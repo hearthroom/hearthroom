@@ -10,6 +10,8 @@ CREATE TABLE managed_work_access (
  approved_role_id TEXT,
  sync_state TEXT NOT NULL DEFAULT 'complete' CHECK(sync_state IN ('complete','changing')),
  sync_operation_id TEXT,
+ moderation_revision INTEGER NOT NULL DEFAULT 0,
+ confirmed_moderation_revision INTEGER NOT NULL DEFAULT 0,
  UNIQUE(provider,source_role_id)
 );
 CREATE TABLE visibility_operations (
@@ -18,6 +20,7 @@ CREATE TABLE visibility_operations (
  root_operation_id TEXT NOT NULL,
  command TEXT NOT NULL,
  intent_hash TEXT NOT NULL,
+ moderation_revision INTEGER,
  state TEXT NOT NULL CHECK(state IN ('intent','pending','complete','conflict')),
  receipt TEXT,
  updated_at INTEGER NOT NULL,
@@ -52,3 +55,37 @@ WHEN NEW.status='approved' AND (OLD.status IS NOT NEW.status OR OLD.approved_hos
  AND NOT EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=NEW.provider AND p.source_role_id=NEW.source_role_id
  AND p.sync_state='complete' AND p.access='public' AND p.approved_role_id=NEW.approved_hosted_role_id)
 BEGIN SELECT RAISE(ABORT,'publication_not_committed'); END;
+
+-- A moderation decision persists its revision in the same D1 transaction,
+-- before a network call can fail or an older handler resume.
+CREATE TRIGGER managed_moderation_revision AFTER UPDATE OF board_hidden,public_blocked ON moderation_state
+WHEN OLD.board_hidden IS NOT NEW.board_hidden OR OLD.public_blocked IS NOT NEW.public_blocked
+BEGIN
+ UPDATE managed_work_access SET moderation_revision=moderation_revision+1
+ WHERE provider=NEW.provider AND source_role_id=NEW.source_role_id;
+END;
+
+-- Retain previous approval identity on rejection without making a private card public.
+DROP TRIGGER hosting_decision;
+CREATE TRIGGER hosting_decision AFTER UPDATE OF status ON review_submissions
+WHEN NEW.status IN ('approved','rejected') AND EXISTS(SELECT 1 FROM hosting_versions WHERE submission_id=NEW.id)
+BEGIN
+ UPDATE hosting_versions SET state=NEW.status WHERE submission_id=NEW.id;
+ UPDATE cards SET status='approved' WHERE id=NEW.card_id AND approved_version_id IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=cards.provider AND p.source_role_id=cards.source_role_id AND (p.access<>'public' OR p.sync_state<>'complete'));
+ UPDATE cards SET status='unshared' WHERE id=NEW.card_id AND approved_version_id IS NOT NULL
+ AND EXISTS(SELECT 1 FROM managed_work_access p WHERE p.provider=cards.provider AND p.source_role_id=cards.source_role_id AND (p.access<>'public' OR p.sync_state<>'complete'));
+ UPDATE cards SET
+  approved_version_id=(SELECT version_id FROM hosting_versions WHERE submission_id=NEW.id),
+  approved_hosted_role_id=(SELECT hosted_revision_id FROM hosting_versions WHERE submission_id=NEW.id),
+  rating=NEW.rating,
+  rating_descriptors=NEW.rating_descriptors,
+  zone=json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.zone'),
+  names=json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.names'),
+  summaries=json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.summaries'),
+  background_url=COALESCE(NULLIF(json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.backgroundUrl'),''),json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.avatarUrl')),
+  share_image_url=NULLIF(json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.shareImageUrl'),''),
+  landscape_url=NULLIF(json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.backgroundLandscapeUrl'),''),
+  tags=json_extract((SELECT public_role FROM hosting_versions WHERE submission_id=NEW.id),'$.tags')
+ WHERE id=NEW.card_id AND NEW.status='approved';
+END;

@@ -184,6 +184,7 @@ it('requires PG restriction readback before suspension success and fences a late
  expect((await request(`/cases/${c.id}/vote`,'r2',{vote:'oppose',reason:'Needs discussion'})).status).toBe(200);
  await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id='member-4'").run();
  expect((await request(`/cases/${c.id}/resolve`,'manager',{decision:'dismiss',reason:'False positive'})).status).toBe(200);
- expect(change).toHaveBeenCalledTimes(2);expect(restriction).toBe('none');
+ // Each new moderation decision fences the current intent; readback retries do not resend.
+ expect(change).toHaveBeenCalledTimes(3);expect(restriction).toBe('none');
  expect(await env.DB.prepare('SELECT restriction,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({restriction:'none',sync_state:'complete'});
 });

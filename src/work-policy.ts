@@ -16,7 +16,7 @@ export interface WorkPolicyCommand {
 }
 export interface ManagedWork {
  work_id:string;provider:ProviderId;source_role_id:string;access:WorkAccess;epoch:number;
- restriction:WorkRestriction;approved_role_id:string|null;sync_state:'complete'|'changing';sync_operation_id:string|null;
+ restriction:WorkRestriction;approved_role_id:string|null;sync_state:'complete'|'changing';sync_operation_id:string|null;moderation_revision:number;confirmed_moderation_revision:number;
 }
 interface Operation {intent_hash:string;command:string;state:string;receipt:string|null}
 
@@ -66,12 +66,17 @@ export async function policyOperationId(identity:string):Promise<string>{
  return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;
 }
 
+export async function workPolicyIntentStatement(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,root=command.operationId,moderationRevision?:number):Promise<D1PreparedStatement>{
+ const intent=await hash({provider,source,command});
+ return env.DB.prepare("INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at,moderation_revision) VALUES(?,?,?,?,?,'intent',?,?)")
+  .bind(command.workId,command.operationId,root,JSON.stringify(command),intent,Date.now(),moderationRevision??null);
+}
+
 // Persist only bounded commands and receipts, never a bearer. After an unknown
 // reply, read the original operation before resending the same idempotent command.
 export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,token?:string,rootOperation=command.operationId):Promise<WorkPolicyReceipt>{
- const db=env.DB;const intent=await hash({provider,source,command});const encoded=JSON.stringify(command);const now=Date.now();
- const inserted=await db.prepare("INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at) VALUES(?,?,?,?,?,'intent',?)")
-  .bind(command.workId,command.operationId,rootOperation,encoded,intent,now).run();
+ const db=env.DB;const intent=await hash({provider,source,command});
+ const inserted=await (await workPolicyIntentStatement(env,provider,source,command,rootOperation)).run();
  const op=await db.prepare('SELECT intent_hash,command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(command.workId,command.operationId).first<Operation>();
  if(!op||op.intent_hash!==intent)throw new HttpError(409,'visibility_operation_conflict');
  if(op.state==='conflict')throw new HttpError(409,'visibility_operation_conflict');
@@ -96,12 +101,13 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
  }
 }
 
-export async function projectWorkReceipt(env:Env,provider:ProviderId,receipt:WorkPolicyReceipt,approvedRole?:string|null,operation?:string):Promise<void>{
+export async function projectWorkReceipt(env:Env,provider:ProviderId,receipt:WorkPolicyReceipt,approvedRole?:string|null,operation?:string,moderationRevision?:number):Promise<void>{
  const result=await env.DB.prepare(`INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id)
  VALUES(?,?,?,?,?,?,?) ON CONFLICT(work_id) DO UPDATE SET access=excluded.access,epoch=excluded.epoch,restriction=excluded.restriction,
- approved_role_id=coalesce(excluded.approved_role_id,managed_work_access.approved_role_id),sync_state='complete',sync_operation_id=NULL
- WHERE managed_work_access.epoch<=excluded.epoch AND (managed_work_access.sync_operation_id IS NULL OR managed_work_access.sync_operation_id=?)`)
- .bind(receipt.workId,provider,receipt.sourceRoleId,receipt.access,receipt.epoch,receipt.restriction,approvedRole??null,receipt.operationId).run();
+ approved_role_id=coalesce(excluded.approved_role_id,managed_work_access.approved_role_id),sync_state='complete',sync_operation_id=NULL,
+ confirmed_moderation_revision=coalesce(?,managed_work_access.confirmed_moderation_revision)
+ WHERE managed_work_access.epoch<=excluded.epoch AND (managed_work_access.sync_operation_id IS NULL OR managed_work_access.sync_operation_id=?) AND (? IS NULL OR managed_work_access.moderation_revision=?)`)
+ .bind(receipt.workId,provider,receipt.sourceRoleId,receipt.access,receipt.epoch,receipt.restriction,approvedRole??null,moderationRevision??null,receipt.operationId,moderationRevision??null,moderationRevision??null).run();
  if(!result.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  if(operation)await bumpOp(env.DB,'work_access',operation,'success');
 }
