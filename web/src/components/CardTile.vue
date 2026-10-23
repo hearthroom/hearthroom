@@ -137,9 +137,11 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   /* 髮絲線用 box-shadow 而不是 border：不佔版面、圓角處也不會出現 1px 的斷差 */
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
   overflow: hidden;
-  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); transform: translateY(-3px); }
+/*
+ * hover 只放大封面、名字變色，卡片本身不動：陰影淡入淡出會連同動圖封面整張重畫，GPU 吃緊的電腦會整條閃白；
+ * 上抬則讓游標停在下緣時來回觸發（見 card-hover-no-repaint.test）
+ */
 
 .card__art { position: relative; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }

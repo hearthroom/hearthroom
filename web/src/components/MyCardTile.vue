@@ -147,9 +147,8 @@ onBeforeUnmount(() => listen(false));
   position: relative; display: flex; flex-direction: column; min-width: 0;
   background: var(--surface); border-radius: var(--r-md);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); overflow: hidden;
-  transition: box-shadow var(--dur) var(--ease);
 }
-.card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); }
+/* hover 只放大封面、名字變色，陰影不變：陰影淡入淡出會連同動圖封面整張重畫，GPU 吃緊的電腦會整條閃白（見 card-hover-no-repaint.test） */
 
 .card__art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
 .card__art img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
