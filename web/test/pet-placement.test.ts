@@ -169,6 +169,14 @@ describe("新手提示卡掛在她頭上", () => {
     expect(390 - a.right - 280).toBe(BAND);
     expect(390 - a.right - a.tail - 7).toBe(60);
   });
+  it("手機的卡只有 195 寬：左右探出時尖角都留在卡片裡、指著她露出來的那段", () => {
+    for (const side of ["left", "right"] as const) {
+      const p = peekPos(f, pet, side, 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 195);
+      expect(a.tail).toBeLessThanOrEqual(195 - 30);
+      expect(a.tail).toBeGreaterThanOrEqual(16);
+      expect(390 - a.right - a.tail - 7).toBe(side === "left" ? 60 : 390 - 60);
+    }
+  });
   it("站在右邊的邊距帶上：尖角指著她的中線", () => {
     const p = standOutPos(f, pet, "right", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
     expect(a.right).toBe(BAND);

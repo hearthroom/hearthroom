@@ -31,6 +31,7 @@ const target = computed(() => store.panel?.newcomer?.today.target ?? 1);
 // 達標未領也不彈：首頁常駐卡已經有「領取」，只留一個入口
 const due = computed(() => !!view.value && !view.value.todayDone && !view.value.claimable && !view.value.finished && newcomerPrompt.loaded && !newcomerPrompt.shown && !newcomerPrompt.later && !newcomerPrompt.thisVisit);
 const pos = ref<{ right: number; bottom: number; tail?: number } | null>(null);
+const card = ref<HTMLElement | null>(null);
 let timer = 0;
 let follow = 0;
 
@@ -40,7 +41,9 @@ function place() {
   const r = pet?.getBoundingClientRect();
   if (!r || !r.width) { pos.value = { right: 16, bottom: 16 }; return; }
   if (!pet!.classList.contains("suki-pet--mobile")) { pos.value = { right: Math.max(8, innerWidth - r.right), bottom: Math.max(8, innerHeight - r.top + 10) }; return; }
-  pos.value = { ...nudgeAnchor(innerWidth, r, 280), bottom: Math.max(8, innerHeight - r.top + 10) };
+  // 卡寬：畫出來了就量，還沒畫出來照 CSS 的寬（760 以下 min(195px, 50vw)）
+  const cardW = card.value?.offsetWidth || (innerWidth <= 760 ? Math.min(195, innerWidth / 2) : 280);
+  pos.value = { ...nudgeAnchor(innerWidth, r, cardW), bottom: Math.max(8, innerHeight - r.top + 10) };
 }
 
 watch(due, (now) => {
@@ -79,7 +82,7 @@ function onKey(e: KeyboardEvent) { if (e.key === "Escape") void later(); }
 
 <template>
   <section
-    v-if="newcomerPrompt.showing && view" class="nudge panel" role="status" :style="pos ? { right: `${pos.right}px`, bottom: `${pos.bottom}px`, ...(pos.tail === undefined ? {} : { '--tail': `${pos.tail}px` }) } : {}"
+    v-if="newcomerPrompt.showing && view" ref="card" class="nudge panel" role="status" :style="pos ? { right: `${pos.right}px`, bottom: `${pos.bottom}px`, ...(pos.tail === undefined ? {} : { '--tail': `${pos.tail}px` }) } : {}"
     :aria-label="t('newcomer.prompt.title', { n: view.day })" @keydown="onKey"
   >
     <span class="nudge__title">{{ t("newcomer.prompt.title", { n: view.day }) }}</span>
