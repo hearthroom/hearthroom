@@ -1,9 +1,9 @@
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
-import {managedWork,policyOperationId,projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkRestriction} from './work-policy';
+import {managedWork,policyOperationId,projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,workPolicyIntentStatement,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkRestriction} from './work-policy';
 
 interface PendingPermit {operation_id:string;version_id:string;submission_id:string}
-export async function fenceManagedWork(env:Env,provider:ProviderId,source:string,identity:string,action:'cancel'|'restrict'|'private'|'unlisted'|'restore',options:{token?:string;restriction?:WorkRestriction;rootOperation?:string}={}):Promise<WorkPolicyReceipt|null>{
+export async function fenceManagedWork(env:Env,provider:ProviderId,source:string,identity:string,action:'cancel'|'restrict'|'private'|'unlisted'|'restore',options:{token?:string;restriction?:WorkRestriction;rootOperation?:string;moderationRevision?:number}={}):Promise<WorkPolicyReceipt|null>{
  const db=env.DB;const p=await managedWork(db,provider,source);if(!p)return null;
  if(p.epoch===0)throw new HttpError(503,'visibility_sync_pending');
  const root=options.rootOperation??await policyOperationId('fence:'+p.work_id+':'+identity);
@@ -19,7 +19,7 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
  .bind(p.work_id).first<PendingPermit>();
  let command:WorkPolicyCommand;
  if(old&&saved?.state!=='conflict'){command=old;}else{
-  const live=await workPolicyGateway.state(env,provider,source);
+  const live=old?await workPolicyGateway.state(env,provider,source):{workId:p.work_id,epoch:p.epoch};
   if(!live||live.workId!==p.work_id)throw new HttpError(503,'visibility_sync_pending',undefined,{operationId:root,state:'pending'});
   // A confirmed epoch conflict is a known failed command. A derived child can
   // rebase the same still-current intent; unknown replies retain the exact key.
@@ -28,9 +28,16 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
    ...(options.restriction?{restriction:options.restriction}:{}),...(old?.permitId?{permitId:old.permitId}:pending?{permitId:pending.operation_id}:{})};
  }
  const operation=command.operationId;
- const locked=await db.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=?
- WHERE work_id=? AND epoch=? AND sync_operation_id IS ?`).bind(operation,p.work_id,p.epoch,p.sync_operation_id).run();
- if(!locked.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+ const durable=await db.batch([
+  await workPolicyIntentStatement(env,provider,source,command,root,options.moderationRevision),
+  db.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=?
+   WHERE work_id=? AND epoch=? AND sync_operation_id IS ? AND (? IS NULL OR moderation_revision=?)`)
+   .bind(operation,p.work_id,p.epoch,p.sync_operation_id,options.moderationRevision??null,options.moderationRevision??null),
+ ]);
+ if(!durable[1].meta.changes){
+  if(durable[0].meta.changes)await db.prepare("UPDATE visibility_operations SET state='conflict' WHERE work_id=? AND operation_id=? AND state='intent'").bind(p.work_id,operation).run();
+  throw new HttpError(409,'visibility_operation_conflict');
+ }
 
  const receipt=await runWorkPolicyOperation(env,provider,source,command,options.token,root);
  // Cancel the local pending review before releasing the projection fence. Old
@@ -46,7 +53,7 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
   db.prepare(`UPDATE work_publication_permits SET state='cancelled' WHERE operation_id=? AND version_id IN(SELECT v.version_id FROM hosting_versions v
    JOIN review_submissions s ON s.id=v.submission_id WHERE v.work_id=? AND s.status='superseded')`).bind(command.permitId,p.work_id),
  ]);
- await projectWorkReceipt(env,provider,receipt,undefined,action);return receipt;
+ await projectWorkReceipt(env,provider,receipt,undefined,action,options.moderationRevision);return receipt;
 }
 
 export async function fenceManagedEdit(env:Env,provider:ProviderId,source:string):Promise<void>{
@@ -60,6 +67,9 @@ export async function syncManagedRestriction(env:Env,provider:ProviderId,source:
  const managed=await managedWork(env.DB,provider,source);if(!managed)return;
  const state=await env.DB.prepare('SELECT public_blocked,board_hidden FROM moderation_state WHERE provider=? AND source_role_id=?').bind(provider,source).first<{public_blocked:number;board_hidden:number}>();
  const restriction:WorkRestriction=state?.public_blocked?'suspended':state?.board_hidden?'delisted':'none';
- if(managed.restriction===restriction&&managed.sync_state==='complete')return;
- await fenceManagedWork(env,provider,source,identity+':'+restriction,'restrict',{restriction});
+ const active=managed.sync_operation_id?await env.DB.prepare('SELECT root_operation_id,command,moderation_revision FROM visibility_operations WHERE work_id=? AND operation_id=?')
+  .bind(managed.work_id,managed.sync_operation_id).first<{root_operation_id:string;command:string;moderation_revision:number|null}>():null;
+ const old=active?JSON.parse(active.command) as WorkPolicyCommand:null;
+ const rootOperation=old?.action==='restrict'&&old.restriction===restriction&&active?.moderation_revision===managed.moderation_revision?active.root_operation_id:undefined;
+ await fenceManagedWork(env,provider,source,identity+':'+restriction+':'+managed.moderation_revision,'restrict',{restriction,rootOperation,moderationRevision:managed.moderation_revision});
 }

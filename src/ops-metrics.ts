@@ -93,7 +93,7 @@ export async function opsMetrics(db: D1Database): Promise<string> {
       }
     }
   }
-  const pending=await db.prepare("SELECT count(*) AS n FROM (SELECT operation_id FROM visibility_operations WHERE state IN ('intent','pending') UNION SELECT sync_operation_id FROM managed_work_access WHERE sync_state='changing')").first<{n:number}>();
+  const pending=await db.prepare("SELECT count(*) AS n FROM (SELECT operation_id FROM visibility_operations WHERE state IN ('intent','pending') UNION SELECT coalesce(sync_operation_id,work_id) FROM managed_work_access WHERE sync_state='changing' OR moderation_revision>confirmed_moderation_revision)").first<{n:number}>();
   out.push('# HELP hearthroom_visibility_pending_operations Work projections awaiting confirmed Provider state.',
     '# TYPE hearthroom_visibility_pending_operations gauge',`hearthroom_visibility_pending_operations ${pending?.n??0}`);
   out.push('# HELP hearthroom_harbor_proxy_requests_total Estimated proxy responses: 1 percent successful responses weighted by 100, all other upstream responses and valid-path errors counted.', '# TYPE hearthroom_harbor_proxy_requests_total counter');

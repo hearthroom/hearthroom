@@ -1,17 +1,17 @@
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
-import {fenceManagedWork} from './work-fence';
+import {fenceManagedWork,syncManagedRestriction} from './work-fence';
 import {finalizeManagedReview} from './work-publication';
 import {projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand} from './work-policy';
-import {unregister} from './cards';
+import {finishManagedWithdrawal} from './cards';
 
 // Bounded recovery of persisted intent. No identity or bearer is stored. A lost
 // author command is read back, but never newly authorized by the scheduler.
 export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:number;pending:number}>{
  const rows=await env.DB.prepare(`SELECT p.work_id,p.provider,p.source_role_id,p.sync_operation_id,o.command,o.root_operation_id
  FROM managed_work_access p LEFT JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
- WHERE p.sync_state='changing' ORDER BY coalesce(o.updated_at,0),p.work_id LIMIT ?`)
+ WHERE p.sync_state='changing' OR p.moderation_revision>p.confirmed_moderation_revision ORDER BY coalesce(o.updated_at,0),p.work_id LIMIT ?`)
  .bind(Math.max(1,Math.min(10,limit))).all<{work_id:string;provider:ProviderId;source_role_id:string;sync_operation_id:string;command:string|null;root_operation_id:string|null}>();
  let complete=0,pending=0;
  for(const row of rows.results){
@@ -19,7 +19,9 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
    const decision=await env.DB.prepare(`SELECT d.submission_id FROM work_review_decisions d JOIN hosting_versions v ON v.submission_id=d.submission_id
     JOIN work_publication_permits g ON g.version_id=v.version_id WHERE v.work_id=? AND g.operation_id=? AND g.state='prepared'`)
     .bind(row.work_id,row.sync_operation_id).first<{submission_id:string}>();
-   if(decision){await finalizeManagedReview(env,decision.submission_id);}else{
+   const saved=row.command?JSON.parse(row.command) as WorkPolicyCommand:null;
+   if(!saved||saved.action==='restrict'){await syncManagedRestriction(env,row.provider,row.source_role_id,'reconcile');}
+   else if(decision){await finalizeManagedReview(env,decision.submission_id);}else{
     if(!row.command||!row.root_operation_id)throw new HttpError(503,'visibility_sync_pending');
     const command=JSON.parse(row.command) as WorkPolicyCommand;
     if(command.action==='bind'){
@@ -38,8 +40,8 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
      }
      await fenceManagedWork(env,row.provider,row.source_role_id,'',command.action,{rootOperation:row.root_operation_id,restriction:command.restriction});
      if(command.action==='private'){
-      const card=await env.DB.prepare('SELECT author_num_id FROM cards WHERE provider=? AND source_role_id=?').bind(row.provider,row.source_role_id).first<{author_num_id:number}>();
-      if(card)await unregister(env.DB,row.source_role_id,card.author_num_id,row.provider,env);
+      const card=await env.DB.prepare('SELECT id FROM cards WHERE provider=? AND source_role_id=?').bind(row.provider,row.source_role_id).first<{id:string}>();
+      if(card)await finishManagedWithdrawal(env.DB,card.id);
      }
     }
    }
