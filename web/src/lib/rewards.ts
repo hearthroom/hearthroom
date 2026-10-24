@@ -77,6 +77,8 @@ export interface Newcomer {
 }
 
 export interface RewardsPanel {
+  /** Read-only test-account projection; stage progress does not imply reward grants. */
+  testFixture?: boolean;
   serverNow: string;
   businessDay: string;
   nextResetAt: string;

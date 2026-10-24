@@ -5,10 +5,10 @@
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { newcomerView } from "@/lib/checkin";
+import { newcomerStageDone, newcomerView } from "@/lib/checkin";
 import { glueUnits, whole } from "@/lib/format";
 import { NEWCOMER_BADGE } from "@/lib/checkin-art";
-import { stageDone, type RewardsPanel } from "@/lib/rewards";
+import { type RewardsPanel } from "@/lib/rewards";
 
 const props = defineProps<{ panel: RewardsPanel; busy: boolean }>();
 const emit = defineEmits<{ guide: [day: number]; grand: []; claim: [] }>();
@@ -31,9 +31,9 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
       <p class="nc__rule">{{ t("newcomer.rule") }}</p>
     </header>
     <ol class="nc__dots">
-      <li v-for="s in n.stages" :key="s.stage" class="nc__dot" :class="{ 'nc__dot--done': stageDone(s), 'nc__dot--today': !stageDone(s) && s.stage === view.day && !view.todayDone }">
+      <li v-for="s in n.stages" :key="s.stage" class="nc__dot" :class="{ 'nc__dot--done': newcomerStageDone(panel, s), 'nc__dot--today': !newcomerStageDone(panel, s) && s.stage === view.day && !view.todayDone }">
         <span class="nc__bead" aria-hidden="true">
-          <svg v-if="stageDone(s)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6" /></svg>
+          <svg v-if="newcomerStageDone(panel, s)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6" /></svg>
           <span v-else>{{ s.stage }}</span>
         </span>
         <span class="nc__reward">{{ s.reward.chest ? t("newcomer.reward.grand") : s.reward.credits ? t("newcomer.reward", { amount: whole(s.reward.credits) }) : "" }}</span>

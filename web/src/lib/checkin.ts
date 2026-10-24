@@ -3,7 +3,7 @@
  * 規格：任務 2026-10-19-checkin-hearthroom-experience 的 ui.md §3–§7、§10；字的鍵照 copy.md。
  * 數字一律從面板與獎表來，這裡不寫死 7、14、28、04:00。
  */
-import { stageDone, type RewardPlan, type RewardsPanel, type RewardTask } from "./rewards";
+import { stageDone, type NewcomerStage, type RewardPlan, type RewardsPanel, type RewardTask } from "./rewards";
 
 export type HeroState = "first" | "normal" | "day3" | "day7" | "two" | "done" | "brokenCard" | "brokenNoCard";
 
@@ -145,10 +145,14 @@ export function countdown(serverNow: string, target: string, fetchedAt: number, 
 /** claimable：今天的目標做到了、還沒領（第 1–6 天要按「領取」才入帳；第 7 天是 grand，開大箱） */
 export interface NewcomerView { day: number; done: number; left: number; todayDone: boolean; claimable: boolean; grand: boolean; finished: boolean }
 
+/** Display completion includes reset fixture stages, without changing reward/grant status. */
+export const newcomerStageDone = (p: RewardsPanel, s: NewcomerStage): boolean =>
+  stageDone(s) || (p.testFixture === true && s.status === "not_granted" && s.stage <= (p.newcomer?.stage ?? 0));
+
 export function newcomerView(p: RewardsPanel): NewcomerView | null {
   const n = p.newcomer;
   if (!n || !n.active) return null;
-  const done = n.stages.filter(stageDone).length;
+  const done = n.stages.filter((s) => newcomerStageDone(p, s)).length;
   const left = n.deadline ? Math.max(0, Math.ceil((new Date(n.deadline).getTime() - new Date(p.serverNow).getTime()) / 86_400_000)) : 0;
   const todayDone = n.today.status === "claimed";
   const total = n.stages.length || 7;
