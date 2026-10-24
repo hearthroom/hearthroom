@@ -1,9 +1,11 @@
+import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
 import {managedWork,policyOperationId,projectWorkReceipt,supersedeOlderWorkIntents,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
 
 export async function prepareManagedPublication(env:Env,provider:ProviderId,source:string,work:string,version:string,role:string,consent?:{providerEpoch:number;providerRevision:string}):Promise<void>{
+ await assertPublicSource(env.DB,provider,source);
  const managed=await managedWork(env.DB,provider,source);if(!managed)return;
  if(managed.work_id!==work||managed.sync_state!=='complete'||consent&&managed.epoch!==consent.providerEpoch)throw new HttpError(409,'visibility_operation_conflict');
  let permit=await env.DB.prepare('SELECT operation_id,epoch FROM work_publication_permits WHERE version_id=?').bind(version).first<{operation_id:string;epoch:number}>();
@@ -31,6 +33,7 @@ export async function finalizeManagedReview(env:Env,submission:string):Promise<v
  JOIN review_submissions s ON s.id=v.submission_id JOIN work_review_decisions d ON d.submission_id=s.id
  WHERE s.id=?`).bind(submission).first<Publication>();
  if(!row)throw new HttpError(503,'visibility_sync_pending');
+ await assertPublicSource(db,row.provider,row.source_role_id);
  if(row.status==='approved'&&row.state==='published')return;
  if(row.status!=='pending'||row.state==='conflict'||row.state==='cancelled')throw new HttpError(409,'visibility_operation_conflict');
  const lock=await db.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=?

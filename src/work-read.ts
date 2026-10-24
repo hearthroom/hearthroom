@@ -1,3 +1,4 @@
+import {testCardIds} from './test-accounts';
 import type {CardRow} from './cards';
 import {apiBaseOf} from './providers';
 import {hostingKey} from './hosting';
@@ -65,6 +66,8 @@ export async function filterPublicRows(env:Env,rows:CardRow[],surface:Visibility
 }
 async function publicRows(env:Env,rows:CardRow[]):Promise<{rows:CardRow[];checked:boolean}>{
  if(rows.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
+ const hidden=await testCardIds(env.DB,rows.map(r=>String(r.id)));
+ rows=rows.filter(r=>!hidden.has(String(r.id)));
  const local=await localWorkPolicies(env,rows);
  const candidates=rows.filter(row=>{
   const p=local.get(row.source_role_id);
@@ -136,7 +139,9 @@ export async function currentCardsAccess(env:Env,rows:CardRow[],surface:Visibili
 async function cardsAccess(env:Env,rows:CardRow[]):Promise<Map<string,CurrentCardAccess>>{
  const policies=await localWorkPolicies(env,rows),out=new Map<string,CurrentCardAccess>();
  const candidates:CardRow[]=[];
+ const hidden=await testCardIds(env.DB,rows.map(r=>String(r.id)));
  for(const row of rows){
+  if(hidden.has(String(row.id))){out.set(String(row.id),{managed:true,access:'private',reachable:false,indexable:false,shareRoleId:''});continue;}
   const p=policies.get(row.source_role_id);
   if(!p){
    if(row.status==='unlisted'&&!row.public_blocked){candidates.push(row);continue;}

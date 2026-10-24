@@ -5,6 +5,9 @@
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
 export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
+  QA_BROWSER_CONTEXT_KEY?: string;
+ QA_ACCOUNT_CONTROL_KEY?: string;
+  HARBOR_TEST_ACCOUNTS_ENABLED?: string;
   DRAFT_TRANSFER_CONTROL_SECRET?: string;
   /** Worker secret, shared only with Harbor's runtime env; independent of Console. */
   HARBOR_HEARTHROOM_PROXY_SECRET?: string;

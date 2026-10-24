@@ -1,3 +1,4 @@
+import {assertNormalMember} from './test-accounts';
 /**
  * 評分：本站自己的資料（migrations/0058）。
  *
@@ -20,7 +21,7 @@ export interface CardScore {
 
 export async function readScore(db: D1Database, cardId: string, memberId: string | null): Promise<CardScore> {
   const [groups, mine] = await db.batch<{ score: number; n: number }>([
-    db.prepare("SELECT score, COUNT(*) AS n FROM card_scores WHERE card_id = ? GROUP BY score").bind(cardId),
+    db.prepare("SELECT score, COUNT(*) AS n FROM card_scores WHERE card_id = ? AND EXISTS(SELECT 1 FROM members m WHERE m.id=card_scores.member_id AND m.account_class='normal') GROUP BY score").bind(cardId),
     db.prepare("SELECT score, 1 AS n FROM card_scores WHERE card_id = ? AND member_id = ?").bind(cardId, memberId ?? ""),
   ]);
   const histogram: CardScore["histogram"] = [0, 0, 0, 0, 0];
@@ -40,6 +41,7 @@ export async function readScore(db: D1Database, cardId: string, memberId: string
 }
 
 export async function setScore(db: D1Database, card: CommentCard, memberId: string, score: unknown, now: number): Promise<void> {
+  await assertNormalMember(db,memberId,await cardAuthorMemberId(db,card));
   if (typeof score !== "number" || !Number.isInteger(score) || score < 1 || score > 5) throw new HttpError(400, "score_invalid");
   if ((await cardAuthorMemberId(db, card)) === memberId) throw new HttpError(403, "own_card");
   await db

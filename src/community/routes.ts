@@ -1,3 +1,4 @@
+import {eligibleNotification} from '../test-accounts';
 import { changeOfficialAuthor } from '../official-authors';
 import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
 import { publicIdentities } from './public-cache';
@@ -272,7 +273,7 @@ app.get("/v1/me/community/notifications", async (c) => {
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
      a.handle AS actor_handle,a.display_name AS actor_name,c.id AS card_num,c.names AS card_names
      FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
-     WHERE n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
+     WHERE ${eligibleNotification()} AND n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
   )
     .bind(Date.now(),Date.now(),m.id)
     .all<{ id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
@@ -293,7 +294,7 @@ app.get("/v1/me/community/notifications/summary", async (c) => {
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
     await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
-  const row = await c.env.DB.prepare("SELECT COUNT(*) AS unread FROM community_notifications WHERE member_id=? AND read_at IS NULL")
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL`)
     .bind(m.id)
     .first<{ unread: number }>();
   return c.json({ unread: row?.unread ?? 0 });
@@ -561,7 +562,7 @@ app.post("/internal/community/:operation", async (c) => {
       .bind(Date.now(), Date.now())
       .all();
     const notifications = await c.env.DB.prepare(
-      `SELECT n.id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE n.delivered=0 AND n.retry_at<? AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
+      `SELECT n.id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
     )
       .bind(Date.now(),Date.now())
       .all();
@@ -641,7 +642,7 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE ${eligibleNotification()} AND n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
       .first<Parameters<typeof pushLine>[0] & { path: string; discord_id: string; locale: string | null }>();

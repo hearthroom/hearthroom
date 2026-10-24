@@ -1,3 +1,4 @@
+import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { Hono, type Context } from 'hono';
 import type { Pending } from './analytics';
 import { getCookie, setCookie } from 'hono/cookie';
@@ -130,7 +131,7 @@ export async function metric(env:Env,operation:string,provider:string,outcome:st
  * 分開問是三趟往返（每趟約 40 ms），而開頁的每支讀取都要先過這一關。
  * 只給讀取用（GET/HEAD）：寫入一律驗 Bearer，cookie 不開跨站寫入的路。
  */
-export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;memberId:string;showNsfw:number|null;ageVerifiedAt:number|null;adultConsentVersion:number|null}|null>{
+export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;memberId:string;showNsfw:number|null;ageVerifiedAt:number|null;adultConsentVersion:number|null;accountClass?:'test';testGeneration?:number}|null>{
   try{
     if(c.req.method!=='GET'&&c.req.method!=='HEAD')return null;
     if(c.env.AUTH_ENABLED!=='true')return null;
@@ -139,16 +140,22 @@ export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>strin
     const raw=(c.req.header('Cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION+'='))?.slice(SESSION.length+1);
     if(!raw)return null;
     // 歸屬的判斷跟 connectedMemberId 一樣：連結覆寫優先，沒有才用原始身分
-    const row=await c.env.DB.prepare(`SELECT s.external_id,s.member_id,m.show_nsfw,m.age_verified_at,m.adult_consent_version
+    const row=await c.env.DB.prepare(`SELECT s.token_hash,s.external_id,s.member_id,m.show_nsfw,m.age_verified_at,m.adult_consent_version,m.account_class,m.test_generation
       FROM account_sessions s LEFT JOIN members m ON m.id=s.member_id
       WHERE s.token_hash=? AND s.origin=? AND s.expires_at>? AND s.created_at>? AND s.provider=?
         AND s.member_id=COALESCE(
           (SELECT owner_member_id FROM member_connections WHERE provider=s.provider AND external_id=s.external_id),
           (SELECT member_id FROM member_identities WHERE provider=s.provider AND external_id=s.external_id))`)
       .bind(await hash(raw),origin,Date.now(),Date.now()-SESSION_MAX,provider)
-      .first<{external_id:string;member_id:string;show_nsfw:number|null;age_verified_at:number|null;adult_consent_version:number|null}>();
+      .first<{token_hash:string;external_id:string;member_id:string;show_nsfw:number|null;age_verified_at:number|null;adult_consent_version:number|null;account_class:string;test_generation:number}>();
     if(!row)return null;
-    return {accountNumId:Number(row.external_id),memberId:row.member_id,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version};
+    if(row.account_class==='test'){
+      const proof=await c.env.DB.prepare('SELECT 1 FROM qa_session_generation WHERE token_hash=? AND test_generation=?').bind(row.token_hash,row.test_generation).first();
+      if(!proof)return null;
+      await validateTestSession(c.env,provider,Number(row.external_id),row.member_id,row.test_generation);
+      c.env=excludeQABrowser(c.env);
+    }else if(isQABrowser(c.env))return null;
+    return {accountNumId:Number(row.external_id),memberId:row.member_id,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version,...(row.account_class==='test'?{accountClass:'test' as const,testGeneration:row.test_generation}:{})};
   }catch{return null;}
 }
 /**
@@ -174,9 +181,14 @@ export async function guestAdult(c:{env:Env;req:{header:(k:string)=>string|undef
 export const guestAllowsNsfw=(g:GuestAdult|null)=>!!g&&g.show&&g.consentVersion===ADULT_CONSENT_VERSION;
 const guestAdultView=(g:GuestAdult|null)=>({showNsfw:guestAllowsNsfw(g),ageVerified:!!g,adultConsent:g?.consentVersion===ADULT_CONSENT_VERSION});
 
-export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number}|null>{
+export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;accountClass?:'test';testGeneration?:number}|null>{
   const reader=await siteSessionReader(c,provider);
-  return reader?{accountNumId:reader.accountNumId}:null;
+  return reader?{accountNumId:reader.accountNumId,...(reader.accountClass==='test'?{accountClass:'test',testGeneration:reader.testGeneration}:{})}:null;
+}
+async function validateTestSession(env:Env,provider:ProviderId,externalId:number,memberId:string,generation:number){
+  const pair=await delegatedAccess(env,provider,externalId,memberId);
+  const me=await upstream.fetchMe(env,pair.accessToken,provider);
+  if(me.accountNumId!==externalId||me.accountClass!=='test'||me.testState!=='active'||me.testGeneration!==generation)throw new HttpError(401,'test_account_inactive');
 }
 async function readSession(c:C,required=true):Promise<Session|null>{
   const raw=getCookie(c,SESSION);
@@ -185,6 +197,13 @@ async function readSession(c:C,required=true):Promise<Session|null>{
     if(required)throw new HttpError(401,'site_session_required');
     return null;
   }
+  const classification=await c.env.DB.prepare('SELECT account_class,test_generation FROM members WHERE id=?').bind(row.member_id).first<{account_class:string;test_generation:number}>();
+  if(classification?.account_class==='test'){
+    const proof=await c.env.DB.prepare('SELECT 1 FROM qa_session_generation WHERE token_hash=? AND test_generation=?').bind(row.token_hash,classification.test_generation).first();
+    if(!proof)throw new HttpError(401,'site_session_required');
+    await validateTestSession(c.env,row.provider,Number(row.external_id),row.member_id,classification.test_generation);
+    c.env=excludeQABrowser(c.env);
+  }else if(isQABrowser(c.env))throw new HttpError(403,'auth_connection_denied');
   // 閒置期限一天最多往後推一次。每個請求都寫的話，讀取複寫的工作階段一寫就得跟主庫對齊，
   // 後面的查詢全都回到跨洋往返（d1-session.ts）。30 天的閒置期，晚一天推不影響任何人。
   const extended=Math.min(Date.now()+SESSION_IDLE,row.created_at+SESSION_MAX);
@@ -386,6 +405,7 @@ accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
       SELECT ?,s.member_id,s.provider,s.external_id,h.target_origin,s.created_at,MIN(s.expires_at,?)
       FROM account_route_handoffs h JOIN account_sessions s ON s.token_hash=h.source_session
       WHERE h.code_hash=? AND h.target_browser=? AND h.target_origin=? AND h.consumed_session IS NULL AND h.expires_at>?
+        AND EXISTS(SELECT 1 FROM members qa WHERE qa.id=s.member_id AND qa.account_class='normal')
         AND s.origin=h.source_origin AND s.provider='harbor' AND s.expires_at>? AND s.created_at>?
         AND s.member_id=COALESCE(
           (SELECT owner_member_id FROM member_connections WHERE provider=s.provider AND external_id=s.external_id),
@@ -441,8 +461,12 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
   if(!stored){await queueRevocation(c.env,a.provider,pair,a.state_hash);throw new HttpError(400,'auth_state_invalid');}
   const me=await upstream.fetchMe(c.env,pair.accessToken,a.provider);
   if(!Number.isSafeInteger(me.accountNumId)||me.accountNumId<=0)throw new HttpError(503,'auth_provider_unavailable');
+  if(isQABrowser(c.env)&&me.accountClass!=='test')throw new HttpError(403,'auth_connection_denied');
+  if(me.accountClass==='test')c.env=excludeQABrowser(c.env);
   if(a.source_session){
     const session=await readSession(c);
+    const sourceClass=await c.env.DB.prepare('SELECT account_class FROM members WHERE id=?').bind(session!.member_id).first<{account_class:string}>();
+    if(me.accountClass==='test'||sourceClass?.account_class==='test')throw new HttpError(403,'auth_connection_denied');
     if(session!.token_hash!==a.source_session)throw new HttpError(401,'site_session_required');
     const confirmed=await c.env.DB.prepare("UPDATE account_auth_attempts SET phase='confirm',payload=? WHERE state_hash=? AND phase='exchanging' AND expires_at>? RETURNING state_hash").bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair,externalId:me.accountNumId}),a.state_hash,Date.now()).first();
     if(!confirmed)throw new HttpError(400,'auth_state_invalid');
@@ -457,9 +481,10 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
       await metric(c.env,'silent','site','consent_required');
       return c.json({silent:true,authenticated:false,error:'consent_required',returnTo:flow.returnTo});
     }
-    const member=existing??await resolveMember(c.env.DB,a.provider,me.accountNumId,Date.now());
+    const member=await resolveMember(c.env.DB,a.provider,me.accountNumId,Date.now(),me);
     const raw=random(),sessionHash=await hash(raw),old=getCookie(c,SESSION);
     const statements=await credentialStatements(c.env,a.provider,me.accountNumId,pair,{attempt:a,phase:'exchanging'});
+    if(me.accountClass==='test')statements.push(c.env.DB.prepare('INSERT INTO qa_session_generation(token_hash,test_generation) VALUES(?,?)').bind(sessionHash,me.testGeneration));
     statements.push(
       c.env.DB.prepare('DELETE FROM account_sessions WHERE token_hash=?').bind(old?await hash(old):''),
       c.env.DB.prepare('INSERT INTO account_sessions VALUES(?,?,?,?,?,?,?)').bind(sessionHash,member,a.provider,String(me.accountNumId),originOf(c),Date.now(),Date.now()+SESSION_IDLE),
@@ -737,5 +762,10 @@ export async function delegatedAccess(env:Env,provider:ProviderId,externalId:num
   ]);
   if(ownerAfter!==memberId)throw new HttpError(403,'auth_connection_denied');
   if(!stillValid)throw new HttpError(401,'auth_reauthorization_required');
+  if(env.HARBOR_TEST_ACCOUNTS_ENABLED==='1'){
+   const local=await env.DB.prepare('SELECT account_class,test_generation FROM members WHERE id=?').bind(memberId).first<{account_class:string;test_generation:number}>();
+   const me=await upstream.fetchMe(env,pair.accessToken,provider);
+   if(!local||me.accountNumId!==externalId||local.account_class!==(me.accountClass??'normal')||(local.account_class==='test'&&local.test_generation!==me.testGeneration))throw new HttpError(403,'auth_connection_denied');
+  }
   return publicPair(pair);
 }
