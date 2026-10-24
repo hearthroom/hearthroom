@@ -44,7 +44,8 @@ const shareUrl=computed(()=>withShareRef(new URL(platformPath(lp(`/cards/${props
 const label=computed(()=>phase.value!=='ready'?t('visibility.title'):value.value?.review==='pending'?t('mine.badge.pending'):value.value?t(`visibility.short.${value.value.access}`):t('visibility.title'));
 const state=computed(()=>{if(phase.value!=='ready')return t(phase.value==='error'?'visibility.loadFailed':phase.value==='unknown'||phase.value==='retryable'?'visibility.operation.unknown':phase.value==='saving'?'visibility.operation.updating':'visibility.operation.checking');const v=value.value;if(!v)return '';const text=t(visibilityStateKey(v,props.editor),{note:v.reviewNote??'',reason:v.restrictionNote??''});return v.access!=='public'&&v.everPublic&&v.restriction==='none'&&v.review==='none'?text+' '+t(v.actions.includes('restore_public')?'visibility.state.restoreReady':v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):text;});
 async function open(){if(!visibilityEnabled.value)return;if(props.actor)void ownReferralCode(props.actor,props.token,props.provider).then(code=>{refCode.value=code;});previous=document.activeElement as HTMLElement;shareDone.value=false;openDialog.value=true;if(!locked.value)await controller.value?.load();await readQuota();await nextTick();((box.value?.querySelector('input:checked:not(:disabled)')??box.value?.querySelector('button:not(:disabled)')) as HTMLElement|null)?.focus();}
-function close(){if(busy.value)return;openDialog.value=false;previous?.focus();}
+function dismiss(){const opener=previous;openDialog.value=false;void nextTick(()=>{if(!openDialog.value&&opener?.isConnected)opener.focus();});}
+function close(){if(busy.value)return;dismiss();}
 function keyboard(e:KeyboardEvent){if(e.key==='Escape'){e.preventDefault();close();}else wrapTab(e,box.value);}
 async function apply(access:WorkAccess){
  shareDone.value=false;
@@ -52,7 +53,7 @@ async function apply(access:WorkAccess){
  if(controller.value?.message.value==='review_required'&&value.value){submit();return;}
  if(controller.value?.message.value==='success'&&access==='unlisted'&&was==='private'){shareDone.value=true;}
 }
-function submit(){if(!value.value)return;if(openDialog.value){openDialog.value=false;previous?.focus();}emit('submit',value.value);}
+function submit(){if(!value.value)return;if(openDialog.value)dismiss();emit('submit',value.value);}
 async function reload(){await controller.value?.load();}
 defineExpose({open,reload,value});
 onBeforeUnmount(()=>{generation++;clearTimeout(poll);if(openDialog.value){const app=document.getElementById('app');if(app)app.inert=appInert;}});

@@ -251,6 +251,19 @@ it('turns an empty list into a first-card start: the web editor and the guide', 
 
 beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
+it('restores the more-button focus only after the page stops being inert on Escape',async()=>{
+ await mount();root.id='app';
+ const trigger=root.querySelector<HTMLButtonElement>('.card__more-btn')!;
+ trigger.focus();trigger.click();await settle();
+ document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();await settle();
+ expect(root.inert).toBe(true);
+ const inertAtFocus:boolean[]=[];const focus=trigger.focus.bind(trigger);
+ const spy=vi.spyOn(trigger,'focus').mockImplementation(()=>{inertAtFocus.push(root.inert);if(!root.inert)focus();});
+ document.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();
+ expect(root.inert).toBe(false);expect(inertAtFocus).toEqual([false]);expect(document.activeElement).toBe(trigger);
+ spy.mockRestore();
+});
+
 it.each(['delisted','suspended','takedown'])('gives %s restrictions priority over the stored public access badge',async restriction=>{
  const projection=visibilityPolicy({access:'public',effectiveAccess:'denied',restriction,restrictionNote:'Synthetic restriction reason'});
  mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved',workVisibility:projection}]));
