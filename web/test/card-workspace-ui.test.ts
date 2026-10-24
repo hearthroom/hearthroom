@@ -265,3 +265,25 @@ it('hides rollout controls and ignores access filters while disabled, retaining 
  expect(root.querySelector('.tools__seg')).toBeNull();expect(root.querySelector('.card__more')).toBeNull();
  expect(root.querySelector('article')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
 });
+
+it('clears the sharing success notice when the same dialog makes the card private again',async()=>{
+ let current=visibilityPolicy();
+ visibilityMocks.read.mockImplementation(async()=>({workVisibility:current}));
+ visibilityMocks.change.mockImplementation(async(_id,_token,_provider,command)=>{
+  current=visibilityPolicy({access:command.targetAccess,effectiveAccess:command.targetAccess==='private'?'owner':'link',policyRevision:current.policyRevision+'1'});
+  return {workVisibility:current,operation:{operationId:command.operationId,state:'complete'}};
+ });
+ await mount();root.querySelector<HTMLButtonElement>('.card__more-btn')!.click();await settle();
+ document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();await settle();
+ const dialog=()=>document.querySelector<HTMLElement>('[role="dialog"]')!;
+ dialog().querySelector<HTMLInputElement>('input[value="unlisted"]')!.click();await settle();
+ dialog().querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await settle();
+ expect(dialog().textContent).toContain(i18n.global.t('visibility.share.title'));
+ dialog().querySelector<HTMLInputElement>('input[value="private"]')!.click();await settle();
+ dialog().querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await settle();
+ expect(visibilityMocks.change).toHaveBeenCalledTimes(2);
+ expect(dialog().querySelector('h2')?.textContent).toBe(i18n.global.t('visibility.title'));
+ expect(dialog().textContent).not.toContain(i18n.global.t('visibility.share.hint'));
+ expect(dialog().querySelector('input[readonly]')).toBeNull();
+ expect(dialog().querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
+});

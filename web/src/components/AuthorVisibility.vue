@@ -33,7 +33,7 @@ watch(()=>[props.id,props.provider,props.actor,visibilityEnabled.value] as const
  if(props.inline)void readQuota();
  if(c.value.value&&c.value.value.restriction!=='none')try{const token=await props.token();if(token){const data=await communityRequest<CommunityView>('/me/community',token);if(g===generation)invite.value=data.invite??'';}}catch{/* The community page remains available. */}
 },{immediate:true});
-watch([value,phase],([v,p])=>{if(v)emit('changed',p==='ready'?v:{...v,syncState:p==='unknown'||p==='retryable'||p==='error'?'unavailable':'changing'});});
+watch([value,phase],([v,p])=>{if(v?.access!=='unlisted'||p!=='ready')shareDone.value=false;if(v)emit('changed',p==='ready'?v:{...v,syncState:p==='unknown'||p==='retryable'||p==='error'?'unavailable':'changing'});});
 const busy=computed(()=>['loading','saving','checking'].includes(phase.value)||!!props.disabled);
 const locked=computed(()=>!['ready','error'].includes(phase.value));
 watch(locked,b=>emit('busy',b));
@@ -47,6 +47,7 @@ async function open(){if(!visibilityEnabled.value)return;if(props.actor)void own
 function close(){if(busy.value)return;openDialog.value=false;previous?.focus();}
 function keyboard(e:KeyboardEvent){if(e.key==='Escape'){e.preventDefault();close();}else wrapTab(e,box.value);}
 async function apply(access:WorkAccess){
+ shareDone.value=false;
  const was=value.value?.access;await controller.value?.apply(access);
  if(controller.value?.message.value==='review_required'&&value.value){submit();return;}
  if(controller.value?.message.value==='success'&&access==='unlisted'&&was==='private'){shareDone.value=true;}
