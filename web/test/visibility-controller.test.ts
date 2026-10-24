@@ -1,3 +1,4 @@
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(true)};});
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createVisibilityController } from '../src/lib/visibility-controller';
 import type { WorkVisibility } from '../src/lib/work-visibility';
@@ -49,4 +50,25 @@ it('a changing projection has an actionable unknown state even without a locally
  const c=setup();await c.load();expect(c.phase.value).toBe('unknown');
  await c.apply('unlisted');expect(mocks.change).not.toHaveBeenCalled();
  mocks.read.mockResolvedValue({workVisibility:policy()});await c.check();expect(c.phase.value).toBe('ready');
+});
+
+it('only offers explicit original-command continuation after distinct not-admitted proof and unchanged allowed CAS',async()=>{
+ mocks.change.mockRejectedValueOnce(new Error('network'));
+ mocks.operation.mockRejectedValue(new VisibilityError(404,{error:'visibility_operation_not_found'}));
+ const c=setup();await c.load();await c.apply('unlisted');
+ const original=mocks.change.mock.calls[0][3];expect(c.phase.value).toBe('retryable');
+ await c.check();expect(mocks.change).toHaveBeenCalledTimes(1);
+ mocks.change.mockResolvedValue({operation:{operationId:original.operationId,state:'complete'},workVisibility:policy({access:'unlisted'})});
+ await c.resume();expect(mocks.change.mock.calls[1][3]).toEqual(original);expect(c.phase.value).toBe('ready');
+});
+it.each([
+ ['generic404',404,'card_not_found',{}],['unavailable',503,'visibility_provider_unavailable',{}],
+ ['policyDrift',404,'visibility_operation_not_found',{policyRevision:'new'}],
+ ['approvalDrift',404,'visibility_operation_not_found',{approvalRevision:'new'}],
+ ['changing',404,'visibility_operation_not_found',{syncState:'changing'}],
+ ['disallowed',404,'visibility_operation_not_found',{actions:['set_private']}],
+] as const)('never resends when %s does not prove safe original continuation',async(_name,status,error,extra)=>{
+ mocks.change.mockRejectedValue(new Error('network'));mocks.operation.mockRejectedValue(new VisibilityError(status,{error}));
+ const c=setup();await c.load();mocks.read.mockResolvedValue({workVisibility:policy(extra as any)});await c.apply('unlisted');
+ expect(c.phase.value).toBe('unknown');await c.resume();expect(mocks.change).toHaveBeenCalledTimes(1);
 });

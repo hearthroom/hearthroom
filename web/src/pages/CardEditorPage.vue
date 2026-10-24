@@ -53,6 +53,7 @@ import { can } from "@/lib/provider";
 import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
+import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
@@ -675,6 +676,7 @@ function exportRegex() {
 // ── 儲存 ──────────────────────────────────────────────────────────
 
 const roleVisibility = ref("");
+const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl = ref<InstanceType<typeof AuthorVisibility>|null>(null);
 const workVisibility = ref<WorkVisibility|null>(null);
 const visibilityBusy = ref(false);
@@ -1013,7 +1015,7 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
-        <p v-if="editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
+        <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
@@ -1294,7 +1296,7 @@ async function exportCard(format: "png" | "json") {
 
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
-          <AuthorVisibility ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
+          <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <div class="panel checklist">
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul>
@@ -1348,7 +1350,7 @@ async function exportCard(format: "png" | "json") {
           <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry)">
             {{ saveLabel }}
           </button>
-          <button v-if="!isNew" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
+          <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
             {{ workVisibility?.syncState!=='complete'?$t('visibility.title'):workVisibility?.review==='pending'?$t('mine.badge.pending'):workVisibility?$t(`visibility.short.${workVisibility.access}`):$t('visibility.title') }}
           </button>
           <button v-if="can('chatTest')" type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>

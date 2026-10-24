@@ -17,6 +17,7 @@ import { accountToken, connectAccount, needsReauthorization } from "@/lib/connec
 import { lastShown } from "@/lib/mine-memory";
 import { confirmForm } from "@/lib/confirm";
 import { askRating } from "@/lib/rating";
+import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
 import { signedInHint } from "@/lib/signin-hint";
@@ -28,6 +29,7 @@ const session = useSession();
 const { lp } = useLocalePath();
 const { t, locale } = useI18n();
 
+const visibilityEnabled=useWorkVisibilityCapability();
 const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 /** 符合目前搜尋與篩選的張數（每家各算） */
 const totals = ref<Partial<Record<ProviderId, number>>>({});
@@ -47,7 +49,7 @@ const PAGE_SIZE = 24;
 type Filter = "all" | "public" | "unlisted" | "private";
 const FILTERS: Filter[] = ["all", "public", "unlisted", "private"];
 const q = computed(() => typeof route.query.q === "string" ? route.query.q : "");
-const filter = computed<Filter>(() => FILTERS.includes(route.query.filter as Filter) ? route.query.filter as Filter : "all");
+const filter = computed<Filter>(() => visibilityEnabled.value&&FILTERS.includes(route.query.filter as Filter) ? route.query.filter as Filter : "all");
 const page = computed(() => Math.max(1, Number(route.query.page) || 1));
 const total = computed(() => Object.values(totals.value).reduce((a, b) => a + (b ?? 0), 0));
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
@@ -134,7 +136,7 @@ const visibilityCard=ref<WorkspaceCard|null>(null);
 const visibilityDialog=ref<InstanceType<typeof AuthorVisibility>|null>(null);
 const visibilityActor=computed(()=>{const p=visibilityCard.value?.sourceProvider??visibilityCard.value?.provider;return String(session.profile?.identities.find(i=>i.provider===p)?.externalId??session.me?.accountNumId??'');});
 const visibilityToken=async()=>visibilityCard.value?cardToken(visibilityCard.value):null;
-async function adjustVisibility(card:WorkspaceCard){if(card.sourceAvailable===false)return;visibilityCard.value=card;await nextTick();await visibilityDialog.value?.open();}
+async function adjustVisibility(card:WorkspaceCard){if(!visibilityEnabled.value||card.sourceAvailable===false)return;visibilityCard.value=card;await nextTick();await visibilityDialog.value?.open();}
 async function submitReview(expected:WorkVisibility){
  const card=visibilityCard.value;if(!card||busy.value||!expected.actions.includes('submit_review'))return;
  const provider=card.sourceProvider??card.provider,source=card.sourceRoleId??card.roleId;
@@ -208,7 +210,7 @@ watch(()=>route.query.fresh, fresh=>{
         <span class="sr-only">{{ $t("mine.search.label") }}</span>
         <input v-model="draft" type="search" class="input" :placeholder="$t('mine.search.placeholder')" maxlength="100" enterkeyhint="search" />
       </label>
-      <div class="seg tools__seg" role="group" :aria-label="$t('mine.filter.label')">
+      <div v-if="visibilityEnabled" class="seg tools__seg" role="group" :aria-label="$t('mine.filter.label')">
         <button v-for="f in FILTERS" :key="f" type="button" class="seg__item" :class="{ 'seg__item--on': filter === f }" :aria-pressed="filter === f" @click="navigate({ filter: f, page: undefined })">{{ f==='all'?$t('mine.filter.all'):$t(`visibility.short.${f}`) }}</button>
       </div>
     </div>
@@ -245,13 +247,14 @@ watch(()=>route.query.fresh, fresh=>{
         v-for="(card, i) in visible"
         :key="workKey(card)"
         :card="card"
+        :visibility-enabled="visibilityEnabled"
         :busy="busy === workKey(card)"
         :eager="i < 6"
         @toggle="adjustVisibility(card)"
       />
     </div>
 
-    <AuthorVisibility v-if="visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
+    <AuthorVisibility v-if="visibilityEnabled&&visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
 
     <nav v-if="pageCount > 1" class="pager" :aria-label="$t('mine.pages')">
       <button type="button" class="btn btn--sm pager__step" :disabled="page <= 1" :aria-label="$t('pager.prev')" @click="goPage(page - 1)">

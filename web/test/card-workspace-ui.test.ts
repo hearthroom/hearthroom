@@ -1,3 +1,5 @@
+const rollout=vi.hoisted(()=>({enabled:true}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
 
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
@@ -247,7 +249,7 @@ it('turns an empty list into a first-card start: the web editor and the guide', 
  expect(empty.querySelector('a[href$="/guide"]')).not.toBeNull();
 });
 
-beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
 it.each(['delisted','suspended','takedown'])('gives %s restrictions priority over the stored public access badge',async restriction=>{
  const projection=visibilityPolicy({access:'public',effectiveAccess:'denied',restriction,restrictionNote:'Synthetic restriction reason'});
@@ -256,4 +258,10 @@ it.each(['delisted','suspended','takedown'])('gives %s restrictions priority ove
  expect(main.textContent).toContain(i18n.global.t(`visibility.badge.${restriction}`));
  expect(main.classList.contains('card__status--alert')).toBe(true);
  expect(root.querySelector('.card__body')?.textContent).toContain('Synthetic restriction reason');
+});
+
+it('hides rollout controls and ignores access filters while disabled, retaining the saved workspace',async()=>{
+ rollout.enabled=false;await mount();
+ expect(root.querySelector('.tools__seg')).toBeNull();expect(root.querySelector('.card__more')).toBeNull();
+ expect(root.querySelector('article')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
 });
