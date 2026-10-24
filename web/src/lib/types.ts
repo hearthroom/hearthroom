@@ -6,6 +6,8 @@ export interface Localized { zh: string; en: string; ja: string; ko: string }
 export type Zone = "zh" | "en" | "ja" | "ko";
 
 export interface CommunityCard {
+  canInteract?: boolean;
+  listed?: boolean;
   id: string;
   roleId: string;
   sourceRoleId?: string;

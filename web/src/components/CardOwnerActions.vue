@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ApiError, fetchDraftState, fetchRatingDraft, registerCard, saveRatingDraft, type DraftState } from '@/lib/api';
+import { ApiError, fetchRatingDraft, registerCard, saveRatingDraft } from '@/lib/api';
 import { accountToken } from '@/lib/connections';
 import { confirmDialog } from '@/lib/confirm';
 import { askRating } from '@/lib/rating';
@@ -10,6 +10,8 @@ import { currentProvider, type ProviderId } from '@/lib/provider';
 import { platformPath } from '@/lib/distribution';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
+import AuthorVisibility from './AuthorVisibility.vue';
+import type { WorkVisibility } from '@/lib/work-visibility';
 import type { CommunityCard } from '@/lib/types';
 const props = defineProps<{card: CommunityCard}>();
 const emit = defineEmits<{submitted: []}>();
@@ -24,20 +26,13 @@ const owner = computed(() => !!provider.value && (
 ));
 const busy = ref(false);
 const error = ref('');
-// 草稿狀態（owner 2026-10-08：改了卡、卡片頁沒說，按遊玩玩到的還是過審那一版）。讀不到就不顯示，不擋其他操作。
-const draft = ref<DraftState | null>(null);
-watch(owner, async (isOwner) => {
-  if (!isOwner || draft.value) return;
-  try {
-    const token = await accountToken(provider.value, props.card.author.accountNumId);
-    if (token) draft.value = await fetchDraftState(sourceId.value, token, provider.value);
-  } catch { /* 狀態只是提示 */ }
-}, { immediate: true });
-const approved = computed(() => props.card.status === 'approved');
+const visibility=ref<WorkVisibility|null>(null);
+const visibilityControl=ref<InstanceType<typeof AuthorVisibility>|null>(null);
+const ownerToken=()=>accountToken(provider.value,props.card.author.accountNumId);
 // 已發布的卡：草稿改了、新版不在審時，可以直接送審更新（跟「我的卡片」的編輯器同一個送審）
-const canSubmitUpdate = computed(() => approved.value && !!draft.value?.draftChanged && draft.value.updateStatus !== 'pending');
-async function submit() {
-  if (busy.value || !owner.value) return;
+const canSubmitUpdate = computed(() => !!visibility.value?.actions.includes('submit_update'));
+async function submit(expected=visibility.value) {
+  if (busy.value || !owner.value || !expected || !expected.actions.some(a=>a==='submit_review'||a==='submit_update')) return;
   // 每次送審都附分級問卷：先帶出作者存過的評測讓他確認，沒有就從頭填
   let token: string | null = null;
   try { token = await accountToken(provider.value, props.card.author.accountNumId); } catch { token = null; }
@@ -54,8 +49,8 @@ async function submit() {
   busy.value = true; error.value = '';
   try {
     void saveRatingDraft(sourceId.value, answers, token, provider.value).catch(() => {});
-    await registerCard(sourceId.value, token, answers, [], provider.value);
-    if (draft.value) draft.value = { ...draft.value, draftChanged: false, updateStatus: 'pending' };
+    await registerCard(sourceId.value, token, answers, [], provider.value, undefined, undefined, expected);
+    await visibilityControl.value?.reload();
     emit('submitted');
   } catch (err) {
     error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'
@@ -65,18 +60,16 @@ async function submit() {
 </script>
 <template>
   <div v-if="owner" class="card-owner-actions">
+    <AuthorVisibility ref="visibilityControl" :id="sourceId" :card-id="String(card.num??card.id)" :provider="provider" :actor="String(card.author.accountNumId)" :name="card.name" :token="ownerToken" :disabled="busy" @changed="visibility=$event" @submit="submit" />
     <RouterLink class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
     <!-- 作者試玩自己的草稿（mode=source）；公開的「遊玩」仍開過審那一版，作者也看得到玩家看到的樣子 -->
     <a class="btn" :href="platformPath(lp(`/play/${card.num ?? card.id}?mode=source`), provider)">{{ t('card.owner.playDraft') }}</a>
-    <button v-if="card.status && !['approved','pending'].includes(card.status)" class="btn" :disabled="busy" @click="submit">{{ t('mine.action.submit') }}</button>
-    <button v-if="canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit">{{ t('card.owner.submitUpdate') }}</button>
-    <p v-if="draft?.draftChanged" class="notice">{{ t('workspace.draftChanged') }}</p>
-    <p v-else-if="approved && draft?.updateStatus === 'pending'" class="notice">{{ t('workspace.updatePending') }}</p>
+    <button v-if="canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit()">{{ t('card.owner.submitUpdate') }}</button>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
   </div>
 </template>
 <style scoped>
 .card-owner-actions { display:flex; flex-wrap:wrap; gap:var(--s-2); grid-column:1 / -1; }
 .card-owner-actions .btn { min-height:44px; flex:1; }
-.card-owner-actions p { flex-basis:100%; }
+.card-owner-actions p, .card-owner-actions :deep(.author-visibility) { flex-basis:100%; }
 </style>
