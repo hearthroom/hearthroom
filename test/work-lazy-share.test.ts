@@ -57,6 +57,7 @@ it.each([false,true])('lets the scoped author read a never-submitted private car
  expect(await getCard(env.DB,source)).toBeNull();
  for(const table of ['works','managed_work_access','visibility_operations','card_registrations'])expect(await env.DB.prepare(`SELECT count(*) AS n FROM ${table}`).first()).toEqual({n:0});
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="detail",outcome="allow"} 1');
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="detail",outcome="denied"} 3');
 });
 
 it('does not let a scoped reader impersonate the author of a private source',async()=>{
@@ -64,4 +65,12 @@ it('does not let a scoped reader impersonate the author of a private source',asy
  vi.spyOn(hostGateway,'read').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Private source'}));
  const denied=await request(source);expect(denied.status).toBe(404);
  expect(await denied.text()).not.toContain('Private source');
+});
+
+it('preserves public-link registration and social access when the visitor is its author',async()=>{
+ const {source}=await fixture();identitiesFor({harbor:{owner:11}});await adult(await makeMember(11));
+ vi.spyOn(hostGateway,'read').mockResolvedValue(role({roleId:source,authorNumId:11}));
+ const response=await request(source,'owner');expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({sourceRoleId:source,status:'unlisted',canInteract:true,listed:false});
+ expect(await getCard(env.DB,source)).toMatchObject({status:'unlisted',registered_at:0});
 });
