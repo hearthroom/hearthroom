@@ -1,0 +1,13 @@
+{
+  "draft": true,
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "公開範圍讓你決定誰能看見卡片。",
+    "zh-Hans": "可见范围让你决定谁能看到卡片。",
+    "en": "Visibility lets you choose who can open your card.",
+    "ja": "公開範囲で、カードを見られる人を選べます。",
+    "ko": "공개 범위에서 카드를 볼 수 있는 사람을 정할 수 있어요."
+  }
+}

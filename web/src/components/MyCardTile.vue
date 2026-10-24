@@ -8,6 +8,7 @@ import { can, currentProvider } from "@/lib/provider";
 import { cardStill, cardThumb } from "@/lib/card-thumb";
 import type { MyCard } from "@/lib/api";
 import RatingMark from "./RatingMark.vue";
+import { visibilityStateKey } from "@/lib/visibility-presentation";
 import { ratingName } from "@/lib/rating";
 
 /** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
@@ -18,12 +19,14 @@ const { lp } = useLocalePath();
 const source=computed(()=>props.card.sourceProvider??props.card.provider??currentProvider());
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
 const detailHref=computed(()=>lp(`/cards/${props.card.num ?? props.card.detailId ?? props.card.workId ?? sourceId.value}`));
-const hasDetails = computed(() =>
+const hasDetails = computed(() => props.card.workVisibility ? (
+ props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
+) : (
   !!props.card.draftChanged ||
   ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
   (props.card.status === 'rejected' && !!props.card.note) ||
   props.card.sourceAvailable === false
-);
+));
 
 /*
  * 封面角上一個狀態標，四種主要狀態（owner 2026-10-05）：同一個深色底，靠字前面的燈號分——
@@ -33,6 +36,9 @@ const hasDetails = computed(() =>
  */
 const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }>(() => {
   const c = props.card;
+  if(c.workVisibility?.syncState==='unavailable')return {key:'visibility.operation.unknown',tone:'wait'};
+  if(c.workVisibility?.syncState==='changing')return {key:'visibility.operation.updating',tone:'wait'};
+  if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
   if (!c.status || c.status === "approved") return { key: "mine.badge.listed", tone: "on" };
   if (c.status === "rejected" || c.status === "unshared") return { key: `mine.badge.${c.status}`, tone: "alert" };
@@ -73,7 +79,7 @@ function listen(on: boolean) {
 }
 function toggleMenu() { menuOpen.value = !menuOpen.value; listen(menuOpen.value); }
 function closeMenu() { if (!menuOpen.value) return; menuOpen.value = false; listen(false); }
-function withdraw() { closeMenu(); emit("toggle"); }
+function withdraw() { const trigger=more.value?.querySelector<HTMLButtonElement>('.card__more-btn');closeMenu();trigger?.focus();emit("toggle"); }
 onBeforeUnmount(() => listen(false));
 </script>
 
@@ -86,8 +92,11 @@ onBeforeUnmount(() => listen(false));
       <div v-else class="card__void"><span>{{ initial }}</span></div>
       <!-- 已發布但改過沒送審：狀態標下面再一個琥珀燈（owner 2026-10-05：改了忘記提交，自己都不知道） -->
       <span class="card__badges">
-        <span class="card__status" :class="`card__status--${status.tone}`">{{ $t(status.key) }}</span>
-        <span v-if="card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
+        <span class="card__status" :class="[`card__status--${status.tone}`,{'card__status--access':!!card.workVisibility}]"><svg v-if="card.workVisibility?.syncState==='complete'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><template v-if="card.workVisibility.access==='private'"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></template><template v-else-if="card.workVisibility.access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></template><template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template></svg>{{ $t(status.key) }}</span>
+        <span v-if="card.workVisibility?.review==='pending'" class="card__status card__status--wait">{{ $t('mine.badge.pending') }}</span>
+        <span v-if="card.workVisibility?.update==='pending'" class="card__status card__status--wait">{{ $t('visibility.badge.updatePending') }}</span>
+        <span v-if="card.workVisibility?.update==='rejected'" class="card__status card__status--alert">{{ $t('visibility.badge.updateRejected') }}</span>
+        <span v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
       <RatingMark v-if="card.registered && card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
     </a>
@@ -96,10 +105,10 @@ onBeforeUnmount(() => listen(false));
       <div class="card__title">
         <h3 class="card__name"><a :href="detailHref" class="card__link">{{ card.name }}</a></h3>
         <!-- 封面那層對讀屏隱藏（跟名字是同一個連結），狀態標在這裡再念一次 -->
-        <span class="sr-only">{{ $t(status.key) }}<template v-if="card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
+        <span class="sr-only">{{ $t(status.key) }}<template v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
         <!-- 送審、重新送審都在編輯頁；這裡只留已登記卡的「撤回」（別處沒有這個入口）。
              放在名字旁邊而不是操作列：每張卡的操作列都是同樣兩顆鍵，排起來才整齊 -->
-        <div v-if="card.registered" ref="more" class="card__more">
+        <div ref="more" class="card__more">
           <button
             type="button" class="btn btn--ghost btn--icon btn--sm card__more-btn" :aria-label="$t('mine.action.more')"
             aria-haspopup="menu" :aria-expanded="menuOpen" :disabled="busy || card.sourceAvailable===false" @click="toggleMenu"
@@ -107,7 +116,7 @@ onBeforeUnmount(() => listen(false));
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="15.5" cy="10" r="1.5" /></svg>
           </button>
           <div v-if="menuOpen" class="card__menu" role="menu">
-            <button type="button" role="menuitem" class="card__menu-item" @click="withdraw">{{ $t("mine.action.unregister") }}</button>
+            <button type="button" role="menuitem" class="card__menu-item" @click="withdraw">{{ $t("visibility.menu") }}</button>
           </div>
         </div>
       </div>
@@ -122,12 +131,15 @@ onBeforeUnmount(() => listen(false));
       </p>
 
       <div v-if="hasDetails" class="card__body">
+        <p v-if="card.workVisibility" class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+        <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
         <p v-if="card.updateStatus==='pending'" class="card__note">{{ $t("workspace.updatePending") }}</p>
         <p v-if="card.updateStatus==='rejected'" class="card__note card__note--alert">{{ $t("workspace.updateRejected") }}</p>
         <p v-if="card.updateStatus==='superseded'" class="card__note card__note--alert">{{ $t("workspace.reviewSaveRetry") }}</p>
         <p v-if="(card.status === 'rejected' || card.updateStatus==='rejected') && card.note" class="card__note card__note--alert">{{ $t("mine.note.rejected", { note: card.note }) }}</p>
         <p v-if="card.sourceAvailable===false" class="card__note">{{ $t('workspace.sourceLoading') }}</p>
+        </template>
       </div>
 
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
@@ -142,6 +154,7 @@ onBeforeUnmount(() => listen(false));
 </template>
 
 <style scoped>
+.card__status--access::before{display:none}.card__status svg{width:14px;height:14px;flex-shrink:0}.card__status{display:inline-flex;gap:var(--s-1);align-items:center}
 /* 跟首頁卡片同一副骨架（CardTile）：3:4 封面、兩行名字、兩行簡介、一行資訊；多一列操作 */
 .card {
   position: relative; display: flex; flex-direction: column; min-width: 0;
