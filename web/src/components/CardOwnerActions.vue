@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ApiError, fetchRatingDraft, registerCard, saveRatingDraft } from '@/lib/api';
+import { ApiError, fetchDraftState, type DraftState, fetchRatingDraft, registerCard, saveRatingDraft } from '@/lib/api';
 import { accountToken } from '@/lib/connections';
 import { confirmDialog } from '@/lib/confirm';
 import { askRating } from '@/lib/rating';
@@ -11,6 +11,7 @@ import { platformPath } from '@/lib/distribution';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
+import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from './AuthorVisibility.vue';
 import type { WorkVisibility } from '@/lib/work-visibility';
 import type { CommunityCard } from '@/lib/types';
@@ -31,6 +32,13 @@ const visibility=ref<WorkVisibility|null>(null);
 const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl=ref<InstanceType<typeof AuthorVisibility>|null>(null);
 const ownerToken=()=>accountToken(provider.value,props.card.author.accountNumId);
+const legacyDraft=ref<DraftState|null>(null);
+let statusGeneration=0;
+watch([owner,visibilityEnabled,sourceId],async([isOwner,enabled])=>{
+ const g=++statusGeneration;legacyDraft.value=null;if(!isOwner||enabled)return;
+ try{const token=await ownerToken();if(!token)return;const state=await fetchDraftState(sourceId.value,token,provider.value);if(g===statusGeneration)legacyDraft.value=state;}catch{/* Legacy status is read-only and cannot authorize actions. */}
+},{immediate:true});
+const legacyState=computed(()=>legacyAuthorStateKey(legacyDraft.value,props.card.status));
 // 已發布的卡：草稿改了、新版不在審時，可以直接送審更新（跟「我的卡片」的編輯器同一個送審）
 const canSubmitUpdate = computed(() => !!visibility.value?.actions.includes('submit_update'));
 async function submit(expected=visibility.value) {
@@ -62,6 +70,7 @@ async function submit(expected=visibility.value) {
 </script>
 <template>
   <div v-if="owner" class="card-owner-actions">
+    <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ t(legacyState) }}</p>
     <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" :id="sourceId" :card-id="String(card.num??card.id)" :provider="provider" :actor="String(card.author.accountNumId)" :name="card.name" :token="ownerToken" :disabled="busy" @changed="visibility=$event" @submit="submit" />
     <RouterLink class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
     <!-- 作者試玩自己的草稿（mode=source）；公開的「遊玩」仍開過審那一版，作者也看得到玩家看到的樣子 -->

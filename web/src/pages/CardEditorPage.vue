@@ -40,6 +40,8 @@ import {
   saveAuthorAsset,
   ApiError,
   registerCard,
+  fetchDraftState,
+  type DraftState,
   fetchRatingDraft,
   saveRatingDraft,
   beginCardEdit,
@@ -54,6 +56,7 @@ import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
+import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
@@ -557,6 +560,7 @@ onMounted(async () => {
     }
     void loadValidation();
     void visibilityControl.value?.reload();
+    void refreshLegacyState();
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
@@ -676,6 +680,10 @@ function exportRegex() {
 // ── 儲存 ──────────────────────────────────────────────────────────
 
 const roleVisibility = ref("");
+const legacyDraft=ref<DraftState|null>(null);
+const legacyState=computed(()=>legacyAuthorStateKey(legacyDraft.value,roleVisibility.value));
+async function refreshLegacyState(){if(visibilityEnabled.value||!roleId.value)return;try{const token=await session.accessToken();if(token)legacyDraft.value=await fetchDraftState(roleId.value,token,editorProvider.value);}catch{/* Status cannot grant visibility actions. */}}
+
 const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl = ref<InstanceType<typeof AuthorVisibility>|null>(null);
 const workVisibility = ref<WorkVisibility|null>(null);
@@ -793,6 +801,7 @@ async function save() {
     track("card_edit", { subject: targetRoleId });
     void loadValidation();
     void visibilityControl.value?.reload();
+    void refreshLegacyState();
 
     // 建立完成後把網址換成編輯頁：重新整理不該回到一張空表單。
     //
@@ -1015,6 +1024,7 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
+        <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
