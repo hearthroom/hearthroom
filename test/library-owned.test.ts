@@ -21,3 +21,11 @@ it('does not label unavailable policy reads as author_private',async()=>{
  const r=await SELF.fetch('https://c.test/v1/me/conversations',{headers:bearer('fan')});
  expect((await r.json() as any).conversations[0]).toMatchObject({canGenerate:false,reason:'unavailable'});
 });
+it('projects a qualified private player as resumable without a closed-history reason',async()=>{
+ await SELF.fetch('https://c.test/v1/me/conversations',{method:'PUT',headers:{...bearer('fan'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'old',conversationId:'saved'})});
+ ownedHistory.read=async()=>({conversationId:'saved',roleId:'old',title:'Saved title',roleName:'Retained role',canGenerate:true});
+ const result=await SELF.fetch('https://c.test/v1/me/conversations',{headers:bearer('fan')});
+ const row=(await result.json() as any).conversations[0];
+ expect(row).toMatchObject({conversationId:'saved',conversationRoleId:'old',conversationTitle:'Saved title',canGenerate:true});
+ expect(row).not.toHaveProperty('reason');
+});

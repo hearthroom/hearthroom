@@ -59,10 +59,11 @@ export interface CommunityCard {
   /** 本站永久數字卡號，私有卡與公開卡共用同一套編號。 */
   num?: number;
   /**
-   * 連結可讀、尚未上榜的卡也會帶回：這張卡在本站的狀態（unlisted＝還沒提交過）。
+   * 私密玩家入口與連結可讀、尚未上榜的卡也會帶回本站狀態。
+   * private 不開放社群互動；unlisted＝還沒提交過。
    * 在榜的卡沒有這個欄位。
    */
-  status?: "unlisted" | "pending" | "rejected" | "needs_review" | "unshared" | "approved";
+  status?: "private" | "unlisted" | "pending" | "rejected" | "needs_review" | "unshared" | "approved";
 }
 
 export interface CardPage {
