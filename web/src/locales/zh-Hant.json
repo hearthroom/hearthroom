@@ -1,4 +1,7 @@
 {
+  "library.historyClosed": "作者未開放",
+  "library.viewHistory": "查看記錄",
+  "library.historyHint": "可以回顧記錄，不能繼續。",
   "nav.board": "榜單",
   "nav.mine": "我的卡片",
   "nav.login": "登入",

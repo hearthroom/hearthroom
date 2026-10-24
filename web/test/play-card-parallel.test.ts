@@ -14,6 +14,7 @@ vi.mock("../src/lib/library", () => ({
 }));
 vi.mock("../src/lib/distribution", () => ({ copies: vi.fn() }));
 
+vi.mock("../src/lib/owned-history",()=>({fetchOwnedHistory:vi.fn(async()=>({conversationId:"conv-1",roleId:"resumed-role",canGenerate:true}))}));
 import { resolvePlayCard } from "../src/lib/play-card";
 
 beforeEach(() => { started.length = 0; platforms = async n => [{ provider: "harbor", roleId: `role-${n}`, playable: true }]; });
@@ -26,9 +27,9 @@ it("asks for the platforms while the card is still loading", async () => {
   expect(await done).toMatchObject({ number: "100076", roleId: "role-100076" });
 });
 
-it("resumes a conversation on the card's current version, asking everything while the card is still loading", async () => {
+it("resumes a conversation on the card's current version, after validating owned capabilities", async () => {
   const done = resolvePlayCard("100076", "harbor", "zh", false, undefined, { id: "conv-1", token: "t" });
-  await Promise.resolve();
+  await vi.waitFor(()=>expect(started).toContain("card:100076"));
   expect(started).toEqual(["conversation:conversations/conv-1", "platforms:100076", "card:100076"]);
   releaseCard();
   expect(await done).toMatchObject({ number: "100076", roleId: "role-100076" });
@@ -36,9 +37,10 @@ it("resumes a conversation on the card's current version, asking everything whil
 
 it("resumes on the recorded version when the card has no playable current version", async () => {
   for (const next of [async () => [], async () => { throw new Error("unavailable"); }]) {
+    started.length = 0;
     platforms = next;
     const done = resolvePlayCard("100076", "harbor", "zh", false, undefined, { id: "conv-1", token: "t" });
-    await Promise.resolve();
+    await vi.waitFor(()=>expect(started).toContain("card:100076"));
     releaseCard();
     expect(await done).toMatchObject({ number: "100076", roleId: "resumed-role" });
   }

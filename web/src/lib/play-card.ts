@@ -2,30 +2,37 @@ import { fetchCard, fetchCardPlatforms, fetchReviewDetail } from './api';
 import { copies } from './distribution';
 import { libraryRequest } from './library';
 import type { ProviderId } from './provider';
+import { fetchOwnedHistory, type HistoryAccessReason } from './owned-history';
+
+interface PlayCardResolved {
+ card: Awaited<ReturnType<typeof fetchCard>> | null; number: string; roleId: string;
+ conversationId?: string; readOnly?: boolean; reason?: HistoryAccessReason; title?: string;
+}
 
 /** Public URLs identify the work; only the selected host's role ID reaches Stage. */
-export async function resolvePlayCard(id: string, provider: ProviderId, language: string, source = false, review?: { id: string; token: string }, resume?: { id: string; token: string }) {
+export async function resolvePlayCard(id: string, provider: ProviderId, language: string, source = false, review?: { id: string; token: string }, resume?: { id: string; token: string; providerToken?: string }): Promise<PlayCardResolved> {
   if (review) {
     const detail = await fetchReviewDetail(review.id, review.token);
     if (String(detail.card.id) !== id) throw new Error('review_card_mismatch');
     return { card: null, number: String(detail.card.id), roleId: detail.card.roleId };
   }
-  // 網址上已經是卡號時，卡片、續玩紀錄、可玩平台三件事一起問，不必一件等一件（開卡前省一趟往返）。
-  // 對照與檢查照舊在卡片回來之後做；卡號跟網址對不上時，平台清單用卡片上的卡號重問。
+  // Verify the private pointer and actual Provider ownership before any public read.
+  const previous = resume ? await libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string}>(
+    `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token) : null;
+  if (previous && resume) {
+    if ((String(previous.cardNumber) !== id && previous.roleId !== id) || previous.provider !== provider) throw new Error('conversation_card_mismatch');
+    const owned = await fetchOwnedHistory(provider, resume.id, resume.providerToken ?? resume.token);
+    if (owned.conversationId !== resume.id || owned.roleId !== previous.roleId) throw new Error('conversation_card_mismatch');
+    if (!owned.canGenerate) return {card:null,number:String(previous.cardNumber ?? previous.roleId),roleId:owned.roleId,
+      conversationId:owned.conversationId,readOnly:true,reason:owned.reason ?? 'unavailable',title:owned.title};
+  }
   const early = /^[1-9]\d*$/.test(id);
-  const previousRequest = resume
-    ? libraryRequest<{ cardNumber: number; provider: ProviderId; roleId: string }>(
-      `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token)
-    : null;
   const platformRequest = !source && early ? fetchCardPlatforms(id) : null;
-  // 卡片那一步先失敗時，這兩個結果沒人等；先掛上處理，免得變成未處理的拒絕。
-  previousRequest?.catch(() => {});
   platformRequest?.catch(() => {});
   const card = await fetchCard(id, language, { quiet: true });
   const number = String(card.num ?? card.id);
   if (!/^[1-9]\d*$/.test(number)) throw new Error('card_number_unavailable');
-  if (previousRequest) {
-    const previous = await previousRequest;
+  if (previous) {
     if (String(previous.cardNumber) !== number || previous.provider !== provider) throw new Error('conversation_card_mismatch');
     // 紀錄記的是當時玩的版本；作者更新後改開目前上架的版本，伺服器開局時會把舊版上的對話接過來，
     // 像遊戲更新一樣接著玩。卡片下架或這個平台暫時不能玩時，才回到紀錄上的版本。

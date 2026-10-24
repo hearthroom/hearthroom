@@ -1,4 +1,7 @@
 {
+  "library.historyClosed": "Not available",
+  "library.viewHistory": "View history",
+  "library.historyHint": "You can read it back, but not continue.",
   "nav.board": "Board",
   "nav.mine": "My cards",
   "nav.login": "Sign in",
