@@ -14571,6 +14571,91 @@
         },
         "x-capability": "work-access-v1"
       }
+    },
+    "/open/v1/conversation/owned": {
+      "get": {
+        "operationId": "getOwnedConversation",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Read an owned conversation identity and current generation capability",
+        "description": "Requires chat.play and verifies the calling application tenant and account own the conversation. Returns its original roleId, saved title, immutable revision roleName, canGenerate and a bounded denial reason. Does not start a conversation, move revisions, insert greetings, call a model or charge credits. History remains available through conversation/messages even when canGenerate is false. This projection never includes private agent configuration content or author restoration metadata. The response is private, no-store; clients refresh capabilities before re-enabling generation. A pre-admission WebSocket failure may return author_private without accepted/streamMeta; preserve the draft and enter read-only history. Accepted operation replay keeps its existing outcome.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned identity and capabilities; no conversation mutation.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversationId",
+                    "roleId",
+                    "title",
+                    "roleName",
+                    "canGenerate"
+                  ],
+                  "properties": {
+                    "conversationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "roleId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "roleName": {
+                      "type": "string",
+                      "description": "Display name of the already-played immutable revision; empty for mutable sources or missing snapshots."
+                    },
+                    "canGenerate": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "author_private",
+                        "restricted",
+                        "unavailable"
+                      ],
+                      "description": "Present on denial. author_private is a confirmed policy fact; missing dependencies or unclassifiable denial use unavailable."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation missing, deleted, outside the calling tenant or owned by another account."
+          }
+        }
+      }
     }
   },
   "components": {

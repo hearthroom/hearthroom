@@ -58,10 +58,10 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
     <div v-else-if="loading" class="library__rows" aria-hidden="true"><div v-for="n in 4" :key="n" class="ghost library__ghost" /></div>
     <div v-else-if="empty" class="empty panel library__empty"><MascotSay src="/mascot/chuchu-sleep.webp" :size="132" /><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
     <div v-else-if="tab === 'conversations'" class="library__rows">
-      <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.cardNumber ?? chat.conversationRoleId)}?resume=${encodeURIComponent(chat.conversationId)}`), chat.provider)" class="conversation panel">
+      <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.cardNumber ?? chat.conversationRoleId)}?resume=${encodeURIComponent(chat.conversationId)}`), chat.provider)" :class="{'conversation--closed':chat.canGenerate === false}" class="conversation panel">
         <CoverImg v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
-        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || displayName(chat.roleName, locale) || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ displayName(chat.roleName, locale) }}</p><p class="conversation__preview muted">{{ $t('library.resumeHint') }}</p></div>
-        <span class="conversation__continue">{{ $t('library.resume') }} <AccountIcon name="arrow" /></span>
+        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || displayName(chat.roleName, locale) || $t('library.untitled') }}</h2><span v-if="chat.reason === 'author_private'" class="chip">{{ $t('library.historyClosed') }}</span><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ displayName(chat.roleName, locale) }}</p><p class="conversation__preview muted">{{ $t(chat.canGenerate === false ? 'library.historyHint' : 'library.resumeHint') }}</p></div>
+        <span class="conversation__continue">{{ $t(chat.canGenerate === false ? 'library.viewHistory' : 'library.resume') }} <AccountIcon name="arrow" /></span>
       </a>
     </div>
     <div v-else class="library__authors">
@@ -71,6 +71,7 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
   </div>
 </template>
 <style scoped>
+.conversation--closed .conversation__avatar { filter:grayscale(1); opacity:.7; }
 .library { max-width: 1120px; }
 .library__header { display:flex; align-items:center; justify-content:space-between; gap:var(--s-5); padding-block:var(--s-5) var(--s-6); }
 .library__header h1 { font-size:clamp(1.75rem, 4vw, 2.25rem); margin-block:var(--s-2); }

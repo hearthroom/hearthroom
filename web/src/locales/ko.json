@@ -1,4 +1,7 @@
 {
+  "library.historyClosed": "이용 불가",
+  "library.viewHistory": "기록 보기",
+  "library.historyHint": "기록은 볼 수 있지만 이어서 할 수는 없어요.",
   "nav.board": "랭킹",
   "nav.mine": "내 카드",
   "nav.login": "로그인",

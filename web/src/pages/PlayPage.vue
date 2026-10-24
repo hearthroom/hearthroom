@@ -44,6 +44,7 @@ const { t } = useI18n();
 
 const routeId = computed(() => String(route.params.roleId || ""));
 const roleId = shallowRef("");
+const historyBootstrap = shallowRef<{conversationId?:string;readOnly?:boolean;reason?:string;title?:string}>({});
 const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
 /** 審核試玩打不開是因為沒領著（含領取過了時效）或這輪已結束：回審核頁就能處理，不是舞台壞了 */
@@ -105,6 +106,7 @@ if (playApp) {
  */
 async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, provider: ReturnType<typeof playProvider>, stale: () => boolean): Promise<boolean> {
   cardNumber.value = resolved.number;
+  historyBootstrap.value = {conversationId:resolved.conversationId,readOnly:resolved.readOnly,reason:resolved.reason,title:resolved.title};
   if (resolved.card && !intro.value) intro.value = { name: displayName(resolved.card.name ?? "", locale.value), art: resolved.card.avatarUrl ?? "", backdrop: resolved.card.landscapeUrl ?? "" };
   roleId.value = resolved.roleId;
   // 頁首的收藏與評論只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
@@ -181,7 +183,7 @@ onMounted(() => {
         ensurePlayAuthorization(token, returnTo, provider),
         profileReady,
         resolvePlayCard(routeId.value, provider, contentLang(locale.value), route.query.mode === "source", typeof route.query.review === "string" ? {id:route.query.review,token} : undefined,
-          typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? ""} : undefined),
+          typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? "",providerToken:token} : undefined),
       ]);
       if (!authorized || stale()) return;
       if (!(await adopt(resolved, provider, stale))) return;
@@ -210,7 +212,7 @@ watch(locale, () => { void remergeStageMessages(); });
 
 <template>
   <div class="play">
-    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" />
+    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" />
     <div v-else-if="error || gated" class="play__state">
       <AdultGate v-if="gated" @enabled="retry++" />
       <p v-else class="play__error" role="alert">{{ error }}</p>

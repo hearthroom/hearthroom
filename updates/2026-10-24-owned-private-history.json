@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library?tab=conversations",
+  "draft": true,
+  "title": {
+    "zh-Hant": "查看記錄",
+    "zh-Hans": "查看记录",
+    "en": "View history",
+    "ja": "履歴を見る",
+    "ko": "기록 보기"
+  }
+}

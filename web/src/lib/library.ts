@@ -14,14 +14,15 @@ export async function libraryRequest<T>(path: string, token: string, method = 'G
   const provider=currentProvider();
   if(activeCredential!==token||activeProvider!==provider){clearLibraryCache();activeCredential=token;activeProvider=provider;}
   if(method!=='GET')privateReads.clear();
-  const cached=privateReads.get(path);
+  const cacheable=method==='GET'&&!path.startsWith('conversations');
+  const cached=cacheable?privateReads.get(path):undefined;
   if(method==='GET'&&cached&&cached.expires>Date.now())return cached.promise as Promise<T>;
   const promise=(async()=>{
     try {return await read<T>(await fetch(`${COMMUNITY_API}/me/${path}`, {
       method, cache: 'no-store', headers: { Authorization: `Bearer ${token}`, 'X-Provider': provider },
     }));} finally {if(method!=='GET')privateReads.clear();}
   })();
-  if(method==='GET'){
+  if(cacheable){
     privateReads.set(path,{expires:Date.now()+30000,promise});
     if(privateReads.size>100)privateReads.delete(privateReads.keys().next().value!);
     void promise.catch(()=>{if(privateReads.get(path)?.promise===promise)privateReads.delete(path);});
@@ -29,6 +30,8 @@ export async function libraryRequest<T>(path: string, token: string, method = 'G
   return promise;
 }
 export interface ConversationSummary {
+  canGenerate?: boolean;
+  reason?: 'author_private'|'restricted'|'unavailable';
   provider: ProviderId;
   conversationId: string;
   conversationRoleId: string;
