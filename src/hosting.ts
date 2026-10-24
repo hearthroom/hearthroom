@@ -1,6 +1,8 @@
-import {managedWork} from './work-policy';
+import {managedWork,enrollWorkAccess,policyOperationId,workPolicyGateway,type WorkAccess} from './work-policy';
+import {readOwnerVisibility} from './work-sharing';
 import {fenceManagedEdit} from './work-fence';
 import {prepareManagedPublication} from './work-publication';
+import {firstRegistrationStatement} from './quota';
 import { isTransferHeld } from './draft-transfer-gate';
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
@@ -15,9 +17,11 @@ import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
+ visibility_consent:string|null;
  provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; rating_answers:string|null;
  hosted_revision_id:string|null; card_id:string|null; submission_id:string|null;
 }
+interface PublicationConsent {policyRevision:string;approvalRevision:string;providerRevision:string;providerEpoch:number;initialAccess:WorkAccess}
 /** Each provider trusts Hearthroom with its own secret. Providers never exchange keys. */
 export function hostingKey(env:Env,provider:ProviderId):string|undefined {
  apiBaseOf(env,provider);
@@ -91,7 +95,7 @@ function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;packId?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
  const db=env.DB;
  const fandom:ResolvedFandom=input.fandom??{fandom:'',qid:null,key:'',search:''};
  const provider=input.provider??'harbor';
@@ -99,13 +103,26 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
  const existingOperation=()=>db.prepare('SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?').bind(input.memberId,input.operationId).first<VersionRow>();
  let version=await existingOperation();
+ let consent:PublicationConsent|null=version?.visibility_consent?JSON.parse(version.visibility_consent) as PublicationConsent:null;
+ if(version&&(!!consent!==!!input.expectedVisibility||consent&&(consent.policyRevision!==input.expectedVisibility?.policyRevision||consent.approvalRevision!==input.expectedVisibility?.approvalRevision)))throw new HttpError(409,'visibility_operation_conflict');
  // 問卷上線前開始的 operation 沒有答案（rating_answers 為 NULL）：重試時接著做並補上答案，不當成「答案不同」
  if(version&&(version.provider!==provider||version.source_role_id!==input.role.roleId||(version.rating_answers!==null&&version.rating_answers!==answers)))throw new HttpError(409,'hosting_operation_conflict');
  if(version&&version.rating_answers===null&&!version.submission_id){
   await db.prepare('UPDATE hosting_versions SET rating_answers=?,rating=? WHERE version_id=? AND rating_answers IS NULL').bind(answers,input.rating.rating,version.version_id).run();
  }
- if(version?.submission_id)return receiptOf(version);
+ if(version?.submission_id){
+  if(consent){const previous=await db.prepare('SELECT status FROM review_submissions WHERE id=?').bind(version.submission_id).first<{status:string}>();if(!previous||previous.status==='superseded')throw new HttpError(409,'visibility_operation_conflict');}
+  return receiptOf(version);
+ }
  const existing=await getCard(db,input.role.roleId,provider);
+ if(!version&&input.expectedVisibility){
+  const view=await readOwnerVisibility(env,input.role.roleId,input.token,existing,true);
+  if(view.workVisibility.policyRevision!==input.expectedVisibility.policyRevision||view.workVisibility.approvalRevision!==input.expectedVisibility.approvalRevision)throw new HttpError(409,'visibility_operation_conflict');
+  if(view.workVisibility.syncState!=='complete')throw new HttpError(503,'visibility_sync_pending');
+  const action=view.workVisibility.access==='public'?'submit_update':'submit_review';
+  if(!view.workVisibility.actions.includes(action))throw new HttpError(409,'visibility_restricted');
+  consent={...input.expectedVisibility,providerRevision:view.provider.policyRevision,providerEpoch:view.provider.epoch,initialAccess:view.workVisibility.access};
+ }
  if(existing&&await pendingSubmissionOf(db,existing.id)){
   const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);
   throw new HttpError(409,'submission_pending');
@@ -116,19 +133,31 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(!work||work.member_id!==input.memberId)throw new HttpError(403,'not the author of this card');
  if(!version){
   try{
-   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now).run();
+   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,visibility_consent) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,consent?JSON.stringify(consent):null).run();
   }catch(error){if(!await existingOperation())throw new HttpError(409,'submission_pending');}
   version=await existingOperation();
  }
  if(!version)throw new HttpError(502,'hosting_seal_failed');
+ if(consent){
+  if(version.visibility_consent!==JSON.stringify(consent))throw new HttpError(409,'visibility_operation_conflict');
+  if(consent.providerEpoch===0){
+   const receipt=await enrollWorkAccess(env,{memberId:input.memberId,roleId:input.role.roleId,operationId:await policyOperationId('submission-enroll:'+version.version_id),access:consent.initialAccess,token:input.token,provider,expectedOwnerRevision:consent.providerRevision});
+   const current=await workPolicyGateway.owner(env,provider,input.role.roleId,input.token,true);
+   if(current.epoch!==receipt.epoch||current.workId!==work.id||current.access!==consent.initialAccess)throw new HttpError(409,'visibility_operation_conflict');
+   const next={...consent,providerEpoch:receipt.epoch,providerRevision:current.policyRevision};
+   const saved=await db.prepare('UPDATE hosting_versions SET visibility_consent=? WHERE version_id=? AND visibility_consent=? AND submission_id IS NULL').bind(JSON.stringify(next),version.version_id,JSON.stringify(consent)).run();
+   if(!saved.meta.changes&&(await existingOperation())?.visibility_consent!==JSON.stringify(next))throw new HttpError(409,'visibility_operation_conflict');
+   consent=next;
+  }
+ }
  try {
  await db.prepare("UPDATE hosting_versions SET state='preparing' WHERE version_id=? AND submission_id IS NULL").bind(version.version_id).run();
  const receipt=await hostGateway.seal(env,input.token,input.role.roleId,work.id,version.version_id,provider);
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
- await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId);
+ await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
  // Validate size before any registry write. Snapshot creation joins the submission
@@ -137,6 +166,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const packedSnapshot=await encodeSnapshot(reviewRecord(settings));
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
+   firstRegistrationStatement(db,{provider,account:input.account,source:input.role.roleId,now:input.now,packId:input.packId}),
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,fandom:fandom.fandom,fandomQid:fandom.qid,fandomKey:fandom.key,fandomSearch:fandom.search,searchName:buildSearchName({...sealed,fandom:fandom.fandom,fandomSearch:fandom.search}),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers) SELECT ?,?,?,?,?,'pending',?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,version!.version_id,submissionId),
@@ -150,7 +180,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  else {
   try {
    await upsertCard(db,{...sealed,roleId:input.role.roleId,creationMethod:'hearthroom'},input.now,{
-    provider,status:'pending',recordRegistration:true,packId:input.packId,preserveExisting:true,additionalWrites:finalize,
+    provider,status:'pending',preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
    const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);throw error;
@@ -162,6 +192,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  } catch(error) {
   if(isTransferHeld(error))throw error;
   await db.prepare("UPDATE hosting_versions SET state='failed' WHERE version_id=? AND submission_id IS NULL").bind(version.version_id).run();
+  if(/weekly_quota_exceeded|registration_pack_unavailable/.test(String(error)))throw new HttpError(403,'weekly_quota_exceeded');
+  if(!(error instanceof HttpError))throw new HttpError(503,'visibility_sync_pending');
   throw error;
  }
 }

@@ -6,6 +6,9 @@ import { quotaFor, type Quota } from "./quota";
 import { type CardStatus, statusAmong } from "./review";
 import type { Env } from "./types";
 import { type DraftVersion, type MyRole, upstream } from "./upstream";
+import {loadSharingMine} from './mine-sharing';
+import type {WorkAccess} from './work-policy';
+import type {WorkVisibility} from './work-sharing';
 
 /**
  * 作者自己的卡片清單。
@@ -46,7 +49,7 @@ const LISTED_SEARCH_LIMIT = 1000;
 const DRAFT_CHECK_LIMIT = 24;
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
-  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; rating?: string | null; draftChanged?: boolean })[];
+  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; rating?: string | null; draftChanged?: boolean;workVisibility?:WorkVisibility })[];
   /** 符合條件的卡一共幾張（翻頁用）。全部／未上架由上游算；已上架由本站的庫算。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -86,9 +89,10 @@ export async function loadMine(
   env: Env,
   bearer: string,
   accountNumId: number,
-  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string },
+  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string;access?:WorkAccess },
 ): Promise<MineResult> {
   const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
+  if(provider==='harbor'&&env.WORK_SHARING_ENABLED==='true')return loadSharingMine(env,bearer,accountNumId,opts);
   // 已登記張數與本週額度只看是誰，跟下面讀清單互不相依：一起問，不一趟接一趟（每趟 D1 約 40 ms）
   const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, accountNumId, Date.now(), provider)]);
 
@@ -105,7 +109,7 @@ export async function loadMine(
     if (q) {
       // 有關鍵字：這位作者已上架的卡整組拿來，繁簡都轉成同一種寫法再比（本站的全文索引不認繁簡）。
       // 一位作者已上架的卡受每週額度限制，不會多到撐不住。
-      const all = await listCards(env.DB, { provider, authorMemberId: memberId, sort: "new", limit: LISTED_SEARCH_LIMIT, offset: 0, anyStatus: true, allowNsfw: true });
+      const all = await listCards(env.DB, { provider, authorMemberId: memberId, sort: "new", limit: LISTED_SEARCH_LIMIT, offset: 0, anyStatus: true, submittedOnly:true, allowNsfw: true });
       const needle = searchForm(q);
       const matched = all.rows.filter((row) => searchForm(`${row.names} ${row.summaries}`).includes(needle));
       total = matched.length;
@@ -119,7 +123,7 @@ export async function loadMine(
         limit: opts.pageSize,
         offset,
         // 作者要看到自己每一張登記過的卡，包括待審、被駁回、離榜重審中的。
-        anyStatus: true,
+        anyStatus: true, submittedOnly:true,
         allowNsfw: true,
       }));
       total = registeredTotal;

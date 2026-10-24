@@ -271,8 +271,11 @@ async function load(afterIdentity = false) {
       }
       gated.value = true; card.value = null;
     }
-    else if (!shown) error.value = err instanceof Error ? err.message : t("state.loadFailed");
-    // 手上那份是剛才那一屏帶過來的：背景更新失敗就讓它繼續顯示，不要把已經畫好的頁面換成錯誤
+    else {
+      card.value = null; confirmed.value = false;
+      error.value = err instanceof Error ? err.message : t("state.loadFailed");
+    }
+    // A remembered preview is not current authorization after a failed read.
     loading.value = false;
     revalidating.value = false;
     return;

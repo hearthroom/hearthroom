@@ -3259,5 +3259,6 @@
   "visibility.state.reviewUnknown": "다시 공개하려면 심사를 다시 받아야 해요.",
   "visibility.badge.delisted": "랭킹에서 제외됨",
   "visibility.badge.suspended": "공개 접근 중지됨",
-  "visibility.badge.takedown": "게시 중단"
+  "visibility.badge.takedown": "게시 중단",
+  "library.removeUnavailable": "제거"
 }

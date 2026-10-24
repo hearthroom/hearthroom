@@ -1,10 +1,11 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ratingBody, bearer, mainSiteDown, resetDb, restoreUpstream, rolesOnMainSite, whoAmI } from "./helpers";
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   whoAmI(10001);
   rolesOnMainSite();
 });

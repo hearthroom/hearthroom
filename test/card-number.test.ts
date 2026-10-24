@@ -1,3 +1,4 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import { PRIMARY_HOST } from "../shared/site-hosts";
 import { getCard } from '../src/cards';
 import {approveFixtureResponse} from './hosted-fixture';
@@ -12,7 +13,7 @@ import { ratingBody, bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnP
  */
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   whoAmI(10001);
   rolesOnMainSite();
 });
@@ -52,12 +53,12 @@ describe("卡號", () => {
     expect(byId.body.num).toBe(100001);
   });
 
-  it("撤銷登記後卡號仍可遊玩；再登記回來沿用原號", async () => {
+  it("撤回後訪客不能開啟；重新核准後沿用原號", async () => {
     rolesOnMainSite({ roleId: "role-a", authorNumId: 10001 }, { roleId: "role-b", authorNumId: 10001 });
     await register("role-a");
     await register("role-b");
     expect((await unregister("role-a")).status).toBe(204);
-    expect((await card("100001")).body.status).toBe("unlisted");
+    expect((await card("100001")).status).toBe(404);
 
     expect(((await (await register("role-a")).json()) as any).num).toBe(100001);
     expect((await card("100001")).body.sourceRoleId).toBe("role-a");

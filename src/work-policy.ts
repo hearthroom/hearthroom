@@ -13,6 +13,11 @@ export interface WorkPolicyCommand {
  workId:string;operationId:string;expectedEpoch:number;
  action:'bind'|'private'|'unlisted'|'restore'|'prepare'|'cancel'|'restrict';
  access?:WorkAccess;restriction?:WorkRestriction;versionRoleId?:string;approvedRoles?:string[];permitId?:string;
+ expectedOwnerRevision?:string;
+}
+export interface WorkOwnerView extends WorkPolicyReceipt {
+ managed:boolean;policyRevision:string;approvalRevision:string;approvedRoleId:string;revisionState:'same'|'changed'|'unknown';
+ restorable:boolean;restoreReason:string;providerRestriction:'none'|'takedown';
 }
 export interface ManagedWork {
  work_id:string;provider:ProviderId;source_role_id:string;access:WorkAccess;epoch:number;
@@ -28,18 +33,58 @@ function checked(value:unknown,source:string,work?:string,operation?:string):Wor
   ||!['prepared','complete','cancelled'].includes(r.state??''))throw new HttpError(503,'visibility_receipt_invalid');
  return r as WorkPolicyReceipt;
 }
-async function call(env:Env,provider:ProviderId,source:string,suffix:string,body?:unknown,token?:string):Promise<unknown|null>{
+async function call(env:Env,provider:ProviderId,source:string,suffix:string,body?:unknown,token?:string,preserveAuth=false):Promise<unknown|null>{
  const key=hostingKey(env,provider);if(!key)throw new HttpError(503,'hosting_unavailable');
  const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/work-access/${encodeURIComponent(source)}${suffix}`,{
   method:body===undefined?'GET':'POST',headers:{'X-Hosting-Key':key,...(token?{Authorization:`Bearer ${token}`}:{}) ,'Content-Type':'application/json'},
   ...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:'manual',signal:AbortSignal.timeout(20000),
  });
  if(response.status===404&&body===undefined)return null;
+ if(preserveAuth&&response.status===401)throw new HttpError(401,'missing bearer token');
+ if(preserveAuth&&response.status===403)throw new HttpError(403,'not_the_author');
  if(response.status===409)throw new HttpError(409,'visibility_operation_conflict');
  if(!response.ok)throw new HttpError(503,'visibility_provider_unavailable');
  return response.json();
 }
+function checkedOwner(value:WorkOwnerView|null,source:string):WorkOwnerView{
+ if(!value||value.sourceRoleId!==source||typeof value.managed!=='boolean'||!Number.isSafeInteger(value.epoch)||value.epoch<(value.managed?1:0)
+    ||!['private','unlisted','public'].includes(value.access)||!['none','delisted','suspended'].includes(value.restriction)
+    ||!['same','changed','unknown'].includes(value.revisionState)||typeof value.restorable!=='boolean'
+    ||!['none','takedown'].includes(value.providerRestriction)||typeof value.policyRevision!=='string'||value.policyRevision.length<16
+    ||typeof value.approvedRoleId!=='string'||typeof value.approvalRevision!=='string'||value.approvalRevision.length<16||typeof value.restoreReason!=='string')throw new HttpError(503,'visibility_provider_unavailable');
+ return value!;
+}
 export const workPolicyGateway={
+ async owners(env:Env,provider:ProviderId,sources:string[],token:string):Promise<WorkOwnerView[]>{
+  if(!sources.length)return [];
+  if(sources.length>200||new Set(sources).size!==sources.length)throw new HttpError(503,'visibility_read_budget_exceeded');
+  const key=hostingKey(env,provider);if(!key)throw new HttpError(503,'visibility_provider_unavailable');
+  try{
+   const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/work-access/owner-batch`,{
+    method:'POST',headers:{'X-Hosting-Key':key,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({sourceRoleIds:sources}),redirect:'manual',signal:AbortSignal.timeout(20000),
+   });
+   if(response.status===401)throw new HttpError(401,'missing bearer token');
+   if(response.status===403)throw new HttpError(403,'not_the_author');
+   if(response.status===404)throw new HttpError(404,'card_not_found');
+   if(!response.ok)throw new HttpError(503,'visibility_provider_unavailable');
+   const body=await response.json() as {items?:WorkOwnerView[]};
+   if(!Array.isArray(body.items)||body.items.length!==sources.length)throw new HttpError(503,'visibility_provider_unavailable');
+   const found=new Map<string,WorkOwnerView>();
+   for(const value of body.items){
+    if(!sources.includes(value?.sourceRoleId)||found.has(value.sourceRoleId))throw new HttpError(503,'visibility_provider_unavailable');
+    found.set(value.sourceRoleId,checkedOwner(value,value.sourceRoleId));
+   }
+   return sources.map(source=>found.get(source)!);
+  }catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_provider_unavailable');}
+ },
+ async owner(env:Env,provider:ProviderId,source:string,token:string,requireWrite=false):Promise<WorkOwnerView>{
+  try{
+   const value=await call(env,provider,source,'?include=restore'+(requireWrite?'&intent=write':''),undefined,token,true) as WorkOwnerView|null;
+   if(value===null)throw new HttpError(404,'card_not_found');
+   return checkedOwner(value,source);
+  }catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_provider_unavailable');}
+ },
  async change(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,token?:string):Promise<WorkPolicyReceipt>{
   return checked(await call(env,provider,source,'',command,token),source,command.workId,command.operationId);
  },
@@ -61,6 +106,7 @@ async function hash(command:unknown):Promise<string>{
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(command)));
  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
+export const workPolicyCommandHash=(provider:ProviderId,source:string,command:WorkPolicyCommand)=>hash({provider,source,command});
 export async function policyOperationId(identity:string):Promise<string>{
  const h=await hash({identity});
  return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;
@@ -124,13 +170,14 @@ export async function projectWorkReceipt(env:Env,provider:ProviderId,receipt:Wor
 
 // Enrollment is internal and opt-in. It derives lineage/approval from issuer
 // records; the initial access is the authenticated author's requested setting.
-export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:string;operationId:string;access:WorkAccess;token:string;provider?:ProviderId}):Promise<WorkPolicyReceipt>{
+export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:string;operationId:string;access:WorkAccess;token:string;provider?:ProviderId;expectedOwnerRevision?:string}):Promise<WorkPolicyReceipt>{
  const provider=input.provider??'harbor';const db=env.DB;
  const work=await db.prepare('SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?').bind(provider,input.roleId).first<{id:string;member_id:string}>();
  if(!work)throw new HttpError(404,'card_not_found');if(work.member_id!==input.memberId)throw new HttpError(403,'not_the_author');
  const card=await db.prepare('SELECT approved_hosted_role_id,public_blocked,board_hidden FROM cards WHERE provider=? AND source_role_id=?').bind(provider,input.roleId).first<{approved_hosted_role_id:string|null;public_blocked:number;board_hidden:number}>();
  const grants=await db.prepare("SELECT hosted_revision_id FROM hosting_versions WHERE work_id=? AND state='approved' AND hosted_revision_id IS NOT NULL ORDER BY version_id").bind(work.id).all<{hosted_revision_id:string}>();
  const command:WorkPolicyCommand={workId:work.id,operationId:input.operationId,expectedEpoch:0,action:'bind',access:input.access,
+  ...(input.expectedOwnerRevision?{expectedOwnerRevision:input.expectedOwnerRevision}:{}),
   restriction:card?.public_blocked?'suspended':card?.board_hidden?'delisted':'none',
   ...(card?.approved_hosted_role_id?{versionRoleId:card.approved_hosted_role_id}:{}),approvedRoles:grants.results.map(r=>r.hosted_revision_id)};
  const previous=await db.prepare('SELECT command FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(work.id,input.operationId).first<{command:string}>();

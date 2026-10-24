@@ -56,7 +56,8 @@ describe.each(DEVELOPER_LOCALES)('%s developer documentation', locale => {
       await vi.waitFor(() => expect(el.querySelector('.doc-body')).not.toBeNull());
       expect(el.querySelector('#community-api')?.textContent).toBe(t(community.info.title));
       expect(el.querySelector('#integration-api')?.textContent).toBe(t(integration.info.title));
-      expect(el.querySelectorAll('h3.ep__head')).toHaveLength(186);
+      const endpoints=[community,integration].reduce((n,d)=>n+Object.values(d.paths).reduce((m,ops)=>m+Object.keys(ops).filter(k=>['get','post','put','patch','delete','head','options'].includes(k)).length,0),0);
+      expect(el.querySelectorAll('h3.ep__head')).toHaveLength(endpoints);
       const heading = el.querySelector<HTMLElement>('#community-get-v1-cards')!;
       expect(heading.textContent).toContain(t(community.paths['/v1/cards'].get.summary));
       heading.click(); await nextTick();

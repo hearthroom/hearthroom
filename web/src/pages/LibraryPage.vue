@@ -5,12 +5,13 @@ import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { displayName } from '@/lib/display-name';
-import { fetchConversations, libraryRequest, type ConversationSummary } from '@/lib/library';
+import { fetchConversations, libraryRequest,isUnavailableFavorite,type LibraryFavorite, type ConversationSummary } from '@/lib/library';
 import { platformPath } from '@/lib/connection-ui';
 import { contentLang, pageTitle } from '@/lib/i18n';
 import { hueFrom, relativeTime } from '@/lib/format';
 import type { CommunityCard } from '@/lib/types';
 import CardGrid from '@/components/CardGrid.vue';
+import FavoriteGrid from '@/components/FavoriteGrid.vue';
 import LibraryToggle from '@/components/LibraryToggle.vue';
 import AccountIcon from '@/components/AccountIcon.vue';
 import MascotSay from '@/components/MascotSay.vue';
@@ -22,7 +23,7 @@ const { t } = useI18n();
 const tabs = ['conversations', 'favorites', 'following'] as const;
 const tab = computed(() => tabs.includes(route.query.tab as typeof tabs[number]) ? route.query.tab as typeof tabs[number] : 'conversations');
 const page = computed(() => Math.max(1, Math.floor(Number(route.query.page) || 1)));
-const chats = ref<ConversationSummary[]>([]), cards = ref<CommunityCard[]>([]);
+const chats = ref<ConversationSummary[]>([]), cards = ref<LibraryFavorite[]>([]);
 const authors = ref<{ handle: string; name: string; avatar: string; bio: string }[]>([]);
 const loading = ref(true), failed = ref(false), hasNext = ref(false);
 let sequence = 0;
@@ -37,13 +38,14 @@ async function load() {
       const result = await fetchConversations(token, contentLang(locale.value), page.value);
       if (seq === sequence) { chats.value = result.conversations; hasNext.value = result.hasNextPage; }
     } else {
-      const result = await libraryRequest<{ items: CommunityCard[] | typeof authors.value; hasNext: boolean }>(`${tab.value}?offset=${(page.value - 1) * 24}&lang=${contentLang(locale.value)}`, token);
-      if (seq === sequence) { if (tab.value === 'favorites') cards.value = result.items as CommunityCard[]; else authors.value = result.items as typeof authors.value; hasNext.value = result.hasNext; }
+      const result = await libraryRequest<{ items: LibraryFavorite[] | typeof authors.value; hasNext: boolean }>(`${tab.value}?offset=${(page.value - 1) * 24}&lang=${contentLang(locale.value)}`, token);
+      if (seq === sequence) { if (tab.value === 'favorites') cards.value = result.items as LibraryFavorite[]; else authors.value = result.items as typeof authors.value; hasNext.value = result.hasNext; }
     }
   } catch { if (seq === sequence) failed.value = true; }
   finally { if (seq === sequence) loading.value = false; }
 }
 function navigate(next: string, n = 1) { void router.push({ query: { tab: next, ...(n > 1 ? { page: String(n) } : {}) } }); }
+function removedFavorite(id:string){cards.value=cards.value.filter(item=>(isUnavailableFavorite(item)?item.bookmarkId:item.id)!==id);}
 const empty = computed(() => !chats.value.length && !cards.value.length && !authors.value.length);
 const time = (chat: ConversationSummary) => { const value = Date.parse(chat.lastChatTime || chat.createTime || ''); return Number.isFinite(value) ? relativeTime(value) : ''; };
 watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () => session.profile?.hiddenTags?.join(',')], load, { immediate: true });
@@ -54,7 +56,8 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
     <nav class="library__tabs" :aria-label="$t('library.title')"><RouterLink v-for="item in tabs" :key="item" :to="{ path: lp('/library'), query: { tab: item } }" :aria-current="tab === item ? 'page' : undefined" :class="{ 'library__tab--on': tab === item }">{{ $t(`library.${item}`) }}</RouterLink></nav>
     <div class="library__context"><p class="muted">{{ $t(`library.${tab}Hint`) }}</p></div>
     <div v-if="failed" class="empty panel" role="alert"><p class="empty__title">{{ $t('library.loadFailed') }}</p><button class="btn" @click="load">{{ $t('library.retry') }}</button></div>
-    <CardGrid v-else-if="tab === 'favorites' && (loading || !empty)" :cards="cards" :loading="loading" />
+    <CardGrid v-else-if="tab === 'favorites' && loading" :cards="[]" loading />
+    <FavoriteGrid v-else-if="tab === 'favorites' && !empty" :items="cards" @removed="removedFavorite" />
     <div v-else-if="loading" class="library__rows" aria-hidden="true"><div v-for="n in 4" :key="n" class="ghost library__ghost" /></div>
     <div v-else-if="empty" class="empty panel library__empty"><MascotSay src="/mascot/chuchu-sleep.webp" :size="132" /><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
     <div v-else-if="tab === 'conversations'" class="library__rows">

@@ -112,7 +112,7 @@ function memoryKey(query: Record<string, unknown>): string | null {
   return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
-const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value), rating: maxRating.value });
+const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value,...(typeof route.query.cursor==='string'?{cursor:route.query.cursor}:{}), lang: contentLang(locale.value), rating: maxRating.value });
 type BoardQuery = ReturnType<typeof currentQuery>;
 
 /** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
@@ -172,8 +172,9 @@ async function load() {
     }
   } catch (err) {
     if (id !== loadId) return;
-    // 畫面上已經有這一分頁的內容：背景重讀失敗就讓它留著
-    if (!remembered) error.value = err instanceof Error ? err.message : t("state.loadFailed");
+    // Current visibility could have changed since the remembered page.
+    page.value = null;
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     if (id === loadId) loading.value = false;
   }
@@ -186,7 +187,7 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
     if (v === undefined || v === "") delete query[k];
     else query[k] = v;
   }
-  if (!("offset" in patch)) delete query.offset;
+  if (!("offset" in patch)) {delete query.offset;delete query.cursor;}
   router.push({ query });
 }
 /** 換榜的時候排序鍵不通用，一起清掉。 */
@@ -204,12 +205,17 @@ const sortsEl = ref<HTMLElement | null>(null);
  * 換分頁時路由會先捲回頂端，等它捲完下一個畫格再捲下來。
  */
 async function toNewCards() {
-  if (mode.value !== "cards" || sort.value !== "day") await router.push({ query: { ...route.query, mode: undefined, sort: "day", offset: undefined } });
+  if (mode.value !== "cards" || sort.value !== "day") await router.push({ query: { ...route.query, mode: undefined, sort: "day", offset: undefined, cursor: undefined } });
   await nextTick();
   requestAnimationFrame(() => sortsEl.value?.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
-watch([() => route.query, locale], load, { immediate: true });
+function reloadViewer() {
+  if (route.query.cursor !== undefined || offset.value) navigate({});
+  else void load();
+}
+watch(() => route.query, load, { immediate: true });
+watch(locale, reloadViewer);
 // 開關改了要重讀。身分第一次載好（undefined → 值）時，第一屏多半已經照帳號開關讀好了
 // （伺服器用 cookie 判斷並標明），對得上就不再讀一次；那一份還在路上就等它回來再比。
 watch(() => session.profile?.showNsfw, (now, before) => {
@@ -218,14 +224,14 @@ watch(() => session.profile?.showNsfw, (now, before) => {
     if (loading.value) { recheckAfterLoad = true; return; }
     if (servedFor(page.value, now)) { adoptShown(); return; }
   }
-  void load();
+  reloadViewer();
 });
 // 遊客在頁首開關 R18：伺服器換了遊客憑證，重讀。第一次問到現況（loaded 由 false 變 true）不算改。
 watch(() => (!session.me && guestAdult.loaded ? guestAdult.showNsfw : null), (now, before) => {
-  if (now !== null && before !== null && now !== before) void load();
+  if (now !== null && before !== null && now !== before) reloadViewer();
 });
 // 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
-watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) load(); });
+watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) reloadViewer(); });
 
 /**
  * 類型列每顆籤後面的張數。跟排序、翻頁無關，只看語區、選了什麼、看的人的開關；讀不到就不標（籤照常能點）。
@@ -312,13 +318,13 @@ const ratingOptions = computed(() => {
         <CardGrid :cards="more" />
       </section>
       <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
-        <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })">← {{ $t("pager.prev") }}</button>
+        <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)),cursor:page.previousCursor })">← {{ $t("pager.prev") }}</button>
         <span class="subtle">
           {{ page.total === null
             ? $t("pager.page", { n: Math.floor(page.offset / page.limit) + 1 })
             : $t("pager.pageOf", { n: Math.floor(page.offset / page.limit) + 1, total: Math.ceil(page.total / page.limit) }) }}
         </span>
-        <button class="btn btn--sm" :disabled="!page.hasNext" @click="navigate({ offset: String(page.offset + page.limit) })">{{ $t("pager.next") }} →</button>
+        <button class="btn btn--sm" :disabled="!page.hasNext" @click="navigate({ offset: String(page.offset + page.limit),cursor:page.nextCursor })">{{ $t("pager.next") }} →</button>
       </nav>
     </template>
 

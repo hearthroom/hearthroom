@@ -3,7 +3,8 @@ import { createApp, defineComponent, h, nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 import PlayPage from '../src/pages/PlayPage.vue';
-const mocks = vi.hoisted(() => ({card:vi.fn(),platforms:vi.fn(),stage:vi.fn(),copies:vi.fn(),review:vi.fn(),resume:vi.fn(),playApp:false}));
+const mocks = vi.hoisted(() => ({card:vi.fn(),platforms:vi.fn(),stage:vi.fn(),copies:vi.fn(),review:vi.fn(),resume:vi.fn(),owned:vi.fn(),playApp:false}));
+vi.mock('../src/lib/owned-history',()=>({fetchOwnedHistory:mocks.owned}));
 vi.mock('../src/lib/library', () => ({libraryRequest:mocks.resume}));
 vi.mock('../src/lib/api', () => ({fetchReviewDetail:mocks.review,fetchCard:mocks.card,fetchCardPlatforms:mocks.platforms,fetchMeAt:async()=>({accountNumId:22})}));
 vi.mock('../src/lib/distribution', () => ({copies:mocks.copies}));
@@ -16,7 +17,7 @@ vi.mock('../src/lib/site', () => ({SITE:{name:'Hearthroom'},isPlayHost:()=>mocks
 vi.mock('../src/lib/track', () => ({track:vi.fn()}));
 let app:ReturnType<typeof createApp>, root:HTMLElement;
 const settle=async()=>{for(let i=0;i<50;i++)await Promise.resolve();await nextTick();};
-beforeEach(()=>{vi.clearAllMocks();mocks.playApp=false;mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source'});mocks.platforms.mockResolvedValue([{provider:'lunatalk',roleId:'luna-copy',playable:true},{provider:'harbor',roleId:'harbor-copy',playable:true}]);mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'draft-copy',status:'synced'}]);mocks.stage.mockResolvedValue(defineComponent({props:['roleId'],setup:p=>()=>h('div',{'data-role':p.roleId})}));});
+beforeEach(()=>{vi.clearAllMocks();mocks.playApp=false;mocks.owned.mockImplementation(async(_provider,id)=>({conversationId:id,roleId:'previous-revision',title:'Recorded chat',canGenerate:true}));mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source'});mocks.platforms.mockResolvedValue([{provider:'lunatalk',roleId:'luna-copy',playable:true},{provider:'harbor',roleId:'harbor-copy',playable:true}]);mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'draft-copy',status:'synced'}]);mocks.stage.mockResolvedValue(defineComponent({props:['roleId'],setup:p=>()=>h('div',{'data-role':p.roleId})}));});
 afterEach(()=>{app?.unmount();root?.remove();});
 async function mount(path:string){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage},{path:'/en/play/:roleId',component:PlayPage},{path:'/:roleId/',component:PlayPage}]});await router.push(path);root=document.createElement('div');document.body.append(root);app=createApp({template:'<RouterView />'}).use(i18n).use(router);app.mount(root);await settle();return router;}
 it('resolves a numeric URL to the selected provider copy, never passing the number to Stage',async()=>{await mount('/play/100021?provider=harbor');expect(root.querySelector('[data-role]')?.getAttribute('data-role')).toBe('harbor-copy');expect(mocks.stage.mock.calls[0][0].currentRoleId()).toBe('harbor-copy');});

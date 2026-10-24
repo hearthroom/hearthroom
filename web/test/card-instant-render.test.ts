@@ -210,3 +210,16 @@ describe("開始對話搆得到", () => {
 });
 
 beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it('removes a remembered card and actions when current authorization cannot be confirmed',async()=>{
+ await fetchBoard();
+ vi.stubGlobal('fetch',(input:RequestInfo|URL,init?:RequestInit)=>{
+  const url=String(input);
+  if(/\/v1\/cards\/[^?]+\?/.test(url))return Promise.resolve(new Response(JSON.stringify({error:'visibility_provider_unavailable'}),{status:503}));
+  return fakeFetch(input,init);
+ });
+ const root=await mountCard('/cards/role-abc');
+ expect(root.querySelector('[role=alert]')).not.toBeNull();
+ expect(root.textContent).not.toContain(CARD.name);
+ expect(root.querySelector('.role__actions')).toBeNull();
+});

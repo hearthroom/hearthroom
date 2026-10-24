@@ -16,6 +16,7 @@ vi.mock('../src/lib/library', () => ({
   recordConversation, clearLibraryCache,
   libraryRequest: vi.fn(async () => ({ cardNumber: 100009, provider: 'harbor', roleId: 'role-9' })),
 }));
+vi.mock('../src/lib/owned-history',()=>({fetchOwnedHistory:async(_provider:string,id:string)=>({conversationId:id,roleId:'role-9',canGenerate:true,title:'Owned history'})}));
 vi.mock('../src/lib/play-authorization',()=>({ensurePlayAuthorization:async()=>true}));
 const installMoonStage = vi.fn(async () => {});
 const mergeStageMessages = vi.fn();

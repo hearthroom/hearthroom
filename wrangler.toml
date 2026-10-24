@@ -37,6 +37,8 @@ not_found_handling = "single-page-application"
 run_worker_first = [
   "/hh-api", "/hh-api/*",
   "/", "/metrics", "/library*", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
+  # Numeric play entrypoints also require the current-policy HTML gate.
+  "/1*", "/2*", "/3*", "/4*", "/5*", "/6*", "/7*", "/8*", "/9*",
   # These SPA entrypoints also need the localized manifest in their initial HTML.
   "/me", "/me/*", "/login*", "/checkin*", "/go/*", "/resources*", "/settings*", "/developers*", "/campaigns*", "/play*",
   "/guide", "/guide/", "/privacy", "/privacy/", "/download", "/download/", "/updates", "/updates/", "/updates.atom", "/blog", "/blog/*", "/blog.atom", "/campaign/*", "/sitemap.xml", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
