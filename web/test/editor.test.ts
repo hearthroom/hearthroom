@@ -1,4 +1,5 @@
-vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(true)};});
+const rollout=vi.hoisted(()=>({enabled:true}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
 
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
@@ -45,6 +46,7 @@ const api = vi.hoisted(() => ({
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
+  fetchDraftState: vi.fn(async ():Promise<any> => ({status:'unlisted',draftChanged:false})),
   fetchRoleDetail: vi.fn(async () => ({})),
   fetchRoleWorldbooks: vi.fn(async () => [{ worldbookId: "wb-bound", name: "北境設定", description: "", entryCount: 2 }]),
   fetchMyWorldbooks: vi.fn(async () => [
@@ -1067,4 +1069,12 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
   });
 });
 
-beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it('retains the pending cancellation warning and save action with rollout disabled',async()=>{
+ rollout.enabled=false;api.fetchDraftState.mockResolvedValue({status:'pending',draftChanged:false});
+ await mount('/cards/r1/edit');await nextTick();
+ expect(root.textContent).toContain(i18n.global.t('visibility.state.pendingEditor'));
+ expect(root.querySelector('.author-visibility')).toBeNull();
+ expect(root.querySelector('button[type="submit"]')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
+});
