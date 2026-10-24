@@ -102,3 +102,9 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 价格、余额、模型可用性、存储上限与保留政策由所连接的服务决定。客户端必须使用返回的功能与费用信息，依需要获取付费操作确认，并区分完整回复、部分输出、取消与失败。
 
 服务错误与身份验证失败，遵循各端点结构定义与集成参考文档的“补充说明”区段，与前述社区错误格式分开。未知的可选功能应维持不可用，不可从服务名称自行推断。
+
+## 分享图片与文案
+
+卡片脚本可以在玩家点击按钮后分享图片与文案。HTTPS 卡片框架由宿主委派 `web-share` 与 `clipboard-write`：`navigator.share` 可接收预先准备的图片 `File` 与文字；`navigator.clipboard.write` 搭配 `ClipboardItem` 可写入 PNG，`navigator.clipboard.writeText` 可写入文案。这些是浏览器能力，不是新增的 `sdk` 方法或 HTTP 端点。
+
+请在点击前准备好文件，在点击处理函数内直接调用，保留用户激活状态。提供操作前先检查 `navigator.share`、`navigator.canShare({ files: [file] })`、`navigator.clipboard.write` 与 `ClipboardItem`。支持情况取决于浏览器、操作系统、权限与接收 App，分享后不保证图片和文字都保留。请捕获拒绝与取消；不支持或被拒绝时提供下载图片与可选取的文案，取消后不要自动重开分享面板。宿主不委派 `clipboard-read`。本地不透明来源的预览仍可能拒绝调用，请在目标设备的实际跨来源卡片上验证。
