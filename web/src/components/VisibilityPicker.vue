@@ -2,14 +2,17 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
-const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string}>(),{dirty:false,quotaFull:false});
-const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];reload:[];missing:[]}>();
+const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string}>(),{dirty:false,quotaFull:false});
+const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[]}>();
 const {t}=useI18n();const uid=useId();
 const selected=ref<WorkAccess|null>(null),cancel=ref(false),copied=ref(false),copyFailed=ref(false);
 const options:WorkAccess[]=['private','unlisted','public'];
 const busy=computed(()=>!['ready','error'].includes(props.phase));
 const pending=computed(()=>props.value?.review==='pending'||props.value?.update==='pending');
-watch(()=>props.value,v=>{selected.value=v?.access??null;cancel.value=false;},{immediate:true});
+watch(()=>[props.value,props.phase,props.resumeAction] as const,([v,phase,action])=>{
+ selected.value=phase==='retryable'?(action==='private'?'private':action==='link'?'unlisted':action==='restore'?'public':v?.access??null):v?.access??null;
+ cancel.value=phase==='retryable'&&action==='cancelReview';
+},{immediate:true});
 const changed=computed(()=>selected.value!==props.value?.access||cancel.value);
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));
 function disabled(access:WorkAccess){
@@ -77,7 +80,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
    <slot v-if="selected==='public'&&review&&changed" />
    <div v-if="value&&value.access!=='private'&&shareUrl&&!busy" class="visibility-link"><input ref="urlInput" class="input" readonly :value="shareUrl" :aria-label="t('visibility.copy')" /><button type="button" class="btn" @click="copy">{{ t(copied?'visibility.copied':'visibility.copy') }}</button></div>
    <p v-if="copied||copyFailed" role="status" class="muted">{{ t(copyFailed?'visibility.copyFailed':'visibility.copied') }}</p>
-   <div v-if="busy" class="notice" role="status"><p>{{ t(phase==='saving'?'visibility.operation.updating':phase==='unknown'?'visibility.operation.unknown':'visibility.operation.checking') }}</p><button v-if="phase==='unknown'||phase==='pending'" data-visibility-check type="button" class="btn" @click="emit('check')">{{ t('visibility.operation.checkStatus') }}</button></div>
+   <div v-if="busy" class="notice" role="status"><p>{{ t(phase==='saving'?'visibility.operation.updating':phase==='unknown'||phase==='retryable'?'visibility.operation.unknown':'visibility.operation.checking') }}</p><button v-if="phase==='unknown'||phase==='retryable'||phase==='pending'" data-visibility-check type="button" class="btn" @click="emit('check')">{{ t('visibility.operation.checkStatus') }}</button><button v-if="phase==='retryable'" data-visibility-resume type="button" class="btn" @click="emit('resume')">{{ resumeAction?t(`visibility.action.${resumeAction}`):button }}</button></div>
    <div v-if="changed" class="visibility-actions"><button type="button" class="btn btn--ghost" :disabled="busy" @click="selected=value?.access??null;cancel=false">{{ t('visibility.reset') }}</button><button type="button" class="btn" :class="{'btn--primary':primary}" data-visibility-apply :disabled="busy||(!cancel&&!!selected&&disabled(selected))" @click="apply">{{ button }}</button></div>
   </template>
  </div>
