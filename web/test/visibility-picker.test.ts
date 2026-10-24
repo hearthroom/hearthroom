@@ -23,3 +23,12 @@ it('unknown revision never claims content was changed or offers a missing restor
  expect(root.textContent).toContain(i18n.global.t('visibility.public.unknown'));
  expect(root.textContent).not.toContain(i18n.global.t('visibility.public.changed'));
 });
+
+it('offers the original action separately from GET-only status checks after safe retry proof',async()=>{
+ const resume=vi.fn(),check=vi.fn();await mount({phase:'retryable',resumeAction:'link',onResume:resume,onCheck:check});
+ expect(root.querySelector<HTMLInputElement>('input[value="unlisted"]')!.checked).toBe(true);
+ expect(root.querySelector('[data-visibility-resume]')!.textContent).toBe(i18n.global.t('visibility.action.link'));
+ expect(root.textContent).toContain(i18n.global.t('visibility.effect.t1',{access:i18n.global.t('visibility.option.private')}));
+ root.querySelector<HTMLButtonElement>('[data-visibility-check]')!.click();expect(resume).not.toHaveBeenCalled();expect(check).toHaveBeenCalledOnce();
+ root.querySelector<HTMLButtonElement>('[data-visibility-resume]')!.click();expect(resume).toHaveBeenCalledOnce();
+});

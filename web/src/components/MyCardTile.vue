@@ -12,7 +12,7 @@ import { visibilityStateKey } from "@/lib/visibility-presentation";
 import { ratingName } from "@/lib/rating";
 
 /** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
-const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean }>();
+const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean; visibilityEnabled?:boolean }>();
 const emit = defineEmits<{ toggle: [] }>();
 
 const { lp } = useLocalePath();
@@ -109,7 +109,7 @@ onBeforeUnmount(() => listen(false));
         <span class="sr-only">{{ $t(status.key) }}<template v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
         <!-- 送審、重新送審都在編輯頁；這裡只留已登記卡的「撤回」（別處沒有這個入口）。
              放在名字旁邊而不是操作列：每張卡的操作列都是同樣兩顆鍵，排起來才整齊 -->
-        <div ref="more" class="card__more">
+        <div v-if="visibilityEnabled" ref="more" class="card__more">
           <button
             type="button" class="btn btn--ghost btn--icon btn--sm card__more-btn" :aria-label="$t('mine.action.more')"
             aria-haspopup="menu" :aria-expanded="menuOpen" :disabled="busy || card.sourceAvailable===false" @click="toggleMenu"

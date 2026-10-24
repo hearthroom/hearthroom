@@ -10,6 +10,7 @@ import { currentProvider, type ProviderId } from '@/lib/provider';
 import { platformPath } from '@/lib/distribution';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
+import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import AuthorVisibility from './AuthorVisibility.vue';
 import type { WorkVisibility } from '@/lib/work-visibility';
 import type { CommunityCard } from '@/lib/types';
@@ -27,6 +28,7 @@ const owner = computed(() => !!provider.value && (
 const busy = ref(false);
 const error = ref('');
 const visibility=ref<WorkVisibility|null>(null);
+const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl=ref<InstanceType<typeof AuthorVisibility>|null>(null);
 const ownerToken=()=>accountToken(provider.value,props.card.author.accountNumId);
 // 已發布的卡：草稿改了、新版不在審時，可以直接送審更新（跟「我的卡片」的編輯器同一個送審）
@@ -60,11 +62,11 @@ async function submit(expected=visibility.value) {
 </script>
 <template>
   <div v-if="owner" class="card-owner-actions">
-    <AuthorVisibility ref="visibilityControl" :id="sourceId" :card-id="String(card.num??card.id)" :provider="provider" :actor="String(card.author.accountNumId)" :name="card.name" :token="ownerToken" :disabled="busy" @changed="visibility=$event" @submit="submit" />
+    <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" :id="sourceId" :card-id="String(card.num??card.id)" :provider="provider" :actor="String(card.author.accountNumId)" :name="card.name" :token="ownerToken" :disabled="busy" @changed="visibility=$event" @submit="submit" />
     <RouterLink class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
     <!-- 作者試玩自己的草稿（mode=source）；公開的「遊玩」仍開過審那一版，作者也看得到玩家看到的樣子 -->
     <a class="btn" :href="platformPath(lp(`/play/${card.num ?? card.id}?mode=source`), provider)">{{ t('card.owner.playDraft') }}</a>
-    <button v-if="canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit()">{{ t('card.owner.submitUpdate') }}</button>
+    <button v-if="visibilityEnabled&&canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit()">{{ t('card.owner.submitUpdate') }}</button>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
   </div>
 </template>
