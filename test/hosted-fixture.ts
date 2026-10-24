@@ -1,3 +1,4 @@
+import {restoreLegacyPolicyFixture} from './work-policy-fixture';
 import {env} from 'cloudflare:test';
 import {hostGateway} from '../src/hosting';
 import {upstream,type UpstreamRole} from '../src/upstream';
@@ -16,6 +17,7 @@ export function hostedFixture(){
  upstream.readForReview=async()=>({document:{roleDetailDesc:'Private fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
 }
 export function restoreHostedFixture(){
+ restoreLegacyPolicyFixture();
  Object.assign(hostGateway,originalGateway);frozenFixtureRoles.clear();
  const settings=env as unknown as {HOSTING_SERVICE_KEY?:string;HOSTING_SERVICE_KEY_LUNATALK?:string;REVIEW_ENABLED?:string};
  delete settings.HOSTING_SERVICE_KEY;delete settings.HOSTING_SERVICE_KEY_LUNATALK;settings.REVIEW_ENABLED='false';
@@ -29,7 +31,7 @@ export async function approveFixtureResponse(response:Response):Promise<Response
  if(sub)for(const reviewer of ['fixture-reviewer-one','fixture-reviewer-two']){
   const pending=await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(sub.id).first<{status:string}>();
   if(pending?.status!=='pending')break;
-  await claim(env.DB,sub.id,reviewer,Date.now());await stamp(env.DB,{submissionId:sub.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()});
+  await claim(env.DB,sub.id,reviewer,Date.now());await stamp(env.DB,{submissionId:sub.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()},env);
  }
  return response;
 }

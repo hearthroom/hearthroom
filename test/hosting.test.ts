@@ -49,7 +49,7 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
- await expect(submitHosted(env,input)).rejects.toThrow('offline');
+ await expect(submitHosted(env,input)).rejects.toMatchObject({status:503,message:'visibility_sync_pending'});
  const next={...input,operationId:crypto.randomUUID()};
  const results=await Promise.all([submitHosted(env,next),submitHosted(env,next)]);
  expect(results[0]).toEqual(results[1]);

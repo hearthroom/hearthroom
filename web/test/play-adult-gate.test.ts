@@ -18,6 +18,7 @@ vi.mock('../src/lib/connections', () => ({ accountToken: vi.fn(), connectAccount
 vi.mock('../src/lib/play-authorization', () => ({ ensurePlayAuthorization: mocks.authorize }));
 vi.mock('../src/lib/library', () => ({ libraryRequest: async () => ({ cardNumber: 100228, provider: 'harbor', roleId: 'harbor-role' }), recordConversation: vi.fn(), clearLibraryCache: vi.fn() }));
 vi.mock('../src/lib/distribution', () => ({ copies: async () => [{ provider: 'harbor', roleId: 'source-role', status: 'source' }] }));
+vi.mock('../src/lib/owned-history',()=>({fetchOwnedHistory:async(_provider:string,id:string)=>({conversationId:id,roleId:'harbor-role',canGenerate:true,title:'Owned history'})}));
 vi.mock('../src/lib/api', async original => {
   const real = await original<typeof import('../src/lib/api')>();
   const state = () => ({ showNsfw: adult.on, ageVerified: true, adultConsent: true });

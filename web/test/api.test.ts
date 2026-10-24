@@ -275,3 +275,33 @@ it('reuses the publication operation after a lost response and starts a new one 
  await registerCard('retry-operation','proof',false,[],'lunatalk');
  expect(requests[1]).toBe(requests[0]);expect(requests[2]).not.toBe(requests[1]);
 });
+
+it('retains the original publication consent with its operation after an unknown result',async()=>{
+ const bodies:any[]=[],reads:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(url,init)=>{if(init.method==='GET'){reads.push(String(url));return Response.json({operation:{state:'pending',operationId:bodies[0].operationId}});}bodies.push(JSON.parse(init.body));if(bodies.length===1)throw new Error('network');return Response.json({});}));
+ const original={policyRevision:'original-policy-cas',approvalRevision:'original-approval-cas'},later={policyRevision:'later-policy-cas',approvalRevision:'later-approval-cas'};
+ await expect(registerCard('consent-retry','proof',false,[],'harbor',undefined,undefined,original)).rejects.toThrow('network');
+ await registerCard('consent-retry','proof',false,[],'harbor',undefined,undefined,later);
+ expect(bodies[1]).toMatchObject({operationId:bodies[0].operationId,expectedPolicyRevision:original.policyRevision,expectedApprovalRevision:original.approvalRevision});
+ expect(reads).toHaveLength(1);expect(reads[0]).toContain('/publication/operations/'+bodies[0].operationId);
+ await registerCard('consent-retry','proof',false,[],'harbor',undefined,undefined,later);expect(bodies[2].expectedPolicyRevision).toBe(later.policyRevision);expect(bodies[2].operationId).not.toBe(bodies[1].operationId);
+});
+
+it.each(['complete','conflict','ordinary404','offline','changed'])('does not POST over a publication readback that is %s',async mode=>{
+ const id='readback-'+mode,expected={policyRevision:'original-policy-cas',approvalRevision:'original-approval-cas'},bodies:any[]=[];
+ const fetcher=vi.fn(async(_url,init)=>{
+  if(init.method==='POST'){bodies.push(JSON.parse(init.body));if(bodies.length===1)throw new Error('network');return Response.json({});}
+  if(mode==='offline')return Response.json({error:'temporarily_unavailable'},{status:503});
+  if(mode==='ordinary404')return Response.json({error:'card_not_found'},{status:404});
+  if(mode==='changed')return Response.json({error:'publication_operation_not_found',workVisibility:{policyRevision:'new-policy',approvalRevision:expected.approvalRevision,syncState:'complete',actions:['submit_review']}},{status:404});
+  return Response.json({operation:{operationId:bodies[0].operationId,state:mode},...(mode==='complete'?{card:{id:'100001',status:'pending'}}:{})});
+ });vi.stubGlobal('fetch',fetcher);
+ await expect(registerCard(id,'proof',false,[],'harbor',undefined,undefined,expected)).rejects.toThrow('network');
+ if(mode==='complete')expect(await registerCard(id,'proof',false,[],'harbor',undefined,undefined,expected)).toMatchObject({id:'100001',status:'pending'});
+ else await expect(registerCard(id,'proof',false,[],'harbor',undefined,undefined,expected)).rejects.toMatchObject({status:mode==='ordinary404'?404:mode==='offline'?503:409});
+ expect(bodies).toHaveLength(1);
+ if(mode==='conflict'||mode==='changed'){
+  await registerCard(id,'proof',false,[],'harbor',undefined,undefined,{...expected,policyRevision:'new-explicit-consent'});
+  expect(bodies[1].operationId).not.toBe(bodies[0].operationId);expect(bodies[1].expectedPolicyRevision).toBe('new-explicit-consent');
+ }
+});

@@ -3259,5 +3259,6 @@
   "visibility.state.reviewUnknown": "Going public again needs a new review.",
   "visibility.badge.delisted": "Removed from Board",
   "visibility.badge.suspended": "Public access paused",
-  "visibility.badge.takedown": "Taken down"
+  "visibility.badge.takedown": "Taken down",
+  "library.removeUnavailable": "Remove"
 }

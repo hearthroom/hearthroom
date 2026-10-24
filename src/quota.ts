@@ -24,6 +24,23 @@ export async function weeklyLimitAt(db: D1Database, at: number): Promise<number>
 export const PACK_MAX = 100;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Share identity is independent of publication usage. Existing approved legacy
+ * rows retain their allowance without manufacturing historical usage records. */
+export async function needsFirstRegistration(db:D1Database,provider:ProviderId,source:string):Promise<boolean>{
+ const row=await db.prepare(`SELECT EXISTS(SELECT 1 FROM card_registrations WHERE provider=?1 AND source_role_id=?2)
+ OR EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider=?1 AND (s.source_role_id=?2 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider=?1 AND source_role_id=?2)))
+ OR EXISTS(SELECT 1 FROM cards WHERE provider=?1 AND source_role_id=?2 AND (approved_version_id IS NOT NULL OR (status='approved' AND registered_at>0))) AS known`)
+ .bind(provider,source).first<{known:number}>();
+ return row?.known!==1;
+}
+export function firstRegistrationStatement(db:D1Database,input:{provider:ProviderId;account:number;source:string;now:number;packId?:string|null}):D1PreparedStatement{
+ return db.prepare(`INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at,pack_id)
+ SELECT ?1,?2,?3,?4,?5 WHERE NOT EXISTS(SELECT 1 FROM card_registrations WHERE provider=?1 AND source_role_id=?3)
+ AND NOT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider=?1 AND (s.source_role_id=?3 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider=?1 AND source_role_id=?3)))
+ AND NOT EXISTS(SELECT 1 FROM cards WHERE provider=?1 AND source_role_id=?3 AND (approved_version_id IS NOT NULL OR (status='approved' AND registered_at>0)))`)
+ .bind(input.provider,input.account,input.source,input.now,input.packId??null);
+}
+
 export interface WeekWindow {
   /** 這週的起點（UTC 週一 00:00），毫秒 */
   start: number;

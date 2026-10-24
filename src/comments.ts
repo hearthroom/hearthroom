@@ -10,7 +10,7 @@
  *   - 刪除：留言者本人、這張卡的作者、站方審核人。軟刪；刪頂層連同底下的回覆一起消失。
  *   - 審核：status = visible／held（命中風險規則，只給本人看）／removed（被移除，頂層有回覆時留佔位）／deleted（刪除）。
  *   - 讚：一人一則一票，重複按不重複算。
- *   - 只有在榜（approved）的卡能讀寫留言。
+ *   - 納管作品依目前 reachable；未納管舊卡維持 approved 規則。
  *
  * 文章留言（post_id 有值、card_id 寫 0）走同一套：只有公開文章有留言區；關閉留言只擋寫；
  * 刪除只有留言者本人（官方文章的作者是職員，刪除走審核移除）；置頂留言讀取時判斷還公不公開。
@@ -21,7 +21,9 @@ import { officialSql } from "./blog";
 import { holdReason, mutedUntil } from "./comment-moderation";
 import { readSettings } from "./community-settings";
 import { bumpOp } from "./ops-metrics";
-import { HttpError } from "./types";
+import { HttpError,type Env } from "./types";
+import {getCard} from './cards';
+import {currentCardAccess} from './work-read';
 
 export const COMMENT_MAX_CHARS = 500;
 export const COMMENT_PAGE_SIZE = 20;
@@ -36,6 +38,7 @@ export interface CommentCard {
   authorNumId: number;
   /** 成人內容（限制級）：留言區跟卡片頁同一道門 */
   adult: boolean;
+  rewardEligible?:boolean;
 }
 
 /** 留言掛在哪裡。文章只帶留言區要用的欄位。 */
@@ -48,14 +51,14 @@ export const sortOf = (raw: string | undefined): CommentSort => (raw === "hot" ?
 const ORDER: Record<CommentSort, string> = { new: "c.created_at DESC, c.id DESC", hot: "c.like_count DESC, c.created_at DESC, c.id DESC" };
 const targetOf = (t: CommentTarget) => (t.kind === "card" ? { col: "card_id", id: t.card.id } : { col: "post_id", id: t.post.id });
 
-/** 這張卡在榜才有留言區；不在榜一律 404（跟卡片頁一致，不透露卡存不存在）。 */
-export async function commentCard(db: D1Database, cardId: string): Promise<CommentCard> {
-  const row = await db
-    .prepare("SELECT id, provider, author_num_id, rating, status, public_blocked FROM cards WHERE id = ?")
-    .bind(cardId)
-    .first<{ id: string; provider: string; author_num_id: number; rating: string | null; status: string; public_blocked:number }>();
-  if (!row || (row.status !== "approved" || row.public_blocked)) throw new HttpError(404, "card not found");
-  return { id: row.id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, adult: row.rating === "R" };
+/** Current work authority gates social reads and writes before adult checks. */
+export async function commentCard(env:Env, cardId: string): Promise<CommentCard> {
+  const row=await getCard(env.DB,cardId);
+  if(!row||row.public_blocked)throw new HttpError(404,'card not found');
+  const access=await currentCardAccess(env,row,'social');
+  if(!access.reachable)throw new HttpError(404,'card not found');
+  return { id: row.id, provider: row.provider as ProviderId, authorNumId: row.author_num_id,
+    adult: row.rating === "R"||access.access==='unlisted',rewardEligible:row.status==='approved' };
 }
 
 /** 這張卡的作者是哪個成員（連結過帳號的算擁有者那一個）；作者從沒登入過本站就是 null。 */

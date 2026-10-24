@@ -41,7 +41,7 @@ async function load() {
   try {
     const [profile, board] = await Promise.all([
       fetchAuthor(handle),
-      fetchBoard({ author: handle, sort: "new", limit: LIMIT, offset: offset.value, lang: contentLang(locale.value) }),
+      fetchBoard({ author: handle, sort: "new", limit: LIMIT, offset: offset.value,...(typeof route.query.cursor==='string'?{cursor:route.query.cursor}:{}), lang: contentLang(locale.value) }),
     ]);
     author.value = profile;
     page.value = board;
@@ -53,13 +53,15 @@ async function load() {
     loading.value = false;
   }
 }
-function go(offset: number) {
-  router.push({ query: offset > 0 ? { offset: String(offset) } : {} });
+function go(offset: number,cursor?:string) {
+  router.push({ query: {...(offset>0?{offset:String(offset)}:{}),...(cursor?{cursor}:{})} });
 }
 watch(() => route.params.handle, () => { author.value = null; page.value = null; load(); }, { immediate: true });
-watch([() => route.query.offset, locale], load);
+watch([() => route.query.offset,() =>route.query.cursor], load);
+function reloadViewer(){if(route.query.cursor!==undefined||offset.value)go(0);else void load();}
+watch(locale,reloadViewer);
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
-watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
+watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) reloadViewer(); });
 </script>
 
 <template>
@@ -110,13 +112,13 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       :empty-hint="$t('author.empty.hint')"
     />
     <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
-      <button class="btn btn--sm" :disabled="page.offset === 0" @click="go(Math.max(0, page.offset - page.limit))">← {{ $t("pager.prev") }}</button>
+      <button class="btn btn--sm" :disabled="page.offset === 0" @click="go(Math.max(0, page.offset - page.limit),page.previousCursor)">← {{ $t("pager.prev") }}</button>
       <span class="subtle">
         {{ page.total === null
           ? $t("pager.page", { n: Math.floor(page.offset / page.limit) + 1 })
           : $t("pager.pageOf", { n: Math.floor(page.offset / page.limit) + 1, total: Math.ceil(page.total / page.limit) }) }}
       </span>
-      <button class="btn btn--sm" :disabled="!page.hasNext" @click="go(page.offset + page.limit)">{{ $t("pager.next") }} →</button>
+      <button class="btn btn--sm" :disabled="!page.hasNext" @click="go(page.offset + page.limit,page.nextCursor)">{{ $t("pager.next") }} →</button>
     </nav>
   </div>
 </template>

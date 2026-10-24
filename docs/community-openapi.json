@@ -108,6 +108,12 @@
                     },
                     "sort": {
                       "type": "string"
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    },
+                    "previousCursor": {
+                      "type": "string"
                     }
                   }
                 }
@@ -123,9 +129,12 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Current access unavailable or bounded candidate budget insufficient to prove a complete page."
           }
         },
-        "description": "Anonymous results exclude adult content. Authenticated visibility follows member settings. total may be null; use hasNext.",
+        "description": "Anonymous results exclude adult content. Authenticated visibility follows member settings. total may be null; use hasNext. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
         "parameters": [
           {
             "name": "zone",
@@ -261,8 +270,104 @@
               "default": 0
             },
             "description": "Pagination offset."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "description": "Opaque nextCursor/previousCursor from this query and viewer context. Keep offset in sync. Reset both on filter or viewer changes."
           }
         ]
+      },
+      "post": {
+        "summary": "Submit a card for review",
+        "tags": [
+          "Cards"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedPolicyRevision": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128
+                  },
+                  "expectedApprovalRevision": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128
+                  },
+                  "ratingAnswers": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "ratingAnswers"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing card submission accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Card"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "First card submission accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Card"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "card_not_found or owned operation not found."
+          },
+          "409": {
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          }
+        },
+        "description": "The optional policy/approval CAS pair must be supplied together and requires workVisibility enabled. New clients persist original operationId, intent and CAS. After unknown, read the original publication operation before retrying; never silently rebase. Legacy clients without CAS retain the existing protocol. Submission acceptance does not make a card public before approval."
       }
     },
     "/v1/cards/{id}": {
@@ -1686,7 +1791,27 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/Card"
+                        "oneOf": [
+                          {
+                            "$ref": "#/components/schemas/Card"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "unavailable": {
+                                "type": "boolean",
+                                "const": true
+                              },
+                              "bookmarkId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "unavailable",
+                              "bookmarkId"
+                            ]
+                          }
+                        ]
                       }
                     },
                     "hasNext": {
@@ -1720,7 +1845,7 @@
             }
           }
         },
-        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant.",
+        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Private bookmarks are retained as generic unavailable placeholders, without current private metadata. Only the owner can remove their bookmark. Reopening restores its original identity.",
         "parameters": [
           {
             "name": "offset",
@@ -1757,7 +1882,7 @@
             "memberToken": []
           }
         ],
-        "description": "Your cards on the connected service, one page at a time, with their community listing state and this week's submission quota. `filter=all` and `filter=unlisted` read your cards from the service (`q` is matched there); `filter=listed` reads the cards you have listed on this site. `q` searches card names and descriptions, case-insensitively, with Traditional and Simplified Chinese matching each other; surrounding spaces are ignored and only the first 100 characters are used. `total` counts every card matching the filter and keyword, so `ceil(total / pageSize)` is the number of pages. Responses are private and never shared-cached; add `fresh=1` right after changing a card to skip this site's short cache of the service list.",
+        "description": "Your cards on the connected service, one page at a time, with their community listing state and this week's submission quota. `filter=all` and `filter=unlisted` read your cards from the service (`q` is matched there); `filter=listed` reads the cards you have listed on this site. `q` searches card names and descriptions, case-insensitively, with Traditional and Simplified Chinese matching each other; surrounding spaces are ignored and only the first 100 characters are used. `total` counts every card matching the filter and keyword, so `ceil(total / pageSize)` is the number of pages. Responses are private and never shared-cached; add `fresh=1` right after changing a card to skip this site's short cache of the service list. When workVisibility is enabled, items contain owner-only current metadata. listed/registered means submission history, not merely an existing link-sharing row.",
         "parameters": [
           {
             "name": "page",
@@ -1828,6 +1953,20 @@
               "type": "string"
             },
             "description": "Which connected service the bearer token belongs to."
+          },
+          {
+            "name": "access",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "private",
+                "unlisted",
+                "public"
+              ]
+            },
+            "description": "Optional capability-gated access filter, applied before pagination to a bounded inventory of at most 200 sources. Disabled capability returns 409; over budget returns 503. Ordinary unfiltered inventory pagination has no 200-source limit."
           }
         ],
         "responses": {
@@ -1893,6 +2032,12 @@
                         "integer",
                         "null"
                       ]
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    },
+                    "previousCursor": {
+                      "type": "string"
                     }
                   }
                 }
@@ -1908,9 +2053,12 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Current access unavailable or bounded candidate budget insufficient to prove a complete page."
           }
         },
-        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant.",
+        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
         "parameters": [
           {
             "name": "offset",
@@ -1932,6 +2080,16 @@
               "type": "string"
             },
             "description": "Display language; defaults to zh-Hant."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "description": "Opaque nextCursor/previousCursor from this query and viewer context. Keep offset in sync. Reset both on filter or viewer changes."
           }
         ]
       }
@@ -2993,6 +3151,353 @@
           }
         }
       }
+    },
+    "/v1/providers": {
+      "get": {
+        "summary": "Read connected-service capabilities",
+        "tags": [
+          "Cards"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "workVisibility": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Only capabilities.workVisibility=true advertises the new author workflow; absence or any other value disables it."
+      }
+    },
+    "/v1/me/cards/{id}/visibility": {
+      "get": {
+        "summary": "Read owner visibility",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workVisibility": {
+                      "$ref": "#/components/schemas/WorkVisibility"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "card_not_found or owned operation not found."
+          },
+          "409": {
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          }
+        },
+        "description": "Private, no-store, primary D1 read with bookmark. Always validates actual source ownership and role.read. No enrollment or new command on GET."
+      },
+      "post": {
+        "summary": "Change visibility or cancel a pending submission",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "operation": {
+                      "$ref": "#/components/schemas/AuthorOperation"
+                    },
+                    "workVisibility": {
+                      "$ref": "#/components/schemas/WorkVisibility"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "card_not_found or owned operation not found."
+          },
+          "409": {
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          },
+          "202": {
+            "description": "Accepted; read original operation until resolved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "operation": {
+                      "$ref": "#/components/schemas/AuthorOperation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires the advertised capability, actual author role.read/role.write, and original policy/approval CAS. Default action is set_access. cancel_review must omit targetAccess. First private/link sharing creates stable identity without a review, quota usage or reward. Restoring public requires unchanged approved content. Unknown results remain pending; read original operation before retrying. Same key and different intent conflicts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisibilityCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/cards/{id}/visibility/operations/{operationId}": {
+      "get": {
+        "summary": "Read original visibility operation",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workVisibility": {
+                      "$ref": "#/components/schemas/WorkVisibility"
+                    },
+                    "operation": {
+                      "$ref": "#/components/schemas/AuthorOperation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "visibility_operation_not_found is distinct from card_not_found. Only an explicit missing original key plus matching original CAS and available action permits same-key/same-intent continuation; never replace CAS after unknown."
+          },
+          "409": {
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          },
+          "202": {
+            "description": "Accepted; aggregate not complete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workVisibility": {
+                      "$ref": "#/components/schemas/WorkVisibility"
+                    },
+                    "operation": {
+                      "$ref": "#/components/schemas/AuthorOperation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Private, no-store, primary D1 read with bookmark. Always validates actual source ownership and role.read. No enrollment or new command on GET. Pending returns 202; conflict returns 409."
+      }
+    },
+    "/v1/me/cards/{id}/publication/operations/{operationId}": {
+      "get": {
+        "summary": "Read original publication operation",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workVisibility": {
+                      "$ref": "#/components/schemas/WorkVisibility"
+                    },
+                    "operation": {
+                      "$ref": "#/components/schemas/AuthorOperation"
+                    },
+                    "card": {
+                      "$ref": "#/components/schemas/Card"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "publication_operation_not_found with latest workVisibility is distinct from card_not_found. Only an explicit missing original key plus matching original CAS and available action permits same-key/same-intent continuation; never replace CAS after unknown."
+          },
+          "409": {
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          }
+        },
+        "description": "Private, no-store, primary D1 read with bookmark. Always validates actual source ownership and role.read. No enrollment or new command on GET. Publication complete means submission accepted, not public access."
+      }
     }
   },
   "components": {
@@ -3147,6 +3652,12 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "canInteract": {
+            "type": "boolean"
+          },
+          "listed": {
+            "type": "boolean"
           }
         }
       },
@@ -3531,6 +4042,9 @@
           "draftChanged": {
             "type": "boolean",
             "description": "Present and true when the card is published but its draft has edits that have not been submitted for review: the draft's content version differs from the approved one. Edits to the Lorebook or presentation rules alone are not detected."
+          },
+          "workVisibility": {
+            "$ref": "#/components/schemas/WorkVisibility"
           }
         }
       },
@@ -3742,6 +4256,194 @@
             "type": "string"
           }
         }
+      },
+      "WorkVisibility": {
+        "type": "object",
+        "properties": {
+          "access": {
+            "type": "string",
+            "enum": [
+              "private",
+              "unlisted",
+              "public"
+            ]
+          },
+          "effectiveAccess": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "link",
+              "public",
+              "denied",
+              "unavailable"
+            ]
+          },
+          "review": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "rejected",
+              "needs_review",
+              "revoked"
+            ]
+          },
+          "update": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "rejected"
+            ]
+          },
+          "everPublic": {
+            "type": "boolean"
+          },
+          "revisionState": {
+            "type": "string",
+            "enum": [
+              "same",
+              "changed",
+              "unknown"
+            ]
+          },
+          "restorable": {
+            "type": "boolean"
+          },
+          "restoreReason": {
+            "type": "string",
+            "enum": [
+              "none",
+              "no_approval",
+              "content_changed",
+              "revision_unknown",
+              "restricted",
+              "unavailable"
+            ]
+          },
+          "draftChanged": {
+            "type": "boolean"
+          },
+          "restriction": {
+            "type": "string",
+            "enum": [
+              "none",
+              "delisted",
+              "suspended",
+              "takedown"
+            ]
+          },
+          "reviewNote": {
+            "type": "string"
+          },
+          "restrictionNote": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "type": "string"
+          },
+          "approvalRevision": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "set_private",
+                "set_unlisted",
+                "restore_public",
+                "submit_review",
+                "submit_update",
+                "cancel_review"
+              ]
+            }
+          },
+          "syncState": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "changing",
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "access",
+          "effectiveAccess",
+          "review",
+          "update",
+          "everPublic",
+          "revisionState",
+          "restorable",
+          "restoreReason",
+          "draftChanged",
+          "restriction",
+          "policyRevision",
+          "approvalRevision",
+          "actions",
+          "syncState"
+        ]
+      },
+      "VisibilityCommand": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "set_access",
+              "cancel_review"
+            ]
+          },
+          "targetAccess": {
+            "type": "string",
+            "enum": [
+              "private",
+              "unlisted",
+              "public"
+            ]
+          },
+          "expectedPolicyRevision": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 128
+          },
+          "expectedApprovalRevision": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "operationId",
+          "expectedPolicyRevision",
+          "expectedApprovalRevision"
+        ]
+      },
+      "AuthorOperation": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "complete",
+              "conflict"
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "state"
+        ]
       }
     }
   }

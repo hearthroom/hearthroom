@@ -66,6 +66,8 @@ export interface CommunityCard {
 }
 
 export interface CardPage {
+  nextCursor?:string;
+  previousCursor?:string;
   items: CommunityCard[];
   /** 有篩選且還有下一頁時為 null——精確總數在那種查詢下太貴，見服務端 listCards 的說明。 */
   total: number | null;

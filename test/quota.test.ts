@@ -1,7 +1,9 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ratingBody, bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI, identities, myRolesOnUpstream, makeMember } from "./helpers";
+import { ratingBody, bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI, identities, myRolesOnUpstream, makeMember,role } from "./helpers";
+import {upsertCard} from '../src/cards';
 import { WEEKLY_LIMIT, WEEK_MS, weekWindow } from "../src/quota";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -16,7 +18,7 @@ const unregister = (roleId: string, token = "alice-token") =>
   SELF.fetch(`https://c.test/v1/cards/${roleId}`, { method: "DELETE", headers: bearer(token) });
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   identities({ "alice-token": 10001, "bob-token": 20002 });
   rolesOnMainSite(
     { roleId: "a1", authorNumId: 10001 },
@@ -45,6 +47,18 @@ describe("週的定義", () => {
 });
 
 describe("每週登記額度", () => {
+  it('does not let a share-only row bypass the first real submission quota',async()=>{
+    await register('a1');await register('a2');await register('a3');
+    await upsertCard(env.DB,role({roleId:'a4',authorNumId:10001}),0,{status:'unshared'});
+    const response=await register('a4');
+    expect(response.status).toBe(403);expect(await response.json()).toMatchObject({error:'weekly_quota_exceeded'});
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM card_registrations WHERE source_role_id='a4'").first<{n:number}>())?.n).toBe(0);
+  });
+  it('records first submission usage even when an unreviewed share already has a community row',async()=>{
+    await upsertCard(env.DB,role({roleId:'a1',authorNumId:10001}),0,{status:'unshared'});
+    expect((await register('a1')).status).toBe(200);
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM card_registrations WHERE source_role_id='a1'").first<{n:number}>())?.n).toBe(1);
+  });
   it(`一週最多 ${WEEKLY_LIMIT} 張，第 ${WEEKLY_LIMIT + 1} 張 403 weekly_quota_exceeded 且不落庫`, async () => {
     expect((await register("a1")).status).toBe(201);
     expect((await register("a2")).status).toBe(201);
@@ -59,8 +73,8 @@ describe("每週登記額度", () => {
   it("撤掉再登同一張不多算；撤掉換一張新的才算——額度數的是不同的卡", async () => {
     await register("a1"); await register("a2"); await register("a3");
     expect((await unregister("a1")).status).toBe(204);
-    // 同一張回鍋：不佔額度
-    expect((await register("a1")).status).toBe(201);
+    // 保留原卡再送審：不佔額度，回傳既有卡
+    expect((await register("a1")).status).toBe(200);
     // 換一張新的：這週已經有三張不同的卡登記過了
     await unregister("a2");
     expect((await register("a4")).status).toBe(403);
@@ -107,6 +121,16 @@ async function grantPack(memberId: string, granted: number, at = Date.now()): Pr
 const packRows = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM card_registrations WHERE pack_id IS NOT NULL").first<{ n: number }>())!.n;
 
 describe("登記補充包", () => {
+  it('charges a pack once for a share-only first submission and keeps exact replay free',async()=>{
+    const alice=await makeMember(10001);await grantPack(alice,1);
+    await register('a1');await register('a2');await register('a3');
+    await upsertCard(env.DB,role({roleId:'a4',authorNumId:10001}),0,{status:'unshared'});
+    const operationId=crypto.randomUUID();
+    const submit=async()=>approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:{'Content-Type':'application/json',...bearer('alice-token')},body:JSON.stringify({roleId:'a4',operationId,...ratingBody(false)})}));
+    expect((await submit()).status).toBe(200);expect(await packRows()).toBe(1);
+    expect((await submit()).status).toBe(200);expect(await packRows()).toBe(1);
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM card_registrations WHERE source_role_id='a4'").first<{n:number}>())?.n).toBe(1);
+  });
   it("免費 3 張用完後，有補充包就能繼續登記，每張新卡扣一次；扣完回到 403", async () => {
     const alice = await makeMember(10001);
     await grantPack(alice, 2);
@@ -135,7 +159,7 @@ describe("登記補充包", () => {
     await register("a1"); await register("a2"); await register("a3");
     expect((await register("a4")).status).toBe(201);
     expect((await unregister("a4")).status).toBe(204);
-    expect((await register("a4")).status).toBe(201);
+    expect((await register("a4")).status).toBe(200);
     expect(await packRows()).toBe(1);
   });
 

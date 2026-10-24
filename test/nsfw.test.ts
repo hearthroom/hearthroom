@@ -100,7 +100,7 @@ describe("榜單權限與快取", () => {
     expect(ids(await json(await SELF.fetch(url, { headers: bearer("viewer-token") })))).toEqual(["role-safe"]);
   });
 
-  it("暖成人榜單只有兩次 D1 讀取，不重新排序，也不快取上游身分", async () => {
+  it("暖成人榜單重驗候選與政策，不重新排序，也不快取上游身分", async () => {
     await listTwo();
     await makeMember(VIEWER);
     await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
@@ -120,8 +120,12 @@ describe("榜單權限與快取", () => {
     const result = await worker.fetch(req.clone(), measured, ctx);
     await waitOnExecutionContext(ctx);
     expect(result.headers.get("X-Cache")).toBe("hit");
-    expect(queries).toHaveLength(2);
-    expect(queries.every(sql => sql.trim().startsWith("SELECT"))).toBe(true);
+    expect(queries).toHaveLength(6);
+    expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
+    expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
+    expect(queries.some(sql=>sql.includes('c.id IN(SELECT value FROM json_each'))).toBe(true);
+    expect(queries.some(sql=>sql.includes("source_role_id IN(SELECT value FROM json_each"))).toBe(true);
+    expect(queries.some(sql=>/ORDER BY/i.test(sql))).toBe(false);
     expect(identity).toHaveBeenCalledTimes(1);
   });
 
@@ -371,7 +375,7 @@ describe("本站登入 cookie 直接放行單卡", () => {
     expect((await page(cookie)).html).not.toContain('rel="preload" as="image"');
   });
 
-  it("靠 cookie 認人的暖成人榜單：總共兩次 D1 讀取（審核時鐘、讀者一次查完），不問供應商", async () => {
+  it("靠 cookie 認人的暖成人榜單批次重驗候選政策，不問供應商", async () => {
     await listTwo();
     const cookie = await siteSession(VIEWER);
     await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
@@ -389,7 +393,10 @@ describe("本站登入 cookie 直接放行單卡", () => {
     await waitOnExecutionContext(ctx);
     expect(ids(await json(res))).toEqual(["role-adult", "role-safe"]);
     expect(res.headers.get("X-Cache")).toBe("hit");
-    expect(queries, queries.join("\n---\n")).toHaveLength(2);
+    expect(queries, queries.join("\n---\n")).toHaveLength(6);
+    expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
+    expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
+    expect(queries.some(sql=>/ORDER BY/i.test(sql))).toBe(false);
     expect(identity).not.toHaveBeenCalled();
   });
 

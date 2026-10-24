@@ -1,9 +1,11 @@
+import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
 import { ownedHistory } from "./owned-history";
 import { moderationMetrics } from "./moderation";
 import { opsMetrics } from "./ops-metrics";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
-import { listCards, toCard, type CardRow } from "./cards";
+import { getCard,cardsByIds,listCards, toCard, type CardRow } from "./cards";
+import {currentCardAccess,currentCardsAccess,filterPublicRows,unlistedCardRow} from './work-read';
 import { upstream } from "./upstream";
 import { libraryAllowsNsfw, memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
 import { tagNamesFor } from "../shared/tag-catalog";
@@ -48,16 +50,18 @@ for (const kind of kinds) {
     const target = kind === "favorites" ? raw : await memberByHandle(c.env.DB, raw);
     if (!target) throw new HttpError(404, "not_found");
     if (c.req.method !== "DELETE" && kind === "favorites") {
-      const card = await c.env.DB.prepare('SELECT status,rating,public_blocked FROM cards WHERE id=?').bind(target).first<{status:string; rating:string|null; public_blocked:number}>();
+      const card = await getCard(c.env.DB,target);
+      const current=card?await currentCardAccess(c.env,card,'library'):null;
       const access = await memberNsfw(c.env.DB, member.id);
       // 看自己已經收藏的那一張照收藏區的規則；新收藏還是要現在開著成人內容才行（卡片頁本身也要）
       const allowed = c.req.method === "GET" ? libraryAllowsNsfw(access) : access.showNsfw && !!access.ageVerifiedAt;
-      if (!card || card.status !== "approved" || card.public_blocked || (card.rating === 'R' && !allowed)) throw new HttpError(404, "not_found");
+      if (!card || !current?.reachable || ((current.access==='unlisted'||card.rating === 'R') && !allowed)) throw new HttpError(404, "not_found");
     }
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
     } else if (c.req.method === "DELETE") {
       await c.env.DB.prepare(`DELETE FROM ${table} WHERE member_id=? AND ${column}=?`).bind(member.id, target).run();
+      if(kind==='favorites')return c.json({active:false});
     }
     const row = await c.env.DB.prepare(`SELECT 1 FROM ${table} WHERE member_id=? AND ${column}=?`).bind(member.id, target).first();
     const count = kind === "favorites" ? await c.env.DB.prepare("SELECT COUNT(*) AS n FROM member_favorites WHERE card_id=?").bind(target).first<{ n: number }>() : null;
@@ -73,14 +77,30 @@ for (const kind of ["favorites", "feed"] as const) {
     const hidden = await memberHiddenTags(c.env.DB, member.id);
     const offset = offsetOf(c.req.query("offset"));
     const limit = 24;
-    const result = await listCards(c.env.DB, {
-      ...(kind === "favorites" ? { favoritedBy: member.id } : { followedBy: member.id }),
-      sort: "new", limit, offset,
-      // 收藏是自己的東西，照收藏區的規則；關注動態是在發現新卡，跟著開關走
-      allowNsfw: kind === "favorites" ? libraryAllowsNsfw(access) : access.showNsfw && !!access.ageVerifiedAt,
-      excludeTags: hidden.flatMap(k => tagNamesFor(k) ?? []),
-    });
-    return c.json({ items: result.rows.map(row => toCard(row, c.req.query("lang") || "zh-Hant")), hasNext: result.hasNext, total: result.total, offset, limit });
+    if(kind==='favorites'){
+      const favorites=await c.env.DB.prepare('SELECT c.* FROM member_favorites f JOIN cards c ON c.id=f.card_id WHERE f.member_id=? ORDER BY f.created_at DESC,f.card_id DESC LIMIT 25 OFFSET ?').bind(member.id,offset).all<CardRow>();
+      const displayRows=await cardsByIds(c.env.DB,favorites.results.slice(0,limit).map(r=>String(r.id)));
+      const displayMap=new Map(displayRows.map(r=>[String(r.id),r]));
+      const rows=favorites.results.slice(0,limit).map(r=>displayMap.get(String(r.id))!).filter(Boolean),policies=await currentCardsAccess(c.env,rows,'library');
+      const allowAdult=libraryAllowsNsfw(access),hiddenNames=new Set(hidden.flatMap(k=>tagNamesFor(k)??[]));
+      const items=[];
+      for(const row of rows){
+        const current=policies.get(String(row.id))!;
+        if(!current.reachable){
+          if(current.managed)items.push({unavailable:true,bookmarkId:String(row.id)});
+          continue;
+        }
+        if((row.rating==='R'||current.access==='unlisted')&&!allowAdult)continue;
+        const visible=current.access==='unlisted'?await unlistedCardRow(c.env,row):row;
+        if((JSON.parse(visible.tags) as string[]).some(tag=>hiddenNames.has(tag)))continue;
+        items.push(toCard(visible,c.req.query('lang')||'zh-Hant'));
+      }
+      return c.json({items,hasNext:favorites.results.length>limit,total:null,offset,limit});
+    }
+    const allowNsfw=access.showNsfw&&!!access.ageVerifiedAt;
+    const position=await publicPosition(c.env,c.req.url,offset,allowNsfw,member.id);
+    const candidates=await publicCandidates(c.env,{followedBy:member.id,sort:'new',limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])},position.raw);
+    return c.json(await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'}));
   });
 }
 

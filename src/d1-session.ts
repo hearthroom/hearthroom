@@ -28,16 +28,20 @@ const BOOKMARK_MAX_AGE = 300;
 const BOOKMARK_RE = /^[0-9a-f]+(?:-[0-9a-f]+){1,15}$/i;
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const READ_MOSTLY_POSTS = new Set(["/v1/auth/session", "/v1/auth/token"]);
+// Author CAS and an operation's absence must not be inferred from a lagging replica.
+// Operation recovery may also finalize a previously accepted command in D1.
+const AUTHOR_VISIBILITY = /^\/v1\/me\/cards\/[^/]+\/(?:visibility(?:\/operations\/[^/]+)?|publication\/operations\/[^/]+)$/;
 
 export function startsAtPrimary(method: string, path: string): boolean {
   if (path.startsWith("/auth/") || path.startsWith("/internal/")) return true;
+  if (AUTHOR_VISIBILITY.test(path)) return true;
   if (READ_METHODS.has(method)) return false;
   return !(method === "POST" && READ_MOSTLY_POSTS.has(path));
 }
 
 /** 寫入類請求與登入回呼的回應要帶回 bookmark，讓下一個請求讀得到這次寫的東西。 */
 function returnsBookmark(method: string, path: string): boolean {
-  return !READ_METHODS.has(method) || path.startsWith("/auth/");
+  return !READ_METHODS.has(method) || path.startsWith("/auth/") || AUTHOR_VISIBILITY.test(path);
 }
 
 function bookmarkFrom(request: Request): string | null {

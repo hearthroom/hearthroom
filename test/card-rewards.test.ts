@@ -1,3 +1,4 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { upstream, type PayResult } from "../src/upstream";
@@ -60,7 +61,7 @@ const rewards = async () => (await env.DB.prepare("SELECT card_id, status, amoun
 const op = () => crypto.randomUUID();
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   identities({ "author-token": AUTHOR, "admin-token": ADMIN, "mod-token": MOD, "admin-author-token": ADMIN_AUTHOR });
   rolesOnMainSite(...["r1", "r2", "r3"].map((roleId) => ({ roleId, authorNumId: AUTHOR })), { roleId: "own", authorNumId: ADMIN_AUTHOR });
   reviewUpstream();

@@ -94,3 +94,30 @@ describe("類型張數", () => {
     expect(router.currentRoute.value.query.tag).toBeUndefined();
   });
 });
+
+it('follows opaque next and previous cursors and clears them when filters change',async()=>{
+ vi.mocked(api.fetchBoard).mockImplementation(async query=>({items:[],total:null,hasNext:!query?.offset,limit:24,offset:query?.offset??0,sort:'new',...(query?.offset?{previousCursor:'opaque-previous'}:{nextCursor:'opaque-next'})}));
+ await mount('/?sort=new');
+ (root.querySelector('.pager button:last-child') as HTMLButtonElement).click();await settle();
+ expect(router.currentRoute.value.query.cursor).toBe('opaque-next');expect(api.fetchBoard).toHaveBeenLastCalledWith(expect.objectContaining({cursor:'opaque-next',offset:24}));
+ (root.querySelector('.pager button:first-child') as HTMLButtonElement).click();await settle();expect(router.currentRoute.value.query.cursor).toBe('opaque-previous');
+ chip('武俠')!.click();await settle();expect(router.currentRoute.value.query.cursor).toBeUndefined();
+});
+
+it('clears a cursor when adult authorization changes',async()=>{
+ const {useSession}=await import('../src/lib/session');
+ await mount('/?offset=24&cursor=old-consent');
+ const session=useSession();session.profile={showNsfw:false,hiddenTags:[]} as any;await settle();
+ session.profile.showNsfw=true;await settle();
+ expect(router.currentRoute.value.query.cursor).toBeUndefined();
+ expect(router.currentRoute.value.query.offset).toBeUndefined();
+});
+it('does not keep a cached public board when current visibility becomes unavailable',async()=>{
+ const card={id:'remembered',roleId:'remembered',name:'Remembered public card',summary:'',author:{name:'A'},tags:[],names:{},summaries:{}} as any;
+ vi.mocked(api.fetchBoard).mockResolvedValue({items:[card],total:1,hasNext:false,limit:24,offset:0,sort:'hot'});
+ await mount('/');expect(root.textContent).toContain(card.name);
+ vi.mocked(api.fetchBoard).mockRejectedValue(new Error('Current visibility unavailable'));
+ await router.push('/?sort=new');await settle();
+ await router.push('/');await settle();
+ expect(root.textContent).not.toContain(card.name);expect(root.querySelector('[role=alert]')).not.toBeNull();
+});
