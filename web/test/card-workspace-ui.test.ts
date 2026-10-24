@@ -1,7 +1,7 @@
 
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
-vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null}));
+vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
 const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:false,revisionState:'unknown',restorable:false,restoreReason:'no_approval',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'0',actions:['set_private','set_unlisted','submit_review'],syncState:'complete',...extra});
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick, type App } from 'vue';
