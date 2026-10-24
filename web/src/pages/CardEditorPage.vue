@@ -40,10 +40,11 @@ import {
   saveAuthorAsset,
   ApiError,
   registerCard,
+  fetchDraftState,
+  type DraftState,
   fetchRatingDraft,
   saveRatingDraft,
   beginCardEdit,
-  unpublishRole,
   unregisterCard,
   uploadImage,
   type WorldbookSummary,
@@ -54,7 +55,11 @@ import { can } from "@/lib/provider";
 import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
-import CreatorSeasonEntry from "@/components/CreatorSeasonEntry.vue";
+import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
+import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
+import AuthorVisibility from "@/components/AuthorVisibility.vue";
+import type { WorkVisibility } from "@/lib/work-visibility";
+import { visibilityStateKey } from "@/lib/visibility-presentation";
 import {
   LANGUAGES,
   scriptChoices,
@@ -554,6 +559,8 @@ onMounted(async () => {
       await loadRegexRules(token);
     }
     void loadValidation();
+    void visibilityControl.value?.reload();
+    void refreshLegacyState();
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
@@ -672,16 +679,23 @@ function exportRegex() {
 
 // ── 儲存 ──────────────────────────────────────────────────────────
 
-/**
- * 這張卡在供應商那邊的狀態：private／public／waitReview。
- * 公開的卡供應商不讓改（要先轉回私有，改完再送審）。作者想改就替他做：儲存時先轉私有再存，
- * 頁上提示改完要再送審；已經拿到連結的人照樣能玩，不受影響（owner 2026-09-15）。
- * 審核中的卡連轉私有都不行，只能等審完。
- */
 const roleVisibility = ref("");
+const legacyDraft=ref<DraftState|null>(null);
+const legacyState=computed(()=>legacyAuthorStateKey(legacyDraft.value,roleVisibility.value));
+async function refreshLegacyState(){if(visibilityEnabled.value||!roleId.value)return;try{const token=await session.accessToken();if(token)legacyDraft.value=await fetchDraftState(roleId.value,token,editorProvider.value);}catch{/* Status cannot grant visibility actions. */}}
+
+const visibilityEnabled=useWorkVisibilityCapability();
+const visibilityControl = ref<InstanceType<typeof AuthorVisibility>|null>(null);
+const workVisibility = ref<WorkVisibility|null>(null);
+const visibilityBusy = ref(false);
+const visibilityActor = computed(()=>String(session.profile?.identities.find(i=>i.provider===editorProvider.value)?.externalId??session.me?.accountNumId??''));
+const editorVisibilityNotice = computed(()=>{const v=workVisibility.value;if(!v)return '';if(v.syncState!=='complete')return t(v.syncState==='unavailable'?'visibility.operation.unknown':'visibility.operation.updating');if(v.access==='private'&&v.review==='none'&&v.restriction==='none')return v.everPublic&&!v.restorable?t(v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):'';return t(visibilityStateKey(v,true),{note:v.reviewNote??'',reason:v.restrictionNote??''});});
+const visibilityToken=()=>session.accessToken();
+function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
+function visibilityMissing(){section.value=missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'dialogue';}
 
 async function save() {
-  if (saving.value || loading.value) return;
+  if (saving.value || loading.value || visibilityBusy.value) return;
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
@@ -725,10 +739,10 @@ async function save() {
     const review = targetRoleId
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
       : {resubmit:false};
-    reviewRetry.value = review.resubmit;
+    reviewRetry.value = false;
     ratingNeeded.value = false;
     if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
-    reviewResubmitted.value = false;
+    reviewResubmitted.value = !!review.resubmit;
     if (!targetRoleId) {
       const created = await createRole(
         { roleName: draft.value.roleName.trim(), language: draft.value.language },
@@ -738,13 +752,6 @@ async function save() {
       targetRoleId = created.roleId;
       roleId.value = targetRoleId;
       track("card_create", { subject: targetRoleId });
-    }
-
-    // Only the editable source becomes private; the approved hosted revision has
-    // its own immutable ID and remains available through the issuer decision.
-    if (roleVisibility.value === "public") {
-      await unpublishRole(targetRoleId, token);
-      roleVisibility.value = "private";
     }
 
     // 送出的是此刻的快照。存檔期間草稿還可能在變（匯入的立繪要先上傳、傳完才填進頭像那格），
@@ -782,19 +789,8 @@ async function save() {
     }
     await saveRegex(token, targetRoleId);
 
-    if (review.resubmit) {
-      // 重送審沿用上一版的分級問卷；上一版沒填過（問卷上線前送的）就請作者現在補，不補就先不送
-      const answers = usable(review.ratingAnswers) ?? (await askRating(ratingAnswers.value));
-      if (answers) {
-        ratingAnswers.value = answers;
-        await saveRatingDraft(targetRoleId, answers, token, editorProvider.value).catch(() => {});
-        await registerCard(targetRoleId, token, answers, [], editorProvider.value, review.fandom ?? "", review.fandomId);
-        reviewRetry.value = false;
-        reviewResubmitted.value = true;
-      } else {
-        ratingNeeded.value = true;
-      }
-    }
+    // Editing cancels this submission. Only the explicit public flow may submit again.
+    if (review.resubmit) { reviewRetry.value=false; reviewResubmitted.value=true; }
 
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
     original.value = sent;
@@ -804,6 +800,8 @@ async function save() {
     flash(t("edit.saved"));
     track("card_edit", { subject: targetRoleId });
     void loadValidation();
+    void visibilityControl.value?.reload();
+    void refreshLegacyState();
 
     // 建立完成後把網址換成編輯頁：重新整理不該回到一張空表單。
     //
@@ -880,8 +878,8 @@ async function editRating(): Promise<RatingAnswers | null> {
   return answers;
 }
 
-async function publish() {
-  if (!canPublish.value || saving.value) return;
+async function publish(expected:WorkVisibility) {
+  if (!canPublish.value || saving.value || !expected.actions.some(a=>a==='submit_review'||a==='submit_update')) return;
   // 先確認分級（填過的直接看結果），再確認送審與原作
   const rated = await editRating();
   if (!rated) return;
@@ -897,7 +895,7 @@ async function publish() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rated, [], editorProvider.value, answer.text, answer.id);
+    await registerCard(roleId.value, token, rated, [], editorProvider.value, answer.text, answer.id, expected);
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
@@ -990,7 +988,7 @@ async function exportCard(format: "png" | "json") {
     <header class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t("workspace.editHint") }}</p>
+      <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
     </header>
 
     <div v-if="loading" class="ghosts" aria-hidden="true">
@@ -1026,10 +1024,9 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
-        <p v-if="!isNew" class="notice" role="status">{{ $t("workspace.editNotice") }}</p>
-        <p v-else-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
-        <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
-        <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("workspace.reviewRestarted") }}</p>
+        <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
+        <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
+        <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
@@ -1309,6 +1306,7 @@ async function exportCard(format: "png" | "json") {
 
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
+          <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <div class="panel checklist">
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul>
@@ -1332,18 +1330,6 @@ async function exportCard(format: "png" | "json") {
               {{ ratingResult ? $t("editor.rating.change") : $t("editor.rating.start") }}
             </button>
           </div>
-
-          <div class="panel">
-            <h2>{{ $t("editor.publish") }}</h2>
-            <p class="muted">{{ $t("editor.publish.hint") }}</p>
-            <!-- 創作季進行中：送審這一刻提醒「本人作品」與獎勵，整行可點到活動頁 -->
-            <CreatorSeasonEntry where="editor" />
-            <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
-            <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
-              {{ $t("editor.publish.submit") }}
-            </button>
-          </div>
-
 
           <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
           <div v-if="!isNew" class="panel panel--danger">
@@ -1371,11 +1357,11 @@ async function exportCard(format: "png" | "json") {
           右欄就整條讓給手機框。
         -->
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew && !reviewRetry)">
+          <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry)">
             {{ saveLabel }}
           </button>
-          <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
-            {{ $t("editor.publish.submit") }}
+          <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
+            {{ workVisibility?.syncState!=='complete'?$t('visibility.title'):workVisibility?.review==='pending'?$t('mine.badge.pending'):workVisibility?$t(`visibility.short.${workVisibility.access}`):$t('visibility.title') }}
           </button>
           <button v-if="can('chatTest')" type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
           <button v-if="can('library')" type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
@@ -1465,6 +1451,7 @@ async function exportCard(format: "png" | "json") {
 </template>
 
 <style scoped>
+.visibility-notice-action{background:transparent;border:0;color:var(--accent-text);font:inherit;min-height:var(--h-sm);padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 /*
    這一頁比別頁寬得多。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器是工作區，
@@ -1688,7 +1675,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   /* 底部動作列一排收完：四顆鈕在手機上會折成兩行，蓋住表單尾端（.body 只留了一行的位置）。
      「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
   .bar { flex-wrap: nowrap; gap: var(--s-2); }
-  .bar > .btn { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); white-space: nowrap; }
+  .bar > .btn { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); white-space: normal; min-height:var(--h-lg); height:auto; align-self:stretch; line-height:1.25; overflow-wrap:anywhere; }
   .bar > a.btn, .bar > .subtle { display: none; }
 }
 /* 640 以下頁面左右內距縮成 s-4（base.css），導覽的出血邊距跟著縮，不然兩邊各差 8px 露一條底 */

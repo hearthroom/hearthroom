@@ -1,3 +1,10 @@
+const rollout=vi.hoisted(()=>({enabled:true}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
+
+const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
+vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
+vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
+const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:false,revisionState:'unknown',restorable:false,restoreReason:'no_approval',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'0',actions:['set_private','set_unlisted','submit_review'],syncState:'complete',...extra});
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick, type App } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
@@ -23,25 +30,15 @@ function button(key:string){return [...root.querySelectorAll('button')].find(b=>
 // 卡片上只有試玩與編輯：送審在編輯頁（owner 2026-09-29：外面那顆大「提交審核」拿掉）
 it('shows one work with only play and edit, and no review submission here',async()=>{await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.textContent).toContain(fixture.summary);expect(root.querySelector('a[href*="single=1"]')).toBeNull();expect(root.querySelector('a[href*="100021/edit"]')?.getAttribute('href')).toContain('provider=harbor');expect([...root.querySelectorAll('.card__actions > *')].map(e=>e.textContent?.trim())).toEqual([i18n.global.t('mine.action.play'),i18n.global.t('mine.action.edit')]);expect(button('mine.action.submit')).toBeUndefined();expect(mocks.register).not.toHaveBeenCalled();});
 // 撤回收在「⋯」裡、按了先問一聲：一週只能登記幾張，撤了要重新送審才回得來
-it('keeps withdrawing a listed card, the only place to do it, behind ⋯ and a confirmation', async () => {
+it('opens visibility for a published card without deleting its registration',async()=>{
  mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved'}]));
- await mount();
- expect(button('mine.action.unregister')).toBeUndefined();
- expect(button('mine.action.submit')).toBeUndefined();
- const more=root.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.global.t('mine.action.more')}"]`)!;
- more.click();await settle();
- expect(more.getAttribute('aria-expanded')).toBe('true');
- mocks.ask.mockResolvedValueOnce(false);
- button('mine.action.unregister').click();await settle();
- expect(mocks.ask).toHaveBeenCalledWith(expect.objectContaining({danger:true,title:i18n.global.t('mine.withdraw.title',{name:fixture.name})}));
+ await mount();root.querySelector<HTMLButtonElement>('.card__more-btn')!.click();await settle();
+ button('visibility.menu').click();await settle();
+ expect(document.querySelector('[role=dialog]')?.textContent).toContain(i18n.global.t('visibility.title'));
  expect(mocks.unregister).not.toHaveBeenCalled();
- expect(root.querySelector('.card__status')?.textContent?.trim()).toBe(i18n.global.t('mine.badge.listed'));
- more.click();await settle();
- mocks.ask.mockResolvedValueOnce(true);
- button('mine.action.unregister').click();await settle();
- expect(mocks.unregister).toHaveBeenCalledWith('original','token-harbor','harbor');
- expect(root.querySelector('.card__status')?.textContent?.trim()).toBe(i18n.global.t('workspace.draft'));
- expect(root.querySelector('.card__more')).toBeNull();
+ expect(root.querySelectorAll('article.card')).toHaveLength(1);
+ const close=[...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')].find(b=>b.getAttribute('aria-label')===i18n.global.t('visibility.close'))!;close.click();await settle();
+ expect(document.querySelector('[role=dialog]')).toBeNull();expect(root.querySelectorAll('article.card')).toHaveLength(1);
 });
 // 已發布、改過沒送審（owner 2026-10-05）：封面多一盞「有修改未提交」、卡上一句說明、「編輯」換成主色
 it('flags a published card with unsubmitted edits, and only that card', async () => {
@@ -59,9 +56,9 @@ it('flags a published card with unsubmitted edits, and only that card', async ()
  expect(clean.querySelector('.card__body')).toBeNull();
  expect(clean.querySelector('a[href*="/edit"]')?.classList.contains('btn--primary')).toBe(false);
 });
-it('has no ⋯ menu on cards that are not registered', async () => {
+it('offers visibility on cards that are not registered', async () => {
  await mount();
- expect(root.querySelector('.card__more')).toBeNull();
+ expect(root.querySelector('.card__more')).not.toBeNull();
 });
 it('links directly to the only playable provider without a chooser or empty footer', async () => {
  await mount();
@@ -182,14 +179,14 @@ it('searches by keyword after typing stops, back on page 1, and keeps it in the 
  input.value='  夜行偵探 ';input.dispatchEvent(new Event('input'));
  await new Promise(r=>setTimeout(r,350));await settle();
  await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({q:'夜行偵探'}));
- await vi.waitFor(()=>expect(lastCall()).toMatchObject({q:'夜行偵探',page:1,pageSize:24,filter:'all',fresh:true}));
+ await vi.waitFor(()=>expect(lastCall()).toMatchObject({q:'夜行偵探',page:1,pageSize:24,access:undefined,fresh:true}));
 });
 it('filters listed or unlisted cards from the address', async () => {
  const router=await mountAt('/mine');
- [...root.querySelectorAll('.seg__item')].find(b=>b.textContent?.trim()===i18n.global.t('mine.filter.listed'))!.dispatchEvent(new Event('click'));
+ [...root.querySelectorAll('.seg__item')].find(b=>b.textContent?.trim()===i18n.global.t('visibility.short.public'))!.dispatchEvent(new Event('click'));
  await settle();
- await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({filter:'listed'}));
- await vi.waitFor(()=>expect(lastCall()).toMatchObject({filter:'listed',page:1}));
+ await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({filter:'public'}));
+ await vi.waitFor(()=>expect(lastCall()).toMatchObject({access:'public',page:1}));
 });
 it('pages with numbers, folds the middle, and jumps straight to a page', async () => {
  mocks.fetch.mockImplementation(async()=>({...result([{...fixture,roleId:'original'}]),total:24*10}));
@@ -250,4 +247,21 @@ it('turns an empty list into a first-card start: the web editor and the guide', 
  expect(root.querySelectorAll('.onboard__pill')).toHaveLength(1);
  expect(empty.querySelector('a[href$="/create"]')).not.toBeNull();
  expect(empty.querySelector('a[href$="/guide"]')).not.toBeNull();
+});
+
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it.each(['delisted','suspended','takedown'])('gives %s restrictions priority over the stored public access badge',async restriction=>{
+ const projection=visibilityPolicy({access:'public',effectiveAccess:'denied',restriction,restrictionNote:'Synthetic restriction reason'});
+ mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved',workVisibility:projection}]));
+ await mount();const main=root.querySelector('.card__badges .card__status')!;
+ expect(main.textContent).toContain(i18n.global.t(`visibility.badge.${restriction}`));
+ expect(main.classList.contains('card__status--alert')).toBe(true);
+ expect(root.querySelector('.card__body')?.textContent).toContain('Synthetic restriction reason');
+});
+
+it('hides rollout controls and ignores access filters while disabled, retaining the saved workspace',async()=>{
+ rollout.enabled=false;await mount();
+ expect(root.querySelector('.tools__seg')).toBeNull();expect(root.querySelector('.card__more')).toBeNull();
+ expect(root.querySelector('article')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
 });
