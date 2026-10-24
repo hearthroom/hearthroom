@@ -3,6 +3,7 @@ import {CARD_NUMBER,getCard,type CardRow} from './cards';
 import {requireMember} from './members';
 import {managedWork,workPolicyGateway,type WorkAccess,type WorkOwnerView,type ManagedWork} from './work-policy';
 import {type Env,HttpError} from './types';
+import {refreshWorkAccess} from './work-refresh';
 
 export interface WorkVisibility {
  access:WorkAccess;effectiveAccess:'owner'|'link'|'public'|'denied'|'unavailable';
@@ -29,15 +30,28 @@ export async function ownerCardSource(env:Env,id:string):Promise<{source:string;
  return {source:id,row:null};
 }
 export async function readOwnerVisibility(env:Env,source:string,token:string,row:CardRow|null,requireWrite=false):Promise<{workVisibility:WorkVisibility;provider:WorkOwnerView}>{
- const provider=await workPolicyGateway.owner(env,'harbor',source,token,requireWrite);
- const local=await managedWork(env.DB,'harbor',source);
+ let provider=await workPolicyGateway.owner(env,'harbor',source,token,requireWrite);
+ let local=await managedWork(env.DB,'harbor',source);
  if(local&&(!provider.managed||provider.workId!==local.work_id))throw new HttpError(503,'visibility_provider_unavailable');
+ if(savedEpochAdvanced(provider,local)){
+  await refreshWorkAccess(env,1,[],[local!.work_id]);
+  // A save or command may race the issuer read. Re-read current authority and
+  // local facts; a remaining mismatch still fails closed in the projection.
+  provider=await workPolicyGateway.owner(env,'harbor',source,token,requireWrite);
+  local=await managedWork(env.DB,'harbor',source);row=await getCard(env.DB,source,'harbor');
+  if(local&&(!provider.managed||provider.workId!==local.work_id))throw new HttpError(503,'visibility_provider_unavailable');
+ }
  const [reviews,history,moderation]=await Promise.all([
   env.DB.prepare("SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1").bind(source).first<ReviewRow>(),
   env.DB.prepare("SELECT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND s.status='approved') AS ever_public").bind(source).first<{ever_public:number}>(),
   env.DB.prepare("SELECT reason FROM moderation_events WHERE provider='harbor' AND source_role_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(source).first<{reason:string}>(),
  ]);
  return {workVisibility:await projectOwnerVisibility(provider,local,row,reviews,history?.ever_public===1,moderation),provider};
+}
+
+function savedEpochAdvanced(provider:WorkOwnerView,local:ManagedWork|null):boolean{
+ return !!local&&local.epoch>0&&local.sync_state==='complete'&&provider.managed&&provider.workId===local.work_id
+  &&provider.epoch>local.epoch&&provider.access===local.access&&provider.restriction===local.restriction;
 }
 
 async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|null,row:CardRow|null,reviews:ReviewRow|null,everPublic:boolean,moderation:{reason:string}|null):Promise<WorkVisibility>{
@@ -72,8 +86,12 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
 // D1 facts are set queries rather than per-card network/database round trips.
 export async function readOwnerVisibilities(env:Env,sources:string[],token:string):Promise<Map<string,WorkVisibility>>{
  if(!sources.length)return new Map();
- const provider=await workPolicyGateway.owners(env,'harbor',sources,token);
+ let provider=await workPolicyGateway.owners(env,'harbor',sources,token);
  const ids=JSON.stringify(sources);
+ const before=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>();
+ const prior=new Map(before.results.map(p=>[p.source_role_id,p]));
+ const saved=sources.flatMap((source,i)=>savedEpochAdvanced(provider[i],prior.get(source)??null)?[prior.get(source)!.work_id]:[]);
+ if(saved.length){await refreshWorkAccess(env,saved.length,[],saved);provider=await workPolicyGateway.owners(env,'harbor',sources,token);}
  const [cards,policies,reviews,moderation]=await Promise.all([
   env.DB.prepare("SELECT * FROM cards WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<CardRow>(),
   env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>(),

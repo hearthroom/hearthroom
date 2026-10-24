@@ -277,6 +277,52 @@ it('refreshes a complete projection after a source save advances only the Provid
  expect(await(await request(`/v1/me/cards/${card.id}/visibility`)).json()).toMatchObject({workVisibility:{syncState:'complete',restorable:true}});
 });
 
+it.each(['private','unlisted','public'] as const)('naturally reads back saved %s content without waiting for maintenance',async access=>{
+ const {work,card,current,behavior}=await fixture();current.access=access;
+ await env.DB.prepare('UPDATE managed_work_access SET access=? WHERE work_id=?').bind(access,work).run();
+ current.epoch+=3;current.revisionState='changed';current.restorable=false;current.restoreReason='content_changed';
+ const response=await request(`/v1/me/cards/${card.id}/visibility`);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({workVisibility:{access,syncState:'complete',actions:expect.arrayContaining(['set_private','set_unlisted',access==='public'?'submit_update':'submit_review'])}});
+ expect(await env.DB.prepare('SELECT access,epoch,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({access,epoch:5,sync_state:'complete'});
+ expect(behavior.commands).toBe(0);
+});
+
+it('does not retire a changing operation fence during an author read after saving',async()=>{
+ const {work,card,current,behavior}=await fixture();current.epoch++;
+ await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing',sync_operation_id='original-operation' WHERE work_id=?").bind(work).run();
+ expect(await(await request(`/v1/me/cards/${card.id}/visibility`)).json()).toMatchObject({workVisibility:{syncState:'changing',actions:[]}});
+ expect(await env.DB.prepare('SELECT epoch,sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({epoch:2,sync_state:'changing',sync_operation_id:'original-operation'});
+ expect(behavior.commands).toBe(0);
+});
+
+it.each(['approval','moderation','offline','racing_command'])('keeps saved-content author readback fenced for %s',async mode=>{
+ const {work,card,current,network,behavior}=await fixture();current.epoch++;
+ if(mode==='approval')current.approvedRoleId=crypto.randomUUID();
+ if(mode==='moderation')await env.DB.prepare('UPDATE managed_work_access SET moderation_revision=moderation_revision+1 WHERE work_id=?').bind(work).run();
+ const original=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  if(String(input).endsWith('/work-access/batch')){
+   if(mode==='offline')throw new Error('Synthetic issuer offline');
+   if(mode==='racing_command')await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing',sync_operation_id='original-key' WHERE work_id=?").bind(work).run();
+  }
+  return original(input,init);
+ });
+ expect(await(await request(`/v1/me/cards/${card.id}/visibility`)).json()).toMatchObject({workVisibility:{syncState:'changing',actions:[]}});
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({epoch:2});
+ expect(behavior.commands).toBe(0);
+});
+
+it('invalidates the old pending snapshot after saving without canceling it by a new Provider command',async()=>{
+ const {card,current,behavior}=await fixture();
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'re','pending',99)").bind(crypto.randomUUID(),card.id,current.sourceRoleId).run();
+ current.epoch++;current.revisionState='changed';current.restorable=false;current.restoreReason='content_changed';
+ expect(await(await request(`/v1/me/cards/${card.id}/visibility`)).json()).toMatchObject({workVisibility:{syncState:'complete',review:'none',actions:expect.arrayContaining(['submit_review'])}});
+ expect(await env.DB.prepare("SELECT count(*) AS n FROM review_submissions WHERE status='pending'").first()).toEqual({n:0});
+ expect(await env.DB.prepare("SELECT count(*) AS n FROM review_submissions WHERE status='approved'").first()).toEqual({n:1});
+ expect(behavior.commands).toBe(0);
+});
+
 it.each(['private','unlisted','public'] as const)('refreshes current %s without changing stable community identity or sending a command',async access=>{
  const {card,current,behavior}=await fixture();
  const before=await env.DB.prepare('SELECT id,registered_at,talk_num,approved_hosted_role_id FROM cards WHERE id=?').bind(card.id).first();
