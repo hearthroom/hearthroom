@@ -264,6 +264,17 @@ it('restores the more-button focus only after the page stops being inert on Esca
  spy.mockRestore();
 });
 
+it('keeps keyboard focus inside a dialog opened while its initial owner read is loading',async()=>{
+ let resolve!:(value:any)=>void;visibilityMocks.read.mockImplementation(()=>new Promise(r=>{resolve=r;}));
+ await mount();root.id='app';const trigger=root.querySelector<HTMLButtonElement>('.card__more-btn')!;
+ trigger.focus();trigger.click();await settle();document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();await settle();
+ const dialog=document.querySelector<HTMLElement>('[role="dialog"]')!;
+ expect(dialog.contains(document.activeElement)).toBe(true);
+ resolve({workVisibility:visibilityPolicy()});await settle();
+ dialog.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();
+ expect(document.querySelector('[role="dialog"]')).toBeNull();expect(document.activeElement).toBe(trigger);
+});
+
 it.each(['delisted','suspended','takedown'])('gives %s restrictions priority over the stored public access badge',async restriction=>{
  const projection=visibilityPolicy({access:'public',effectiveAccess:'denied',restriction,restrictionNote:'Synthetic restriction reason'});
  mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved',workVisibility:projection}]));
