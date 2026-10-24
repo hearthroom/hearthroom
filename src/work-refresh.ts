@@ -1,22 +1,23 @@
 import {bumpOp} from './ops-metrics';
 import {type Env,HttpError} from './types';
 import {workPolicyGateway,type ManagedWork} from './work-policy';
-import {readCurrentWorkPolicies} from './work-read';
+import {readCurrentWorkPolicies,WORK_READ_BUDGET} from './work-read';
 
 type RefreshRow=ManagedWork&{card_id:string;card_approved_role:string|null;card_version:string|null};
 // Refresh current facts, never replay a command or infer authority from a receipt.
 // An established policy fence clears only after PG advanced past its CAS.
 // A definitively refused first bind has no established policy to project.
-export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:string[]=[]):Promise<{complete:number;pending:number}>{
+export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:string[]=[],onlyWorkIds?:string[]):Promise<{complete:number;pending:number}>{
  if(limit<1)return {complete:0,pending:0};
  const rows=await env.DB.prepare(`SELECT p.*,c.id AS card_id,c.approved_hosted_role_id AS card_approved_role,c.approved_version_id AS card_version
  FROM managed_work_access p JOIN cards c ON c.provider=p.provider AND c.source_role_id=p.source_role_id
  WHERE p.provider='harbor' AND p.epoch>=0 AND p.moderation_revision=p.confirmed_moderation_revision
  AND p.work_id NOT IN(SELECT value FROM json_each(?))
+ AND (? IS NULL OR p.work_id IN(SELECT value FROM json_each(?)))
  AND (p.sync_state='complete' OR EXISTS(SELECT 1 FROM author_visibility_operations a
  WHERE a.work_id=p.work_id AND a.provider_operation_id=p.sync_operation_id AND a.state='conflict'
  AND json_extract(a.command,'$.expectedEpoch')<p.epoch+1))
- ORDER BY p.reconcile_at,p.work_id LIMIT ?`).bind(JSON.stringify(alreadyChecked),Math.min(10,limit)).all<RefreshRow>();
+ ORDER BY p.reconcile_at,p.work_id LIMIT ?`).bind(JSON.stringify(alreadyChecked),onlyWorkIds?JSON.stringify(onlyWorkIds):null,onlyWorkIds?JSON.stringify(onlyWorkIds):null,Math.min(onlyWorkIds?WORK_READ_BUDGET:10,limit)).all<RefreshRow>();
  if(!rows.results.length)return {complete:0,pending:0};
  const now=Date.now();
  await env.DB.batch(rows.results.map(p=>env.DB.prepare('UPDATE managed_work_access SET reconcile_at=? WHERE work_id=?').bind(now,p.work_id)));
