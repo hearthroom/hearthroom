@@ -122,3 +122,14 @@ it('keeps a verified author without owner-read scope out of the past-player exce
  for(const path of ['/v1/cards/'+source,'/v1/cards/'+source+'/platforms'])expect((await request(path,'authorLow')).status).toBe(404);
  expect(network).not.toHaveBeenCalled();
 });
+
+it('preserves private past-player entry when the work is only delisted',async()=>{
+ const {source,target,work}=await fixture();
+ await env.DB.prepare("UPDATE managed_work_access SET restriction='delisted' WHERE work_id=?").bind(work).run();
+ const response=await request('/v1/cards/'+source,'player');
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({roleId:target,status:'private',canInteract:false,listed:false});
+ const platforms=await request('/v1/cards/'+source+'/platforms','player');
+ expect(platforms.status).toBe(200);
+ expect(await platforms.json()).toMatchObject({platforms:[{roleId:target,playable:true}]});
+});

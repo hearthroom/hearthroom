@@ -25,7 +25,7 @@ export async function privatePlayerCard(env:Env,row:CardRow,token:string|undefin
  try{
   if(!token||row.provider!=='harbor'||row.public_blocked)return null;
   const policy=await managedWork(env.DB,'harbor',row.source_role_id);
-  if(!policy||policy.access!=='private'||policy.restriction!=='none')return null;
+  if(!policy||policy.access!=='private'||policy.restriction==='suspended')return null;
   // A confirmed author must still use the existing owner-read scope. A public
   // player projection is not a substitute for that independently checked path.
   const viewer=await upstream.fetchMe(env,token,'harbor').catch(()=>null);
