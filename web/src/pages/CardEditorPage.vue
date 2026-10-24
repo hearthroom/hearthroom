@@ -1675,7 +1675,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   /* 底部動作列一排收完：四顆鈕在手機上會折成兩行，蓋住表單尾端（.body 只留了一行的位置）。
      「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
   .bar { flex-wrap: nowrap; gap: var(--s-2); }
-  .bar > .btn { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); white-space: normal; min-height:var(--h-lg); height:auto; align-self:stretch; line-height:1.25; overflow-wrap:anywhere; }
+  .bar > .btn { flex: 1 1 min-content; min-width: min-content; padding-inline: var(--s-2); white-space: normal; min-height:var(--h-lg); height:auto; align-self:stretch; line-height:1.25; overflow-wrap:normal; word-break:normal; }
   .bar > a.btn, .bar > .subtle { display: none; }
 }
 /* 640 以下頁面左右內距縮成 s-4（base.css），導覽的出血邊距跟著縮，不然兩邊各差 8px 露一條底 */

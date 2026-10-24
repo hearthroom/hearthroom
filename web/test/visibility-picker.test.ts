@@ -39,3 +39,15 @@ it('submits saved public edits through the current public option without changin
  const button=root.querySelector<HTMLButtonElement>('[data-visibility-apply]');expect(button).not.toBeNull();
  button!.click();await nextTick();expect(submit).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
 });
+
+it.each(['delisted','suspended','takedown'])('keeps the current access neutral and gives %s a separate restriction badge',async restriction=>{
+ const note='Synthetic restriction reason';await mount({value:{...base,access:'public',effectiveAccess:'denied',restriction,restrictionNote:note,actions:['set_private','set_unlisted']}});
+ const row=root.querySelector<HTMLInputElement>('input[value="public"]')!.closest('label')!;
+ const title=row.querySelector('.visibility-option__title')!;
+ const badge=title.querySelector('.visibility-option__restriction');
+ expect(badge?.textContent).toBe(i18n.global.t(`visibility.badge.${restriction}`));
+ expect([...title.querySelectorAll('.chip')].some(e=>e.textContent===i18n.global.t('visibility.current')&&!e.classList.contains('visibility-option__restriction'))).toBe(true);
+ expect(row.classList.contains('visibility-option--selected')).toBe(false);
+ expect(row.querySelector<HTMLInputElement>('input')!.disabled).toBe(true);
+ expect(row.querySelector('.visibility-option__reason')?.textContent).toContain(note);
+});

@@ -44,7 +44,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
  <div class="visibility-picker" :aria-busy="phase==='loading'||phase==='saving'||phase==='checking'">
   <p v-if="newCard" class="notice">{{ t('visibility.new') }}</p>
   <template v-else-if="phase==='loading'"><div v-for="n in 3" :key="n" class="ghost visibility-skeleton" /></template>
-  <div v-else-if="phase==='error'" class="notice notice--error" role="alert">{{ t('visibility.loadFailed') }} <button type="button" class="btn" @click="emit('reload')">{{ t('visibility.reload') }}</button></div>
+  <div v-else-if="phase==='error'" class="notice notice--error" role="alert">{{ t('visibility.loadFailed') }} <button type="button" class="btn visibility-reload" @click="emit('reload')">{{ t('visibility.reload') }}</button></div>
   <template v-else>
    <div role="radiogroup" :aria-label="t('visibility.title')" class="visibility-options">
     <label v-for="access in options" :key="access" class="visibility-option" :class="{'visibility-option--selected':selected===access&&!disabled(access),'visibility-option--disabled':disabled(access)}">
@@ -53,7 +53,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
       <template v-else-if="access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 1)"/></template>
       <template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template>
      </svg>
-     <span class="visibility-option__body"><span class="visibility-option__title">{{ t(`visibility.option.${access}`) }} <span v-if="value?.access===access&&phase==='ready'" class="chip">{{ t('visibility.current') }}</span></span>
+     <span class="visibility-option__body"><span class="visibility-option__title">{{ t(`visibility.option.${access}`) }} <span v-if="value?.access===access&&phase==='ready'" class="chip">{{ t('visibility.current') }}</span><span v-if="access==='public'&&value&&value.restriction!=='none'" class="chip visibility-option__restriction">{{ t(`visibility.badge.${value.restriction}`) }}</span></span>
       <span :id="`${uid}-${access}`" class="visibility-option__description">{{ t(`visibility.description.${access}`) }}</span>
       <template v-if="access==='public'&&value">
        <span v-if="value.restriction!=='none'" class="visibility-option__reason">{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[0] }}<a :href="appealUrl" target="_blank" rel="noopener">Discord</a>{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[1] }}</span>
@@ -97,10 +97,12 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
 .visibility-option__title{font-size:15px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2)}
 .visibility-option__description,.visibility-option__reason{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
+.visibility-option__restriction{color:var(--danger);cursor:default;max-width:100%}
+.visibility-option__restriction::before{content:"";flex:none;width:var(--s-1);height:var(--s-1);border-radius:var(--r-pill);background:currentColor}
 .visibility-skeleton{height:72px;border-radius:var(--r-sm);margin-bottom:var(--s-2)}
 .visibility-link{display:flex;gap:var(--s-2);margin-top:var(--s-4)}.visibility-link input{min-width:0;flex:1}.visibility-link button{flex-shrink:0}
 .visibility-effect{font-size:13px;background:var(--surface-2);color:var(--text)}.visibility-effect p+p{margin-top:var(--s-2)}
 .visibility-actions{display:flex;justify-content:flex-end;gap:var(--s-2);margin-top:var(--s-4)}
 :lang(ko){word-break:keep-all}
-@media(max-width:480px){.visibility-actions{flex-direction:column-reverse}.visibility-actions .btn{min-height:var(--h-lg);height:auto;white-space:normal}.visibility-link{flex-wrap:wrap}.visibility-link input{flex-basis:100%}}
+@media(max-width:480px){.visibility-reload{min-height:var(--h-lg)}.visibility-actions{flex-direction:column-reverse}.visibility-actions .btn{min-height:var(--h-lg);height:auto;white-space:normal}.visibility-link{flex-wrap:wrap}.visibility-link input{flex-basis:100%}}
 </style>
