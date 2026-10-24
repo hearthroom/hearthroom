@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { fetchMyCards, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
+import { fetchMyCards, fetchRatingDraft, saveRatingDraft, registerCard, fetchFandomLookup, type MyCard, type MyCardPage } from "@/lib/api";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
@@ -15,7 +15,10 @@ import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
 import { lastShown } from "@/lib/mine-memory";
-import { confirmDialog } from "@/lib/confirm";
+import { confirmForm } from "@/lib/confirm";
+import { askRating } from "@/lib/rating";
+import AuthorVisibility from "@/components/AuthorVisibility.vue";
+import type { WorkVisibility } from "@/lib/work-visibility";
 import { signedInHint } from "@/lib/signin-hint";
 import { suki } from "@/pet/events";
 
@@ -41,8 +44,8 @@ const visible = computed(()=>groupWorks(rows.value));
  * 作者卡多（幾百張）時靠這三樣找卡；一頁 PAGE_SIZE 張，有頁碼可以直接跳。
  */
 const PAGE_SIZE = 24;
-type Filter = "all" | "listed" | "unlisted";
-const FILTERS: Filter[] = ["all", "listed", "unlisted"];
+type Filter = "all" | "public" | "unlisted" | "private";
+const FILTERS: Filter[] = ["all", "public", "unlisted", "private"];
 const q = computed(() => typeof route.query.q === "string" ? route.query.q : "");
 const filter = computed<Filter>(() => FILTERS.includes(route.query.filter as Filter) ? route.query.filter as Filter : "all");
 const page = computed(() => Math.max(1, Number(route.query.page) || 1));
@@ -98,7 +101,7 @@ async function loadProvider(provider:ProviderId, version=generation) {
   const identity=session.profile?.identities.find(i=>i.provider===provider);
   const token=await accountToken(provider,identity?.externalId);
   if(!token)throw new Error("connection_source_expired");
-  const result=await fetchMyCards(token,{provider,page:page.value,pageSize:PAGE_SIZE,fresh:true,q:q.value,filter:filter.value});
+  const result=await fetchMyCards(token,{provider,page:page.value,pageSize:PAGE_SIZE,fresh:true,q:q.value,access:filter.value==='all'?undefined:filter.value});
   if(version!==generation)return;
   rows.value[provider]=result.items;
   totals.value[provider]=result.total ?? result.items.length;
@@ -127,35 +130,28 @@ async function cardToken(card:WorkspaceCard) {
  if(!token)throw new Error(t("auth.expired"));
  return token;
 }
-/** 取消登記（下架）。送審與重新送審在編輯頁。撤了要重新送審才回得來，所以先問一聲。 */
-async function withdraw(card: WorkspaceCard) {
-  if (!card.sourceAvailable || !card.registered) return;
-  const ok = await confirmDialog({
-    title: t("mine.withdraw.title", { name: card.name }),
-    message: t("mine.withdraw.message"),
-    confirmText: t("mine.action.unregister"),
-    danger: true,
-  });
-  if (!ok) return;
-  busy.value = workKey(card);
-  error.value = "";
-  // Keep the displayed card while the original provider handles the request.
-  card.registered = false;
-  try {
-    const token = await cardToken(card);
-    if (!token) throw new Error(t("auth.expired"));
-    await unregisterCard(card.roleId, token, card.provider);
-    card.status = undefined;
-    card.note = "";
-    persistCard(card);
-  } catch (err) {
-    card.registered = true;
-    error.value = err instanceof Error ? err.message : t("state.actionFailed");
-  } finally {
-    busy.value = null;
-  }
+const visibilityCard=ref<WorkspaceCard|null>(null);
+const visibilityDialog=ref<InstanceType<typeof AuthorVisibility>|null>(null);
+const visibilityActor=computed(()=>{const p=visibilityCard.value?.sourceProvider??visibilityCard.value?.provider;return String(session.profile?.identities.find(i=>i.provider===p)?.externalId??session.me?.accountNumId??'');});
+const visibilityToken=async()=>visibilityCard.value?cardToken(visibilityCard.value):null;
+async function adjustVisibility(card:WorkspaceCard){if(card.sourceAvailable===false)return;visibilityCard.value=card;await nextTick();await visibilityDialog.value?.open();}
+async function submitReview(expected:WorkVisibility){
+ const card=visibilityCard.value;if(!card||busy.value||!expected.actions.includes('submit_review'))return;
+ const provider=card.sourceProvider??card.provider,source=card.sourceRoleId??card.roleId;
+ try {
+  const token=await cardToken(card);const saved=await fetchRatingDraft(source,token,provider).catch(()=>null);
+  const answers=await askRating(saved);if(!answers)return;
+  const consent=await confirmForm({title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:q=>fetchFandomLookup(q)}});
+  if(!consent)return;busy.value=workKey(card);error.value='';
+  await saveRatingDraft(source,answers,token,provider).catch(()=>{});
+  await registerCard(source,token,answers,[],provider,consent.text,consent.id,expected);
+  await visibilityDialog.value?.reload();await load(true);
+ }catch(e){error.value=e instanceof Error?e.message:t('state.actionFailed');}finally{busy.value=null;}
 }
-
+function visibilityChanged(value:WorkVisibility){
+ const card=visibilityCard.value;if(!card)return;card.workVisibility=value;persistCard(card);
+ lastShown.set(shownKey(),{rows:rows.value,totals:totals.value,quota:quota.value});
+}
 function persistCard(card:WorkspaceCard) {
  const original=rows.value[card.provider]?.find(c=>c.roleId===card.roleId);
  if(original)Object.assign(original,card);
@@ -213,7 +209,7 @@ watch(()=>route.query.fresh, fresh=>{
         <input v-model="draft" type="search" class="input" :placeholder="$t('mine.search.placeholder')" maxlength="100" enterkeyhint="search" />
       </label>
       <div class="seg tools__seg" role="group" :aria-label="$t('mine.filter.label')">
-        <button v-for="f in FILTERS" :key="f" type="button" class="seg__item" :class="{ 'seg__item--on': filter === f }" :aria-pressed="filter === f" @click="navigate({ filter: f, page: undefined })">{{ $t(`mine.filter.${f}`) }}</button>
+        <button v-for="f in FILTERS" :key="f" type="button" class="seg__item" :class="{ 'seg__item--on': filter === f }" :aria-pressed="filter === f" @click="navigate({ filter: f, page: undefined })">{{ f==='all'?$t('mine.filter.all'):$t(`visibility.short.${f}`) }}</button>
       </div>
     </div>
 
@@ -243,6 +239,8 @@ watch(()=>route.query.fresh, fresh=>{
       </div>
     </div>
 
+    <AuthorVisibility v-if="visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
+
     <!-- 卡片牆跟首頁同一套欄數：手機兩欄、平板三到四欄、桌機六欄（都整除一頁 24 張，最後一列不缺角） -->
     <div v-else class="wall" :aria-busy="loading || undefined">
       <MyCardTile
@@ -251,7 +249,7 @@ watch(()=>route.query.fresh, fresh=>{
         :card="card"
         :busy="busy === workKey(card)"
         :eager="i < 6"
-        @toggle="withdraw(card)"
+        @toggle="adjustVisibility(card)"
       />
     </div>
 

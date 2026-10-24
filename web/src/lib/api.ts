@@ -347,13 +347,14 @@ export async function registerCard(
   /** 原作（選填）；沒給就是沒有。fandomId 是對到的 Wikidata 編號，有它就以它為準 */
   fandom?: string,
   fandomId?: string,
+  expected?: { policyRevision:string; approvalRevision:string },
 ): Promise<CommunityCard> {
   const key=publicationKey(provider,roleId);
   const result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
-      body: JSON.stringify({ roleId, ratingAnswers, operationId: publicationOperation(key), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
+      body: JSON.stringify({ roleId, ratingAnswers, operationId: publicationOperation(key), ...(expected ? {expectedPolicyRevision:expected.policyRevision,expectedApprovalRevision:expected.approvalRevision} : {}), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
   clearPublicationOperation(key);
@@ -645,6 +646,7 @@ export interface MyCard {
   /** Portrait background; optional for cached and older responses. */
   backgroundUrl?: string | null;
   visibility: string;
+  workVisibility?: import("./work-visibility").WorkVisibility;
   talkNum: number;
   registered: boolean;
   /** 本站的審核狀態；只有 registered 時才有。 */
@@ -690,7 +692,7 @@ export interface MyCardPage {
  */
 export async function fetchMyCards(
   token: string,
-  opts: { provider?: import("./provider").ProviderId; page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted"; q?: string } = {},
+  opts: { provider?: import("./provider").ProviderId; page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted"; access?: import("./work-visibility").WorkAccess; q?: string } = {},
 ): Promise<MyCardPage> {
   const params = new URLSearchParams();
   if (opts.page) params.set("page", String(opts.page));
@@ -698,6 +700,7 @@ export async function fetchMyCards(
   if (opts.fresh) params.set("fresh", "1");
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
   if (opts.q) params.set("q", opts.q);
+  if (opts.access) params.set("access", opts.access);
   return json<MyCardPage>(
     await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...(opts.provider ? {"X-Provider":opts.provider} : {}), ...authHeaders(token) } }),
   );
@@ -901,7 +904,7 @@ export async function createRole(draft: { roleName: string; language?: string },
     await fetch(`${UPSTREAM_API}/open/v1/role`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(token) },
-      body: JSON.stringify({ roleName: draft.roleName, language: draft.language, origin: "hearthroom" }),
+      body: JSON.stringify({ roleName: draft.roleName, language: draft.language, origin: "hearthroom", visibility: "private" }),
     }),
   );
 }
