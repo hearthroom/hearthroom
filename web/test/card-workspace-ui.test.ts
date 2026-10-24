@@ -311,3 +311,19 @@ it('clears the sharing success notice when the same dialog makes the card privat
  expect(dialog().querySelector('input[readonly]')).toBeNull();
  expect(dialog().querySelector<HTMLInputElement>('input[value="private"]')!.checked).toBe(true);
 });
+
+it('keeps keyboard focus in the modal when a successful mutation removes its apply button',async()=>{
+ let current=visibilityPolicy();visibilityMocks.read.mockImplementation(async()=>({workVisibility:current}));
+ visibilityMocks.change.mockImplementation(async(_id,_token,_provider,command)=>{
+  current=visibilityPolicy({access:'unlisted',effectiveAccess:'link',policyRevision:'2'});
+  return {workVisibility:current,operation:{operationId:command.operationId,state:'complete'}};
+ });
+ await mount();root.id='app';const trigger=root.querySelector<HTMLButtonElement>('.card__more-btn')!;
+ trigger.focus();trigger.click();await settle();document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();await settle();
+ const dialog=document.querySelector<HTMLElement>('[role="dialog"]')!;
+ dialog.querySelector<HTMLInputElement>('input[value="unlisted"]')!.click();await settle();
+ const apply=dialog.querySelector<HTMLButtonElement>('[data-visibility-apply]')!;apply.focus();apply.click();await settle();
+ expect(apply.isConnected).toBe(false);expect(dialog.contains(document.activeElement)).toBe(true);
+ document.activeElement!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();
+ expect(document.querySelector('[role="dialog"]')).toBeNull();expect(document.activeElement).toBe(trigger);
+});

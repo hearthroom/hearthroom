@@ -152,11 +152,16 @@ onMounted(() => {
       if (playerProvider && playerProvider !== provider) { location.assign(route.fullPath); return; }
       const sameProvider = provider === currentProvider();
       const returnTo = route.fullPath;
+      const publicPlay = sameProvider && route.query.mode !== "source" && typeof route.query.review !== "string" && typeof route.query.resume !== "string";
+      // A library anchor starts a fresh document too. Restore the saved session
+      // before asking for credentials; otherwise accessToken() can refresh an
+      // empty in-memory session while App's restore is still in flight.
+      if (!publicPlay && !session.me && !session.ready) await session.restore();
+      if (stale()) return;
       const profileReady = session.ensureProfile();
       if (!sameProvider) await profileReady;
       if (stale()) return;
       // 遊客：本站這一家、上架中的卡，不必登入就掛舞台（只畫開場，送出時才請他登入）
-      const publicPlay = sameProvider && route.query.mode !== "source" && typeof route.query.review !== "string" && typeof route.query.resume !== "string";
       // 路由不再擋未登入的人：身分還沒確認就在這裡確認（已經知道是誰就不必等）
       if (publicPlay && !session.me && !session.ready) await session.restore();
       if (stale()) return;
