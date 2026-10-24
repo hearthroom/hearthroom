@@ -1,3 +1,9 @@
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(true)};});
+
+const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
+vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
+vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
+const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:false,revisionState:'unknown',restorable:false,restoreReason:'no_approval',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'0',actions:['set_private','set_unlisted','submit_review'],syncState:'complete',...extra});
 /**
  * 點榜單上的卡進卡片頁：立刻看到內容，不是先盯著骨架屏等一次往返。
  *
@@ -130,7 +136,7 @@ it('offers the owner a provider-scoped editor for the draft behind a neutral det
   session.profile={identities:[{provider:'lunatalk',externalId:7}]} as any;
   await flush();
   expect(root.querySelector('a[href="/cards/100021/edit?provider=lunatalk"]')).not.toBeNull();
-  expect([...root.querySelectorAll('button')].some(e=>e.textContent?.trim()===i18n.global.t('mine.action.submit'))).toBe(true);
+  expect([...root.querySelectorAll('button')].some(e=>e.textContent?.includes(i18n.global.t('visibility.title')))).toBe(true);
   session.profile={identities:[{provider:'harbor',externalId:7}]} as any;
   session.me=null;
   await flush();
@@ -202,3 +208,5 @@ describe("開始對話搆得到", () => {
     expect(side.style.getPropertyValue("--side-h")).toBe("1240px");
   });
 });
+
+beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});

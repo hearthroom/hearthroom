@@ -123,7 +123,7 @@ const ambient = computed(() => {
   return src ? cardThumb(src) : "";
 });
 /** 在榜才有評分與評論（跟伺服器同一個條件） */
-const listed = computed(() => !card.value?.status || card.value.status === "approved");
+const listed = computed(() => card.value?.canInteract ?? (!card.value?.status || card.value.status === "approved"));
 
 /**
  * 介紹：作者寫了就照 Markdown 畫；沒寫的話，簡介夠長（舊卡多半把整段介紹塞在簡介裡）就把簡介當介紹，
@@ -377,9 +377,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
       <div v-else class="role__ambient" :style="{ backgroundImage: `url(${ambient})` }" aria-hidden="true" />
 
       <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
-      <p v-if="card.status && card.status !== 'approved'" class="notice role__own" role="status">
-        {{ $t(`card.own.${card.status}`) }}
-      </p>
 
       <header class="role__hero settle" :class="{ 'role__hero--plain': !banner }" :aria-busy="revalidating || undefined">
         <div class="role__art">
