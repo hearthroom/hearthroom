@@ -18,6 +18,13 @@ it('unknown result disables mutation and check status only emits a readback requ
  expect([...root.querySelectorAll<HTMLInputElement>('input[type=radio]')].every(i=>i.disabled)).toBe(true);
  root.querySelector<HTMLButtonElement>('[data-visibility-check]')!.click();await nextTick();expect(check).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
 });
+it('keeps missing-field guidance actionable while public is disabled',async()=>{
+ const missing=vi.fn();await mount({missing:'Character setting',onMissing:missing});
+ const guidance=root.querySelector<HTMLButtonElement>('.visibility-missing')!;
+ expect(guidance.textContent).toBe(i18n.global.t('visibility.missing',{fields:'Character setting'}));
+ expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(true);
+ guidance.click();await nextTick();expect(missing).toHaveBeenCalledOnce();
+});
 it('unknown revision never claims content was changed or offers a missing restore action',async()=>{
  await mount({value:{...base,everPublic:true,restorable:false,revisionState:'unknown'}});
  expect(root.textContent).toContain(i18n.global.t('visibility.public.unknown'));
