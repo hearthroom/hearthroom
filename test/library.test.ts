@@ -1,3 +1,5 @@
+import {ownedHistory} from "../src/owned-history";
+const originalOwnedHistory=ownedHistory.read;
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it } from "vitest";
@@ -9,13 +11,17 @@ const request = (path: string, token = "fan", method = "GET") => SELF.fetch(`htt
 const body = async (r: Response) => await r.json() as any;
 beforeEach(async () => {
   await resetDb();
+  ownedHistory.read=async(_env,_token,id)=>{
+    const row=await env.DB.prepare('SELECT role_id AS roleId FROM member_conversations WHERE conversation_id=? LIMIT 1').bind(id).first<{roleId:string}>();
+    return row ? {conversationId:id,roleId:row.roleId,canGenerate:true} : null;
+  };
   identities({ author: 10001, fan: 20001, other: 20002 });
   rolesOnMainSite({ roleId: "library-role", authorNumId: 10001 });
   const r = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { ...bearer("author"), "Content-Type": "application/json" }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "library-role", ...ratingBody(false) })}) }));
   cardId = (await body(r)).id;
   handle = (await body(await request("me", "author"))).handle;
 });
-afterEach(restoreUpstream);
+afterEach(()=>{ownedHistory.read=originalOwnedHistory;restoreUpstream();});
 
 it('can save a card hosted by another provider using its community ID', async () => {
   await env.DB.prepare("UPDATE cards SET provider='harbor' WHERE id=?").bind(cardId).run();

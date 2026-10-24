@@ -27,7 +27,7 @@ import { dropManagedToken } from "@/lib/managed-auth";
 import { restorePersisted } from "@/lib/oauth";
 import { forgetVerifiedAccount } from "@/lib/connections";
 import { applyLocale, contentLang, i18n } from "@/lib/i18n";
-import { isPlayHost, mainSiteLinks } from "@/lib/site";
+import { isPlayHost, mainSiteLinks, communityHost as communityHostForHistory } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
@@ -195,6 +195,10 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         },
       },
       nav: {
+        toConversations: () => {
+          if (isPlayHost()) window.location.assign(`https://${communityHostForHistory()}${deps.lp('/library?tab=conversations')}`);
+          else void deps.router.push(deps.lp('/library?tab=conversations'));
+        },
         // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」
         back: () => {
           if (window.history.length > 1) { deps.router.back(); return; }
