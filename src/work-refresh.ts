@@ -62,12 +62,17 @@ export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:stri
     writes.push(env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=?
      WHERE card_id=? AND status='pending' AND ${guard}`).bind(now,p.card_id,...args));
     writes.push(env.DB.prepare(`DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded') AND ${guard}`).bind(p.card_id,...args));
-    writes.push(env.DB.prepare(`UPDATE cards SET status=? WHERE id=? AND ${guard}`).bind(r.access==='public'?'approved':'unshared',p.card_id,...args));
    }
+   const projectionIndex=writes.length;
    writes.push(env.DB.prepare(`UPDATE managed_work_access SET access=?,restriction=?,epoch=?,sync_state='complete',sync_operation_id=NULL
     WHERE work_id=? AND ${guard}`).bind(r.access,r.restriction,r.epoch,p.work_id,...args));
+   if(r.epoch>p.epoch)writes.push(env.DB.prepare(`UPDATE cards SET status=? WHERE id=?
+    AND EXISTS(SELECT 1 FROM managed_work_access p WHERE p.work_id=? AND p.epoch=? AND p.access=? AND p.restriction=?
+    AND p.sync_state='complete' AND p.sync_operation_id IS NULL AND p.moderation_revision=? AND p.confirmed_moderation_revision=?
+    AND cards.approved_hosted_role_id IS ?)`)
+    .bind(r.access==='public'?'approved':'unshared',p.card_id,p.work_id,r.epoch,r.access,r.restriction,p.moderation_revision,p.confirmed_moderation_revision,p.card_approved_role));
    const result=await env.DB.batch(writes);
-   if(!result.at(-1)?.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+   if(!result[projectionIndex]?.meta.changes||!result.at(-1)?.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
    complete++;await bumpOp(env.DB,'work_access','reconcile','success');
   }catch{pending++;await bumpOp(env.DB,'work_access','reconcile','pending');}
  }
