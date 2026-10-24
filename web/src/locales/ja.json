@@ -3253,5 +3253,8 @@
   "visibility.short.unlisted": "リンク",
   "visibility.state.restoreReady": "公開に戻すときの再審査は不要です。",
   "visibility.state.reviewChanged": "内容を変更したため、公開に戻すには再審査が必要です。",
-  "visibility.state.reviewUnknown": "公開に戻すには再審査が必要です。"
+  "visibility.state.reviewUnknown": "公開に戻すには再審査が必要です。",
+  "visibility.badge.delisted": "ランキングから除外",
+  "visibility.badge.suspended": "公開を一時停止",
+  "visibility.badge.takedown": "掲載停止"
 }

@@ -38,6 +38,7 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
   const c = props.card;
   if(c.workVisibility?.syncState==='unavailable')return {key:'visibility.operation.unknown',tone:'wait'};
   if(c.workVisibility?.syncState==='changing')return {key:'visibility.operation.updating',tone:'wait'};
+  if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
   if (!c.status || c.status === "approved") return { key: "mine.badge.listed", tone: "on" };
@@ -92,7 +93,7 @@ onBeforeUnmount(() => listen(false));
       <div v-else class="card__void"><span>{{ initial }}</span></div>
       <!-- 已發布但改過沒送審：狀態標下面再一個琥珀燈（owner 2026-10-05：改了忘記提交，自己都不知道） -->
       <span class="card__badges">
-        <span class="card__status" :class="[`card__status--${status.tone}`,{'card__status--access':!!card.workVisibility}]"><svg v-if="card.workVisibility?.syncState==='complete'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><template v-if="card.workVisibility.access==='private'"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></template><template v-else-if="card.workVisibility.access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></template><template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template></svg>{{ $t(status.key) }}</span>
+        <span class="card__status" :class="[`card__status--${status.tone}`,{'card__status--access':!!card.workVisibility&&card.workVisibility.restriction==='none'}]"><svg v-if="card.workVisibility?.syncState==='complete'&&card.workVisibility.restriction==='none'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><template v-if="card.workVisibility.access==='private'"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></template><template v-else-if="card.workVisibility.access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></template><template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template></svg>{{ $t(status.key) }}</span>
         <span v-if="card.workVisibility?.review==='pending'" class="card__status card__status--wait">{{ $t('mine.badge.pending') }}</span>
         <span v-if="card.workVisibility?.update==='pending'" class="card__status card__status--wait">{{ $t('visibility.badge.updatePending') }}</span>
         <span v-if="card.workVisibility?.update==='rejected'" class="card__status card__status--alert">{{ $t('visibility.badge.updateRejected') }}</span>
