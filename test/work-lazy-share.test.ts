@@ -1,13 +1,17 @@
 import {createExecutionContext,env,waitOnExecutionContext} from 'cloudflare:test';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import worker from '../src/index';
-import {getCard} from '../src/cards';
+import {ensureCardNumber,getCard} from '../src/cards';
+import {hostGateway} from '../src/hosting';
+import {HttpError} from '../src/types';
+import {opsMetrics} from '../src/ops-metrics';
 import {identitiesFor,makeMember,resetDb,restoreUpstream,role} from './helpers';
 import {upstream} from '../src/upstream';
 import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 beforeEach(resetDb);afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
 async function fixture(){
  identitiesFor({harbor:{reader:42}});const reader=await makeMember(42),source=crypto.randomUUID();
+ vi.spyOn(hostGateway,'read').mockRejectedValue(new HttpError(403,'role_not_author'));
  const content=vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Latest link content'}));
  const current={readable:true,managed:false};
  vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
@@ -15,7 +19,7 @@ async function fixture(){
   const {items}=JSON.parse(String(init?.body));return Response.json({items:items.map((i:any)=>({...i,managed:current.managed,access:current.managed?'private':'',restriction:current.managed?'none':'',epoch:current.managed?1:0,approvedRoleId:'',shareRoleId:current.readable?source:'',targetReadable:current.readable,listed:false}))});
  });return {source,reader,content,current};
 }
-async function request(source:string){const ctx=createExecutionContext();const res=await worker.fetch(new Request('https://c.test/v1/cards/'+source,{headers:{Authorization:'Bearer reader'}}),{...env,HOSTING_SERVICE_KEY:'fixture-issuer',WORK_SHARING_ENABLED:'true'},ctx);await waitOnExecutionContext(ctx);return res;}
+async function request(source:string,token='reader'){const ctx=createExecutionContext();const res=await worker.fetch(new Request('https://c.test/v1/cards/'+source,{headers:token?{Authorization:'Bearer '+token}:{}}),{...env,HOSTING_SERVICE_KEY:'fixture-issuer',WORK_SHARING_ENABLED:'true'},ctx);await waitOnExecutionContext(ctx);return res;}
 async function adult(member:string){await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1,adult_consent_version=? WHERE id=?').bind(ADULT_CONSENT_VERSION,member).run();}
 it('lazily registers a verified legacy link once with social access and zero publication usage',async()=>{
  const {source,reader}=await fixture();await adult(reader);
@@ -30,4 +34,34 @@ it('checks the conservative adult gate before reading unreviewed source fields',
 it.each(['private','managed'])('never enrolls or registers unknown legacy authority when %s',async mode=>{
  const {source,reader,current}=await fixture();await adult(reader);current.readable=false;current.managed=mode==='managed';
  expect((await request(source)).status).toBe(mode==='managed'?503:404);expect(await getCard(env.DB,source)).toBeNull();
+});
+
+it.each([false,true])('lets the scoped author read a never-submitted private card (numbered=%s)',async numbered=>{
+ const {source,content,current}=await fixture();current.readable=false;
+ identitiesFor({harbor:{owner:11,reader:42,profileOnly:11}});
+ const read=vi.spyOn(hostGateway,'read').mockImplementation(async(_env,token,id)=>{
+  if(token!=='owner')throw new HttpError(403,'insufficient_scope');
+  return role({roleId:id,authorNumId:11,name:'Owned private draft'});
+ });
+ const id=numbered?String(await ensureCardNumber(env.DB,'harbor',source)):source;
+ const response=await request(id,'owner');expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({roleId:source,name:'Owned private draft',canInteract:false,listed:false});
+ expect(response.headers.get('Cache-Control')).toContain('no-store');
+ expect(response.headers.get('X-Robots-Tag')).toContain('noindex');
+ expect(read).toHaveBeenCalledWith(expect.anything(),'owner',source);
+ expect(content).not.toHaveBeenCalled();
+ for(const token of ['reader','profileOnly','']){
+  const denied=await request(id,token);expect(denied.status).toBe(404);
+  expect(await denied.text()).not.toContain('Owned private draft');
+ }
+ expect(await getCard(env.DB,source)).toBeNull();
+ for(const table of ['works','managed_work_access','visibility_operations','card_registrations'])expect(await env.DB.prepare(`SELECT count(*) AS n FROM ${table}`).first()).toEqual({n:0});
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="detail",outcome="allow"} 1');
+});
+
+it('does not let a scoped reader impersonate the author of a private source',async()=>{
+ const {source,current}=await fixture();current.readable=false;
+ vi.spyOn(hostGateway,'read').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Private source'}));
+ const denied=await request(source);expect(denied.status).toBe(404);
+ expect(await denied.text()).not.toContain('Private source');
 });

@@ -590,6 +590,13 @@ app.get("/v1/cards/:id", async (c) => {
   let row = link.row;
   if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
     c.header('Cache-Control','private, no-store');c.header('X-Robots-Tag','noindex, nofollow');
+    // A never-submitted private source has no community row. Authenticate its
+    // author before applying the public-only legacy registration gate.
+    const own=await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
+    if(own){
+      await bumpOp(c.env.DB,'visibility_read','detail','allow');
+      return c.json({...own,canInteract:false,listed:false});
+    }
     row=await registerLegacyShare(c.env,link.source?.roleId??c.req.param('id'),()=>viewerAllowsNsfw(c,{card:true}));
   }
   const access = row ? await checkedCardAccess(c,row) : null;
