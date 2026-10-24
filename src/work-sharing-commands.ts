@@ -79,16 +79,19 @@ async function finalize(env:Env,op:AuthorOperation,receipt:WorkPolicyReceipt):Pr
  if(p.sync_operation_id!==op.provider_operation_id)throw new HttpError(409,'visibility_operation_conflict');
  const card=await getCard(env.DB,op.source_role_id,'harbor');if(!card)throw new HttpError(503,'visibility_sync_pending');
  const guard="EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND sync_operation_id=? AND sync_state='changing' AND moderation_revision=confirmed_moderation_revision)";
+ const confirmed="EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND access=? AND restriction=? AND sync_state='complete' AND sync_operation_id IS NULL AND moderation_revision=confirmed_moderation_revision)";
  const status=receipt.access==='public'?'approved':'unshared';
  const writes=[
   env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE card_id=? AND status='pending' AND ${guard}`).bind(Date.now(),card.id,op.work_id,op.provider_operation_id),
   env.DB.prepare(`DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded') AND ${guard}`).bind(card.id,op.work_id,op.provider_operation_id),
   env.DB.prepare(`UPDATE work_publication_permits SET state='cancelled' WHERE state='prepared' AND version_id IN(SELECT version_id FROM hosting_versions WHERE work_id=? AND state='superseded') AND ${guard}`).bind(op.work_id,op.work_id,op.provider_operation_id),
-  env.DB.prepare(`UPDATE cards SET status=? WHERE id=? AND ${guard}`).bind(status,card.id,op.work_id,op.provider_operation_id),
+  // The database publication guard requires this projection before a retained
+  // unshared card may become approved. Both writes remain in one D1 transaction.
   env.DB.prepare(`UPDATE managed_work_access SET access=?,epoch=?,restriction=?,sync_state='complete',sync_operation_id=NULL WHERE work_id=? AND sync_operation_id=? AND epoch<=? AND moderation_revision=confirmed_moderation_revision`).bind(receipt.access,receipt.epoch,receipt.restriction,op.work_id,op.provider_operation_id,receipt.epoch),
+  env.DB.prepare(`UPDATE cards SET status=? WHERE id=? AND ${confirmed}`).bind(status,card.id,op.work_id,receipt.epoch,receipt.access,receipt.restriction),
   env.DB.prepare(`UPDATE author_visibility_operations SET state='complete',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending' AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND sync_state='complete' AND sync_operation_id IS NULL)`).bind(Date.now(),op.member_id,op.operation_id,op.work_id,receipt.epoch),
  ];
- const results=await env.DB.batch(writes);if(!results[4].meta.changes||!results[5].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+ const results=await env.DB.batch(writes);if(!results[3].meta.changes||!results[4].meta.changes||!results[5].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  await bumpOp(env.DB,'work_access',(JSON.parse(op.command) as WorkPolicyCommand).action,'success');
 }
 async function authorConflict(env:Env,op:AuthorOperation):Promise<'conflict'>{
