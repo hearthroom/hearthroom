@@ -203,7 +203,10 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
   const member = await requireMember(c);
   const provider = c.req.query('provider');
   if (provider !== 'harbor') throw new HttpError(400, 'invalid_provider');
-  const row = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber
+  const row = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber,c.rating,c.approved_hosted_role_id AS approvedRoleId,
+    CASE WHEN p.access='private' AND p.restriction<>'suspended' AND p.sync_state='complete'
+      AND p.moderation_revision=p.confirmed_moderation_revision
+      AND coalesce(c.public_blocked,1)=0 AND coalesce(ms.public_blocked,0)=0 THEN 1 ELSE 0 END AS canResumeExact
     FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
     LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
@@ -211,8 +214,14 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
     LEFT JOIN works w ON w.id=COALESCE(hv.work_id,cp.work_id)
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider) AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
+    LEFT JOIN managed_work_access p ON p.provider=COALESCE(w.source_provider,r.provider) AND p.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
+    LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider) AND ms.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     WHERE r.member_id=? AND r.provider=? AND r.conversation_id=? LIMIT 1`)
-    .bind(member.id,provider,c.req.param('conversationId')).first<{provider:string;roleId:string;cardNumber:number|null}>();
+    .bind(member.id,provider,c.req.param('conversationId')).first<{provider:string;roleId:string;cardNumber:number|null;rating:string|null;approvedRoleId:string|null;canResumeExact:number}>();
   if (!row) throw new HttpError(404, 'not_found');
-  return c.json(row);
+  // This is a local fence, never proof of play. The client must additionally
+  // verify actual Provider ownership and canGenerate for this exact revision.
+  const needsAdult=row.rating==='R'||row.roleId!==row.approvedRoleId;
+  const adultAllowed=!needsAdult||libraryAllowsNsfw(await memberNsfw(c.env.DB,member.id));
+  return c.json({provider:row.provider,roleId:row.roleId,cardNumber:row.cardNumber,canResumeExact:row.canResumeExact===1&&adultAllowed});
 });

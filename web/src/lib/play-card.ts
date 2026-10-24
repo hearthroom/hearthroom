@@ -17,7 +17,7 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
     return { card: null, number: String(detail.card.id), roleId: detail.card.roleId };
   }
   // Verify the private pointer and actual Provider ownership before any public read.
-  const previous = resume ? await libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string}>(
+  const previous = resume ? await libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string;canResumeExact?:boolean}>(
     `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token) : null;
   if (previous && resume) {
     if ((String(previous.cardNumber) !== id && previous.roleId !== id) || previous.provider !== provider) throw new Error('conversation_card_mismatch');
@@ -29,7 +29,16 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
   const early = /^[1-9]\d*$/.test(id);
   const platformRequest = !source && early ? fetchCardPlatforms(id) : null;
   platformRequest?.catch(() => {});
-  const card = await fetchCard(id, language, { quiet: true });
+  let card: Awaited<ReturnType<typeof fetchCard>>;
+  try { card = await fetchCard(id, language, { quiet: true }); }
+  catch(error) {
+    // A playable owned revision can outlive the current share target. Keep the
+    // community moderation/sync fence as well as Provider ownership: a generic
+    // 404 alone must never revive a locally suspended work.
+    if(previous?.canResumeExact===true&&(error as {status?:unknown})?.status===404)
+      return {card:null,number:String(previous.cardNumber??previous.roleId),roleId:previous.roleId};
+    throw error;
+  }
   const number = String(card.num ?? card.id);
   if (!/^[1-9]\d*$/.test(number)) throw new Error('card_number_unavailable');
   if (previous) {

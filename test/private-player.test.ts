@@ -133,3 +133,34 @@ it('preserves private past-player entry when the work is only delisted',async()=
  expect(platforms.status).toBe(200);
  expect(await platforms.json()).toMatchObject({platforms:[{roleId:target,playable:true}]});
 });
+it('gates exact private resumes with the current community moderation and sync fence',async()=>{
+ const {source,work}=await fixture();
+ const old=crypto.randomUUID();
+ await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES(?,'harbor',11,?,'published',?)").bind(work,old,Date.now()).run();
+ const player=await makeMember(42);
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',old,'exact-saved',Date.now(),Date.now()).run();
+ const read=async()=>await (await request('/v1/me/conversations/exact-saved?provider=harbor','player')).json() as any;
+ expect(await read()).toMatchObject({roleId:old,canResumeExact:true});
+ await env.DB.prepare('UPDATE cards SET public_blocked=1 WHERE source_role_id=?').bind(source).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare('UPDATE cards SET public_blocked=0 WHERE source_role_id=?').bind(source).run();
+ await env.DB.prepare("INSERT INTO moderation_state(provider,source_role_id,public_blocked) VALUES('harbor',?,1)").bind(source).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare('UPDATE moderation_state SET public_blocked=0 WHERE source_role_id=?').bind(source).run();
+ await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing' WHERE work_id=?").bind(work).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare("UPDATE managed_work_access SET sync_state='complete',moderation_revision=confirmed_moderation_revision+1 WHERE work_id=?").bind(work).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare("UPDATE managed_work_access SET moderation_revision=confirmed_moderation_revision,restriction='suspended' WHERE work_id=?").bind(work).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare("UPDATE managed_work_access SET restriction='delisted' WHERE work_id=?").bind(work).run();
+ expect((await read()).canResumeExact).toBe(true);
+ await env.DB.prepare('UPDATE members SET show_nsfw=0 WHERE id=?').bind(player).run();
+ // Existing library policy retains previously age-verified content when discovery is off.
+ expect((await read()).canResumeExact).toBe(true);
+ await env.DB.prepare('UPDATE members SET adult_consent_version=0 WHERE id=?').bind(player).run();
+ expect((await read()).canResumeExact).toBe(false);
+ await env.DB.prepare('UPDATE members SET adult_consent_version=?,age_verified_at=NULL WHERE id=?').bind(ADULT_CONSENT_VERSION,player).run();
+ expect((await read()).canResumeExact).toBe(false);
+ expect((await request('/v1/me/conversations/exact-saved?provider=harbor','stranger')).status).toBe(404);
+});
