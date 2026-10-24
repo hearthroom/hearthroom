@@ -43,3 +43,23 @@ it('opens the qualified private target for a new conversation from its card link
  const result=await resolvePlayCard('100076','harbor','zh-Hant');
  expect(result.roleId).toBe('played-source');expect(result.readOnly).toBeUndefined();expect(owned).not.toHaveBeenCalled();
 });
+it('resumes the verified exact private revision after a gated community 404',async()=>{
+ pointer.mockResolvedValue({cardNumber:100076,provider:'harbor',roleId:'old',canResumeExact:true});
+ owned.mockResolvedValue({conversationId:'conv',roleId:'old',canGenerate:true});
+ card.mockRejectedValue(Object.assign(new Error('not found'),{status:404}));
+ const result=await resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'});
+ expect(result).toEqual({card:null,number:'100076',roleId:'old'});
+ expect(result.readOnly).toBeUndefined();
+});
+it.each([false,undefined])('does not bypass a missing or denied community exact-play gate (%s)',async canResumeExact=>{
+ pointer.mockResolvedValue({cardNumber:100076,provider:'harbor',roleId:'old',canResumeExact});
+ owned.mockResolvedValue({conversationId:'conv',roleId:'old',canGenerate:true});
+ card.mockRejectedValue(Object.assign(new Error('blocked'),{status:404}));
+ await expect(resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'})).rejects.toThrow('blocked');
+});
+it('does not turn an unavailable community response into exact-version permission',async()=>{
+ pointer.mockResolvedValue({cardNumber:100076,provider:'harbor',roleId:'old',canResumeExact:true});
+ owned.mockResolvedValue({conversationId:'conv',roleId:'old',canGenerate:true});
+ card.mockRejectedValue(Object.assign(new Error('unavailable'),{status:503}));
+ await expect(resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'})).rejects.toThrow('unavailable');
+});
