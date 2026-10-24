@@ -269,6 +269,47 @@ it('does not restore from a D1 approval pointer that differs from current Provid
  expect(await response.json()).toMatchObject({workVisibility:{syncState:'changing',restorable:false,actions:[]}});
 });
 
+it.each(['private','unlisted'] as const)('restores a retained %s card after Provider acceptance without a new review',async access=>{
+ const {work,card,current,behavior}=await fixture();current.access=access;
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ await env.DB.prepare('UPDATE managed_work_access SET access=? WHERE work_id=?').bind(access,work).run();
+ const before=await env.DB.prepare('SELECT count(*) AS n FROM review_submissions').first();
+ const intent=await command(card.id,'public');const response=await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ expect(response.status,await response.clone().text()).toBe(200);
+ expect(await response.json()).toMatchObject({operation:{state:'complete'},workVisibility:{access:'public',syncState:'complete'}});
+ expect(await env.DB.prepare('SELECT access,sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({access:'public',sync_state:'complete',sync_operation_id:null});
+ expect(await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(card.id).first()).toEqual({status:'approved'});
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM review_submissions').first()).toEqual(before);
+ expect((await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`)).status).toBe(200);
+ expect(behavior.commands).toBe(1);
+});
+
+it('reconciles a newer public policy before marking a retained unshared card approved',async()=>{
+ const {card,current,behavior}=await fixture();
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ current.access='public';current.epoch++;
+ expect(await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'})).toEqual({complete:1,pending:0});
+ expect(await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(card.id).first()).toEqual({status:'approved'});
+ expect(behavior.commands).toBe(0);
+});
+
+it('finishes the original accepted restore key after a local projection rollback without another Provider command',async()=>{
+ const {work,card,current,behavior}=await fixture();current.access='unlisted';
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ await env.DB.prepare("UPDATE managed_work_access SET access='unlisted' WHERE work_id=?").bind(work).run();
+ const intent=await command(card.id,'public');
+ await env.DB.prepare("CREATE TRIGGER qa_restore_projection_fault BEFORE UPDATE OF status ON cards WHEN NEW.status='approved' BEGIN SELECT RAISE(ABORT,'synthetic_projection_fault'); END").run();
+ try{
+  expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(202);
+  expect(current.access).toBe('public');expect(behavior.commands).toBe(1);
+  expect(await env.DB.prepare('SELECT access,sync_state,sync_operation_id IS NOT NULL AS has_key FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({access:'unlisted',sync_state:'changing',has_key:1});
+ }finally{await env.DB.prepare('DROP TRIGGER qa_restore_projection_fault').run();}
+ const response=await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`);
+ expect(response.status,await response.clone().text()).toBe(200);
+ expect(await response.json()).toMatchObject({operation:{operationId:intent.operationId,state:'complete'},workVisibility:{access:'public',syncState:'complete'}});
+ expect(behavior.commands).toBe(1);
+});
+
 it('refreshes a complete projection after a source save advances only the Provider epoch',async()=>{
  const {work,card,current,behavior}=await fixture();current.epoch++;
  const result=await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'});
