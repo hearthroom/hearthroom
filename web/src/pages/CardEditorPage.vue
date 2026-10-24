@@ -692,7 +692,7 @@ const visibilityActor = computed(()=>String(session.profile?.identities.find(i=>
 const editorVisibilityNotice = computed(()=>{const v=workVisibility.value;if(!v)return '';if(v.syncState!=='complete')return t(v.syncState==='unavailable'?'visibility.operation.unknown':'visibility.operation.updating');if(v.access==='private'&&v.review==='none'&&v.restriction==='none')return v.everPublic&&!v.restorable?t(v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):'';return t(visibilityStateKey(v,true),{note:v.reviewNote??'',reason:v.restrictionNote??''});});
 const visibilityToken=()=>session.accessToken();
 function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
-function visibilityMissing(){section.value=missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'dialogue';}
+function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'dialogue');}
 
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
