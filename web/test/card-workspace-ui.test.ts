@@ -34,6 +34,9 @@ it('opens visibility for a published card without deleting its registration',asy
  button('visibility.menu').click();await settle();
  expect(document.querySelector('[role=dialog]')?.textContent).toContain(i18n.global.t('visibility.title'));
  expect(mocks.unregister).not.toHaveBeenCalled();
+ expect(root.querySelectorAll('article.card')).toHaveLength(1);
+ const close=[...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')].find(b=>b.getAttribute('aria-label')===i18n.global.t('visibility.close'))!;close.click();await settle();
+ expect(document.querySelector('[role=dialog]')).toBeNull();expect(root.querySelectorAll('article.card')).toHaveLength(1);
 });
 // 已發布、改過沒送審（owner 2026-10-05）：封面多一盞「有修改未提交」、卡上一句說明、「編輯」換成主色
 it('flags a published card with unsubmitted edits, and only that card', async () => {
@@ -245,3 +248,12 @@ it('turns an empty list into a first-card start: the web editor and the guide', 
 });
 
 beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it.each(['delisted','suspended','takedown'])('gives %s restrictions priority over the stored public access badge',async restriction=>{
+ const projection=visibilityPolicy({access:'public',effectiveAccess:'denied',restriction,restrictionNote:'Synthetic restriction reason'});
+ mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved',workVisibility:projection}]));
+ await mount();const main=root.querySelector('.card__badges .card__status')!;
+ expect(main.textContent).toContain(i18n.global.t(`visibility.badge.${restriction}`));
+ expect(main.classList.contains('card__status--alert')).toBe(true);
+ expect(root.querySelector('.card__body')?.textContent).toContain('Synthetic restriction reason');
+});

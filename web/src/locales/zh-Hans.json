@@ -3253,5 +3253,8 @@
   "visibility.short.unlisted": "有链接",
   "visibility.state.restoreReady": "改回公开不用重新审核",
   "visibility.state.reviewChanged": "内容改过，改回公开要重新审核",
-  "visibility.state.reviewUnknown": "改回公开需要重新审核"
+  "visibility.state.reviewUnknown": "改回公开需要重新审核",
+  "visibility.badge.delisted": "已退出榜单",
+  "visibility.badge.suspended": "已暂停公开",
+  "visibility.badge.takedown": "已下架"
 }

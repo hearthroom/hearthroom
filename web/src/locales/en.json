@@ -3253,5 +3253,8 @@
   "visibility.short.unlisted": "Link only",
   "visibility.state.restoreReady": "Making it public again needs no new review.",
   "visibility.state.reviewChanged": "Edited since approval, so going public again needs a new review.",
-  "visibility.state.reviewUnknown": "Going public again needs a new review."
+  "visibility.state.reviewUnknown": "Going public again needs a new review.",
+  "visibility.badge.delisted": "Removed from Board",
+  "visibility.badge.suspended": "Public access paused",
+  "visibility.badge.takedown": "Taken down"
 }

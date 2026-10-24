@@ -239,8 +239,6 @@ watch(()=>route.query.fresh, fresh=>{
       </div>
     </div>
 
-    <AuthorVisibility v-if="visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
-
     <!-- 卡片牆跟首頁同一套欄數：手機兩欄、平板三到四欄、桌機六欄（都整除一頁 24 張，最後一列不缺角） -->
     <div v-else class="wall" :aria-busy="loading || undefined">
       <MyCardTile
@@ -252,6 +250,8 @@ watch(()=>route.query.fresh, fresh=>{
         @toggle="adjustVisibility(card)"
       />
     </div>
+
+    <AuthorVisibility v-if="visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
 
     <nav v-if="pageCount > 1" class="pager" :aria-label="$t('mine.pages')">
       <button type="button" class="btn btn--sm pager__step" :disabled="page <= 1" :aria-label="$t('pager.prev')" @click="goPage(page - 1)">

@@ -3253,5 +3253,8 @@
   "visibility.short.unlisted": "링크",
   "visibility.state.restoreReady": "다시 공개할 때 심사를 다시 받지 않아도 돼요.",
   "visibility.state.reviewChanged": "내용이 바뀌어서 다시 공개하려면 심사를 다시 받아야 해요.",
-  "visibility.state.reviewUnknown": "다시 공개하려면 심사를 다시 받아야 해요."
+  "visibility.state.reviewUnknown": "다시 공개하려면 심사를 다시 받아야 해요.",
+  "visibility.badge.delisted": "랭킹에서 제외됨",
+  "visibility.badge.suspended": "공개 접근 중지됨",
+  "visibility.badge.takedown": "게시 중단"
 }
