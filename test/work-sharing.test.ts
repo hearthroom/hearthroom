@@ -32,7 +32,7 @@ async function fixture(unmanaged=false){
   const path=new URL(String(input)).pathname;
   if(path==='/open/v1/hosting/work-access/batch'){
    const {items}=JSON.parse(String(init?.body)) as {items:{sourceRoleId:string;workId:string;targetRoleId:string}[]};
-   return Response.json({items:items.map(item=>({...item,...current,shareRoleId:current.access==='public'?current.approvedRoleId:current.access==='unlisted'?source:'',targetReadable:current.access!=='private'&&current.restriction!=='suspended',listed:current.access==='public'&&current.restriction==='none'}))});
+   return Response.json({items:items.map(item=>({...current,...item,shareRoleId:current.access==='public'?current.approvedRoleId:current.access==='unlisted'?source:'',targetReadable:current.access!=='private'&&current.restriction!=='suspended',listed:current.access==='public'&&current.restriction==='none'}))});
   }
   if(path.startsWith(`/open/v1/hosting/work-access/${source}/operations/`)){
    const receipt=receipts.get(path.split('/').at(-1)!);return receipt?Response.json(receipt):Response.json({error:'not_found'},{status:404});
@@ -360,4 +360,86 @@ it('distinguishes an unaccepted publication operation after checking the actual 
  const response=await request(`/v1/me/cards/${source}/publication/operations/${crypto.randomUUID()}`);
  expect(response.status).toBe(404);expect(await response.json()).toMatchObject({error:'publication_operation_not_found',workVisibility:{access:'private'}});
  expect((await request(`/v1/me/cards/${card.id}/publication/operations/${crypto.randomUUID()}`,'reader')).status).toBe(403);
+});
+
+
+it.each(['direct','crash-gap'])('resolves a definitive Provider CAS conflict without permanent pending after %s',async mode=>{
+ const {card,source,current,network}=await fixture();const intent=await command(card.id);
+ const prior=network.getMockImplementation()!;let switched=false;
+ network.mockImplementation(async(input,init)=>{
+  if(!switched&&init?.method==='POST'&&new URL(String(input)).pathname===`/open/v1/hosting/work-access/${source}`){switched=true;current.epoch++;current.policyRevision='concurrent-save-policy-revision';}
+  return prior(input,init);
+ });
+ const response=await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ expect(response.status).toBe(409);
+ const before=await env.DB.prepare('SELECT state FROM author_visibility_operations').first();
+ const providerOp=await env.DB.prepare('SELECT state FROM visibility_operations').first();
+ const syncBefore=await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first();
+ if(mode==='crash-gap')await env.DB.prepare("UPDATE author_visibility_operations SET state='pending'").run();
+ const readback=await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`);
+ const reconcile=await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'});
+ const after=await env.DB.prepare('SELECT state FROM author_visibility_operations').first();
+ const syncAfter=await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first();
+ expect(before).toMatchObject({state:'conflict'});expect(providerOp).toMatchObject({state:'conflict'});
+ expect(readback.status).toBe(409);expect(await readback.json()).toMatchObject({operation:{state:'conflict'}});
+ expect(reconcile).toMatchObject({complete:1,pending:0});
+ expect(after).toMatchObject({state:'conflict'});
+ expect(syncAfter).toMatchObject({epoch:current.epoch,sync_state:'complete'});
+});
+
+
+it('recovers a definitively refused first bind without inventing a managed policy',async()=>{
+ const {source,current,network}=await fixture(true);const intent=await command(source);
+ const prior=network.getMockImplementation()!;let switched=false;
+ network.mockImplementation(async(input,init)=>{
+  if(!switched&&init?.method==='POST'&&new URL(String(input)).pathname===`/open/v1/hosting/work-access/${source}`){switched=true;current.policyRevision='concurrent-unmanaged-save-revision';}
+  return prior(input,init);
+ });
+ const response=await request(`/v1/me/cards/${source}/visibility`,'owner',intent);
+ expect(response.status).toBe(409);
+ const op=await env.DB.prepare('SELECT state FROM author_visibility_operations').first();
+ const low=await env.DB.prepare('SELECT state FROM visibility_operations').first();
+ const before=await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first();
+ const readback=await request(`/v1/me/cards/${source}/visibility/operations/${intent.operationId}`);
+ const reconcile=await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'});
+ const after=await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first();
+ const latest=await request(`/v1/me/cards/${source}/visibility`);
+ expect(op).toMatchObject({state:'conflict'});expect(low).toMatchObject({state:'conflict'});expect(before).toMatchObject({epoch:0,sync_state:'changing'});expect(readback.status).toBe(409);expect(reconcile).toEqual({complete:1,pending:0});
+ expect(after).toBeNull();expect(latest.status).toBe(200);
+ const identity=await getCard(env.DB,source);
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM author_visibility_operations').first()).toEqual({n:1});
+ const fresh=await command(source);expect(fresh.operationId).not.toBe(intent.operationId);
+ expect((await request(`/v1/me/cards/${source}/visibility`,'owner',fresh)).status).toBe(200);
+ expect((await getCard(env.DB,source))?.id).toBe(identity?.id);
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM review_submissions').first()).toEqual({n:0});
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM card_registrations').first()).toEqual({n:0});
+
+});
+
+it.each(['offline','receipt','managed','moderation','new_fence','other_intent','low_pending'])('retains a refused first-bind fence when cleanup proof is %s',async mode=>{
+ const {source,current,network}=await fixture(true);const intent=await command(source);
+ const prior=network.getMockImplementation()!;let switched=false;
+ network.mockImplementation(async(input,init)=>{
+  if(!switched&&init?.method==='POST'&&new URL(String(input)).pathname===`/open/v1/hosting/work-access/${source}`){switched=true;current.policyRevision='concurrent-unmanaged-save-revision';}
+  return prior(input,init);
+ });
+ expect((await request(`/v1/me/cards/${source}/visibility`,'owner',intent)).status).toBe(409);
+ const op=(await env.DB.prepare('SELECT * FROM author_visibility_operations').first<{work_id:string;provider_operation_id:string}>())!;
+ if(mode==='managed'){current.managed=true;current.workId=op.work_id;current.epoch=1;}
+ if(mode==='low_pending')await env.DB.prepare("UPDATE visibility_operations SET state='pending'").run();
+ const postConflict=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  if(mode==='offline')throw new Error('Fixture Provider offline');
+  const path=new URL(String(input)).pathname;
+  if(mode==='receipt'&&path.endsWith('/operations/'+op.provider_operation_id))return Response.json({...current,workId:op.work_id,operationId:op.provider_operation_id,epoch:1,state:'complete'});
+  if(path.endsWith('/work-access/batch')){
+   if(mode==='moderation')await env.DB.prepare('UPDATE managed_work_access SET moderation_revision=moderation_revision+1').run();
+   if(mode==='new_fence')await env.DB.prepare('UPDATE managed_work_access SET sync_operation_id=?').bind(crypto.randomUUID()).run();
+   if(mode==='other_intent')await env.DB.prepare("INSERT INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at) VALUES(?,?,?,'{\"action\":\"bind\",\"expectedEpoch\":0}','new-intent','pending',1)").bind(op.work_id,crypto.randomUUID(),crypto.randomUUID()).run();
+  }
+  return postConflict(input,init);
+ });
+ await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'});
+ expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first()).toEqual({epoch:0,sync_state:'changing'});
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'conflict'});
 });
