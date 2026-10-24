@@ -1,16 +1,17 @@
 import {bumpOp} from './ops-metrics';
 import {type Env,HttpError} from './types';
-import type {ManagedWork} from './work-policy';
+import {workPolicyGateway,type ManagedWork} from './work-policy';
 import {readCurrentWorkPolicies} from './work-read';
 
 type RefreshRow=ManagedWork&{card_id:string;card_approved_role:string|null;card_version:string|null};
 // Refresh current facts, never replay a command or infer authority from a receipt.
-// A conflicting author's fence can clear only after PG advanced past its CAS.
+// An established policy fence clears only after PG advanced past its CAS.
+// A definitively refused first bind has no established policy to project.
 export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:string[]=[]):Promise<{complete:number;pending:number}>{
  if(limit<1)return {complete:0,pending:0};
  const rows=await env.DB.prepare(`SELECT p.*,c.id AS card_id,c.approved_hosted_role_id AS card_approved_role,c.approved_version_id AS card_version
  FROM managed_work_access p JOIN cards c ON c.provider=p.provider AND c.source_role_id=p.source_role_id
- WHERE p.provider='harbor' AND p.epoch>0 AND p.moderation_revision=p.confirmed_moderation_revision
+ WHERE p.provider='harbor' AND p.epoch>=0 AND p.moderation_revision=p.confirmed_moderation_revision
  AND p.work_id NOT IN(SELECT value FROM json_each(?))
  AND (p.sync_state='complete' OR EXISTS(SELECT 1 FROM author_visibility_operations a
  WHERE a.work_id=p.work_id AND a.provider_operation_id=p.sync_operation_id AND a.state='conflict'
@@ -26,6 +27,25 @@ export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:stri
  for(const [index,p] of rows.results.entries()){
   try{
    const r=current[index];
+   if(p.epoch===0){
+    if(p.sync_state!=='changing'||r.managed||r.epoch!==0||!p.sync_operation_id)throw new HttpError(503,'visibility_sync_pending');
+    // This GET must explicitly establish no original receipt. A timeout, stale
+    // receipt or a newly established PG policy can never remove this fence.
+    if(await workPolicyGateway.operation(env,'harbor',p.source_role_id,p.work_id,p.sync_operation_id))throw new HttpError(503,'visibility_sync_pending');
+    const removed=await env.DB.prepare(`DELETE FROM managed_work_access
+     WHERE work_id=? AND epoch=0 AND sync_state='changing' AND sync_operation_id=?
+     AND moderation_revision=? AND confirmed_moderation_revision=?
+     AND EXISTS(SELECT 1 FROM cards c WHERE c.provider=managed_work_access.provider AND c.source_role_id=managed_work_access.source_role_id AND c.approved_hosted_role_id IS ?)
+     AND EXISTS(SELECT 1 FROM author_visibility_operations a JOIN visibility_operations o ON o.work_id=a.work_id AND o.operation_id=a.provider_operation_id
+      WHERE a.work_id=managed_work_access.work_id AND a.provider_operation_id=managed_work_access.sync_operation_id AND a.state='conflict' AND o.state='conflict'
+      AND json_extract(a.command,'$.action')='bind' AND json_extract(a.command,'$.expectedEpoch')=0
+      AND json_extract(o.command,'$.action')='bind' AND json_extract(o.command,'$.expectedEpoch')=0)
+     AND NOT EXISTS(SELECT 1 FROM visibility_operations o WHERE o.work_id=managed_work_access.work_id AND o.state IN ('intent','pending'))
+     AND NOT EXISTS(SELECT 1 FROM author_visibility_operations a WHERE a.work_id=managed_work_access.work_id AND a.state='pending')`)
+     .bind(p.work_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,p.card_approved_role).run();
+    if(!removed.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+    complete++;await bumpOp(env.DB,'work_access','reconcile','success');continue;
+   }
    const restrictionRank={none:0,delisted:1,suspended:2};
    if(!r.managed||r.epoch<p.epoch||r.approvedRoleId!==(p.card_approved_role??'')||r.approvedRoleId!==(p.approved_role_id??'')
     ||restrictionRank[r.restriction as keyof typeof restrictionRank]<restrictionRank[p.restriction]

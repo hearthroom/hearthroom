@@ -13,14 +13,15 @@ watch(()=>[props.value,props.phase,props.resumeAction] as const,([v,phase,action
  selected.value=phase==='retryable'?(action==='private'?'private':action==='link'?'unlisted':action==='restore'?'public':v?.access??null):v?.access??null;
  cancel.value=phase==='retryable'&&action==='cancelReview';
 },{immediate:true});
-const changed=computed(()=>selected.value!==props.value?.access||cancel.value);
+const update=computed(()=>selected.value==='public'&&props.value?.access==='public'&&props.value.actions.includes('submit_update'));
+const changed=computed(()=>selected.value!==props.value?.access||cancel.value||update.value);
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));
 function disabled(access:WorkAccess){
  if(props.newCard||busy.value||!props.value||props.value.syncState!=='complete')return true;
  if(access===props.value.access&&access!=='public')return false;
  if(access==='private')return !props.value.actions.includes('set_private');
  if(access==='unlisted')return !props.value.actions.includes('set_unlisted');
- return pending.value||props.value.restriction!=='none'||props.dirty||!!props.missing||(!props.value.actions.includes('restore_public')&&(!props.value.actions.includes('submit_review')||props.quotaFull));
+ return pending.value||props.value.restriction!=='none'||props.dirty||!!props.missing||(!props.value.actions.includes('restore_public')&&(!props.value.actions.some(action=>action==='submit_review'||action==='submit_update')||props.quotaFull));
 }
 const effect=computed(()=>{
  const v=props.value;if(!v||!selected.value)return '';

@@ -180,13 +180,20 @@ export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:str
   ...(input.expectedOwnerRevision?{expectedOwnerRevision:input.expectedOwnerRevision}:{}),
   restriction:card?.public_blocked?'suspended':card?.board_hidden?'delisted':'none',
   ...(card?.approved_hosted_role_id?{versionRoleId:card.approved_hosted_role_id}:{}),approvedRoles:grants.results.map(r=>r.hosted_revision_id)};
- const previous=await db.prepare('SELECT command FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(work.id,input.operationId).first<{command:string}>();
+ const previous=await db.prepare('SELECT command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(work.id,input.operationId).first<Operation>();
  const saved=previous?JSON.parse(previous.command) as WorkPolicyCommand:null;
  if(saved&&(saved.action!=='bind'||saved.access!==input.access))throw new HttpError(409,'visibility_operation_conflict');
  // Mark the work managed before sending bind. Otherwise a legacy reviewer can
  // publish while the remote result is unknown and D1 has no policy row yet.
  await db.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id)
  VALUES(?,?,?,?,0,?,?,'changing',?)`).bind(work.id,provider,input.roleId,input.access,command.restriction,card?.approved_hosted_role_id??null,input.operationId).run();
+ const fence=await managedWork(db,provider,input.roleId);
+ if(!fence||fence.epoch!==0||fence.sync_state!=='changing'||fence.sync_operation_id!==input.operationId){
+  // Exact completed replay may return its receipt; it cannot project over a
+  // newer fence or authorize another bind. Every new bind must own its fence.
+  if(previous?.state==='complete'&&previous.receipt)return checked(JSON.parse(previous.receipt),input.roleId,work.id,input.operationId);
+  throw new HttpError(409,'visibility_operation_conflict');
+ }
  const receipt=await runWorkPolicyOperation(env,provider,input.roleId,saved??command,input.token);
  await projectWorkReceipt(env,provider,receipt,card?.approved_hosted_role_id,'bind');return receipt;
 }
