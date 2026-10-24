@@ -1071,6 +1071,17 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
 
 beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockReset();visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
+it('scrolls from publication guidance to the missing character setting section',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic name',roleWelcome:'Synthetic greeting'});
+ await mount('/cards/r1/edit');await nextTick();
+ const section=root.querySelector<HTMLElement>('[data-section="persona"]')!;
+ const scroll=vi.spyOn(section,'scrollIntoView');
+ const missing=root.querySelector<HTMLButtonElement>('.visibility-missing')!;
+ expect(missing).not.toBeNull();missing.click();await nextTick();
+ expect(scroll).toHaveBeenCalledWith({block:'start',behavior:'smooth'});
+ expect(api.patchRoleDocument).not.toHaveBeenCalled();
+});
+
 it('retains the pending cancellation warning and save action with rollout disabled',async()=>{
  rollout.enabled=false;api.fetchDraftState.mockResolvedValue({status:'pending',draftChanged:false});
  await mount('/cards/r1/edit');await nextTick();
