@@ -59,7 +59,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
        <span v-if="value.restriction!=='none'" class="visibility-option__reason">{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[0] }}<a :href="appealUrl" target="_blank" rel="noopener">Discord</a>{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[1] }}</span>
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>
        <span v-else-if="dirty" class="visibility-option__reason">{{ t('visibility.saveFirst') }}</span>
-       <button v-else-if="missing" type="button" class="link" @click.prevent="emit('missing')">{{ t('visibility.missing',{fields:missing}) }}</button>
+       <button v-else-if="missing" type="button" class="link visibility-missing" @click.prevent="emit('missing')">{{ t('visibility.missing',{fields:missing}) }}</button>
        <span v-else-if="quotaFull&&!value.actions.includes('restore_public')" class="visibility-option__reason">{{ t('mine.quota.exceeded') }}</span>
        <span v-else-if="value.actions.includes('restore_public')" class="visibility-option__reason">{{ t('visibility.public.restore') }}</span>
        <span v-else-if="value.revisionState==='changed'" class="visibility-option__reason">{{ t('visibility.public.changed') }}</span>
@@ -97,6 +97,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
 .visibility-option__title{font-size:15px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2)}
 .visibility-option__description,.visibility-option__reason{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
+.visibility-missing{border:0;background:none;padding:0;font:inherit;font-size:13px;line-height:1.6;text-align:start;cursor:pointer;overflow-wrap:anywhere;min-height:var(--h-lg)}
 .visibility-option__restriction{color:var(--danger);cursor:default;max-width:100%}
 .visibility-option__restriction::before{content:"";flex:none;width:var(--s-1);height:var(--s-1);border-radius:var(--r-pill);background:currentColor}
 .visibility-skeleton{height:72px;border-radius:var(--r-sm);margin-bottom:var(--s-2)}
