@@ -1069,7 +1069,7 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
   });
 });
 
-beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockReset();visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
 it('retains the pending cancellation warning and save action with rollout disabled',async()=>{
  rollout.enabled=false;api.fetchDraftState.mockResolvedValue({status:'pending',draftChanged:false});
