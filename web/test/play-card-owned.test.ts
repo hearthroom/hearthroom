@@ -29,3 +29,17 @@ it('validates the provider conversation and revision binding',async()=>{
  owned.mockResolvedValue({conversationId:'other',roleId:'new',canGenerate:false,reason:'author_private'});
  await expect(resolvePlayCard('100076','harbor','zh',false,undefined,{id:'conv',token:'t'})).rejects.toThrow('conversation_card_mismatch');
 });
+it('keeps a qualified private player on the full playable bootstrap instead of read-only history',async()=>{
+ owned.mockResolvedValue({conversationId:'conv',roleId:'old',title:'Saved title',canGenerate:true});
+ card.mockResolvedValue({id:'100076',num:100076,provider:'harbor',roleId:'retained-approved',status:'private',canInteract:false,listed:false});
+ platforms.mockResolvedValue([{provider:'harbor',roleId:'retained-approved',playable:true}]);
+ const result=await resolvePlayCard('100076','harbor','zh-Hant',false,undefined,{id:'conv',token:'t'});
+ expect(result).toMatchObject({number:'100076',roleId:'retained-approved',card:{status:'private',canInteract:false,listed:false}});
+ expect(result.readOnly).toBeUndefined();expect(result.conversationId).toBeUndefined();
+});
+it('opens the qualified private target for a new conversation from its card link',async()=>{
+ card.mockResolvedValue({id:'100076',num:100076,provider:'harbor',roleId:'played-source',status:'private',canInteract:false,listed:false});
+ platforms.mockResolvedValue([{provider:'harbor',roleId:'played-source',playable:true}]);
+ const result=await resolvePlayCard('100076','harbor','zh-Hant');
+ expect(result.roleId).toBe('played-source');expect(result.readOnly).toBeUndefined();expect(owned).not.toHaveBeenCalled();
+});

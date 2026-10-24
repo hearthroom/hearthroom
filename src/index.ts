@@ -20,6 +20,7 @@ import {workSharingCommandRoutes} from './work-sharing-commands';
 import {workSubmissionRoutes} from './work-submission';
 import {managedWork,workPolicyGateway} from './work-policy';
 import {registerLegacyShare} from './work-share-registration';
+import {privatePlayerCard} from './private-player';
 import {publicPosition,publicCandidates,publicCandidatePage,parsePublicCandidates} from './work-pagination';
 import { sukiRoutes, sukiRecall } from "./suki";
 import { rewardRoutes } from "./rewards";
@@ -638,6 +639,10 @@ app.get("/v1/cards/:id", async (c) => {
   if (access && !access.reachable&&(access.managed||row?.status==='unlisted')) {
     const own = await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
     if (own) return c.json(own,200,{'Cache-Control':'private, no-store'});
+    if(row&&access.access==='private'){
+      const played=await privatePlayerCard(c.env,row,bearerOf(c),lang(c),'detail',()=>viewerAllowsNsfw(c,{card:true}));
+      if(played)return c.json(played);
+    }
     throw new HttpError(404,'card not found');
   }
   if (row && access?.reachable && access.access==='unlisted') {
@@ -943,7 +948,14 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
   const access=await checkedCardAccess(c,base,'metadata');
   if(access.managed||base.status==='unlisted'){
    c.header('Cache-Control','private, no-store');
-   if(!access.reachable)throw new HttpError(404,'card not found');
+   if(!access.reachable){
+    if(access.access==='private'){
+     c.header('X-Robots-Tag','noindex, nofollow');
+     const played=await privatePlayerCard(c.env,base,bearerOf(c),lang(c),'metadata',()=>viewerAllowsNsfw(c,{card:true}));
+     if(played)return c.json({platforms:[{provider:'harbor',roleId:played.roleId,playable:hasChat('harbor')}]});
+    }
+    throw new HttpError(404,'card not found');
+   }
    if((isAdult(base)||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
    if(access.access==='unlisted')c.header('X-Robots-Tag','noindex');
    // Current work authority already validated this exact target; no unrelated
