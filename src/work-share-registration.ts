@@ -6,10 +6,13 @@ import {type Env,HttpError} from './types';
 
 // A legacy public link can acquire a stable social identity without becoming a
 // policy enrollment or a publication. No caller-supplied author/content is used.
-export async function registerLegacyShare(env:Env,source:string,canReadUnreviewed:()=>Promise<boolean>):Promise<CardRow>{
+export async function registerLegacyShare(env:Env,source:string,canReadUnreviewed:()=>Promise<boolean>):Promise<CardRow|null>{
  const [authority]=await readCurrentWorkPolicies(env,[{sourceRoleId:source,workId:'00000000-0000-0000-0000-000000000000',targetRoleId:source}]);
  if(authority.managed)throw new HttpError(503,'visibility_sync_pending');
- if(!authority.targetReadable||authority.shareRoleId!==source)throw new HttpError(404,'card not found');
+ // A private source may still be read by its authenticated author. The caller
+ // handles that fallback without creating a public community registration.
+ if(!authority.targetReadable)return null;
+ if(authority.shareRoleId!==source)throw new HttpError(404,'card not found');
  if(!await canReadUnreviewed())throw new HttpError(403,'adult_content');
  const role=await upstream.fetchRole(env,source,'harbor');
  if(role.roleId!==source||!Number.isSafeInteger(role.authorNumId)||role.authorNumId<1||role.creationMethod!=='hearthroom')throw new HttpError(404,'card not found');
