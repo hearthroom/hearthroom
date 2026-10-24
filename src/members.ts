@@ -3,7 +3,8 @@ import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } f
 import { tagNamesFor } from "../shared/tag-catalog";
 import { readTipLinks } from "../shared/tip-links";
 import { type Env, HttpError } from "./types";
-import { upstream } from "./upstream";
+import { upstream, type ProviderIdentity } from "./upstream";
+import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { guestAdult, guestAllowsNsfw, siteSessionIdentity, siteSessionReader } from "./account-auth";
 
 /**
@@ -18,6 +19,8 @@ import { guestAdult, guestAllowsNsfw, siteSessionIdentity, siteSessionReader } f
  * 沒有 token、沒有信箱、沒有內部識別碼。
  */
 export interface Member {
+ accountClass?:'normal'|'test';
+ testGeneration?:number;
   id: string;
   provider: ProviderId;
   /** 供應商上的公開 ID（HarperHarbor accountNumId） */
@@ -40,37 +43,43 @@ export function newHandle(): string {
  * 兩個請求同時第一次登入：身分表的主鍵擋住第二個，重讀就拿到第一個建的。
  * handle 撞到唯一索引（機率極低）也會落到同一個 catch，所以重讀不到才換一個 handle 再試。
  */
-type ResolvedMember = { id: string; handle: string; display_name: string | null };
+type ResolvedMember = { id: string; handle: string; display_name: string | null;account_class:string;test_generation:number;test_state?:string };
 
-async function resolveMemberRecord(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<ResolvedMember> {
+async function resolveMemberRecord(db: D1Database, provider: ProviderId, externalId: number, now: number, classification?:ProviderIdentity): Promise<ResolvedMember> {
+  if(provider==='harbor'&&externalId===279&&await db.prepare('SELECT 1 FROM legacy_account_fence WHERE public_no=279').first())throw new HttpError(403,'account_retired');
+  const accountClass=classification?.accountClass??'normal',generation=accountClass==='test'?classification!.testGeneration!:0;
+  const checked=(row:ResolvedMember)=>{
+    if(row.account_class!==accountClass||row.test_generation!==generation||(accountClass==='test'&&row.test_state!==undefined&&row.test_state!=='active'))throw new HttpError(403,'identity_classification_conflict');
+    return row;
+  };
   const ext = String(externalId);
   // Connections override the original identity, including during a concurrent first login.
   const lookup = () => db.prepare(`
-    SELECT id, handle, display_name FROM members WHERE id = COALESCE(
+    SELECT id, handle, display_name,account_class,test_generation,test_state FROM members WHERE id = COALESCE(
       (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
       (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
     )`).bind(provider, ext, provider, ext).first<ResolvedMember>();
   const found = await lookup();
-  if (found) return found;
+  if (found) return checked(found);
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = crypto.randomUUID();
     const handle = newHandle();
     try {
       await db.batch([
-        db.prepare("INSERT INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, handle, now),
+        db.prepare("INSERT INTO members (id, handle, created_at,account_class,test_generation) VALUES (?, ?, ?,?,?)").bind(id, handle, now,accountClass,generation),
         db.prepare("INSERT INTO member_identities (provider, external_id, member_id, linked_at) VALUES (?, ?, ?, ?)").bind(provider, ext, id, now),
       ]);
-      return { id, handle, display_name: null };
+      return { id, handle, display_name: null,account_class:accountClass,test_generation:generation };
     } catch {
       const again = await lookup();
-      if (again) return again;
+      if (again) return checked(again);
     }
   }
   throw new HttpError(502, "could not create member");
 }
 
-export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<string> {
-  return (await resolveMemberRecord(db, provider, externalId, now)).id;
+export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number, classification?:ProviderIdentity): Promise<string> {
+  return (await resolveMemberRecord(db, provider, externalId, now,classification)).id;
 }
 
 /**
@@ -94,6 +103,7 @@ export async function missingMemberStatements(
   const out: D1PreparedStatement[] = [];
   for (const i of identities) {
     if (existing.has(`${i.provider}:${i.externalId}`)) continue;
+    if(i.provider==='harbor'&&i.externalId===279&&await db.prepare('SELECT 1 FROM legacy_account_fence WHERE public_no=279').first())continue;
     const id = crypto.randomUUID();
     out.push(
       db.prepare("INSERT OR IGNORE INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, newHandle(), now),
@@ -106,7 +116,7 @@ export async function missingMemberStatements(
 /** 公開 ID → 成員 id；格式不對或沒這個人都是 null。 */
 export async function memberByHandle(db: D1Database, handle: string): Promise<string | null> {
   if (!HANDLE_RE.test(handle)) return null;
-  const row = await db.prepare("SELECT id FROM members WHERE handle = ?").bind(handle).first<{ id: string }>();
+  const row = await db.prepare("SELECT id FROM members WHERE handle = ? AND account_class='normal'").bind(handle).first<{ id: string }>();
   return row?.id ?? null;
 }
 
@@ -368,13 +378,19 @@ export function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
    // 讀取請求先問本站 session（就近的 D1 複本），認得出來就不必跨洋問供應商；見 siteSessionIdentity。
    if(c.req.url&&c.req.method){
     const site=await siteSessionIdentity(c as Ctx&{req:{url:string;method:string}},provider);
-    if(site){const me={accountNumId:site.accountNumId,nickName:'',avatar:''} as Identity;sessionIdentities.add(me);return me;}
+    if(site){const me={accountNumId:site.accountNumId,nickName:'',avatar:'',...(site.accountClass==='test'?{accountClass:'test',testState:'active',testGeneration:site.testGeneration}:{})} as Identity;sessionIdentities.add(me);return me;}
    }
    return upstream.fetchMe(c.env,bearer,provider);
   })();
   identities.set(c,pending);
  }
  return pending;
+}
+
+/** Applies exclusion only after a trusted provider identity has been resolved. */
+export function applyQAIdentity(c:Ctx,me:ProviderIdentity):void{
+ if(isQABrowser(c.env)&&me.accountClass!=='test')throw new HttpError(403,'auth_connection_denied');
+ if(me.accountClass==='test')c.env=excludeQABrowser(c.env);
 }
 
 /** 轉發 token 問供應商「你是誰」，再換成本站成員。token 不落庫、不進日誌。 */
@@ -387,7 +403,13 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
   const me = await requestIdentity(c, bearer, provider);
   timing?.("identity", performance.now() - started);
   const memberStarted = performance.now();
-  const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now());
+  applyQAIdentity(c,me);
+  if(me.accountClass==='test'){
+   c.env=excludeQABrowser(c.env);
+   const path=c.req.url?new URL(c.req.url).pathname:'';
+   if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score)|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
+  }
+  const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now(),me);
   // 由本站 session 認出來的沒有供應商暱稱；顯示名稱留給下一個走供應商驗證的請求補上。
   if (member.display_name === null && !sessionIdentities.has(me)) {
     // Keep the SQL guard: another request or the member may initialize it after our read.
@@ -395,7 +417,7 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
       .bind(me.nickName?.trim().slice(0, 60) || member.handle, safeAvatar(me.avatar), member.id).run();
   }
   timing?.("member", performance.now() - memberStarted);
-  return { id: member.id, provider, externalId: me.accountNumId };
+  return { id: member.id, provider, externalId: me.accountNumId,accountClass:me.accountClass??'normal',testGeneration:me.testGeneration };
 }
 
 /** 這個請求屬於哪一家供應商。沒帶標頭就是預設那家；不認得或這個部署沒設定的一律 400。 */

@@ -37,7 +37,8 @@ async function readJson(res: Response, what: string): Promise<Record<string, unk
  * 轉發的是使用者自己授權給本站的 token，權限範圍不超過他本來就給出去的那些；
  * 它只在這一個呼叫裡出現，不寫日誌、不進 D1、不進 KV。
  */
-async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<{ accountNumId: number; nickName?: string; avatar?: string }> {
+export type ProviderIdentity={accountNumId:number;nickName?:string;avatar?:string;accountClass?:'normal'|'test';testState?:'active';testGeneration?:number};
+async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<ProviderIdentity> {
   const res = await fetch(apiUrl(env, provider, "/open/v1/me"), {
     headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
   });
@@ -46,7 +47,18 @@ async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_
   if (!Number.isSafeInteger(accountNumId) || accountNumId <= 0) {
     throw new HttpError(401, "upstream returned no public account id");
   }
-  return { accountNumId, ...(typeof body.avatar === "string" ? {avatar: body.avatar} : {}), ...(typeof body.nickName === "string" ? {nickName: body.nickName} : {}) };
+  const classification:Partial<ProviderIdentity>={};
+  if(provider==='harbor'){
+    if(body.accountClass!==undefined || env.HARBOR_TEST_ACCOUNTS_ENABLED==='1'){
+      if(body.accountClass!=='normal'&&body.accountClass!=='test')throw new HttpError(401,'identity_classification_required');
+      classification.accountClass=body.accountClass;
+      if(body.accountClass==='test'){
+        if(env.HARBOR_TEST_ACCOUNTS_ENABLED!=='1'||body.testState!=='active'||typeof body.testGeneration!=='number'||!Number.isSafeInteger(body.testGeneration)||body.testGeneration<1)throw new HttpError(401,'test_account_inactive');
+        classification.testState='active';classification.testGeneration=body.testGeneration;
+      }
+    }
+  }
+  return { accountNumId, ...classification, ...(typeof body.avatar === "string" ? {avatar: body.avatar} : {}), ...(typeof body.nickName === "string" ? {nickName: body.nickName} : {}) };
 }
 
 /**

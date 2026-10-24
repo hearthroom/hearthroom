@@ -1,3 +1,5 @@
+import {siteSessionReader} from './account-auth';
+import {isQABrowser,excludeQABrowser} from './qa-browser-context';
 import { Hono } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { siteRootOf } from "../shared/site-hosts";
@@ -22,6 +24,7 @@ analyticsRoutes.post("/v1/analytics/signup", async c => {
   if (!siteRootOf(url.hostname) || c.req.header("Origin") !== url.origin || c.req.header("X-Hearthroom-Request") !== "1") return c.json({ error: "forbidden" }, 403);
   if (c.env.GA4_ENABLED !== "true" || c.req.header("Sec-GPC") === "1") return c.json({ first: false });
   const member = await requireMember(c);
+  if(isQABrowser(c.env)||member.accountClass==='test')return c.json({first:false});
   const response = await fetch(apiBaseOf(c.env, member.provider) + "/open/v1/me/referral", {
     headers: { Authorization: c.req.header("Authorization")! }, signal: AbortSignal.timeout(3000),
   });
@@ -50,6 +53,14 @@ analyticsRoutes.post("/v1/analytics/session", async c => {
     return c.json({ enabled: false });
   }
   if (c.env.GA4_ENABLED !== "true") return c.json({ enabled: false });
+  // A signed QA bootstrap is the earliest anonymous boundary. Also check any
+  // authenticated caller here rather than relying on a later page restore.
+  if(c.req.header('Authorization'))await requireMember(c);
+  else {
+   const reader=await siteSessionReader({env:c.env,req:{url:c.req.url,method:'GET',header:k=>c.req.header(k)}},'harbor');
+   if(reader?.accountClass==='test')c.env=excludeQABrowser(c.env);
+  }
+  if(isQABrowser(c.env))return c.json({enabled:false});
   const now = Math.floor(Date.now() / 1000);
   const existing = getCookie(c, COOKIE) ?? "";
   const linked = c.req.header("Content-Type")?.includes("application/json")

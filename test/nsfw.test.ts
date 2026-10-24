@@ -120,7 +120,8 @@ describe("榜單權限與快取", () => {
     const result = await worker.fetch(req.clone(), measured, ctx);
     await waitOnExecutionContext(ctx);
     expect(result.headers.get("X-Cache")).toBe("hit");
-    expect(queries).toHaveLength(6);
+    // The additional bounded author-classification read prevents cached QA disclosure.
+    expect(queries).toHaveLength(7);
     expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
     expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
     expect(queries.some(sql=>sql.includes('c.id IN(SELECT value FROM json_each'))).toBe(true);
@@ -393,7 +394,9 @@ describe("本站登入 cookie 直接放行單卡", () => {
     await waitOnExecutionContext(ctx);
     expect(ids(await json(res))).toEqual(["role-adult", "role-safe"]);
     expect(res.headers.get("X-Cache")).toBe("hit");
-    expect(queries, queries.join("\n---\n")).toHaveLength(6);
+    // A cookie additionally needs an exclusion-only hint before authentication.
+    expect(queries, queries.join("\n---\n")).toHaveLength(8);
+    expect(queries[0]).toContain("qa_session_exclusion");
     expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
     expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
     expect(queries.some(sql=>/ORDER BY/i.test(sql))).toBe(false);

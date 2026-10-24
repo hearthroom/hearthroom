@@ -1,3 +1,4 @@
+import {assertNormalMember} from '../test-accounts';
 import { SANDBOX_PARENT_ORIGINS } from '../../shared/site-hosts';
 import { activeAwardKeys, sweepMilestones } from './badges';
 import { appearanceView, projectAppearance, type AppearancePreferences } from './appearance';
@@ -30,6 +31,7 @@ export function site(env: Env) {
 }
 export const level = (xp: number) => Math.floor(Math.sqrt(xp / 10));
 export async function beginLink(env: Env, member: string, nonce: string, returnOrigin = site(env)) {
+  await assertNormalMember(env.DB,member);
   enabled(env);
   if (returnOrigin !== site(env) && !SANDBOX_PARENT_ORIGINS.includes(returnOrigin))
     throw new HttpError(400, "community_input");
@@ -99,6 +101,7 @@ export async function completeLink(
   receipt: string,
   nonce: string,
 ) {
+  await assertNormalMember(env.DB,member);
   const hashed = await digest(receipt),
     proof = await digest(nonce),
     now = Date.now();
@@ -240,7 +243,7 @@ export async function publicCommunityViews(env:Env,members:string[]):Promise<Map
  LEFT JOIN discord_links l ON l.member_id=m.id AND l.state='active'
  LEFT JOIN community_discord_appearance a ON a.member_id=m.id AND a.link_version=l.version
  LEFT JOIN community_appearance_preferences ap ON ap.member_id=m.id
- WHERE m.id IN (${members.map(()=>'?').join(',')})`).bind(Date.now(),...members).all<{
+ WHERE m.account_class='normal' AND m.id IN (${members.map(()=>'?').join(',')})`).bind(Date.now(),...members).all<{
  id:string;public_badges:number|null;public_level:number|null;linked:string|null;verified_at:number|null;boosting_since:number|null;assets:string|null;
  avatar_source:AppearancePreferences['avatarSource']|null;name_style:AppearancePreferences['nameStyle'];frame:AppearancePreferences['frame'];public_enabled:number;badges:string;xp:number|null;
  }>()).results;

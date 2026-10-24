@@ -1,3 +1,4 @@
+import {assertNormalMember} from './test-accounts';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCard,upsertCard,type CardRow} from './cards';
@@ -45,6 +46,7 @@ export async function withdrawLegacyVisibility(env:Env,row:CardRow,account:numbe
 }
 
 async function enrollAuthorOperation(env:Env,member:{id:string;externalId:number},source:string,token:string,row:CardRow|null,command:AuthorCommand,intent:string,owner:WorkOwnerView):Promise<void>{
+ await assertNormalMember(env.DB,member.id);
  if(command.action==='cancel_review')throw new HttpError(409,'visibility_operation_conflict');
  if(command.targetAccess==='public')throw new HttpError(409,'review_required');
  const role=await hostGateway.read(env,token,source,'harbor');
@@ -99,6 +101,7 @@ async function authorConflict(env:Env,op:AuthorOperation):Promise<'conflict'>{
  return 'conflict';
 }
 export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string):Promise<AuthorOperation['state']>{
+ await assertNormalMember(env.DB,op.member_id);
  const latest=await findOperation(env,op.member_id,op.operation_id);if(!latest)throw new HttpError(404,'card_not_found');
  if(latest.state!=='pending')return latest.state;
  const fence=await managedWork(env.DB,'harbor',op.source_role_id);

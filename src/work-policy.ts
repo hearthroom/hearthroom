@@ -1,3 +1,4 @@
+import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
 import {apiBaseOf,type ProviderId} from './providers';
 import {hostingKey} from './hosting';
@@ -121,6 +122,7 @@ export async function workPolicyIntentStatement(env:Env,provider:ProviderId,sour
 // Persist only bounded commands and receipts, never a bearer. After an unknown
 // reply, read the original operation before resending the same idempotent command.
 export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,token?:string,rootOperation=command.operationId):Promise<WorkPolicyReceipt>{
+ await assertPublicSource(env.DB,provider,source);
  const db=env.DB;const intent=await hash({provider,source,command});
  const inserted=await (await workPolicyIntentStatement(env,provider,source,command,rootOperation)).run();
  const op=await db.prepare('SELECT intent_hash,command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(command.workId,command.operationId).first<Operation>();

@@ -1,3 +1,4 @@
+import {assertNormalMember} from '../test-accounts';
 import { HttpError, type Env } from '../types';
 import { digest } from './crypto';
 
@@ -81,8 +82,9 @@ export async function syncAppearance(env:Env,b:Record<string,unknown>) {
 /** Same-origin opaque URLs keep Discord identifiers out of public profile payloads. */
 export async function appearanceMedia(env:Env,key:string) {
  if(!/^[a-f0-9]{64}$/.test(key)||env.COMMUNITY_ENABLED!=='true')throw new HttpError(404,'not_found');
- const row=await env.DB.prepare(`SELECT m.source_url FROM community_appearance_media m JOIN discord_links l ON l.member_id=m.member_id AND l.version=m.link_version AND l.state='active' JOIN community_discord_appearance a ON a.member_id=l.member_id AND a.link_version=l.version AND a.verified_at>? WHERE m.key=?`).bind(Date.now()-86400000,key).first<{source_url:string}>();
+ const row=await env.DB.prepare(`SELECT m.source_url,m.member_id FROM community_appearance_media m JOIN discord_links l ON l.member_id=m.member_id AND l.version=m.link_version AND l.state='active' JOIN community_discord_appearance a ON a.member_id=l.member_id AND a.link_version=l.version AND a.verified_at>? WHERE m.key=?`).bind(Date.now()-86400000,key).first<{source_url:string;member_id:string}>();
  if(!row)throw new HttpError(404,'not_found');
+ await assertNormalMember(env.DB,row.member_id);
  const url=new URL(row.source_url);
  if(url.origin!=='https://cdn.discordapp.com'||!/^\/(avatars|guilds|embed\/avatars|avatar-decoration-presets)\//.test(url.pathname))throw new HttpError(404,'not_found');
  // Workers supports manual/follow only. Reject all non-2xx responses below.

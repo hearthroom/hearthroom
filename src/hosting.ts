@@ -1,3 +1,4 @@
+import {assertNormalMember} from './test-accounts';
 import {managedWork,enrollWorkAccess,policyOperationId,workPolicyGateway,type WorkAccess} from './work-policy';
 import {readOwnerVisibility} from './work-sharing';
 import {fenceManagedEdit} from './work-fence';
@@ -205,6 +206,8 @@ export async function hostingDecision(db:D1Database,versionId:string){
   FROM hosting_versions v LEFT JOIN review_submissions s ON s.id=v.submission_id LEFT JOIN cards c ON c.id=v.card_id WHERE v.version_id=?`)
   .bind(versionId).first<VersionRow & {status:string|null;card_status:string|null;public_blocked:number|null;version_blocked:number;approved_version_id:string|null}>();
  if(!row||!row.hosted_revision_id)throw new HttpError(404,'version_not_found');
+ const owner=await db.prepare('SELECT member_id FROM works WHERE id=?').bind(row.work_id).first<{member_id:string}>();
+ if(owner)await assertNormalMember(db,owner.member_id);
  const status=row.status==='approved'?(row.card_status==='approved'&&!row.public_blocked&&!row.version_blocked?'approved':'revoked'):(row.status??'pending');
  return {...receiptOf(row),status};
 }

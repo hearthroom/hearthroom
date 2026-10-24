@@ -1,3 +1,4 @@
+import {assertNormalMember,isTestHarborAccount,testCardIds} from './test-accounts';
 /**
  * 綺夢社伺服器上報給 Harbor 應用獎勵的事件（AppRewards 技術設計 §10.3）。
  * 任務、新手七日、推廣分層的進度由 Harbor 判定；只有綺夢社自己看得到的事由這裡報：
@@ -44,8 +45,17 @@ export const rewardEventRoutes = new Hono<{ Bindings: Env }>();
 
 // ---- 寫進待送清單 ----------------------------------------------------------------
 
+async function excludedRewardEvent(db:D1Database,ev:RewardEvent):Promise<boolean>{
+ if(await isTestHarborAccount(db,ev.accountNo,typeof ev.attrs.viewerAccountNo==='number'?ev.attrs.viewerAccountNo:undefined))return true;
+ if(ev.workRoleId){
+  const rows=await db.prepare('SELECT id FROM cards WHERE source_role_id=? OR approved_hosted_role_id=?').bind(ev.workRoleId,ev.workRoleId).all<{id:string}>();
+  if((await testCardIds(db,rows.results.map(r=>String(r.id)))).size)return true;
+ }
+ return false;
+}
 export async function enqueueRewardEvent(db: D1Database, ev: RewardEvent, now: number): Promise<boolean> {
   try {
+    if(await excludedRewardEvent(db,ev))return false;
     const res = await db.prepare("INSERT OR IGNORE INTO reward_event_outbox (event_id, type, body, created_at, next_at) VALUES (?, ?, ?, ?, ?)")
       .bind(ev.eventId, ev.type, JSON.stringify(ev), now, now).run();
     if (res.meta.changes) await bumpOp(db, "reward_events", ev.type, "queued");
@@ -59,7 +69,7 @@ export async function enqueueRewardEvent(db: D1Database, ev: RewardEvent, now: n
 
 /** 成員在 Harbor 的公開數字帳號；沒有 Harbor 身分就是 null（那就不是 Harbor 的玩家，不報）。 */
 export async function harborAccountNo(db: D1Database, memberId: string): Promise<number | null> {
-  const row = await db.prepare("SELECT external_id FROM member_identities WHERE member_id = ? AND provider = 'harbor'").bind(memberId).first<{ external_id: string }>();
+  const row = await db.prepare("SELECT external_id FROM member_identities WHERE member_id = ? AND provider = 'harbor' AND EXISTS(SELECT 1 FROM members WHERE id=member_id AND account_class='normal')").bind(memberId).first<{ external_id: string }>();
   const n = Number(row?.external_id);
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
@@ -162,6 +172,11 @@ rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) 
 });
 
 async function recordShareOpen(c: Context<{ Bindings: Env }>): Promise<void> {
+  let viewer: number | null = null;
+  if(c.req.header('Authorization')){
+   const member=await requireMember(c);await assertNormalMember(c.env.DB,member.id);
+   viewer=await harborAccountNo(c.env.DB,member.id);
+  }
   const body = (await c.req.json().catch(() => ({}))) as { ref?: unknown; card?: unknown };
   const ref = typeof body.ref === "string" && REF_CODE.test(body.ref) ? body.ref : null;
   if (!ref) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return; }
@@ -177,10 +192,6 @@ async function recordShareOpen(c: Context<{ Bindings: Env }>): Promise<void> {
   const fresh = await c.env.DB.prepare("INSERT OR IGNORE INTO share_opens (ref_code, day, visitor_hash, created_at) VALUES (?, ?, ?, ?)").bind(ref, day, hash, now).run();
   if (!fresh.meta.changes) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return; }
   // 登入的訪客帶上自己的帳號，Harbor 才擋得掉「自己打開自己的連結」
-  let viewer: number | null = null;
-  if (c.req.header("Authorization")) {
-    try { viewer = await harborAccountNo(c.env.DB, (await requireMember(c)).id); } catch { viewer = null; }
-  }
   const attrs: Record<string, string | number> = { visitorHash: hash };
   if (viewer) attrs.viewerAccountNo = viewer;
   await enqueueRewardEvent(c.env.DB, { eventId: `share_open:${ref}:${day}:${hash}`, type: "share_open", refCode: ref, ...(workRoleId ? { workRoleId } : {}), occurredAt: new Date(now).toISOString(), attrs }, now);
@@ -250,6 +261,15 @@ export async function flushRewardEvents(env: Env, now: number): Promise<FlushRes
   if (!env.HARBOR_REWARDS_CLIENT_ID || !env.HARBOR_REWARDS_CLIENT_SECRET) return out;
   const due = await db.prepare("SELECT event_id, type, body, attempts FROM reward_event_outbox WHERE sent_at IS NULL AND next_at <= ? ORDER BY created_at LIMIT ?").bind(now, BATCH).all<{ event_id: string; type: string; body: string; attempts: number }>();
   if (!due.results.length) return out;
+  const allowed:typeof due.results=[];
+  for(const row of due.results){
+   const event=JSON.parse(row.body) as RewardEvent;
+   if(await excludedRewardEvent(db,event)){
+    await db.prepare('UPDATE reward_event_outbox SET sent_at=? WHERE event_id=? AND sent_at IS NULL').bind(now,row.event_id).run();out.rejected++;
+   }else allowed.push(row);
+  }
+  due.results=allowed;
+  if(!due.results.length)return out;
   const events = due.results.map((r) => JSON.parse(r.body) as RewardEvent);
   let result: SendResult;
   try {

@@ -1,3 +1,4 @@
+import {eligibleNotification} from '../test-accounts';
 import { SITE_NAME, siteName } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
@@ -180,7 +181,7 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
     await env.DB.prepare(
       `SELECT n.id,n.member_id,n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names
        FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
-       WHERE n.push_at IS NULL AND n.created_at>? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=n.member_id)
+       WHERE ${eligibleNotification()} AND n.push_at IS NULL AND n.created_at>? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=n.member_id)
        ORDER BY n.created_at LIMIT 40`,
     ).bind(now - 86400000).all<Row>()
   ).results;

@@ -1,3 +1,6 @@
+import {qaAccountControlRoutes} from './qa-account-control';
+import {qaSessionHint} from './test-accounts';
+import {applyQAIdentity} from './members';
 import { HEAT_CRON, syncHeat } from "./heat";
 import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
 import { bumpOp, bumpHarborProxy } from './ops-metrics';
@@ -106,7 +109,34 @@ import { withD1Session } from "./d1-session";
 import { renderSiteManifest } from "./site-manifest";
 import { analyticsRoutes } from "./ga4";
 
+import { qaContextRoutes, verifyQAContext, excludeQABrowser } from './qa-browser-context';
+
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
+
+// Public identities and avatar aliases cannot expose a test member, including
+// encoded direct URLs and HTML-head paths that otherwise fall back to the SPA.
+app.use('*',async(c,next)=>{
+ let path:string;try{path=decodeURIComponent(new URL(c.req.url).pathname);}catch{await next();return;}
+ const match=path.match(/^\/(?:(?:zh-Hant|zh-Hans|en|ja|ko)\/)?(?:authors|community\/members|v1\/authors|v1\/community\/members|v1\/avatars)\/([a-z]{8})(?:\/|$)/);
+ if(match&&(await c.env.DB.prepare("SELECT 1 FROM members WHERE handle=? AND account_class='test' UNION ALL SELECT 1 FROM legacy_account_fence WHERE handle=?").bind(match[1],match[1]).first()))return c.notFound();
+ await next();
+});
+
+// The trusted exclusion context is established before the first product page,
+// and before any analytics, anonymous attribution or share-event producer.
+app.use('*',async(c,next)=>{
+ const path=new URL(c.req.url).pathname;
+ if(path==='/internal/qa/accounts')return qaAccountControlRoutes.fetch(c.req.raw,c.env,c.executionCtx);
+ if(path==='/internal/qa/browser-context')return qaContextRoutes.fetch(c.req.raw,c.env,c.executionCtx);
+ if(await verifyQAContext(c.req.raw,c.env)||await qaSessionHint(c.req.raw,c.env.DB)){
+  c.env=excludeQABrowser(c.env);
+  c.header('Cache-Control','private, no-store');
+  if(path==='/v1/analytics/session')return c.json({enabled:false});
+  if(path==='/v1/analytics/signup')return c.json({first:false});
+  if(['/v1/e','/v1/share/open','/v1/campaign/visits'].includes(path))return c.body(null,204);
+ }
+ await next();
+});
 
 /**
  * 埋點：一個請求發一個數據點。
@@ -231,7 +261,9 @@ const clamp = (raw: string | undefined, fallback: number, max: number) => {
 async function requireAuthor(c: { env: Env; req: { header: (k: string) => string | undefined } }) {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
-  return await upstream.fetchMe(c.env, bearer, providerOf(c));
+  const me=await upstream.fetchMe(c.env, bearer, providerOf(c));
+  applyQAIdentity(c,me);
+  return me;
 }
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
@@ -813,7 +845,7 @@ app.get("/v1/me/cards", async (c) => {
 app.get("/v1/authors/:handle", async (c) => {
   const handle = c.req.param("handle");
   const [member,allowNsfw,moderation]=await Promise.all([
-    c.env.DB.prepare('SELECT id,public_cache_revision FROM members WHERE handle=?').bind(handle).first<{id:string;public_cache_revision:string}>(),
+    c.env.DB.prepare("SELECT id,public_cache_revision FROM members WHERE handle=? AND account_class='normal'").bind(handle).first<{id:string;public_cache_revision:string}>(),
     viewerAllowsNsfw(c),moderationRevision(c),
   ]);
   c.header('Cache-Control',allowNsfw?'private, no-store':'no-store');
@@ -1315,6 +1347,7 @@ app.put("/v1/cards/:roleId/rating-draft", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
+  if(me.accountClass==='test')throw new HttpError(403,'test_account_operation_not_allowed');
   const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; ratingAnswers?: unknown; fandom?: unknown; fandomId?: unknown; distribute?: unknown; operationId?: unknown;expectedPolicyRevision?:unknown;expectedApprovalRevision?:unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
@@ -1333,7 +1366,7 @@ app.post("/v1/cards", async (c) => {
   const role = await hostGateway.read(c.env,bearer,roleId,provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
-  const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
+  const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now(),me);
   if(Array.isArray(body.distribute)&&body.distribute.length)throw new HttpError(410,'service_retired');
   // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
   // 這條是防直接打 API 的那一手。

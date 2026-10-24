@@ -105,6 +105,9 @@ export const NOT_ADULT = "rating IS NOT 'R'";
  * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
  */
 const listed = (allowNsfw:boolean,alias='c') => `${alias}.status='approved' AND ${alias}.board_hidden=0 AND ${alias}.public_blocked=0
+ AND NOT EXISTS(SELECT 1 FROM members qm WHERE (qm.account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence qf WHERE qf.member_id=qm.id)) AND qm.id IN(
+  (SELECT owner_member_id FROM member_connections WHERE provider=${alias}.provider AND external_id=CAST(${alias}.author_num_id AS TEXT)),
+  (SELECT member_id FROM member_identities WHERE provider=${alias}.provider AND external_id=CAST(${alias}.author_num_id AS TEXT))))
  AND NOT EXISTS(SELECT 1 FROM managed_work_access policy WHERE policy.provider=${alias}.provider AND policy.source_role_id=${alias}.source_role_id
  AND (policy.access<>'public' OR policy.restriction<>'none' OR policy.sync_state<>'complete' OR policy.moderation_revision<>policy.confirmed_moderation_revision))
  ${allowNsfw?'':`AND ${alias}.${NOT_ADULT}`}`;
