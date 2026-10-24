@@ -1,3 +1,10 @@
+const rollout=vi.hoisted(()=>({enabled:true}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
+
+const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
+vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
+vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
+const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:false,revisionState:'unknown',restorable:false,restoreReason:'no_approval',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'0',actions:['set_private','set_unlisted','submit_review'],syncState:'complete',...extra});
 /**
  * 建卡編輯器的整條路：匯入一張酒館卡 → 建立並儲存 → 改一個欄位再存。
  *
@@ -39,6 +46,7 @@ const api = vi.hoisted(() => ({
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
+  fetchDraftState: vi.fn(async ():Promise<any> => ({status:'unlisted',draftChanged:false})),
   fetchRoleDetail: vi.fn(async () => ({})),
   fetchRoleWorldbooks: vi.fn(async () => [{ worldbookId: "wb-bound", name: "北境設定", description: "", entryCount: 2 }]),
   fetchMyWorldbooks: vi.fn(async () => [
@@ -679,8 +687,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
   it("版本化卡片：儲存只修改草稿，頁上說明已發布版本繼續可玩", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleDesc: "舊簡介", roleVisibility: "public" });
+    visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:"public"})});
     await mount("/cards/r1/edit");
-    expect(document.body.textContent).toContain(i18n.global.t("workspace.editNotice"));
+    expect(document.body.textContent).toContain(i18n.global.t("visibility.state.publicEditor"));
     api.unpublishRole.mockClear();
     api.patchRoleDocument.mockClear();
     const desc = $<HTMLTextAreaElement>("#f-desc");
@@ -688,9 +697,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     desc.dispatchEvent(new Event("input", { bubbles: true }));
     await flush();
     await submit();
-    expect(api.unpublishRole).toHaveBeenCalledWith("r1", "tok");
+    expect(api.unpublishRole).not.toHaveBeenCalled();
     expect(api.patchRoleDocument).toHaveBeenCalledTimes(1);
-    expect(api.unpublishRole.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
     // 轉過一次就不再轉：再存一次不會又打一次
     api.unpublishRole.mockClear();
     desc.value = "再改一次";
@@ -702,8 +710,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     app.unmount(); root.remove();
 
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleVisibility: "waitReview" });
+    visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({review:"pending"})});
     await mount("/cards/r2/edit");
-    expect(document.body.textContent).toContain(i18n.global.t("workspace.editNotice"));
+    expect(document.body.textContent).toContain(i18n.global.t("visibility.state.pendingEditor"));
   });
 
   it("只調順序也存得下來：不送任何條目操作，只送新的順序", async () => {
@@ -946,7 +955,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleAvatar:'https://img.test/avatar.png'});
  await mount('/cards/r1/edit');
  byText('發布').click();await flush();
- btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
+ const publicOption=root.querySelector<HTMLInputElement>('input[value=public]')!;publicOption.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
  expect(root.querySelector('.platform-dialog')).toBeNull();
  // 先填分級問卷（沒填過就從頭來），再確認送審
  expect(ratingState.current?.initial).toBeNull();
@@ -954,7 +963,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  ratingState.current!.resolve(GENERAL);await flush();await flush();
  expect(api.saveRatingDraft).toHaveBeenCalledWith('r1',GENERAL,'tok','harbor');
  settleConfirm(true);await flush();await flush();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined);
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined,expect.objectContaining({policyRevision:'1'}));
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
  expect(platforms.saveCopies).not.toHaveBeenCalled();
  expect(router.currentRoute.value.path).toBe('/mine');
@@ -963,17 +972,18 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
 it('submits a private HarperHarbor draft to the same immutable community review',async()=>{
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
  await mount('/cards/r1/edit');
- expect(root.textContent).toContain(i18n.global.t('workspace.editHint'));
+ expect(root.textContent).not.toContain(i18n.global.t('workspace.editHint'));
+ expect(root.querySelector<HTMLInputElement>('input[value=private]')?.checked).toBe(true);
  byText('發布').click();await flush();
- btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
+ const publicOption=root.querySelector<HTMLInputElement>('input[value=public]')!;publicOption.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
  ratingState.current!.resolve(GENERAL);await flush();await flush();
  settleConfirm(true);await flush();await flush();
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined);
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined,expect.objectContaining({policyRevision:'1'}));
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
-it('retires a pending Harbor review before saving, then submits the completed draft again',async()=>{
+it('cancels a pending review while saving without changing access or submitting again',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleVisibility:'public'});
  api.beginCardEdit.mockResolvedValueOnce({resubmit:true,ratingAnswers:ADULT});
@@ -981,27 +991,21 @@ it('retires a pending Harbor review before saving, then submits the completed dr
  await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
  expect(api.beginCardEdit).toHaveBeenCalledWith('r1','tok','harbor');
  expect(api.beginCardEdit.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
- expect(api.unpublishRole).toHaveBeenCalledWith('r1','tok');
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',ADULT,[],'harbor','',undefined);
- expect(api.registerCard.mock.invocationCallOrder[0]).toBeGreaterThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+ expect(api.unpublishRole).not.toHaveBeenCalled();
+ expect(api.registerCard).not.toHaveBeenCalled();
  // 沿用上一版的問卷，不再問一次
  expect(ratingState.current).toBeNull();
 });
 
 // owner 2026-10-10：問卷上線前上架的一般卡沒有級別，下次送審一定要補
-it('asks for the rating questionnaire when the previous submission has none, and holds the resubmission if the author skips it',async()=>{
+it('saving an unrated pending draft cancels review without starting a questionnaire',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
  api.beginCardEdit.mockResolvedValueOnce({resubmit:true});
- await mount('/cards/r1/edit');
- await type($<HTMLInputElement>('#f-name'),'B revised');
- const saving=submit();await flush();await flush();
- expect(ratingState.current?.initial).toBeNull();
- ratingState.current!.resolve(null);await saving;
- for(let i=0;i<10;i++)await flush();
- expect(api.patchRoleDocument).toHaveBeenCalled();
+ await mount('/cards/r1/edit');await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
+ expect(ratingState.current).toBeNull();expect(api.patchRoleDocument).toHaveBeenCalled();
  expect(api.registerCard).not.toHaveBeenCalled();
- expect(root.textContent).toContain(i18n.global.t('workspace.reviewNeedsRating'));
+ expect(root.textContent).toContain(i18n.global.t('visibility.review.cancelled'));
 });
 
 it('a failed draft save never submits partial content for review',async()=>{
@@ -1063,4 +1067,14 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     expect(root.querySelectorAll(".world-char")).toHaveLength(1);
     expect(root.querySelectorAll(".side__item")).toHaveLength(6);
   });
+});
+
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockReset();visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it('retains the pending cancellation warning and save action with rollout disabled',async()=>{
+ rollout.enabled=false;api.fetchDraftState.mockResolvedValue({status:'pending',draftChanged:false});
+ await mount('/cards/r1/edit');await nextTick();
+ expect(root.textContent).toContain(i18n.global.t('visibility.state.pendingEditor'));
+ expect(root.querySelector('.author-visibility')).toBeNull();
+ expect(root.querySelector('button[type="submit"]')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
 });
