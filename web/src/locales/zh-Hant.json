@@ -3259,5 +3259,6 @@
   "visibility.state.reviewUnknown": "改回公開需要重新審核",
   "visibility.badge.delisted": "已退出榜單",
   "visibility.badge.suspended": "已暫停公開",
-  "visibility.badge.takedown": "已下架"
+  "visibility.badge.takedown": "已下架",
+  "library.removeUnavailable": "移除"
 }

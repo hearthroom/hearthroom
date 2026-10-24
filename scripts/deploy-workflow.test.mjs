@@ -29,6 +29,16 @@ test('Harbor proxy requests reach the Worker instead of the static SPA', () => {
   }
 });
 
+test('numeric card-app entrypoints reach current work permission and noindex handling',()=>{
+ const config=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+ const routes=/run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1]??'';
+ const patterns=[...routes.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
+ for(const card of ['100001','200001','999999999999'])for(const suffix of ['','/']){
+  const path=`/${card}${suffix}`;
+  assert.ok(patterns.some(pattern=>pattern.endsWith('*')?path.startsWith(pattern.slice(0,-1)):path===pattern),`${path} bypasses work permission and noindex handling`);
+ }
+});
+
 test('CI archives the built assets on every deploy, after the Worker is live', () => {
   const archive = index((s) => s.run.includes('npm run archive:assets'));
   assert.notEqual(archive, -1, 'no CI step runs npm run archive:assets');

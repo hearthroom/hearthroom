@@ -5,6 +5,13 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  visibility_read: {
+    name:'hearthroom_visibility_reads_total',
+    help:'Current work policy checks before returning data; adult and social rules apply separately.',
+    label:'surface',
+    operations:['list','detail','social','library','metadata','aggregate'],
+    outcomes:['allow','denied','unavailable'],
+  },
   work_access: {
     name:'hearthroom_visibility_operations_total',
     help:'Durable work policy requests and publication finalization outcomes.',

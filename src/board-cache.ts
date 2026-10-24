@@ -11,7 +11,7 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
   const url = new URL(source.pathname, source.origin);
   const counts = source.pathname === "/v1/tags/counts";
   const fields = source.pathname === "/v1/cards"
-    ? ["zone", "sort", "period", "q", "author", "limit", "offset", "lang", "hide", "rating"]
+    ? ["zone", "sort", "period", "q", "author", "limit", "offset", "cursor", "lang", "hide", "rating"]
     : counts ? ["zone", "hide", "rating"] : ["zone", "sort", "q", "limit", "offset"];
   for (const field of fields) {
     const value = source.searchParams.get(field);

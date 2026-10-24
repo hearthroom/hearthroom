@@ -51,3 +51,22 @@ describe("第二家的錯誤碼", () => {
     });
   }
 });
+
+const visibilityCodes: [string, number, string][] = [
+ ['visibility_operation_conflict',409,'workspace.submitConflict'],
+ ['visibility_provider_unavailable',503,'visibility.loadFailed'],
+ ['visibility_sync_pending',503,'visibility.operation.unknown'],
+ ['visibility_read_budget_exceeded',503,'state.serverBusy'],
+ ['visibility_disabled',409,'visibility.loadFailed'],
+ ['visibility_restricted',403,'state.forbidden'],
+ ['publication_operation_not_found',404,'state.notFound'],
+ ['visibility_operation_not_found',404,'state.notFound'],
+ ['review_required',409,'state.requestFailed'],
+];
+for (const locale of ['zh-Hant','zh-Hans','en','ja','ko'] as const) {
+ it(`visibility failures use approved messages in ${locale}`,()=>{
+  const before=i18n.global.locale.value;i18n.global.locale.value=locale;
+  try {for(const [code,status,key] of visibilityCodes){expect(describeApiError(status,code)).toBe(i18n.global.t(key));}}
+  finally {i18n.global.locale.value=before;}
+ });
+}

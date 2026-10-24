@@ -19,11 +19,15 @@ it("does not turn an authentication failure into an empty library", async () => 
 it("deduplicates private reads per session and invalidates after a mutation", async () => {
   const fetcher=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({items:[]})));
   vi.stubGlobal("fetch",fetcher);
-  await Promise.all([libraryRequest("favorites?lang=en","cache-user"),libraryRequest("favorites?lang=en","cache-user")]);
+  await Promise.all([libraryRequest("following?lang=en","cache-user"),libraryRequest("following?lang=en","cache-user")]);
   expect(fetcher).toHaveBeenCalledTimes(1);
-  await libraryRequest("favorites?lang=en","other-user"); expect(fetcher).toHaveBeenCalledTimes(2);
-  await libraryRequest("favorites/item","cache-user","PUT");
-  await libraryRequest("favorites?lang=en","cache-user"); expect(fetcher).toHaveBeenCalledTimes(4);
+  await libraryRequest("following?lang=en","other-user"); expect(fetcher).toHaveBeenCalledTimes(2);
+  await libraryRequest("following/item","cache-user","PUT");
+  await libraryRequest("following?lang=en","cache-user"); expect(fetcher).toHaveBeenCalledTimes(4);
+});
+it.each(['favorites','feed'])('rechecks %s on each read instead of reusing cached permissions',async path=>{
+ const fetcher=vi.fn().mockImplementation(async()=>Response.json({items:[]}));vi.stubGlobal('fetch',fetcher);
+ await libraryRequest(path,'same-user');await libraryRequest(path,'same-user');expect(fetcher).toHaveBeenCalledTimes(2);
 });
 it('expires private responses and never retains failed reads',async()=>{
  const fetcher=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({items:[]})));

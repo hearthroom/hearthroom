@@ -5,13 +5,15 @@ import {fenceManagedWork,syncManagedRestriction} from './work-fence';
 import {finalizeManagedReview} from './work-publication';
 import {projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand} from './work-policy';
 import {finishManagedWithdrawal} from './cards';
+import {recoverAuthorVisibility,type AuthorOperation} from './work-sharing-commands';
+import {refreshWorkAccess} from './work-refresh';
 
 // Bounded recovery of persisted intent. No identity or bearer is stored. A lost
 // author command is read back, but never newly authorized by the scheduler.
 export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:number;pending:number}>{
  const rows=await env.DB.prepare(`SELECT p.work_id AS work_id,p.provider,p.source_role_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,p.reconcile_at AS due,0 AS prepare_only
  FROM managed_work_access p LEFT JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
- WHERE p.sync_state='changing' OR p.moderation_revision>p.confirmed_moderation_revision
+ WHERE (p.sync_state='changing' AND NOT EXISTS(SELECT 1 FROM author_visibility_operations a WHERE a.work_id=p.work_id AND a.provider_operation_id=p.sync_operation_id AND a.state='conflict')) OR p.moderation_revision>p.confirmed_moderation_revision
  UNION ALL
  SELECT p.work_id AS work_id,p.provider,p.source_role_id,o.operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,o.updated_at AS due,1 AS prepare_only
  FROM visibility_operations o JOIN managed_work_access p ON p.work_id=o.work_id
@@ -22,9 +24,18 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
  let complete=0,pending=0;
  for(const row of rows.results){
   try{
+   await env.DB.prepare('UPDATE managed_work_access SET reconcile_at=? WHERE work_id=?').bind(Date.now(),row.work_id).run();
    if(row.prepare_only){
     await runWorkPolicyOperation(env,row.provider,row.source_role_id,JSON.parse(row.command!) as WorkPolicyCommand);
     complete++;await bumpOp(env.DB,'work_access','reconcile','success');continue;
+   }
+   const author=await env.DB.prepare('SELECT * FROM author_visibility_operations WHERE work_id=? AND provider_operation_id=?').bind(row.work_id,row.sync_operation_id).first<AuthorOperation>();
+   if(author&&row.moderation_revision===row.confirmed_moderation_revision){
+    const state=await recoverAuthorVisibility(env,author);
+    if(state==='complete')complete++;else pending++;
+    // Never auto-rebase an author's stale CAS command onto a newer choice.
+    await bumpOp(env.DB,'work_access','reconcile',state==='complete'?'success':state==='conflict'?'conflict':'pending');
+    continue;
    }
    // Durable attempt order prevents an absent author receipt from starving
    // unrelated works or prepared permits across bounded scheduler runs.
@@ -63,5 +74,6 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
    pending++;await bumpOp(env.DB,'work_access','reconcile',error instanceof HttpError&&error.status===409?'conflict':'pending');
   }
  }
- return {complete,pending};
+ const refreshed=await refreshWorkAccess(env,Math.max(0,Math.min(10,limit)-rows.results.length),rows.results.map(row=>row.work_id));
+ return {complete:complete+refreshed.complete,pending:pending+refreshed.pending};
 }

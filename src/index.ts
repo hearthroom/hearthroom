@@ -12,6 +12,12 @@ import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
+import {workSharingRoutes} from './work-sharing';
+import {workSharingCommandRoutes} from './work-sharing-commands';
+import {workSubmissionRoutes} from './work-submission';
+import {managedWork,workPolicyGateway} from './work-policy';
+import {registerLegacyShare} from './work-share-registration';
+import {publicPosition,publicCandidates,publicCandidatePage,parsePublicCandidates} from './work-pagination';
 import { sukiRoutes, sukiRecall } from "./suki";
 import { rewardRoutes } from "./rewards";
 import { rewardEventRoutes, reportComment as reportRewardComment, reportCommentRemoved, reportRating, rewardEventMaintenance, flushRewardEvents } from "./reward-events";
@@ -64,10 +70,11 @@ import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
+import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,type VisibilityReadSurface} from './work-read';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags, updateMemberShowStats } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
-import { weeklyLimitAt, registeredThisWeek, openPack } from "./quota";
+import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission,
@@ -189,6 +196,9 @@ app.use('/v1/*',async(c,next)=>{
   return next();
 });
 app.route("/", accountAuthRoutes);
+app.route('/',workSharingRoutes);
+app.route('/',workSharingCommandRoutes);
+app.route('/',workSubmissionRoutes);
 app.route("/", analyticsRoutes);
 
 app.route("/", transferGateRoutes);
@@ -240,7 +250,8 @@ app.get("/v1/region", (c) => {
  */
 app.get("/v1/providers", (c) =>
   c.json(
-    { providers: configuredProviders(c.env).map((id) => ({ id, name: PROVIDER_NAMES[id] })) },
+    { providers: configuredProviders(c.env).map((id) => ({ id, name: PROVIDER_NAMES[id] })),
+      ...(c.env.WORK_SHARING_ENABLED==='true'?{capabilities:{workVisibility:true}}:{}) },
     200,
     { "Cache-Control": "public, max-age=300" },
   ),
@@ -317,6 +328,7 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
 
 /** Public author/tag lists share the same five-minute internal cache. */
 async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean } = {}) {
+  if(['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'].includes(c.req.path))await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
   const moderation = await moderationRevision(c);
   const key = await boardKey(c.req.url, moderation.revision, false);
   const started = performance.now();
@@ -369,11 +381,16 @@ app.get("/v1/cards", async (c) => {
     viewerAllowsNsfw(c).then(value => { accessMs = performance.now() - accessStarted; return value; }),
     moderationRevision(c),
   ]);
+  const offset=clamp(c.req.query('offset'),0,10_000);
+  const limit=Math.max(1,clamp(c.req.query('limit'),24,100));
+  const position=await publicPosition(c.env,c.req.url,offset,allowNsfw);
   const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c));
   const cacheStarted = performance.now();
   const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
-  if (hit) {
+  const cachedCandidates=hit?parsePublicCandidates(hit.body):null;
+  if (hit&&cachedCandidates) {
+    hit.body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw}),sort:parseBoardSort(c.req.query('sort')).key});
     // 快取命中一樣是一次瀏覽行為；結果數這條路上沒有，但空不空看得出來——不標的話中間件會把每次命中都記成 ok，空結果率就偏低
     const q0 = c.req.query("q")?.trim();
     note(c, {
@@ -393,8 +410,6 @@ app.get("/v1/cards", async (c) => {
   const periods: Record<string, number> = { week: 7, month: 30, quarter: 90, year: 365 };
   const period = c.req.query("period");
   const since = period && Object.hasOwn(periods, period) ? Date.now() - periods[period] * 86_400_000 : sortSince;
-  const offset = clamp(c.req.query("offset"), 0, 10_000);
-  const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
@@ -405,7 +420,7 @@ app.get("/v1/cards", async (c) => {
   const filters = tagFilters(c);
   if (!filters) return c.json({ error: "too_many_tags" }, 400);
   const { tagGroups, excludeTags } = filters;
-  const { rows, total, hasNext, partial } = await listCards(c.env.DB, {
+  const candidates = await publicCandidates(c.env, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
     tagGroups,
@@ -419,8 +434,8 @@ app.get("/v1/cards", async (c) => {
     boardWindow: period ? undefined : c.req.query("sort"),
     limit,
     offset,
-  });
-  const l = lang(c);
+  },position.raw);
+  const page=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:lang(c),allowNsfw});
   const q = c.req.query("q")?.trim();
   // 搜尋與榜單是兩種行為，分開記；結果數只有這裡拿得到（total 有篩選時是 null，中間件讀不到）
   note(c, {
@@ -430,12 +445,12 @@ app.get("/v1/cards", async (c) => {
     term: q ? shapeTerm(q) : "",
     subject: author ?? "",
     zoneScope: c.req.query("zone") === "all" ? "all" : "current",
-    resultCount: total ?? rows.length,
+    resultCount: page.items.length,
     offset,
-    outcome: rows.length ? "ok" : "empty",
+    outcome: page.items.length ? "ok" : "empty",
   });
-  const body = JSON.stringify({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey, ...(partial ? { partial } : {}) });
-  if (sort !== "random") writeBoardCache(c.env, c.executionCtx, cacheKey, body);
+  const body=JSON.stringify({...page,sort:sortKey});
+  if (sort !== "random") writeBoardCache(c.env,c.executionCtx,cacheKey,JSON.stringify(candidates));
   return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 });
 
@@ -444,6 +459,7 @@ app.get("/v1/cards", async (c) => {
  * （看的人開沒開成人內容分開放，審核一動就換一份）。
  */
 app.get("/v1/tags/counts", async (c) => {
+  await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
   const [allowNsfw, moderation] = await Promise.all([viewerAllowsNsfw(c), moderationRevision(c)]);
   const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
   const hit = await readBoardCache(c.env, c.executionCtx, key);
@@ -536,13 +552,32 @@ app.get("/v1/authors", (c) =>
 );
 
 /** Owner fallback for host-private legacy assets; never forwards credentials to a guessed provider. */
+async function checkedCardAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,row:NonNullable<Awaited<ReturnType<typeof getCard>>>,surface:VisibilityReadSurface='detail'){
+  try{return await currentCardAccess(c.env,row,surface);}
+  catch(error){
+    c.header('Cache-Control','private, no-store');c.header('X-Robots-Tag','noindex, nofollow');
+    throw error;
+  }
+}
+
 async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, id: string, row: Awaited<ReturnType<typeof getCard>>) {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) return null;
   const provider = providerOf(c);
   const me = await upstream.fetchMe(c.env, bearer, provider).catch(() => null);
   if (!me) return null;
-  if (row) return row.provider === provider && row.author_num_id === me.accountNumId ? { ...toCard(row, lang(c)), status: row.status } : null;
+  if (row) {
+    if(row.provider!==provider||row.author_num_id!==me.accountNumId)return null;
+    if(provider==='harbor'&&(row.status==='unlisted'||await managedWork(c.env.DB,provider,row.source_role_id))){
+      try{
+        await workPolicyGateway.owner(c.env,provider,row.source_role_id,bearer);
+        const role=await hostGateway.read(c.env,bearer,row.source_role_id,provider);
+        if(role.roleId!==row.source_role_id||role.authorNumId!==me.accountNumId)return null;
+        return {...previewCard(role,lang(c),provider,row.num??Number(row.id)),status:row.status,canInteract:false,listed:false};
+      }catch{return null;}
+    }
+    return {...toCard(row,lang(c)),status:row.status};
+  }
   // 卡號查不到就是沒這張卡；只有上游的卡片 ID 才值得去上游問
   if (CARD_NUMBER.test(id)) return null;
   const role = await (provider==='harbor'?hostGateway.read(c.env,bearer,id):upstream.fetchRole(c.env,id,provider)).catch(() => null);
@@ -552,9 +587,31 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
 
 app.get("/v1/cards/:id", async (c) => {
   const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
-  const row = link.row;
+  let row = link.row;
+  if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
+    c.header('Cache-Control','private, no-store');c.header('X-Robots-Tag','noindex, nofollow');
+    row=await registerLegacyShare(c.env,link.source?.roleId??c.req.param('id'),()=>viewerAllowsNsfw(c,{card:true}));
+  }
+  const access = row ? await checkedCardAccess(c,row) : null;
+  if(access&&(access.managed||row?.status==='unlisted')){
+    c.header('Cache-Control','private, no-store');
+    if(!access.indexable)c.header('X-Robots-Tag','noindex, nofollow');
+  }
+  if (access && !access.reachable&&(access.managed||row?.status==='unlisted')) {
+    const own = await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
+    if (own) return c.json(own,200,{'Cache-Control':'private, no-store'});
+    throw new HttpError(404,'card not found');
+  }
+  if (row && access?.reachable && access.access==='unlisted') {
+    c.header('Cache-Control','private, no-store');
+    c.header('X-Robots-Tag','noindex');
+    // Saved source content has not been classified by the approval snapshot.
+    // Check the conservative adult gate before fetching any source fields.
+    if (!(await viewerAllowsNsfw(c,{card:true}))) throw new HttpError(403,'adult_content');
+    row=await unlistedCardRow(c.env,row);
+  }
   // 榜單審核與連結存取分開；公開資料仍由來源平台授權。
-  if (!row || row.status !== 'approved') {
+  if (!row || (row.status !== 'approved' && !access?.reachable)) {
     if (row && isAdult(row) && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403,'adult_content');
     const preview = await linkPreview(c.env,c.req.param('id'),link,lang(c));
     if (preview) return c.json(preview,200,{'Cache-Control':'private, no-store'});
@@ -575,7 +632,7 @@ app.get("/v1/cards/:id", async (c) => {
   const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;
   const card = toCard(row, lang(c));
   // 打賞連結只在單卡頁給（卡片頁的作者區塊用）；榜單一頁幾十張卡，用不到也不該多帶
-  return c.json({ ...card, author: { ...card.author, tips: readTipLinks(row.author_tip_links) }, ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
+  return c.json({ ...card, ...(access&&(access.managed||access.access==='unlisted')?{canInteract:true,listed:access.indexable,...(access.access==='unlisted'?{status:'unlisted'}:{})}:{}), author: { ...card.author, tips: readTipLinks(row.author_tip_links) }, ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw||access?.managed ? { "Cache-Control": "private, no-store" } : {});
 });
 
 /**
@@ -585,19 +642,29 @@ app.get("/v1/cards/:id", async (c) => {
  * 沒有就 404。快取期短：名字與頭像每小時同步一次，圖示另有自己的 Cache API 快取。
  */
 async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
-  const row = await getCard(c.env.DB, c.req.param("id") ?? "");
-  if (!row || row.provider !== "harbor" || row.status !== "approved" || row.public_blocked) throw new HttpError(404, "card not found");
+  let row = await getCard(c.env.DB, c.req.param("id") ?? "");
+  if (!row || row.provider !== "harbor" || row.public_blocked) throw new HttpError(404, "card not found");
+  const access=await checkedCardAccess(c,row,'metadata');
+  if(access.managed||row.status==='unlisted'){
+    c.header('Cache-Control','private, no-store');
+    if(!access.reachable)throw new HttpError(404,'card not found');
+  }else if(row.status!=='approved')throw new HttpError(404,'card not found');
   const key = c.req.query("k");
-  if (isAdult(row) && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
-  return { row, key: isAdult(row) ? key : undefined };
+  const adult=isAdult(row)||access.access==='unlisted';
+  if (adult && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
+  if(access.access==='unlisted'){
+    c.header('X-Robots-Tag','noindex');
+    row=await unlistedCardRow(c.env,row);
+  }
+  return { row, key: adult ? key : undefined, managed:access.managed||access.access==='unlisted' };
 }
 
 app.get("/v1/cards/:id/manifest.webmanifest", async (c) => {
-  const { row, key } = await shortcutCard(c);
+  const { row, key, managed } = await shortcutCard(c);
   return c.json(cardManifest(row, lang(c), key, { playApp: isPlayHost(requestHost(c)) }), 200, {
     "Content-Type": "application/manifest+json; charset=utf-8",
     // 快取期要短：瀏覽器安裝與更新檢查都讀這份，改了顯示模式（例如全螢幕）拿到一小時前的舊版就裝錯
-    "Cache-Control": key ? "private, no-store" : "public, max-age=60",
+    "Cache-Control": key||managed ? "private, no-store" : "public, max-age=60",
   });
 });
 
@@ -621,7 +688,7 @@ export const iconCache = { namespace: "card-icon" };
 
 // icon-192.png／icon-512.png 給 manifest（退路可以是 SVG）；touch-icon.png 給 iOS（退路是原圖）
 app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
-  const { row } = await shortcutCard(c);
+  const { row, managed } = await shortcutCard(c);
   const file = c.req.param("file");
   const raster = file === "touch-icon.png";
   const size = raster ? TOUCH_ICON_SIZE : iconSize(file.slice("icon-".length, -".png".length));
@@ -633,7 +700,11 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
   const cache = await caches.open(iconCache.namespace);
   const key = new Request(`https://icon.invalid/${row.id}/${size}/${raster ? "raw" : "any"}?src=${encodeURIComponent(src.toString())}`);
   const hit = await cache.match(key);
-  if (hit) return hit;
+  if (hit) {
+    if(!managed)return hit;
+    const headers=new Headers(hit.headers);headers.set('Cache-Control','private, no-store');
+    return new Response(hit.body,{status:hit.status,headers});
+  }
 
   const res = await fetch(src.toString(), { headers: { "User-Agent": "Hearthroom/0.1 (home screen icon)" } });
   if (!res.ok) return siteIcon();
@@ -655,6 +726,10 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
   if (!out && bytes.byteLength <= SVG_WRAP_LIMIT) out = new Response(svgWrap(bytes, type, size), { status: 200, headers: { ...headers, "content-type": "image/svg+xml" } });
   if (!out) return siteIcon();
   c.executionCtx.waitUntil(cache.put(key, out.clone()));
+  if(managed){
+    const headers=new Headers(out.headers);headers.set('Cache-Control','private, no-store');
+    return new Response(out.body,{status:out.status,headers});
+  }
   return out;
 });
 
@@ -690,15 +765,18 @@ app.get("/v1/me/cards", async (c) => {
   const fresh = c.req.query("fresh") === "1";
   const filterParam = c.req.query("filter");
   const filter: MineFilter = filterParam === "listed" || filterParam === "unlisted" ? filterParam : "all";
+  const access=c.req.query('access');
+  if(access!==undefined&&!['private','unlisted','public'].includes(access))throw new HttpError(400,'invalid_arguments');
   // 搜尋關鍵字（卡名或簡介，繁簡互通）；太長的只取前 100 個字
   const q = [...(c.req.query("q") ?? "").trim()].slice(0, 100).join("");
 
   const provider = providerOf(c);
+  if(access!==undefined&&(provider!=='harbor'||c.env.WORK_SHARING_ENABLED!=='true'))throw new HttpError(409,'visibility_disabled');
   // 讀取時本站 session 就認得出是誰，不必先跨洋問供應商（約 0.4 s）；卡片清單仍用這個人的 token 讀
   const started = performance.now();
   const me = await requestIdentity(c, bearer, provider);
   const identified = performance.now();
-  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider, q });
+  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider, q,...(access?{access:access as 'private'|'unlisted'|'public'}:{}) });
 
   const listedAt = performance.now();
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
@@ -823,6 +901,18 @@ function animatedArea(b: Uint8Array): number {
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
+ if(base){
+  const access=await checkedCardAccess(c,base,'metadata');
+  if(access.managed||base.status==='unlisted'){
+   c.header('Cache-Control','private, no-store');
+   if(!access.reachable)throw new HttpError(404,'card not found');
+   if((isAdult(base)||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+   if(access.access==='unlisted')c.header('X-Robots-Tag','noindex');
+   // Current work authority already validated this exact target; no unrelated
+   // copies or old approval pointers may be advertised as playable.
+   return c.json({platforms:[{provider:'harbor',roleId:access.shareRoleId,playable:hasChat('harbor')}]});
+  }
+ }
  if(base?.approved_version_id && base.status!=='approved')throw new HttpError(404,'card not found');
  if(base && isAdult(base) && !await viewerAllowsNsfw(c, { card: true }))throw new HttpError(403,'nsfw_gated');
  let source=link.source;
@@ -1041,9 +1131,19 @@ async function commentViewer(c: Context<{ Bindings: Env; Variables: { ev: Pendin
   }
 }
 async function commentCardFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
-  const card = await commentCard(c.env.DB, c.req.param("id") ?? "");
+  return commentCardAt(c,c.req.param('id')??'');
+}
+async function commentCardAt(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:string){
+  c.header('Cache-Control','private, no-store');
+  const card = await commentCard(c.env, id);
   if (card.adult && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403, "adult_content");
   return card;
+}
+async function commentTargetAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}>){
+  const target=await c.env.DB.prepare('SELECT card_id,post_id FROM comments WHERE id=? AND deleted_at IS NULL')
+    .bind(c.req.param('id')).first<{card_id:string;post_id:string|null}>();
+  if(!target)throw new HttpError(404,'comment not found');
+  if(!target.post_id)await commentCardAt(c,String(target.card_id));
 }
 const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor(Number(raw)) || 1));
 
@@ -1075,7 +1175,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const created = await postComment(c.env.DB, { target: { kind: "card", card }, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now });
   note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
   // 應用獎勵：公開的留言才報（被擋下待審的不算）；作者在自己的卡下回覆另報一筆，Harbor 會再核對
-  if (created.status === "visible" && typeof body.content === "string") {
+  if (card.rewardEligible && created.status === "visible" && typeof body.content === "string") {
     await reportRewardComment(c.env.DB, { cardId: String(card.id), memberId: member.id, commentId: created.commentId, content: body.content, reply: !!(body.rootId || body.parentId), now });
     c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   }
@@ -1097,6 +1197,7 @@ app.delete("/v1/comments/:id", async (c) => {
 
 app.put("/v1/comments/:id/like", async (c) => {
   const member = await requireMember(c);
+  await commentTargetAccess(c);
   await setLike(c.env.DB, c.req.param("id"), member.id, true, Date.now());
   queuePush(c);
   return c.body(null, 204);
@@ -1104,12 +1205,14 @@ app.put("/v1/comments/:id/like", async (c) => {
 
 app.delete("/v1/comments/:id/like", async (c) => {
   const member = await requireMember(c);
+  await commentTargetAccess(c);
   await setLike(c.env.DB, c.req.param("id"), member.id, false, Date.now());
   return c.body(null, 204);
 });
 
 app.post("/v1/comments/:id/report", async (c) => {
   const member = await requireMember(c);
+  await commentTargetAccess(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown; note?: unknown };
   const out = await reportComment(c.env.DB, { commentId: c.req.param("id"), reporterId: member.id, reason: body.reason, note: body.note, now: Date.now() }, await readSettings(c.env.DB));
   note(c, { event: "comment_report", detail: out.folded ? "folded" : "recorded" });
@@ -1129,7 +1232,7 @@ app.put("/v1/cards/:id/score", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { score?: unknown };
   const now = Date.now();
   await setScore(c.env.DB, card, member.id, body.score, now);
-  await reportRating(c.env.DB, { cardId: String(card.id), memberId: member.id, now });
+  if(card.rewardEligible)await reportRating(c.env.DB, { cardId: String(card.id), memberId: member.id, now });
   // 跟留言一樣當場送：新手「留言或評分」那天，評完回簽到頁就該能領，不等每小時的排程
   c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   note(c, { event: "card_score", subject: card.id, detail: `set_${body.score}` });
@@ -1206,9 +1309,12 @@ app.put("/v1/cards/:roleId/rating-draft", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; ratingAnswers?: unknown; fandom?: unknown; fandomId?: unknown; distribute?: unknown; operationId?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; ratingAnswers?: unknown; fandom?: unknown; fandomId?: unknown; distribute?: unknown; operationId?: unknown;expectedPolicyRevision?:unknown;expectedApprovalRevision?:unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
+  const hasConsent=body.expectedPolicyRevision!==undefined||body.expectedApprovalRevision!==undefined;
+  if(hasConsent&&[body.expectedPolicyRevision,body.expectedApprovalRevision].some(v=>typeof v!=='string'||v.length<16||v.length>128))throw new HttpError(400,'invalid_arguments');
+  if(hasConsent&&c.env.WORK_SHARING_ENABLED!=='true')throw new HttpError(409,'visibility_disabled');
   // 每次送審都要附分級問卷（owner 2026-10-10）：級別由這裡算，客戶端只送答案。
   // 問卷上線前的一般卡沒有級別，作者下次送審就得補上；只送舊的成人勾選一樣不收。
   if (body.ratingAnswers === undefined) throw new HttpError(400, "rating_required");
@@ -1237,7 +1343,7 @@ app.post("/v1/cards", async (c) => {
   const now = Date.now();
   const existing = await getCard(c.env.DB, roleId, provider);
   let packId: string | null = null;
-  if (!existing) {
+  if (await needsFirstRegistration(c.env.DB,provider,roleId)) {
     const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
     if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= (await weeklyLimitAt(c.env.DB, now))) {
       packId = await openPack(c.env.DB, memberId);
@@ -1252,7 +1358,7 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId});
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);
@@ -1682,6 +1788,15 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
  */
 const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|guide|cards|authors)(?:\/([^/]+))?\/?$/;
 const PAGE_TTL = 60;
+
+function noindexShell(shell:Response,status=200):Response{
+ const response=new HTMLRewriter().on('head',{element(e){e.append('<meta name="robots" content="noindex, nofollow">',{html:true});}})
+  .transform(new Response(shell.body,{status,headers:shell.headers}));
+ response.headers.set('Cache-Control','private, no-store');
+ response.headers.set('X-Robots-Tag','noindex, nofollow');
+ response.headers.delete('etag');response.headers.delete('last-modified');
+ return response;
+}
 const SITE_ROUTE_LOCALE = /^\/(zh-Hans|en|ja|ko)(?:\/|$)/;
 const SITE_API_PATH = /^\/(?:v1|api)(?:\/|$)/;
 const SITE_PLAY_PATH = /^(?:\/(?:zh-Hans|en|ja|ko))?\/play(?:\/|$)/;
@@ -1872,6 +1987,23 @@ app.get("*", async (c) => {
   }
   const blog = url.pathname.match(BLOG_PAGE);
   if (blog) return blogPage(c, url, blog);
+  const play=url.pathname.match(/^(?:\/(?:zh-Hans|en|ja|ko))?\/play\/([^/]+)\/?$/)
+    ??(isPlayHost(url.host)?url.pathname.match(/^\/([1-9]\d{0,11})\/?$/):null);
+  if(play){
+    let id:string;try{id=decodeURIComponent(play[1]!);}catch{id='';}
+    const link=id?await cardLink(c.env,id,DEFAULT_PROVIDER):null;
+    const access=link?.row?await checkedCardAccess(c,link.row,'metadata'):null;
+    if(access?.managed){
+      const shell=await c.env.ASSETS.fetch(new Request(new URL('/',url)));
+      // An owned conversation can still load this shell after the work becomes
+      // private. Its history authorization is independent of new admissions.
+      if(!access.indexable)return noindexShell(shell);
+      const response=new Response(shell.body,{status:shell.status,headers:shell.headers});
+      response.headers.set('Cache-Control','private, no-store');
+      response.headers.delete('etag');response.headers.delete('last-modified');
+      return response;
+    }
+  }
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
@@ -1928,6 +2060,13 @@ app.get("*", async (c) => {
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
     const link = await cardLink(c.env,id,DEFAULT_PROVIDER);
     const row=link.row;
+    const access=row?await checkedCardAccess(c,row,'metadata'):null;
+    if(access?.managed){
+      if(!access.reachable)return noindexShell(shell,404);
+      // Unlisted content uses the unreviewed saved source. Crawlers have no
+      // adult credential, so their initial shell contains no card metadata.
+      if(!access.indexable)return noindexShell(shell);
+    }
     if (!row || row.status !== 'approved') {
       const preview = row && isAdult(row) ? null : await linkPreview(c.env,id,link,l);
       if (!preview && !row) return new Response(shell.body,{status:404,headers:shell.headers});
@@ -1965,10 +2104,11 @@ app.get("*", async (c) => {
       ...(card.shareImageUrl ? { imageSize: { width: 1200, height: 630 } } : {}),
       preload: cardArtPreloads(card),
     });
-    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    res.headers.set("Cache-Control", access?.managed?'private, no-store':`public, max-age=${PAGE_TTL}`);
     return res;
   }
   const memberId = await memberByHandle(c.env.DB, m[3]!);
+  await provePublicAggregates(c.env);
   const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
   if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
   const res = renderHead(shell, {

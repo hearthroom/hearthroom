@@ -3,18 +3,18 @@ import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
 import {managedWork,policyOperationId,projectWorkReceipt,supersedeOlderWorkIntents,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
 
-export async function prepareManagedPublication(env:Env,provider:ProviderId,source:string,work:string,version:string,role:string):Promise<void>{
+export async function prepareManagedPublication(env:Env,provider:ProviderId,source:string,work:string,version:string,role:string,consent?:{providerEpoch:number;providerRevision:string}):Promise<void>{
  const managed=await managedWork(env.DB,provider,source);if(!managed)return;
- if(managed.work_id!==work||managed.sync_state!=='complete')throw new HttpError(409,'visibility_operation_conflict');
+ if(managed.work_id!==work||managed.sync_state!=='complete'||consent&&managed.epoch!==consent.providerEpoch)throw new HttpError(409,'visibility_operation_conflict');
  let permit=await env.DB.prepare('SELECT operation_id,epoch FROM work_publication_permits WHERE version_id=?').bind(version).first<{operation_id:string;epoch:number}>();
  if(!permit){
-  const current=await workPolicyGateway.state(env,provider,source);if(!current||current.workId!==work)throw new HttpError(503,'visibility_sync_pending');
+  const current=consent?{workId:work,epoch:consent.providerEpoch}:await workPolicyGateway.state(env,provider,source);if(!current||current.workId!==work)throw new HttpError(503,'visibility_sync_pending');
   const op=await policyOperationId('publication:'+version);
   await env.DB.prepare("INSERT OR IGNORE INTO work_publication_permits(version_id,operation_id,epoch,state) VALUES(?,?,?,'prepared')").bind(version,op,current.epoch).run();
   permit=await env.DB.prepare('SELECT operation_id,epoch FROM work_publication_permits WHERE version_id=?').bind(version).first<{operation_id:string;epoch:number}>();
  }
  if(!permit)throw new HttpError(503,'visibility_sync_pending');
- const command:WorkPolicyCommand={workId:work,operationId:permit.operation_id,expectedEpoch:permit.epoch,action:'prepare',versionRoleId:role};
+ const command:WorkPolicyCommand={workId:work,operationId:permit.operation_id,expectedEpoch:permit.epoch,action:'prepare',versionRoleId:role,...(consent?{expectedOwnerRevision:consent.providerRevision}:{})};
  const receipt=await runWorkPolicyOperation(env,provider,source,command);
  if(receipt.state!=='prepared')throw new HttpError(409,'visibility_operation_conflict');
 }

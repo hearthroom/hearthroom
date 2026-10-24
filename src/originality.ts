@@ -238,7 +238,7 @@ export async function originalityReport(
     sources.push({
       cardId: String(s.cardId),
       name,
-      status: !info?.card_status ? "removed" : info.approved ? "approved" : "pending",
+      status: !info?.card_status || info.card_status==='unshared' ? "removed" : info.approved ? "approved" : "pending",
       firstSeenAt: info?.first_seen ?? 0,
       earlier: (info?.first_seen ?? Infinity) < submission.submitted_at,
       similarity: ratio(s.covered, units.length),

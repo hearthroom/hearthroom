@@ -85,6 +85,12 @@ const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM h
 
 const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
+/** Presentation rows only; callers must apply current access before returning. */
+export async function cardsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
+ if(!ids.length)return [];
+ return (await db.prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<CardRow>()).results;
+}
+
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
 
@@ -94,12 +100,14 @@ export const isAdult = (row: { rating?: string | null }) => row.rating === "R";
 export const NOT_ADULT = "rating IS NOT 'R'";
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
-const LISTED = "status = 'approved' AND board_hidden = 0 AND public_blocked = 0";
 /**
  * 加上成人內容的門：沒開啟（或沒登入）的人只看得到一般內容。
  * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
  */
-const listed = (allowNsfw: boolean) => (allowNsfw ? LISTED : `${LISTED} AND ${NOT_ADULT}`);
+const listed = (allowNsfw:boolean,alias='c') => `${alias}.status='approved' AND ${alias}.board_hidden=0 AND ${alias}.public_blocked=0
+ AND NOT EXISTS(SELECT 1 FROM managed_work_access policy WHERE policy.provider=${alias}.provider AND policy.source_role_id=${alias}.source_role_id
+ AND (policy.access<>'public' OR policy.restriction<>'none' OR policy.sync_state<>'complete' OR policy.moderation_revision<>policy.confirmed_moderation_revision))
+ ${allowNsfw?'':`AND ${alias}.${NOT_ADULT}`}`;
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
 export function toCard(row: CardRow, lang: string) {
@@ -227,6 +235,7 @@ export interface ListOptions {
   offset: number;
   /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
   anyStatus?: boolean;
+  submittedOnly?: boolean;
   /** 看的人開了成人內容（且驗過年齡）；沒開就只列一般內容 */
   allowNsfw?: boolean;
 }
@@ -271,7 +280,7 @@ const excludeClause = (table: string) => `NOT ${inList(table)}`;
 type CountScope = { zone?: string; tagGroups?: string[][]; excludeTags?: string[]; allowNsfw: boolean; maxRating?: Rating };
 /** 數量用的範圍條件：跟 listCards 同一組（在榜、不是副本、本站、語區、已選類型、不想看的類型、分級、成人門） */
 function countScope(opts: CountScope) {
-  const where = [`c.${listed(opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const where = [listed(opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   for (const group of opts.tagGroups ?? []) { where.push(inList("c")); binds.push(JSON.stringify(group)); }
@@ -327,7 +336,8 @@ const PRIOR_MEAN = 3;
 const BAYES_SCORE = `(SELECT (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) FROM card_scores s WHERE CAST(s.card_id AS INTEGER) = c.id)`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
-  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const where: string[] = opts.anyStatus ? ["1=1"] : [listed(!!opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  if(opts.submittedOnly)where.push(SUBMITTED_CARD);
   const binds: unknown[] = [];
   if (opts.provider) {
     where.push("c.provider = ?");
@@ -460,7 +470,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
-    const countWhere = [listed(!!opts.allowNsfw), NOT_A_COPY("cards"), "provider = 'harbor'"];
+    const countWhere = [listed(!!opts.allowNsfw,'cards'), NOT_A_COPY("cards"), "provider = 'harbor'"];
     const countBinds: unknown[] = [];
     if (opts.provider) { countWhere.push("provider = ?"); countBinds.push(opts.provider); }
     if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
@@ -639,7 +649,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
               MAX(am.is_official) AS is_official, MAX(am.bio) AS bio, MAX(am.cover) AS cover, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)} AND c.provider='harbor'`,
+       WHERE am.id = ? AND ${NOT_A_COPY("c")} AND ${listed(allowNsfw)} AND c.provider='harbor'`,
     )
     .bind(memberId)
     .first<{
@@ -669,6 +679,16 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
     .first<{ id: string; source_role_id:string; author_num_id: number }>();
   if (!row) throw new HttpError(404, "card not registered");
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
+  if(provider==='harbor'){
+    const authorPending=await db.prepare("SELECT 1 FROM author_visibility_operations WHERE source_role_id=? AND state='pending' AND json_extract(intent,'$.targetAccess')='private' LIMIT 1").bind(row.source_role_id).first();
+    const p=await managedWork(db,provider,row.source_role_id);
+    if(!p||authorPending){
+      if(!env||!token)throw new HttpError(503,'visibility_sync_pending');
+      const {withdrawLegacyVisibility}=await import('./work-sharing-commands');
+      await withdrawLegacyVisibility(env,(await getCard(db,row.id,provider))!,authorNumId,token);
+      return;
+    }
+  }
   const managed=await managedWork(db,provider,row.source_role_id);
   if(managed){
     if(!env||!token)throw new HttpError(503,'visibility_sync_pending');
@@ -754,9 +774,13 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
  * 「已登記」不能靠掃上游那一頁來數：作者可能有一百多張卡，一頁只看得到二十幾張，
  * 數出來的是「這一頁裡有幾張」而不是「一共有幾張」。本站的 D1 才是登記這件事的權威。
  */
+export const SUBMITTED_CARD = `(c.registered_at>0 OR c.approved_version_id IS NOT NULL
+ OR EXISTS(SELECT 1 FROM card_registrations r WHERE r.provider=c.provider AND r.source_role_id=c.source_role_id)
+ OR EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider=c.provider AND s.card_id=c.id))`;
+
 export async function countByAuthor(db: D1Database, authorNumId: number, provider: ProviderId = "harbor"): Promise<number> {
   const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM cards WHERE provider = ? AND author_num_id = ?")
+    .prepare(`SELECT COUNT(*) AS n FROM cards c WHERE c.provider = ? AND c.author_num_id = ? AND ${SUBMITTED_CARD}`)
     .bind(provider, authorNumId)
     .first<{ n: number }>();
   return row?.n ?? 0;
@@ -765,10 +789,9 @@ export async function countByAuthor(db: D1Database, authorNumId: number, provide
 /** 這批 roleId 裡，哪些已經登記在本站。永遠直接查庫，不快取——見 src/mine.ts 的說明。 */
 export async function registeredAmong(db: D1Database, roleIds: string[], provider: ProviderId = "harbor"): Promise<Set<string>> {
   if (!roleIds.length) return new Set();
-  const holes = roleIds.map(() => "?").join(",");
   const rows = await db
-    .prepare(`SELECT source_role_id FROM cards WHERE provider = ? AND source_role_id IN (${holes})`)
-    .bind(provider, ...roleIds)
+    .prepare(`SELECT source_role_id FROM cards c WHERE c.provider = ? AND c.source_role_id IN (SELECT value FROM json_each(?)) AND ${SUBMITTED_CARD}`)
+    .bind(provider, JSON.stringify(roleIds))
     .all<{ source_role_id: string }>();
   return new Set(rows.results.map((r) => r.source_role_id));
 }
@@ -779,8 +802,8 @@ export async function registeredAmong(db: D1Database, roleIds: string[], provide
  */
 export async function topTags(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0) {
   let where = zone
-    ? `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
-    : `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")}`;
+    ? `WHERE ${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
+    : `WHERE ${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")}`;
   const binds: unknown[] = zone ? [zone] : [];
   // 標籤名存的是作者寫的原文，沒有正規化欄位：用繁簡、大小寫展開的 GLOB 比，一樣互通
   if (q) { where += " AND j.value GLOB ?"; binds.push(hanziGlob(q)); }
@@ -800,7 +823,7 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
  * 只算一般內容、只算這一區；q 比的是鍵（已正規化），所以查詢字串也先正規化。
  */
 export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0, lang = "zh") {
-  const where = [`c.${listed(false)}`, "c.provider='harbor'", NOT_A_COPY("c"), "c.fandom_key <> ''"];
+  const where = [listed(false), "c.provider='harbor'", NOT_A_COPY("c"), "c.fandom_key <> ''"];
   const binds: unknown[] = [];
   if (zone) { where.push("c.zone IN (?, 'all')"); binds.push(zone); }
   // q 比的是索引字：對到 Wikidata 的作品是所有語言的名字與別名，自由文字是它的正規形
@@ -844,7 +867,7 @@ export async function listAuthors(
   db: D1Database,
   opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [`c.${listed(false)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const where: string[] = [listed(false), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push("COALESCE(am.display_name,c.author_name) GLOB ?"); binds.push(hanziGlob(opts.q)); }

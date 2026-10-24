@@ -1,3 +1,4 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ratingBody, bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
@@ -26,7 +27,7 @@ let persona = { name: "", text: "" };
 const writes = (name: string, text: string) => { persona = { name, text }; };
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   identities({ alice: ALICE, bob: BOB, carol: CAROL, "rev-a": 20001, "rev-b": 20002, stranger: 30003 });
   rolesOnMainSite(
     { roleId: "alice-1", authorNumId: ALICE }, { roleId: "alice-2", authorNumId: ALICE },
@@ -152,7 +153,7 @@ describe("查重", () => {
     const rows = await env.DB.prepare("SELECT submission_id FROM originality_texts").all<{ submission_id: string }>();
     expect(rows.results.map((r) => r.submission_id)).toEqual([v2.id]);
 
-    await unregister(env.DB, "alice-1", ALICE, "harbor");
+    await unregister(env.DB, "alice-1", ALICE, "harbor",env,"alice");
     writes("乙", text);
     const bob = await submit("bob-1", "bob");
     expect((await report(bob.id)).sources[0]).toMatchObject({ cardId: String(v2.card_id), status: "removed" });

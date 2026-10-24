@@ -1,6 +1,10 @@
 import { COMMUNITY_API } from './config';
 import { currentProvider, type ProviderId } from './provider';
 import { ApiError, describeApiError } from './api';
+import type {CommunityCard} from './types';
+export interface UnavailableFavorite {unavailable:true;bookmarkId:string}
+export type LibraryFavorite=CommunityCard|UnavailableFavorite;
+export const isUnavailableFavorite=(value:LibraryFavorite):value is UnavailableFavorite=>'unavailable' in value&&value.unavailable===true;
 
 async function read<T>(response: Response): Promise<T> {
   if (!response.ok) throw new ApiError(response.status, describeApiError(response.status, ''));
@@ -14,7 +18,7 @@ export async function libraryRequest<T>(path: string, token: string, method = 'G
   const provider=currentProvider();
   if(activeCredential!==token||activeProvider!==provider){clearLibraryCache();activeCredential=token;activeProvider=provider;}
   if(method!=='GET')privateReads.clear();
-  const cacheable=method==='GET'&&!path.startsWith('conversations');
+  const cacheable=method==='GET'&&!/^(conversations|favorites|feed)(?:[/?]|$)/.test(path);
   const cached=cacheable?privateReads.get(path):undefined;
   if(method==='GET'&&cached&&cached.expires>Date.now())return cached.promise as Promise<T>;
   const promise=(async()=>{

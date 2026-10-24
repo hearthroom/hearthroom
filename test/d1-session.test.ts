@@ -20,6 +20,17 @@ function recorder(){
   return {seen,env:{...env,DB:db} as any};
 }
 
+it('reads author visibility and operation absence from primary even without a prior bookmark',async()=>{
+  const r=recorder();
+  for(const path of ['/v1/me/cards/100076/visibility','/v1/me/cards/100076/visibility/operations/missing','/v1/me/cards/100076/publication/operations/missing']){
+    const session=withD1Session(new Request(`https://hearthroom.club${path}`),r.env);
+    await session.env.DB.prepare('SELECT 1').first();
+    expect(session.finish(new Response('ok')).headers.get('Set-Cookie')).toContain(`${BOOKMARK_COOKIE}=`);
+  }
+  expect(r.seen).toEqual(['first-primary','first-primary','first-primary']);
+  expect(startsAtPrimary('GET','/v1/me/cards/100076')).toBe(false);
+});
+
 it('opens the session from the bookmark the browser brings back, and ignores malformed ones',()=>{
   const r=recorder();
   const bookmark='00000000-0000002d-00000000-00000000000000000000000000000000';

@@ -1,3 +1,4 @@
+import {legacyPolicyFixture} from './work-policy-fixture';
 import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
@@ -14,7 +15,7 @@ const REVIEWER_B = 20002;
 const STRANGER = 30003;
 
 beforeEach(async () => {
-  await resetDb();
+  await resetDb();legacyPolicyFixture();
   identities({ "author-token": AUTHOR, "rev-a": REVIEWER_A, "rev-b": REVIEWER_B, "stranger": STRANGER });
   rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR }, { roleId: "role-2", authorNumId: AUTHOR });
   reviewUpstream();
@@ -95,7 +96,7 @@ describe("提交", () => {
   it("讀不到設定就整個提交失敗，不落庫", async () => {
     const { upstream } = await import("../src/upstream");
     upstream.readForReview = async () => { throw new Error("boom"); };
-    expect((await submit("role-1")).status).toBe(500);
+    expect((await submit("role-1")).status).toBe(503);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
     expect(n?.n).toBe(0);
   });
@@ -358,11 +359,11 @@ describe("內容版本", () => {
     await sync();
     expect(await cardStatus("role-1")).toEqual(before);
     expect((await queue("rev-a")).body.items).toHaveLength(0);
-    expect(await board()).toEqual(publicBefore);
+    expect((await board()).map(({syncedAt,...card}:any)=>card)).toEqual(publicBefore.map(({syncedAt,...card}:any)=>card));
     const response=await submit("role-1"); expect(response.status).toBe(200);
     const receipt=await response.json() as any;
     expect(await cardStatus("role-1")).toEqual(before);
-    expect(await board()).toEqual(publicBefore);
+    expect((await board()).map(({syncedAt,...card}:any)=>card)).toEqual(publicBefore.map(({syncedAt,...card}:any)=>card));
     const q=await queue("rev-a");
     expect(q.body.items[0]).toMatchObject({kind:"re",stamps:{approve:0,required:1}});
     const id=q.body.items[0].id;

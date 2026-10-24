@@ -8,6 +8,7 @@ import type { CardPage } from '@/lib/types';
 import CardGrid from './CardGrid.vue';
 const session = useSession();
 const { locale, lp } = useLocalePath();
+const cursor=ref<string>();
 const page = ref<CardPage | null>(null), offset = ref(0), loading = ref(false), failed = ref(false);
 let sequence = 0;
 async function load() {
@@ -18,12 +19,15 @@ async function load() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error('auth');
-    const result = await libraryRequest<CardPage>(`feed?offset=${offset.value}&lang=${contentLang(locale.value)}`, token);
+    const result = await libraryRequest<CardPage>(`feed?offset=${offset.value}&lang=${contentLang(locale.value)}${cursor.value?'&cursor='+encodeURIComponent(cursor.value):''}`, token);
     if (seq === sequence) page.value = result;
   } catch { if (seq === sequence) failed.value = true; }
   finally { if (seq === sequence) loading.value = false; }
 }
-watch([() => session.me, () => session.profile?.showNsfw, () => session.profile?.hiddenTags?.join(','), locale, offset], load, { immediate: true });
+watch([offset,cursor],load);
+watch([() => session.me, () => session.profile?.showNsfw, () => session.profile?.hiddenTags?.join(','), locale],()=>{
+ if(offset.value||cursor.value!==undefined){cursor.value=undefined;offset.value=0;}else void load();
+},{immediate:true});
 </script>
 <template>
   <section class="feed" :aria-label="$t('library.feed')">
@@ -31,7 +35,7 @@ watch([() => session.me, () => session.profile?.showNsfw, () => session.profile?
     <div v-if="!session.me" class="empty panel"><p class="empty__title">{{ $t('library.feedGuest') }}</p><p class="empty__hint muted">{{ $t('library.feedHint') }}</p><RouterLink class="btn" :to="lp('/login?returnTo=' + encodeURIComponent(lp('/?mode=following')))">{{ $t('nav.login') }}</RouterLink></div>
     <div v-else-if="failed" class="notice notice--error" role="alert">{{ $t('library.loadFailed') }} <button class="btn" @click="load">{{ $t('library.retry') }}</button></div>
     <CardGrid v-else :cards="page?.items ?? []" :loading="loading" :empty-title="$t('library.feedEmpty')" :empty-hint="$t('library.followHint')" />
-    <nav v-if="page && (offset || page.hasNext)" class="pager" :aria-label="$t('library.feed')"><button class="btn" :disabled="!offset" @click="offset -= 24">{{ $t('pager.prev') }}</button><button class="btn" :disabled="!page.hasNext" @click="offset += 24">{{ $t('pager.next') }}</button></nav>
+    <nav v-if="page && (offset || page.hasNext)" class="pager" :aria-label="$t('library.feed')"><button class="btn" :disabled="!offset" @click="cursor=page.previousCursor;offset-=24">{{ $t('pager.prev') }}</button><button class="btn" :disabled="!page.hasNext" @click="cursor=page.nextCursor;offset+=24">{{ $t('pager.next') }}</button></nav>
   </section>
 </template>
 <style scoped>
