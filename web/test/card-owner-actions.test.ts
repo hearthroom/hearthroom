@@ -1,4 +1,5 @@
-vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(true)};});
+const rollout=vi.hoisted(()=>({enabled:true}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
 
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
@@ -65,4 +66,15 @@ it('does not submit when the owner closes the rating questionnaire',async()=>{
  expect(mocks.register).not.toHaveBeenCalled();
 });
 
-beforeEach(()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
+
+it.each([
+ [{status:'approved',updateStatus:'pending',draftChanged:false},'visibility.editor.pendingPublic'],
+ [{status:'approved',draftChanged:true},'workspace.draftChanged'],
+ [{status:'pending',draftChanged:false},'visibility.state.pendingEditor'],
+ [{status:'rejected',draftChanged:false},'mine.badge.rejected'],
+])('retains legacy owner state %j while rollout controls are hidden',async(draft,key)=>{
+ rollout.enabled=false;mocks.draft.mockResolvedValue(draft);await mount();
+ expect(root.textContent).toContain(text(key));expect(root.querySelector('.author-visibility')).toBeNull();
+ expect(visibilityMocks.read).not.toHaveBeenCalled();expect(mocks.register).not.toHaveBeenCalled();
+});
