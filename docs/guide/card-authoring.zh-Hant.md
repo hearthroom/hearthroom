@@ -193,3 +193,9 @@
 | 腳本沒有反應 | 在網址加上 `?sdkDebug=1` 開啟除錯面板，檢視腳本錯誤與 `sdk.debug.log` 的輸出。 |
 | 存檔失敗 | 確認 key 只含英數、`_`、`-`，單值未超過 64 KB，且該卡的 key 數未達 10 個。 |
 | 訊息兩側比預期窄 | 卡片中貼齊邊緣的元素被判定為側邊欄。在該元素加上 `--lt-dock: none`。 |
+
+## 分享圖片與文案
+
+卡片腳本可以在玩家點擊按鈕後分享圖片與文案。HTTPS 卡片框架由宿主委派 `web-share` 與 `clipboard-write`：`navigator.share` 可接收預先準備的圖片 `File` 與文字；`navigator.clipboard.write` 搭配 `ClipboardItem` 可寫入 PNG，`navigator.clipboard.writeText` 可寫入文案。這些是瀏覽器能力，不是新增的 `sdk` 方法或 HTTP 端點。
+
+請在點擊前準備好檔案，在點擊處理函式內直接呼叫，保留使用者啟動狀態。提供操作前先檢查 `navigator.share`、`navigator.canShare({ files: [file] })`、`navigator.clipboard.write` 與 `ClipboardItem`。支援情況取決於瀏覽器、作業系統、權限與接收 App，分享後不保證圖片和文字都保留。請捕捉拒絕與取消；不支援或被拒絕時提供下載圖片與可選取的文案，取消後不要自動重開分享面板。宿主不委派 `clipboard-read`。本機不透明來源的預覽仍可能拒絕呼叫，請在目標裝置的實際跨來源卡片上驗證。
