@@ -45,6 +45,8 @@ it('persists an enrollment intent before contacting Provider, then reuses durabl
  });
  vi.spyOn(workPolicyGateway,'operation').mockResolvedValue(receipt);
  await expect(enrollWorkAccess(env,{memberId,roleId:draft.roleId,operationId,access:'private',token:'fixture'})).rejects.toThrow('visibility_sync_pending');
+ await expect(enrollWorkAccess(env,{memberId,roleId:draft.roleId,operationId:crypto.randomUUID(),access:'private',token:'fixture'})).rejects.toThrow('visibility_operation_conflict');
+ expect(change).toHaveBeenCalledTimes(1);
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_operations_total{operation="bind",outcome="pending"} 1');
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_pending_operations 1');
  expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access WHERE work_id=?').bind(work.id).first()).toEqual({epoch:0,sync_state:'changing'});

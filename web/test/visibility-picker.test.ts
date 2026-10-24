@@ -32,3 +32,10 @@ it('offers the original action separately from GET-only status checks after safe
  root.querySelector<HTMLButtonElement>('[data-visibility-check]')!.click();expect(resume).not.toHaveBeenCalled();expect(check).toHaveBeenCalledOnce();
  root.querySelector<HTMLButtonElement>('[data-visibility-resume]')!.click();expect(resume).toHaveBeenCalledOnce();
 });
+
+it('submits saved public edits through the current public option without changing access',async()=>{
+ const submit=vi.fn(),apply=vi.fn();await mount({value:{...base,access:'public',effectiveAccess:'public',everPublic:true,revisionState:'changed',draftChanged:true,actions:['set_private','set_unlisted','submit_update']},onSubmit:submit,onApply:apply});
+ expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(false);
+ const button=root.querySelector<HTMLButtonElement>('[data-visibility-apply]');expect(button).not.toBeNull();
+ button!.click();await nextTick();expect(submit).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
+});

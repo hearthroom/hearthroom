@@ -91,6 +91,10 @@ async function finalize(env:Env,op:AuthorOperation,receipt:WorkPolicyReceipt):Pr
  const results=await env.DB.batch(writes);if(!results[4].meta.changes||!results[5].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  await bumpOp(env.DB,'work_access',(JSON.parse(op.command) as WorkPolicyCommand).action,'success');
 }
+async function authorConflict(env:Env,op:AuthorOperation):Promise<'conflict'>{
+ await env.DB.prepare("UPDATE author_visibility_operations SET state='conflict',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending'").bind(Date.now(),op.member_id,op.operation_id).run();
+ return 'conflict';
+}
 export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string):Promise<AuthorOperation['state']>{
  const latest=await findOperation(env,op.member_id,op.operation_id);if(!latest)throw new HttpError(404,'card_not_found');
  if(latest.state!=='pending')return latest.state;
@@ -103,13 +107,23 @@ export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:
   ]);return 'conflict';
  }
  const command=JSON.parse(op.command) as WorkPolicyCommand;
- let receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
- if(!receipt){if(!token)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+ // An explicit Provider CAS refusal is terminal even if the process stopped
+ // after persisting the lower-level refusal and before updating this aggregate.
+ const intent=await env.DB.prepare('SELECT state FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(op.work_id,op.provider_operation_id).first<{state:string}>();
+ if(intent?.state==='conflict')return authorConflict(env,op);
+ let receipt:WorkPolicyReceipt|null;
+ try{
+  receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
+  if(!receipt){if(!token)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+ }catch(error){
+  if(error instanceof HttpError&&error.status===409)return authorConflict(env,op);
+  throw error;
+ }
  if(receipt.state!=='complete')return 'pending';
  await env.DB.prepare("UPDATE visibility_operations SET state='complete',receipt=?,updated_at=? WHERE work_id=? AND operation_id=?").bind(JSON.stringify(receipt),Date.now(),op.work_id,op.provider_operation_id).run();
  try{await finalize(env,op,receipt);return 'complete';}
  catch(error){
-  if(error instanceof HttpError&&error.status===409){await env.DB.prepare("UPDATE author_visibility_operations SET state='conflict',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending'").bind(Date.now(),op.member_id,op.operation_id).run();return 'conflict';}
+  if(error instanceof HttpError&&error.status===409)return authorConflict(env,op);
   throw error;
  }
 }
