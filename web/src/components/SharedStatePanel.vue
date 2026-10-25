@@ -8,6 +8,7 @@
  * - 讀不到（含宣告讀不到的 503）不能當成「沒宣告」藏起來，就地顯示錯誤與重新載入。
  * - 只有 4xx 算「確定沒做」；5xx 與斷線＝結果不明：先鎖住寫入、重新讀狀態，不自動重送（尤其是歸零）。
  * - 確認與寫入綁住開始時的卡與世代：確認框開著時換了卡，舊的確認不會寫到新卡。
+ * - 讀取錯誤與上一次寫入的結果放在同一個回饋區，事實可以多段，恢復的鍵只有一顆（只讀，不重送寫入）。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -26,10 +27,15 @@ const data = ref<SharedStateSettings | null>(null);
 const showSkeleton = ref(false);
 /** 正在做的寫入；做的期間本區所有寫入控件都鎖住。 */
 const busy = ref<null | "toggle" | "reset" | "clear">(null);
-/** 上一次寫入的結果：成功只是短暫回饋，拒絕與不明會一直留著直到下一次操作或讀回。 */
+/**
+ * 上一次寫入的結果。成功是短暫回饋，但要等讀回成功才開始倒數：讀不到最新數字時，「已經做成」得一直留著，
+ * 不然作者只看到舊數字。拒絕留到下一次操作或讀回成功；不明留到下一次操作。
+ */
 const result = ref<{ kind: "success" | "rejected" | "unknown"; text: string } | null>(null);
 /** 結果不明之後要先成功讀回一次，才放開寫入。 */
 const needsReadback = ref(false);
+/** 作者按了恢復鍵、正在重新讀：那顆鍵不能重複按。 */
+const reloading = ref(false);
 let generation = 0;
 let skeletonTimer: ReturnType<typeof setTimeout> | undefined;
 let successTimer: ReturnType<typeof setTimeout> | undefined;
@@ -51,6 +57,8 @@ async function load(initial = false) {
     data.value = next;
     phase.value = next.platformEnabled && declared(next) ? "ready" : "hidden";
     needsReadback.value = false;
+    if (result.value?.kind === "rejected") result.value = null;
+    if (result.value?.kind === "success") armSuccess();
     return true;
   } catch {
     if (g !== generation) return false;
@@ -73,7 +81,7 @@ const same = (src: Source) => src.epoch === epoch;
 // 切卡或切供應商：丟掉舊請求的回應，從頭讀
 watch(() => [props.roleId, props.provider] as const, () => {
   epoch++;
-  data.value = null; result.value = null; needsReadback.value = false; busy.value = null;
+  data.value = null; result.value = null; needsReadback.value = false; busy.value = null; reloading.value = false;
   void load(true);
 }, { immediate: true });
 onBeforeUnmount(() => { generation++; epoch++; clearTimeout(skeletonTimer); clearTimeout(successTimer); });
@@ -95,7 +103,10 @@ function counterOf(item: SharedItem | undefined) { return item?.kind === "counte
 function goalOf(key: string): number | undefined { return data.value?.declaration.counters[key]?.goal; }
 
 function succeed(text: string) {
+  clearTimeout(successTimer);
   result.value = { kind: "success", text };
+}
+function armSuccess() {
   clearTimeout(successTimer);
   successTimer = setTimeout(() => { if (result.value?.kind === "success") result.value = null; }, 4000);
 }
@@ -137,9 +148,15 @@ async function write(src: Source, kind: "toggle" | "reset" | "clear", run: (toke
   }
 }
 
-async function checkResult() {
-  if (await load()) { needsReadback.value = false; }
+/** 回饋區唯一的鍵：結果不明時是「查看最新狀態」，其他是「重新載入」；兩者都只讀。 */
+async function recover() {
+  if (reloading.value || busy.value) return;
+  const src = sourceNow();
+  reloading.value = true;
+  try { await load(!data.value); } finally { if (same(src)) reloading.value = false; }
 }
+const feedbackError = computed(() => phase.value === "error" || result.value?.kind === "rejected");
+const recoverLabel = computed(() => (result.value?.kind === "unknown" ? k("checkResult") : phase.value === "error" || result.value?.kind === "rejected" ? k("reload") : ""));
 
 function toggle(event: Event) {
   const input = event.target as HTMLInputElement;
@@ -206,13 +223,14 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
       </template>
     </div>
 
-    <template v-else-if="phase === 'error'">
-      <div class="notice notice--error shared__error" role="alert">
-        <span>{{ k("loadError") }}</span>
-        <button type="button" class="btn" @click="load(!data)">{{ k("reload") }}</button>
-      </div>
-      <p v-if="data" class="subtle">{{ k("previousData") }}</p>
-    </template>
+    <div v-else-if="phase === 'error' || result" class="shared__feedback" :class="result?.kind === 'success' && phase !== 'error' ? 'shared__ok' : ['notice', { 'notice--error': feedbackError }]"
+         :role="result?.kind === 'success' && phase !== 'error' ? 'status' : 'alert'">
+      <p v-if="phase === 'error'">{{ k("loadError") }}</p>
+      <p v-if="result">{{ result.text }}</p>
+      <p v-if="phase === 'error' && data" class="subtle">{{ k("previousData") }}</p>
+      <p v-if="reloading" class="subtle" role="status">{{ k("loading") }}</p>
+      <button v-if="recoverLabel" type="button" class="btn shared__recover" :disabled="reloading || !!busy" @click="recover">{{ recoverLabel }}</button>
+    </div>
 
     <template v-if="data && (phase === 'ready' || phase === 'error')">
       <label class="shared__row" :class="{ 'shared__row--locked': platformOff }">
@@ -233,12 +251,6 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
       </label>
 
       <p v-if="waitText" class="subtle shared__wait" role="status">{{ waitText }}</p>
-      <div v-if="result?.kind === 'success'" class="shared__ok" role="status">{{ result.text }}</div>
-      <div v-else-if="result" class="notice shared__error" :class="{ 'notice--error': result.kind === 'rejected' }" role="alert">
-        <span>{{ result.text }}</span>
-        <button v-if="result.kind === 'unknown'" type="button" class="btn" :disabled="!!busy" @click="checkResult">{{ k("checkResult") }}</button>
-        <button v-else type="button" class="btn" :disabled="!!busy" @click="load()">{{ k("reload") }}</button>
-      </div>
 
       <h3 class="shared__group">{{ k("liveTitle") }}</h3>
       <ul class="shared__items">
@@ -314,7 +326,8 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
 .shared__state--paused { color: var(--text-2); }
 .shared__state--platform { color: var(--warning-text); }
 .shared__wait, .shared__ok { margin: 0; font-size: 13px; color: var(--text-2); }
-.shared__error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.shared__feedback { display: grid; gap: var(--s-2); justify-items: start; }
+.shared__feedback p { margin: 0; }
 .shared__group { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
 .shared__items { list-style: none; margin: 0; padding: 0; display: grid; }
 .shared__item { display: grid; gap: var(--s-3); padding: var(--s-4) 0; border-top: 1px solid var(--line); }
