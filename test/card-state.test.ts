@@ -327,3 +327,20 @@ describe("寫入資格向 Harbor 查（§7.6 B）", () => {
     expect((await call("/v1/cards/src-1/state/cheer/add?draft=1", { token: "author", body: { delta: 1 } })).status).toBe(200);
   });
 });
+
+it("測試帳號當作者：設定頁看到的草稿數字就是重設與清空會清掉的那一份", async () => {
+  const original = ACCOUNTS.author;
+  ACCOUNTS.author = { id: 10001, accountClass: "test" };
+  try {
+    await env.DB.prepare("UPDATE members SET account_class = 'test', test_generation = 1 WHERE id = 'member-10001'").run();
+    await call("/v1/cards/src-1/state/cheer/add?draft=1", { token: "author", body: { delta: 3 } });
+    expect((await call("/v1/me/cards/src-1/shared-state", { token: "author" })).body.draft.cheer.total).toBe(3);
+    await call("/v1/me/cards/src-1/shared-state/cheer/reset", { token: "author", body: { ns: "draft" } });
+    expect((await call("/v1/me/cards/src-1/shared-state", { token: "author" })).body.draft.cheer.total).toBe(0);
+    await call("/v1/cards/src-1/state/cheer/add?draft=1", { token: "author", body: { delta: 2 } });
+    await call("/v1/me/cards/src-1/shared-state/draft/clear", { token: "author", body: {} });
+    expect((await call("/v1/me/cards/src-1/shared-state", { token: "author" })).body.draft.cheer.total).toBe(0);
+  } finally {
+    ACCOUNTS.author = original;
+  }
+});

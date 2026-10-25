@@ -132,11 +132,12 @@ export const ELIGIBILITY_TTL_MS = 30 * DAY_MS;
 /**
  * 寫入資格（E3、§7.6 B）：在這張卡開過對話。第一次寫入時用玩家自己的 token 向 Harbor 查這張卡的對話存檔
  * （roleId 是他正在玩的那一版，Harbor 連同同一作品的其他版本一起列），查到就記 30 天。
- * 本站的 member_conversations 是遊玩頁回報的、伺服器不驗證，不能當資格。作者在草稿裡試寫不需要。
+ * 本站的 member_conversations 是遊玩頁回報的、伺服器不驗證，不能當資格。作者本人寫自己的卡不需要。
  * Harbor 問不到 → 503 eligibility_unavailable（可重試），不當成「沒玩過」。
  */
 export async function hasPlayed(env: Env, state: CardState, memberId: string, roleId: string, bearer: string, provider: ProviderId, now: number): Promise<boolean> {
-  if (state.ns === "draft") return true;
+  // 作者本人寫自己的卡（草稿試玩，或測試帳號作者寫進 test）不必查
+  if (state.ns === "draft" || state.isAuthor) return true;
   const cached = await env.DB.prepare("SELECT checked_at FROM card_state_eligibility WHERE card_id = ? AND member_id = ?").bind(state.cardId, memberId).first<{ checked_at: number }>();
   if (cached && now - cached.checked_at < ELIGIBILITY_TTL_MS) return true;
   let count: number;
