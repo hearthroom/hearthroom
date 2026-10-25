@@ -58,6 +58,7 @@ import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
+import SharedStatePanel from "@/components/SharedStatePanel.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
 import {
@@ -1307,6 +1308,8 @@ async function exportCard(format: "png" | "json") {
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
           <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
+          <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
+          <SharedStatePanel v-if="!isNew && roleId" :role-id="roleId" :provider="editorProvider" :card-name="draft.roleName" :token="visibilityToken" />
           <div class="panel checklist">
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul>
