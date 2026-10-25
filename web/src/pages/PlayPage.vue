@@ -140,14 +140,14 @@ async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>,
   let poll: { token: string; key: string; options: string[] } | null = null;
   const token = enabled ? shareTokenOf(raw) : null;
   if (token) {
-    const hit = await resolveShareToken(resolved.roleId, token, { bearer: session.me ? await session.accessToken().catch(() => null) : null });
+    const hit = await resolveShareToken(resolved.roleId, token, { bearer: await play.token().catch(() => null), provider: play.provider });
     // 查短碼的途中換了卡：這一筆不能蓋掉下一張卡的值
     if (stale()) return;
     raw = hit?.context ?? null;
     poll = hit?.poll ? { token, ...hit.poll } : null;
   }
   // 共用狀態（lib/play-shared）用這一局的 token 與供應商；作者試玩寫進自己的草稿那一份
-  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled, poll, provider: play.provider, token: play.token, draft: route.query.mode === "source" });
+  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled, poll, provider: play.provider, token: play.token, draft: route.query.mode === "source", review: typeof route.query.review === "string" });
   // 從帶情境的連結開卡記一次（情境碼本身不送）：看得出卡內分享有沒有人點、碼有沒有壞、開關是不是關著
   const asked = fresh && typeof route.query.share === "string";
   if (asked) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : raw !== null && shareContextOf(raw) ? "delivered" : "invalid" });

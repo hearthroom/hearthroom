@@ -32,6 +32,8 @@ export interface PlayShareInput {
   provider?: ProviderId;
   token?: () => Promise<string | null>;
   draft?: boolean;
+  /** 審核試玩（?review=）：能讀，但不寫進玩家的數字、不產生也不回答分享連結。 */
+  review?: boolean;
 }
 
 export interface PlayShareDeps {
@@ -56,10 +58,10 @@ export function shareTokenOf(raw: unknown): string | null {
 }
 
 /** 這條短碼代表的情境碼與朋友可以回應的投票；解不開（過期、別張卡、網路）回 null，最多等 timeoutMs。 */
-export async function resolveShareToken(roleId: string, token: string, opts: { bearer?: string | null; timeoutMs?: number } = {}): Promise<{ context: string; poll: { key: string; options: string[] } | null } | null> {
+export async function resolveShareToken(roleId: string, token: string, opts: { bearer?: string | null; provider?: ProviderId; timeoutMs?: number } = {}): Promise<{ context: string; poll: { key: string; options: string[] } | null } | null> {
   try {
     const res = await fetch(`/v1/cards/${encodeURIComponent(roleId)}/share-tokens/${encodeURIComponent(token)}`, {
-      headers: opts.bearer ? { Authorization: `Bearer ${opts.bearer}` } : {},
+      headers: { ...(opts.provider ? { "X-Provider": opts.provider } : {}), ...(opts.bearer ? { Authorization: `Bearer ${opts.bearer}` } : {}) },
       signal: AbortSignal.timeout(opts.timeoutMs ?? 2500),
     });
     if (!res.ok) return null;
