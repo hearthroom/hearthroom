@@ -3521,7 +3521,7 @@
             "description": ""
           }
         ],
-        "description": "Authenticates the actual author and forwards only the explicitly confirmed reward recovery amount. The community listing is withdrawn only after a confirmed successful deletion; rejected or unknown outcomes leave the listing unchanged. Retry with the same amount after checking the result.",
+        "description": "Persists the authenticated author's explicit recovery amount before contacting the service. An unknown reply keeps that original intent; read it with GET and retry with the same amount. Confirmed deletion is saved before local cleanup, and completion and listing withdrawal commit together. Rejections and unknown outcomes do not withdraw a still-existing card.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3593,6 +3593,81 @@
           },
           "503": {
             "description": "Authority unavailable or outcome unconfirmed; the local listing is preserved."
+          }
+        }
+      },
+      "get": {
+        "summary": "Read an owned pending or completed deletion",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ],
+        "description": "Private, no-store read of this member's durable deletion consent. Read this before fetching a source that may already have been deleted. A rejected operation returns deletion:null; pending and confirmed operations retain their original amount for safe completion.",
+        "responses": {
+          "200": {
+            "description": "The member-owned deletion state or null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deletion": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "sourceRoleId",
+                            "rewardRecoveryCredits",
+                            "state"
+                          ],
+                          "properties": {
+                            "sourceRoleId": {
+                              "type": "string"
+                            },
+                            "rewardRecoveryCredits": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "confirmed",
+                                "complete"
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "The source card belongs to another author."
           }
         }
       }

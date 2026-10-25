@@ -1197,6 +1197,11 @@ export async function fetchRoleValidation(roleId: string, token: string): Promis
  * Worker 先向 Provider 刪除來源卡並全額收回期限內的獎勵，成功才撤下社群列表。
  * 呼叫前須輸入角色名稱，並明確確認當次實際收回金額。
  */
+export interface CardDeletionState {sourceRoleId:string;rewardRecoveryCredits:number;state:'pending'|'confirmed'|'complete'}
+export async function fetchCardDeletion(roleId:string,token:string):Promise<{deletion:CardDeletionState|null}>{
+ return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/delete`,{headers:authHeaders(token),cache:'no-store'}));
+}
+
 export async function deleteRole(roleId: string, token: string,rewardRecoveryCredits=0): Promise<void> {
   await json<{ message?: string }>(
     await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/delete`, { method: "POST", headers:{...authHeaders(token),"Content-Type":"application/json"},body:JSON.stringify({rewardRecoveryCredits}) }),

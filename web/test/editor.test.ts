@@ -29,6 +29,7 @@ const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none"
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
+ fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
   registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
@@ -167,6 +168,7 @@ async function submit() {
 }
 
 beforeEach(() => {
+ api.fetchCardDeletion.mockResolvedValue({deletion:null});
   ratingState.current = null;
   localStorage.clear();
   sessionStorage.clear();
@@ -920,6 +922,13 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
    expect(api.deleteRole).not.toHaveBeenCalled();settleConfirm(true,'阿芙拉');await flush();await flush();
    expect(api.deleteRole).toHaveBeenCalledWith('r1','tok',13700);expect(api.unregisterCard).not.toHaveBeenCalled();
    expect(router.currentRoute.value.path).toBe(fail?'/cards/r1/edit':'/mine');if(fail)expect(root.textContent).toContain('積分不足，無法刪除');
+  });
+
+
+  it('reload completes the saved deletion before querying the missing source or showing a new confirmation',async()=>{
+   api.fetchCardDeletion.mockResolvedValueOnce({deletion:{sourceRoleId:'r1',rewardRecoveryCredits:13700,state:'confirmed'}});
+   await mount('/cards/r1/edit');await flush();await flush();
+   expect(api.deleteRole).toHaveBeenCalledWith('r1','tok',13700);expect(api.fetchRoleDetail).not.toHaveBeenCalled();expect(confirmState.current).toBeNull();expect(router.currentRoute.value.path).toBe('/mine');
   });
 
   it("新卡（還沒建立）沒有刪除鍵", async () => {
