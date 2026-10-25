@@ -596,7 +596,7 @@
   "d8851edc5174c": "`not_found: role does not exist`。",
   "d5b0841deccc7": "未分類錯誤；`retryable: true`。",
   "d819f32c14b58": "取代自己角色的顯示規則",
-  "d12e797743a8a": "完整取代作者素材（不支援部分更新）。樂觀鎖定：`version` 必須等於最後讀取的版本（尚無素材時為 `0`）；不符時回傳 409 `version_conflict`。`mountLayer` 必填，須為 `under`、`over` 或 `cover`；`pageMode` 可省略（視為 `classic`），或為 `immersive`、`sandbox`。每條規則需要非空白 `find`；每個 `replace` 上限為 131072 位元組，所有規則的 `id` + `name` + `find` + `replace` 總計上限為 33554432 位元組（`validate_reject`，附 `message` 與 `detail` `{reason: emptyFind|ruleReplace|rulesTotal, index, name, max, actual, unit: bytes}`）。儲存會立即將 `status` 設為 `passed` 並增加 `version`。規則只作用於轉譯層，絕不進入提示詞。",
+  "d12e797743a8a": "完整取代作者素材（不支援部分更新）。樂觀鎖定：`version` 必須等於最後讀取的版本（尚無素材時為 `0`）；不符時回傳 409 `version_conflict`。`mountLayer` 必填，須為 `under`、`over` 或 `cover`；`pageMode` 可省略（視為 `classic`），或為 `immersive`、`sandbox`。每條規則需要非空白 `find`；每個 `replace` 上限為 131072 位元組，所有規則的 `id` + `name` + `find` + `replace` 總計上限為 33554432 位元組（`validate_reject`，附 `message` 與 `detail` `{reason: emptyFind|ruleReplace|rulesTotal|sharedState, index, name, max, actual, unit: bytes}`）。儲存會立即將 `status` 設為 `passed` 並增加 `version`。規則只作用於轉譯層，絕不進入提示詞。例外：`sharedState` 省略或為 `null` 時保留原值，`{}` 會清空；不合規則的宣告以 `reason: sharedState` 拒絕。",
   "da0cc0b1439f3": "已儲存素材（新 `version`、`status: passed`）。",
   "dcd6869c6042e": "`invalid_param`（JSON 錯誤）或 `validate_reject`（未知 mountLayer／pageMode、空白 `find`、單條規則或總大小超限）。本文為 `{\"error\": \"<code>\"}`；空白 `find` 與大小限制另含 `message`（英文句子）及 `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`。",
   "db6e05fe712a9": "`version_conflict` — `version` 與已儲存版本不符（素材已存在而 `version` 為 0 時亦同）。",
