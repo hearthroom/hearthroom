@@ -159,3 +159,43 @@ it("期別：日與週以 UTC+8 換期，週從週一開始", () => {
   expect(periodOf("week", sun, 1)).toBe("W2026-10-12");
   expect(periodOf("none", sun)).toBe("");
 });
+
+describe("分享回流（短碼）", () => {
+  const SHARE_DECL = { polls: { "p1-4": { options: ["a", "b", "c"], share: true }, solo: { options: ["x", "y"] } } };
+  const mint = (who: string, context = "p1-4.b", poll = "p1-4") => call("/v1/cards/src-1/share-tokens", { token: who, body: { context, poll } });
+  const respond = (who: string, token: string, option: string) => call(`/v1/cards/src-1/share-tokens/${token}/respond`, { token: who, body: { option } });
+  const results = (who: string) => call("/v1/cards/src-1/share-tokens", { token: who });
+
+  it("分享者產生短碼（同一個情境碼回同一條）；朋友解得回情境碼與投票，不必登入；分享者是誰從不回傳", async () => {
+    declared = SHARE_DECL;
+    await played("alice");
+    const first = await mint("alice");
+    expect(first.body.token).toMatch(/^~[A-Z0-9]{8}$/);
+    expect((await mint("alice")).body.token).toBe(first.body.token);
+    expect(await mint("alice", "p1-4.b", "solo")).toMatchObject({ status: 400, body: { error: "not_declared" } });
+    expect(await mint("alice", "<b>")).toMatchObject({ status: 400, body: { error: "context_invalid" } });
+    const resolved = await call(`/v1/cards/src-1/share-tokens/${first.body.token}`);
+    expect(resolved.body).toEqual({ context: "p1-4.b", poll: { key: "p1-4", options: ["a", "b", "c"] } });
+    expect((await call("/v1/cards/src-1/share-tokens/~AAAAAAAA")).status).toBe(404);
+    // 開關關著：情境碼照樣送到，只是不給投票
+    expect((await call(`/v1/cards/src-1/share-tokens/${first.body.token}`, { vars: { CARD_STATE_ENABLED: "false" } })).body).toEqual({ context: "p1-4.b", poll: null });
+  });
+
+  it("朋友回應：玩過才算、分享者不能回自己的；未滿 3 人只給總數，滿了給各選項人數（當天照一張快照）", async () => {
+    declared = SHARE_DECL;
+    for (const w of ["alice", "bob", "carol", "author"]) await played(w);
+    const token = (await mint("alice")).body.token as string;
+    expect(await respond("alice", token, "a")).toMatchObject({ status: 403, body: { error: "own_token" } });
+    expect((await respond("bob", token, "a")).body).toEqual({ mine: "a" });
+    await respond("carol", token, "c");
+    expect((await results("alice")).body.items).toEqual([expect.objectContaining({ context: "p1-4.b", pollKey: "p1-4", total: 2, counts: null, updatedAt: null })]);
+    await respond("author", token, "a");
+    const after = (await results("alice")).body.items[0];
+    // 今天第一次讀時只有 2 人，快照也是 2 人：各選項人數要到明天才出現，總數即時是 3
+    expect(after).toMatchObject({ total: 3, counts: null });
+    await env.DB.prepare("DELETE FROM card_share_snapshots").run();
+    expect((await results("alice")).body.items[0]).toMatchObject({ total: 3, counts: { a: 2, b: 0, c: 1 } });
+    expect((await results("bob")).body.items).toEqual([]);
+    expect(JSON.stringify((await call(`/v1/cards/src-1/share-tokens/${token}`)).body)).not.toContain("member-");
+  });
+});

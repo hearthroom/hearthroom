@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { playShareHost, setPlayShare, setPlayShareRef, shareContextOf, shareQr, withShareContext, SHARE_CONTEXT_RE } from "../src/lib/play-share";
+import { playShareHost, setPlayShare, setPlayShareRef, shareContextOf, shareQr, shareTokenOf, withShareContext, SHARE_CONTEXT_RE } from "../src/lib/play-share";
 import { SHARE_CONTEXT_RE as STAGE_RE } from "../../stage/src/common/share-context";
 import { mainSiteLinks } from "../src/lib/site";
 
@@ -56,6 +56,14 @@ describe("卡內分享情境：宿主給舞台的值", () => {
     const h = playShareHost({ links: () => mainSiteLinks({ hostname: "play.sukisuki.ai", locale: "en", lp: appLp }) });
     setPlayShare(input);
     expect(h.read("r1")!.url).toBe("https://sukisuki.ai/en/cards/100271");
+  });
+
+  it("平台短碼（~ 開頭）跟情境碼一樣轉送，但不當成情境碼交給卡片", () => {
+    expect(shareTokenOf("~K7Q2M9XA")).toBe("~K7Q2M9XA");
+    expect(shareTokenOf("~k7q2m9xa")).toBeNull();
+    expect(withShareContext("/play/1?provider=harbor", "~K7Q2M9XA")).toBe("/play/1?provider=harbor&share=%7EK7Q2M9XA");
+    setPlayShare({ ...input, context: "~K7Q2M9XA" });
+    expect(host().read("r1")!.context).toBeNull();
   });
 
   it("沒有卡號就沒有連結", () => {

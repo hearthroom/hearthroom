@@ -20,6 +20,7 @@ import { currentCardAccess } from "./work-read";
 import { HttpError, type Env } from "./types";
 
 export const SHARED_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export { localDay };
 export const LEADERBOARD_MAX = 50;
 const DAY_MS = 86_400_000;
 /** 換期的時區：UTC+8，跟創作季同一個慣例。 */
@@ -160,17 +161,17 @@ export const VOTE_CHANGES_PER_DAY = 10;
  * 投票：一人一票、可以改。個人那一列與兩個選項的總數在同一個 batch 裡改，總數只認這一次寫入的 rev，
  * 重送同一票不重算、並發的另一筆不會讓總數跑掉。
  */
-export async function vote(env: Env, state: CardState, key: string, option: string, memberId: string, now: number): Promise<{ mine: string }> {
+export async function vote(env: Env, state: CardState, key: string, option: string, memberId: string, now: number, scope = "global"): Promise<{ mine: string }> {
   const poll = state.decl.polls[key];
   if (!poll) throw new HttpError(400, "not_declared");
   if (!poll.options.includes(option)) throw new HttpError(400, "option_invalid");
-  const prev = await env.DB.prepare("SELECT option, changes, changes_day FROM card_state_members WHERE card_id=? AND ns=? AND scope='global' AND key=? AND period='' AND member_id=?")
-    .bind(state.cardId, state.ns, key, memberId).first<{ option: string; changes: number; changes_day: string }>();
+  const prev = await env.DB.prepare("SELECT option, changes, changes_day FROM card_state_members WHERE card_id=? AND ns=? AND scope=? AND key=? AND period='' AND member_id=?")
+    .bind(state.cardId, state.ns, scope, key, memberId).first<{ option: string; changes: number; changes_day: string }>();
   if (prev?.option === option) return { mine: option };
   const day = localDay(now);
   if (prev && prev.changes_day === day && prev.changes >= VOTE_CHANGES_PER_DAY) throw new HttpError(429, "limit_reached");
   const rev = crypto.randomUUID();
-  const pk = [state.cardId, state.ns, "global", key, ""] as const;
+  const pk = [state.cardId, state.ns, scope, key, ""] as const;
   const applied = `(SELECT 1 FROM card_state_members WHERE card_id=? AND ns=? AND scope=? AND key=? AND period=? AND member_id=? AND rev=?)`;
   const appliedArgs = [...pk, memberId, rev];
   const stmts = [
@@ -188,8 +189,8 @@ export async function vote(env: Env, state: CardState, key: string, option: stri
       .bind(now, ...pk, prev.option, ...appliedArgs));
   }
   await env.DB.batch(stmts);
-  const now2 = await env.DB.prepare("SELECT option FROM card_state_members WHERE card_id=? AND ns=? AND scope='global' AND key=? AND period='' AND member_id=?")
-    .bind(state.cardId, state.ns, key, memberId).first<{ option: string }>();
+  const now2 = await env.DB.prepare("SELECT option FROM card_state_members WHERE card_id=? AND ns=? AND scope=? AND key=? AND period='' AND member_id=?")
+    .bind(state.cardId, state.ns, scope, key, memberId).first<{ option: string }>();
   return { mine: now2?.option ?? option };
 }
 

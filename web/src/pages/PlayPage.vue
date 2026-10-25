@@ -28,7 +28,7 @@ import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
-import { setPlayShare, setPlayShareRef, shareContextOf } from "@/lib/play-share";
+import { resolveShareToken, setPlayShare, setPlayShareRef, shareContextOf, shareTokenOf } from "@/lib/play-share";
 import { currentReferralCode } from "@/lib/share-ref";
 import PlayComments from "@/components/PlayComments.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
@@ -115,7 +115,8 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
   registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
-  adoptShare(resolved);
+  await adoptShare(resolved);
+  if (stale()) return false;
   if (playApp) applyCardHead(resolved.card, locale.value);
   if (routeId.value !== resolved.number) {
     const destination = { path: playApp ? `/${resolved.number}/` : route.path.replace(/[^/]+\/?$/, resolved.number), query: route.query, hash: route.hash };
@@ -131,13 +132,22 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
  * 卡內分享情境（lib/play-share）：朋友的情境碼只在一般遊玩開機時給，看紀錄、審核試玩不帶；
  * 分享連結與「誰打得開」照給。登入者的推薦碼跟舞台一起載，通常在殼握手前就到了。
  */
-function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>) {
+async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>) {
   const fresh = typeof route.query.review !== "string" && typeof route.query.resume !== "string";
-  const raw = fresh && typeof route.query.share === "string" ? route.query.share : null;
+  let raw = fresh && typeof route.query.share === "string" ? route.query.share : null;
   const enabled = resolved.card?.shareContext === true;
-  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled });
+  // 平台短碼（分享回流）：先解回情境碼再掛舞台，卡片腳本一跑就讀得到；解不開就當沒有。
+  let poll: { token: string; key: string; options: string[] } | null = null;
+  const token = enabled ? shareTokenOf(raw) : null;
+  if (token) {
+    const hit = await resolveShareToken(resolved.roleId, token, { bearer: session.me ? await session.accessToken().catch(() => null) : null });
+    raw = hit?.context ?? null;
+    poll = hit?.poll ? { token, ...hit.poll } : null;
+  }
+  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled, poll });
   // 從帶情境的連結開卡記一次（情境碼本身不送）：看得出卡內分享有沒有人點、碼有沒有壞、開關是不是關著
-  if (raw !== null) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : shareContextOf(raw) ? "delivered" : "invalid" });
+  const asked = fresh && typeof route.query.share === "string";
+  if (asked) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : raw !== null && shareContextOf(raw) ? "delivered" : "invalid" });
   // 推薦碼在讀卡的同時就開始問（startShareRef），這裡只是接上；多半在殼握手前就到了
   void (pendingShareRef ?? Promise.resolve(null)).then((code) => setPlayShareRef(resolved.roleId, code), () => {});
 }
