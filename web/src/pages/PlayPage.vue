@@ -28,6 +28,8 @@ import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
+import { setPlayShare, setPlayShareRef, shareContextOf } from "@/lib/play-share";
+import { currentReferralCode } from "@/lib/share-ref";
 import PlayComments from "@/components/PlayComments.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
@@ -113,6 +115,7 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
   registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
+  adoptShare(resolved);
   if (playApp) applyCardHead(resolved.card, locale.value);
   if (routeId.value !== resolved.number) {
     const destination = { path: playApp ? `/${resolved.number}/` : route.path.replace(/[^/]+\/?$/, resolved.number), query: route.query, hash: route.hash };
@@ -124,10 +127,25 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   return true;
 }
 
+/**
+ * 卡內分享情境（lib/play-share）：朋友的情境碼只在一般遊玩開機時給，看紀錄、審核試玩不帶；
+ * 分享連結與「誰打得開」照給。登入者的推薦碼跟舞台一起載，通常在殼握手前就到了。
+ */
+function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>) {
+  const fresh = typeof route.query.review !== "string" && typeof route.query.resume !== "string";
+  const raw = fresh && typeof route.query.share === "string" ? route.query.share : null;
+  const enabled = resolved.card?.shareContext === true;
+  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled });
+  // 從帶情境的連結開卡記一次（情境碼本身不送）：看得出卡內分享有沒有人點、碼有沒有壞、開關是不是關著
+  if (raw !== null) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : shareContextOf(raw) ? "delivered" : "invalid" });
+  const id = session.me?.accountNumId;
+  if (id) void currentReferralCode(id).then((code) => setPlayShareRef(resolved.roleId, code), () => {});
+}
+
 let generation = 0;
 let canonicalNavigation = "";
 let playerProvider = "";
-onBeforeUnmount(() => { generation++; registerPlayCard(null); });
+onBeforeUnmount(() => { generation++; registerPlayCard(null); setPlayShare(null); });
 onMounted(() => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
@@ -145,6 +163,7 @@ onMounted(() => {
     gated.value = false;
     backToReview.value = false;
     registerPlayCard(null);
+    setPlayShare(null);
     try {
       void preloadStage();
       const provider = playProvider(route.query.provider);

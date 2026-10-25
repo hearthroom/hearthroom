@@ -627,7 +627,7 @@ app.get("/v1/cards/:id", async (c) => {
     if(!row){
       const own=await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
       await bumpOp(c.env.DB,'visibility_read','detail',own?'allow':'denied');
-      if(own)return c.json({...own,canInteract:false,listed:false});
+      if(own)return c.json({...own,canInteract:false,listed:false,...shareFields(c,'author')});
       throw new HttpError(404,'card not found');
     }
   }
@@ -638,10 +638,11 @@ app.get("/v1/cards/:id", async (c) => {
   }
   if (access && !access.reachable&&(access.managed||row?.status==='unlisted')) {
     const own = await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
-    if (own) return c.json(own,200,{'Cache-Control':'private, no-store'});
+    if (own) return c.json({...own,...shareFields(c,'author')},200,{'Cache-Control':'private, no-store'});
     if(row&&access.access==='private'){
+      // 玩過這張私卡的人照樣打得開，但新朋友打不開：分享鈕要看的是後者，所以一樣是 author
       const played=await privatePlayerCard(c.env,row,bearerOf(c),lang(c),'detail',()=>viewerAllowsNsfw(c,{card:true}));
-      if(played)return c.json(played);
+      if(played)return c.json({...played,...shareFields(c,'author')});
     }
     throw new HttpError(404,'card not found');
   }
@@ -657,9 +658,9 @@ app.get("/v1/cards/:id", async (c) => {
   if (!row || (row.status !== 'approved' && !access?.reachable)) {
     if (row && isAdult(row) && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403,'adult_content');
     const preview = await linkPreview(c.env,c.req.param('id'),link,lang(c));
-    if (preview) return c.json(preview,200,{'Cache-Control':'private, no-store'});
+    if (preview) return c.json({...preview,...shareFields(c,'link')},200,{'Cache-Control':'private, no-store'});
     const own = await ownCardView(c, link.source?.roleId ?? c.req.param('id'), row);
-    if (own) return c.json(own, 200, { "Cache-Control": "private, no-store" });
+    if (own) return c.json({...own,...shareFields(c,'author')}, 200, { "Cache-Control": "private, no-store" });
     throw new HttpError(404, "card not found");
   }
   // 成人內容：沒開（或沒登入、沒驗年齡）的人拿不到內容，但要知道「這是成人內容、要登入／驗年齡」
@@ -675,8 +676,19 @@ app.get("/v1/cards/:id", async (c) => {
   const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;
   const card = toCard(row, lang(c));
   // 打賞連結只在單卡頁給（卡片頁的作者區塊用）；榜單一頁幾十張卡，用不到也不該多帶
-  return c.json({ ...card, ...(access&&(access.managed||access.access==='unlisted')?{canInteract:true,listed:access.indexable,...(access.access==='unlisted'?{status:'unlisted'}:{})}:{}), author: { ...card.author, tips: readTipLinks(row.author_tip_links) }, ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw||access?.managed ? { "Cache-Control": "private, no-store" } : {});
+  // 拿著連結才打得開：unlisted，或已從探索拿掉（delisted）但連結照樣能玩
+  const audience = access?.access==='unlisted'||(access?.managed&&!access.indexable) ? 'link' : 'public';
+  return c.json({ ...card, ...(access&&(access.managed||access.access==='unlisted')?{canInteract:true,listed:access.indexable,...(access.access==='unlisted'?{status:'unlisted'}:{})}:{}), author: { ...card.author, tips: readTipLinks(row.author_tip_links) }, ...(shortcutKey ? { shortcutKey } : {}), ...shareFields(c,audience) }, 200, allowNsfw||access?.managed ? { "Cache-Control": "private, no-store" } : {});
 });
+
+/**
+ * 遊玩頁給卡內分享鈕用的兩個欄位（design：docs/studio/tasks/2026-10-25-card-share-context/design.md）：
+ * audience 是拿到分享連結的新朋友打不打得開：author＝打不開（私卡，只有作者與玩過的人）、link＝有連結就行、public＝所有人；shareContext 是平台的分享情境開關
+ * （SHARE_CONTEXT_ENABLED；關著時遊玩頁不轉送 ?share=，卡片拿到的情境碼一律是 null）。
+ */
+function shareFields(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, audience: 'author' | 'link' | 'public') {
+  return { audience, ...(c.env.SHARE_CONTEXT_ENABLED === 'true' ? { shareContext: true } : {}) };
+}
 
 /**
  * 把一張卡加到主畫面：卡片專屬的 manifest 與圖示。設計見 src/shortcut.ts。

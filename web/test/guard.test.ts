@@ -58,4 +58,11 @@ describe("分享連結的推薦碼", () => {
     expect(localStorage.getItem("hearthroom.shareRef")).toBeNull();
     localStorage.clear();
   });
+
+  it("卡內分享的情境碼（?share=）留在網址上：拿掉推薦碼後，卡片頁與遊玩頁還讀得到", async () => {
+    localStorage.clear();
+    await router.push("/en/cards/14?ref=K7M2Q9XA&share=p1-4.b");
+    expect(router.currentRoute.value.fullPath).toBe("/en/cards/14?share=p1-4.b");
+    localStorage.clear();
+  });
 });

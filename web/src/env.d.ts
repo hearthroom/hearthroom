@@ -33,6 +33,12 @@ declare module "moonstage/stage" {
       setFavorite(roleId: string, on: boolean): Promise<boolean>;
       openComments(roleId: string): void;
     };
+    /** 卡內分享情境（lib/play-share.ts）：情境碼、分享連結、誰打得開；不給就是沒有分享連結。 */
+    share?: {
+      read(roleId: string): { enabled: boolean; context: string | null; url: string; audience: "author" | "link" | "public" | null } | null;
+      onChange?(fn: () => void): () => void;
+      qr?(text: string): Promise<{ size: number; path: string }>;
+    };
   }
   export interface StageI18n {
     getLocaleMessage(locale: string): Record<string, unknown>;

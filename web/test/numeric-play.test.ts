@@ -3,7 +3,8 @@ import { createApp, defineComponent, h, nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 import PlayPage from '../src/pages/PlayPage.vue';
-const mocks = vi.hoisted(() => ({card:vi.fn(),platforms:vi.fn(),stage:vi.fn(),copies:vi.fn(),review:vi.fn(),resume:vi.fn(),owned:vi.fn(),playApp:false}));
+import { playShareHost } from '../src/lib/play-share';
+const mocks = vi.hoisted(() => ({card:vi.fn(),platforms:vi.fn(),stage:vi.fn(),copies:vi.fn(),review:vi.fn(),resume:vi.fn(),owned:vi.fn(),track:vi.fn(),playApp:false}));
 vi.mock('../src/lib/owned-history',()=>({fetchOwnedHistory:mocks.owned}));
 vi.mock('../src/lib/library', () => ({libraryRequest:mocks.resume}));
 vi.mock('../src/lib/api', () => ({fetchReviewDetail:mocks.review,fetchCard:mocks.card,fetchCardPlatforms:mocks.platforms,fetchMeAt:async()=>({accountNumId:22})}));
@@ -14,7 +15,8 @@ vi.mock('../src/lib/play-authorization', () => ({ensurePlayAuthorization:async()
 vi.mock('../src/lib/stage-host', () => ({ensureStage:mocks.stage,preloadStage:async()=>{},remergeStageMessages:async()=>{},stageToasts:{list:[]}}));
 vi.mock('../src/lib/card-manifest', () => ({applyCardHead:vi.fn()}));
 vi.mock('../src/lib/site', () => ({SITE:{name:'Hearthroom'},isPlayHost:()=>mocks.playApp,communityHost:()=> 'hearthroom.club'}));
-vi.mock('../src/lib/track', () => ({track:vi.fn()}));
+vi.mock('../src/lib/track', () => ({track:mocks.track}));
+vi.mock('../src/lib/share-ref', async (original) => ({...(await original<typeof import('../src/lib/share-ref')>()),currentReferralCode:async()=>'ABCD'}));
 let app:ReturnType<typeof createApp>, root:HTMLElement;
 const settle=async()=>{for(let i=0;i<50;i++)await Promise.resolve();await nextTick();};
 beforeEach(()=>{vi.clearAllMocks();mocks.playApp=false;mocks.owned.mockImplementation(async(_provider,id)=>({conversationId:id,roleId:'previous-revision',title:'Recorded chat',canGenerate:true}));mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source'});mocks.platforms.mockResolvedValue([{provider:'lunatalk',roleId:'luna-copy',playable:true},{provider:'harbor',roleId:'harbor-copy',playable:true}]);mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'draft-copy',status:'synced'}]);mocks.stage.mockResolvedValue(defineComponent({props:['roleId'],setup:p=>()=>h('div',{'data-role':p.roleId})}));});
@@ -34,3 +36,8 @@ it('resumes an existing conversation on the card\'s current version, like a game
 it('resumes on the recorded revision when the current version is not playable on that provider',async()=>{mocks.resume.mockResolvedValue({cardNumber:100021,provider:'harbor',roleId:'previous-revision'});mocks.platforms.mockResolvedValue([{provider:'lunatalk',roleId:'luna-copy',playable:true}]);await mount('/play/100021?provider=harbor&resume=existing-chat');expect(root.querySelector('[data-role]')?.getAttribute('data-role')).toBe('previous-revision');});
 it('does not resume a conversation belonging to another card or provider',async()=>{mocks.resume.mockResolvedValue({cardNumber:100020,provider:'harbor',roleId:'wrong-card'});await mount('/play/100021?provider=harbor&resume=existing-chat');expect(mocks.stage).not.toHaveBeenCalled();});
 it('reloads before changing the host of an installed player',async()=>{const assign=vi.spyOn(window.location,'assign').mockImplementation(()=>{});const router=await mount('/play/100021?provider=harbor');await router.push('/play/100021?provider=lunatalk');await settle();expect(assign).not.toHaveBeenCalled();expect(root.querySelector('[role=alert]')).not.toBeNull();expect(mocks.stage).toHaveBeenCalledTimes(1);assign.mockRestore();});
+
+const shareHost=()=>playShareHost({communityHost:()=>'hearthroom.club',lp:(p)=>p});
+it('hands the friend\'s share context, the card link with the player\'s referral code and the audience to the stage',async()=>{mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source',audience:'link',shareContext:true});const router=await mount('/play/harbor-copy?provider=harbor&share=p1-4.b');await vi.waitFor(()=>expect(router.currentRoute.value.fullPath).toBe('/play/100021?provider=harbor&share=p1-4.b'));await settle();expect(shareHost().read('harbor-copy')).toEqual({enabled:true,context:'p1-4.b',url:'https://hearthroom.club/cards/100021?ref=ABCD',audience:'link'});expect(mocks.track).toHaveBeenCalledWith('share_context',{subject:'harbor-copy',detail:'delivered'});});
+it('never carries a share context into a review or a resumed history, and drops it while the platform switch is off',async()=>{mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source',audience:'public'});await mount('/play/100021?provider=harbor&share=p1-4.b');expect(shareHost().read('harbor-copy')).toMatchObject({enabled:false,context:null,audience:'public'});expect(mocks.track).toHaveBeenCalledWith('share_context',{subject:'harbor-copy',detail:'disabled'});app.unmount();root.remove();
+ mocks.card.mockResolvedValue({id:'100021',num:100021,provider:'lunatalk',sourceRoleId:'source',audience:'link',shareContext:true});mocks.resume.mockResolvedValue({cardNumber:100021,provider:'harbor',roleId:'previous-revision'});await mount('/play/100021?provider=harbor&resume=existing-chat&share=p1-4.b');expect(shareHost().read('harbor-copy')).toMatchObject({enabled:true,context:null});});

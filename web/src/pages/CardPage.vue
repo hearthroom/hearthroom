@@ -48,6 +48,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
 import { playAppUrl } from "@/lib/site";
+import { withShareContext } from "@/lib/play-share";
 import { loginPath } from "@/lib/login-return";
 import type { CommunityCard } from "@/lib/types";
 
@@ -323,7 +324,8 @@ function addToHome() {
   const c = card.value;
   if (!c) return;
   track("pwa_card_install_click", { subject: c.roleId });
-  location.assign(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }));
+  // 朋友分享的情境碼（?share=）一併帶過去：裝好之前先玩的那一局，卡片讀得到
+  location.assign(withShareContext(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }), route.query.share));
 }
 
 /**

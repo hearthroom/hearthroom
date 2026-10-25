@@ -180,6 +180,9 @@ export const BEACON_EVENTS = new Set([
   "routes_prompt", "routes_dialog", "routes_handoff",
   // 直接開另一個網域時，Harbor 那邊已登入而免按登入就進來了（對照 login_done 看靜默登入省掉多少次）
   "login_silent",
+  // 卡內分享情境：從帶 ?share= 的連結開卡（detail 是 delivered／invalid／disabled，subject 是 roleId）。
+  // 情境碼本身從不送：那是卡片自訂的字，不進 blob
+  "share_context",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
@@ -203,6 +206,8 @@ export const BEACON_DETAILS = new Set([
   "checkin", "plan",
   // 線路：提示卡、清單與換手過場頁的結果
   "switch", "all", "opened", "switched", "failed", "arrived", "issue_failed", "complete_failed",
+  // 卡內分享情境：情境碼送到卡片、格式不對沒送、平台開關關著沒送
+  "delivered", "invalid", "disabled",
 ]);
 
 /**

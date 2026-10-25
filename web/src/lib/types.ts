@@ -64,6 +64,10 @@ export interface CommunityCard {
    * 在榜的卡沒有這個欄位。
    */
   status?: "private" | "unlisted" | "pending" | "rejected" | "needs_review" | "unshared" | "approved";
+  /** 單卡讀取才有：現在誰打得開這張卡（只有作者／有連結的人／所有人），卡內分享鈕用（lib/play-share）。 */
+  audience?: "author" | "link" | "public";
+  /** 單卡讀取才有：平台的分享情境開關開著（Worker 的 SHARE_CONTEXT_ENABLED）。 */
+  shareContext?: boolean;
 }
 
 export interface CardPage {
