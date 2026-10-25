@@ -51,9 +51,9 @@ describe("卡號", () => {
     expect(byNum.body.roleId).not.toBe(byNum.body.sourceRoleId);
     const byId = await card("role-a");
     expect(byId.body.num).toBe(100001);
-    // 分享情境：公開卡誰都打得開；平台開關沒開時不帶 shareContext。
+    // 分享情境：公開卡誰都打得開；shareContext 跟著平台開關（wrangler.toml 的 SHARE_CONTEXT_ENABLED）。
     expect(byNum.body.audience).toBe("public");
-    expect(byNum.body.shareContext).toBeUndefined();
+    expect(byNum.body.shareContext).toBe(env.SHARE_CONTEXT_ENABLED === "true" ? true : undefined);
   });
 
   it("撤回後訪客不能開啟；重新核准後沿用原號", async () => {
