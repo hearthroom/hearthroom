@@ -15,12 +15,22 @@ async function ticket(aud=origin,purpose='bootstrap',ttl=60){
 const configured=()=>({...env,QA_BROWSER_CONTEXT_KEY:key});
 beforeEach(async()=>{await env.DB.exec('DELETE FROM qa_browser_nonce');});
 
+it('keeps the pre-context document blank and disallows edge analytics injection',async()=>{
+ const res=await qaContextRoutes.request(origin+'/internal/qa/browser-context',{method:'GET'},configured());
+ expect(res.status).toBe(200);
+ expect(await res.text()).toBe('<!doctype html><title>QA</title>');
+ expect(res.headers.get('Cache-Control')).toContain('private');
+ expect(res.headers.get('Cache-Control')).toContain('no-store');
+ expect(res.headers.get('Cache-Control')).toContain('no-transform');
+});
+
 it('exchanges a management ticket once and issues an exclusion-only host cookie',async()=>{
  const token=await ticket();
  const request=()=>qaContextRoutes.request(origin+'/internal/qa/browser-context',{
   method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({ticket:token}),
  },configured());
  const res=await request();expect(res.status).toBe(200);
+ expect(res.headers.get('Cache-Control')).toContain('no-transform');
  const set=res.headers.get('Set-Cookie')!;
  expect(set).toContain('HttpOnly');expect(set).toContain('Secure');expect(set).toContain('SameSite=Lax');expect(set).not.toContain('Domain=');
  const cookie=set.split(';')[0];
