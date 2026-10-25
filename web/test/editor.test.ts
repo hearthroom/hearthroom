@@ -931,6 +931,26 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
    expect(api.deleteRole).toHaveBeenCalledWith('r1','tok',13700);expect(api.fetchRoleDetail).not.toHaveBeenCalled();expect(confirmState.current).toBeNull();expect(router.currentRoute.value.path).toBe('/mine');
   });
 
+  it.each(['積分不足，需要13700，可用300，尚差13400，可稍後刪除','服務暫時無法回應'])('刪卡失敗在操作旁聚焦並立即帶入視野，保留未儲存內容：%s',async message=>{
+   api.fetchRoleDetail.mockResolvedValueOnce({roleName:'阿芙拉',roleDesc:'老闆娘'});
+   await mount('/cards/r1/edit');
+   await type($<HTMLInputElement>('#f-name'),'保留輸入驗證');
+   const scroll=vi.spyOn(HTMLElement.prototype,'scrollIntoView');
+   for(let attempt=0;attempt<2;attempt++){
+    api.deleteRole.mockRejectedValueOnce(new Error(message));
+    btnIn(root,'刪除這張卡').click();await flush();settleConfirm(true,'保留輸入驗證');await flush();await flush();
+    const alert=root.querySelector<HTMLElement>('.panel--danger [role=alert]');
+    expect(alert?.textContent).toContain(message);
+    expect(document.activeElement).toBe(alert);
+    expect(scroll.mock.instances.at(-1)).toBe(alert);
+    expect(scroll).toHaveBeenLastCalledWith({block:'center',behavior:'instant'});
+    expect(root.querySelectorAll('[role=alert]')).toHaveLength(1);
+    expect($<HTMLInputElement>('#f-name').value).toBe('保留輸入驗證');
+    expect(router.currentRoute.value.path).toBe('/cards/r1/edit');
+    document.activeElement instanceof HTMLElement&&document.activeElement.blur();
+   }
+  });
+
   it("新卡（還沒建立）沒有刪除鍵", async () => {
     await mount("/create");
     byText("發布").click();
