@@ -127,6 +127,8 @@ async function authorState(c: Ctx): Promise<{ member: Member; state: CardState }
 
 cardStateRoutes.get("/v1/me/cards/:roleId/shared-state", async (c) => {
   const { state } = await authorState(c);
+  // 讀不到宣告不能回空設定：編輯頁會把「沒宣告」當成整塊不顯示，作者就看不到讀取失敗
+  if (state.declUnavailable) throw new HttpError(503, "declaration_unavailable");
   const controls = await c.env.DB.prepare("SELECT author_off, platform_off FROM card_state_controls WHERE card_id = ?").bind(state.cardId).first<{ author_off: number; platform_off: number }>();
   const keys = [...Object.keys(state.decl.polls), ...Object.keys(state.decl.counters)];
   const live = { ...state, ns: "live" as const };
