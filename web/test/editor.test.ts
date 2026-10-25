@@ -944,7 +944,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(document.activeElement).toBe(alert);
     expect(scroll.mock.instances.at(-1)).toBe(alert);
     expect(scroll).toHaveBeenLastCalledWith({block:'center',behavior:'instant'});
-    expect(root.querySelectorAll('[role=alert]')).toHaveLength(1);
+    expect(root.querySelectorAll('.panel--danger [role=alert]')).toHaveLength(1);
+    expect([...root.querySelectorAll('[role=alert]')].filter(el=>el.textContent?.includes(message))).toHaveLength(1);
     expect($<HTMLInputElement>('#f-name').value).toBe('保留輸入驗證');
     expect(router.currentRoute.value.path).toBe('/cards/r1/edit');
     document.activeElement instanceof HTMLElement&&document.activeElement.blur();
