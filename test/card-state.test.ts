@@ -349,3 +349,90 @@ it("作者設定讀不到宣告時回可重試的 503，不回一份看起來像
   upstream.fetchSharedState = async () => { throw new HttpError(502, "upstream failed"); };
   expect(await call("/v1/me/cards/src-1/shared-state", { token: "author" })).toMatchObject({ status: 503, body: { error: "declaration_unavailable" } });
 });
+
+describe("還沒有卡片列的新卡（沒送審、沒設能見度的私卡；CLI 試玩卡）：只給作者本人", () => {
+  let roleReads = 0;
+  const fresh = (roleId: string, authorNumId: number) => {
+    const real = upstream.fetchRole;
+    upstream.fetchRole = async (e, id, provider) => {
+      if (id !== roleId) return real(e, id, provider);
+      roleReads++;
+      return role({ roleId, authorNumId });
+    };
+  };
+  const at = (roleId: string) => ({
+    read: (keys: string, token?: string) => call(`/v1/cards/${roleId}/state?keys=${keys}`, { token }),
+    vote: (who: string, option: string) => call(`/v1/cards/${roleId}/state/p1-4/vote`, { token: who, body: { option } }),
+    add: (who: string, delta: number) => call(`/v1/cards/${roleId}/state/cheer/add`, { token: who, body: { delta } }),
+    settings: (who: string) => call(`/v1/me/cards/${roleId}/shared-state`, { token: who }),
+  });
+  beforeEach(async () => {
+    roleReads = 0;
+    for (const id of ["fresh-1", "trial-1"]) {
+      await caches.default.delete(`https://card-state.internal/decl/harbor/${id}`);
+      for (const n of [10001, 99, 11]) await caches.default.delete(`https://card-state.internal/own/harbor/${id}/${n}`);
+    }
+  });
+
+  it("作者讀寫自己那一份（draft），編輯頁設定看得到；不必查玩過", async () => {
+    fresh("fresh-1", 10001);
+    const c = at("fresh-1");
+    expect(await c.read("p1-4", "author")).toMatchObject({ status: 200, body: { enabled: true, items: { "p1-4": { kind: "poll", total: 0 } } } });
+    expect(await c.vote("author", "a")).toMatchObject({ status: 200, body: { mine: "a" } });
+    expect(await c.add("author", 3)).toMatchObject({ status: 200, body: { total: 3, mine: 3 } });
+    expect((await c.read("p1-4", "author")).body.items["p1-4"].counts).toMatchObject({ a: 1 });
+    const s = await c.settings("author");
+    expect(s.status).toBe(200);
+    expect(s.body.draft["p1-4"].counts).toMatchObject({ a: 1 });
+    expect(s.body.live["p1-4"].total).toBe(0);
+    expect(archiveCalls).toBe(0);
+  });
+
+  it("非作者（就算玩過）與遊客：一律 404，不透露有沒有這張卡", async () => {
+    fresh("fresh-1", 10001);
+    await played("alice");
+    const c = at("fresh-1");
+    expect(await c.read("p1-4", "alice")).toMatchObject({ status: 404 });
+    expect(await c.vote("alice", "a")).toMatchObject({ status: 404 });
+    expect(await c.settings("alice")).toMatchObject({ status: 404 });
+    expect(await c.read("p1-4")).toMatchObject({ status: 404 });
+  });
+
+  it("測試帳號作者的 CLI 試玩卡：寫進 test 那一份", async () => {
+    await env.DB.prepare("UPDATE members SET account_class = 'test', test_generation = 1 WHERE id = 'member-99'").run();
+    fresh("trial-1", 99);
+    const c = at("trial-1");
+    expect(await c.vote("qa", "b")).toMatchObject({ status: 200, body: { mine: "b" } });
+    const s = await c.settings("qa");
+    expect(s.body.draft["p1-4"].counts).toMatchObject({ b: 1 });
+    const row = await env.DB.prepare("SELECT ns FROM card_state_members WHERE key = 'p1-4'").first<{ ns: string }>();
+    expect(row?.ns).toBe("test");
+  });
+
+  it("用卡號當鍵：之後正式登記（送審或設能見度）時是同一個 cards.id，試玩數字接得上", async () => {
+    fresh("fresh-1", 10001);
+    await at("fresh-1").vote("author", "c");
+    const registered = (await upsertCard(env.DB, role({ roleId: "fresh-1", authorNumId: 10001 }), Date.now(), { status: "unshared" })).id;
+    const num = await env.DB.prepare("SELECT num FROM card_numbers WHERE source_role_id = 'fresh-1'").first<{ num: number }>();
+    expect(String(num?.num)).toBe(registered);
+    expect((await at("fresh-1").settings("author")).body.draft["p1-4"].counts).toMatchObject({ c: 1 });
+  });
+
+  it("作者在這種卡上能暫停與恢復；不發分享短碼（朋友打不開這張卡）——回 404，不是 500", async () => {
+    fresh("fresh-1", 10001);
+    expect(await call("/v1/me/cards/fresh-1/shared-state", { token: "author", method: "PUT", body: { enabled: false } })).toMatchObject({ status: 200, body: { authorOff: true } });
+    expect((await at("fresh-1").settings("author")).body.authorOff).toBe(true);
+    expect(await call("/v1/me/cards/fresh-1/shared-state", { token: "author", method: "PUT", body: { enabled: true } })).toMatchObject({ status: 200 });
+    expect(await call("/v1/cards/fresh-1/share-tokens", { token: "author", body: { context: "p1-4.a", poll: "p1-4" } })).toMatchObject({ status: 404 });
+    expect(await call("/v1/cards/fresh-1/share-tokens", { token: "author" })).toMatchObject({ status: 404 });
+  });
+
+  it("作者身分短暫快取：連續讀寫不必每次都問 Harbor", async () => {
+    fresh("fresh-1", 10001);
+    const c = at("fresh-1");
+    await c.read("p1-4", "author");
+    await c.vote("author", "a");
+    await c.read("p1-4", "author");
+    expect(roleReads).toBe(1);
+  });
+});

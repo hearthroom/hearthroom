@@ -193,6 +193,7 @@ const tokenParam = (c: Ctx) => {
 
 cardStateRoutes.post("/v1/cards/:roleId/share-tokens", async (c) => {
   const { state, memberId } = await writeGate(c, "share_mint");
+  if (state.unregistered) { await bumpOp(c.env.DB, "card_state", "share_mint", "denied"); throw new HttpError(404, "card not found"); }
   const body = (await c.req.json().catch(() => null)) as { context?: unknown; poll?: unknown } | null;
   const context = typeof body?.context === "string" ? body.context : "";
   const poll = typeof body?.poll === "string" ? body.poll : "";
@@ -204,6 +205,7 @@ cardStateRoutes.post("/v1/cards/:roleId/share-tokens", async (c) => {
 cardStateRoutes.get("/v1/cards/:roleId/share-tokens", async (c) => {
   const member = await requireMember(c);
   const state = await stateFor(c, member);
+  if (state.unregistered) throw new HttpError(404, "card not found");
   if (!state.enabled) throw new HttpError(403, "shared_disabled");
   return c.json({ items: await ownerResults(c.env, state, await saveMemberId(c.env.DB, member), Date.now()) }, 200, NO_STORE);
 });
