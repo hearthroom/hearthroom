@@ -6,7 +6,8 @@
  * - 這裡的操作立即寫入，跟編輯頁的內容儲存分開：不動 dirty、不觸發儲存或發布。
  * - 四種狀態：平台總開關沒開、或這張卡沒宣告 → 整塊不顯示；有宣告 → 完整面板；平台暫停這張卡 → 唯讀。
  * - 讀不到（含宣告讀不到的 503）不能當成「沒宣告」藏起來，就地顯示錯誤與重新載入。
- * - 送出後斷線＝結果不明：先鎖住寫入、重新讀狀態，不自動重送（尤其是歸零）。
+ * - 只有 4xx 算「確定沒做」；5xx 與斷線＝結果不明：先鎖住寫入、重新讀狀態，不自動重送（尤其是歸零）。
+ * - 確認與寫入綁住開始時的卡與世代：確認框開著時換了卡，舊的確認不會寫到新卡。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -60,8 +61,21 @@ async function load(initial = false) {
   }
 }
 
+/**
+ * 這張卡的世代：切卡或切供應商就加一。確認框與寫入在開始時記下來源（卡、供應商、世代），
+ * 每次 await 之後核對；換了就作廢，不改用新的 props，舊請求的結果也不更新新卡。
+ */
+let epoch = 0;
+interface Source { roleId: string; provider: ProviderId; epoch: number }
+const sourceNow = (): Source => ({ roleId: props.roleId, provider: props.provider, epoch });
+const same = (src: Source) => src.epoch === epoch;
+
 // 切卡或切供應商：丟掉舊請求的回應，從頭讀
-watch(() => [props.roleId, props.provider] as const, () => { data.value = null; result.value = null; needsReadback.value = false; void load(true); }, { immediate: true });
+watch(() => [props.roleId, props.provider] as const, () => {
+  epoch++;
+  data.value = null; result.value = null; needsReadback.value = false; busy.value = null;
+  void load(true);
+}, { immediate: true });
 onBeforeUnmount(() => { generation++; clearTimeout(skeletonTimer); clearTimeout(successTimer); });
 
 const platformOff = computed(() => !!data.value?.platformOff);
@@ -87,20 +101,30 @@ function succeed(text: string) {
 }
 
 /**
- * 跑一次寫入：拿到 HTTP 回應的錯誤＝伺服器明確沒做（rejected）；沒拿到回應（斷線、逾時）＝結果不明，
- * 鎖住寫入並重新讀狀態，不重送。成功也重新讀，不把畫面硬寫成零（玩家可能同時還在貢獻）。
+ * 有保證「伺服器在寫入前就擋下」的錯誤（4xx：權限、參數、限流、衝突）才算沒做成；
+ * 5xx、斷線、回應讀不懂都不能證明沒寫，一律當結果不明：鎖住寫入、重新讀狀態，不重送。
  */
-async function write(kind: "toggle" | "reset" | "clear", run: (token: string) => Promise<unknown>, ok: string, rejected: string) {
+const notExecuted = (err: unknown) => err instanceof ApiError && err.status >= 400 && err.status < 500;
+
+/**
+ * 跑一次寫入。來源在開始時就定了（src）：拿 token 之後、寫入回來之後都核對一次，換卡了就什麼都不做。
+ * 成功也重新讀，不把畫面硬寫成零（玩家可能同時還在貢獻）。
+ */
+async function write(src: Source, kind: "toggle" | "reset" | "clear", run: (token: string, src: Source) => Promise<unknown>, ok: string, rejected: string) {
+  if (!same(src)) return;
   busy.value = kind;
   result.value = null;
   try {
     const token = await props.token();
+    if (!same(src)) return;
     if (!token) throw new ApiError(401, "", "unauthorized");
-    await run(token);
+    await run(token, src);
+    if (!same(src)) return;
     succeed(ok);
     await load();
   } catch (err) {
-    if (err instanceof ApiError) {
+    if (!same(src)) return;
+    if (notExecuted(err)) {
       result.value = { kind: "rejected", text: rejected };
     } else {
       // 讀回成功就放開寫入（作者可以照最新資料再操作），但「上一次結果未確認」的說明留著
@@ -109,7 +133,7 @@ async function write(kind: "toggle" | "reset" | "clear", run: (token: string) =>
       await load();
     }
   } finally {
-    busy.value = null;
+    if (same(src)) busy.value = null;
   }
 }
 
@@ -123,11 +147,12 @@ function toggle(event: Event) {
   // 畫面先照最後確認的狀態，寫成功、讀回後才換
   input.checked = open.value;
   if (!writable.value) return;
-  void write("toggle", (token) => setSharedStateEnabled(props.roleId, desired, token, props.provider), desired ? k("enabledSuccess") : k("pausedSuccess"), k("updateRejected"));
+  void write(sourceNow(), "toggle", (token, src) => setSharedStateEnabled(src.roleId, desired, token, src.provider), desired ? k("enabledSuccess") : k("pausedSuccess"), k("updateRejected"));
 }
 
 async function reset(key: string, kind: "poll" | "counter", ns: "live" | "draft", from: HTMLElement) {
   if (!writable.value) return;
+  const src = sourceNow();
   const live = ns === "live";
   const ok = await confirmDialog({
     title: k(live ? "resetLiveTitle" : "resetDraftTitle", { name: key }),
@@ -140,13 +165,14 @@ async function reset(key: string, kind: "poll" | "counter", ns: "live" | "draft"
     focusCancel: true,
   });
   from.focus();
-  // 確認期間狀態可能變了（平台暫停、正在寫）：再核一次
-  if (!ok || !writable.value) return;
-  await write("reset", (token) => resetSharedStateKey(props.roleId, key, ns, token, props.provider), k("resetSuccess", { name: key }), k("resetRejected"));
+  // 確認期間可能換了卡、平台暫停了或正在寫：再核一次，換卡就作廢
+  if (!ok || !same(src) || !writable.value) return;
+  await write(src, "reset", (token, s) => resetSharedStateKey(s.roleId, key, ns, token, s.provider), k("resetSuccess", { name: key }), k("resetRejected"));
 }
 
 async function clearDraft(from: HTMLElement) {
   if (!writable.value) return;
+  const src = sourceNow();
   const ok = await confirmDialog({
     title: k("clearDraftTitle"),
     message: k("clearDraftBody"),
@@ -158,8 +184,8 @@ async function clearDraft(from: HTMLElement) {
     focusCancel: true,
   });
   from.focus();
-  if (!ok || !writable.value) return;
-  await write("clear", (token) => clearSharedStateDraft(props.roleId, token, props.provider), k("clearDraftSuccess"), k("clearDraftRejected"));
+  if (!ok || !same(src) || !writable.value) return;
+  await write(src, "clear", (token, s) => clearSharedStateDraft(s.roleId, token, s.provider), k("clearDraftSuccess"), k("clearDraftRejected"));
 }
 
 const statusLabel = computed(() => (platformOff.value ? k("platformPaused") : open.value ? k("active") : k("paused")));
