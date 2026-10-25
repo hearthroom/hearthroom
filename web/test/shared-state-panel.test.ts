@@ -3,15 +3,15 @@
  * 立即寫入的開關、要確認的歸零與清空、讀不到不藏、結果不明不重送。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick } from "vue";
+import { createApp, h, nextTick, reactive } from "vue";
 import { i18n } from "../src/lib/i18n";
 const api = vi.hoisted(() => ({ fetch: vi.fn(), set: vi.fn(), reset: vi.fn(), clear: vi.fn() }));
-const confirm = vi.hoisted(() => ({ answer: true, calls: [] as unknown[] }));
+const confirm = vi.hoisted(() => ({ answer: true as boolean, calls: [] as unknown[], hold: null as null | ((v: boolean) => void), held: false }));
 vi.mock("../src/lib/api", async (original) => ({
   ...(await original<typeof import("../src/lib/api")>()),
   fetchSharedStateSettings: api.fetch, setSharedStateEnabled: api.set, resetSharedStateKey: api.reset, clearSharedStateDraft: api.clear,
 }));
-vi.mock("../src/lib/confirm", () => ({ confirmDialog: async (o: unknown) => { confirm.calls.push(o); return confirm.answer; } }));
+vi.mock("../src/lib/confirm", () => ({ confirmDialog: (o: unknown) => { confirm.calls.push(o); return confirm.held ? new Promise<boolean>((r) => { confirm.hold = r; }) : Promise.resolve(confirm.answer); } }));
 import { ApiError } from "../src/lib/api";
 import SharedStatePanel from "../src/components/SharedStatePanel.vue";
 
@@ -24,10 +24,11 @@ const settings = (over: Record<string, unknown> = {}) => ({
 });
 let app: ReturnType<typeof createApp>, root: HTMLElement;
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); await nextTick(); };
+const props = reactive({ roleId: "src-1", provider: "harbor", cardName: "夜宴", token: async () => "tok" as string | null });
 async function mount() {
   root = document.createElement("div");
   document.body.append(root);
-  app = createApp(SharedStatePanel, { roleId: "src-1", provider: "harbor", cardName: "夜宴", token: async () => "tok" }).use(i18n);
+  app = createApp({ render: () => h(SharedStatePanel, props) }).use(i18n);
   app.mount(root);
   await settle();
 }
@@ -38,7 +39,8 @@ const resetButtons = () => buttons().filter((b) => b.classList.contains("shared_
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
-  confirm.answer = true; confirm.calls = [];
+  confirm.answer = true; confirm.calls = []; confirm.held = false; confirm.hold = null;
+  Object.assign(props, { roleId: "src-1", provider: "harbor", cardName: "夜宴", token: async () => "tok" });
   api.fetch.mockReset().mockResolvedValue(settings());
   api.set.mockReset().mockResolvedValue({ authorOff: true });
   api.reset.mockReset().mockResolvedValue(undefined);
@@ -142,5 +144,72 @@ describe("操作", () => {
     await settle();
     expect(panel()!.textContent).toContain("數字未能歸零。");
     expect(panel()!.textContent).toContain("42 / 100");
+  });
+});
+
+describe("審查修正：確認與寫入綁住來源、依未執行保證分類", () => {
+  it("確認框開著時切到另一張卡：舊的確認不會寫到新卡", async () => {
+    await mount();
+    confirm.held = true;
+    resetButtons()[0]!.click();
+    await settle();
+    props.roleId = "src-2";
+    await settle();
+    confirm.hold!(true);
+    await settle();
+    expect(api.reset).not.toHaveBeenCalled();
+  });
+
+  it("清空試玩數字也一樣；寫入送出後才切卡，舊結果不更新新卡", async () => {
+    await mount();
+    confirm.held = true;
+    buttons().find((b) => b.classList.contains("shared__clear"))!.click();
+    await settle();
+    props.roleId = "src-2";
+    await settle();
+    confirm.hold!(true);
+    await settle();
+    expect(api.clear).not.toHaveBeenCalled();
+    confirm.held = false;
+    let finish!: () => void;
+    api.reset.mockImplementation(() => new Promise<void>((r) => { finish = r; }));
+    resetButtons()[1]!.click();
+    await settle();
+    expect(api.reset).toHaveBeenLastCalledWith("src-2", "boss", "live", "tok", "harbor");
+    props.roleId = "src-3";
+    await settle();
+    finish();
+    await settle();
+    expect(panel()!.textContent).not.toContain("的數字已歸零");
+    expect(box().disabled).toBe(false);
+  });
+
+  it("等 token 時切卡：不送出", async () => {
+    await mount();
+    let give!: (t: string) => void;
+    props.token = () => new Promise<string | null>((r) => { give = r as (t: string) => void; });
+    resetButtons()[1]!.click();
+    await settle();
+    props.roleId = "src-2";
+    await settle();
+    give("tok");
+    await settle();
+    expect(api.reset).not.toHaveBeenCalled();
+  });
+
+  it("5xx 不算確定沒做：顯示結果不明並讀回；4xx（寫入前擋下）才算沒做成", async () => {
+    await mount();
+    for (const status of [500, 502, 504]) {
+      api.reset.mockRejectedValueOnce(new ApiError(status, "", "x"));
+      resetButtons()[1]!.click();
+      await settle();
+      expect(panel()!.textContent).toContain("操作結果尚未確認。");
+    }
+    for (const status of [403, 409, 429]) {
+      api.reset.mockRejectedValueOnce(new ApiError(status, "", "x"));
+      resetButtons()[1]!.click();
+      await settle();
+      expect(panel()!.textContent).toContain("數字未能歸零。");
+    }
   });
 });
