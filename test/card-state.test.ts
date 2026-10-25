@@ -344,3 +344,8 @@ it("測試帳號當作者：設定頁看到的草稿數字就是重設與清空�
     ACCOUNTS.author = original;
   }
 });
+
+it("作者設定讀不到宣告時回可重試的 503，不回一份看起來像「沒宣告」的空設定", async () => {
+  upstream.fetchSharedState = async () => { throw new HttpError(502, "upstream failed"); };
+  expect(await call("/v1/me/cards/src-1/shared-state", { token: "author" })).toMatchObject({ status: 503, body: { error: "declaration_unavailable" } });
+});
