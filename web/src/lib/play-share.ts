@@ -25,6 +25,8 @@ export interface PlayShareInput {
   audience: ShareAudience | null;
   /** 平台開關。 */
   enabled: boolean;
+  /** 從平台短碼開的：朋友可以回應的投票（分享回流）。 */
+  poll?: { token: string; key: string; options: string[] } | null;
 }
 
 export interface PlayShareDeps {
@@ -40,11 +42,38 @@ export function shareContextOf(raw: unknown): string | null {
 }
 
 /**
+ * 平台短碼（分享回流）：?share=~XXXXXXXX。遊玩頁先把它解回原本的情境碼再交給卡片，卡片讀法不變；
+ * 轉送時跟情境碼一樣帶著走。
+ */
+export const SHARE_TOKEN_RE = /^~[A-Z0-9]{8}$/;
+export function shareTokenOf(raw: unknown): string | null {
+  return typeof raw === "string" && SHARE_TOKEN_RE.test(raw) ? raw : null;
+}
+
+/** 這條短碼代表的情境碼與朋友可以回應的投票；解不開（過期、別張卡、網路）回 null，最多等 timeoutMs。 */
+export async function resolveShareToken(roleId: string, token: string, opts: { bearer?: string | null; timeoutMs?: number } = {}): Promise<{ context: string; poll: { key: string; options: string[] } | null } | null> {
+  try {
+    const res = await fetch(`/v1/cards/${encodeURIComponent(roleId)}/share-tokens/${encodeURIComponent(token)}`, {
+      headers: opts.bearer ? { Authorization: `Bearer ${opts.bearer}` } : {},
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 2500),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { context?: unknown; poll?: { key?: unknown; options?: unknown } | null };
+    const context = shareContextOf(body.context);
+    if (!context) return null;
+    const poll = body.poll && typeof body.poll.key === "string" && Array.isArray(body.poll.options) ? { key: body.poll.key, options: body.poll.options.filter((o): o is string => typeof o === "string") } : null;
+    return { context, poll };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 卡片頁到遊玩頁（開始玩、安裝成卡片 App）要把朋友的情境碼帶過去：不帶的話，連結落在卡片頁、
  * 按「開始玩」之後卡片就讀不到了。不合格式的不帶。相對路徑進、相對路徑出。
  */
 export function withShareContext(target: string, raw: unknown): string {
-  const context = shareContextOf(raw);
+  const context = shareContextOf(raw) ?? shareTokenOf(raw);
   if (!context) return target;
   const absolute = /^https?:\/\//.test(target);
   const u = new URL(target, "https://x.invalid");

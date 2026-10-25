@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { auditStmt } from "./audit";
 import { add, hasPlayed, leaderboard, readState, resetKey, resolveCardState, vote, SHARED_KEY_RE, type CardState } from "./card-state";
 import { providerOf, requireMember, saveMemberId, type Member } from "./members";
+import { mintToken, ownerResults, tokenFor } from "./card-share-tokens";
 import { bumpOp } from "./ops-metrics";
 import { saveScope } from "./saves";
 import { HttpError, type Env } from "./types";
@@ -56,8 +57,10 @@ cardStateRoutes.get("/v1/cards/:roleId/state/:key/leaderboard", async (c) => {
   return c.json(await leaderboard(c.env, state, keyParam(c), Number(c.req.query("limit") ?? 10), memberId, Date.now()), 200, NO_STORE);
 });
 
+type WriteOp = "vote" | "add" | "share_mint" | "share_respond";
+
 /** 寫入的共同關卡：開關、資格、限流；任一關沒過都記一筆指標。 */
-async function writeGate(c: Ctx, op: "vote" | "add"): Promise<{ state: CardState; memberId: string }> {
+async function writeGate(c: Ctx, op: WriteOp): Promise<{ state: CardState; memberId: string }> {
   const member = await requireMember(c);
   const state = await stateFor(c, member);
   if (!state.enabled) { await bumpOp(c.env.DB, "card_state", op, "disabled"); throw new HttpError(403, "shared_disabled"); }
@@ -71,7 +74,7 @@ async function writeGate(c: Ctx, op: "vote" | "add"): Promise<{ state: CardState
   return { state, memberId };
 }
 
-async function counted<T>(c: Ctx, op: "vote" | "add", run: () => Promise<T>): Promise<T> {
+async function counted<T>(c: Ctx, op: WriteOp, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
     await bumpOp(c.env.DB, "card_state", op, "ok");
@@ -153,4 +156,54 @@ cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/draft/clear", async (c) 
   await resetKey(c.env, state.cardId, "draft", null);
   await bumpOp(c.env.DB, "card_state", "draft_clear", "ok");
   return c.json({ ok: true }, 200, NO_STORE);
+});
+
+/**
+ * 分享回流（原語 2，src/card-share-tokens.ts）。產生短碼與回應都走寫入的共同關卡（開關、玩過、限流）；
+ * 解短碼不必登入，開關關著也照樣把情境碼送到（原語 1 不受影響），只是不給投票。
+ */
+const tokenParam = (c: Ctx) => {
+  const token = c.req.param("token") ?? "";
+  if (!/^~[A-Z0-9]{8}$/.test(token)) throw new HttpError(404, "token not found");
+  return token;
+};
+
+cardStateRoutes.post("/v1/cards/:roleId/share-tokens", async (c) => {
+  const { state, memberId } = await writeGate(c, "share_mint");
+  const body = (await c.req.json().catch(() => null)) as { context?: unknown; poll?: unknown } | null;
+  const context = typeof body?.context === "string" ? body.context : "";
+  const poll = typeof body?.poll === "string" ? body.poll : "";
+  if (!SHARED_KEY_RE.test(context)) { await bumpOp(c.env.DB, "card_state", "share_mint", "invalid"); throw new HttpError(400, "context_invalid"); }
+  const out = await counted(c, "share_mint", () => mintToken(c.env, state, memberId, context, poll, Date.now()));
+  return c.json(out, 200, NO_STORE);
+});
+
+cardStateRoutes.get("/v1/cards/:roleId/share-tokens", async (c) => {
+  const member = await requireMember(c);
+  const state = await stateFor(c, member);
+  if (!state.enabled) throw new HttpError(403, "shared_disabled");
+  return c.json({ items: await ownerResults(c.env, state, await saveMemberId(c.env.DB, member), Date.now()) }, 200, NO_STORE);
+});
+
+cardStateRoutes.get("/v1/cards/:roleId/share-tokens/:token", async (c) => {
+  const member = await optionalMember(c);
+  const state = await stateFor(c, member);
+  const row = await tokenFor(c.env, state.cardId, tokenParam(c), Date.now());
+  if (!row) throw new HttpError(404, "token not found");
+  const poll = state.decl.polls[row.poll_key];
+  const respondable = state.enabled && row.ns === state.ns && !!poll?.share;
+  return c.json({ context: row.context, poll: respondable ? { key: row.poll_key, options: poll!.options } : null }, 200, NO_STORE);
+});
+
+cardStateRoutes.post("/v1/cards/:roleId/share-tokens/:token/respond", async (c) => {
+  const { state, memberId } = await writeGate(c, "share_respond");
+  const row = await tokenFor(c.env, state.cardId, tokenParam(c), Date.now());
+  if (!row) throw new HttpError(404, "token not found");
+  // 分享者不能替自己的連結灌回應；回應寫在回應者自己的 ns（測試帳號回應正式連結不會算進去）
+  if (row.owner_member_id === memberId) { await bumpOp(c.env.DB, "card_state", "share_respond", "denied"); throw new HttpError(403, "own_token"); }
+  const poll = state.decl.polls[row.poll_key];
+  if (!poll?.share) { await bumpOp(c.env.DB, "card_state", "share_respond", "invalid"); throw new HttpError(400, "not_declared"); }
+  const body = (await c.req.json().catch(() => null)) as { option?: unknown } | null;
+  const out = await counted(c, "share_respond", () => vote(c.env, state, row.poll_key, typeof body?.option === "string" ? body.option : "", memberId, Date.now(), `share:${row.token}`));
+  return c.json(out, 200, NO_STORE);
 });
