@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -34,15 +32,14 @@ export function maintenanceCommand(args,now=Date.now(),operation=randomUUID()) {
  }
  return {target,sql,state};
 }
+export function executeMaintenance(args,runner=spawnSync) {
+ const command=maintenanceCommand(args);
+ return runner(process.execPath,[join(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB',command.target,'--command',command.sql,'--json'],{cwd:root,stdio:'inherit'});
+}
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- let folder;
  try {
-  const command=maintenanceCommand(process.argv.slice(2));
-  folder=mkdtempSync(join(tmpdir(),'hearthroom-maintenance-'));
-  const file=join(folder,'control.sql');writeFileSync(file,command.sql,{mode:0o600});
-  const result=spawnSync(process.execPath,[join(root,'node_modules/wrangler/bin/wrangler.js'),'d1','execute','DB',command.target,'--file',file,'--json'],{cwd:root,stdio:'inherit'});
+  const result=executeMaintenance(process.argv.slice(2));
   if(result.error)throw result.error;
   process.exitCode=result.status??1;
  }catch(error){console.error(error.message);process.exitCode=1;}
- finally{if(folder)rmSync(folder,{recursive:true,force:true});}
 }
