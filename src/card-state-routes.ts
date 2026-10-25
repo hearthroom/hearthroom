@@ -158,7 +158,8 @@ cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/:key/reset", async (c) =
   const { member, state } = await authorState(c);
   const key = keyParam(c);
   const body = (await c.req.json().catch(() => ({}))) as { ns?: unknown };
-  const ns = body?.ns === "draft" ? "draft" : "live";
+  // 作者自己那一份：一般作者是 draft，測試帳號作者是 test（跟設定頁顯示的「草稿」同一份）
+  const ns = body?.ns === "draft" ? state.ns : "live";
   const now = Date.now();
   await c.env.DB.batch([
     ...resetStmts(c.env, state.cardId, ns, key),
@@ -171,7 +172,7 @@ cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/:key/reset", async (c) =
 cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/draft/clear", async (c) => {
   const { member, state } = await authorState(c);
   await c.env.DB.batch([
-    ...resetStmts(c.env, state.cardId, "draft", null),
+    ...resetStmts(c.env, state.cardId, state.ns, null),
     auditStmt(c.env.DB, { subjectKind: "card_state", subjectId: String(state.cardId), actorMemberId: member.id, actorKind: "human", action: "draft_clear", operationId: crypto.randomUUID(), now: Date.now() }),
   ]);
   await bumpOp(c.env.DB, "card_state", "draft_clear", "ok");
