@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { playShareHost, setPlayShare, setPlayShareRef, shareContextOf, shareQr, withShareContext, SHARE_CONTEXT_RE } from "../src/lib/play-share";
 import { SHARE_CONTEXT_RE as STAGE_RE } from "../../stage/src/common/share-context";
+import { mainSiteLinks } from "../src/lib/site";
 
-const host = () => playShareHost({ communityHost: () => "sukisuki.ai", lp: (p) => `/zh-Hans${p}` });
+const host = () => playShareHost({ links: () => ({ origin: "https://sukisuki.ai", lp: (p) => `/zh-Hans${p}` }) });
 const input = { roleId: "r1", cardNumber: "100271", context: "p1-4.b", audience: "link" as const, enabled: true };
 
 afterEach(() => setPlayShare(null));
@@ -48,6 +49,13 @@ describe("卡內分享情境：宿主給舞台的值", () => {
     expect(withShareContext("/play/1", undefined)).toBe("/play/1");
     expect(withShareContext("/play/1", "a b")).toBe("/play/1");
     expect(withShareContext("/play/1", ["p1", "p2"])).toBe("/play/1");
+  });
+
+  it("卡片 App 網域上產生的連結指回主站、用路徑語系，不帶 ?lang=", () => {
+    const appLp = (p: string) => `${p}?lang=en`;
+    const h = playShareHost({ links: () => mainSiteLinks({ hostname: "play.sukisuki.ai", locale: "en", lp: appLp }) });
+    setPlayShare(input);
+    expect(h.read("r1")!.url).toBe("https://sukisuki.ai/en/cards/100271");
   });
 
   it("沒有卡號就沒有連結", () => {

@@ -138,8 +138,16 @@ function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>) {
   setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled });
   // 從帶情境的連結開卡記一次（情境碼本身不送）：看得出卡內分享有沒有人點、碼有沒有壞、開關是不是關著
   if (raw !== null) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : shareContextOf(raw) ? "delivered" : "invalid" });
+  // 推薦碼在讀卡的同時就開始問（startShareRef），這裡只是接上；多半在殼握手前就到了
+  void (pendingShareRef ?? Promise.resolve(null)).then((code) => setPlayShareRef(resolved.roleId, code), () => {});
+}
+
+/** 登入者的推薦碼：跟讀卡同時開始問，卡片腳本一跑就拿得到帶推薦碼的分享連結（作者常在載入時就備好連結與 QR）。 */
+let pendingShareRef: Promise<string | null> | null = null;
+function startShareRef(profileReady: Promise<unknown>) {
   const id = session.me?.accountNumId;
-  if (id) void currentReferralCode(id).then((code) => setPlayShareRef(resolved.roleId, code), () => {});
+  // 查推薦碼要用到個人資料（服務帳號），等它好了再問，不另外觸發一次讀取
+  pendingShareRef = id ? profileReady.then(() => currentReferralCode(id)).catch(() => null) : null;
 }
 
 let generation = 0;
@@ -184,6 +192,7 @@ onMounted(() => {
       // 路由不再擋未登入的人：身分還沒確認就在這裡確認（已經知道是誰就不必等）
       if (publicPlay && !session.me && !session.ready) await session.restore();
       if (stale()) return;
+      startShareRef(profileReady);
       if (publicPlay && !session.me) {
         const resolved = await resolvePlayCard(routeId.value, provider, contentLang(locale.value));
         if (stale()) return;
