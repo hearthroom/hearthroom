@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
@@ -62,13 +62,13 @@ Review works as follows: reviewers take submissions from a shared queue; a first
 
 ## Usage
 
-The public instance is at [hearthroom.club](https://hearthroom.club).
+The public instance is at [sukisuki.ai](https://sukisuki.ai).
 
 1. The board, search, card pages and author pages are public.
 2. **Sign in** with a card provider account. The provider issues a token scoped to this site; the site does not receive the password.
 3. **My cards** lists the account's cards at the provider. Select one and submit it for review, or create a new card in the editor. Each author has a weekly listing limit.
-4. The [card authoring guide](https://hearthroom.club/guide) covers fields, rules, the sandbox author API and importing from other platforms.
-5. The [developer documentation](https://hearthroom.club/developers) and the [OpenAPI description](docs/openapi.json) cover the HTTP API.
+4. The [card authoring guide](https://sukisuki.ai/guide) covers fields, rules, the sandbox author API and importing from other platforms.
+5. The [developer documentation](https://sukisuki.ai/developers) and the [OpenAPI description](docs/openapi.json) cover the HTTP API.
 
 ## Architecture
 

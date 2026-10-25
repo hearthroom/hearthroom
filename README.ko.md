@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
@@ -62,13 +62,13 @@ SillyTavern과의 차이는 실행 위치입니다. 로컬에 설치할 것이 �
 
 ## 사용하기
 
-공개 인스턴스: [hearthroom.club](https://hearthroom.club)
+공개 인스턴스: [sukisuki.ai](https://sukisuki.ai)
 
 1. 랭킹, 검색, 카드 페이지, 작성자 페이지는 공개입니다.
 2. 카드 제공자 계정으로 **로그인**합니다. 제공자는 이 사이트용 토큰을 발급하며, 사이트는 비밀번호를 받지 않습니다.
 3. **내 카드**에 제공자 쪽 카드가 나열됩니다. 하나를 골라 심사에 제출하거나 편집기에서 새 카드를 만듭니다. 작성자마다 주간 등록 한도가 있습니다.
-4. [카드 작성 가이드](https://hearthroom.club/guide)는 필드, 규칙, 샌드박스 작성자 API, 다른 플랫폼에서 가져오기를 다룹니다.
-5. [개발자 문서](https://hearthroom.club/developers)와 [OpenAPI 명세](docs/openapi.json)는 HTTP API를 다룹니다.
+4. [카드 작성 가이드](https://sukisuki.ai/guide)는 필드, 규칙, 샌드박스 작성자 API, 다른 플랫폼에서 가져오기를 다룹니다.
+5. [개발자 문서](https://sukisuki.ai/developers)와 [OpenAPI 명세](docs/openapi.json)는 HTTP API를 다룹니다.
 
 ## 아키텍처
 
