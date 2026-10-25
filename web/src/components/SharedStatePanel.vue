@@ -238,6 +238,8 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
 
       <details class="shared__draft">
         <summary>{{ k("draftTitle") }}</summary>
+        <!-- details 的內容不會當 grid 子項排，間距與靠右要放在自己的容器上 -->
+        <div class="shared__draft-body">
         <p class="subtle">{{ k("draftHint") }}</p>
         <ul class="shared__items">
           <li v-for="item in keys" :key="`draft-${item.key}`" class="shared__item">
@@ -260,6 +262,7 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
           </li>
         </ul>
         <button type="button" class="btn btn--danger shared__clear" :disabled="!writable" @click="clearDraft($event.currentTarget as HTMLElement)">{{ k("clearDraft") }}</button>
+        </div>
       </details>
     </template>
   </section>
@@ -297,10 +300,10 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
 .shared__num { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .shared__counter { margin: 0; display: flex; flex-wrap: wrap; gap: 4px var(--s-2); font-size: 14px; align-items: baseline; }
 .shared__reset, .shared__clear { justify-self: end; min-height: var(--h-lg); }
-.shared__draft { display: grid; gap: var(--s-3); }
+.shared__draft-body { display: grid; gap: var(--s-3); }
+.shared__draft-body > .subtle { margin: 0; }
 /* 不用 flex：summary 一變成 flex，瀏覽器的展開三角形就不見了 */
 .shared__draft summary { padding: 12px 0; line-height: 20px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text); }
-.shared__draft > .subtle { margin: 0; }
 @media (min-width: 761px) {
   .shared__item { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
   .shared__reset, .shared__clear { min-height: var(--h-md); }

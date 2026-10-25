@@ -103,13 +103,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 }
 .dlg {
   width: min(400px, 100%);
+  grid-template-columns: minmax(0, 1fr);
   padding: var(--s-5) var(--s-5) var(--s-4);
   display: grid; gap: var(--s-3);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
   animation: pop var(--dur-slow) var(--ease);
 }
-.dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; }
-.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); }
+/* 標題與內文可能帶使用者或作者給的長字（卡名、項目 key）：不斷行會把框撐得比畫面還寬 */
+.dlg > * { min-width: 0; }
+.dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
 .dlg__detail {
   display: block; padding: 10px 12px;
   border-radius: var(--r-sm); background: var(--surface-2);
