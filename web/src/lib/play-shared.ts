@@ -42,6 +42,12 @@ function playFor(roleId: string): PlayShareInput {
   if (!s || s.roleId !== roleId) throw sharedError("HOST_DENIED");
   return s;
 }
+/** 會改數字或產生短碼的操作：審核試玩時不給（審核的人不是作者，Worker 會寫進正式數字）。 */
+function writableFor(roleId: string): PlayShareInput {
+  const s = playFor(roleId);
+  if (s.review) throw sharedError("HOST_DENIED");
+  return s;
+}
 
 async function call(s: PlayShareInput, path: string, init: { method?: "GET" | "POST"; body?: unknown; auth: "optional" | "required"; query?: Record<string, string> }): Promise<unknown> {
   let token: string | null = null;
@@ -49,7 +55,9 @@ async function call(s: PlayShareInput, path: string, init: { method?: "GET" | "P
   if (init.auth === "required" && !token) throw sharedError("UNAUTHORIZED");
   const q = new URLSearchParams(init.query ?? {});
   if (s.draft) q.set("draft", "1");
-  const url = `${COMMUNITY_API}/cards/${encodeURIComponent(s.roleId)}${path}${q.size ? `?${q}` : ""}`;
+  // 不用 q.size：iOS 16 與較舊的瀏覽器沒有它，查詢字串（含 draft=1）會整串掉
+  const qs = q.toString();
+  const url = `${COMMUNITY_API}/cards/${encodeURIComponent(s.roleId)}${path}${qs ? `?${qs}` : ""}`;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -79,17 +87,17 @@ export function playSharedHost(deps: PlayShareDeps) {
       if (!body.enabled) throw sharedError("SHARED_DISABLED");
       return body.items ?? {};
     },
-    vote(roleId: string, key: string, option: string) {
-      return call(playFor(roleId), `/state/${encodeURIComponent(key)}/vote`, { method: "POST", auth: "required", body: { option } });
+    async vote(roleId: string, key: string, option: string) {
+      return call(writableFor(roleId), `/state/${encodeURIComponent(key)}/vote`, { method: "POST", auth: "required", body: { option } });
     },
-    add(roleId: string, key: string, delta: number) {
-      return call(playFor(roleId), `/state/${encodeURIComponent(key)}/add`, { method: "POST", auth: "required", body: { delta } });
+    async add(roleId: string, key: string, delta: number) {
+      return call(writableFor(roleId), `/state/${encodeURIComponent(key)}/add`, { method: "POST", auth: "required", body: { delta } });
     },
-    leaderboard(roleId: string, key: string, limit: number) {
+    async leaderboard(roleId: string, key: string, limit: number) {
       return call(playFor(roleId), `/state/${encodeURIComponent(key)}/leaderboard`, { auth: "optional", query: { limit: String(limit) } });
     },
     async tallyLink(roleId: string, context: string, pollKey: string) {
-      const s = playFor(roleId);
+      const s = writableFor(roleId);
       const card = playCardUrl(s, deps.links);
       if (!card) throw sharedError("HOST_DENIED");
       const body = (await call(s, "/share-tokens", { method: "POST", auth: "required", body: { context, poll: pollKey } })) as { token?: unknown };
@@ -100,12 +108,12 @@ export function playSharedHost(deps: PlayShareDeps) {
       return url.href;
     },
     async respond(roleId: string, option: string) {
-      const s = playFor(roleId);
+      const s = writableFor(roleId);
       if (!s.enabled || !s.poll) throw sharedError("HOST_DENIED");
       await call(s, `/share-tokens/${encodeURIComponent(s.poll.token)}/respond`, { method: "POST", auth: "required", body: { option } });
       return { ok: true };
     },
-    results(roleId: string) {
+    async results(roleId: string) {
       return call(playFor(roleId), "/share-tokens", { auth: "required" });
     },
   };

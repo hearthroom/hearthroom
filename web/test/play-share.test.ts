@@ -79,3 +79,14 @@ describe("卡內分享情境：宿主給舞台的值", () => {
     await expect(shareQr("x".repeat(1025))).rejects.toMatchObject({ code: "INVALID_ARGS" });
   });
 });
+
+describe("解平台短碼", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it("帶這張卡的供應商與這一局的 token，跟共用狀態的呼叫一致", async () => {
+    const { resolveShareToken } = await import("../src/lib/play-share");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ context: "p1-4.b", poll: { key: "p1-4", options: ["a"] } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveShareToken("r1", "~K7Q2M9XA", { bearer: "play-token", provider: "harbor" })).toEqual({ context: "p1-4.b", poll: { key: "p1-4", options: ["a"] } });
+    expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers).toMatchObject({ Authorization: "Bearer play-token", "X-Provider": "harbor" });
+  });
+});

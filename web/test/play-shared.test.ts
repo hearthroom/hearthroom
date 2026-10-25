@@ -124,3 +124,29 @@ describe("分享回流", () => {
     expect(playShareHost({ links }).read("r1")!.poll).toBeUndefined();
   });
 });
+
+describe("審查修正", () => {
+  it("瀏覽器沒有 URLSearchParams.size（iOS 16 等）：查詢字串照樣送出，試玩的 draft=1 不會掉", async () => {
+    const desc = Object.getOwnPropertyDescriptor(URLSearchParams.prototype, "size");
+    Object.defineProperty(URLSearchParams.prototype, "size", { get: () => undefined, configurable: true });
+    try {
+      setPlayShare({ ...base, draft: true });
+      fetchMock.mockImplementation(async () => ok({ enabled: true, items: {} }));
+      await host().read("r1", ["boss"]);
+      expect(fetchMock.mock.calls[0]![0]).toBe("/v1/cards/r1/state?keys=boss&draft=1");
+    } finally {
+      if (desc) Object.defineProperty(URLSearchParams.prototype, "size", desc);
+    }
+  });
+
+  it("審核試玩（?review=）能讀，但投票、加數、產生與回答分享連結都不寫進正式數字", async () => {
+    setPlayShare({ ...base, review: true, poll: { token: "~K7Q2M9XA", key: "p1-4", options: ["a"] } });
+    fetchMock.mockImplementation(async () => ok({ enabled: true, items: {} }));
+    expect(await codeOf(host().read("r1", ["boss"]))).toBe("ok");
+    expect(await codeOf(host().vote("r1", "p1-4", "a"))).toBe("HOST_DENIED");
+    expect(await codeOf(host().add("r1", "boss", 1))).toBe("HOST_DENIED");
+    expect(await codeOf(host().tallyLink("r1", "p1-4.b", "p1-4"))).toBe("HOST_DENIED");
+    expect(await codeOf(host().respond("r1", "a"))).toBe("HOST_DENIED");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
