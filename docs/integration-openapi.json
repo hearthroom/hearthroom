@@ -13138,6 +13138,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "sharedState": {
+            "$ref": "#/components/schemas/SharedStateDeclaration"
           }
         }
       },
@@ -13224,6 +13227,9 @@
               "type": "string"
             },
             "description": "Map from each Han character appearing in any rule's `find` to a character class containing its Simplified/Traditional variants, for the client to expand before compiling the pattern. Absent in the empty shape."
+          },
+          "sharedState": {
+            "$ref": "#/components/schemas/SharedStateDeclaration"
           }
         }
       },
@@ -13269,6 +13275,10 @@
             "format": "int64",
             "description": "Version last read; omitted/0 for the first save (409 if an asset already exists).",
             "default": 0
+          },
+          "sharedState": {
+            "$ref": "#/components/schemas/SharedStateDeclaration",
+            "description": "Omitted or `null` keeps the stored declaration; `{}` clears it."
           }
         }
       },
@@ -20178,6 +20188,10 @@
               "tavern"
             ],
             "description": "Origin dialect of the rules; `trial_unsupported` when unknown."
+          },
+          "sharedState": {
+            "$ref": "#/components/schemas/SharedStateDeclaration",
+            "description": "Omitted or `null` keeps the stored declaration; `{}` clears it."
           }
         }
       },
@@ -25660,6 +25674,76 @@
           "targetReadable",
           "listed"
         ]
+      },
+      "SharedStateDeclaration": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Shared state the card declares: polls and counters players can write. Keys and option IDs are 1–64 letters, digits, `.`, `_` or `-`, starting with a letter or digit; `{}` declares nothing. An invalid declaration is rejected with `validate_reject` (`reason: sharedState`).",
+        "properties": {
+          "polls": {
+            "type": "object",
+            "maxProperties": 16,
+            "description": "Up to 16 polls by key. `options` lists 2–12 option IDs; `share: true` also allows the poll on share links.",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "options"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 12,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+                  }
+                },
+                "share": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "counters": {
+            "type": "object",
+            "maxProperties": 16,
+            "description": "Up to 16 counters by key. `maxStep` is 1–1000 per write, `perMember` caps each player per period, `goal` is optional, and `period` is `none`, `day` or `week` (UTC+8).",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "maxStep",
+                "perMember"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "goal": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maxStep": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "perMember": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "period": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "day",
+                    "week"
+                  ]
+                }
+              }
+            }
+          }
+        }
       },
       "AuthorHistoryItem": {
         "type": "object",
