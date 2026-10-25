@@ -3304,7 +3304,7 @@
             "description": "card_not_found or owned operation not found."
           },
           "409": {
-            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled. card_reward_public_locked includes publicUntil, publicDays and requiredCredits; private and unlisted options remain unavailable until the deadline."
           },
           "503": {
             "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
@@ -3497,6 +3497,104 @@
           }
         },
         "description": "Private, no-store, primary D1 read with bookmark. Always validates actual source ownership and role.read. No enrollment or new command on GET. Publication complete means submission accepted, not public access."
+      }
+    },
+    "/v1/me/cards/{id}/delete": {
+      "post": {
+        "summary": "Delete an owned card and confirm any reward return",
+        "tags": [
+          "Library"
+        ],
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ],
+        "description": "Authenticates the actual author and forwards only the explicitly confirmed reward recovery amount. The community listing is withdrawn only after a confirmed successful deletion; rejected or unknown outcomes leave the listing unchanged. Retry with the same amount after checking the result.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rewardRecoveryCredits": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Actual amount read from the owner visibility projection and explicitly confirmed by the author; use zero without an active obligation."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deletion confirmed, with any full reward recovery, and local listing withdrawn."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.write required."
+          },
+          "404": {
+            "description": "card_not_found."
+          },
+          "409": {
+            "description": "card_reward_recovery_required or card_reward_recovery_insufficient. No deletion or partial recovery occurs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "publicUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Exact end of the public retention obligation. Display in the reader's timezone."
+                    },
+                    "publicDays": {
+                      "type": "integer",
+                      "description": "Saved retention duration of the award."
+                    },
+                    "requiredCredits": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Actual reward amount that must be recovered before author deletion."
+                    },
+                    "availableCredits": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Eligible unexpired and unreserved credits available at the failed recovery attempt."
+                    },
+                    "shortfallCredits": {
+                      "type": "integer",
+                      "format": "int64",
+                      "description": "Additional eligible credits needed for full recovery."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority unavailable or outcome unconfirmed; the local listing is preserved."
+          }
+        }
       }
     }
   },
@@ -4366,6 +4464,9 @@
               "changing",
               "unavailable"
             ]
+          },
+          "rewardRetention": {
+            "$ref": "#/components/schemas/RewardRetention"
           }
         },
         "required": [
@@ -4444,6 +4545,31 @@
           "operationId",
           "state"
         ]
+      },
+      "RewardRetention": {
+        "type": "object",
+        "required": [
+          "publicUntil",
+          "days",
+          "recoveryCredits"
+        ],
+        "properties": {
+          "publicUntil": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exact end of the saved public retention obligation; display in the reader's timezone."
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Public retention duration saved with the original reward."
+          },
+          "recoveryCredits": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Actual credits to return for author deletion before publicUntil."
+          }
+        }
       }
     }
   }

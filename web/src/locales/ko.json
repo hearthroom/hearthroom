@@ -3325,5 +3325,22 @@
   "maintenance.checking": "확인 중…",
   "maintenance.stillActive": "서버 업그레이드가 아직 진행 중이에요.",
   "maintenance.checkFailed": "다시 이용할 수 있는지 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
-  "maintenance.reload": "새로고침"
+  "maintenance.reload": "새로고침",
+  "rewardRetention.lock.badge": "창작 시즌 공개 유지 기간",
+  "rewardRetention.lock.reason": "이 카드는 창작 시즌 보상을 받아 {days}일 동안 공개를 유지해야 해요. {unlockAt}부터 공개 범위를 바꿀 수 있어요.",
+  "rewardRetention.lock.option": "{unlockAt}부터 선택할 수 있어요",
+  "rewardRetention.lock.error": "이 카드는 창작 시즌 보상을 받아 {unlockAt} 전에는 ‘나만 보기’나 ‘링크가 있는 사용자’로 바꿀 수 없어요.",
+  "rewardRetention.delete.title": "‘{name}’ 카드를 삭제할까요?",
+  "rewardRetention.delete.reward": "이 카드는 아직 창작 시즌의 {days}일 공개 유지 기간 중이에요. 삭제하면 보상을 회수하기 위해 사용 가능한 잔액에서 {points}포인트를 차감해요.",
+  "rewardRetention.delete.later": "{unlockAt}부터는 이 카드를 삭제해도 이 보상을 돌려주지 않아도 돼요.",
+  "rewardRetention.delete.confirm": "보상 반환 후 삭제",
+  "rewardRetention.delete.keep": "카드 유지",
+  "rewardRetention.delete.insufficientTitle": "포인트가 부족해 삭제할 수 없어요",
+  "rewardRetention.delete.insufficient": "이 카드를 삭제하려면 창작 시즌 보상 {points}포인트를 돌려줘야 해요. 사용 가능한 잔액은 {available}포인트로, {shortfall}포인트가 더 필요해요.",
+  "rewardRetention.delete.insufficientLater": "{unlockAt}까지 기다리면 이 보상을 돌려주지 않고 삭제할 수 있어요.",
+  "rewardRetention.reward.reclaimed": "카드 삭제로 창작 시즌 보상 반환",
+  "rewardRetention.rules.public": "창작 시즌 보상을 받은 카드는 {days}일 동안 공개를 유지해야 해요. 이 기간에는 ‘나만 보기’나 ‘링크가 있는 사용자’로 바꿀 수 없어요.",
+  "rewardRetention.rules.delete": "이 기간에 카드를 삭제하려면 해당 카드의 창작 시즌 보상을 돌려줘야 해요. 사용 가능한 포인트가 부족하면 삭제할 수 없어요.",
+  "rewardRetention.lock.reason.one": "이 카드는 창작 시즌 보상을 받아 {days}일 동안 공개를 유지해야 해요. {unlockAt}부터 공개 범위를 바꿀 수 있어요.",
+  "rewardRetention.rules.public.one": "창작 시즌 보상을 받은 카드는 {days}일 동안 공개를 유지해야 해요. 이 기간에는 ‘나만 보기’나 ‘링크가 있는 사용자’로 바꿀 수 없어요."
 }

@@ -3325,5 +3325,22 @@
   "maintenance.checking": "確認中…",
   "maintenance.stillActive": "サーバーのアップグレードはまだ続いています。",
   "maintenance.checkFailed": "再開したか確認できませんでした。しばらくしてからもう一度お試しください。",
-  "maintenance.reload": "更新"
+  "maintenance.reload": "更新",
+  "rewardRetention.lock.badge": "創作シーズン公開期間中",
+  "rewardRetention.lock.reason": "このカードは創作シーズン報酬を受け取ったため、{days}日間の公開が必要です。{unlockAt}から公開範囲を変更できます。",
+  "rewardRetention.lock.option": "{unlockAt}から選べます",
+  "rewardRetention.lock.error": "このカードは創作シーズン報酬を受け取ったため、{unlockAt}までは「自分のみ」や「リンクを知っている人」に変更できません。",
+  "rewardRetention.delete.title": "「{name}」を削除しますか？",
+  "rewardRetention.delete.reward": "このカードは創作シーズンの{days}日間の公開期間中です。削除すると、報酬の{points}ポイントを利用可能な残高から差し引きます。",
+  "rewardRetention.delete.later": "{unlockAt}以降に削除する場合、この報酬の返還は不要です。",
+  "rewardRetention.delete.confirm": "報酬を返して削除",
+  "rewardRetention.delete.keep": "カードを残す",
+  "rewardRetention.delete.insufficientTitle": "ポイント不足で削除できません",
+  "rewardRetention.delete.insufficient": "このカードの削除には、創作シーズン報酬の{points}ポイントの返還が必要です。利用可能な残高は{available}ポイントで、あと{shortfall}ポイント足りません。",
+  "rewardRetention.delete.insufficientLater": "{unlockAt}以降なら、この報酬を返さずに削除できます。",
+  "rewardRetention.reward.reclaimed": "カード削除による創作シーズン報酬の返還",
+  "rewardRetention.rules.public": "創作シーズン報酬を受け取ったカードは、{days}日間の公開が必要です。その間は「自分のみ」や「リンクを知っている人」に変更できません。",
+  "rewardRetention.rules.delete": "この期間中にカードを削除するには、そのカードの創作シーズン報酬を返す必要があります。利用可能なポイントが足りない場合は削除できません。",
+  "rewardRetention.lock.reason.one": "このカードは創作シーズン報酬を受け取ったため、{days}日間の公開が必要です。{unlockAt}から公開範囲を変更できます。",
+  "rewardRetention.rules.public.one": "創作シーズン報酬を受け取ったカードは、{days}日間の公開が必要です。その間は「自分のみ」や「リンクを知っている人」に変更できません。"
 }

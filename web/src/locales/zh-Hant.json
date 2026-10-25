@@ -3325,5 +3325,22 @@
   "maintenance.checking": "正在檢查…",
   "maintenance.stillActive": "伺服器仍在升級中。",
   "maintenance.checkFailed": "暫時無法確認是否恢復，請稍後再試。",
-  "maintenance.reload": "重新整理"
+  "maintenance.reload": "重新整理",
+  "rewardRetention.lock.badge": "創作季公開期限內",
+  "rewardRetention.lock.reason": "這張卡已領取創作季獎勵，須維持公開 {days} 天，{unlockAt} 起可變更公開範圍。",
+  "rewardRetention.lock.option": "{unlockAt} 起可選",
+  "rewardRetention.lock.error": "這張卡已領取創作季獎勵，{unlockAt} 前無法改為「僅自己」或「有連結的人」。",
+  "rewardRetention.delete.title": "要刪除「{name}」嗎？",
+  "rewardRetention.delete.reward": "這張卡仍在創作季的 {days} 天公開期限內，刪除會從你的可用積分收回 {points} 積分。",
+  "rewardRetention.delete.later": "{unlockAt} 起刪除就不會收回這筆獎勵。",
+  "rewardRetention.delete.confirm": "刪除並退回獎勵",
+  "rewardRetention.delete.keep": "保留卡片",
+  "rewardRetention.delete.insufficientTitle": "積分不足，無法刪除",
+  "rewardRetention.delete.insufficient": "刪除這張卡須退回 {points} 積分的創作季獎勵，目前可用 {available} 積分，還差 {shortfall} 積分。",
+  "rewardRetention.delete.insufficientLater": "你也可以等到 {unlockAt} 再刪除，不用退回這筆獎勵。",
+  "rewardRetention.reward.reclaimed": "刪卡退回創作季獎勵",
+  "rewardRetention.rules.public": "領取創作季獎勵後，卡片須維持公開 {days} 天，期間無法改為「僅自己」或「有連結的人」。",
+  "rewardRetention.rules.delete": "期間刪除卡片須退回該卡的創作季獎勵，可用積分不足時無法刪除。",
+  "rewardRetention.lock.reason.one": "這張卡已領取創作季獎勵，須維持公開 {days} 天，{unlockAt} 起可變更公開範圍。",
+  "rewardRetention.rules.public.one": "領取創作季獎勵後，卡片須維持公開 {days} 天，期間無法改為「僅自己」或「有連結的人」。"
 }

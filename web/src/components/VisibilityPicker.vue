@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import {retentionText} from '@/lib/reward-retention';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
 const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string}>(),{dirty:false,quotaFull:false});
 const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[]}>();
@@ -46,6 +47,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
   <template v-else-if="phase==='loading'"><div v-for="n in 3" :key="n" class="ghost visibility-skeleton" /></template>
   <div v-else-if="phase==='error'" class="notice notice--error" role="alert">{{ t('visibility.loadFailed') }} <button type="button" class="btn visibility-reload" @click="emit('reload')">{{ t('visibility.reload') }}</button></div>
   <template v-else>
+   <div v-if="value?.rewardRetention" class="notice" data-reward-retention role="status"><p>{{ t('rewardRetention.lock.badge') }}</p><p>{{ retentionText('lock.reason',value.rewardRetention) }}</p></div>
    <div role="radiogroup" :aria-label="t('visibility.title')" class="visibility-options">
     <label v-for="access in options" :key="access" class="visibility-option" :class="{'visibility-option--selected':selected===access&&!disabled(access),'visibility-option--disabled':disabled(access)}">
      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75">

@@ -85,7 +85,7 @@ describe("審核通過就發", () => {
     expect(stamped.reward).toMatchObject({ status: "paid", amount: 10000, cardId: await cardIdOf("r1") });
     expect(pool.sent).toHaveLength(1);
     // 發放不帶有效期：點數池只是額度，不帶就是永久
-    expect(pool.sent[0]).toEqual({ token: "admin-token", key: expect.any(String), accountNo: AUTHOR, amount: 10000, campaignRef: campaignId, contentRef: "harbor:r1" });
+    expect(pool.sent[0]).toEqual({ token: "admin-token", key: expect.any(String), accountNo: AUTHOR, amount: 10000, campaignRef: campaignId, contentRef: "harbor:r1", retentionRoleId:"r1", publicRetentionDays:30 });
     expect(await rewards()).toEqual([{ card_id: await cardIdOf("r1"), status: "paid", amount: 10000, recipient_account_no: AUTHOR, campaign_id: campaignId }]);
     const audit = await env.DB.prepare("SELECT action FROM audit_log WHERE subject_kind = 'card_reward' ORDER BY created_at, action").all<{ action: string }>();
     expect(audit.results.map((r) => r.action).sort()).toEqual(["paid", "request"]);

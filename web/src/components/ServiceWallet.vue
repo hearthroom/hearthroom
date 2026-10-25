@@ -73,7 +73,7 @@ function planItemOf(r: ScoreRecord): string {
   return t(r.record === "refund" ? "wallet.reason.refund" : "wallet.reason.grant");
 }
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…），其餘照服務給的分類。 */
-const itemOf = (r: ScoreRecord) => planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
+const itemOf = (r: ScoreRecord) => r.rewardRecovery?t("rewardRetention.reward.reclaimed"):planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
   if (r.record === "grant" && r.playerNote) return { text: r.playerNote, off: false };

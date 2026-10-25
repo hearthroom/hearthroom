@@ -501,7 +501,7 @@ const entryOf = (b: unknown) => {
   return r && typeof r.entryId === "string" && r.entryId && typeof r.paidAt === "string" ? { entryId: r.entryId, paidAt: r.paidAt } : null;
 };
 
-async function payCampaign(env: Env, bearer: string, body: { key: string; accountNo: number; amount: number; campaignRef: string; contentRef: string }, provider: ProviderId = DEFAULT_PROVIDER): Promise<PayResult> {
+async function payCampaign(env: Env, bearer: string, body: { key: string; accountNo: number; amount: number; campaignRef: string; contentRef: string;retentionRoleId?:string;publicRetentionDays?:number }, provider: ProviderId = DEFAULT_PROVIDER): Promise<PayResult> {
   const url = apiUrl(env, provider, "/open/v1/campaign-pool/payouts");
   try {
     const res = await fetch(url, {

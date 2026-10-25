@@ -1,3 +1,4 @@
+import {retentionParams} from './reward-retention';
 import { deviceToken } from "./reward-device";
 import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
@@ -168,11 +169,15 @@ export function describeApiError(status: number, raw: string, detail?: LimitDeta
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail; until?: number | null };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail; until?: number | null;publicUntil?:string;publicDays?:number;requiredCredits?:number;availableCredits?:number;shortfallCredits?:number };
     if (body.detail?.field === "customInstructions") body.detail.field = "jailbreak";
     const raw = body.error ?? body.message ?? "";
     // 禁言帶著到期時間：null＝永久。沒帶（舊回應）就用不講期限的那一句。
-    const said = raw === "comment_muted" && body.until !== undefined
+    const retained=body.publicUntil&&body.publicDays&&body.requiredCredits?{publicUntil:body.publicUntil,days:body.publicDays,recoveryCredits:body.requiredCredits}:null;
+    const said = retained&&raw==='card_reward_recovery_insufficient'&&body.availableCredits!==undefined&&body.shortfallCredits!==undefined ? i18n.global.t('rewardRetention.delete.insufficient',retentionParams(retained,body.availableCredits,body.shortfallCredits))+' '+i18n.global.t('rewardRetention.delete.insufficientLater',retentionParams(retained))
+      :retained&&raw==='card_reward_recovery_required'?i18n.global.t('rewardRetention.delete.reward',retentionParams(retained))+' '+i18n.global.t('rewardRetention.delete.later',retentionParams(retained))
+      :retained&&raw==='card_reward_public_locked'?i18n.global.t('rewardRetention.lock.error',retentionParams(retained))
+      : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
     throw new ApiError(res.status, said, body.error ?? "");
@@ -1073,6 +1078,7 @@ export async function redeemReferral(token: string, code: string, provider: Prov
 }
 
 export interface ScoreRecord {
+ rewardRecovery?:boolean;
   playerNote?: string;
   id: number;
   record: string;
@@ -1188,12 +1194,12 @@ export async function fetchRoleValidation(roleId: string, token: string): Promis
 
 /** 送審。確認摘要是給審核方看的，上游要求至少 8 個字，所以不能送空字串。 */
 /**
- * 刪掉自己的一張卡。上游連同它的對話、世界書綁定、搜尋索引一起清，不可逆——
- * 呼叫前一定要走過「輸入角色名稱」的確認（CardEditorPage.remove）。
+ * Worker 先向 Provider 刪除來源卡並全額收回期限內的獎勵，成功才撤下社群列表。
+ * 呼叫前須輸入角色名稱，並明確確認當次實際收回金額。
  */
-export async function deleteRole(roleId: string, token: string): Promise<void> {
+export async function deleteRole(roleId: string, token: string,rewardRecoveryCredits=0): Promise<void> {
   await json<{ message?: string }>(
-    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}`, { method: "DELETE", headers: authHeaders(token) }),
+    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/delete`, { method: "POST", headers:{...authHeaders(token),"Content-Type":"application/json"},body:JSON.stringify({rewardRecoveryCredits}) }),
   );
 }
 
