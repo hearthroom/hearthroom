@@ -224,12 +224,12 @@
 `rules.json` の `sharedState` で宣言した投票とカウンターは、このカードを遊ぶ全員で共有されます。読み書きには `sdk.shared`（クラシックカードでは `window.stage.shared`）を使います。
 
 - `read(keys)` はキー 1 つ、または最大 16 個を受け取り、`{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }` を返します。宣言されていないキーは結果に含まれません。`mine` はプレイヤー自身の選択や貢献で、ゲストにはありません。`previous` は前の期間の合計です。
-- `vote(key, option)` は `{ mine }` を返します。投票は 1 日 10 回まで変更できます。
+- `vote(key, option)` は `{ mine }` を返します。1 つの投票につき、最初の投票を含めて 1 日 10 回まで投票・変更できます。同じ選択肢を選び直しても回数には数えません。
 - `add(key, delta)` は 1 からそのカウンターの `maxStep` までの整数を加え、`{ total, mine, reachedAt }` を返します。
-- `leaderboard(key, { limit })` は `{ items: [{ rank, name, value }], mine? }` を返します。今期もっとも貢献したプレイヤー（既定 10 人、最大 50 人）を公開ニックネームで示し、テストアカウントは載りません。
+- `leaderboard(key, { limit })` は `{ items: [{ rank, name, value }], mine? }` を返します。今期もっとも貢献したプレイヤー（既定 10 人、最大 50 人）を公開ニックネームで示し、テストアカウントは載りません。カウンターの `total`、`mine`、ランキングは期間ごとにリセットされます。
 
-読み取りは誰でもできます。書き込みには、ログインしていて、このカードを遊んだことのあるプレイヤーが必要です。数値はカードに自動で届かないので、必要に応じて読み直してください。間隔は 10 秒以上空けてください。
+読み取りは誰でもできます。書き込みには、ログインしていて、このカードを遊んだことのある（会話を 1 つ始めていれば十分です）プレイヤーが必要です。数値はカードに自動で届かないので、必要に応じて読み直してください。間隔は 10 秒以上空けてください。作者は、新しい非公開カードや CLI で作った試遊カードを含め、自分のどのカードでも試せます。作者の数値はプレイヤーの数値と分けて記録されます。
 
-共有への回答は共有リンクの上に成り立っています。`sdk.share.tallyLink(code, pollKey)` は、`share: true` で宣言した投票に、プラットフォームの短縮コード（`?share=~XXXXXXXX`）付きリンクを作ります。非同期なので、クリック前に用意しておいてください。同じコードと投票の組み合わせなら同じリンクが返り、1 人 1 日 20 本まで、リンクは 90 日間有効です。友だちがリンクを開くと、`sdk.share.context` にコード、`sdk.share.poll` に答えられる質問 `{ key, options }`（ないときは `null`）が入り、`sdk.share.respond(option)` で答えます。共有した人は `sdk.share.results()` で自分のリンクを読みます。各項目は `{ context, pollKey, total, counts, updatedAt }` で、`total` はリアルタイム、`counts` は 3 人以上が答えると表示され、1 日 1 回更新されます。誰が共有し、誰が答えたかはカードにはわかりません。カードはこの数値でカード内のコンテンツを解放できますが、プラットフォームのポイントが付与されることはありません。
+共有への回答は共有リンクの上に成り立っています。`sdk.share.tallyLink(code, pollKey)` は、`share: true` で宣言した投票に、プラットフォームの短縮コード（`?share=~XXXXXXXX`）付きリンクを作ります。非同期なので、クリック前に用意しておいてください。同じコードと投票の組み合わせなら同じリンクが返り、1 人 1 日 20 本まで、リンクは 90 日間有効です。友だちがリンクを開くと、`sdk.share.context` にコード、`sdk.share.poll` に答えられる質問 `{ key, options }`（ないときは `null`）が入り、`sdk.share.respond(option)` で答えます。この回答はリンクごとに記録され、投票そのものの票とは別に扱われます。共有した人は `sdk.share.results()` で自分のリンクを読みます。各項目は `{ context, pollKey, total, counts, updatedAt }` で、`total` はリアルタイム、`counts` は 3 人以上が答えると表示され、1 日 1 回更新されます。誰が共有し、誰が答えたかはカードにはわかりません。カードはこの数値でカード内のコンテンツを解放できますが、プラットフォームのポイントが付与されることはありません。
 
-エラーコードは両方のページで共通です：`SHARED_DISABLED`（プラットフォームまたは作者が一時停止中）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（まだ遊んでいない、または自分のリンクに答えようとした）、`UNAUTHORIZED`（未ログイン）、`RATE_LIMITED`（少し待って再試行）、`LIMIT_REACHED`（`err.data.reason` は `goal` か `limit`）、`HOST_DENIED`（古いプレイページ。過去の会話や審査用の試遊では読み取りのみ）。作者の試遊（`?mode=source`）とテストアカウントは、プレイヤーとは別の数値を持ちます。編集画面の「プレイヤーの投票とカウント」または `hearthroom card state` で確認、一時停止、リセットできます。
+エラーコードは両方のページで共通です：`SHARED_DISABLED`（プラットフォームまたは作者が一時停止中）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（まだ遊んでいない、または自分のリンクに答えようとした）、`UNAUTHORIZED`（未ログイン）、`RATE_LIMITED`（少し待って再試行）、`LIMIT_REACHED`（`err.data.reason` は `goal` か `limit`）、`HOST_DENIED`（古いプレイページ。過去の会話や審査用の試遊では読み取りのみ。審査に出したことも公開範囲を設定したこともないカード、たとえば試遊カードでは、ほかの人が開けないため `tallyLink` で回答用リンクを作れません）。作者の試遊（`?mode=source`）とテストアカウントは、プレイヤーとは別の数値を持ちます。編集画面の「プレイヤーの投票とカウント」または `hearthroom card state` で確認、一時停止、リセットできます。
