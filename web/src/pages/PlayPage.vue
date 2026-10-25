@@ -115,7 +115,7 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
   registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
-  await adoptShare(resolved);
+  await adoptShare(resolved, stale);
   if (stale()) return false;
   if (playApp) applyCardHead(resolved.card, locale.value);
   if (routeId.value !== resolved.number) {
@@ -132,7 +132,7 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
  * 卡內分享情境（lib/play-share）：朋友的情境碼只在一般遊玩開機時給，看紀錄、審核試玩不帶；
  * 分享連結與「誰打得開」照給。登入者的推薦碼跟舞台一起載，通常在殼握手前就到了。
  */
-async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>) {
+async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, stale: () => boolean) {
   const fresh = typeof route.query.review !== "string" && typeof route.query.resume !== "string";
   let raw = fresh && typeof route.query.share === "string" ? route.query.share : null;
   const enabled = resolved.card?.shareContext === true;
@@ -141,6 +141,8 @@ async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>)
   const token = enabled ? shareTokenOf(raw) : null;
   if (token) {
     const hit = await resolveShareToken(resolved.roleId, token, { bearer: session.me ? await session.accessToken().catch(() => null) : null });
+    // 查短碼的途中換了卡：這一筆不能蓋掉下一張卡的值
+    if (stale()) return;
     raw = hit?.context ?? null;
     poll = hit?.poll ? { token, ...hit.poll } : null;
   }

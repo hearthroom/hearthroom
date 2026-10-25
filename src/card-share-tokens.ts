@@ -20,9 +20,15 @@ export const TOKENS_PER_DAY = 20;
 /** 回應滿這麼多人才給各選項人數。 */
 export const RESULT_THRESHOLD = 3;
 
+/** 每一碼都均勻：丟掉 252 以上的位元組（36 × 7 = 252），不然前幾個字母出現得比較多。 */
 function newToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
-  return "~" + Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
+  let out = "";
+  while (out.length < 8) {
+    for (const b of crypto.getRandomValues(new Uint8Array(16))) {
+      if (b < 252 && out.length < 8) out += ALPHABET[b % ALPHABET.length];
+    }
+  }
+  return "~" + out;
 }
 
 /**
@@ -30,7 +36,7 @@ function newToken(): string {
  * 卡片在每次畫分享圖時都呼叫也不會一直長新碼。
  */
 export async function mintToken(env: Env, state: CardState, ownerId: string, context: string, pollKey: string, now: number): Promise<{ token: string; expiresAt: number }> {
-  const poll = state.decl.polls[pollKey];
+  const poll = pollKey in state.decl.polls ? state.decl.polls[pollKey] : undefined;
   if (!poll || !poll.share) throw new HttpError(400, "not_declared");
   const existing = await env.DB.prepare("SELECT token, expires_at FROM card_share_tokens WHERE owner_member_id=? AND card_id=? AND ns=? AND context=? AND poll_key=? AND expires_at > ? ORDER BY created_at DESC LIMIT 1")
     .bind(ownerId, state.cardId, state.ns, context, pollKey, now).first<{ token: string; expires_at: number }>();
@@ -56,7 +62,7 @@ export async function tokenFor(env: Env, cardId: number, token: string, now: num
   return row && row.card_id === cardId && row.expires_at > now ? row : null;
 }
 
-export interface TokenResult { context: string; pollKey: string; total: number; counts: Record<string, number> | null; updatedAt: string | null; expiresAt: number }
+export interface TokenResult { token: string; context: string; pollKey: string; total: number; counts: Record<string, number> | null; updatedAt: string | null; expiresAt: number }
 
 /** 各選項的人數（即時，只給快照用）。 */
 async function liveCounts(env: Env, row: TokenRow, options: string[]): Promise<{ counts: Record<string, number>; total: number }> {
@@ -77,15 +83,17 @@ export async function ownerResults(env: Env, state: CardState, ownerId: string, 
   const day = localDay(now);
   const out: TokenResult[] = [];
   for (const row of rows.results) {
-    const options = state.decl.polls[row.poll_key]?.options ?? [];
+    const options = row.poll_key in state.decl.polls ? state.decl.polls[row.poll_key]!.options : [];
     const live = await liveCounts(env, row, options);
     let snap = await env.DB.prepare("SELECT counts, total FROM card_share_snapshots WHERE token=? AND day=?").bind(row.token, day).first<{ counts: string; total: number }>();
-    if (!snap) {
+    // 過期的連結不再收回應，也不再照新的快照（最後一張還在就照那張回）
+    if (!snap && row.expires_at <= now) snap = await env.DB.prepare("SELECT counts, total FROM card_share_snapshots WHERE token=? ORDER BY day DESC LIMIT 1").bind(row.token).first<{ counts: string; total: number }>() ?? { counts: JSON.stringify(live.counts), total: live.total };
+    else if (!snap) {
       snap = { counts: JSON.stringify(live.counts), total: live.total };
       await env.DB.prepare("INSERT OR IGNORE INTO card_share_snapshots (token, day, counts, total) VALUES (?, ?, ?, ?)").bind(row.token, day, snap.counts, snap.total).run();
     }
     const shown = snap.total >= RESULT_THRESHOLD;
-    out.push({ context: row.context, pollKey: row.poll_key, total: live.total, counts: shown ? (JSON.parse(snap.counts) as Record<string, number>) : null, updatedAt: shown ? day : null, expiresAt: row.expires_at });
+    out.push({ token: row.token, context: row.context, pollKey: row.poll_key, total: live.total, counts: shown ? (JSON.parse(snap.counts) as Record<string, number>) : null, updatedAt: shown ? day : null, expiresAt: row.expires_at });
   }
   return out;
 }

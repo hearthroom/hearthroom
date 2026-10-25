@@ -20,11 +20,13 @@ const ACCOUNTS: Record<string, { id: number; accountClass?: "test" }> = { alice:
 let cardId = "";
 let declared: unknown = DECL;
 let limit: { success: boolean } = { success: true };
+let readLimit: { success: boolean } = { success: true };
 
 beforeEach(async () => {
   await resetDb();
   declared = DECL;
   limit = { success: true };
+  readLimit = { success: true };
   upstream.fetchMe = async (_env, token) => {
     const a = ACCOUNTS[token];
     if (!a) throw new HttpError(401, "upstream rejected the token");
@@ -32,6 +34,7 @@ beforeEach(async () => {
   };
   upstream.fetchSharedState = async () => declared;
   cardId = (await upsertCard(env.DB, role({ roleId: "src-1", authorNumId: 10001 }), Date.now())).id;
+  await forgetDecl();
   for (const [name, a] of Object.entries(ACCOUNTS)) {
     const member = await makeMember(a.id);
     await env.DB.prepare("UPDATE members SET display_name = ? WHERE id = ?").bind(name === "carol" ? null : name.toUpperCase(), member).run();
@@ -39,13 +42,19 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
+/** 宣告依 roleId 快取在 Cache API：換宣告或模擬 Provider 壞掉前先清掉這張卡的。 */
+async function forgetDecl() {
+  const r = await env.DB.prepare("SELECT source_role_id AS s, approved_hosted_role_id AS a FROM cards").first<{ s: string; a: string | null }>();
+  for (const id of [r?.s, r?.a]) if (id) await caches.default.delete(`https://card-state.internal/decl/harbor/${id}`);
+}
+
 async function call(path: string, opts: { token?: string; method?: string; body?: unknown; vars?: Record<string, unknown> } = {}) {
   const ctx = createExecutionContext();
   const res = await worker.fetch(new Request(`https://c.test${path}`, {
     method: opts.method ?? (opts.body === undefined ? "GET" : "POST"),
-    headers: { ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}), ...(opts.body === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: { "cf-connecting-ip": "203.0.113.7", ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}), ...(opts.body === undefined ? {} : { "Content-Type": "application/json" }) },
     ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),
-  }), { ...env, CARD_STATE_ENABLED: "true", CARD_STATE_MEMBER_LIMIT: { limit: async () => limit }, CARD_STATE_CARD_LIMIT: { limit: async () => ({ success: true }) }, ...opts.vars } as typeof env, ctx);
+  }), { ...env, CARD_STATE_ENABLED: "true", CARD_STATE_MEMBER_LIMIT: { limit: async () => limit }, CARD_STATE_CARD_LIMIT: { limit: async () => ({ success: true }) }, CARD_STATE_READ_LIMIT: { limit: async () => readLimit }, ...opts.vars } as typeof env, ctx);
   await waitOnExecutionContext(ctx);
   return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
 }
@@ -100,6 +109,7 @@ describe("投票", () => {
     await played("alice"); await played("bob");
     await vote("alice", "a"); await vote("bob", "c");
     declared = { polls: { "p1-4": { options: ["a", "b"] } } };
+    await forgetDecl();
     expect((await read("p1-4")).body.items["p1-4"]).toEqual({ kind: "poll", counts: { a: 1, b: 0 }, total: 1 });
   });
 });
@@ -198,4 +208,92 @@ describe("分享回流（短碼）", () => {
     expect((await results("bob")).body.items).toEqual([]);
     expect(JSON.stringify((await call(`/v1/cards/src-1/share-tokens/${token}`)).body)).not.toContain("member-");
   });
+});
+
+describe("審查修正", () => {
+  it("內建物件名稱當 key 不會出錯：讀取當成沒宣告，寫入回 not_declared", async () => {
+    await played("alice");
+    expect(await call("/v1/cards/src-1/state?keys=constructor,toString,__proto__,p1-4")).toMatchObject({ status: 200, body: { enabled: true } });
+    expect(Object.keys((await read("constructor,toString")).body.items)).toEqual([]);
+    expect(await call("/v1/cards/src-1/state/constructor/vote", { token: "alice", body: { option: "a" } })).toMatchObject({ status: 400, body: { error: "not_declared" } });
+    expect(await call("/v1/cards/src-1/state/valueOf/add", { token: "alice", body: { delta: 1 } })).toMatchObject({ status: 400, body: { error: "not_declared" } });
+  });
+
+  it("宣告依 roleId 快取：連續讀寫只問 Provider 一次；Provider 讀不到時寫入回可重試的 503，不是 not_declared", async () => {
+    await played("alice");
+    let calls = 0;
+    upstream.fetchSharedState = async () => { calls++; return DECL; };
+    await read("p1-4"); await read("p1-4"); await vote("alice", "a");
+    expect(calls).toBe(1);
+    upstream.fetchSharedState = async () => { throw new HttpError(502, "upstream author asset failed with 500"); };
+    await forgetDecl();
+    expect(await vote("alice", "b")).toMatchObject({ status: 503, body: { error: "declaration_unavailable" } });
+    expect((await read("p1-4")).body).toEqual({ enabled: true, items: {} });
+  });
+
+  it("加滿上限之後再按，不會讓自己在同分裡往後排", async () => {
+    for (const w of ["alice", "bob"]) await played(w);
+    await add("alice", "cheer", 5);
+    await add("bob", "cheer", 5);
+    const capped = { ...DECL, counters: { ...DECL.counters, cheer: { maxStep: 5, perMember: 5 } } };
+    declared = capped;
+    await forgetDecl();
+    expect(await add("alice", "cheer", 1)).toMatchObject({ status: 429 });
+    expect((await call("/v1/cards/src-1/state/cheer/leaderboard")).body.items.map((r: { name: string }) => r.name)).toEqual(["ALICE", "BOB"]);
+  });
+
+  it("測試帳號開別人的私卡一樣是 404", async () => {
+    await env.DB.prepare("UPDATE members SET account_class = 'test', test_generation = 1 WHERE id = 'member-99'").run();
+    const work = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO works VALUES(?,?,?,?,?)").bind(work, "member-10001", "harbor", "src-1", 1).run();
+    await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction) VALUES(?,'harbor','src-1','private',1,'none')").bind(work).run();
+    expect((await call("/v1/cards/src-1/state?keys=p1-4", { token: "qa" })).status).toBe(404);
+    expect((await call("/v1/cards/src-1/state?keys=p1-4", { token: "alice" })).status).toBe(404);
+    // 作者自己的私卡照樣讀得到（寫進 draft）
+    expect((await call("/v1/cards/src-1/state?keys=p1-4", { token: "author" })).status).toBe(200);
+  });
+
+  it("重設與清空草稿都留稽核紀錄", async () => {
+    await call("/v1/me/cards/src-1/shared-state/cheer/reset", { token: "author", body: {} });
+    await call("/v1/me/cards/src-1/shared-state/draft/clear", { token: "author", body: {} });
+    const audit = await env.DB.prepare("SELECT action FROM audit_log WHERE subject_kind = 'card_state' ORDER BY created_at").all<{ action: string }>();
+    expect(audit.results.map((r) => r.action)).toEqual(["reset", "draft_clear"]);
+  });
+});
+
+describe("審查修正（分享回流）", () => {
+  const SHARE_DECL = { polls: { "p1-4": { options: ["a", "b", "c"], share: true } } };
+  it("登入過期的人開短碼：當成遊客，情境碼照樣送到；宣告讀不到也照樣給情境碼", async () => {
+    declared = SHARE_DECL;
+    await played("alice");
+    const token = (await call("/v1/cards/src-1/share-tokens", { token: "alice", body: { context: "p1-4.b", poll: "p1-4" } })).body.token as string;
+    expect((await call(`/v1/cards/src-1/share-tokens/${token}`, { token: "expired" })).body).toMatchObject({ context: "p1-4.b" });
+    upstream.fetchSharedState = async () => { throw new HttpError(502, "upstream failed"); };
+    await forgetDecl();
+    expect((await call(`/v1/cards/src-1/share-tokens/${token}`)).body).toEqual({ context: "p1-4.b", poll: null });
+  });
+
+  it("別的命名空間的人回應正式連結：不收（測試帳號不能替正式連結灌回應）", async () => {
+    declared = SHARE_DECL;
+    await env.DB.prepare("UPDATE members SET account_class = 'test', test_generation = 1 WHERE id = 'member-99'").run();
+    await played("alice"); await played("qa");
+    const token = (await call("/v1/cards/src-1/share-tokens", { token: "alice", body: { context: "p1-4.b", poll: "p1-4" } })).body.token as string;
+    expect(await call(`/v1/cards/src-1/share-tokens/${token}/respond`, { token: "qa", body: { option: "a" } })).toMatchObject({ status: 403, body: { error: "not_eligible" } });
+  });
+
+  it("結果帶短碼本身，同一個情境碼的兩條連結分得出來；過期的不再照快照", async () => {
+    declared = SHARE_DECL;
+    await played("alice");
+    const token = (await call("/v1/cards/src-1/share-tokens", { token: "alice", body: { context: "p1-4.b", poll: "p1-4" } })).body.token as string;
+    expect((await call("/v1/cards/src-1/share-tokens", { token: "alice" })).body.items[0]).toMatchObject({ token });
+    await env.DB.prepare("UPDATE card_share_tokens SET expires_at = 1").run();
+    await env.DB.prepare("DELETE FROM card_share_snapshots").run();
+    await call("/v1/cards/src-1/share-tokens", { token: "alice" });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM card_share_snapshots").first()).toEqual({ n: 0 });
+  });
+});
+
+it("讀取也限流（每個連線 IP），打滿回 rate_limited", async () => {
+  readLimit = { success: false };
+  expect(await read("p1-4")).toMatchObject({ status: 429, body: { error: "rate_limited" } });
 });
