@@ -311,6 +311,8 @@ const saving = ref(false);
 /** 世界書分段送出時的進度；沒在送就是 null。 */
 const saveProgress = ref<{ done: number; total: number } | null>(null);
 const error = ref("");
+const deletionError = ref("");
+const deletionErrorNotice = ref<HTMLElement | null>(null);
 const saved = ref(false);
 const reviewRetry = ref(false);
 const reviewResubmitted = ref(false);
@@ -848,7 +850,7 @@ async function resumeDeletion(token:string):Promise<boolean>{
 }
 async function remove() {
  if(isNew.value||saving.value)return;
- saving.value=true;error.value='';
+ saving.value=true;error.value='';deletionError.value='';
  try{
   const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));
   if(await resumeDeletion(token))return;
@@ -863,7 +865,14 @@ async function remove() {
    ...(reward?{cancelText:t('rewardRetention.delete.keep')}:{}),danger:true});
   if(!ok)return;
   await finishDeletion(roleId.value,reward?.recoveryCredits??0,token);
- }catch(err){error.value=err instanceof Error?err.message:t('state.actionFailed');}
+ }catch(err){
+  deletionError.value=err instanceof Error?err.message:t('state.actionFailed');
+  await nextTick();
+  // Keep the failure beside its action, after the confirmation has restored focus.
+  // Immediate scrolling also works when a long editor or reduced motion is in use.
+  deletionErrorNotice.value?.focus({preventScroll:true});
+  deletionErrorNotice.value?.scrollIntoView({block:'center',behavior:'instant'});
+ }
  finally{saving.value=false;}
 }
 
@@ -1340,6 +1349,7 @@ async function exportCard(format: "png" | "json") {
           <div v-if="!isNew" class="panel panel--danger">
             <h2>{{ $t("editor.delete") }}</h2>
             <p class="muted">{{ $t("editor.delete.hint") }}</p>
+            <p v-if="deletionError" ref="deletionErrorNotice" class="notice notice--error" role="alert" tabindex="-1">{{ deletionError }}</p>
             <button type="button" class="btn btn--danger" :disabled="saving" @click="remove">
               {{ $t("editor.delete.button") }}
             </button>
