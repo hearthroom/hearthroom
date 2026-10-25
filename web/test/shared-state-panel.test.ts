@@ -231,6 +231,80 @@ describe("審查修正：確認與寫入綁住來源、依未執行保證分類"
     expect(api.fetch.mock.calls.length).toBe(reads);
   });
 
+});
+
+describe("一個回饋區、一個恢復動作（editor-toggle-ui.md §9.2）", () => {
+  const feedback = () => root.querySelectorAll(".shared__feedback");
+  const recover = () => [...root.querySelectorAll<HTMLButtonElement>(".shared__recover")];
+  const text = () => panel()!.textContent!;
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("寫入被拒之後又讀不到：兩件事同一區交代，只有一顆重新載入；讀回成功後拒絕的說明收掉", async () => {
+    await mount();
+    api.reset.mockRejectedValueOnce(new ApiError(409, "", "x"));
+    resetButtons()[1]!.click();
+    await settle();
+    api.fetch.mockRejectedValue(new ApiError(503, "", "x"));
+    recover()[0]!.click();
+    await settle();
+    expect(feedback()).toHaveLength(1);
+    expect(text()).toContain("數字未能歸零。");
+    expect(text()).toContain("投票與計數暫時無法載入。");
+    expect(text()).toContain("上次載入的數字");
+    expect(recover().map((b) => b.textContent!.trim())).toEqual(["重新載入"]);
+    let done!: (v: unknown) => void;
+    api.fetch.mockImplementation(() => new Promise((r) => { done = r; }));
+    recover()[0]!.click();
+    await settle();
+    expect(recover()[0]!.disabled).toBe(true);
+    expect(text()).toContain("數字載入中");
+    done(settings());
+    await settle();
+    expect(text()).not.toContain("投票與計數暫時無法載入。");
+    expect(text()).not.toContain("上次載入的數字");
+    expect(text()).not.toContain("數字未能歸零。");
+    expect(recover()).toHaveLength(0);
+  });
+
+  it("結果不明、讀回也失敗：兩段都留著，唯一的鍵是查看最新狀態（只讀不重送）", async () => {
+    await mount();
+    api.reset.mockRejectedValueOnce(new ApiError(502, "", "x"));
+    api.fetch.mockRejectedValue(new TypeError("Failed to fetch"));
+    resetButtons()[1]!.click();
+    await settle();
+    expect(feedback()).toHaveLength(1);
+    expect(text()).toContain("操作結果尚未確認。");
+    expect(text()).toContain("投票與計數暫時無法載入。");
+    expect(recover().map((b) => b.textContent!.trim())).toEqual(["查看最新狀態"]);
+    recover()[0]!.click();
+    await settle();
+    expect(api.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("寫入成功但讀回失敗：成功的說明留到讀回恢復，不會 4 秒就消失", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await mount();
+    api.fetch.mockRejectedValue(new ApiError(503, "", "x"));
+    resetButtons()[1]!.click();
+    await settle();
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    expect(feedback()).toHaveLength(1);
+    expect(text()).toContain("「boss」的數字已歸零");
+    expect(text()).toContain("投票與計數暫時無法載入。");
+    expect(recover()).toHaveLength(1);
+    api.fetch.mockResolvedValue(settings());
+    recover()[0]!.click();
+    await settle();
+    expect(text()).not.toContain("投票與計數暫時無法載入。");
+    expect(text()).toContain("「boss」的數字已歸零");
+    vi.advanceTimersByTime(4_000);
+    await settle();
+    expect(text()).not.toContain("「boss」的數字已歸零");
+  });
+});
+
+describe("審查修正（續）", () => {
   it("5xx 不算確定沒做：顯示結果不明並讀回；4xx（寫入前擋下）才算沒做成", async () => {
     await mount();
     for (const status of [500, 502, 504]) {
