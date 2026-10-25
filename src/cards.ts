@@ -709,11 +709,12 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 }
 
 /** Only after a confirmed private receipt; never grants or changes PG access. */
-export async function finishManagedWithdrawal(db:D1Database,cardId:string):Promise<void>{
+export async function finishManagedWithdrawal(db:D1Database,cardId:string,completion:D1PreparedStatement[]=[]):Promise<void>{
  await db.batch([
   db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending'").bind(cardId),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded')").bind(cardId),
   db.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(cardId),
+  ...completion,
  ]);
 }
 

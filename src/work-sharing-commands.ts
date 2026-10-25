@@ -191,8 +191,17 @@ workSharingCommandRoutes.get('/v1/me/cards/:id/visibility/operations/:operationI
  return c.json({workVisibility:latest.workVisibility,operation:{operationId:op.operation_id,state}},200);
 });
 
-// Delete first in the Provider's financial transaction. A rejected or unknown
-// result must never withdraw a still-existing public card from the community.
+// An accepted consent and cross-service completion state survive lost replies.
+interface CardDeletion {recovery_credits:number;state:'pending'|'confirmed'|'complete'|'rejected'}
+const deletionOf=(env:Env,member:string,source:string)=>env.DB.prepare('SELECT recovery_credits,state FROM author_card_deletions WHERE member_id=? AND source_role_id=?').bind(member,source).first<CardDeletion>();
+workSharingCommandRoutes.get('/v1/me/cards/:id/delete',async c=>{
+ c.header('Cache-Control','private, no-store');const member=await requireMember(c);
+ if(member.provider!=='harbor')throw new HttpError(404,'card_not_found');
+ const {source,row}=await ownerCardSource(c.env,c.req.param('id'));
+ if(row&&row.author_num_id!==Number(member.externalId))throw new HttpError(403,'not_the_author');
+ const pending=await deletionOf(c.env,member.id,source);
+ return c.json({deletion:pending&&pending.state!=='rejected'?{sourceRoleId:source,rewardRecoveryCredits:pending.recovery_credits,state:pending.state}:null});
+});
 workSharingCommandRoutes.post('/v1/me/cards/:id/delete',bodyLimit({maxSize:1024}),async c=>{
  c.header('Cache-Control','private, no-store');const member=await requireMember(c);
  if(member.provider!=='harbor')throw new HttpError(404,'card_not_found');
@@ -201,18 +210,30 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/delete',bodyLimit({maxSize:1024}
  const {source,row}=await ownerCardSource(c.env,c.req.param('id'));
  if(row&&row.author_num_id!==Number(member.externalId))throw new HttpError(403,'not_the_author');
  const token=c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
- let response:Response;
- try{response=await fetch(`${apiBaseOf(c.env,'harbor')}/open/v1/role/${encodeURIComponent(source)}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({rewardRecoveryCredits:credits}),redirect:'manual',signal:AbortSignal.timeout(20000)});}
- catch{throw new HttpError(503,'temporarily_unavailable');}
- const result=await response.json().catch(()=>null) as Record<string,unknown>|null;
- if(response.status===409&&typeof result?.error==='string'&&['card_reward_recovery_required','card_reward_recovery_insufficient'].includes(result.error)){
-  const details:Record<string,unknown>={};for(const key of ['publicUntil','publicDays','requiredCredits','availableCredits','shortfallCredits'])if(typeof result[key]==='number'||(key==='publicUntil'&&typeof result[key]==='string'))details[key]=result[key];
-  throw new HttpError(409,result.error,undefined,details);
+ let pending=await deletionOf(c.env,member.id,source);
+ if(!pending||pending.state==='rejected'){
+  await workPolicyGateway.owner(c.env,'harbor',source,token,true);
+  await c.env.DB.prepare(`INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,?,'pending',?) ON CONFLICT(member_id,source_role_id) DO UPDATE SET recovery_credits=excluded.recovery_credits,state='pending',updated_at=excluded.updated_at WHERE author_card_deletions.state='rejected'`).bind(member.id,source,credits,Date.now()).run();
+  pending=await deletionOf(c.env,member.id,source);
  }
- if(response.status===401)throw new HttpError(401,'missing bearer token');
- if(response.status===403)throw new HttpError(403,'not_the_author');
- if(response.status===404)throw new HttpError(404,'card_not_found');
- if(response.status!==200||result?.message!=='success')throw new HttpError(503,'temporarily_unavailable');
- if(row)await finishManagedWithdrawal(c.env.DB,row.id);
+ if(!pending||pending.recovery_credits!==credits)throw new HttpError(409,'visibility_operation_conflict');
+ if(pending.state==='complete')return c.json({message:'success'});
+ if(pending.state==='pending'){
+  let response:Response;
+  try{response=await fetch(`${apiBaseOf(c.env,'harbor')}/open/v1/role/${encodeURIComponent(source)}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({rewardRecoveryCredits:credits}),redirect:'manual',signal:AbortSignal.timeout(20000)});}
+  catch{throw new HttpError(503,'temporarily_unavailable');}
+  const result=await response.json().catch(()=>null) as Record<string,unknown>|null;
+  if(response.status===409&&typeof result?.error==='string'&&['card_reward_recovery_required','card_reward_recovery_insufficient'].includes(result.error)){
+   await c.env.DB.prepare("UPDATE author_card_deletions SET state='rejected',updated_at=? WHERE member_id=? AND source_role_id=? AND state='pending' AND recovery_credits=?").bind(Date.now(),member.id,source,credits).run();
+   const details:Record<string,unknown>={};for(const key of ['publicUntil','publicDays','requiredCredits','availableCredits','shortfallCredits'])if(typeof result[key]==='number'||(key==='publicUntil'&&typeof result[key]==='string'))details[key]=result[key];
+   throw new HttpError(409,result.error,undefined,details);
+  }
+  if(response.status===401)throw new HttpError(401,'missing bearer token');
+  if(response.status===403)throw new HttpError(403,'not_the_author');
+  if(response.status!==200||result?.message!=='success')throw new HttpError(503,'temporarily_unavailable');
+  await c.env.DB.prepare("UPDATE author_card_deletions SET state='confirmed',updated_at=? WHERE member_id=? AND source_role_id=? AND state IN ('pending','rejected') AND recovery_credits=?").bind(Date.now(),member.id,source,credits).run();
+ }
+ const complete=c.env.DB.prepare("UPDATE author_card_deletions SET state='complete',updated_at=? WHERE member_id=? AND source_role_id=? AND state='confirmed'").bind(Date.now(),member.id,source);
+ try{if(row)await finishManagedWithdrawal(c.env.DB,row.id,[complete]);else await complete.run();}catch{throw new HttpError(503,'temporarily_unavailable');}
  return c.json({message:'success'});
 });

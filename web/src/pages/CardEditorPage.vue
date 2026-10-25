@@ -32,6 +32,7 @@ import {
   fetchFandomLookup,
   registerCardIdentity,
   deleteRole,
+  fetchCardDeletion,
   fetchAuthorAsset,
   fetchRoleDetail,
   fetchRoleValidation,
@@ -538,6 +539,7 @@ onMounted(async () => {
   }
   try {
     const token = await session.accessToken();
+    if(token&&await resumeDeletion(token))return;
     if (/^[1-9]\d*$/.test(roleId.value)) {
       const card = await fetchCard(roleId.value, locale.value);
       if (card.provider !== editorProvider.value) throw new Error(t('state.loadFailed'));
@@ -836,11 +838,20 @@ async function save() {
  * 刪掉這張卡。不可逆，所以要作者把角色名稱照打一遍才准按。
  * 刪除前重讀公開期限與收回金額；Provider 確認刪除與全額收回後，Worker 才撤下榜單。
  */
+async function finishDeletion(source:string,credits:number,token:string){
+ await deleteRole(source,token,credits);track('card_delete',{subject:source});deleted.value=true;saving.value=false;
+ await router.push({path:lp('/mine'),query:{fresh:'1'}});
+}
+async function resumeDeletion(token:string):Promise<boolean>{
+ const {deletion}=await fetchCardDeletion(String(route.params.roleId??roleId.value),token);
+ if(!deletion)return false;await finishDeletion(deletion.sourceRoleId,deletion.rewardRecoveryCredits,token);return true;
+}
 async function remove() {
  if(isNew.value||saving.value)return;
  saving.value=true;error.value='';
  try{
   const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));
+  if(await resumeDeletion(token))return;
   const latest=await fetchWorkVisibility(roleId.value,token,editorProvider.value);
   if(!latest.workVisibility)throw new Error(t('visibility.loadFailed'));
   workVisibility.value=latest.workVisibility;
@@ -851,9 +862,7 @@ async function remove() {
    requireText:name,confirmText:t(reward?'rewardRetention.delete.confirm':'editor.delete.confirm'),
    ...(reward?{cancelText:t('rewardRetention.delete.keep')}:{}),danger:true});
   if(!ok)return;
-  await deleteRole(roleId.value,token,reward?.recoveryCredits??0);
-  track('card_delete',{subject:roleId.value});deleted.value=true;saving.value=false;
-  await router.push({path:lp('/mine'),query:{fresh:'1'}});
+  await finishDeletion(roleId.value,reward?.recoveryCredits??0,token);
  }catch(err){error.value=err instanceof Error?err.message:t('state.actionFailed');}
  finally{saving.value=false;}
 }

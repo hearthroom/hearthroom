@@ -547,7 +547,9 @@ it('projects reward retention and rejects author visibility changes before persi
 
 it.each([409,503,200])('only withdraws the community listing after confirmed Provider deletion (%i)',async status=>{
  const f=await fixture();await env.DB.prepare("UPDATE cards SET status='approved' WHERE id=?").bind(f.card.id).run();
+ const prior=f.network.getMockImplementation()!;
  f.network.mockImplementation(async(input,init)=>{
+  if(init?.method!=='DELETE')return prior(input,init);
   expect(new URL(String(input)).pathname).toBe(`/open/v1/role/${f.source}`);expect(init?.method).toBe('DELETE');
   expect(JSON.parse(String(init?.body))).toEqual({rewardRecoveryCredits:13700});
   return Response.json(status===200?{message:'success'}:{error:status===409?'card_reward_recovery_insufficient':'temporarily_unavailable',requiredCredits:13700,availableCredits:300,shortfallCredits:13400,publicDays:30,publicUntil:'2030-01-01T00:00:00Z'},{status});
@@ -555,4 +557,29 @@ it.each([409,503,200])('only withdraws the community listing after confirmed Pro
  const response=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:13700});expect(response.status).toBe(status);
  const saved=await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(f.card.id).first<{status:string}>();expect(saved?.status).toBe(status===200?'unshared':'approved');
  if(status===409)expect(await response.json()).toMatchObject({error:'card_reward_recovery_insufficient',requiredCredits:13700,availableCredits:300});
+});
+
+it('resumes confirmed Provider deletion after a failed local cleanup without deleting twice',async()=>{
+ const f=await fixture();const original=f.network.getMockImplementation()!;let deletes=0;
+ f.network.mockImplementation(async(input,init)=>{if(init?.method!=='DELETE')return original(input,init);deletes++;return Response.json(deletes===1?{message:'success'}:{error:'role_not_found'},{status:deletes===1?200:404});});
+ await env.DB.prepare("CREATE TRIGGER synthetic_delete_cleanup_fail BEFORE UPDATE OF status ON cards WHEN NEW.status='unshared' BEGIN SELECT RAISE(ABORT,'synthetic_cleanup_failure'); END").run();
+ try{const first=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:0});expect(first.status).toBeGreaterThanOrEqual(500);}finally{await env.DB.prepare('DROP TRIGGER synthetic_delete_cleanup_fail').run();}
+ const retried=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:0});expect(retried.status).toBe(200);expect(deletes).toBe(1);
+ expect((await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(f.card.id).first<{status:string}>())?.status).toBe('unshared');
+});
+
+it('keeps the confirmed amount and resumes a lost Provider reply without reading the deleted owner view',async()=>{
+ const f=await fixture();const original=f.network.getMockImplementation()!;let deletes=0,gone=false;
+ f.network.mockImplementation(async(input,init)=>{
+  if(init?.method!=='DELETE'){if(gone)return Response.json({error:'role_not_found'},{status:404});return original(input,init);}
+  deletes++;if(deletes===1){gone=true;throw new Error('synthetic reply lost after Provider commit');}return Response.json({message:'success'});
+ });
+ const endpoint=`/v1/me/cards/${f.source}/delete`;
+ expect((await request(endpoint,'owner',{rewardRecoveryCredits:13700})).status).toBe(503);
+ const saved=await request(endpoint);expect(await saved.json()).toMatchObject({deletion:{sourceRoleId:f.source,rewardRecoveryCredits:13700,state:'pending'}});
+ expect((await request(endpoint,'reader')).status).toBe(403);
+ expect((await request(endpoint,'owner',{rewardRecoveryCredits:0})).status).toBe(409);expect(deletes).toBe(1);
+ expect((await request(endpoint,'owner',{rewardRecoveryCredits:13700})).status).toBe(200);expect(deletes).toBe(2);
+ expect((await request(endpoint,'owner',{rewardRecoveryCredits:13700})).status).toBe(200);expect(deletes).toBe(2);
+ expect(await (await request(endpoint)).json()).toMatchObject({deletion:{state:'complete'}});
 });
