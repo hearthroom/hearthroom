@@ -1,5 +1,5 @@
 import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
-import { ownedHistory } from "./owned-history";
+import { ownedHistory, bindOwnedHistory } from "./owned-history";
 import { moderationMetrics } from "./moderation";
 import { opsMetrics } from "./ops-metrics";
 import { bodyLimit } from "hono/body-limit";
@@ -161,8 +161,9 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   const lang = c.req.query('lang') || 'zh-Hant';
   return c.json({ conversations: await Promise.all(rows.results.slice(0,24).map(async row => {
     const token = c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1] || '';
-    const capability = await ownedHistory.read(c.env, token, row.conversationId);
-    const binding = capability?.roleId === row.conversationRoleId;
+    const raw = await ownedHistory.read(c.env, token, row.conversationId);
+    const capability = await bindOwnedHistory(c.env,row.conversationRoleId,row.conversationId,raw);
+    const binding = capability!==null;
     const canGenerate = binding && capability?.canGenerate === true;
     const reason = canGenerate ? undefined : binding && ['author_private','restricted','unavailable'].includes(capability?.reason || '') ? capability!.reason : 'unavailable';
     const historyVisible = !row.public_blocked && !row.moderationBlocked && (row.rating !== 'R' || libraryAllowsNsfw(access));
@@ -171,7 +172,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     // 不在榜上的卡（只靠分享連結玩、還在審、沒登記）這裡只有卡號，名字跟卡片頁一樣去託管平台拿
     const hosted = !card && visible ? await hostedTitle(c.env, row.hostRoleId) : null;
     // 首頁面板是發現面，要照開關藏成人卡；清單本身照上面的收藏區規則，所以把等級一起給前端
-    return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId, adult: row.rating === 'R',
+    return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: capability?.roleId??row.conversationRoleId, conversationId: row.conversationId, adult: row.rating === 'R',
       canGenerate, reason, conversationTitle: binding ? capability?.title || null : null,
       roleName: card?.name || (hosted ? pickLocale(hosted.names, lang) : historyVisible && (visible || (binding && reason === 'author_private')) ? capability?.roleName || '' : ''), roleAvatar: card?.avatarUrl || hosted?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
@@ -203,7 +204,7 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
   const member = await requireMember(c);
   const provider = c.req.query('provider');
   if (provider !== 'harbor') throw new HttpError(400, 'invalid_provider');
-  const row = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber,c.rating,c.approved_hosted_role_id AS approvedRoleId,
+  const rows = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber,c.rating,c.approved_hosted_role_id AS approvedRoleId,
     CASE WHEN p.access='private' AND p.restriction<>'suspended' AND p.sync_state='complete'
       AND p.moderation_revision=p.confirmed_moderation_revision
       AND coalesce(c.public_blocked,1)=0 AND coalesce(ms.public_blocked,0)=0 THEN 1 ELSE 0 END AS canResumeExact
@@ -216,12 +217,22 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider) AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     LEFT JOIN managed_work_access p ON p.provider=COALESCE(w.source_provider,r.provider) AND p.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider) AND ms.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
-    WHERE r.member_id=? AND r.provider=? AND r.conversation_id=? LIMIT 1`)
-    .bind(member.id,provider,c.req.param('conversationId')).first<{provider:string;roleId:string;cardNumber:number|null;rating:string|null;approvedRoleId:string|null;canResumeExact:number}>();
-  if (!row) throw new HttpError(404, 'not_found');
+    WHERE r.member_id=? AND r.provider=? AND r.conversation_id=? LIMIT 201`)
+    .bind(member.id,provider,c.req.param('conversationId')).all<{provider:string;roleId:string;cardNumber:number|null;rating:string|null;approvedRoleId:string|null;canResumeExact:number}>();
+  if (!rows.results.length) throw new HttpError(404, 'not_found');
+  if(rows.results.length>200)throw new HttpError(503,'conversation_read_budget_exceeded');
+  const token=c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1]||'';
+  const capability=await ownedHistory.read(c.env,token,c.req.param('conversationId'));
+  if(!capability&&rows.results.length>1)throw new HttpError(503,'conversation_binding_unavailable');
+  if(capability){
+    const bindings=await Promise.all(rows.results.map(row=>bindOwnedHistory(c.env,row.roleId,c.req.param('conversationId'),capability)));
+    if(bindings.some(binding=>!binding))throw new HttpError(404,'conversation_card_mismatch');
+  }
+  const row=rows.results.find(row=>row.roleId===capability?.roleId)??rows.results[0];
+  const roleId=capability?.roleId??row.roleId;
   // This is a local fence, never proof of play. The client must additionally
   // verify actual Provider ownership and canGenerate for this exact revision.
-  const needsAdult=row.rating==='R'||row.roleId!==row.approvedRoleId;
+  const needsAdult=row.rating==='R'||roleId!==row.approvedRoleId;
   const adultAllowed=!needsAdult||libraryAllowsNsfw(await memberNsfw(c.env.DB,member.id));
-  return c.json({provider:row.provider,roleId:row.roleId,cardNumber:row.cardNumber,canResumeExact:row.canResumeExact===1&&adultAllowed});
+  return c.json({provider:row.provider,roleId,cardNumber:row.cardNumber,canResumeExact:row.canResumeExact===1&&adultAllowed});
 });

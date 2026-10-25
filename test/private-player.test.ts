@@ -164,3 +164,49 @@ it('gates exact private resumes with the current community moderation and sync f
  expect((await read()).canResumeExact).toBe(false);
  expect((await request('/v1/me/conversations/exact-saved?provider=harbor','stranger')).status).toBe(404);
 });
+it('projects the Provider canonical revision after a same-work conversation migration',async()=>{
+ const {source,target,work}=await fixture();
+ const old=crypto.randomUUID(),player=await makeMember(42);
+ await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES(?,'harbor',11,?,'published',?)").bind(work,old,Date.now()).run();
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',old,'migrated-saved',Date.now(),Date.now()).run();
+ const {ownedHistory}=await import('../src/owned-history');
+ vi.spyOn(ownedHistory,'read').mockResolvedValue({conversationId:'migrated-saved',roleId:target,canGenerate:true,roleName:'Canonical saved role'});
+ for(let attempt=0;attempt<2;attempt++){
+  const pointer=await request('/v1/me/conversations/migrated-saved?provider=harbor','player');
+  expect(pointer.status).toBe(200);expect(await pointer.json()).toMatchObject({roleId:target,canResumeExact:true});
+  const list=await request('/v1/me/conversations','player');
+  expect((await list.json() as any).conversations[0]).toMatchObject({conversationRoleId:target,canGenerate:true});
+ }
+ const stored=await env.DB.prepare("SELECT role_id FROM member_conversations WHERE member_id=? AND conversation_id='migrated-saved'").bind(player).first<{role_id:string}>();
+ expect(stored?.role_id).toBe(old);
+ // Both old and canonical pointers can coexist after the activity writer runs.
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',target,'migrated-saved',Date.now(),Date.now()).run();
+ expect(await (await request('/v1/me/conversations/migrated-saved?provider=harbor','player')).json()).toMatchObject({roleId:target});
+ // Never choose one arbitrary matching pointer if another points somewhere unknown.
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',crypto.randomUUID(),'migrated-saved',Date.now(),Date.now()).run();
+ expect((await request('/v1/me/conversations/migrated-saved?provider=harbor','player')).status).toBe(404);
+});
+it('does not reconcile a forged conversation pointer into a different work',async()=>{
+ const {target,work}=await fixture();
+ const old=crypto.randomUUID(),foreign=crypto.randomUUID(),player=await makeMember(42);
+ await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES(?,'harbor',11,?,'published',?)").bind(work,old,Date.now()).run();
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',old,'foreign-saved',Date.now(),Date.now()).run();
+ const {ownedHistory}=await import('../src/owned-history');
+ vi.spyOn(ownedHistory,'read').mockResolvedValue({conversationId:'foreign-saved',roleId:foreign,canGenerate:true,roleName:'Foreign private text'});
+ const pointer=await request('/v1/me/conversations/foreign-saved?provider=harbor','player');
+ expect(pointer.status).toBe(404);expect(await pointer.text()).not.toContain('Foreign private text');
+ const list=await request('/v1/me/conversations','player');
+ const item=(await list.json() as any).conversations[0];
+ expect(item.canGenerate).toBe(false);expect(JSON.stringify(item)).not.toContain('Foreign private text');
+});
+
+it('rejects contradictory work mappings instead of selecting one lineage',async()=>{
+ const {target,work}=await fixture();
+ const old=crypto.randomUUID(),player=await makeMember(42),author=await makeMember(11);
+ await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES(?,'harbor',11,?,'published',?)").bind(work,old,Date.now()).run();
+ await env.DB.prepare('INSERT INTO works VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),author,'harbor',old,Date.now()).run();
+ await env.DB.prepare('INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(player,'harbor',old,'ambiguous-saved',Date.now(),Date.now()).run();
+ const {ownedHistory}=await import('../src/owned-history');
+ vi.spyOn(ownedHistory,'read').mockResolvedValue({conversationId:'ambiguous-saved',roleId:target,canGenerate:true});
+ expect((await request('/v1/me/conversations/ambiguous-saved?provider=harbor','player')).status).toBe(404);
+});
