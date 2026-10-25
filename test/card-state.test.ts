@@ -33,6 +33,12 @@ beforeEach(async () => {
     return a.accountClass ? { accountNumId: a.id, accountClass: "test", testState: "active", testGeneration: 1 } : { accountNumId: a.id };
   };
   upstream.fetchSharedState = async () => declared;
+  harborPlayers = new Set(); archiveCalls = 0; archivesDown = false;
+  upstream.fetchArchiveCount = async (_env, token) => {
+    archiveCalls++;
+    if (archivesDown) throw new HttpError(502, "upstream archives failed with 500");
+    return harborPlayers.has(token) ? 1 : 0;
+  };
   cardId = (await upsertCard(env.DB, role({ roleId: "src-1", authorNumId: 10001 }), Date.now())).id;
   await forgetDecl();
   for (const [name, a] of Object.entries(ACCOUNTS)) {
@@ -58,7 +64,11 @@ async function call(path: string, opts: { token?: string; method?: string; body?
   await waitOnExecutionContext(ctx);
   return { status: res.status, body: (await res.json().catch(() => ({}))) as any };
 }
-const played = (who: string) => env.DB.prepare("INSERT INTO member_conversations VALUES (?, 'harbor', 'src-1', ?, 1, 1)").bind(`member-${ACCOUNTS[who]!.id}`, `conv-${who}`).run();
+/** Harbor 那邊有這張卡的對話存檔的人（用玩家自己的 token 查）。 */
+let harborPlayers = new Set<string>();
+let archiveCalls = 0;
+let archivesDown = false;
+const played = async (who: string) => { harborPlayers.add(who); };
 const vote = (who: string, option: string) => call("/v1/cards/src-1/state/p1-4/vote", { token: who, body: { option } });
 const add = (who: string, key: string, delta: number) => call(`/v1/cards/src-1/state/${key}/add`, { token: who, body: { delta } });
 const read = (keys: string, token?: string) => call(`/v1/cards/src-1/state?keys=${keys}`, { token });
@@ -296,4 +306,24 @@ describe("審查修正（分享回流）", () => {
 it("讀取也限流（每個連線 IP），打滿回 rate_limited", async () => {
   readLimit = { success: false };
   expect(await read("p1-4")).toMatchObject({ status: 429, body: { error: "rate_limited" } });
+});
+
+describe("寫入資格向 Harbor 查（§7.6 B）", () => {
+  it("本站自己回報的對話紀錄不算數；Harbor 查到才算，查到後 30 天內不再問", async () => {
+    await env.DB.prepare("INSERT INTO member_conversations VALUES ('member-11', 'harbor', 'src-1', 'conv-fake', 1, 1)").run();
+    expect(await vote("alice", "a")).toMatchObject({ status: 403, body: { error: "not_eligible" } });
+    await played("alice");
+    expect((await vote("alice", "a")).status).toBe(200);
+    expect((await vote("alice", "b")).status).toBe(200);
+    expect(archiveCalls).toBe(2);
+    await env.DB.prepare("UPDATE card_state_eligibility SET checked_at = ?").bind(Date.now() - 31 * 86_400_000).run();
+    harborPlayers.delete("alice");
+    expect(await vote("alice", "c")).toMatchObject({ status: 403, body: { error: "not_eligible" } });
+  });
+
+  it("Harbor 查不到存檔清單時回可重試的 503；作者試玩草稿不必查", async () => {
+    archivesDown = true;
+    expect(await vote("alice", "a")).toMatchObject({ status: 503, body: { error: "eligibility_unavailable" } });
+    expect((await call("/v1/cards/src-1/state/cheer/add?draft=1", { token: "author", body: { delta: 1 } })).status).toBe(200);
+  });
 });

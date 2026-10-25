@@ -553,5 +553,17 @@ async function fetchSharedState(env: Env, roleId: string, provider: ProviderId =
   return body.sharedState ?? {};
 }
 
-export const upstream = { fetchSharedState, fetchMe, setNickname, fetchRole, fetchHeats, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
+/**
+ * 這位玩家在這張卡（同一作品的各版本都算）有幾段對話存檔：用玩家自己的 token 問，Harbor 只回他自己的。
+ * 共用狀態的寫入資格靠它（card-state.ts）。
+ */
+async function fetchArchiveCount(env: Env, bearer: string, roleId: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<number> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/conversation/archives?roleId=${encodeURIComponent(roleId)}`), {
+    headers: { "User-Agent": UA, Authorization: `Bearer ${bearer}` },
+  });
+  const body = await readJson(res, "conversation archives");
+  return Array.isArray(body.archives) ? body.archives.length : 0;
+}
+
+export const upstream = { fetchSharedState, fetchArchiveCount, fetchMe, setNickname, fetchRole, fetchHeats, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
 export type Upstream = typeof upstream;

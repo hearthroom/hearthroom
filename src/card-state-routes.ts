@@ -4,7 +4,6 @@ import { add, hasPlayed, leaderboard, readState, resetStmts, resolveCardState, v
 import { providerOf, requireMember, saveMemberId, type Member } from "./members";
 import { mintToken, ownerResults, tokenFor } from "./card-share-tokens";
 import { bumpOp } from "./ops-metrics";
-import { saveScope } from "./saves";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -84,8 +83,9 @@ async function writeGate(c: Ctx, op: WriteOp): Promise<{ state: CardState; membe
   if (!state.enabled) { await bumpOp(c.env.DB, "card_state", op, "disabled"); throw new HttpError(403, "shared_disabled"); }
   if (await limited(c.env.CARD_STATE_CARD_LIMIT, String(state.cardId))) { await bumpOp(c.env.DB, "card_state", op, "limited"); throw new HttpError(429, "rate_limited"); }
   if (state.declUnavailable) { await bumpOp(c.env.DB, "card_state", op, "error"); throw new HttpError(503, "declaration_unavailable"); }
-  const scope = await saveScope(c.env.DB, c.req.param("roleId")!);
-  if (!(await hasPlayed(c.env, state, [member.id, memberId], scope.ids))) { await bumpOp(c.env.DB, "card_state", op, "ineligible"); throw new HttpError(403, "not_eligible"); }
+  let played: boolean;
+  try { played = await hasPlayed(c.env, state, memberId, c.req.param("roleId")!, bearerOf(c)!, providerOf(c), Date.now()); } catch (err) { await bumpOp(c.env.DB, "card_state", op, "error"); throw err; }
+  if (!played) { await bumpOp(c.env.DB, "card_state", op, "ineligible"); throw new HttpError(403, "not_eligible"); }
   return { state, memberId };
 }
 
