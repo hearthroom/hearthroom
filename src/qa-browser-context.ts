@@ -54,11 +54,11 @@ async function receipt(env:Env,result:'exchanged'|'rejected'){
 export const qaContextRoutes=new Hono<{Bindings:Env}>();
 // This blank bootstrap document has no analytics/scripts and grants no identity.
 qaContextRoutes.get('/internal/qa/browser-context',c=>{
- c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
+ c.header('Cache-Control','private, no-store, no-transform');c.header('Referrer-Policy','no-referrer');
  return secret(c.env)?c.html('<!doctype html><title>QA</title>'):c.notFound();
 });
 qaContextRoutes.post('/internal/qa/browser-context',async c=>{
- c.header('Cache-Control','private, no-store');
+ c.header('Cache-Control','private, no-store, no-transform');
  if(!secret(c.env))return c.notFound();
  const origin=new URL(c.req.url).origin;
  if(c.req.header('Origin')!==origin||!c.req.header('Content-Type')?.startsWith('application/json'))return c.json({error:'invalid_qa_context'},401);
