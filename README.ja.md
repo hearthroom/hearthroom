@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
@@ -62,13 +62,13 @@ SillyTavern との違いは実行場所です。ローカルへのインスト�
 
 ## 使い方
 
-公開インスタンス：[hearthroom.club](https://hearthroom.club)
+公開インスタンス：[sukisuki.ai](https://sukisuki.ai)
 
 1. ランキング、検索、カードページ、作者ページは公開です。
 2. カードプロバイダーのアカウントで**サインイン**します。プロバイダーはこのサイト向けのトークンを発行し、サイトはパスワードを受け取りません。
 3. **マイカード**にプロバイダー側のカードが表示されます。1 枚選んで審査に出すか、エディターで新しいカードを作成します。作者ごとに週の登録上限があります。
-4. [カード作成ガイド](https://hearthroom.club/guide)では項目、ルール、サンドボックス作者 API、他プラットフォームからのインポートを説明しています。
-5. [開発者ドキュメント](https://hearthroom.club/developers)と [OpenAPI 記述](docs/openapi.json)で HTTP API を説明しています。
+4. [カード作成ガイド](https://sukisuki.ai/guide)では項目、ルール、サンドボックス作者 API、他プラットフォームからのインポートを説明しています。
+5. [開発者ドキュメント](https://sukisuki.ai/developers)と [OpenAPI 記述](docs/openapi.json)で HTTP API を説明しています。
 
 ## アーキテクチャ
 

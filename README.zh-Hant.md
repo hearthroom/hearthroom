@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
@@ -62,13 +62,13 @@
 
 ## 使用
 
-公開站台：[hearthroom.club](https://hearthroom.club)。
+公開站台：[sukisuki.ai](https://sukisuki.ai)。
 
 1. 榜單、搜尋、卡片頁與作者頁為公開內容。
 2. 以卡片供應商的帳號**登入**。供應商核發僅對本站有效的 token，本站不會收到密碼。
 3. **我的卡片**列出該帳號在供應商的卡片。選擇一張送審，或在編輯器建立新卡。每位作者每週有登記上限。
-4. [寫卡指南](https://hearthroom.club/guide)說明欄位、規則、沙箱作者 API 與從其他平台匯入。
-5. [開發者文件](https://hearthroom.club/developers)與 [OpenAPI 描述](docs/openapi.json)說明 HTTP API。
+4. [寫卡指南](https://sukisuki.ai/guide)說明欄位、規則、沙箱作者 API 與從其他平台匯入。
+5. [開發者文件](https://sukisuki.ai/developers)與 [OpenAPI 描述](docs/openapi.json)說明 HTTP API。
 
 ## 架構
 
