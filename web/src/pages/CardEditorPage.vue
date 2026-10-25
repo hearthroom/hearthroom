@@ -456,7 +456,9 @@ const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
 interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; roleId?: string; visibility?: "private" | "unlisted" }
 function storeDraft() {
-  if (!onCreatePage.value) return;
+  // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
+  // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
+  if (!onCreatePage.value || original.value) return;
   try {
     if (!dirty.value) {
       localStorage.removeItem(DRAFT_KEY);
@@ -497,6 +499,8 @@ function restoreDraft() {
 }
 function discardDraft() {
   newCardVisibility.value = "unlisted";
+  // 本機草稿可能帶著上次建好、尚未存完的卡號；清空必須連儲存目標一起放掉。
+  roleId.value = "";
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
   wb.reset();

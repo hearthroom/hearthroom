@@ -888,6 +888,48 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
   });
 
+  it("清空帶有建卡編號的本機草稿後，儲存建立另一張卡，不覆寫舊卡", async () => {
+    api.patchRoleDocument.mockRejectedValueOnce(new Error("儲存中斷"));
+    await mount("/create");
+    await type($("#f-name"), "先前未存完的卡");
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("hearthroom.draft.create")).toContain('"roleId":"r1"');
+    app!.unmount();
+    root.remove();
+
+    await mount("/create");
+    byText("清空重來").click();
+    await flush();
+    api.beginCardEdit.mockClear();
+    api.patchRoleDocument.mockClear();
+    api.createRole.mockResolvedValueOnce({ roleId: "r2" });
+    await type($("#f-name"), "全新的卡");
+    await submit();
+
+    expect(api.createRole).toHaveBeenCalledTimes(2);
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).toHaveBeenCalledWith("r2", expect.objectContaining({ roleName: "全新的卡" }), "tok");
+    expect(api.patchRoleDocument.mock.calls.every(([id]) => id !== "r1")).toBe(true);
+  });
+
+  it("成功建卡後的未儲存修改不再回流到新卡本機草稿", async () => {
+    await mount("/create");
+    await type($("#f-name"), "已建立的卡");
+    await submit();
+    expect(window.location.pathname).toBe("/cards/100021/edit");
+    await type($("#f-name"), "已建立卡的新修改");
+    await new Promise((r) => setTimeout(r, 500));
+    expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
+    app!.unmount();
+    root.remove();
+    expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
+
+    await mount("/create");
+    expect($<HTMLInputElement>("#f-name").value).toBe("");
+    expect(root.textContent).not.toContain("已恢復上次沒儲存的草稿");
+  });
+
   it("刪卡：要照打角色名稱才准；確認 Provider 刪除成功後回到我的卡片", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "阿芙拉", roleDesc: "老闆娘" });
     await mount("/cards/r1/edit");
