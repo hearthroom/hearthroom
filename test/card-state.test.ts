@@ -368,9 +368,10 @@ describe("還沒有卡片列的新卡（沒送審、沒設能見度的私卡；C
   });
   beforeEach(async () => {
     roleReads = 0;
-    for (const id of ["fresh-1", "trial-1"]) {
+    for (const id of ["fresh-1", "trial-1", "copy-1"]) {
       await caches.default.delete(`https://card-state.internal/decl/harbor/${id}`);
       for (const n of [10001, 99, 11]) await caches.default.delete(`https://card-state.internal/own/harbor/${id}/${n}`);
+      await caches.default.delete(`https://card-state.internal/decl/harbor/${id}`);
     }
   });
 
@@ -425,6 +426,35 @@ describe("還沒有卡片列的新卡（沒送審、沒設能見度的私卡；C
     expect(await call("/v1/me/cards/fresh-1/shared-state", { token: "author", method: "PUT", body: { enabled: true } })).toMatchObject({ status: 200 });
     expect(await call("/v1/cards/fresh-1/share-tokens", { token: "author", body: { context: "p1-4.a", poll: "p1-4" } })).toMatchObject({ status: 404 });
     expect(await call("/v1/cards/fresh-1/share-tokens", { token: "author" })).toMatchObject({ status: 404 });
+  });
+
+  it("審查修正：開關關著時不問 Harbor、不發卡號；非作者的結果也短暫快取", async () => {
+    fresh("fresh-1", 10001);
+    expect(await call("/v1/cards/fresh-1/state?keys=p1-4", { token: "author", vars: { CARD_STATE_ENABLED: "false" } })).toMatchObject({ status: 200, body: { enabled: false, items: {} } });
+    expect(roleReads).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM card_numbers WHERE source_role_id = 'fresh-1'").first<{ n: number }>()).toMatchObject({ n: 0 });
+    await played("alice");
+    await at("fresh-1").read("p1-4", "alice");
+    await at("fresh-1").vote("alice", "a");
+    expect(roleReads).toBe(1);
+  });
+
+  it("審查修正：不照 works 對應到別的來源（別人的卡號），只用 Harbor 確認過的這個 roleId", async () => {
+    fresh("copy-1", 10001);
+    const other = (await upsertCard(env.DB, role({ roleId: "src-1", authorNumId: 10001 }), Date.now())).id;
+    await env.DB.prepare("INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES('w-copy','member-x','harbor','src-1',0)").run();
+    await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,updated_at) VALUES('w-copy','harbor',10001,'copy-1',0)").run();
+    expect(await at("copy-1").vote("author", "a")).toMatchObject({ status: 200 });
+    const row = await env.DB.prepare("SELECT card_id FROM card_state_members WHERE key = 'p1-4'").first<{ card_id: number }>();
+    const own = await env.DB.prepare("SELECT num FROM card_numbers WHERE source_role_id = 'copy-1'").first<{ num: number }>();
+    expect(row?.card_id).toBe(own?.num);
+    expect(String(row?.card_id)).not.toBe(other);
+  });
+
+  it("審查修正：解短碼與回答也不給沒有卡片列的卡", async () => {
+    fresh("fresh-1", 10001);
+    expect(await call("/v1/cards/fresh-1/share-tokens/~AAAAAAAA", { token: "author" })).toMatchObject({ status: 404 });
+    expect(await call("/v1/cards/fresh-1/share-tokens/~AAAAAAAA/respond", { token: "author", body: { option: "a" } })).toMatchObject({ status: 404 });
   });
 
   it("作者身分短暫快取：連續讀寫不必每次都問 Harbor", async () => {

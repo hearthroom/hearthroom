@@ -214,6 +214,7 @@ cardStateRoutes.get("/v1/cards/:roleId/share-tokens/:token", async (c) => {
   await readGate(c);
   const member = await optionalMember(c);
   const state = await stateFor(c, member);
+  if (state.unregistered) throw new HttpError(404, "token not found");
   const row = await tokenFor(c.env, state.cardId, tokenParam(c), Date.now());
   if (!row) throw new HttpError(404, "token not found");
   const poll = row.poll_key in state.decl.polls ? state.decl.polls[row.poll_key] : undefined;
@@ -223,6 +224,7 @@ cardStateRoutes.get("/v1/cards/:roleId/share-tokens/:token", async (c) => {
 
 cardStateRoutes.post("/v1/cards/:roleId/share-tokens/:token/respond", async (c) => {
   const { state, memberId } = await writeGate(c, "share_respond");
+  if (state.unregistered) { await bumpOp(c.env.DB, "card_state", "share_respond", "denied"); throw new HttpError(404, "token not found"); }
   const row = await tokenFor(c.env, state.cardId, tokenParam(c), Date.now());
   if (!row) throw new HttpError(404, "token not found");
   // 分享者不能替自己的連結灌回應；回應寫在回應者自己的 ns（測試帳號回應正式連結不會算進去）

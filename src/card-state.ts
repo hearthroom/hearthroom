@@ -14,7 +14,6 @@
  * owner 允許卡片拿這些數字解鎖卡內內容（E5），所以不另加帳齡或裝置限制；防線是資格、每人上限與限流。
  */
 import { ensureCardNumber, getPublicCard, type CardRow } from "./cards";
-import { workFor } from "./card-sync";
 import { hostGateway } from "./hosting";
 import type { Member } from "./members";
 import type { ProviderId } from "./providers";
@@ -99,29 +98,36 @@ async function declarationOf(env: Env, roleId: string, provider: ProviderId, bea
   return parseDecl(raw);
 }
 
-/** 作者身分（這個帳號是不是這張卡的作者）的快取：作者不會變，每次讀寫都問 Harbor 太貴。 */
+/**
+ * 作者身分（這個帳號是不是這張卡的作者）的快取：作者不會變，每次讀寫都問 Harbor 太貴。
+ * 「不是作者」也短暫記住：別人對這種卡的每次讀寫不必都打一次 Harbor（只會拿到 404）。
+ */
 export const OWN_CARD_CACHE_SECONDS = 300;
+export const NOT_OWN_CARD_CACHE_SECONDS = 60;
 const ownCacheKey = (provider: ProviderId, roleId: string, externalId: number) => `https://card-state.internal/own/${provider}/${encodeURIComponent(roleId)}/${externalId}`;
 
 /**
  * 還沒有卡片列的卡（新建的私卡：沒送審、沒設過能見度；CLI 推的試玩卡）。社群站沒有它的列，
  * 只能用請求者自己的 token 讀 Harbor 的 role 確認他是作者；不是作者、讀不到一律當沒有這張卡。
- * 鍵用卡號：之後送審或設能見度時 upsertCard 也用同一個號碼當 cards.id，作者的試玩數字接得上。
+ * 鍵用這個 roleId 自己的卡號：之後送審或設能見度時 upsertCard 也用同一個號碼當 cards.id，作者的試玩數字接得上。
+ * 不照 works 對應到別的來源：那可能是別人（或已登記）的卡號，作者在這裡的歸零與暫停會動到那張卡。
+ * 草稿轉移凍結中發不出卡號：當作沒有這張卡（404），不是 500。
  */
 async function unregisteredOwnCard(env: Env, roleId: string, provider: ProviderId, member: Member, bearer: string): Promise<CardRow | null> {
   const cache = typeof caches === "undefined" ? null : caches.default;
   const key = ownCacheKey(provider, roleId, member.externalId);
   const hit = await cache?.match(key).catch(() => undefined);
-  let source = hit ? ((await hit.json().catch(() => null)) as { provider: ProviderId; roleId: string } | null) : null;
-  if (!source) {
+  let own = hit ? ((await hit.json().catch(() => null)) as { roleId: string | null } | null) : null;
+  if (!own) {
     const role = await hostGateway.read(env, bearer, roleId, provider).catch(() => null);
-    if (!role || role.authorNumId !== member.externalId) return null;
-    const work = await workFor(env.DB, provider, role.roleId);
-    source = { provider: (work?.source_provider as ProviderId | undefined) ?? provider, roleId: work?.source_role_id ?? role.roleId };
-    await cache?.put(key, new Response(JSON.stringify(source), { headers: { "Cache-Control": `max-age=${OWN_CARD_CACHE_SECONDS}`, "Content-Type": "application/json" } })).catch(() => undefined);
+    own = { roleId: role && role.authorNumId === member.externalId ? role.roleId : null };
+    const seconds = own.roleId ? OWN_CARD_CACHE_SECONDS : NOT_OWN_CARD_CACHE_SECONDS;
+    await cache?.put(key, new Response(JSON.stringify(own), { headers: { "Cache-Control": `max-age=${seconds}`, "Content-Type": "application/json" } })).catch(() => undefined);
   }
-  const num = await ensureCardNumber(env.DB, source.provider, source.roleId);
-  return { id: String(num), provider, source_role_id: source.roleId, author_num_id: member.externalId } as CardRow;
+  if (!own.roleId) return null;
+  const num = await ensureCardNumber(env.DB, provider, own.roleId).catch(() => null);
+  if (num === null) return null;
+  return { id: String(num), provider, source_role_id: own.roleId, author_num_id: member.externalId } as CardRow;
 }
 
 export interface ResolveOptions {
@@ -138,8 +144,13 @@ export interface ResolveOptions {
  * 別人打不開的卡一律 404，不透露有沒有這張卡。
  */
 export async function resolveCardState(env: Env, roleId: string, opts: ResolveOptions): Promise<CardState> {
-  const card = await getPublicCard(env.DB, roleId, opts.provider).catch(() => null);
+  // 查卡失敗（D1 暫時出錯）照舊 404，不走下面「沒有卡片列」的退路：不然已登記卡的作者會被悄悄寫進另一份
+  const found = await getPublicCard(env.DB, roleId, opts.provider).then((row) => ({ row }), () => null);
+  if (!found) throw new HttpError(404, "card not found");
+  const card = found.row;
   if (!card) {
+    // 平台總開關關著：不問 Harbor、不發卡號，跟已登記的卡一樣回「沒開」
+    if (env.CARD_STATE_ENABLED !== "true") return { card: { id: "0", provider: opts.provider, source_role_id: roleId } as CardRow, cardId: 0, ns: "live", decl: parseDecl({}), declUnavailable: false, enabled: false, isAuthor: false, unregistered: true };
     const own = opts.member && opts.bearer ? await unregisteredOwnCard(env, roleId, opts.provider, opts.member, opts.bearer) : null;
     if (!own) throw new HttpError(404, "card not found");
     const decl = await declarationOf(env, own.source_role_id, opts.provider, opts.bearer ?? undefined);
