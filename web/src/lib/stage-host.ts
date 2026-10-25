@@ -221,7 +221,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         lang: () => contentLang(i18n.global.locale.value),
       }),
       // 卡內分享情境（sdk.share／stage.share）：連結指回社群站的卡片頁，值由 PlayPage 設（lib/play-share）
-      share: playShareHost({ communityHost: communityHostForHistory, lp: deps.lp }),
+      share: playShareHost({ links: () => mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp }) }),
     });
     const player = deps.player === undefined ? deps.session.me : deps.player;
     // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。

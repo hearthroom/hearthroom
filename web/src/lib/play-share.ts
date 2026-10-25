@@ -28,9 +28,11 @@ export interface PlayShareInput {
 }
 
 export interface PlayShareDeps {
-  /** 社群站的主機名（卡片 App 網域上也要回主站）。 */
-  communityHost(): string;
-  lp(path: string): string;
+  /**
+   * 社群站的網址與語系前綴（lib/site 的 mainSiteLinks）。卡片 App 網域上的 lp 帶的是 ?lang=，
+   * 拿去組社群站連結會讓朋友落在預設語言，所以一律用主站那一套。
+   */
+  links(): { origin: string; lp(path: string): string };
 }
 
 export function shareContextOf(raw: unknown): string | null {
@@ -89,7 +91,8 @@ export function playShareHost(deps: PlayShareDeps) {
     read(roleId: string) {
       const s = current;
       if (!s || s.roleId !== roleId) return null;
-      const url = s.cardNumber ? withShareRef(`https://${deps.communityHost()}${deps.lp(`/cards/${s.cardNumber}`)}`, refCode) : "";
+      const site = deps.links();
+      const url = s.cardNumber ? withShareRef(`${site.origin}${site.lp(`/cards/${s.cardNumber}`)}`, refCode) : "";
       return { enabled: s.enabled, context: s.enabled ? shareContextOf(s.context) : null, url, audience: s.audience };
     },
     onChange(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
