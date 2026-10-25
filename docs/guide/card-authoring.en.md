@@ -218,3 +218,18 @@ The page author API provides `sdk.history` (sandbox) and `stage.history` (classi
 Only terminal visible original bodies are optional; thinking, streaming body and moderation-withheld text are excluded. `item.complete` excludes partial or failed replies. Revisions and opaque IDs are not player identities.
 
 Cross-device changes are checked every 15 seconds in the foreground and on return to the page. Dispose subscriptions when the card exits.
+
+## Polls, co-op counters and share responses
+
+The polls and counters declared in `rules.json` under `sharedState` are shared by everyone who plays the card. `sdk.shared` (classic cards: `window.stage.shared`) reads and writes them:
+
+- `read(keys)` takes one key or up to 16 and returns `{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }`. Undeclared keys are left out. `mine` is the player's own vote or contribution and is missing for guests; `previous` is the previous period's total.
+- `vote(key, option)` returns `{ mine }`. A player can change their vote up to 10 times a day.
+- `add(key, delta)` adds a whole number from 1 to the counter's `maxStep` and returns `{ total, mine, reachedAt }`.
+- `leaderboard(key, { limit })` returns `{ items: [{ rank, name, value }], mine? }`: this period's top contributors (10 by default, at most 50) under their public nickname. Test accounts are never listed.
+
+Anyone can read; writing needs a signed-in player who has played this card. Nothing is pushed to the card: read again on your own schedule, at most once every 10 seconds.
+
+Share responses build on share links. `sdk.share.tallyLink(code, pollKey)` creates a link with a platform token (`?share=~XXXXXXXX`) for a poll declared with `share: true`. It is asynchronous, so create it before the click; the same code and poll give back the same link, a player can make 20 a day, and a link works for 90 days. A friend who opens it reads the code as `sdk.share.context` and the question as `sdk.share.poll` (`{ key, options }`, otherwise `null`), and answers with `sdk.share.respond(option)`. The sharer reads `sdk.share.results()`, a list of `{ context, pollKey, total, counts, updatedAt }` for the links they made: `total` is live, while `counts` appears once 3 friends have answered and updates once a day. The card never learns who shared or who answered. A card may unlock its own content from these numbers; they never grant platform credits.
+
+Both page modes use the same error codes: `SHARED_DISABLED` (the platform or the author paused it), `NOT_DECLARED`, `OPTION_INVALID`, `NOT_ELIGIBLE` (not played yet, or answering your own link), `UNAUTHORIZED` (signed out), `RATE_LIMITED` (wait and retry), `LIMIT_REACHED` (`err.data.reason` is `goal` or `limit`) and `HOST_DENIED` (an older player page; while viewing a past conversation or a review playtest, only reads work). Author playtests (`?mode=source`) and test accounts keep their own numbers, apart from the players'. See, pause and reset them under “Player polls and counters” in the editor or with `hearthroom card state`.

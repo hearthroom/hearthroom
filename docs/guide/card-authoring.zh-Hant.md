@@ -218,3 +218,18 @@
 可選正文只有已終止的可見原文，不含 thinking、生成中文字或 moderation 隱藏內容；`item.complete` 不把部分／失敗回覆當成功。revision 與不透明 ID 不是玩家身分。
 
 其他裝置在前景每 15 秒與回前景時檢查；離開卡片時取消訂閱。
+
+## 投票、共鬥計數與分享回流
+
+在 `rules.json` 的 `sharedState` 宣告的投票與計數器，由所有玩這張卡的人共用。`sdk.shared`（一般卡為 `window.stage.shared`）提供讀寫：
+
+- `read(keys)` 收一個 key 或最多 16 個，回傳 `{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }`。沒宣告的 key 不在結果裡；`mine` 是玩家自己投的選項或貢獻，遊客沒有；`previous` 是上一期的總數。
+- `vote(key, option)` 回傳 `{ mine }`。玩家可以改票，每天最多 10 次。
+- `add(key, delta)` 加上 1 到該計數器 `maxStep` 之間的整數，回傳 `{ total, mine, reachedAt }`。
+- `leaderboard(key, { limit })` 回傳 `{ items: [{ rank, name, value }], mine? }`：這一期貢獻最多的玩家（預設 10 名，最多 50 名），以公開暱稱顯示，不列出測試帳號。
+
+所有人都能讀；寫入需要已登入、而且玩過這張卡的玩家。數字不會主動推給卡片，請自行重讀，間隔至少 10 秒。
+
+分享回流建立在分享連結上。`sdk.share.tallyLink(code, pollKey)` 為宣告了 `share: true` 的投票產生帶平台短碼（`?share=~XXXXXXXX`）的連結。這是非同步呼叫，請在點擊前準備好；同一組情境碼與投票會拿回同一條連結，每位玩家每天最多 20 條，連結 90 天內有效。朋友開啟後，`sdk.share.context` 是情境碼，`sdk.share.poll` 是可以回答的題目 `{ key, options }`（沒有時為 `null`），以 `sdk.share.respond(option)` 回答。分享者用 `sdk.share.results()` 讀自己發出的連結，每筆是 `{ context, pollKey, total, counts, updatedAt }`：`total` 即時更新，`counts` 要有 3 位朋友回答才出現，每天更新一次。卡片不會知道誰分享、誰回答。卡片可以依這些數字解鎖卡內內容，但不會因此發放平台積分。
+
+兩種頁面使用同一組錯誤碼：`SHARED_DISABLED`（平台或作者已暫停）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（還沒玩過，或回答自己的連結）、`UNAUTHORIZED`（未登入）、`RATE_LIMITED`（稍後再試）、`LIMIT_REACHED`（`err.data.reason` 為 `goal` 或 `limit`）、`HOST_DENIED`（舊版遊玩頁；看過去的對話或審核試玩時只能讀）。作者試玩（`?mode=source`）與測試帳號各有自己的一份數字，不混進玩家的；可以在編輯頁的「玩家投票與計數」或用 `hearthroom card state` 查看、暫停與歸零。

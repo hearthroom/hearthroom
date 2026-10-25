@@ -116,3 +116,18 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 朋友那一端以 `sdk.share.context` 讀回情境碼；沒有，或正在看自己過去的對話時是 `null`。情境碼只收 1–64 個英數字與 `.`、`_`、`-`，開頭須為英數字；不合規則時沙盒卡丟出 `SHARE_CONTEXT_INVALID`，一般卡得到 `null`。平台只負責送到：情境碼不會送進模型、不含玩家資料，而且任何人都能手打，請只接受卡片自己定義的碼。朋友是否已有存檔由卡片判斷（例如 `sdk.archive.list()`；遊客沒有存檔）。
 
 `sdk.share.audience` 表示誰打得開這條連結：`author`（僅自己可見的卡，新朋友打不開）、`link` 或 `public`。平台開關關閉時 `sdk.share.enabled` 為 false，`context` 為 `null`，`link()` 回傳不帶情境的一般連結。`sdk.share.qr(text)` 回傳 `{ size, path }`（`size` × `size` 格的 SVG path），可畫進分享圖。推薦碼較晚取得時會觸發 `share:change`。作者可以用 `?mode=source&share=<code>` 在草稿上測試。
+
+## 投票、共鬥計數與分享回流
+
+在 `rules.json` 的 `sharedState` 宣告的投票與計數器，由所有玩這張卡的人共用。`sdk.shared`（一般卡為 `window.stage.shared`）提供讀寫：
+
+- `read(keys)` 收一個 key 或最多 16 個，回傳 `{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }`。沒宣告的 key 不在結果裡；`mine` 是玩家自己投的選項或貢獻，遊客沒有；`previous` 是上一期的總數。
+- `vote(key, option)` 回傳 `{ mine }`。玩家可以改票，每天最多 10 次。
+- `add(key, delta)` 加上 1 到該計數器 `maxStep` 之間的整數，回傳 `{ total, mine, reachedAt }`。
+- `leaderboard(key, { limit })` 回傳 `{ items: [{ rank, name, value }], mine? }`：這一期貢獻最多的玩家（預設 10 名，最多 50 名），以公開暱稱顯示，不列出測試帳號。
+
+所有人都能讀；寫入需要已登入、而且玩過這張卡的玩家。數字不會主動推給卡片，請自行重讀，間隔至少 10 秒。
+
+分享回流建立在分享連結上。`sdk.share.tallyLink(code, pollKey)` 為宣告了 `share: true` 的投票產生帶平台短碼（`?share=~XXXXXXXX`）的連結。這是非同步呼叫，請在點擊前準備好；同一組情境碼與投票會拿回同一條連結，每位玩家每天最多 20 條，連結 90 天內有效。朋友開啟後，`sdk.share.context` 是情境碼，`sdk.share.poll` 是可以回答的題目 `{ key, options }`（沒有時為 `null`），以 `sdk.share.respond(option)` 回答。分享者用 `sdk.share.results()` 讀自己發出的連結，每筆是 `{ context, pollKey, total, counts, updatedAt }`：`total` 即時更新，`counts` 要有 3 位朋友回答才出現，每天更新一次。卡片不會知道誰分享、誰回答。卡片可以依這些數字解鎖卡內內容，但不會因此發放平台積分。
+
+兩種頁面使用同一組錯誤碼：`SHARED_DISABLED`（平台或作者已暫停）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（還沒玩過，或回答自己的連結）、`UNAUTHORIZED`（未登入）、`RATE_LIMITED`（稍後再試）、`LIMIT_REACHED`（`err.data.reason` 為 `goal` 或 `limit`）、`HOST_DENIED`（舊版遊玩頁；看過去的對話或審核試玩時只能讀）。作者試玩（`?mode=source`）與測試帳號各有自己的一份數字，不混進玩家的；可以在編輯頁的「玩家投票與計數」或用 `hearthroom card state` 查看、暫停與歸零。
