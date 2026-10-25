@@ -1,3 +1,4 @@
+import { maintenanceResponse, readMaintenance } from './maintenance';
 import {qaAccountControlRoutes} from './qa-account-control';
 import {qaSessionHint} from './test-accounts';
 import {applyQAIdentity} from './members';
@@ -2199,6 +2200,8 @@ async function numericSchemaReady(db: D1Database): Promise<boolean> {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const maintenance = await maintenanceResponse(request, env, ctx);
+    if (maintenance) return maintenance;
     const path = new URL(request.url).pathname;
     // Transport is independent of the community schema, HTML transforms and cookies.
     if (path === HARBOR_PROXY_PREFIX || path.startsWith(`${HARBOR_PROXY_PREFIX}/`)) {
@@ -2218,6 +2221,8 @@ export default {
     return d1.finish(await app.fetch(request, d1.env, ctx));
   },
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    try { if ((await readMaintenance(env.DB)).enabled) return; }
+    catch { console.warn("Maintenance status unavailable; scheduled work held"); return; }
     if (!(await numericSchemaReady(env.DB))) return;
     // 熱度有自己的排程（wrangler.toml）：一次執行的子請求額度全給 Harbor 的批次讀。
     if (event.cron === HEAT_CRON) {

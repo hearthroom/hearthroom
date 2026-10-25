@@ -3314,5 +3314,16 @@
   "editor.shared.resetRejected": "Totals couldn't be reset.",
   "editor.shared.clearDraftRejected": "Draft play data couldn't be cleared.",
   "editor.shared.resultUnknown": "The result hasn't been confirmed yet.",
-  "editor.shared.checkResult": "Check current status"
+  "editor.shared.checkResult": "Check current status",
+  "maintenance.title": "Server Upgrade in Progress",
+  "maintenance.body": "The site is temporarily unavailable while the servers are being upgraded.",
+  "maintenance.eta": "Expected to be back at {time}",
+  "maintenance.duration": "Estimated duration: {duration}",
+  "maintenance.etaPending": "No confirmed time for service to resume",
+  "maintenance.autoResume": "This page will refresh automatically when service resumes.",
+  "maintenance.check": "Check availability",
+  "maintenance.checking": "Checking…",
+  "maintenance.stillActive": "The server upgrade is still in progress.",
+  "maintenance.checkFailed": "Availability could not be checked. Please try again shortly.",
+  "maintenance.reload": "Refresh"
 }

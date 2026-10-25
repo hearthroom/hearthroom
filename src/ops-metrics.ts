@@ -5,6 +5,11 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  maintenance: {
+    name:'hearthroom_maintenance_requests_total',
+    help:'Site maintenance admission blocks and status read failures.',
+    label:'surface', operations:['page','api','status'], outcomes:['blocked','error'],
+  },
   visibility_read: {
     name:'hearthroom_visibility_reads_total',
     help:'Current work policy checks before returning data; adult and social rules apply separately.',

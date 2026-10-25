@@ -3314,5 +3314,16 @@
   "editor.shared.resetRejected": "数据未能归零。",
   "editor.shared.clearDraftRejected": "试玩数据未能清空。",
   "editor.shared.resultUnknown": "操作结果尚未确认。",
-  "editor.shared.checkResult": "查看最新状态"
+  "editor.shared.checkResult": "查看最新状态",
+  "maintenance.title": "服务器升级中",
+  "maintenance.body": "绮梦社暂时无法使用，服务器升级完成后就会恢复。",
+  "maintenance.eta": "预计 {time} 恢复",
+  "maintenance.duration": "预计需要 {duration}",
+  "maintenance.etaPending": "恢复时间待确认",
+  "maintenance.autoResume": "恢复后，本页会自动刷新。",
+  "maintenance.check": "检查是否恢复",
+  "maintenance.checking": "正在检查…",
+  "maintenance.stillActive": "服务器仍在升级中。",
+  "maintenance.checkFailed": "暂时无法确认是否恢复，请稍后再试。",
+  "maintenance.reload": "刷新"
 }

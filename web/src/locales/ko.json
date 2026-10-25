@@ -3314,5 +3314,16 @@
   "editor.shared.resetRejected": "집계 결과를 0으로 만들지 못했어요.",
   "editor.shared.clearDraftRejected": "초안 플레이 데이터를 지우지 못했어요.",
   "editor.shared.resultUnknown": "아직 작업 결과를 확인하지 못했어요.",
-  "editor.shared.checkResult": "현재 상태 확인하기"
+  "editor.shared.checkResult": "현재 상태 확인하기",
+  "maintenance.title": "서버 업그레이드 중",
+  "maintenance.body": "서버 업그레이드가 끝날 때까지 사이트를 이용할 수 없어요.",
+  "maintenance.eta": "{time}에 다시 이용할 수 있을 예정이에요",
+  "maintenance.duration": "예상 소요 시간: {duration}",
+  "maintenance.etaPending": "다시 이용할 수 있는 시간은 아직 정해지지 않았어요",
+  "maintenance.autoResume": "다시 이용할 수 있게 되면 이 페이지가 자동으로 새로고침돼요.",
+  "maintenance.check": "이용 가능한지 확인",
+  "maintenance.checking": "확인 중…",
+  "maintenance.stillActive": "서버 업그레이드가 아직 진행 중이에요.",
+  "maintenance.checkFailed": "다시 이용할 수 있는지 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  "maintenance.reload": "새로고침"
 }

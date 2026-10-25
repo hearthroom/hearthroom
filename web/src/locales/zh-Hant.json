@@ -3314,5 +3314,16 @@
   "editor.shared.resetRejected": "數字未能歸零。",
   "editor.shared.clearDraftRejected": "試玩數字未能清空。",
   "editor.shared.resultUnknown": "操作結果尚未確認。",
-  "editor.shared.checkResult": "查看最新狀態"
+  "editor.shared.checkResult": "查看最新狀態",
+  "maintenance.title": "伺服器升級中",
+  "maintenance.body": "綺夢社暫時無法使用，伺服器升級完成後就會恢復。",
+  "maintenance.eta": "預計 {time} 恢復",
+  "maintenance.duration": "預計需要 {duration}",
+  "maintenance.etaPending": "恢復時間待確認",
+  "maintenance.autoResume": "恢復後，本頁會自動更新。",
+  "maintenance.check": "檢查是否恢復",
+  "maintenance.checking": "正在檢查…",
+  "maintenance.stillActive": "伺服器仍在升級中。",
+  "maintenance.checkFailed": "暫時無法確認是否恢復，請稍後再試。",
+  "maintenance.reload": "重新整理"
 }
