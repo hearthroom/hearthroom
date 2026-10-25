@@ -11,6 +11,8 @@ import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { savePlayIntro, type PlayIntro } from "@/lib/play-intro";
+import { withShareContext } from "@/lib/play-share";
+import { useRoute } from "vue-router";
 const props = defineProps<{
   cardId: string;
   provider?: string;
@@ -21,6 +23,7 @@ const props = defineProps<{
   intro?: PlayIntro | null;
 }>();
 const session = useSession();
+const route = useRoute();
 const { lp } = useLocalePath();
 const platforms = ref<
   { provider: ProviderId; roleId: string; playable: boolean }[]
@@ -94,10 +97,11 @@ async function play() {
   if (!choice.value || busy.value) return;
   busy.value = true;
   if (props.intro) savePlayIntro([props.cardId, props.cardNumber], props.intro);
-  const destination = platformPath(
+  // 朋友分享的連結帶著情境碼（?share=，lib/play-share）：跟著進遊玩頁，卡片才讀得到
+  const destination = withShareContext(platformPath(
     lp(`/play/${props.cardId}`),
     choice.value.provider
-  );
+  ), route.query.share);
   try {
     if (
       session.me &&

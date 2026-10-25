@@ -41,6 +41,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   HOSTING_SERVICE_KEY?: string;
   /** Author controls remain off until the complete visibility release is approved. */
   WORK_SHARING_ENABLED?: string;
+  /** 卡片分享情境（?share=）的平台總開關："true" 才轉送給卡片；其他值一律關（卡片拿到 null、分享鈕照常）。 */
+  SHARE_CONTEXT_ENABLED?: string;
   /** Hearthroom 在 Harbor 的固定 OAuth 客戶端（公開識別，非密鑰）；設了就不再動態註冊。 */
   HARBOR_CLIENT_ID?: string;
   /** 應用獎勵上報用的機密客戶端（client_credentials，只有 rewards.report）；沒設就不送，事件留在待送清單 */

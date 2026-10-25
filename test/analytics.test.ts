@@ -204,6 +204,11 @@ describe("beacon 端點", () => {
     expect(ev!.client).toBe("beacon");
   });
 
+  it("卡內分享情境：三種結果都收得下，帶 roleId、不帶情境碼", async () => {
+    await post(["delivered", "invalid", "disabled"].map((detail) => ({ event: "share_context", subject: "r-1", detail })));
+    expect(seen("share_context").map((e) => [e.detail, e.subject])).toEqual([["delivered", "r-1"], ["invalid", "r-1"], ["disabled", "r-1"]]);
+  });
+
   it("白名單外的事件直接丟掉，不記成 unknown", async () => {
     await post([{ event: "刷榜", subject: "r-1" }, { event: "cta" }]);
     expect(points).toHaveLength(1);
