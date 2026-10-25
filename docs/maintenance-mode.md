@@ -2,6 +2,8 @@
 
 The switch lives in Cloudflare D1 (`community_settings.site_maintenance`), independently of Harbor. No Provider call, application redeploy, new resource, or schema migration is required to toggle it. An absent record means off. The estimate never disables the switch automatically.
 
+If your Cloudflare login has multiple accounts, set `CLOUDFLARE_ACCOUNT_ID` to the account owning the configured D1 before running the commands.
+
 Only an operator with Cloudflare D1 write access can change it. Obtain the owner's authorization before a production toggle. These commands must run from the exact released Hearthroom checkout:
 
 ```sh
