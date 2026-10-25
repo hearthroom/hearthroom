@@ -106,7 +106,7 @@ if (playApp) {
  * 卡片解析好了：記下卡號與畫布要的 roleId、登記頁首的收藏與評論、卡片 App 的頭，網址換成卡號那一個。
  * 換網址途中又換了卡（stale）回 false。
  */
-async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, provider: ReturnType<typeof playProvider>, stale: () => boolean): Promise<boolean> {
+async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, provider: ReturnType<typeof playProvider>, stale: () => boolean, token: () => Promise<string | null>): Promise<boolean> {
   cardNumber.value = resolved.number;
   historyBootstrap.value = {conversationId:resolved.conversationId,readOnly:resolved.readOnly,reason:resolved.reason,title:resolved.title};
   if (resolved.card && !intro.value) intro.value = { name: displayName(resolved.card.name ?? "", locale.value), art: resolved.card.avatarUrl ?? "", backdrop: resolved.card.landscapeUrl ?? "" };
@@ -115,7 +115,7 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
   registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
-  await adoptShare(resolved, stale);
+  await adoptShare(resolved, stale, { provider, token });
   if (stale()) return false;
   if (playApp) applyCardHead(resolved.card, locale.value);
   if (routeId.value !== resolved.number) {
@@ -132,7 +132,7 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
  * 卡內分享情境（lib/play-share）：朋友的情境碼只在一般遊玩開機時給，看紀錄、審核試玩不帶；
  * 分享連結與「誰打得開」照給。登入者的推薦碼跟舞台一起載，通常在殼握手前就到了。
  */
-async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, stale: () => boolean) {
+async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, stale: () => boolean, play: { provider: ReturnType<typeof playProvider>; token: () => Promise<string | null> }) {
   const fresh = typeof route.query.review !== "string" && typeof route.query.resume !== "string";
   let raw = fresh && typeof route.query.share === "string" ? route.query.share : null;
   const enabled = resolved.card?.shareContext === true;
@@ -146,7 +146,8 @@ async function adoptShare(resolved: Awaited<ReturnType<typeof resolvePlayCard>>,
     raw = hit?.context ?? null;
     poll = hit?.poll ? { token, ...hit.poll } : null;
   }
-  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled, poll });
+  // 共用狀態（lib/play-shared）用這一局的 token 與供應商；作者試玩寫進自己的草稿那一份
+  setPlayShare({ roleId: resolved.roleId, cardNumber: resolved.number, context: raw, audience: resolved.card?.audience ?? null, enabled, poll, provider: play.provider, token: play.token, draft: route.query.mode === "source" });
   // 從帶情境的連結開卡記一次（情境碼本身不送）：看得出卡內分享有沒有人點、碼有沒有壞、開關是不是關著
   const asked = fresh && typeof route.query.share === "string";
   if (asked) track("share_context", { subject: resolved.roleId, detail: !enabled ? "disabled" : raw !== null && shareContextOf(raw) ? "delivered" : "invalid" });
@@ -208,7 +209,7 @@ onMounted(() => {
       if (publicPlay && !session.me) {
         const resolved = await resolvePlayCard(routeId.value, provider, contentLang(locale.value));
         if (stale()) return;
-        if (!(await adopt(resolved, provider, stale))) return;
+        if (!(await adopt(resolved, provider, stale, async () => null))) return;
         playerProvider = provider;
         const stage = await ensureStage({ app, router, session, provider, accessToken: async () => null, player: null,
           currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, guest: true,
@@ -231,7 +232,7 @@ onMounted(() => {
           typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? "",providerToken:token} : undefined),
       ]);
       if (!authorized || stale()) return;
-      if (!(await adopt(resolved, provider, stale))) return;
+      if (!(await adopt(resolved, provider, stale, accessToken))) return;
       const player = sameProvider ? session.me : await fetchMeAt(apiBaseOf(provider), token);
       if (stale()) return;
       playerProvider = provider;

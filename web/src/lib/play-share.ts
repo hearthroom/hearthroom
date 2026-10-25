@@ -9,6 +9,7 @@
  * 設計：docs/studio/tasks/2026-10-25-card-share-context/design.md（monorepo docs）。
  */
 import { withShareRef } from "./share-ref";
+import type { ProviderId } from "./provider";
 
 /** 跟舞台 common/share-context.ts 的 SHARE_CONTEXT_RE 同一條（web 測試會比對）。~ 開頭留給平台短碼。 */
 export const SHARE_CONTEXT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -25,8 +26,12 @@ export interface PlayShareInput {
   audience: ShareAudience | null;
   /** 平台開關。 */
   enabled: boolean;
-  /** 從平台短碼開的：朋友可以回應的投票（分享回流）。 */
+  /** 從平台短碼開的：朋友可以回應的投票（分享回流）。短碼留在這裡，舞台只拿到 key 與選項。 */
   poll?: { token: string; key: string; options: string[] } | null;
+  /** 共用狀態（lib/play-shared）要的：這張卡在哪一家、玩這一局的 token（遊客回 null）、是不是作者試玩（?mode=source）。 */
+  provider?: ProviderId;
+  token?: () => Promise<string | null>;
+  draft?: boolean;
 }
 
 export interface PlayShareDeps {
@@ -83,6 +88,16 @@ export function withShareContext(target: string, raw: unknown): string {
 
 let current: PlayShareInput | null = null;
 let refCode: string | null = null;
+/** 給 lib/play-shared：這一局的值與推薦碼。 */
+export const currentPlayShare = (): PlayShareInput | null => current;
+export const currentShareRef = (): string | null => refCode;
+
+/** 這張卡在社群站的卡片頁（帶分享者的推薦碼）；拿不到卡號是空字串。 */
+export function playCardUrl(s: PlayShareInput, links: PlayShareDeps["links"]): string {
+  if (!s.cardNumber) return "";
+  const site = links();
+  return withShareRef(`${site.origin}${site.lp(`/cards/${s.cardNumber}`)}`, refCode);
+}
 const listeners = new Set<() => void>();
 const notify = () => { for (const fn of [...listeners]) { try { fn(); } catch { /* 單一訂閱者壞了不影響其他 */ } } };
 
@@ -120,9 +135,8 @@ export function playShareHost(deps: PlayShareDeps) {
     read(roleId: string) {
       const s = current;
       if (!s || s.roleId !== roleId) return null;
-      const site = deps.links();
-      const url = s.cardNumber ? withShareRef(`${site.origin}${site.lp(`/cards/${s.cardNumber}`)}`, refCode) : "";
-      return { enabled: s.enabled, context: s.enabled ? shareContextOf(s.context) : null, url, audience: s.audience };
+      const poll = s.enabled && s.poll ? { key: s.poll.key, options: [...s.poll.options] } : null;
+      return { enabled: s.enabled, context: s.enabled ? shareContextOf(s.context) : null, url: playCardUrl(s, deps.links), audience: s.audience, ...(poll ? { poll } : {}) };
     },
     onChange(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
     qr: shareQr,
