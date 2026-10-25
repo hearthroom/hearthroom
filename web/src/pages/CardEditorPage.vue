@@ -454,7 +454,7 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
-interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; roleId?: string; visibility?: "private" | "unlisted" }
+interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; pendingCreate?: { roleId: string }; visibility?: "private" | "unlisted" }
 function storeDraft() {
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
@@ -471,7 +471,7 @@ function storeDraft() {
       worldbook: wb.stored(),
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
-      ...(roleId.value ? { roleId: roleId.value } : {}),
+      ...(roleId.value ? { pendingCreate: { roleId: roleId.value } } : {}),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
   } catch {
@@ -488,7 +488,9 @@ function restoreDraft() {
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
     newCardVisibility.value = stored.visibility === "private" ? "private" : "unlisted";
-    if (stored.roleId) roleId.value = stored.roleId;
+    // 舊格式的 roleId 也可能來自已成功儲存的卡，無法證明是建卡未完成。
+    // 舊草稿只恢復內容；只有明確的 partial-create 記錄才允許續存原目標。
+    if (typeof stored.pendingCreate?.roleId === "string") roleId.value = stored.pendingCreate.roleId;
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
     worldShown.value = Boolean(draft.value.world);

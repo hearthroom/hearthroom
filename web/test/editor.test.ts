@@ -22,6 +22,7 @@ import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
 import { ratingState } from "../src/lib/rating";
+import { makeDraft } from "../src/lib/role-draft";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -892,9 +893,14 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     api.patchRoleDocument.mockRejectedValueOnce(new Error("儲存中斷"));
     await mount("/create");
     await type($("#f-name"), "先前未存完的卡");
+    const visibility = $<HTMLSelectElement>("#new-card-visibility");
+    visibility.value = "private";
+    visibility.dispatchEvent(new Event("change"));
+    await flush();
     await submit();
     expect(api.createRole).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem("hearthroom.draft.create")).toContain('"roleId":"r1"');
+    expect(JSON.parse(localStorage.getItem("hearthroom.draft.create")!).pendingCreate).toEqual({ roleId: "r1" });
+    expect(JSON.parse(localStorage.getItem("hearthroom.draft.create")!).visibility).toBe("private");
     app!.unmount();
     root.remove();
 
@@ -911,6 +917,27 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.beginCardEdit).not.toHaveBeenCalled();
     expect(api.patchRoleDocument).toHaveBeenCalledWith("r2", expect.objectContaining({ roleName: "全新的卡" }), "tok");
     expect(api.patchRoleDocument.mock.calls.every(([id]) => id !== "r1")).toBe(true);
+    expect(api.createRole).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: "unlisted" }), "tok");
+  });
+
+  it("新建入口恢復舊格式草稿只帶入內容，直接儲存不覆寫草稿裡的舊卡", async () => {
+    localStorage.setItem("hearthroom.draft.create", JSON.stringify({
+      draft: { ...makeDraft("zh-Hant"), roleName: "舊卡留下的草稿", roleDetailDesc: "原本的設定" },
+      tagsText: "", worldbook: null, savedAt: Date.now(), roleId: "previous-card", visibility: "private",
+    }));
+    await mount("/create");
+    expect(root.textContent).toContain("已恢復上次沒儲存的草稿");
+    expect($<HTMLInputElement>("#f-name").value).toBe("舊卡留下的草稿");
+    expect($<HTMLTextAreaElement>("#f-detail").value).toBe("原本的設定");
+    await type($("#f-name"), "作者要新建的卡");
+    await type($("#f-detail"), "新卡的設定");
+    await submit();
+
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", expect.objectContaining({ roleName: "作者要新建的卡" }), "tok");
+    expect(api.patchRoleDocument.mock.calls.every(([id]) => id !== "previous-card")).toBe(true);
+    expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({ visibility: "private" }), "tok");
   });
 
   it("成功建卡後的未儲存修改不再回流到新卡本機草稿", async () => {
