@@ -76,7 +76,7 @@ watch(() => [props.roleId, props.provider] as const, () => {
   data.value = null; result.value = null; needsReadback.value = false; busy.value = null;
   void load(true);
 }, { immediate: true });
-onBeforeUnmount(() => { generation++; clearTimeout(skeletonTimer); clearTimeout(successTimer); });
+onBeforeUnmount(() => { generation++; epoch++; clearTimeout(skeletonTimer); clearTimeout(successTimer); });
 
 const platformOff = computed(() => !!data.value?.platformOff);
 const open = computed(() => !!data.value && !data.value.authorOff && !data.value.platformOff);
