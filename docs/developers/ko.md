@@ -109,3 +109,11 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 카드 스크립트는 플레이어가 버튼을 누르면 이미지와 문구를 공유할 수 있습니다. HTTPS 카드 프레임에는 호스트가 `web-share`와 `clipboard-write`를 위임합니다. `navigator.share`에 미리 준비한 이미지 `File`과 텍스트를 전달할 수 있고, `navigator.clipboard.write`와 `ClipboardItem`으로 PNG를, `navigator.clipboard.writeText`로 문구를 쓸 수 있습니다. 이는 브라우저 기능이며 새로운 `sdk` 메서드나 HTTP 엔드포인트가 아닙니다.
 
 파일은 클릭 전에 준비하고 클릭 핸들러에서 직접 호출해 사용자 활성화를 유지하세요. 작업을 제공하기 전에 `navigator.share`, `navigator.canShare({ files: [file] })`, `navigator.clipboard.write`, `ClipboardItem`을 확인하세요. 지원 여부는 브라우저, 운영체제, 권한, 수신 앱에 따라 달라지며 이미지와 텍스트가 모두 유지된다고 보장할 수 없습니다. 거부와 취소를 처리하고 사용할 수 없으면 이미지 다운로드와 선택 가능한 문구를 제공하세요. 취소한 공유 창을 자동으로 다시 열지 마세요. 호스트는 `clipboard-read`를 위임하지 않습니다. 불투명 오리진의 로컬 미리보기에서는 거부될 수 있으므로 대상 기기의 실제 교차 오리진 카드에서 확인하세요.
+
+## 맥락을 담은 공유 링크
+
+카드 스크립트는 맥락 코드를 담은 공유 링크를 만들 수 있습니다. 친구가 그 링크로 카드를 열면 같은 코드를 받으므로 “친구는 이걸 골랐어요, 이제 당신 차례”를 보여 줄 수 있습니다. `sdk.share.link(code)`(클래식 카드는 `window.stage.share.link`)는 이 카드의 공유 링크를 동기적으로 돌려줍니다. 링크는 카드 페이지 `/cards/<number>`이며 로그인한 플레이어의 추천 코드가 붙고, 코드를 넘기면 `?share=<code>`가 더해집니다. 링크는 클릭 전에 만들어 두고 클릭 핸들러 안에서 `navigator.share`에 넘기세요.
+
+친구 쪽에서는 `sdk.share.context`로 코드를 읽습니다. 코드가 없거나 지난 대화를 보고 있으면 `null`입니다. 코드는 영문자, 숫자와 `.`, `_`, `-`로 된 1–64자의 ASCII이며 영문자나 숫자로 시작해야 합니다. 규칙에 맞지 않으면 샌드박스 카드는 `SHARE_CONTEXT_INVALID`를 던지고 클래식 카드는 `null`을 받습니다. 플랫폼은 코드를 전달만 합니다. 모델로 보내지 않고 플레이어 정보도 담지 않으며, 누구나 직접 입력할 수 있으니 카드가 정의한 코드만 받아들이세요. 친구에게 이미 저장 데이터가 있는지는 카드가 판단합니다(예: `sdk.archive.list()`, 게스트에게는 저장 데이터가 없습니다).
+
+`sdk.share.audience`는 링크를 열 수 있는 사람을 나타냅니다: `author`(비공개 카드, 새 친구는 열 수 없음), `link`, `public`. 플랫폼 스위치가 꺼져 있으면 `sdk.share.enabled`은 false, `context`는 `null`이고 `link()`는 맥락 없는 일반 링크를 돌려줍니다. `sdk.share.qr(text)`는 공유 이미지에 쓸 `{ size, path }`(`size` × `size` 칸의 SVG path)를 돌려줍니다. 추천 코드가 늦게 도착하면 `share:change`가 발생합니다. 작성자는 `?mode=source&share=<code>`로 초안에서 시험할 수 있습니다.

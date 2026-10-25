@@ -108,3 +108,11 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 卡片腳本可以在玩家點擊按鈕後分享圖片與文案。HTTPS 卡片框架由宿主委派 `web-share` 與 `clipboard-write`：`navigator.share` 可接收預先準備的圖片 `File` 與文字；`navigator.clipboard.write` 搭配 `ClipboardItem` 可寫入 PNG，`navigator.clipboard.writeText` 可寫入文案。這些是瀏覽器能力，不是新增的 `sdk` 方法或 HTTP 端點。
 
 請在點擊前準備好檔案，在點擊處理函式內直接呼叫，保留使用者啟動狀態。提供操作前先檢查 `navigator.share`、`navigator.canShare({ files: [file] })`、`navigator.clipboard.write` 與 `ClipboardItem`。支援情況取決於瀏覽器、作業系統、權限與接收 App，分享後不保證圖片和文字都保留。請捕捉拒絕與取消；不支援或被拒絕時提供下載圖片與可選取的文案，取消後不要自動重開分享面板。宿主不委派 `clipboard-read`。本機不透明來源的預覽仍可能拒絕呼叫，請在目標裝置的實際跨來源卡片上驗證。
+
+## 帶情境的分享連結
+
+卡片腳本可以產生一條帶情境碼的分享連結：朋友從這條連結開卡時，腳本讀得到同一個碼，卡片就能做出「你朋友選了這個，換你」。`sdk.share.link(code)`（一般卡為 `window.stage.share.link`）同步回傳這張卡的分享連結：卡片頁 `/cards/<number>`，帶著已登入玩家的推薦碼，給了情境碼就再加上 `?share=<code>`。請在點擊前產生連結，在點擊處理函式內交給 `navigator.share`。
+
+朋友那一端以 `sdk.share.context` 讀回情境碼；沒有，或正在看自己過去的對話時是 `null`。情境碼只收 1–64 個英數字與 `.`、`_`、`-`，開頭須為英數字；不合規則時沙盒卡丟出 `SHARE_CONTEXT_INVALID`，一般卡得到 `null`。平台只負責送到：情境碼不會送進模型、不含玩家資料，而且任何人都能手打，請只接受卡片自己定義的碼。朋友是否已有存檔由卡片判斷（例如 `sdk.archive.list()`；遊客沒有存檔）。
+
+`sdk.share.audience` 表示誰打得開這條連結：`author`（僅自己可見的卡，新朋友打不開）、`link` 或 `public`。平台開關關閉時 `sdk.share.enabled` 為 false，`context` 為 `null`，`link()` 回傳不帶情境的一般連結。`sdk.share.qr(text)` 回傳 `{ size, path }`（`size` × `size` 格的 SVG path），可畫進分享圖。推薦碼較晚取得時會觸發 `share:change`。作者可以用 `?mode=source&share=<code>` 在草稿上測試。
