@@ -136,7 +136,8 @@ describe("共鬥計數器與排行榜", () => {
     expect(typeof reached.body.reachedAt).toBe("number");
     expect(await add("bob", "boss", 1)).toMatchObject({ status: 409, body: { error: "goal_reached" } });
     const view = (await read("boss,cheer", "bob")).body.items;
-    expect(view.boss).toMatchObject({ kind: "counter", total: 100, goal: 100, previous: 0, mine: 50 });
+    // bob 在總數 60 時加 50，只有 40 進到總數；個人貢獻也只算這 40（PM 2026-10-26 裁定，原本會記 50）
+    expect(view.boss).toMatchObject({ kind: "counter", total: 100, goal: 100, previous: 0, mine: 40 });
     expect(view.cheer).toEqual({ kind: "counter", total: 0, mine: 0 });
   });
 
@@ -464,5 +465,22 @@ describe("還沒有卡片列的新卡（沒送審、沒設能見度的私卡；C
     await c.vote("author", "a");
     await c.read("p1-4", "author");
     expect(roleReads).toBe(1);
+  });
+});
+
+describe("達標那一次：個人貢獻只算真的進到總數的部分（PM 裁定，加總恆等於總數）", () => {
+  it("總數 90、目標 100 時加 50（個人額度還有 50）：只進 10，mine 也只加 10；之後再加回 goal_reached", async () => {
+    await played("alice"); await played("bob"); await played("carol");
+    expect((await add("alice", "boss", 10)).body).toMatchObject({ total: 10, mine: 10 });
+    expect((await add("bob", "boss", 50)).body).toMatchObject({ total: 60, mine: 50 });
+    expect((await add("carol", "boss", 30)).body).toMatchObject({ total: 90, mine: 30 });
+    const last = await add("alice", "boss", 50);
+    expect(last).toMatchObject({ status: 200, body: { total: 100, mine: 20 } });
+    expect(last.body.reachedAt).toEqual(expect.any(Number));
+    expect(await add("bob", "boss", 1)).toMatchObject({ status: 409, body: { error: "goal_reached" } });
+    const sum = await env.DB.prepare("SELECT SUM(value) AS s FROM card_state_members WHERE key = 'boss'").first<{ s: number }>();
+    expect(sum?.s).toBe(100);
+    const board = await call("/v1/cards/src-1/state/boss/leaderboard", { token: "alice" });
+    expect(board.body.items.map((r: { value: number }) => r.value)).toEqual([50, 30, 20]);
   });
 });

@@ -283,6 +283,7 @@ export async function vote(env: Env, state: CardState, key: string, option: stri
 /**
  * 計數器：加一個 1..maxStep 的整數。每人每期最多 perMember，超過的部分不算（加滿了回 limit_reached）；
  * 有目標的達標後不再增加，記下達標時刻。實際加了多少在 SQL 裡算（last_delta），總數只加這一筆的量。
+ * 達標那一次只算進到總數的部分：個人貢獻的加總恆等於總數，排行榜不會替最後一下多記（PM 2026-10-26 裁定）。
  */
 export async function add(env: Env, state: CardState, key: string, delta: number, memberId: string, now: number): Promise<{ total: number; mine: number; reachedAt: number | null }> {
   const counter = key in state.decl.counters ? state.decl.counters[key] : undefined;
@@ -297,14 +298,18 @@ export async function add(env: Env, state: CardState, key: string, delta: number
   const goal = counter.goal ?? Number.MAX_SAFE_INTEGER;
   const mineSql = `(SELECT last_delta FROM card_state_members WHERE card_id=? AND ns=? AND scope=? AND key=? AND period=? AND member_id=? AND rev=?)`;
   const mineArgs = [...pk, memberId, rev];
+  // 這一下最多能加多少：delta 與「離目標還差多少」取小（同一個 batch 裡讀總數，並發也一致）；再跟每人額度取小
+  const capSql = `MIN(?, ? - COALESCE((SELECT t.value FROM card_state_totals t WHERE t.card_id=? AND t.ns=? AND t.scope=? AND t.key=? AND t.period=? AND t.option=''), 0))`;
+  const capArgs = [delta, goal, ...pk];
   const results = await env.DB.batch([
     // SQLite 的 UPDATE SET 一律用舊值計算：last_delta 與 value 用的是同一個「還剩多少額度」
     env.DB.prepare(`INSERT INTO card_state_members (card_id, ns, scope, key, period, member_id, value, last_delta, rev, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, MIN(?, ?), MIN(?, ?), ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, MAX(0, MIN(${capSql}, ?)), MAX(0, MIN(${capSql}, ?)), ?, ?)
         ON CONFLICT (card_id, ns, scope, key, period, member_id) DO UPDATE SET
-          last_delta = MAX(0, MIN(?, ? - value)), value = value + MAX(0, MIN(?, ? - value)), rev = excluded.rev,
-          updated_at = CASE WHEN MIN(?, ? - value) > 0 THEN excluded.updated_at ELSE updated_at END`)
-      .bind(...pk, memberId, delta, counter.perMember, delta, counter.perMember, rev, now, delta, counter.perMember, delta, counter.perMember, delta, counter.perMember),
+          last_delta = MAX(0, MIN(${capSql}, ? - value)), value = value + MAX(0, MIN(${capSql}, ? - value)), rev = excluded.rev,
+          updated_at = CASE WHEN MIN(${capSql}, ? - value) > 0 THEN excluded.updated_at ELSE updated_at END`)
+      .bind(...pk, memberId, ...capArgs, counter.perMember, ...capArgs, counter.perMember, rev, now,
+        ...capArgs, counter.perMember, ...capArgs, counter.perMember, ...capArgs, counter.perMember),
     env.DB.prepare(`INSERT INTO card_state_totals (card_id, ns, scope, key, period, option, value, reached_at, updated_at)
         SELECT ?, ?, ?, ?, ?, '', MIN(?, d), CASE WHEN d >= ? THEN ? END, ? FROM (SELECT ${mineSql} AS d) WHERE d > 0
         ON CONFLICT (card_id, ns, scope, key, period, option) DO UPDATE SET
@@ -316,7 +321,11 @@ export async function add(env: Env, state: CardState, key: string, delta: number
   ]);
   const mine = (results[2]!.results[0] ?? { last_delta: 0, value: 0 }) as { last_delta: number; value: number };
   const after = (results[3]!.results[0] ?? { value: 0, reached_at: null }) as { value: number; reached_at: number | null };
-  if (mine.last_delta === 0) throw new HttpError(429, "limit_reached");
+  if (mine.last_delta === 0) {
+    // 什麼都沒加進去：別人剛好先達標（goal_reached），否則是自己的額度滿了
+    if (counter.goal && after.reached_at) throw new HttpError(409, "goal_reached");
+    throw new HttpError(429, "limit_reached");
+  }
   return { total: after.value, mine: mine.value, reachedAt: after.reached_at };
 }
 
