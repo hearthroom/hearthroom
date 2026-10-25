@@ -3314,5 +3314,16 @@
   "editor.shared.resetRejected": "集計結果をゼロにできませんでした。",
   "editor.shared.clearDraftRejected": "試遊データを消せませんでした。",
   "editor.shared.resultUnknown": "操作の結果をまだ確認できていません。",
-  "editor.shared.checkResult": "最新の状態を確認する"
+  "editor.shared.checkResult": "最新の状態を確認する",
+  "maintenance.title": "サーバーアップグレード中",
+  "maintenance.body": "サーバーのアップグレード中は、サイトを利用できません。完了後に再び利用できます。",
+  "maintenance.eta": "{time} に再開予定です",
+  "maintenance.duration": "所要時間は {duration} の予定です",
+  "maintenance.etaPending": "再開時刻はまだ決まっていません",
+  "maintenance.autoResume": "再開すると、このページは自動で更新されます。",
+  "maintenance.check": "再開したか確認",
+  "maintenance.checking": "確認中…",
+  "maintenance.stillActive": "サーバーのアップグレードはまだ続いています。",
+  "maintenance.checkFailed": "再開したか確認できませんでした。しばらくしてからもう一度お試しください。",
+  "maintenance.reload": "更新"
 }

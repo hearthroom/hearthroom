@@ -21,8 +21,9 @@ it('reuses public identities and immediately invalidates privacy and award chang
  const ctx=createExecutionContext();const warm=await app.fetch(new Request('https://c.test'+path),{...env,COMMUNITY_ENABLED:'true',DB:recorded.db},ctx);await waitOnExecutionContext(ctx);
  expect(warm.headers.get('X-Cache')).toBe('hit');
  // One bounded identity-fence read precedes the existing cache revision read.
- expect(recorded.queries.length).toBe(2);
- expect(recorded.queries[0]).toContain("account_class");
+ expect(recorded.queries.length).toBe(3);
+ expect(recorded.queries[0]).toContain("community_settings");
+ expect(recorded.queries[1]).toContain("account_class");
  await env.DB.prepare('UPDATE community_preferences SET public_badges=0 WHERE member_id=?').bind(member).run();
  expect(await (await get(path)).json()).toEqual({badges:[]});
 });

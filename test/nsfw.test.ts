@@ -112,8 +112,9 @@ describe("榜單權限與快取", () => {
     const measured = { ...env, DB: db };
     // The proxy is a new database binding: warm its one-time schema check too.
     await worker.fetch(new Request('https://c.test/v1/providers'), measured, createExecutionContext());
-    expect(queries).toHaveLength(1);
-    expect(queries[0]).toContain('pragma_table_info');
+    expect(queries).toHaveLength(2);
+    expect(queries[0]).toContain('community_settings');
+    expect(queries[1]).toContain('pragma_table_info');
     queries.length = 0;
     const identity = vi.spyOn(upstream, "fetchMe");
     const ctx = createExecutionContext();
@@ -121,7 +122,8 @@ describe("榜單權限與快取", () => {
     await waitOnExecutionContext(ctx);
     expect(result.headers.get("X-Cache")).toBe("hit");
     // The additional bounded author-classification read prevents cached QA disclosure.
-    expect(queries).toHaveLength(7);
+    expect(queries).toHaveLength(8);
+    expect(queries[0]).toContain("community_settings");
     expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
     expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
     expect(queries.some(sql=>sql.includes('c.id IN(SELECT value FROM json_each'))).toBe(true);
@@ -395,8 +397,9 @@ describe("本站登入 cookie 直接放行單卡", () => {
     expect(ids(await json(res))).toEqual(["role-adult", "role-safe"]);
     expect(res.headers.get("X-Cache")).toBe("hit");
     // A cookie additionally needs an exclusion-only hint before authentication.
-    expect(queries, queries.join("\n---\n")).toHaveLength(8);
-    expect(queries[0]).toContain("qa_session_exclusion");
+    expect(queries, queries.join("\n---\n")).toHaveLength(9);
+    expect(queries[0]).toContain("community_settings");
+    expect(queries[1]).toContain("qa_session_exclusion");
     expect(queries.filter(sql=>sql.trim().startsWith('INSERT'))).toHaveLength(1);
     expect(queries.find(sql=>sql.trim().startsWith('INSERT'))).toContain('ops_metrics');
     expect(queries.some(sql=>/ORDER BY/i.test(sql))).toBe(false);

@@ -1,3 +1,4 @@
+import { readMaintenance } from './maintenance';
 import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
 import { ownedHistory, bindOwnedHistory } from "./owned-history";
 import { moderationMetrics } from "./moderation";
@@ -24,10 +25,12 @@ libraryRoutes.use('/v1/me/*', async (c, next) => {
 
 libraryRoutes.get('/metrics', async c => {
   const rows = await c.env.DB.prepare('SELECT operation,outcome,value FROM library_metrics ORDER BY operation,outcome').all<{ operation: string; outcome: string; value: number }>();
+  const maintenance = await readMaintenance(c.env.DB);
   const lines = rows.results.filter(r => /^(favorites|following|feed|conversations)_(get|put|delete)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))
     .map(r => `hearthroom_library_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
   const community = await c.env.DB.prepare('SELECT operation,outcome,value FROM community_metrics').all<{operation:string;outcome:string;value:number}>();
   const communityLines=community.results.filter(r=>/^(member|bridge|oauth|media|badge_read|badge_write|badge_admin|official_admin)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_community_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
+  lines.push('# HELP hearthroom_maintenance_enabled Whether site maintenance is enabled.','# TYPE hearthroom_maintenance_enabled gauge',`hearthroom_maintenance_enabled ${maintenance.enabled?1:0}`);
   lines.push('# HELP hearthroom_community_requests_total Community integration requests.','# TYPE hearthroom_community_requests_total counter',...communityLines);
   const updates = await c.env.DB.prepare('SELECT operation,outcome,value FROM update_metrics ORDER BY operation,outcome').all<{operation:string;outcome:string;value:number}>();
   lines.push('# HELP hearthroom_updates_operations_total Update announcement work: registering a build, building the daily digest, digest delivery acks, reporter notices, read-state writes.','# TYPE hearthroom_updates_operations_total counter',
