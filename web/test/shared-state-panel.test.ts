@@ -197,6 +197,40 @@ describe("審查修正：確認與寫入綁住來源、依未執行保證分類"
     expect(api.reset).not.toHaveBeenCalled();
   });
 
+  it("離開編輯頁（元件卸載）：確認框、token、寫入三個等待點之後都不再送出或動畫面", async () => {
+    await mount();
+    confirm.held = true;
+    resetButtons()[1]!.click();
+    await settle();
+    app.unmount();
+    confirm.hold!(true);
+    await settle();
+    expect(api.reset).not.toHaveBeenCalled();
+
+    confirm.held = false;
+    await mount();
+    let give!: (t: string) => void;
+    props.token = () => new Promise<string | null>((r) => { give = r as (t: string) => void; });
+    resetButtons()[1]!.click();
+    await settle();
+    app.unmount();
+    give("tok");
+    await settle();
+    expect(api.reset).not.toHaveBeenCalled();
+
+    props.token = async () => "tok";
+    await mount();
+    let fail!: (e: unknown) => void;
+    api.reset.mockImplementation(() => new Promise<void>((_, j) => { fail = j; }));
+    resetButtons()[1]!.click();
+    await settle();
+    app.unmount();
+    const reads = api.fetch.mock.calls.length;
+    fail(new TypeError("Failed to fetch"));
+    await settle();
+    expect(api.fetch.mock.calls.length).toBe(reads);
+  });
+
   it("5xx 不算確定沒做：顯示結果不明並讀回；4xx（寫入前擋下）才算沒做成", async () => {
     await mount();
     for (const status of [500, 502, 504]) {
