@@ -89,7 +89,7 @@ const xml = (s: string) => s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uF
 
 export async function blogFeed(env: Env, lang: string, now: number): Promise<string> {
   const l = asLocale(lang);
-  const posts = await recentPosts(env.DB, now, FEED_LIMIT);
+  const posts = await recentPosts(env.DB, now, FEED_LIMIT, l);
   const self = `${origin}${prefix(l)}/blog.atom`;
   const updated = new Date(Math.max(0, ...posts.map((p) => p.contentUpdatedAt)) || now).toISOString();
   const entries = posts.map((p) => {

@@ -128,7 +128,7 @@ it("shows a decorative monogram on a card without a cover: the column name, else
 });
 
 it("shows the preview notice and sends the token when the link carries one", async () => {
-  routes["/v1/blog/posts/news/hello?preview=tok%2B1"] = post({ status: "draft" });
+  routes["/v1/blog/posts/news/hello?locale=zh-Hant&preview=tok%2B1"] = post({ status: "draft" });
   const root = await mount(BlogPostPage, "/blog/news/hello?preview=tok%2B1", "/blog/:column/:slug");
   expect(root.textContent).toContain(t("blog.preview"));
   expect(tracked.some((e) => e.event === "blog_view")).toBe(false);
@@ -181,4 +181,22 @@ it("the post page shows where it lives: blog › group › column", async () => 
   const root = await mount(BlogPostPage, "/blog/news/hello", "/blog/:column/:slug");
   const crumbs = [...root.querySelectorAll(".blog-post__crumbs a")].map((a) => [a.textContent?.trim(), a.getAttribute("href")]);
   expect(crumbs).toEqual([[t("blog.title"), "/blog"], ["官方消息", "/blog/g/official"], ["公告", "/blog/news"]]);
+});
+
+it("sends page locale and reloads the list when only locale changes", async () => {
+  routes["/v1/blog/posts"] = { total: 1, pinned: [], items: [card("a")] };
+  await mount(BlogListPage, "/zh-Hans/blog", "/:locale/blog/:column?");
+  expect(fetched.some(u => u.includes("locale=zh-Hans"))).toBe(true);
+  const router = app.config.globalProperties.$router;
+  await router.push("/en/blog");
+  for (let i = 0; i < 6; i++) { await nextTick(); await new Promise(r => setTimeout(r, 0)); }
+  expect(fetched.some(u => u.includes("locale=en"))).toBe(true);
+});
+it("sends viewer locale on article navigation and refreshes recommendations on locale change", async () => {
+  routes["/v1/blog/posts/news/hello"] = post();
+  await mount(BlogPostPage, "/zh-Hans/blog/news/hello", "/:locale/blog/:column/:slug");
+  expect(fetched.some(u => u.includes("/news/hello?") && u.includes("locale=zh-Hans"))).toBe(true);
+  await app.config.globalProperties.$router.push("/en/blog/news/hello");
+  for (let i = 0; i < 6; i++) { await nextTick(); await new Promise(r => setTimeout(r, 0)); }
+  expect(fetched.some(u => u.includes("/news/hello?") && u.includes("locale=en"))).toBe(true);
 });

@@ -91,8 +91,8 @@ export function markViewed(postId: string, today: string): boolean {
 }
 
 
-export const fetchPosts = (filter: { column?: string; group?: string }, page: number) => {
-  const q = new URLSearchParams({ ...(filter.group ? { group: filter.group } : {}), ...(filter.column ? { column: filter.column } : {}), page: String(page) });
+export const fetchPosts = (filter: { column?: string; group?: string }, page: number, locale = i18n.global.locale.value) => {
+  const q = new URLSearchParams({ ...(filter.group ? { group: filter.group } : {}), ...(filter.column ? { column: filter.column } : {}), page: String(page), locale });
   return get<{ total: number; pinned: PostCard[]; items: PostCard[] }>(`/blog/posts?${q}`);
 };
 
@@ -100,8 +100,10 @@ export const allColumns = (groups: BlogGroup[]): BlogColumn[] => groups.flatMap(
 export const groupOfColumn = (groups: BlogGroup[], columnSlug: string): BlogGroup | undefined => groups.find((g) => g.columns.some((c) => c.slug === columnSlug));
 
 /** preview 是編輯器發的預覽碼：帶著它讀得到還沒公開的那一篇。 */
-export const fetchPost = (column: string, slug: string, preview?: string) =>
-  get<PostPage>(`/blog/posts/${encodeURIComponent(column)}/${encodeURIComponent(slug)}${preview ? `?preview=${encodeURIComponent(preview)}` : ""}`);
+export const fetchPost = (column: string, slug: string, preview?: string, locale = i18n.global.locale.value) => {
+  const q = new URLSearchParams({ locale, ...(preview ? { preview } : {}) });
+  return get<PostPage>(`/blog/posts/${encodeURIComponent(column)}/${encodeURIComponent(slug)}?${q}`);
+};
 
 /** 短網址 /blog/p/<id> 指向的正式網址。 */
 export const resolveShortLink = (id: string) => get<{ column: string; slug: string }>(`/blog/p/${encodeURIComponent(id)}`);

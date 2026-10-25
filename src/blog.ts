@@ -10,6 +10,17 @@ import { HttpError, type Env } from "./types";
  */
 export const LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type Locale = (typeof LOCALES)[number];
+export const blogLocale = (value?: string): Locale => LOCALES.includes(value as Locale) ? value as Locale : "zh-Hant";
+/** 繁簡互留無語言尾碼的舊文；多語文章需以語言尾碼識別，避免互相混入。 */
+export function matchesBlogLocale(post: { locale: string; slug: string }, locale: Locale): boolean {
+  return post.locale === locale || ((locale === "zh-Hant" ? post.locale === "zh-Hans" : locale === "zh-Hans" && post.locale === "zh-Hant")
+    && !LOCALES.some(l => post.slug.endsWith(`-${l.toLowerCase()}`)));
+}
+const localeSql = (param: string) => `(p.locale = ${param} OR (
+  ((${param} = 'zh-Hant' AND p.locale = 'zh-Hans') OR (${param} = 'zh-Hans' AND p.locale = 'zh-Hant'))
+  AND ${LOCALES.map(l => `p.slug NOT LIKE '%-${l.toLowerCase()}'`).join(" AND ")}
+))`;
+
 /** 欄目名稱／說明的多語文字，鍵是文章語言（types.ts 的 Localized 是卡片介面用的 zh/en/ja/ko，不同一套）。 */
 export type Localized = Partial<Record<Locale, string>>;
 export type Actor = { memberId: string; kind: ActorKind };
@@ -452,17 +463,18 @@ export async function columnTree(db: D1Database, opts: { admin: boolean }): Prom
  * 公開列表：看得到的欄目（VISIBLE_COLUMN）裡已公開的文章。columnSlug 只看那一欄；groupSlug 只看那一組；
  * 兩個都給時以欄目為準。置頂的最多 3 篇另列在 pinned，其餘依發布時間新到舊分頁；total 是 items 那一群的總數。
  */
-export async function publicPosts(db: D1Database, opts: { columnSlug?: string; groupSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
+export async function publicPosts(db: D1Database, opts: { locale?: Locale; columnSlug?: string; groupSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
   const column = opts.columnSlug ?? null;
   const group = column ? null : opts.groupSlug ?? null;
-  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND (?2 IS NULL OR col.slug = ?2) AND (?3 IS NULL OR col.parent_id = (SELECT id FROM blog_columns WHERE slug = ?3 AND parent_id IS NULL))`;
-  const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column, group).all<CardRow>()).results;
+  const locale = opts.locale ?? "zh-Hant";
+  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND ${localeSql("?4")} AND (?2 IS NULL OR col.slug = ?2) AND (?3 IS NULL OR col.parent_id = (SELECT id FROM blog_columns WHERE slug = ?3 AND parent_id IS NULL))`;
+  const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column, group, locale).all<CardRow>()).results;
   const skip = JSON.stringify(pinned.map((r) => r.id));
   const page = Math.max(1, Math.floor(opts.page) || 1);
-  const rest = `${where} AND p.id NOT IN (SELECT value FROM json_each(?4))`;
+  const rest = `${where} AND p.id NOT IN (SELECT value FROM json_each(?5))`;
   const [count, items] = await db.batch<CardRow & { n: number }>([
-    db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, group, skip),
-    db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?5 OFFSET ?6`).bind(opts.now, column, group, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, group, locale, skip),
+    db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?6 OFFSET ?7`).bind(opts.now, column, group, locale, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
   return { total: (count!.results[0] as { n: number }).n, pinned: pinned.map(toCard(opts.now)), items: (items!.results as CardRow[]).map(toCard(opts.now)) };
 }
@@ -509,8 +521,8 @@ export async function setPostLike(db: D1Database, postId: string, memberId: stri
 }
 
 /** 最新的公開文章（Atom 用）：停用欄目的不列，與公開列表一致。 */
-export async function recentPosts(db: D1Database, now: number, limit: number): Promise<Post[]> {
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit).all<PostRow>();
+export async function recentPosts(db: D1Database, now: number, limit: number, locale?: Locale): Promise<Post[]> {
+  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} AND (?3 IS NULL OR ${localeSql("?3")}) ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit, locale ?? null).all<PostRow>();
   return rows.results.map(toPost);
 }
 
@@ -533,18 +545,18 @@ export async function publicPostById(db: D1Database, id: string, now: number): P
 }
 
 /** 同欄目已公開的前一篇（較舊）與後一篇（較新）。 */
-export async function adjacentPosts(db: D1Database, post: Post, now: number): Promise<{ prev: PostCard | null; next: PostCard | null }> {
+export async function adjacentPosts(db: D1Database, post: Post, now: number, locale: Locale = post.locale): Promise<{ prev: PostCard | null; next: PostCard | null }> {
   if (post.publishAt === null) return { prev: null, next: null };
   const one = (cmp: "<" | ">", dir: "DESC" | "ASC") =>
-    db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND (p.publish_at ${cmp} ?3 OR (p.publish_at = ?3 AND p.id ${cmp} ?4)) ORDER BY p.publish_at ${dir}, p.id ${dir} LIMIT 1`).bind(now, post.columnId, post.publishAt, post.id);
+    db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND ${localeSql("?5")} AND (p.publish_at ${cmp} ?3 OR (p.publish_at = ?3 AND p.id ${cmp} ?4)) ORDER BY p.publish_at ${dir}, p.id ${dir} LIMIT 1`).bind(now, post.columnId, post.publishAt, post.id, locale);
   const [prev, next] = await db.batch<CardRow>([one("<", "DESC"), one(">", "ASC")]);
   const card = (r: D1Result<CardRow> | undefined) => (r?.results[0] ? toCard(now)(r.results[0]) : null);
   return { prev: card(prev), next: card(next) };
 }
 
 /** 同欄目最新的幾篇（排除自己）。 */
-export async function relatedPosts(db: D1Database, post: Post, now: number, limit = 3): Promise<PostCard[]> {
-  const rows = await db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND p.id <> ?3 ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4`).bind(now, post.columnId, post.id, limit).all<CardRow>();
+export async function relatedPosts(db: D1Database, post: Post, now: number, limit = 3, locale: Locale = post.locale): Promise<PostCard[]> {
+  const rows = await db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND p.id <> ?3 AND ${localeSql("?5")} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4`).bind(now, post.columnId, post.id, limit, locale).all<CardRow>();
   return rows.results.map(toCard(now));
 }
 
