@@ -96,7 +96,7 @@ async function load() {
   missing.value = false;
   failed.value = false;
   try {
-    const res = await fetchPost(columnSlug.value, slug.value, preview.value);
+    const res = await fetchPost(columnSlug.value, slug.value, preview.value, locale.value);
     if (mine !== seq) return;
     data.value = res;
     document.title = pageTitle(res.post.title);
@@ -204,7 +204,7 @@ onMounted(() => {
   if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
   fetchColumns().then((r) => { groups.value = r.items ?? []; }).catch(() => {});
 });
-watch([columnSlug, slug, preview], () => { void load(); }, { immediate: true });
+watch([columnSlug, slug, preview, locale], () => { void load(); }, { immediate: true });
 onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect(); clearTimeout(toastTimer); });
 </script>
 
@@ -323,7 +323,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 
 .blog-post__layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); align-items: start; }
 .blog-post__layout--toc { grid-template-columns: 220px minmax(0, 1fr); gap: var(--s-7); }
-.blog-post__main { display: grid; gap: var(--s-6); min-width: 0; max-width: 80ch; }
+.blog-post__main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); min-width: 0; max-width: 80ch; }
 
 .toc { position: sticky; top: calc(var(--header-h) + var(--s-4)); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; }
 .toc__fold > summary { list-style: none; cursor: default; }

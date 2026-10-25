@@ -41,7 +41,7 @@ async function load(reset = false) {
   loading.value = true;
   failed.value = false;
   try {
-    const res = await fetchPosts({ group: group.value, column: column.value }, page.value);
+    const res = await fetchPosts({ group: group.value, column: column.value }, page.value, locale.value);
     if (mine !== seq) return;
     if (page.value === 1) { pinned.value = res.pinned ?? []; items.value = res.items ?? []; }
     else items.value = [...items.value, ...(res.items ?? [])];
@@ -58,7 +58,7 @@ onMounted(() => {
   document.title = pageTitle(t("blog.title"));
   fetchColumns().then((r) => { groups.value = r.items ?? []; }).catch(() => {});
 });
-watch([group, column], () => load(true), { immediate: true });
+watch([group, column, locale], () => load(true), { immediate: true });
 watch(locale, () => { document.title = pageTitle(t("blog.title")); });
 </script>
 

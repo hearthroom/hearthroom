@@ -1,5 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
-import { columnTree, LOCALES, recentPosts, type Post } from "./blog";
+import { columnTree, matchesBlogLocale, LOCALES, recentPosts, type Post } from "./blog";
 import { blogGroupUrl, blogUrl } from "./blog-head";
 import { listCampaigns } from "./campaign";
 
@@ -19,11 +19,11 @@ export async function sitemapXml(db: D1Database, now: number): Promise<string> {
   const newest = (keep: (p: Post) => boolean) => Math.max(0, ...posts.filter(keep).map((p) => p.contentUpdatedAt)) || null;
   const out: string[] = [];
   for (const l of LOCALES) {
-    out.push(entry(`${origin}${prefix(l) || "/"}`), entry(`${origin}${prefix(l)}/updates`), entry(blogUrl(l), newest(() => true)));
+    out.push(entry(`${origin}${prefix(l) || "/"}`), entry(`${origin}${prefix(l)}/updates`), entry(blogUrl(l), newest(p => matchesBlogLocale(p, l))));
     for (const g of tree) {
       const inGroup = new Set(g.columns.map((c) => c.slug));
-      out.push(entry(blogGroupUrl(l, g.slug), newest((p) => inGroup.has(p.columnSlug))));
-      for (const c of g.columns) out.push(entry(blogUrl(l, c.slug), newest((p) => p.columnSlug === c.slug)));
+      out.push(entry(blogGroupUrl(l, g.slug), newest((p) => matchesBlogLocale(p, l) && inGroup.has(p.columnSlug))));
+      for (const c of g.columns) out.push(entry(blogUrl(l, c.slug), newest((p) => matchesBlogLocale(p, l) && p.columnSlug === c.slug)));
     }
   }
   for (const p of posts) out.push(entry(blogUrl(p.locale, p.columnSlug, p.slug), p.contentUpdatedAt));

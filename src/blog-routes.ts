@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import { clientKind } from "./analytics";
 import {
-  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug, publicPost,
+  blogLocale, adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug, publicPost,
   publicPostById, publicPosts, publicView, recordView, relatedPosts, restoreRevision, saveColumn, savePost, setPostLike, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
@@ -72,7 +72,7 @@ const admin = async (c: Ctx, post: Post) => c.json(await adminView(c.env.DB, pos
 blogRoutes.get("/v1/blog/columns", async (c) => c.json({ items: await columnTree(c.env.DB, { admin: false }) }, 200, PUBLIC));
 
 blogRoutes.get("/v1/blog/posts", async (c) =>
-  c.json(await publicPosts(c.env.DB, { columnSlug: c.req.query("column") || undefined, groupSlug: c.req.query("group") || undefined, page: page(c), now: Date.now() }), 200, PUBLIC));
+  c.json(await publicPosts(c.env.DB, { locale: blogLocale(c.req.query("locale")), columnSlug: c.req.query("column") || undefined, groupSlug: c.req.query("group") || undefined, page: page(c), now: Date.now() }), 200, PUBLIC));
 
 /** 帶預覽碼（24 小時、只認那一篇）讀得到未公開的文章；碼不對就當沒帶，照公開規則。 */
 async function previewed(c: Ctx, token: string, column: string, slug: string, now: number): Promise<Post | null> {
@@ -93,7 +93,8 @@ blogRoutes.get("/v1/blog/posts/:column/:slug", async (c) => {
   const post = (token ? await previewed(c, token, column, slug, now) : null) ?? (await publicPost(c.env.DB, column, slug, now));
   const headers = token ? { "Cache-Control": PRIVATE } : PUBLIC;
   if (!post) return c.json({ error: "blog_post_not_found" }, 404, headers);
-  const [adjacent, related, view] = await Promise.all([adjacentPosts(c.env.DB, post, now), relatedPosts(c.env.DB, post, now), publicView(c.env.DB, post, now)]);
+  const locale = blogLocale(c.req.query("locale") ?? post.locale);
+  const [adjacent, related, view] = await Promise.all([adjacentPosts(c.env.DB, post, now, locale), relatedPosts(c.env.DB, post, now, 3, locale), publicView(c.env.DB, post, now)]);
   return c.json({ post: view, adjacent, related }, 200, headers);
 });
 
