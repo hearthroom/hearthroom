@@ -6,6 +6,7 @@ import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
 
 export interface WorkVisibility {
+ rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  access:WorkAccess;effectiveAccess:'owner'|'link'|'public'|'denied'|'unavailable';
  review:'none'|'pending'|'rejected'|'needs_review'|'revoked';update:'none'|'pending'|'rejected';
  everPublic:boolean;revisionState:'same'|'changed'|'unknown';restorable:boolean;
@@ -64,8 +65,8 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
  const restorable=provider.restorable&&restriction==='none'&&syncState==='complete';
  const actions:WorkVisibility['actions']=[];
  if(syncState==='complete'&&restriction!=='takedown'){
-  actions.push('set_private');
-  if(restriction!=='suspended')actions.push('set_unlisted');
+  if(!provider.rewardRetention)actions.push('set_private');
+  if(restriction!=='suspended'&&!provider.rewardRetention)actions.push('set_unlisted');
   if(restriction==='none'){
    if(restorable)actions.push('restore_public');
    else actions.push(access==='public'?'submit_update':'submit_review');
@@ -73,11 +74,11 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
   if(review==='pending'||update==='pending')actions.push('cancel_review');
  }
  const workVisibility:WorkVisibility={access,effectiveAccess:syncState!=='complete'?'unavailable':restriction==='suspended'||restriction==='takedown'?'denied':access==='private'?'owner':access==='unlisted'||restriction==='delisted'?'link':'public',
-  review,update,everPublic,revisionState:provider.revisionState,restorable,
+  ...(provider.rewardRetention?{rewardRetention:provider.rewardRetention}:{}),review,update,everPublic,revisionState:provider.revisionState,restorable,
   restoreReason:syncState!=='complete'?'unavailable':restriction!=='none'?'restricted':restorable?'none':provider.restoreReason==='content_changed'?'content_changed':provider.restoreReason==='not_approved'?'no_approval':'revision_unknown',
   draftChanged:provider.revisionState==='changed',restriction,...(reviews?.status==='rejected'&&reviews.note?{reviewNote:reviews.note}:{}),
   ...(restriction!=='none'&&moderation?.reason?{restrictionNote:moderation.reason}:{}),
-  policyRevision:await revision({provider:provider.policyRevision,local:local?[local.work_id,local.provider,local.source_role_id,local.access,local.epoch,local.restriction,local.approved_role_id,local.sync_state,local.sync_operation_id,local.moderation_revision,local.confirmed_moderation_revision]:null,row:row?[row.status,row.approved_version_id,row.approved_hosted_role_id,row.board_hidden,row.public_blocked]:null,reviews,everPublic}),
+  policyRevision:await revision({rewardRetention:provider.rewardRetention??null,provider:provider.policyRevision,local:local?[local.work_id,local.provider,local.source_role_id,local.access,local.epoch,local.restriction,local.approved_role_id,local.sync_state,local.sync_operation_id,local.moderation_revision,local.confirmed_moderation_revision]:null,row:row?[row.status,row.approved_version_id,row.approved_hosted_role_id,row.board_hidden,row.public_blocked]:null,reviews,everPublic}),
   approvalRevision:await revision({provider:provider.approvalRevision,approved:row?.approved_version_id??null,role:row?.approved_hosted_role_id??null,everPublic}),actions,syncState};
  return workVisibility;
 }

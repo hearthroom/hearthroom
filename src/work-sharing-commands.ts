@@ -1,7 +1,8 @@
+import {apiBaseOf} from './providers';
 import {assertNormalMember} from './test-accounts';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
-import {getCard,upsertCard,type CardRow} from './cards';
+import {getCard,upsertCard,finishManagedWithdrawal,type CardRow} from './cards';
 import {hostGateway} from './hosting';
 import {requireMember,resolveMember} from './members';
 import {ownerCardSource,readOwnerVisibility} from './work-sharing';
@@ -146,6 +147,7 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/visibility',bodyLimit({maxSize:4
  if(op)await workPolicyGateway.owner(c.env,'harbor',source,token,true);
  if(!op){
   const view=await readOwnerVisibility(c.env,source,token,row,true);
+  if(command.action!=='cancel_review'&&command.targetAccess!=='public'&&view.workVisibility.rewardRetention){const r=view.workVisibility.rewardRetention;throw new HttpError(409,'card_reward_public_locked',undefined,{publicUntil:r.publicUntil,publicDays:r.days,requiredCredits:r.recoveryCredits});}
   if(view.workVisibility.policyRevision!==command.expectedPolicyRevision||view.workVisibility.approvalRevision!==command.expectedApprovalRevision)throw new HttpError(409,'visibility_operation_conflict');
   if(view.workVisibility.syncState!=='complete')throw new HttpError(503,'visibility_sync_pending');
   if(command.action==='cancel_review'&&!view.workVisibility.actions.includes('cancel_review'))throw new HttpError(409,'visibility_operation_conflict');
@@ -187,4 +189,30 @@ workSharingCommandRoutes.get('/v1/me/cards/:id/visibility/operations/:operationI
  if(state==='conflict')return c.json({error:'visibility_operation_conflict',operation:{operationId:op.operation_id,state}},409);
  const latest=await readOwnerVisibility(c.env,source,token,await getCard(c.env.DB,source,'harbor'));
  return c.json({workVisibility:latest.workVisibility,operation:{operationId:op.operation_id,state}},200);
+});
+
+// Delete first in the Provider's financial transaction. A rejected or unknown
+// result must never withdraw a still-existing public card from the community.
+workSharingCommandRoutes.post('/v1/me/cards/:id/delete',bodyLimit({maxSize:1024}),async c=>{
+ c.header('Cache-Control','private, no-store');const member=await requireMember(c);
+ if(member.provider!=='harbor')throw new HttpError(404,'card_not_found');
+ const body=await c.req.json().catch(()=>null) as {rewardRecoveryCredits?:unknown}|null;
+ const credits=body?.rewardRecoveryCredits??0;if(typeof credits!=='number'||!Number.isSafeInteger(credits)||credits<0)throw new HttpError(400,'invalid_request');
+ const {source,row}=await ownerCardSource(c.env,c.req.param('id'));
+ if(row&&row.author_num_id!==Number(member.externalId))throw new HttpError(403,'not_the_author');
+ const token=c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
+ let response:Response;
+ try{response=await fetch(`${apiBaseOf(c.env,'harbor')}/open/v1/role/${encodeURIComponent(source)}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({rewardRecoveryCredits:credits}),redirect:'manual',signal:AbortSignal.timeout(20000)});}
+ catch{throw new HttpError(503,'temporarily_unavailable');}
+ const result=await response.json().catch(()=>null) as Record<string,unknown>|null;
+ if(response.status===409&&typeof result?.error==='string'&&['card_reward_recovery_required','card_reward_recovery_insufficient'].includes(result.error)){
+  const details:Record<string,unknown>={};for(const key of ['publicUntil','publicDays','requiredCredits','availableCredits','shortfallCredits'])if(typeof result[key]==='number'||(key==='publicUntil'&&typeof result[key]==='string'))details[key]=result[key];
+  throw new HttpError(409,result.error,undefined,details);
+ }
+ if(response.status===401)throw new HttpError(401,'missing bearer token');
+ if(response.status===403)throw new HttpError(403,'not_the_author');
+ if(response.status===404)throw new HttpError(404,'card_not_found');
+ if(response.status!==200||result?.message!=='success')throw new HttpError(503,'temporarily_unavailable');
+ if(row)await finishManagedWithdrawal(c.env.DB,row.id);
+ return c.json({message:'success'});
 });

@@ -33,12 +33,12 @@ const OPEN = ["pending", "blocked_insufficient"];
 // ---- 活動設定 -----------------------------------------------------------------
 
 type CampaignRow = {
-  id: string; slug: string; title: string; starts_at: number; ends_at: number; payout_deadline: number | null; weekly_limit: number; reward: number; status: "draft" | "active";
+  id: string; slug: string; title: string; starts_at: number; ends_at: number; payout_deadline: number | null; weekly_limit: number; public_days:number; reward: number; status: "draft" | "active";
   posters: string; timezone: string; banner_key: string | null; featured: number; featured_rank: number | null;
 };
 const campaignView = (r: CampaignRow) => ({
   id: r.id, slug: r.slug, title: JSON.parse(r.title) as Record<string, string>, startsAt: r.starts_at, endsAt: r.ends_at, payoutDeadline: r.payout_deadline,
-  posterUrls: posterUrls(JSON.parse(r.posters)), weeklyLimit: r.weekly_limit, reward: r.reward, status: r.status, timezone: r.timezone, bannerUrl: imageUrl(r.banner_key), featured: r.featured === 1, featuredRank: r.featured_rank,
+  posterUrls: posterUrls(JSON.parse(r.posters)), weeklyLimit: r.weekly_limit, publicDays:r.public_days, reward: r.reward, status: r.status, timezone: r.timezone, bannerUrl: imageUrl(r.banner_key), featured: r.featured === 1, featuredRank: r.featured_rank,
 });
 export type RewardCampaign = ReturnType<typeof campaignView>;
 
@@ -58,7 +58,7 @@ export const cardRewardSummary = (k: RewardCampaign, now: number) => ({
 });
 /** 公開活動頁：規則卡要的數字。 */
 export const cardRewardDetail = (k: RewardCampaign, now: number) => ({
-  ...cardRewardSummary(k, now), payoutDeadline: k.payoutDeadline, reward: k.reward, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT,
+  ...cardRewardSummary(k, now), payoutDeadline: k.payoutDeadline, reward: k.reward, publicDays:k.publicDays, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT,
 });
 
 // ---- 誰該拿 -------------------------------------------------------------------
@@ -94,7 +94,7 @@ const LIVE = "('pending', 'blocked_insufficient', 'paid')";
  * ?1 現在時間，?2 限定一張卡（NULL＝全部）。
  * 卡的 registered_at 是這張卡列第一次過審的時間，不早於第一次上架，所以先用最早的活動開始時間篩掉舊卡。
  */
-const DUE = `SELECT x.card_id, x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward
+const DUE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
   FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted FROM (${CARD_BASE}
     AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
     AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
@@ -103,11 +103,12 @@ const DUE = `SELECT x.card_id, x.author_num_id, x.names, x.work_key, x.member_id
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE})
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.card_id = x.card_id AND r.status IN ${LIVE})`;
 
-type Due = { card_id: number; author_num_id: number; names: string; work_key: string; member_id: string; listed_at: number; campaign_id: string; slug: string; reward: number };
+type Due = { source_role_id:string;public_days:number;card_id: number; author_num_id: number; names: string; work_key: string; member_id: string; listed_at: number; campaign_id: string; slug: string; reward: number };
 
 // ---- 發放紀錄 -----------------------------------------------------------------
 
 type Row = {
+ retention_role_id:string|null;public_days:number|null;
   id: string; campaign_id: string; work_key: string; card_id: number; member_id: string; recipient_account_no: number; amount: number; status: string;
   provider_entry_id: string | null; error: string | null; attempts: number; checked_absent_at: number | null; created_at: number; updated_at: number; settled_at: number | null;
 };
@@ -135,7 +136,7 @@ async function notSelf(db: D1Database, actor: string, memberId: string, accountN
 }
 
 const send = (x: Payer, r: Row): Promise<PayResult> =>
-  upstream.payCampaign(x.env, x.bearer, { key: r.id, accountNo: r.recipient_account_no, amount: r.amount, campaignRef: r.campaign_id, contentRef: r.work_key }, x.provider)
+  upstream.payCampaign(x.env, x.bearer, { key: r.id, accountNo: r.recipient_account_no, amount: r.amount, campaignRef: r.campaign_id, contentRef: r.work_key,...(r.retention_role_id&&r.public_days?{retentionRoleId:r.retention_role_id,publicRetentionDays:r.public_days}:{}) }, x.provider)
     .catch(() => ({ kind: "unknown" }) as const);
 
 /**
@@ -198,9 +199,9 @@ export async function requestReward(x: Payer, cardId: number, op: string): Promi
   let inserted = 0;
   try {
     const [ins] = await db.batch([
-      db.prepare(`INSERT INTO card_rewards (id, campaign_id, work_key, card_id, member_id, recipient_account_no, amount, status, requested_by, attempts, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?)`)
-        .bind(id, due.campaign_id, due.work_key, due.card_id, due.member_id, due.author_num_id, due.reward, x.memberId, now, now),
+      db.prepare(`INSERT INTO card_rewards (id, campaign_id, work_key, card_id, member_id, recipient_account_no, amount, status, requested_by, attempts, created_at, updated_at,retention_role_id,public_days)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?,?,?)`)
+        .bind(id, due.campaign_id, due.work_key, due.card_id, due.member_id, due.author_num_id, due.reward, x.memberId, now, now,due.source_role_id,due.public_days),
       auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "request", after: { cardId, amount: due.reward }, operationId: op, now }),
     ]);
     inserted = ins!.meta.changes;

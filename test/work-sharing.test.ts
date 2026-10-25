@@ -530,3 +530,29 @@ it.each(['offline','receipt','managed','moderation','new_fence','other_intent','
  expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first()).toEqual({epoch:0,sync_state:'changing'});
  expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'conflict'});
 });
+
+it('projects reward retention and rejects author visibility changes before persisting intent',async()=>{
+ const f=await fixture();const until=new Date(Date.now()+86400000).toISOString();
+ Object.assign(f.current,{access:'public',rewardRetention:{publicUntil:until,days:30,recoveryCredits:10000}});
+ await env.DB.prepare("UPDATE managed_work_access SET access='public' WHERE work_id=?").bind(f.work).run();
+ const response=await request(`/v1/me/cards/${f.source}/visibility`);expect(response.status).toBe(200);
+ const body=await response.json() as {workVisibility:{rewardRetention?:unknown;actions:string[];policyRevision:string;approvalRevision:string}};
+ expect(body.workVisibility.rewardRetention).toEqual({publicUntil:until,days:30,recoveryCredits:10000});
+ expect(body.workVisibility.actions).not.toContain('set_private');expect(body.workVisibility.actions).not.toContain('set_unlisted');
+ const result=await request(`/v1/me/cards/${f.source}/visibility`,'owner',{operationId:crypto.randomUUID(),targetAccess:'private',expectedPolicyRevision:body.workVisibility.policyRevision,expectedApprovalRevision:body.workVisibility.approvalRevision});
+ expect(result.status).toBe(409);expect(await result.json()).toMatchObject({error:'card_reward_public_locked',publicUntil:until,requiredCredits:10000});
+ expect(f.behavior.commands).toBe(0);
+ expect((await env.DB.prepare('SELECT count(*) AS n FROM author_visibility_operations').first<{n:number}>())!.n).toBe(0);
+});
+
+it.each([409,503,200])('only withdraws the community listing after confirmed Provider deletion (%i)',async status=>{
+ const f=await fixture();await env.DB.prepare("UPDATE cards SET status='approved' WHERE id=?").bind(f.card.id).run();
+ f.network.mockImplementation(async(input,init)=>{
+  expect(new URL(String(input)).pathname).toBe(`/open/v1/role/${f.source}`);expect(init?.method).toBe('DELETE');
+  expect(JSON.parse(String(init?.body))).toEqual({rewardRecoveryCredits:13700});
+  return Response.json(status===200?{message:'success'}:{error:status===409?'card_reward_recovery_insufficient':'temporarily_unavailable',requiredCredits:13700,availableCredits:300,shortfallCredits:13400,publicDays:30,publicUntil:'2030-01-01T00:00:00Z'},{status});
+ });
+ const response=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:13700});expect(response.status).toBe(status);
+ const saved=await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(f.card.id).first<{status:string}>();expect(saved?.status).toBe(status===200?'unshared':'approved');
+ if(status===409)expect(await response.json()).toMatchObject({error:'card_reward_recovery_insufficient',requiredCredits:13700,availableCredits:300});
+});

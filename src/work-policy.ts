@@ -17,6 +17,7 @@ export interface WorkPolicyCommand {
  expectedOwnerRevision?:string;
 }
 export interface WorkOwnerView extends WorkPolicyReceipt {
+ rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  managed:boolean;policyRevision:string;approvalRevision:string;approvedRoleId:string;revisionState:'same'|'changed'|'unknown';
  restorable:boolean;restoreReason:string;providerRestriction:'none'|'takedown';
 }
@@ -43,7 +44,7 @@ async function call(env:Env,provider:ProviderId,source:string,suffix:string,body
  if(response.status===404&&body===undefined)return null;
  if(preserveAuth&&response.status===401)throw new HttpError(401,'missing bearer token');
  if(preserveAuth&&response.status===403)throw new HttpError(403,'not_the_author');
- if(response.status===409)throw new HttpError(409,'visibility_operation_conflict');
+ if(response.status===409){const body=await response.json().catch(()=>null) as {error?:string;publicUntil?:string;publicDays?:number;requiredCredits?:number}|null;if(body?.error==='card_reward_public_locked')throw new HttpError(409,body.error,undefined,{publicUntil:body.publicUntil,publicDays:body.publicDays,requiredCredits:body.requiredCredits});throw new HttpError(409,'visibility_operation_conflict');}
  if(!response.ok)throw new HttpError(503,'visibility_provider_unavailable');
  return response.json();
 }

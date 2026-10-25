@@ -886,7 +886,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
   });
 
-  it("刪卡：要照打角色名稱才准；先撤榜單登記再刪上游，然後回到我的卡片", async () => {
+  it("刪卡：要照打角色名稱才准；確認 Provider 刪除成功後回到我的卡片", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "阿芙拉", roleDesc: "老闆娘" });
     await mount("/cards/r1/edit");
     byText("發布").click();
@@ -900,14 +900,26 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     expect(api.deleteRole).not.toHaveBeenCalled();
     expect(confirmState.current).not.toBeNull();
-    // 打對：先撤登記、再刪卡、回到 /mine?fresh=1
+    // 打對：使用已確認的收回金額交給 Worker，成功後回到 /mine?fresh=1
     settleConfirm(true, "阿芙拉");
     await flush(); await flush();
-    expect(api.unregisterCard).toHaveBeenCalledWith("r1", "tok");
-    expect(api.deleteRole).toHaveBeenCalledWith("r1", "tok");
-    expect(api.unregisterCard.mock.invocationCallOrder[0]).toBeLessThan(api.deleteRole.mock.invocationCallOrder[0]);
+    expect(api.unregisterCard).not.toHaveBeenCalled();
+    expect(api.deleteRole).toHaveBeenCalledWith("r1", "tok",0);
     expect(router.currentRoute.value.path).toBe("/mine");
     expect(router.currentRoute.value.query.fresh).toBe("1");
+  });
+
+
+  it.each([false,true])('領獎卡刪除前確認實際金額，失敗時保留編輯頁（失敗=%s）',async fail=>{
+   api.fetchRoleDetail.mockResolvedValueOnce({roleName:'阿芙拉',roleDesc:'老闆娘'});
+   visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',actions:['submit_update'],rewardRetention:{publicUntil:'2030-11-25T14:30:00Z',days:7,recoveryCredits:13700}})});
+   if(fail)api.deleteRole.mockRejectedValueOnce(new Error('積分不足，無法刪除'));
+   await mount('/cards/r1/edit');byText('發布').click();await flush();btnIn(root,'刪除這張卡').click();await flush();
+   expect(confirmState.current?.message).toContain('13,700');expect(confirmState.current?.message).toContain('2030');expect(confirmState.current?.message).toContain('7 天');
+   expect(confirmState.current?.confirmText).toBe('刪除並退回獎勵');expect(confirmState.current?.cancelText).toBe('保留卡片');
+   expect(api.deleteRole).not.toHaveBeenCalled();settleConfirm(true,'阿芙拉');await flush();await flush();
+   expect(api.deleteRole).toHaveBeenCalledWith('r1','tok',13700);expect(api.unregisterCard).not.toHaveBeenCalled();
+   expect(router.currentRoute.value.path).toBe(fail?'/cards/r1/edit':'/mine');if(fail)expect(root.textContent).toContain('積分不足，無法刪除');
   });
 
   it("新卡（還沒建立）沒有刪除鍵", async () => {

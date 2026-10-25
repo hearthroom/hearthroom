@@ -1,0 +1,20 @@
+{
+  "draft": true,
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "創作季卡片的公開期限",
+    "zh-Hans": "创作季卡片的公开期限",
+    "en": "Creator Season public period",
+    "ja": "創作シーズンの公開期間",
+    "ko": "창작 시즌 카드 공개 유지 기간"
+  },
+  "body": {
+    "zh-Hant": "創作季領獎卡在公開期限內無法改為非公開，刪除前會顯示須退回的獎勵金額，可用積分不足時無法刪除。",
+    "zh-Hans": "领取创作季奖励的卡片在公开期限内无法改为非公开，删除前会显示需要退回的奖励金额，可用积分不足时无法删除。",
+    "en": "Cards rewarded in Creator Season must stay public for the required period; before deleting one, you’ll see the reward amount to return, and you can’t delete it if your available credits are insufficient.",
+    "ja": "創作シーズン報酬を受け取ったカードは所定の期間中は非公開に変更できず、削除前に返還する報酬額が表示され、利用可能なポイントが足りない場合は削除できません。",
+    "ko": "창작 시즌 보상을 받은 카드는 정해진 기간 동안 비공개로 바꿀 수 없고, 삭제 전에 돌려줄 보상 금액이 표시되며 사용 가능한 포인트가 부족하면 삭제할 수 없어요."
+  }
+}

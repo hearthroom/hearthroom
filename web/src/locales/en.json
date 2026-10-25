@@ -3325,5 +3325,22 @@
   "maintenance.checking": "Checking…",
   "maintenance.stillActive": "The server upgrade is still in progress.",
   "maintenance.checkFailed": "Availability could not be checked. Please try again shortly.",
-  "maintenance.reload": "Refresh"
+  "maintenance.reload": "Refresh",
+  "rewardRetention.lock.badge": "Creator Season public period",
+  "rewardRetention.lock.reason": "This card received a Creator Season reward and must stay public for {days} days. You can change its visibility from {unlockAt}.",
+  "rewardRetention.lock.option": "Available from {unlockAt}",
+  "rewardRetention.lock.error": "This card received a Creator Season reward. You cannot change it to “Only me” or “Anyone with the link” before {unlockAt}.",
+  "rewardRetention.delete.title": "Delete “{name}”?",
+  "rewardRetention.delete.reward": "This card is still within its {days}-day Creator Season public period. Deleting it will deduct {points} from your available balance to reclaim its reward.",
+  "rewardRetention.delete.later": "From {unlockAt}, you can delete this card without returning this reward.",
+  "rewardRetention.delete.confirm": "Delete and return reward",
+  "rewardRetention.delete.keep": "Keep card",
+  "rewardRetention.delete.insufficientTitle": "Not enough credits to delete",
+  "rewardRetention.delete.insufficient": "Deleting this card requires returning its Creator Season reward of {points}. You have {available} available and need {shortfall} more.",
+  "rewardRetention.delete.insufficientLater": "You can also wait until {unlockAt} to delete this card without returning this reward.",
+  "rewardRetention.reward.reclaimed": "Creator Season reward returned for card deletion",
+  "rewardRetention.rules.public": "Cards must stay public for {days} days after receiving a Creator Season reward. During this time, you cannot change them to “Only me” or “Anyone with the link”.",
+  "rewardRetention.rules.delete": "Deleting a card during this period requires returning its Creator Season reward. You cannot delete it if your available balance is too low.",
+  "rewardRetention.lock.reason.one": "This card received a Creator Season reward and must stay public for {days} day. You can change its visibility from {unlockAt}.",
+  "rewardRetention.rules.public.one": "Cards must stay public for {days} day after receiving a Creator Season reward. During this time, you cannot change them to “Only me” or “Anyone with the link”."
 }

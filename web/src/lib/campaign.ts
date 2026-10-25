@@ -210,7 +210,7 @@ export interface PublicCampaign {
 export interface CardRewardCampaign {
   kind: "card_reward";
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number; endsAt: number; timezone: string; bannerUrl: string | null; posterUrls?: CampaignPosterUrls; featured: boolean;
-  featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number;
+  publicDays?:number; featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number;
 }
 export type AnyCampaign = PublicCampaign | CardRewardCampaign;
 export const isCardReward = (c: { kind?: string } | null | undefined): c is CardRewardCampaign => c?.kind === "card_reward";

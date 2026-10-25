@@ -7008,6 +7008,34 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "card_reward_recovery_required: confirm requiredCredits or wait until publicUntil. card_reward_recovery_insufficient: availableCredits cannot repay the full reward; no deletion or partial recovery occurs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rewardRecoveryCredits": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0,
+                    "description": "Explicitly confirmed actual reward recovery amount. Required during an active reward retention period; recovery and deletion commit together. Retrying the same confirmed deletion does not recover twice."
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -7459,6 +7487,16 @@
           },
           "500": {
             "description": "`role_in_review` (card is in human review), `record not found`, or another unclassified error; `retryable: true`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "card_reward_public_locked: this awarded agent configuration must remain public until publicUntil; the request leaves access unchanged.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14940,6 +14978,30 @@
           "credits_available": {
             "type": "integer",
             "description": "Only on `insufficient_credits`: the credits the wallet could set aside for it."
+          },
+          "publicUntil": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exact end of the public retention obligation. Display in the reader's timezone."
+          },
+          "publicDays": {
+            "type": "integer",
+            "description": "Saved retention duration of the award."
+          },
+          "requiredCredits": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual reward amount that must be recovered before author deletion."
+          },
+          "availableCredits": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Eligible unexpired and unreserved credits available at the failed recovery attempt."
+          },
+          "shortfallCredits": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Additional eligible credits needed for full recovery."
           }
         }
       },
@@ -19430,6 +19492,10 @@
           "laneName": {
             "type": "string",
             "description": "Present with `modelName` when the model has a lane: the localized lane label from the model list, in the language of the `language` header."
+          },
+          "rewardRecovery": {
+            "type": "boolean",
+            "description": "True for an author deletion reward recovery. The existing record reason remains adjust."
           }
         }
       },
@@ -23086,6 +23152,17 @@
             "minimum": 1,
             "maximum": 3650,
             "description": "Optional. Days until the paid credits expire, from 1 to 3650. Leave it out for credits that never expire. Re-sending a key must carry the same value."
+          },
+          "retentionRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional source agent configuration whose author receives the payout. Supply with publicRetentionDays. The server checks ownership and public access and saves the retention obligation atomically with the payout."
+          },
+          "publicRetentionDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "Optional public retention duration in 24-hour days, starting at the original paidAt. Supply with retentionRoleId; replay must keep both values unchanged."
           }
         }
       },

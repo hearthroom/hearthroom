@@ -15,6 +15,8 @@
  * 後面每一步都需要前一步產生的 id。任何一步失敗就停下並保留草稿，不做局部回滾——
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
+import {retentionText} from '@/lib/reward-retention';
+import {fetchWorkVisibility} from '@/lib/work-visibility';
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted } from "@/lib/oauth";
@@ -832,37 +834,28 @@ async function save() {
 
 /**
  * 刪掉這張卡。不可逆，所以要作者把角色名稱照打一遍才准按。
- * 先把它從本站的榜單撤下（沒登記過就當沒事），再刪上游的卡——順序反過來的話，
- * 上游沒了、榜單那筆撤不掉（撤銷登記要向上游確認擁有權），會留一張點進去 404 的卡。
+ * 刪除前重讀公開期限與收回金額；Provider 確認刪除與全額收回後，Worker 才撤下榜單。
  */
 async function remove() {
-  if (isNew.value) return;
-  const name = draft.value.roleName.trim() || roleId.value;
-  const ok = await confirmDialog({
-    title: t("editor.delete.confirmTitle", { name }),
-    message: t("editor.delete.confirmMessage"),
-    requireText: name,
-    confirmText: t("editor.delete.confirm"),
-    danger: true,
-  });
-  if (!ok) return;
-  saving.value = true;
-  error.value = "";
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    await unregisterCard(roleId.value, token).catch(() => { /* 沒登記過、或早就撤了：都不擋刪除 */ });
-    await deleteRole(roleId.value, token);
-    track("card_delete", { subject: roleId.value });
-    // 卡沒了：離開守衛放行（deleted），也別讓 saving 擋住換頁
-    deleted.value = true;
-    saving.value = false;
-    await router.push({ path: lp("/mine"), query: { fresh: "1" } });
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.actionFailed");
-  } finally {
-    saving.value = false;
-  }
+ if(isNew.value||saving.value)return;
+ saving.value=true;error.value='';
+ try{
+  const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));
+  const latest=await fetchWorkVisibility(roleId.value,token,editorProvider.value);
+  if(!latest.workVisibility)throw new Error(t('visibility.loadFailed'));
+  workVisibility.value=latest.workVisibility;
+  const reward=latest.workVisibility.rewardRetention;
+  const name=draft.value.roleName.trim()||roleId.value;
+  const ok=await confirmDialog({title:t(reward?'rewardRetention.delete.title':'editor.delete.confirmTitle',{name}),
+   message:t('editor.delete.confirmMessage')+(reward?'\n\n'+retentionText('delete.reward',reward)+'\n'+retentionText('delete.later',reward):''),
+   requireText:name,confirmText:t(reward?'rewardRetention.delete.confirm':'editor.delete.confirm'),
+   ...(reward?{cancelText:t('rewardRetention.delete.keep')}:{}),danger:true});
+  if(!ok)return;
+  await deleteRole(roleId.value,token,reward?.recoveryCredits??0);
+  track('card_delete',{subject:roleId.value});deleted.value=true;saving.value=false;
+  await router.push({path:lp('/mine'),query:{fresh:'1'}});
+ }catch(err){error.value=err instanceof Error?err.message:t('state.actionFailed');}
+ finally{saving.value=false;}
 }
 
 // ── 送審 ──────────────────────────────────────────────────────────

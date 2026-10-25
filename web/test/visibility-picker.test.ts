@@ -58,3 +58,11 @@ it.each(['delisted','suspended','takedown'])('keeps the current access neutral a
  expect(row.querySelector<HTMLInputElement>('input')!.disabled).toBe(true);
  expect(row.querySelector('.visibility-option__reason')?.textContent).toContain(note);
 });
+
+it('shows the retained reward deadline and disables both narrower access options',async()=>{
+ await mount({value:{...base,access:'public',effectiveAccess:'public',actions:['submit_update'],rewardRetention:{publicUntil:'2030-01-02T12:00:00Z',days:30,recoveryCredits:10000}}});
+ expect(root.querySelector<HTMLInputElement>('input[value="private"]')!.disabled).toBe(true);
+ expect(root.querySelector<HTMLInputElement>('input[value="unlisted"]')!.disabled).toBe(true);
+ expect(root.querySelector('[data-reward-retention]')).not.toBeNull();
+ expect(root.textContent).toContain('2030');
+});

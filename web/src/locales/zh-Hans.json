@@ -3325,5 +3325,22 @@
   "maintenance.checking": "正在检查…",
   "maintenance.stillActive": "服务器仍在升级中。",
   "maintenance.checkFailed": "暂时无法确认是否恢复，请稍后再试。",
-  "maintenance.reload": "刷新"
+  "maintenance.reload": "刷新",
+  "rewardRetention.lock.badge": "创作季公开期限内",
+  "rewardRetention.lock.reason": "这张卡已领取创作季奖励，需要保持公开 {days} 天，{unlockAt} 起可以更改可见范围。",
+  "rewardRetention.lock.option": "{unlockAt} 起可选",
+  "rewardRetention.lock.error": "这张卡已领取创作季奖励，{unlockAt} 前无法改为“仅自己”或“知道链接的人”。",
+  "rewardRetention.delete.title": "要删除“{name}”吗？",
+  "rewardRetention.delete.reward": "这张卡仍在创作季的 {days} 天公开期限内，删除会从你的可用积分中收回 {points} 积分。",
+  "rewardRetention.delete.later": "{unlockAt} 起删除就不会收回这笔奖励。",
+  "rewardRetention.delete.confirm": "删除并退回奖励",
+  "rewardRetention.delete.keep": "保留卡片",
+  "rewardRetention.delete.insufficientTitle": "积分不足，无法删除",
+  "rewardRetention.delete.insufficient": "删除这张卡需要退回 {points} 积分的创作季奖励，当前可用 {available} 积分，还差 {shortfall} 积分。",
+  "rewardRetention.delete.insufficientLater": "你也可以等到 {unlockAt} 再删除，不用退回这笔奖励。",
+  "rewardRetention.reward.reclaimed": "删卡退回创作季奖励",
+  "rewardRetention.rules.public": "领取创作季奖励后，卡片需要保持公开 {days} 天，期间无法改为“仅自己”或“知道链接的人”。",
+  "rewardRetention.rules.delete": "期间删除卡片需要退回这张卡的创作季奖励，可用积分不足时无法删除。",
+  "rewardRetention.lock.reason.one": "这张卡已领取创作季奖励，需要保持公开 {days} 天，{unlockAt} 起可以更改可见范围。",
+  "rewardRetention.rules.public.one": "领取创作季奖励后，卡片需要保持公开 {days} 天，期间无法改为“仅自己”或“知道链接的人”。"
 }

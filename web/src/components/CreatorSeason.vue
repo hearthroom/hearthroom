@@ -7,6 +7,7 @@
  *
  * 金額、額度、期間全部讀活動設定；日期用活動自己的時區，作者自己的送審時間用作者本地時區。
  */
+import {retentionRules} from '@/lib/reward-retention';
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
@@ -133,6 +134,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2" /><path d="M7 6.25h6M7 10h1M10 10h1M13 10h0M7 13.25h1M10 13.25h1M13 13.25h0" /></svg>
             <span><AmountText :text="t('creator.rules.calc', { limit: c.weeklyLimit, total })" /></span>
           </li>
+        <li v-if="c.publicDays"><span>{{ retentionRules(c.publicDays) }}</span></li>
+          <li v-if="c.publicDays"><span>{{ t('rewardRetention.rules.delete') }}</span></li>
         </ul>
 
         <!-- 活動結束後蘇綺在主按鈕下說過話了，導言不再出現。空狀態時進度卡已有她的姿勢，這裡只收姿勢、導言留著 -->
