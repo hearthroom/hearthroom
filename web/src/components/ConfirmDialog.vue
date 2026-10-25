@@ -135,6 +135,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   /* 低權重的危險確認：取消在上、破壞動作在下，不讓它成為最上方最醒目的按鈕 */
   .dlg--danger-subdued .dlg__actions { flex-direction: column; }
 }
+/* 低權重的危險確認在韓文按詞換行（標題、內文）；長 key 仍靠 overflow-wrap: anywhere 斷開 */
+.dlg--danger-subdued:lang(ko) .dlg__title, .dlg--danger-subdued:lang(ko) .dlg__msg { word-break: keep-all; }
 /* 低權重的破壞動作：透明底、警示色字與細框；hover 只加淡色，不變實心紅 */
 .dlg__subdued { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
 .dlg__subdued:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: var(--danger); }

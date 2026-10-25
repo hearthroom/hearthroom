@@ -296,6 +296,8 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
 
 <style scoped>
 .shared { padding: var(--s-4); display: grid; gap: var(--s-2); }
+/* 韓文按詞換行；作者的 key 與選項 ID 照樣可以任意斷（.shared__key 的 overflow-wrap: anywhere） */
+.shared:lang(ko) { word-break: keep-all; }
 .shared h2 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .shared__hint { margin: 0; }
 .shared__group { margin-top: var(--s-2); }
@@ -319,7 +321,7 @@ const waitText = computed(() => (busy.value === "toggle" ? k("updating") : busy.
 .shared__item:first-child { border-top: 0; padding-top: 0; }
 .shared__main { display: grid; gap: var(--s-2); min-width: 0; }
 .shared__head { margin: 0; font-size: 14px; }
-.shared__key { color: var(--text); overflow-wrap: anywhere; word-break: keep-all; }
+.shared__key { color: var(--text); overflow-wrap: anywhere; word-break: normal; }
 .shared__options { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
 .shared__options li { display: flex; justify-content: space-between; gap: var(--s-3); }
 .shared__options li .shared__key { min-width: 0; }
