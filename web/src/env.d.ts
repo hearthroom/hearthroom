@@ -35,9 +35,19 @@ declare module "moonstage/stage" {
     };
     /** 卡內分享情境（lib/play-share.ts）：情境碼、分享連結、誰打得開；不給就是沒有分享連結。 */
     share?: {
-      read(roleId: string): { enabled: boolean; context: string | null; url: string; audience: "author" | "link" | "public" | null } | null;
+      read(roleId: string): { enabled: boolean; context: string | null; url: string; audience: "author" | "link" | "public" | null; poll?: { key: string; options: string[] } } | null;
       onChange?(fn: () => void): () => void;
       qr?(text: string): Promise<{ size: number; path: string }>;
+    };
+    /** 卡片的共用狀態與分享回流（lib/play-shared.ts）：舞台驗過參數、補上 roleId 才叫；錯誤丟 { code, data? }。 */
+    shared?: {
+      read(roleId: string, keys: string[]): Promise<unknown>;
+      vote(roleId: string, key: string, option: string): Promise<unknown>;
+      add(roleId: string, key: string, delta: number): Promise<unknown>;
+      leaderboard(roleId: string, key: string, limit: number): Promise<unknown>;
+      tallyLink(roleId: string, context: string, pollKey: string): Promise<unknown>;
+      respond(roleId: string, option: string): Promise<unknown>;
+      results(roleId: string): Promise<unknown>;
     };
   }
   export interface StageI18n {
