@@ -207,3 +207,8 @@
 友だち側では `sdk.share.context` でコードを読めます。コードがないとき、または過去の会話を見ているときは `null` です。コードは英数字と `.`、`_`、`-` からなる 1–64 文字の ASCII で、先頭は英数字です。規則に合わない場合、サンドボックスカードは `SHARE_CONTEXT_INVALID` を投げ、クラシックカードは `null` を受け取ります。プラットフォームはコードを届けるだけです。モデルには送られず、プレイヤーの情報も含みません。誰でも手入力できるので、カード自身が定義したコードだけを受け付けてください。友だちがすでにセーブを持っているかどうかはカードが判断します（例：`sdk.archive.list()`。ゲストにはセーブがありません）。
 
 `sdk.share.audience` はリンクを開ける人を示します：`author`（非公開カード。新しい友だちは開けません）、`link`、`public`。プラットフォームのスイッチがオフのとき、`sdk.share.enabled` は false、`context` は `null` になり、`link()` はコンテキストなしの通常リンクを返します。`sdk.share.qr(text)` は共有画像用に `{ size, path }`（`size` × `size` マスの SVG path）を返します。紹介コードの取得が遅れた場合は `share:change` が発生します。作者は `?mode=source&share=<code>` で下書きを試せます。
+
+
+## 確定したメッセージ履歴
+
+ページの作者 API は sandbox の `sdk.history` と classic の `stage.history` です。まず `capabilities().available` を確認してください。旧ホストやプレビューでは利用できない場合があります。`list({cursor,revision,content:true})` が読むのは現在のプレイヤー、カード、会話だけです。同じ revision で全ページを読み、最後のページの `complete:true` を確認してから完全な集合として扱います。`onChange(callback)` は購読解除関数を返し、未 mount・hollow 済みのメッセージの実際の削除も通知します。viewport unmount は削除ではありません。イベントの最初の部分で派生状態を無効にし、完全なリストから再計算してください。無効な cursor、reset、unavailable は不明状態であり、空の履歴ではありません。任意の本文は終了したメッセージの表示可能な原文だけで、thinking、生成途中の本文、moderation で隠された本文は含みません。`item.complete` は部分的・失敗した返答を成功扱いにしません。revision と不透明 ID はプレイヤーの識別子ではありません。別端末の変更は前面表示中に 15 秒ごと、および復帰時に確認します。カード終了時に購読を解除してください。
