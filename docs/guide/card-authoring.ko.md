@@ -211,4 +211,10 @@
 
 ## 확정된 메시지 기록
 
-페이지 작성자 API는 sandbox의 `sdk.history`와 classic의 `stage.history`입니다. 먼저 `capabilities().available`을 확인하세요. 이전 호스트와 미리보기에서는 지원하지 않을 수 있습니다. `list({cursor,revision,content:true})`는 현재 플레이어, 카드, 대화만 읽습니다. 같은 revision으로 모든 페이지를 읽고 마지막 페이지의 `complete:true`를 확인해야 전체 목록으로 취급할 수 있습니다. `onChange(callback)`은 구독 해제 함수를 반환하며, mount된 적이 없거나 이미 hollow 상태인 메시지의 실제 삭제도 알립니다. viewport unmount는 삭제가 아닙니다. 이벤트의 첫 부분부터 파생 상태를 무효화하고 전체 목록으로 다시 계산하세요. 만료된 cursor, reset, unavailable은 알 수 없는 상태이며 빈 기록이 아닙니다. 선택적 본문은 종료된 메시지의 표시 가능한 원문만 포함하며 thinking, 생성 중 본문, moderation으로 숨긴 내용은 제외합니다. `item.complete`는 부분 또는 실패한 응답을 성공으로 취급하지 않습니다. revision과 불투명 ID는 플레이어 신원이 아닙니다. 다른 기기의 변경은 화면이 활성화된 동안 15초마다, 그리고 화면으로 돌아올 때 확인합니다. 카드에서 나갈 때 구독을 해제하세요.
+페이지 작성자 API는 sandbox의 `sdk.history`와 classic의 `stage.history`입니다. 먼저 `capabilities().available`을 확인하세요. 이전 호스트와 미리보기에서는 지원하지 않을 수 있습니다. `list({cursor,revision,content:true})`는 현재 플레이어, 카드, 대화만 읽습니다. 다음 페이지도 첫 페이지와 같은 revision으로 읽으세요. 모든 페이지를 모으고 마지막 페이지의 `complete:true`를 확인한 뒤 전체 목록을 사용하세요.
+
+`onChange(callback)`은 구독 해제 함수를 반환하며, mount된 적이 없거나 이미 hollow 상태인 메시지의 실제 삭제도 알립니다. viewport unmount는 삭제가 아닙니다. 이벤트의 첫 부분을 받으면 파생 상태를 미확인으로 표시하고, 전체 목록을 다시 읽은 뒤 계산하세요. 만료된 cursor, reset, unavailable은 알 수 없는 상태이며 빈 기록이 아닙니다.
+
+선택적 본문은 종료된 메시지의 표시 가능한 원문만 포함하며 thinking, 생성 중 본문, moderation으로 숨긴 내용은 제외합니다. `item.complete`는 부분 또는 실패한 응답을 성공으로 취급하지 않습니다. revision과 불투명 ID는 플레이어 신원이 아닙니다.
+
+다른 기기의 변경은 화면이 활성화된 동안 15초마다, 그리고 화면으로 돌아올 때 확인합니다. 카드에서 나갈 때 구독을 해제하세요.

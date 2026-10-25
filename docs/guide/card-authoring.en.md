@@ -211,4 +211,10 @@ On the friend's side, `sdk.share.context` holds the code; it is `null` when ther
 
 ## Authoritative message history
 
-The page author API provides `sdk.history` (sandbox) and `stage.history` (classic). Check `capabilities().available` first; old hosts and previews may not support it. `list({cursor,revision,content:true})` reads only the current player, configuration and conversation; finish every page at the same revision before treating the collection as complete. Only the last page has `complete:true`. `onChange(callback)` returns an unsubscribe function and reports committed changes even for messages never mounted or already hollow; viewport unmount is not deletion. Invalidate derived state on the first event part and rebuild from a complete list. A stale cursor, reset or unavailable result is unknown state, never an empty history. Only terminal visible original bodies are optional; thinking, streaming body and moderation-withheld text are excluded. `item.complete` excludes partial or failed replies. Revisions and opaque IDs are not player identities. Cross-device changes are checked every 15 seconds in the foreground and on return to the page. Dispose subscriptions when the card exits.
+The page author API provides `sdk.history` (sandbox) and `stage.history` (classic). Check `capabilities().available` first; old hosts and previews may not support it. `list({cursor,revision,content:true})` reads only the current player, configuration and conversation. Use the first page's revision for every continuation page. Accumulate all pages and use the full collection only after the last page returns `complete:true`.
+
+`onChange(callback)` returns an unsubscribe function and reports committed changes even for messages never mounted or already hollow; viewport unmount is not deletion. Invalidate derived state as soon as the first event part arrives, then rebuild it from a complete list. A stale cursor, reset or unavailable result is unknown state, never an empty history.
+
+Only terminal visible original bodies are optional; thinking, streaming body and moderation-withheld text are excluded. `item.complete` excludes partial or failed replies. Revisions and opaque IDs are not player identities.
+
+Cross-device changes are checked every 15 seconds in the foreground and on return to the page. Dispose subscriptions when the card exits.

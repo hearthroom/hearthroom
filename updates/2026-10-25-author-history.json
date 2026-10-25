@@ -4,17 +4,17 @@
   "draft": true,
   "try": "/guide",
   "title": {
-    "zh-Hant": "卡片狀態可以跟著刪除或改寫的對話更新。",
-    "zh-Hans": "卡片状态可以随删除或改写的对话更新。",
-    "en": "Card states can follow deleted or rewritten conversation history.",
-    "ja": "会話の削除や書き換えに合わせて、カードの状態を更新できます。",
-    "ko": "대화 삭제나 수정에 맞춰 카드 상태를 갱신할 수 있습니다."
+    "zh-Hant": "作者可讓道具與進度跟著對話更新",
+    "zh-Hans": "作者可让道具与进度随对话更新",
+    "en": "Authors can update items and progress as conversations change",
+    "ja": "作者が会話の変更に合わせてアイテムや進行状況を更新できます",
+    "ko": "작성자가 대화에 맞춰 아이템과 진행 상황을 바꿀 수 있어요"
   },
   "body": {
-    "zh-Hant": "作者可讀取完整有效歷史，讓額度、道具與狀態欄在回溯後重新對帳。",
-    "zh-Hans": "作者可读取完整有效历史，让额度、道具和状态栏在回溯后重新核对。",
-    "en": "Authors can read the complete current history to reconcile limits, items and status panels after a rollback.",
-    "ja": "作者は有効な履歴全体を読み取り、巻き戻し後の回数制限やアイテム、状態欄を再計算できます。",
-    "ko": "작성자는 유효한 전체 기록을 읽어 되돌리기 후 횟수 제한, 아이템, 상태창을 다시 계산할 수 있습니다."
+    "zh-Hant": "作者更新卡片腳本後，可在玩家刪除、回溯或改寫對話時，重新計算道具數量與任務進度。",
+    "zh-Hans": "作者更新卡片脚本后，可在玩家删除、回溯或改写对话时，重新计算道具数量与任务进度。",
+    "en": "After updating their card scripts, authors can recalculate item counts and quest progress when players delete, roll back or rewrite a conversation.",
+    "ja": "作者がカードのスクリプトを更新すると、プレイヤーが会話を削除・巻き戻し・書き換えたときに、アイテム数やクエストの進行状況を再計算できます。",
+    "ko": "작성자가 카드 스크립트를 업데이트하면, 플레이어가 대화를 삭제하거나 되돌리거나 수정할 때 아이템 수와 퀘스트 진행 상황을 다시 계산할 수 있어요."
   }
 }

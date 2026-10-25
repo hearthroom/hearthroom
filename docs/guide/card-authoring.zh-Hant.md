@@ -211,4 +211,10 @@
 
 ## 可靠的訊息歷史
 
-頁級作者 API 提供沙盒卡的 `sdk.history` 與一般卡的 `stage.history`。先探測 `capabilities().available`；舊宿主與預覽可能不支援。`list({cursor,revision,content:true})` 只讀目前玩家、目前卡、目前會話；所有分頁必須沿用同一 revision，只有最後頁 `complete:true` 才能當完整集合。`onChange(callback)` 回取消訂閱函式，從未 mount 或已 hollow 的訊息真刪除仍有變更，viewport unmount 不算刪除。第一包事件即使衍生狀態失效，重新取得完整清單再重算。舊游標、reset 或 unavailable 代表未知，不是空歷史。可選正文只有已終止的可見原文，不含 thinking、生成中文字或 moderation 隱藏內容；`item.complete` 不把部分／失敗回覆當成功。revision 與不透明 ID 不是玩家身分。其他裝置在前景每 15 秒與回前景時檢查；離開卡片時取消訂閱。
+頁級作者 API 提供沙盒卡的 `sdk.history` 與一般卡的 `stage.history`。先探測 `capabilities().available`；舊宿主與預覽可能不支援。`list({cursor,revision,content:true})` 只讀目前玩家、目前卡、目前會話；所有分頁必須沿用第一頁的 revision；累積每一頁，直到收到 `complete:true` 的最後一頁，才能採用整份清單。
+
+`onChange(callback)` 回取消訂閱函式，從未 mount 或已 hollow 的訊息真刪除仍有變更，viewport unmount 不算刪除。收到第一包事件時，先將衍生狀態標為待確認，重新取得完整清單後再計算。舊游標、reset 或 unavailable 代表未知，不是空歷史。
+
+可選正文只有已終止的可見原文，不含 thinking、生成中文字或 moderation 隱藏內容；`item.complete` 不把部分／失敗回覆當成功。revision 與不透明 ID 不是玩家身分。
+
+其他裝置在前景每 15 秒與回前景時檢查；離開卡片時取消訂閱。
