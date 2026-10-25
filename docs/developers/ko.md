@@ -117,3 +117,18 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 친구 쪽에서는 `sdk.share.context`로 코드를 읽습니다. 코드가 없거나 지난 대화를 보고 있으면 `null`입니다. 코드는 영문자, 숫자와 `.`, `_`, `-`로 된 1–64자의 ASCII이며 영문자나 숫자로 시작해야 합니다. 규칙에 맞지 않으면 샌드박스 카드는 `SHARE_CONTEXT_INVALID`를 던지고 클래식 카드는 `null`을 받습니다. 플랫폼은 코드를 전달만 합니다. 모델로 보내지 않고 플레이어 정보도 담지 않으며, 누구나 직접 입력할 수 있으니 카드가 정의한 코드만 받아들이세요. 친구에게 이미 저장 데이터가 있는지는 카드가 판단합니다(예: `sdk.archive.list()`, 게스트에게는 저장 데이터가 없습니다).
 
 `sdk.share.audience`는 링크를 열 수 있는 사람을 나타냅니다: `author`(비공개 카드, 새 친구는 열 수 없음), `link`, `public`. 플랫폼 스위치가 꺼져 있으면 `sdk.share.enabled`은 false, `context`는 `null`이고 `link()`는 맥락 없는 일반 링크를 돌려줍니다. `sdk.share.qr(text)`는 공유 이미지에 쓸 `{ size, path }`(`size` × `size` 칸의 SVG path)를 돌려줍니다. 추천 코드가 늦게 도착하면 `share:change`가 발생합니다. 작성자는 `?mode=source&share=<code>`로 초안에서 시험할 수 있습니다.
+
+## 투표, 협동 카운터, 공유 응답
+
+`rules.json`의 `sharedState`에 선언한 투표와 카운터는 이 카드를 플레이하는 모든 사람이 함께 씁니다. 읽고 쓰기는 `sdk.shared`(클래식 카드는 `window.stage.shared`)로 합니다.
+
+- `read(keys)`는 키 하나 또는 최대 16개를 받아 `{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }`를 돌려줍니다. 선언하지 않은 키는 결과에 없습니다. `mine`은 플레이어 자신의 선택이나 기여이며 게스트에게는 없습니다. `previous`는 이전 기간의 합계입니다.
+- `vote(key, option)`는 `{ mine }`을 돌려줍니다. 투표는 하루 10번까지 바꿀 수 있습니다.
+- `add(key, delta)`는 1부터 해당 카운터의 `maxStep`까지의 정수를 더하고 `{ total, mine, reachedAt }`을 돌려줍니다.
+- `leaderboard(key, { limit })`는 `{ items: [{ rank, name, value }], mine? }`을 돌려줍니다. 이번 기간에 가장 많이 기여한 플레이어(기본 10명, 최대 50명)를 공개 닉네임으로 보여 주며, 테스트 계정은 나오지 않습니다.
+
+읽기는 누구나 할 수 있고, 쓰기는 로그인했으며 이 카드를 플레이한 적 있는 플레이어만 할 수 있습니다. 숫자는 카드로 자동 전달되지 않으니 필요할 때 다시 읽되, 간격은 10초 이상 두세요.
+
+공유 응답은 공유 링크 위에서 동작합니다. `sdk.share.tallyLink(code, pollKey)`는 `share: true`로 선언한 투표에 플랫폼 단축 코드(`?share=~XXXXXXXX`)가 붙은 링크를 만듭니다. 비동기 호출이므로 클릭 전에 준비해 두세요. 같은 코드와 투표 조합이면 같은 링크가 돌아오고, 플레이어당 하루 20개까지 만들 수 있으며, 링크는 90일 동안 유효합니다. 친구가 링크를 열면 `sdk.share.context`에 코드가, `sdk.share.poll`에 답할 수 있는 질문 `{ key, options }`(없으면 `null`)가 들어 있고, `sdk.share.respond(option)`로 답합니다. 공유한 사람은 `sdk.share.results()`로 자기가 만든 링크를 읽습니다. 각 항목은 `{ context, pollKey, total, counts, updatedAt }`이며, `total`은 실시간이고 `counts`는 친구 3명 이상이 답해야 나타나며 하루에 한 번 갱신됩니다. 누가 공유했고 누가 답했는지는 카드가 알 수 없습니다. 카드는 이 숫자로 카드 안의 콘텐츠를 열 수 있지만, 플랫폼 포인트가 지급되지는 않습니다.
+
+두 페이지 모두 같은 오류 코드를 씁니다: `SHARED_DISABLED`(플랫폼이나 작성자가 일시 중지함), `NOT_DECLARED`, `OPTION_INVALID`, `NOT_ELIGIBLE`(아직 플레이하지 않았거나 자기 링크에 답하려 함), `UNAUTHORIZED`(로그인하지 않음), `RATE_LIMITED`(잠시 후 다시 시도), `LIMIT_REACHED`(`err.data.reason`은 `goal` 또는 `limit`), `HOST_DENIED`(이전 버전의 플레이 페이지. 지난 대화를 보거나 심사용 시험 플레이 중에는 읽기만 가능). 작성자의 시험 플레이(`?mode=source`)와 테스트 계정은 플레이어와 따로 숫자를 가집니다. 편집 화면의 “플레이어 투표 및 집계”나 `hearthroom card state`에서 확인하고 일시 중지하거나 초기화할 수 있습니다.
