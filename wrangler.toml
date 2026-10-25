@@ -96,6 +96,12 @@ name = "CARD_STATE_CARD_LIMIT"
 namespace_id = "6404"
 simple = { limit = 200, period = 10 }
 
+# 共用狀態的讀取（含遊客）：每個連線 IP 每分鐘 120 次；殼端本來就每 10 秒最多讀一次。
+[[ratelimits]]
+name = "CARD_STATE_READ_LIMIT"
+namespace_id = "6405"
+simple = { limit = 120, period = 60 }
+
 [vars]
 # 卡內分享情境（?share=，sdk.share／stage.share）。關掉（改成 "false"）時卡片讀到的情境碼一律是 null，
 # 分享鈕照常能用。2026-10-25 owner 批准上線。

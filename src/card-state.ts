@@ -34,16 +34,18 @@ export interface SharedDecl { polls: Record<string, SharedPoll>; counters: Recor
 
 /** Provider 已經驗過；這裡再防一次形狀，壞的 key 直接當沒宣告。 */
 export function parseDecl(raw: unknown): SharedDecl {
-  const out: SharedDecl = { polls: {}, counters: {} };
+  // 沒有原型的物件：key 寫成 constructor、toString 這類名字時，查不到 Object.prototype 上的東西
+  const out: SharedDecl = { polls: Object.create(null), counters: Object.create(null) };
   if (!raw || typeof raw !== "object") return out;
   const r = raw as { polls?: Record<string, unknown>; counters?: Record<string, unknown> };
-  for (const [key, p] of Object.entries(r.polls ?? {})) {
+  const own = (o: unknown) => (o && typeof o === "object" ? Object.entries(o as Record<string, unknown>) : []);
+  for (const [key, p] of own(r.polls)) {
     const options = (p as SharedPoll | null)?.options;
     if (SHARED_KEY_RE.test(key) && Array.isArray(options) && options.every((o) => typeof o === "string" && SHARED_KEY_RE.test(o))) {
       out.polls[key] = { options: [...new Set(options)], share: (p as SharedPoll).share === true };
     }
   }
-  for (const [key, cRaw] of Object.entries(r.counters ?? {})) {
+  for (const [key, cRaw] of own(r.counters)) {
     const c = cRaw as Partial<SharedCounter> | null;
     if (!SHARED_KEY_RE.test(key) || !c || !Number.isInteger(c.maxStep) || !Number.isInteger(c.perMember) || c.maxStep! < 1 || c.perMember! < 1) continue;
     out.counters[key] = { maxStep: c.maxStep!, perMember: c.perMember!, goal: Number.isInteger(c.goal) && c.goal! > 0 ? c.goal : undefined, period: c.period === "day" || c.period === "week" ? c.period : "none" };
@@ -69,8 +71,27 @@ export interface CardState {
   cardId: number;
   ns: Ns;
   decl: SharedDecl;
+  /** Provider 讀不到宣告：讀取當成沒宣告，寫入回可重試的 503（不是 not_declared）。 */
+  declUnavailable: boolean;
   enabled: boolean;
   isAuthor: boolean;
+}
+
+/** 宣告的邊緣快取：每次讀寫都問 Provider 太貴（遊客讀取也會打到）。作者改宣告後最多晚這麼久生效。 */
+export const DECL_CACHE_SECONDS = 60;
+const declCacheKey = (provider: ProviderId, roleId: string) => `https://card-state.internal/decl/${provider}/${encodeURIComponent(roleId)}`;
+
+/** 匿名讀得到的宣告（公開與有連結的卡）走快取；草稿要帶作者的 token，不快取。讀不到回 null。 */
+async function declarationOf(env: Env, roleId: string, provider: ProviderId, bearer?: string): Promise<SharedDecl | null> {
+  if (bearer) return upstream.fetchSharedState(env, roleId, provider, bearer).then(parseDecl, () => null);
+  const cache = typeof caches === "undefined" ? null : caches.default;
+  const key = declCacheKey(provider, roleId);
+  const hit = await cache?.match(key).catch(() => undefined);
+  if (hit) return parseDecl(await hit.json().catch(() => ({})));
+  let raw: unknown;
+  try { raw = await upstream.fetchSharedState(env, roleId, provider); } catch { return null; }
+  await cache?.put(key, new Response(JSON.stringify(raw ?? {}), { headers: { "Cache-Control": `max-age=${DECL_CACHE_SECONDS}`, "Content-Type": "application/json" } })).catch(() => undefined);
+  return parseDecl(raw);
 }
 
 export interface ResolveOptions {
@@ -91,15 +112,18 @@ export async function resolveCardState(env: Env, roleId: string, opts: ResolveOp
   if (!card || card.provider !== opts.provider) throw new HttpError(404, "card not found");
   const access = await currentCardAccess(env, card);
   const isAuthor = !!opts.member && opts.member.provider === card.provider && opts.member.externalId === card.author_num_id;
+  // 別人打不開的卡（私卡、停權），任何人（含測試帳號）都是 404；作者自己的私卡寫進 draft
+  if (!access.reachable && !isAuthor) throw new HttpError(404, "card not found");
   let ns: Ns = "live";
   if (opts.member?.accountClass === "test") ns = "test";
   else if (isAuthor && (opts.draft || !access.reachable)) ns = "draft";
-  else if (!access.reachable) throw new HttpError(404, "card not found");
-  const declRole = ns === "draft" ? card.source_role_id : access.shareRoleId || card.source_role_id;
-  const decl = parseDecl(await upstream.fetchSharedState(env, declRole, opts.provider, ns === "draft" ? opts.bearer ?? undefined : undefined).catch(() => ({})));
+  const draftRead = isAuthor && (opts.draft || !access.reachable);
+  const declRole = draftRead ? card.source_role_id : access.shareRoleId || card.source_role_id;
+  const fetched = await declarationOf(env, declRole, opts.provider, draftRead ? opts.bearer ?? undefined : undefined);
+  const decl = fetched ?? parseDecl({});
   const controls = await env.DB.prepare("SELECT author_off, platform_off FROM card_state_controls WHERE card_id = ?").bind(Number(card.id)).first<{ author_off: number; platform_off: number }>();
   const enabled = env.CARD_STATE_ENABLED === "true" && !controls?.author_off && !controls?.platform_off;
-  return { card, cardId: Number(card.id), ns, decl, enabled, isAuthor };
+  return { card, cardId: Number(card.id), ns, decl, declUnavailable: fetched === null, enabled, isAuthor };
 }
 
 /** 寫入資格（E3）：在這張卡的任一版開過對話。作者在草稿裡試寫不需要。 */
@@ -119,9 +143,9 @@ export type CounterView = { kind: "counter"; total: number; goal?: number; reach
 /** 讀一組 key：投票回各選項票數（只算還宣告著的選項），計數器回這一期與上一期的總數。 */
 export async function readState(env: Env, state: CardState, keys: string[], memberId: string | null, now: number): Promise<Record<string, PollView | CounterView>> {
   const out: Record<string, PollView | CounterView> = {};
-  const wanted = [...new Set(keys)].filter((k) => state.decl.polls[k] || state.decl.counters[k]).slice(0, 32);
+  const wanted = [...new Set(keys)].filter((k) => k in state.decl.polls || k in state.decl.counters).slice(0, 16);
   for (const key of wanted) {
-    const poll = state.decl.polls[key];
+    const poll = key in state.decl.polls ? state.decl.polls[key] : undefined;
     if (poll) {
       const rows = await env.DB.prepare("SELECT option, value FROM card_state_totals WHERE card_id=? AND ns=? AND scope='global' AND key=? AND period=''")
         .bind(state.cardId, state.ns, key).all<{ option: string; value: number }>();
@@ -162,7 +186,7 @@ export const VOTE_CHANGES_PER_DAY = 10;
  * 重送同一票不重算、並發的另一筆不會讓總數跑掉。
  */
 export async function vote(env: Env, state: CardState, key: string, option: string, memberId: string, now: number, scope = "global"): Promise<{ mine: string }> {
-  const poll = state.decl.polls[key];
+  const poll = key in state.decl.polls ? state.decl.polls[key] : undefined;
   if (!poll) throw new HttpError(400, "not_declared");
   if (!poll.options.includes(option)) throw new HttpError(400, "option_invalid");
   const prev = await env.DB.prepare("SELECT option, changes, changes_day FROM card_state_members WHERE card_id=? AND ns=? AND scope=? AND key=? AND period='' AND member_id=?")
@@ -199,7 +223,7 @@ export async function vote(env: Env, state: CardState, key: string, option: stri
  * 有目標的達標後不再增加，記下達標時刻。實際加了多少在 SQL 裡算（last_delta），總數只加這一筆的量。
  */
 export async function add(env: Env, state: CardState, key: string, delta: number, memberId: string, now: number): Promise<{ total: number; mine: number; reachedAt: number | null }> {
-  const counter = state.decl.counters[key];
+  const counter = key in state.decl.counters ? state.decl.counters[key] : undefined;
   if (!counter) throw new HttpError(400, "not_declared");
   if (!Number.isInteger(delta) || delta < 1 || delta > counter.maxStep) throw new HttpError(400, "delta_invalid");
   const period = periodOf(counter.period, now);
@@ -216,8 +240,9 @@ export async function add(env: Env, state: CardState, key: string, delta: number
     env.DB.prepare(`INSERT INTO card_state_members (card_id, ns, scope, key, period, member_id, value, last_delta, rev, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, MIN(?, ?), MIN(?, ?), ?, ?)
         ON CONFLICT (card_id, ns, scope, key, period, member_id) DO UPDATE SET
-          last_delta = MAX(0, MIN(?, ? - value)), value = value + MAX(0, MIN(?, ? - value)), rev = excluded.rev, updated_at = excluded.updated_at`)
-      .bind(...pk, memberId, delta, counter.perMember, delta, counter.perMember, rev, now, delta, counter.perMember, delta, counter.perMember),
+          last_delta = MAX(0, MIN(?, ? - value)), value = value + MAX(0, MIN(?, ? - value)), rev = excluded.rev,
+          updated_at = CASE WHEN MIN(?, ? - value) > 0 THEN excluded.updated_at ELSE updated_at END`)
+      .bind(...pk, memberId, delta, counter.perMember, delta, counter.perMember, rev, now, delta, counter.perMember, delta, counter.perMember, delta, counter.perMember),
     env.DB.prepare(`INSERT INTO card_state_totals (card_id, ns, scope, key, period, option, value, reached_at, updated_at)
         SELECT ?, ?, ?, ?, ?, '', MIN(?, d), CASE WHEN d >= ? THEN ? END, ? FROM (SELECT ${mineSql} AS d) WHERE d > 0
         ON CONFLICT (card_id, ns, scope, key, period, option) DO UPDATE SET
@@ -241,7 +266,7 @@ export interface LeaderboardRow { rank: number; name: string | null; value: numb
  * 測試帳號在 test ns，本來就不在正式榜上；名單另外只收一般帳號（account_class），雙重保險。
  */
 export async function leaderboard(env: Env, state: CardState, key: string, limit: number, memberId: string | null, now: number): Promise<{ items: LeaderboardRow[]; mine?: { rank: number; value: number } }> {
-  const counter = state.decl.counters[key];
+  const counter = key in state.decl.counters ? state.decl.counters[key] : undefined;
   if (!counter) throw new HttpError(400, "not_declared");
   const period = periodOf(counter.period, now);
   const n = Math.min(Math.max(1, Math.floor(limit) || 10), LEADERBOARD_MAX);
@@ -260,11 +285,14 @@ export async function leaderboard(env: Env, state: CardState, key: string, limit
 }
 
 /** 作者重設一個 key（全部期別）或清空整個 draft。 */
-export async function resetKey(env: Env, cardId: number, ns: Ns, key: string | null): Promise<void> {
+export function resetStmts(env: Env, cardId: number, ns: Ns, key: string | null): D1PreparedStatement[] {
   const where = key === null ? "card_id=? AND ns=?" : "card_id=? AND ns=? AND key=?";
   const args = key === null ? [cardId, ns] : [cardId, ns, key];
-  await env.DB.batch([
+  const tokens = key === null ? "card_id=? AND ns=?" : "card_id=? AND ns=? AND poll_key=?";
+  return [
     env.DB.prepare(`DELETE FROM card_state_members WHERE ${where}`).bind(...args),
     env.DB.prepare(`DELETE FROM card_state_totals WHERE ${where}`).bind(...args),
-  ]);
+    // 分享回流的快照也一起清，不然重設後當天還看得到舊人數
+    env.DB.prepare(`DELETE FROM card_share_snapshots WHERE token IN (SELECT token FROM card_share_tokens WHERE ${tokens})`).bind(...args),
+  ];
 }

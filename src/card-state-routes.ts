@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { auditStmt } from "./audit";
-import { add, hasPlayed, leaderboard, readState, resetKey, resolveCardState, vote, SHARED_KEY_RE, type CardState } from "./card-state";
+import { add, hasPlayed, leaderboard, readState, resetStmts, resolveCardState, vote, SHARED_KEY_RE, type CardState } from "./card-state";
 import { providerOf, requireMember, saveMemberId, type Member } from "./members";
 import { mintToken, ownerResults, tokenFor } from "./card-share-tokens";
 import { bumpOp } from "./ops-metrics";
@@ -20,9 +20,16 @@ type Ctx = Context<{ Bindings: Env }>;
 const NO_STORE = { "Cache-Control": "private, no-store" };
 const bearerOf = (c: Ctx) => c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? null;
 
-/** 讀取不必登入；帶了 token 就認人（回 mine）。 */
+/**
+ * 讀取不必登入；帶了 token 就認人（回 mine）。token 過期或被拒就當遊客——朋友點開分享連結時登入剛好過期，
+ * 不能因此拿不到情境碼。
+ */
 async function optionalMember(c: Ctx): Promise<Member | null> {
-  return bearerOf(c) ? requireMember(c) : null;
+  if (!bearerOf(c)) return null;
+  try { return await requireMember(c); } catch (err) {
+    if (err instanceof HttpError && (err.status === 401 || err.status === 403)) return null;
+    throw err;
+  }
 }
 
 async function stateFor(c: Ctx, member: Member | null): Promise<CardState> {
@@ -34,6 +41,12 @@ async function limited(binding: RateLimit | undefined, key: string): Promise<boo
   try { return !(await binding.limit({ key })).success; } catch { return false; }
 }
 
+/** 讀取的限流（遊客也算）：以連線 IP 為鍵，打滿回 rate_limited，不碰 D1 與 Provider。 */
+async function readGate(c: Ctx): Promise<void> {
+  const ip = c.req.header("cf-connecting-ip") ?? "";
+  if (ip && (await limited(c.env.CARD_STATE_READ_LIMIT, ip))) throw new HttpError(429, "rate_limited");
+}
+
 const keyParam = (c: Ctx) => {
   const key = c.req.param("key") ?? "";
   if (!SHARED_KEY_RE.test(key)) throw new HttpError(400, "not_declared");
@@ -41,6 +54,7 @@ const keyParam = (c: Ctx) => {
 };
 
 cardStateRoutes.get("/v1/cards/:roleId/state", async (c) => {
+  await readGate(c);
   const member = await optionalMember(c);
   const state = await stateFor(c, member);
   if (!state.enabled) return c.json({ enabled: false, items: {} }, 200, NO_STORE);
@@ -50,6 +64,7 @@ cardStateRoutes.get("/v1/cards/:roleId/state", async (c) => {
 });
 
 cardStateRoutes.get("/v1/cards/:roleId/state/:key/leaderboard", async (c) => {
+  await readGate(c);
   const member = await optionalMember(c);
   const state = await stateFor(c, member);
   if (!state.enabled) throw new HttpError(403, "shared_disabled");
@@ -62,15 +77,15 @@ type WriteOp = "vote" | "add" | "share_mint" | "share_respond";
 /** 寫入的共同關卡：開關、資格、限流；任一關沒過都記一筆指標。 */
 async function writeGate(c: Ctx, op: WriteOp): Promise<{ state: CardState; memberId: string }> {
   const member = await requireMember(c);
+  const memberId = await saveMemberId(c.env.DB, member);
+  // 每位會員的限流排在讀卡與宣告之前：打滿的人不會再讓 Worker 去問 Provider
+  if (await limited(c.env.CARD_STATE_MEMBER_LIMIT, memberId)) { await bumpOp(c.env.DB, "card_state", op, "limited"); throw new HttpError(429, "rate_limited"); }
   const state = await stateFor(c, member);
   if (!state.enabled) { await bumpOp(c.env.DB, "card_state", op, "disabled"); throw new HttpError(403, "shared_disabled"); }
-  const memberId = await saveMemberId(c.env.DB, member);
+  if (await limited(c.env.CARD_STATE_CARD_LIMIT, String(state.cardId))) { await bumpOp(c.env.DB, "card_state", op, "limited"); throw new HttpError(429, "rate_limited"); }
+  if (state.declUnavailable) { await bumpOp(c.env.DB, "card_state", op, "error"); throw new HttpError(503, "declaration_unavailable"); }
   const scope = await saveScope(c.env.DB, c.req.param("roleId")!);
   if (!(await hasPlayed(c.env, state, [member.id, memberId], scope.ids))) { await bumpOp(c.env.DB, "card_state", op, "ineligible"); throw new HttpError(403, "not_eligible"); }
-  if ((await limited(c.env.CARD_STATE_MEMBER_LIMIT, memberId)) || (await limited(c.env.CARD_STATE_CARD_LIMIT, String(state.cardId)))) {
-    await bumpOp(c.env.DB, "card_state", op, "limited");
-    throw new HttpError(429, "rate_limited");
-  }
   return { state, memberId };
 }
 
@@ -145,15 +160,20 @@ cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/:key/reset", async (c) =
   const body = (await c.req.json().catch(() => ({}))) as { ns?: unknown };
   const ns = body?.ns === "draft" ? "draft" : "live";
   const now = Date.now();
-  await resetKey(c.env, state.cardId, ns, key);
-  await auditStmt(c.env.DB, { subjectKind: "card_state", subjectId: String(state.cardId), actorMemberId: member.id, actorKind: "human", action: "reset", after: { key, ns }, operationId: crypto.randomUUID(), now }).run();
+  await c.env.DB.batch([
+    ...resetStmts(c.env, state.cardId, ns, key),
+    auditStmt(c.env.DB, { subjectKind: "card_state", subjectId: String(state.cardId), actorMemberId: member.id, actorKind: "human", action: "reset", after: { key, ns }, operationId: crypto.randomUUID(), now }),
+  ]);
   await bumpOp(c.env.DB, "card_state", "reset", "ok");
   return c.json({ ok: true }, 200, NO_STORE);
 });
 
 cardStateRoutes.post("/v1/me/cards/:roleId/shared-state/draft/clear", async (c) => {
-  const { state } = await authorState(c);
-  await resetKey(c.env, state.cardId, "draft", null);
+  const { member, state } = await authorState(c);
+  await c.env.DB.batch([
+    ...resetStmts(c.env, state.cardId, "draft", null),
+    auditStmt(c.env.DB, { subjectKind: "card_state", subjectId: String(state.cardId), actorMemberId: member.id, actorKind: "human", action: "draft_clear", operationId: crypto.randomUUID(), now: Date.now() }),
+  ]);
   await bumpOp(c.env.DB, "card_state", "draft_clear", "ok");
   return c.json({ ok: true }, 200, NO_STORE);
 });
@@ -186,11 +206,12 @@ cardStateRoutes.get("/v1/cards/:roleId/share-tokens", async (c) => {
 });
 
 cardStateRoutes.get("/v1/cards/:roleId/share-tokens/:token", async (c) => {
+  await readGate(c);
   const member = await optionalMember(c);
   const state = await stateFor(c, member);
   const row = await tokenFor(c.env, state.cardId, tokenParam(c), Date.now());
   if (!row) throw new HttpError(404, "token not found");
-  const poll = state.decl.polls[row.poll_key];
+  const poll = row.poll_key in state.decl.polls ? state.decl.polls[row.poll_key] : undefined;
   const respondable = state.enabled && row.ns === state.ns && !!poll?.share;
   return c.json({ context: row.context, poll: respondable ? { key: row.poll_key, options: poll!.options } : null }, 200, NO_STORE);
 });
@@ -201,7 +222,8 @@ cardStateRoutes.post("/v1/cards/:roleId/share-tokens/:token/respond", async (c) 
   if (!row) throw new HttpError(404, "token not found");
   // 分享者不能替自己的連結灌回應；回應寫在回應者自己的 ns（測試帳號回應正式連結不會算進去）
   if (row.owner_member_id === memberId) { await bumpOp(c.env.DB, "card_state", "share_respond", "denied"); throw new HttpError(403, "own_token"); }
-  const poll = state.decl.polls[row.poll_key];
+  if (row.ns !== state.ns) { await bumpOp(c.env.DB, "card_state", "share_respond", "ineligible"); throw new HttpError(403, "not_eligible"); }
+  const poll = row.poll_key in state.decl.polls ? state.decl.polls[row.poll_key] : undefined;
   if (!poll?.share) { await bumpOp(c.env.DB, "card_state", "share_respond", "invalid"); throw new HttpError(400, "not_declared"); }
   const body = (await c.req.json().catch(() => null)) as { option?: unknown } | null;
   const out = await counted(c, "share_respond", () => vote(c.env, state, row.poll_key, typeof body?.option === "string" ? body.option : "", memberId, Date.now(), `share:${row.token}`));
