@@ -1,5 +1,10 @@
 import { ref, readonly } from 'vue';
-import { maintenanceOff, parseMaintenance, MAINTENANCE_POLL_MS } from '../../../shared/maintenance';
+import { maintenanceOff, parseMaintenance, MAINTENANCE_POLL_MS, MAINTENANCE_LOCALES } from '../../../shared/maintenance';
+export function maintenanceLocale(pathname:string,search:string,playHost:boolean,detected:string):string {
+ const known=(value:string|null):value is (typeof MAINTENANCE_LOCALES)[number]=>!!value&&(MAINTENANCE_LOCALES as readonly string[]).includes(value);
+ const prefix=pathname.split('/')[1],query=new URLSearchParams(search).get('lang');
+ return playHost ? known(query)?query:detected : known(prefix)?prefix:detected;
+}
 export function formatMaintenanceTime(endsAt:number|null,locale:string,now=Date.now(),timeZone?:string):string|null {
  if(endsAt===null||endsAt<=now)return null;
  return new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'long',...(timeZone?{timeZone}:{})}).format(new Date(endsAt));
