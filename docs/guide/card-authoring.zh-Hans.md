@@ -211,4 +211,10 @@
 
 ## 可靠的消息历史
 
-页面作者 API 提供沙盒卡的 `sdk.history` 与普通卡的 `stage.history`。先检查 `capabilities().available`；旧宿主和预览可能不支持。`list({cursor,revision,content:true})` 只读取当前玩家、当前卡片、当前会话；所有分页必须使用同一 revision，只有最后一页 `complete:true` 才是完整集合。`onChange(callback)` 返回取消订阅函数，从未 mount 或已 hollow 的消息被真正删除时仍有事件，viewport unmount 不表示删除。收到第一段事件就使派生状态失效，重新取得完整列表后计算。失效游标、reset 或 unavailable 表示未知，不是空历史。可选正文只含已终止消息的可见原文，不含 thinking、生成中的正文或被 moderation 隐藏的内容；`item.complete` 不把部分或失败回复当成功。revision 和不透明 ID 不是玩家身份。其他设备在前台每 15 秒以及回到前台时检查；离开卡片时取消订阅。
+页面作者 API 提供沙盒卡的 `sdk.history` 与普通卡的 `stage.history`。先检查 `capabilities().available`；旧宿主和预览可能不支持。`list({cursor,revision,content:true})` 只读取当前玩家、当前卡片、当前会话；所有分页必须沿用第一页的 revision；累积每一页，直到收到 `complete:true` 的最后一页，才能使用完整列表。
+
+`onChange(callback)` 返回取消订阅函数，从未 mount 或已 hollow 的消息被真正删除时仍有事件，viewport unmount 不表示删除。收到第一部分事件时，先将派生状态标为待确认，重新获取完整列表后再计算。失效游标、reset 或 unavailable 表示未知，不是空历史。
+
+可选正文只含已终止消息的可见原文，不含 thinking、生成中的正文或被 moderation 隐藏的内容；`item.complete` 不把部分或失败回复当成功。revision 和不透明 ID 不是玩家身份。
+
+其他设备在前台每 15 秒以及回到前台时检查；离开卡片时取消订阅。

@@ -211,4 +211,10 @@
 
 ## 確定したメッセージ履歴
 
-ページの作者 API は sandbox の `sdk.history` と classic の `stage.history` です。まず `capabilities().available` を確認してください。旧ホストやプレビューでは利用できない場合があります。`list({cursor,revision,content:true})` が読むのは現在のプレイヤー、カード、会話だけです。同じ revision で全ページを読み、最後のページの `complete:true` を確認してから完全な集合として扱います。`onChange(callback)` は購読解除関数を返し、未 mount・hollow 済みのメッセージの実際の削除も通知します。viewport unmount は削除ではありません。イベントの最初の部分で派生状態を無効にし、完全なリストから再計算してください。無効な cursor、reset、unavailable は不明状態であり、空の履歴ではありません。任意の本文は終了したメッセージの表示可能な原文だけで、thinking、生成途中の本文、moderation で隠された本文は含みません。`item.complete` は部分的・失敗した返答を成功扱いにしません。revision と不透明 ID はプレイヤーの識別子ではありません。別端末の変更は前面表示中に 15 秒ごと、および復帰時に確認します。カード終了時に購読を解除してください。
+ページの作者 API は sandbox の `sdk.history` と classic の `stage.history` です。まず `capabilities().available` を確認してください。旧ホストやプレビューでは利用できない場合があります。`list({cursor,revision,content:true})` が読むのは現在のプレイヤー、カード、会話だけです。続きのページも最初のページと同じ revision で取得してください。全ページを蓄積し、最後のページで `complete:true` を確認してから、履歴全体を使ってください。
+
+`onChange(callback)` は購読解除関数を返し、未 mount・hollow 済みのメッセージの実際の削除も通知します。viewport unmount は削除ではありません。イベントの最初の部分を受け取った時点で派生状態を未確認にし、完全なリストを取得してから再計算してください。無効な cursor、reset、unavailable は不明状態であり、空の履歴ではありません。
+
+任意の本文は終了したメッセージの表示可能な原文だけで、thinking、生成途中の本文、moderation で隠された本文は含みません。`item.complete` は部分的・失敗した返答を成功扱いにしません。revision と不透明 ID はプレイヤーの識別子ではありません。
+
+別端末の変更は前面表示中に 15 秒ごと、および復帰時に確認します。カード終了時に購読を解除してください。

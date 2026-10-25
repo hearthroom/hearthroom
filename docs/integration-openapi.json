@@ -12742,7 +12742,7 @@
           "Conversation"
         ],
         "summary": "Read the complete owned history index",
-        "description": "Read-only; requires chat:play and ownership plus current configuration scope. No generation or credit charge. This is a Provider endpoint; it does not grant access to another player or conversation. Rows are ordered oldest first by sequence. Continue at the same revision; HTTP 409 requires discarding the partial page chain. Only the final page has complete=true and cursor=null. Optional content is limited to visible terminal original bodies, excluding thinking and moderation-withheld text. Maximum body payload is 512 KiB; oversized single bodies return HISTORY_LIMIT rather than truncated success.",
+        "description": "Read-only; requires chat:play and ownership plus current configuration scope. No generation or credits charge. This is a Provider endpoint; it does not grant access to another user or conversation. Rows are ordered oldest first by sequence. Continue at the same revision; HTTP 409 requires discarding the partial page chain. Only the final page has complete=true and cursor=null. Optional content is limited to visible terminal original bodies, excluding thinking and moderation-withheld text. The JSON-encoded response is limited to 512 KiB, including message metadata and the continuation cursor. A single message that cannot fit returns HISTORY_LIMIT rather than truncated success.",
         "security": [
           {
             "userToken": []
@@ -12845,7 +12845,7 @@
           "Conversation"
         ],
         "summary": "Read committed history changes",
-        "description": "Read-only; requires chat:play and ownership plus current configuration scope. No generation or credit charge. This is a Provider endpoint; it does not grant access to another player or conversation. A revision is a committed history projection, independent of viewport mounting. Every affected ID is included even when never mounted. Changes are split into parts of at most 200 items; apply no partial transaction as a complete state. Each read freezes a target revision. Gaps, expired 24-hour ranges or ranges older than 10,000 revisions return reset=true. A reset is not an empty authoritative history.",
+        "description": "Read-only; requires chat:play and ownership plus current configuration scope. No generation or credits charge. This is a Provider endpoint; it does not grant access to another user or conversation. A revision is a committed history projection, independent of viewport mounting. Every affected ID is included even when never mounted. Changes are split into parts of at most 200 items; apply no partial transaction as a complete state. Each read freezes a target revision. Gaps, expired 24-hour ranges or ranges older than 10,000 revisions return reset=true. A reset is not an empty authoritative history.",
         "security": [
           {
             "userToken": []
@@ -25675,7 +25675,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Opaque identifier scoped to this owned conversation; not a player identity."
+            "description": "Opaque identifier scoped to this owned conversation; not a user identity."
           },
           "order": {
             "type": "string",
@@ -25729,7 +25729,7 @@
         "properties": {
           "conversationKey": {
             "type": "string",
-            "description": "Opaque identifier scoped to this owned conversation; not a player identity."
+            "description": "Opaque identifier scoped to this owned conversation; not a user identity."
           },
           "previousRevision": {
             "type": "string",
@@ -25767,7 +25767,7 @@
                 },
                 "id": {
                   "type": "string",
-                  "description": "Opaque identifier scoped to this owned conversation; not a player identity."
+                  "description": "Opaque identifier scoped to this owned conversation; not a user identity."
                 }
               }
             }
@@ -25793,7 +25793,7 @@
         "properties": {
           "conversationKey": {
             "type": "string",
-            "description": "Opaque identifier scoped to this owned conversation; not a player identity."
+            "description": "Opaque identifier scoped to this owned conversation; not a user identity."
           },
           "revision": {
             "type": "string",
@@ -25830,7 +25830,7 @@
         "properties": {
           "conversationKey": {
             "type": "string",
-            "description": "Opaque identifier scoped to this owned conversation; not a player identity."
+            "description": "Opaque identifier scoped to this owned conversation; not a user identity."
           },
           "revision": {
             "type": "string",
