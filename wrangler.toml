@@ -84,6 +84,18 @@ name = "AUTH_ROUTE_LIMIT"
 namespace_id = "6402"
 simple = { limit = 120, period = 60 }
 
+# 卡片共用狀態（投票、共鬥計數器）的寫入：每位會員所有卡合計每分鐘 30 次；每張卡每 10 秒 200 次，
+# 保護全站共用的 D1 主庫（熱門卡打滿就回 RATE_LIMITED，卡片稍後再試）。
+[[ratelimits]]
+name = "CARD_STATE_MEMBER_LIMIT"
+namespace_id = "6403"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "CARD_STATE_CARD_LIMIT"
+namespace_id = "6404"
+simple = { limit = 200, period = 10 }
+
 [vars]
 # 卡內分享情境（?share=，sdk.share／stage.share）。關掉（改成 "false"）時卡片讀到的情境碼一律是 null，
 # 分享鈕照常能用。2026-10-25 owner 批准上線。

@@ -541,5 +541,17 @@ async function getCampaignPayout(env: Env, bearer: string, key: string, provider
   }
 }
 
-export const upstream = { fetchMe, setNickname, fetchRole, fetchHeats, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
+/**
+ * 一張卡（玩家玩到的那一版）宣告的共用狀態（作者資產的 sharedState：投票與計數器）。匿名讀得到
+ * 公開與有連結的卡；作者試玩自己的草稿或私卡時帶他的 token。沒宣告回 {}。
+ */
+async function fetchSharedState(env: Env, roleId: string, provider: ProviderId = DEFAULT_PROVIDER, bearer?: string): Promise<unknown> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/role/author-asset/serve?roleId=${encodeURIComponent(roleId)}`), {
+    headers: { "User-Agent": UA, ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
+  });
+  const body = await readJson(res, "author asset");
+  return body.sharedState ?? {};
+}
+
+export const upstream = { fetchSharedState, fetchMe, setNickname, fetchRole, fetchHeats, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
 export type Upstream = typeof upstream;

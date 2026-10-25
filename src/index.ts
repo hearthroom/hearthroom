@@ -8,6 +8,7 @@ import { HARBOR_PROXY_PREFIX, proxyHarborApi } from './harbor-api-proxy';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
+import { cardStateRoutes } from './card-state-routes';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
@@ -1073,6 +1074,8 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
 
 app.route("/", communityRoutes);
 app.route("/", campaignRoutes);
+// 卡片共用狀態（sdk.shared：投票、共鬥計數器、排行榜）；設計見 src/card-state.ts
+app.route("/", cardStateRoutes);
 app.route("/", cardRewardRoutes);
 app.route("/", blogRoutes);
 app.get("/sitemap.xml", async (c) =>

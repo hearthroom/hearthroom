@@ -70,6 +70,14 @@ const METRICS = {
     operations: ["batch"],
     outcomes: ["success", "error"],
   },
+  card_state: {
+    name: "hearthroom_card_state_total",
+    help: "Card shared state (polls, co-op counters, leaderboards): player writes, author switches and resets. Reads are counted in Analytics Engine.",
+    label: "operation",
+    operations: ["vote", "add", "author_toggle", "reset", "draft_clear"],
+    // limited：限速或上限；ineligible：沒玩過這張卡；disabled：平台或作者關掉；invalid：沒宣告或值不合規則
+    outcomes: ["ok", "limited", "invalid", "denied", "disabled", "ineligible", "error"],
+  },
   reward_events: {
     name: "hearthroom_reward_events_total",
     help: "App reward events reported to Harbor: queued, sent, rejected, retried (error), expired, or dropped (bots, repeat visitors).",
