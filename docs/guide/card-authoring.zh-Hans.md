@@ -224,12 +224,12 @@
 在 `rules.json` 的 `sharedState` 里声明的投票和计数器，由所有玩这张卡的人共用。`sdk.shared`（普通卡为 `window.stage.shared`）负责读写：
 
 - `read(keys)` 接收一个 key 或最多 16 个，返回 `{ [key]: { kind: 'poll', counts, total, mine? } | { kind: 'counter', total, mine?, goal?, reachedAt?, previous? } }`。未声明的 key 不会出现在结果里；`mine` 是玩家自己投的选项或贡献，游客没有；`previous` 是上一期的总数。
-- `vote(key, option)` 返回 `{ mine }`。玩家可以改票，每天最多 10 次。
+- `vote(key, option)` 返回 `{ mine }`。同一题每人每天最多投或改 10 次，第一次投票也算；投回同一个选项不算。
 - `add(key, delta)` 加上 1 到该计数器 `maxStep` 之间的整数，返回 `{ total, mine, reachedAt }`。
-- `leaderboard(key, { limit })` 返回 `{ items: [{ rank, name, value }], mine? }`：本期贡献最多的玩家（默认 10 名，最多 50 名），显示公开昵称，不列出测试账号。
+- `leaderboard(key, { limit })` 返回 `{ items: [{ rank, name, value }], mine? }`：本期贡献最多的玩家（默认 10 名，最多 50 名），显示公开昵称，不列出测试账号。计数器的 `total`、`mine` 和排行榜，每一期都重新开始。
 
-所有人都能读；写入需要已登录并且玩过这张卡的玩家。数字不会主动推送给卡片，请自行重新读取，间隔至少 10 秒。
+所有人都能读；写入需要已登录并且玩过这张卡的玩家（开过一段对话即可）。数字不会主动推送给卡片，请自行重新读取，间隔至少 10 秒。作者可以在自己的任何一张卡上试，包括全新的私卡和 CLI 推送的试玩卡；作者的数字和玩家的分开。
 
-分享回流基于分享链接。`sdk.share.tallyLink(code, pollKey)` 为声明了 `share: true` 的投票生成带平台短码（`?share=~XXXXXXXX`）的链接。这是异步调用，请在点击前准备好；同一组情境码和投票会拿到同一条链接，每位玩家每天最多 20 条，链接 90 天内有效。朋友打开后，`sdk.share.context` 是情境码，`sdk.share.poll` 是可以回答的题目 `{ key, options }`（没有时为 `null`），用 `sdk.share.respond(option)` 回答。分享者用 `sdk.share.results()` 读取自己发出的链接，每条是 `{ context, pollKey, total, counts, updatedAt }`：`total` 实时更新，`counts` 要有 3 位朋友回答才会出现，每天更新一次。卡片不会知道是谁分享、谁回答。卡片可以根据这些数字解锁卡内内容，但不会因此发放平台积分。
+分享回流基于分享链接。`sdk.share.tallyLink(code, pollKey)` 为声明了 `share: true` 的投票生成带平台短码（`?share=~XXXXXXXX`）的链接。这是异步调用，请在点击前准备好；同一组情境码和投票会拿到同一条链接，每位玩家每天最多 20 条，链接 90 天内有效。朋友打开后，`sdk.share.context` 是情境码，`sdk.share.poll` 是可以回答的题目 `{ key, options }`（没有时为 `null`），用 `sdk.share.respond(option)` 回答。这些回答每条链接各记一份，和这道题本身的投票分开。分享者用 `sdk.share.results()` 读取自己发出的链接，每条是 `{ context, pollKey, total, counts, updatedAt }`：`total` 实时更新，`counts` 要有 3 位朋友回答才会出现，每天更新一次。卡片不会知道是谁分享、谁回答。卡片可以根据这些数字解锁卡内内容，但不会因此发放平台积分。
 
-两种页面使用同一组错误码：`SHARED_DISABLED`（平台或作者已暂停）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（还没玩过，或回答自己的链接）、`UNAUTHORIZED`（未登录）、`RATE_LIMITED`（稍后再试）、`LIMIT_REACHED`（`err.data.reason` 为 `goal` 或 `limit`）、`HOST_DENIED`（旧版游玩页；查看过去的对话或审核试玩时只能读）。作者试玩（`?mode=source`）和测试账号各有自己的一份数字，不会混进玩家的；可以在编辑页的“玩家投票与计数”或用 `hearthroom card state` 查看、暂停和清零。
+两种页面使用同一组错误码：`SHARED_DISABLED`（平台或作者已暂停）、`NOT_DECLARED`、`OPTION_INVALID`、`NOT_ELIGIBLE`（还没玩过，或回答自己的链接）、`UNAUTHORIZED`（未登录）、`RATE_LIMITED`（稍后再试）、`LIMIT_REACHED`（`err.data.reason` 为 `goal` 或 `limit`）、`HOST_DENIED`（旧版游玩页；查看过去的对话或审核试玩时只能读；从未送审、也没设置过可见范围的卡，例如试玩卡，不能用 `tallyLink` 生成回流链接，因为别人打不开）。作者试玩（`?mode=source`）和测试账号各有自己的一份数字，不会混进玩家的；可以在编辑页的“玩家投票与计数”或用 `hearthroom card state` 查看、暂停和清零。
