@@ -1,7 +1,6 @@
 {
   "tier": "feature",
   "audience": "authors",
-  "draft": true,
   "try": "/blog/guides",
   "title": {
     "zh-Hant": "全服進度與全服投票，讓同一卡片的玩家一起推進故事。",
