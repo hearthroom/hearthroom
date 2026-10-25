@@ -673,6 +673,37 @@ export async function registerCardIdentity(roleId: string, token: string, provid
 
 /** 卡片頁給作者本人的草稿狀態（GET /v1/me/cards/:roleId/draft）：草稿有沒有改了還沒送審、新版在不在審。 */
 export interface DraftState { status?: string; updateStatus?: string; draftChanged: boolean }
+/**
+ * 卡片的共用狀態（玩家投票與計數），作者本人的設定（Worker src/card-state-routes.ts）。
+ * live 是玩家的數字，draft 是作者自己試玩的那一份；宣告讀不到時伺服器回 503，不回空設定。
+ */
+export type SharedItem =
+  | { kind: "poll"; counts: Record<string, number>; total: number }
+  | { kind: "counter"; total: number; goal?: number; reachedAt?: number | null; previous?: number };
+export interface SharedDeclaration { polls: Record<string, { options: string[]; share?: boolean }>; counters: Record<string, { goal?: number; maxStep: number; perMember: number; period?: string }> }
+export interface SharedStateSettings {
+  platformEnabled: boolean;
+  authorOff: boolean;
+  platformOff: boolean;
+  declaration: SharedDeclaration;
+  live: Record<string, SharedItem>;
+  draft: Record<string, SharedItem>;
+}
+const sharedPath = (roleId: string) => `${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/shared-state`;
+export async function fetchSharedStateSettings(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<SharedStateSettings> {
+  return json(await fetch(sharedPath(roleId), { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
+}
+export async function setSharedStateEnabled(roleId: string, enabled: boolean, token: string, provider: ProviderId = currentProvider()): Promise<{ authorOff: boolean }> {
+  return json(await fetch(sharedPath(roleId), { method: "PUT", headers: { ...writeHeaders(token), "X-Provider": provider }, body: JSON.stringify({ enabled }) }));
+}
+/** ns 一定明確給：live 是玩家數字，draft 是作者自己試玩的那一份。 */
+export async function resetSharedStateKey(roleId: string, key: string, ns: "live" | "draft", token: string, provider: ProviderId = currentProvider()): Promise<void> {
+  await json(await fetch(`${sharedPath(roleId)}/${encodeURIComponent(key)}/reset`, { method: "POST", headers: { ...writeHeaders(token), "X-Provider": provider }, body: JSON.stringify({ ns }) }));
+}
+export async function clearSharedStateDraft(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {
+  await json(await fetch(`${sharedPath(roleId)}/draft/clear`, { method: "POST", headers: { ...writeHeaders(token), "X-Provider": provider }, body: "{}" }));
+}
+
 export async function fetchDraftState(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<DraftState> {
   return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/draft`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
 }

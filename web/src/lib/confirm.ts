@@ -19,6 +19,11 @@ export interface ConfirmOptions {
   cancelText?: string;
   /** 破壞性動作：確認鍵用警示色，焦點先落在取消鍵 */
   danger?: boolean;
+  /**
+   * 只配 danger 用：低權重的危險確認（確認鍵是透明底、警示色字與細框，不是實心紅；手機上取消在上）。
+   * 給編輯頁「歸零／清空數字」這類常在管理區裡出現、又不該變成畫面上最醒目按鈕的操作。沒給就照舊。
+   */
+  dangerAppearance?: "subdued";
   /** 焦點先落在取消鍵（不是危險操作，但預設應該留在原處，例如「直接簽到」會讓連續天數退回） */
   focusCancel?: boolean;
   /** 只有一顆「知道了」，沒有取消 */

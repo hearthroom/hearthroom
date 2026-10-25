@@ -13,6 +13,8 @@ const fieldPick = ref<LookupValue>({ label: "" });
 /** 勾選框：開新彈窗時回到預設值 */
 const checked = ref(false);
 const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
+/** 低權重的危險確認：只在 danger 時生效，非危險確認忽略這個選項。 */
+const subdued = computed(() => !!confirmState.current?.danger && confirmState.current.dangerAppearance === "subdued");
 function confirm() {
   const cur = confirmState.current;
   if (!cur || !typedOk.value) return;
@@ -51,7 +53,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 <template>
   <Teleport to="body">
     <div v-if="confirmState.current" class="dlg-backdrop" @click.self="settleConfirm(false)">
-      <div ref="box" class="dlg panel" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
+      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg">{{ confirmState.current.message }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
@@ -79,7 +81,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
           </button>
-          <button class="btn" :class="confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
+          <button class="btn" :class="subdued ? 'dlg__subdued' : confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
                   :disabled="!typedOk" @click="confirm">
             {{ confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
@@ -127,7 +129,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   .dlg { width: 100%; }
   .dlg__actions { flex-direction: column-reverse; }
   .dlg__actions .btn { width: 100%; height: var(--h-lg); }
+  /* 低權重的危險確認：取消在上、破壞動作在下，不讓它成為最上方最醒目的按鈕 */
+  .dlg--danger-subdued .dlg__actions { flex-direction: column; }
 }
+/* 低權重的破壞動作：透明底、警示色字與細框；hover 只加淡色，不變實心紅 */
+.dlg__subdued { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.dlg__subdued:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: var(--danger); }
 .dlg__field { display: grid; gap: 6px; text-align: left; }
 .dlg__check { display: flex; align-items: flex-start; gap: var(--s-2); min-height: var(--h-sm); font-size: 14px; line-height: 1.5; cursor: pointer; }
 .dlg__check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent-btn); }

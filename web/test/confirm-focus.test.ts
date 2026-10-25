@@ -35,3 +35,34 @@ describe("確認框的預設焦點", () => {
     expect(document.querySelector("[data-confirm]")?.classList.contains("btn--danger-solid")).toBe(false);
   });
 });
+
+// 低權重的危險確認（dangerAppearance: "subdued"，編輯頁的歸零與清空用）：確認鍵不是實心紅、
+// 框掛自己的修飾 class（手機改成取消在上），焦點仍在取消。沒帶這個選項的危險確認照舊。
+describe("低權重的危險確認", () => {
+  let unmount: (() => void) | null = null;
+  afterEach(() => { settleConfirm(false); unmount?.(); unmount = null; });
+
+  it("subdued：確認鍵不是實心紅，框有修飾 class，焦點在取消", async () => {
+    unmount = await mountDialog();
+    void confirmDialog({ message: "m", confirmText: "ok", cancelText: "back", danger: true, dangerAppearance: "subdued", focusCancel: true });
+    await nextTick(); await nextTick();
+    const confirmBtn = document.querySelector("[data-confirm]")!;
+    expect(confirmBtn.classList.contains("btn--danger-solid")).toBe(false);
+    expect(confirmBtn.classList.contains("dlg__subdued")).toBe(true);
+    expect(document.querySelector(".dlg")!.classList.contains("dlg--danger-subdued")).toBe(true);
+    expect((document.activeElement as HTMLElement | null)?.hasAttribute("data-cancel")).toBe(true);
+  });
+
+  it("沒帶選項的危險確認照舊是實心紅；非危險確認忽略這個選項", async () => {
+    unmount = await mountDialog();
+    void confirmDialog({ message: "m", confirmText: "ok", cancelText: "back", danger: true });
+    await nextTick(); await nextTick();
+    expect(document.querySelector("[data-confirm]")!.classList.contains("btn--danger-solid")).toBe(true);
+    expect(document.querySelector(".dlg")!.classList.contains("dlg--danger-subdued")).toBe(false);
+    settleConfirm(false);
+    void confirmDialog({ message: "m", confirmText: "ok", cancelText: "back", dangerAppearance: "subdued" });
+    await nextTick(); await nextTick();
+    expect(document.querySelector("[data-confirm]")!.classList.contains("btn--primary")).toBe(true);
+    expect(document.querySelector(".dlg")!.classList.contains("dlg--danger-subdued")).toBe(false);
+  });
+});
