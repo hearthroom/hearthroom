@@ -1,7 +1,7 @@
 {
   "tier": "feature",
   "audience": "authors",
-  "draft": true,
+  "draft": false,
   "try": "/guide",
   "title": {
     "zh-Hant": "作者可讓道具與進度跟著對話更新",
