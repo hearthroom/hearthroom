@@ -207,3 +207,8 @@
 친구 쪽에서는 `sdk.share.context`로 코드를 읽습니다. 코드가 없거나 지난 대화를 보고 있으면 `null`입니다. 코드는 영문자, 숫자와 `.`, `_`, `-`로 된 1–64자의 ASCII이며 영문자나 숫자로 시작해야 합니다. 규칙에 맞지 않으면 샌드박스 카드는 `SHARE_CONTEXT_INVALID`를 던지고 클래식 카드는 `null`을 받습니다. 플랫폼은 코드를 전달만 합니다. 모델로 보내지 않고 플레이어 정보도 담지 않으며, 누구나 직접 입력할 수 있으니 카드가 정의한 코드만 받아들이세요. 친구에게 이미 저장 데이터가 있는지는 카드가 판단합니다(예: `sdk.archive.list()`, 게스트에게는 저장 데이터가 없습니다).
 
 `sdk.share.audience`는 링크를 열 수 있는 사람을 나타냅니다: `author`(비공개 카드, 새 친구는 열 수 없음), `link`, `public`. 플랫폼 스위치가 꺼져 있으면 `sdk.share.enabled`은 false, `context`는 `null`이고 `link()`는 맥락 없는 일반 링크를 돌려줍니다. `sdk.share.qr(text)`는 공유 이미지에 쓸 `{ size, path }`(`size` × `size` 칸의 SVG path)를 돌려줍니다. 추천 코드가 늦게 도착하면 `share:change`가 발생합니다. 작성자는 `?mode=source&share=<code>`로 초안에서 시험할 수 있습니다.
+
+
+## 확정된 메시지 기록
+
+페이지 작성자 API는 sandbox의 `sdk.history`와 classic의 `stage.history`입니다. 먼저 `capabilities().available`을 확인하세요. 이전 호스트와 미리보기에서는 지원하지 않을 수 있습니다. `list({cursor,revision,content:true})`는 현재 플레이어, 카드, 대화만 읽습니다. 같은 revision으로 모든 페이지를 읽고 마지막 페이지의 `complete:true`를 확인해야 전체 목록으로 취급할 수 있습니다. `onChange(callback)`은 구독 해제 함수를 반환하며, mount된 적이 없거나 이미 hollow 상태인 메시지의 실제 삭제도 알립니다. viewport unmount는 삭제가 아닙니다. 이벤트의 첫 부분부터 파생 상태를 무효화하고 전체 목록으로 다시 계산하세요. 만료된 cursor, reset, unavailable은 알 수 없는 상태이며 빈 기록이 아닙니다. 선택적 본문은 종료된 메시지의 표시 가능한 원문만 포함하며 thinking, 생성 중 본문, moderation으로 숨긴 내용은 제외합니다. `item.complete`는 부분 또는 실패한 응답을 성공으로 취급하지 않습니다. revision과 불투명 ID는 플레이어 신원이 아닙니다. 다른 기기의 변경은 화면이 활성화된 동안 15초마다, 그리고 화면으로 돌아올 때 확인합니다. 카드에서 나갈 때 구독을 해제하세요.

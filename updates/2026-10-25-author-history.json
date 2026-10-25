@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "卡片狀態可以跟著刪除或改寫的對話更新。",
+    "zh-Hans": "卡片状态可以随删除或改写的对话更新。",
+    "en": "Card states can follow deleted or rewritten conversation history.",
+    "ja": "会話の削除や書き換えに合わせて、カードの状態を更新できます。",
+    "ko": "대화 삭제나 수정에 맞춰 카드 상태를 갱신할 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "作者可讀取完整有效歷史，讓額度、道具與狀態欄在回溯後重新對帳。",
+    "zh-Hans": "作者可读取完整有效历史，让额度、道具和状态栏在回溯后重新核对。",
+    "en": "Authors can read the complete current history to reconcile limits, items and status panels after a rollback.",
+    "ja": "作者は有効な履歴全体を読み取り、巻き戻し後の回数制限やアイテム、状態欄を再計算できます。",
+    "ko": "작성자는 유효한 전체 기록을 읽어 되돌리기 후 횟수 제한, 아이템, 상태창을 다시 계산할 수 있습니다."
+  }
+}

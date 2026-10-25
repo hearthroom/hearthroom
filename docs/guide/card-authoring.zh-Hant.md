@@ -207,3 +207,8 @@
 朋友那一端以 `sdk.share.context` 讀回情境碼；沒有，或正在看自己過去的對話時是 `null`。情境碼只收 1–64 個英數字與 `.`、`_`、`-`，開頭須為英數字；不合規則時沙盒卡丟出 `SHARE_CONTEXT_INVALID`，一般卡得到 `null`。平台只負責送到：情境碼不會送進模型、不含玩家資料，而且任何人都能手打，請只接受卡片自己定義的碼。朋友是否已有存檔由卡片判斷（例如 `sdk.archive.list()`；遊客沒有存檔）。
 
 `sdk.share.audience` 表示誰打得開這條連結：`author`（僅自己可見的卡，新朋友打不開）、`link` 或 `public`。平台開關關閉時 `sdk.share.enabled` 為 false，`context` 為 `null`，`link()` 回傳不帶情境的一般連結。`sdk.share.qr(text)` 回傳 `{ size, path }`（`size` × `size` 格的 SVG path），可畫進分享圖。推薦碼較晚取得時會觸發 `share:change`。作者可以用 `?mode=source&share=<code>` 在草稿上測試。
+
+
+## 可靠的訊息歷史
+
+頁級作者 API 提供沙盒卡的 `sdk.history` 與一般卡的 `stage.history`。先探測 `capabilities().available`；舊宿主與預覽可能不支援。`list({cursor,revision,content:true})` 只讀目前玩家、目前卡、目前會話；所有分頁必須沿用同一 revision，只有最後頁 `complete:true` 才能當完整集合。`onChange(callback)` 回取消訂閱函式，從未 mount 或已 hollow 的訊息真刪除仍有變更，viewport unmount 不算刪除。第一包事件即使衍生狀態失效，重新取得完整清單再重算。舊游標、reset 或 unavailable 代表未知，不是空歷史。可選正文只有已終止的可見原文，不含 thinking、生成中文字或 moderation 隱藏內容；`item.complete` 不把部分／失敗回覆當成功。revision 與不透明 ID 不是玩家身分。其他裝置在前景每 15 秒與回前景時檢查；離開卡片時取消訂閱。
