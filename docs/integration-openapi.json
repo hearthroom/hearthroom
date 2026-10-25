@@ -7019,7 +7019,7 @@
           "Author assets"
         ],
         "summary": "Replace the display rules of an owned role",
-        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 131072 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal, index, name, max, actual, unit: bytes}`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt.",
+        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 131072 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|sharedState, index, name, max, actual, unit: bytes}`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
         "security": [
           {
             "userToken": []
@@ -25705,6 +25705,9 @@
                   "type": "boolean"
                 }
               }
+            },
+            "propertyNames": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
             }
           },
           "counters": {
@@ -25721,7 +25724,8 @@
               "properties": {
                 "goal": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 1000000000000
                 },
                 "maxStep": {
                   "type": "integer",
@@ -25730,7 +25734,8 @@
                 },
                 "perMember": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "maximum": 1000000000
                 },
                 "period": {
                   "type": "string",
@@ -25741,6 +25746,9 @@
                   ]
                 }
               }
+            },
+            "propertyNames": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
             }
           }
         }
