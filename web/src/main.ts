@@ -5,8 +5,9 @@ import { createPinia } from "pinia";
 import { createApp } from "vue";
 import { watch } from "vue";
 import MaintenanceNotice from "./components/MaintenanceNotice.vue";
-import { createMaintenanceMonitor } from "./lib/maintenance";
-import { applyLocale, LOCALE_CODES, SOURCE_LOCALE } from "./lib/i18n";
+import { createMaintenanceMonitor, maintenanceLocale } from "./lib/maintenance";
+import { applyLocale, detectLocale } from "./lib/i18n";
+import { isPlayHost } from "./lib/site";
 import { useAppearance } from "./lib/appearance";
 import { i18n } from "./lib/i18n";
 
@@ -49,9 +50,7 @@ const noticeRoot = document.createElement('div');
 noticeRoot.id = 'maintenance-root';
 document.body.append(noticeRoot);
 useAppearance().init();
-const prefix = location.pathname.split('/')[1];
-const queryLocale = new URLSearchParams(location.search).get('lang');
-const initialLocale = LOCALE_CODES.includes(prefix) ? prefix : queryLocale && LOCALE_CODES.includes(queryLocale) ? queryLocale : SOURCE_LOCALE;
+const initialLocale = maintenanceLocale(location.pathname, location.search, isPlayHost(), detectLocale());
 void applyLocale(initialLocale).then(async () => {
   createApp(MaintenanceNotice, { monitor: maintenance }).use(i18n).mount(noticeRoot);
   await maintenance.check();

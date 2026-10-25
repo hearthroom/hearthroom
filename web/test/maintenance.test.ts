@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createMaintenanceMonitor, formatMaintenanceTime } from '../src/lib/maintenance';
+import { createMaintenanceMonitor, formatMaintenanceTime, maintenanceLocale } from '../src/lib/maintenance';
 afterEach(()=>vi.useRealTimers());
 it('polls on/off and keeps an active notice after failed checks; never replays an action',async()=>{
  vi.useFakeTimers();
@@ -18,4 +18,16 @@ it('formats a future ETA in the viewer timezone and omits expired estimates',()=
  expect(formatMaintenanceTime(1,'en',2)).toBe(null);
  const eta=Date.UTC(2030,0,1);expect(formatMaintenanceTime(eta,'en',0,'Asia/Taipei')).toContain('8:00');
  expect(formatMaintenanceTime(eta,'en',0,'America/New_York')).toContain('7:00');
+});
+
+it('uses the same explicit and browser locale decisions before the router starts',()=>{
+ expect(maintenanceLocale('/','',false,'en')).toBe('en');
+ expect(maintenanceLocale('/ja/play/123','',false,'en')).toBe('ja');
+ expect(maintenanceLocale('/123/','?lang=ko',true,'en')).toBe('ko');
+ expect(maintenanceLocale('/123/','',true,'ja')).toBe('ja');
+ expect(maintenanceLocale('/123/','?lang=unknown',true,'ko')).toBe('ko');
+});
+it('keeps a server-confirmed maintenance shell blocked when its first poll fails',async()=>{
+ const monitor=createMaintenanceMonitor(vi.fn().mockRejectedValue(Error('offline')),true);
+ await monitor.check();expect(monitor.state.value.enabled).toBe(true);expect(monitor.failed.value).toBe(true);
 });

@@ -19,7 +19,8 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
   // Preserve local proxy refusals without a DB/Provider call.
   if ((path==='/hh-api'||path.startsWith('/hh-api/'))&&!allowedHarborProxyRequest(request))return null;
   const sandboxAsset=isSandboxHost(url.host)&&/^\/(?:assets|mascot)\//.test(path);
-  const api=/^\/(?:v1|hh-api|auth)(?:\/|$)/.test(path);
+  const browserAuth=/^\/auth(?:\/|$)/.test(path)&&['GET','HEAD'].includes(request.method)&&request.headers.get('Accept')?.includes('text/html');
+  const api=/^\/(?:v1|hh-api|auth)(?:\/|$)/.test(path)&&!browserAuth;
   if(path==='/metrics'||path.startsWith('/internal/')||(!api&&!sandboxAsset&&STATIC.test(path)))return null;
   const status=path==='/v1/maintenance';
   const document=['GET','HEAD'].includes(request.method)&&(!path.split('/').pop()?.includes('.')||path.endsWith('.html')||request.headers.get('Accept')?.includes('text/html'));
@@ -30,7 +31,7 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
     ctx.waitUntil(bumpOp(env.DB,'maintenance','status','error'));
     return Response.json({error:'maintenance_status_unavailable'}, {status:503,headers:noStore});
   }
-  if(status)return Response.json(state,{headers:{'Cache-Control':'no-store'}});
+  if(status)return Response.json(state,{headers:{'Cache-Control':'no-store','Access-Control-Allow-Origin':'*'}});
   if(!state.enabled)return null;
   // Only while active: the isolated maintenance shell needs its public SPA assets.
   if(sandboxAsset)return env.ASSETS.fetch(request);
@@ -42,6 +43,6 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
   for(const [key,value] of Object.entries(noStore))headers.set(key,value);
   headers.set('X-Robots-Tag','noindex');
   // A direct sandbox shell resumes its original host document instead of a site route.
-  const content=(await shell.text()).replace('<head>','<head><meta name="hearthroom-maintenance-shell" content="'+(isSandboxHost(url.host)?'sandbox':'site')+'">');
+  const content=(await shell.text()).replace('<head>','<head><meta name="hearthroom-maintenance-shell" content="'+(isSandboxHost(url.host)||path.startsWith('/sandbox/')?'sandbox':'site')+'">');
   return new Response(request.method==='HEAD'?null:content,{status:503,headers});
 }

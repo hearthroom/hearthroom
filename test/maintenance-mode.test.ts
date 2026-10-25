@@ -44,3 +44,20 @@ it('invalid state never silently opens admission, and off restores normal routin
   await setState({enabled:false});
   expect((await SELF.fetch('https://sukisuki.ai/v1/health')).status).toBe(200);
 });
+it('shows an auto-recovering shell on browser auth pages while holding machine auth operations',async()=>{
+ await setState({enabled:true});
+ const assets=async()=>new Response('<html><head></head><body><div id="app"></div></body></html>',{headers:{'Content-Type':'text/html'}});
+ for(const path of ['/auth/callback?code=example','/auth/route/issue','/auth/route/complete']){
+  const ctx=createExecutionContext();
+  const r=await worker.fetch(new Request('https://sukisuki.ai'+path,{headers:{Accept:'text/html'}}),{...env,ASSETS:{fetch:assets} as unknown as Fetcher},ctx);
+  expect(r.headers.get('content-type'),path).toContain('text/html');expect(await r.text()).toContain('hearthroom-maintenance-shell');await waitOnExecutionContext(ctx);
+ }
+ const r=await SELF.fetch('https://sukisuki.ai/auth/route/prepare',{method:'POST'});expect(r.status).toBe(503);expect(r.headers.get('content-type')).toContain('application/json');
+});
+it('restores same-site sandbox documents by reloading their original shell and supports opaque-origin status checks',async()=>{
+ await setState({enabled:true});
+ const ctx=createExecutionContext();
+ const r=await worker.fetch(new Request('https://sukisuki.ai/sandbox/'),{...env,ASSETS:{fetch:async()=>new Response('<html><head></head></html>',{headers:{'Content-Type':'text/html'}})} as unknown as Fetcher},ctx);
+ expect(await r.text()).toContain('content="sandbox"');await waitOnExecutionContext(ctx);
+ expect((await SELF.fetch('https://sukisuki.ai/v1/maintenance',{headers:{Origin:'null'}})).headers.get('Access-Control-Allow-Origin')).toBe('*');
+});
