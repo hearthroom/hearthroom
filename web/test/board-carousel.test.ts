@@ -313,3 +313,47 @@ describe("blog post slide", () => {
     expect(slides()).toHaveLength(3);
   });
 });
+
+it("refreshes pinned blog slides across homepage locales and removes stale-language content", async () => {
+  list = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const u = new URL(url, "https://local.test");
+    const locale = u.searchParams.get("locale");
+    const pinned = locale === "en" ? [] : [{ id: locale, columnSlug: "news", slug: `guide-${locale}`, locale, title: `Post ${locale}`, excerpt: "", coverUrl: null, firstPublishedAt: Date.now(), pinned: true, readMinutes: 1, campaign: null }];
+    const data = u.pathname === "/v1/campaigns" ? {items: []} : u.pathname === "/v1/blog/posts" ? {pinned, items: [], total: 0} : {items: []};
+    return new Response(JSON.stringify(data));
+  }));
+  await mount();
+  expect(host.textContent).toContain("Post zh-Hant");
+  await mountedRouter.push("/en/");
+  await settle();
+  expect(host.textContent).not.toContain("Post zh-Hant");
+  await mountedRouter.push("/zh-Hans/");
+  await settle();
+  expect(host.textContent).toContain("Post zh-Hans");
+  expect(host.textContent).not.toContain("Post zh-Hant");
+});
+
+it("discards a late pinned-post response after the homepage locale changes again", async () => {
+  list = [];
+  let releaseEnglish!: (value: Response) => void;
+  const english = new Promise<Response>(resolve => { releaseEnglish = resolve; });
+  const body = (locale: string) => ({ pinned: [{ id: locale, columnSlug: "news", slug: `guide-${locale}`, locale, title: `Post ${locale}`, excerpt: "", coverUrl: null, firstPublishedAt: Date.now(), pinned: true, readMinutes: 1, campaign: null }], items: [], total: 0 });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const u = new URL(url, "https://local.test");
+    const locale = u.searchParams.get("locale") ?? "zh-Hant";
+    if (u.pathname === "/v1/blog/posts" && locale === "en") return english;
+    return new Response(JSON.stringify(u.pathname === "/v1/blog/posts" ? body(locale) : { items: [] }));
+  }));
+  await mount();
+  await mountedRouter.push("/en/");
+  await settle();
+  expect(host.textContent).not.toContain("Post zh-Hant");
+  await mountedRouter.push("/zh-Hans/");
+  await settle();
+  expect(host.textContent).toContain("Post zh-Hans");
+  releaseEnglish(new Response(JSON.stringify(body("en"))));
+  await settle();
+  expect(host.textContent).toContain("Post zh-Hans");
+  expect(host.textContent).not.toContain("Post en");
+});

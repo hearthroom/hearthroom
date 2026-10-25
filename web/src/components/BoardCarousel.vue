@@ -36,6 +36,8 @@ const lib = shallowRef<CampaignLib | null>(null);
 const featured = ref<CampaignSummary[]>([]);
 const post = ref<PostCard | null>(null);
 const postColumn = ref("");
+const campaignsReady = ref(false);
+let postSeq = 0;
 onMounted(async () => {
   try {
     const m = await import("@/lib/campaign");
@@ -43,17 +45,25 @@ onMounted(async () => {
     featured.value = m.featuredCampaigns(items);
     lib.value = m;
   } catch { /* 讀不到就只有蘇綺 */ }
-  if (!props.campaigns) return;
+  campaignsReady.value = true;
+});
+watch([locale, campaignsReady, () => props.campaigns], async () => {
+  const mine = ++postSeq;
+  const lang = locale.value;
+  post.value = null;
+  if (!campaignsReady.value || !props.campaigns) return;
   try {
     const b = await import("@/lib/blog");
-    const { pinned } = await b.fetchPosts({}, 1);
+    const { pinned } = await b.fetchPosts({}, 1, lang);
     const pick = b.homePost(pinned, featured.value.map((c) => c.slug), Date.now());
-    if (!pick) return;
-    postPath.value = b.postPath(pick);
+    if (!pick || mine !== postSeq) return;
     // 欄目名讀不到就寫「官方」，卡片照樣出現
-    postColumn.value = await b.fetchColumns()
-      .then(({ items }) => b.columnName(b.allColumns(items).find((c) => c.slug === pick.columnSlug), locale.value, ""))
+    const name = await b.fetchColumns()
+      .then(({ items }) => b.columnName(b.allColumns(items).find((c) => c.slug === pick.columnSlug), lang, ""))
       .catch(() => "") || t("blog.official");
+    if (mine !== postSeq) return;
+    postPath.value = b.postPath(pick);
+    postColumn.value = name;
     post.value = pick;
   } catch { /* 讀不到就沒有文章卡 */ }
 });
@@ -127,7 +137,7 @@ function touched() {
 
 const onVisibility = () => { pause.hidden = document.hidden; };
 onMounted(() => { onVisibility(); document.addEventListener("visibilitychange", onVisibility); });
-onBeforeUnmount(() => { clearTimeout(timer); clearTimeout(touchTimer); document.removeEventListener("visibilitychange", onVisibility); });
+onBeforeUnmount(() => { ++postSeq; clearTimeout(timer); clearTimeout(touchTimer); document.removeEventListener("visibilitychange", onVisibility); });
 
 const root = ref<HTMLElement | null>(null);
 function onFocusOut(e: FocusEvent) {
