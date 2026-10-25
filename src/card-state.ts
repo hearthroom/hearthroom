@@ -8,11 +8,14 @@
  * 誰寫進哪裡（ns）：
  *   - 測試帳號 → test：QA 走得完整條路，但不上榜、不算進正式數字（owner 2026-10-25 E3、E6）
  *   - 作者試玩（?mode=source）或「僅自己」的卡 → draft：作者測試灌的數字不混進正式數字
+ *   - 還沒有卡片列的新卡（沒送審、沒設過能見度的私卡，CLI 試玩卡）只給作者本人，一樣寫 draft／test
  *   - 其他 → live
  * 寫入資格（E3）：登入、而且在這張卡（任一版）開過對話——member_conversations 本站就有，不必問 Provider。
  * owner 允許卡片拿這些數字解鎖卡內內容（E5），所以不另加帳齡或裝置限制；防線是資格、每人上限與限流。
  */
-import { getPublicCard, type CardRow } from "./cards";
+import { ensureCardNumber, getPublicCard, type CardRow } from "./cards";
+import { workFor } from "./card-sync";
+import { hostGateway } from "./hosting";
 import type { Member } from "./members";
 import type { ProviderId } from "./providers";
 import { upstream } from "./upstream";
@@ -75,6 +78,8 @@ export interface CardState {
   declUnavailable: boolean;
   enabled: boolean;
   isAuthor: boolean;
+  /** 還沒有卡片列（只有作者讀得到的新卡、CLI 試玩卡）：不發分享短碼，朋友本來就打不開。 */
+  unregistered?: boolean;
 }
 
 /** 宣告的邊緣快取：每次讀寫都問 Provider 太貴（遊客讀取也會打到）。作者改宣告後最多晚這麼久生效。 */
@@ -94,6 +99,31 @@ async function declarationOf(env: Env, roleId: string, provider: ProviderId, bea
   return parseDecl(raw);
 }
 
+/** 作者身分（這個帳號是不是這張卡的作者）的快取：作者不會變，每次讀寫都問 Harbor 太貴。 */
+export const OWN_CARD_CACHE_SECONDS = 300;
+const ownCacheKey = (provider: ProviderId, roleId: string, externalId: number) => `https://card-state.internal/own/${provider}/${encodeURIComponent(roleId)}/${externalId}`;
+
+/**
+ * 還沒有卡片列的卡（新建的私卡：沒送審、沒設過能見度；CLI 推的試玩卡）。社群站沒有它的列，
+ * 只能用請求者自己的 token 讀 Harbor 的 role 確認他是作者；不是作者、讀不到一律當沒有這張卡。
+ * 鍵用卡號：之後送審或設能見度時 upsertCard 也用同一個號碼當 cards.id，作者的試玩數字接得上。
+ */
+async function unregisteredOwnCard(env: Env, roleId: string, provider: ProviderId, member: Member, bearer: string): Promise<CardRow | null> {
+  const cache = typeof caches === "undefined" ? null : caches.default;
+  const key = ownCacheKey(provider, roleId, member.externalId);
+  const hit = await cache?.match(key).catch(() => undefined);
+  let source = hit ? ((await hit.json().catch(() => null)) as { provider: ProviderId; roleId: string } | null) : null;
+  if (!source) {
+    const role = await hostGateway.read(env, bearer, roleId, provider).catch(() => null);
+    if (!role || role.authorNumId !== member.externalId) return null;
+    const work = await workFor(env.DB, provider, role.roleId);
+    source = { provider: (work?.source_provider as ProviderId | undefined) ?? provider, roleId: work?.source_role_id ?? role.roleId };
+    await cache?.put(key, new Response(JSON.stringify(source), { headers: { "Cache-Control": `max-age=${OWN_CARD_CACHE_SECONDS}`, "Content-Type": "application/json" } })).catch(() => undefined);
+  }
+  const num = await ensureCardNumber(env.DB, source.provider, source.roleId);
+  return { id: String(num), provider, source_role_id: source.roleId, author_num_id: member.externalId } as CardRow;
+}
+
 export interface ResolveOptions {
   provider: ProviderId;
   member?: Member | null;
@@ -109,7 +139,17 @@ export interface ResolveOptions {
  */
 export async function resolveCardState(env: Env, roleId: string, opts: ResolveOptions): Promise<CardState> {
   const card = await getPublicCard(env.DB, roleId, opts.provider).catch(() => null);
-  if (!card || card.provider !== opts.provider) throw new HttpError(404, "card not found");
+  if (!card) {
+    const own = opts.member && opts.bearer ? await unregisteredOwnCard(env, roleId, opts.provider, opts.member, opts.bearer) : null;
+    if (!own) throw new HttpError(404, "card not found");
+    const decl = await declarationOf(env, own.source_role_id, opts.provider, opts.bearer ?? undefined);
+    const controls = await env.DB.prepare("SELECT author_off, platform_off FROM card_state_controls WHERE card_id = ?").bind(Number(own.id)).first<{ author_off: number; platform_off: number }>();
+    return {
+      card: own, cardId: Number(own.id), ns: opts.member!.accountClass === "test" ? "test" : "draft", decl: decl ?? parseDecl({}), declUnavailable: decl === null,
+      enabled: env.CARD_STATE_ENABLED === "true" && !controls?.author_off && !controls?.platform_off, isAuthor: true, unregistered: true,
+    };
+  }
+  if (card.provider !== opts.provider) throw new HttpError(404, "card not found");
   const access = await currentCardAccess(env, card);
   const isAuthor = !!opts.member && opts.member.provider === card.provider && opts.member.externalId === card.author_num_id;
   // 別人打不開的卡（私卡、停權），任何人（含測試帳號）都是 404；作者自己的私卡寫進 draft
