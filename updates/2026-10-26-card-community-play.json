@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/blog/guides",
+  "title": {
+    "zh-Hant": "全服進度與全服投票，讓同一卡片的玩家一起推進故事。",
+    "zh-Hans": "全服进度和全服投票，让同一张卡的玩家一起推动剧情。",
+    "en": "Shared progress and community polls let your card's players shape the story together.",
+    "ja": "「みんなの進捗」と「みんなの投票」で、同じカードの物語を一緒に進められます。",
+    "ko": "공동 진행도와 전체 투표로 같은 카드의 플레이어가 함께 이야기를 진행할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "寫卡 AI 可以幫你製作共鬥、貢獻榜或依朋友回答人數解鎖的番外，做法與需求範例見部落格。",
+    "zh-Hans": "写卡 AI 可以帮你制作全服打怪、贡献榜或按好友回答人数解锁的番外，做法和需求示例见博客。",
+    "en": "Your card-writing AI can build boss battles, contribution rankings, or side stories unlocked when enough friends answer, with examples in the blog.",
+    "ja": "ブログには、制作AIでボス戦や貢献度ランキング、フレンドの回答人数で開く番外編を作る依頼例があります。",
+    "ko": "카드 제작 AI에 보스전과 기여도 순위, 친구 응답 수로 여는 외전을 부탁하는 예시와 방법을 블로그에서 확인할 수 있어요."
+  }
+}
