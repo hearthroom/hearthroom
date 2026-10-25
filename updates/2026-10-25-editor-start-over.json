@@ -3,10 +3,10 @@
   "audience": "authors",
   "draft": true,
   "title": {
-    "zh-Hant": "恢復草稿後選「清空重來」，再儲存會建立新卡，不再改到原本的卡。",
-    "zh-Hans": "恢复草稿后选“清空重来”，再保存会创建新卡，不再改到原来的卡。",
-    "en": "Choosing “Start over” after restoring a draft now saves a new card instead of changing the previous card.",
-    "ja": "復元した下書きを消して書き直すと、保存時に新しいカードが作られ、元のカードは変わりません。",
-    "ko": "복원한 초안을 비우고 다시 쓰면 저장할 때 새 카드가 만들어지고 기존 카드는 바뀌지 않아요."
+    "zh-Hant": "新建卡片時修改自動恢復的舊草稿，儲存不再覆寫原本的卡。",
+    "zh-Hans": "新建卡片时修改自动恢复的旧草稿，保存不再覆盖原来的卡。",
+    "en": "Editing an old draft restored when creating a new card no longer overwrites the original card when saved.",
+    "ja": "新規作成で復元した古い下書きを編集して保存しても、元のカードを上書きしなくなりました。",
+    "ko": "새 카드 작성 중 복원된 이전 초안을 수정해 저장해도 기존 카드를 덮어쓰지 않아요."
   }
 }
