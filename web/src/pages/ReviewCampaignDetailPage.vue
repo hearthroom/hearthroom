@@ -267,7 +267,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           </template>
           <label v-else class="rcd-field">
             <span class="subtle">{{ t('campaign.decide.reason') }}</span>
-            <textarea v-model="dialog.reason" class="input" rows="4" :disabled="dialog.busy" aria-describedby="rcd-reason-hint" />
+            <textarea autocomplete="off" v-model="dialog.reason" class="input" rows="4" :disabled="dialog.busy" aria-describedby="rcd-reason-hint" />
             <span id="rcd-reason-hint" class="rcd-field__foot subtle">
               <span>{{ t('campaign.decide.reasonShown') }}</span>
               <span class="num" :class="{ 'rcd-over': reasonLength > REASON_MAX }">{{ reasonLength }}/{{ REASON_MAX }}</span>

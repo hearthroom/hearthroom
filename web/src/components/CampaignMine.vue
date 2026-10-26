@@ -275,7 +275,7 @@ async function send() {
                 </fieldset>
                 <div class="field" data-field="note">
                   <label :for="`rs-note-${p.id}`">{{ t("campaign.share.field.note") }} <span class="subtle">{{ t("campaign.apply.optional") }}</span></label>
-                  <textarea :id="`rs-note-${p.id}`" v-model="form.note" class="input" rows="3" maxlength="1000" />
+                  <textarea autocomplete="off" :id="`rs-note-${p.id}`" v-model="form.note" class="input" rows="3" maxlength="1000" />
                 </div>
                 <p v-if="formError" class="notice notice--error" role="alert" data-form-error>{{ formError }}</p>
                 <div class="mine-share__actions">

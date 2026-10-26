@@ -251,7 +251,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/settings\/campaigns\/[^/]+
       </label>
       <label class="field">
         <span>{{ t('campaign.field.intro') }}</span>
-        <textarea v-model="form.intro[lang]" class="input" data-field="intro" rows="5" maxlength="20000" :disabled="locked" :aria-invalid="bad('intro') || undefined" />
+        <textarea autocomplete="off" v-model="form.intro[lang]" class="input" data-field="intro" rows="5" maxlength="20000" :disabled="locked" :aria-invalid="bad('intro') || undefined" />
       </label>
       <label class="field">
         <span>{{ t('campaign.field.slug') }}</span>
@@ -277,7 +277,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/settings\/campaigns\/[^/]+
         </span>
         <label v-if="form.posters[lang].key" class="field">
           <span>{{ t('campaign.field.posterAlt') }}</span>
-          <textarea v-model="form.posters[lang].alt" class="input" data-poster-alt maxlength="1000" required :disabled="locked" />
+          <textarea autocomplete="off" v-model="form.posters[lang].alt" class="input" data-poster-alt maxlength="1000" required :disabled="locked" />
           <span class="subtle">{{ t('campaign.field.posterAltHint') }}</span>
         </label>
       </div>

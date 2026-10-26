@@ -261,7 +261,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           </div>
           <label class="cmod-dialog__field">
             <span class="subtle">{{ t(dialog.kind === 'remove' ? 'moderation.comments.removeReason' : 'moderation.reason') }}</span>
-            <textarea v-model="dialog.reason" class="input" rows="3" maxlength="2000" :disabled="dialog.busy" />
+            <textarea autocomplete="off" v-model="dialog.reason" class="input" rows="3" maxlength="2000" :disabled="dialog.busy" />
           </label>
           <p v-if="dialog.error" class="notice notice--error" role="alert">{{ dialog.error }}</p>
           <div class="modal__actions">

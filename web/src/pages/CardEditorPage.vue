@@ -1291,7 +1291,7 @@ async function exportCard(format: "png" | "json") {
                   <option value="user">{{ $t("editor.talkExample.user") }}</option>
                   <option value="ai">{{ $t("editor.talkExample.ai") }}</option>
                 </select>
-                <textarea v-model="turn.content" class="input" rows="2" style="min-height: calc(2 * 1.7em + 26px)"
+                <textarea autocomplete="off" v-model="turn.content" class="input" rows="2" style="min-height: calc(2 * 1.7em + 26px)"
                           :aria-label="$t('editor.talkExample.content')" />
                 <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('list.remove')"
                         :title="$t('list.remove')" @click="draft.talkExample.splice(i, 1)">

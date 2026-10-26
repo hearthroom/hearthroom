@@ -218,7 +218,7 @@ async function submit() {
       <div class="apply__optional-body">
         <div class="field" data-field="note">
           <label for="apply-note">{{ t("campaign.share.field.note") }} <span class="subtle">{{ t("campaign.apply.optional") }}</span></label>
-          <textarea id="apply-note" v-model="form.note" class="input" rows="3" maxlength="1000" :aria-invalid="bad('note')" aria-describedby="apply-note-err" />
+          <textarea autocomplete="off" id="apply-note" v-model="form.note" class="input" rows="3" maxlength="1000" :aria-invalid="bad('note')" aria-describedby="apply-note-err" />
           <p v-if="errors.note" id="apply-note-err" class="apply__error" role="alert">{{ errors.note }}</p>
         </div>
         <template v-if="kind === 'new'">

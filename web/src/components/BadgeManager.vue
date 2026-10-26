@@ -49,7 +49,7 @@ onMounted(load);
    <form data-badge-create @submit.prevent="create"><h3>{{ t('badgeWall.manage.create') }}</h3>
     <label>{{ t('badgeWall.manage.key') }}<input v-model="key" pattern="[a-z0-9][a-z0-9_]{0,49}" maxlength="50" required :disabled="busy" /></label>
     <label>{{ t('badgeWall.manage.name') }}<input v-model="title" maxlength="60" required :disabled="busy" /></label>
-    <label>{{ t('badgeWall.manage.condition') }}<textarea v-model="description" maxlength="300" required :disabled="busy" /></label>
+    <label>{{ t('badgeWall.manage.condition') }}<textarea autocomplete="off" v-model="description" maxlength="300" required :disabled="busy" /></label>
     <label>{{ t('badgeWall.manage.icon') }}<select v-model="icon" :disabled="busy"><option v-for="name in BADGE_ICONS" :key="name" :value="name">{{ t('badgeWall.icon.'+name) }}</option></select></label>
     <button class="btn" :disabled="busy">{{ t('badgeWall.manage.create') }}</button>
    </form>

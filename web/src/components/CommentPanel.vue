@@ -221,7 +221,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
     <div v-else-if="session.me" class="cmt__composer">
       <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="cmt__face" />
       <div class="cmt__box">
-        <textarea v-model="draft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.placeholder')" rows="2" />
+        <textarea autocomplete="off" v-model="draft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.placeholder')" rows="2" />
         <div class="cmt__box-foot">
           <span class="subtle">{{ draft.length }}/{{ MAX }}<template v-if="myScore"> · {{ $t("score.attached", { n: myScore }) }}</template></span>
           <button class="btn btn--primary btn--sm" :disabled="sending || !draft.trim()" @click="submit()">{{ $t("comment.submit") }}</button>
@@ -301,7 +301,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
           <button v-if="moreReplies(c)" class="cmt__more" @click="showAllReplies(c)">{{ expanded[c.commentId] ? $t("comment.loadMore") : $t("comment.viewReplies", { n: c.replyCount }) }}</button>
 
           <div v-if="!blocked && replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
-            <textarea v-model="replyDraft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.replyTo', { name: replyTo!.target.accountNickName })" rows="2" autofocus />
+            <textarea autocomplete="off" v-model="replyDraft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.replyTo', { name: replyTo!.target.accountNickName })" rows="2" autofocus />
             <div class="cmt__box-foot">
               <button class="btn btn--ghost btn--sm" @click="replyTo = null">{{ $t("comment.cancel") }}</button>
               <button class="btn btn--primary btn--sm" :disabled="sending || !replyDraft.trim()" @click="submit(replyTo!.root, replyTo!.target)">{{ $t("comment.submit") }}</button>
