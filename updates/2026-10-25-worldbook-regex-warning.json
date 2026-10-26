@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "世界書編輯器會提醒像正規表示式卻少了 /…/ 外框的關鍵詞。",
+    "zh-Hans": "世界书编辑器会提示看起来像正则表达式、但缺少 /…/ 的关键词。",
+    "en": "The Lorebook editor flags keywords that look like regular expressions but lack /…/ delimiters.",
+    "ja": "世界書エディターで、正規表現のようなキーワードに /…/ がない場合に案内が出ます。",
+    "ko": "세계관 편집기가 정규식처럼 보이지만 /…/가 없는 키워드를 알려줘요."
+  }
+}

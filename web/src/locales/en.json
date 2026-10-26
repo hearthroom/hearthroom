@@ -880,6 +880,7 @@
   "wb.entry.match": "What counts as a hit",
   "wb.entry.match.case": "Case matters",
   "wb.entry.match.whole": "Whole word only",
+  "wb.entry.regexHint": "This is matched as plain text; regular expressions need /…/ around them, for example /chapter[4-6]/. You can ignore this notice if plain text is intended.",
   "wb.entry.match.hint": "Entries brought over from Tavern are matched literally by these rules.",
   "wb.entry.match.logic": "How the extra keywords count",
   "wb.entry.match.logic.0": "Any one of them shows up",
