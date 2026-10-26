@@ -2270,7 +2270,7 @@
   "d808d059eb4b9": "中繼資料、條目操作與關聯在同一筆交易套用；任一操作不合法時，整次請求都不寫入。每次最多 200 個條目操作，呼叫者必須擁有 Lorebook 與要關聯的智慧體設定。中繼資料會替換 name、description、iconUrl 與 tags；未傳 visibility 時保留原值。回應的 `createdEntryIds` 按新增操作順序排列。請從詳情端點讀取此書的 `entryContentMax`，已關聯語言中以最寬上限為準。此操作不提供冪等去重；結果不明時，先讀回條目再決定是否重送新增操作。",
   "d8f26a110beb7": "`worldbook_limit_exceeded` 會以 `field`、`reason`、`index`、`max`、`actual` 與 `unit` 回報操作數超限；其他驗證錯誤使用 `invalid_arguments`，並附 `field`、`index` 與 `reason`，長度錯誤另附 `max`、`actual` 與 `unit`。條目索引從零開始，文件層欄位使用 -1；請修正指定欄位或切小批次後再送出。",
   "dbd5d3615f700": "建立智慧體設定",
-  "d5624afa08837": "建立由 bearer 帳號擁有的智慧體設定；`visibility` 設為 `private` 時僅作者可存取，設為 `unlisted` 時可透過連結開啟，省略 `visibility` 時預設為 `unlisted`。已授權客戶端仍可依 scope 存取；建立不會公開發布或提交審核，CLI 的 `--create` 會送出 `private`。",
+  "d5624afa08837": "建立由 bearer 帳號擁有的智慧體設定；`visibility` 設為 `private` 時僅作者可存取，設為 `unlisted` 時可透過連結開啟，省略 `visibility` 時預設為 `unlisted`。已授權客戶端仍可依 scope 存取；建立不會公開發布或提交審核，CLI 的 `--create` 會送出 `unlisted`。",
   "dd4e8e5e9fb1c": "`not_found`",
   "d6e2a15c61061": "`temporarily_unavailable`",
   "d43e82bc212a8": "用於解析流式輸出預設值的模型；省略時使用應用的預設模型，不會變更已儲存的模型選擇。",

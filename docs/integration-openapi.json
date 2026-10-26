@@ -6091,7 +6091,7 @@
           "Roles"
         ],
         "summary": "Create an agent configuration",
-        "description": "Creates an agent configuration owned by the bearer account. Set `visibility` to `private` for author-only access or `unlisted` for link access; omitted `visibility` defaults to `unlisted`. Authorized clients retain their scoped access. Creation does not publish or submit for review. The CLI sends `private` with `--create`.",
+        "description": "Creates an agent configuration owned by the bearer account. Set `visibility` to `private` for author-only access or `unlisted` for link access; omitted `visibility` defaults to `unlisted`. Authorized clients retain their scoped access. Creation does not publish or submit for review. The CLI sends `unlisted` with `--create`.",
         "security": [
           {
             "userToken": []

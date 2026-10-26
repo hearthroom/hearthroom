@@ -322,7 +322,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     await submit();
 
-    expect(api.createRole).toHaveBeenCalledWith({ roleName: "阿芙拉", language: "zh-Hant" }, "tok");
+    expect(api.createRole).toHaveBeenCalledWith({ roleName: "阿芙拉", language: "zh-Hant", visibility: "unlisted" }, "tok");
     const [, fields] = api.patchRoleDocument.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(fields).toMatchObject({
       roleName: "阿芙拉",
@@ -1130,4 +1130,30 @@ it('retains the pending cancellation warning and save action with rollout disabl
  expect(root.textContent).toContain(i18n.global.t('visibility.state.pendingEditor'));
  expect(root.querySelector('.author-visibility')).toBeNull();
  expect(root.querySelector('button[type="submit"]')).not.toBeNull();expect(visibilityMocks.read).not.toHaveBeenCalled();
+});
+
+describe('new card visibility',()=>{
+ it('shows the link default before saving and honors a private choice',async()=>{
+  await mount('/create');
+  const choice=$<HTMLSelectElement>('#new-card-visibility');
+  expect(choice).not.toBeNull();
+  expect(choice.value).toBe('unlisted');
+  expect(root.textContent).toContain(i18n.global.t('visibility.description.unlisted'));
+  choice.value='private';choice.dispatchEvent(new Event('change'));await flush();
+  await type($<HTMLInputElement>('#f-name'),'Private fixture');await submit();
+  expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({visibility:'private'}),'tok');
+ });
+ it('does not offer a create default while editing an existing card',async()=>{
+  await mount('/cards/existing/edit');
+  expect(root.querySelector('#new-card-visibility')).toBeNull();
+  expect(api.createRole).not.toHaveBeenCalled();
+ });
+});
+
+it('restores a new draft private choice without applying it to existing cards',async()=>{
+ localStorage.setItem('hearthroom.draft.create',JSON.stringify({draft:{roleName:'Restored private',language:'en'},visibility:'private',tagsText:'',worldbook:null,savedAt:Date.now()}));
+ await mount('/create');
+ expect($<HTMLSelectElement>('#new-card-visibility')?.value).toBe('private');
+ await submit();
+ expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({visibility:'private'}),'tok');
 });
