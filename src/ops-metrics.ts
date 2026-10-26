@@ -49,7 +49,7 @@ const METRICS = {
     name: "hearthroom_blog_operations_total",
     help: "Official blog: saves, publishing, pinning, comment switch, restores, column changes, image uploads and reader likes.",
     label: "operation",
-    operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image", "like", "unlike"],
+    operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image", "like", "unlike", "translation"],
     outcomes: ["success", "denied", "error"],
   },
   campaign: {
@@ -113,6 +113,8 @@ export async function opsMetrics(db: D1Database): Promise<string> {
       }
     }
   }
+  const ungrouped=await db.prepare("SELECT COUNT(*) AS n FROM blog_posts WHERE translation_group_id IS NULL").first<{n:number}>();
+  out.push("# HELP hearthroom_blog_ungrouped_posts Posts pending translation-group backfill.","# TYPE hearthroom_blog_ungrouped_posts gauge",`hearthroom_blog_ungrouped_posts ${ungrouped?.n??0}`);
   const pending=await db.prepare("SELECT count(*) AS n FROM (SELECT operation_id FROM visibility_operations WHERE state IN ('intent','pending') UNION SELECT coalesce(sync_operation_id,work_id) FROM managed_work_access WHERE sync_state='changing' OR moderation_revision>confirmed_moderation_revision)").first<{n:number}>();
   out.push('# HELP hearthroom_visibility_pending_operations Work projections awaiting confirmed Provider state.',
     '# TYPE hearthroom_visibility_pending_operations gauge',`hearthroom_visibility_pending_operations ${pending?.n??0}`);

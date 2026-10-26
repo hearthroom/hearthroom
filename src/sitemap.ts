@@ -12,7 +12,7 @@ const prefix = (l: string) => (l === "zh-Hant" ? "" : `/${l}`);
 /** 一份 sitemap 的上限是五萬個網址；文章遠少於此，這裡只是防呆 */
 const POST_LIMIT = 5000;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const entry = (loc: string, lastmod?: number | null) => `<url><loc>${esc(loc)}</loc>${lastmod ? `<lastmod>${new Date(lastmod).toISOString()}</lastmod>` : ""}</url>`;
+const entry = (loc: string, lastmod?: number | null, translations: Post[] = []) => `<url><loc>${esc(loc)}</loc>${lastmod ? `<lastmod>${new Date(lastmod).toISOString()}</lastmod>` : ""}${translations.map(p=>`<xhtml:link rel="alternate" hreflang="${p.locale}" href="${esc(blogUrl(p.locale,p.columnSlug,p.slug))}"/>`).join("")}</url>`;
 
 export async function sitemapXml(db: D1Database, now: number): Promise<string> {
   const [tree, posts, campaigns] = await Promise.all([columnTree(db, { admin: false }), recentPosts(db, now, POST_LIMIT), listCampaigns(db, { includeDraft: false })]);
@@ -26,7 +26,7 @@ export async function sitemapXml(db: D1Database, now: number): Promise<string> {
       for (const c of g.columns) out.push(entry(blogUrl(l, c.slug), newest((p) => matchesBlogLocale(p, l) && p.columnSlug === c.slug)));
     }
   }
-  for (const p of posts) out.push(entry(blogUrl(p.locale, p.columnSlug, p.slug), p.contentUpdatedAt));
+  for (const p of posts) out.push(entry(blogUrl(p.locale, p.columnSlug, p.slug), p.contentUpdatedAt, posts.filter(q=>q.translationGroupId===p.translationGroupId)));
   for (const c of campaigns) out.push(entry(`${origin}/campaign/${encodeURIComponent(c.slug)}`, c.updatedAt));
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${out.join("")}</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${out.join("")}</urlset>\n`;
 }

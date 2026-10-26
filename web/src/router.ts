@@ -74,8 +74,8 @@ const pages: RouteRecordRaw[] = [
     beforeEnter: async (to) => {
       try {
         const { resolveShortLink } = await import("./lib/blog");
-        const { column, slug } = await resolveShortLink(String(to.params.id));
-        return { path: withLocale(`/blog/${column}/${slug}`, localeOf(to)), query: to.query, hash: to.hash, replace: true };
+        const { column, slug,locale:contentLocale } = await resolveShortLink(String(to.params.id));
+        return { path: withLocale(`/blog/${column}/${slug}`, contentLocale ?? localeOf(to)), query: to.query, hash: to.hash, replace: true };
       } catch {
         return true;
       }

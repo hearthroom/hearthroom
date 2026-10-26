@@ -18,7 +18,10 @@ function switchTo(code: string) {
   if (code === current.value) return;
   track("locale_switch", { subject: code });
   const bare = current.value === SOURCE_LOCALE ? route.path : route.path.replace(`/${current.value}`, "") || "/";
-  router.push({ path: withLocale(bare, code), query: route.query });
+  const query={...route.query};
+  if (/^\/blog\/(?!g\/|p\/)[^/]+\/[^/]+\/?$/.test(bare) && !query.preview) query.articleLang=code;
+  else delete query.articleLang;
+  router.push({ path: withLocale(bare, code), query });
 }
 
 function onDocClick(e: MouseEvent) {

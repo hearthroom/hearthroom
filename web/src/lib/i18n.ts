@@ -101,8 +101,8 @@ export async function applyLocale(code: string): Promise<void> {
  */
 export function updateHreflang(bareePath: string): void {
   const head = document.head;
-  head.querySelectorAll("link[data-hreflang]").forEach((el) => el.remove());
-  // 文章是單一語言，沒有翻譯關聯；同 slug 的其他 UI 語言不代表翻譯版本。
+  head.querySelectorAll("link[hreflang]").forEach((el) => el.remove());
+  // Article alternates come from the public translation group after its request resolves.
   if (/^\/blog\/(?!g\/)[^/]+\/[^/]+\/?$/.test(bareePath)) return;
   const add = (hreflang: string, path: string) => {
     const link = document.createElement("link");

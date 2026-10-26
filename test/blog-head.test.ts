@@ -127,9 +127,9 @@ describe("部落格分享資訊", () => {
 });
 
 describe("短網址與停用欄目", () => {
-  it("/blog/p/:id：公開文章 302 到 canonical（保留語言前綴）；草稿與未到時間 404＋noindex", async () => {
+  it("/blog/p/:id：公開文章 302 到 canonical（正文語言前綴）；草稿與未到時間 404＋noindex", async () => {
     const live = await post({ slug: "live", locale: "en" }, 1000);
-    for (const [path, to] of [[`/blog/p/${live.id}`, "/blog/news/live"], [`/en/blog/p/${live.id}`, "/en/blog/news/live"], [`/ja/blog/p/${live.id}`, "/ja/blog/news/live"]] as const) {
+    for (const [path, to] of [[`/blog/p/${live.id}`, "/en/blog/news/live"], [`/en/blog/p/${live.id}`, "/en/blog/news/live"], [`/ja/blog/p/${live.id}`, "/en/blog/news/live"]] as const) {
       const ctx = createExecutionContext();
       const res = await worker.fetch(new Request(`https://c.test${path}`, { redirect: "manual" }), testEnv, ctx);
       await waitOnExecutionContext(ctx);

@@ -141,7 +141,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 <template>
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
-  <header v-if="!route.meta.bare" class="header">
+  <header v-if="!route.meta.bare" class="header" :lang="locale">
     <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely || reviewerStore.blogWriter, 'header__inner--signal': showRouteSignal }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
         <!-- 看板娘蘇綺的頭像（docs/design/hearthroom-mascot）；固定配色，不跟主題換色 -->
@@ -219,7 +219,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
     連結分組放在 lib/footer-nav.ts：新入口先決定屬於哪一組，不再往同一排後面接。
   -->
-  <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">
+  <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer" :lang="locale">
     <div class="footer__inner">
       <div class="footer__about">
         <p class="footer__name">{{ footerName }}</p>

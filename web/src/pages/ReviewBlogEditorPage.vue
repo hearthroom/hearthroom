@@ -14,14 +14,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
-  allColumns, AUTOSAVE_MS, columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
+  changeTranslation,fetchTranslationGroups,type TranslationGroup,allColumns, AUTOSAVE_MS, columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
   restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogGroup, type PostInput, type Revision, type StateChange, suggestSlug,
 } from '@/lib/blog';
 import MarkdownToolbar from '@/components/MarkdownToolbar.vue';
 import { ApiError } from '@/lib/api';
 import { applyMarkdown, type MarkdownAction } from '@/lib/markdown-edit';
 import { fetchCampaigns, localized, type Campaign } from '@/lib/campaign';
-import { confirmDialog } from '@/lib/confirm';
+import { BLOG_PINNED_LIMIT,BLOG_HOME_FRESH_DAYS,BLOG_HOME_LIMIT } from '../../../shared/blog';
+import { confirmDialog,confirmForm } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
 import { LOCALES, pageTitle } from '@/lib/i18n';
 import { renderDoc } from '@/lib/markdown-toc';
@@ -101,6 +102,49 @@ const saveState = computed(() => {
 const localeLabel = (code: string) => LOCALES.find((l) => l.code === code)?.label ?? code;
 const message = (e: unknown, fallback = 'moderation.error.retry') => (e instanceof Error ? e.message : t(fallback));
 
+const translationSource=ref<AdminPost|null>(null);
+const translationLanguage=ref('en');
+const versions=computed(()=>post.value?.translations??[]);
+const urlLocked=computed(()=>!!post.value&&(post.value.wasPublic===true||(post.value.status==='published'&&post.value.publishAt!==null&&post.value.publishAt<=Date.now())));
+const sourceLocked=computed(()=>versions.value.length>1&&post.value?.locale===post.value?.sourceLocale);
+const columnLocked=computed(()=>urlLocked.value||versions.value.length>1||!!translationSource.value);
+const canDetach=computed(()=>versions.value.length>1&&post.value?.locale!==post.value?.sourceLocale);
+const linkConflict=ref(false);
+
+async function startTranslation(){
+ const p=post.value;if(!p||busy.value||saving.value)return;
+ const existing=versions.value.find(v=>v.locale===translationLanguage.value);
+ if(existing){await router.push(lp(`/review/blog/${existing.id}`));return;}
+ const original=versions.value.find(v=>v.locale===p.sourceLocale);
+ await router.push({path:lp('/review/blog/new'),query:{translationOf:original?.id??p.id,language:translationLanguage.value}});
+}
+async function changeLink(detach=false){
+ if(!post.value||busy.value||saving.value||uploading.value)return;
+ busy.value=true;error.value='';linkConflict.value=false;
+ try{
+  if(dirty.value){busy.value=false;await save();busy.value=true;if(dirty.value||conflict.value||error.value)return;}
+  const p=post.value!;let target:TranslationGroup|undefined;
+  if(!detach){
+   const result=await confirmForm({title:t('blog.admin.chooseTranslationOf'),message:t('blog.admin.translationOfHint'),confirmText:t('blog.admin.attachTranslation'),cancelText:t('blog.admin.keepTranslationLink'),field:{label:t('blog.admin.searchTranslationOf'),hint:t('blog.admin.translationCandidatesHint',{language:localeLabel(p.locale)}),lookup:async(query)=>{
+    const res=await fetchTranslationGroups(await token(),{page:1,query,column:p.columnId,missingLocale:p.locale});
+    candidates=res.items.filter(g=>g.id!==p.translationGroupId);return candidates.map(g=>({id:g.id,label:g.title,description:g.versions.map(v=>`${localeLabel(v.locale)} · ${t(`blog.admin.status.${displayStatus(v)}`)}`).join(' / ')}));
+   }}});
+   if(!result?.id)return;target=candidates.find(g=>g.id===result.id);if(!target)return;
+  }
+  const detail=detach?p.title:`${p.title} (${localeLabel(p.locale)}) → ${target!.title}\n${target!.versions.map(v=>`${localeLabel(v.locale)} · ${t(`blog.admin.status.${displayStatus(v)}`)}`).join(' / ')}`;
+  if(!await confirmDialog({title:t(detach?'blog.admin.detachTranslationTitle':'blog.admin.attachTranslation'),message:t(detach?'blog.admin.detachTranslationHint':'blog.admin.translationLinkHint'),detail,confirmText:t(detach?'blog.admin.detachTranslation':'blog.admin.attachTranslation'),cancelText:t(detach?'blog.admin.keepAsTranslation':'blog.admin.keepTranslationLink'),focusCancel:true}))return;
+  const input={expectedVersion:p.version,expectedGroupVersion:p.groupVersion??0,targetPostId:target?.versions.find(v=>v.locale===target?.sourceLocale)?.id??null,...(target?{expectedTargetGroupVersion:target.version}:{})};
+  const key=`translation:${JSON.stringify(input)}`;
+  const res=await changeTranslation(await token(),p.id,input,opFor(key));ops.delete(key);
+  if(res.version!==p.version+1||JSON.stringify(fromPost(res))!==JSON.stringify(fromPost(p)))holdBase(p,res);else post.value=res;
+  done.value=t(detach?'blog.admin.detachTranslation':'blog.admin.translationLinked');
+ }catch(e){
+  if(e instanceof ApiError&&/^blog_translation_/.test(e.code)){linkConflict.value=true;error.value=e.code==='blog_translation_locale_taken'?t('blog.admin.translationConflict',{language:localeLabel(draft.locale)}):t('blog.admin.translationGroupChanged');}
+  else error.value=message(e);
+ }finally{busy.value=false;}
+}
+let candidates:TranslationGroup[]=[];
+
 const ops = new Map<string, string>();
 const opFor = (key: string) => { let id = ops.get(key); if (!id) { id = crypto.randomUUID(); ops.set(key, id); } return id; };
 
@@ -126,14 +170,17 @@ function toLocalInput(ms: number) {
   return d.toISOString().slice(0, 16);
 }
 
+let loadGeneration=0;
 async function load() {
-  loading.value = true; error.value = ''; previewUrl.value = ''; opened.value = null;
+  const gen=++loadGeneration;
+  loading.value = true; error.value = ''; previewUrl.value = ''; opened.value = null;translationSource.value=null;
   try {
     const access = await token();
     const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
     const [cols, p, revs, camps] = await Promise.all([
       fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null, fetchCampaigns(access).catch(() => null),
     ]);
+    if(gen!==loadGeneration)return;
     groups.value = cols.items;
     campaigns.value = camps?.items ?? [];
     revisions.value = revs?.items ?? [];
@@ -145,9 +192,19 @@ async function load() {
       const pre = typeof q === 'string' && allColumns(cols.items).some((c) => c.id === q) ? q : '';
       Object.assign(draft, empty(), { columnId: pre });
       saved.value = JSON.stringify(draft);
-      slugTouched.value = false;
+      const sourceId=typeof route.query.translationOf==='string'?route.query.translationOf:'';
+      if(sourceId){
+        const original=await fetchAdminPost(access,sourceId);
+        if(gen!==loadGeneration)return;
+        const language=typeof route.query.language==='string'&&POST_LOCALES.includes(route.query.language as typeof POST_LOCALES[number])?route.query.language:'en';
+        const existing=original.translations?.find(v=>v.locale===language);
+        if(existing){await router.replace(lp(`/review/blog/${existing.id}`));return;}
+        translationSource.value=original;
+        Object.assign(draft,fromPost(original),{locale:language,slug:`${original.slug.slice(0,65)}-${language.toLowerCase()}`});
+      }
+      slugTouched.value = !!translationSource.value;
     }
-  } catch (e) { error.value = message(e, 'state.loadFailed'); } finally { loading.value = false; }
+  } catch (e) { if(gen===loadGeneration)error.value = message(e, 'state.loadFailed'); } finally { if(gen===loadGeneration)loading.value = false; }
 }
 async function loadRevisions() {
   if (!post.value) return;
@@ -156,12 +213,12 @@ async function loadRevisions() {
 
 // 網址代號跟著標題走：自動儲存早早就把新文章建起來，所以不能只看「還沒存過」；
 // 改過網址代號、或文章發布過（網址已經對外）就不再跟
-watch(() => draft.title, (title) => { if (!slugTouched.value && !post.value?.firstPublishedAt) draft.slug = title.trim() ? suggestSlug(title) : ''; });
+watch(() => draft.title, (title) => { if (!slugTouched.value && !urlLocked.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
 /** 回應帶著別人存的內容時，只收狀態、版本號留在原處並標成衝突：下一次存檔會被擋下，不會蓋掉別人的修改。 */
 function holdBase(prev: AdminPost, res: AdminPost) {
-  const { status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } = res;
-  post.value = { ...prev, status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId };
+  const { status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId,wasPublic,translations,translationGroupId,groupVersion,sourceLocale } = res;
+  post.value = { ...prev, status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId,wasPublic,translations,translationGroupId,groupVersion,sourceLocale };
   conflict.value = true;
 }
 
@@ -175,7 +232,7 @@ function save(opts: { auto?: boolean } = {}): Promise<void> {
   return inflight;
 }
 async function doSave(opts: { auto?: boolean }) {
-  const input = toInput(draft);
+  const input = {...toInput(draft),...(!post.value&&translationSource.value?{translationOfPostId:translationSource.value.id,expectedTranslationGroupVersion:translationSource.value.groupVersion}:{})};
   const sent = JSON.stringify(draft);
   const key = `save:${JSON.stringify(input)}`;
   saving.value = true; error.value = ''; done.value = '';
@@ -186,7 +243,7 @@ async function doSave(opts: { auto?: boolean }) {
     // 重送被認成同一次時，回來的可能是別人較新的版本；存檔途中我又打了字的話，不拿它當基準（見 holdBase）
     if (res.version !== (p?.version ?? 0) + 1 && JSON.stringify(draft) !== sent) holdBase(p ?? { ...res, version: 0 }, res);
     else {
-      post.value = res;
+      post.value = res;translationSource.value=null;
       saved.value = JSON.stringify(fromPost(res));
       // 存檔途中又打了字：留著，那些仍是沒存的修改
       if (JSON.stringify(draft) === sent) Object.assign(draft, fromPost(res));
@@ -282,7 +339,7 @@ function openSchedule() {
 const primary = () => (live.value ? update() : publish());
 const primaryLabel = computed(() => (live.value ? t('blog.admin.update') : scheduleAt.value ? t('blog.admin.schedule') : t('blog.admin.publish')));
 const unpublish = () => { closeMenu(); return change({ status: 'unpublished' }, t('blog.admin.unpublish'), t('blog.admin.unpublishConfirm'), true); };
-const pin = (on: boolean) => change({ pinned: on }, t(on ? 'blog.admin.pin' : 'blog.admin.unpin'), t(on ? 'blog.admin.pinConfirm' : 'blog.admin.unpinConfirm'));
+const pin = (on: boolean) => change({ pinned: on }, t(on ? 'blog.admin.pin' : 'blog.admin.unpin'), on?`${t('blog.admin.translationPinHint',{pinnedLimit:BLOG_PINNED_LIMIT},BLOG_PINNED_LIMIT)} ${t('blog.admin.translationCarouselHint',{freshDays:BLOG_HOME_FRESH_DAYS,carouselLimit:BLOG_HOME_LIMIT},BLOG_HOME_FRESH_DAYS)}`:t('blog.admin.translationUnpinHint'));
 const comments = (close: boolean) => change({ commentsClosed: close }, t(close ? 'blog.admin.closeComments' : 'blog.admin.openComments'), t(close ? 'blog.admin.closeCommentsConfirm' : 'blog.admin.openCommentsConfirm'), close);
 
 async function makePreview() {
@@ -399,7 +456,7 @@ function onSourceKey(e: KeyboardEvent) {
 
 // ---- 自動儲存：只對草稿與已撤下的文章，停手 AUTOSAVE_MS 後存。公開或排程中的不自動存，免得半成品直接上線 ----
 
-const autosaves = computed(() => !post.value || post.value.status === 'draft' || post.value.status === 'unpublished');
+const autosaves = computed(() => !translationSource.value&&(!post.value || post.value.status === 'draft' || post.value.status === 'unpublished'));
 let autoTimer: ReturnType<typeof setTimeout> | undefined;
 /** 伺服器拒收的那一份內容：沒改過就不再自動送 */
 let refusedDraft = '';
@@ -436,9 +493,9 @@ onMounted(() => {
   window.addEventListener('keydown', onKey);
   void load();
 });
-onBeforeUnmount(() => { window.removeEventListener('beforeunload', guard); window.removeEventListener('keydown', onKey); });
+onBeforeUnmount(() => { loadGeneration++;window.removeEventListener('beforeunload', guard); window.removeEventListener('keydown', onKey); });
 // 新文章第一次存好會換到它自己的網址：那一篇已經在編輯器裡，不必重讀
-watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.path) && (!id || id !== post.value?.id)) void load(); });
+watch(() => [route.params.id,route.query.translationOf,route.query.language], ([id]) => { if (/\/review\/blog\/[^/]+$/.test(route.path) && (!id || id !== post.value?.id)) void load(); });
 </script>
 
 <template>
@@ -483,6 +540,8 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         <button type="button" class="btn btn--sm" data-action="copy-mine" @click="copy(draft.bodyMd, 'blog.admin.copied')">{{ t('blog.admin.copyMine') }}</button>
       </span>
     </div>
+    <button v-if="linkConflict" type="button" class="btn btn--sm" @click="changeLink()">{{ t('blog.admin.reselectTranslationOf') }}</button>
+    <p v-if="translationSource" class="notice">{{ t('blog.admin.translationDraftHint') }}</p>
     <p v-if="!loading && !columns.length" class="notice">{{ t('blog.admin.needColumn') }}</p>
 
     <div class="bed-body">
@@ -512,7 +571,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         </div>
         <label class="field" :class="{ 'field--invalid': isMissing('columnId') }">
           <span>{{ t('blog.admin.column') }} <small class="subtle">{{ t('blog.admin.required') }}</small></span>
-          <select id="bed-f-columnId" v-model="draft.columnId" class="input" :aria-invalid="isMissing('columnId') || undefined">
+          <select id="bed-f-columnId" v-model="draft.columnId" :disabled="columnLocked" class="input" :aria-invalid="isMissing('columnId') || undefined">
             <option value="" disabled>{{ t('blog.admin.column') }}</option>
             <optgroup v-for="g in groups" :key="g.id" :label="columnName(g, String(locale))">
               <option v-for="c in g.columns" :key="c.id" :value="c.id">{{ columnName(c, String(locale)) }}{{ c.enabled && g.enabled ? '' : ` (${t('blog.admin.hidden')})` }}</option>
@@ -526,15 +585,32 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         </label>
         <label class="field" :class="{ 'field--invalid': isMissing('slug') }">
           <span>{{ t('blog.admin.slug') }} <small class="subtle">{{ t('blog.admin.required') }}</small></span>
-          <input id="bed-f-slug" v-model="draft.slug" class="input" maxlength="80" pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" :aria-invalid="isMissing('slug') || undefined" @input="slugTouched = true" />
+          <input id="bed-f-slug" v-model="draft.slug" :disabled="urlLocked" class="input" maxlength="80" pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" :aria-invalid="isMissing('slug') || undefined" @input="slugTouched = true" />
           <span class="subtle">{{ t('blog.admin.slugHint') }}</span>
         </label>
         <label class="field">
           <span>{{ t('blog.admin.locale') }}</span>
-          <select v-model="draft.locale" class="input">
+          <select v-model="draft.locale" class="input" :disabled="urlLocked || sourceLocked || !!translationSource">
             <option v-for="l in POST_LOCALES" :key="l" :value="l">{{ localeLabel(l) }}</option>
           </select>
         </label>
+        <p v-if="urlLocked" class="subtle">{{ t('blog.admin.permalinkLocked') }}</p>
+        <p v-else-if="sourceLocked" class="subtle">{{ t('blog.admin.sourceLanguageLocked') }}</p>
+        <p v-if="columnLocked && !urlLocked" class="subtle">{{ t('blog.admin.translationColumnHint') }}</p>
+        <details v-if="post" class="bed-versions" open>
+          <summary>{{ t('blog.admin.languageVersions') }}</summary>
+          <p class="subtle">{{ t('blog.admin.translationPublishHint') }}</p>
+          <nav :aria-label="t('blog.admin.languageVersions')" class="bed-version-list">
+            <RouterLink v-for="v in versions" :key="v.id" :to="lp(`/review/blog/${v.id}`)" class="btn btn--sm" :aria-current="v.id===post.id?'page':undefined">{{ localeLabel(v.locale) }} · {{ t(`blog.admin.status.${displayStatus(v)}`) }}<span v-if="v.locale===post.sourceLocale"> · {{ t('blog.admin.sourceVersion') }}</span></RouterLink>
+          </nav>
+          <label class="field"><span>{{ t('blog.admin.translationLanguage') }}</span><select v-model="translationLanguage" class="input"><option v-for="l in POST_LOCALES" :key="l" :value="l">{{ localeLabel(l) }}</option></select></label>
+          <p v-if="versions.some(v=>v.locale===translationLanguage)" class="subtle">{{ t('blog.admin.translationExists',{language:localeLabel(translationLanguage)}) }}</p>
+          <button type="button" class="btn btn--sm" data-action="new-translation" :disabled="busy || saving" @click="startTranslation">{{ t(versions.some(v=>v.locale===translationLanguage)?'blog.admin.openTranslation':'blog.admin.startTranslation') }}</button>
+          <details><summary>{{ t('blog.admin.translationOf') }}</summary><p class="subtle">{{ t('blog.admin.translationOfHint') }}</p>
+            <button type="button" class="btn btn--sm" :disabled="busy || saving || sourceLocked" @click="changeLink()">{{ t('blog.admin.chooseTranslationOf') }}</button>
+            <button v-if="canDetach" type="button" class="btn btn--sm btn--ghost" :disabled="busy || saving" @click="changeLink(true)">{{ t('blog.admin.detachTranslation') }}</button>
+          </details>
+        </details>
         <label class="field">
           <span>{{ t('blog.admin.excerpt') }} <small class="subtle">{{ draft.excerpt.length }}/300</small></span>
           <textarea autocomplete="off" v-model="draft.excerpt" class="input" rows="3" maxlength="300" />
@@ -625,6 +701,9 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
 </template>
 
 <style scoped>
+.bed-versions { display:grid;gap:var(--s-2);min-width:0; }
+.bed-version-list { display:flex;flex-wrap:wrap;gap:var(--s-2);margin-block:var(--s-2); }
+.bed-version-list .btn { white-space:normal;text-align:start;overflow-wrap:anywhere;max-width:100%;height:auto;min-height:var(--h-sm); }
 .bed { display: grid; gap: var(--s-3); min-width: 0; }
 .bed-top { position: sticky; top: var(--header-h); z-index: 20; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-2) 0; background: var(--bg); }
 .bed-top__spacer { flex: 1; }

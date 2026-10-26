@@ -1969,7 +1969,7 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   if (column === "p" && slug) {
     const target = await publicPostById(c.env.DB, slug, Date.now());
     if (target) {
-      const res = c.redirect(`${m[1] ? `/${m[1]}` : ""}/blog/${encodeURIComponent(target.column)}/${encodeURIComponent(target.slug)}`, 302);
+      const res = c.redirect(`${target.locale === "zh-Hant" ? "" : `/${target.locale}`}/blog/${encodeURIComponent(target.column)}/${encodeURIComponent(target.slug)}`, 302);
       res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
       return res;
     }
@@ -1981,7 +1981,7 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   // 分組頁 /blog/g/<分組>：分組不是文章，不走 postMeta
   const meta = column === null || slug === null ? null
     : column === "g" && slug ? await blogIndexMeta(c.env.DB, locale, { group: slug }, blogGroupUrl(locale, slug))
-    : column && slug ? await postMeta(c.env.DB, column, slug, Date.now())
+    : column && slug ? await postMeta(c.env.DB, column, slug, Date.now(),locale,url.searchParams.get("articleLang") ?? undefined)
     : await blogIndexMeta(c.env.DB, locale, { column }, blogUrl(locale, column));
   if (!meta) {
     const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));

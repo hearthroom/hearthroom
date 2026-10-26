@@ -11,8 +11,8 @@ import BlogColumnDialog from '@/components/BlogColumnDialog.vue';
 import BlogColumnTree from '@/components/BlogColumnTree.vue';
 import { ApiError } from '@/lib/api';
 import {
-  allColumns, columnName, deleteColumn, displayStatus, fetchAdminColumns, fetchAdminPosts, saveColumn,
-  type AdminPostRow, type BlogColumn, type BlogGroup, type TreePick,
+  allColumns, columnName, deleteColumn, displayStatus, fetchAdminColumns, fetchTranslationGroups, saveColumn,
+  type TranslationGroup, type BlogColumn, type BlogGroup, type TreePick,
 } from '@/lib/blog';
 import { confirmDialog } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
@@ -31,7 +31,7 @@ const PAGE = 12;
 const STATUSES = ['', 'draft', 'published', 'unpublished'] as const;
 const status = ref<(typeof STATUSES)[number]>('');
 const page = ref(1);
-const items = ref<AdminPostRow[]>([]);
+const items = ref<TranslationGroup[]>([]);
 const total = ref(0);
 const loading = ref(true);
 const error = ref('');
@@ -93,11 +93,11 @@ const fail = (e: unknown, fallback = 'state.loadFailed') => {
 let generation = 0;
 async function load() {
   const gen = ++generation;
-  loading.value = true; error.value = '';
+  loading.value = true; error.value = '';items.value=[];total.value=0;
   try {
     const p = picked.value;
     const filter = p.kind === 'column' ? { column: p.id } : p.kind === 'group' ? { group: p.id } : {};
-    const res = await fetchAdminPosts(await token(), { status: status.value, page: page.value, ...filter });
+    const res = await fetchTranslationGroups(await token(), { status: status.value, page: page.value, ...filter });
     if (gen !== generation) return;
     items.value = res.items; total.value = res.total;
   } catch (e) { if (gen === generation) fail(e); } finally { if (gen === generation) loading.value = false; }
@@ -201,9 +201,11 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
           <RouterLink v-else-if="empty.action === 'post'" class="btn btn--primary" :to="newPostTo">{{ t('blog.admin.new') }}</RouterLink>
           <button v-else-if="empty.action === 'all'" type="button" class="btn" @click="status = ''">{{ t('blog.admin.showAll') }}</button>
         </div>
-        <RouterLink v-for="p in items" :key="p.id" class="rblog-item" :to="lp(`/review/blog/${p.id}`)" :data-post="p.id">
+        <article v-for="g in items" :key="g.id" class="rblog-group" :data-translation-group="g.id">
+        <details class="rblog-group__fold"><summary class="rblog-group__title">{{ g.title }}<span class="subtle"> · {{ g.versions.map(v=>localeLabel(v.locale)).join(' / ') }}</span></summary>
+        <RouterLink v-for="p in g.versions" :key="p.id" class="rblog-item" :to="lp(`/review/blog/${p.id}`)" :data-post="p.id">
           <div class="rblog-item__head">
-            <span class="rblog-item__title">{{ p.title }}</span>
+            <span class="rblog-item__title">{{ localeLabel(p.locale) }}<span v-if="p.locale===g.sourceLocale" class="subtle"> · {{ t('blog.admin.sourceVersion') }}</span></span>
             <span class="rblog-item__chips">
               <span v-if="p.pinned" class="chip rblog-chip">{{ t('blog.admin.pinned') }}</span>
               <span class="chip rblog-chip" :class="`rblog-chip--${displayStatus(p)}`">{{ t(`blog.admin.status.${displayStatus(p)}`) }}</span>
@@ -213,7 +215,7 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
             {{ nameOf(columns.find((c) => c.id === p.columnId), p.columnSlug) }} · {{ localeLabel(p.locale) }}
             <template v-if="p.publishAt"> · {{ t('blog.admin.publishedAt', { date: dateTime(p.publishAt) }) }}</template>
           </p>
-          <p class="subtle rblog-item__meta">{{ t('blog.admin.lastEdit', { name: p.editorHandle || p.authorHandle, date: dateTime(p.updatedAt) }) }}</p>
+          <p class="subtle rblog-item__meta">{{ t('blog.admin.lastEdit', { name: p.editorHandle || p.authorHandle, date: dateTime(p.updatedAt ?? 0) }) }}</p>
           <p class="rblog-item__stats" data-stats>
             <span :title="t('blog.admin.statViews', { n: fmt(p.viewCount) })"><span class="sr-only">{{ t('blog.admin.statViews', { n: fmt(p.viewCount) }) }}</span>
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg><span aria-hidden="true">{{ fmt(p.viewCount) }}</span>
@@ -226,6 +228,7 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
             </span>
           </p>
         </RouterLink>
+        </details></article>
       </div>
       <div v-if="page > 1 || hasNext" class="rblog-pager">
         <button class="btn btn--sm" :disabled="page === 1 || loading" @click="page--">{{ t('moderation.previous') }}</button>
@@ -239,6 +242,8 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 </template>
 
 <style scoped>
+.rblog-group { min-width:0;border-bottom:1px solid var(--line); }
+.rblog-group__title { margin:0;padding:var(--s-3) var(--s-4);cursor:pointer;font-size:16px;overflow-wrap:anywhere; }
 .rblog { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--s-5); align-items: start; min-width: 0; }
 /* 左欄自己捲動，長樹也用得了；「⋯」選單是固定定位，不會被這裡的 overflow 裁掉 */
 .rblog-side { position: sticky; top: calc(var(--header-h) + var(--s-3)); padding: var(--s-2); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; overscroll-behavior: contain; }

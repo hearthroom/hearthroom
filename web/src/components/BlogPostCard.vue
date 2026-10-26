@@ -3,6 +3,7 @@
  * 部落格列表的一張文章卡：封面、欄目與日期、標題、摘要、閱讀時長。hero 是列表首屏那張大圖。
  * badge 插槽疊在封面左上角；沒填時，關聯了活動的文章顯示活動狀態（未開始／進行中／已結束）。
  */
+import { LOCALES } from "@/lib/i18n";
 import { RouterLink } from "vue-router";
 import { dateOnly, hueFrom } from "@/lib/format";
 import { postPath, type PostCard } from "@/lib/blog";
@@ -11,6 +12,7 @@ import { useLocalePath } from "@/lib/use-locale";
 defineProps<{ post: PostCard; column: string; hero?: boolean }>();
 /** 沒有封面時疊在色塊上的字：欄目名稱，沒有就取標題第一個字。 */
 const monogram = (post: PostCard, column: string) => column || Array.from(post.title)[0] || "";
+const languageName=(code:string)=>LOCALES.find(l=>l.code===code)?.label??code;
 const { lp } = useLocalePath();
 </script>
 
@@ -27,7 +29,8 @@ const { lp } = useLocalePath();
       <div class="post-card__text">
         <p class="post-card__meta">
           <span v-if="column">{{ column }}</span>
-          <span v-if="post.firstPublishedAt">{{ dateOnly(post.firstPublishedAt / 1000) }}</span>
+          <span v-if="post.fallback" :lang="post.locale" :aria-label="$t('blog.contentLanguage',{language:languageName(post.locale)})">{{ languageName(post.locale) }}</span>
+          <span v-if="post.groupPublishedAt ?? post.firstPublishedAt">{{ dateOnly((post.groupPublishedAt ?? post.firstPublishedAt)! / 1000) }}</span>
           <span>{{ $t("blog.readMinutes", { n: post.readMinutes }) }}</span>
         </p>
         <h2 class="post-card__title">{{ post.title }}</h2>

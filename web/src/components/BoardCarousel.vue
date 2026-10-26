@@ -17,6 +17,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
+import { LOCALES } from "@/lib/i18n";
 import type { PostCard } from "@/lib/blog";
 import type { CampaignSummary } from "@/lib/campaign";
 import { track } from "@/lib/track";
@@ -207,7 +208,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
           <img v-if="post.coverUrl" class="carousel__img" :src="post.coverUrl" alt="" decoding="async" />
           <svg v-else class="carousel__mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c1.6 9.6 10.4 18.4 20 20-9.6 1.6-18.4 10.4-20 20-1.6-9.6-10.4-18.4-20-20 9.6-1.6 18.4-10.4 20-20z" /></svg>
           <span class="carousel__body">
-            <span class="carousel__phase carousel__phase--post">{{ postColumn }}</span>
+            <span class="carousel__phase carousel__phase--post">{{ postColumn }}<span v-if="post.fallback" :lang="post.locale"> · {{ LOCALES.find(l=>l.code===post?.locale)?.label ?? post.locale }}</span></span>
             <strong class="carousel__title">{{ post.title }}</strong>
             <span class="btn btn--primary carousel__cta">{{ t("blog.carousel.read") }}</span>
           </span>

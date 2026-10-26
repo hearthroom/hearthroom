@@ -71,7 +71,7 @@ beforeEach(() => {
       ?? (path === '/v1/blog/admin/posts/p1' && method === 'GET' ? ok(post())
         : path === '/v1/blog/admin/columns' ? ok(tree())
           : path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [] })
-            : path === '/v1/blog/admin/posts' ? ok({ total: 0, items: [] })
+            : path === '/v1/blog/admin/translation-groups' ? ok({ total: 0, items: [] })
               : { status: 404, body: { error: 'not_found' } });
     return new Response(JSON.stringify(res.body), { status: res.status });
   }));
@@ -321,7 +321,7 @@ it('restoring a revision says readers see it at once when the post is live, and 
   expect(await restoreMessage(false)).toContain(t('blog.admin.restoreConfirm'));
 });
 
-const postListUrls = () => (fetch as unknown as { mock: { calls: [string][] } }).mock.calls.map((c) => c[0]).filter((u) => u.startsWith('/v1/blog/admin/posts?'));
+const postListUrls = () => (fetch as unknown as { mock: { calls: [string][] } }).mock.calls.map((c) => c[0]).filter((u) => u.startsWith('/v1/blog/admin/translation-groups?'));
 
 it('lists groups and columns with post counts on the left, and filters posts by what is picked', async () => {
   await mount('/review/blog');
@@ -634,7 +634,7 @@ it('leaving while a new post\'s first autosave is in flight does not pull you ba
 it('each post in the list shows its reader counts: views, likes and comments', async () => {
   const row = { id: 'p1', columnId: 'c1', columnSlug: 'news', slug: 'hello', locale: 'zh-Hant', title: '開站了', status: 'published', publishAt: 1, firstPublishedAt: 1,
     pinned: false, commentsClosed: false, version: 3, updatedAt: 1, authorHandle: 'ed', editorHandle: 'ed', viewCount: 1234, likeCount: 5, commentCount: 2 };
-  handle = (c) => (c.path === '/v1/blog/admin/posts' ? ok({ total: 1, items: [row] }) : undefined);
+  handle = (c) => (c.path === '/v1/blog/admin/translation-groups' ? ok({ total: 1, items: [{id:'tg',title:row.title,columnId:row.columnId,sourceLocale:row.locale,version:1,versions:[row]}] }) : undefined);
   await mount('/review/blog');
   await vi.waitFor(() => expect(host.querySelector('[data-post="p1"] [data-stats]')).not.toBeNull());
   const stats = [...host.querySelectorAll('[data-post="p1"] [data-stats] > span')];
@@ -644,4 +644,26 @@ it('each post in the list shows its reader counts: views, likes and comments', a
   expect(stats.map((s) => s.querySelector('.sr-only')!.textContent!.trim())).toEqual([
     t('blog.admin.statViews', { n: fmt(1234) }), t('blog.admin.statLikes', { n: '5' }), t('blog.admin.statComments', { n: '2' }),
   ]);
+});
+it('prefills a new translation without publishing or creating it, then saves into the source group',async()=>{
+ handle=c=>c.path==='/v1/blog/admin/posts'&&c.method==='POST'?ok(post({id:'en1',locale:'en',slug:'hello-en',version:1,translationGroupId:'g',groupVersion:2,sourceLocale:'zh-Hant'})):undefined;
+ await mount('/review/blog/new?translationOf=p1&language=en');await settle();
+ expect(source().value).toBe('舊內容');expect(host.textContent).toContain(t('blog.admin.translationDraftHint'));
+ expect(calls.filter(c=>c.method==='POST')).toHaveLength(0);
+ saveNow();await settle();
+ expect(calls.find(c=>c.method==='POST'&&c.path==='/v1/blog/admin/posts')?.body).toMatchObject({translationOfPostId:'p1',locale:'en'});
+ expect(calls.filter(c=>c.path.endsWith('/state'))).toHaveLength(0);
+});
+it('locks formerly public URL fields after unpublishing',async()=>{
+ handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(post({status:'unpublished',wasPublic:true,translationGroupId:'g',groupVersion:1,sourceLocale:'zh-Hant',translations:[]})):undefined;
+ await mount('/review/blog/p1');await settle();
+ expect(host.querySelector<HTMLInputElement>('#bed-f-slug')?.disabled).toBe(true);
+ expect(host.querySelector<HTMLSelectElement>('#bed-f-columnId')?.disabled).toBe(true);
+ expect(host.textContent).toContain(t('blog.admin.permalinkLocked'));
+});
+it('lists each translation group once, with independent language/status links',async()=>{
+ handle=c=>c.path==='/v1/blog/admin/translation-groups'?ok({total:1,items:[{id:'tg',sourceLocale:'zh-Hant',version:2,title:'同一篇',columnId:'c1',versions:[{...post(),id:'p1'},{...post(),id:'p2',locale:'en',status:'unpublished'}]}]}):undefined;
+ await mount('/review/blog');await settle();
+ expect(host.querySelectorAll('[data-translation-group]')).toHaveLength(1);
+ expect(host.querySelector('a[href="/review/blog/p1"]')).not.toBeNull();expect(host.querySelector('a[href="/review/blog/p2"]')).not.toBeNull();
 });

@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import { clientKind } from "./analytics";
 import {
-  blogLocale, adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug, publicPost,
+  changeTranslation, adminTranslationGroups, blogLocale, optionalBlogLocale, resolveArticleRoute, adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug,
   publicPostById, publicPosts, publicView, recordView, relatedPosts, restoreRevision, saveColumn, savePost, setPostLike, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
@@ -37,6 +37,7 @@ async function operationFor(c: Ctx): Promise<string | null> {
   const { method, path } = c.req;
   if (method === "GET") return null;
   if (/^\/v1\/blog\/admin\/posts(\/[^/]+)?$/.test(path)) return "save";
+  if (path.endsWith("/translation")) return "translation";
   if (path.endsWith("/restore")) return "restore";
   if (path.startsWith("/v1/blog/admin/columns")) return "column";
   if (path === "/v1/blog/admin/images") return "image";
@@ -90,12 +91,14 @@ blogRoutes.get("/v1/blog/posts/:column/:slug", async (c) => {
   const now = Date.now();
   const { column, slug } = c.req.param();
   const token = c.req.query("preview");
-  const post = (token ? await previewed(c, token, column, slug, now) : null) ?? (await publicPost(c.env.DB, column, slug, now));
+  const preview = token ? await previewed(c, token, column, slug, now) : null;
+  const resolved = preview ? null : await resolveArticleRoute(c.env.DB,{columnSlug:column,slug,now,viewerLocale:blogLocale(c.req.query("locale")),preferredLocale:optionalBlogLocale(c.req.query("preferredLocale"))});
+  const post = preview ?? resolved?.post;
   const headers = token ? { "Cache-Control": PRIVATE } : PUBLIC;
   if (!post) return c.json({ error: "blog_post_not_found" }, 404, headers);
   const locale = blogLocale(c.req.query("locale") ?? post.locale);
   const [adjacent, related, view] = await Promise.all([adjacentPosts(c.env.DB, post, now, locale), relatedPosts(c.env.DB, post, now, 3, locale), publicView(c.env.DB, post, now)]);
-  return c.json({ post: view, adjacent, related }, 200, headers);
+  return c.json({ post: view, adjacent, related, translations:resolved?.translations ?? [], resolution:resolved?.resolution ?? null }, 200, headers);
 });
 
 blogRoutes.get("/v1/blog/p/:id", async (c) => {
@@ -148,6 +151,15 @@ blogRoutes.get("/v1/blog/images/:file", async (c) => {
 });
 
 // ---- 管理 ---------------------------------------------------------------------
+
+blogRoutes.get("/v1/blog/admin/translation-groups", async(c)=>{
+  await writer(c);
+  return c.json(await adminTranslationGroups(c.env.DB,{page:page(c),query:c.req.query("query"),column:c.req.query("column"),group:c.req.query("group"),status:c.req.query("status"),missingLocale:c.req.query("missingLocale")}));
+});
+blogRoutes.put("/v1/blog/admin/posts/:id/translation",async(c)=>{
+ const actor=await writer(c);const {operationId,...input}=await bodyOf(c);
+ return admin(c,await changeTranslation(c.env.DB,c.req.param("id"),input as Parameters<typeof changeTranslation>[2],actor,operationOf(operationId),Date.now()));
+});
 
 blogRoutes.get("/v1/blog/admin/posts", async (c) => {
   await writer(c);

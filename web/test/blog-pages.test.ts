@@ -155,7 +155,7 @@ it("records reaching the end once, and a copied link as a share", async () => {
   expect(tracked.filter((e) => e.event === "blog_read_end")).toEqual([{ event: "blog_read_end", data: { subject: "hello" } }]);
   [...root.querySelectorAll("button")].find((b) => b.textContent?.trim() === t("blog.copyLink"))!.click();
   await vi.waitFor(() => expect(tracked).toContainEqual({ event: "blog_share", data: { detail: "share_clipboard", subject: "hello" } }));
-  expect(writeText).toHaveBeenCalledWith(`${location.origin}/blog/news/hello`);
+  expect(writeText).toHaveBeenCalledWith(`https://sukisuki.ai/blog/news/hello`);
   expect(root.textContent).toContain(t("blog.copied"));
 });
 
@@ -227,4 +227,13 @@ it.each([
   expect(root.querySelector('[role="alert"]')).not.toBeNull();
   expect(root.querySelectorAll(".post-card")).toHaveLength(0);
   expect(root.textContent).not.toContain("標題 old-item");
+});
+it("shows real language versions and fallback reason, canonical metadata and no stale article during retry",async()=>{
+ const dto={...post(),translations:[{id:'p9',locale:'zh-Hant',columnSlug:'news',slug:'hello',canonicalUrl:'https://sukisuki.ai/blog/news/hello'},{id:'en',locale:'en',columnSlug:'news',slug:'english-title',canonicalUrl:'https://sukisuki.ai/en/blog/news/english-title'}],resolution:{requestedContentLocale:'ja',contentLocale:'zh-Hant',reason:'preferred_missing'}};
+ routes['/v1/blog/posts/news/hello']=dto;
+ const root=await mount(BlogPostPage,'/blog/news/hello?articleLang=ja','/blog/:column/:slug');
+ expect(fetched.some(u=>u.includes('preferredLocale=ja'))).toBe(true);
+ expect(root.querySelector('a[hreflang=en]')?.getAttribute('href')).toBe('/en/blog/news/english-title');
+ expect(root.textContent).toContain(t('blog.languageFallback',{requestedLanguage:'日本語',language:'繁體中文'}));
+ expect(document.head.querySelector('link[rel=canonical]')?.getAttribute('href')).toBe('https://sukisuki.ai/blog/news/hello');
 });

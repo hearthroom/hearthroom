@@ -79,7 +79,7 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', onKey); restore?
         </fieldset>
         <label class="field">
           <span>{{ t('blog.admin.slug') }}</span>
-          <input v-model="form.slug" class="input" maxlength="40" required pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" data-field="slug" />
+          <input v-model="form.slug" :disabled="initial?.permalinkLocked" class="input" maxlength="40" required pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" data-field="slug" />
           <span class="subtle">{{ t('blog.admin.slugHint') }}</span>
         </label>
         <details class="bcd-more">

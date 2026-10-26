@@ -30,6 +30,7 @@ export interface PageMeta {
    * 跟分享預覽圖分開：預覽圖是給抓取器的 1.91:1，不是頁面上畫的那張。
    */
   preload?: string;
+  alternates?: {lang:string;url:string}[];
 }
 
 const esc = (s: string) =>
@@ -101,6 +102,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
   const description = oneLine(meta.description);
   const tags = [
     `<link rel="canonical" href="${esc(meta.url)}">`,
+    ...(meta.alternates ?? []).map(a=>`<link rel="alternate" hreflang="${esc(a.lang)}" href="${esc(a.url)}">`),
     `<meta property="og:type" content="${meta.type}">`,
     `<meta property="og:title" content="${esc(meta.title)}">`,
     `<meta property="og:description" content="${esc(description)}">`,
@@ -118,6 +120,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
   ].filter(Boolean).join("");
 
   const res = stripShareTags(new HTMLRewriter())
+    .on('link[rel="canonical"],link[hreflang]', { element:e=>{e.remove();} })
     .on("html", { element: (e) => { e.setAttribute("lang", meta.lang); } })
     .on("title", { element: (e) => { e.setInnerContent(meta.title); } })
     .on('meta[name="description"]', { element: (e) => { e.setAttribute("content", description); } })

@@ -162,7 +162,7 @@ describe("文章生命週期", () => {
     const p = await newPost();
     expect((await call(`/v1/blog/p/${p.id}`)).status).toBe(404);
     await state(p.id, { status: "published" });
-    expect(await json(await call(`/v1/blog/p/${p.id}`))).toEqual({ column: "news", slug: "hello" });
+    expect(await json(await call(`/v1/blog/p/${p.id}`))).toEqual({ column: "news", slug: "hello",locale:"zh-Hant" });
   });
 
   it("稽核：發布、撤下、置頂、關閉留言各一筆，都是 human", async () => {

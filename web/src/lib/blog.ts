@@ -2,16 +2,17 @@
  * 官方部落格的公開讀取（/v1/blog）與後台管理（/v1/blog/admin）。形狀照 src/blog-routes.ts：公開的作者一律是官方，不帶成員 id。
  * 留言不在這裡：留言面板用 api.ts 的留言函式，傳 { postId } 就掛到文章上。
  */
+import { BLOG_HOME_FRESH_DAYS } from "../../../shared/blog";
 import { ApiError, describeApiError } from "./api";
 import { COMMUNITY_API } from "./config";
-import { i18n } from "./i18n";
+import { i18n,LOCALES } from "./i18n";
 import { currentProvider } from "./provider";
 import { currentSurface } from "./track";
 
 /** 欄目名稱的多語文字，鍵是 zh-Hant／zh-Hans／en／ja／ko。 */
 export type Localized = Partial<Record<string, string>>;
 /** 分組與欄目同一種形狀：parentId 是 null 的是分組。postCount 只有管理端的樹才有。 */
-export interface BlogColumn { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null; postCount?: number }
+export interface BlogColumn { permalinkLocked?:boolean; id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null; postCount?: number }
 export interface BlogGroup extends BlogColumn { columns: BlogColumn[] }
 /** 後台左欄選了什麼 */
 export type TreePick = { kind: "all" } | { kind: "group" | "column"; id: string };
@@ -24,13 +25,16 @@ export interface CampaignBrief {
 }
 export interface PostCard {
   id: string; columnSlug: string; slug: string; title: string; excerpt: string; coverUrl: string | null; locale: string;
+  translationGroupId?: string; sourceLocale?: string; fallback?: boolean; groupPublishedAt?: number | null;
   firstPublishedAt: number | null; pinned: boolean; readMinutes: number; commentCount: number; campaign: CampaignBrief | null;
 }
 export interface BlogPost extends Omit<PostCard, "commentCount"> {
   columnId: string; bodyMd: string; status: string; publishAt: number | null; commentsClosed: boolean; pinnedCommentId: string | null;
   createdAt: number; updatedAt: number; contentUpdatedAt: number; official: true;
+  shareTitle?: string|null;shareDescription?: string|null;shareCoverUrl?:string|null;
 }
-export interface PostPage { post: BlogPost; adjacent: { prev: PostCard | null; next: PostCard | null }; related: PostCard[] }
+export interface TranslationBrief {id:string;locale:string;columnSlug:string;slug:string;canonicalUrl:string}
+export interface PostPage { translations?:TranslationBrief[];resolution?:{requestedContentLocale:string|null;contentLocale:string;reason:string}|null; post: BlogPost; adjacent: { prev: PostCard | null; next: PostCard | null }; related: PostCard[] }
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${COMMUNITY_API}${path}`, { headers: { "X-From": currentSurface() } });
@@ -46,7 +50,7 @@ export const fetchColumns = () => get<{ items: BlogGroup[] }>("/blog/columns");
 // ---- 首頁輪播 -----------------------------------------------------------------
 
 /** 置頂文章上首頁輪播的期限：首次發布後幾天內 */
-const HOME_POST_DAYS = 30;
+const HOME_POST_DAYS = BLOG_HOME_FRESH_DAYS;
 /**
  * 首頁輪播的文章卡：置頂中、30 天內首次發布、關聯的活動不在輪播裡（免得同一件事出現兩張），取最新的一篇。
  * 置頂文章由公開列表的 pinned 給（最多三篇）。
@@ -54,8 +58,8 @@ const HOME_POST_DAYS = 30;
 export function homePost(pinned: PostCard[], campaignSlugs: string[], now: number): PostCard | null {
   const since = now - HOME_POST_DAYS * 86_400_000;
   return pinned
-    .filter((p) => (p.firstPublishedAt ?? 0) >= since && !(p.campaign && campaignSlugs.includes(p.campaign.slug)))
-    .sort((a, b) => (b.firstPublishedAt ?? 0) - (a.firstPublishedAt ?? 0))[0] ?? null;
+    .filter((p) => (p.groupPublishedAt ?? p.firstPublishedAt ?? 0) >= since && !(p.campaign && campaignSlugs.includes(p.campaign.slug)))
+    .sort((a, b) => (b.groupPublishedAt ?? b.firstPublishedAt ?? 0) - (a.groupPublishedAt ?? a.firstPublishedAt ?? 0))[0] ?? null;
 }
 
 // ---- 閱讀數與喜歡 ---------------------------------------------------------------
@@ -100,13 +104,13 @@ export const allColumns = (groups: BlogGroup[]): BlogColumn[] => groups.flatMap(
 export const groupOfColumn = (groups: BlogGroup[], columnSlug: string): BlogGroup | undefined => groups.find((g) => g.columns.some((c) => c.slug === columnSlug));
 
 /** preview 是編輯器發的預覽碼：帶著它讀得到還沒公開的那一篇。 */
-export const fetchPost = (column: string, slug: string, preview?: string, locale = i18n.global.locale.value) => {
-  const q = new URLSearchParams({ locale, ...(preview ? { preview } : {}) });
+export const fetchPost = (column: string, slug: string, preview?: string, locale = i18n.global.locale.value, preferredLocale?: string) => {
+  const q = new URLSearchParams({ locale, ...(preview ? { preview } : {}),...(!preview && preferredLocale && POST_LOCALES.includes(preferredLocale as typeof POST_LOCALES[number])?{preferredLocale}:{}) });
   return get<PostPage>(`/blog/posts/${encodeURIComponent(column)}/${encodeURIComponent(slug)}?${q}`);
 };
 
 /** 短網址 /blog/p/<id> 指向的正式網址。 */
-export const resolveShortLink = (id: string) => get<{ column: string; slug: string }>(`/blog/p/${encodeURIComponent(id)}`);
+export const resolveShortLink = (id: string) => get<{ column: string; slug: string; locale?:string }>(`/blog/p/${encodeURIComponent(id)}`);
 
 /** 欄目在這個語言的名字；沒有這一語就退回正體、再退回任何一個，都沒有就用網址上的代號。 */
 export function columnName(column: BlogColumn | undefined, locale: string, fallback = ""): string {
@@ -133,11 +137,15 @@ export interface AdminPostRow {
   /** 只有列表回：精確的閱讀數、喜歡數與看得到的留言數 */
   viewCount?: number; likeCount?: number; commentCount?: number;
 }
+export interface AdminVersion extends Partial<AdminPostRow> {id:string;locale:string;title:string;status:PostStatus;publishAt:number|null;version:number;wasPublic:boolean;columnId:string;columnSlug:string;slug:string}
+export interface TranslationGroup {id:string;sourceLocale:string;version:number;title:string;columnId:string;versions:AdminVersion[]}
 export interface AdminPost extends AdminPostRow {
+  translationGroupId?:string;sourceLocale?:string;groupVersion?:number;wasPublic?:boolean;translations?:AdminVersion[];
   excerpt: string; bodyMd: string; coverKey: string | null; coverUrl: string | null; shareTitle: string | null; shareDescription: string | null;
   shareCoverKey: string | null; shareCoverUrl: string | null; campaignId: string | null; pinnedCommentId: string | null; createdAt: number;
 }
 export interface PostInput {
+  translationOfPostId?:string; expectedTranslationGroupVersion?:number;
   columnId: string; slug: string; locale: string; title: string; excerpt: string; bodyMd: string; coverKey: string | null;
   shareTitle: string | null; shareDescription: string | null; shareCoverKey: string | null; campaignId: string | null;
 }
@@ -154,8 +162,11 @@ const FIELD_LABEL: Record<string, string> = {
 const CODE_MESSAGE: Record<string, string> = {
   blog_write_forbidden: "blog.admin.managersOnly", blog_version_conflict: "blog.admin.conflict", blog_slug_taken: "blog.admin.slugTaken", blog_column_slug_taken: "blog.admin.columnSlugTaken",
   blog_preview_unavailable: "blog.admin.previewUnavailable", blog_image_invalid: "blog.admin.uploadFailed", blog_image_unavailable: "blog.admin.uploadFailed",
+  blog_translation_locale_taken:"blog.admin.translationConflict", blog_translation_group_changed:"blog.admin.translationGroupChanged",blog_translation_source_locked:"blog.admin.sourceLanguageLocked",blog_translation_column_mismatch:"blog.admin.translationColumnHint",blog_permalink_locked:"blog.admin.permalinkLocked",
   blog_column_not_empty: "blog.admin.columnNotEmpty",
 };
+
+const bodyLocale=(body:unknown)=>typeof body==="object"&&body!==null&&"locale"in body?String(body.locale):"";
 
 async function admin<T>(token: string, path: string, method = "GET", body?: unknown): Promise<T> {
   const json = body !== undefined && !(body instanceof FormData);
@@ -171,7 +182,7 @@ async function admin<T>(token: string, path: string, method = "GET", body?: unkn
     const label = FIELD_LABEL[b.field ?? ""];
     const message = code === "blog_invalid"
       ? label ? t("blog.admin.invalid", { field: t(label) }) : t("blog.admin.invalidAny")
-      : CODE_MESSAGE[code] ? t(CODE_MESSAGE[code]!) : describeApiError(res.status, code);
+      : CODE_MESSAGE[code] ? t(CODE_MESSAGE[code]!,{language:LOCALES.find(l=>l.code===bodyLocale(body))?.label??bodyLocale(body)}) : describeApiError(res.status, code);
     throw new ApiError(res.status, message, code);
   }
   return (await res.json()) as T;
@@ -212,3 +223,6 @@ export const imageUrlOf = (key: string | null) => (key ? `${COMMUNITY_API}/blog/
 /** 發布了但時間還沒到＝排程中；其餘照存的狀態。 */
 export const displayStatus = (p: { status: string; publishAt: number | null }, now = Date.now()) =>
   p.status === "published" && p.publishAt !== null && p.publishAt > now ? "scheduled" : p.status;
+
+export const fetchTranslationGroups=(token:string,q:{page:number;query?:string;column?:string;group?:string;status?:string;missingLocale?:string})=>admin<{total:number;items:TranslationGroup[]}>(token,`/translation-groups?${new URLSearchParams(Object.entries(q).filter(([,v])=>v!==undefined&&v!=="" ).map(([k,v])=>[k,String(v)]))}`);
+export const changeTranslation=(token:string,id:string,input:{expectedVersion:number;expectedGroupVersion:number;targetPostId:string|null;expectedTargetGroupVersion?:number},operationId:string)=>admin<AdminPost>(token,`/posts/${encodeURIComponent(id)}/translation`,"PUT",{...input,operationId});

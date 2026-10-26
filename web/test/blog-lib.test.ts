@@ -30,3 +30,6 @@ it("the home carousel takes the newest pinned post from the last 30 days whose c
   expect(homePost([card("a", 10), card("b", 2), card("season", 1, "share-season")], ["share-season"], NOW)!.slug).toBe("b");
   expect(homePost([card("season", 1, "share-season")], [], NOW)!.slug).toBe("season");
 });
+it("a recent translation does not renew an old group's carousel window",()=>{
+ expect(homePost([{...card('translated',1),groupPublishedAt:NOW-40*DAY}],[],NOW)).toBeNull();
+});

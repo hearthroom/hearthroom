@@ -1,7 +1,10 @@
 import { auditStmt, auditStmtIfChanged, type ActorKind } from "./audit";
 import { campaignPhase, type CampaignStatus } from "./campaign";
+import { languageRank, translationListCte } from "./blog-translations";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, type Env } from "./types";
+import { BLOG_PINNED_LIMIT } from "../shared/blog";
+import { PRIMARY_HOST } from "../shared/site-hosts";
 
 /**
  * 官方部落格（開業活動設計 §6）。寫的人＝供應商那邊本站應用的 owner／admin（不含 AI 帳號，見 community-admin.ts）。
@@ -11,22 +14,15 @@ import { HttpError, type Env } from "./types";
 export const LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const blogLocale = (value?: string): Locale => LOCALES.includes(value as Locale) ? value as Locale : "zh-Hant";
-/** 繁簡互留無語言尾碼的舊文；多語文章需以語言尾碼識別，避免互相混入。 */
-export function matchesBlogLocale(post: { locale: string; slug: string }, locale: Locale): boolean {
-  return post.locale === locale || ((locale === "zh-Hant" ? post.locale === "zh-Hans" : locale === "zh-Hans" && post.locale === "zh-Hant")
-    && !LOCALES.some(l => post.slug.endsWith(`-${l.toLowerCase()}`)));
-}
-const localeSql = (param: string) => `(p.locale = ${param} OR (
-  ((${param} = 'zh-Hant' AND p.locale = 'zh-Hans') OR (${param} = 'zh-Hans' AND p.locale = 'zh-Hant'))
-  AND ${LOCALES.map(l => `p.slug NOT LIKE '%-${l.toLowerCase()}'`).join(" AND ")}
-))`;
-
+export const optionalBlogLocale = (value?: string | null): Locale | undefined => LOCALES.includes(value as Locale) ? value as Locale : undefined;
+/** List eligibility; translations are selected and deduplicated by SQL before pagination. */
+export const matchesBlogLocale = (p: Pick<Post,"locale">, locale: Locale) => p.locale===locale || (locale==="zh-Hant"&&p.locale==="zh-Hans") || (locale==="zh-Hans"&&p.locale==="zh-Hant");
 /** 欄目名稱／說明的多語文字，鍵是文章語言（types.ts 的 Localized 是卡片介面用的 zh/en/ja/ko，不同一套）。 */
 export type Localized = Partial<Record<Locale, string>>;
 export type Actor = { memberId: string; kind: ActorKind };
 export type PostStatus = "draft" | "pending_review" | "published" | "unpublished";
 
-export type Column = { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null };
+export type Column = { permalinkLocked?:boolean; id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null };
 /** 不帶 parentId 視為分組（null）。建立後 parentId 只能換成另一個分組，不能讓分組變欄目或反過來。 */
 export type ColumnInput = Omit<Column, "id" | "parentId"> & { id?: string; parentId?: string | null };
 export type ColumnNode = Column & { postCount?: number; columns: (Column & { postCount?: number })[] };
@@ -40,20 +36,23 @@ export type Post = {
   contentUpdatedAt: number;
   /** 編輯器回存時要帶回的原始 key（coverUrl／shareCoverUrl 是由它算出來的公開網址）。 */
   coverKey: string | null; shareCoverKey: string | null;
+  translationGroupId: string; sourceLocale: Locale; groupVersion: number; wasPublic: boolean;
 };
 /** 公開回應裡的關聯活動：只在活動存在且不是草稿時有，其餘是 null。原始 campaignId 只給管理端。 */
 export type CampaignBrief = { slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null };
-export type PostCard = Pick<Post, "id" | "columnSlug" | "slug" | "title" | "excerpt" | "coverUrl" | "locale" | "firstPublishedAt" | "pinned"> & { readMinutes: number; commentCount: number; campaign: CampaignBrief | null };
+export type PostCard = Pick<Post, "id" | "columnSlug" | "slug" | "title" | "excerpt" | "coverUrl" | "locale" | "firstPublishedAt" | "pinned"> & { readMinutes: number; commentCount: number; campaign: CampaignBrief | null; translationGroupId: string; sourceLocale: Locale; fallback: boolean; groupPublishedAt: number | null };
 export type PostInput = {
   /** 編輯器的自動儲存：同一人十分鐘內連續的自動儲存併進同一筆修訂，修訂紀錄才不會被幾百個半成品淹沒 */
   autosave?: boolean;
+  translationOfPostId?: string;
+  expectedTranslationGroupVersion?: number;
   columnId: string; slug: string; locale: Locale; title: string; excerpt: string; bodyMd: string;
   coverKey?: string | null; shareTitle?: string | null; shareDescription?: string | null; shareCoverKey?: string | null; campaignId?: string | null;
 };
 export type StateChange = { status?: "published" | "unpublished"; publishAt?: number | null; pinned?: boolean; commentsClosed?: boolean; pinnedCommentId?: string | null };
 
 export const PAGE_SIZE = 12;
-const PINNED_MAX = 3;
+const PINNED_MAX = BLOG_PINNED_LIMIT;
 
 /**
  * 留言上的「官方」徽章：寫過或改過文章的人。寫作權限本身看供應商的應用團隊（community-admin.ts），
@@ -86,18 +85,21 @@ type PostRow = {
   campaign_id: string | null; status: PostStatus; publish_at: number | null; first_published_at: number | null; pinned: number;
   comments_closed: number; pinned_comment_id: string | null; version: number; created_at: number; updated_at: number;
   content_updated_at: number | null;
+  translation_group_id: string | null; group_source_locale: Locale | null; group_version: number | null; was_public: number;
 };
 type CampaignRow = { cmp_slug: string | null; cmp_title: string | null; cmp_status: CampaignStatus | null; cmp_starts_at: number | null; cmp_ends_at: number | null; cmp_timezone: string | null };
-type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "body_md"> & { comment_count: number } & CampaignRow;
-type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number; parent_id: string | null };
+type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "body_md"> & { comment_count: number; translation_group_id: string | null; group_pinned?: number; group_published_at?: number; source_locale?: Locale; viewer_locale?: Locale } & CampaignRow;
+type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number; parent_id: string | null; permalink_locked?:number };
 
-const POST_SELECT = "SELECT p.*, col.slug AS column_slug, (SELECT MAX(r.created_at) FROM blog_post_revisions r WHERE r.post_id = p.id) AS content_updated_at FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
+const POST_SELECT = "SELECT p.*, col.slug AS column_slug, g.source_locale AS group_source_locale, g.version AS group_version, (SELECT MAX(r.created_at) FROM blog_post_revisions r WHERE r.post_id = p.id) AS content_updated_at FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id LEFT JOIN blog_translation_groups g ON g.id=p.translation_group_id";
 // ponytail: 卡片要算閱讀時長，所以連內文一起讀（一頁 12 篇）；嫌重時改成儲存時算好存一欄。
 // 關聯活動用 LEFT JOIN 一起讀（列表不逐篇查）；草稿活動當作沒有。
 const CAMPAIGN_COLUMNS = "cmp.slug AS cmp_slug, cmp.title AS cmp_title, cmp.status AS cmp_status, cmp.starts_at AS cmp_starts_at, cmp.ends_at AS cmp_ends_at, cmp.timezone AS cmp_timezone";
-const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.excerpt, p.cover_key, p.locale, p.first_published_at, p.pinned, p.body_md, ${CAMPAIGN_COLUMNS},
-  (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible') AS comment_count
-  FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id LEFT JOIN campaigns cmp ON cmp.id = p.campaign_id AND cmp.status <> 'draft'`;
+const CARD_FIELDS = `p.translation_group_id, p.id, col.slug AS column_slug, p.slug, p.title, p.excerpt, p.cover_key, p.locale, p.first_published_at, p.pinned, p.body_md, ${CAMPAIGN_COLUMNS},
+  (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible') AS comment_count`;
+const CARD_FROM = `FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id LEFT JOIN campaigns cmp ON cmp.id = p.campaign_id AND cmp.status <> 'draft'`;
+const CARD_SELECT = `SELECT ${CARD_FIELDS} ${CARD_FROM}`;
+const CHOSEN_CARDS = `SELECT ${CARD_FIELDS}, chosen.source_locale, chosen.group_pinned, chosen.group_published_at, ?2 AS viewer_locale ${CARD_FROM} JOIN chosen ON chosen.id=p.id`;
 /** 已公開（?1 是現在）。欄目啟不啟用另外判斷：列表要看，單篇與前後篇不看。 */
 const LIVE = "p.status = 'published' AND p.publish_at IS NOT NULL AND p.publish_at <= ?1";
 /** 公開列表看得到的欄目（別名 col）：是欄目、自己啟用、所屬分組也啟用。單篇不看這條（舊連結不失效）。 */
@@ -116,6 +118,7 @@ const toPost = (r: PostRow): Post => ({
   // 草稿先存、之後才發布時，最後一版早於首發；對外的修改時間不早於首發時間。
   contentUpdatedAt: Math.max(r.content_updated_at ?? 0, r.first_published_at ?? r.created_at),
   coverKey: r.cover_key, shareCoverKey: r.share_cover_key,
+  translationGroupId: r.translation_group_id ?? r.id, sourceLocale: r.group_source_locale ?? r.locale, groupVersion: r.group_version ?? 0, wasPublic: !!r.was_public,
 });
 const toBrief = (r: CampaignRow, now: number): CampaignBrief | null => {
   if (r.cmp_slug === null || r.cmp_status === null || r.cmp_status === "draft") return null;
@@ -124,9 +127,10 @@ const toBrief = (r: CampaignRow, now: number): CampaignBrief | null => {
 };
 const toCard = (now: number) => (r: CardRow): PostCard => ({
   id: r.id, columnSlug: r.column_slug, slug: r.slug, title: r.title, excerpt: r.excerpt, coverUrl: imageUrl(r.cover_key), locale: r.locale,
-  firstPublishedAt: r.first_published_at, pinned: !!r.pinned, readMinutes: readMinutes(r.body_md), commentCount: r.comment_count, campaign: toBrief(r, now),
+  firstPublishedAt: r.first_published_at, pinned: !!(r.group_pinned ?? r.pinned), readMinutes: readMinutes(r.body_md), commentCount: r.comment_count, campaign: toBrief(r, now),
+  translationGroupId:r.translation_group_id ?? r.id,sourceLocale:r.source_locale ?? r.locale,fallback:r.viewer_locale!==undefined && r.locale!==r.viewer_locale,groupPublishedAt:r.group_published_at ?? r.first_published_at,
 });
-const toColumn = (r: ColumnRow): Column => ({ id: r.id, slug: r.slug, name: JSON.parse(r.name), description: JSON.parse(r.description), sort: r.sort, enabled: !!r.enabled, parentId: r.parent_id });
+const toColumn = (r: ColumnRow): Column => ({ id: r.id, slug: r.slug, name: JSON.parse(r.name), description: JSON.parse(r.description), sort: r.sort, enabled: !!r.enabled, parentId: r.parent_id, ...(r.permalink_locked!==undefined?{permalinkLocked:!!r.permalink_locked}:{}) });
 
 async function postRow(db: D1Database, id: string): Promise<PostRow | null> {
   return db.prepare(`${POST_SELECT} WHERE p.id = ?`).bind(id).first<PostRow>();
@@ -209,9 +213,12 @@ async function commit(db: D1Database, writes: D1PreparedStatement[], actor: Acto
     return prior ? { replay: prior } : { changes };
   } catch (e) {
     const msg = String(e);
+    const guard = msg.match(/blog_(?:permalink_locked|translation_[a-z_]+)/)?.[0];
+    if (guard) throw new HttpError(409, guard);
     if (!/UNIQUE constraint failed/.test(msg)) throw e;
     const prior = await priorSubject(db, actor, operationId, kind);
     if (prior) return { replay: prior };
+    if (/blog_posts.translation_group_id/.test(msg)) throw new HttpError(409, "blog_translation_locale_taken");
     if (/blog_(posts|columns)/.test(msg)) throw new HttpError(409, slugTaken);
     throw e;
   }
@@ -233,7 +240,7 @@ const auditView = (r: { title: string; slug: string; column_id: string; version:
 /** 自動儲存併進前一筆修訂的時間窗 */
 const AUTOSAVE_MERGE_MS = 10 * 60_000;
 
-async function writeContent(db: D1Database, before: PostRow | null, c: Content, actor: Actor, operationId: string, now: number, action: "create" | "save" | "restore", auto = false): Promise<Post> {
+async function writeContent(db: D1Database, before: PostRow | null, c: Content, actor: Actor, operationId: string, now: number, action: "create" | "save" | "restore", auto = false, translation?: { id: string; version: number }): Promise<Post> {
   const id = before?.id ?? crypto.randomUUID();
   const version = (before?.version ?? 0) + 1;
   const meta = JSON.stringify({ slug: c.slug, excerpt: c.excerpt, shareTitle: c.share_title, shareDescription: c.share_description, shareCoverKey: c.share_cover_key, coverKey: c.cover_key, locale: c.locale, columnId: c.column_id, ...(auto ? { auto: true } : {}) });
@@ -242,26 +249,32 @@ async function writeContent(db: D1Database, before: PostRow | null, c: Content, 
     ? await db.prepare("SELECT id FROM blog_post_revisions WHERE post_id = ? AND editor_member_id = ? AND created_at > ? AND json_extract(meta_json, '$.auto') = 1 AND version = (SELECT MAX(version) FROM blog_post_revisions WHERE post_id = ?)")
       .bind(id, actor.memberId, now - AUTOSAVE_MERGE_MS, id).first<{ id: string }>()
     : null;
+  const groupId = before?.translation_group_id ?? translation?.id ?? id;
   const values = CONTENT_COLUMNS.map((k) => c[k]);
-  const audit = { subjectKind: "blog_post" as const, subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action, before: before ? auditView(before) : {}, after: auditView({ ...c, version }), operationId, now };
+  const audit = { subjectKind: "blog_post" as const, subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action, before: before ? auditView(before) : {}, after: {...auditView({ ...c, version }),translationGroupId:groupId,...(translation?{translationOf:true}:{})}, operationId, now };
   const revision = "INSERT INTO blog_post_revisions (id, post_id, editor_member_id, title, body_md, meta_json, version, created_at)";
   const writes = before
     ? [
-        db.prepare(`UPDATE blog_posts SET ${CONTENT_COLUMNS.map((k) => `${k} = ?`).join(", ")}, version = version + 1, updated_at = ? WHERE id = ? AND version = ?`).bind(...values, now, id, before.version),
+        db.prepare(`UPDATE blog_posts SET ${CONTENT_COLUMNS.map((k) => `${k} = ?`).join(", ")}, version = version + 1, updated_at = ?, translation_group_id = ? WHERE id = ? AND version = ? ${!before.translation_group_id?"AND changes()>0":""}`).bind(...values, now, groupId, id, before.version),
         mergeInto
           ? db.prepare("UPDATE blog_post_revisions SET title = ?, body_md = ?, meta_json = ?, version = ?, created_at = ? WHERE id = ? AND changes() > 0").bind(c.title, c.body_md, meta, version, now, mergeInto.id)
           : db.prepare(`${revision} SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
         auditStmtIfChanged(db, audit),
       ]
     : [
-        db.prepare(`INSERT INTO blog_posts (id, author_member_id, created_at, updated_at, ${CONTENT_COLUMNS.join(", ")}) VALUES (?, ?, ?, ?, ${CONTENT_COLUMNS.map(() => "?").join(", ")})`).bind(id, actor.memberId, now, now, ...values),
-        db.prepare(`${revision} VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
-        auditStmt(db, audit),
+        db.prepare(`INSERT INTO blog_posts (id, author_member_id, created_at, updated_at, translation_group_id, ${CONTENT_COLUMNS.join(", ")}) SELECT ?, ?, ?, ?, ?, ${CONTENT_COLUMNS.map(() => "?").join(", ")} WHERE changes()>0`).bind(id, actor.memberId, now, now, groupId, ...values),
+        db.prepare(`${revision} SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes()>0`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
+        auditStmtIfChanged(db, audit),
       ];
+  if (!before || !before.translation_group_id) {
+    if (translation) writes.unshift(db.prepare("UPDATE blog_translation_groups SET version=version+1 WHERE id=? AND version=?").bind(translation.id, translation.version));
+    else writes.unshift(db.prepare(`INSERT INTO blog_translation_groups(id,source_locale,created_at) SELECT ?,?,? ${before ? "WHERE EXISTS(SELECT 1 FROM blog_posts WHERE id=? AND version=? AND translation_group_id IS NULL)" : ""}`).bind(groupId,c.locale,now,...(before ? [before.id,before.version] : [])));
+  }
   const done = await commit(db, writes, actor, operationId, "blog_post", "blog_slug_taken");
   if ("replay" in done) return mustPost(db, done.replay);
-  if (!done.changes) await conflict(db, id);
+  if (!done.changes) { if (translation) throw new HttpError(409, "blog_translation_group_changed"); await conflict(db, id); }
   await keepImages(db, c);
+  if(translation)await bumpOp(db,"blog","translation","success");
   await bumpOp(db, "blog", action === "restore" ? "restore" : "save", "success");
   return mustPost(db, id);
 }
@@ -271,7 +284,18 @@ export async function savePost(db: D1Database, input: PostInput & { id?: string;
   if (prior) return mustPost(db, prior);
   const c = cleanPost(input);
   if (!(await db.prepare("SELECT 1 AS ok FROM blog_columns WHERE id = ? AND parent_id IS NOT NULL").bind(c.column_id).first())) invalid("columnId");
-  if (input.id === undefined) return writeContent(db, null, c, actor, operationId, now, "create");
+  if (input.id === undefined) {
+    let target: {id:string;version:number} | undefined;
+    if (input.translationOfPostId !== undefined) {
+      const source = await mustPost(db,input.translationOfPostId);
+      if (source.columnId !== c.column_id) throw new HttpError(409,"blog_translation_column_mismatch");
+      if (!source.groupVersion) throw new HttpError(503,"blog_translation_backfill_pending");
+      if (input.expectedTranslationGroupVersion !== undefined && input.expectedTranslationGroupVersion !== source.groupVersion) throw new HttpError(409,"blog_translation_group_changed");
+      target={id:source.translationGroupId,version:source.groupVersion};
+    }
+    return writeContent(db, null, c, actor, operationId, now, "create",false,target);
+  }
+  if (input.translationOfPostId !== undefined) invalid("translationOfPostId");
   if (!Number.isInteger(input.expectedVersion)) invalid("expectedVersion");
   const before = await postRow(db, input.id);
   if (!before) throw new HttpError(404, "blog_post_not_found");
@@ -289,7 +313,7 @@ export async function restoreRevision(db: D1Database, postId: string, revisionId
   const m = JSON.parse(rev.meta_json) as Record<string, unknown>;
   const pick = <T>(key: string, fallback: T): T => (key in m ? m[key] : fallback) as T;
   // 已發布（含排程）的文章網址（欄目、slug、語言前綴）不跟著還原動，其餘照還原
-  const keepUrl = before.status === "published";
+  const keepUrl = !!before.was_public || isPublic({status:before.status,publishAt:before.publish_at},now) || (await db.prepare("SELECT COUNT(*) AS n FROM blog_posts WHERE translation_group_id=?").bind(before.translation_group_id).first<{n:number}>())!.n > 1;
   const c: Content = {
     column_id: keepUrl ? before.column_id : pick("columnId", before.column_id), slug: keepUrl ? before.slug : pick("slug", before.slug), locale: keepUrl ? before.locale : pick("locale", before.locale), title: rev.title,
     excerpt: pick("excerpt", before.excerpt), body_md: rev.body_md, cover_key: pick("coverKey", before.cover_key), share_title: pick("shareTitle", before.share_title),
@@ -443,7 +467,7 @@ async function mustColumn(db: D1Database, id: string): Promise<Column> {
  */
 export async function columnTree(db: D1Database, opts: { admin: boolean }): Promise<ColumnNode[]> {
   const count = opts.admin ? "(SELECT COUNT(*) FROM blog_posts p WHERE p.column_id = c.id)" : "0";
-  const rows = (await db.prepare(`SELECT c.*, ${count} AS post_count FROM blog_columns c ORDER BY c.sort, c.created_at, c.id`).all<ColumnRow & { post_count: number }>()).results;
+  const rows = (await db.prepare(`SELECT c.*, ${count} AS post_count, EXISTS(SELECT 1 FROM blog_posts p WHERE p.column_id=c.id AND (p.was_public=1 OR (p.status='published' AND p.publish_at<=CAST((julianday('now')-2440587.5)*86400000 AS INTEGER)))) AS permalink_locked FROM blog_columns c ORDER BY c.sort, c.created_at, c.id`).all<ColumnRow & { post_count: number }>()).results;
   const shown = (r: ColumnRow) => opts.admin || r.enabled === 1;
   const withCount = (r: ColumnRow & { post_count: number }): Column & { postCount?: number } => (opts.admin ? { ...toColumn(r), postCount: r.post_count } : toColumn(r));
   return rows
@@ -464,25 +488,20 @@ export async function columnTree(db: D1Database, opts: { admin: boolean }): Prom
  * 兩個都給時以欄目為準。置頂的最多 3 篇另列在 pinned，其餘依發布時間新到舊分頁；total 是 items 那一群的總數。
  */
 export async function publicPosts(db: D1Database, opts: { locale?: Locale; columnSlug?: string; groupSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
-  const column = opts.columnSlug ?? null;
-  const group = column ? null : opts.groupSlug ?? null;
-  const locale = opts.locale ?? "zh-Hant";
-  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND ${localeSql("?4")} AND (?2 IS NULL OR col.slug = ?2) AND (?3 IS NULL OR col.parent_id = (SELECT id FROM blog_columns WHERE slug = ?3 AND parent_id IS NULL))`;
-  const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column, group, locale).all<CardRow>()).results;
-  const skip = JSON.stringify(pinned.map((r) => r.id));
-  const page = Math.max(1, Math.floor(opts.page) || 1);
-  const rest = `${where} AND p.id NOT IN (SELECT value FROM json_each(?5))`;
-  const [count, items] = await db.batch<CardRow & { n: number }>([
-    db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, group, locale, skip),
-    db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?6 OFFSET ?7`).bind(opts.now, column, group, locale, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+  const args = [opts.now,opts.locale ?? "zh-Hant",opts.columnSlug ?? null,opts.columnSlug ? null : opts.groupSlug ?? null];
+  const cte=translationListCte();
+  const pinned=(await db.prepare(`${cte} ${CHOSEN_CARDS} WHERE chosen.group_pinned=1 ORDER BY chosen.group_published_at DESC,chosen.group_key DESC LIMIT ${PINNED_MAX}`).bind(...args).all<CardRow>()).results;
+  const skip=JSON.stringify(pinned.map(p=>p.id));const page=Math.max(1,Math.floor(opts.page)||1);
+  const [count,items]=await db.batch<CardRow & {n:number}>([
+    db.prepare(`${cte} SELECT COUNT(*) AS n FROM chosen WHERE id NOT IN(SELECT value FROM json_each(?5))`).bind(...args,skip),
+    db.prepare(`${cte} ${CHOSEN_CARDS} WHERE p.id NOT IN(SELECT value FROM json_each(?5)) ORDER BY chosen.group_published_at DESC,chosen.group_key DESC LIMIT ?6 OFFSET ?7`).bind(...args,skip,PAGE_SIZE,(page-1)*PAGE_SIZE),
   ]);
-  return { total: (count!.results[0] as { n: number }).n, pinned: pinned.map(toCard(opts.now)), items: (items!.results as CardRow[]).map(toCard(opts.now)) };
+  return {total:count!.results[0]!.n,pinned:pinned.map(toCard(opts.now)),items:items!.results.map(toCard(opts.now))};
 }
 
 /** 單篇：欄目停用也能開（舊連結不失效），只看公開判定。 */
 export async function publicPost(db: D1Database, columnSlug: string, slug: string, now: number): Promise<Post | null> {
-  const post = await postBySlug(db, columnSlug, slug);
-  return post && isPublic(post, now) ? post : null;
+  return (await resolveArticleRoute(db,{columnSlug,slug,now}))?.post ?? null;
 }
 
 // ---- 閱讀數與喜歡 ---------------------------------------------------------------
@@ -522,7 +541,9 @@ export async function setPostLike(db: D1Database, postId: string, memberId: stri
 
 /** 最新的公開文章（Atom 用）：停用欄目的不列，與公開列表一致。 */
 export async function recentPosts(db: D1Database, now: number, limit: number, locale?: Locale): Promise<Post[]> {
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} AND (?3 IS NULL OR ${localeSql("?3")}) ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit, locale ?? null).all<PostRow>();
+  const rows=locale
+    ? await db.prepare(`${translationListCte()} ${POST_SELECT} JOIN chosen ON chosen.id=p.id ORDER BY chosen.group_published_at DESC,chosen.group_key DESC LIMIT ?5`).bind(now,locale,null,null,limit).all<PostRow>()
+    : await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} ORDER BY p.publish_at DESC,p.id DESC LIMIT ?2`).bind(now,limit).all<PostRow>();
   return rows.results.map(toPost);
 }
 
@@ -539,31 +560,48 @@ export async function livePost(db: D1Database, id: string, now: number): Promise
 }
 
 /** 短網址：公開文章的欄目與 slug。 */
-export async function publicPostById(db: D1Database, id: string, now: number): Promise<{ column: string; slug: string } | null> {
-  const r = await postRow(db, id);
-  return r && isPublic({ status: r.status, publishAt: r.publish_at }, now) ? { column: r.column_slug, slug: r.slug } : null;
+export async function publicPostById(db: D1Database, id: string, now: number): Promise<{ column: string; slug: string; locale: Locale } | null> {
+  const requested=await postRow(db,id);if(!requested)return null;
+  const result=await resolveArticleRoute(db,{post:toPost(requested),now});
+  return result ? {column:result.post.columnSlug,slug:result.post.slug,locale:result.post.locale} : null;
 }
 
-/** 同欄目已公開的前一篇（較舊）與後一篇（較新）。 */
-export async function adjacentPosts(db: D1Database, post: Post, now: number, locale: Locale = post.locale): Promise<{ prev: PostCard | null; next: PostCard | null }> {
-  if (post.publishAt === null) return { prev: null, next: null };
-  const one = (cmp: "<" | ">", dir: "DESC" | "ASC") =>
-    db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND ${localeSql("?5")} AND (p.publish_at ${cmp} ?3 OR (p.publish_at = ?3 AND p.id ${cmp} ?4)) ORDER BY p.publish_at ${dir}, p.id ${dir} LIMIT 1`).bind(now, post.columnId, post.publishAt, post.id, locale);
-  const [prev, next] = await db.batch<CardRow>([one("<", "DESC"), one(">", "ASC")]);
-  const card = (r: D1Result<CardRow> | undefined) => (r?.results[0] ? toCard(now)(r.results[0]) : null);
-  return { prev: card(prev), next: card(next) };
+async function groupPublishedAt(db:D1Database,post:Post,now:number):Promise<number>{
+  const r=await db.prepare("SELECT MIN(first_published_at) AS at FROM blog_posts WHERE COALESCE(translation_group_id,id)=? AND (was_public=1 OR (status='published' AND publish_at<=?))").bind(post.translationGroupId,now).first<{at:number|null}>();
+  return r?.at ?? post.firstPublishedAt ?? post.publishAt ?? post.createdAt;
+}
+export async function adjacentPosts(db:D1Database,post:Post,now:number,locale:Locale=post.locale):Promise<{prev:PostCard|null;next:PostCard|null}>{
+  const at=await groupPublishedAt(db,post,now);const cte=translationListCte(false);
+  const one=(cmp:"<"|">",dir:"ASC"|"DESC")=>db.prepare(`${cte} ${CHOSEN_CARDS} WHERE chosen.group_key<>?5 AND (chosen.group_published_at ${cmp} ?6 OR (chosen.group_published_at=?6 AND chosen.group_key ${cmp} ?5)) ORDER BY chosen.group_published_at ${dir},chosen.group_key ${dir} LIMIT 1`).bind(now,locale,post.columnSlug,null,post.translationGroupId,at);
+  const [prev,next]=await db.batch<CardRow>([one("<","DESC"),one(">","ASC")]);
+  return {prev:prev!.results[0]?toCard(now)(prev!.results[0]):null,next:next!.results[0]?toCard(now)(next!.results[0]):null};
+}
+export async function relatedPosts(db:D1Database,post:Post,now:number,limit=3,locale:Locale=post.locale):Promise<PostCard[]>{
+  const rows=await db.prepare(`${translationListCte(false)} ${CHOSEN_CARDS} WHERE chosen.group_key<>?5 ORDER BY chosen.group_published_at DESC,chosen.group_key DESC LIMIT ?6`).bind(now,locale,post.columnSlug,null,post.translationGroupId,limit).all<CardRow>();return rows.results.map(toCard(now));
 }
 
-/** 同欄目最新的幾篇（排除自己）。 */
-export async function relatedPosts(db: D1Database, post: Post, now: number, limit = 3, locale: Locale = post.locale): Promise<PostCard[]> {
-  const rows = await db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND p.id <> ?3 AND ${localeSql("?5")} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4`).bind(now, post.columnId, post.id, limit, locale).all<CardRow>();
-  return rows.results.map(toCard(now));
+export type TranslationBrief={id:string;locale:Locale;columnSlug:string;slug:string;canonicalUrl:string};
+export type ArticleResolution={requestedContentLocale:Locale|null;contentLocale:Locale;reason:"exact"|"preferred_missing"|"requested_unavailable"};
+const canonical=(p:Pick<Post,"locale"|"columnSlug"|"slug">)=>`https://${PRIMARY_HOST}${p.locale==="zh-Hant"?"":`/${p.locale}`}/blog/${encodeURIComponent(p.columnSlug)}/${encodeURIComponent(p.slug)}`;
+export const translationBrief=(p:Post):TranslationBrief=>({id:p.id,locale:p.locale,columnSlug:p.columnSlug,slug:p.slug,canonicalUrl:canonical(p)});
+export async function publicTranslations(db:D1Database,post:Post,now:number):Promise<Post[]>{
+  const rows=await db.prepare(`${POST_SELECT} WHERE COALESCE(p.translation_group_id,p.id)=?2 AND ${LIVE} ORDER BY p.first_published_at,p.id`).bind(now,post.translationGroupId).all<PostRow>();return rows.results.map(toPost);
+}
+export async function resolveArticleRoute(db:D1Database,opts:{columnSlug?:string;slug?:string;post?:Post;now:number;viewerLocale?:Locale;preferredLocale?:Locale}):Promise<{post:Post;translations:TranslationBrief[];resolution:ArticleResolution}|null>{
+  const requested=opts.post ?? (opts.columnSlug&&opts.slug?await postBySlug(db,opts.columnSlug,opts.slug):null);
+  if(!requested)return null;const exact=isPublic(requested,opts.now);
+  if(!exact&&!requested.wasPublic)return null;
+  const versions=await publicTranslations(db,requested,opts.now);if(!versions.length)return null;
+  const preferred=opts.preferredLocale ?? opts.viewerLocale ?? requested.locale;
+  const sorted=[...versions].sort((a,b)=>languageRank(a.locale,preferred,requested.sourceLocale)-languageRank(b.locale,preferred,requested.sourceLocale)||(a.firstPublishedAt??a.createdAt)-(b.firstPublishedAt??b.createdAt)||a.id.localeCompare(b.id));
+  const selected=exact&&!opts.preferredLocale?requested:sorted[0]!;
+  return {post:selected,translations:versions.map(translationBrief),resolution:{requestedContentLocale:opts.preferredLocale ?? (!exact?requested.locale:null),contentLocale:selected.locale,reason:!exact?"requested_unavailable":opts.preferredLocale&&selected.locale!==opts.preferredLocale?"preferred_missing":"exact"}};
 }
 
 // ---- 對外形狀 -----------------------------------------------------------------
 
 /** 公開回應不帶成員 id、原始 key 與原始活動 id：作者一律是官方，活動換成摘要（草稿活動是 null）。 */
-export async function publicView(db: D1Database, { authorMemberId: _a, coverKey: _c, shareCoverKey: _s, campaignId, ...p }: Post, now: number) {
+export async function publicView(db: D1Database, { authorMemberId: _a, coverKey: _c, shareCoverKey: _s, wasPublic:_w, groupVersion:_g, campaignId, ...p }: Post, now: number) {
   const r = campaignId ? await db.prepare(`SELECT ${CAMPAIGN_COLUMNS} FROM campaigns cmp WHERE cmp.id = ?`).bind(campaignId).first<CampaignRow>() : null;
   return { ...p, official: true as const, readMinutes: readMinutes(p.bodyMd), campaign: r ? toBrief(r, now) : null };
 }
@@ -571,7 +609,7 @@ export async function publicView(db: D1Database, { authorMemberId: _a, coverKey:
 /** 管理回應：作者換成公開 ID（handle），不給成員 id。 */
 export async function adminView(db: D1Database, { authorMemberId, ...p }: Post) {
   const m = await db.prepare("SELECT handle FROM members WHERE id = ?").bind(authorMemberId).first<{ handle: string }>();
-  return { ...p, authorHandle: m?.handle ?? "" };
+  return { ...p, authorHandle: m?.handle ?? "", translations: await adminTranslations(db,{...p,authorMemberId}) };
 }
 
 export async function adminPost(db: D1Database, id: string) {
@@ -604,6 +642,63 @@ export async function adminPosts(db: D1Database, opts: { status?: string; column
       viewCount: r.view_count, likeCount: r.like_count, commentCount: r.comment_count,
     })),
   };
+}
+
+export type AssociationInput = { expectedVersion:number; expectedGroupVersion:number; targetPostId:string|null; expectedTargetGroupVersion?:number };
+
+/** Only membership and CAS versions change. Body, URLs and engagement remain version-owned. */
+export async function changeTranslation(db:D1Database,id:string,input:AssociationInput,actor:Actor,operationId:string,now:number):Promise<Post>{
+  const prior=await priorSubject(db,actor,operationId,"blog_post");if(prior)return mustPost(db,prior);
+  if(!Number.isInteger(input.expectedVersion)||!Number.isInteger(input.expectedGroupVersion)||(input.targetPostId!==null&&typeof input.targetPostId!=="string"))invalid("translation");
+  const before=await mustPost(db,id);
+  if(before.version!==input.expectedVersion)await conflict(db,id);
+  if(before.groupVersion!==input.expectedGroupVersion)throw new HttpError(409,"blog_translation_group_changed");
+  const target=input.targetPostId===null?null:await mustPost(db,input.targetPostId);
+  if(target&&(!Number.isInteger(input.expectedTargetGroupVersion)||target.groupVersion!==input.expectedTargetGroupVersion))throw new HttpError(409,"blog_translation_group_changed");
+  if(target&&target.columnId!==before.columnId)throw new HttpError(409,"blog_translation_column_mismatch");
+  if(target?.translationGroupId===before.translationGroupId)throw new HttpError(409,"blog_translation_same_group");
+  const groupId=target?.translationGroupId??crypto.randomUUID();
+  const condition="id=? AND version=? AND translation_group_id=? AND EXISTS(SELECT 1 FROM blog_translation_groups WHERE id=? AND version=?)";
+  const cas=[id,input.expectedVersion,before.translationGroupId,before.translationGroupId,input.expectedGroupVersion];
+  const writes:D1PreparedStatement[]=[];
+  if(!target)writes.push(db.prepare(`INSERT INTO blog_translation_groups(id,source_locale,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM blog_posts WHERE ${condition})`).bind(groupId,before.locale,now,...cas));
+  writes.push(db.prepare(`UPDATE blog_posts SET translation_group_id=?,version=version+1,updated_at=? WHERE ${condition} ${target?"AND EXISTS(SELECT 1 FROM blog_translation_groups WHERE id=? AND version=?)":"AND changes()>0"}`).bind(groupId,now,...cas,...(target?[groupId,input.expectedTargetGroupVersion!]:[])));
+  writes.push(db.prepare("UPDATE blog_translation_groups SET version=version+1 WHERE id=? AND changes()>0").bind(before.translationGroupId));
+  if(target)writes.push(db.prepare("UPDATE blog_translation_groups SET version=version+1 WHERE id=? AND changes()>0").bind(groupId));
+  writes.push(auditStmtIfChanged(db,{subjectKind:"blog_post",subjectId:id,actorMemberId:actor.memberId,actorKind:actor.kind,operationId,now,action:target?"translation_attach":"translation_detach",before:{translationGroupId:before.translationGroupId,version:before.version,groupVersion:before.groupVersion},after:{translationGroupId:groupId,version:before.version+1}}));
+  writes.push(db.prepare("DELETE FROM blog_translation_groups WHERE id=? AND NOT EXISTS(SELECT 1 FROM blog_posts WHERE translation_group_id=?) AND EXISTS(SELECT 1 FROM audit_log WHERE actor_member_id=? AND operation_id=?)").bind(before.translationGroupId,before.translationGroupId,actor.memberId,operationId));
+  const done=await commit(db,writes,actor,operationId,"blog_post","blog_slug_taken");
+  if("replay"in done)return mustPost(db,done.replay);
+  if(!done.changes)throw new HttpError(409,"blog_translation_group_changed");
+  await bumpOp(db,"blog","translation","success");
+  return mustPost(db,id);
+}
+
+export async function adminTranslations(db:D1Database,post:Post){
+  const rows=await db.prepare(`${POST_SELECT.replace("SELECT p.*,",`SELECT p.*,p.view_count,p.like_count,
+  (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.root_id IS NULL AND c.status='visible' AND c.deleted_at IS NULL) AS comment_count,
+  COALESCE((SELECT handle FROM members WHERE id=p.author_member_id),'') AS author_handle,
+  COALESCE((SELECT m.handle FROM blog_post_revisions r JOIN members m ON m.id=r.editor_member_id WHERE r.post_id=p.id ORDER BY r.version DESC LIMIT 1),'') AS editor_handle,`)} WHERE COALESCE(p.translation_group_id,p.id)=? ORDER BY p.locale`).bind(post.translationGroupId).all<PostRow & {view_count:number;like_count:number;comment_count:number;author_handle:string;editor_handle:string}>();
+  return rows.results.map(r=>({id:r.id,locale:r.locale,title:r.title,status:r.status,publishAt:r.publish_at,version:r.version,wasPublic:!!r.was_public,columnId:r.column_id,columnSlug:r.column_slug,slug:r.slug,pinned:!!r.pinned,updatedAt:r.updated_at,authorHandle:r.author_handle,editorHandle:r.editor_handle,viewCount:r.view_count,likeCount:r.like_count,commentCount:r.comment_count}));
+}
+
+/** A group qualifies when any member matches filters; return all slots, including unpublished ones. */
+export async function adminTranslationGroups(db:D1Database,opts:{page:number;query?:string;column?:string;status?:string;group?:string;missingLocale?:string}){
+  if(opts.status&&!STATUSES.includes(opts.status))invalid("status");
+  if(opts.missingLocale&&!LOCALES.includes(opts.missingLocale as Locale))invalid("locale");
+  const from="FROM blog_posts p JOIN blog_columns col ON col.id=p.column_id";
+  const where=`(?1 IS NULL OR instr(lower(p.title),lower(?1))>0) AND (?2 IS NULL OR col.id=?2 OR col.slug=?2) AND (?3 IS NULL OR p.status=?3) AND (?4 IS NULL OR col.parent_id=?4) AND (?5 IS NULL OR NOT EXISTS(SELECT 1 FROM blog_posts q WHERE COALESCE(q.translation_group_id,q.id)=COALESCE(p.translation_group_id,p.id) AND q.locale=?5))`;
+  const binds=[opts.query||null,opts.column||null,opts.status||null,opts.group||null,opts.missingLocale||null];
+  const page=Math.max(1,Math.floor(opts.page)||1);
+  const [count,rows]=await db.batch<{n:number;id:string}>([
+    db.prepare(`SELECT COUNT(DISTINCT COALESCE(p.translation_group_id,p.id)) AS n ${from} WHERE ${where}`).bind(...binds),
+    db.prepare(`SELECT COALESCE(p.translation_group_id,p.id) AS id ${from} WHERE ${where} GROUP BY COALESCE(p.translation_group_id,p.id) ORDER BY MAX(p.updated_at) DESC,id DESC LIMIT ?6 OFFSET ?7`).bind(...binds,PAGE_SIZE,(page-1)*PAGE_SIZE),
+  ]);
+  const items=await Promise.all(rows!.results.map(async({id})=>{
+    const row=await db.prepare(`${POST_SELECT} WHERE COALESCE(p.translation_group_id,p.id)=? ORDER BY CASE WHEN p.locale=g.source_locale THEN 0 ELSE 1 END,p.id LIMIT 1`).bind(id).first<PostRow>();
+    const post=toPost(row!);return {id,sourceLocale:post.sourceLocale,version:post.groupVersion,title:post.title,columnId:post.columnId,versions:await adminTranslations(db,post)};
+  }));
+  return {total:count!.results[0]!.n,items};
 }
 
 // ---- 圖片 ---------------------------------------------------------------------

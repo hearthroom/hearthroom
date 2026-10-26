@@ -35,7 +35,7 @@ it("filters all public list scopes and pinned posts before count, pagination and
     for (const scope of ["", "&column=news", "&group=official"]) {
       const data = await api(`/v1/blog/posts?locale=${locale}${scope}`);
       const slugs = [...data.pinned, ...data.items].map(p => p.slug).sort();
-      expect(slugs).toEqual([`guide-${locale.toLowerCase()}`, ...(/^zh-/.test(locale) ? ["old-announcement"] : [])].sort());
+      expect(slugs).toEqual([`guide-${locale.toLowerCase()}`, ...(/^zh-/.test(locale) ? ["old-announcement",`guide-${locale==="zh-Hant"?"zh-hans":"zh-hant"}`] : [])].sort());
     }
   }
   for (let i = 0; i < 15; i++) await publish(`entry-${i}-en`, "en", 200 + i);
@@ -47,10 +47,10 @@ it("filters all public list scopes and pinned posts before count, pagination and
   expect(new Set([...first.items, ...second.items].map(p => p.id)).size).toBe(15);
   expect((await api("/v1/blog/posts?locale=invalid")).pinned.map(p => p.slug)).toContain("guide-zh-hant");
 });
-it("keeps Chinese legacy fallback in both directions but excludes suffixed translations", async () => {
+it("uses Chinese fallback independently of old slug suffixes", async () => {
   await publish("old-hans", "zh-Hans");
   await publish("version-zh-hans", "zh-Hans");
-  expect((await publicPosts(env.DB, { locale: "zh-Hant", page: 1, now: 300 })).items.map(p => p.slug)).toEqual(["old-hans"]);
+  expect((await publicPosts(env.DB, { locale: "zh-Hant", page: 1, now: 300 })).items.map(p => p.slug).sort()).toEqual(["old-hans","version-zh-hans"]);
 });
 it("uses viewer locale for adjacent and related posts, including a legacy article", async () => {
   await publish("older-zh-hans", "zh-Hans", 90);
@@ -63,8 +63,8 @@ it("uses viewer locale for adjacent and related posts, including a legacy articl
   expect(data.adjacent.next?.slug).toBe("newer-zh-hans");
   expect(data.related.map(p => p.slug).sort()).toEqual(["newer-zh-hans", "older-zh-hans"]);
   const p = (await publicPost(env.DB, "news", "legacy", 200))!;
-  expect((await adjacentPosts(env.DB, p, 200)).prev).toBeNull();
-  expect(await relatedPosts(env.DB, p, 200)).toEqual([]);
+  expect((await adjacentPosts(env.DB, p, 200)).prev?.slug).toBe("older-zh-hans");
+  expect((await relatedPosts(env.DB, p, 200)).map(p=>p.slug)).toEqual(["newer-zh-hans","older-zh-hans"]);
 });
 it("filters each Atom feed before the twenty-entry limit", async () => {
   await publish("guide-zh-hans", "zh-Hans", 50);

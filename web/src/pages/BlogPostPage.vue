@@ -9,7 +9,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRouter,useRoute } from "vue-router";
 import BlogCampaign from "@/components/BlogCampaign.vue";
 import BlogPostCard from "@/components/BlogPostCard.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
@@ -18,13 +18,15 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
 import { allColumns, columnName, fetchColumns, fetchPost, groupOfColumn, likePost, markViewed, postPath, viewPost, type BlogGroup, type Engagement, type PostPage } from "@/lib/blog";
 import { dateOnly } from "@/lib/format";
-import { pageTitle } from "@/lib/i18n";
+import { articleUrl,clearArticleMeta,setArticleMeta } from "@/lib/blog-meta";
+import { LOCALES,pageTitle } from "@/lib/i18n";
 import { renderDoc } from "@/lib/markdown-toc";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
 
 const route = useRoute();
+const router=useRouter();
 const { t } = useI18n();
 const { lp, locale } = useLocalePath();
 
@@ -38,6 +40,10 @@ const loading = ref(true);
 const missing = ref(false);
 const failed = ref(false);
 
+const languageName=(code:string)=>LOCALES.find(l=>l.code===code)?.label??code;
+const preferred=computed(()=>typeof route.query.articleLang==="string"?route.query.articleLang:undefined);
+const translations=computed(()=>data.value?.translations??[]);
+const fallback=computed(()=>{const r=data.value?.resolution;return r&&r.reason!=="exact"&&r.requestedContentLocale&&r.requestedContentLocale!==r.contentLocale?r:null;});
 const post = computed(() => data.value?.post ?? null);
 const rendered = computed(() => renderDoc(post.value?.bodyMd ?? ""));
 const longRead = computed(() => rendered.value.toc.length >= 3);
@@ -91,16 +97,20 @@ let seq = 0;
 async function load() {
   const mine = ++seq;
   loading.value = true;
+  data.value=null;clearArticleMeta();document.title=pageTitle();
+  headingObserver?.disconnect();endObserver?.disconnect();activeId.value="";
   stats.value = null;
   statsGone.value = false;
   missing.value = false;
   failed.value = false;
   try {
-    const res = await fetchPost(columnSlug.value, slug.value, preview.value, locale.value);
+    const res = await fetchPost(columnSlug.value, slug.value, preview.value, locale.value,preferred.value);
     if (mine !== seq) return;
+    if(preferred.value&&!preview.value&&lp(postPath(res.post))!==route.path){await router.replace({path:lp(postPath(res.post)),query:route.query,hash:route.hash});return;}
     data.value = res;
     document.title = pageTitle(res.post.title);
     if (!preview.value) {
+      setArticleMeta(res.post,res.translations??[]);
       track("blog_view", { subject: res.post.slug });
       void refreshStats(res.post.id, mine);
     }
@@ -118,7 +128,7 @@ async function load() {
 
 // ---- 分享 --------------------------------------------------------------------
 const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-const shareUrl = computed(() => (post.value ? `${location.origin}${lp(postPath(post.value))}` : ""));
+const shareUrl = computed(() => (post.value ? articleUrl(post.value) : ""));
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function say(text: string) { toast.value = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.value = ""; }, 3000); }
@@ -204,13 +214,13 @@ onMounted(() => {
   if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
   fetchColumns().then((r) => { groups.value = r.items ?? []; }).catch(() => {});
 });
-watch([columnSlug, slug, preview, locale], () => { void load(); }, { immediate: true });
-onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect(); clearTimeout(toastTimer); });
+watch([columnSlug, slug, preview, locale,preferred], () => { void load(); }, { immediate: true });
+onBeforeUnmount(() => { seq++;clearArticleMeta(true);document.documentElement.lang=locale.value;headingObserver?.disconnect(); endObserver?.disconnect(); clearTimeout(toastTimer); });
 </script>
 
 <template>
   <NotFoundPage v-if="missing" />
-  <div v-else class="page blog-post" :aria-busy="loading && !!post">
+  <div v-else class="page blog-post" :lang="locale" :aria-busy="loading && !!post">
     <p v-if="preview" class="notice blog-post__preview" role="status">{{ t("blog.preview") }}</p>
 
     <p v-if="failed" class="notice notice--error" role="alert">
@@ -235,7 +245,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
           <span aria-hidden="true">›</span>
           <RouterLink :to="lp(`/blog/${post.columnSlug}`)" class="blog-post__column">{{ column }}</RouterLink>
         </nav>
-        <h1 class="blog-post__title">{{ post.title }}</h1>
+        <h1 class="blog-post__title" :lang="post.locale">{{ post.title }}</h1>
         <p class="blog-post__meta">
           <span class="blog-post__official">{{ t("blog.official") }}</span>
           <time v-if="published" :datetime="new Date(published).toISOString()">{{ dateOnly(published / 1000) }}</time>
@@ -243,6 +253,11 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
           <span>{{ t("blog.readMinutes", { n: post.readMinutes }) }}</span>
           <span v-if="viewsText">{{ viewsText }}</span>
         </p>
+        <nav v-if="!preview && translations.length" class="blog-post__languages" :aria-label="t('blog.translations')">
+          <span class="subtle">{{ t('blog.translations') }}</span>
+          <RouterLink v-for="v in translations" :key="v.id" :to="`${v.locale==='zh-Hant'?'':`/${v.locale}`}${postPath(v)}`" :hreflang="v.locale" :lang="v.locale" class="btn btn--sm" :aria-current="v.id===post.id?'true':undefined" :aria-label="v.id===post.id?t('blog.currentLanguage',{language:languageName(v.locale)}):languageName(v.locale)">{{ languageName(v.locale) }}<span v-if="v.id===post.id" aria-hidden="true"> ✓</span></RouterLink>
+        </nav>
+        <p v-if="fallback" class="notice" role="status">{{ t('blog.languageFallback',{requestedLanguage:languageName(fallback.requestedContentLocale!),language:languageName(fallback.contentLocale)}) }}</p>
         <img v-if="post.coverUrl" :src="post.coverUrl" alt="" class="blog-post__cover" />
       </header>
       <BlogCampaign v-if="post.campaign" :campaign="post.campaign" :subject="post.slug" at="top" />
@@ -262,7 +277,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
         </aside>
 
         <div class="blog-post__main">
-          <article ref="article" class="blog-post__body" v-html="rendered.html" />
+          <article ref="article" class="blog-post__body" :lang="post.locale" v-html="rendered.html" />
           <BlogCampaign v-if="post.campaign" :campaign="post.campaign" :subject="post.slug" at="end" />
 
           <div ref="endEl" class="blog-post__share">
@@ -279,10 +294,10 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 
           <nav v-if="data!.adjacent.prev || data!.adjacent.next" class="blog-post__adjacent">
             <RouterLink v-if="data!.adjacent.prev" :to="lp(postPath(data!.adjacent.prev))" class="blog-post__step">
-              <span class="subtle">{{ t("blog.prev") }}</span><span class="blog-post__step-title">{{ data!.adjacent.prev.title }}</span>
+              <span class="subtle">{{ t("blog.prev") }}<span v-if="data!.adjacent.prev.fallback"> · {{ languageName(data!.adjacent.prev.locale) }}</span></span><span class="blog-post__step-title">{{ data!.adjacent.prev.title }}</span>
             </RouterLink>
             <RouterLink v-if="data!.adjacent.next" :to="lp(postPath(data!.adjacent.next))" class="blog-post__step blog-post__step--next">
-              <span class="subtle">{{ t("blog.next") }}</span><span class="blog-post__step-title">{{ data!.adjacent.next.title }}</span>
+              <span class="subtle">{{ t("blog.next") }}<span v-if="data!.adjacent.next.fallback"> · {{ languageName(data!.adjacent.next.locale) }}</span></span><span class="blog-post__step-title">{{ data!.adjacent.next.title }}</span>
             </RouterLink>
           </nav>
 
@@ -319,6 +334,8 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 .blog-post__meta > * + *::before { content: "·"; margin-right: var(--s-2); }
 .blog-post__official { padding: 1px 8px; border-radius: var(--r-pill); background: var(--accent-tint); color: var(--accent-text); font-size: 12px; font-weight: 600; }
 .blog-post__meta > .blog-post__official + *::before { content: none; }
+.blog-post__languages { display:flex;flex-wrap:wrap;gap:var(--s-2);align-items:center;min-width:0; }
+.blog-post__languages [aria-current=true] { color:var(--accent-text);box-shadow:inset 0 0 0 1px var(--accent); }
 .blog-post__cover { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r-lg); margin-top: var(--s-2); background: var(--surface-2); }
 
 .blog-post__layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); align-items: start; }

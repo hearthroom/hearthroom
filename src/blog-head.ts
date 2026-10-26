@@ -1,6 +1,6 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
 import { SITE_NAME, siteName } from "../shared/site-name";
-import { LOCALES, columnTree, publicPost, recentPosts, type Column, type Locale, type Post } from "./blog";
+import { LOCALES, columnTree, resolveArticleRoute, optionalBlogLocale, recentPosts, type Column, type Locale, type Post } from "./blog";
 import { oneLine, siteOgImage, type PageMeta } from "./head";
 import type { Env } from "./types";
 
@@ -56,9 +56,11 @@ export function plainText(md: string): string {
 const absolute = (u: string | null) => (u ? `${origin}${u}` : null);
 
 /** 公開文章的 head；未公開或不存在是 null（呼叫端回殼＋noindex＋404）。 */
-export async function postMeta(db: D1Database, column: string, slug: string, now: number): Promise<PageMeta | null> {
-  const post: Post | null = await publicPost(db, column, slug, now);
-  if (!post) return null;
+export async function postMeta(db: D1Database, column: string, slug: string, now: number, viewerLocale?: string, preferredLocale?: string): Promise<PageMeta | null> {
+  const resolved=await resolveArticleRoute(db,{columnSlug:column,slug,now,viewerLocale:optionalBlogLocale(viewerLocale),preferredLocale:optionalBlogLocale(preferredLocale)});
+  if (!resolved) return null;
+  const {post,translations}=resolved;
+  const original=translations.find(p=>p.locale===post.sourceLocale) ?? translations[0]!;
   const title = post.shareTitle || post.title;
   const image = absolute(post.shareCoverUrl) ?? absolute(post.coverUrl);
   const url = blogUrl(post.locale, post.columnSlug, post.slug);
@@ -66,6 +68,7 @@ export async function postMeta(db: D1Database, column: string, slug: string, now
   const modified = new Date(post.contentUpdatedAt).toISOString();
   return {
     lang: post.locale, title, url, type: "article",
+    alternates:[...translations.map(p=>({lang:p.locale,url:p.canonicalUrl})),{lang:"x-default",url:original.canonicalUrl}],
     description: post.shareDescription || post.excerpt || oneLine(plainText(post.bodyMd.slice(0, 2000))),
     image: image ?? siteOgImage("default", post.locale),
     ...(image ? {} : { imageSize: { width: 1200, height: 630 } }),
