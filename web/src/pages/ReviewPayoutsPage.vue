@@ -378,7 +378,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           <p class="subtle rpo-line">{{ dialog.payout.contentTitle }} · {{ points(dialog.payout.amount) }}</p>
           <label class="rpo-field">
             <span class="subtle">{{ t('campaign.payouts.reason') }}</span>
-            <textarea v-model="dialog.reason" class="input" rows="4" :disabled="dialog.busy" aria-describedby="rpo-reason-hint" />
+            <textarea autocomplete="off" v-model="dialog.reason" class="input" rows="4" :disabled="dialog.busy" aria-describedby="rpo-reason-hint" />
             <span id="rpo-reason-hint" class="rpo-field__foot subtle">
               <span>{{ t('campaign.payouts.reasonKept') }}</span>
               <span class="num" :class="{ 'rpo-over': reasonLength > REASON_MAX }">{{ reasonLength }}/{{ REASON_MAX }}</span>

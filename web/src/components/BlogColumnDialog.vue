@@ -86,7 +86,7 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', onKey); restore?
           <summary>{{ t(kind === 'group' ? 'blog.admin.groupDescription' : 'blog.admin.columnDescription') }}</summary>
           <label v-for="l in POST_LOCALES" :key="l" class="bcd-row">
             <span class="subtle">{{ localeLabel(l) }}</span>
-            <textarea v-model="form.description[l]" class="input" rows="2" maxlength="300" />
+            <textarea autocomplete="off" v-model="form.description[l]" class="input" rows="2" maxlength="300" />
           </label>
         </details>
         <label class="bcd-check"><input v-model="form.enabled" type="checkbox" /> {{ t('blog.admin.enabled') }}</label>

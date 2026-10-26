@@ -246,7 +246,7 @@ onMounted(() => {
 
         <div class="field">
           <label for="persona-define">{{ $t("settings.persona.define") }}</label>
-          <textarea id="persona-define" v-model="draft.userDefine" class="input" rows="6" :maxlength="DEFINE_MAX" :placeholder="$t('settings.persona.definePlaceholder')" />
+          <textarea autocomplete="off" id="persona-define" v-model="draft.userDefine" class="input" rows="6" :maxlength="DEFINE_MAX" :placeholder="$t('settings.persona.definePlaceholder')" />
           <p class="field__foot subtle"><span class="persona__count">{{ draft.userDefine.length }} / {{ DEFINE_MAX }}</span></p>
         </div>
 

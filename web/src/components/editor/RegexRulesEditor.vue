@@ -171,7 +171,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
           </div>
           <div class="field rx__replace">
             <label for="rx-replace">{{ $t("regex.rule.replace") }}</label>
-            <textarea id="rx-replace" v-model="selected.replace" class="input mono-input" spellcheck="false" :placeholder="$t('regex.rule.replace.placeholder')" />
+            <textarea autocomplete="off" id="rx-replace" v-model="selected.replace" class="input mono-input" spellcheck="false" :placeholder="$t('regex.rule.replace.placeholder')" />
             <span class="field__foot">
               <span class="subtle">{{ $t("regex.rule.replace.hint") }}</span>
               <span class="subtle count" :class="{ over: utf8Bytes(selected.replace) > REGEX_LIMITS.replaceBytes }">{{ (utf8Bytes(selected.replace) / 1024).toFixed(1) }} / {{ REGEX_LIMITS.replaceBytes / 1024 }} KB</span>
@@ -209,7 +209,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
             </div>
           </div>
           <div class="rx__test-panes">
-            <textarea id="rx-test" v-model="testInput" class="input mono-input" rows="5" :placeholder="$t('regex.test.placeholder')" />
+            <textarea autocomplete="off" id="rx-test" v-model="testInput" class="input mono-input" rows="5" :placeholder="$t('regex.test.placeholder')" />
             <pre class="rx__out input mono-input" aria-live="polite">{{ testOutput || $t("regex.test.empty") }}</pre>
           </div>
         </div>

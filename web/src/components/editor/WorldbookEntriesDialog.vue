@@ -248,7 +248,7 @@ function onKeydown(event: KeyboardEvent) {
 
             <div class="field wbd__content">
               <label for="wbd-content">{{ $t("wb.entry.content") }}</label>
-              <textarea id="wbd-content" class="input" :value="entry.content"
+              <textarea autocomplete="off" id="wbd-content" class="input" :value="entry.content"
                         :placeholder="$t('wb.entry.content.placeholder')"
                         @input="patch({ content: ($event.target as HTMLTextAreaElement).value })" />
               <span class="field__foot">

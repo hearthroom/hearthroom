@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
                   maxlength="80" /></label
               ><label
                 >{{ t("community.content")
-                }}<textarea
+                }}<textarea autocomplete="off"
                   :disabled="busy"
                   v-model="body"
                   required
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
               >
                 <label
                   >{{ t("community.reply")
-                  }}<textarea
+                  }}<textarea autocomplete="off"
                     :disabled="busy"
                     v-model="reply"
                     required

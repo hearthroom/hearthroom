@@ -48,9 +48,9 @@ const beyond = computed(() => !over.value && Boolean(props.advise) && length.val
       <span v-if="required" class="req" aria-hidden="true">*</span>
     </label>
     <!-- min-height 照 rows 算：欄位會跟內容長高（見編輯頁的 field-sizing），rows 只剩「起始有多高」這個意思 -->
-    <textarea v-if="rows > 0" :id="id" v-model="value" class="input" :rows="rows" :placeholder="placeholder"
+    <textarea autocomplete="off" v-if="rows > 0" :id="id" v-model="value" class="input" :rows="rows" :placeholder="placeholder"
               :style="{ minHeight: `calc(${rows} * 1.7em + 26px)` }" />
-    <input v-else :id="id" v-model="value" class="input" :placeholder="placeholder" />
+    <input v-else autocomplete="off" :id="id" v-model="value" class="input" :placeholder="placeholder" />
     <span v-if="hint || max" class="field__foot">
       <span class="subtle">{{ hint }}</span>
       <span v-if="max" class="subtle count" :class="{ over, beyond }">{{ length }} / {{ max }}</span>

@@ -85,7 +85,7 @@ onBeforeUnmount(()=>{alive=false;generation++;});
      <form data-grant-pack class="member-grant" @submit.prevent="grant">
       <h3>{{t('moderation.members.grant')}}</h3><p class="subtle">{{t('moderation.members.grantHint')}}</p>
       <label for="pack-granted">{{t('moderation.members.granted')}}</label><input id="pack-granted" v-model.number="granted" class="input member-grant__amount" type="number" min="1" max="100" step="1" required :disabled="busy"/>
-      <label for="pack-reason">{{t('moderation.reason')}}</label><textarea id="pack-reason" v-model="reason" class="input" rows="3" maxlength="2000" :disabled="busy"/>
+      <label for="pack-reason">{{t('moderation.reason')}}</label><textarea autocomplete="off" id="pack-reason" v-model="reason" class="input" rows="3" maxlength="2000" :disabled="busy"/>
       <button class="btn btn--primary work-submit" :disabled="busy||!reason.trim()||!validAmount">{{t('moderation.members.grantSubmit')}}</button>
      </form>
      <h3>{{t('moderation.members.badges')}}</h3>

@@ -496,7 +496,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
           <MarkdownToolbar v-show="pane === 'edit'" :disabled="uploading > 0" @act="act" />
           <input ref="imagePicker" type="file" accept="image/*" multiple class="bed-file" tabindex="-1" aria-hidden="true" @change="onPick" />
           <div class="bed-split" :class="`bed-split--${pane}`">
-            <textarea ref="source" v-model="draft.bodyMd" class="input bed-source" data-source spellcheck="false" maxlength="60000" :aria-label="t('blog.admin.body')"
+            <textarea autocomplete="off" ref="source" v-model="draft.bodyMd" class="input bed-source" data-source spellcheck="false" maxlength="60000" :aria-label="t('blog.admin.body')"
                       @paste="onPaste" @drop="onDrop" @dragover.prevent @keydown="onSourceKey" />
             <!-- renderDoc 不吃 HTML（html:false），跟文章頁同一份渲染 -->
             <article class="bed-preview" :aria-label="t('blog.admin.preview')" v-html="rendered" />
@@ -537,7 +537,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         </label>
         <label class="field">
           <span>{{ t('blog.admin.excerpt') }} <small class="subtle">{{ draft.excerpt.length }}/300</small></span>
-          <textarea v-model="draft.excerpt" class="input" rows="3" maxlength="300" />
+          <textarea autocomplete="off" v-model="draft.excerpt" class="input" rows="3" maxlength="300" />
         </label>
         <div class="field">
           <span class="bed-label">{{ t('blog.admin.cover') }}</span>
@@ -563,7 +563,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
           </label>
           <label class="field">
             <span>{{ t('blog.admin.shareDescription') }}</span>
-            <textarea v-model="draft.shareDescription" class="input" rows="2" maxlength="300" :placeholder="draft.excerpt" />
+            <textarea autocomplete="off" v-model="draft.shareDescription" class="input" rows="2" maxlength="300" :placeholder="draft.excerpt" />
           </label>
           <div class="field">
             <span class="bed-label">{{ t('blog.admin.shareCover') }}</span>

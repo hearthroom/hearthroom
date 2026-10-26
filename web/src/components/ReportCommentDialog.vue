@@ -66,7 +66,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
         </fieldset>
         <label class="report__note">
           <span class="subtle">{{ $t("comment.reportNote") }}</span>
-          <textarea v-model="note" class="input" rows="3" :maxlength="NOTE_MAX" />
+          <textarea autocomplete="off" v-model="note" class="input" rows="3" :maxlength="NOTE_MAX" />
         </label>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <div class="modal__actions">

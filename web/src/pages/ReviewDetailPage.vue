@@ -451,7 +451,7 @@ onMounted(() => { void load(); });
         </div>
         <div class="field">
           <label for="review-note">{{ $t("review.note.label") }}</label>
-          <textarea id="review-note" v-model="note" class="input" rows="3" :disabled="decided" />
+          <textarea autocomplete="off" id="review-note" v-model="note" class="input" rows="3" :disabled="decided" />
           <!-- 常見的駁回理由一鍵填入；審核人不改作者的宣告，只駁回 -->
           <button type="button" class="btn btn--sm btn--ghost" :disabled="decided" @click="note = $t('review.rating.mismatch')">{{ $t("review.rating.mismatchFill") }}</button>
         </div>

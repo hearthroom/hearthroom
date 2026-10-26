@@ -46,7 +46,7 @@ const move = (index: number, delta: number) => {
     <p v-if="hint" class="subtle hint">{{ hint }}</p>
     <ul class="rows">
       <li v-for="(item, index) in modelValue" :key="index" class="row">
-        <textarea
+        <textarea autocomplete="off"
           class="input"
           :rows="rows ?? 2"
           :style="{ minHeight: `calc(${rows ?? 2} * 1.7em + 26px)` }"
