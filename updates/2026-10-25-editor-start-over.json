@@ -1,7 +1,7 @@
 {
   "tier": "fix",
   "audience": "authors",
-  "draft": true,
+  "draft": false,
   "title": {
     "zh-Hant": "新建卡片時修改自動恢復的舊草稿，儲存不再覆寫原本的卡。",
     "zh-Hans": "新建卡片时修改自动恢复的旧草稿，保存不再覆盖原来的卡。",
