@@ -237,3 +237,8 @@ it("shows real language versions and fallback reason, canonical metadata and no 
  expect(root.textContent).toContain(t('blog.languageFallback',{requestedLanguage:'日本語',language:'繁體中文'}));
  expect(document.head.querySelector('link[rel=canonical]')?.getAttribute('href')).toBe('https://sukisuki.ai/blog/news/hello');
 });
+it('uses the same plain Markdown description as SSR for an article without an excerpt',async()=>{
+ routes['/v1/blog/posts/news/hello']=post({excerpt:'',bodyMd:'[guide](https://example.test) **text**\n\n```js\nsecret code\n```'});
+ await mount(BlogPostPage,'/blog/news/hello','/blog/:column/:slug');
+ expect(document.head.querySelector('meta[property="og:description"]')?.getAttribute('content')).toBe('guide text');
+});

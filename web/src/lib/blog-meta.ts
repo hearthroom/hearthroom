@@ -1,3 +1,4 @@
+import {blogDescription} from "../../../shared/blog-text";
 import { PRIMARY_HOST } from '../../../shared/site-hosts';
 import { siteName } from '../../../shared/site-name';
 import type { BlogPost, TranslationBrief } from './blog';
@@ -10,7 +11,7 @@ export function clearArticleMeta(preserveAlternates=false){
 export function setArticleMeta(p:BlogPost,versions:TranslationBrief[]){
  clearArticleMeta();document.documentElement.lang=p.locale;
  const link=(rel:string,href:string,lang?:string)=>{const e=document.createElement('link');e.rel=rel;e.href=href;e.dataset.blogMeta='1';if(lang){e.hreflang=lang;e.dataset.hreflang='1';}document.head.append(e);};
- const title=p.shareTitle||p.title,description=p.shareDescription||p.excerpt||p.bodyMd.replace(/[#*_`~]/g,'').replace(/\s+/g,' ').slice(0,200);
+ const title=p.shareTitle||p.title,description=blogDescription(p);
  const url=articleUrl(p),image=p.shareCoverUrl||p.coverUrl||`${origin}/og/default-${p.locale}.jpg?v=3`;
  link('canonical',url);
  for(const v of versions)link('alternate',v.canonicalUrl,v.locale);

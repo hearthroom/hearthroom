@@ -1,7 +1,8 @@
+import {blogDescription} from "../shared/blog-text";
 import { PRIMARY_HOST } from "../shared/site-hosts";
 import { SITE_NAME, siteName } from "../shared/site-name";
 import { LOCALES, columnTree, resolveArticleRoute, optionalBlogLocale, recentPosts, type Column, type Locale, type Post } from "./blog";
-import { oneLine, siteOgImage, type PageMeta } from "./head";
+import { siteOgImage, type PageMeta } from "./head";
 import type { Env } from "./types";
 
 /**
@@ -40,18 +41,7 @@ export async function blogIndexMeta(db: D1Database, lang: string, target: { colu
   return { ...base, title: `${pick(found.name, l) || found.slug} · ${siteName(l)}`, description: pick(found.description, l) || BLOG_DESCRIPTION[l] };
 }
 
-/** 內文前面的一段純文字：去掉 Markdown 符號，連結與圖片只留文字。 */
-export function plainText(md: string): string {
-  return md
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/^[ \t]*(?:#{1,6}|>|[-*+]|\d+\.)[ \t]+/gm, "")
-    .replace(/[*_`~|]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export {plainText} from "../shared/blog-text";
 
 const absolute = (u: string | null) => (u ? `${origin}${u}` : null);
 
@@ -69,7 +59,7 @@ export async function postMeta(db: D1Database, column: string, slug: string, now
   return {
     lang: post.locale, title, url, type: "article",
     alternates:[...translations.map(p=>({lang:p.locale,url:p.canonicalUrl})),{lang:"x-default",url:original.canonicalUrl}],
-    description: post.shareDescription || post.excerpt || oneLine(plainText(post.bodyMd.slice(0, 2000))),
+    description: blogDescription(post),
     image: image ?? siteOgImage("default", post.locale),
     ...(image ? {} : { imageSize: { width: 1200, height: 630 } }),
     article: {

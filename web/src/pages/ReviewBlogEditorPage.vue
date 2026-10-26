@@ -110,16 +110,30 @@ const sourceLocked=computed(()=>versions.value.length>1&&post.value?.locale===po
 const columnLocked=computed(()=>urlLocked.value||versions.value.length>1||!!translationSource.value);
 const canDetach=computed(()=>versions.value.length>1&&post.value?.locale!==post.value?.sourceLocale);
 const linkConflict=ref(false);
+type LinkInput=Parameters<typeof changeTranslation>[2];
+const pendingLink=ref<{post:AdminPost;input:LinkInput;operationId:string;key:string;detach:boolean;title:string}|null>(null);
+async function submitPendingLink(){
+ const pending=pendingLink.value;if(!pending)return;
+ const res=await changeTranslation(await token(),pending.post.id,pending.input,pending.operationId);ops.delete(pending.key);
+ if(res.version!==pending.post.version+1||JSON.stringify(fromPost(res))!==JSON.stringify(fromPost(pending.post)))holdBase(pending.post,res);else post.value=res;
+ pendingLink.value=null;done.value=t(pending.detach?'blog.admin.detachTranslation':'blog.admin.translationLinked');
+}
+function failLink(e:unknown){
+ if(e instanceof ApiError&&e.status<500){pendingLink.value=null;if(/^blog_translation_/.test(e.code)){linkConflict.value=true;error.value=e.code==='blog_translation_locale_taken'?t('blog.admin.translationConflict',{language:localeLabel(draft.locale)}):t('blog.admin.translationGroupChanged');}else error.value=message(e);}
+ else error.value=message(e);
+}
+async function retryLink(){if(!pendingLink.value||busy.value)return;busy.value=true;error.value='';try{await submitPendingLink();}catch(e){failLink(e);}finally{busy.value=false;}}
+
 
 async function startTranslation(){
- const p=post.value;if(!p||busy.value||saving.value)return;
+ const p=post.value;if(!p||busy.value||saving.value||pendingLink.value)return;
  const existing=versions.value.find(v=>v.locale===translationLanguage.value);
  if(existing){await router.push(lp(`/review/blog/${existing.id}`));return;}
  const original=versions.value.find(v=>v.locale===p.sourceLocale);
  await router.push({path:lp('/review/blog/new'),query:{translationOf:original?.id??p.id,language:translationLanguage.value}});
 }
 async function changeLink(detach=false){
- if(!post.value||busy.value||saving.value||uploading.value)return;
+ if(!post.value||busy.value||saving.value||uploading.value||pendingLink.value)return;
  busy.value=true;error.value='';linkConflict.value=false;
  try{
   if(dirty.value){busy.value=false;await save();busy.value=true;if(dirty.value||conflict.value||error.value)return;}
@@ -135,12 +149,12 @@ async function changeLink(detach=false){
   if(!await confirmDialog({title:t(detach?'blog.admin.detachTranslationTitle':'blog.admin.attachTranslation'),message:t(detach?'blog.admin.detachTranslationHint':'blog.admin.translationLinkHint'),detail,confirmText:t(detach?'blog.admin.detachTranslation':'blog.admin.attachTranslation'),cancelText:t(detach?'blog.admin.keepAsTranslation':'blog.admin.keepTranslationLink'),focusCancel:true}))return;
   const input={expectedVersion:p.version,expectedGroupVersion:p.groupVersion??0,targetPostId:target?.versions.find(v=>v.locale===target?.sourceLocale)?.id??null,...(target?{expectedTargetGroupVersion:target.version}:{})};
   const key=`translation:${JSON.stringify(input)}`;
-  const res=await changeTranslation(await token(),p.id,input,opFor(key));ops.delete(key);
-  if(res.version!==p.version+1||JSON.stringify(fromPost(res))!==JSON.stringify(fromPost(p)))holdBase(p,res);else post.value=res;
-  done.value=t(detach?'blog.admin.detachTranslation':'blog.admin.translationLinked');
+  sideOpen.value=false;
+  pendingLink.value={post:p,input,operationId:opFor(key),key,detach,title:target?.title??p.title};
+  void nextTick(()=>document.querySelector<HTMLElement>('[data-link-status]')?.scrollIntoView?.({block:'center'}));
+  await submitPendingLink();
  }catch(e){
-  if(e instanceof ApiError&&/^blog_translation_/.test(e.code)){linkConflict.value=true;error.value=e.code==='blog_translation_locale_taken'?t('blog.admin.translationConflict',{language:localeLabel(draft.locale)}):t('blog.admin.translationGroupChanged');}
-  else error.value=message(e);
+  failLink(e);
  }finally{busy.value=false;}
 }
 let candidates:TranslationGroup[]=[];
@@ -156,7 +170,7 @@ async function token() {
 
 /** 把服務端的版本放進編輯器（丟掉本地內容）。 */
 function apply(p: AdminPost) {
-  ops.clear();
+  ops.clear();pendingLink.value=null;
   post.value = p;
   Object.assign(draft, fromPost(p));
   saved.value = JSON.stringify(draft);
@@ -173,7 +187,7 @@ function toLocalInput(ms: number) {
 let loadGeneration=0;
 async function load() {
   const gen=++loadGeneration;
-  loading.value = true; error.value = ''; previewUrl.value = ''; opened.value = null;translationSource.value=null;
+  loading.value = true; error.value = ''; previewUrl.value = ''; opened.value = null;translationSource.value=null;pendingLink.value=null;sideOpen.value=false;
   try {
     const access = await token();
     const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
@@ -203,6 +217,7 @@ async function load() {
         Object.assign(draft,fromPost(original),{locale:language,slug:`${original.slug.slice(0,65)}-${language.toLowerCase()}`});
       }
       slugTouched.value = !!translationSource.value;
+      if(translationSource.value)void nextTick(()=>{window.scrollTo?.(0,0);document.getElementById('bed-f-title')?.focus();});
     }
   } catch (e) { if(gen===loadGeneration)error.value = message(e, 'state.loadFailed'); } finally { if(gen===loadGeneration)loading.value = false; }
 }
@@ -227,7 +242,7 @@ let inflight: Promise<void> | null = null;
 /** 頁面已經離開：在途的存檔回來後不再換網址、不再排下一次自動儲存 */
 let alive = true;
 function save(opts: { auto?: boolean } = {}): Promise<void> {
-  if (saving.value || busy.value || uploading.value) return inflight ?? Promise.resolve();
+  if (saving.value || busy.value || uploading.value || pendingLink.value) return inflight ?? Promise.resolve();
   inflight = doSave(opts).finally(() => { inflight = null; });
   return inflight;
 }
@@ -456,7 +471,7 @@ function onSourceKey(e: KeyboardEvent) {
 
 // ---- 自動儲存：只對草稿與已撤下的文章，停手 AUTOSAVE_MS 後存。公開或排程中的不自動存，免得半成品直接上線 ----
 
-const autosaves = computed(() => !translationSource.value&&(!post.value || post.value.status === 'draft' || post.value.status === 'unpublished'));
+const autosaves = computed(() => !translationSource.value&&!pendingLink.value&&(!post.value || post.value.status === 'draft' || post.value.status === 'unpublished'));
 let autoTimer: ReturnType<typeof setTimeout> | undefined;
 /** 伺服器拒收的那一份內容：沒改過就不再自動送 */
 let refusedDraft = '';
@@ -506,13 +521,14 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
       <button v-if="saveFailed" type="button" class="btn btn--sm btn--ghost bed-state bed-state--failed" data-save-state @click="save()">{{ saveState }}</button>
       <span v-else class="subtle bed-state" data-save-state role="status">{{ saveState }}</span>
       <span class="bed-top__spacer" />
+      <button v-if="translationSource && !post" type="button" class="btn btn--sm" data-action="save-translation-draft" :disabled="saving || busy || uploading>0" @click="save()">{{ t('blog.admin.save') }}</button>
       <div class="seg bed-pane">
         <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'edit' }" :aria-pressed="pane === 'edit'" @click="pane = 'edit'">{{ t('blog.admin.edit') }}</button>
         <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'preview' }" :aria-pressed="pane === 'preview'" @click="pane = 'preview'">{{ t('blog.admin.preview') }}</button>
       </div>
       <button type="button" class="btn btn--sm bed-settings-toggle" data-action="open-settings" :aria-expanded="sideOpen" @click="sideOpen = !sideOpen">{{ t('blog.admin.openSettings') }}</button>
       <div class="bed-primary">
-        <button type="button" class="btn btn--primary" data-action="primary" :disabled="saving || busy || uploading > 0 || loading" @click="primary">{{ primaryLabel }}</button>
+        <button type="button" class="btn btn--primary" data-action="primary" :disabled="saving || busy || uploading > 0 || loading || !!pendingLink" @click="primary">{{ primaryLabel }}</button>
         <details ref="menu" class="bed-menu">
           <summary class="btn btn--primary bed-menu__toggle" data-action="publish-menu" :aria-label="t('blog.admin.publishOptions')">▾</summary>
           <div class="panel bed-menu__pop" role="menu">
@@ -532,6 +548,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
     </header>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <p v-if="pendingLink" class="notice" role="status" data-link-status>{{ pendingLink.title }} <button type="button" class="btn btn--sm" data-action="retry-translation" :disabled="busy" @click="retryLink">{{ t('blog.retry') }}</button></p>
     <p v-if="done && !error" class="notice" role="status">{{ done }}</p>
     <div v-if="conflict" class="notice notice--error bed-conflict" role="alert" data-conflict>
       <span>{{ t('blog.admin.conflict') }}</span>

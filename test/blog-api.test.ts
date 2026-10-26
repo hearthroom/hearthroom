@@ -379,3 +379,7 @@ describe("分組", () => {
     expect(await (await call("/metrics")).text()).toContain('hearthroom_blog_operations_total{operation="column",outcome="denied"}');
   });
 });
+it('attributes translation creation denials to the translation metric',async()=>{
+ const source=await newPost();const res=await call('/v1/blog/admin/posts',{method:'POST',token:'editor',body:{columnId,slug:'duplicate-language',locale:'zh-Hant',title:'Duplicate',excerpt:'',bodyMd:'',translationOfPostId:source.id,operationId:op()}});expect(res.status).toBe(409);
+ expect((await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='blog' AND operation='translation' AND outcome='denied'").first<{value:number}>())?.value).toBe(1);
+});

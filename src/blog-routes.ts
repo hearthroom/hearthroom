@@ -36,7 +36,7 @@ const page = (c: Ctx) => Number(c.req.query("page")) || 1;
 async function operationFor(c: Ctx): Promise<string | null> {
   const { method, path } = c.req;
   if (method === "GET") return null;
-  if (/^\/v1\/blog\/admin\/posts(\/[^/]+)?$/.test(path)) return "save";
+  if (/^\/v1\/blog\/admin\/posts(\/[^/]+)?$/.test(path)) return method==="POST"&&typeof (await bodyOf(c)).translationOfPostId==="string"?"translation":"save";
   if (path.endsWith("/translation")) return "translation";
   if (path.endsWith("/restore")) return "restore";
   if (path.startsWith("/v1/blog/admin/columns")) return "column";

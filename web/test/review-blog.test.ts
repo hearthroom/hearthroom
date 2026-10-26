@@ -667,3 +667,20 @@ it('lists each translation group once, with independent language/status links',a
  expect(host.querySelectorAll('[data-translation-group]')).toHaveLength(1);
  expect(host.querySelector('a[href="/review/blog/p1"]')).not.toBeNull();expect(host.querySelector('a[href="/review/blog/p2"]')).not.toBeNull();
 });
+it('offers a visible first draft save for an unsaved translation on touch devices',async()=>{
+ await mount('/review/blog/new?translationOf=p1&language=en');await settle();
+ expect(host.querySelector('[data-action=save-translation-draft]')?.textContent).toContain(t('blog.admin.save'));
+});
+it('retains an ambiguous association request and retries the same operation after further typing',async()=>{
+ const {confirmState,settleConfirm}=await import('../src/lib/confirm');
+ let attempt=0;
+ const current=post({locale:'en',translationGroupId:'old',sourceLocale:'en',groupVersion:1,translations:[{id:'p1',locale:'en',title:'English',status:'draft',publishAt:null}]});
+ const target={id:'target',sourceLocale:'zh-Hant',version:4,title:'Original',columnId:'c1',versions:[{id:'original',locale:'zh-Hant',title:'Original',status:'published',publishAt:1}]};
+ handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(current):c.path==='/v1/blog/admin/translation-groups'?ok({total:1,items:[target]}):c.path.endsWith('/translation')&&c.method==='PUT'?(++attempt===1?{status:503,body:{error:'unavailable'}}:ok({...current,version:4,translationGroupId:'target',sourceLocale:'zh-Hant',groupVersion:5})):undefined;
+ await mount('/review/blog/p1');await settle();
+ [...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===t('blog.admin.chooseTranslationOf'))!.click();await settle();
+ await confirmState.current!.field!.lookup!('Original');settleConfirm(true,'','Original','target');await settle();confirm().click();await settle();
+ expect(host.querySelector('[data-action=retry-translation]')).not.toBeNull();
+ type(source(),'still editing');await nextTick();host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.click();await settle();
+ const writes=calls.filter(c=>c.path.endsWith('/translation')&&c.method==='PUT');expect(writes).toHaveLength(2);expect(writes[1]!.body).toEqual(writes[0]!.body);expect(source().value).toBe('still editing');
+});
