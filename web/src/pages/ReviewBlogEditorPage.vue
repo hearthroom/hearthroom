@@ -120,7 +120,7 @@ async function submitPendingLink(){
 }
 function failLink(e:unknown){
  if(e instanceof ApiError&&e.status<500){pendingLink.value=null;if(/^blog_translation_/.test(e.code)){linkConflict.value=true;error.value=e.code==='blog_translation_locale_taken'?t('blog.admin.translationConflict',{language:localeLabel(draft.locale)}):t('blog.admin.translationGroupChanged');}else error.value=message(e);}
- else error.value='';
+ else error.value=e instanceof LoginExpiredError?e.message:'';
 }
 async function retryLink(){if(!pendingLink.value||busy.value)return;busy.value=true;error.value='';try{await submitPendingLink();}catch(e){failLink(e);}finally{busy.value=false;}}
 
@@ -162,9 +162,10 @@ let candidates:TranslationGroup[]=[];
 const ops = new Map<string, string>();
 const opFor = (key: string) => { let id = ops.get(key); if (!id) { id = crypto.randomUUID(); ops.set(key, id); } return id; };
 
+class LoginExpiredError extends Error {}
 async function token() {
   const value = await session.accessToken();
-  if (!value) throw new Error(t('auth.expired'));
+  if (!value) throw new LoginExpiredError(t('auth.expired'));
   return value;
 }
 

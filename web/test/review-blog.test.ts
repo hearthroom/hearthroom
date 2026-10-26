@@ -9,8 +9,8 @@ import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-
 import { i18n } from '../src/lib/i18n';
 import ConfirmDialog from '../src/components/ConfirmDialog.vue';
 
-const mocks = vi.hoisted(() => ({ role: 'manager' as string, reviewer: true, writer: true }));
-vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 7 }, profile: {}, ready: true, accessToken: async () => 'synthetic' }) }));
+const mocks = vi.hoisted(() => ({ role: 'manager' as string, reviewer: true, writer: true, token: 'synthetic' }));
+vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 7 }, profile: {}, ready: true, accessToken: async () => mocks.token }) }));
 vi.mock('../src/lib/api', async (original) => {
   const real = await original<typeof import('../src/lib/api')>();
   return {
@@ -56,7 +56,7 @@ const saveNow = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: '
 
 beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
-  mocks.role = 'manager'; mocks.reviewer = true; mocks.writer = true;
+  mocks.role = 'manager'; mocks.reviewer = true; mocks.writer = true; mocks.token = 'synthetic';
   calls = [];
   handle = () => undefined;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -700,4 +700,18 @@ it('shows a completed status after detaching a translation',async()=>{
  [...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===t('blog.admin.detachTranslation'))!.click();await settle();confirm().click();await settle();
  expect(host.querySelector('.notice[role=status]')?.textContent).toBe('已改為獨立文章');
  expect(calls.find(c=>c.method==='PUT'&&c.path.endsWith('/translation'))?.body.targetPostId).toBeNull();
+});
+
+it('keeps the login recovery hint and pending association when credentials expire before sending',async()=>{
+ const current=post({locale:'en',translationGroupId:'group',sourceLocale:'zh-Hant',groupVersion:2,translations:[{id:'original',locale:'zh-Hant',title:'Original',status:'published',publishAt:1},{id:'p1',locale:'en',title:'English',status:'draft',publishAt:null}]});
+ handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(current):c.path.endsWith('/translation')&&c.method==='PUT'?ok({...current,version:4,translationGroupId:'standalone',sourceLocale:'en',groupVersion:1,translations:[current.translations[1]]}):undefined;
+ await mount('/review/blog/p1');await settle();
+ [...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===t('blog.admin.detachTranslation'))!.click();await settle();
+ mocks.token='';confirm().click();await settle();
+ expect(host.querySelector('[role=alert]')?.textContent).toBe(t('auth.expired'));
+ expect(host.querySelector('[data-action=retry-translation]')).not.toBeNull();
+ expect(calls.filter(c=>c.path.endsWith('/translation')&&c.method==='PUT')).toHaveLength(0);
+ mocks.token='synthetic';host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.click();await settle();
+ expect(host.querySelector('[role=alert]')).toBeNull();
+ expect(host.querySelector('.notice[role=status]')?.textContent).toBe('已改為獨立文章');
 });
