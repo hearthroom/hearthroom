@@ -2,10 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createRole } from '../src/lib/api';
 import { fetchWorkVisibility, changeWorkVisibility, fetchVisibilityOperation, VisibilityError } from '../src/lib/work-visibility';
 afterEach(()=>vi.unstubAllGlobals());
-it('creates a private source explicitly',async()=>{
+it('creates an unlisted source explicitly',async()=>{
  const request=vi.fn(async()=>new Response('{"roleId":"source"}'));vi.stubGlobal('fetch',request);
  await createRole({roleName:'Fixture'},'token');
- expect(JSON.parse(String((request.mock.calls[0] as any)[1].body))).toMatchObject({visibility:'private',origin:'hearthroom'});
+ expect(JSON.parse(String((request.mock.calls[0] as any)[1].body))).toMatchObject({visibility:'unlisted',origin:'hearthroom'});
 });
 it('uses the author endpoints, original provider and caller command without dropping pending receipts',async()=>{
  const result={operation:{operationId:'same-key',state:'pending'}};
@@ -24,4 +24,10 @@ it('retains structured conflict and unavailable receipts without showing raw ser
  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify(body),{status:503})));
  try {await fetchWorkVisibility('source','token','harbor');throw new Error('expected rejection');}
  catch(e){expect(e).toBeInstanceOf(VisibilityError);expect(e).toMatchObject({status:503,code:body.error,result:body});}
+});
+
+it('honors an explicit private choice at creation',async()=>{
+ const request=vi.fn(async()=>new Response('{"roleId":"source"}'));vi.stubGlobal('fetch',request);
+ await createRole({roleName:'Fixture',visibility:'private'},'token');
+ expect(JSON.parse(String((request.mock.calls[0] as any)[1].body))).toMatchObject({visibility:'private'});
 });

@@ -41,7 +41,7 @@ describe("createRole", () => {
     vi.stubGlobal("fetch", fetchMock);
     await createRole({ roleName: "阿芙拉", language: "zh-Hant" }, "tok");
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect(JSON.parse(String(init.body))).toEqual({ roleName: "阿芙拉", language: "zh-Hant", origin: "hearthroom", visibility: "private" });
+    expect(JSON.parse(String(init.body))).toEqual({ roleName: "阿芙拉", language: "zh-Hant", origin: "hearthroom", visibility: "unlisted" });
   });
 });
 
@@ -219,7 +219,7 @@ it("建立上游設定只送協定欄位，不把社群分級一起帶去", asyn
  const draft={roleName:"Support",language:"en",contentRatingIntent:"r18",contentRating:"R18",isR18:true,nsfw:true,rating:"R"};
  await createRole(draft,"token");
  const init=(fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1];
- expect(JSON.parse(String(init.body))).toEqual({roleName:"Support",language:"en",origin:"hearthroom",visibility:"private"});
+ expect(JSON.parse(String(init.body))).toEqual({roleName:"Support",language:"en",origin:"hearthroom",visibility:"unlisted"});
 });
 
 it("sends customInstructions while keeping the editor draft intact", async () => {

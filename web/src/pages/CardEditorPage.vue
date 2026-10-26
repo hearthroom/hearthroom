@@ -130,6 +130,7 @@ const ratingResult = computed(() => (ratingAnswers.value ? rate(ratingAnswers.va
 /** 存完要重送審，但上一版沒有可沿用的分級問卷（問卷上線前送的）：作者得先補 */
 const ratingNeeded = ref(false);
 const isNew = computed(() => !roleId.value);
+const newCardVisibility = ref<"private" | "unlisted">("unlisted");
 // 已建立的中文卡可以在繁簡之間互換；以載入時的語言決定給不給選，選了之後選單不會消失。
 const scriptOptions = computed(() => scriptChoices(pristine.value.language));
 /**
@@ -453,7 +454,7 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
-interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; roleId?: string }
+interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; roleId?: string; visibility?: "private" | "unlisted" }
 function storeDraft() {
   if (!onCreatePage.value) return;
   try {
@@ -463,6 +464,7 @@ function storeDraft() {
     }
     const stored: StoredDraft = {
       draft: draft.value,
+      visibility: newCardVisibility.value,
       tagsText: tagsText.value,
       worldbook: wb.stored(),
       savedAt: Date.now(),
@@ -483,6 +485,7 @@ function restoreDraft() {
     if (!stored?.draft?.roleName && !stored?.draft?.roleDetailDesc && !stored?.draft?.roleWelcome) return;
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
+    newCardVisibility.value = stored.visibility === "private" ? "private" : "unlisted";
     if (stored.roleId) roleId.value = stored.roleId;
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
@@ -493,6 +496,7 @@ function restoreDraft() {
   }
 }
 function discardDraft() {
+  newCardVisibility.value = "unlisted";
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
   wb.reset();
@@ -501,7 +505,7 @@ function discardDraft() {
   localStorage.removeItem(DRAFT_KEY);
 }
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch([draft, wb], () => {
+watch([draft, wb, newCardVisibility], () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
@@ -752,7 +756,7 @@ async function save() {
     reviewResubmitted.value = !!review.resubmit;
     if (!targetRoleId) {
       const created = await createRole(
-        { roleName: draft.value.roleName.trim(), language: draft.value.language },
+        { roleName: draft.value.roleName.trim(), language: draft.value.language, visibility: newCardVisibility.value },
         token,
       );
       if (!created.roleId) throw new Error(t("state.createFailed"));
@@ -1036,6 +1040,14 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
+        <div v-if="isNew" class="field">
+          <label for="new-card-visibility">{{ $t('visibility.title') }}</label>
+          <select id="new-card-visibility" v-model="newCardVisibility" class="input" :disabled="saving" aria-describedby="new-card-visibility-description">
+            <option value="unlisted">{{ $t('visibility.option.unlisted') }}</option>
+            <option value="private">{{ $t('visibility.option.private') }}</option>
+          </select>
+          <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
+        </div>
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
@@ -1318,7 +1330,7 @@ async function exportCard(format: "png" | "json") {
 
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
-          <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
+          <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
           <SharedStatePanel v-if="!isNew && roleId" :role-id="roleId" :provider="editorProvider" :card-name="draft.roleName" :token="visibilityToken" />
           <div class="panel checklist">

@@ -2270,7 +2270,7 @@
   "d808d059eb4b9": "メタデータ、エントリ操作、関連付けを同じトランザクションで適用し、不正な操作があればリクエスト全体を取り消します。1 回に最大 200 操作を受け付けます。呼び出し元は Lorebook と関連付けるエージェント設定の所有者である必要があります。メタデータは name、description、iconUrl、tags を置き換え、visibility の省略時は現在値を保持します。`createdEntryIds` は作成操作の順に返します。詳細エンドポイントの `entryContentMax` を参照してください。関連付けた言語のうち最も広い上限を適用します。冪等な重複排除はありません。結果が不明な場合は作成操作を繰り返す前にエントリを読み戻してください。",
   "d8f26a110beb7": "操作数の上限超過は `worldbook_limit_exceeded` と `field`、`reason`、`index`、`max`、`actual`、`unit` で示します。その他の検証エラーは `invalid_arguments` と `field`、`index`、`reason` を返し、長さのエラーには `max`、`actual`、`unit` も含まれます。エントリの索引はゼロ始まりで、文書全体のフィールドは -1 です。指定されたフィールドを修正するか、バッチを分割して再送してください。",
   "dbd5d3615f700": "エージェント設定を作成",
-  "d5624afa08837": "bearer アカウントが所有するエージェント設定を作成します。`visibility` を `private` にすると作者のみ、`unlisted` にするとリンクからアクセスでき、省略時の `visibility` は `unlisted` です。承認済みクライアントは scope の範囲内で引き続きアクセスできます。作成だけでは公開や審査申請は行いません。CLI は `--create` で `private` を送信します。",
+  "d5624afa08837": "bearer アカウントが所有するエージェント設定を作成します。`visibility` を `private` にすると作者のみ、`unlisted` にするとリンクからアクセスでき、省略時の `visibility` は `unlisted` です。承認済みクライアントは scope の範囲内で引き続きアクセスできます。作成だけでは公開や審査申請は行いません。CLI は `--create` で `unlisted` を送信します。",
   "dd4e8e5e9fb1c": "`not_found`",
   "d6e2a15c61061": "`temporarily_unavailable`",
   "d43e82bc212a8": "ストリーミング出力の既定値を解決するモデル。省略時はアプリの既定モデルを使い、保存済みのモデル選択は変更しません。",

@@ -2270,7 +2270,7 @@
   "d808d059eb4b9": "메타데이터, 항목 작업, 연결을 하나의 트랜잭션으로 적용하며 잘못된 작업이 있으면 요청 전체를 취소해요. 요청당 최대 200개 작업을 받아요. 호출자는 Lorebook과 연결할 에이전트 설정의 소유자여야 해요. 메타데이터는 name, description, iconUrl, tags를 교체하고 visibility를 생략하면 현재 값을 유지해요. `createdEntryIds`는 생성 작업 순서로 반환해요. 상세 조회의 `entryContentMax`를 확인하세요. 연결된 언어 중 가장 넓은 한도가 적용돼요. 멱등 중복 제거는 제공하지 않으므로 결과가 불명확하면 생성 작업을 다시 보내기 전에 항목을 조회하세요.",
   "d8f26a110beb7": "작업 수 한도 초과는 `worldbook_limit_exceeded`와 `field`, `reason`, `index`, `max`, `actual`, `unit`으로 알려줘요. 다른 검증 오류는 `invalid_arguments`와 `field`, `index`, `reason`을 반환하며 길이 오류에는 `max`, `actual`, `unit`도 포함돼요. 항목 인덱스는 0부터 시작하고 문서 수준 필드는 -1이에요. 해당 필드를 수정하거나 배치를 나눈 후 다시 보내세요.",
   "dbd5d3615f700": "에이전트 설정 생성",
-  "d5624afa08837": "bearer 계정이 소유하는 에이전트 설정을 만들어요. `visibility`를 `private`으로 설정하면 작성자만, `unlisted`로 설정하면 링크로 접근할 수 있으며 `visibility`를 생략하면 `unlisted`가 돼요. 승인된 클라이언트는 scope 범위에서 계속 접근할 수 있어요. 생성만으로 공개하거나 심사를 신청하지 않아요. CLI는 `--create`에서 `private`을 보내요.",
+  "d5624afa08837": "bearer 계정이 소유하는 에이전트 설정을 만들어요. `visibility`를 `private`으로 설정하면 작성자만, `unlisted`로 설정하면 링크로 접근할 수 있으며 `visibility`를 생략하면 `unlisted`가 돼요. 승인된 클라이언트는 scope 범위에서 계속 접근할 수 있어요. 생성만으로 공개하거나 심사를 신청하지 않아요. CLI는 `--create`에서 `unlisted`를 보내요.",
   "dd4e8e5e9fb1c": "`not_found`",
   "d6e2a15c61061": "`temporarily_unavailable`",
   "d43e82bc212a8": "스트리밍 출력 기본값을 결정할 모델입니다. 생략하면 앱의 기본 모델을 사용하며, 저장된 모델 선택은 변경하지 않습니다.",
