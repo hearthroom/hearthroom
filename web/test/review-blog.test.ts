@@ -683,4 +683,5 @@ it('retains an ambiguous association request and retries the same operation afte
  expect(host.querySelector('[data-action=retry-translation]')).not.toBeNull();
  type(source(),'still editing');await nextTick();host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.click();await settle();
  const writes=calls.filter(c=>c.path.endsWith('/translation')&&c.method==='PUT');expect(writes).toHaveLength(2);expect(writes[1]!.body).toEqual(writes[0]!.body);expect(source().value).toBe('still editing');
+ await vi.waitFor(()=>expect(calls.some(c=>c.method==='PUT'&&c.path==='/v1/blog/admin/posts/p1'&&c.body.bodyMd==='still editing'&&c.body.autosave===true)).toBe(true),{timeout:AUTOSAVE_MS+1500});
 });

@@ -486,7 +486,7 @@ function scheduleAutosave() {
     void save({ auto: true }).finally(scheduleAutosave);
   }, AUTOSAVE_MS);
 }
-watch(() => JSON.stringify(draft), scheduleAutosave);
+watch([() => JSON.stringify(draft), autosaves], scheduleAutosave);
 onBeforeUnmount(() => { alive = false; clearTimeout(autoTimer); });
 
 // ---- 離開前提醒：站內換頁與關分頁都攔 ----

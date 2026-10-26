@@ -9,7 +9,8 @@ INSERT INTO blog_translation_preflight SELECT 0 FROM blog_posts p WHERE p.first_
     AND json_extract(a.after_json,'$.version') BETWEEN 1 AND p.version)=p.version
   AND EXISTS(SELECT 1 FROM audit_log a WHERE a.subject_kind='blog_post' AND a.subject_id=p.id AND a.action='publish')
   AND NOT EXISTS(SELECT 1 FROM audit_log a WHERE a.subject_kind='blog_post' AND a.subject_id=p.id AND a.action IN('publish','unpublish')
-    AND (json_type(a.after_json,'$.version') IS NOT 'integer' OR json_extract(a.after_json,'$.status') IS NOT CASE a.action WHEN 'publish' THEN 'published' ELSE 'unpublished' END
+    AND (json_type(a.after_json,'$.version') IS NOT 'integer' OR json_extract(a.after_json,'$.version') NOT BETWEEN 1 AND p.version
+      OR json_extract(a.after_json,'$.status') IS NOT CASE a.action WHEN 'publish' THEN 'published' ELSE 'unpublished' END
       OR (a.action='publish' AND json_type(a.after_json,'$.publishAt') IS NOT 'integer')))
   AND (SELECT a.action FROM audit_log a WHERE a.subject_kind='blog_post' AND a.subject_id=p.id AND a.action IN('publish','unpublish') ORDER BY CAST(json_extract(a.after_json,'$.version') AS INTEGER) DESC LIMIT 1)
     =CASE p.status WHEN 'published' THEN 'publish' WHEN 'unpublished' THEN 'unpublish' ELSE 'unknown' END
