@@ -1,0 +1,162 @@
+[
+  {
+    "key": "20[6-7][0-9]",
+    "warn": true
+  },
+  {
+    "key": "[abc]",
+    "warn": true
+  },
+  {
+    "key": "[^0-9]",
+    "warn": true
+  },
+  {
+    "key": "\\d+",
+    "warn": true
+  },
+  {
+    "key": "\\w{3}",
+    "warn": true
+  },
+  {
+    "key": "\\bport\\b",
+    "warn": true
+  },
+  {
+    "key": "dock{2}",
+    "warn": true
+  },
+  {
+    "key": "dock{2,4}",
+    "warn": true
+  },
+  {
+    "key": "dock{2,}",
+    "warn": true
+  },
+  {
+    "key": "^dock",
+    "warn": true
+  },
+  {
+    "key": "dock$",
+    "warn": true
+  },
+  {
+    "key": "harbor.*gate",
+    "warn": true
+  },
+  {
+    "key": "harbor.+gate",
+    "warn": true
+  },
+  {
+    "key": "(dock|pier)",
+    "warn": true
+  },
+  {
+    "key": "(?:dock)",
+    "warn": true
+  },
+  {
+    "key": "(?=dock)",
+    "warn": true
+  },
+  {
+    "key": "桟橋[甲乙]",
+    "warn": true
+  },
+  {
+    "key": "",
+    "warn": false
+  },
+  {
+    "key": "dock",
+    "warn": false
+  },
+  {
+    "key": "2065",
+    "warn": false
+  },
+  {
+    "key": "C++",
+    "warn": false
+  },
+  {
+    "key": "What?",
+    "warn": false
+  },
+  {
+    "key": "v1.2",
+    "warn": false
+  },
+  {
+    "key": "price $5",
+    "warn": false
+  },
+  {
+    "key": "A/B",
+    "warn": false
+  },
+  {
+    "key": "/assets/dock/",
+    "warn": false
+  },
+  {
+    "key": "/20[6-7][0-9]/i",
+    "warn": false
+  },
+  {
+    "key": "/^dock$/",
+    "warn": false
+  },
+  {
+    "key": "/[abc]/gim",
+    "warn": false
+  },
+  {
+    "key": "\\[dock\\]",
+    "warn": false
+  },
+  {
+    "key": "\\\\d",
+    "warn": false
+  },
+  {
+    "key": "dock\\$",
+    "warn": false
+  },
+  {
+    "key": "\\^dock",
+    "warn": false
+  },
+  {
+    "key": "dock{west}",
+    "warn": false
+  },
+  {
+    "key": "[unfinished",
+    "warn": false
+  },
+  {
+    "key": "\\\\\\d",
+    "warn": true
+  },
+  {
+    "key": " /chapter[4-6]/ ",
+    "warn": false
+  },
+  {
+    "key": "\t/^dock$/i\r\n",
+    "warn": false
+  },
+  {
+    "key": "/chapter[4-6]/　",
+    "warn": false
+  },
+  {
+    "key": "﻿/chapter[4-6]/",
+    "warn": true
+  }
+]

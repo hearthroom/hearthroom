@@ -880,6 +880,7 @@
   "wb.entry.match": "怎么算命中",
   "wb.entry.match.case": "分大小写",
   "wb.entry.match.whole": "整个词才算",
+  "wb.entry.regexHint": "这个写法会按普通文本匹配；正则表达式需要用 /…/ 包起来，例如 /chapter[4-6]/。如果要匹配原样文本，可以忽略此提示。",
   "wb.entry.match.hint": "从酒馆带进来的条目照这里的规则逐字比对。",
   "wb.entry.match.logic": "次要关键词怎么算",
   "wb.entry.match.logic.0": "出现任一个",

@@ -880,6 +880,7 @@
   "wb.entry.match": "怎麼算命中",
   "wb.entry.match.case": "分大小寫",
   "wb.entry.match.whole": "整個詞才算",
+  "wb.entry.regexHint": "這個寫法會按普通文字比對；正規表示式需加上 /…/ 外框，例如 /chapter[4-6]/。要比對原樣文字可忽略此提示。",
   "wb.entry.match.hint": "從酒館帶進來的條目照這裡的規則逐字比對。",
   "wb.entry.match.logic": "次要關鍵詞怎麼算",
   "wb.entry.match.logic.0": "出現任一個",

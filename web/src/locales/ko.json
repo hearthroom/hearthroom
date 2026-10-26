@@ -880,6 +880,7 @@
   "wb.entry.match": "무엇을 적중으로 볼지",
   "wb.entry.match.case": "대소문자 구분",
   "wb.entry.match.whole": "단어 전체가 맞을 때만",
+  "wb.entry.regexHint": "이대로는 일반 텍스트로 검색하고, 정규식으로 쓰려면 /…/로 감싸야 해요(예: /chapter[4-6]/). 입력한 텍스트 그대로 검색하려는 경우 이 안내는 무시해도 돼요.",
   "wb.entry.match.hint": "Tavern에서 가져온 항목은 여기 규칙대로 글자 그대로 대조합니다.",
   "wb.entry.match.logic": "보조 키워드를 세는 방법",
   "wb.entry.match.logic.0": "하나라도 나오면",

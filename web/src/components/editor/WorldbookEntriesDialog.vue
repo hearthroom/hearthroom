@@ -15,6 +15,7 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
 import { entryContentMax } from "@/lib/tavern";
+import { looksLikeBareRegex } from "@/lib/lorebook-regex";
 
 const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
@@ -39,6 +40,9 @@ const commit = (next: WorldbookEntryDraft[]) => emit("update:modelValue", next);
 /** 選中的是第幾條。條目沒有穩定的本地 id（新加的還沒有 entryId），所以每次改動順序或刪除都要跟著調。 */
 const selected = ref(props.modelValue.length ? 0 : -1);
 const entry = computed(() => props.modelValue[selected.value] ?? null);
+
+const primaryRegexHint = computed(() => entry.value?.keywords.some(looksLikeBareRegex) ?? false);
+const secondaryRegexHint = computed(() => entry.value?.secondaryKeywords?.some(looksLikeBareRegex) ?? false);
 
 const query = ref("");
 const visible = computed(() => {
@@ -216,7 +220,9 @@ function onKeydown(event: KeyboardEvent) {
               <label for="wbd-kw">{{ $t("wb.entry.keywords") }}</label>
               <input id="wbd-kw" class="input" :value="entry.keywords.join('、')" :disabled="entry.isConstant"
                      :placeholder="$t('wb.entry.keywords.placeholder')"
+                     :aria-describedby="primaryRegexHint ? 'wbd-kw-hint' : undefined"
                      @input="patch({ keywords: splitKeywords(($event.target as HTMLInputElement).value) })" />
+              <span v-if="primaryRegexHint" id="wbd-kw-hint" class="wbd__regex-hint subtle" role="status">{{ $t("wb.entry.regexHint") }}</span>
               <span class="subtle">{{ entry.isConstant ? $t("wb.entry.keywords.constantHint") : $t("wb.entry.keywords.hint") }}</span>
             </div>
 
@@ -224,7 +230,9 @@ function onKeydown(event: KeyboardEvent) {
               <label for="wbd-sk">{{ $t("wb.entry.secondary") }}</label>
               <input id="wbd-sk" class="input" :value="(entry.secondaryKeywords ?? []).join('、')"
                      :placeholder="$t('wb.entry.secondary.placeholder')"
+                     :aria-describedby="secondaryRegexHint ? 'wbd-sk-hint' : undefined"
                      @input="patch({ secondaryKeywords: splitKeywords(($event.target as HTMLInputElement).value) })" />
+              <span v-if="secondaryRegexHint" id="wbd-sk-hint" class="wbd__regex-hint subtle" role="status">{{ $t("wb.entry.regexHint") }}</span>
               <span class="subtle">{{ $t("wb.entry.secondary.hint") }}</span>
             </div>
 
@@ -331,6 +339,7 @@ function onKeydown(event: KeyboardEvent) {
 .wbd__edit { padding: var(--s-4); overflow-y: auto; display: grid; gap: var(--s-3); align-content: start; }
 .wbd__edit--empty { place-items: center; align-content: center; }
 .wbd__edit .field { margin-bottom: 0; gap: 6px; }
+.wbd__regex-hint { overflow-wrap: anywhere; }
 .wbd__content textarea { min-height: 220px; resize: vertical; }
 .wbd__toggles { display: flex; gap: var(--s-4); flex-wrap: wrap; }
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }

@@ -880,6 +880,7 @@
   "wb.entry.match": "何をヒットとみなすか",
   "wb.entry.match.case": "大文字と小文字を区別",
   "wb.entry.match.whole": "単語まるごとで一致",
+  "wb.entry.regexHint": "この書き方は通常の文字列として照合され、正規表現として使うには /…/ で囲む必要があります（例：/chapter[4-6]/）。文字列をそのまま照合したい場合は、この案内は無視できます。",
   "wb.entry.match.hint": "Tavern から取り込んだ項目は、ここのルールで文字どおり照合します。",
   "wb.entry.match.logic": "補助キーワードの数え方",
   "wb.entry.match.logic.0": "どれか一つが出てくる",
