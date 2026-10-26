@@ -1,0 +1,19 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "新建卡片預設為「有連結的人可看」。",
+    "zh-Hans": "新建卡片默认“有链接的人可看”。",
+    "en": "New cards are playable by anyone with the link by default.",
+    "ja": "新しいカードは初期設定でリンクを知っている人が遊べます。",
+    "ko": "새 카드는 기본적으로 링크를 아는 사람이 플레이할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "試玩卡仍是私人，既有卡片的公開範圍不變。",
+    "zh-Hans": "试玩卡仍为私人，已有卡片的可见范围不变。",
+    "en": "Trial cards stay private, and existing cards keep their visibility.",
+    "ja": "お試しカードは非公開のままで、既存カードの公開範囲も変わりません。",
+    "ko": "체험 카드는 계속 비공개이며, 기존 카드의 공개 범위는 바뀌지 않아요."
+  }
+}
