@@ -111,16 +111,24 @@ function settingsViewport(e: MediaQueryListEvent) { narrowSettings.value = e.mat
 function keepSettingsFocus(e: FocusEvent) {
   if (settingsModal.value && !confirmState.current && !revOpen.value && e.target instanceof Node && !settingsPanel.value?.contains(e.target)) focusSettings();
 }
-function settingsKey(e: KeyboardEvent) {
-  if (!settingsModal.value || e.defaultPrevented || e.key !== 'Tab') return;
-  const controls = [...settingsPanel.value!.querySelectorAll<HTMLElement>("a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex='0']")]
+function panelKey(e: KeyboardEvent, panel: HTMLElement | null) {
+  if (!panel || e.defaultPrevented || e.key !== 'Tab') return;
+  const controls = [...panel.querySelectorAll<HTMLElement>("a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex='0']")]
     .filter(el => el.tabIndex >= 0 && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[inert]'));
   const first = controls[0], last = controls.at(-1);
   if (!first || !last) return;
   if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
+function settingsKey(e: KeyboardEvent) { if (settingsModal.value) panelKey(e, settingsPanel.value); }
 const revOpen = ref(false);
+const revisionPanel = ref<HTMLElement | null>(null);
+watch(revOpen, (open) => {
+  void nextTick(() => {
+    if (open) revisionPanel.value?.querySelector<HTMLElement>('button')?.focus();
+    else settingsPanel.value?.querySelector<HTMLElement>('[data-action=open-revisions]')?.focus();
+  });
+});
 watch([() => confirmState.current, revOpen], () => {
   // A confirmation's opener can still be disabled while its async caller resumes.
   void nextTick(() => {
@@ -635,7 +643,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 
       <Teleport to="body" :disabled="!narrowSettings">
       <div v-if="settingsModal" class="bed-scrim" @click="sideOpen = false" />
-      <aside ref="settingsPanel" class="panel bed-side" :class="{ 'bed-side--open': sideOpen }" :role="settingsModal ? 'dialog' : undefined" :aria-modal="settingsModal ? true : undefined" :aria-hidden="narrowSettings && !sideOpen ? true : undefined" :inert="narrowSettings && !sideOpen" :aria-label="t('blog.admin.openSettings')" @keydown="settingsKey">
+      <aside ref="settingsPanel" class="panel bed-side" :class="{ 'bed-side--open': sideOpen }" :role="settingsModal ? 'dialog' : undefined" :aria-modal="settingsModal ? true : undefined" :aria-hidden="narrowSettings && !sideOpen ? true : undefined" :inert="narrowSettings && (!sideOpen || revOpen)" :aria-label="t('blog.admin.openSettings')" @keydown="settingsKey">
         <div class="bed-side__head">
           <h2>{{ t('blog.admin.openSettings') }}</h2>
           <button type="button" class="btn btn--sm btn--ghost bed-side__close" @click="sideOpen = false">{{ t('blog.admin.close') }}</button>
@@ -747,7 +755,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 
     <Teleport to="body">
       <div v-if="revOpen" class="bed-drawer-backdrop" @click.self="revOpen = false">
-        <section class="panel bed-drawer" role="dialog" aria-modal="true" :aria-label="t('blog.admin.revisions')">
+        <section ref="revisionPanel" class="panel bed-drawer" role="dialog" aria-modal="true" :aria-label="t('blog.admin.revisions')" @keydown="panelKey($event, revisionPanel)">
           <div class="bed-side__head">
             <h2>{{ t('blog.admin.revisions') }}</h2>
             <button type="button" class="btn btn--sm btn--ghost" @click="revOpen = false">{{ t('blog.admin.close') }}</button>
@@ -838,7 +846,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 .bed-link { display: block; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; user-select: all; }
 .bed-revs-open { justify-self: start; }
 .bed-scrim { display: none; }
-.bed-drawer-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: flex-end; background: rgba(0, 0, 0, 0.32); }
+.bed-drawer-backdrop { position: fixed; inset: 0; z-index: 104; display: flex; justify-content: flex-end; background: rgba(0, 0, 0, 0.32); }
 .bed-drawer { width: min(440px, 100%); height: 100%; border-radius: 0; display: grid; align-content: start; gap: var(--s-3); padding: var(--s-4); overflow-y: auto; }
 .bed-revs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
 .bed-rev { display: grid; gap: 2px; width: 100%; padding: var(--s-2) var(--s-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text); text-align: start; font: inherit; font-size: 13px; cursor: pointer; }

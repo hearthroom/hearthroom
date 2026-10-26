@@ -724,6 +724,12 @@ it('opens phone settings as a modal outside the inert app and restores focus on 
  expect(drawer.getAttribute('role')).toBe('dialog');expect(drawer.getAttribute('aria-modal')).toBe('true');
  expect(host.contains(drawer)).toBe(false);expect(host.inert).toBe(true);
  await vi.waitFor(()=>expect(document.activeElement).toBe(drawer.querySelector('.bed-side__close')));
+ drawer.querySelector<HTMLButtonElement>('[data-action=open-revisions]')!.click();await settle();
+ const revisions=document.querySelector<HTMLElement>('.bed-drawer')!;
+ expect(drawer.inert).toBe(true);expect(revisions.contains(document.activeElement)).toBe(true);
+ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));await settle();
+ expect(drawer.inert).toBe(false);expect(document.querySelector('.bed-drawer')).toBeNull();
+ expect(document.activeElement).toBe(drawer.querySelector('[data-action=open-revisions]'));
  window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));await settle();
  expect(host.inert).toBe(false);expect(document.activeElement).toBe(opener);
  expect(drawer.inert).toBe(true);expect(drawer.getAttribute('aria-hidden')).toBe('true');
