@@ -3379,5 +3379,9 @@
   "blog.admin.translationColumnHint": "번역은 원문과 같은 카테고리에 속해요.",
   "blog.admin.translationPinHint": "상단 고정은 이 글의 다른 언어 버전에도 적용되며, 각 목록에 최대 {pinnedLimit}개의 고정 글이 표시돼요.",
   "blog.admin.translationCarouselHint": "처음 게시한 지 {freshDays}일 이내인 고정 글은 홈 캐러셀에 최대 {carouselLimit}개까지 표시될 수 있어요.",
-  "blog.admin.translationUnpinHint": "다른 언어 버전이 상단에 고정되어 있으면 이 글도 고정 글로 남아요."
+  "blog.admin.translationUnpinHint": "다른 언어 버전이 상단에 고정되어 있으면 이 글도 고정 글로 남아요.",
+  "blog.admin.translationUpdating": "언어별 버전 설정을 변경하고 있어요…",
+  "blog.admin.translationPending": "언어별 버전 설정이 변경됐는지 아직 확인하지 못했어요.",
+  "blog.admin.confirmTranslationResult": "변경 결과 확인",
+  "blog.admin.translationDetached": "독립된 글로 바꿨어요"
 }

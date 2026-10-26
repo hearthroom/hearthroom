@@ -3379,5 +3379,9 @@
   "blog.admin.translationColumnHint": "翻譯與原文使用同一個欄目。",
   "blog.admin.translationPinHint": "置頂也適用於這篇的其他語言版本，各列表最多顯示 {pinnedLimit} 篇置頂文章。",
   "blog.admin.translationCarouselHint": "首次發布後 {freshDays} 天內的置頂文章可出現在首頁輪播，最多顯示 {carouselLimit} 篇。",
-  "blog.admin.translationUnpinHint": "其他語言版本若仍設為置頂，這篇仍會列入置頂文章。"
+  "blog.admin.translationUnpinHint": "其他語言版本若仍設為置頂，這篇仍會列入置頂文章。",
+  "blog.admin.translationUpdating": "正在更新語言版本設定…",
+  "blog.admin.translationPending": "語言版本設定的結果尚未確認。",
+  "blog.admin.confirmTranslationResult": "確認設定結果",
+  "blog.admin.translationDetached": "已改為獨立文章"
 }

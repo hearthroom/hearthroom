@@ -674,14 +674,30 @@ it('offers a visible first draft save for an unsaved translation on touch device
 it('retains an ambiguous association request and retries the same operation after further typing',async()=>{
  const {confirmState,settleConfirm}=await import('../src/lib/confirm');
  let attempt=0;
+ let release!:()=>void;const confirming=new Promise<void>(resolve=>{release=resolve;});
  const current=post({locale:'en',translationGroupId:'old',sourceLocale:'en',groupVersion:1,translations:[{id:'p1',locale:'en',title:'English',status:'draft',publishAt:null}]});
  const target={id:'target',sourceLocale:'zh-Hant',version:4,title:'Original',columnId:'c1',versions:[{id:'original',locale:'zh-Hant',title:'Original',status:'published',publishAt:1}]};
- handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(current):c.path==='/v1/blog/admin/translation-groups'?ok({total:1,items:[target]}):c.path.endsWith('/translation')&&c.method==='PUT'?(++attempt===1?{status:503,body:{error:'unavailable'}}:ok({...current,version:4,translationGroupId:'target',sourceLocale:'zh-Hant',groupVersion:5})):undefined;
+ handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(current):c.path==='/v1/blog/admin/translation-groups'?ok({total:1,items:[target]}):c.path.endsWith('/translation')&&c.method==='PUT'?(++attempt===1?{status:503,body:{error:'unavailable'}}:{...ok({...current,version:4,translationGroupId:'target',sourceLocale:'zh-Hant',groupVersion:5}),wait:confirming}):undefined;
  await mount('/review/blog/p1');await settle();
  [...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===t('blog.admin.chooseTranslationOf'))!.click();await settle();
  await confirmState.current!.field!.lookup!('Original');settleConfirm(true,'','Original','target');await settle();confirm().click();await settle();
  expect(host.querySelector('[data-action=retry-translation]')).not.toBeNull();
+ expect(host.querySelector('[data-link-status]')?.textContent).toContain('語言版本設定的結果尚未確認。');
+ expect(host.querySelector('[data-action=retry-translation]')?.textContent).toBe('確認設定結果');
+ expect(host.textContent).not.toContain('unavailable');
  type(source(),'still editing');await nextTick();host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.click();await settle();
+ expect(host.querySelector('[data-link-status]')?.textContent).toContain('正在更新語言版本設定…');
+ expect(host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.disabled).toBe(true);
+ release();await settle();
  const writes=calls.filter(c=>c.path.endsWith('/translation')&&c.method==='PUT');expect(writes).toHaveLength(2);expect(writes[1]!.body).toEqual(writes[0]!.body);expect(source().value).toBe('still editing');
  await vi.waitFor(()=>expect(calls.some(c=>c.method==='PUT'&&c.path==='/v1/blog/admin/posts/p1'&&c.body.bodyMd==='still editing'&&c.body.autosave===true)).toBe(true),{timeout:AUTOSAVE_MS+1500});
+});
+
+it('shows a completed status after detaching a translation',async()=>{
+ const current=post({locale:'en',translationGroupId:'group',sourceLocale:'zh-Hant',groupVersion:2,translations:[{id:'original',locale:'zh-Hant',title:'Original',status:'published',publishAt:1},{id:'p1',locale:'en',title:'English',status:'draft',publishAt:null}]});
+ handle=c=>c.path==='/v1/blog/admin/posts/p1'&&c.method==='GET'?ok(current):c.path.endsWith('/translation')&&c.method==='PUT'?ok({...current,version:4,translationGroupId:'standalone',sourceLocale:'en',groupVersion:1,translations:[current.translations[1]]}):undefined;
+ await mount('/review/blog/p1');await settle();
+ [...host.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===t('blog.admin.detachTranslation'))!.click();await settle();confirm().click();await settle();
+ expect(host.querySelector('.notice[role=status]')?.textContent).toBe('已改為獨立文章');
+ expect(calls.find(c=>c.method==='PUT'&&c.path.endsWith('/translation'))?.body.targetPostId).toBeNull();
 });

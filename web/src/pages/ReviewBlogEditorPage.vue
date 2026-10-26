@@ -116,11 +116,11 @@ async function submitPendingLink(){
  const pending=pendingLink.value;if(!pending)return;
  const res=await changeTranslation(await token(),pending.post.id,pending.input,pending.operationId);ops.delete(pending.key);
  if(res.version!==pending.post.version+1||JSON.stringify(fromPost(res))!==JSON.stringify(fromPost(pending.post)))holdBase(pending.post,res);else post.value=res;
- pendingLink.value=null;done.value=t(pending.detach?'blog.admin.detachTranslation':'blog.admin.translationLinked');
+ pendingLink.value=null;done.value=t(pending.detach?'blog.admin.translationDetached':'blog.admin.translationLinked');
 }
 function failLink(e:unknown){
  if(e instanceof ApiError&&e.status<500){pendingLink.value=null;if(/^blog_translation_/.test(e.code)){linkConflict.value=true;error.value=e.code==='blog_translation_locale_taken'?t('blog.admin.translationConflict',{language:localeLabel(draft.locale)}):t('blog.admin.translationGroupChanged');}else error.value=message(e);}
- else error.value=message(e);
+ else error.value='';
 }
 async function retryLink(){if(!pendingLink.value||busy.value)return;busy.value=true;error.value='';try{await submitPendingLink();}catch(e){failLink(e);}finally{busy.value=false;}}
 
@@ -134,7 +134,7 @@ async function startTranslation(){
 }
 async function changeLink(detach=false){
  if(!post.value||busy.value||saving.value||uploading.value||pendingLink.value)return;
- busy.value=true;error.value='';linkConflict.value=false;
+ busy.value=true;error.value='';done.value='';linkConflict.value=false;
  try{
   if(dirty.value){busy.value=false;await save();busy.value=true;if(dirty.value||conflict.value||error.value)return;}
   const p=post.value!;let target:TranslationGroup|undefined;
@@ -548,7 +548,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
     </header>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-    <p v-if="pendingLink" class="notice" role="status" data-link-status>{{ pendingLink.title }} <button type="button" class="btn btn--sm" data-action="retry-translation" :disabled="busy" @click="retryLink">{{ t('blog.retry') }}</button></p>
+    <p v-if="pendingLink" class="notice" role="status" data-link-status><span>{{ t(busy?'blog.admin.translationUpdating':'blog.admin.translationPending') }}</span><span class="bed-link-title">{{ pendingLink.title }}</span><button type="button" class="btn btn--sm" data-action="retry-translation" :disabled="busy" @click="retryLink">{{ t('blog.admin.confirmTranslationResult') }}</button></p>
     <p v-if="done && !error" class="notice" role="status">{{ done }}</p>
     <div v-if="conflict" class="notice notice--error bed-conflict" role="alert" data-conflict>
       <span>{{ t('blog.admin.conflict') }}</span>
@@ -719,6 +719,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 
 <style scoped>
 .bed-versions { display:grid;gap:var(--s-2);min-width:0; }
+.bed-link-title { display:block;overflow-wrap:anywhere; }
 .bed-version-list { display:flex;flex-wrap:wrap;gap:var(--s-2);margin-block:var(--s-2); }
 .bed-version-list .btn { white-space:normal;text-align:start;overflow-wrap:anywhere;max-width:100%;height:auto;min-height:var(--h-sm); }
 .bed { display: grid; gap: var(--s-3); min-width: 0; }

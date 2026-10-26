@@ -3379,5 +3379,9 @@
   "blog.admin.translationColumnHint": "翻訳は原文と同じカテゴリーに入ります。",
   "blog.admin.translationPinHint": "固定表示はこの記事の別言語版にも適用され、各一覧に最大{pinnedLimit}件が固定表示されます。",
   "blog.admin.translationCarouselHint": "初回公開から{freshDays}日以内の固定記事は、ホームのカルーセルに最大{carouselLimit}件まで表示されることがあります。",
-  "blog.admin.translationUnpinHint": "別の言語版が固定表示のままなら、この記事は引き続き固定記事として扱われます。"
+  "blog.admin.translationUnpinHint": "別の言語版が固定表示のままなら、この記事は引き続き固定記事として扱われます。",
+  "blog.admin.translationUpdating": "言語別の記事の設定を更新しています…",
+  "blog.admin.translationPending": "言語別の記事の設定が変更されたか、まだ確認できていません。",
+  "blog.admin.confirmTranslationResult": "変更結果を確認",
+  "blog.admin.translationDetached": "独立した記事にしました"
 }
