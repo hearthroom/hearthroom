@@ -200,3 +200,31 @@ it("sends viewer locale on article navigation and refreshes recommendations on l
   for (let i = 0; i < 6; i++) { await nextTick(); await new Promise(r => setTimeout(r, 0)); }
   expect(fetched.some(u => u.includes("/news/hello?") && u.includes("locale=en"))).toBe(true);
 });
+
+it.each([
+  ["/ja/blog", "/:locale/blog", "/en/blog"],
+  ["/ja/blog/g/creators", "/:locale/blog/g/:group", "/en/blog/g/creators"],
+  ["/ja/blog/guides", "/:locale/blog/:column", "/en/blog/guides"],
+])("clears prior-language cards during loading and failure on %s", async (path, pattern, target) => {
+  let release!: (value: Response) => void;
+  const pending = new Promise<Response>(resolve => { release = resolve; });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const u = new URL(url, "https://local.test");
+    if (u.pathname === "/v1/blog/columns") return new Response(JSON.stringify(columns));
+    if (u.searchParams.get("locale") === "en") return pending;
+    return new Response(JSON.stringify({ total: 13, pinned: [card("old-pin", { locale: "ja", pinned: true })], items: [card("old-item", { locale: "ja" })] }));
+  }));
+  const root = await mount(BlogListPage, path, pattern);
+  expect(root.textContent).toContain("標題 old-pin");
+  expect(root.textContent).toContain("標題 old-item");
+  await app.config.globalProperties.$router.push(target);
+  await nextTick();
+  expect(root.querySelector(".blog__skeleton")).not.toBeNull();
+  expect(root.querySelectorAll(".post-card")).toHaveLength(0);
+  expect(root.textContent).not.toContain("標題 old-pin");
+  release(new Response(JSON.stringify({ error: "unavailable" }), { status: 503 }));
+  for (let i = 0; i < 6; i++) { await nextTick(); await new Promise(r => setTimeout(r, 0)); }
+  expect(root.querySelector('[role="alert"]')).not.toBeNull();
+  expect(root.querySelectorAll(".post-card")).toHaveLength(0);
+  expect(root.textContent).not.toContain("標題 old-item");
+});

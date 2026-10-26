@@ -36,7 +36,12 @@ const nameOf = (slug: string) => columnName(allColumns(groups.value).find((c) =>
 /** 換欄目時上一欄的回應晚到就丟掉，不蓋掉新的 */
 let seq = 0;
 async function load(reset = false) {
-  if (reset) page.value = 1;
+  if (reset) {
+    page.value = 1;
+    pinned.value = [];
+    items.value = [];
+    total.value = 0;
+  }
   const mine = ++seq;
   loading.value = true;
   failed.value = false;
