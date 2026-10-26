@@ -22,7 +22,7 @@ import { ApiError } from '@/lib/api';
 import { applyMarkdown, type MarkdownAction } from '@/lib/markdown-edit';
 import { fetchCampaigns, localized, type Campaign } from '@/lib/campaign';
 import { BLOG_PINNED_LIMIT,BLOG_HOME_FRESH_DAYS,BLOG_HOME_LIMIT } from '../../../shared/blog';
-import { confirmDialog,confirmForm } from '@/lib/confirm';
+import { confirmDialog,confirmForm,confirmState } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
 import { LOCALES, pageTitle } from '@/lib/i18n';
 import { renderDoc } from '@/lib/markdown-toc';
@@ -79,7 +79,54 @@ const lastSaved = ref<{ at: number; auto: boolean } | null>(null);
 const saveFailed = ref(false);
 /** 手機上右側設定欄收成底部抽屜 */
 const sideOpen = ref(false);
+const narrowSettings = ref(false);
+const settingsPanel = ref<HTMLElement | null>(null);
+const settingsModal = computed(() => narrowSettings.value && sideOpen.value);
+let settingsMedia: MediaQueryList | undefined;
+let settingsOpener: HTMLElement | null = null;
+let settingsApp: HTMLElement | null = null;
+let settingsAppWasInert = false;
+function releaseSettingsBackground() {
+  if (settingsApp) settingsApp.inert = settingsAppWasInert;
+  settingsApp = null;
+}
+function focusSettings() {
+  settingsPanel.value?.querySelector<HTMLElement>('.bed-side__close')?.focus({ preventScroll: true });
+}
+watch(settingsModal, (open) => {
+  if (open) {
+    settingsOpener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : document.querySelector<HTMLElement>('[data-action=open-settings]');
+    settingsApp = document.getElementById('app');
+    if (settingsApp) { settingsAppWasInert = settingsApp.inert; settingsApp.inert = true; }
+    if (settingsPanel.value) settingsPanel.value.scrollTop = 0;
+    // At the transition's first frame visibility can still be hidden; focus once it is rendered.
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (settingsModal.value) focusSettings(); }));
+  } else {
+    releaseSettingsBackground();
+    if (!sideOpen.value && settingsOpener?.isConnected) settingsOpener.focus({ preventScroll: true });
+    settingsOpener = null;
+  }
+}, { flush: 'post' });
+function settingsViewport(e: MediaQueryListEvent) { narrowSettings.value = e.matches; }
+function keepSettingsFocus(e: FocusEvent) {
+  if (settingsModal.value && !confirmState.current && !revOpen.value && e.target instanceof Node && !settingsPanel.value?.contains(e.target)) focusSettings();
+}
+function settingsKey(e: KeyboardEvent) {
+  if (!settingsModal.value || e.defaultPrevented || e.key !== 'Tab') return;
+  const controls = [...settingsPanel.value!.querySelectorAll<HTMLElement>("a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex='0']")]
+    .filter(el => el.tabIndex >= 0 && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[inert]'));
+  const first = controls[0], last = controls.at(-1);
+  if (!first || !last) return;
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
 const revOpen = ref(false);
+watch([() => confirmState.current, revOpen], () => {
+  // A confirmation's opener can still be disabled while its async caller resumes.
+  void nextTick(() => {
+    if (settingsModal.value && !confirmState.current && !revOpen.value && !settingsPanel.value?.contains(document.activeElement)) focusSettings();
+  });
+});
 const menu = ref<HTMLDetailsElement | null>(null);
 /** 按了發布或更新而必填沒填：標出來 */
 const showMissing = ref(false);
@@ -499,17 +546,22 @@ onBeforeRouteUpdate((to) => (to.params.id === post.value?.id ? true : ask()));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) { e.preventDefault(); e.returnValue = ''; } };
 /** ⌘S／Ctrl＋S 儲存（已公開的是更新）；Esc 關抽屜 */
 function onKey(e: KeyboardEvent) {
+  if (e.defaultPrevented) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void (live.value ? update() : save()); return; }
   if (e.key === 'Escape' && revOpen.value) { revOpen.value = false; return; }
   if (e.key === 'Escape' && sideOpen.value) sideOpen.value = false;
 }
 onMounted(() => {
+  settingsMedia = window.matchMedia('(max-width: 899px)');
+  narrowSettings.value = settingsMedia.matches;
+  settingsMedia.addEventListener('change', settingsViewport);
+  document.addEventListener('focusin', keepSettingsFocus);
   document.title = pageTitle(t('moderation.tab.blog'));
   window.addEventListener('beforeunload', guard);
   window.addEventListener('keydown', onKey);
   void load();
 });
-onBeforeUnmount(() => { loadGeneration++;window.removeEventListener('beforeunload', guard); window.removeEventListener('keydown', onKey); });
+onBeforeUnmount(() => { releaseSettingsBackground();settingsMedia?.removeEventListener('change', settingsViewport);document.removeEventListener('focusin', keepSettingsFocus);loadGeneration++;window.removeEventListener('beforeunload', guard); window.removeEventListener('keydown', onKey); });
 // 新文章第一次存好會換到它自己的網址：那一篇已經在編輯器裡，不必重讀
 watch(() => [route.params.id,route.query.translationOf,route.query.language], ([id]) => { if (/\/review\/blog\/[^/]+$/.test(route.path) && (!id || id !== post.value?.id)) void load(); });
 </script>
@@ -581,8 +633,9 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
         </template>
       </div>
 
-      <div v-if="sideOpen" class="bed-scrim" @click="sideOpen = false" />
-      <aside class="panel bed-side" :class="{ 'bed-side--open': sideOpen }" :aria-label="t('blog.admin.openSettings')">
+      <Teleport to="body" :disabled="!narrowSettings">
+      <div v-if="settingsModal" class="bed-scrim" @click="sideOpen = false" />
+      <aside ref="settingsPanel" class="panel bed-side" :class="{ 'bed-side--open': sideOpen }" :role="settingsModal ? 'dialog' : undefined" :aria-modal="settingsModal ? true : undefined" :aria-hidden="narrowSettings && !sideOpen ? true : undefined" :inert="narrowSettings && !sideOpen" :aria-label="t('blog.admin.openSettings')" @keydown="settingsKey">
         <div class="bed-side__head">
           <h2>{{ t('blog.admin.openSettings') }}</h2>
           <button type="button" class="btn btn--sm btn--ghost bed-side__close" @click="sideOpen = false">{{ t('blog.admin.close') }}</button>
@@ -689,6 +742,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
         </details>
         <button v-if="post" type="button" class="btn btn--sm btn--ghost bed-revs-open" data-action="open-revisions" @click="openRevisions">{{ t('blog.admin.revisions') }} →</button>
       </aside>
+      </Teleport>
     </div>
 
     <Teleport to="body">
@@ -797,15 +851,15 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 @media (max-width: 899px) {
   .bed-body { grid-template-columns: minmax(0, 1fr); }
   .bed-settings-toggle { display: inline-flex; }
-  .bed-side { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 85; max-height: 80vh; border-radius: 24px 24px 0 0; padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom)); transform: translateY(100%); visibility: hidden; transition: transform var(--dur) var(--ease), visibility var(--dur); }
+  .bed-side { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 101; max-height: 80vh; border-radius: 24px 24px 0 0; padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom)); transform: translateY(100%); visibility: hidden; transition: transform var(--dur) var(--ease), visibility var(--dur); }
   .bed-side--open { transform: none; visibility: visible; }
   .bed-side__close { display: inline-flex; }
-  .bed-scrim { display: block; position: fixed; inset: 0; z-index: 84; background: rgba(0, 0, 0, 0.32); }
+  .bed-scrim { display: block; position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.32); }
 }
 @media (max-width: 760px) {
   .bed-top { gap: var(--s-1); }
   .bed-pane { order: 10; width: 100%; }
   .bed-title { font-size: 22px; }
-  .bed .btn, .bed .input:not(textarea) { min-height: 44px; }
+  .bed .btn, .bed .input:not(textarea), .bed-side .btn, .bed-side .input:not(textarea) { min-height: 44px; }
 }
 </style>

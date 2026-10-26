@@ -40,7 +40,7 @@ const tree = () => ({ items: [
 
 let app: App, host: HTMLElement, router: Router;
 async function mount(path: string) {
-  host = document.body.appendChild(document.createElement('div'));
+  host = document.body.appendChild(document.createElement('div'));host.id='app';
   router = createRouter({ history: createMemoryHistory(), routes: siteRouter.options.routes });
   await router.push(path);
   app = createApp({ render: () => [h(RouterView), h(ConfirmDialog)] }).use(createPinia()).use(router).use(i18n);
@@ -714,4 +714,17 @@ it('keeps the login recovery hint and pending association when credentials expir
  mocks.token='synthetic';host.querySelector<HTMLButtonElement>('[data-action=retry-translation]')!.click();await settle();
  expect(host.querySelector('[role=alert]')).toBeNull();
  expect(host.querySelector('.notice[role=status]')?.textContent).toBe('已改為獨立文章');
+});
+
+it('opens phone settings as a modal outside the inert app and restores focus on close',async()=>{
+ vi.stubGlobal('matchMedia',vi.fn(()=>({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()})));
+ await mount('/review/blog/p1');await settle();
+ const opener=host.querySelector<HTMLButtonElement>('[data-action=open-settings]')!;opener.focus();opener.click();await settle();
+ const drawer=document.querySelector<HTMLElement>('.bed-side')!;
+ expect(drawer.getAttribute('role')).toBe('dialog');expect(drawer.getAttribute('aria-modal')).toBe('true');
+ expect(host.contains(drawer)).toBe(false);expect(host.inert).toBe(true);
+ await vi.waitFor(()=>expect(document.activeElement).toBe(drawer.querySelector('.bed-side__close')));
+ window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));await settle();
+ expect(host.inert).toBe(false);expect(document.activeElement).toBe(opener);
+ expect(drawer.inert).toBe(true);expect(drawer.getAttribute('aria-hidden')).toBe('true');
 });
