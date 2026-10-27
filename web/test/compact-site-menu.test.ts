@@ -1,0 +1,26 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { computed, createApp, nextTick, type App } from "vue";
+import { createPinia } from "pinia";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { i18n } from "../src/lib/i18n";
+import CompactSiteSections from "../src/components/CompactSiteSections.vue";
+import { siteLinksKey } from "../src/lib/site-links";
+let app: App, root: HTMLElement;
+afterEach(() => { app?.unmount(); root?.remove(); vi.unstubAllGlobals(); });
+it("puts preferences before community, deduplicates destinations, and collapses low-frequency groups", async () => {
+  vi.stubGlobal("fetch", async () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }));
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
+  await router.push("/"); await router.isReady();
+  root = document.createElement("div"); document.body.append(root);
+  app = createApp(CompactSiteSections).use(createPinia()).use(router).use(i18n);
+  app.provide(siteLinksKey, computed(() => ({ repoUrl: "https://example.test/repo", license: "AGPL", discordInvite: "https://discord.test", showDownloadEntry: true, canInstallSite: true, routeLine: { name: "routes.name.a", host: "example.test" } })));
+  app.mount(root); await nextTick();
+  const groups = [...root.querySelectorAll('[data-menu-section]')];
+  expect(groups.map(g => g.getAttribute('data-menu-section'))).toEqual(['preferences', 'community', 'developers', 'support', 'legal']);
+  expect(root.querySelector('details')?.open).toBe(false);
+  const ids = [...root.querySelectorAll('[data-site-link]')].map(el => el.getAttribute('data-site-link'));
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids).toContain('download'); expect(ids).not.toContain('install');
+  expect(root.querySelector('[data-menu-section="community"]')?.querySelectorAll('[data-site-link]').length).toBe(5);
+  expect(root.querySelector('[data-menu-section="preferences"] [data-site-link="routes"]')?.textContent).toContain('example.test');
+});

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { LOCALES, SOURCE_LOCALE } from "@/lib/i18n";
 import { localeOf, withLocale } from "@/router";
@@ -7,7 +7,16 @@ import { track } from "@/lib/track";
 
 const route = useRoute();
 const router = useRouter();
+const props = defineProps<{ external?: boolean }>();
+let externalOpener: HTMLElement | null = null;
+function openFrom(opener: HTMLElement | null) {
+  externalOpener = opener; open.value = true;
+  void nextTick(() => root.value?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+}
+defineExpose({ openFrom });
+import { useHeaderOverlay } from "@/lib/site-links";
 const open = ref(false);
+useHeaderOverlay(open);
 const root = ref<HTMLElement | null>(null);
 const current = computed(() => localeOf(route));
 const label = computed(() => LOCALES.find((l) => l.code === current.value)?.label ?? current.value);
@@ -15,6 +24,7 @@ const label = computed(() => LOCALES.find((l) => l.code === current.value)?.labe
 /** 換語言就是換網址：連結可以分享，上一頁也回得去。榜單的語區也跟著這裡走。 */
 function switchTo(code: string) {
   open.value = false;
+  externalOpener?.focus();
   if (code === current.value) return;
   track("locale_switch", { subject: code });
   const bare = current.value === SOURCE_LOCALE ? route.path : route.path.replace(`/${current.value}`, "") || "/";
@@ -28,15 +38,15 @@ function onDocClick(e: MouseEvent) {
   if (root.value && !root.value.contains(e.target as Node)) open.value = false;
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && open.value) { open.value = false; root.value?.querySelector<HTMLElement>("button")?.focus(); }
+  if (e.key === "Escape" && open.value) { open.value = false; (externalOpener ?? root.value?.querySelector<HTMLElement>("button"))?.focus(); }
 }
 onMounted(() => { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onKey); });
 onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); });
 </script>
 
 <template>
-  <div ref="root" class="lang">
-    <button class="lang__btn" :aria-label="$t('nav.language')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
+  <div ref="root" class="lang" :class="{ 'is-external': props.external }">
+    <button v-if="!props.external" class="lang__btn" :aria-label="$t('nav.language')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
       <svg class="lang__icon" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5" />
         <path d="M2.75 10h14.5M10 2.75c2.2 2.3 2.2 12.2 0 14.5M10 2.75c-2.2 2.3-2.2 12.2 0 14.5" fill="none" stroke="currentColor" stroke-width="1.5" />
@@ -45,7 +55,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       <svg class="lang__chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
     </button>
 
-    <ul v-if="open" class="lang__menu panel" role="menu">
+    <ul v-if="open" class="lang__menu panel" data-discovery-overlay role="menu">
       <!-- 語言名用它自己的語言寫，不翻譯：各語言的使用者都認得自己的 -->
       <li v-for="l in LOCALES" :key="l.code" role="none">
         <button class="lang__item" :class="{ 'is-on': l.code === current }" :lang="l.code" role="menuitemradio" :aria-checked="l.code === current" @click="switchTo(l.code)">
@@ -90,4 +100,6 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 860px) { .lang__label { display: none; } .lang__btn { padding: 0 8px; } }
+.is-external { position: static; }
+.is-external .lang__menu { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); left: auto; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); overflow-y: auto; }
 </style>

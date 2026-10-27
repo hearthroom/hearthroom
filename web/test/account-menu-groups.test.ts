@@ -39,14 +39,14 @@ let app: App | null = null;
 let el: HTMLElement | null = null;
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
 
-async function openMenu() {
+async function openMenu(compact = false) {
   el = document.createElement("div");
   document.body.appendChild(el);
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
   const pinia = createPinia();
   setActivePinia(pinia);
   await useSession().restore();
-  app = createApp(AccountMenu);
+  app = createApp(AccountMenu, { compact });
   app.use(pinia).use(router).use(i18n);
   await router.push("/");
   await router.isReady();
@@ -116,4 +116,19 @@ describe("頭像選單分組", () => {
     const menu = await openMenu();
     expect(hrefs(menu)).not.toContain("/checkin");
   });
+});
+
+it("窄選單在創作與社群之前放偏好，低頻預設收合，End與Esc回唯一頭像", async () => {
+  rewards = panel(false);
+  const menu = await openMenu(true);
+  const sections = [...menu.querySelectorAll('[data-menu-section]')].map(el => el.getAttribute('data-menu-section'));
+  expect(sections.indexOf('preferences')).toBeGreaterThanOrEqual(0);
+  expect(sections.indexOf('preferences')).toBeLessThan(sections.indexOf('community'));
+  expect(menu.querySelector('details')?.open).toBe(false);
+  const button = document.querySelector<HTMLButtonElement>('.acct__btn')!;
+  button.focus(); menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  expect(document.activeElement?.textContent).toContain(i18n.global.t('nav.logout'));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await nextTick(); expect(document.querySelector('.acct .menu')).toBeNull();
+  expect(document.activeElement).toBe(button);
 });

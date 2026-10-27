@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+const HomeSidebar = defineAsyncComponent(() => import("@/components/HomeSidebar.vue"));
+import { boardEndKey } from "@/lib/site-links";
 import BoardCarousel from "@/components/BoardCarousel.vue";
 import DownloadBanner from "@/components/DownloadBanner.vue";
 import MascotWelcome from "@/components/MascotWelcome.vue";
@@ -13,7 +15,8 @@ import type { CommunityCard } from "@/lib/types";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard, fetchCard, fetchTagCounts } from "@/lib/api";
-import { recallBoard, rememberBoard } from "@/lib/board-memory";
+import { recallStream, rememberStream, prepareBoardScroll } from "@/lib/board-memory";
+import { createBoardStream } from "@/lib/board-stream";
 import { takeInlineBoard } from "@/lib/board-inline";
 import { rememberCards } from "@/lib/card-memory";
 import { contentLang, defaultZone } from "@/lib/i18n";
@@ -46,31 +49,25 @@ watch(() => (tourState.step === "r18" || tourState.step === "card" || tourState.
 }, { immediate: true });
 const { t } = useI18n();
 
-const page = ref<CardPage | null>(null);
-/** 開窗的榜卡太少時接在下面的最熱（topUp） */
-const more = ref<CommunityCard[]>([]);
-const loading = ref(true);
-const error = ref("");
-
-/**
- * 榜的種類照魅魔島：最熱、日榜（24h）、週榜（7 天）、月榜（30 天）、最新、推薦（隨機）。窗口看的是上榜時間。
- * 另加評分（貝氏平均，票少的不會一票衝頂）、收藏與最近更新（目前上線版本過審的時刻）（2026-10-11）。
- * 首頁預設最熱、排最左：新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張，
- * 第一屏看起來像沒人的站（2026-10-11 線上 34 張卡、日榜 2 張）。最熱是全站卡一起排，站上有卡就不會空。
- */
-const SORTS: Sort[] = ["hot", "score", "favorites", "day", "week", "month", "new", "updated", "random"];
-/** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
-const WINDOWED = new Set<Sort>(["day", "week", "month"]);
-/** 開窗的榜第一頁不到這麼多張：下面接上最熱，最多接這麼多張 */
-const THIN = 8;
-const MORE_LIMIT = 12;
-
-
+const stream = createBoardStream(fetchBoard, canLoad);
+const feed = stream.state;
+const boardEnded = inject(boardEndKey, ref(false));
+watch(() => feed.done, done => { boardEnded.value = done; }, { immediate: true });
+const page = computed(() => feed.first);
+const more = computed(() => feed.hot?.items ?? []);
+const loading = computed(() => feed.loading);
+const SORTS: Sort[] = ["day", "hot", "score", "favorites", "week", "month", "new", "updated", "random"];
+const wide = ref(window.innerWidth >= 1080);
+const sentinel = ref<HTMLElement | null>(null);
+let mounted = false;
+function canLoad() {
+  return !mounted || (document.visibilityState !== "hidden" && ![...document.querySelectorAll<HTMLElement>('[data-discovery-overlay], [role="menu"], [role="dialog"], dialog[open]')].some(el => el.getClientRects().length > 0));
+}
 /** 角色卡探索或關注動態；相容舊作者榜連結。 */
 const mode = computed(() => ["following", "authors"].includes(String(route.query.mode)) ? "following" : "cards");
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
-  return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "hot";
+  return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "day";
 });
 const tags = computed(() => selectedTags(route.query.tag));
 /**
@@ -106,80 +103,103 @@ function servedFor(p: CardPage | null, showNsfw: boolean | undefined): boolean {
 /** 看過的分頁記在記憶體的鍵。身分還沒到時不記也不取：還不知道這一份是給誰看的。推薦每次都要重洗，不記。 */
 function memoryKey(query: Record<string, unknown>): string | null {
   // 知道是誰了（登入的人資料到了，或確定是訪客）才記
-  if (!(session.profile || session.ready) || query.sort === "random") return null;
+  if ((session.me ? !session.profile : !session.ready) || query.sort === "random") return null;
   // 遊客的開關在遊客憑證上（頁首 R18 遊客也能開），一樣算進鍵裡
   const p = session.me ? session.profile : viewerAdult(session);
   return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
 const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value,...(typeof route.query.cursor==='string'?{cursor:route.query.cursor}:{}), lang: contentLang(locale.value), rating: maxRating.value });
-type BoardQuery = ReturnType<typeof currentQuery>;
 
 /** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
 function adoptShown() {
   const key = memoryKey(currentQuery());
-  if (key && page.value) rememberBoard(key, page.value);
+  if (key && page.value) { shownKey = key; rememberStream(key, { stream: stream.snapshot() }); }
 }
 
-/**
- * 開窗的榜第一頁不到一屏：下面接上最熱（去掉上面已有的），一屏不會只剩一兩張卡。
- * 只在沒篩類型、第一頁時接——篩了類型、翻到後面是使用者自己要的範圍，不往裡塞別的。
- */
-async function topUp(id: number, query: BoardQuery, shown: CardPage) {
-  if (!WINDOWED.has(query.sort) || query.tag.length || query.offset || shown.items.length >= THIN) return;
-  const hotQuery = { ...query, sort: "hot" as Sort };
-  const hotKey = memoryKey(hotQuery);
-  const hot = (hotKey ? recallBoard(hotKey) : null) ?? await fetchBoard(hotQuery).catch(() => null);
-  if (!hot || id !== loadId) return;
-  if (hotKey) rememberBoard(hotKey, hot);
-  const seen = new Set(shown.items.map((c) => c.id));
-  more.value = hot.items.filter((c) => !seen.has(c.id)).slice(0, MORE_LIMIT);
+let shownKey: string | null = null;
+async function loadMore() {
+  const id = loadId;
+  await stream.next();
+  if (id !== loadId) return;
+  if (recheckAfterLoad && session.profile && page.value) {
+    recheckAfterLoad = false;
+    if (!servedFor(page.value, session.profile.showNsfw)) { void load(); return; }
+  }
+  adoptShown();
+  await nextTick();
+  scheduleCheck();
 }
-
 async function load() {
-  const id = ++loadId;
-  error.value = "";
-  more.value = [];
-  if (mode.value !== "cards") { loading.value = false; return; }
+  ++loadId;
+  stream.reset(currentQuery());
+  shownKey = null;
+  prepareBoardScroll(null);
+  if (mode.value !== "cards") return;
   const query = currentQuery();
   const key = memoryKey(query);
-  const remembered = key ? recallBoard(key) : null;
-  const landing = route.query.sort === undefined && !tags.value.length && offset.value === 0;
-  // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
-  if (remembered) page.value = remembered;
-  // 新開的首頁：HTML 裡已經放好第一屏的榜單（照看的人的 cookie 讀的最熱），
-  // 直接畫、不再讀一次。身分到了由下面的 watch 比對開關，對不上照舊重讀。
-  const inline = landing && !remembered ? takeInlineBoard(query) : null;
-  if (inline) {
-    rememberCards(inline.items);
-    page.value = inline;
-    loading.value = false;
-    if (key) rememberBoard(key, inline);
+  const remembered = key ? recallStream(key) : null;
+  if (remembered) {
+    stream.restore(query, remembered.stream);
+    shownKey = key;
+    prepareBoardScroll(remembered.scroll);
     return;
   }
-  loading.value = !remembered;
-  try {
-    const result = await fetchBoard(query);
-    if (id !== loadId) return;
-    page.value = result;
-    const storeKey = memoryKey(query);
-    if (storeKey) rememberBoard(storeKey, result);
-    void topUp(id, query, result);
-    if (recheckAfterLoad && session.profile) {
-      recheckAfterLoad = false;
-      if (!servedFor(result, session.profile.showNsfw)) void load();
-      else adoptShown();
-    }
-  } catch (err) {
-    if (id !== loadId) return;
-    // Current visibility could have changed since the remembered page.
-    page.value = null;
-    error.value = err instanceof Error ? err.message : t("state.loadFailed");
-  } finally {
-    if (id === loadId) loading.value = false;
+  const landing = route.query.sort === undefined && !tags.value.length && !maxRating.value && offset.value === 0;
+  const inline = landing ? takeInlineBoard(query) : null;
+  if (inline) {
+    rememberCards(inline.items);
+    stream.seed(inline);
+    adoptShown();
+    if (!feed.dayEnded) return;
   }
+  await loadMore();
 }
 
+// Both IntersectionObserver and scroll/resize check the tail: an appended batch may
+// leave the sentinel intersecting, which does not produce another observer transition.
+let observer: IntersectionObserver | undefined;
+let frame = 0;
+function checkTail() {
+  frame = 0;
+  if (!mounted || mode.value !== "cards" || feed.loading || feed.done || feed.error || !canLoad()) return;
+  if (sentinel.value && sentinel.value.getBoundingClientRect().top < window.innerHeight + 400) void loadMore();
+}
+function scheduleCheck() {
+  wide.value = window.innerWidth >= 1080;
+  if (mounted && !frame) frame = requestAnimationFrame(checkTail);
+}
+onMounted(() => {
+  mounted = true;
+  if (typeof IntersectionObserver !== "undefined") {
+    observer = new IntersectionObserver(scheduleCheck, { rootMargin: "400px" });
+    if (sentinel.value) observer.observe(sentinel.value);
+  }
+  window.addEventListener("scroll", scheduleCheck, { passive: true });
+  window.addEventListener("resize", scheduleCheck);
+  document.addEventListener("visibilitychange", scheduleCheck);
+  document.addEventListener("click", scheduleCheck);
+  document.addEventListener("keydown", scheduleCheck);
+  scheduleCheck();
+});
+onBeforeRouteLeave(() => {
+  if (shownKey && page.value) {
+    const anchor = [...document.querySelectorAll<HTMLElement>('[data-board-list] .card__link')].find(el => el.getBoundingClientRect().bottom > 100);
+    rememberStream(shownKey, { stream: stream.snapshot(), scroll: { top: window.scrollY, anchor: anchor?.getAttribute('href') ?? undefined, delta: anchor?.getBoundingClientRect().top } });
+  }
+});
+onBeforeUnmount(() => {
+  mounted = false;
+  ++loadId;
+  stream.invalidate();
+  observer?.disconnect();
+  cancelAnimationFrame(frame);
+  window.removeEventListener("scroll", scheduleCheck);
+  window.removeEventListener("resize", scheduleCheck);
+  document.removeEventListener("visibilitychange", scheduleCheck);
+  document.removeEventListener("click", scheduleCheck);
+  document.removeEventListener("keydown", scheduleCheck);
+});
 /** 狀態放進網址：篩選結果可以直接分享，上一頁也回得去。 */
 function navigate(patch: Record<string, string | string[] | undefined>) {
   const query: Record<string, string | string[]> = { ...(route.query as Record<string, string | string[]>) };
@@ -230,6 +250,10 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 watch(() => (!session.me && guestAdult.loaded ? guestAdult.showNsfw : null), (now, before) => {
   if (now !== null && before !== null && now !== before) reloadViewer();
 });
+watch(() => session.me?.accountNumId, (now, before) => { if (now !== before && (before !== undefined || session.ready)) reloadViewer(); });
+watch(() => session.profile?.ageVerified, (now, before) => { if (before !== undefined && now !== before) reloadViewer(); });
+watch(() => session.profile?.adultConsent, (now, before) => { if (before !== undefined && now !== before) reloadViewer(); });
+watch(() => session.ready, ready => { if (ready && servedFor(page.value, viewerAdult(session)?.showNsfw)) adoptShown(); });
 // 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
 watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) reloadViewer(); });
 
@@ -280,6 +304,7 @@ const ratingOptions = computed(() => {
       不是排法——選中它時六個排序全部不亮。原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；
       R18 開關搬進頁首（App.vue）。
     -->
+    <div class="board-layout"><div class="board-main">
     <div ref="sortsEl" class="sorts" role="group" :aria-label="$t('board.sorts')">
       <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
         {{ $t(`board.sort.${s}`) }}
@@ -290,11 +315,10 @@ const ratingOptions = computed(() => {
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
     <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" :counts="tagCounts" collapsible @change="navigate({ tag: $event.length ? $event : undefined })" />
 
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-if="mode === 'cards'">
       <div class="count-row">
-        <p class="subtle count">{{ page && page.total !== null ? $t("board.count", { n: page.total }) : "" }}</p>
+        <p class="subtle count">{{ sort !== 'day' && page && page.total !== null ? $t("board.count", { n: page.total }) : "" }}</p>
         <label class="rating-filter">
           <span class="sr-only">{{ $t("board.rating.label") }}</span>
           <select :value="maxRating ?? ''" @change="navigate({ rating: ($event.target as HTMLSelectElement).value || undefined })">
@@ -304,36 +328,53 @@ const ratingOptions = computed(() => {
         </label>
       </div>
       <CardGrid
+        v-if="page?.items.length || starterCard || (loading && !page)"
+        data-board-list
         :cards="page?.items ?? []"
         :starter="offset === 0 ? starterCard : null"
         :loading="loading && !page"
-        :busy="loading"
+        :busy="false"
         :ranked="!tags.length"
         :rank-offset="page?.offset ?? 0"
         :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />
-      <section v-if="more.length" class="more" data-board-more>
-        <h2 class="more__title">{{ $t("board.more.title") }}</h2>
-        <CardGrid :cards="more" />
+      <section v-if="feed.dayEnded" class="more" data-board-more>
+        <p class="subtle">{{ $t(page?.items.length ? "home.dailyEnd" : "home.dailyEmpty") }}</p>
+        <h2 class="more__title">{{ $t("board.sort.hot") }}</h2>
+        <CardGrid v-if="more.length" data-board-list :cards="more" />
       </section>
-      <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
-        <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)),cursor:page.previousCursor })">← {{ $t("pager.prev") }}</button>
-        <span class="subtle">
-          {{ page.total === null
-            ? $t("pager.page", { n: Math.floor(page.offset / page.limit) + 1 })
-            : $t("pager.pageOf", { n: Math.floor(page.offset / page.limit) + 1, total: Math.ceil(page.total / page.limit) }) }}
-        </span>
-        <button class="btn btn--sm" :disabled="!page.hasNext" @click="navigate({ offset: String(page.offset + page.limit),cursor:page.nextCursor })">{{ $t("pager.next") }} →</button>
-      </nav>
+      <div ref="sentinel" class="stream-tail" data-board-tail>
+        <div v-if="feed.error" class="notice notice--error" role="alert">
+          <p>{{ $t((page?.items.length || more.length) ? 'home.appendError' : 'home.firstError') }}</p>
+          <button class="btn" @click="loadMore">{{ $t('home.retry') }}</button>
+        </div>
+        <template v-else-if="loading">
+          <p class="sr-only" role="status">{{ $t('home.loading') }}</p>
+          <div v-if="page" class="tail-skeleton" aria-hidden="true"><div v-for="i in 8" :key="i" class="ghost" /></div>
+        </template>
+        <div v-else-if="feed.done" class="stream-end" role="status">
+          <template v-if="!page?.items.length && !more.length">
+            <p>{{ $t(tags.length || maxRating ? 'home.empty' : 'board.empty.title') }}</p>
+            <p v-if="!tags.length && !maxRating" class="muted">{{ $t('board.empty.hint') }}</p>
+            <button v-if="tags.length || maxRating" class="btn" @click="navigate({ tag: undefined, rating: undefined })">{{ $t('home.clear') }}</button>
+          </template>
+          <p>{{ $t('home.end') }}</p>
+          <button class="btn btn--ghost" @click="sortsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })">{{ $t('home.top') }}</button>
+        </div>
+      </div>
     </template>
 
     <FollowFeed v-else />
+    </div><HomeSidebar v-if="wide" class="board-sidebar" /></div>
   </div>
 </template>
 
 <style scoped>
 /* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
+.board-main { min-width: 0; }
+.board-sidebar { display: none; }
+@media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: grid; } .board-main :deep(.grid) { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 .sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }
 .sorts__item {
   height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);
@@ -356,6 +397,12 @@ const ratingOptions = computed(() => {
 .rating-filter select:hover { border-color: var(--line-strong); color: var(--text); }
 .more { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
 .more__title { margin: 0 0 var(--s-3); font-size: 15px; font-weight: 600; color: var(--text-2); }
+.stream-tail { min-height: 1px; margin-top: var(--s-5); }
+.stream-end { text-align: center; padding: var(--s-6); color: var(--text-2); }
+.tail-skeleton { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
+.tail-skeleton .ghost { aspect-ratio: 3 / 5.3; }
+@media(min-width:600px) { .tail-skeleton { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(min-width:820px) { .tail-skeleton { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 .ghosts { display: grid; gap: 6px; }
 .ghosts .ghost { height: 62px; }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }

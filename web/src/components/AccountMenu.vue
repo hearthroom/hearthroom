@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AccountIcon from "@/components/AccountIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
@@ -15,6 +15,15 @@ import NewMark from "@/components/NewMark.vue";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import { useCheckin } from "@/lib/checkin-store";
 
+import CompactSiteSections from "./CompactSiteSections.vue";
+import AppearanceMenu from "./AppearanceMenu.vue";
+import LocaleSwitch from "./LocaleSwitch.vue";
+import { navigateMenu } from "@/lib/menu-navigation";
+const props = defineProps<{ compact?: boolean }>();
+const appearance = ref<InstanceType<typeof AppearanceMenu> | null>(null);
+const language = ref<InstanceType<typeof LocaleSwitch> | null>(null);
+const menu = ref<HTMLElement | null>(null);
+const menuTop = ref(0);
 const session = useSession();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
 const reviewerStore = useReviewer();
@@ -23,7 +32,21 @@ const checkin = useCheckin();
 const reviewDot = computed(() => reviewerStore.reviewer && reviewerStore.pending > 0);
 watch(() => session.me?.accountNumId, (id) => { if (id && !checkin.panel && !checkin.disabled) void checkin.load(); }, { immediate: true });
 const { lp } = useLocalePath();
+import { useHeaderOverlay } from "@/lib/site-links";
 const open = ref(false);
+useHeaderOverlay(open);
+watch(() => props.compact, () => { open.value = false; });
+const opener = () => root.value?.querySelector<HTMLElement>(".acct__btn") ?? null;
+watch(open, async value => { if (value) { await nextTick(); menuTop.value = menu.value?.getBoundingClientRect().top ?? 0; } });
+function preference(which: "appearance" | "language") {
+  open.value = false;
+  void nextTick(() => (which === "appearance" ? appearance.value : language.value)?.openFrom(opener()));
+}
+function menuClick(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest("a,button")) open.value = false;
+}
+function focusOut(e: FocusEvent) { if (e.relatedTarget && !root.value?.contains(e.relatedTarget as Node)) open.value = false; }
+
 /**
  * 頁首的積分：顯示實際餘額（跟積分頁同一個數：一般＋限時）。只寫「積分與會員」幾個字沒有資訊量（owner 2026-10-11），
  * 讀不到餘額就整顆不放；百萬以上縮寫，免得把頁首撐開。
@@ -71,7 +94,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
     </button>
 
     <!-- 項目一多就分組：人先找組、再找項目。頁首已有入口的（通知有鈴鐺、對話與收藏有頂部分頁）不在這裡重複。 -->
-    <div v-if="open" class="menu panel" role="menu" @click="open = false">
+    <div v-if="open" ref="menu" class="menu panel" :class="{ 'menu--compact': props.compact }" data-discovery-overlay role="menu" :style="{ '--menu-top': `${menuTop}px` }" @click="menuClick" @keydown="navigateMenu($event, menu!)" @focusout="focusOut">
       <RouterLink :to="lp('/me')" class="menu__head" role="menuitem">
         <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="menu__face" />
         <span v-else class="menu__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</span>
@@ -82,17 +105,22 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <AccountIcon name="arrow" class="menu__chevron" />
       </RouterLink>
       <div class="menu__group">
+        <p v-if="props.compact" class="menu__label">{{ $t('home.rewardsGroup') }}</p>
         <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}</RouterLink>
         <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="calendar" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
         <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
       </div>
       <div class="menu__group">
+        <p v-if="props.compact" class="menu__label">{{ $t('home.contentGroup') }}</p>
         <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
         <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
         <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
         <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </div>
-      <div class="menu__group">
+      <CompactSiteSections v-if="props.compact" :opener="opener" @activate="open = false" @appearance="preference('appearance')" @language="preference('language')">
+        <template #settings><RouterLink :to="lp('/settings')" role="menuitem">{{ $t('nav.settings') }}</RouterLink></template>
+      </CompactSiteSections>
+      <div v-else class="menu__group">
         <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem"><AccountIcon name="settings" />{{ $t("nav.settings") }}</RouterLink>
         <button v-if="hereLine" type="button" class="menu__item" role="menuitem" @click="openRoutes"><SignalBars :level="3" />{{ $t("routes.title") }}<span class="menu__aside">{{ $t(`routes.name.${hereLine.n}`) }}<span class="menu__aside-host">{{ hereLine.host }}</span></span></button>
         <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
@@ -105,6 +133,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <button class="menu__item" role="menuitem" @click="logoutWithRoutes(session)"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
       </div>
     </div>
+    <AppearanceMenu v-if="props.compact" ref="appearance" external />
+    <LocaleSwitch v-if="props.compact" ref="language" external />
   </div>
 </template>
 
@@ -131,7 +161,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 
 .menu {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
-  min-width: 220px; padding: 6px;
+  min-width: 220px; max-width: min(280px, calc(100vw - 24px)); padding: 6px; max-height: calc(100dvh - var(--menu-top, 60px) - 12px); overflow-y: auto;
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
   animation: fade var(--dur) var(--ease);
 }
@@ -157,4 +187,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 .menu__aside { margin-inline-start: auto; padding-inline-start: var(--s-3); display: grid; text-align: right; font-size: 13px; line-height: 1.3; color: var(--text-2); white-space: nowrap; }
 .menu__aside-host { font-size: 12px; color: var(--text-3); }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.menu__label { margin: var(--s-1) var(--s-2); font-size: 12px; font-weight: 600; color: var(--text-3); }
+.menu--compact { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); width: min(280px, calc(100vw - 24px)); }
+.menu--compact .menu__item { min-height: var(--h-lg); font-size: 14px; }
+.menu--compact .menu__aside { white-space: normal; overflow-wrap: anywhere; }
 </style>

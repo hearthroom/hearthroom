@@ -30,7 +30,7 @@ const card = (id: string, name: string) => ({
 });
 const boardCalls: string[] = [];
 /** 首頁（最熱）讀了幾次 */
-const landingCalls = () => boardCalls.filter((c) => c.includes("sort=hot"));
+const landingCalls = () => boardCalls.filter((c) => c.includes("sort=day"));
 let boardDelay = 10;
 /** 伺服器依 cookie 判斷：開了的人拿到成人版並標明 */
 let cookieAdult = true;
@@ -82,14 +82,14 @@ async function open(path = "/") {
 describe("首頁第一次讀榜", () => {
   it("第一次就照帳號開關讀到成人版：身分到了不再讀第二次", async () => {
     await open();
-    expect(el!.textContent).toContain("hot（成人版）");
+    expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls(), boardCalls.join("\n")).toHaveLength(1);
   });
 
   it("第一次拿到的跟開關對不上（伺服器沒認出來）：身分到了照舊重讀一次", async () => {
     cookieAdult = false;
     await open();
-    expect(el!.textContent).toContain("hot（成人版）");
+    expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls(), boardCalls.join("\n")).toHaveLength(2);
   });
 
@@ -97,13 +97,13 @@ describe("首頁第一次讀榜", () => {
     boardDelay = 120;
     await open();
     await later(100, () => null);
-    expect(el!.textContent).toContain("hot（成人版）");
+    expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls(), boardCalls.join("\n")).toHaveLength(1);
   });
 });
 
 describe("切換分頁", () => {
-  it("切回看過的分頁：記住的那份立刻畫出來，背景再讀一次", async () => {
+  it("切回看過的清單：已讀批次立刻畫出來，不背景重排", async () => {
     await open();
     await router.push("/?sort=week");
     await later(100, () => null);
@@ -113,11 +113,11 @@ describe("切換分頁", () => {
     await nextTick();
     await nextTick();
     // 伺服器還沒回，最熱已經在畫面上，而且不是變淡的等待狀態
-    expect(el!.textContent).toContain("hot（成人版）");
+    expect(el!.textContent).toContain("day（成人版）");
     expect(el!.querySelector("[aria-busy='true']")).toBeNull();
     // 背景照常重讀
     await later(30, () => null);
-    expect(boardCalls.at(-1)).toContain("sort=hot");
+    expect(boardCalls.at(-1)).toContain("sort=week");
   });
 
   it("推薦每次都重洗：不拿記住的那份", async () => {
@@ -132,15 +132,16 @@ describe("切換分頁", () => {
   });
 });
 
-describe("首頁預設最熱", () => {
+describe("首頁預設日榜接最熱", () => {
   const on = () => el!.querySelector(".sorts__item--on")?.textContent?.trim();
   // 新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張；首頁改放全站卡都參與的最熱
-  it("一進首頁就是最熱：排在最左、亮起來，不先試日榜", async () => {
+  it("一進首頁先日榜：排在最左，載完接最熱", async () => {
     await open();
-    expect(on()).toBe(i18n.global.t("board.sort.hot"));
-    expect(el!.querySelector(".sorts__item")?.textContent?.trim()).toBe(i18n.global.t("board.sort.hot"));
-    expect(el!.textContent).toContain("hot（成人版）");
-    expect(boardCalls.filter((c) => /sort=(day|week)/.test(c)), boardCalls.join("\n")).toHaveLength(0);
+    expect(on()).toBe(i18n.global.t("board.sort.day"));
+    expect(el!.querySelector(".sorts__item")?.textContent?.trim()).toBe(i18n.global.t("board.sort.day"));
+    expect(el!.textContent).toContain("day（成人版）");
+    expect(boardCalls[0]).toContain("sort=day");
+    expect(boardCalls[1]).toContain("sort=hot");
   });
 });
 
@@ -150,7 +151,7 @@ describe("開窗的榜卡太少", () => {
     hotIncludesDay = true;
     await open("/?sort=day");
     expect(el!.querySelector(".sorts__item--on")?.textContent?.trim()).toBe(i18n.global.t("board.sort.day"));
-    expect(more()?.textContent).toContain(i18n.global.t("board.more.title"));
+    expect(more()?.textContent).toContain(i18n.global.t("board.sort.hot"));
     expect(more()?.textContent).toContain("hot（成人版）");
     expect(more()?.textContent).not.toContain("day");
   });
@@ -162,11 +163,12 @@ describe("開窗的榜卡太少", () => {
     expect(more()?.textContent).toContain("hot（成人版）");
   });
 
-  it("篩了類型或翻到後面：不接（那是使用者自己要的範圍）；最熱本身也不接", async () => {
+  it("篩選日榜同樣接同條件最熱；明選最熱不插日榜", async () => {
     await open("/?sort=day&tag=roleplay");
-    expect(more()).toBeNull();
+    expect(more()).not.toBeNull();
+    expect(boardCalls.at(-1)).toContain("tag=roleplay");
     app?.unmount(); el?.remove();
-    await open("/?sort=day&offset=20");
+    await open("/?sort=week");
     expect(more()).toBeNull();
     app?.unmount(); el?.remove();
     await open("/?sort=hot");
@@ -175,7 +177,7 @@ describe("開窗的榜卡太少", () => {
 });
 
 describe("首頁 HTML 裡已經放好第一屏的榜單", () => {
-  function plant(page: unknown, query = { zone: "zh", lang: "zh", sort: "hot", offset: 0 }) {
+  function plant(page: unknown, query = { zone: "zh", lang: "zh", sort: "day", offset: 0 }) {
     const node = document.createElement("script");
     node.id = "board-inline";
     node.type = "application/json";
@@ -185,25 +187,25 @@ describe("首頁 HTML 裡已經放好第一屏的榜單", () => {
   const inlinePage = (sort: string, name: string) => ({ items: [card(`inline-${sort}`, name)], total: 1, hasNext: false, limit: 20, offset: 0, sort, adult: true });
 
   it("直接畫出來、不再讀最熱；用過就拿掉；卡片記住了，點進去立刻有", async () => {
-    plant(inlinePage("hot", "預先放好的卡"));
+    plant(inlinePage("day", "預先放好的卡"));
     await open();
     expect(el!.textContent).toContain("預先放好的卡");
     expect(landingCalls(), boardCalls.join("\n")).toHaveLength(0);
     expect(document.getElementById("board-inline")).toBeNull();
-    expect(recallCard("inline-hot")?.name).toBe("預先放好的卡");
+    expect(recallCard("inline-day")?.name).toBe("預先放好的卡");
   });
 
   it("條件對不上（例如另一個語區）就不用，照常讀", async () => {
-    plant(inlinePage("hot", "英文區的卡"), { zone: "en", lang: "en", sort: "hot", offset: 0 });
+    plant(inlinePage("day", "英文區的卡"), { zone: "en", lang: "en", sort: "day", offset: 0 });
     await open();
     expect(el!.textContent).not.toContain("英文區的卡");
     expect(landingCalls()).toHaveLength(1);
   });
 
   it("身分到了、發現開關對不上（HTML 裡是一般版）：照舊重讀一次", async () => {
-    plant({ ...inlinePage("hot", "一般版"), adult: false });
+    plant({ ...inlinePage("day", "一般版"), adult: false });
     await open();
-    expect(el!.textContent).toContain("hot（成人版）");
+    expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls()).toHaveLength(1);
   });
 });

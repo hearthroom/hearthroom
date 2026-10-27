@@ -95,12 +95,12 @@ describe("類型張數", () => {
   });
 });
 
-it('follows opaque next and previous cursors and clears them when filters change',async()=>{
+it('automatically follows opaque next cursors without changing history, and clears them on filter changes',async()=>{
  vi.mocked(api.fetchBoard).mockImplementation(async query=>({items:[],total:null,hasNext:!query?.offset,limit:24,offset:query?.offset??0,sort:'new',...(query?.offset?{previousCursor:'opaque-previous'}:{nextCursor:'opaque-next'})}));
  await mount('/?sort=new');
- (root.querySelector('.pager button:last-child') as HTMLButtonElement).click();await settle();
- expect(router.currentRoute.value.query.cursor).toBe('opaque-next');expect(api.fetchBoard).toHaveBeenLastCalledWith(expect.objectContaining({cursor:'opaque-next',offset:24}));
- (root.querySelector('.pager button:first-child') as HTMLButtonElement).click();await settle();expect(router.currentRoute.value.query.cursor).toBe('opaque-previous');
+ expect(api.fetchBoard).toHaveBeenLastCalledWith(expect.objectContaining({cursor:'opaque-next',offset:24}));
+ expect(router.currentRoute.value.query).toEqual({sort:'new'});
+ expect(root.querySelector('.pager')).toBeNull();
  chip('武俠')!.click();await settle();expect(router.currentRoute.value.query.cursor).toBeUndefined();
 });
 

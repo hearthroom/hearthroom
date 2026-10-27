@@ -4,7 +4,16 @@ import { MODES, THEMES, useAppearance } from "@/lib/appearance";
 import { track } from "@/lib/track";
 
 const { mode, theme, resolvedMode, setMode, setTheme } = useAppearance();
+const props = defineProps<{ external?: boolean }>();
+let externalOpener: HTMLElement | null = null;
+function openFrom(opener: HTMLElement | null) {
+  externalOpener = opener; open.value = true;
+  void nextTick(() => root.value?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+}
+defineExpose({ openFrom });
+import { useHeaderOverlay } from "@/lib/site-links";
 const open = ref(false);
+useHeaderOverlay(open);
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 
@@ -16,16 +25,16 @@ function onDocClick(e: MouseEvent) {
   if (root.value && !root.value.contains(e.target as Node)) open.value = false;
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && open.value) { open.value = false; root.value?.querySelector<HTMLElement>("button")?.focus(); }
+  if (e.key === "Escape" && open.value) { open.value = false; (externalOpener ?? root.value?.querySelector<HTMLElement>("button"))?.focus(); }
 }
 onMounted(() => { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onKey); });
 onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); });
 </script>
 
 <template>
-  <div ref="root" class="ap">
+  <div ref="root" class="ap" :class="{ 'is-external': props.external }">
     <!-- 圖示畫的是現在生效的那一種：白天是太陽、晚上是月亮 -->
-    <button class="ap__btn" :aria-label="$t('appearance.title')" :aria-expanded="open" @click="toggle">
+    <button v-if="!props.external" class="ap__btn" :aria-label="$t('appearance.title')" :aria-expanded="open" @click="toggle">
       <svg v-if="resolvedMode === 'dark'" viewBox="0 0 20 20" aria-hidden="true">
         <path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
       </svg>
@@ -36,7 +45,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
     </button>
 
     <!-- 非模態的設定面板：Tab 走得出去、點外面就收，不裝成對話框 -->
-    <div v-if="open" ref="panel" class="ap__panel panel" role="group" :aria-label="$t('appearance.title')">
+    <div v-if="open" ref="panel" class="ap__panel panel" data-discovery-overlay role="group" :aria-label="$t('appearance.title')">
       <p id="ap-mode-label" class="ap__label">{{ $t("appearance.title") }}</p>
       <div class="seg ap__modes" role="radiogroup" aria-labelledby="ap-mode-label">
         <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m); track('appearance', { detail: 'mode', subject: m })">
@@ -121,4 +130,6 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
   .ap__swatch { padding: 10px 4px 8px; font-size: 12px; }
   .ap__dot { width: 28px; height: 28px; }
 }
+.is-external { position: static; }
+.is-external .ap__panel { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); left: auto; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); overflow-y: auto; }
 </style>

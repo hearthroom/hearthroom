@@ -1946,7 +1946,7 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   const zone = landingZone(locale);
   const cookie = c.req.header("Cookie") ?? "";
   const read = async (): Promise<LandingBoard | null> => {
-    const res = await app.request(new URL(`/v1/cards?zone=${zone}&sort=hot&offset=0&lang=${zone}`, url).toString(), { headers: { Cookie: cookie } }, c.env, c.executionCtx);
+    const res = await app.request(new URL(`/v1/cards?zone=${zone}&sort=day&offset=0&lang=${zone}`, url).toString(), { headers: { Cookie: cookie } }, c.env, c.executionCtx);
     if (!res.ok) return null;
     return { body: (await res.json()) as LandingBoard["body"], adult: res.headers.get("X-Adult-Content") === "1" };
   };
@@ -1960,7 +1960,7 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
   if (!shell.ok) return null;
   // 卡名、簡介是作者寫的字：放進 <script> 之前把 < 與兩個 JS 換行字元跳脫，作者寫了 </script> 也關不掉這一段
-  const payload = JSON.stringify({ query: { zone, lang: zone, sort: "hot", offset: 0 }, page: { ...board.body, adult: board.adult } })
+  const payload = JSON.stringify({ query: { zone, lang: zone, sort: "day", offset: 0 }, page: { ...board.body, adult: board.adult } })
     .replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
   const first = board.body.items.find((item) => item.avatarUrl)?.avatarUrl;
   const thumb = first ? cardThumbUrl(PRIMARY_HOST, first) : null;

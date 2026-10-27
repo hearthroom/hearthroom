@@ -4,8 +4,10 @@ import SessionConnectionGate from "@/components/SessionConnectionGate.vue";
 import { communityRequest } from "./lib/community";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, provide, reactive, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import SiteMenu from "@/components/SiteMenu.vue";
+import { siteLinksKey, boardEndKey, headerOverlaysKey } from "@/lib/site-links";
 import AccountMenu from "@/components/AccountMenu.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { useNotifications } from "@/lib/notifications";
@@ -76,6 +78,25 @@ const footerCtx = computed<FooterContext>(() => ({
   canInstallSite: installPrompt.available && installPrompt.target === "site",
   routeLine: routesOn && hereLine ? { name: `routes.name.${hereLine.n}`, host: hereLine.host } : null,
 }));
+provide(siteLinksKey, footerCtx);
+const headerOverlays = reactive(new Set<symbol>());
+provide(headerOverlaysKey, headerOverlays);
+const boardEnded = ref(false);
+provide(boardEndKey, boardEnded);
+const onBoardPage = computed(() => route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, ''));
+const compactHeader = ref(typeof window.matchMedia === "function" ? window.matchMedia('(max-width: 1079px)').matches : false);
+const headerElement = ref<HTMLElement | null>(null);
+let headerObserver: ResizeObserver | undefined;
+function measureHeader() {
+  compactHeader.value = window.innerWidth < 1080;
+  const h = headerElement.value?.getBoundingClientRect().height;
+  if (h) document.documentElement.style.setProperty('--site-header-h', `${h}px`);
+}
+onMounted(() => {
+  measureHeader(); window.addEventListener('resize', measureHeader);
+  if (typeof ResizeObserver !== 'undefined' && headerElement.value) { headerObserver = new ResizeObserver(measureHeader); headerObserver.observe(headerElement.value); }
+});
+onBeforeUnmount(() => { window.removeEventListener('resize', measureHeader); headerObserver?.disconnect(); });
 const footerNav = computed(() => footerGroups(footerCtx.value));
 const legalNav = computed(() => footerLegal(footerCtx.value));
 onMounted(()=>{void communityRequest<{invite:string|null}>("/community/config").then(r=>{discordInvite.value=r.invite;}).catch(()=>{});});
@@ -141,7 +162,9 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 <template>
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
-  <header v-if="!route.meta.bare" class="header" :lang="locale">
+  <a v-if="onBoardPage && !compactHeader" class="skip skip-info" href="#home-site-info">{{ $t("home.skipInfo") }}</a>
+
+  <header v-if="!route.meta.bare" ref="headerElement" class="header" :lang="locale">
     <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely || reviewerStore.blogWriter, 'header__inner--signal': showRouteSignal }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
         <!-- 看板娘蘇綺的頭像（docs/design/hearthroom-mascot）；固定配色，不跟主題換色 -->
@@ -182,32 +205,33 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <AdultToggle v-if="route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, '')" />
         <!-- 頁首放 Discord：玩家要找的是社群，不是程式碼；GitHub 留在頁尾的社群欄（owner 2026-10-17）。
              邀請連結跟頁尾「加入 Discord」同一條，讀不到就不顯示 -->
-        <a v-if="discordInvite" :href="discordInvite" target="_blank" rel="noopener noreferrer" class="gh" data-header-discord :aria-label="$t('community.join')" :title="$t('community.join')">
+        <a v-if="discordInvite && !compactHeader" :href="discordInvite" target="_blank" rel="noopener noreferrer" class="gh" data-header-discord :aria-label="$t('community.join')" :title="$t('community.join')">
           <CommunityIcon name="discord" />
         </a>
-        <AppearanceMenu />
-        <LocaleSwitch />
+        <AppearanceMenu v-if="!compactHeader" />
+        <LocaleSwitch v-if="!compactHeader" />
         <NotificationBell v-if="session.me" />
-        <AccountMenu v-if="session.me" />
+        <AccountMenu v-if="session.me" :compact="compactHeader" />
         <button v-else-if="session.restoreError && !route.meta.auth" type="button" class="btn btn--lg" :disabled="!session.ready" :aria-busy="!session.ready" :title="$t('state.serverBusy')" @click="session.retryRestore()">{{ $t('linked.retry') }}</button>
         <RouterLink v-else-if="session.ready && !session.restoreError" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}
         </RouterLink>
+        <SiteMenu v-if="compactHeader && session.ready && !session.me && !session.restoreError" />
       </div>
     </div>
   </header>
 
-  <nav v-if="!route.meta.bare && onTabPage" class="mobile-library-nav" :aria-label="$t('library.navigation')">
+  <nav v-if="!route.meta.bare && onTabPage" class="mobile-library-nav" :inert="headerOverlays.size > 0" :aria-label="$t('library.navigation')">
     <RouterLink :to="lp('/')" :aria-current="route.path === lp('/') ? 'page' : undefined">{{ $t('nav.board') }}</RouterLink>
     <RouterLink :to="lp('/library')" data-tour="library" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
-  <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
+  <main id="main" tabindex="-1" :inert="headerOverlays.size > 0" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
   <CoachTour />
   <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
-  <SukiPet v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
+  <SukiPet :inert="headerOverlays.size > 0" v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
   <ConfirmDialog />
   <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
@@ -219,7 +243,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
     連結分組放在 lib/footer-nav.ts：新入口先決定屬於哪一組，不再往同一排後面接。
   -->
-  <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer" :lang="locale">
+  <footer v-if="SITE.repoUrl && !route.meta.bare && (!onBoardPage || boardEnded || route.query.mode === 'following' || route.query.mode === 'authors')" class="footer" :inert="headerOverlays.size > 0" :lang="locale">
     <div class="footer__inner">
       <div class="footer__about">
         <p class="footer__name">{{ footerName }}</p>
@@ -257,6 +281,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
  * 內容區至少一整個螢幕高：頁尾永遠不在第一屏。不然頁面程式碼到之前頁尾在畫面底部，
  * 骨架一出現把它推走、空狀態又拉回來，手機上實測版面位移 0.46（2026-09-26，首頁）。
  */
+.skip-info { left: auto; right: var(--s-2); }
 .site-main { min-height: 100vh; min-height: 100dvh; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 .header {
   padding-top: env(safe-area-inset-top, 0px);
@@ -366,7 +391,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
 /* 平板（iPad 直放 744–834）跟桌機一樣：導覽留在頁首那一排，搜尋收成圖示讓出位置（owner 2026-10-11）。
    只有手機寬度才把導覽拆成第二排分頁。 */
-@media (min-width: 701px) and (max-width: 1024px) {
+@media (min-width: 701px) and (max-width: 1079px) {
   .header__inner { grid-template-columns: auto auto minmax(0, 1fr); column-gap: var(--s-4); padding: 0 var(--s-4); }
   .search { display: none; }
   .search-go { display: inline-flex; }

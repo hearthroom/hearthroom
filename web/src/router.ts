@@ -1,4 +1,5 @@
 import { nextTick } from "vue";
+import { boardScrollPosition } from "./lib/board-memory";
 import { preloadStage } from "./lib/stage-preload";
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
@@ -30,7 +31,7 @@ const PREFIXED = LOCALE_CODES.filter((c) => c !== SOURCE_LOCALE);
 const pages: RouteRecordRaw[] = [
   // 首頁直接打包進主程式：它是大多數人的第一頁。拆成一包的話，冷開要等主程式跑完才去抓
   // 九個小檔（合計約 15 KB），實測白白多一波 0.57 s（2026-09-26）。
-  { path: "", component: BoardPage },
+  { path: "", component: BoardPage, meta: { board: true } },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
@@ -158,6 +159,7 @@ export const router = createRouter({
 
 /** 換頁面回頂端、返回鍵回原位；頁面標了 keepScrollOnQuery 時，同一頁只改網址參數（切分區、排序）不動捲動位置。 */
 export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormalized, saved: { left: number; top: number } | null) {
+  if (saved && to.meta.board) return nextTick().then(() => new Promise<{ left: number; top: number }>(resolve => requestAnimationFrame(() => resolve(boardScrollPosition(saved)))));
   if (saved) return saved;
   if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
   return { top: 0 };
