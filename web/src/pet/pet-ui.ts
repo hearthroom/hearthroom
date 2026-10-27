@@ -13,6 +13,7 @@ import {
 import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
+import { sidebarClearance, type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
 type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
@@ -46,6 +47,8 @@ export interface PetOptions {
   quietGreeting?: () => boolean;
   /** Physical page bottom may be a loading/error boundary rather than a completed list. */
   canListEnd?: () => boolean;
+  /** Present only while the homepage desktop sidebar is mounted. */
+  sidebarBounds?: () => SidebarRect | null;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
   menu?: () => MenuItem[];
   /** 每天第一次來擲的「今天的幸運類型」 */
@@ -118,6 +121,58 @@ export class SukiPet {
   private lastScroll = { y: 0, t: 0 };
   private typed = "";
   private stopped = false;
+  private idleButton: HTMLButtonElement;
+  private sidebarDocked = false;
+  private sidebarAwake = false;
+  private sidebarPosition: { x: number; y: number } | null = null;
+  private get sidebarIdle() { return this.sidebarDocked && !this.sidebarAwake; }
+
+  private updateSidebar() {
+    const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
+    if (!bounds) {
+      if (!this.sidebarDocked && !this.sidebarPosition) return;
+      const wasIdle = this.sidebarIdle;
+      if (this.sidebarPosition) this.place(this.sidebarPosition);
+      this.sidebarPosition = null; this.sidebarDocked = false; this.sidebarAwake = false;
+      this.idleButton.hidden = true;
+      this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded");
+      if (wasIdle && this.guide) this.setGuide(this.guide);
+      return;
+    }
+    if (this.sidebarIdle) return;
+    const body = this.box();
+    const obstacles: SidebarRect[] = [{ left: body.left, right: body.right, top: body.top, bottom: body.top + body.height }];
+    for (const popup of [this.bubble, this.menuEl]) if (!popup.hidden) obstacles.push(popup.getBoundingClientRect());
+    if (!sidebarClearance(bounds, obstacles).blocked) return;
+    if (!this.sidebarAwake) {
+      this.sidebarPosition = { ...this.pos };
+      this.sidebarDocked = true;
+      this.idleButton.hidden = false;
+      this.idleButton.setAttribute("aria-expanded", "false");
+      this.el.classList.add("suki-pet--sidebar-idle");
+      this.bubble.hidden = true; this.queue = []; this.closeMenu();
+      petSpeaking.value = false;
+      return;
+    }
+    // Explicit expansion may use the clear space above the still-visible hero.
+    // After the sidebar becomes sticky, a bottom-standing pet leaves its upper row clear.
+    if (!this.drag) {
+      const above = bounds.top - 12 - body.height;
+      this.place({ x: this.pos.x, y: above >= 60 ? above : Math.max(0, innerHeight - body.height - 8) });
+    }
+  }
+
+  private toggleSidebar() {
+    if (!this.sidebarDocked) return;
+    this.sidebarAwake = !this.sidebarAwake;
+    this.idleButton.setAttribute("aria-expanded", String(this.sidebarAwake));
+    this.el.classList.toggle("suki-pet--sidebar-idle", !this.sidebarAwake);
+    this.el.classList.toggle("suki-pet--sidebar-expanded", this.sidebarAwake);
+    if (!this.sidebarAwake) { this.bubble.hidden = true; this.queue = []; this.closeMenu(); return; }
+    this.updateSidebar();
+    this.openMenu();
+    this.menuEl.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  }
 
   constructor(private opts: PetOptions) {
     this.el = document.createElement("div");
@@ -141,6 +196,11 @@ export class SukiPet {
     // 量 safe-area 用：定位是 JS 算的，env() 只能透過一個看不見的元素讀成像素
     this.insetProbe = document.createElement("div");
     this.insetProbe.className = "suki-pet__inset";
+    this.idleButton = document.createElement("button");
+    this.idleButton.type = "button"; this.idleButton.className = "suki-pet__idle"; this.idleButton.hidden = true;
+    this.idleButton.setAttribute("aria-label", opts.label); this.idleButton.setAttribute("aria-expanded", "false");
+    const avatar = document.createElement("img"); avatar.src = "/mascot/suki-avatar.webp"; avatar.alt = "";
+    this.idleButton.append(avatar); this.idleButton.addEventListener("click", () => this.toggleSidebar());
     this.el.append(this.canvas, this.touch, this.bubble, this.menuEl, this.insetProbe);
     if (opts.mobile) {
       // 側邊頁籤：她從它後面探出來。蓋住邊距帶（曲面屏點不到的那段），自己不靠它點；平面屏點到了就當點她
@@ -180,7 +240,7 @@ export class SukiPet {
     await this.view.load(base, this.texScale);
     this.driver = new Driver(this.rig);
     await this.loadHit(`${base}/hit-${skin}.png`, skeleton.regions ?? []);
-    parent.append(this.el);
+    parent.append(this.el, this.idleButton);
     if (this.tab) parent.append(this.tab);
     if (this.catcher) parent.append(this.catcher);
     this.bind();
@@ -191,10 +251,11 @@ export class SukiPet {
     // 手機讀回「探出」時 restore 已經放好了；沒存過：手機靠在右側探出，桌機站在右下角
     else if (this.opts.mobile) { if (!this.tucked) { const d = defaultPeek(this.viewport(), this.size()); this.peekAt(d.side, d.pos); } }
     else this.place({ x: innerWidth - cssW - 24, y: innerHeight - cssH - 8 });
+    this.updateSidebar();
     void this.el.offsetWidth;
     requestAnimationFrame(() => { this.el.classList.remove("suki-pet--placing"); this.el.classList.add("suki-pet--pop"); });
     // 這一頁不說話：招呼與每日口味都留到下一頁（每日那句沒說就不算說過）
-    const quiet = this.opts.quietGreeting?.() ?? false;
+    const quiet = this.sidebarIdle || (this.opts.quietGreeting?.() ?? false);
     if (!this.tucked && !quiet) this.greet();
     if (!quiet) this.daily();
     void this.opts.careVisit?.().then((got) => {
@@ -216,13 +277,13 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); petSpeaking.value = false; }
+  stop() { this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
     this.guide = g;
     this.closeMenu();
-    if (!g || this.tucked || !this.ready) return;
+    if (!g || this.tucked || this.sidebarIdle || !this.ready) return;
     // 主要按鈕剛好在她泡泡位置的那幾頁：介紹留在選單裡，不自己開口（美術總監最終 r2 M8）
     if (this.opts.quietGreeting?.()) return;
     const todo = g.todo?.();
@@ -267,7 +328,7 @@ export class SukiPet {
     if (this.menuEl.contains(t) || this.touch.contains(t)) return;
     this.closeMenu();
   };
-  private escape = (e: KeyboardEvent) => { if (e.key === "Escape") this.closeMenu(); };
+  private escape = (e: KeyboardEvent) => { if (e.key === "Escape") { this.closeMenu(); if (this.sidebarDocked) this.idleButton.focus({ preventScroll: true }); } };
   private menuTimer = 0;
   private closeMenu() {
     clearTimeout(this.menuTimer);
@@ -314,6 +375,8 @@ export class SukiPet {
 
   // ---- 網站事件 ----
   on(e: SukiEvent) {
+    if (e.type === "summon" && this.sidebarIdle) return this.toggleSidebar();
+    if (this.sidebarIdle && e.type !== "away") return;
     switch (e.type) {
       case "favorite": return this.act({ expr: "happy", say: this.line("favorite"), hop: true });
       case "searchEmpty": return this.act({ expr: "pout", say: this.line("searchEmpty") });
@@ -349,7 +412,7 @@ export class SukiPet {
     }
   }
   private act(a: Act, urgent = false) {
-    if (a.showIf?.() === false) return;
+    if (this.sidebarIdle || a.showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
@@ -394,6 +457,7 @@ export class SukiPet {
   /** 網站直接要她說一句（例如選單動作找不到東西時） */
   say(text: string) { if (text) this.act({ say: text, talk: true }, true); }
   private speak(text: string, ms = 2600, action?: MenuItem, showIf?: () => boolean) {
+    if (this.sidebarIdle) return;
     this.bubbleCondition = showIf;
     this.bubble.textContent = text;
     if (action) {
@@ -424,6 +488,9 @@ export class SukiPet {
 
   // ---- 每一格 ----
   private frame(dt: number, now: number) {
+    this.updateSidebar();
+    if (this.sidebarIdle) return;
+    if (this.sidebarAwake) this.fitPopups();
     const p = this.rig.params;
     // 表情淡入淡出；演完回到平常
     const idle = (now - this.lastInput) / 1000, acting = now <= this.actUntil;
@@ -992,6 +1059,7 @@ export class SukiPet {
     this.fitPopups();
   }
   private save(p: { x: number; y: number }, peeking = false) {
+    if (this.sidebarDocked && this.sidebarAwake) this.sidebarPosition = { ...p };
     if (this.opts.mobile) {
       try { localStorage.setItem("suki.pet.pos", JSON.stringify(toSaved(this.viewport(), p, peeking ? this.side : null))); } catch { /* 存不了就算了 */ }
       return;
@@ -1197,7 +1265,20 @@ export class SukiPet {
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
-    if (!this.opts.mobile) return;
+    if (!this.opts.mobile) {
+      const bounds = this.opts.sidebarBounds?.();
+      for (const el of [this.bubble, this.menuEl]) {
+        if (!bounds || !this.sidebarAwake || el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
+        const r = el.getBoundingClientRect();
+        const previous = el.style.translate.split(" ").map(v => parseFloat(v) || 0);
+        const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
+        let x = left, y = Math.max(8, Math.min(top, innerHeight - 8 - r.height));
+        if (x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
+        const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
+        if (el.style.translate !== translate) el.style.translate = translate;
+      }
+      return;
+    }
     // 拖著、走路時每一格都會呼叫：兩個都收著就不量
     if (this.bubble.hidden && this.menuEl.hidden && !this.bubble.style.left && !this.menuEl.style.left) return;
     const f = this.viewport();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -11,7 +11,7 @@ import { fetchWallet } from "@/lib/api";
 import { fetchUpdates } from "@/lib/updates";
 import { fetchPosts, postPath } from "@/lib/blog";
 import { withLocale } from "@/router";
-import { useSiteLinks } from "@/lib/site-links";
+import { sidebarBoundsKey, useSiteLinks } from "@/lib/site-links";
 import { sidebarClearance, type SidebarRect } from "@/lib/sidebar-clearance";
 import SiteLink from "./SiteLink.vue";
 
@@ -88,6 +88,7 @@ watch(() => session.me?.accountNumId, id => {
   balanceState.value = checkinState.value = "loading";
   if (id) { void loadBalance(epoch); void loadCheckin(epoch); }
 }, { immediate: true });
+const sidebarBounds = inject(sidebarBoundsKey, ref<SidebarRect | null>(null));
 const host = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
 let clearanceFrame = 0;
@@ -111,6 +112,8 @@ function measureClearance() {
   const natural = outer.getBoundingClientRect();
   const top = Math.max(natural.top, header + topGap);
   const bottom = Math.min(window.innerHeight - bottomGap, natural.bottom);
+  const bounds = { left: natural.left, right: natural.right, top, bottom };
+  if (!sidebarBounds.value || Object.keys(bounds).some(key => bounds[key as keyof SidebarRect] !== sidebarBounds.value?.[key as keyof SidebarRect])) sidebarBounds.value = bounds;
   const pet = document.querySelector<HTMLElement>('.suki-pet');
   if (pet !== observedPet) {
     petObserver?.disconnect(); observedPet = pet;
@@ -123,7 +126,9 @@ function measureClearance() {
       if (rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none') obstacles.push(rect);
     }
   }
-  const range = sidebarClearance({ left: natural.left, right: natural.right, top, bottom }, obstacles);
+  const idle = document.querySelector<HTMLElement>('.suki-pet__idle:not([hidden])');
+  if (idle) obstacles.push(idle.getBoundingClientRect());
+  const range = sidebarClearance(bounds, obstacles);
   const height = bottom > top ? Math.max(0, range.bottom - range.top) : maxHeight;
   const offset = range.top > top ? range.top : header + topGap;
   if (inner.style.maxHeight !== `${height}px`) inner.style.maxHeight = `${height}px`;
@@ -147,6 +152,7 @@ onMounted(() => {
 });
 onUpdated(scheduleClearance);
 onBeforeUnmount(() => {
+  sidebarBounds.value = null;
   cancelAnimationFrame(clearanceFrame); petObserver?.disconnect(); bodyObserver?.disconnect(); sizeObserver?.disconnect();
   window.removeEventListener('scroll', scheduleClearance); window.removeEventListener('resize', scheduleClearance); window.removeEventListener('pointermove', scheduleClearance);
 });
