@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { approveFixtureResponse } from './hosted-fixture';
 import { legacyPolicyFixture } from './work-policy-fixture';
 import { bearer, identities, makeMember, ratingBody, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
+import { assertUpdateCooldown, reserveUpdateNotification, sourceUpdateTimes } from '../src/card-update';
 import { claim, stamp } from '../src/review';
 import app from '../src/index';
 import { createExecutionContext } from 'cloudflare:test';
@@ -79,19 +80,23 @@ it('notifies the recipient union once only after approval and preserves its vers
   const metrics = await SELF.fetch('https://c.test/metrics');
   expect(await metrics.text()).toContain('hearthroom_card_update_notifications_total{operation="publish",outcome="queued"} 1');
 });
-it('enforces seven days but keeps silent updates available and clears only the public log', async () => {
+it('enforces three days but keeps silent updates available and clears only the public log', async () => {
   await approve(await submit({ updateKind: 'major', updateNote: log }));
+  const published = await env.DB.prepare("SELECT published_at FROM card_update_events WHERE state='published'").first<{published_at:number}>();
+  const next = published!.published_at + 3 * day;
   legacyPolicyFixture();
   const availability = await SELF.fetch('https://c.test/v1/me/cards/draft/visibility', { headers: bearer('author') });
-  expect(await availability.json()).toMatchObject({ workVisibility: { nextMajorUpdateAt: expect.any(Number) } });
+  expect(await availability.json()).toMatchObject({ workVisibility: { nextMajorUpdateAt: next } });
   const blocked = await submit({ updateKind: 'major', updateNote: log });
   expect(blocked.status).toBe(409);
-  expect(await blocked.json()).toMatchObject({ error: 'update_notification_cooldown', nextMajorUpdateAt: expect.any(Number) });
+  expect(await blocked.json()).toMatchObject({ error: 'update_notification_cooldown', nextMajorUpdateAt: next });
+  const metrics = await SELF.fetch('https://c.test/metrics');
+  expect(await metrics.text()).toContain('hearthroom_card_update_notifications_total{operation="admission",outcome="cooldown"} 1');
   await approve(await submit());
   const detail = await SELF.fetch('https://c.test/v1/cards/' + card);
   expect(await detail.json()).toMatchObject({ updateKind: 'minor', updateNote: '' });
   expect((await notices()).results.map(r => JSON.parse(r.extra).note)).toEqual([log, log]);
-  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(Date.now() - 7 * day).run();
+  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(Date.now() - 3 * day).run();
   expect((await submit({ updateKind: 'major', updateNote: '字'.repeat(200) })).status).toBe(200);
 });
 it('carries a collector-only update through website, Web Push and Discord without exposing R logs on Discord', async () => {
@@ -178,4 +183,24 @@ it('does not expose the frozen changelog through notifications after access is w
  const response=await SELF.fetch('https://c.test/v1/me/community/notifications?lang=en',{headers:bearer('collector')});
  expect(response.status).toBe(200);
  expect(JSON.stringify(await response.json())).not.toContain(log);
+});
+
+it('uses the exact three-day boundary in admission, reservation and source eligibility', async () => {
+  await approve(await submit({ updateKind: 'major', updateNote: log }));
+  const event = await env.DB.prepare("SELECT work_id,published_at FROM card_update_events WHERE state='published'").first<{work_id:string;published_at:number}>();
+  // Prepare a pending major version while eligible, then restore the real last publication.
+  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(Date.now()-8*day).run();
+  const pending = await submit({updateKind:'major',updateNote:log});
+  expect(pending.status).toBe(200);
+  const {versionId} = await pending.json() as {versionId:string};
+  const version = await env.DB.prepare('SELECT submission_id FROM hosting_versions WHERE version_id=?').bind(versionId).first<{submission_id:string}>();
+  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(event!.published_at).run();
+  const next = event!.published_at+3*day;
+  expect((await sourceUpdateTimes(env.DB,['draft'])).get('draft')).toBe(next);
+  await expect(assertUpdateCooldown(env.DB,event!.work_id,next-1)).rejects.toMatchObject({status:409,extra:{nextMajorUpdateAt:next}});
+  await expect(reserveUpdateNotification(env.DB,version!.submission_id,next-1)).rejects.toMatchObject({status:409});
+  await expect(env.DB.prepare("INSERT INTO card_update_events(version_id,work_id,state,reserved_at) VALUES(?,?,'reserved',?)").bind(versionId,event!.work_id,next-1).run()).rejects.toThrow('update_notification_cooldown');
+  await expect(assertUpdateCooldown(env.DB,event!.work_id,next)).resolves.toBeUndefined();
+  await expect(reserveUpdateNotification(env.DB,version!.submission_id,next)).resolves.toBeUndefined();
+  expect(await env.DB.prepare('SELECT state,reserved_at FROM card_update_events WHERE version_id=?').bind(versionId).first()).toEqual({state:'reserved',reserved_at:next});
 });

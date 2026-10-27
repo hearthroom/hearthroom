@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick, type App } from 'vue';
 import ConfirmDialog from '../src/components/ConfirmDialog.vue';
 import { clearPublicationDrafts, confirmForm, confirmState, settleConfirm } from '../src/lib/confirm';
-import { i18n } from '../src/lib/i18n';
+import { i18n, loadLocale } from '../src/lib/i18n';
 
 let app: App | undefined;
 const tick = async () => { await nextTick(); await Promise.resolve(); await nextTick(); };
@@ -53,4 +53,13 @@ it('retains the form on a definite submission failure', async () => {
   document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await tick();
   expect(confirmState.current).not.toBeNull();
   expect(document.body.textContent).toContain('Try again');
+});
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('shows the three-day interval in %s',async locale=>{
+  await loadLocale(locale);
+  i18n.global.locale.value=locale;
+  try {
+    void open();await tick();
+    expect(document.querySelector('.publication-fields')?.textContent).toContain(i18n.global.t('cardUpdate.update.intervalHint',{days:3},3));
+  } finally { i18n.global.locale.value='zh-Hant'; }
 });

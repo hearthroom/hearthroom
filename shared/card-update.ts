@@ -1,6 +1,7 @@
 export const UPDATE_NOTE_MIN = 10;
 export const UPDATE_NOTE_MAX = 200;
-export const UPDATE_COOLDOWN_MS = 7 * 86400000;
+export const UPDATE_COOLDOWN_DAYS = 3;
+export const UPDATE_COOLDOWN_MS = UPDATE_COOLDOWN_DAYS * 86400000;
 export interface UpdateIntent { updateKind: 'minor' | 'major'; updateNote: string }
 export function normalizeUpdateNote(value: string): string {
   return value.replace(/\r\n?/g, '\n').replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '');
