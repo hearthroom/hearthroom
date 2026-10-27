@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useSiteLinks } from "@/lib/site-links";
 import SiteLink from "./SiteLink.vue";
 defineProps<{ opener?: () => HTMLElement | null }>();
 const emit = defineEmits<{ activate: []; appearance: []; language: [] }>();
 const { links } = useSiteLinks();
 const pick = (ids: string[]) => computed(() => ids.flatMap(id => links.value.filter(link => link.id === id)));
+const otherOpen = ref(false);
 const routes = pick(['routes']);
 const community = pick(['guide', 'campaign', 'blog', 'updates', 'discord']);
 const developers = pick(['developers']);
@@ -24,9 +25,9 @@ const legal = pick(['privacy', 'license']);
     <p class="compact-label">{{ $t('home.createCommunity') }}</p>
     <SiteLink v-for="link in community" :key="link.id" :link="link" :opener="opener" @activate="emit('activate')" />
   </div>
-  <details class="compact-other">
+  <details class="compact-other" @toggle="otherOpen = ($event.target as HTMLDetailsElement).open">
     <summary>{{ $t('home.otherInfo') }}</summary>
-    <div v-for="group in [{ id: 'developers', title: 'home.developerGroup', links: developers }, { id: 'support', title: 'home.siteSupportGroup', links: support }, { id: 'legal', title: 'home.legalGroup', links: legal }]" :key="group.id" class="compact-group" :data-menu-section="group.id">
+    <div v-for="group in [{ id: 'developers', title: 'home.developerGroup', links: developers }, { id: 'support', title: 'home.siteSupportGroup', links: support }, { id: 'legal', title: 'home.legalGroup', links: legal }]" :key="group.id" v-show="otherOpen" class="compact-group" :data-menu-section="group.id">
       <p class="compact-label">{{ $t(group.title) }}</p>
       <SiteLink v-for="link in group.links" :key="link.id" :link="link" :opener="opener" @activate="emit('activate')" />
     </div>
