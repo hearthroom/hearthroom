@@ -23,7 +23,7 @@ function choose(updateKind:UpdateIntent['updateKind']){emit('update:modelValue',
       <input type="radio" name="publication-update" data-update-choice="major" :checked="modelValue.updateKind==='major'" :disabled="disabled||unavailable" aria-describedby="publication-eligibility" @change="choose('major')" />
       <span><strong>{{ t('cardUpdate.update.major') }}</strong><small>{{ t('cardUpdate.update.majorHint') }}</small></span>
     </label>
-    <p v-if="nextMajorUpdateAt===undefined" id="publication-eligibility" class="subtle" role="status">{{ t('cardUpdate.update.loadError') }} <button type="button" class="link" @click="emit('retry')">{{ t('cardUpdate.update.retryEligibility') }}</button></p>
+    <p v-if="nextMajorUpdateAt===undefined" id="publication-eligibility" class="subtle" role="status">{{ t('cardUpdate.update.loadError') }} <button type="button" class="btn btn--ghost btn--sm publication-retry" @click="emit('retry')">{{ t('cardUpdate.update.retryEligibility') }}</button></p>
     <p v-else-if="unavailable" id="publication-eligibility" class="subtle" role="status">{{ t('cardUpdate.update.noticeAvailableAt',{availableAt}) }}</p>
     <div v-if="modelValue.updateKind==='major'" class="field publication-note">
       <label for="publication-note">{{ t('cardUpdate.update.note') }}</label>
@@ -44,6 +44,8 @@ legend { font-size:13px; font-weight:600; padding:0 0 var(--s-2); }
 .publication-choice span { min-width:0; }
 .publication-choice strong { display:block; font-size:14px; font-weight:600; }
 .publication-choice small { display:block; color:var(--text-2); font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.publication-fields:lang(ko) :is(legend, strong, small, .subtle, .publication-error) { word-break:keep-all; overflow-wrap:anywhere; }
+.publication-retry { color:var(--accent-text); }
 .publication-note { gap:var(--s-2); margin:0; }
 .publication-note textarea { width:100%; min-height:140px; resize:vertical; }
 .publication-count { text-align:end; }
