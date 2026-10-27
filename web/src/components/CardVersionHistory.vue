@@ -86,13 +86,14 @@ onBeforeUnmount(()=>{generation++;});
 </template>
 <style scoped>
 .version-history { min-width:0; display:grid; gap:var(--s-3); padding:var(--s-5) 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
+[data-version-id] { scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
 .version-history__head { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s-3); }
 .version-history__head h2 { font-size:18px; font-weight:600; }
 .version-history__head button { color:var(--accent-text); min-height:var(--h-lg); flex-shrink:0; font-size:13px; }
 .version-history__latest,.version-history__date,.version-history__status { display:grid; gap:var(--s-2); }
 .version-history__note { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; font-size:14px; }
 .version-history__older { display:grid; gap:var(--s-3); }
-.version-history__entry { border-top:1px solid var(--line); padding-top:var(--s-2); scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
+.version-history__entry { border-top:1px solid var(--line); padding-top:var(--s-2); }
 .version-history__entry summary { min-height:var(--h-lg); cursor:pointer; font-size:13px; line-height:1.7; overflow-wrap:anywhere; }
 .version-history__entry summary span { margin-inline-start:var(--s-3); }
 .version-history__entry > p,.version-history__date { margin:var(--s-2) 0; }
