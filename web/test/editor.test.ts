@@ -128,6 +128,18 @@ async function mount(path: string) {
 }
 
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
+
+it('lets the author save an unchanged draft to retire an unfinished publication',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'合成草稿',roleDetailDesc:'合成設定',roleWelcome:'合成開場',language:'zh-Hant'});
+ localStorage.setItem('hearthroom:publication:harbor:r1','fixture-unfinished-operation');
+ try{
+  await mount('/cards/r1/edit');
+  const save=$<HTMLButtonElement>('.bar button[type=submit]');
+  expect(save.disabled).toBe(false);
+  save.click();await flush();
+  expect(api.beginCardEdit).toHaveBeenCalled();
+ }finally{localStorage.removeItem('hearthroom:publication:harbor:r1');}
+});
 // 條目彈窗 Teleport 到 body，不在掛載的 root 裡面
 const $d = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
 const btnIn = (scope: ParentNode, text: string) =>

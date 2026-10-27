@@ -1,4 +1,5 @@
 import {parseUpdateIntent,type UpdateIntent} from '../../../shared/card-update';
+import {publicationOperationKey as publicationKey,notePublicationOperation} from './publication-operation';
 import {retentionParams} from './reward-retention';
 import { deviceToken } from "./reward-device";
 import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
@@ -351,15 +352,15 @@ export async function fetchAuthor(handle: string): Promise<Author> {
 const publicationOperations=new Map<string,string>();
 type PublicationConsent={operationId:string;intentHash:string;expected:{policyRevision:string;approvalRevision:string}|null};
 const publicationConsents=new Map<string,PublicationConsent>();
-const publicationKey=(provider:ProviderId,roleId:string)=>`hearthroom:publication:${provider}:${roleId}`;
 function publicationOperation(key:string):string {
  let id=publicationOperations.get(key);
  try{id ||= localStorage.getItem(key)||undefined}catch{}
  id ||= crypto.randomUUID();publicationOperations.set(key,id);
+ notePublicationOperation(key,true);
  try{localStorage.setItem(key,id)}catch{}
  return id;
 }
-function clearPublicationOperation(key:string){publicationOperations.delete(key);publicationConsents.delete(key);try{localStorage.removeItem(key);localStorage.removeItem(key+':consent')}catch{}}
+function clearPublicationOperation(key:string){publicationOperations.delete(key);publicationConsents.delete(key);try{localStorage.removeItem(key);localStorage.removeItem(key+':consent')}catch{}notePublicationOperation(key,false);}
 async function publicationConsent(key:string,operationId:string,intent:unknown,expected?:PublicationConsent['expected']):Promise<{consent:PublicationConsent;prior:boolean;changed:boolean}>{
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(intent)));
  const intentHash=[...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('');

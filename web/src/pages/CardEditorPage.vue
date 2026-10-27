@@ -16,6 +16,7 @@
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
 import {retentionText} from '@/lib/reward-retention';
+import {hasPublicationOperation} from '@/lib/publication-operation';
 import {fetchWorkVisibility} from '@/lib/work-visibility';
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
@@ -316,6 +317,7 @@ const deletionError = ref("");
 const deletionErrorNotice = ref<HTMLElement | null>(null);
 const saved = ref(false);
 const reviewRetry = ref(false);
+const unfinishedPublication=computed(()=>hasPublicationOperation(editorProvider.value,roleId.value));
 const reviewResubmitted = ref(false);
 /** 卡已經刪掉：離開時不再問「放棄修改？」，也不攔關分頁 */
 const deleted = ref(false);
@@ -1398,7 +1400,7 @@ async function exportCard(format: "png" | "json") {
           右欄就整條讓給手機框。
         -->
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry)">
+          <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
