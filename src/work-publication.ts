@@ -1,3 +1,4 @@
+import { reserveUpdateNotification } from './card-update';
 import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
@@ -36,6 +37,7 @@ export async function finalizeManagedReview(env:Env,submission:string):Promise<v
  await assertPublicSource(db,row.provider,row.source_role_id);
  if(row.status==='approved'&&row.state==='published')return;
  if(row.status!=='pending'||row.state==='conflict'||row.state==='cancelled')throw new HttpError(409,'visibility_operation_conflict');
+ await reserveUpdateNotification(db,submission,Date.now());
  const lock=await db.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=?
  WHERE work_id=? AND (sync_operation_id IS NULL OR sync_operation_id=?)
  AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='pending')`).bind(row.operation_id,row.work_id,row.operation_id,submission).run();

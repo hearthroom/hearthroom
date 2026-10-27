@@ -10,6 +10,8 @@ import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 
 export interface CardRow {
+  update_kind?: 'minor'|'major';
+  update_note?: string;
   favorite_count?: number;
   updated_at?: number;
   approved_version_id: string | null;
@@ -81,9 +83,9 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
  * 最近更新的時間（「更新」那個榜的排序鍵，也是卡片上的「幾天前更新」）：目前上線那一版審核通過的時刻——作者改了卡、新版過審，玩家才看得到新內容。
  * 沒有審核紀錄（早期直接上線的版本）退回那一版建立的時間；沒有版本退回上榜時間。兩次查找都走主鍵。
  */
-const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
+const UPDATED_AT = `COALESCE((SELECT COALESCE(v.published_at, r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
 
-const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = "c.*, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** Presentation rows only; callers must apply current access before returning. */
 export async function cardsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
@@ -162,6 +164,8 @@ export function toCard(row: CardRow, lang: string) {
     heat: row.heat ?? 0,
     registeredAt: row.registered_at,
     updatedAt: row.updated_at ?? row.registered_at,
+    updateKind: row.update_kind ?? 'minor',
+    updateNote: row.update_kind === 'major' ? row.update_note ?? '' : '',
     syncedAt: row.last_synced_at,
   };
 }

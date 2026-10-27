@@ -115,3 +115,38 @@ eligibility without identifiers or content hashes in metric labels.
 Design reference: Buffer's [post groups](https://support.buffer.com/en-us/articles/using-post-groups-in-buffer-bUZAamv7kk)
 are a useful shared-work presentation pattern, but their channel-publication model does
 not define HearthRoom's hosting or review responsibilities.
+
+## Silent updates and public changelogs
+
+Saving an author draft, including `hearthroom card push`, does not notify followers.
+An existing published card defaults to a silent update when submitted for review.
+The website offers **Silent update** and **Update and notify**. To request the latter
+from the CLI, use `hearthroom card submit <dir> --notify --update-note "…"` only after
+the author chooses to notify readers. The public changelog is required: at least 10
+non-whitespace Unicode code points and at most 200 code points in the whole text.
+CRLF/CR become LF and surrounding Unicode White_Space is trimmed; internal spaces
+and line breaks count toward the maximum. Text is neither translated nor rendered
+as HTML or Markdown. A note without explicit notification consent is rejected.
+
+The submitted intent and note belong to that frozen review version. Only approval
+and actual publication create a notification event; rejection, withdrawal and draft
+edits do not. Each work can create one notified-update event per seven days. A
+cooldown refusal leaves silent submission available and never silently changes a
+notified submission into a silent one. Resume the original operation after an unknown
+result instead of changing its intent or creating another submission.
+
+Recipients are the deduplicated union of people following the creator and people
+saving the card, excluding the creator and respecting notification settings. Device
+push and Discord require their existing subscriptions or opt-in; restricted content
+is not exposed through notification snapshots. A published notification event is
+not a claim that every external device received it.
+
+The card introduction page keeps version records after the author's introduction
+and before comments. Silent versions retain their dates without inventing logs;
+previous notified-version logs survive later silent updates. The public history API
+is `GET /v1/cards/:id/versions?page=1` (20 records, `hasMore`). Optional `target` returns
+a specific visible revision without scanning pages, and notifications link with
+`?version=<versionId>`. Old records use a labelled review date where available or an
+unknown date; only newly recorded publication timestamps are labelled as published.
+Current access and each revision's adult gate still apply. These are community HTTP
+and CLI contracts; this change does not add a Provider MCP gateway.

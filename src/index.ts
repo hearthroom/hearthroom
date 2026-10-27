@@ -1213,6 +1213,27 @@ async function commentTargetAccess(c:Context<{Bindings:Env;Variables:{ev:Pending
 }
 const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor(Number(raw)) || 1));
 
+/** Public version metadata follows current card access and each revision's adult gate. */
+app.get('/v1/cards/:id/versions', async c => {
+  c.header('Cache-Control','private, no-store');
+  const card=await commentCardFor(c);
+  const allowAdult=await viewerAllowsNsfw(c,{card:true});
+  const page=pageOf(c.req.query('page'));
+  const target=c.req.query('target');
+  if(target!==undefined&&!/^[a-zA-Z0-9_-]{1,128}$/.test(target))throw new HttpError(400,'invalid_arguments');
+  const select=`SELECT v.version_id AS versionId,v.update_kind AS updateKind,
+    CASE WHEN v.update_kind='major' THEN v.update_note ELSE '' END AS updateNote,
+    COALESCE(v.published_at,s.decided_at) AS publishedAt,
+    CASE WHEN v.published_at IS NOT NULL THEN 'published' WHEN s.decided_at IS NOT NULL THEN 'review' ELSE 'unknown' END AS publicationTimeSource
+    FROM hosting_versions v LEFT JOIN review_submissions s ON s.id=v.submission_id
+    WHERE v.card_id=? AND v.state='approved' AND (s.id IS NULL OR s.status='approved')
+    AND (v.rating IS NOT 'R' OR ?)`;
+  const rows=await c.env.DB.prepare(select+` ORDER BY COALESCE(v.published_at,s.decided_at,v.created_at) DESC,v.rowid DESC LIMIT 21 OFFSET ?`)
+    .bind(card.id,allowAdult?1:0,(page-1)*20).all();
+  const selected=target?await c.env.DB.prepare(select+' AND v.version_id=?').bind(card.id,allowAdult?1:0,target).first():null;
+  return c.json({items:rows.results.slice(0,20),page,hasMore:rows.results.length>20,...(target?{target:selected}:{})});
+});
+
 app.get("/v1/cards/:id/comments", async (c) => {
   const card = await commentCardFor(c);
   const res = await listTop(c.env.DB, { kind: "card", card }, await commentViewer(c), pageOf(c.req.query("page")), sortOf(c.req.query("sort")));
@@ -1376,7 +1397,7 @@ app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
   if(me.accountClass==='test')throw new HttpError(403,'test_account_operation_not_allowed');
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; ratingAnswers?: unknown; fandom?: unknown; fandomId?: unknown; distribute?: unknown; operationId?: unknown;expectedPolicyRevision?:unknown;expectedApprovalRevision?:unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; ratingAnswers?: unknown; fandom?: unknown; fandomId?: unknown; distribute?: unknown; operationId?: unknown;updateKind?:unknown;updateNote?:unknown;expectedPolicyRevision?:unknown;expectedApprovalRevision?:unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
   const hasConsent=body.expectedPolicyRevision!==undefined||body.expectedApprovalRevision!==undefined;
@@ -1425,7 +1446,7 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,updateKind:body.updateKind,updateNote:body.updateNote,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);

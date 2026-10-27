@@ -79,13 +79,13 @@ it('points followers at the new card itself and records the author', async () =>
  expect(list.items[0]).toMatchObject({ kind: 'followed_work', card: { id: Number(second), name: '第二張' } });
  expect(list.items[0].actor.handle).toBe((await env.DB.prepare('SELECT handle FROM members WHERE id=?').bind(author).first<{ handle: string }>())!.handle);
  expect(list.items[0].extra).toEqual({ event: 'new' });
- // A new reviewed version of a listed card is an update, including a synced card coming back
- // from re-review; only a card that never passed review before is new.
+ // Later pointer changes are silent unless the submitted version carries explicit notification consent.
+ // Initial publication retains its existing follower notice.
  await env.DB.prepare("UPDATE cards SET approved_version_id='v2' WHERE id=?").bind(Number(second)).run();
  await env.DB.prepare("UPDATE cards SET status='needs_review' WHERE id=?").bind(Number(second)).run();
  await env.DB.prepare("UPDATE cards SET status='approved',approved_version_id='v3' WHERE id=?").bind(Number(second)).run();
  const events = (await rows(fan, 'followed_work')).results.map(r => JSON.parse(String(r.extra)).event);
- expect(events).toEqual(['new', 'update', 'update']);
+ expect(events).toEqual(['new']);
 });
 it('keeps one like notice per comment, counts real likers, and only re-alerts at milestones', async () => {
  identities({ author: AUTHOR, fan: FAN, other: OTHER, third: 20003, fourth: 20004 });

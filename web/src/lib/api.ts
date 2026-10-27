@@ -1,3 +1,4 @@
+import {parseUpdateIntent,type UpdateIntent} from '../../../shared/card-update';
 import {retentionParams} from './reward-retention';
 import { deviceToken } from "./reward-device";
 import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
@@ -282,6 +283,16 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
   return card;
 }
 
+export interface CardVersion {
+ versionId:string;publishedAt:number|null;publicationTimeSource:'published'|'review'|'unknown';updateKind:'minor'|'major';updateNote:string;
+}
+export interface CardVersionPage {items:CardVersion[];page:number;hasMore:boolean;target?:CardVersion|null}
+export async function fetchCardVersions(id:string,page=1,target?:string):Promise<CardVersionPage>{
+ const viewer=await viewerAccess();const params=new URLSearchParams({page:String(page)});
+ if(viewer.param)params.set('nsfw','1');if(target)params.set('target',target);
+ return json<CardVersionPage>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}/versions?${params}`,{cache:'no-store',headers:{...from(),...viewer.headers}}));
+}
+
 /** 這一區最常見的標籤，給榜單的類型篩選列。 */
 export async function fetchTags(zone: Zone | "all"): Promise<{ tag: string; n: number }[]> {
   const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`, { headers: from() }));
@@ -355,7 +366,13 @@ async function publicationConsent(key:string,operationId:string,intent:unknown,e
  let saved=publicationConsents.get(key);
  if(!saved){try{const raw=localStorage.getItem(key+':consent');if(raw)saved=JSON.parse(raw) as PublicationConsent;}catch{}}
  if(saved?.operationId===operationId){
-  if(saved.intentHash!==intentHash)throw new ApiError(409,describeApiError(409,''),'visibility_operation_conflict');
+  if(saved.intentHash!==intentHash){
+    const value=intent as Record<string,unknown>,{updateKind,updateNote,...legacy}=value;
+    const legacyHash=updateKind==='minor'&&updateNote===''?await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(legacy))):null;
+    const compatible=legacyHash&&[...new Uint8Array(legacyHash)].map(n=>n.toString(16).padStart(2,'0')).join('')===saved.intentHash;
+    if(!compatible)throw new ApiError(409,describeApiError(409,''),'visibility_operation_conflict');
+    saved.intentHash=intentHash;publicationConsents.set(key,saved);try{localStorage.setItem(key+':consent',JSON.stringify(saved))}catch{}
+  }
   return {consent:saved,prior:true};
  }
  const value={operationId,intentHash,expected:expected??null};publicationConsents.set(key,value);
@@ -377,10 +394,12 @@ export async function registerCard(
   fandom?: string,
   fandomId?: string,
   expected?: { policyRevision:string; approvalRevision:string },
+  update?:UpdateIntent,
 ): Promise<CommunityCard> {
+  const intent=parseUpdateIntent(update??{});
   const key=publicationKey(provider,roleId);
   const operationId=publicationOperation(key);
-  const {consent,prior}=await publicationConsent(key,operationId,{roleId,ratingAnswers,fandom:fandom??'',fandomId:fandomId??'',distribute:distribute.map(d=>d.provider)},expected);
+  const {consent,prior}=await publicationConsent(key,operationId,{roleId,ratingAnswers,fandom:fandom??'',fandomId:fandomId??'',distribute:distribute.map(d=>d.provider),...intent},expected);
   if(prior&&provider==='harbor'){
     const response=await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/publication/operations/${encodeURIComponent(operationId)}`,{method:'GET',cache:'no-store',headers:{...from(),'X-Provider':provider,...authHeaders(token)}});
     const body=await response.json().catch(()=>null) as {error?:string;operation?:{operationId?:string;state?:string};card?:CommunityCard;workVisibility?:{policyRevision:string;approvalRevision:string;syncState:string;actions:string[]}}|null;
@@ -401,13 +420,18 @@ export async function registerCard(
       }
     }
   }
-  const result=await json<CommunityCard>(
+  let result:CommunityCard;
+  try{result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
-      body: JSON.stringify({ roleId, ratingAnswers, operationId, ...(consent.expected ? {expectedPolicyRevision:consent.expected.policyRevision,expectedApprovalRevision:consent.expected.approvalRevision} : {}), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
+      body: JSON.stringify({ roleId, ratingAnswers, operationId, ...intent, ...(consent.expected ? {expectedPolicyRevision:consent.expected.policyRevision,expectedApprovalRevision:consent.expected.approvalRevision} : {}), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
+  }catch(error){
+    if(error instanceof ApiError&&['update_notification_cooldown','update_note_invalid','update_kind_invalid','update_notification_unavailable'].includes(error.code)&&publicationOperations.get(key)===operationId)clearPublicationOperation(key);
+    throw error;
+  }
   clearPublicationOperation(key);
   return result;
 }

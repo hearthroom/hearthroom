@@ -1,3 +1,5 @@
+import {updateNoticeVisibility,type UpdateNoticeRef} from './update-visibility';
+import {notificationRecipientEligible} from '../card-update';
 import {eligibleNotification} from '../test-accounts';
 import { changeOfficialAuthor } from '../official-authors';
 import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
@@ -271,19 +273,21 @@ app.get("/v1/me/community/notifications", async (c) => {
   const lang = langOf(c);
   const rows = await c.env.DB.prepare(
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
-     a.handle AS actor_handle,a.display_name AS actor_name,c.id AS card_num,c.names AS card_names
+     a.handle AS actor_handle,a.display_name AS actor_name,n.card_id,c.id AS card_num,c.names AS card_names
      FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
      WHERE ${eligibleNotification()} AND n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
   )
     .bind(Date.now(),Date.now(),m.id)
-    .all<{ id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
+    .all<{ card_id:string|number|null; id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
+  const adult=await memberNsfw(c.env.DB,m.id);
+  const visibility=await updateNoticeVisibility(c.env,rows.results,adult.showNsfw&&!!adult.ageVerifiedAt&&adult.adultConsent);
   // Only public identity leaves here: the actor's handle and display name, the card's number and name.
-  const items = rows.results.map(({ extra, actor_handle, actor_name, card_num, card_names, ...n }) => ({
+  const items = rows.results.map(({ extra, actor_handle, actor_name, card_num, card_names, card_id:_cardId, ...n }) => ({
     ...n,
     actor: actor_handle ? { handle: actor_handle, name: actor_name || actor_handle } : null,
     // An expired claim no longer belongs to this reviewer, so its card is not named.
-    card: card_num !== null && n.kind !== "review_reminder_expired" ? { id: card_num, name: pickLocale(JSON.parse(card_names || "{}"), lang) } : null,
-    extra: withUpdateTitle(n.kind, extra ? JSON.parse(extra) : null, lang),
+    card: card_num !== null && n.kind !== "review_reminder_expired" && (!visibility.newIds.has(n.id)||visibility.readable.has(n.id)) ? { id: card_num, name: pickLocale(JSON.parse(card_names || "{}"), lang) } : null,
+    extra: withUpdateTitle(n.kind, extra ? {...JSON.parse(extra),...(visibility.newIds.has(n.id)&&!visibility.readable.has(n.id)?{note:undefined}:{})} : null, lang),
   }));
   return c.json({ items });
 });
@@ -562,17 +566,18 @@ app.post("/internal/community/:operation", async (c) => {
       .bind(Date.now(), Date.now())
       .all();
     const notifications = await c.env.DB.prepare(
-      `SELECT n.id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
+      `SELECT n.id,n.kind,n.extra,n.card_id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
     )
       .bind(Date.now(),Date.now())
-      .all();
+      .all<UpdateNoticeRef>();
+    const updateVisibility=await updateNoticeVisibility(c.env,notifications.results);
     const review = await c.env.DB.prepare(
       "SELECT revision FROM community_review_signal WHERE delivered=0",
     ).first();
     return c.json({
       subjects: subjects.results.map((r) => r.discord_id),
       jobs: jobs.results,
-      notifications: notifications.results,
+      notifications: notifications.results.filter(r=>!updateVisibility.newIds.has(r.id)||updateVisibility.reachable.has(r.id)).map(r=>({id:r.id})),
       review,
     });
   }
@@ -642,11 +647,17 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE ${eligibleNotification()} AND n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.id,n.card_id,n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE ${eligibleNotification()} AND n.id=? AND n.delivered=0 AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
-      .first<Parameters<typeof pushLine>[0] & { path: string; discord_id: string; locale: string | null }>();
+      .first<Parameters<typeof pushLine>[0] & UpdateNoticeRef & { path: string; discord_id: string; locale: string | null }>();
     if (!n) throw new HttpError(404, "not_found");
+    const visibility=await updateNoticeVisibility(c.env,[n]);
+    if(visibility.newIds.has(n.id)){
+      if(visibility.unavailable)throw new HttpError(503,'visibility_sync_pending');
+      if(!visibility.reachable.has(n.id))throw new HttpError(404,'not_found');
+      if(!visibility.readable.has(n.id))n.card_names=null;
+    }
     if (b.delivered === true)
       await c.env.DB.prepare(
         "UPDATE community_notifications SET delivered=1 WHERE id=?",

@@ -1,3 +1,4 @@
+import {sourceUpdateTimes} from './card-update';
 import {Hono} from 'hono';
 import {CARD_NUMBER,getCard,type CardRow} from './cards';
 import {requireMember} from './members';
@@ -6,6 +7,7 @@ import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
 
 export interface WorkVisibility {
+ nextMajorUpdateAt?:number;
  rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  access:WorkAccess;effectiveAccess:'owner'|'link'|'public'|'denied'|'unavailable';
  review:'none'|'pending'|'rejected'|'needs_review'|'revoked';update:'none'|'pending'|'rejected';
@@ -47,7 +49,8 @@ export async function readOwnerVisibility(env:Env,source:string,token:string,row
   env.DB.prepare("SELECT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND s.status='approved') AS ever_public").bind(source).first<{ever_public:number}>(),
   env.DB.prepare("SELECT reason FROM moderation_events WHERE provider='harbor' AND source_role_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(source).first<{reason:string}>(),
  ]);
- return {workVisibility:await projectOwnerVisibility(provider,local,row,reviews,history?.ever_public===1,moderation),provider};
+ const times=await sourceUpdateTimes(env.DB,[source]);
+ return {workVisibility:{...await projectOwnerVisibility(provider,local,row,reviews,history?.ever_public===1,moderation),nextMajorUpdateAt:times.get(source)??0},provider};
 }
 
 function savedEpochAdvanced(provider:WorkOwnerView,local:ManagedWork|null):boolean{
@@ -107,11 +110,12 @@ export async function readOwnerVisibilities(env:Env,sources:string[],token:strin
  ]);
  const cardMap=new Map(cards.results.map(r=>[r.source_role_id,r])),policyMap=new Map(policies.results.map(r=>[r.source_role_id,r]));
  const reviewMap=new Map(reviews.results.map(r=>[r.source,r])),moderationMap=new Map(moderation.results.map(r=>[r.source_role_id,r]));
+ const times=await sourceUpdateTimes(env.DB,sources);
  const out=new Map<string,WorkVisibility>();
  for(const [i,source] of sources.entries()){
   const p=policyMap.get(source)??null,r=provider[i],review=reviewMap.get(source)??null;
   if(p&&(!r.managed||r.workId!==p.work_id))throw new HttpError(503,'visibility_provider_unavailable');
-  out.set(source,await projectOwnerVisibility(r,p,cardMap.get(source)??null,review,review?.ever_public===1,moderationMap.get(source)??null));
+  out.set(source,{...await projectOwnerVisibility(r,p,cardMap.get(source)??null,review,review?.ever_public===1,moderationMap.get(source)??null),nextMajorUpdateAt:times.get(source)??0});
  }
  return out;
 }

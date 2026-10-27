@@ -1,3 +1,4 @@
+import {clearPublicationDrafts} from './confirm';
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
@@ -206,6 +207,7 @@ export const useSession = defineStore("session", () => {
 
   async function logout(o: { allRoutes?: boolean } = {}) {
     generation++;
+    clearPublicationDrafts();
     // 剛登出的網域不靜默登入，否則一登出馬上又被登回去（lib/silent-login.ts）
     markLoggedOut();
     otherLines.value = [];

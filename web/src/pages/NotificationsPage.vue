@@ -5,19 +5,22 @@
  * 通知是「我的」層級的東西，Discord 私訊只是其中一種送達方式——所以清單與站內／瀏覽器的
  * 開關在這裡，Discord 綁定與私訊提醒留在社群頁，這裡只給一句引導。
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink } from "vue-router";
+import { RouterLink,useRoute } from "vue-router";
 import AccountIcon from "@/components/AccountIcon.vue";
 import MascotSay from "@/components/MascotSay.vue";
 import { communityRequest, type CommunityNotice, type CommunityView } from "@/lib/community";
 import { pageTitle } from "@/lib/i18n";
-import { noticeText, useNotifications } from "@/lib/notifications";
+import { noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
 import { disablePush, enablePush, pushConfig, pushState, pushSupported, type PushConfig, type PushState } from "@/lib/push";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import NewMark from "@/components/NewMark.vue";
 
+const route=useRoute();
+const expanded=ref(new Set<string>());
+function toggleLog(id:string){if(expanded.value.has(id))expanded.value.delete(id);else expanded.value.add(id);}
 const session = useSession();
 const store = useNotifications();
 const { t } = useI18n();
@@ -58,6 +61,11 @@ function togglePush() {
   void run(async () => { push.value = push.value === "on" ? await disablePush(await token()) : await enablePush(token, locale.value, config.value); });
 }
 function pick(n: CommunityNotice) { void store.read(n); }
+watch(()=>[route.hash,store.items],async()=>{
+ let id='';try{if(route.hash.startsWith('#notice-'))id=decodeURIComponent(route.hash.slice(8));}catch{return;}
+ const n=store.items.find(n=>n.id===id);if(!n||!noticeUpdateNote(n))return;
+ expanded.value.add(id);await nextTick();document.getElementById('notice-'+id)?.scrollIntoView?.({block:'nearest'});
+},{immediate:true});
 const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(locale.value);
 onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(load); });
 </script>
@@ -78,11 +86,16 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
         <p class="subtle">{{ t("notifications.empty") }}</p>
       </div>
       <ul v-else class="notices__list">
-        <li v-for="n in store.items" :key="n.id">
+        <li v-for="n in store.items" :key="n.id" :id="'notice-'+n.id">
           <RouterLink :to="lp(n.path)" class="notices__item" :class="{ 'notices__item--unread': !n.read_at }" @click="pick(n)">
             <span>{{ noticeText(n) }}</span>
             <small>{{ when(n) }} · {{ t(n.read_at ? "community.read" : "community.unread") }}</small>
           </RouterLink>
+          <div v-if="noticeUpdateNote(n)" class="notices__update">
+            <strong class="subtle">{{t('cardUpdate.notice.updateLog')}}</strong>
+            <p :id="'notice-log-'+n.id" class="notices__log" :class="{'notices__log--preview':!expanded.has(n.id)}">{{noticeUpdateNote(n)}}</p>
+            <button type="button" class="link" :aria-expanded="expanded.has(n.id)" :aria-controls="'notice-log-'+n.id" @click="toggleLog(n.id)">{{t(expanded.has(n.id)?'cardUpdate.notice.hideUpdateLog':'cardUpdate.notice.showUpdateLog')}}</button>
+          </div>
         </li>
       </ul>
     </section>
@@ -110,6 +123,11 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
 </template>
 
 <style scoped>
+.notices__update { display:grid; gap:var(--s-2); padding:0 var(--s-3) var(--s-3); }
+.notices__update button { justify-self:start; min-height:var(--h-lg); font-size:13px; }
+.notices__log { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.7; }
+.notices__log--preview { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+.notices__list > li { scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
 .notices { display: grid; gap: var(--s-4); }
 .notices__back { display: inline-flex; align-items: center; justify-self: start; gap: var(--s-2); min-height: var(--h-lg); color: var(--text-2); }
 .notices__back:hover { color: var(--accent-text); }

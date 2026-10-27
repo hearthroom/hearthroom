@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError, fetchDraftState, type DraftState, fetchRatingDraft, registerCard, saveRatingDraft } from '@/lib/api';
 import { accountToken } from '@/lib/connections';
-import { confirmDialog } from '@/lib/confirm';
+import { confirmDialog,confirmPublication } from '@/lib/confirm';
 import { askRating } from '@/lib/rating';
 import { currentProvider, type ProviderId } from '@/lib/provider';
 import { platformPath } from '@/lib/distribution';
@@ -13,7 +13,7 @@ import { useLocalePath } from '@/lib/use-locale';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from './AuthorVisibility.vue';
-import type { WorkVisibility } from '@/lib/work-visibility';
+import {fetchWorkVisibility,type WorkVisibility} from '@/lib/work-visibility';
 import type { CommunityCard } from '@/lib/types';
 const props = defineProps<{card: CommunityCard}>();
 const emit = defineEmits<{submitted: []}>();
@@ -43,29 +43,41 @@ const legacyState=computed(()=>legacyAuthorStateKey(legacyDraft.value,props.card
 const canSubmitUpdate = computed(() => !!visibility.value?.actions.includes('submit_update'));
 async function submit(expected=visibility.value) {
   if (busy.value || !owner.value || !expected || !expected.actions.some(a=>a==='submit_review'||a==='submit_update')) return;
+  const source=sourceId.value,p=provider.value,actor=session.me?.accountNumId;
+  const valid=()=>sourceId.value===source&&provider.value===p&&session.me?.accountNumId===actor;
   // 每次送審都附分級問卷：先帶出作者存過的評測讓他確認，沒有就從頭填
   let token: string | null = null;
-  try { token = await accountToken(provider.value, props.card.author.accountNumId); } catch { token = null; }
+  try { token = await accountToken(p, props.card.author.accountNumId); } catch { token = null; }
+  if(!valid())return;
   if (!token) { error.value = t('auth.expired'); return; }
-  const saved = await fetchRatingDraft(sourceId.value, token, provider.value).catch(() => null);
+  const saved = await fetchRatingDraft(source, token, p).catch(() => null);
   const answers = await askRating(saved);
-  if (!answers) return;
-  const ok = await confirmDialog({
+  if (!answers||!valid()) return;
+  const options={
     title: t('mine.consent.title'),
-    message: t(provider.value === 'harbor' ? 'workspace.reviewConsent' : 'mine.consent.message'),
+    message: t(p === 'harbor' ? 'workspace.reviewConsent' : 'mine.consent.message'),
     confirmText: t('mine.consent.confirm'),
-  });
-  if (!ok) return;
-  busy.value = true; error.value = '';
+  };
+  const send=async(value?:{update:import('../../../shared/card-update').UpdateIntent})=>{
+    if(!valid())return;busy.value=true;error.value='';
+    try{
+      void saveRatingDraft(source,answers,token!,p).catch(()=>{});
+      if(expected.everPublic)await registerCard(source,token!,answers,[],p,undefined,undefined,expected,value?.update);
+      else await registerCard(source,token!,answers,[],p,undefined,undefined,expected);
+    }finally{if(valid())busy.value=false;}
+  };
   try {
-    void saveRatingDraft(sourceId.value, answers, token, provider.value).catch(() => {});
-    await registerCard(sourceId.value, token, answers, [], provider.value, undefined, undefined, expected);
-    await visibilityControl.value?.reload();
-    emit('submitted');
+    if(expected.everPublic){
+      const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
+        publication:{key:`${p}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
+          reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token!,p);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+      if(!ok||!valid())return;
+    }else{if(!await confirmDialog(options)||!valid())return;await send();}
+    if(!valid())return;await visibilityControl.value?.reload();if(valid())emit('submitted');
   } catch (err) {
-    error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'
+    if(valid())error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'
       ? t('mine.quota.exceeded') : err instanceof Error ? err.message : t('state.actionFailed');
-  } finally { busy.value = false; }
+  }
 }
 </script>
 <template>

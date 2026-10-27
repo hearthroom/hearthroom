@@ -1,3 +1,5 @@
+import {updateNoticeVisibility} from './update-visibility';
+import {privateUpdateCopy} from '../../shared/card-update-copy';
 import {eligibleNotification} from '../test-accounts';
 import { SITE_NAME, siteName } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
@@ -24,7 +26,7 @@ export function pushConfigured(env: Env): boolean {
   return !!(env.PUSH_VAPID_PUBLIC_KEY && env.PUSH_VAPID_PRIVATE_KEY && env.PUSH_VAPID_SUBJECT);
 }
 
-type Row = { id: string; member_id: string; kind: string; path: string; extra: string | null; actor_name: string | null; actor_handle: string | null; card_names: string | null };
+type Row = { card_id:string|number|null; id: string; member_id: string; kind: string; path: string; extra: string | null; actor_name: string | null; actor_handle: string | null; card_names: string | null };
 type Sub = { id: string; endpoint: string; p256dh: string; auth: string; locale: string | null; failures: number };
 
 const quote = (locale: PushLocale, name: string) => (locale.startsWith("zh") ? `「${name}」` : locale === "ja" ? `『${name}』` : `“${name}”`);
@@ -114,8 +116,8 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
   const count = Number(extra.count ?? 1);
   if (row.kind === "comment_reply") return actor && card ? fill(c.reply, { actor, card }) : c.replyPlain;
   if (row.kind === "followed_work") {
-    if (!actor || !card) return c.workPlain;
-    return fill(extra.event === "new" ? c.workNew : extra.event === "update" ? c.workUpdate : c.work, { actor, card });
+    if (!actor || !card) return typeof extra.version==='string'?privateUpdateCopy[locale]:c.workPlain;
+    return fill(extra.event === "new" ? c.workNew : extra.event === "update" ? c.workUpdate : c.work, { actor, card }) + (extra.event === "update" && typeof extra.note === "string" ? "\n" + extra.note : "");
   }
   if (row.kind === "review_result") {
     if (!card) return c.reviewPlain;
@@ -179,7 +181,7 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   const now = Date.now();
   const rows = (
     await env.DB.prepare(
-      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names
+      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,n.card_id,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names
        FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
        WHERE ${eligibleNotification()} AND n.push_at IS NULL AND n.created_at>? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=n.member_id)
        ORDER BY n.created_at LIMIT 40`,
@@ -187,8 +189,14 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   ).results;
   // Everything else without a subscriber is settled in one statement so the index stays small.
   await env.DB.prepare("UPDATE community_notifications SET push_at=? WHERE push_at IS NULL AND created_at<=? AND NOT EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=community_notifications.member_id)").bind(now, now).run();
+  const visibility=await updateNoticeVisibility(env,rows);
   let sent = 0;
   for (const row of rows) {
+    if(visibility.newIds.has(row.id)&&!visibility.reachable.has(row.id)){
+      if(!visibility.unavailable)await env.DB.prepare('UPDATE community_notifications SET push_at=? WHERE id=?').bind(now,row.id).run();
+      continue;
+    }
+    if(visibility.newIds.has(row.id)&&!visibility.readable.has(row.id))row.card_names=null;
     const subs = (await env.DB.prepare("SELECT id,endpoint,p256dh,auth,locale,failures FROM push_subscriptions WHERE member_id=?").bind(row.member_id).all<Sub>()).results;
     const site = row.path.startsWith("/") ? row.path : "/me/community";
     for (const sub of subs) {

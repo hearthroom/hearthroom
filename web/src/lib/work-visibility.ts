@@ -4,6 +4,7 @@ import type { ProviderId } from './provider';
 export type WorkAccess = 'private' | 'unlisted' | 'public';
 export type VisibilityAction = 'set_private' | 'set_unlisted' | 'restore_public' | 'submit_review' | 'submit_update' | 'cancel_review';
 export interface WorkVisibility {
+ nextMajorUpdateAt?:number;
  rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};
  access: WorkAccess;
  effectiveAccess: 'owner' | 'link' | 'public' | 'denied' | 'unavailable';

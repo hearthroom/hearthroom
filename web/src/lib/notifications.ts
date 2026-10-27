@@ -70,6 +70,10 @@ function quote(locale: string, name: string): string {
   return `“${name}”`;
 }
 
+export function noticeUpdateNote(n:CommunityNotice):string {
+ return n.kind==='followed_work'&&n.extra?.event==='update'&&typeof n.extra.note==='string'?n.extra.note:'';
+}
+
 /** One line that says who did what to which card; falls back to the plain kind label when the record carries no detail. */
 export function noticeText(n: CommunityNotice): string {
   const t = i18n.global.t;
@@ -79,6 +83,7 @@ export function noticeText(n: CommunityNotice): string {
   const extra = n.extra ?? {};
   const count = Number(extra.count ?? 1);
   if (n.kind === "comment_reply" && actor && card) return t("community.noticeText.comment_reply", { actor, card });
+  if(n.kind==='followed_work'&&typeof extra.version==='string')return actor&&card?t('cardUpdate.notice.updateBy',{actor,card}):t('cardUpdate.notice.updatePrivate');
   if (n.kind === "followed_work" && actor && card)
     return t(extra.event === "new" ? "community.noticeText.followed_work_new" : extra.event === "update" ? "community.noticeText.followed_work_update" : "community.noticeText.followed_work", { actor, card });
   if (n.kind === "review_result" && card) {

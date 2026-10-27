@@ -8,6 +8,7 @@ vi.mock('../src/lib/community', async original => ({ ...await original<object>()
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 1 }, accessToken: async () => 'fixture' }) }));
 vi.mock('../src/lib/push', () => ({ pushSupported: () => true, pushConfig: async () => ({ enabled: true, publicKey: 'k' }), pushState: async () => mock.push.state, enablePush: mock.push.enable, disablePush: mock.push.disable }));
 import NotificationsPage from '../src/pages/NotificationsPage.vue';
+import {useNotifications} from '../src/lib/notifications';
 
 // 通知頁：清單、全部標為已讀、站內／按讚／推播開關，以及一句 Discord 引導（綁定或開私訊）。
 let app: App, el: HTMLDivElement, router: Router;
@@ -32,6 +33,16 @@ beforeEach(async () => {
   app = createApp(RouterView).use(router).use(i18n).use(pinia); app.mount(el); await settle(); await settle();
 });
 afterEach(() => { app?.unmount(); el.remove(); });
+
+it('opens a frozen update log from its notification anchor without marking it as a card click',async()=>{
+ items=[{id:'log-1',kind:'followed_work',path:'/cards/12?version=v1',created_at:1700000000000,read_at:null,actor:{handle:'abcdefgh',name:'作者'},card:{id:12,name:'合成卡'},extra:{event:'update',version:'v1',note:'<script>literal changelog</script>\n第二行'}}];
+ await useNotifications().load('zh-Hant');await router.push('/me/notifications#notice-log-1');await settle();
+ const log=el.querySelector<HTMLElement>('.notices__log')!;
+ expect(log.textContent).toContain('<script>literal changelog</script>');expect(log.querySelector('script')).toBeNull();
+ expect(log.classList.contains('notices__log--preview')).toBe(false);
+ el.querySelector<HTMLButtonElement>('.notices__update button')!.click();await settle();
+ expect(router.currentRoute.value.path).toBe('/me/notifications');expect(items[0].read_at).toBeNull();
+});
 
 it('lists every notice with who and which card, offers mark-all-read, and points unlinked members at Discord linking', async () => {
   expect(el.querySelector('h1')!.textContent).toBe(i18n.global.t('nav.notifications'));

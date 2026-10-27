@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { noticeText, useNotifications } from "@/lib/notifications";
+import { noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityNotice } from "@/lib/community";
 import NewMark from "@/components/NewMark.vue";
@@ -51,8 +51,10 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
         <li v-for="n in store.items.slice(0, 20)" :key="n.id">
           <RouterLink :to="lp(n.path)" class="bell__item" :class="{ 'bell__item--unread': !n.read_at }" @click="pick(n)">
             <span class="bell__text">{{ noticeText(n) }}</span>
+            <span v-if="noticeUpdateNote(n)" class="bell__note">{{ noticeUpdateNote(n) }}</span>
             <small class="bell__when">{{ when(n) }}</small>
           </RouterLink>
+          <RouterLink v-if="noticeUpdateNote(n)" :to="lp('/me/notifications#notice-'+encodeURIComponent(n.id))" class="bell__log link" @click="open=false">{{ t('cardUpdate.notice.showUpdateLog') }}</RouterLink>
         </li>
       </ul>
       <RouterLink :to="lp('/me/notifications')" class="bell__all" @click="open = false">{{ t("notifications.viewAll") }}</RouterLink>
@@ -61,6 +63,8 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
 </template>
 
 <style scoped>
+.bell__note { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; color:var(--text-2); }
+.bell__log { display:inline-flex; align-items:center; min-height:var(--h-lg); margin-inline:var(--s-3); font-size:13px; }
 .bell { position: relative; display: inline-flex; }
 .bell__btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center;

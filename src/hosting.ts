@@ -1,3 +1,4 @@
+import { updateIntent, assertUpdateCooldown } from './card-update';
 import {assertNormalMember} from './test-accounts';
 import {managedWork,enrollWorkAccess,policyOperationId,workPolicyGateway,type WorkAccess} from './work-policy';
 import {readOwnerVisibility} from './work-sharing';
@@ -18,7 +19,7 @@ import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
- visibility_consent:string|null;
+ update_kind:'minor'|'major'; update_note:string; visibility_consent:string|null;
  provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; rating_answers:string|null;
  hosted_revision_id:string|null; card_id:string|null; submission_id:string|null;
 }
@@ -96,14 +97,17 @@ function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;packId?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;updateKind?:unknown;updateNote?:unknown;packId?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
  const db=env.DB;
+ const intent=updateIntent(input);
  const fandom:ResolvedFandom=input.fandom??{fandom:'',qid:null,key:'',search:''};
  const provider=input.provider??'harbor';
  const answers=JSON.stringify(input.rating.answers);
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
  const existingOperation=()=>db.prepare('SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?').bind(input.memberId,input.operationId).first<VersionRow>();
  let version=await existingOperation();
+ const checkIntent=()=>{if(version&&(version.update_kind!==intent.updateKind||version.update_note!==intent.updateNote))throw new HttpError(409,'hosting_operation_conflict');};
+ checkIntent();
  let consent:PublicationConsent|null=version?.visibility_consent?JSON.parse(version.visibility_consent) as PublicationConsent:null;
  if(version&&(!!consent!==!!input.expectedVisibility||consent&&(consent.policyRevision!==input.expectedVisibility?.policyRevision||consent.approvalRevision!==input.expectedVisibility?.approvalRevision)))throw new HttpError(409,'visibility_operation_conflict');
  // 問卷上線前開始的 operation 沒有答案（rating_answers 為 NULL）：重試時接著做並補上答案，不當成「答案不同」
@@ -132,14 +136,19 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  await db.prepare('INSERT OR IGNORE INTO works VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),input.memberId,provider,input.role.roleId,input.now).run();
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,input.role.roleId).first<{id:string;member_id:string}>();
  if(!work||work.member_id!==input.memberId)throw new HttpError(403,'not the author of this card');
+ if(!version&&intent.updateKind==='major'){
+  if(!existing?.approved_version_id&&existing?.status!=='approved')throw new HttpError(400,'update_notification_unavailable');
+  await assertUpdateCooldown(db,work.id,input.now);
+ }
  if(!version){
   try{
-   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,visibility_consent) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,consent?JSON.stringify(consent):null).run();
+   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,visibility_consent,update_kind,update_note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,consent?JSON.stringify(consent):null,intent.updateKind,intent.updateNote).run();
   }catch(error){if(!await existingOperation())throw new HttpError(409,'submission_pending');}
   version=await existingOperation();
  }
  if(!version)throw new HttpError(502,'hosting_seal_failed');
+ checkIntent();
  if(consent){
   if(version.visibility_consent!==JSON.stringify(consent))throw new HttpError(409,'visibility_operation_conflict');
   if(consent.providerEpoch===0){

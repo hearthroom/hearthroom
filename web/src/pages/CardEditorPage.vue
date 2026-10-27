@@ -94,7 +94,7 @@ import { imageToPng } from "@/lib/export-image";
 import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
-import { confirmDialog, confirmForm } from "@/lib/confirm";
+import { confirmDialog, confirmForm, confirmPublication } from "@/lib/confirm";
 import { askRating, rate, usable } from "@/lib/rating";
 import RatingMark from "@/components/RatingMark.vue";
 import type { RatingAnswers } from "../../../shared/content-rating";
@@ -904,33 +904,39 @@ async function editRating(): Promise<RatingAnswers | null> {
 
 async function publish(expected:WorkVisibility) {
   if (!canPublish.value || saving.value || !expected.actions.some(a=>a==='submit_review'||a==='submit_update')) return;
-  // 先確認分級（填過的直接看結果），再確認送審與原作
-  const rated = await editRating();
-  if (!rated) return;
-  const answer = await confirmForm({
+  const source=roleId.value,provider=editorProvider.value,actor=session.me?.accountNumId;
+  const valid=()=>roleId.value===source&&editorProvider.value===provider&&session.me?.accountNumId===actor;
+  const rated=await editRating();if(!rated||!valid())return;
+  const options = {
     title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"),
     // 打作品名去 Wikidata 找候選，點了就對上編號；找不到照打，當自由文字
-    field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q) => fetchFandomLookup(q) },
-  });
-  if (!answer) return;
-  saving.value = true;
-  error.value = "";
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rated, [], editorProvider.value, answer.text, answer.id, expected);
-    saving.value = false;
-    await router.push(lp("/mine?fresh=1"));
-  } catch (err) {
-    error.value =
-      err instanceof ApiError && err.code === "weekly_quota_exceeded" ? t("mine.quota.exceeded")
-      : err instanceof ApiError && (err.code === "fandom_lookup_failed" || err.code === "fandom_not_found") ? t("mine.fandomLookupFailed")
-      : err instanceof ApiError && err.code === "card_too_large_for_review" ? t("mine.tooLargeForReview")
-      : err instanceof ApiError && err.code === "rating_version_outdated" ? t("error.ratingOutdated")
-      : err instanceof Error ? err.message : t("state.saveFailed");
-  } finally {
-    saving.value = false;
+    field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q:string) => fetchFandomLookup(q) },
+  };
+  const send=async(answer:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
+    if(!valid())return;saving.value=true;error.value='';
+    try{
+      const token=await session.accessToken();if(!valid())return;
+      if(!token)throw new Error(t('auth.expired'));
+      if(expected.everPublic)await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected,answer.update);
+      else await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected);
+    }finally{if(valid())saving.value=false;}
+  };
+  try{
+    if(expected.everPublic){
+      const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
+        publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
+          reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+      if(!ok||!valid())return;
+    }else{const answer=await confirmForm(options);if(!answer||!valid())return;await send(answer);}
+    if(valid())await router.push(lp('/mine?fresh=1'));
+  }catch(err){
+    if(!valid())return;
+    error.value=err instanceof ApiError&&err.code==='weekly_quota_exceeded'?t('mine.quota.exceeded')
+      :err instanceof ApiError&&(err.code==='fandom_lookup_failed'||err.code==='fandom_not_found')?t('mine.fandomLookupFailed')
+      :err instanceof ApiError&&err.code==='card_too_large_for_review'?t('mine.tooLargeForReview')
+      :err instanceof ApiError&&err.code==='rating_version_outdated'?t('error.ratingOutdated')
+      :err instanceof Error?err.message:t('state.saveFailed');
   }
 }
 

@@ -15,11 +15,11 @@ import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
 import { lastShown } from "@/lib/mine-memory";
-import { confirmForm } from "@/lib/confirm";
+import { confirmForm,confirmPublication } from "@/lib/confirm";
 import { askRating } from "@/lib/rating";
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
-import type { WorkVisibility } from "@/lib/work-visibility";
+import {fetchWorkVisibility,type WorkVisibility} from "@/lib/work-visibility";
 import { signedInHint } from "@/lib/signin-hint";
 import { suki } from "@/pet/events";
 
@@ -138,18 +138,31 @@ const visibilityActor=computed(()=>{const p=visibilityCard.value?.sourceProvider
 const visibilityToken=async()=>visibilityCard.value?cardToken(visibilityCard.value):null;
 async function adjustVisibility(card:WorkspaceCard){if(!visibilityEnabled.value||card.sourceAvailable===false)return;visibilityCard.value=card;await nextTick();await visibilityDialog.value?.open();}
 async function submitReview(expected:WorkVisibility){
- const card=visibilityCard.value;if(!card||busy.value||!expected.actions.includes('submit_review'))return;
- const provider=card.sourceProvider??card.provider,source=card.sourceRoleId??card.roleId;
+ const card=visibilityCard.value;if(!card||busy.value||!expected.actions.some(a=>a==='submit_review'||a==='submit_update'))return;
+ const provider=card.sourceProvider??card.provider,source=card.sourceRoleId??card.roleId,actor=visibilityActor.value,key=workKey(card);
+ const valid=()=>!!visibilityCard.value&&workKey(visibilityCard.value)===key&&visibilityActor.value===actor;
  try {
-  const token=await cardToken(card);const saved=await fetchRatingDraft(source,token,provider).catch(()=>null);
-  const answers=await askRating(saved);if(!answers)return;
-  const consent=await confirmForm({title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:q=>fetchFandomLookup(q)}});
-  if(!consent)return;busy.value=workKey(card);error.value='';
-  await saveRatingDraft(source,answers,token,provider).catch(()=>{});
-  await registerCard(source,token,answers,[],provider,consent.text,consent.id,expected);
-  await visibilityDialog.value?.reload();await load(true);
- }catch(e){error.value=e instanceof Error?e.message:t('state.actionFailed');}finally{busy.value=null;}
+  const token=await cardToken(card);if(!valid())return;const saved=await fetchRatingDraft(source,token,provider).catch(()=>null);
+  const answers=await askRating(saved);if(!answers||!valid())return;
+  const options={title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:(q:string)=>fetchFandomLookup(q)}};
+  const send=async(value:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
+   if(!valid())return;busy.value=key;error.value='';
+   try{
+    await saveRatingDraft(source,answers,token,provider).catch(()=>{});if(!valid())return;
+    if(expected.everPublic)await registerCard(source,token,answers,[],provider,value.text,value.id,expected,value.update);
+    else await registerCard(source,token,answers,[],provider,value.text,value.id,expected);
+   }finally{if(valid())busy.value=null;}
+  };
+  if(expected.everPublic){
+   const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
+    publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
+      reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+   if(!ok||!valid())return;
+  }else{const consent=await confirmForm(options);if(!consent||!valid())return;await send(consent);}
+  await visibilityDialog.value?.reload();if(valid())await load(true);
+ }catch(e){if(valid())error.value=e instanceof Error?e.message:t('state.actionFailed');}
 }
+
 function visibilityChanged(value:WorkVisibility){
  const card=visibilityCard.value;if(!card)return;card.workVisibility=value;persistCard(card);
  lastShown.set(shownKey(),{rows:rows.value,totals:totals.value,quota:quota.value});

@@ -209,6 +209,8 @@ describe("最近更新（sort=updated）", () => {
     if (submission) await env.DB.prepare("INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, submitted_at, decided_at) VALUES (?, ?, 'harbor', ?, 'update', 'approved', ?, ?)").bind(submission, id, `role-${label}`, createdAt, decidedAt).run();
     await env.DB.prepare("INSERT INTO hosting_versions (version_id, work_id, member_id, operation_id, source_role_id, provider, card_id, submission_id, state, created_at) VALUES (?, 'w', 'm', ?, ?, 'harbor', ?, ?, 'approved', ?)").bind(v, v, `role-${label}`, id, submission, createdAt).run();
     await env.DB.prepare("UPDATE cards SET approved_version_id=? WHERE id=?").bind(v, id).run();
+    // This helper models legacy records that predate the publication timestamp.
+    await env.DB.prepare("UPDATE hosting_versions SET published_at=NULL WHERE version_id=?").bind(v).run();
   }
 
   it("按目前上線版本的過審時間排，新的在前；沒有審核紀錄看版本建立時間，沒有版本看上榜時間", async () => {
@@ -221,6 +223,13 @@ describe("最近更新（sort=updated）", () => {
     expect(ids(body)).toEqual(["a", "c", "b"]);
     // 卡片上「幾天前更新」用的就是這個時間：每張卡都帶著
     expect(body.items.map((c) => c.updatedAt)).toEqual([now - 3_600_000, now - 1 * DAY, now - 2 * DAY]);
+  });
+  it('prefers a recorded publication time over the earlier review decision',async()=>{
+    await seed({id:'a',registeredAt:now-10*DAY});await seed({id:'b',registeredAt:now-DAY});
+    await version('a',now-3*DAY,now-2*DAY);
+    await env.DB.prepare("UPDATE hosting_versions SET published_at=? WHERE version_id='v-a'").bind(now-1000).run();
+    const body=(await list('?sort=updated')).body;
+    expect(ids(body)).toEqual(['a','b']);expect(body.items[0].updatedAt).toBe(now-1000);
   });
 });
 

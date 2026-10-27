@@ -1,4 +1,7 @@
 import { reactive } from "vue";
+import type { UpdateIntent } from "../../../shared/card-update";
+export interface ConfirmValues { text:string; id?:string; update:UpdateIntent }
+export const publicationDrafts=new Map<string,UpdateIntent & {pending?:boolean}>();
 
 /**
  * 站台自己的確認彈窗。
@@ -11,6 +14,9 @@ import { reactive } from "vue";
  * 畫面由 components/ConfirmDialog.vue 負責，掛在 App.vue，一次只會有一個。
  */
 export interface ConfirmOptions {
+  publication?: {key:string; nextMajorUpdateAt?:number; reloadEligibility?:()=>Promise<number>};
+  onConfirm?:(values:ConfirmValues)=>Promise<void>;
+  valid?:()=>boolean;
   title?: string;
   message: string;
   /** 一段要讓人複製的文字（例如網址），畫成可全選的方塊 */
@@ -46,7 +52,7 @@ export interface ConfirmOptions {
   check?: { label: string; hint?: string; initial: boolean };
 }
 
-interface Pending extends ConfirmOptions { resolve: (ok: boolean, text: string, id?: string, checked?: boolean) => void }
+interface Pending extends ConfirmOptions { resolve: (ok: boolean, text: string, id?: string, checked?: boolean, update?:UpdateIntent) => void }
 
 export const confirmState = reactive<{ current: Pending | null }>({ current: null });
 
@@ -57,9 +63,9 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
 }
 
 /** 帶一格文字的確認：確認回填的字（有 lookup 時連對上的編號），取消回 null。 */
-export function confirmForm(opts: ConfirmOptions & { field: NonNullable<ConfirmOptions["field"]> }): Promise<{ text: string; id?: string } | null> {
+export function confirmForm(opts: ConfirmOptions & { field: NonNullable<ConfirmOptions["field"]> }): Promise<{ text: string; id?: string;update?:UpdateIntent } | null> {
   confirmState.current?.resolve(false, "");
-  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, text, id) => resolve(ok ? { text, ...(id ? { id } : {}) } : null) }; });
+  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, text, id, _checked,update) => resolve(ok ? { text, ...(id ? { id } : {}), ...(update?{update}:{}) } : null) }; });
 }
 
 /** 帶一個勾選框的確認：確認回勾選狀態，取消回 null。 */
@@ -78,10 +84,19 @@ export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, ty
  * 由彈窗元件呼叫：把答案交回去並關掉。
  * 有 requireText 的彈窗，確認時要帶使用者打的字；沒打對就當沒按——彈窗留著。
  */
-export function settleConfirm(ok: boolean, typed = "", text = "", id?: string, checked?: boolean): void {
+export function settleConfirm(ok: boolean, typed = "", text = "", id?: string, checked?: boolean, update?:UpdateIntent): void {
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
   confirmState.current = null;
-  c.resolve(ok, text.trim(), id, checked);
+  c.resolve(ok, text.trim(), id, checked,update);
+}
+
+/** Publication requests remain in the existing confirmation form until their result is known. */
+export function confirmPublication(opts:ConfirmOptions & {onConfirm:NonNullable<ConfirmOptions['onConfirm']>}):Promise<boolean>{
+  return confirmDialog(opts);
+}
+
+export function clearPublicationDrafts(){
+ publicationDrafts.clear();if(confirmState.current?.publication)settleConfirm(false);
 }

@@ -50,6 +50,7 @@ import { canInstall } from "@/lib/pwa";
 import { playAppUrl } from "@/lib/site";
 import { withShareContext } from "@/lib/play-share";
 import { loginPath } from "@/lib/login-return";
+import CardVersionHistory from "@/components/CardVersionHistory.vue";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -456,6 +457,8 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             </div>
           </section>
 
+          <CardVersionHistory :key="card.id" class="role__versions-wrap" :card-id="card.id" :target="typeof route.query.version==='string'?route.query.version:undefined" />
+
           <!-- 評論：接在介紹下面；作者關掉評論、或卡還沒上榜就不放 -->
           <section v-if="showComments && listed" id="comments" class="role__comments-wrap" aria-labelledby="comments-h">
             <h2 id="comments-h" class="role__h2">{{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__h2-n">{{ commentCount }}</span></h2>
@@ -486,9 +489,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
                 </dd>
               </template>
               <dt>{{ $t("card.language") }}</dt><dd>{{ zoneLabel(card.zone) }}</dd>
-              <template v-if="editedAt">
-                <dt>{{ $t("card.contentUpdated") }}</dt><dd :title="dateTime(editedAt)">{{ dateOnly(Math.floor(editedAt / 1000)) }}</dd>
-              </template>
             </dl>
             <div class="role__links">
               <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)">{{ $t("community.reportCard") }}</RouterLink>
@@ -701,15 +701,16 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__cta > .library-toggle { order: 1; flex: none; }
   .role__cta > .sh { order: 1; }
 
-  .role__body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "score" "comments" "info" "more"; gap: var(--s-5); margin-top: var(--s-5); }
+  .role__body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "versions" "score" "comments" "info" "more"; gap: var(--s-5); margin-top: var(--s-5); }
   .role__main, .role__side { display: contents; }
   .role__intro-wrap { grid-area: intro; }
+  .role__versions-wrap { grid-area: versions; }
   .role__score-box { grid-area: score; }
   .role__comments-wrap { grid-area: comments; }
   .role__info { grid-area: info; }
   .role__more { grid-area: more; }
   /* 作者綁了打賞：作者區塊從最底下移到介紹正下方，讀完介紹就看得到（其他作品跟著上來） */
-  .role__body:has(.role__more--tips) { grid-template-areas: "intro" "more" "score" "comments" "info"; }
+  .role__body:has(.role__more--tips) { grid-template-areas: "intro" "versions" "more" "score" "comments" "info"; }
   .role__intro { padding: var(--s-4); }
   .role__comments { padding: var(--s-4); }
 }

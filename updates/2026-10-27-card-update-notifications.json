@@ -1,0 +1,18 @@
+{
+  "tier": "feature",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "卡片預設靜默更新，選「更新並通知」時需附上更新日誌。",
+    "zh-Hans": "卡片默认静默更新，选择“更新并通知”时需附上更新日志。",
+    "en": "Card updates are silent by default; Update and notify requires a changelog.",
+    "ja": "カードの更新は標準では通知せず、通知する場合は更新内容の入力が必要です。",
+    "ko": "카드는 기본으로 알림 없이 업데이트하며, 알림을 보내려면 업데이트 내역이 필요해요."
+  },
+  "body": {
+    "zh-Hant": "日誌至少 10 字（不含空白）、最多 200 字，可在版本記錄查看；CLI 用 --notify 搭配 --update-note。",
+    "zh-Hans": "日志至少 10 字（不含空白）、最多 200 字，可在版本记录查看；CLI 用 --notify 搭配 --update-note。",
+    "en": "Version history shows changelogs of at least 10 non-whitespace characters and at most 200 in total; CLI submissions use --notify with --update-note.",
+    "ja": "更新内容は空白を除き10文字以上、全体で200文字以内で、更新履歴から確認でき、CLIでは --notify と --update-note を使います。",
+    "ko": "내역은 공백 제외 10자 이상, 전체 200자 이내로 버전 기록에서 볼 수 있으며, CLI에서는 --notify와 --update-note를 함께 써요."
+  }
+}

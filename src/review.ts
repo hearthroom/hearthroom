@@ -1,3 +1,4 @@
+import { reserveUpdateNotification } from './card-update';
 import {finalizeManagedReview} from './work-publication';
 import { dropSnapshotStatement } from "./review-snapshot";
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
@@ -202,6 +203,7 @@ export async function stamp(
   } else if (approvals >= required && managed) {
     writes.push(db.prepare('INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) VALUES(?,?)').bind(row.id,input.now));
   } else if (approvals >= required) {
+    await reserveUpdateNotification(db,row.id,input.now);
     cardStatus = "approved";
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
     // 定案就刪快照：本站不留任何卡片的私有設定

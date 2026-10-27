@@ -1,10 +1,32 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
+import { confirmDialog, confirmState, confirmTextMatches, settleConfirm, publicationDrafts } from "@/lib/confirm";
 import LookupField, { type LookupValue } from "./LookupField.vue";
+import PublicationUpdateFields from './PublicationUpdateFields.vue';
+import { parseUpdateIntent, type UpdateIntent } from '../../../shared/card-update';
+import { useI18n } from 'vue-i18n';
 import { wrapTab } from "@/lib/focus-trap";
 
+const {t}=useI18n();
 const box = ref<HTMLElement | null>(null);
+const update=ref<UpdateIntent>({updateKind:'minor',updateNote:''});
+const busy=ref(false),pending=ref(false),submitError=ref(''),now=ref(Date.now());
+let cooldownTimer:ReturnType<typeof setTimeout>|undefined;
+function changeUpdate(value:UpdateIntent){
+ update.value=value;
+ const key=confirmState.current?.publication?.key;if(key)publicationDrafts.set(key,{...value});
+}
+function validUpdate(){
+ if(!confirmState.current?.publication)return true;
+ if(update.value.updateKind==='minor')return true;
+ const next=confirmState.current.publication.nextMajorUpdateAt;
+ if(next===undefined||next>now.value)return false;
+ try{parseUpdateIntent(update.value);return true;}catch{return false;}
+}
+async function retryEligibility(){
+ const cur=confirmState.current;if(!cur?.publication?.reloadEligibility)return;
+ try{const value=await cur.publication.reloadEligibility();if(confirmState.current===cur)cur.publication.nextMajorUpdateAt=value;}catch{if(confirmState.current===cur)cur.publication.nextMajorUpdateAt=undefined;}
+}
 /** 要照打的字：每次開新彈窗清空 */
 const typed = ref("");
 /** 選填的那一格：開新彈窗時填上預設值；有 lookup 的那種還帶著對上的編號 */
@@ -12,14 +34,34 @@ const fieldText = ref("");
 const fieldPick = ref<LookupValue>({ label: "" });
 /** 勾選框：開新彈窗時回到預設值 */
 const checked = ref(false);
-const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
+const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value) && validUpdate() && !busy.value);
 /** 低權重的危險確認：只在 danger 時生效，非危險確認忽略這個選項。 */
 const subdued = computed(() => !!confirmState.current?.danger && confirmState.current.dangerAppearance === "subdued");
-function confirm() {
+async function confirm() {
   const cur = confirmState.current;
-  if (!cur || !typedOk.value) return;
-  if (cur.field?.lookup) settleConfirm(true, typed.value, fieldPick.value.label, fieldPick.value.id);
-  else settleConfirm(true, typed.value, fieldText.value, undefined, cur.check ? checked.value : undefined);
+  if (!cur || !typedOk.value || busy.value) return;
+  if(cur.valid&&!cur.valid()){settleConfirm(false);return;}
+  const text=cur.field?.lookup?fieldPick.value.label:fieldText.value;
+  const id=cur.field?.lookup?fieldPick.value.id:undefined;
+  const intent=cur.publication?parseUpdateIntent(update.value.updateKind==='major'?update.value:{updateKind:'minor'}):{updateKind:'minor' as const,updateNote:''};
+  if(cur.onConfirm){
+   busy.value=true;submitError.value='';
+   try{
+    await cur.onConfirm({text:text.trim(),...(id?{id}:{}),update:intent});
+    if(confirmState.current!==cur)return;
+    if(cur.valid&&!cur.valid()){settleConfirm(false);return;}
+    if(cur.publication)publicationDrafts.delete(cur.publication.key);
+   }catch(error){
+    if(confirmState.current!==cur)return;
+    const e=error as {status?:number;code?:string;message?:string};
+    pending.value=error instanceof TypeError||!!e.status&&e.status>=500;
+    if(cur.publication)publicationDrafts.set(cur.publication.key,{...update.value,pending:pending.value});
+    submitError.value=pending.value?t('cardUpdate.update.resultPending'):e.code==='update_notification_cooldown'?t('cardUpdate.update.noticeLimit'):e.message||t('cardUpdate.update.submitFailed');
+    if(e.code==='update_notification_cooldown')await retryEligibility();
+    return;
+   }finally{if(confirmState.current===cur)busy.value=false;}
+  }
+  settleConfirm(true,typed.value,text,id,cur.check?checked.value:undefined,cur.publication?intent:undefined);
 }
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
@@ -27,35 +69,43 @@ let restore: HTMLElement | null = null;
 watch(() => confirmState.current, async (cur) => {
   if (!cur) { restore?.focus?.(); restore = null; return; }
   restore = document.activeElement as HTMLElement | null;
+  busy.value=false;pending.value=!!(cur.publication&&publicationDrafts.get(cur.publication.key)?.pending);submitError.value=pending.value?t('cardUpdate.update.resultPending'):'';
+  update.value=cur.publication?{...(publicationDrafts.get(cur.publication.key)??{updateKind:'minor',updateNote:''})}:{updateKind:'minor',updateNote:''};
   typed.value = "";
   fieldText.value = cur.field?.initial ?? "";
   checked.value = cur.check?.initial ?? false;
   fieldPick.value = { label: cur.field?.initial ?? "", ...(cur.field?.initialId ? { id: cur.field.initialId } : {}) };
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
-  const pick = cur.requireText ? "[data-typed]" : (cur.danger || cur.focusCancel) && !cur.single ? "[data-cancel]" : "[data-confirm]";
+  const pick = cur.publication ? "[data-update-choice=minor]" : cur.requireText ? "[data-typed]" : (cur.danger || cur.focusCancel) && !cur.single ? "[data-cancel]" : "[data-confirm]";
   box.value?.querySelector<HTMLElement>(pick)?.focus();
 });
 
+watch(()=>confirmState.current?.publication?.nextMajorUpdateAt,(next)=>{
+ if(cooldownTimer)clearTimeout(cooldownTimer);now.value=Date.now();
+ if(next&&next>now.value)cooldownTimer=setTimeout(()=>{now.value=Date.now();},next-now.value);
+});
 function onKey(e: KeyboardEvent) {
   if (!confirmState.current) return;
-  if (e.key === "Escape") { e.preventDefault(); settleConfirm(false); return; }
+  if (e.key === "Escape") { e.preventDefault(); if(!busy.value)settleConfirm(false); return; }
   // 焦點只在彈窗裡繞（沿用原本的範圍：停用的鍵也算一站）
-  wrapTab(e, box.value, "button, input, [tabindex='0']");
+  wrapTab(e, box.value);
 }
 onMounted(() => {
   document.addEventListener("keydown", onKey);
   if (import.meta.env.DEV) (window as unknown as { __confirmDialog: typeof confirmDialog }).__confirmDialog = confirmDialog;
 });
-onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
+onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldownTimer)clearTimeout(cooldownTimer); });
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="confirmState.current" class="dlg-backdrop" @click.self="settleConfirm(false)">
-      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
+    <div v-if="confirmState.current" class="dlg-backdrop" @click.self="!busy && settleConfirm(false)">
+      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg">{{ confirmState.current.message }}</p>
+        <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
+        <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
         <code v-if="confirmState.current.detail" class="dlg__detail" tabindex="0" @click="($event.target as HTMLElement).ownerDocument.getSelection()?.selectAllChildren($event.target as Node)">{{ confirmState.current.detail }}</code>
         <!-- 要照打的字：打對了確認鍵才亮；Enter 也只在打對時算數 -->
@@ -66,7 +116,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
                  @keydown.enter.prevent="confirm" />
         </label>
         <!-- 選填的一格字（例如原作）：Enter 不送出，送出仍要按確認鍵 -->
-        <label v-if="confirmState.current.field" class="dlg__field">
+        <label v-if="confirmState.current.field" class="dlg__field" :inert="busy||pending">
           <span class="dlg__field-label">{{ confirmState.current.field.label }}</span>
           <LookupField v-if="confirmState.current.field.lookup" v-model="fieldPick" :lookup="confirmState.current.field.lookup" :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" :label="confirmState.current.field.label" />
           <input v-else v-model="fieldText" class="input" type="text" autocomplete="off" data-field
@@ -78,12 +128,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <span class="dlg__check-text">{{ confirmState.current.check.label }}<span v-if="confirmState.current.check.hint" class="dlg__check-hint">{{ confirmState.current.check.hint }}</span></span>
         </label>
         <div class="dlg__actions">
-          <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
+          <button v-if="!confirmState.current.single" class="btn" data-cancel :disabled="busy" @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
           </button>
           <button class="btn" :class="subdued ? 'dlg__subdued' : confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
                   :disabled="!typedOk" @click="confirm">
-            {{ confirmState.current.confirmText ?? $t("dialog.confirm") }}
+            {{ pending ? t("cardUpdate.update.checkResult") : confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
       </div>
@@ -111,6 +161,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 }
 /* 標題與內文可能帶使用者或作者給的長字（卡名、項目 key）：不斷行會把框撐得比畫面還寬 */
 .dlg > * { min-width: 0; }
+.dlg--publication { width:min(420px,100%); max-height:calc(100dvh - var(--s-6)); overflow-y:auto; }
+.dlg--publication .dlg__actions { min-width:0; }
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
 .dlg__detail {

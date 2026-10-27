@@ -320,11 +320,49 @@
                   "ratingAnswers": {
                     "type": "object",
                     "additionalProperties": true
+                  },
+                  "updateKind": {
+                    "type": "string",
+                    "enum": [
+                      "minor",
+                      "major"
+                    ],
+                    "default": "minor",
+                    "description": "minor is a silent content update. major explicitly requests notifications after the approved version becomes public."
+                  },
+                  "updateNote": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 200 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note."
                   }
                 },
                 "required": [
                   "roleId",
                   "ratingAnswers"
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "updateKind": {
+                          "const": "major"
+                        }
+                      },
+                      "required": [
+                        "updateKind"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "updateNote"
+                      ],
+                      "properties": {
+                        "updateNote": {
+                          "minLength": 10
+                        }
+                      }
+                    }
+                  }
                 ]
               }
             }
@@ -361,13 +399,16 @@
             "description": "card_not_found or owned operation not found."
           },
           "409": {
-            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled."
+            "description": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled. update_notification_cooldown includes nextMajorUpdateAt (UTC milliseconds)."
           },
           "503": {
             "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          },
+          "400": {
+            "description": "Invalid update type or changelog; major requires a previously published card."
           }
         },
-        "description": "The optional policy/approval CAS pair must be supplied together and requires workVisibility enabled. New clients persist original operationId, intent and CAS. After unknown, read the original publication operation before retrying; never silently rebase. Legacy clients without CAS retain the existing protocol. Submission acceptance does not make a card public before approval."
+        "description": "The optional policy/approval CAS pair must be supplied together and requires workVisibility enabled. New clients persist original operationId, intent and CAS. After unknown, read the original publication operation before retrying; never silently rebase. Legacy clients without CAS retain the existing protocol. Submission acceptance does not make a card public before approval. Updates default to silent. Explicit major intent and its changelog are part of operation identity; changing them requires a new operation after a definitive refusal. Notifications go once to the follower/favorite union only after publication, respecting notification settings. A work can publish a notification event once per 7 days; pending, rejected and withdrawn versions do not consume the interval. An unknown result must resume the same original intent."
       }
     },
     "/v1/cards/{id}": {
@@ -3671,6 +3712,106 @@
           }
         }
       }
+    },
+    "/v1/cards/{id}/versions": {
+      "get": {
+        "summary": "Read published version history",
+        "tags": [
+          "Cards"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 1
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "description": "Return this same-card published revision as target even when it is outside the requested page; null if absent or not visible."
+          },
+          {
+            "name": "nsfw",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "description": "Requires the existing authenticated adult consent gate."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Twenty visible published records per page, newest first. No drafts or private configuration data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "hasMore"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "maxItems": 20,
+                      "items": {
+                        "$ref": "#/components/schemas/CardVersion"
+                      }
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "target": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/CardVersion"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Adult content gate not satisfied."
+          },
+          "404": {
+            "description": "Card not currently reachable."
+          },
+          "503": {
+            "description": "Current authority unavailable; fail closed."
+          }
+        },
+        "description": "Current card access and individual historical adult ratings apply. Cache-Control is private, no-store. Timestamps labelled review are approval dates, not asserted exact publication instants; unknown is null, never created_at. target uses the same visibility checks and does not scan client-side pages."
+      }
     }
   },
   "components": {
@@ -3831,6 +3972,18 @@
           },
           "listed": {
             "type": "boolean"
+          },
+          "updateKind": {
+            "type": "string",
+            "enum": [
+              "minor",
+              "major"
+            ]
+          },
+          "updateNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Current approved-version changelog; empty for a silent version."
           }
         }
       },
@@ -4542,6 +4695,10 @@
           },
           "rewardRetention": {
             "$ref": "#/components/schemas/RewardRetention"
+          },
+          "nextMajorUpdateAt": {
+            "type": "integer",
+            "description": "Earliest next notified-update time (UTC ms), zero if no previous notified update. Private author readback."
           }
         },
         "required": [
@@ -4643,6 +4800,49 @@
             "type": "integer",
             "minimum": 1,
             "description": "Actual credits to return for author deletion before publicUntil."
+          }
+        }
+      },
+      "CardVersion": {
+        "type": "object",
+        "required": [
+          "versionId",
+          "publishedAt",
+          "publicationTimeSource",
+          "updateKind",
+          "updateNote"
+        ],
+        "properties": {
+          "versionId": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Actual publication time for new versions, legacy review time if available, otherwise null."
+          },
+          "publicationTimeSource": {
+            "type": "string",
+            "enum": [
+              "published",
+              "review",
+              "unknown"
+            ]
+          },
+          "updateKind": {
+            "type": "string",
+            "enum": [
+              "minor",
+              "major"
+            ],
+            "description": "Legacy versions without a recorded intent are minor."
+          },
+          "updateNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Frozen public changelog for a major revision, empty for minor."
           }
         }
       }
