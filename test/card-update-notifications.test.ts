@@ -119,6 +119,17 @@ it('carries a collector-only update through website, Web Push and Discord withou
   await env.DB.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(Number(card)).run();
   const hidden = await bridge('notification', { id: n!.id });
   expect(hidden.status).toBe(200); expect(JSON.stringify(await hidden.json())).not.toContain(log);
+  // A denied old update must not occupy every limited Discord batch forever.
+  await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(Number(card)).run();
+  for(let i=0;i<10;i++)await env.DB.prepare(`INSERT INTO community_notifications(id,event_key,member_id,kind,card_id,actor_id,extra,path,created_at)
+    SELECT ?,?,member_id,kind,card_id,actor_id,extra,path,created_at-1000-? FROM community_notifications WHERE id=?`)
+    .bind(crypto.randomUUID(),crypto.randomUUID(),i,n!.id).run();
+  await bridge('pending');
+  expect((await env.DB.prepare("SELECT count(*) n FROM community_notifications WHERE member_id=? AND delivered=0 AND kind='followed_work'").bind(collector).first<{n:number}>())!.n).toBe(1);
+  await env.DB.prepare("INSERT INTO community_notifications(id,event_key,member_id,kind,extra,path,created_at) VALUES('later-notice','later-event',?,'pack_grant','{}','/mine',?)").bind(collector,Date.now()).run();
+  const next=await bridge('pending');
+  expect((await next.json() as any).notifications).toContainEqual({id:'later-notice'});
+
 });
 it('does not reserve or notify a rejected update', async () => {
   const response = await submit({ updateKind: 'major', updateNote: '😀'.repeat(10) });

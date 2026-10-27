@@ -51,7 +51,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   // 留言是本站的另一條請求，跟卡片請求無關：照常回空列表
   if (url.includes('/platforms')) { platformRequests.push(url); return json({ platforms: [] }); }
   if (url.includes("/comments")) { commentRequests++; return json({ total: 0, comments: [], isRoleCreator: false }); }
-  if (/\/v1\/cards\/[^?]+\?/.test(url)) { cardRequests++; return new Promise(() => {}); }
+  if (url.includes("/versions?")) return json({items: [], page: 1, hasMore: false});
+  if (/\/v1\/cards\/[^/?]+\?/.test(url)) { cardRequests++; return new Promise(() => {}); }
   if (url.includes("/v1/cards?")) return json({ items: [CARD], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" });
   if (url.endsWith("/v1/me")) return json({ error: "unauthorized" }, 401);
   return json({ error: "not_found" }, 404);
@@ -97,7 +98,7 @@ describe("點榜單上的卡：立刻有內容", () => {
     expect(root.textContent).toContain("民國背景推理");
     expect(root.textContent).toContain("推理");
     expect(root.querySelector(".role__actions"), "操作列要在第一畫面就出現").not.toBeNull();
-    expect(root.querySelectorAll(".ghost").length, "手上有卡就不該再畫骨架屏").toBe(0);
+    expect(root.querySelectorAll(".role__hero .ghost, .role__intro-ghost, .role__side .ghost").length, "快取主內容不該再畫骨架屏；版本記錄獨立載入").toBe(0);
     // 伺服器那一份還是要去拿（瀏覽數要記、資料可能變了），只是在背景
     expect(cardRequests).toBe(1);
   });
@@ -105,7 +106,7 @@ describe("點榜單上的卡：立刻有內容", () => {
   it("先畫出來的頁面不能變淡、不能擋點擊——那是換語言時才有的樣子", async () => {
     await fetchBoard();
     const root = await mountCard("/cards/role-abc");
-    expect(root.querySelector("[aria-busy='true']")).toBeNull();
+    expect(root.querySelector(".role__hero[aria-busy='true'], .role__body[aria-busy='true']")).toBeNull();
   });
 
   it("沒看過的卡（直接開連結）照舊畫骨架屏", async () => {

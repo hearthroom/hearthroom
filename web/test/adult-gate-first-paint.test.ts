@@ -38,7 +38,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.includes("/v1/cards/abc/platforms")) return Promise.resolve(json({ platforms: [] }));
   if (url.includes("/v1/cards/abc/score")) return Promise.resolve(json({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null }));
   if (url.includes("/v1/cards/abc/comments")) return Promise.resolve(json({ total: 0, comments: [], isRoleCreator: false }));
-  if (url.includes("/v1/cards/abc")) {
+  if (url.includes("/v1/cards/abc/versions")) return Promise.resolve(json({ items: [], page: 1, hasMore: false }));
+  if (/\/v1\/cards\/abc(?:\?|$)/.test(url)) {
     cardReads.push(url + (auth ? " [auth]" : ""));
     const allowed = cookieGrants || (url.includes("nsfw=1") && auth);
     return later(10, () => (allowed ? json(CARD) : json({ error: "adult_content" }, 403)));

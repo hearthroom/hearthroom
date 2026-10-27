@@ -571,6 +571,11 @@ app.post("/internal/community/:operation", async (c) => {
       .bind(Date.now(),Date.now())
       .all<UpdateNoticeRef>();
     const updateVisibility=await updateNoticeVisibility(c.env,notifications.results);
+    const withheld=notifications.results.filter(r=>updateVisibility.newIds.has(r.id)&&!updateVisibility.reachable.has(r.id));
+    if(withheld.length)await c.env.DB.batch(withheld.map(r=>updateVisibility.unavailable
+      ?c.env.DB.prepare('UPDATE community_notifications SET retry_at=? WHERE id=? AND delivered=0').bind(Date.now()+60000,r.id)
+      :c.env.DB.prepare('UPDATE community_notifications SET delivered=1 WHERE id=? AND delivered=0').bind(r.id)));
+
     const review = await c.env.DB.prepare(
       "SELECT revision FROM community_review_signal WHERE delivered=0",
     ).first();

@@ -100,3 +100,28 @@ it('never caches an unknown review version decision',async()=>{
  expect(await response.json()).toEqual({error:'version_not_found'});
  expect(response.headers.get('cache-control')).toContain('no-store');
 });
+
+it('revalidates a concurrent completed operation before returning its pending receipt',async()=>{
+ const memberId=await makeMember(10001),me=role({roleId:'race-draft',authorNumId:10001});
+ vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
+ const receipt=await submitHosted(env,input);
+ // Deterministically represent the first read preceding another request's commit.
+ const staleOnce=()=>{
+  let stale=true;
+  return new Proxy(env.DB,{get(db,key){
+   if(key==='prepare')return (sql:string)=>{
+    const statement=db.prepare(sql);
+    if(sql==='SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?'&&stale){
+     stale=false;return {bind:()=>({first:async()=>null})};
+    }
+    return statement;
+   };
+   const value=Reflect.get(db,key);return typeof value==='function'?value.bind(db):value;
+  }});
+ };
+ await expect(submitHosted({...env,DB:staleOnce()},{...input,updateKind:'major',updateNote:'新增第二章劇情和兩條支線'})).rejects.toThrow('hosting_operation_conflict');
+ expect(await submitHosted({...env,DB:staleOnce()},input)).toEqual(receipt);
+});

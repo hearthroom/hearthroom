@@ -106,12 +106,16 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
  const existingOperation=()=>db.prepare('SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?').bind(input.memberId,input.operationId).first<VersionRow>();
  let version=await existingOperation();
- const checkIntent=()=>{if(version&&(version.update_kind!==intent.updateKind||version.update_note!==intent.updateNote))throw new HttpError(409,'hosting_operation_conflict');};
- checkIntent();
- let consent:PublicationConsent|null=version?.visibility_consent?JSON.parse(version.visibility_consent) as PublicationConsent:null;
- if(version&&(!!consent!==!!input.expectedVisibility||consent&&(consent.policyRevision!==input.expectedVisibility?.policyRevision||consent.approvalRevision!==input.expectedVisibility?.approvalRevision)))throw new HttpError(409,'visibility_operation_conflict');
- // 問卷上線前開始的 operation 沒有答案（rating_answers 為 NULL）：重試時接著做並補上答案，不當成「答案不同」
- if(version&&(version.provider!==provider||version.source_role_id!==input.role.roleId||(version.rating_answers!==null&&version.rating_answers!==answers)))throw new HttpError(409,'hosting_operation_conflict');
+ const checkVersion=(candidate:VersionRow|null)=>{
+  if(!candidate)return null;
+  if(candidate.update_kind!==intent.updateKind||candidate.update_note!==intent.updateNote)throw new HttpError(409,'hosting_operation_conflict');
+  const saved:PublicationConsent|null=candidate.visibility_consent?JSON.parse(candidate.visibility_consent) as PublicationConsent:null;
+  if(!!saved!==!!input.expectedVisibility||saved&&(saved.policyRevision!==input.expectedVisibility?.policyRevision||saved.approvalRevision!==input.expectedVisibility?.approvalRevision))throw new HttpError(409,'visibility_operation_conflict');
+  // Pre-questionnaire operations may resume and fill their missing answers.
+  if(candidate.provider!==provider||candidate.source_role_id!==input.role.roleId||(candidate.rating_answers!==null&&candidate.rating_answers!==answers))throw new HttpError(409,'hosting_operation_conflict');
+  return saved;
+ };
+ let consent=checkVersion(version);
  if(version&&version.rating_answers===null&&!version.submission_id){
   await db.prepare('UPDATE hosting_versions SET rating_answers=?,rating=? WHERE version_id=? AND rating_answers IS NULL').bind(answers,input.rating.rating,version.version_id).run();
  }
@@ -129,7 +133,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   consent={...input.expectedVisibility,providerRevision:view.provider.policyRevision,providerEpoch:view.provider.epoch,initialAccess:view.workVisibility.access};
  }
  if(existing&&await pendingSubmissionOf(db,existing.id)){
-  const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);
+  const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);return receiptOf(retry);}
   throw new HttpError(409,'submission_pending');
  }
  await adoptRetiredWork(db,provider,input.role.roleId);
@@ -148,7 +152,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   version=await existingOperation();
  }
  if(!version)throw new HttpError(502,'hosting_seal_failed');
- checkIntent();
+ checkVersion(version);
  if(consent){
   if(version.visibility_consent!==JSON.stringify(consent))throw new HttpError(409,'visibility_operation_conflict');
   if(consent.providerEpoch===0){
@@ -193,7 +197,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
     provider,status:'pending',preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
-   const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);throw error;
+   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);return receiptOf(retry);}throw error;
   }
  }
  const stored=await existingOperation();
