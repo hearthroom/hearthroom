@@ -55,6 +55,17 @@ it('retains the form on a definite submission failure', async () => {
   expect(document.body.textContent).toContain('Try again');
 });
 
+it('keeps the first-review dialog and its field when recovered acceptance differs from the current input',async()=>{
+ const message=i18n.global.t('workspace.submitPreviousAccepted');
+ void open({publication:undefined,cancelText:i18n.global.t('cardUpdate.update.back'),onConfirm:async()=>{throw Object.assign(new Error(message),{status:409,code:'publication_completed_different_intent'});}});await tick();
+ const field=document.querySelector<HTMLInputElement>('[data-field]')!;
+ field.value='New synthetic fandom';field.dispatchEvent(new Event('input',{bubbles:true}));await tick();
+ document.querySelector<HTMLButtonElement>('[data-confirm]')!.click();await tick();
+ expect(confirmState.current).not.toBeNull();expect(document.querySelector<HTMLInputElement>('[data-field]')!.value).toBe('New synthetic fandom');
+ expect(document.body.textContent).toContain(message);
+ expect(document.querySelector('[data-cancel]')?.textContent).toContain(i18n.global.t('cardUpdate.update.back'));
+});
+
 it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('shows the three-day interval in %s',async locale=>{
   await loadLocale(locale);
   i18n.global.locale.value=locale;

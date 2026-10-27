@@ -930,7 +930,7 @@ async function publish(expected:WorkVisibility) {
         publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
           reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
       if(!ok||!valid())return;
-    }else{const answer=await confirmForm(options);if(!answer||!valid())return;await send(answer);}
+    }else{const answer=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});if(!answer||!valid())return;}
     if(valid())await router.push(lp('/mine?fresh=1'));
   }catch(err){
     if(!valid())return;

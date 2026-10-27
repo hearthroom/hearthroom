@@ -1331,7 +1331,7 @@
   "workspace.uploadMedia": "请先重新上传卡片的封面与背景，再提交审核。",
   "workspace.alreadyPending": "这张卡片已在等待审核。",
   "workspace.submitUnavailable": "这次未能提交审核，请稍后再试。",
-  "workspace.submitPreviousAccepted": "上次提交已受理，这次修改的内容没有提交，输入仍保留在当前窗口。请点击“返回编辑”并保存，再确认内容并重新提交审核。",
+  "workspace.submitPreviousAccepted": "上次提交已受理，这次修改的内容没有提交。请点击“返回编辑”并保存，再确认内容并重新提交审核。",
   "workspace.submitUnfinished": "上次提交尚未完成，已保存的卡片草稿仍在。请点击“返回编辑”并保存，再重新提交审核。",
   "workspace.submitConflict": "提交内容已变更，请刷新后再试。",
   "workspace.reviewConsent": "审核人会在审核期间读取这一版的完整设定，包括角色设定、开场白、世界书、额外指示与版面规则；完整内容由托管服务保存，{site}只保留角色描述与名称供查重，审核结束或撤回后删除。草稿修改不会改变已发布的内容，新版需另行送审。",

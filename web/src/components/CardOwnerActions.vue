@@ -72,7 +72,7 @@ async function submit(expected=visibility.value) {
         publication:{key:`${p}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
           reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token!,p);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
       if(!ok||!valid())return;
-    }else{if(!await confirmDialog(options)||!valid())return;await send();}
+    }else{if(!await confirmDialog({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send})||!valid())return;}
     if(!valid())return;await visibilityControl.value?.reload();if(valid())emit('submitted');
   } catch (err) {
     if(valid())error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'

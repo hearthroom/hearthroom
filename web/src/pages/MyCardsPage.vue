@@ -158,7 +158,7 @@ async function submitReview(expected:WorkVisibility){
     publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
       reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
    if(!ok||!valid())return;
-  }else{const consent=await confirmForm(options);if(!consent||!valid())return;await send(consent);}
+  }else{const consent=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});if(!consent||!valid())return;}
   await visibilityDialog.value?.reload();if(valid())await load(true);
  }catch(e){if(valid())error.value=e instanceof Error?e.message:t('state.actionFailed');}
 }

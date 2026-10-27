@@ -1120,7 +1120,9 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  expect(ratingState.current?.initial).toBeNull();
  expect(confirmState.current).toBeNull();
  ratingState.current!.resolve(GENERAL);await flush();await flush();
+ expect(confirmState.current?.onConfirm).toBeTypeOf('function');
  expect(api.saveRatingDraft).toHaveBeenCalledWith('r1',GENERAL,'tok','harbor');
+ await confirmState.current!.onConfirm!({text:'',update:{updateKind:'minor',updateNote:''}});
  settleConfirm(true);await flush();await flush();
  expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined,expect.objectContaining({policyRevision:'1'}));
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
@@ -1136,6 +1138,7 @@ it('submits a private HarperHarbor draft to the same immutable community review'
  byText('發布').click();await flush();
  const publicOption=root.querySelector<HTMLInputElement>('input[value=public]')!;publicOption.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
  ratingState.current!.resolve(GENERAL);await flush();await flush();
+ await confirmState.current!.onConfirm!({text:'',update:{updateKind:'minor',updateNote:''}});
  settleConfirm(true);await flush();await flush();
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
  expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined,expect.objectContaining({policyRevision:'1'}));
