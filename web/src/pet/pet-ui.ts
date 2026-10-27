@@ -276,8 +276,7 @@ export class SukiPet {
     document.removeEventListener("keydown", this.escape, true);
     if (this.menuEl.hidden) return;
     this.menuEl.hidden = true;
-    const next = this.queue.shift();
-    if (next) setTimeout(() => this.act(next), 400);
+    setTimeout(() => this.drainQueue(), 400);
   }
 
   /** 照顧的消息：餵飽了、餓了、升級、連續天數、好久不見；一次只講最重要的一件 */
@@ -341,6 +340,14 @@ export class SukiPet {
   // ---- 反應 ----
   /** 一次說一句：前一句還在講，新的排隊；被點、被拖這種當下的反應插隊 */
   private queue: Act[] = [];
+  private drainQueue() {
+    let next: Act | undefined;
+    while ((next = this.queue.shift())) {
+      if (next.showIf?.() === false) continue;
+      this.act(next);
+      break;
+    }
+  }
   private act(a: Act, urgent = false) {
     if (a.showIf?.() === false) return;
     const now = performance.now();
@@ -496,7 +503,7 @@ export class SukiPet {
     if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
-    if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
+    if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.drainQueue(); }
   }
 
   // ---- 自主行動（瑞星小獅子、Office 迴紋針、拓麻歌子：她自己會走、會換姿勢、會自己玩） ----
@@ -822,7 +829,7 @@ export class SukiPet {
     this.tab?.classList.toggle("suki-pet__tab--away", on);
     this.layoutEdge();
     if (on) { this.bubble.hidden = true; this.closeMenu(); }
-    else { if (this.opts.mobile) this.refit(); const next = this.queue.shift(); if (next) setTimeout(() => this.act(next), 500); }
+    else { if (this.opts.mobile) this.refit(); setTimeout(() => this.drainQueue(), 500); }
   }
 
   private dragMove(e: PointerEvent) {

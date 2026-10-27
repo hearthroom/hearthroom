@@ -29,3 +29,17 @@ it('does not carry a list-end condition into unrelated direct speech', () => {
   internals.speak('Zzz…');
   expect(internals.bubbleCondition).toBeUndefined();
 });
+it('skips an invalid queued list-end and continues with the next notification after a menu closes', () => {
+  vi.useFakeTimers();
+  try {
+    pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 220, line: key => key } as PetOptions);
+    const internals = pet as unknown as { queue: unknown[]; menuEl: HTMLElement; driver: { state: { talking: boolean } }; closeMenu: () => void; speak: (...args: unknown[]) => void };
+    internals.queue = [{ say: 'old listEnd', showIf: () => false }, { say: 'notification' }];
+    internals.menuEl.hidden = false;
+    internals.driver = { state: { talking: false } };
+    const speak = vi.spyOn(internals, 'speak').mockImplementation(() => {});
+    internals.closeMenu(); vi.advanceTimersByTime(401);
+    expect(speak).toHaveBeenCalledWith('notification', undefined, undefined, undefined);
+    expect(internals.queue).toHaveLength(0);
+  } finally { vi.useRealTimers(); }
+});

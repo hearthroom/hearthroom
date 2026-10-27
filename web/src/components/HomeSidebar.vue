@@ -110,7 +110,7 @@ function measureClearance() {
   if (outer.style.minHeight !== reservation) outer.style.minHeight = reservation;
   const natural = outer.getBoundingClientRect();
   const top = Math.max(natural.top, header + topGap);
-  const bottom = Math.min(top + maxHeight, natural.bottom);
+  const bottom = Math.min(window.innerHeight - bottomGap, natural.bottom);
   const pet = document.querySelector<HTMLElement>('.suki-pet');
   if (pet !== observedPet) {
     petObserver?.disconnect(); observedPet = pet;
@@ -125,7 +125,7 @@ function measureClearance() {
   }
   const range = sidebarClearance({ left: natural.left, right: natural.right, top, bottom }, obstacles);
   const height = bottom > top ? Math.max(0, range.bottom - range.top) : maxHeight;
-  const offset = range.top - top + header + topGap;
+  const offset = range.top > top ? range.top : header + topGap;
   if (inner.style.maxHeight !== `${height}px`) inner.style.maxHeight = `${height}px`;
   if (inner.style.top !== `${offset}px`) inner.style.top = `${offset}px`;
   // Expose the genuinely impossible geometry to runtime verification, without
