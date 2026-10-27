@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "未指定聊天頁的正規表示式檔重新匯入時，不再更改目前的聊天頁選擇。",
+    "zh-Hans": "未指定聊天页的正则文件重新导入时，不再更改当前的聊天页选择。",
+    "en": "Reimporting a regex file without a chat page setting no longer changes the card’s selected chat page.",
+    "ja": "チャットページ指定のない正規表現ファイルを再読み込みしても、選択中のページは変わりません。",
+    "ko": "채팅 페이지 설정이 없는 정규식 파일을 다시 가져와도 선택한 채팅 페이지가 바뀌지 않아요."
+  }
+}

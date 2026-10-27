@@ -189,6 +189,42 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("正則匯入的聊天頁模式", () => {
+  const oldMmd = { beginning: "<identity>", statusbar: "<theme>", regex_scripts: [{ scriptName: "theme", findRegex: "<theme>", replaceString: "<style>body{color:red}</style>", placement: [2] }] };
+
+  it.each(["sandbox", "classic", "immersive"])("已存 %s 卡重匯未指定模式的舊檔，沿用模式並保存完整新規則", async (pageMode) => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Local fixture", roleWelcome: "Existing opening" });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode, status: "passed", version: 7 });
+    await mount("/cards/r1/edit");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(oldMmd)], "old-mmd.json"));
+    expect($(".chatpage [aria-checked=true]").textContent?.trim()).toBe(i18n.global.t(pageMode === "sandbox" ? "editor.chatPage.sandbox" : "editor.chatPage.classic"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ pageMode, version: 7, mountTrigger: "<theme>", rules: [expect.objectContaining({ name: "theme", find: "<theme>", replace: oldMmd.regex_scripts[0].replaceString })] }), "tok");
+    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("Existing opening");
+  });
+
+  it("新卡首次匯入預設沙箱，保存後重新匯入美化也保持沙箱", async () => {
+    await mount("/create");
+    await type($("#f-name"), "Local fixture");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(oldMmd)], "old-mmd.json"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({ pageMode: "sandbox", version: 0 }), "tok");
+    const changed = { ...oldMmd, regex_scripts: [{ ...oldMmd.regex_scripts[0], replaceString: "<style>body{color:blue}</style>" }] };
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(changed)], "updated-mmd.json"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({ pageMode: "sandbox", version: 1 }), "tok");
+  });
+
+  it.each(["sandbox", "classic"])("檔案明確指定 %s 時採用該模式", async (pageMode) => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Local fixture" });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: pageMode === "sandbox" ? "classic" : "sandbox", status: "passed", version: 2 });
+    await mount("/cards/r1/edit");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify({ version: 1, pageMode, rules: [{ find: "x", replace: "y" }] })], "explicit.json"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ pageMode, version: 2 }), "tok");
+  });
+});
+
 describe("卡片匯出", () => {
   function captureDownload() {
     const blobs: Blob[] = [];
