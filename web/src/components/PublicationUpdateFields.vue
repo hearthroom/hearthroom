@@ -38,7 +38,7 @@ function choose(updateKind:UpdateIntent['updateKind']){emit('update:modelValue',
 <style scoped>
 .publication-fields { display:grid; gap:var(--s-3); border:0; padding:0; margin:0; min-width:0; }
 legend { font-size:13px; font-weight:600; padding:0 0 var(--s-2); }
-.publication-choice { display:flex; gap:var(--s-3); align-items:flex-start; padding:var(--s-3); border:1px solid var(--border); border-radius:var(--r-sm); cursor:pointer; min-height:var(--h-lg); }
+.publication-choice { display:flex; gap:var(--s-3); align-items:flex-start; padding:var(--s-3); border:1px solid var(--line); border-radius:var(--r-sm); cursor:pointer; min-height:var(--h-lg); }
 .publication-choice:has(input:checked) { background:var(--accent-soft); border-color:var(--accent); }
 .publication-choice input { margin-top:var(--s-1); accent-color:var(--accent); flex-shrink:0; }
 .publication-choice span { min-width:0; }

@@ -106,4 +106,5 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
   .bell__panel { position: fixed; top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 4px); left: var(--s-3); right: var(--s-3); width: auto; }
   .bell__list { max-height: calc(100vh - var(--header-h) - 160px); }
 }
+.bell__log { color:var(--accent-text); }
 </style>

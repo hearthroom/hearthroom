@@ -124,7 +124,7 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
 
 <style scoped>
 .notices__update { display:grid; gap:var(--s-2); padding:0 var(--s-3) var(--s-3); }
-.notices__update button { justify-self:start; min-height:var(--h-lg); font-size:13px; }
+.notices__update button { color:var(--accent-text); justify-self:start; min-height:var(--h-lg); font-size:13px; }
 .notices__log { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.7; }
 .notices__log--preview { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
 .notices__list > li { scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
