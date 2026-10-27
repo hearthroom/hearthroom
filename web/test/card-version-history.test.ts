@@ -7,15 +7,17 @@ import CardVersionHistory from '../src/components/CardVersionHistory.vue';
 let app:App;
 const settle=async()=>{for(let i=0;i<4;i++){await nextTick();await Promise.resolve();}};
 const revision=(id:string,kind='minor',source='published')=>({versionId:id,updateKind:kind,updateNote:kind==='major'?'<b>新增支線</b>':'',publishedAt:source==='unknown'?null:1793080800000,publicationTimeSource:source});
-afterEach(()=>{app?.unmount();document.body.innerHTML='';mock.load.mockReset();});
+afterEach(()=>{vi.restoreAllMocks();app?.unmount();document.body.innerHTML='';mock.load.mockReset();});
 function mount(props:{cardId:string;target?:string}){const root=document.createElement('div');document.body.append(root);app=createApp({render:()=>h(CardVersionHistory,props)});app.use(i18n);app.mount(root);return root;}
 it('keeps the latest silent record current and targets a historical changelog beyond page one as text',async()=>{
+ const scroll=vi.spyOn(HTMLElement.prototype,'scrollIntoView').mockImplementation(()=>{});
  mock.load.mockResolvedValue({items:[revision('latest'),revision('older')],page:1,hasMore:true,target:revision('target','major','review')});
  const root=mount({cardId:'100001',target:'target'});await settle();
  expect(mock.load).toHaveBeenCalledWith('100001',1,'target');
  expect(root.querySelector('[data-current-version]')?.textContent).not.toContain('新增支線');
  const target=root.querySelector<HTMLDetailsElement>('[data-version-id="target"]');expect(target?.open).toBe(true);
  expect(target?.textContent).toContain('<b>新增支線</b>');expect(target?.querySelector('b')).toBeNull();
+ expect(scroll).toHaveBeenCalledTimes(1);expect(scroll.mock.contexts[0]).toBe(target);
  expect(target?.textContent).toContain('審核通過');expect(target?.textContent).toContain('未記錄公開時間');
 });
 it('keeps loaded records on a more-page error and allows retry',async()=>{

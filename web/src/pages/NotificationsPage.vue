@@ -94,7 +94,7 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
           <div v-if="noticeUpdateNote(n)" class="notices__update">
             <strong class="subtle">{{t('cardUpdate.notice.updateLog')}}</strong>
             <p :id="'notice-log-'+n.id" class="notices__log" :class="{'notices__log--preview':!expanded.has(n.id)}">{{noticeUpdateNote(n)}}</p>
-            <button type="button" class="link" :aria-expanded="expanded.has(n.id)" :aria-controls="'notice-log-'+n.id" @click="toggleLog(n.id)">{{t(expanded.has(n.id)?'cardUpdate.notice.hideUpdateLog':'cardUpdate.notice.showUpdateLog')}}</button>
+            <button type="button" class="btn btn--ghost btn--sm" :aria-expanded="expanded.has(n.id)" :aria-controls="'notice-log-'+n.id" @click="toggleLog(n.id)">{{t(expanded.has(n.id)?'cardUpdate.notice.hideUpdateLog':'cardUpdate.notice.showUpdateLog')}}</button>
           </div>
         </li>
       </ul>

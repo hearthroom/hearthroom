@@ -34,8 +34,8 @@ async function load(){
  try{
   const response=await fetchCardVersions(id,1,target);if(g!==generation)return;
   items.value=response.items;batches.value=[response.items.slice(1)];hasMore.value=response.hasMore;selected.value=response.target??null;
-  if(target&&selected.value){historyOpen.value=selected.value.versionId!==latest.value?.versionId;opened.value.add(target);await nextTick();
-   if(g===generation)[...root.value?.querySelectorAll<HTMLElement>('[data-version-id]')??[]].find(el=>el.dataset.versionId===target)?.scrollIntoView?.({block:'nearest'});
+  if(target&&selected.value){historyOpen.value=selected.value.versionId!==latest.value?.versionId;opened.value.add(target);busy.value=false;await nextTick();
+   if(g===generation)[...root.value?.querySelectorAll<HTMLElement>('[data-version-id]')??[]].find(el=>el.dataset.versionId===target)?.scrollIntoView?.({block:'start'});
   }
  }catch{if(g===generation)failed.value=true;}finally{if(g===generation)busy.value=false;}
 }
@@ -56,7 +56,7 @@ onBeforeUnmount(()=>{generation++;});
  <section ref="root" class="version-history" aria-labelledby="version-history-title" :aria-busy="busy">
   <div class="version-history__head">
    <h2 id="version-history-title">{{t('cardUpdate.card.updateNote')}}</h2>
-   <button v-if="groups.length||hasMore" type="button" class="link" data-history-toggle :aria-expanded="historyOpen" aria-controls="older-versions" @click="historyOpen=!historyOpen">{{t(historyOpen?'cardUpdate.history.hide':'cardUpdate.history.view')}}</button>
+   <button v-if="groups.length||hasMore" type="button" class="btn btn--ghost btn--sm" data-history-toggle :aria-expanded="historyOpen" aria-controls="older-versions" @click="historyOpen=!historyOpen">{{t(historyOpen?'cardUpdate.history.hide':'cardUpdate.history.view')}}</button>
   </div>
   <div v-if="busy" class="ghost version-history__skeleton" :aria-label="t('cardUpdate.history.loading')" />
   <div v-else-if="failed" class="version-history__status" role="status"><p>{{t('cardUpdate.history.loadFailed')}}</p><button type="button" class="btn btn--sm" @click="load">{{t('cardUpdate.history.retry')}}</button></div>
