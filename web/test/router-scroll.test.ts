@@ -24,3 +24,17 @@ it('waits for the restored board DOM and corrects to the card anchor', async () 
   expect(await scrollFor(at('/', {}, { board: true }), at('/cards/1'), { left: 0, top: 480 })).toEqual({ left: 0, top: 820 });
   list.remove(); prepareBoardScroll(null);
 });
+
+it('restores the clicked card after capture-phase decoration makes its href absolute', async () => {
+  const leaving = document.createElement('a'); leaving.href = '/cards/1';
+  const { decorateGa4Checkout } = await import('../src/lib/ga4');
+  const click = new MouseEvent('click'); Object.defineProperty(click, 'target', { value: leaving });
+  decorateGa4Checkout(click);
+  expect(leaving.getAttribute('href')).toBe(leaving.href);
+  prepareBoardScroll({ top: 480, anchor: leaving.getAttribute('href')!, delta: 80 });
+  const returned = document.createElement('a'); returned.href = '/cards/1'; returned.className = 'card__link';
+  const list = document.createElement('div'); list.dataset.boardList = ''; list.append(returned); document.body.append(list);
+  returned.getBoundingClientRect = () => ({ top: 900 }) as DOMRect;
+  try { expect(await scrollFor(at('/', {}, { board: true }), at('/cards/1'), { left: 0, top: 480 })).toEqual({ left: 0, top: 820 }); }
+  finally { list.remove(); prepareBoardScroll(null); }
+});

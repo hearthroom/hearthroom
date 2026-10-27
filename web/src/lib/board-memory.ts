@@ -10,7 +10,10 @@ let restoredScroll: RememberedStream["scroll"] | null = null;
 export function prepareBoardScroll(scroll: RememberedStream["scroll"] | null) { restoredScroll = scroll; }
 export function boardScrollPosition(saved: { left: number; top: number }): { left: number; top: number } {
   if (!restoredScroll) return { left: 0, top: 0 };
-  const anchor = [...document.querySelectorAll<HTMLElement>('[data-board-list] .card__link')].find(el => el.getAttribute("href") === restoredScroll?.anchor);
+  // Capture-phase link decoration may canonicalize the clicked href before the
+  // leave snapshot; rebuilt card links still use relative attributes.
+  const expected = restoredScroll.anchor ? new URL(restoredScroll.anchor, document.baseURI).href : undefined;
+  const anchor = [...document.querySelectorAll<HTMLAnchorElement>('[data-board-list] .card__link')].find(el => el.href === expected);
   return anchor && restoredScroll.delta !== undefined ? { left: 0, top: Math.max(0, window.scrollY + anchor.getBoundingClientRect().top - restoredScroll.delta) } : saved;
 }
 export function recallStream(key: string): RememberedStream | null { return streams.get(key) ?? null; }
