@@ -126,7 +126,7 @@ it("窄選單在創作與社群之前放偏好，低頻預設收合，End與Esc�
   expect(sections.indexOf('preferences')).toBeLessThan(sections.indexOf('community'));
   expect(menu.querySelector('details')?.open).toBe(false);
   const button = document.querySelector<HTMLButtonElement>('.acct__btn')!;
-  button.focus(); menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  button.focus(); button.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
   expect(document.activeElement?.textContent).toContain(i18n.global.t('nav.logout'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await nextTick(); expect(document.querySelector('.acct .menu')).toBeNull();

@@ -38,9 +38,11 @@ useHeaderOverlay(open);
 watch(() => props.compact, () => { open.value = false; });
 const opener = () => root.value?.querySelector<HTMLElement>(".acct__btn") ?? null;
 watch(open, async value => { if (value) { await nextTick(); menuTop.value = menu.value?.getBoundingClientRect().top ?? 0; } });
+function menuKey(e: KeyboardEvent) { if (open.value && menu.value) navigateMenu(e, menu.value); }
 function preference(which: "appearance" | "language") {
   open.value = false;
-  void nextTick(() => (which === "appearance" ? appearance.value : language.value)?.openFrom(opener()));
+  // A microtask can run before the document click listener; hand off after dispatch.
+  setTimeout(() => (which === "appearance" ? appearance.value : language.value)?.openFrom(opener()), 0);
 }
 function menuClick(e: MouseEvent) {
   if ((e.target as HTMLElement).closest("a,button")) open.value = false;
@@ -79,7 +81,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 </script>
 
 <template>
-  <div v-if="session.me" ref="root" class="acct">
+  <div v-if="session.me" ref="root" class="acct" @keydown="menuKey">
     <!-- 餘額放在頁首：這是登入後最常想瞄一眼的數字 -->
     <RouterLink v-if="balance" :to="lp('/wallet')" class="acct__credits" :title="$t('wallet.balance')" :aria-label="`${$t('wallet.balance')} ${balance}`">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.4l-3.9 2.2.9-4.4L1.6 6.1l4.5-.5z" /></svg>
@@ -94,7 +96,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
     </button>
 
     <!-- 項目一多就分組：人先找組、再找項目。頁首已有入口的（通知有鈴鐺、對話與收藏有頂部分頁）不在這裡重複。 -->
-    <div v-if="open" ref="menu" class="menu panel" :class="{ 'menu--compact': props.compact }" data-discovery-overlay role="menu" :style="{ '--menu-top': `${menuTop}px` }" @click="menuClick" @keydown="navigateMenu($event, menu!)" @focusout="focusOut">
+    <div v-if="open" ref="menu" class="menu panel" :class="{ 'menu--compact': props.compact }" data-discovery-overlay role="menu" :style="{ '--menu-top': `${menuTop}px` }" @click="menuClick" @focusout="focusOut">
       <RouterLink :to="lp('/me')" class="menu__head" role="menuitem">
         <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="menu__face" />
         <span v-else class="menu__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</span>

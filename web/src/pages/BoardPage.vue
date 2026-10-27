@@ -57,6 +57,7 @@ const page = computed(() => feed.first);
 const more = computed(() => feed.hot?.items ?? []);
 const loading = computed(() => feed.loading);
 const SORTS: Sort[] = ["day", "hot", "score", "favorites", "week", "month", "new", "updated", "random"];
+const restoring = ref(false);
 const wide = ref(window.innerWidth >= 1080);
 const sentinel = ref<HTMLElement | null>(null);
 let mounted = false;
@@ -100,13 +101,15 @@ function servedFor(p: CardPage | null, showNsfw: boolean | undefined): boolean {
   return p.adult === undefined ? !showNsfw : p.adult === !!showNsfw;
 }
 
-/** 看過的分頁記在記憶體的鍵。身分還沒到時不記也不取：還不知道這一份是給誰看的。推薦每次都要重洗，不記。 */
+/** 身份與內容設定分開記；推薦只在同一 history entry 的卡片返回時復原。 */
 function memoryKey(query: Record<string, unknown>): string | null {
   // 知道是誰了（登入的人資料到了，或確定是訪客）才記
-  if ((session.me ? !session.profile : !session.ready) || query.sort === "random") return null;
+  if (session.me ? !session.profile : !session.ready) return null;
+  const position = query.sort === "random" ? router.options.history.state.position : null;
+  if (query.sort === "random" && typeof position !== "number") return null;
   // 遊客的開關在遊客憑證上（頁首 R18 遊客也能開），一樣算進鍵裡
   const p = session.me ? session.profile : viewerAdult(session);
-  return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
+  return JSON.stringify([query, position, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
 const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value,...(typeof route.query.cursor==='string'?{cursor:route.query.cursor}:{}), lang: contentLang(locale.value), rating: maxRating.value });
@@ -134,12 +137,14 @@ async function load() {
   ++loadId;
   stream.reset(currentQuery());
   shownKey = null;
+  restoring.value = false;
   prepareBoardScroll(null);
   if (mode.value !== "cards") return;
   const query = currentQuery();
   const key = memoryKey(query);
   const remembered = key ? recallStream(key) : null;
   if (remembered) {
+    restoring.value = true;
     stream.restore(query, remembered.stream);
     shownKey = key;
     prepareBoardScroll(remembered.scroll);
@@ -304,7 +309,7 @@ const ratingOptions = computed(() => {
       不是排法——選中它時六個排序全部不亮。原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；
       R18 開關搬進頁首（App.vue）。
     -->
-    <div class="board-layout"><div class="board-main">
+    <div class="board-layout"><div class="board-main" :class="{ 'board-main--restored': restoring }">
     <div ref="sortsEl" class="sorts" role="group" :aria-label="$t('board.sorts')">
       <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
         {{ $t(`board.sort.${s}`) }}
@@ -373,6 +378,8 @@ const ratingOptions = computed(() => {
 <style scoped>
 /* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
 .board-main { min-width: 0; }
+/* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
+.board-main--restored :deep(.settle) { animation: none; }
 .board-sidebar { display: none; }
 @media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: grid; } .board-main :deep(.grid) { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 .sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }

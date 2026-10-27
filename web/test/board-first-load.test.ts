@@ -63,7 +63,7 @@ let router: Router;
 beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); resetInlineBoardForTest(); document.getElementById("board-inline")?.remove(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; empty = new Set(); hotIncludesDay = false; });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
-async function open(path = "/") {
+async function open(path = "/", position?: number) {
   el = document.createElement("div");
   document.body.appendChild(el);
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: BoardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
@@ -71,6 +71,7 @@ async function open(path = "/") {
   setActivePinia(pinia);
   await router.push(path);
   await router.isReady();
+  if (position !== undefined) router.options.history.replace(path, { position });
   app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
   app.mount(el);
   // 跟正式站一樣：頁面先開始讀榜，身分之後才到
@@ -207,5 +208,17 @@ describe("首頁 HTML 裡已經放好第一屏的榜單", () => {
     await open();
     expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls()).toHaveLength(1);
+  });
+});
+
+describe("推薦的卡片返回", () => {
+  it("同一history entry返回保留清單；重新切進推薦才重洗", async () => {
+    await open('/?sort=random', 7);
+    const calls = () => boardCalls.filter(c => c.includes('sort=random'));
+    expect(calls()).toHaveLength(1);
+    await router.push('/cards/example'); await nextTick();
+    router.back(); await later(100, () => null); await nextTick();
+    expect(el!.textContent).toContain('random（成人版）');
+    expect(calls()).toHaveLength(1);
   });
 });
