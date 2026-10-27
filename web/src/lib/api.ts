@@ -137,6 +137,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   hosting_read_failed: "workspace.submitUnavailable",
   hosting_receipt_invalid: "workspace.submitUnavailable",
   hosting_operation_conflict: "workspace.submitConflict",
+  hosting_preparation_unfinished: "workspace.submitUnfinished",
   publication_use_original: "error.publicationUseOriginal",
   adult_content: "card.gate.title",
   rating_required: "error.ratingRequired",
@@ -417,6 +418,9 @@ export async function registerCard(
       if(body.operation.state==='conflict')throw conflict();
       if(body.operation.state==='complete'){
         if(!body.card?.id)throw new ApiError(503,describeApiError(503,''),'visibility_sync_pending');
+        // The accepted prior submission must never be mistaken for this
+        // changed form. Keep its key and the form until an explicit edit.
+        if(changed)throw new ApiError(409,i18n.global.t('workspace.submitPreviousAccepted'),'publication_completed_different_intent');
         clearPublicationOperation(key);return body.card;
       }
     }

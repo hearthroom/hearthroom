@@ -7,8 +7,8 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
 const METRICS = {
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',
-    help:'Publication operation readback and author-initiated cancellation outcomes.',
-    label:'operation', operations:['read','cancel'], outcomes:['complete','pending','conflict','error'],
+    help:'Publication readback, occupied submission admission and author-initiated cancellation outcomes.',
+    label:'operation', operations:['read','submit','cancel'], outcomes:['complete','pending','conflict','error'],
   },
   card_update: {
     name:'hearthroom_card_update_notifications_total',

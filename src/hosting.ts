@@ -1,4 +1,5 @@
 import { updateIntent, assertUpdateCooldown } from './card-update';
+import {bumpOp} from './ops-metrics';
 import {assertNormalMember} from './test-accounts';
 import {managedWork,enrollWorkAccess,policyOperationId,workPolicyGateway,type WorkAccess} from './work-policy';
 import {readOwnerVisibility} from './work-sharing';
@@ -154,7 +155,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   }catch(error){
    if(!await existingOperation()){
     const occupied=await db.prepare("SELECT 1 FROM hosting_versions WHERE work_id=? AND state IN ('preparing','cancelling')").bind(work.id).first();
-    if(occupied)throw new HttpError(409,'hosting_operation_conflict');
+    if(occupied){await bumpOp(db,'publication_recovery','submit','pending');throw new HttpError(409,'hosting_preparation_unfinished');}
     throw error;
    }
   }

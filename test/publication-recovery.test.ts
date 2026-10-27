@@ -113,3 +113,53 @@ it('does not misreport unrelated database insertion failures as an existing pend
   await expect(submitHosted(env,{memberId,account:10001,role:draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()})).rejects.not.toMatchObject({message:'submission_pending'});
  }finally{await env.DB.prepare('DROP TRIGGER fixture_hosting_insert_failure').run();}
 });
+
+it('distinguishes another browser encountering an unfinished preparation from an incompatible operation replay',async()=>{
+ const x=await orphan();
+ await expect(submitHosted(env,{memberId:x.memberId,account:10001,role:x.draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()})).rejects.toMatchObject({status:409,message:'hosting_preparation_unfinished'});
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'preparing'});
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_publication_recovery_total{operation="submit",outcome="pending"} 1');
+});
+
+it.each(['cancel','finalize'] as const)('keeps the real final submission transaction coherent when %s wins the edit race',async winner=>{
+ const x=await orphan();let epoch=3;
+ const prepared:WorkPolicyReceipt={sourceRoleId:x.draft.roleId,workId:x.work,operationId:x.permit,access:'public',restriction:'none',epoch:3,state:'prepared',replayed:false};
+ vi.spyOn(hostGateway,'seal').mockResolvedValue({workId:x.work,versionId:x.version,hostedRevisionId:'sealed-fixture'});
+ vi.spyOn(hostGateway,'read').mockResolvedValue({...x.draft,roleId:'sealed-fixture'});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'這是只用於交易競態驗證的合成角色設定，包含足夠長的背景與角色互動規則。'.repeat(8)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(workPolicyGateway,'state').mockImplementation(async()=>({...prepared,epoch}));
+ vi.spyOn(workPolicyGateway,'operation').mockImplementation(async(_e,_p,_s,_w,operation)=>operation===x.permit?prepared:null);
+ vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,command)=>{
+  if(command.action==='prepare')return prepared;
+  expect(command.action).toBe('cancel');epoch++;
+  return {sourceRoleId:source,workId:x.work,operationId:command.operationId,access:'public',restriction:'none',epoch,state:'complete',replayed:false};
+ });
+ let ready!:()=>void,resume!:()=>void,held=false;
+ const atFinalBatch=new Promise<void>(resolve=>{ready=resolve}),release=new Promise<void>(resolve=>{resume=resolve});
+ const delayed={prepare:env.DB.prepare.bind(env.DB),batch:async(statements:D1PreparedStatement[])=>{
+  if(!held&&statements.length>=6){held=true;ready();await release;}
+  return env.DB.batch(statements);
+ }} as D1Database;
+ const submitted=submitHosted({...env,DB:delayed},{memberId:x.memberId,account:10001,role:x.draft,token:'fixture',rating:GENERAL_RATING,operationId:x.operation,now:Date.now()});
+ const outcome=submitted.then(value=>({value,error:null}),error=>({value:null,error}));
+ await atFinalBatch;
+ if(winner==='cancel')await beginHostedEdit(env.DB,x.memberId,x.draft.roleId,Date.now(),'harbor',env);
+ resume();const result=await outcome;
+ if(winner==='cancel'){
+  expect(result.error).toMatchObject({status:409,message:'hosting_operation_conflict'});
+  // This is the actual submitHosted/upsertCard final batch, not a hand-built
+  // approximation: its first registration and all private review data roll back.
+  for(const table of ['cards','card_registrations','review_submissions','review_snapshots','originality_texts','originality_prints']){
+   expect(await env.DB.prepare(`SELECT count(*) AS n FROM ${table}`).first(),table).toEqual({n:0});
+  }
+ }else{
+  expect(result.error).toBeNull();expect(result.value?.versionId).toBe(x.version);
+  expect((await env.DB.prepare('SELECT count(*) AS n FROM originality_prints').first<{n:number}>())!.n).toBeGreaterThan(0);
+  await beginHostedEdit(env.DB,x.memberId,x.draft.roleId,Date.now(),'harbor',env);
+  expect(await env.DB.prepare('SELECT status FROM review_submissions').first()).toEqual({status:'superseded'});
+  expect(await env.DB.prepare('SELECT count(*) AS n FROM card_registrations').first()).toEqual({n:1});
+  expect(await env.DB.prepare('SELECT count(*) AS n FROM review_snapshots').first()).toEqual({n:0});
+ }
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'superseded'});
+ expect(await env.DB.prepare('SELECT access FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toEqual({access:'public'});
+});
