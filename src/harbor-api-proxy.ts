@@ -13,6 +13,7 @@ const FORWARDED_HEADERS = [
 ] as const;
 
 export function proxyRoute(path: string): ProxyRoute {
+  path=reviewTarget(path)?.path??path;
   if (path === '/oauth/token' || path === '/oauth/revoke') return 'oauth';
   if (path.startsWith('/open/v1/conversation/')) return 'conversation';
   if (/^\/open\/v1\/(media|image|uploads?)(\/|$)/.test(path)) return 'media';
@@ -21,12 +22,17 @@ export function proxyRoute(path: string): ProxyRoute {
   return 'other';
 }
 
+function reviewTarget(path:string):{path:string;reviewId:string}|null {
+ const match=path.match(/^\/reviews\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/open\/v1\/.*)$/i);
+ return match?{reviewId:match[1],path:match[2]}:null;
+}
+
 export function allowedHarborProxyRequest(request: Request): boolean {
   const incoming = new URL(request.url);
   const path = incoming.pathname.slice(HARBOR_PROXY_PREFIX.length);
   return !!siteRootOf(incoming.hostname) && incoming.pathname.startsWith(`${HARBOR_PROXY_PREFIX}/`)
     && !/%2f|%5c|\\/i.test(path)
-    && (path.startsWith('/open/v1/') || path === '/oauth/token' || path === '/oauth/revoke');
+    && (path.startsWith('/open/v1/') || !!reviewTarget(path) || path === '/oauth/token' || path === '/oauth/revoke');
 }
 
 /** Bearer-only public transport. Never expose Harbor's cookie-authenticated Console routes. */
@@ -41,7 +47,8 @@ export async function proxyHarborApi(request: Request, env: Env): Promise<Respon
     return Response.json({ error: 'temporarily_unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
   const target = new URL(HARBOR_ORIGIN);
-  target.pathname = path;
+  const review=reviewTarget(path);
+  target.pathname = review?.path??path;
   target.search = incoming.search;
   // Only documented browser/public-API headers cross this boundary. Site cookies,
   // internal service keys and caller-supplied provenance are never copied.
@@ -50,6 +57,8 @@ export async function proxyHarborApi(request: Request, env: Env): Promise<Respon
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
+  // The selector is untrusted: Provider checks the actual OAuth viewer with the issuer.
+  if(review)headers.set('X-Hearthroom-Review',review.reviewId);
   const country = request.cf?.country;
   if (typeof country === 'string' && /^[A-Z]{2}$/.test(country)) headers.set('CF-IPCountry', country);
   headers.set('X-Harbor-Client-IP', client);

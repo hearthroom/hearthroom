@@ -72,10 +72,12 @@ export interface StageDeps {
    * 萬一有請求被拒也不把他送去登入頁。按下送出時叫 onSignInRequired，由對話頁在原地請他登入。
    */
   guest?: boolean;
+  reviewId?: string;
   onSignInRequired?: () => void;
 }
 
 let stagePromise: Promise<Component> | null = null;
+let stageIdentity: string | null = null;
 
 /**
  * 舞台被供應商拒絕時問一次：手上這張 token 是不是已經被換掉了。
@@ -95,7 +97,7 @@ export async function recoverRejectedToken(provider: ProviderId, accessToken: ()
  * 補 CSP）；本機開發或別的主機上沒有那些子網域，退回不透明 origin 載同源的 /sandbox/index.html
  * （前端 build 會把上游的殼複製到 web/public/sandbox/）。
  */
-export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider(), guest = false) {
+export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider(), guest = false, review = false) {
   // 卡片 App 網域（play.<站台>）也在同一個 zone 底下，殼子網域一樣用得到
   const root = siteRootOf(hostname);
   const production = !!root;
@@ -128,12 +130,17 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
     const l = String(roleId).toLowerCase();
     return production && /^[a-z0-9-]{1,62}$/.test(l) ? l : null;
   };
+  const reviewSaves=new Map<string,Record<string,unknown>>();
   return {
-    prefetch,
+    prefetch: review ? async (_roleId:string)=>{} : prefetch,
     shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}/sandbox/` : "/sandbox/"; },
     origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}` : "null"; },
     // 遊客沒有存檔：讀到的是空的、寫的不留（沙箱卡照樣能從頭玩），不當錯誤丟給作者腳本。
-    saves: guest ? {
+    saves: review ? {
+      load: async (roleId:string)=>structuredClone(reviewSaves.get(roleId)??{}),
+      set: async (roleId:string,key:string,value:unknown)=>{const saved=reviewSaves.get(roleId)??{};saved[key]=structuredClone(value);reviewSaves.set(roleId,saved);},
+      remove: async (roleId:string,key:string)=>{const saved=reviewSaves.get(roleId);if(saved)delete saved[key];},
+    } : guest ? {
       load: async (_roleId: string) => ({} as Record<string, unknown>),
       set: async (_roleId: string, _key: string, _value: unknown) => {},
       remove: async (_roleId: string, _key: string) => {},
@@ -152,11 +159,17 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
 
 /** 載入並安裝舞台套件，回畫布元件。重複呼叫共用同一個 Promise。 */
 export function ensureStage(deps: StageDeps): Promise<Component> {
+  const identity=(deps.provider??currentProvider())+':'+(deps.reviewId??'');
+  if(stagePromise&&stageIdentity!==identity){
+    window.location.assign(deps.currentPath());
+    return Promise.reject(new Error('stage_context_reloading'));
+  }
   if (stagePromise) return stagePromise;
+  stageIdentity=identity;
   stagePromise = (async () => {
     const provider = deps.provider ?? currentProvider();
     const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
-    const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider, !!deps.guest);
+    const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider, !!deps.guest, !!deps.reviewId);
     let recovering = false;
     const initialRoleId = deps.currentRoleId?.();
     if (initialRoleId) void sandbox.prefetch(initialRoleId);
@@ -231,6 +244,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     const storageScope = await stageStorageScope(provider, player);
     const startedConversations = new Set<string>();
     host.events.on('conversationActivity', async (payload: unknown) => {
+      if(deps.reviewId)return;
       const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;
       const conversationId = activity?.conversationId;
       const path = deps.currentPath().split('?')[0] || '';
@@ -269,14 +283,14 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           : undefined,
         storageScope,
       },
-      api: { base: provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider) },
+      api: { base: deps.reviewId ? new URL(`/hh-api/reviews/${encodeURIComponent(deps.reviewId)}`,window.location.origin).href : provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider) },
       i18n: i18n.global,
       sandbox,
     });
     onStageSignOut(() => stage.clearAuthorRuleStorage?.());
     return stage.MoonStage;
   })();
-  stagePromise.catch(() => { stagePromise = null; });
+  stagePromise.catch(() => { stagePromise = null; stageIdentity=null; });
   return stagePromise;
 }
 

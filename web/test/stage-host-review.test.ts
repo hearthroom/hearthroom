@@ -1,0 +1,23 @@
+import {expect,it,vi} from 'vitest';
+import {createApp} from 'vue';
+import {createPinia,setActivePinia} from 'pinia';
+import {createMemoryHistory,createRouter} from 'vue-router';
+import {i18n} from '../src/lib/i18n';
+import {useSession} from '../src/lib/session';
+const {install,events,record}=vi.hoisted(()=>({install:vi.fn(async(_app:unknown,_options:unknown)=>{}),events:new Map<string,(value:unknown)=>unknown>(),record:vi.fn()}));
+vi.mock('../src/lib/library',()=>({recordConversation:record,clearLibraryCache:vi.fn()}));
+vi.mock('moonstage/stage',()=>({installMoonStage:install,mergeStageMessages:vi.fn(),browserHost:(o:object)=>({...o,events:{on:(k:string,f:(value:unknown)=>unknown)=>events.set(k,f)}}),MoonStage:{template:'<div />'}}));
+vi.mock('moonstage/stage.css',()=>({}));
+it('installs review HTTP/WS base and keeps review activity out of the normal library',async()=>{
+ const {ensureStage}=await import('../src/lib/stage-host');
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});await router.push('/play/7?review=11111111-1111-4111-8111-111111111111');
+ const app=createApp({}).use(pinia).use(router).use(i18n);
+ await ensureStage({app,router,session,provider:'harbor',accessToken:async()=>'synthetic',player:{accountNumId:7,nickName:'Fixture',avatar:''},currentPath:()=>router.currentRoute.value.fullPath,currentRoleId:()=>'pending-version',lp:p=>p,reviewId:'11111111-1111-4111-8111-111111111111'});
+ const options=install.mock.calls[0]![1] as any;
+ expect(new URL(options.api.base).pathname).toBe('/hh-api/reviews/11111111-1111-4111-8111-111111111111');
+ await events.get('conversationActivity')?.({roleId:'pending-version',conversationId:'synthetic-conversation'});expect(record).not.toHaveBeenCalled();
+ const assign=vi.spyOn(window.location,'assign').mockImplementation(()=>{});
+ await expect(ensureStage({app,router,session,provider:'harbor',currentPath:()=>'/play/7',lp:p=>p})).rejects.toThrow('stage_context_reloading');
+ expect(assign).toHaveBeenCalledWith('/play/7');expect(install).toHaveBeenCalledTimes(1);assign.mockRestore();
+});

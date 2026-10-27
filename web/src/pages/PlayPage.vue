@@ -189,7 +189,9 @@ onMounted(() => {
       void preloadStage();
       const provider = playProvider(route.query.provider);
       // Stage installs its API and credential host once per document.
-      if (playerProvider && playerProvider !== provider) { location.assign(route.fullPath); return; }
+      const reviewId=typeof route.query.review==='string'?route.query.review:undefined;
+      const documentIdentity=provider+':'+(reviewId??'');
+      if(playerProvider&&playerProvider!==documentIdentity){location.assign(route.fullPath);return;}
       const sameProvider = provider === currentProvider();
       const returnTo = route.fullPath;
       const publicPlay = sameProvider && route.query.mode !== "source" && typeof route.query.review !== "string" && typeof route.query.resume !== "string";
@@ -210,7 +212,7 @@ onMounted(() => {
         const resolved = await resolvePlayCard(routeId.value, provider, contentLang(locale.value));
         if (stale()) return;
         if (!(await adopt(resolved, provider, stale, async () => null))) return;
-        playerProvider = provider;
+        playerProvider = documentIdentity;
         const stage = await ensureStage({ app, router, session, provider, accessToken: async () => null, player: null,
           currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, guest: true,
           onSignInRequired: () => { signInOpen.value = true; track("play_signin", { subject: roleId.value }); } });
@@ -235,9 +237,9 @@ onMounted(() => {
       if (!(await adopt(resolved, provider, stale, accessToken))) return;
       const player = sameProvider ? session.me : await fetchMeAt(apiBaseOf(provider), token);
       if (stale()) return;
-      playerProvider = provider;
+      playerProvider = documentIdentity;
       const stage = await ensureStage({ app, router, session, provider, accessToken, player,
-        currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp });
+        currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, reviewId });
       if (stale()) return;
       Stage.value = stage;
       track("play_open", { subject: roleId.value });

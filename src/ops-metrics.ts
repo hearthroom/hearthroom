@@ -10,6 +10,7 @@ const METRICS = {
     help:'Publication readback, occupied submission admission and author-initiated cancellation outcomes.',
     label:'operation', operations:['read','submit','cancel'], outcomes:['complete','pending','conflict','error'],
   },
+  review_play: {name:'hearthroom_review_play_checks_total',help:'Fresh issuer review playback authorization checks.',label:'operation',operations:['admission'],outcomes:['allow','denied','unavailable']},
   card_update: {
     name:'hearthroom_card_update_notifications_total',
     help:'Card update publication events and notification cooldown admission blocks; queued counts events, not device delivery.',

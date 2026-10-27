@@ -77,3 +77,11 @@ test('all site page entrypoints reach the Worker for the initial localized manif
     assert.ok(patterns.some(pattern => pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern), `${path} bypasses manifest localization`);
   }
 });
+
+test('review playback authority callback reaches the Worker instead of the SPA fallback',()=>{
+ const config=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+ const routes=/run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1]??'';
+ const patterns=[...routes.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
+ const path='/internal/review/11111111-1111-4111-8111-111111111111/play-access';
+ assert.ok(patterns.some(p=>p.endsWith('*')?path.startsWith(p.slice(0,-1)):path===p),'review callback bypasses authority handler');
+});

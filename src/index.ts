@@ -1,3 +1,4 @@
+import {reviewPlayAccessRoutes} from './review-play-access';
 import { maintenanceResponse, readMaintenance } from './maintenance';
 import {qaAccountControlRoutes} from './qa-account-control';
 import {qaSessionHint} from './test-accounts';
@@ -222,6 +223,7 @@ app.use("*", async (c, next) => {
   if (vary) c.header("Vary", vary);
 });
 
+app.route('/',reviewPlayAccessRoutes());
 app.route("/", moderationRoutes);
 app.route("/", commentModerationRoutes);
 app.use('/v1/*',async(c,next)=>{

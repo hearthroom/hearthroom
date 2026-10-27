@@ -174,3 +174,12 @@ it('preserves GPC so the upstream profile omits optional analytics identity', as
   expect(await ordinary.json()).toHaveProperty('analytics');
   expect((upstream.mock.calls[1]![0] as Request).headers.has('Sec-GPC')).toBe(false);
 });
+
+it('carries only the review selector from its scoped path for both HTTP and WebSocket',async()=>{
+ const id='11111111-1111-4111-8111-111111111111';
+ vi.spyOn(globalThis,'fetch').mockImplementation(async input=>{
+  const req=input as Request;expect(new URL(req.url).pathname).toMatch(/^\/open\/v1\//);expect(req.headers.get('X-Hearthroom-Review')).toBe(id);return new Response(null,{status:204});
+ });
+ for(const path of ['/role/detail?roleId=synthetic','/conversation/ws?protocolVersion=2'])expect((await proxyHarborApi(request(`/reviews/${id}/open/v1${path}`,{headers:{'X-Hearthroom-Review':'forged'}}),options)).status).toBe(204);
+ expect((await proxyHarborApi(request('/reviews/bad/open/v1/me'),options)).status).toBe(404);
+});

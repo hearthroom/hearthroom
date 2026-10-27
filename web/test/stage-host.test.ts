@@ -103,3 +103,14 @@ for (const root of ['sukisuki.ai', 'sukisuki.chat', 'sukisuki.pro']) {
     expect(sandboxOptions(`${root}.evil.test`, session).origin('1')).toBe('null');
   });
 }
+
+it('review saves stay within this document and never read or write ordinary player state',async()=>{
+ vi.clearAllMocks();
+ const {sandboxOptions}=await import('../src/lib/stage-host');
+ const o=sandboxOptions('localhost',session,'harbor',false,true);
+ await o.prefetch('review-role');await o.saves.set('review-role','checkpoint',{turn:2});
+ expect(await o.saves.load('review-role')).toEqual({checkpoint:{turn:2}});
+ expect(await o.saves.load('another-role')).toEqual({});
+ await o.saves.remove('review-role','checkpoint');expect(await o.saves.load('review-role')).toEqual({});
+ expect(fetchCardSaves).not.toHaveBeenCalled();expect(putCardSave).not.toHaveBeenCalled();
+});
