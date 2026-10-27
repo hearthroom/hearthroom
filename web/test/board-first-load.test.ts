@@ -6,7 +6,7 @@
  *   - 首頁預設最熱；開窗的榜（日／週／月）第一頁不到一屏時，下面接上最熱（2026-10-11）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick, type App } from "vue";
+import { createApp, nextTick, ref, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
@@ -15,6 +15,8 @@ vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "boa
 vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
 
+import { boardListEndKey } from "../src/lib/site-links";
+const listEndAllowed = ref(false);
 import BoardPage from "../src/pages/BoardPage.vue";
 import { useSession } from "../src/lib/session";
 import { resetManagedAuthForTest } from "../src/lib/managed-auth";
@@ -73,6 +75,7 @@ async function open(path = "/", position?: number) {
   await router.isReady();
   if (position !== undefined) router.options.history.replace(path, { position });
   app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
+  app.provide(boardListEndKey, listEndAllowed);
   app.mount(el);
   // 跟正式站一樣：頁面先開始讀榜，身分之後才到
   void useSession().restore();
@@ -220,5 +223,17 @@ describe("推薦的卡片返回", () => {
     router.back(); await later(100, () => null); await nextTick();
     expect(el!.textContent).toContain('random（成人版）');
     expect(calls()).toHaveLength(1);
+  });
+});
+
+describe("桌寵到底台詞的清單事實", () => {
+  it("成功結束且有卡片才允許", async () => {
+    await open(); expect(listEndAllowed.value).toBe(true);
+  });
+  it("成功空清單不允許", async () => {
+    empty = new Set(['day', 'hot']); await open(); expect(listEndAllowed.value).toBe(false);
+  });
+  it("仍在載入不允許", async () => {
+    boardDelay = 600; await open(); expect(listEndAllowed.value).toBe(false);
   });
 });

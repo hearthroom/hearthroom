@@ -2,6 +2,7 @@ import { computed, inject, onBeforeUnmount, watch, type ComputedRef, type Inject
 import { footerGroups, footerLegal, type FooterContext } from "./footer-nav";
 
 export const siteLinksKey: InjectionKey<ComputedRef<FooterContext>> = Symbol("site-links");
+export const boardListEndKey: InjectionKey<Ref<boolean>> = Symbol("board-list-end");
 export const boardEndKey: InjectionKey<Ref<boolean>> = Symbol("board-end");
 export const headerOverlaysKey: InjectionKey<Set<symbol>> = Symbol("header-overlays");
 /** A header menu temporarily owns interaction; covered page controls must not take focus. */

@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMo
 import { useI18n } from "vue-i18n";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 const HomeSidebar = defineAsyncComponent(() => import("@/components/HomeSidebar.vue"));
-import { boardEndKey } from "@/lib/site-links";
+import { boardEndKey, boardListEndKey } from "@/lib/site-links";
 import BoardCarousel from "@/components/BoardCarousel.vue";
 import DownloadBanner from "@/components/DownloadBanner.vue";
 import MascotWelcome from "@/components/MascotWelcome.vue";
@@ -52,6 +52,8 @@ const { t } = useI18n();
 const stream = createBoardStream(fetchBoard, canLoad);
 const feed = stream.state;
 const boardEnded = inject(boardEndKey, ref(false));
+const boardListEnd = inject(boardListEndKey, ref(false));
+watch(() => feed.done && !feed.loading && !feed.error && ((feed.first?.items.length ?? 0) + (feed.hot?.items.length ?? 0) > 0), allowed => { boardListEnd.value = allowed; }, { immediate: true });
 watch(() => feed.done, done => { boardEnded.value = done; }, { immediate: true });
 const page = computed(() => feed.first);
 const more = computed(() => feed.hot?.items ?? []);

@@ -17,7 +17,7 @@ import { petSpeaking, type SukiEvent } from "./events";
 
 type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
 
-interface Act { expr?: Expr; say?: string; ms?: number; hop?: boolean; talk?: boolean; action?: MenuItem }
+interface Act { showIf?: () => boolean; expr?: Expr; say?: string; ms?: number; hop?: boolean; talk?: boolean; action?: MenuItem }
 
 /** 選單的一項：她能直接幫你做的事 */
 export interface MenuItem { label: string; run: () => void }
@@ -44,6 +44,8 @@ export interface PetOptions {
   mobile?: boolean;
   /** 這一頁進來時不說開場的招呼與每日口味（頁面主要按鈕在她的泡泡底下時）；預設照常說 */
   quietGreeting?: () => boolean;
+  /** Physical page bottom may be a loading/error boundary rather than a completed list. */
+  canListEnd?: () => boolean;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
   menu?: () => MenuItem[];
   /** 每天第一次來擲的「今天的幸運類型」 */
@@ -103,6 +105,7 @@ export class SukiPet {
   private exprTarget: Partial<Record<Expr, number>> = {};
   private actUntil = 0;
   private bubbleUntil = 0;
+  private bubbleCondition: (() => boolean) | undefined;
   private lastInput = performance.now();
   private clicks: number[] = [];
   private drag?: Drag;
@@ -319,7 +322,7 @@ export class SukiPet {
       case "roll": this.kick("Die", 300); return this.act({ expr: "wink", say: this.line("roll") });
       case "notifications": if (e.count > 0) this.once("notifications", { expr: "surprised", say: this.line("notifications"), ms: 2600 }); return;
       case "update": return this.once("update", { expr: "happy", say: this.line("update"), ms: 4000 });
-      case "listEnd": return this.once("listEnd", { expr: "wink", say: this.line("listEnd") });
+      case "listEnd": if (this.opts.canListEnd?.() === false) return; return this.once("listEnd", { expr: "wink", say: this.line("listEnd"), showIf: this.opts.canListEnd });
       case "say": return this.act({ say: e.text, talk: true });
       case "summon": return this.summon();
       case "notice":
@@ -339,6 +342,7 @@ export class SukiPet {
   /** 一次說一句：前一句還在講，新的排隊；被點、被拖這種當下的反應插隊 */
   private queue: Act[] = [];
   private act(a: Act, urgent = false) {
+    if (a.showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
@@ -346,7 +350,7 @@ export class SukiPet {
     if (urgent) this.queue = [];
     if (a.expr) { for (const k of EXPRS) this.exprTarget[k] = 0; this.exprTarget[a.expr] = 1; }
     this.actUntil = now + (a.ms ?? 1800);
-    if (a.say) this.speak(a.say, a.ms, a.action);
+    if (a.say) this.speak(a.say, a.ms, a.action, a.showIf);
     if (a.hop) this.hop();
     if (a.talk || a.say) { this.driver.state.talking = true; setTimeout(() => { this.driver.state.talking = false; }, Math.min(1600, (a.say?.length ?? 6) * 90)); }
   }
@@ -382,7 +386,8 @@ export class SukiPet {
 
   /** 網站直接要她說一句（例如選單動作找不到東西時） */
   say(text: string) { if (text) this.act({ say: text, talk: true }, true); }
-  private speak(text: string, ms = 2600, action?: MenuItem) {
+  private speak(text: string, ms = 2600, action?: MenuItem, showIf?: () => boolean) {
+    this.bubbleCondition = showIf;
     this.bubble.textContent = text;
     if (action) {
       const b = document.createElement("button");
@@ -491,7 +496,7 @@ export class SukiPet {
     if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
-    if (!this.bubble.hidden && now > this.bubbleUntil) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
+    if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
   }
 
   // ---- 自主行動（瑞星小獅子、Office 迴紋針、拓麻歌子：她自己會走、會換姿勢、會自己玩） ----

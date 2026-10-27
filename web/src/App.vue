@@ -7,7 +7,7 @@ import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, provide, reactive, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import SiteMenu from "@/components/SiteMenu.vue";
-import { siteLinksKey, boardEndKey, headerOverlaysKey } from "@/lib/site-links";
+import { siteLinksKey, boardEndKey, boardListEndKey, headerOverlaysKey } from "@/lib/site-links";
 import AccountMenu from "@/components/AccountMenu.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { useNotifications } from "@/lib/notifications";
@@ -83,6 +83,8 @@ const headerOverlays = reactive(new Set<symbol>());
 provide(headerOverlaysKey, headerOverlays);
 const boardEnded = ref(false);
 provide(boardEndKey, boardEnded);
+const boardListEnd = ref(false);
+provide(boardListEndKey, boardListEnd);
 const onBoardPage = computed(() => route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, ''));
 const compactHeader = ref(typeof window.matchMedia === "function" ? window.matchMedia('(max-width: 1079px)').matches : false);
 const headerElement = ref<HTMLElement | null>(null);
@@ -231,7 +233,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <CoachTour />
   <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
-  <SukiPet :inert="headerOverlays.size > 0" v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
+  <SukiPet :list-end-allowed="!onBoardPage || ['following', 'authors'].includes(String(route.query.mode)) || boardListEnd" :inert="headerOverlays.size > 0" v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
   <ConfirmDialog />
   <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->

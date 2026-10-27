@@ -28,6 +28,7 @@ import { guideFor } from "@/pet/guides";
 import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
+const props = withDefaults(defineProps<{ listEndAllowed?: boolean }>(), { listEndAllowed: true });
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -119,6 +120,7 @@ async function start() {
     mobile,
     // 手機上活動頁的主要按鈕剛好在她招呼泡泡的位置（約戰 QA 2026-10-17）：那幾頁進來時不招呼，她照常在
     // petQuiet：不分手機桌機都不招呼（錢包、機率頁的泡泡會蓋到主按鈕與紀錄，美術總監最終 r2 M8）
+    canListEnd: () => props.listEndAllowed,
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,

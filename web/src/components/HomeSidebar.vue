@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -12,6 +12,7 @@ import { fetchUpdates } from "@/lib/updates";
 import { fetchPosts, postPath } from "@/lib/blog";
 import { withLocale } from "@/router";
 import { useSiteLinks } from "@/lib/site-links";
+import { sidebarClearance, type SidebarRect } from "@/lib/sidebar-clearance";
 import SiteLink from "./SiteLink.vue";
 
 const session = useSession();
@@ -87,11 +88,73 @@ watch(() => session.me?.accountNumId, id => {
   balanceState.value = checkinState.value = "loading";
   if (id) { void loadBalance(epoch); void loadCheckin(epoch); }
 }, { immediate: true });
+const host = ref<HTMLElement | null>(null);
+const sidebar = ref<HTMLElement | null>(null);
+let clearanceFrame = 0;
+let petObserver: MutationObserver | undefined;
+let bodyObserver: MutationObserver | undefined;
+let sizeObserver: ResizeObserver | undefined;
+let observedPet: HTMLElement | null = null;
+function scheduleClearance() { if (!clearanceFrame) clearanceFrame = requestAnimationFrame(measureClearance); }
+function measureClearance() {
+  clearanceFrame = 0;
+  const outer = host.value, inner = sidebar.value;
+  if (!outer || !inner) return;
+  const tokens = getComputedStyle(document.documentElement);
+  const header = parseFloat(tokens.getPropertyValue('--site-header-h')) || parseFloat(tokens.getPropertyValue('--header-h')) || 60;
+  const topGap = parseFloat(tokens.getPropertyValue('--s-5')) || 24;
+  const bottomGap = parseFloat(tokens.getPropertyValue('--s-6')) || 32;
+  const maxHeight = Math.max(0, window.innerHeight - header - topGap - bottomGap);
+  const reservedHeight = Math.min(inner.scrollHeight, maxHeight);
+  const reservation = `${reservedHeight}px`;
+  if (outer.style.minHeight !== reservation) outer.style.minHeight = reservation;
+  const natural = outer.getBoundingClientRect();
+  const top = Math.max(natural.top, header + topGap);
+  const bottom = Math.min(top + maxHeight, natural.bottom);
+  const pet = document.querySelector<HTMLElement>('.suki-pet');
+  if (pet !== observedPet) {
+    petObserver?.disconnect(); observedPet = pet;
+    if (pet) petObserver?.observe(pet, { attributes: true, attributeFilter: ['hidden', 'style', 'class'], childList: true, subtree: true, characterData: true });
+  }
+  const obstacles: SidebarRect[] = [];
+  if (pet && getComputedStyle(pet).visibility !== 'hidden' && Number(getComputedStyle(pet).opacity) > 0.05) {
+    for (const el of pet.querySelectorAll<HTMLElement>('.suki-pet__bubble, .suki-pet__menu, .suki-pet__hit')) {
+      const rect = el.getBoundingClientRect(), style = getComputedStyle(el);
+      if (rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none') obstacles.push(rect);
+    }
+  }
+  const range = sidebarClearance({ left: natural.left, right: natural.right, top, bottom }, obstacles);
+  const height = bottom > top ? Math.max(0, range.bottom - range.top) : maxHeight;
+  const offset = range.top - top + header + topGap;
+  if (inner.style.maxHeight !== `${height}px`) inner.style.maxHeight = `${height}px`;
+  if (inner.style.top !== `${offset}px`) inner.style.top = `${offset}px`;
+  // Expose the genuinely impossible geometry to runtime verification, without
+  // pretending that a CSS floor makes the overlapping controls reachable.
+  inner.toggleAttribute('data-pet-clearance-blocked', !!range.blocked);
+  // CSS popup/placement transitions change rects without changing attributes.
+  // Follow only their active frames, then stop once actual geometry settles.
+  if (pet?.getAnimations?.({ subtree: true }).some(animation => animation.playState === 'running')) scheduleClearance();
+}
+onMounted(() => {
+  petObserver = new MutationObserver(scheduleClearance);
+  bodyObserver = new MutationObserver(scheduleClearance);
+  bodyObserver.observe(document.body, { childList: true });
+  if (typeof ResizeObserver !== 'undefined' && host.value) { sizeObserver = new ResizeObserver(scheduleClearance); sizeObserver.observe(host.value); }
+  window.addEventListener('scroll', scheduleClearance, { passive: true });
+  window.addEventListener('resize', scheduleClearance);
+  window.addEventListener('pointermove', scheduleClearance, { passive: true });
+  scheduleClearance();
+});
+onUpdated(scheduleClearance);
+onBeforeUnmount(() => {
+  cancelAnimationFrame(clearanceFrame); petObserver?.disconnect(); bodyObserver?.disconnect(); sizeObserver?.disconnect();
+  window.removeEventListener('scroll', scheduleClearance); window.removeEventListener('resize', scheduleClearance); window.removeEventListener('pointermove', scheduleClearance);
+});
 onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
 </script>
 
 <template>
-  <aside class="home-sidebar" :aria-label="$t('home.siteInfo')">
+  <div ref="host" class="home-sidebar-host"><aside ref="sidebar" class="home-sidebar" :aria-label="$t('home.siteInfo')">
     <section class="panel sidebar-block" data-sidebar-campaigns>
       <h2>{{ $t('home.eventsTitle') }}</h2>
       <div v-if="campaignState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
@@ -128,11 +191,12 @@ onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
       <template v-else><p class="muted">{{ $t('home.noUpdates') }}</p><RouterLink class="sidebar-link" :to="lp('/blog')">{{ $t('blog.title') }}</RouterLink></template>
     </section>
     <nav id="home-site-info" tabindex="-1" class="sidebar-info" :aria-label="$t('home.siteInfo')"><SiteLink v-for="link in links" :key="link.id" :link="link" /></nav>
-  </aside>
+  </aside></div>
 </template>
 
 <style scoped>
-.home-sidebar { display: grid; gap: var(--s-4); align-content: start; position: sticky; top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-6)); overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.home-sidebar-host { align-self: stretch; min-width: 0; }
+.home-sidebar { align-self: start; display: grid; gap: var(--s-4); align-content: start; position: sticky; top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-6)); overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
 .sidebar-block { padding: var(--s-4); min-width: 0; }
 .sidebar-block h2 { margin: 0 0 var(--s-2); font-size: 16px; font-weight: 600; }
 .sidebar-block p { font-size: 13px; margin: var(--s-2) 0; overflow-wrap: anywhere; }
