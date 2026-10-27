@@ -360,7 +360,7 @@ function publicationOperation(key:string):string {
  return id;
 }
 function clearPublicationOperation(key:string){publicationOperations.delete(key);publicationConsents.delete(key);try{localStorage.removeItem(key);localStorage.removeItem(key+':consent')}catch{}}
-async function publicationConsent(key:string,operationId:string,intent:unknown,expected?:PublicationConsent['expected']):Promise<{consent:PublicationConsent;prior:boolean}>{
+async function publicationConsent(key:string,operationId:string,intent:unknown,expected?:PublicationConsent['expected']):Promise<{consent:PublicationConsent;prior:boolean;changed:boolean}>{
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(intent)));
  const intentHash=[...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('');
  let saved=publicationConsents.get(key);
@@ -370,14 +370,14 @@ async function publicationConsent(key:string,operationId:string,intent:unknown,e
     const value=intent as Record<string,unknown>,{updateKind,updateNote,...legacy}=value;
     const legacyHash=updateKind==='minor'&&updateNote===''?await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(legacy))):null;
     const compatible=legacyHash&&[...new Uint8Array(legacyHash)].map(n=>n.toString(16).padStart(2,'0')).join('')===saved.intentHash;
-    if(!compatible)throw new ApiError(409,describeApiError(409,''),'visibility_operation_conflict');
+    if(!compatible)return {consent:saved,prior:true,changed:true};
     saved.intentHash=intentHash;publicationConsents.set(key,saved);try{localStorage.setItem(key+':consent',JSON.stringify(saved))}catch{}
   }
-  return {consent:saved,prior:true};
+  return {consent:saved,prior:true,changed:false};
  }
  const value={operationId,intentHash,expected:expected??null};publicationConsents.set(key,value);
  try{localStorage.setItem(key+':consent',JSON.stringify(value))}catch{}
- return {consent:value,prior:false};
+ return {consent:value,prior:false,changed:false};
 }
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
@@ -399,27 +399,30 @@ export async function registerCard(
   const intent=parseUpdateIntent(update??{});
   const key=publicationKey(provider,roleId);
   const operationId=publicationOperation(key);
-  const {consent,prior}=await publicationConsent(key,operationId,{roleId,ratingAnswers,fandom:fandom??'',fandomId:fandomId??'',distribute:distribute.map(d=>d.provider),...intent},expected);
+  const {consent,prior,changed}=await publicationConsent(key,operationId,{roleId,ratingAnswers,fandom:fandom??'',fandomId:fandomId??'',distribute:distribute.map(d=>d.provider),...intent},expected);
+  const conflict=()=>new ApiError(409,i18n.global.t('workspace.submitConflict'),'visibility_operation_conflict');
   if(prior&&provider==='harbor'){
     const response=await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/publication/operations/${encodeURIComponent(operationId)}`,{method:'GET',cache:'no-store',headers:{...from(),'X-Provider':provider,...authHeaders(token)}});
     const body=await response.json().catch(()=>null) as {error?:string;operation?:{operationId?:string;state?:string};card?:CommunityCard;workVisibility?:{policyRevision:string;approvalRevision:string;syncState:string;actions:string[]}}|null;
-    const conflict=()=>new ApiError(409,describeApiError(409,''),'visibility_operation_conflict');
     if(response.status===404&&body?.error==='publication_operation_not_found'){
       if(consent.expected){
         const latest=body.workVisibility;
         if(!latest||latest.syncState!=='complete')throw new ApiError(503,describeApiError(503,''),'visibility_sync_pending');
-        if(latest.policyRevision!==consent.expected.policyRevision||latest.approvalRevision!==consent.expected.approvalRevision||!latest.actions.some(a=>a==='submit_review'||a==='submit_update')){clearPublicationOperation(key);throw conflict();}
+        if(latest.policyRevision!==consent.expected.policyRevision||latest.approvalRevision!==consent.expected.approvalRevision||!latest.actions.some(a=>a==='submit_review'||a==='submit_update'))throw conflict();
       }
     }else{
       if(!response.ok)throw new ApiError(response.status,describeApiError(response.status,body?.error??''),body?.error??'');
       if(body?.operation?.operationId!==operationId||!['pending','complete','conflict'].includes(body.operation.state??''))throw new ApiError(503,describeApiError(503,''),'visibility_sync_pending');
-      if(body.operation.state==='conflict'){clearPublicationOperation(key);throw conflict();}
+      if(body.operation.state==='conflict')throw conflict();
       if(body.operation.state==='complete'){
         if(!body.card?.id)throw new ApiError(503,describeApiError(503,''),'visibility_sync_pending');
         clearPublicationOperation(key);return body.card;
       }
     }
   }
+  // An accepted submission wins over stale form contents. A still-unresolved
+  // operation must keep its original intent until an explicit edit fences it.
+  if(changed)throw new ApiError(409,i18n.global.t('workspace.submitUnfinished'),'visibility_operation_conflict');
   let result:CommunityCard;
   try{result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {

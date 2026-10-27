@@ -1331,6 +1331,7 @@
   "workspace.uploadMedia": "검토를 요청하기 전에 표지와 배경을 다시 업로드해 주세요.",
   "workspace.alreadyPending": "이미 검토를 기다리는 카드예요.",
   "workspace.submitUnavailable": "검토를 요청하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  "workspace.submitUnfinished": "이전 제출이 아직 완료되지 않았지만 저장한 카드 초안은 남아 있어요. ‘편집으로 돌아가기’를 눌러 저장한 뒤 다시 심사를 요청해 주세요.",
   "workspace.submitConflict": "제출 내용이 변경되었어요. 새로고침 후 다시 시도해 주세요.",
   "workspace.reviewConsent": "검토자는 검토 기간 동안 캐릭터 설정, 인사말, Lorebook, 추가 지침과 표시 규칙을 포함한 이 버전의 전체 설정을 읽어요. 전체 내용은 호스팅 서비스가 보관하고, {site}는 중복 확인을 위해 캐릭터 설명과 이름만 보관하며 검토가 끝나거나 철회하면 삭제해요. 초안 수정은 게시된 내용에 영향을 주지 않아요. 새 버전은 별도 검토가 필요해요.",
   "workspace.editHint": "저장하면 초안만 업데이트되고 게시된 버전은 유지돼요.",

@@ -1,9 +1,10 @@
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
+import {bumpOp} from './ops-metrics';
 import {managedWork,policyOperationId,projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,workPolicyIntentStatement,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkRestriction} from './work-policy';
 
 interface PendingPermit {operation_id:string;version_id:string;submission_id:string}
-export async function fenceManagedWork(env:Env,provider:ProviderId,source:string,identity:string,action:'cancel'|'restrict'|'private'|'unlisted'|'restore',options:{token?:string;restriction?:WorkRestriction;rootOperation?:string;moderationRevision?:number}={}):Promise<WorkPolicyReceipt|null>{
+export async function fenceManagedWork(env:Env,provider:ProviderId,source:string,identity:string,action:'cancel'|'restrict'|'private'|'unlisted'|'restore',options:{token?:string;restriction?:WorkRestriction;rootOperation?:string;moderationRevision?:number;publicationVersion?:string}={}):Promise<WorkPolicyReceipt|null>{
  const db=env.DB;const p=await managedWork(db,provider,source);if(!p)return null;
  if(p.epoch===0)throw new HttpError(503,'visibility_sync_pending');
  const root=options.rootOperation??await policyOperationId('fence:'+p.work_id+':'+identity);
@@ -13,10 +14,22 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
  if(old&&(old.action!==action||old.restriction!==options.restriction))throw new HttpError(409,'visibility_operation_conflict');
  if(saved?.state==='complete'&&saved.receipt&&p.sync_operation_id!==saved.operation_id)return JSON.parse(saved.receipt) as WorkPolicyReceipt;
  if(saved&&p.sync_operation_id!==saved.operation_id)throw new HttpError(409,'visibility_operation_conflict');
- const pending=await db.prepare(`SELECT g.operation_id,v.version_id,v.submission_id FROM work_publication_permits g
+ let pending=await db.prepare(`SELECT g.operation_id,v.version_id,v.submission_id FROM work_publication_permits g
  JOIN hosting_versions v ON v.version_id=g.version_id JOIN review_submissions s ON s.id=v.submission_id
  WHERE v.work_id=? AND s.status='pending' AND g.state IN ('prepared','published') ORDER BY v.created_at DESC,v.rowid DESC LIMIT 1`)
  .bind(p.work_id).first<PendingPermit>();
+ if(options.publicationVersion){
+  pending=await db.prepare(`SELECT g.operation_id,v.version_id,v.submission_id FROM work_publication_permits g
+   JOIN hosting_versions v ON v.version_id=g.version_id WHERE v.work_id=? AND v.version_id=? AND v.submission_id IS NULL`)
+   .bind(p.work_id,options.publicationVersion).first<PendingPermit>();
+  if(pending&&!old){
+   // A local prepare intent may not have reached Provider. An epoch fence
+   // without permitId safely invalidates a prepare that races this readback.
+   const remote=await workPolicyGateway.operation(env,provider,source,p.work_id,pending.operation_id);
+   if(remote?.state==='complete')throw new HttpError(409,'visibility_operation_conflict');
+   if(remote?.state!=='prepared')pending=null;
+  }
+ }
  let command:WorkPolicyCommand;
  if(old&&saved?.state!=='conflict'){command=old;}else{
   const live=old?await workPolicyGateway.state(env,provider,source):{workId:p.work_id,epoch:p.epoch};
@@ -57,10 +70,50 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
 }
 
 export async function fenceManagedEdit(env:Env,provider:ProviderId,source:string):Promise<void>{
+ await retireUnsubmittedPreparations(env,provider,source);
  const pending=await env.DB.prepare(`SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
  JOIN managed_work_access p ON p.work_id=v.work_id WHERE p.provider=? AND p.source_role_id=? AND s.status='pending'
  ORDER BY s.submitted_at DESC LIMIT 1`).bind(provider,source).first<{id:string}>();
  if(pending)await fenceManagedWork(env,provider,source,'edit:'+pending.id,'cancel');
+}
+
+/** Explicit author edit, never a timeout reaper. Keep unknown cancellation
+ * fenced and replay its durable operation before releasing the work slot. */
+async function retireUnsubmittedPreparations(env:Env,provider:ProviderId,source:string):Promise<void>{
+ const db=env.DB;
+ const versions=await db.prepare(`SELECT version_id,work_id FROM hosting_versions WHERE provider=? AND source_role_id=?
+  AND submission_id IS NULL AND state IN ('preparing','cancelling','failed')
+  ORDER BY CASE WHEN state='failed' THEN 1 ELSE 0 END,created_at`).bind(provider,source).all<{version_id:string;work_id:string}>();
+ for(const version of versions.results){
+  try{
+   const held=await db.prepare(`UPDATE hosting_versions SET state='cancelling' WHERE version_id=? AND submission_id IS NULL
+    AND state IN ('preparing','cancelling','failed')`).bind(version.version_id).run();
+   if(!held.meta.changes)continue; // A final review won the CAS; normal edit handles it below.
+   let managed=await managedWork(db,provider,source);
+   if(managed?.epoch===0){
+    // Only recover the already-authorized bind for this work; never enroll a
+    // new intent or clean up another work as a side effect of this edit.
+    const bind=await db.prepare('SELECT command FROM visibility_operations WHERE work_id=? AND operation_id=?')
+     .bind(version.work_id,managed.sync_operation_id).first<{command:string}>();
+    const command=bind?JSON.parse(bind.command) as WorkPolicyCommand:null;
+    if(!command||command.action!=='bind')throw new HttpError(503,'visibility_sync_pending');
+    const receipt=await runWorkPolicyOperation(env,provider,source,command);
+    await projectWorkReceipt(env,provider,receipt,undefined,'bind');
+    managed=await managedWork(db,provider,source);
+   }
+   if(managed)await fenceManagedWork(env,provider,source,'unsubmitted:'+version.version_id,'cancel',{publicationVersion:version.version_id});
+   const retired=await db.batch([
+    db.prepare("UPDATE hosting_versions SET state='superseded' WHERE version_id=? AND submission_id IS NULL AND state='cancelling'").bind(version.version_id),
+    db.prepare(`UPDATE work_publication_permits SET state='cancelled' WHERE version_id=?
+     AND EXISTS(SELECT 1 FROM hosting_versions v WHERE v.version_id=? AND v.submission_id IS NULL AND v.state='superseded')`).bind(version.version_id,version.version_id),
+   ]);
+   if(!retired[0].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+   await bumpOp(db,'publication_recovery','cancel','complete');
+  }catch(error){
+   await bumpOp(db,'publication_recovery','cancel',error instanceof HttpError&&error.status===409?'conflict':'pending');
+   throw error;
+  }
+ }
 }
 
 export async function syncManagedRestriction(env:Env,provider:ProviderId,source:string,identity:string):Promise<void>{

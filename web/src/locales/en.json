@@ -1331,6 +1331,7 @@
   "workspace.uploadMedia": "Upload the cover and backgrounds again before submitting for review.",
   "workspace.alreadyPending": "This card is already waiting for review.",
   "workspace.submitUnavailable": "The card could not be submitted; please try again later.",
+  "workspace.submitUnfinished": "Your last submission is unfinished, and your saved card draft is still available. Select “Back to editing”, save, then submit for review again.",
   "workspace.submitConflict": "The submission changed; refresh the page and try again.",
   "workspace.reviewConsent": "Reviewers read this version’s full configuration during review, including character instructions, greetings, Lorebooks, additional instructions and presentation rules. The hosting service keeps the full content; {site} keeps only the character description and names for originality checks and deletes them when review ends or you withdraw. Draft edits leave published content unchanged and updates require a new review.",
   "workspace.editHint": "Saving updates the draft and leaves the published version unchanged.",

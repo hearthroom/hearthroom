@@ -301,6 +301,12 @@ it.each(['complete','conflict','ordinary404','offline','changed'])('does not POS
  else await expect(registerCard(id,'proof',false,[],'harbor',undefined,undefined,expected)).rejects.toMatchObject({status:mode==='ordinary404'?404:mode==='offline'?503:409});
  expect(bodies).toHaveLength(1);
  if(mode==='conflict'||mode==='changed'){
+  // A new consent alone cannot discard an unfinished durable operation.
+  await expect(registerCard(id,'proof',false,[],'harbor',undefined,undefined,{...expected,policyRevision:'new-explicit-consent'})).rejects.toMatchObject({status:409});
+  const prior=fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async(url,init)=>String(url).endsWith('/edit')?Response.json({resubmit:false}):prior(url,init));
+  const {beginCardEdit}=await import('../src/lib/api');
+  await beginCardEdit(id,'proof','harbor');
   await registerCard(id,'proof',false,[],'harbor',undefined,undefined,{...expected,policyRevision:'new-explicit-consent'});
   expect(bodies[1].operationId).not.toBe(bodies[0].operationId);expect(bodies[1].expectedPolicyRevision).toBe('new-explicit-consent');
  }

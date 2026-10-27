@@ -18,10 +18,11 @@ it('sends the canonical notification intent and preserves it on an unknown-resul
 });
 it('does not change the notification intent underneath an unresolved operation',async()=>{
  let requests=0;
- vi.stubGlobal('fetch',vi.fn(async()=>{requests++;throw new TypeError('network');}));
+ vi.stubGlobal('fetch',vi.fn(async(_url:string,init:RequestInit)=>{requests++;if(init.method==='GET')return Response.json({operation:{operationId:localStorage.getItem('hearthroom:publication:harbor:frozen-log'),state:'pending'}});throw new TypeError('network');}));
  await expect(submit('frozen-log',{updateKind:'major',updateNote:'新增第二章劇情和兩條支線'})).rejects.toThrow();
  await expect(submit('frozen-log',{updateKind:'major',updateNote:'另外新增第三章劇情和結局'})).rejects.toMatchObject({status:409});
- expect(requests).toBe(1);
+ // Durable readback precedes the intent check; no second POST is sent.
+ expect(requests).toBe(2);
 });
 it('lets an explicit silent retry start a new operation after a definitive cooldown refusal',async()=>{
  const bodies:any[]=[];

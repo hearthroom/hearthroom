@@ -19,6 +19,7 @@ import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
+ state:string;
  update_kind:'minor'|'major'; update_note:string; visibility_consent:string|null;
  provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; rating_answers:string|null;
  hosted_revision_id:string|null; card_id:string|null; submission_id:string|null;
@@ -76,7 +77,8 @@ export async function beginHostedEdit(db:D1Database,memberId:string,roleId:strin
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
  if(work.member_id!==memberId)throw new HttpError(403,'not the author of this card');
- if(await managedWork(db,provider,roleId)){
+ const unfinished=await db.prepare("SELECT 1 FROM hosting_versions WHERE work_id=? AND submission_id IS NULL AND state IN ('preparing','cancelling','failed')").bind(work.id).first();
+ if(unfinished||await managedWork(db,provider,roleId)){
   if(!env)throw new HttpError(503,'visibility_sync_pending');
   await fenceManagedEdit(env,provider,roleId);
  }
@@ -108,6 +110,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  let version=await existingOperation();
  const checkVersion=(candidate:VersionRow|null)=>{
   if(!candidate)return null;
+  if(!candidate.submission_id&&['cancelling','superseded'].includes(candidate.state))throw new HttpError(409,'hosting_operation_conflict');
   if(candidate.update_kind!==intent.updateKind||candidate.update_note!==intent.updateNote)throw new HttpError(409,'hosting_operation_conflict');
   const saved:PublicationConsent|null=candidate.visibility_consent?JSON.parse(candidate.visibility_consent) as PublicationConsent:null;
   if(!!saved!==!!input.expectedVisibility||saved&&(saved.policyRevision!==input.expectedVisibility?.policyRevision||saved.approvalRevision!==input.expectedVisibility?.approvalRevision))throw new HttpError(409,'visibility_operation_conflict');
@@ -148,10 +151,17 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   try{
    await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,visibility_consent,update_kind,update_note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
     .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,consent?JSON.stringify(consent):null,intent.updateKind,intent.updateNote).run();
-  }catch(error){if(!await existingOperation())throw new HttpError(409,'submission_pending');}
+  }catch(error){
+   if(!await existingOperation()){
+    const occupied=await db.prepare("SELECT 1 FROM hosting_versions WHERE work_id=? AND state IN ('preparing','cancelling')").bind(work.id).first();
+    if(occupied)throw new HttpError(409,'hosting_operation_conflict');
+    throw error;
+   }
+  }
   version=await existingOperation();
  }
  if(!version)throw new HttpError(502,'hosting_seal_failed');
+ try {
  checkVersion(version);
  if(consent){
   if(version.visibility_consent!==JSON.stringify(consent))throw new HttpError(409,'visibility_operation_conflict');
@@ -165,7 +175,6 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
    consent=next;
   }
  }
- try {
  await db.prepare("UPDATE hosting_versions SET state='preparing' WHERE version_id=? AND submission_id IS NULL").bind(version.version_id).run();
  const receipt=await hostGateway.seal(env,input.token,input.role.roleId,work.id,version.version_id,provider);
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
@@ -205,8 +214,10 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  return receiptOf(stored);
  } catch(error) {
   if(isTransferHeld(error))throw error;
-  await db.prepare("UPDATE hosting_versions SET state='failed' WHERE version_id=? AND submission_id IS NULL").bind(version.version_id).run();
+  const managed=await managedWork(db,provider,input.role.roleId);
+  if(managed?.epoch!==0)await db.prepare("UPDATE hosting_versions SET state='failed' WHERE version_id=? AND submission_id IS NULL AND state='preparing'").bind(version.version_id).run();
   if(/weekly_quota_exceeded|registration_pack_unavailable/.test(String(error)))throw new HttpError(403,'weekly_quota_exceeded');
+  if(String(error).includes('hosting_operation_conflict'))throw new HttpError(409,'hosting_operation_conflict');
   if(!(error instanceof HttpError))throw new HttpError(503,'visibility_sync_pending');
   throw error;
  }

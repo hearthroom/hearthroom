@@ -5,6 +5,11 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  publication_recovery: {
+    name:'hearthroom_publication_recovery_total',
+    help:'Publication operation readback and author-initiated cancellation outcomes.',
+    label:'operation', operations:['read','cancel'], outcomes:['complete','pending','conflict','error'],
+  },
   card_update: {
     name:'hearthroom_card_update_notifications_total',
     help:'Card update publication events and notification cooldown admission blocks; queued counts events, not device delivery.',
