@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "部分從外站搬來的卡，點 AI 回覆下方選項時，收起的輸入框也能填入文字。",
+    "zh-Hans": "部分从外站导入的卡，点击 AI 回复下方选项时，收起的输入框也能填入文字。",
+    "en": "On some cards imported from other platforms, choices below AI replies now fill the message box even when it’s collapsed.",
+    "ja": "他サイトから移した一部のカードで、入力欄を閉じていてもAI返信下の選択肢を押すと文章が入ります。",
+    "ko": "외부에서 가져온 일부 카드에서 입력창을 접어도 AI 답변 아래 선택지를 누르면 입력창에 글이 들어가요."
+  }
+}
