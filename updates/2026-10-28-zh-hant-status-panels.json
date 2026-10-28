@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "部分簡體卡片的狀態欄與面板，在繁體中文介面下恢復正常顯示。",
+    "zh-Hans": "部分简体卡片的状态栏和面板，在繁体中文界面下恢复正常显示。",
+    "en": "Some Simplified Chinese cards now show their status bars and panels correctly in the Traditional Chinese interface.",
+    "ja": "一部の簡体字カードのステータス欄やパネルが、繁体字中国語の画面でも正しく表示されます。",
+    "ko": "중국어 번체 화면에서도 일부 간체 카드의 상태 표시줄과 패널이 정상적으로 표시돼요."
+  }
+}
