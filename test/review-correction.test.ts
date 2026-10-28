@@ -17,8 +17,8 @@ beforeEach(async () => {
 });
 afterEach(() => {restoreUpstream(); reviewOff();});
 
-async function approved() {
-  const result = await SELF.fetch('https://c.test/v1/cards', {method:'POST', headers:{...bearer('author'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'role-1',...ratingBody(false),operationId:crypto.randomUUID()})});
+async function approved(intent:Record<string,unknown>={}) {
+  const result = await SELF.fetch('https://c.test/v1/cards', {method:'POST', headers:{...bearer('author'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'role-1',...ratingBody(false),operationId:crypto.randomUUID(),...intent})});
   expect([200,201]).toContain(result.status);
   const s=await env.DB.prepare('SELECT id FROM review_submissions ORDER BY rowid DESC LIMIT 1').first<{id:string}>();
   const claim=await SELF.fetch(`https://c.test/v1/review/${s!.id}/claim`, {method:'POST',headers:bearer('reviewer')});
@@ -149,6 +149,7 @@ it('releases a definitively refused stale-epoch intent so the reviewer can reloa
   return change(env,provider,source,command,token);
  };
  expect((await correct(id)).status).toBe(409);
+ expect((await env.DB.prepare('SELECT state FROM review_corrections').first<{state:string}>())!.state).toBe('conflict');
  expect((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first<{status:string}>())!.status).toBe('approved');
  expect((await env.DB.prepare('SELECT sync_state FROM managed_work_access').first<{sync_state:string}>())!.sync_state).toBe('complete');
  workPolicyGateway.change=change;
@@ -181,9 +182,17 @@ it('does not let an unadmitted correction preempt a moderation fence during reco
  await env.DB.prepare("UPDATE moderation_state SET public_blocked=1 WHERE source_role_id='role-1'").run();
  await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing',sync_operation_id='moderation-owner' WHERE source_role_id='role-1'").run();
  expect((await correct(id)).status).toBe(409);
+ expect((await env.DB.prepare('SELECT state FROM review_corrections').first<{state:string}>())!.state).toBe('conflict');
  const result=await reconcileWorkAccess(env);
  expect(result.complete).toBe(1);
  expect((await env.DB.prepare('SELECT restriction,confirmed_moderation_revision,moderation_revision FROM managed_work_access').first())).toEqual({restriction:'suspended',confirmed_moderation_revision:1,moderation_revision:1});
+ await env.DB.prepare("UPDATE moderation_state SET public_blocked=0 WHERE source_role_id='role-1'").run();
+ await reconcileWorkAccess(env);
+ await env.DB.prepare("INSERT INTO member_follows(member_id,author_id,created_at) VALUES('member-20002',?,?)").bind(owner!.member_id,Date.now()).run();
+ await SELF.fetch('https://c.test/v1/cards/role-1/edit',{method:'POST',headers:bearer('author')});
+ const next=await approved({updateKind:'major',updateNote:'Synthetic new chapter'});
+ expect(await env.DB.prepare('SELECT e.state FROM card_update_events e JOIN hosting_versions v ON v.version_id=e.version_id WHERE v.submission_id=?').bind(next).first()).toEqual({state:'published'});
+ expect((await env.DB.prepare("SELECT count(*) n FROM community_notifications WHERE kind='followed_work'").first<{n:number}>())!.n).toBe(1);
 });
 
 it('never restores a previous approved revision that is still blocked by moderation',async()=>{

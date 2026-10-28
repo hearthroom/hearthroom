@@ -92,7 +92,7 @@ END;
 -- Restore an existing publication without announcing a new release.
 DROP TRIGGER community_publication_update;
 CREATE TRIGGER community_publication_update AFTER UPDATE OF status ON cards
-WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state IN ('pending','applying')) AND NEW.status='approved' AND NEW.public_blocked=0 AND NEW.board_hidden=0
+WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state='applying') AND NEW.status='approved' AND NEW.public_blocked=0 AND NEW.board_hidden=0
  AND (OLD.status='pending' OR (OLD.status='unshared' AND NEW.approved_version_id IS OLD.last_public_version_id))
 BEGIN
  INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,author_id,actor_id,card_id,extra)
@@ -106,7 +106,7 @@ END;
 -- Restore an existing publication without announcing a new release.
 DROP TRIGGER card_update_publication_guard;
 CREATE TRIGGER card_update_publication_guard BEFORE UPDATE OF status,approved_version_id ON cards
-WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state IN ('pending','applying')) AND NEW.status='approved' AND NEW.approved_version_id IS NOT OLD.last_public_version_id
+WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state='applying') AND NEW.status='approved' AND NEW.approved_version_id IS NOT OLD.last_public_version_id
  AND EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=NEW.approved_version_id AND update_kind='major')
  AND NOT EXISTS(SELECT 1 FROM card_update_events WHERE version_id=NEW.approved_version_id)
 BEGIN SELECT RAISE(ABORT,'update_notification_not_reserved'); END;
@@ -114,7 +114,7 @@ BEGIN SELECT RAISE(ABORT,'update_notification_not_reserved'); END;
 -- Restore an existing publication without announcing a new release.
 DROP TRIGGER card_update_publication;
 CREATE TRIGGER card_update_publication AFTER UPDATE OF status,approved_version_id ON cards
-WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state IN ('pending','applying')) AND NEW.status='approved' AND NEW.approved_version_id IS NOT OLD.last_public_version_id
+WHEN NOT EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id IN (SELECT id FROM review_submissions WHERE card_id=NEW.id) AND x.state='applying') AND NEW.status='approved' AND NEW.approved_version_id IS NOT OLD.last_public_version_id
 BEGIN
  UPDATE card_update_events SET state='published',published_at=CAST(unixepoch('subsec')*1000 AS INTEGER)
  WHERE version_id=NEW.approved_version_id AND state='reserved';

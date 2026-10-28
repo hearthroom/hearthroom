@@ -45,7 +45,7 @@ let loadSequence=0;
 let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
-watch(id,()=>{cancelOwnedConfirm();data.value=null;correctionOpen.value=false;correctionNote.value='';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';correctionOpen.value=false;correctionNote.value='';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -239,6 +239,7 @@ async function stamp(verdict: "approve" | "reject") {
       await load();
     }
   } catch (err) {
+    if(!active||id.value!==target)return;
     error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
@@ -262,6 +263,7 @@ async function correct(){
   done.value=t('review.correction.done')+' '+t(result.publicState==='previous_version'?'review.correction.donePrevious':result.publicState==='unpublished'?'review.correction.doneUnpublished':'review.correction.doneUnchanged');
   correctionOpen.value=false;await load();
  }catch(err){
+  if(!active||id.value!==target)return;
   const message=err instanceof ApiError&&err.code==='review_correction_reward_pending'?t('review.correction.rewardPending'):err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
   await load();
   error.value=message;
@@ -273,7 +275,7 @@ onMounted(() => { void load(); });
 
 <template>
   <section class="review-detail">
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button v-if="data" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
     <RouterLink v-if="error && !data" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
     <p v-if="data?.detail.closed" class="notice" role="status">{{ $t("review.closedPartial") }}</p>
@@ -511,7 +513,8 @@ onMounted(() => { void load(); });
           <p class="text record__note">{{data.submission.correction.note}}</p>
           <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
           <p v-if="data.submission.correction.state==='conflict'" class="notice">{{t('review.correction.changed')}}</p>
-          <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.reload')}}</button>
+          <button v-if="data.submission.correction.state==='pending'" class="btn" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button>
+          <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.action')}}</button>
         </div>
         <template v-if="data.submission.canCorrect&&(!data.submission.correction||data.submission.correction.state==='conflict')">
           <button class="btn" :disabled="busy" @click="correctionOpen=!correctionOpen">{{t('review.correction.action')}}</button>
@@ -521,7 +524,7 @@ onMounted(() => { void load(); });
             <label for="correction-note">{{t('review.correction.reason')}}</label>
             <textarea autocomplete="off" id="correction-note" v-model="correctionNote" class="input" rows="5" maxlength="2000" :disabled="busy" />
             <p class="subtle">{{t('review.correction.reasonHint')}}</p>
-            <button class="btn" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
+            <button class="btn btn--lg" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
           </div>
         </template>
         <!-- 駁回說明可能很長（逐條列問題）：不能塞進固定高度的 chip，會溢出去壓到下面的輸入框 -->

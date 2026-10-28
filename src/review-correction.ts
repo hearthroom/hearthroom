@@ -76,7 +76,7 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
    db.prepare("UPDATE managed_work_access SET sync_state='changing',sync_operation_id=? WHERE work_id=? AND epoch=? AND sync_operation_id IS NULL").bind(x.operation_id,v.work_id,command.expectedEpoch),
    db.prepare(`UPDATE review_corrections SET command=?,public_version_id=?,public_state=? WHERE operation_id=? AND command IS NULL`)
     .bind(JSON.stringify(command),current?fallback?.version_id??null:card?.approved_version_id??null,current?fallback?'previous_version':'unpublished':'unchanged',x.operation_id),
-  ]);}catch(error){if(String(error).includes('review correction changed'))throw new HttpError(409,'review_correction_changed');throw error;}
+  ]);}catch(error){if(String(error).includes('review correction changed')){await db.prepare("UPDATE review_corrections SET state='conflict' WHERE operation_id=? AND state='pending' AND command IS NULL").bind(x.operation_id).run();throw new HttpError(409,'review_correction_changed');}throw error;}
   x=(await db.prepare('SELECT * FROM review_corrections WHERE operation_id=?').bind(x.operation_id).first<Correction>())!;
  }
  const command=JSON.parse(x.command!) as WorkPolicyCommand;
