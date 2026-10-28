@@ -48,3 +48,13 @@ it('announces explicit rail-menu ownership and releases it on Escape',()=>{
  (pet as unknown as {closeMenu:()=>void}).closeMenu();
  expect(change).toHaveBeenLastCalledWith(false);expect(p.idleButton.getAttribute('aria-expanded')).toBe('false');
 });
+it('keeps a visible answer and overlay ownership for a deliberate topic action',()=>{
+ const change=vi.fn();const {p}=setup(false,change);
+ const manual=pet as unknown as {guide:object;menuEl:HTMLElement;bubble:HTMLElement;closeMenu:()=>void};
+ manual.guide={id:'board',topics:[{q:'What is heat?',a:'Heat explains recent activity.'}]};
+ p.updateSidebar();p.idleButton.click();
+ [...manual.menuEl.querySelectorAll('button')].find(b=>b.textContent==='What is heat?')!.click();
+ expect(manual.bubble.hidden).toBe(false);expect(manual.bubble.textContent).toBe('Heat explains recent activity.');
+ expect(p.el.classList.contains('suki-pet--sidebar-idle')).toBe(false);expect(change).toHaveBeenLastCalledWith(true);
+ manual.closeMenu();expect(manual.bubble.hidden).toBe(true);expect(change).toHaveBeenLastCalledWith(false);
+});

@@ -256,8 +256,8 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--sidebar-expanded { transition: opacity var(--dur-base, 250ms); }
 .suki-pet--sidebar-avatar { pointer-events: none; }
-.suki-pet--sidebar-avatar .suki-pet__menu { pointer-events: auto; }
-.suki-pet--sidebar-avatar .suki-pet__canvas, .suki-pet--sidebar-avatar .suki-pet__hit, .suki-pet--sidebar-avatar .suki-pet__bubble { visibility: hidden; pointer-events: none; }
+.suki-pet--sidebar-avatar .suki-pet__menu, .suki-pet--sidebar-avatar .suki-pet__bubble { pointer-events: auto; }
+.suki-pet--sidebar-avatar .suki-pet__canvas, .suki-pet--sidebar-avatar .suki-pet__hit { visibility: hidden; pointer-events: none; }
 .suki-pet--sidebar-idle { visibility: hidden; opacity: 0; pointer-events: none; }
 .suki-pet__idle { position: fixed; right: 8px; bottom: 8px; z-index: 45; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-md); cursor: pointer; overflow: hidden; }
 .suki-pet__idle img { display: block; width: 100%; height: 100%; object-fit: cover; }

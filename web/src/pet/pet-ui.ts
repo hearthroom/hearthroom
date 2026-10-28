@@ -283,7 +283,7 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.opts.onSidebarMenuChange?.(false); this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
+  stop() { this.closeMenu(); this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
@@ -312,7 +312,10 @@ export class SukiPet {
     this.menuEl.replaceChildren(...items.map((it) => {
       const b = document.createElement("button");
       b.type = "button"; b.setAttribute("role", "menuitem"); b.textContent = it.label;
-      b.addEventListener("click", (e) => { e.stopPropagation(); this.closeMenu(); it.run(); });
+      b.addEventListener("click", (e) => {
+        e.stopPropagation(); this.closeMenu(this.sidebarAwake); it.run();
+        if (this.sidebarAwake && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
+      });
       return b;
     }));
     this.bubble.hidden = true;
@@ -332,26 +335,31 @@ export class SukiPet {
   private outside = (e: Event) => {
     const t = e.target as Node;
     // 點選單項目由項目自己收；點她本人由她的按下處理（收起選單、不另外起反應）
-    if (this.menuEl.contains(t) || this.touch.contains(t)) return;
+    if (this.menuEl.contains(t) || this.touch.contains(t) || (this.sidebarAwake && this.bubble.contains(t))) return;
     this.closeMenu();
   };
   private escape = (e: KeyboardEvent) => { if (e.key === "Escape") { this.closeMenu(); if (this.sidebarDocked) this.idleButton.focus({ preventScroll: true }); } };
   private menuTimer = 0;
-  private closeMenu() {
-    this.opts.onSidebarMenuChange?.(false);
-    if (this.sidebarDocked && this.sidebarAwake) {
-      this.sidebarAwake = false;
-      this.el.classList.add("suki-pet--sidebar-idle");
-      this.el.classList.remove("suki-pet--sidebar-expanded");
-      this.idleButton.setAttribute("aria-expanded", "false");
+  private closeMenu(keepSidebarAnswer = false) {
+    // Menu actions may immediately speak. Keep their explicit interaction alive
+    // until the answer closes; automatic idle chatter must stay suppressed.
+    if (!keepSidebarAnswer) {
+      this.opts.onSidebarMenuChange?.(false);
+      if (this.sidebarDocked && this.sidebarAwake) {
+        this.sidebarAwake = false;
+        this.bubble.hidden = true;
+        this.el.classList.add("suki-pet--sidebar-idle");
+        this.el.classList.remove("suki-pet--sidebar-expanded");
+        this.idleButton.setAttribute("aria-expanded", "false");
+      }
+      document.removeEventListener("pointerdown", this.outside, true);
+      document.removeEventListener("touchstart", this.outside, true);
+      document.removeEventListener("keydown", this.escape, true);
     }
     clearTimeout(this.menuTimer);
-    document.removeEventListener("pointerdown", this.outside, true);
-    document.removeEventListener("touchstart", this.outside, true);
-    document.removeEventListener("keydown", this.escape, true);
     if (this.menuEl.hidden) return;
     this.menuEl.hidden = true;
-    setTimeout(() => this.drainQueue(), 400);
+    if (!keepSidebarAnswer) setTimeout(() => this.drainQueue(), 400);
   }
 
   /** 照顧的消息：餵飽了、餓了、升級、連續天數、好久不見；一次只講最重要的一件 */
@@ -431,7 +439,7 @@ export class SukiPet {
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
-    if (a.say && urgent) this.closeMenu();
+    if (a.say && urgent) this.closeMenu(this.sidebarAwake);
     if (urgent) this.queue = [];
     if (a.expr) { for (const k of EXPRS) this.exprTarget[k] = 0; this.exprTarget[a.expr] = 1; }
     this.actUntil = now + (a.ms ?? 1800);
@@ -587,6 +595,7 @@ export class SukiPet {
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
     if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.drainQueue(); }
+    if (this.sidebarAwake && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
   }
 
   // ---- 自主行動（瑞星小獅子、Office 迴紋針、拓麻歌子：她自己會走、會換姿勢、會自己玩） ----
