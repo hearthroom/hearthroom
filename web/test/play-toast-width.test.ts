@@ -34,11 +34,11 @@ it('gives the fixed toast its available viewport width without covering the sand
     const rows = JSON.parse(json!);
     expect(rows).toHaveLength(widths.length);
     for (const row of rows) {
-      expect(row.width, `viewport ${row.viewport}`).toBeCloseTo(Math.min(row.viewport * .9, 480), 1);
+      expect(row.bottom, `opening at ${row.viewport}`).toBeLessThanOrEqual(row.opening);
+      expect(row.width, `viewport ${row.viewport}`).toBeCloseTo(Math.min(row.viewport - 16, 480), 1);
       expect(row.overflow).toBe(false);
       expect(row.hit).toBe('none');
       expect(row.shortWidth, 'short feedback stays compact').toBeLessThan(160);
-      if (row.viewport >= 390) expect(row.bottom, `opening at ${row.viewport}`).toBeLessThanOrEqual(row.opening);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 30000);
