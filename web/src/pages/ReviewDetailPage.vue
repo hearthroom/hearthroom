@@ -6,7 +6,7 @@
  * 正規表示式規則與常駐區塊的原文，外加成本側寫。要看效果按「試玩」開遊玩頁。
  * 分區沿用編輯頁的分法（基本／人設／對話／世界書），只是每一格都是唯讀。不顯示作者。
  */
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -40,6 +40,8 @@ const busy = ref(false);
 const note = ref("");
 const correctionNote=ref('');
 const correctionOpen=ref(false);
+const correctionError=ref('');
+const correctionErrorNotice=ref<HTMLElement|null>(null);
 let active=true;
 let loadSequence=0;
 let ownedConfirm:typeof confirmState.current=null;
@@ -50,8 +52,8 @@ async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
 }
-function summary(name:string,submittedAt:number,verdict:string,reason:string){
- return `${t('review.confirm.card')}: ${name}\n${t('review.confirm.version')}: ${dateTime(submittedAt)}\n${t('review.confirm.decision')}: ${verdict}\n${t('review.confirm.note')}: ${reason||t('review.confirm.noNote')}`;
+function summary(name:string,submittedAt:number,verdict:string,reason:string,reasonKey='review.confirm.note'){
+ return `${t('review.confirm.card')}: ${name}\n${t('review.confirm.version')}: ${dateTime(submittedAt)}\n${t('review.confirm.decision')}: ${verdict}\n${t(reasonKey)}: ${reason||t('review.confirm.noNote')}`;
 }
 const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
@@ -170,6 +172,7 @@ async function token() {
 async function load() {
   const seq=++loadSequence,target=id.value;
   error.value = "";
+  correctionError.value = '';
   loading.value = !data.value;
   try {
     needsClaim.value=false;
@@ -250,11 +253,11 @@ async function correct(){
  if(busy.value||!data.value||data.value.submission.id!==id.value)return;
  const review=data.value,target=id.value,pending=review.submission.correction;
  const reason=pending?.state==='pending'?pending.note:correctionNote.value.trim();
- if(!reason){error.value=t('review.correction.reasonRequired');return;}
- busy.value=true;error.value='';
+ if(!reason){correctionError.value=t('review.correction.reasonRequired');return;}
+ busy.value=true;error.value='';correctionError.value='';
  try{
   const confirmedToken=await token();
-  if(!await decisionConfirm({scrollMessage:true,title:t('review.correction.confirmTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,`${t('review.action.approve')} → ${t('review.action.reject')}`,reason)+'\n\n'+t('review.correction.confirmBody')+'\n'+t('review.correction.publicEffect'),confirmText:t('review.correction.confirm'),cancelText:t('review.correction.back'),danger:true,dangerAppearance:'subdued'}))return;
+  if(!await decisionConfirm({scrollMessage:true,title:t('review.correction.confirmTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,`${t('review.action.approve')} → ${t('review.action.reject')}`,reason,'review.correction.reason')+'\n\n'+t('review.correction.confirmBody')+'\n'+t('review.correction.publicEffect'),confirmText:t('review.correction.confirm'),cancelText:t('review.correction.back'),danger:true,dangerAppearance:'subdued'}))return;
   if(!active||id.value!==target||data.value!==review)return;
   const operationId=pending?.state==='pending'?pending.operationId:crypto.randomUUID();
   if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
@@ -266,7 +269,12 @@ async function correct(){
   if(!active||id.value!==target)return;
   const message=err instanceof ApiError&&err.code==='review_correction_reward_pending'?t('review.correction.rewardPending'):err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
   await load();
-  error.value=message;
+  if(!active||id.value!==target)return;
+  correctionError.value=message;
+  await nextTick();
+  if(!active||id.value!==target)return;
+  correctionErrorNotice.value?.focus({preventScroll:true});
+  correctionErrorNotice.value?.scrollIntoView({block:'start'});
  }finally{busy.value=false;}
 }
 
@@ -507,6 +515,7 @@ onMounted(() => { void load(); });
 
       <section class="verdict panel">
         <RouterLink class="link" :to="lp('/review/decisions')">{{t('review.history.title')}}</RouterLink>
+        <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
         <div v-if="data.submission.correction" class="records">
           <h3>{{t('review.correction.recordTitle')}}</h3>
           <p>{{dateTime(data.submission.correction.at)}}</p>
@@ -558,6 +567,8 @@ onMounted(() => { void load(); });
 </template>
 
 <style scoped>
+.link, .link:hover { color: var(--accent-text); }
+.correction-error { scroll-margin-block-start: calc(var(--header-h) + var(--s-4)); }
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-4); }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 2px 0; }
 .head__acts { display: flex; gap: var(--s-2); }

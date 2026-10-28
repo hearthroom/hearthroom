@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code=''){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code=''){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -92,6 +92,35 @@ it('clears the old actionable submission immediately while the next route detail
  await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeNull());
  expect(confirmState.current).toBeNull();
  release({...pendingDetail(),submission:{...pendingDetail().submission,id:'s2'}});
+});
+
+it.each([
+ ['review_correction_reward_pending','review.correction.rewardPending'],
+ ['review_correction_unknown','review.correction.unknown'],
+])('focuses the correction error and offers a read-only reload after %s',async(code,key)=>{
+ const detail=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...detail,submission:{...detail.submission,status:'approved',canCorrect:true,claimedByMe:false,stampedByMe:true}});
+ api.correctReviewDecision.mockRejectedValue(new api.ApiError(503,'request failed',code));
+ await remount();
+ const action=()=>[...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.correction.action'))!;
+ await vi.waitFor(()=>expect(action()).toBeTruthy());action().click();
+ await vi.waitFor(()=>expect(el.querySelector('#correction-note')).toBeTruthy());
+ const input=el.querySelector<HTMLTextAreaElement>('#correction-note')!;
+ input.value='The setting needs more detail.';input.dispatchEvent(new Event('input',{bubbles:true}));
+ await vi.waitFor(()=>expect([...el.querySelectorAll('button')].filter(b=>b.textContent?.trim()===i18n.global.t('review.correction.action')).at(-1)?.disabled).toBe(false));
+ [...el.querySelectorAll('button')].filter(b=>b.textContent?.trim()===i18n.global.t('review.correction.action')).at(-1)!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(confirmState.current!.message).toContain(i18n.global.t('review.correction.reason')+': The setting needs more detail.');
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.correctReviewDecision).toHaveBeenCalledTimes(1));
+ await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t(key)));
+ const notice=el.querySelector<HTMLElement>('.verdict [role="alert"]')!;
+ await vi.waitFor(()=>expect(document.activeElement).toBe(notice));
+ expect(input.value).toBe('The setting needs more detail.');
+ notice.querySelector('button')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')).toBeNull());
+ expect(api.fetchReviewDetail).toHaveBeenCalledTimes(3);
+ expect(api.correctReviewDecision).toHaveBeenCalledTimes(1);
 });
 
 it('the reviewer holding the claim fixes a missing tag and the page shows the saved tags',async()=>{

@@ -38,5 +38,7 @@ watch(()=>[route.params.id,locale.value],()=>void load());
  </section>
 </template>
 <style scoped>
+.link, .link:hover { color: var(--accent-text); }
+.record:lang(ko) { word-break: keep-all; }
 .result,.record{display:grid;gap:var(--s-4)}.result{padding-block:var(--s-5)}.record{padding:var(--s-5);overflow-wrap:anywhere}.reason{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}.placeholder{height:160px;border-radius:var(--r-md)}h1{font-size:22px}h2{font-size:18px}h3{font-size:16px}
 </style>
