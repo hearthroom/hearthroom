@@ -7,7 +7,7 @@ import { headerOverlaysKey } from '@/lib/site-links';
 import { useMediaQuery } from '@/lib/use-media';
 const checkin = useCheckin(), session = useSession(), { lp } = useLocalePath();
 const overlays = inject(headerOverlaysKey, new Set<symbol>());
-const narrow = useMediaQuery('(max-width: 640px)');
+const narrow = useMediaQuery('(max-width: 700px)');
 const visible = ref(false), reserved = ref(false), used = ref(false);
 const placement = ref<Record<string, string>>({});
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -49,7 +49,7 @@ onBeforeUnmount(() => { clearTimeout(timer); window.removeEventListener('resize'
 .checkin-hint a { min-width: 0; min-height: var(--h-sm); display: flex; align-items: center; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; color: var(--text-2); }
 .checkin-hint button { flex: none; width: var(--h-sm); }
 .checkin-hint svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; }
-@media(max-width:640px) {
+@media(max-width:700px) {
   .checkin-hint-slot--reserved { display: block; min-height: 56px; position: relative; }
   .checkin-hint { position: absolute; top: var(--s-2); right: var(--s-4); }
 }

@@ -51,6 +51,8 @@ export interface PetOptions {
   canListEnd?: () => boolean;
   /** Present only while the homepage desktop sidebar is mounted. */
   sidebarBounds?: () => SidebarRect | null;
+  /** A deliberate homepage rail popup owns interaction until it closes. */
+  onSidebarMenuChange?: (open: boolean) => void;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
   menu?: () => MenuItem[];
   /** 每天第一次來擲的「今天的幸運類型」 */
@@ -132,6 +134,7 @@ export class SukiPet {
   private updateSidebar() {
     const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
     if (!bounds) {
+      this.opts.onSidebarMenuChange?.(false);
       if (!this.sidebarDocked && !this.sidebarPosition) return;
       const wasIdle = this.sidebarIdle;
       if (this.sidebarPosition) this.place(this.sidebarPosition);
@@ -280,7 +283,7 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
+  stop() { this.opts.onSidebarMenuChange?.(false); this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
@@ -314,6 +317,7 @@ export class SukiPet {
     }));
     this.bubble.hidden = true;
     this.menuEl.hidden = false;
+    this.opts.onSidebarMenuChange?.(this.sidebarDocked);
     this.fitPopups();
     this.act({ expr: "happy" });
     clearTimeout(this.menuTimer);
@@ -334,6 +338,13 @@ export class SukiPet {
   private escape = (e: KeyboardEvent) => { if (e.key === "Escape") { this.closeMenu(); if (this.sidebarDocked) this.idleButton.focus({ preventScroll: true }); } };
   private menuTimer = 0;
   private closeMenu() {
+    this.opts.onSidebarMenuChange?.(false);
+    if (this.sidebarDocked && this.sidebarAwake) {
+      this.sidebarAwake = false;
+      this.el.classList.add("suki-pet--sidebar-idle");
+      this.el.classList.remove("suki-pet--sidebar-expanded");
+      this.idleButton.setAttribute("aria-expanded", "false");
+    }
     clearTimeout(this.menuTimer);
     document.removeEventListener("pointerdown", this.outside, true);
     document.removeEventListener("touchstart", this.outside, true);
@@ -1274,10 +1285,13 @@ export class SukiPet {
       const bounds = this.opts.sidebarBounds?.();
       for (const el of [this.bubble, this.menuEl]) {
         if (!bounds || !this.sidebarAwake || el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
+        const minimumTop = Math.max(8, (document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0) + 8);
+        const available = `${Math.max(0, innerHeight - minimumTop - 8)}px`;
+        if (el.style.maxHeight !== available) { el.style.maxHeight = available; el.style.overflowY = 'auto'; }
         const r = el.getBoundingClientRect();
         const previous = el.style.translate.split(" ").map(v => parseFloat(v) || 0);
         const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
-        let x = left, y = Math.max(8, Math.min(top, innerHeight - 8 - r.height));
+        let x = left, y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
         if (x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
         const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
         if (el.style.translate !== translate) el.style.translate = translate;

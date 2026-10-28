@@ -15,7 +15,7 @@ async function mount(){
  root=document.createElement('div');document.body.append(root);app=createApp(CheckinHint).use(router).use(i18n).provide(headerOverlaysKey,overlays);app.mount(root);await nextTick();
 }
 beforeEach(()=>{vi.useFakeTimers();setActivePinia(createPinia());overlays.clear();useSession().me={accountNumId:1} as any;});
-afterEach(()=>{app?.unmount();root?.remove();vi.useRealTimers();});
+afterEach(()=>{app?.unmount();root?.remove();vi.useRealTimers();vi.unstubAllGlobals();});
 it('only shows a confirmed pending check-in and navigates without claiming',async()=>{
  const store=useCheckin();await mount();expect(root.querySelector('[data-checkin-hint]')).toBeNull();
  store.panel={checkin:{todayClaimed:false}} as any;await nextTick();expect(root.querySelector('a')?.getAttribute('href')).toBe('/checkin');
@@ -31,4 +31,10 @@ it('dismisses on menu open or account change and never reopens on that page',asy
  const store=useCheckin();store.panel={checkin:{todayClaimed:false}} as any;await mount();expect(root.querySelector('[data-checkin-hint]')).not.toBeNull();
  overlays.add(Symbol());await nextTick();expect(root.querySelector('[data-checkin-hint]')).toBeNull();overlays.clear();await nextTick();expect(root.querySelector('[data-checkin-hint]')).toBeNull();
  useSession().me={accountNumId:2} as any;store.panel={checkin:{todayClaimed:false}} as any;await nextTick();expect(root.querySelector('[data-checkin-hint]')).toBeNull();
+});
+it('reserves the hint slot at 680px while the mobile navigation remains visible',async()=>{
+ vi.stubGlobal('matchMedia',(query:string)=>({matches:query.includes('700px'),media:query,addEventListener:()=>{},removeEventListener:()=>{}}));
+ useCheckin().panel={checkin:{todayClaimed:false}} as any;await mount();
+ expect(root.querySelector('.checkin-hint-slot--reserved')).not.toBeNull();
+ vi.unstubAllGlobals();
 });

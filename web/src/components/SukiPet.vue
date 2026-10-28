@@ -6,10 +6,10 @@
  * 頁面載完（load 事件）、瀏覽器空閒才載入（動態 import），不拖慢第一眼；可在設定裡關掉。
  * 這裡只做「網站 → 她」的接線：她怎麼演在 pet/pet-ui.ts，各頁的用途在 pet/guides.ts。
  */
-import { computed, inject, onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { sidebarBoundsKey } from "@/lib/site-links";
+import { sidebarBoundsKey, useHeaderOverlay } from "@/lib/site-links";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { useNotifications, noticeText } from "@/lib/notifications";
@@ -31,6 +31,8 @@ import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
 const props = withDefaults(defineProps<{ listEndAllowed?: boolean }>(), { listEndAllowed: true });
 const sidebarBounds = inject(sidebarBoundsKey, undefined);
+const sidebarMenuOpen = ref(false);
+useHeaderOverlay(sidebarMenuOpen);
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -125,6 +127,7 @@ async function start() {
     // petQuiet：不分手機桌機都不招呼（錢包、機率頁的泡泡會蓋到主按鈕與紀錄，美術總監最終 r2 M8）
     canListEnd: () => props.listEndAllowed,
     sidebarBounds: () => sidebarBounds?.value ?? null,
+    onSidebarMenuChange: open => { sidebarMenuOpen.value = open; },
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     quietReading: () => mobile && reviewingDetail.value,
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -252,6 +255,8 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 /* 桌寵的外觀（全域：她掛在 body 上，不在這個元件的 DOM 裡）。泡泡與選單固定白底深字，不跟站台主題換色 */
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--sidebar-expanded { transition: opacity var(--dur-base, 250ms); }
+.suki-pet--sidebar-avatar { pointer-events: none; }
+.suki-pet--sidebar-avatar .suki-pet__menu { pointer-events: auto; }
 .suki-pet--sidebar-avatar .suki-pet__canvas, .suki-pet--sidebar-avatar .suki-pet__hit, .suki-pet--sidebar-avatar .suki-pet__bubble { visibility: hidden; pointer-events: none; }
 .suki-pet--sidebar-idle { visibility: hidden; opacity: 0; pointer-events: none; }
 .suki-pet__idle { position: fixed; right: 8px; bottom: 8px; z-index: 45; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-md); cursor: pointer; overflow: hidden; }

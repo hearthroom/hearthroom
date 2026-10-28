@@ -3,9 +3,9 @@ import { SukiPet, type PetOptions } from '../src/pet/pet-ui';
 import type { SidebarRect } from '../src/lib/sidebar-clearance';
 let pet: SukiPet;
 afterEach(() => { pet?.stop(); vi.restoreAllMocks(); });
-function setup(mobile = false) {
+function setup(mobile = false, onSidebarMenuChange = vi.fn()) {
   let bounds: SidebarRect | null = { left: 792, right: 1056, top: 428, bottom: 568 };
-  pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 220, line: key => key, mobile, sidebarBounds: () => bounds } as PetOptions);
+  pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 220, line: key => key, mobile, onSidebarMenuChange, sidebarBounds: () => bounds } as PetOptions);
   const p = pet as unknown as { updateSidebar: () => void; box: () => object; place: (p: object) => void; fitPopups: () => void; driver: object; el: HTMLElement; bubble: HTMLElement; idleButton: HTMLButtonElement };
   vi.spyOn(p, 'box').mockReturnValue({ left: 909, top: 372, width: 146, height: 220, right: 1055 });
   vi.spyOn(p, 'place').mockImplementation(() => {});
@@ -38,4 +38,13 @@ it('does not introduce the desktop avatar fallback on phone pages', () => {
 it('docks for partial rail overlap even when another operation row remains clear',()=>{
  const {p}=setup();vi.mocked(p.box).mockReturnValue({left:909,right:1055,top:500,width:146,height:220});
  p.updateSidebar();expect(p.idleButton.hidden).toBe(false);expect(p.el.classList.contains('suki-pet--sidebar-idle')).toBe(true);
+});
+
+it('announces explicit rail-menu ownership and releases it on Escape',()=>{
+ const change=vi.fn();const {p}=setup(false,change);p.updateSidebar();p.idleButton.click();
+ expect(change).toHaveBeenLastCalledWith(true);
+ document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ // The listener is registered on the next task; test the same close path directly.
+ (pet as unknown as {closeMenu:()=>void}).closeMenu();
+ expect(change).toHaveBeenLastCalledWith(false);expect(p.idleButton.getAttribute('aria-expanded')).toBe('false');
 });
