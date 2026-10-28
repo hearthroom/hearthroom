@@ -1,3 +1,4 @@
+import { reviewLength } from './review-length';
 /**
  * 審核讀取：本站自己的事，不靠供應商的分享介面。
  *
@@ -116,6 +117,7 @@ export function reviewRecord(settings: ReviewSettings): ReviewSettings {
     slim: true,
     document: { roleName: doc.roleName ?? "", userName: doc.userName ?? "", roleDetailDesc: doc.roleDetailDesc ?? "" },
     ...(settings.costProfile ? { costProfile: settings.costProfile } : {}),
+    reviewLength: reviewLength(settings),
     hashes: settings.hashes,
   };
 }
@@ -184,12 +186,13 @@ async function projectForReview(call: TransferCall, roleId: string): Promise<Rev
     authorAsset: await sha256(authorAsset),
   };
   const hashes = { ...parts, content: `sha256:${await sha256(parts)}` };
-  return {
+  const settings = {
     document, greetings,
     // 審核頁一次看一本；綁了多本的全部放在 worldbooks。
     worldbook: books[0] ?? null, worldbooks: books, worldbookAvailable: true,
     authorAsset, hashes, costProfile,
   };
+  return {...settings, reviewLength:reviewLength(settings)};
 }
 
 /**

@@ -126,7 +126,7 @@ it.each(['cancel','finalize'] as const)('keeps the real final submission transac
  const prepared:WorkPolicyReceipt={sourceRoleId:x.draft.roleId,workId:x.work,operationId:x.permit,access:'public',restriction:'none',epoch:3,state:'prepared',replayed:false};
  vi.spyOn(hostGateway,'seal').mockResolvedValue({workId:x.work,versionId:x.version,hostedRevisionId:'sealed-fixture'});
  vi.spyOn(hostGateway,'read').mockResolvedValue({...x.draft,roleId:'sealed-fixture'});
- vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'這是只用於交易競態驗證的合成角色設定，包含足夠長的背景與角色互動規則。'.repeat(8)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'這是只用於交易競態驗證的合成角色設定，包含足夠長的背景與角色互動規則。'.repeat(100)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  vi.spyOn(workPolicyGateway,'state').mockImplementation(async()=>({...prepared,epoch}));
  vi.spyOn(workPolicyGateway,'operation').mockImplementation(async(_e,_p,_s,_w,operation)=>operation===x.permit?prepared:null);
  vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,command)=>{

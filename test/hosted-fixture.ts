@@ -14,7 +14,7 @@ export function hostedFixture(){
   if(!frozenFixtureRoles.has(hostedRevisionId))frozenFixtureRoles.set(hostedRevisionId,{...await hostGateway.read(e,token,id,provider),roleId:hostedRevisionId});
   return {workId,versionId,hostedRevisionId};
  };
- upstream.readForReview=async()=>({document:{roleDetailDesc:'Private fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ upstream.readForReview=async()=>({document:{roleDetailDesc:'Private fixture'.repeat(300)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
 }
 export function restoreHostedFixture(){
  restoreLegacyPolicyFixture();

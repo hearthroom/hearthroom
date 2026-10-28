@@ -90,7 +90,7 @@ it.each(['sealed','lost-response'])('holds stale in-flight %s without cleanup, r
  const started=new Promise<void>(r=>{arrived=r;});let work='',version='';
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_source,w,v)=>{work=w;version=v;arrived();return new Promise((resolve,reject)=>{finish=resolve;fail=reject;});});
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:99101}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const pending=submitHosted(env,{memberId,account:99101,role:role({roleId:sourceRoleId,authorNumId:99101}),token:'synthetic',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
  // Attach the rejection assertion before releasing the simulated remote request.
  const rejected=expect(pending).rejects.toThrow('draft_transfer_held');

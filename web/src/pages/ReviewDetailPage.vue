@@ -7,6 +7,7 @@
  * 分區沿用編輯頁的分法（基本／人設／對話／世界書），只是每一格都是唯讀。不顯示作者。
  */
 import { computed, onMounted, ref } from "vue";
+import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
@@ -29,6 +30,7 @@ const session = useSession();
 
 const id = computed(() => String(route.params.id || ""));
 const data = ref<ReviewDetail | null>(null);
+const lengthParams = computed(()=>data.value?.detail.reviewLength?formatReviewLength(data.value.detail.reviewLength,String(locale.value)):{});
 const loading = ref(true);
 const error = ref("");
 const needsClaim = ref(false);
@@ -252,6 +254,20 @@ onMounted(() => { void load(); });
           <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
         </div>
       </header>
+
+      <section class="pane panel" data-review-length>
+        <h3>{{ $t('reviewLength.title') }}</h3>
+        <template v-if="data.detail.reviewLength">
+          <p class="length-values">
+            <span>{{ $t('reviewLength.persona', lengthParams) }}</span>
+            <span>{{ $t('reviewLength.constantWorldbook', lengthParams) }}</span>
+            <span>{{ $t('reviewLength.total', lengthParams) }}</span>
+            <strong>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
+          </p>
+          <p class="subtle">{{ $t('reviewLength.welcome', lengthParams) }}</p>
+        </template>
+        <p v-else class="subtle">{{ $t('reviewLength.unavailable') }}</p>
+      </section>
 
       <div class="seg tabs">
         <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
@@ -497,6 +513,8 @@ onMounted(() => { void load(); });
 .entry--off { opacity: 0.6; }
 .entry__head { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-2); }
 .entry__body { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+.length-values { display:flex; flex-wrap:wrap; gap:var(--s-2) var(--s-4); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+:lang(ko) .length-values { word-break:keep-all; }
 .cost { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }

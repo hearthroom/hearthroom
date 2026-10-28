@@ -14,7 +14,7 @@ async function setup() {
  const draft = role({roleId:'draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...draft,roleId:id}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'.repeat(600)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const submit = (adult=false) => submitHosted(env,{memberId,account:10001,role:draft,token:'fixture',rating:adult?ADULT_RATING:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
  const pending = async () => (await pendingSubmissionOf(env.DB,(await getCard(env.DB,'draft','harbor'))!.id))!;
  const approve = async () => { const s=await pending(); for(const memberId of s.kind==='first'?['a','b']:['c']) {await claim(env.DB,s.id,memberId,Date.now());if((await stamp(env.DB,{submissionId:s.id,memberId,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;} };

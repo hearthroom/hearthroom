@@ -405,10 +405,35 @@
             "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
           },
           "400": {
-            "description": "Invalid update type or changelog; major requires a previously published card."
+            "description": "Invalid update type or changelog; major requires a previously published card. review_length_insufficient returns detail.reviewLength: persona, constantWorldbook, total, required (3001), remaining, eligible, and informational welcome (excluded from total).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "reviewLengthInsufficient": {
+                    "value": {
+                      "error": "review_length_insufficient",
+                      "detail": {
+                        "reviewLength": {
+                          "persona": 2000,
+                          "constantWorldbook": 1000,
+                          "total": 3000,
+                          "required": 3001,
+                          "remaining": 1,
+                          "eligible": false,
+                          "welcome": 100
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
-        "description": "The optional policy/approval CAS pair must be supplied together and requires workVisibility enabled. New clients persist original operationId, intent and CAS. After unknown, read the original publication operation before retrying; never silently rebase. Legacy clients without CAS retain the existing protocol. Submission acceptance does not make a card public before approval. Updates default to silent. Explicit major intent and its changelog are part of operation identity; changing them requires a new operation after a definitive refusal. Notifications go once to the follower/favorite union only after publication, respecting notification settings. A work can publish a notification event once per 3 days; pending, rejected and withdrawn versions do not consume the interval. An unknown result must resume the same original intent."
+        "description": "The optional policy/approval CAS pair must be supplied together and requires workVisibility enabled. New clients persist original operationId, intent and CAS. After unknown, read the original publication operation before retrying; never silently rebase. Legacy clients without CAS retain the existing protocol. Submission acceptance does not make a card public before approval. Updates default to silent. Explicit major intent and its changelog are part of operation identity; changing them requires a new operation after a definitive refusal. Notifications go once to the follower/favorite union only after publication, respecting notification settings. A work can publish a notification event once per 3 days; pending, rejected and withdrawn versions do not consume the interval. An unknown result must resume the same original intent. New submissions require a combined minimum of 3001 counted characters in roleDetailDesc and enabled constant Lorebook entry contents. Draft preflight and immutable revision validation use the same calculation. Completed operations replay without retrospective checks; existing public cards are not removed by this rule."
       }
     },
     "/v1/cards/{id}": {

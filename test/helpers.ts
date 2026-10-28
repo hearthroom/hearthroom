@@ -59,6 +59,7 @@ export function reviewOff(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_
 
 const blankSettings = (roleId: string) => ({
   document: { roleName: roleId },
+  worldbooks: [{entries:[{content:"Synthetic constant setting ".repeat(150),isConstant:true,isEnabled:true}]}],
   hashes: { card: "c", welcome: "w", worldbook: "", authorAsset: "a", content: `sha256:${roleId}` },
 });
 

@@ -3487,5 +3487,21 @@
   "home.contentGroup": "我的內容",
   "home.developerGroup": "開發者資源",
   "home.siteSupportGroup": "網站與支援",
-  "home.legalGroup": "隱私與授權"
+  "home.legalGroup": "隱私與授權",
+  "reviewLength.insufficientTitle": "有效字數不足",
+  "reviewLength.insufficient": "人物設定與已啟用的世界書常駐條目合計 {total} 字，還差 {remaining} 字才能送審；兩部分可互相補足，合計至少需要 {required} 字。",
+  "reviewLength.requirement": "人物設定與已啟用的世界書常駐條目合計至少 {required} 有效字，兩部分可互相補足。",
+  "reviewLength.personaHint": "人物設定指「人設」中的「角色設定」。",
+  "reviewLength.countingHint": "中文、英文字母與數字都按字元計算，空白、標點、符號、表情符號、格式標記與模板變數不計。",
+  "reviewLength.excludedHint": "開場白、範例對話、自訂指令、非常駐條目與停用條目不計入。",
+  "reviewLength.title": "送審有效字數",
+  "reviewLength.persona": "人物設定 {persona} 字",
+  "reviewLength.constantWorldbook": "世界書常駐條目 {constantWorldbook} 字",
+  "reviewLength.total": "合計 {total} 字（至少 {required} 字）",
+  "reviewLength.eligible": "字數達標",
+  "reviewLength.ineligible": "字數未達標",
+  "reviewLength.welcome": "開場白有效字數 {welcome} 字（不計入門檻）",
+  "reviewLength.unavailable": "這份審核沒有字數統計",
+  "reviewLength.cliError": "人物設定 {persona} 字，已啟用的世界書常駐條目 {constantWorldbook} 字，合計 {total} 字；送審至少需要 {required} 有效字，還差 {remaining} 字。兩部分可互相補足，修改後先推送，再重新送審。",
+  "reviewLength.cliHelp": "送審內容以最後推送的版本為準。人物設定與已啟用的世界書常駐條目合計至少需要 {required} 有效字，兩部分可互相補足；開場白與範例對話不計入。"
 }

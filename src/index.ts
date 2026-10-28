@@ -1,3 +1,4 @@
+import { reviewLength } from './review-length';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import { maintenanceResponse, readMaintenance } from './maintenance';
 import {qaAccountControlRoutes} from './qa-account-control';
@@ -1688,6 +1689,7 @@ app.get("/v1/review/:id/detail", async (c) => {
     };
   }
   // 盲審：作者的公開 ID 不進審核頁。快照本來就不含，這裡再擋一次——組快照的那一層換了實作也不會漏。
+  if(!detail.partial)detail.reviewLength=reviewLength(detail);
   delete detail.authorNumId;
   const stamps = await c.env.DB
     .prepare("SELECT verdict, note, created_at FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")

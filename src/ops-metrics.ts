@@ -5,6 +5,7 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight and sealed revision.',label:'phase',operations:['draft','sealed'],outcomes:['eligible','insufficient']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',
     help:'Publication readback, occupied submission admission and author-initiated cancellation outcomes.',

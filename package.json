@@ -27,11 +27,14 @@
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^2.0.0",
+    "entities": "^7.0.1",
     "hono": "^4.13.5",
-    "jose": "^6.2.10"
+    "jose": "^6.2.10",
+    "markdown-it": "^14.3.3"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@types/markdown-it": "^14.2.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.0",
     "wrangler": "^4.128.0"

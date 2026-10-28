@@ -56,7 +56,7 @@ describe("審核副本不在本站", () => {
   // 本站（Cloudflare D1）單列只有 2 MB；大型世界卡的完整設定存不下。完整內容留在 Harbor 的封存版，
   // 審核時直接讀；本站只存查重要用的原文（角色描述、名字）與統計數字。
   it("本站只存查重原文，審核頁的完整內容向 Harbor 封存版讀", async () => {
-    reviewUpstream((roleId) => ({ roleId, document: { roleName: "夜行偵探", userName: "助手", roleDetailDesc: "角色描述原文", customInstructions: "自訂指示" }, worldbooks: [{ name: "世界書", entries: [{ content: "世界書條目" }] }] }));
+    reviewUpstream((roleId) => ({ roleId, document: { roleName: "夜行偵探", userName: "助手", roleDetailDesc: "角色描述原文", customInstructions: "自訂指示" }, worldbooks: [{ name: "世界書", entries: [{ content: "世界書條目".repeat(800), isConstant:true }] }] }));
     const receipt = await (await submit("role-1")).json() as any;
     const stored = (await env.DB.prepare("SELECT detail FROM review_snapshots").first<{ detail: string }>())!.detail;
     const { loadSnapshot } = await import("../src/review-snapshot");
@@ -69,7 +69,7 @@ describe("審核副本不在本站", () => {
     await act(id, "claim", "rev-a");
     const body = await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json() as any;
     expect(body.detail.document.customInstructions).toBe("自訂指示");
-    expect(body.detail.worldbooks[0].entries[0].content).toBe("世界書條目");
+    expect(body.detail.worldbooks[0].entries[0].content).toBe("世界書條目".repeat(800));
     expect(sealedReads).toEqual([{ roleId: "frozen-" + receipt.versionId, provider: "harbor" }]);
   });
 });
@@ -80,7 +80,7 @@ describe("提交", () => {
     expect(res.status).toBe(201);
     const receipt=await res.json() as any;
     expect(receipt.status).toBe("pending");
-    expect(settingsReads).toEqual([{ token: "author-token", roleId: "frozen-"+receipt.versionId, provider: "harbor" }]);
+    expect(settingsReads).toEqual([{token:"author-token",roleId:"role-1",provider:"harbor"},{ token: "author-token", roleId: "frozen-"+receipt.versionId, provider: "harbor" }]);
     expect(await board()).toHaveLength(0);
     const s = await env.DB.prepare("SELECT kind, status, content_hash FROM review_submissions").first<any>();
     expect(s).toMatchObject({ kind: "first", status: "pending" });
@@ -284,7 +284,7 @@ describe("審核佇列", () => {
     expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
     // 審核頁不再回頭問供應商：快照是唯一來源
-    expect(settingsReads).toHaveLength(1);
+    expect(settingsReads).toHaveLength(2);
     // 駁回即定案：快照刪掉
     await act(id, "claim", "rev-a");
     expect((await act(id, "stamp", "rev-a", { verdict: "reject", note: "不行" })).status).toBe(200);

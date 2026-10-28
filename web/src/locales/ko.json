@@ -3487,5 +3487,21 @@
   "home.contentGroup": "내 콘텐츠",
   "home.developerGroup": "개발자 자료",
   "home.siteSupportGroup": "사이트 및 지원",
-  "home.legalGroup": "개인정보 및 라이선스"
+  "home.legalGroup": "개인정보 및 라이선스",
+  "reviewLength.insufficientTitle": "유효 글자 수가 부족해요",
+  "reviewLength.insufficient": "캐릭터 설정과 활성화된 상시 세계관 항목을 합하면 {total}자예요. 심사 제출에 필요한 {required}자까지 {remaining}자가 더 필요하며, 어느 쪽에 내용을 추가해도 합계에 반영돼요.",
+  "reviewLength.requirement": "캐릭터 설정과 활성화된 상시 세계관 항목의 합계가 유효 글자 수 기준으로 {required}자 이상이어야 해요. 어느 쪽에 내용을 추가해도 합계에 반영돼요.",
+  "reviewLength.personaHint": "‘인물’에 있는 ‘캐릭터 설정’을 뜻해요.",
+  "reviewLength.countingHint": "한글, 한자, 영문자, 숫자는 각각 한 글자로 세요. 공백, 문장 부호, 기호, 이모지, 서식 표시, 템플릿 변수는 세지 않아요.",
+  "reviewLength.excludedHint": "첫 메시지, 대화 예시, 사용자 지정 지침, 상시가 아닌 항목, 비활성화된 항목은 포함하지 않아요.",
+  "reviewLength.title": "심사 대상 유효 글자 수",
+  "reviewLength.persona": "캐릭터 설정 {persona}자",
+  "reviewLength.constantWorldbook": "상시 세계관 항목 {constantWorldbook}자",
+  "reviewLength.total": "합계 {total}자 (최소 {required}자)",
+  "reviewLength.eligible": "글자 수 기준 충족",
+  "reviewLength.ineligible": "글자 수 부족",
+  "reviewLength.welcome": "첫 메시지 유효 글자 수 {welcome}자 (기준 합계에서 제외)",
+  "reviewLength.unavailable": "이 심사에는 글자 수 통계가 없어요",
+  "reviewLength.cliError": "유효 글자 수는 캐릭터 설정 {persona}자, 활성화된 상시 세계관 항목 {constantWorldbook}자, 합계 {total}자예요. 제출 기준인 {required}자까지 {remaining}자가 더 필요해요. 어느 쪽이든 내용을 추가한 뒤 변경 사항을 푸시하고 다시 제출하세요.",
+  "reviewLength.cliHelp": "마지막으로 푸시한 내용이 심사 대상이에요. 캐릭터 설정과 활성화된 상시 세계관 항목의 합계가 유효 글자 수 기준으로 {required}자 이상이어야 해요. 어느 쪽에 내용을 추가해도 합계에 반영돼요. 첫 메시지와 대화 예시는 포함하지 않아요."
 }

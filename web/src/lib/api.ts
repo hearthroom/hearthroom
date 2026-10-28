@@ -1,3 +1,5 @@
+import {formatReviewLength} from './review-length';
+import type {ReviewLength} from '../../../shared/review-length';
 import {parseUpdateIntent,type UpdateIntent} from '../../../shared/card-update';
 import {publicationOperationKey as publicationKey,notePublicationOperation} from './publication-operation';
 import {retentionParams} from './reward-retention';
@@ -16,7 +18,7 @@ import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "
 
 export class ApiError extends Error {
   /** 上游回的穩定錯誤碼（例如 image_in_use）。畫面要分情況說話時看它，不看訊息文字。 */
-  constructor(readonly status: number, message: string, readonly code = "") {
+  constructor(readonly status: number, message: string, readonly code = "", readonly reviewLength?:ReviewLength) {
     super(message);
   }
 }
@@ -79,7 +81,7 @@ const CODE_KEY: Record<string, string> = {
 };
 
 /** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
-export interface LimitDetail { reason?: string; field?: string; index?: number; name?: string; max?: number; actual?: number; unit?: string }
+export interface LimitDetail { reviewLength?:ReviewLength; reason?: string; field?: string; index?: number; name?: string; max?: number; actual?: number; unit?: string }
 
 /**
  * 有明細就照明細講：整份多大、上限多少；或第幾條叫什麼、多大。沒有對應文案的 reason
@@ -159,6 +161,7 @@ const looksInternal = (raw: string): boolean => /^[a-z]+( [a-z]+)+$/.test(raw);
 export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
   // .mov：資源庫不收 QuickTime，請作者匯出成 MP4。上傳前的檢查也講同一句。
   if (detail?.reason === "quicktime") return i18n.global.t("res.error.mov");
+  if(raw==='review_length_insufficient'&&detail?.reviewLength)return i18n.global.t('reviewLength.insufficient',formatReviewLength(detail.reviewLength,String(i18n.global.locale.value)));
   const legacy = (raw || "").trim();
   const text = legacy === "jailbreak_too_long" ? "custom_instructions_too_long" : legacy;
   const byDetail = text ? describeLimit(text, detail) : null;
@@ -183,7 +186,7 @@ async function json<T>(res: Response): Promise<T> {
       : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
-    throw new ApiError(res.status, said, body.error ?? "");
+    throw new ApiError(res.status, said, body.error ?? "", body.detail?.reviewLength);
   }
   return (await res.json()) as T;
 }
@@ -437,7 +440,7 @@ export async function registerCard(
     }),
   );
   }catch(error){
-    if(error instanceof ApiError&&['update_notification_cooldown','update_note_invalid','update_kind_invalid','update_notification_unavailable'].includes(error.code)&&publicationOperations.get(key)===operationId)clearPublicationOperation(key);
+    if(error instanceof ApiError&&['review_length_insufficient','update_notification_cooldown','update_note_invalid','update_kind_invalid','update_notification_unavailable'].includes(error.code)&&publicationOperations.get(key)===operationId)clearPublicationOperation(key);
     throw error;
   }
   clearPublicationOperation(key);
@@ -536,6 +539,7 @@ export interface ReviewDetail {
       mountTrigger: string; mountLayer: string; pageMode: string; status: string; version: number;
     };
     hashes: { card: string; welcome: string; worldbook: string; authorAsset: string; content: string };
+    reviewLength?:ReviewLength;
     costProfile: {
       personaChars: number; worldbookEntryCount: number; worldbookEnabledCount: number; worldbookConstantCount: number;
       worldbookChars: number; worldbookConstantChars: number; estimatedConstantTokens: number; estimatedMaxTokens: number;

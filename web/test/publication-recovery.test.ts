@@ -42,3 +42,16 @@ it('keeps pending intent intact and explains the conflict after durable readback
  await expect(submit('pending-recovery','new')).rejects.toMatchObject({code:'visibility_operation_conflict',message:i18n.global.t('workspace.submitUnfinished')});
  expect(fetcher).toHaveBeenCalledTimes(2);expect(localStorage.getItem(key)).toBe(saved);
 });
+
+it('keeps the server length details and clears a definitely rejected new intent so a revised submission can start fresh',async()=>{
+ const length={persona:2000,constantWorldbook:1000,total:3000,required:3001,remaining:1,eligible:false,welcome:99};
+ const posts:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(_url:string,init:RequestInit)=>{
+  expect(init.method).toBe('POST');posts.push(JSON.parse(String(init.body)).operationId);
+  return Response.json({error:'review_length_insufficient',detail:{reviewLength:length}},{status:400});
+ }));
+ await expect(submit('length-refusal','old')).rejects.toMatchObject({status:400,code:'review_length_insufficient',reviewLength:length});
+ expect(localStorage.getItem('hearthroom:publication:harbor:length-refusal')).toBeNull();
+ await expect(submit('length-refusal','revised')).rejects.toMatchObject({code:'review_length_insufficient'});
+ expect(posts).toHaveLength(2);expect(posts[0]).not.toBe(posts[1]);
+});

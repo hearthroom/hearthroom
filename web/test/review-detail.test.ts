@@ -105,3 +105,26 @@ it('explains that a submission from before the questionnaire only has the genera
  [...el.querySelectorAll('.tabs button')].find(b=>b.textContent?.trim()===i18n.global.t('review.section.rating'))!.click();
  await vi.waitFor(()=>expect(el.querySelector('[data-rating-answers]')?.textContent).toContain(i18n.global.t('review.rating.legacy')));
 });
+
+it('shows the two server-calculated parts, strict minimum and informational opening count before the content tabs',async()=>{
+ const detail=pendingDetail();
+ const length={persona:2000,constantWorldbook:1001,total:3001,required:3001,remaining:0,eligible:true,welcome:99};
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...detail,detail:{...detail.detail,reviewLength:length}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-review-length]')).toBeTruthy());
+ const text=el.querySelector('[data-review-length]')!.textContent!;
+ expect(text).toContain(i18n.global.t('reviewLength.persona',{persona:'2,000'}));
+ expect(text).toContain(i18n.global.t('reviewLength.constantWorldbook',{constantWorldbook:'1,001'}));
+ expect(text).toContain(i18n.global.t('reviewLength.total',{total:'3,001',required:'3,001'}));
+ expect(text).toContain(i18n.global.t('reviewLength.eligible'));
+ expect(text).toContain(i18n.global.t('reviewLength.welcome',{welcome:'99'}));
+});
+
+it('shows unknown counts for older or closed reviews without classifying them as insufficient',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-review-length]')).toBeTruthy());
+ const text=el.querySelector('[data-review-length]')!.textContent!;
+ expect(text).toContain(i18n.global.t('reviewLength.unavailable'));
+ expect(text).not.toContain(i18n.global.t('reviewLength.ineligible'));
+});

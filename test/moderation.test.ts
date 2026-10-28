@@ -104,7 +104,7 @@ it('suspension revokes every approved hosting decision and later approvals canno
  const author=await makeMember(10001);const source=role({roleId:'hosted-draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_e,_t,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'frozen-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_e,_t,id)=>({...source,roleId:id}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const submit=()=>submitHosted(env,{memberId:author,account:10001,role:source,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
  const approve=async()=>{const sub=await env.DB.prepare("SELECT id FROM review_submissions WHERE status='pending'").first<any>();for(const m of ['a','b']){await claim(env.DB,sub.id,m,Date.now());await stamp(env.DB,{submissionId:sub.id,memberId:m,verdict:'approve',note:'',now:Date.now()});if((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(sub.id).first<any>()).status==='approved')break;}};
  const a=await submit();await approve();const b=await submit();await approve();

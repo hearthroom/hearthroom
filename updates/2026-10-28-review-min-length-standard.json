@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "送審至少需要 3,001 有效字，系統會自動計算。",
+    "zh-Hans": "提交审核至少需要 3,001 有效字，系统会自动计算。",
+    "en": "Review submissions now require at least 3,001 counted characters, with the total calculated for you.",
+    "ja": "審査への提出には有効文字数が合計3,001文字以上必要になり、自動で集計されます。",
+    "ko": "심사 제출에는 유효 글자 수가 최소 3,001자 필요하며, 자동으로 집계돼요."
+  },
+  "body": {
+    "zh-Hant": "人物設定與已啟用的世界書常駐條目可互相補足，開場白與範例對話不計入。",
+    "zh-Hans": "人物设定与已启用的世界书常驻条目可以互相补足，开场白和示例对话不计入。",
+    "en": "The character definition and enabled always-on Lorebook entries count together; opening messages and example conversations are excluded.",
+    "ja": "キャラクター設定と有効な常時オンの世界設定項目を合算し、最初のメッセージや会話例は含みません。",
+    "ko": "캐릭터 설정과 활성화된 상시 세계관 항목을 합산하며, 첫 메시지와 대화 예시는 포함하지 않아요."
+  }
+}

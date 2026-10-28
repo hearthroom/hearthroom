@@ -20,7 +20,7 @@ async function author(roleId: string, f: Parameters<typeof role>[0] = { roleId }
   const draft = role({ ...f, roleId, authorNumId: 10001 });
   vi.spyOn(hostGateway, "seal").mockImplementation(async (_env, _token, _id, workId, versionId) => ({ workId, versionId, hostedRevisionId: "sealed-" + versionId }));
   vi.spyOn(hostGateway, "read").mockImplementation(async (_env, _token, id) => ({ ...draft, roleId: id }));
-  const snapshot = { document: { roleDetailDesc: "fixture" }, hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: "" } } as never;
+  const snapshot = { document: { roleDetailDesc: "fixture".repeat(600) }, hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: "" } } as never;
   vi.spyOn(upstream, "readForReview").mockResolvedValue(snapshot);
   vi.spyOn(upstream, "readSealedForReview").mockResolvedValue(snapshot);
   const submit = async (opts: { adult?: boolean; fandom?: string; fandomId?: string } = {}) =>

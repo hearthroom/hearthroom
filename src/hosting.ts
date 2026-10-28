@@ -1,3 +1,4 @@
+import { reviewLength } from './review-length';
 import { updateIntent, assertUpdateCooldown } from './card-update';
 import {bumpOp} from './ops-metrics';
 import {assertNormalMember} from './test-accounts';
@@ -140,6 +141,10 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);return receiptOf(retry);}
   throw new HttpError(409,'submission_pending');
  }
+ if(!version){
+  try{await assertReviewLength(db,await upstream.readForReview(env,input.token,input.role.roleId,provider),'draft');}
+  catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_sync_pending');}
+ }
  await adoptRetiredWork(db,provider,input.role.roleId);
  await db.prepare('INSERT OR IGNORE INTO works VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),input.memberId,provider,input.role.roleId,input.now).run();
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,input.role.roleId).first<{id:string;member_id:string}>();
@@ -181,6 +186,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
+ settings.reviewLength=await assertReviewLength(db,settings,'sealed');
  await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
@@ -243,4 +249,11 @@ async function hostingCall(env:Env,provider:ProviderId,token:string,operation:st
  const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/${operation}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'X-Hosting-Key':key,'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(60000)});
  if(!response.ok)throw new HttpError(502,'hosting_'+operation+'_failed');
  return await response.json() as Record<string,string>;
+}
+
+async function assertReviewLength(db:D1Database,settings:Record<string,unknown>,phase:'draft'|'sealed'){
+ const length=reviewLength(settings);
+ await bumpOp(db,'review_length',phase,length.eligible?'eligible':'insufficient');
+ if(!length.eligible)throw new HttpError(400,'review_length_insufficient',undefined,{detail:{reviewLength:length}});
+ return length;
 }

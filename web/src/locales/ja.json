@@ -3487,5 +3487,21 @@
   "home.contentGroup": "マイコンテンツ",
   "home.developerGroup": "開発者向け情報",
   "home.siteSupportGroup": "サイトとサポート",
-  "home.legalGroup": "プライバシーとライセンス"
+  "home.legalGroup": "プライバシーとライセンス",
+  "reviewLength.insufficientTitle": "有効文字数が足りません",
+  "reviewLength.insufficient": "キャラクター設定と有効な常時オンの世界設定項目は合計 {total} 文字で、審査への提出に必要な {required} 文字まであと {remaining} 文字です。どちらに追記しても合計に含まれます。",
+  "reviewLength.requirement": "キャラクター設定と有効な常時オンの世界設定項目は、合計 {required} 有効文字以上が必要です。どちらに追記しても合計に含まれます。",
+  "reviewLength.personaHint": "対象は「人物像」にある「キャラクター設定」です。",
+  "reviewLength.countingHint": "文字と数字はそれぞれ1文字として数えます。空白、句読点、記号、絵文字、書式のマークアップ、テンプレート変数は数えません。",
+  "reviewLength.excludedHint": "最初のメッセージ、会話例、カスタム指示、常時オンではない項目、無効な項目は含みません。",
+  "reviewLength.title": "審査対象の有効文字数",
+  "reviewLength.persona": "キャラクター設定 {persona} 文字",
+  "reviewLength.constantWorldbook": "常時オンの世界設定項目 {constantWorldbook} 文字",
+  "reviewLength.total": "合計 {total} 文字（最低 {required} 文字）",
+  "reviewLength.eligible": "文字数条件達成",
+  "reviewLength.ineligible": "文字数不足",
+  "reviewLength.welcome": "最初のメッセージの有効文字数 {welcome} 文字（条件の合計には含みません）",
+  "reviewLength.unavailable": "この審査の文字数データはありません",
+  "reviewLength.cliError": "有効文字数はキャラクター設定 {persona} 文字、有効な常時オンの世界設定項目 {constantWorldbook} 文字、合計 {total} 文字です。提出に必要な {required} 文字まであと {remaining} 文字です。どちらかに追記して変更をプッシュしてから、再提出してください。",
+  "reviewLength.cliHelp": "最後にプッシュした内容が審査の対象です。キャラクター設定と有効な常時オンの世界設定項目は、合計 {required} 有効文字以上が必要です。どちらに追記しても合計に含まれます。最初のメッセージと会話例は含みません。"
 }

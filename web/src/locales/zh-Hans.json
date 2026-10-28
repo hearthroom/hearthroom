@@ -3487,5 +3487,21 @@
   "home.contentGroup": "我的内容",
   "home.developerGroup": "开发者资源",
   "home.siteSupportGroup": "网站与支持",
-  "home.legalGroup": "隐私与许可"
+  "home.legalGroup": "隐私与许可",
+  "reviewLength.insufficientTitle": "有效字数不足",
+  "reviewLength.insufficient": "人物设定与已启用的世界书常驻条目合计 {total} 字，还差 {remaining} 字才能提交审核；两部分可以互相补足，合计至少需要 {required} 字。",
+  "reviewLength.requirement": "人物设定与已启用的世界书常驻条目合计至少 {required} 有效字，两部分可以互相补足。",
+  "reviewLength.personaHint": "人物设定指“人设”中的“角色设定”。",
+  "reviewLength.countingHint": "中文、英文字母和数字都按字符计算，空格、标点、符号、表情符号、格式标记和模板变量不计入。",
+  "reviewLength.excludedHint": "开场白、示例对话、自定义指令、非常驻条目和停用条目不计入。",
+  "reviewLength.title": "送审有效字数",
+  "reviewLength.persona": "人物设定 {persona} 字",
+  "reviewLength.constantWorldbook": "世界书常驻条目 {constantWorldbook} 字",
+  "reviewLength.total": "合计 {total} 字（至少 {required} 字）",
+  "reviewLength.eligible": "字数达标",
+  "reviewLength.ineligible": "字数未达标",
+  "reviewLength.welcome": "开场白有效字数 {welcome} 字（不计入门槛）",
+  "reviewLength.unavailable": "这份审核没有字数统计",
+  "reviewLength.cliError": "人物设定 {persona} 字，已启用的世界书常驻条目 {constantWorldbook} 字，合计 {total} 字；提交审核至少需要 {required} 有效字，还差 {remaining} 字。两部分可以互相补足，修改后先推送，再重新提交审核。",
+  "reviewLength.cliHelp": "提交审核的内容以最后推送的版本为准。人物设定与已启用的世界书常驻条目合计至少需要 {required} 有效字，两部分可以互相补足；开场白和示例对话不计入。"
 }

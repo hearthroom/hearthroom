@@ -13,10 +13,10 @@ it('reviews the sealed revision once, keeps published version during updates, an
  const me=role({roleId:'draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,roleId,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id,names:{...me.names,zh:'Frozen title'}}));
- const read=vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'PRIVATE'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ const read=vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'PRIVATE'.repeat(600)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
  const first=await submitHosted(env,input);
- expect(read.mock.calls[0][2]).toBe(first.hostedRevisionId);
+ expect(read.mock.calls.map(call=>call[2])).toEqual([me.roleId,first.hostedRevisionId]);
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('pending');
  expect(await submitHosted(env,input)).toEqual(first);
  expect(hostGateway.seal).toHaveBeenCalledTimes(1);
@@ -47,7 +47,7 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
  const me=role({roleId:'draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockRejectedValueOnce(new Error('offline')).mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
  await expect(submitHosted(env,input)).rejects.toMatchObject({status:503,message:'visibility_sync_pending'});
  const next={...input,operationId:crypto.randomUUID()};
@@ -63,7 +63,7 @@ it.each(['harbor','harbor'] as const)('HTTP submits a private %s draft and expos
  vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>{if(id==='private-draft')throw new Error('private draft');return role({roleId:id,authorNumId:10001})});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:10001}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const headers={Authorization:'Bearer author','X-Provider':provider,'Content-Type':'application/json'};
  const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:JSON.stringify({roleId:'private-draft',...ratingBody(false),operationId:crypto.randomUUID()})});
  expect(response.status).toBe(201);
@@ -85,7 +85,7 @@ it('a failed review transaction cannot consume a listing slot or leave an empty 
  const me=role({roleId:'draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  await env.DB.prepare("CREATE TRIGGER fixture_snapshot_failure BEFORE INSERT ON review_snapshots BEGIN SELECT RAISE(ABORT,'fixture_failure'); END").run();
  try {
   await expect(submitHosted(env,{memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()})).rejects.toThrow();
@@ -105,7 +105,7 @@ it('revalidates a concurrent completed operation before returning its pending re
  const memberId=await makeMember(10001),me=role({roleId:'race-draft',authorNumId:10001});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
- vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'.repeat(600)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
  const receipt=await submitHosted(env,input);
  // Deterministically represent the first read preceding another request's commit.

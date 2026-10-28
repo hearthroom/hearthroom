@@ -3487,5 +3487,21 @@
   "home.contentGroup": "My content",
   "home.developerGroup": "Developer resources",
   "home.siteSupportGroup": "Site & support",
-  "home.legalGroup": "Privacy & licensing"
+  "home.legalGroup": "Privacy & licensing",
+  "reviewLength.insufficientTitle": "Not enough counted characters",
+  "reviewLength.insufficient": "Your character definition and enabled always-on Lorebook entries have a combined character count of {total}; add {remaining} more in either section to reach the submission minimum of {required}.",
+  "reviewLength.requirement": "The combined character count for the character definition and enabled always-on Lorebook entries must reach {required}; content in either section counts toward the minimum.",
+  "reviewLength.personaHint": "The character definition is under “Persona.”",
+  "reviewLength.countingHint": "Chinese characters, letters and numbers count individually; spaces, punctuation, symbols, emoji, formatting markup and template variables do not count.",
+  "reviewLength.excludedHint": "Opening messages, example conversations, custom instructions, entries that are not always on and disabled entries do not count.",
+  "reviewLength.title": "Counted characters for review",
+  "reviewLength.persona": "Character definition: {persona}",
+  "reviewLength.constantWorldbook": "Always-on Lorebook entries: {constantWorldbook}",
+  "reviewLength.total": "Total: {total} (minimum: {required})",
+  "reviewLength.eligible": "Length requirement met",
+  "reviewLength.ineligible": "Below the length requirement",
+  "reviewLength.welcome": "Counted characters in opening message: {welcome} (excluded from the minimum)",
+  "reviewLength.unavailable": "No character count is available for this review",
+  "reviewLength.cliError": "Counted characters: character definition {persona}, enabled always-on Lorebook entries {constantWorldbook}, total {total}. The submission minimum is {required}; add {remaining} more in either section, push your changes, then submit again.",
+  "reviewLength.cliHelp": "Review uses the last pushed version. The combined character count for the character definition and enabled always-on Lorebook entries must reach {required}; content in either section counts toward the minimum. Opening messages and example conversations do not count."
 }
