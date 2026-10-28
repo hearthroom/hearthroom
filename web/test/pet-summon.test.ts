@@ -10,6 +10,7 @@ const calls: { type: string }[] = [];
 addEventListener("suki", (e) => calls.push((e as CustomEvent<{ type: string }>).detail));
 vi.mock("../src/pet/pet-ui", () => ({
   SukiPet: class {
+    openFrom() { calls.push({ type: "openMenu" }); }
     async start() {}
     stop() {}
     on(e: { type: string }) { calls.push(e); }
@@ -58,4 +59,16 @@ it("她被關掉的時候：開回來，出來之後拉出來打招呼", async (
   expect(petEnabled.value).toBe(true);
   expect(localStorage.getItem("suki.pet.off")).toBeNull();
   expect(calls.filter((c) => c.type === "summon")).toHaveLength(1);
+});
+
+it('opens interaction from desktop preferences when disabled without resetting position', async () => {
+  const { openPetMenu } = await import('../src/pet/enabled');
+  petEnabled.value = false; await nextTick();
+  localStorage.setItem('suki.pet.pos', 'original-position');
+  await mount();
+  const opener = document.createElement('button');
+  openPetMenu(opener); await settle();
+  expect(petEnabled.value).toBe(true);
+  expect(localStorage.getItem('suki.pet.pos')).toBe('original-position');
+  expect(calls.filter(c => c.type === 'openMenu')).toHaveLength(1);
 });

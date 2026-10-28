@@ -25,7 +25,7 @@ it("puts preferences before community, deduplicates destinations, and collapses 
   expect(root.querySelector('[data-menu-section="preferences"] [data-site-link="routes"]')?.textContent).toContain('example.test');
 });
 
-it('opens the ordinary pet menu after language without resetting position or enabling a disabled pet',async()=>{
+it('opens the ordinary pet menu after language without resetting position and brings back a disabled pet',async()=>{
  const {petMenuKey}=await import('../src/lib/site-links');const {petEnabled}=await import('../src/pet/enabled');
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div/>'}}]});await router.push('/');
  const opener=document.createElement('button');document.body.append(opener);const events:Event[]=[];const listen=(e:Event)=>events.push(e);window.addEventListener('suki-menu',listen);
@@ -33,6 +33,6 @@ it('opens the ordinary pet menu after language without resetting position or ena
  const buttons=[...root.querySelectorAll('[data-menu-section="preferences"] button')];expect(buttons[2]?.hasAttribute('data-pet-menu')).toBe(true);
  localStorage.setItem('suki.pet.pos','saved-position');petEnabled.value=true;(buttons[2] as HTMLButtonElement).click();await new Promise(r=>setTimeout(r,10));
  expect(events).toHaveLength(1);expect((events[0] as CustomEvent).detail).toBe(opener);expect(localStorage.getItem('suki.pet.pos')).toBe('saved-position');
- petEnabled.value=false;await nextTick();(buttons[2] as HTMLButtonElement).click();await new Promise(r=>setTimeout(r,10));expect(events).toHaveLength(1);expect(petEnabled.value).toBe(false);
+ petEnabled.value=false;await nextTick();(buttons[2] as HTMLButtonElement).click();await new Promise(r=>setTimeout(r,10));expect(events).toHaveLength(2);expect(petEnabled.value).toBe(true);expect(localStorage.getItem('suki.pet.pos')).toBe('saved-position');
  window.removeEventListener('suki-menu',listen);opener.remove();localStorage.removeItem('suki.pet.pos');petEnabled.value=true;await nextTick();
 });

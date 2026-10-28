@@ -24,7 +24,8 @@ export function summonPet() {
 /** 桌寵載入好時問一次：剛才是不是被「叫她出來」開起來的 */
 export function takeSummon() { const v = summonOnStart; summonOnStart = false; return v; }
 
-/** Ordinary menu entry preserves both the position and the enabled preference. */
+/** The preference entry opens interaction; when dismissed, enable her without clearing position. */
 export function openPetMenu(opener:HTMLElement|null){
- if(petEnabled.value)dispatchEvent(new CustomEvent("suki-menu",{detail:opener}));
+ petEnabled.value=true;
+ dispatchEvent(new CustomEvent("suki-menu",{detail:opener}));
 }

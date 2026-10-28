@@ -223,7 +223,7 @@
   "mascot.pet.menu.notifications": "알림 보기",
   "mascot.pet.menu.write": "카드 쓰기",
   "mascot.pet.menu.tuck": "잠깐 숨기",
-  "mascot.pet.menu.off": "데스크 펫 끄기",
+  "mascot.pet.menu.off": "스키 숨기기",
   "mascot.pet.go.look": "보기",
   "mascot.pet.notice.approved": "축하해!",
   "mascot.pet.notice.rejected": "기운 내~",
@@ -3577,8 +3577,11 @@
   "import.regex.invalid": "아래 정규식 내용은 수정이 필요해서 아직 저장되지 않았어요. 양식에 적용한 뒤 수정할 수 있어요.",
   "editor.regex.invalid": "이번 변경 내용은 저장되지 않았어요. 아래 정규식 문제를 수정한 뒤 다시 저장해 주세요.",
   "regex.issue.rule": "{index}번 규칙 「{name}」: {why}",
+  "mascot.pet.bringBack": "스키 다시 부르기",
   "home.weekEnd": "주간 카드가 모두 표시되었어요",
   "home.weekEmpty": "조건에 맞는 다른 주간 카드가 없어요",
   "home.monthEnd": "월간 카드가 모두 표시되었어요",
-  "home.monthEmpty": "조건에 맞는 다른 월간 카드가 없어요"
+  "home.monthEmpty": "조건에 맞는 다른 월간 카드가 없어요",
+  "mascot.pet.offHintMember": "페이지 상단의 프로필 아이콘을 누르면 ‘환경 설정’에서 스키를 다시 부를 수 있어요.",
+  "mascot.pet.offHintGuest": "페이지 상단의 세 줄 메뉴를 누르면 ‘환경 설정’에서 스키를 다시 부를 수 있어요."
 }
