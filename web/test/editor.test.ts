@@ -1293,7 +1293,7 @@ it('keeps a length refusal on the editor after the author returns from the submi
 });
 
 describe('匯入正則在寫入前驗證', () => {
-  const oversized = { beginning: 'synthetic-image-marker', regex_scripts: [{ id: 'synthetic-rule', scriptName: 'Synthetic oversized rule', findRegex: 'synthetic-image-marker', replaceString: 'x'.repeat(256 * 1024 + 1) }] };
+  const oversized = { beginning: 'synthetic-image-marker', regex_scripts: [{ id: 'synthetic-rule', scriptName: 'Synthetic oversized rule', findRegex: 'synthetic-image-marker', replaceString: 'x'.repeat(512 * 1024 + 1) }] };
   it('匯入預覽指出超限規則，仍可套用修正', async () => {
     await mount('/create');
     localStorage.setItem('hr.import.kind', 'mmd');
@@ -1302,7 +1302,7 @@ describe('匯入正則在寫入前驗證', () => {
     await pickFile($('.import input[type=file]'), new File([JSON.stringify(oversized)], 'synthetic.json'));
     const notice = root.querySelector('.review [role=alert]');
     expect(notice?.textContent).toContain('Synthetic oversized rule');
-    expect(notice?.textContent).toContain('256');
+    expect(notice?.textContent).toContain('512');
     const apply = byText('套用到表單');
     expect(apply.disabled).toBe(false);
     apply.click(); await flush();
@@ -1322,10 +1322,10 @@ describe('匯入正則在寫入前驗證', () => {
     expect(api.saveAuthorAsset).not.toHaveBeenCalled();
     expect(root.querySelector('[role=alert]')?.textContent).toContain('Synthetic oversized rule');
     expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('synthetic-image-marker');
-    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ ...oversized, regex_scripts: [{ ...oversized.regex_scripts[0], replaceString: 'x'.repeat(256 * 1024) }] })], 'corrected.json'));
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ ...oversized, regex_scripts: [{ ...oversized.regex_scripts[0], replaceString: 'x'.repeat(512 * 1024) }] })], 'corrected.json'));
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
-    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace: 'x'.repeat(256 * 1024) })] }), 'tok');
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace: 'x'.repeat(512 * 1024) })] }), 'tok');
     expect(api.createRole).toHaveBeenCalledTimes(path === '/create' ? 1 : 0);
   });
 });
@@ -1345,11 +1345,11 @@ describe('正則預檢與保存快照', () => {
   const file = (replace: string) => new File([JSON.stringify({ beginning: 'snapshot-opening', regex_scripts: [{ id: 'snapshot', scriptName: 'Snapshot', findRegex: 'snapshot-opening', replaceString: replace }] })], 'snapshot.json');
   await pickFile($('.rxbar input[type=file]'), file('verified-before-save'));
   $('form').dispatchEvent(new Event('submit', { cancelable: true })); await flush();
-  await pickFile($('.rxbar input[type=file]'), file('x'.repeat(256 * 1024 + 1)));
+  await pickFile($('.rxbar input[type=file]'), file('x'.repeat(512 * 1024 + 1)));
   complete({roleId: 'r1'}); await flush(); await flush();
   expect((api.saveAuthorAsset.mock.calls[0][1] as any).rules[0].replace).toBe('verified-before-save');
   await submit();
   expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
-  expect(root.querySelector('[role=alert]')?.textContent).toContain('256');
+  expect(root.querySelector('[role=alert]')?.textContent).toContain('512');
  });
 });

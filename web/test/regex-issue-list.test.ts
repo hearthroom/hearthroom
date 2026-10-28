@@ -12,7 +12,7 @@ afterEach(() => { app?.unmount(); root?.remove(); i18n.global.locale.value = old
 it.each(['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const)('%s 保留空名稱、多個原因與整份問題', locale => {
   i18n.global.locale.value = locale;
   const set = emptyRuleSet();
-  set.rules = [makeRule({ id: 'synthetic', name: '', find: '', replace: 'x'.repeat(256 * 1024 + 1) })];
+  set.rules = [makeRule({ id: 'synthetic', name: '', find: '', replace: 'x'.repeat(512 * 1024 + 1) })];
   const issues = [...validateRuleSet(set), { ruleId: '', key: 'regex.issue.tooMany', params: { max: 500 } }];
   root = document.createElement('div'); document.body.append(root);
   app = createApp({ render: () => h(RegexIssueList, { set, issues }) }).use(i18n);
@@ -20,7 +20,7 @@ it.each(['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const)('%s 保留空名稱�
   const texts = [...root.querySelectorAll('li')].map(el => el.textContent?.trim());
   expect(texts).toEqual([
     i18n.global.t('regex.issue.rule', { index: 1, name: i18n.global.t('regex.rule.untitled'), why: i18n.global.t('regex.issue.emptyFind') }),
-    i18n.global.t('regex.issue.rule', { index: 1, name: i18n.global.t('regex.rule.untitled'), why: i18n.global.t('regex.issue.replaceLong', { max: 256 }) }),
+    i18n.global.t('regex.issue.rule', { index: 1, name: i18n.global.t('regex.rule.untitled'), why: i18n.global.t('regex.issue.replaceLong', { max: 512 }) }),
     i18n.global.t('regex.issue.tooMany', { max: 500 }),
   ]);
 });
