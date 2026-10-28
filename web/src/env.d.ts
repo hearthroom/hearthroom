@@ -11,7 +11,7 @@ declare module "moonstage/stage" {
   import type { App, Component } from "vue";
   export interface StageHost {
     ui: {
-      toast(text: string, kind?: "info" | "success" | "error" | "warning"): void;
+      toast(text: string, kind?: "info" | "success" | "error" | "warning", durationMs?: number): void;
       confirm(options: { title?: string; content: string; confirmText?: string; cancelText?: string }): Promise<boolean>;
       loading(on: boolean): void;
       /** 對話頁頂欄的實際底色，塗到系統狀態列；null＝離開對話頁，還原。 */

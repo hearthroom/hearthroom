@@ -280,7 +280,7 @@
   "d65b459a99574": "`conversation_limit_reached` — 角色卡已有 `limit`（20）个未删除对话；不创建新对话，也不变更旧对话。",
   "df62e13c34b47": "`internal` — 无法计算归档数量（`retryable: true`）。`save` 缺少或不是布尔值时，返回空响应体的 500。",
   "d219ae23e8159": "打开（或继续）与角色的当前对话",
-  "de40e159cac3c": "同步操作。返回（调用方账号、`roleId`）组合的 CURRENT 对话；不存在时以原子操作创建。新建对话会将角色问候语插入为第一则 AI 消息（`isFirst:true`）；`greetingIndex` 可为第一则消息选择替代问候语。现有对话以 `historyConversation:true` 返回；尚无任何消息时会在此时插入问候语，否则不插入任何内容。此端点不生成回复，也不进行流式传输：发送消息、重新生成与续写皆通过 `POST /open/v1/conversation/ws-ticket`（`x-websocket`）说明的 WebSocket 运行。副作用：增加角色聊天计数与每日任务进度。`roleInfo` 依 `language` 头部本地化，并清空 `roleDetailDesc`／`roleDetailDescEn`／`roleDetailDescJa`／`roleDetailDescKo`；`roleWelcome` 与 `defaultRelay` 的 `{{char}}`／`{{user}}` 占位符会被替换。头像／背景主机依语言重写。可选的 `X-XMLV3-Feature-Level` 头部（正整数，默认 1）声明客户端的 XMLV3 渲染器等级，并于 `xmlV3Compatibility` 原样返回。注意：处理程序以未检查的类型断言读取 `roleId`；请求体未含字符串 `roleId` 时，返回 HTTP 500 与空响应体（panic 恢复），而非 400。",
+  "de40e159cac3c": "同步操作。返回（调用方账号、`roleId`）组合的 CURRENT 对话；不存在时以原子操作创建。新建对话会将角色问候语插入为第一则 AI 消息（`isFirst:true`）；`greetingIndex` 可为第一则消息选择替代问候语。现有对话以 `historyConversation:true` 返回；尚无任何消息时会在此时插入问候语，否则不插入任何内容。此端点不生成回复，也不进行流式传输：发送消息、重新生成与续写皆通过 `POST /open/v1/conversation/ws-ticket`（`x-websocket`）说明的 WebSocket 运行。副作用：增加角色聊天计数与每日任务进度。`roleInfo` 依 `language` 头部本地化，并清空 `roleDetailDesc`／`roleDetailDescEn`／`roleDetailDescJa`／`roleDetailDescKo`；`roleWelcome` 与 `defaultRelay` 的 `{{char}}`／`{{user}}` 占位符会被替换。头像／背景主机依语言重写。可选的 `X-XMLV3-Feature-Level` 头部（正整数，默认 1）声明客户端的 XMLV3 渲染器等级，并于 `xmlV3Compatibility` 原样返回。注意：处理程序以未检查的类型断言读取 `roleId`；请求体未含字符串 `roleId` 时，返回 HTTP 500 与空响应体（panic 恢复），而非 400。 这是支持账号模型偏好的服务的可选能力：用户在此应用中首次与某个智能体配置开始对话时，账号保存的模型或线路偏好优先于应用默认值；如果该智能体配置已有自己的模型设置，则保留原设置。偏好的模型或指定线路不在可选目录或无法使用时，本次调用会将应用默认值保存为该智能体配置的模型，并返回 `modelPreferenceFallback=true`。账号偏好会保留，供以后首次使用其他智能体配置时判断。已经打开过的智能体配置保留各自的模型设置。",
   "dfa4da5ffa357": "将 `roleInfo` 与问候语本地化。全局中间件会范式此头部，缺少或无法识别时改用 `en`。",
   "da666ec162d01": "客户端 XMLV3 渲染器功能等级（最新为 4）。用于计算 `xmlV3Compatibility`。",
   "d59c676e429f7": "已打开或继续对话。",
@@ -543,7 +543,7 @@
   "d08aee9978e4f": "设置。",
   "d4e5598962919": "账号查找失败；`{\"error\": \"<text>\"}`。",
   "dc08f0c33f2f8": "保存单个角色卡的玩家设置",
-  "d5b20d172a7c0": "部分更新：每个字段皆可选；请求体未出现的字段保留保存值，出现的字段（即使为空字符串／false／空数组）都会写入。角色卡首次保存时会创建数据行，省略字段使用默认值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其余为空白／false）。验证：`systemPrompt` <= 2000 个字符；`userName` <= 20；`userDefine` <= 1000；`customInstructions` 在去除首尾空白前最多 2000 个 UTF-16 码元；`personaMode` 必须为枚举值之一。审核：`userName` + `userDefine` 任一变更时一起审核；变更后非空的 `customInstructions` 也会审核。服务器不对 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 进行枚举值验证；请发送 /models 提供的值。未提供 personaMode 时的推导：若出现 `userName`／`userSex`／`userDefine` 任一字段，模式设为 `custom`；若皆未出现，模式维持不变。",
+  "d5b20d172a7c0": "部分更新：每个字段皆可选；请求体未出现的字段保留保存值，出现的字段（即使为空字符串／false／空数组）都会写入。角色卡首次保存时会创建数据行，省略字段使用默认值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其余为空白／false）。验证：`systemPrompt` <= 2000 个字符；`userName` <= 20；`userDefine` <= 1000；`customInstructions` 在去除首尾空白前最多 2000 个 UTF-16 码元；`personaMode` 必须为枚举值之一。审核：`userName` + `userDefine` 任一变更时一起审核；变更后非空的 `customInstructions` 也会审核。服务器不对 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 进行枚举值验证；请发送 /models 提供的值。未提供 personaMode 时的推导：若出现 `userName`／`userSex`／`userDefine` 任一字段，模式设为 `custom`；若皆未出现，模式维持不变。 这是支持账号模型偏好的服务的可选能力：更改 `selectModel` 时，所选模型也会保存为用户在此应用中的账号偏好，仅应用于以后首次使用的其他智能体配置；改选为应用当前的默认模型也包括在内。再次发送当前值不会更新账号偏好。将 `selectModel` 设为空字符串会清除账号偏好，并让此智能体配置恢复使用应用默认值。更改其他设置或为单轮指定模型不会改变账号偏好。",
   "d7a8de51b7151": "`{\"success\": \"ok\"}`。",
   "d52ba8fcefe57": "JSON 格式错误、长度／枚举验证失败（本地化或固定文本）、审核拒绝，或数据库错误。响应体为 `{\"error\": \"<text>\"}`。",
   "db37860ceabf6": "`invalid JSON body`、`roleName is required`（请求体层级检查；响应体为 `{\"error\": \"...\"}`），或服务返回的 `invalid_arguments`（`{\"error\": \"invalid_arguments\", \"retryable\": false}`）。",
@@ -2409,5 +2409,6 @@
   "d31b1ce6845bb": "即使同一卡片的这个已公开修订版本不在请求页内，也会作为 target 返回；不存在或不可见时为 null。",
   "d88dc7cc83eba": "每页 20 条可见的已公开记录，最新的在前，不包含草稿或私有配置数据。",
   "d579271456592": "minor 是不发送通知的内容更新；major 则明确要求在审核通过的版本公开后发送通知。",
-  "d7e6f2cc17c4f": "visibility_operation_conflict、visibility_restricted、review_required 或 visibility_disabled。update_notification_cooldown 包含 nextMajorUpdateAt（UTC 毫秒）。"
+  "d7e6f2cc17c4f": "visibility_operation_conflict、visibility_restricted、review_required 或 visibility_disabled。update_notification_cooldown 包含 nextMajorUpdateAt（UTC 毫秒）。",
+  "de2c39bfe0977": "这是支持账号模型偏好的服务的可选能力：仅当本次调用为此用户首次启动某个智能体配置，并因账号偏好的模型或指定线路无法使用或不在可选目录中而保存应用默认值时，才为 `true`。账号偏好仍会保留，供以后首次使用其他智能体配置时判断。继续已经打开过的智能体配置不会重新应用账号偏好。"
 }

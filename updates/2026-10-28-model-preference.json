@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "draft": true,
+  "title": {
+    "zh-Hant": "你選的模型與線路會沿用到之後第一次開啟的卡片。",
+    "zh-Hans": "你选的模型和线路会用于以后首次打开的卡片。",
+    "en": "Your model and lane choices now carry over to cards you open for the first time.",
+    "ja": "選んだモデルと回線は、次に初めて開くカードにも引き継がれます。",
+    "ko": "선택한 모델과 회선이 이후 처음 여는 카드에도 적용돼요."
+  },
+  "body": {
+    "zh-Hant": "模型或線路目前無法使用時，新卡會先用預設模型，偏好仍會保留，已開過的卡片維持原設定。",
+    "zh-Hans": "模型或线路目前不可用时，新卡会先用默认模型，偏好仍会保留，已经打开过的卡片保持原设置。",
+    "en": "If that model or lane is unavailable, the new card uses the default model while your preference is kept for future cards, and cards you have already opened keep their settings.",
+    "ja": "モデルや回線が使えないときは新しいカードでデフォルトのモデルを使いますが、選択は今後のカードのために保存され、すでに開いたカードの設定は変わりません。",
+    "ko": "모델이나 회선을 사용할 수 없으면 새 카드는 기본 모델을 사용하지만 선택은 이후 카드를 위해 유지되며, 이미 연 카드의 설정은 바뀌지 않아요."
+  }
+}

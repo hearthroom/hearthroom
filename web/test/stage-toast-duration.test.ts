@@ -11,3 +11,11 @@ it('keeps a failure readable for five seconds and preserves ordinary feedback du
  await vi.advanceTimersByTimeAsync(1);
  expect(stageToasts.list).toHaveLength(0);
 });
+it('keeps a long informational fallback readable for the requested six seconds', async () => {
+ vi.useFakeTimers();
+ pushStageToast('Preference fallback', 'info', 6000);
+ await vi.advanceTimersByTimeAsync(5999);
+ expect(stageToasts.list.map(t=>t.text)).toEqual(['Preference fallback']);
+ await vi.advanceTimersByTimeAsync(1);
+ expect(stageToasts.list).toHaveLength(0);
+});

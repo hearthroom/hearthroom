@@ -48,11 +48,13 @@ type Session = ReturnType<typeof useSession>;
 /** 舞台丟出來的提示；PlayPage 畫在畫布上方，幾秒後自動消失。 */
 export const stageToasts = reactive<{ list: { id: number; text: string; kind: string }[] }>({ list: [] });
 let toastSeq = 0;
-export function pushStageToast(text: string, kind = "info"): void {
+export function pushStageToast(text: string, kind = "info", durationMs?: number): void {
   if (!text) return;
   const id = ++toastSeq;
   stageToasts.list.push({ id, text, kind });
-  setTimeout(() => { stageToasts.list = stageToasts.list.filter((t) => t.id !== id); }, kind === "error" || kind === "warning" ? 5000 : 2800);
+  const defaultDuration = kind === "error" || kind === "warning" ? 5000 : 2800;
+  const duration = typeof durationMs === "number" && Number.isFinite(durationMs) ? Math.min(10000, Math.max(1500,durationMs)) : defaultDuration;
+  setTimeout(() => { stageToasts.list = stageToasts.list.filter((t) => t.id !== id); }, duration);
 }
 
 export interface StageDeps {
@@ -177,7 +179,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     const stage = await preloadStage();
     const host = stage.browserHost({
       ui: {
-        toast: (text, kind) => pushStageToast(text, kind),
+        toast: (text, kind, durationMs) => pushStageToast(text, kind, durationMs),
         confirm: (o) => confirmDialog({ title: o.title, message: o.content, confirmText: o.confirmText, cancelText: o.cancelText }),
         loading: () => {},
         // 手機的系統狀態列跟著頁面的 theme-color 塗色：對話頁上塗成舞台頂欄的實際底色（作者換配色會再叫），

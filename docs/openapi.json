@@ -3418,7 +3418,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting when creating the conversation, or into an existing conversation that has no messages yet; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. With firstPageSize above 0 (limit 100), a resumed conversation also returns firstPage, the same object as conversation/messages with pageNum=1 and that pageSize; a new conversation returns none. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
+          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting when creating the conversation, or into an existing conversation that has no messages yet; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. With firstPageSize above 0 (limit 100), a resumed conversation also returns firstPage, the same object as conversation/messages with pageNum=1 and that pageSize; a new conversation returns none. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences. Optional capability on services that support account model preferences: When this user first starts a conversation with an agent configuration in this application, the saved account model or lane preference takes priority over the application default, unless a model is already saved for that configuration. If the preferred model or exact lane is no longer selectable or is unavailable, this call saves the application default for that configuration and returns `modelPreferenceFallback=true`. The account preference is retained for future configurations. Previously opened configurations keep their own model settings.",
           "security": [
             {
               "userToken": []
@@ -3656,6 +3656,10 @@
                             "const": 1
                           }
                         }
+                      },
+                      "modelPreferenceFallback": {
+                        "type": "boolean",
+                        "description": "Optional capability on services that support account model preferences: `true` only when this call first starts an agent configuration for this user and saves the application default because the account's preferred model or exact lane is unavailable or absent from the selectable catalog. The account preference is retained for future configurations. Resuming a previously opened configuration does not reapply the account preference."
                       }
                     }
                   }
@@ -7681,7 +7685,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent. customInstructions accepts at most 2000 UTF-16 code units before trimming; the legacy jailbreak alias uses the same limit.",
+          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent. customInstructions accepts at most 2000 UTF-16 code units before trimming; the legacy jailbreak alias uses the same limit. Optional capability on services that support account model preferences: A change to `selectModel` also saves the selected model as the user's account preference within this application, applied only when first starting other agent configurations. This includes changing to the model currently used as the application default. Sending the current value again does not update the account preference. Sending an empty string for `selectModel` clears the account preference and returns this configuration to the application default. Changes to other settings and single-turn model overrides do not change the account preference.",
           "security": [
             {
               "userToken": []
@@ -16755,6 +16759,10 @@
           "firstPage": {
             "$ref": "#/components/schemas/ConversationMessagesResponse",
             "description": "Present only when the request set `firstPageSize` above 0 and `historyConversation` is `true`: the first history page, identical to the `/conversation/messages` response for `pageNum=1` with the same `pageSize`. When it is absent, fetch `/conversation/messages` as usual."
+          },
+          "modelPreferenceFallback": {
+            "type": "boolean",
+            "description": "Optional capability on services that support account model preferences: `true` only when this call first starts an agent configuration for this user and saves the application default because the account's preferred model or exact lane is unavailable or absent from the selectable catalog. The account preference is retained for future configurations. Resuming a previously opened configuration does not reapply the account preference."
           }
         }
       },
