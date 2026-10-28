@@ -23,3 +23,30 @@ it('does not double count the first book alias and supports older single-book sn
   expect(reviewLength({worldbooks: [book], worldbook: book}).constantWorldbook).toBe(2);
   expect(reviewLength({worldbook: book}).constantWorldbook).toBe(2);
 });
+
+it('does not admit markup declarations or entity-encoded template variables as setting content',()=>{
+  expect(effectiveCharacters('<!doctype html>'.repeat(273))).toBe(0);
+  expect(effectiveCharacters('<?xml version="1.0"?>'.repeat(273))).toBe(0);
+  expect(effectiveCharacters('&lbrace;&lbrace;char&rbrace;&rbrace;'.repeat(751))).toBe(0);
+  expect(effectiveCharacters('&#123;&#123;char&#125;&#125;')).toBe(0);
+  expect(effectiveCharacters('前<span title="a > b">文</span>後')).toBe(3);
+  expect(effectiveCharacters('İ<script>excluded</script>文')).toBe(2);
+});
+it('handles large unterminated tags in bounded time',()=>{
+  const start=performance.now();
+  expect(effectiveCharacters('<a'+' '.repeat(20000))).toBe(1);
+  expect(performance.now()-start).toBeLessThan(1000);
+});
+
+it('excludes whole emoji graphemes even when their bases are Unicode letters or numbers',()=>{
+  expect(effectiveCharacters('1️⃣ ℹ️ 2⃣ 🇹🇼 👩🏽‍💻')).toBe(0);
+  expect(effectiveCharacters('1 i １２ 中文')).toBe(6);
+  expect(reviewLength({document:{roleDetailDesc:'1️⃣'.repeat(3001)}})).toMatchObject({total:0,eligible:false,remaining:3001});
+});
+
+it('handles many unterminated template starts in bounded time',()=>{
+  const start=performance.now();
+  expect(effectiveCharacters('{{'.repeat(10000))).toBe(0);
+  expect(effectiveCharacters('${'.repeat(10000))).toBe(0);
+  expect(performance.now()-start).toBeLessThan(1000);
+});
