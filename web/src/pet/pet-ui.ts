@@ -414,7 +414,7 @@ export class SukiPet {
     }
   }
   private act(a: Act, urgent = false) {
-    const showIf = !urgent && this.opts.quietReading ? () => a.showIf?.() !== false && !this.opts.quietReading!() : a.showIf;
+    const showIf = this.opts.quietReading ? () => a.showIf?.() !== false && (urgent || !this.opts.quietReading!()) : a.showIf;
     if (this.sidebarIdle || showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
@@ -460,8 +460,9 @@ export class SukiPet {
   /** 網站直接要她說一句（例如選單動作找不到東西時） */
   say(text: string) { if (text) this.act({ say: text, talk: true }, true); }
   private speak(text: string, ms = 2600, action?: MenuItem, showIf?: () => boolean) {
-    if (this.sidebarIdle) return;
-    this.bubbleCondition = showIf;
+    const condition = showIf ?? (this.opts.quietReading ? () => !this.opts.quietReading!() : undefined);
+    if (this.sidebarIdle || condition?.() === false) return;
+    this.bubbleCondition = condition;
     this.bubble.textContent = text;
     if (action) {
       const b = document.createElement("button");

@@ -55,3 +55,14 @@ it('invalidates automatic speech carried into a quiet reading page and does not 
   reading=true;expect(condition?.()).toBe(false);
   p.act({say:'A delayed daily line'});expect(speak).toHaveBeenCalledTimes(1);
 });
+
+it('keeps direct idle/sleep speech quiet while retaining an explicit requested line',()=>{
+  let reading=true;
+  pet=new SukiPet({base:'',skin:'day',label:'Suki',height:220,line:key=>key,quietReading:()=>reading} as PetOptions);
+  const p=pet as unknown as {driver:{state:{talking:boolean}};bubble:HTMLElement;bubbleCondition?:()=>boolean;speak:(text:string)=>void;fitPopups:()=>void};
+  p.driver={state:{talking:false}};vi.spyOn(p,'fitPopups').mockImplementation(()=>{});
+  p.speak('sleepy');expect(p.bubble.hidden).toBe(true);
+  reading=false;p.speak('Zzz…');expect(p.bubble.hidden).toBe(false);
+  reading=true;expect(p.bubbleCondition?.()).toBe(false);
+  pet.say('An explicitly requested explanation');expect(p.bubble.textContent).toBe('An explicitly requested explanation');expect(p.bubbleCondition?.()).toBe(true);
+});
