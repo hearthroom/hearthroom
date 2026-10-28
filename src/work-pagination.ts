@@ -13,8 +13,10 @@ async function key(env:Env):Promise<CryptoKey|null>{
  const hash=await crypto.subtle.digest('SHA-256',encoder.encode('hearthroom-visibility-cursor-v1:'+secret));
  return crypto.subtle.importKey('raw',hash,'AES-GCM',false,['encrypt','decrypt']);
 }
-async function bindingOf(url:string,adult:boolean,context:string):Promise<string>{
- const parsed=new URL(url);for(const field of ['offset','cursor','lang'])parsed.searchParams.delete(field);parsed.searchParams.sort();
+async function bindingOf(url:string,adult:boolean,context:string,legacy=false):Promise<string>{
+ const parsed=new URL(url);for(const field of ['offset','cursor','lang',...(legacy?[]:['nsfw'])])parsed.searchParams.delete(field);parsed.searchParams.sort();
+ // Effective adult permission below already binds access. Cookie and bearer callers
+ // may express that same permission with different nsfw request flags.
  const hash=await crypto.subtle.digest('SHA-256',encoder.encode(JSON.stringify([parsed.pathname,parsed.search,adult,context])));
  return base64(new Uint8Array(hash));
 }
@@ -34,7 +36,8 @@ export async function publicPosition(env:Env,url:string,rank:number,adult:boolea
   const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.slice(0,12)},secret,bytes.slice(12));
   const value=JSON.parse(new TextDecoder().decode(plain)) as Cursor;
   const valid=(n:number)=>Number.isSafeInteger(n)&&n>=0&&n<=2_000_000;
-  if(value.binding!==binding||value.rank!==rank||value.expires<Date.now()||!valid(value.raw)||!Array.isArray(value.trail)||value.trail.length>500||!value.trail.every(valid))throw new Error('invalid');
+  const matchingBinding=value.binding===binding||value.binding===await bindingOf(url,adult,context,true);
+  if(!matchingBinding||value.rank!==rank||value.expires<Date.now()||!valid(value.raw)||!Array.isArray(value.trail)||value.trail.length>500||!value.trail.every(valid))throw new Error('invalid');
   return {...value,binding};
  }catch{throw new HttpError(400,'invalid_cursor');}
 }
