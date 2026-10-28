@@ -1,7 +1,6 @@
 {
   "tier": "fix",
   "audience": "everyone",
-  "draft": true,
   "title": {
     "zh-Hant": "部分沙盒卡片的狀態列與頁面按鈕，現在能正常顯示。",
     "zh-Hans": "部分沙盒卡片的状态栏与页面按钮，现在能正常显示。",
