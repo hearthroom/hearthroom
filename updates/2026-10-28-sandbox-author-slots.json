@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "draft": true,
+  "title": {
+    "zh-Hant": "部分沙盒卡片的狀態列與頁面按鈕，現在能正常顯示。",
+    "zh-Hans": "部分沙盒卡片的状态栏与页面按钮，现在能正常显示。",
+    "en": "Status bars and page buttons now display correctly on some sandbox cards.",
+    "ja": "一部のサンドボックスカードで、ステータス欄とページボタンが正しく表示されるようになりました。",
+    "ko": "일부 샌드박스 카드의 상태 표시줄과 페이지 버튼이 정상적으로 표시돼요."
+  }
+}
