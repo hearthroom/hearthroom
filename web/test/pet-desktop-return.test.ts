@@ -1,7 +1,7 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {SukiPet,type PetOptions} from '../src/pet/pet-ui';
 type Point={x:number;y:number};
-type Harness={opts:PetOptions;pos:Point;tucked:boolean;el:HTMLElement;touch:HTMLElement;menuEl:HTMLElement;bubble:HTMLElement;idleButton:HTMLButtonElement;driver:object;restore:()=>Point|null;place:(p:Point)=>void;save:(p:Point)=>void;tuck:(side:'left'|'right',silent?:boolean)=>void;poke:(e:PointerEvent)=>void;drop:(e:PointerEvent,d:unknown)=>void;refit:()=>void;updateSidebar:()=>void;fitPopups:()=>void;daily:()=>void;act:()=>void;view:object;rig:object};
+type Harness={opts:PetOptions;pos:Point;tucked:boolean;el:HTMLElement;touch:HTMLElement;menuEl:HTMLElement;bubble:HTMLElement;idleButton:HTMLButtonElement;driver:object;restore:()=>Point|null;place:(p:Point)=>void;save:(p:Point)=>void;tuck:(side:'left'|'right',silent?:boolean)=>void;poke:(e:PointerEvent)=>void;drop:(e:PointerEvent,d:unknown)=>void;refit:()=>void;updateSidebar:()=>void;fitPopups:()=>void;daily:()=>void;act:()=>void;summon:()=>void;view:object;rig:object};
 const pets:SukiPet[]=[];
 afterEach(()=>{vi.clearAllTimers();vi.useRealTimers();for(const pet of pets.splice(0))pet.stop();localStorage.removeItem('suki.pet.pos');document.querySelectorAll('[data-qa04]').forEach(e=>e.remove());vi.unstubAllGlobals();vi.restoreAllMocks();});
 function setup(width=1440,rail=true){
@@ -66,4 +66,18 @@ it('persists an explicit edge choice even while the default homepage parking pol
 it('refits ordinary saved desktop coordinates on a narrower reload without replacing the preference',()=>{
  const p=setup(768,false);const preference=JSON.stringify({x:.9,y:.9});localStorage.setItem('suki.pet.pos',preference);const restored=p.restore()!;
  expect(restored.x+146).toBeLessThanOrEqual(768);expect(restored.y+220).toBeLessThanOrEqual(900);expect(localStorage.getItem('suki.pet.pos')).toBe(preference);
+});
+
+it('does not replace a normalized stand with a one-time reload clamp before tucking',()=>{
+ const p=setup(768,false);startAt(p,{x:768*.9,y:900*.9});dragToEdge(p,'right');
+ expect(JSON.parse(localStorage.getItem('suki.pet.pos')!).stand).toEqual({x:.9,y:.9});
+});
+it('clears the remembered desktop choice when the existing settings reset summons her',()=>{
+ const p=setup(1440,false);startAt(p,{x:576,y:405});p.summon();
+ expect(JSON.parse(localStorage.getItem('suki.pet.pos')!).stand).toBeUndefined();
+});
+it('distinguishes the parking caller whole-main bounds from a real rail on explicit return',()=>{
+ const p=setup(1000);p.opts.parkOnHomepage=()=>true;p.opts.sidebarBounds=()=>({left:25,right:927,top:84,bottom:820});
+ startAt(p,{x:400,y:585});dragToEdge(p,'right');p.poke({clientX:980,clientY:625} as PointerEvent);p.updateSidebar();
+ expect(p.pos).toEqual({x:400,y:585});expect(p.tucked).toBe(false);expect(p.idleButton.hidden).toBe(true);
 });

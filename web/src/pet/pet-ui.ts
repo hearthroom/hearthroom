@@ -252,7 +252,7 @@ export class SukiPet {
       if (this.sidebarDocked || this.sidebarPosition) this.releaseSidebar(true);
       return;
     }
-    const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
+    const bounds = this.opts.mobile || this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
     if (!bounds) {
       this.opts.onSidebarMenuChange?.(false);
       if (this.sidebarDocked || this.sidebarPosition) this.releaseSidebar();
@@ -1158,7 +1158,7 @@ export class SukiPet {
   }
 
   private tuck(edge: "left" | "right", silent = false, origin?: { x: number; y: number }) {
-    if (origin && !silent && !this.tucked) this.rememberDesktopStand(origin);
+    if (origin && !silent && !this.tucked && !this.desktopStand) this.rememberDesktopStand(origin);
     this.tucked = true; this.side = edge;
     const r = this.box();
     this.el.classList.add("suki-pet--tucked");
@@ -1182,7 +1182,7 @@ export class SukiPet {
     const pos = clampStand(this.viewport(), this.size(), choice), body = this.box();
     if (pos.x < 0 || pos.y < 0 || pos.x + body.width > innerWidth || pos.y + body.height > innerHeight) return null;
     const blockers = [...document.querySelectorAll<HTMLElement>('.header, .sorts__item, .sorts__mode')].map(el => el.getBoundingClientRect());
-    const rail = this.opts.sidebarBounds?.();
+    const rail = this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
     if (rail) blockers.push(new DOMRect(rail.left, rail.top, rail.right - rail.left, rail.bottom - rail.top));
     if (blockers.some(r => r.width > 0 && r.height > 0 && pos.x < r.right && pos.x + body.width > r.left && pos.y < r.bottom && pos.y + body.height > r.top)) return null;
     return pos;
@@ -1404,6 +1404,7 @@ export class SukiPet {
   private summon() {
     if (this.sleeping) { this.sleeping = false; this.exprTarget = {}; }
     if (this.opts.mobile) { const d = defaultPeek(this.viewport(), this.size()); this.peekAt(d.side, d.pos); return this.pullOut(); }
+    this.desktopStand = null; this.desktopChosenStand = false; this.returningFromEdge = false;
     this.tucked = false; this.el.classList.remove("suki-pet--tucked");
     const pos = this.deskHome();
     this.place(pos); this.save(pos);
@@ -1488,7 +1489,7 @@ export class SukiPet {
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
     if (!this.opts.mobile || this.homeParked || this.phoneOriginal || this.entryAwake) {
-      const bounds = this.entryAwake ? null : this.opts.sidebarBounds?.();
+      const bounds = this.entryAwake || this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
       for (const el of [this.bubble, this.menuEl]) {
         if (el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
         const minimumTop = Math.max(8, (document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0) + 8);
