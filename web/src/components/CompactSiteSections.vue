@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { useSiteLinks } from "@/lib/site-links";
+import { computed, inject, ref } from "vue";
+import { useSiteLinks, petMenuKey } from "@/lib/site-links";
 import SiteLink from "./SiteLink.vue";
-defineProps<{ opener?: () => HTMLElement | null }>();
+const props=defineProps<{ opener?: () => HTMLElement | null }>();
 const emit = defineEmits<{ activate: []; appearance: []; language: [] }>();
 const { links } = useSiteLinks();
+const petMenu=inject(petMenuKey,computed(()=>false));
+const emitPet=()=>{emit("activate");setTimeout(()=>openPetMenu(props.opener?.()??null),0);};
+import {openPetMenu} from "@/pet/enabled";
 const pick = (ids: string[]) => computed(() => ids.flatMap(id => links.value.filter(link => link.id === id).map(link => link.id === "updates" && "to" in link ? { ...link, query: { ...link.query, from: "menu" } } : link)));
 const otherOpen = ref(false);
 const routes = pick(['routes']);
@@ -18,6 +21,7 @@ const legal = pick(['privacy', 'license']);
     <p class="compact-label">{{ $t('home.preferences') }}</p>
     <button type="button" role="menuitem" @click="emit('appearance')">{{ $t('appearance.title') }}</button>
     <button type="button" role="menuitem" @click="emit('language')">{{ $t('nav.language') }}</button>
+    <button v-if="petMenu" type="button" role="menuitem" data-pet-menu @click="emitPet">{{ $t("mascot.pet.openMenu") }}</button>
     <SiteLink v-for="link in routes" :key="link.id" :link="link" :opener="opener" @activate="emit('activate')" />
     <slot name="settings" />
   </div>

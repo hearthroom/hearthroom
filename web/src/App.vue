@@ -6,11 +6,12 @@ import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, provide, reactive, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import {homePhoneMode} from "@/pet/home-clearance";
 import { petEnabled } from "@/pet/enabled";
 import CheckinHint from "@/components/CheckinHint.vue";
 import SiteLink from "@/components/SiteLink.vue";
 import SiteMenu from "@/components/SiteMenu.vue";
-import { siteLinksKey, boardEndKey, boardListEndKey, sidebarBoundsKey, headerOverlaysKey } from "@/lib/site-links";
+import { siteLinksKey, boardEndKey, boardListEndKey, sidebarBoundsKey, headerOverlaysKey, petMenuKey } from "@/lib/site-links";
 import AccountMenu from "@/components/AccountMenu.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { useNotifications } from "@/lib/notifications";
@@ -91,10 +92,13 @@ provide(boardListEndKey, boardListEnd);
 provide(sidebarBoundsKey, ref(null));
 const onBoardPage = computed(() => route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, ''));
 const compactHeader = ref(typeof window.matchMedia === "function" ? window.matchMedia('(max-width: 1079px)').matches : false);
+const petPhone = ref(homePhoneMode(innerWidth, matchMedia("(pointer: coarse)").matches));
+provide(petMenuKey, computed(()=>onBoardPage.value&&petEnabled.value&&petPhone.value));
 const headerElement = ref<HTMLElement | null>(null);
 let headerObserver: ResizeObserver | undefined;
 function measureHeader() {
   compactHeader.value = window.innerWidth < 1080;
+  petPhone.value=homePhoneMode(innerWidth,matchMedia("(pointer: coarse)").matches);
   const h = headerElement.value?.getBoundingClientRect().height;
   if (h) document.documentElement.style.setProperty('--site-header-h', `${h}px`);
 }

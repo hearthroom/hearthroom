@@ -2,6 +2,7 @@ import { computed, inject, onBeforeUnmount, watch, type ComputedRef, type Inject
 import type { SidebarRect } from "./sidebar-clearance";
 import { footerGroups, footerLegal, footerSupport, type FooterContext } from "./footer-nav";
 
+export const petMenuKey: InjectionKey<ComputedRef<boolean>> = Symbol("pet-menu");
 export const siteLinksKey: InjectionKey<ComputedRef<FooterContext>> = Symbol("site-links");
 export const sidebarBoundsKey: InjectionKey<Ref<SidebarRect | null>> = Symbol("sidebar-bounds");
 export const boardListEndKey: InjectionKey<Ref<boolean>> = Symbol("board-list-end");

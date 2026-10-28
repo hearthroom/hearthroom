@@ -13,6 +13,7 @@ import {
 import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
+import {nearestClearPetY,type PhoneClearance} from "./home-clearance";
 import { type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
@@ -53,6 +54,8 @@ export interface PetOptions {
   sidebarBounds?: () => SidebarRect | null;
   /** Homepage 640–1079 has a dedicated avatar lane, including coarse-pointer devices. */
   parkOnHomepage?: () => boolean;
+  /** Only the homepage phone caller supplies content obstacles. */
+  phoneClearance?: () => PhoneClearance | null;
   /** A deliberate homepage rail popup owns interaction until it closes. */
   onSidebarMenuChange?: (open: boolean) => void;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
@@ -129,6 +132,41 @@ export class SukiPet {
   private stopped = false;
   private idleButton: HTMLButtonElement;
   private homeParked = false;
+  private phoneOriginal: {x:number;y:number} | null = null;
+  private phoneFocus: HTMLElement | null = null;
+  private releasePhone() {
+    const original=this.phoneOriginal;
+    this.closeMenu();this.phoneOriginal=null;this.sidebarDocked=false;this.sidebarAwake=false;
+    this.el.classList.remove("suki-pet--phone-suspended","suki-pet--phone-dialog","suki-pet--sidebar-idle","suki-pet--sidebar-expanded");
+    for(const popup of [this.bubble,this.menuEl]){popup.style.translate="";popup.style.maxHeight="";popup.style.overflowY="";}
+    if(original){this.place(original);this.refit();}this.layoutEdge();
+  }
+  private updatePhone(space:PhoneClearance) {
+    if(!this.phoneOriginal){if(this.sidebarDocked)this.releaseSidebar();this.phoneOriginal={...this.pos};}
+    this.idleButton.hidden=true;
+    if(this.sidebarAwake){
+      const body=this.box();this.place({x:innerWidth-body.width-8,y:Math.max(space.top+8,innerHeight-body.height-8)});
+      if(this.tab)this.tab.hidden=true;if(this.catcher)this.catcher.hidden=true;return;
+    }
+    if(this.drag||this.slide)return;
+    this.bubble.hidden=true;this.queue=[];petSpeaking.value=false;
+    this.walk=null;this.lastInput=performance.now();this.touchedAt=performance.now();
+    const original=this.opts.mobile&&this.tucked?peekPos(this.viewport(),this.size(),this.side,this.phoneOriginal.y):clampStand(this.viewport(),this.size(),this.phoneOriginal);
+    const body={...this.box(),left:original.x,right:original.x+this.box().width},catcher=this.opts.mobile&&this.tucked?peekCatch(this.viewport(),this.size(),this.side,this.pos.y):null;
+    const y=nearestClearPetY({...space,left:Math.min(body.left,catcher?.x??body.left),right:Math.max(body.right,catcher?catcher.x+catcher.w:body.right),height:Math.max(body.height,catcher?.h??0),original:original.y,current:this.pos.y});
+    this.el.classList.toggle("suki-pet--phone-suspended",y===null);
+    if(y!==null)this.place({x:original.x,y});
+    this.layoutEdge();
+  }
+  /** Ordinary homepage entry: preserve the enabled preference and saved position. */
+  openFrom(opener:HTMLElement|null) {
+    const space=this.opts.phoneClearance?.();if(!space||this.opts.parkOnHomepage?.())return;
+    this.updatePhone(space);this.phoneFocus=opener;
+    this.sidebarDocked=true;this.sidebarAwake=true;
+    this.el.classList.remove("suki-pet--phone-suspended","suki-pet--sidebar-idle");
+    this.el.classList.add("suki-pet--phone-dialog");this.updatePhone(space);this.openMenu();
+    this.menuEl.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
+  }
   private sidebarDocked = false;
   private sidebarAwake = false;
   private sidebarActions = 0;
@@ -150,6 +188,7 @@ export class SukiPet {
   private updateSidebar() {
     const parking = this.opts.parkOnHomepage?.() === true;
     if (parking) {
+      if(this.phoneOriginal)this.releasePhone();
       if (!this.homeParked) {
         if (this.sidebarDocked) this.releaseSidebar();
         this.sidebarPosition = { ...this.pos };
@@ -170,6 +209,9 @@ export class SukiPet {
       return;
     }
     if (this.homeParked) this.releaseSidebar();
+    const phone=this.opts.phoneClearance?.();
+    if(phone){this.updatePhone(phone);return;}
+    if(this.phoneOriginal)this.releasePhone();
     const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
     if (!bounds) {
       this.opts.onSidebarMenuChange?.(false);
@@ -331,6 +373,7 @@ export class SukiPet {
   private get ready() { return !!this.rig; }
 
   private openMenu() {
+    if(this.phoneOriginal&&!this.sidebarAwake){this.openFrom(document.querySelector<HTMLElement>('.acct__btn,.site-menu > button'));return;}
     this.touchedAt = performance.now();
     const items: MenuItem[] = [...(this.opts.menu?.() ?? [])];
     // 拓麻歌子那幾顆按鈕：看她的狀態、陪她玩、哄她睡
@@ -384,6 +427,12 @@ export class SukiPet {
     // until the answer closes; automatic idle chatter must stay suppressed.
     if (!keepSidebarAnswer) {
       this.opts.onSidebarMenuChange?.(false);
+      if(this.phoneOriginal&&this.sidebarAwake){
+        const focus=this.phoneFocus;this.phoneFocus=null;this.sidebarDocked=false;this.sidebarAwake=false;
+        this.el.classList.remove("suki-pet--phone-dialog");this.bubble.hidden=true;
+        this.place(this.phoneOriginal);this.refit();
+        if(focus?.isConnected)setTimeout(()=>focus.focus({preventScroll:true}),0);
+      }
       if (this.sidebarDocked && this.sidebarAwake) {
         this.sidebarAwake = false;
         this.bubble.hidden = true;
@@ -396,6 +445,7 @@ export class SukiPet {
       document.removeEventListener("keydown", this.escape, true);
     }
     clearTimeout(this.menuTimer);
+    if(this.phoneOriginal&&!this.sidebarAwake){const space=this.opts.phoneClearance?.();if(space)this.updatePhone(space);}
     if (this.menuEl.hidden) return;
     this.menuEl.hidden = true;
     if (!keepSidebarAnswer) setTimeout(() => this.drainQueue(), 400);
@@ -474,7 +524,7 @@ export class SukiPet {
   }
   private act(a: Act, urgent = false) {
     const showIf = this.opts.quietReading ? () => a.showIf?.() !== false && (urgent || !this.opts.quietReading!()) : a.showIf;
-    if (this.sidebarIdle || showIf?.() === false) return;
+    if (this.sidebarIdle || (this.phoneOriginal&&!this.sidebarAwake&&!!a.say) || showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
@@ -553,12 +603,13 @@ export class SukiPet {
   private frame(dt: number, now: number) {
     this.updateSidebar();
     if (this.sidebarIdle) return;
-    if (this.homeParked) {
+    if (this.homeParked || (this.phoneOriginal&&this.sidebarAwake)) {
       this.fitPopups();
       if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.queue = []; }
       if (this.sidebarAwake && !this.sidebarActions && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
       return;
     }
+    if(this.el.classList.contains("suki-pet--phone-suspended"))return;
     if (this.sidebarAwake) this.fitPopups();
     const p = this.rig.params;
     // 表情淡入淡出；演完回到平常
@@ -1129,7 +1180,8 @@ export class SukiPet {
     this.fitPopups();
   }
   private save(p: { x: number; y: number }, peeking = false) {
-    if (this.homeParked || this.opts.parkOnHomepage?.()) return;
+    if (this.homeParked || this.opts.parkOnHomepage?.() || (this.phoneOriginal&&this.sidebarAwake)) return;
+    if(this.phoneOriginal&&!this.sidebarAwake)this.phoneOriginal={...p};
     if (this.sidebarDocked && this.sidebarAwake && !this.homeParked) this.sidebarPosition = { ...p };
     if (this.opts.mobile) {
       try { localStorage.setItem("suki.pet.pos", JSON.stringify(toSaved(this.viewport(), p, peeking ? this.side : null))); } catch { /* 存不了就算了 */ }
@@ -1319,7 +1371,7 @@ export class SukiPet {
   }
   /** 螢幕邊上的東西：站著時的細條頁籤、探出時的接觸區 */
   private layoutEdge() {
-    if (this.opts.parkOnHomepage?.()) { if (this.tab) this.tab.hidden = true; if (this.catcher) this.catcher.hidden = true; return; }
+    if (this.opts.parkOnHomepage?.() || this.el.classList.contains("suki-pet--phone-suspended") || this.el.classList.contains("suki-pet--phone-dialog")) { if (this.tab) this.tab.hidden = true; if (this.catcher) this.catcher.hidden = true; return; }
     if (!this.opts.mobile) return;
     const f = this.viewport(), size = this.size(), s = Math.max(0, Math.min(1, this.peekS));
     // 頁籤只在她站著時當「她住這一側」的細條；探出時收掉，她的身體直接貼著螢幕邊（owner 2026-10-24：中間不能有一條底色）
@@ -1337,8 +1389,8 @@ export class SukiPet {
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
-    if (!this.opts.mobile || this.homeParked) {
-      const bounds = this.opts.sidebarBounds?.() ?? (this.homeParked ? { left: 0, right: innerWidth, top: 0, bottom: innerHeight } : null);
+    if (!this.opts.mobile || this.homeParked || this.phoneOriginal) {
+      const bounds = this.opts.sidebarBounds?.() ?? ((this.homeParked||this.phoneOriginal) ? { left: 0, right: innerWidth, top: 0, bottom: innerHeight } : null);
       for (const el of [this.bubble, this.menuEl]) {
         if (!bounds || !this.sidebarAwake || el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
         const minimumTop = Math.max(8, (document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0) + 8);
@@ -1348,7 +1400,7 @@ export class SukiPet {
         const previous = el.style.translate.split(" ").map(v => parseFloat(v) || 0);
         const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
         let x = Math.max(8, Math.min(left, innerWidth - 8 - r.width)), y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
-        if (!this.homeParked && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
+        if (!this.homeParked && !this.phoneOriginal && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
         const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
         if (el.style.translate !== translate) el.style.translate = translate;
       }

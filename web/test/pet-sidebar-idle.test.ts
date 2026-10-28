@@ -99,3 +99,26 @@ it.each([false,true])('keeps the pet reachable after shrinking out of the homepa
  expect(localStorage.getItem('suki.pet.pos')).toBe('original-preference');
  localStorage.removeItem('suki.pet.pos');vi.unstubAllGlobals();
 });
+
+it('suspends passive phone presentation without changing preferences and opens an explicit text menu',()=>{
+ const {p}=setup(true);const manual=pet as unknown as {opts:PetOptions & {phoneClearance?:()=>unknown};openFrom:(opener:HTMLElement)=>void;menuEl:HTMLElement;closeMenu:()=>void;phoneOriginal:unknown};
+ manual.opts.phoneClearance=()=>({top:60,bottom:900,obstacles:[{left:0,right:1200,top:60,bottom:900}]});
+ localStorage.setItem('suki.pet.pos','preserve');p.updateSidebar();
+ expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);expect(p.idleButton.hidden).toBe(true);
+ const opener=document.createElement('button');document.body.append(opener);manual.openFrom(opener);
+ expect(manual.menuEl.hidden).toBe(false);expect(p.el.classList.contains('suki-pet--phone-dialog')).toBe(true);
+ manual.closeMenu();expect(manual.menuEl.hidden).toBe(true);expect(localStorage.getItem('suki.pet.pos')).toBe('preserve');
+ opener.remove();localStorage.removeItem('suki.pet.pos');
+});
+
+it('keeps manual async phone answers readable and restores the passive policy afterwards',async()=>{
+ const change=vi.fn();const {p}=setup(true,change);
+ const manual=pet as unknown as {opts:PetOptions;openFrom:(opener:HTMLElement|null)=>void;menuEl:HTMLElement;closeMenu:()=>void};
+ manual.opts.phoneClearance=()=>({top:60,bottom:900,obstacles:[{left:0,right:1200,top:60,bottom:900}]});
+ let resolve!:()=>void;const pending=new Promise<void>(r=>resolve=r);
+ manual.opts.menu=()=>[{label:'Resume',run:async()=>{await pending;pet.say('No previous conversation.');}}];
+ p.updateSidebar();manual.openFrom(null);manual.menuEl.querySelector<HTMLButtonElement>('button')!.click();
+ expect(change).toHaveBeenLastCalledWith(true);resolve();for(let i=0;i<5;i++)await Promise.resolve();
+ expect(p.bubble.hidden).toBe(false);expect(change).toHaveBeenLastCalledWith(true);
+ manual.closeMenu();expect(p.bubble.hidden).toBe(true);expect(change).toHaveBeenLastCalledWith(false);expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
+});

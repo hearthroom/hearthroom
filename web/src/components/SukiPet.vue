@@ -26,6 +26,7 @@ import { platformPath } from "@/lib/connection-ui";
 import { can } from "@/lib/provider";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
+import {homePhoneMode,homePhoneObstacles,type PhoneClearance} from "@/pet/home-clearance";
 import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
@@ -128,8 +129,25 @@ function homepagePetBounds() {
   return bottom > top ? { left: rect.left, right: rect.right, top, bottom } : null;
 }
 
+let obstacleKey="",obstacleCache:PhoneClearance|null=null;
+function phoneClearance():PhoneClearance|null {
+ if(!petEnabled.value||!homePhoneMode(innerWidth,matchMedia("(pointer: coarse)").matches)||route.path.replace(/\/+$/,'')!==lp('/').replace(/\/+$/,''))return null;
+ const board=document.querySelector<HTMLElement>('.board-page');
+ const header=document.querySelector('.header')?.getBoundingClientRect().bottom??60;
+ const key=[route.fullPath,scrollY,innerWidth,innerHeight,board?.offsetHeight,document.querySelector<HTMLElement>('.footer')?.offsetHeight,header].join(':');
+ if(key!==obstacleKey||!obstacleCache){obstacleKey=key;obstacleCache={top:header,bottom:innerHeight,obstacles:homePhoneObstacles()};}
+ return obstacleCache;
+}
+let pendingMenu:HTMLElement|null=null,starting=false;
+function menuRequest(e:Event){
+ if(!phoneClearance())return;
+ const opener=(e as CustomEvent<HTMLElement|null>).detail;
+ if(pet.value)pet.value.openFrom(opener);else{pendingMenu=opener;void start();}
+}
 let disposed = false;
 async function start() {
+  if(disposed||pet.value||starting)return;starting=true;
+  try{
   const { SukiPet } = await import("@/pet/pet-ui");
   if (disposed || pet.value) return;
   const mobile = matchMedia("(pointer: coarse)").matches || innerWidth < 640;
@@ -145,6 +163,7 @@ async function start() {
     canListEnd: () => props.listEndAllowed,
     sidebarBounds: homepagePetBounds,
     parkOnHomepage: homepageParking,
+    phoneClearance,
     onSidebarMenuChange: open => { sidebarMenuOpen.value = open; },
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     quietReading: () => mobile && reviewingDetail.value,
@@ -181,6 +200,8 @@ async function start() {
   if (import.meta.env.DEV) (window as unknown as { __suki: Pet }).__suki = p;
   enter(route.path);
   if (takeSummon()) p.on({ type: "summon" });
+  if(pendingMenu){const opener=pendingMenu;pendingMenu=null;p.openFrom(opener);}
+  }finally{starting=false;}
 }
 
 function stop() { pet.value?.stop(); pet.value = null; }
@@ -192,6 +213,7 @@ function whenLoaded(go: () => void) {
   else window.addEventListener("load", go, { once: true });
 }
 onMounted(() => {
+  window.addEventListener("suki-menu",menuRequest);
   if (!petEnabled.value) return;
   const go = () => void start();
   whenLoaded(() => {
@@ -199,7 +221,7 @@ onMounted(() => {
     else setTimeout(go, 1500);
   });
 });
-onBeforeUnmount(() => { disposed = true; stop(); });
+onBeforeUnmount(() => { disposed = true;window.removeEventListener("suki-menu",menuRequest);stop(); });
 watch(petEnabled, (on) => { if (on) void start(); else stop(); });
 
 /** 作者工作區（編輯器）是滿版的，右下角是試聊的輸入框：進來時她先收到邊上 */
@@ -343,4 +365,11 @@ body:has(.header [role="menu"]) .suki-pet--mobile.suki-pet--tucked .suki-pet__go
 /* 量 safe-area 的探針：看不見、不佔位、不接點擊 */
 .suki-pet__inset { position: absolute; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 @media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: none; } }
+</style>
+
+<style>
+.suki-pet--phone-suspended {visibility:hidden;opacity:0;pointer-events:none;}
+.suki-pet--phone-dialog {pointer-events:none;}
+.suki-pet--phone-dialog .suki-pet__canvas,.suki-pet--phone-dialog .suki-pet__hit {visibility:hidden;pointer-events:none;}
+.suki-pet--phone-dialog .suki-pet__menu,.suki-pet--phone-dialog .suki-pet__bubble {pointer-events:auto;}
 </style>

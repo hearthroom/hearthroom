@@ -24,3 +24,15 @@ it("puts preferences before community, deduplicates destinations, and collapses 
   expect(root.querySelector('[data-menu-section="community"]')?.querySelectorAll('[data-site-link]').length).toBe(5);
   expect(root.querySelector('[data-menu-section="preferences"] [data-site-link="routes"]')?.textContent).toContain('example.test');
 });
+
+it('opens the ordinary pet menu after language without resetting position or enabling a disabled pet',async()=>{
+ const {petMenuKey}=await import('../src/lib/site-links');const {petEnabled}=await import('../src/pet/enabled');
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div/>'}}]});await router.push('/');
+ const opener=document.createElement('button');document.body.append(opener);const events:Event[]=[];const listen=(e:Event)=>events.push(e);window.addEventListener('suki-menu',listen);
+ root=document.createElement('div');document.body.append(root);app=createApp(CompactSiteSections,{opener:()=>opener}).use(createPinia()).use(router).use(i18n);app.provide(petMenuKey,computed(()=>true));app.mount(root);await nextTick();
+ const buttons=[...root.querySelectorAll('[data-menu-section="preferences"] button')];expect(buttons[2]?.hasAttribute('data-pet-menu')).toBe(true);
+ localStorage.setItem('suki.pet.pos','saved-position');petEnabled.value=true;(buttons[2] as HTMLButtonElement).click();await new Promise(r=>setTimeout(r,10));
+ expect(events).toHaveLength(1);expect((events[0] as CustomEvent).detail).toBe(opener);expect(localStorage.getItem('suki.pet.pos')).toBe('saved-position');
+ petEnabled.value=false;await nextTick();(buttons[2] as HTMLButtonElement).click();await new Promise(r=>setTimeout(r,10));expect(events).toHaveLength(1);expect(petEnabled.value).toBe(false);
+ window.removeEventListener('suki-menu',listen);opener.remove();localStorage.removeItem('suki.pet.pos');petEnabled.value=true;await nextTick();
+});
