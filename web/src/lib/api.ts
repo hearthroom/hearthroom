@@ -114,6 +114,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   review_correction_manager_required:'review.correction.managerRequired',
   review_correction_not_final:'review.correction.notFinal',
   review_correction_changed:'review.correction.changed',
+  review_correction_reward_pending:'review.correction.rewardPending',
   visibility_read_budget_exceeded: "state.serverBusy",
   visibility_disabled: "visibility.loadFailed",
   visibility_restricted: "state.forbidden",
@@ -515,7 +516,7 @@ export interface ReviewDetail {
     claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
-    correction?:{note:string;at:number;state:'pending'|'complete';operationId:string;publicState:string|null;canResume:boolean}|null;
+    correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
   };
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };

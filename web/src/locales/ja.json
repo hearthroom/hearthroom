@@ -3566,5 +3566,6 @@
   "review.correction.authorBody": "このバージョンは承認されていましたが、審査結果を却下に訂正しました。",
   "review.correction.authorReason": "却下理由",
   "review.correction.authorOpen": "審査結果を見る",
-  "review.correction.rewardKept": "今回の申請で受け取った創作シーズンの特典は、そのまま残ります。"
+  "review.correction.rewardKept": "今回の申請で受け取った創作シーズンの特典は、そのまま残ります。",
+  "review.correction.rewardPending": "創作シーズンの特典が付与済みか確認できていません。時間をおいて再読み込みしてから訂正してください。"
 }

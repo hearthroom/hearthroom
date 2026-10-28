@@ -79,6 +79,21 @@ it('requires confirmation before approval, cancels without POST, and snapshots t
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1'}));
 });
 
+it('clears the old actionable submission immediately while the next route detail is still loading',async()=>{
+ app.unmount();
+ let release!:(value:any)=>void;
+ api.fetchReviewDetail.mockReset().mockImplementation((id:string)=>id==='s1'?Promise.resolve(pendingDetail()):new Promise(resolve=>{release=resolve;}));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});
+ await router.push('/review/s1');
+ app=createApp({template:'<router-view />'}).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ await router.push('/review/s2');
+ await vi.waitFor(()=>expect(api.fetchReviewDetail).toHaveBeenCalledWith('s2','local-reviewer'));
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeNull());
+ expect(confirmState.current).toBeNull();
+ release({...pendingDetail(),submission:{...pendingDetail().submission,id:'s2'}});
+});
+
 it('the reviewer holding the claim fixes a missing tag and the page shows the saved tags',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  api.updateReviewTags.mockResolvedValue({tags:['冒險','倫理']});

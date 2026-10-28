@@ -1,9 +1,11 @@
 import { SELF, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { legacyPolicyFixture } from './work-policy-fixture';
-import { workPolicyGateway } from '../src/work-policy';
+import { workPolicyGateway,enrollWorkAccess } from '../src/work-policy';
 import {pushLine} from '../src/community/push';
 import {opsMetrics} from '../src/ops-metrics';
+import {HttpError} from '../src/types';
+import {reconcileWorkAccess} from '../src/work-reconcile';
 import { bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, ratingBody } from './helpers';
 
 beforeEach(async () => {
@@ -81,9 +83,27 @@ it('enforces ownership, final status, 24h limit and manager override',async()=>{
 it('keeps a durable fence after an unknown Provider reply and recovers the same operation',async()=>{
  const id=await approved(),operationId=crypto.randomUUID(),change=workPolicyGateway.change;
  workPolicyGateway.change=async(...args)=>{await change(...args);throw new Error('reply lost');};
- expect((await correct(id,'reviewer',operationId)).status).toBe(503);
+ const firstAttempt=await correct(id,'reviewer',operationId);
+ expect(firstAttempt.status,await firstAttempt.clone().text()).toBe(503);
  expect((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first<{status:string}>())!.status).toBe('approved');
  expect((await env.DB.prepare('SELECT sync_state FROM managed_work_access').first<{sync_state:string}>())!.sync_state).toBe('changing');
+ workPolicyGateway.change=change;
+ expect((await correct(id,'reviewer',operationId)).status).toBe(200);
+});
+
+it('can finalize a confirmed correction after a later source edit advanced Provider epoch',async()=>{
+ const id=await approved(),owner=await env.DB.prepare("SELECT member_id FROM works WHERE source_role_id='role-1'").first<{member_id:string}>();
+ await enrollWorkAccess(env,{memberId:owner!.member_id,roleId:'role-1',operationId:crypto.randomUUID(),access:'public',token:'author'});
+ const change=workPolicyGateway.change,operationId=crypto.randomUUID();
+ workPolicyGateway.change=async(env,provider,source,command,token)=>{
+  const receipt=await change(env,provider,source,command,token);
+  if(command.action==='correct_review'){
+   await change(env,provider,source,{workId:command.workId,operationId:crypto.randomUUID(),expectedEpoch:receipt.epoch,action:'cancel'});
+   throw new Error('correction committed, reply lost, source epoch advanced');
+  }
+  return receipt;
+ };
+ const attempt=await correct(id,'reviewer',operationId);expect(attempt.status,await attempt.clone().text()).toBe(503);
  workPolicyGateway.change=change;
  expect((await correct(id,'reviewer',operationId)).status).toBe(200);
 });
@@ -117,4 +137,64 @@ it('correcting an older approval preserves the newer public version',async()=>{
 it('keeps the database terminal guard closed without a Provider-confirmed correction',async()=>{
  const id=await approved();
  await expect(env.DB.prepare("UPDATE review_submissions SET status='rejected' WHERE id=?").bind(id).run()).rejects.toThrow('submission already decided');
+});
+
+it('releases a definitively refused stale-epoch intent so the reviewer can reload and confirm a new operation',async()=>{
+ const id=await approved(),change=workPolicyGateway.change;
+ workPolicyGateway.change=async(env,provider,source,command,token)=>{
+  if(command.action==='correct_review'){
+   await change(env,provider,source,{workId:command.workId,operationId:crypto.randomUUID(),expectedEpoch:command.expectedEpoch,action:'cancel'});
+   throw new HttpError(409,'visibility_operation_conflict');
+  }
+  return change(env,provider,source,command,token);
+ };
+ expect((await correct(id)).status).toBe(409);
+ expect((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first<{status:string}>())!.status).toBe('approved');
+ expect((await env.DB.prepare('SELECT sync_state FROM managed_work_access').first<{sync_state:string}>())!.sync_state).toBe('complete');
+ workPolicyGateway.change=change;
+ expect((await correct(id)).status).toBe(200);
+});
+
+it('waits for an unknown reward payout to reconcile before completing correction',async()=>{
+ const id=await approved(),campaign=crypto.randomUUID(),reward=crypto.randomUUID();
+ const s=await env.DB.prepare('SELECT card_id FROM review_submissions WHERE id=?').bind(id).first<{card_id:string}>();
+ const owner=await env.DB.prepare("SELECT member_id FROM works WHERE source_role_id='role-1'").first<{member_id:string}>();
+ await env.DB.prepare(`INSERT INTO card_reward_campaigns(id,slug,title,starts_at,ends_at,weekly_limit,reward,status,created_at,updated_at) VALUES(?,'synthetic-season','{}',0,9999999999999,6,20000,'active',0,0)`).bind(campaign).run();
+ await env.DB.prepare(`INSERT INTO card_rewards(id,campaign_id,work_key,card_id,member_id,recipient_account_no,amount,status,requested_by,created_at,updated_at,retention_role_id,public_days)
+  VALUES(?,?,?,?,?,10001,20000,'pending','member-20001',0,0,'role-1',30)`).bind(reward,campaign,'synthetic-work',s!.card_id,owner!.member_id).run();
+ expect((await correct(id)).status).toBe(503);
+ expect((await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first<{status:string}>())!.status).toBe('approved');
+ await env.DB.prepare("UPDATE card_rewards SET status='paid',provider_entry_id=? WHERE id=?").bind(crypto.randomUUID(),reward).run();
+ expect((await correct(id)).status).toBe(200);
+ const command=await env.DB.prepare("SELECT command FROM review_corrections WHERE state='complete'").first<{command:string}>();
+ expect(JSON.parse(command!.command).rewardPayoutEntryIds).toHaveLength(1);
+ // A payout whose due-read happened before correction cannot arrive after it.
+ await expect(env.DB.prepare(`INSERT INTO card_rewards(id,campaign_id,work_key,card_id,member_id,recipient_account_no,amount,status,requested_by,created_at,updated_at,retention_role_id,public_days)
+  SELECT ?,campaign_id,'synthetic-delayed-work',card_id,member_id,recipient_account_no,amount,'pending',requested_by,0,0,retention_role_id,public_days FROM card_rewards WHERE id=?`).bind(crypto.randomUUID(),reward).run()).rejects.toThrow('review correction');
+});
+
+it('does not let an unadmitted correction preempt a moderation fence during reconciliation',async()=>{
+ const id=await approved();
+ const owner=await env.DB.prepare("SELECT member_id FROM works WHERE source_role_id='role-1'").first<{member_id:string}>();
+ await enrollWorkAccess(env,{memberId:owner!.member_id,roleId:'role-1',operationId:crypto.randomUUID(),access:'public',token:'author'});
+ await env.DB.prepare("INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES('harbor','role-1')").run();
+ await env.DB.prepare("UPDATE moderation_state SET public_blocked=1 WHERE source_role_id='role-1'").run();
+ await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing',sync_operation_id='moderation-owner' WHERE source_role_id='role-1'").run();
+ expect((await correct(id)).status).toBe(409);
+ const result=await reconcileWorkAccess(env);
+ expect(result.complete).toBe(1);
+ expect((await env.DB.prepare('SELECT restriction,confirmed_moderation_revision,moderation_revision FROM managed_work_access').first())).toEqual({restriction:'suspended',confirmed_moderation_revision:1,moderation_revision:1});
+});
+
+it('never restores a previous approved revision that is still blocked by moderation',async()=>{
+ const first=await approved();
+ const firstVersion=await env.DB.prepare('SELECT approved_version_id FROM cards').first<{approved_version_id:string}>();
+ await SELF.fetch('https://c.test/v1/cards/role-1/edit',{method:'POST',headers:bearer('author')});
+ const second=await approved();expect(second).not.toBe(first);
+ await env.DB.prepare(`INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,card_number,public_evidence,action,reason,created_by,operation_id,status,created_at)
+  VALUES('synthetic-case','harbor','role-1',?,'synthetic','synthetic',100001,'{}','suspend','synthetic','synthetic','synthetic-case-op','dismissed',0)`).bind(firstVersion!.approved_version_id).run();
+ // The suspension blocked both revisions; a later restore cleared only B.
+ await env.DB.prepare('DELETE FROM moderation_blocked_versions WHERE version_id=(SELECT version_id FROM hosting_versions WHERE submission_id=?)').bind(second).run();
+ const response=await correct(second);expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({publicState:'unpublished',publicVersionId:null});
 });

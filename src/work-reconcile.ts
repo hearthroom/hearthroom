@@ -4,7 +4,7 @@ import {bumpOp} from './ops-metrics';
 import {fenceManagedWork,syncManagedRestriction} from './work-fence';
 import {finalizeManagedReview} from './work-publication';
 import {correctReview} from './review-correction';
-import {projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand} from './work-policy';
+import {projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,policyOperationId,type WorkPolicyCommand} from './work-policy';
 import {finishManagedWithdrawal} from './cards';
 import {recoverAuthorVisibility,type AuthorOperation} from './work-sharing-commands';
 import {refreshWorkAccess} from './work-refresh';
@@ -44,8 +44,10 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
    const decision=await env.DB.prepare(`SELECT d.submission_id FROM work_review_decisions d JOIN hosting_versions v ON v.submission_id=d.submission_id
     JOIN work_publication_permits g ON g.version_id=v.version_id WHERE v.work_id=? AND g.operation_id=? AND g.state='prepared'`)
     .bind(row.work_id,row.sync_operation_id).first<{submission_id:string}>();
-   const correction=await env.DB.prepare(`SELECT x.submission_id,x.actor_member_id,x.operation_id,x.note FROM review_corrections x JOIN hosting_versions v ON v.submission_id=x.submission_id WHERE v.work_id=? AND x.state='pending'`).bind(row.work_id).first<{submission_id:string;actor_member_id:string;operation_id:string;note:string}>();
-   if(correction){
+   const candidates=await env.DB.prepare(`SELECT x.submission_id,x.actor_member_id,x.operation_id,x.note FROM review_corrections x JOIN hosting_versions v ON v.submission_id=x.submission_id WHERE v.work_id=? AND x.state='pending'`).bind(row.work_id).all<{submission_id:string;actor_member_id:string;operation_id:string;note:string}>();
+   let correction:typeof candidates.results[number]|undefined;
+   for(const candidate of candidates.results){if(candidate.operation_id===row.sync_operation_id||await policyOperationId('review-correction-bind:'+candidate.operation_id)===row.sync_operation_id){correction=candidate;break;}}
+   if(correction&&row.moderation_revision===row.confirmed_moderation_revision){
     await correctReview(env,{id:correction.submission_id,member:correction.actor_member_id,operationId:correction.operation_id,note:correction.note,now:Date.now()});
     complete++;continue;
    }

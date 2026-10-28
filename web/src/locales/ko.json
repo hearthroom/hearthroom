@@ -3566,5 +3566,6 @@
   "review.correction.authorBody": "이 버전은 심사를 통과했지만, 심사 결과를 반려로 정정했어요.",
   "review.correction.authorReason": "반려 사유",
   "review.correction.authorOpen": "심사 결과 보기",
-  "review.correction.rewardKept": "이 심사 건으로 이미 받은 창작 시즌 보상은 그대로 유지돼요."
+  "review.correction.rewardKept": "이 심사 건으로 이미 받은 창작 시즌 보상은 그대로 유지돼요.",
+  "review.correction.rewardPending": "창작 시즌 보상 지급 여부를 아직 확인하지 못했어요. 잠시 후 새로고침한 다음 심사 결과를 정정해 주세요."
 }

@@ -1536,7 +1536,7 @@ app.get('/v1/mine/reviews/:id',async(c)=>{
   v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
   FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
-  LEFT JOIN review_corrections x ON x.submission_id=s.id
+  LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
   WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
    status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;
   }>();
@@ -1749,7 +1749,7 @@ app.get("/v1/review/:id/detail", async (c) => {
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
-        correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=?").bind(member.id,s.id).first(),
+        correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
         ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份

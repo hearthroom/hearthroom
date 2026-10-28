@@ -3566,5 +3566,6 @@
   "review.correction.authorBody": "这个版本原本通过审核，现已更正为驳回。",
   "review.correction.authorReason": "驳回理由",
   "review.correction.authorOpen": "查看审核结果",
-  "review.correction.rewardKept": "已发放的这笔创作季奖励不受影响。"
+  "review.correction.rewardKept": "已发放的这笔创作季奖励不受影响。",
+  "review.correction.rewardPending": "创作季奖励是否已发放仍待确认，请稍后重新加载再改判。"
 }

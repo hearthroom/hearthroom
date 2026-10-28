@@ -101,9 +101,9 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 <template>
   <Teleport to="body">
     <div v-if="confirmState.current" class="dlg-backdrop" @click.self="!busy && settleConfirm(false)">
-      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
+      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
-        <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg">{{ confirmState.current.message }}</p>
+        <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
         <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
@@ -158,14 +158,15 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
   display: grid; gap: var(--s-3);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
   animation: pop var(--dur-slow) var(--ease);
-  max-height:calc(100dvh - var(--s-6));overflow-y:auto;
 }
 /* 標題與內文可能帶使用者或作者給的長字（卡名、項目 key）：不斷行會把框撐得比畫面還寬 */
 .dlg > * { min-width: 0; }
 .dlg--publication { width:min(420px,100%); max-height:calc(100dvh - var(--s-6)); overflow-y:auto; }
 .dlg--publication .dlg__actions { min-width:0; }
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; white-space:pre-wrap; }
+.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.dlg--scroll-message { max-height:calc(100dvh - var(--s-6)); }
+.dlg--scroll-message .dlg__msg { max-height:max(120px,calc(100dvh - 300px));overflow-y:auto;overscroll-behavior:contain;white-space:pre-wrap; }
 .dlg__detail {
   display: block; padding: 10px 12px;
   border-radius: var(--r-sm); background: var(--surface-2);

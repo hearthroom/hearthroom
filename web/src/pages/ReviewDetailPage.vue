@@ -45,7 +45,7 @@ let loadSequence=0;
 let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
-watch(id,()=>{cancelOwnedConfirm();correctionOpen.value=false;correctionNote.value='';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;correctionOpen.value=false;correctionNote.value='';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -214,7 +214,7 @@ async function release() {
 }
 
 async function stamp(verdict: "approve" | "reject") {
-  if(busy.value||!data.value)return;
+  if(busy.value||!data.value||data.value.submission.id!==id.value)return;
   if (!claimedByMe.value) {
     error.value = t("review.claimFirst");
     return;
@@ -225,7 +225,7 @@ async function stamp(verdict: "approve" | "reject") {
   try {
     const confirmedToken=await token();
     const approved=review.submission.stamps.filter(s=>s.verdict==='approve').length+1>=review.submission.required;
-    if(!await decisionConfirm({title:t(verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(`review.action.${verdict}`),reason)+'\n\n'+t(verdict==='reject'?'review.confirm.rejectBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending'),confirmText:t(verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    if(!await decisionConfirm({scrollMessage:true,title:t(verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(`review.action.${verdict}`),reason)+'\n\n'+t(verdict==='reject'?'review.confirm.rejectBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending'),confirmText:t(verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
     const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation });
@@ -246,23 +246,23 @@ async function stamp(verdict: "approve" | "reject") {
 }
 
 async function correct(){
- if(busy.value||!data.value)return;
+ if(busy.value||!data.value||data.value.submission.id!==id.value)return;
  const review=data.value,target=id.value,pending=review.submission.correction;
  const reason=pending?.state==='pending'?pending.note:correctionNote.value.trim();
  if(!reason){error.value=t('review.correction.reasonRequired');return;}
  busy.value=true;error.value='';
  try{
   const confirmedToken=await token();
-  if(!await decisionConfirm({title:t('review.correction.confirmTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,`${t('review.action.approve')} → ${t('review.action.reject')}`,reason)+'\n\n'+t('review.correction.confirmBody')+'\n'+t('review.correction.publicEffect'),confirmText:t('review.correction.confirm'),cancelText:t('review.correction.back'),danger:true,dangerAppearance:'subdued'}))return;
+  if(!await decisionConfirm({scrollMessage:true,title:t('review.correction.confirmTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,`${t('review.action.approve')} → ${t('review.action.reject')}`,reason)+'\n\n'+t('review.correction.confirmBody')+'\n'+t('review.correction.publicEffect'),confirmText:t('review.correction.confirm'),cancelText:t('review.correction.back'),danger:true,dangerAppearance:'subdued'}))return;
   if(!active||id.value!==target||data.value!==review)return;
-  const operationId=pending?.operationId??crypto.randomUUID();
+  const operationId=pending?.state==='pending'?pending.operationId:crypto.randomUUID();
   if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
   const result=await correctReviewDecision(target,confirmedToken,{operationId,note:reason});
   if(!active||id.value!==target)return;
   done.value=t('review.correction.done')+' '+t(result.publicState==='previous_version'?'review.correction.donePrevious':result.publicState==='unpublished'?'review.correction.doneUnpublished':'review.correction.doneUnchanged');
   correctionOpen.value=false;await load();
  }catch(err){
-  const message=err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
+  const message=err instanceof ApiError&&err.code==='review_correction_reward_pending'?t('review.correction.rewardPending'):err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
   await load();
   error.value=message;
  }finally{busy.value=false;}
@@ -510,9 +510,10 @@ onMounted(() => { void load(); });
           <p>{{dateTime(data.submission.correction.at)}}</p>
           <p class="text record__note">{{data.submission.correction.note}}</p>
           <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
+          <p v-if="data.submission.correction.state==='conflict'" class="notice">{{t('review.correction.changed')}}</p>
           <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.reload')}}</button>
         </div>
-        <template v-else-if="data.submission.canCorrect">
+        <template v-if="data.submission.canCorrect&&(!data.submission.correction||data.submission.correction.state==='conflict')">
           <button class="btn" :disabled="busy" @click="correctionOpen=!correctionOpen">{{t('review.correction.action')}}</button>
           <div v-if="correctionOpen" class="field">
             <p v-if="!data.submission.manager">{{t('review.correction.window',{hours:24})}}</p>

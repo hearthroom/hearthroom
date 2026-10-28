@@ -1,24 +1,45 @@
 -- Retain the original stamp and decision timestamp; correction is a new event.
 CREATE TABLE review_corrections (
  operation_id TEXT PRIMARY KEY,
- submission_id TEXT NOT NULL UNIQUE REFERENCES review_submissions(id),
+ submission_id TEXT NOT NULL REFERENCES review_submissions(id),
  actor_member_id TEXT NOT NULL REFERENCES members(id),
  actor_role TEXT NOT NULL,
  note TEXT NOT NULL CHECK(length(trim(note)) BETWEEN 1 AND 2000),
  original_decided_at INTEGER NOT NULL,
  created_at INTEGER NOT NULL,
- state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','applying','complete')),
+ state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','applying','complete','conflict')),
  command TEXT,
  public_version_id TEXT,
  public_state TEXT CHECK(public_state IN ('previous_version','unpublished','unchanged')),
  completed_at INTEGER
 );
+CREATE UNIQUE INDEX review_correction_active ON review_corrections(submission_id) WHERE state<>'conflict';
+CREATE TRIGGER review_correction_reward_guard BEFORE INSERT ON review_corrections
+WHEN EXISTS(SELECT 1 FROM card_rewards r JOIN review_submissions s ON s.card_id=r.card_id
+ WHERE s.id=NEW.submission_id AND r.public_days IS NOT NULL
+ AND (r.status='pending' OR (r.status='paid' AND r.provider_entry_id IS NULL)))
+BEGIN SELECT RAISE(ABORT,'review correction reward pending'); END;
+CREATE TRIGGER reward_correction_insert_guard BEFORE INSERT ON card_rewards
+WHEN EXISTS(SELECT 1 FROM review_corrections x JOIN review_submissions s ON s.id=x.submission_id
+ WHERE s.card_id=NEW.card_id AND x.state IN ('pending','applying'))
+ OR (EXISTS(SELECT 1 FROM review_corrections x JOIN review_submissions s ON s.id=x.submission_id
+ WHERE s.card_id=NEW.card_id AND x.state='complete') AND NOT EXISTS(
+ SELECT 1 FROM cards c WHERE c.id=NEW.card_id AND (c.status='approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked=0))
+BEGIN SELECT RAISE(ABORT,'review correction in progress'); END;
+CREATE TRIGGER reward_correction_retry_guard BEFORE UPDATE OF status ON card_rewards
+WHEN NEW.status='pending' AND OLD.status<>'pending' AND EXISTS(
+ SELECT 1 FROM review_corrections x JOIN review_submissions s ON s.id=x.submission_id
+ WHERE s.card_id=NEW.card_id AND x.state IN ('pending','applying'))
+ OR (NEW.status='pending' AND OLD.status<>'pending' AND EXISTS(
+ SELECT 1 FROM review_corrections x JOIN review_submissions s ON s.id=x.submission_id WHERE s.card_id=NEW.card_id AND x.state='complete')
+ AND NOT EXISTS(SELECT 1 FROM cards c WHERE c.id=NEW.card_id AND (c.status='approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked=0))
+BEGIN SELECT RAISE(ABORT,'review correction in progress'); END;
 CREATE TRIGGER review_correction_immutable BEFORE UPDATE ON review_corrections
 WHEN NEW.operation_id<>OLD.operation_id OR NEW.submission_id<>OLD.submission_id
  OR NEW.actor_member_id<>OLD.actor_member_id OR NEW.actor_role<>OLD.actor_role
  OR NEW.note<>OLD.note OR NEW.created_at<>OLD.created_at OR NEW.original_decided_at<>OLD.original_decided_at
  OR (OLD.command IS NOT NULL AND NEW.command IS NOT OLD.command)
- OR OLD.state='complete'
+ OR OLD.state IN ('complete','conflict')
 BEGIN SELECT RAISE(ABORT,'review correction immutable'); END;
 
 DROP TRIGGER hosting_review_terminal;
@@ -33,7 +54,8 @@ BEGIN SELECT RAISE(ABORT,'submission already decided'); END;
 CREATE TRIGGER review_correction_apply_guard BEFORE UPDATE OF state ON review_corrections
 WHEN NEW.state='applying' AND (OLD.state<>'pending' OR NOT EXISTS(
  SELECT 1 FROM managed_work_access p WHERE p.work_id=json_extract(NEW.command,'$.workId')
- AND p.epoch=json_extract(NEW.command,'$.expectedEpoch') AND p.sync_state='changing' AND p.sync_operation_id=NEW.operation_id))
+ AND p.epoch>=json_extract(NEW.command,'$.expectedEpoch') AND p.sync_state='changing' AND p.sync_operation_id=NEW.operation_id
+ AND EXISTS(SELECT 1 FROM visibility_operations o WHERE o.work_id=p.work_id AND o.operation_id=NEW.operation_id AND o.state='complete')))
 BEGIN SELECT RAISE(ABORT,'review correction changed'); END;
 
 CREATE TRIGGER review_correction_command_guard BEFORE UPDATE OF command ON review_corrections

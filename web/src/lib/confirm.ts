@@ -32,6 +32,8 @@ export interface ConfirmOptions {
   dangerAppearance?: "subdued";
   /** 焦點先落在取消鍵（不是危險操作，但預設應該留在原處，例如「直接簽到」會讓連續天數退回） */
   focusCancel?: boolean;
+  /** Keep the title/actions visible while a full review reason scrolls. */
+  scrollMessage?:boolean;
   /** 只有一顆「知道了」，沒有取消 */
   single?: boolean;
   /**
