@@ -134,7 +134,9 @@ function phoneClearance():PhoneClearance|null {
  if(!petEnabled.value||!homePhoneMode(innerWidth,matchMedia("(pointer: coarse)").matches)||route.path.replace(/\/+$/,'')!==lp('/').replace(/\/+$/,''))return null;
  const board=document.querySelector<HTMLElement>('.board-page');
  const header=document.querySelector('.header')?.getBoundingClientRect().bottom??60;
- const key=[route.fullPath,scrollY,innerWidth,innerHeight,board?.offsetHeight,document.querySelector<HTMLElement>('.footer')?.offsetHeight,header].join(':');
+ // The independently mounted/sticky rail can move without changing board height.
+ const rail=document.querySelector('.home-sidebar')?.getBoundingClientRect();
+ const key=[route.fullPath,scrollY,innerWidth,innerHeight,board?.offsetHeight,document.querySelector<HTMLElement>('.footer')?.offsetHeight,header,rail?.left,rail?.right,rail?.top,rail?.bottom].join(':');
  if(key!==obstacleKey||!obstacleCache){obstacleKey=key;obstacleCache={top:header,bottom:innerHeight,obstacles:homePhoneObstacles()};}
  return obstacleCache;
 }

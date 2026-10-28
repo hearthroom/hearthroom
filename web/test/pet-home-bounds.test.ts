@@ -43,3 +43,15 @@ it('selects homepage parking at the actual 640–1079 limits and follows the ena
  await mount();for(const [width,expected]of [[639,false],[640,true],[1079,true],[1080,false]] as const){vi.stubGlobal('innerWidth',width);expect(captured.parkOnHomepage?.()).toBe(expected);}
  vi.stubGlobal('innerWidth',768);petEnabled.value=false;expect(captured.parkOnHomepage?.()).toBe(false);petEnabled.value=true;
 });
+
+it('refreshes phone obstacles when the sidebar mounts without changing the taller main column',async()=>{
+ vi.stubGlobal('innerWidth',1080);vi.stubGlobal('matchMedia',(q:string)=>({matches:q.includes('pointer: coarse')}));await mount();
+ const before=captured.phoneClearance?.();expect(before).not.toBeNull();
+ const rail=document.createElement('aside');rail.className='home-sidebar';rail.dataset.testClearance='';rail.getBoundingClientRect=()=>new DOMRect(789,428,264,563.58);document.body.append(rail);
+ try{expect(captured.phoneClearance?.()?.obstacles).toContainEqual({left:789,right:1053,top:428,bottom:991.58});}finally{rail.remove();}
+});
+it('refreshes phone obstacles when only the sidebar moves at the same document scroll position',async()=>{
+ vi.stubGlobal('innerWidth',1080);vi.stubGlobal('matchMedia',(q:string)=>({matches:q.includes('pointer: coarse')}));
+ const rail=document.createElement('aside');rail.className='home-sidebar';let top=428;rail.getBoundingClientRect=()=>new DOMRect(789,top,264,563.58);document.body.append(rail);
+ try{await mount();expect(captured.phoneClearance?.()?.obstacles).toContainEqual({left:789,right:1053,top:428,bottom:991.58});top=84;expect(captured.phoneClearance?.()?.obstacles).toContainEqual({left:789,right:1053,top:84,bottom:647.58});}finally{rail.remove();}
+});
