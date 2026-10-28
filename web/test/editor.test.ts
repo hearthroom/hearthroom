@@ -66,7 +66,7 @@ const api = vi.hoisted(() => ({
   fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
   saveAuthorAsset: vi.fn(async (_roleId: string, body: { version: number }) => ({ ...body, status: "passed", version: body.version + 1 })),
 }));
-vi.mock("../src/lib/api", () => api);
+vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
 vi.mock("../src/lib/session", () => ({
   useSession: () => ({ profile:platforms.profile, accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
 }));
@@ -1276,4 +1276,18 @@ it('restores a new draft private choice without applying it to existing cards',a
  expect($<HTMLSelectElement>('#new-card-visibility')?.value).toBe('private');
  await submit();
  expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({visibility:'private'}),'tok');
+});
+
+it('keeps a length refusal on the editor after the author returns from the submission dialog',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Short draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ await mount('/cards/r1/edit');byText('發布').click();await flush();
+ root.querySelector<HTMLInputElement>('input[value=public]')!.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
+ ratingState.current!.resolve(GENERAL);await flush();await flush();
+ const {ApiError}=await import('../src/lib/api');
+ const message='合計 3,000 字，還差 1 字，至少 3,001 字。';
+ api.registerCard.mockRejectedValueOnce(new ApiError(400,message,'review_length_insufficient'));
+ await expect(confirmState.current!.onConfirm!({text:'',update:{updateKind:'minor',updateNote:''}})).rejects.toThrow(message);
+ settleConfirm(false);await flush();await flush();
+ expect([...root.querySelectorAll('[role=alert]')].map(node=>node.textContent).join(' ')).toContain(message);
+ expect(router.currentRoute.value.path).toBe('/cards/r1/edit');
 });

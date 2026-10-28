@@ -43,3 +43,15 @@ it('skips an invalid queued list-end and continues with the next notification af
     expect(internals.queue).toHaveLength(0);
   } finally { vi.useRealTimers(); }
 });
+
+it('invalidates automatic speech carried into a quiet reading page and does not queue another automatic line there',()=>{
+  let reading=false;
+  pet=new SukiPet({base:'',skin:'day',label:'Suki',height:220,line:key=>key,quietReading:()=>reading} as PetOptions);
+  const p=pet as unknown as {driver:{state:{talking:boolean}};speak:(text:string,ms?:number,action?:unknown,showIf?:()=>boolean)=>void;act:(value:{say:string})=>void};
+  p.driver={state:{talking:false}};
+  const speak=vi.spyOn(p,'speak').mockImplementation(()=>{});
+  p.act({say:'A line from the previous page'});
+  const condition=speak.mock.calls[0][3];expect(condition?.()).toBe(true);
+  reading=true;expect(condition?.()).toBe(false);
+  p.act({say:'A delayed daily line'});expect(speak).toHaveBeenCalledTimes(1);
+});

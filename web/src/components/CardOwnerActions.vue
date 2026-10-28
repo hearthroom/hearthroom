@@ -64,7 +64,7 @@ async function submit(expected=visibility.value) {
       void saveRatingDraft(source,answers,token!,p).catch(()=>{});
       if(expected.everPublic)await registerCard(source,token!,answers,[],p,undefined,undefined,expected,value?.update);
       else await registerCard(source,token!,answers,[],p,undefined,undefined,expected);
-    }finally{if(valid())busy.value=false;}
+    }catch(e){if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;throw e;}finally{if(valid())busy.value=false;}
   };
   try {
     if(expected.everPublic){

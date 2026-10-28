@@ -45,6 +45,8 @@ export interface PetOptions {
   mobile?: boolean;
   /** 這一頁進來時不說開場的招呼與每日口味（頁面主要按鈕在她的泡泡底下時）；預設照常說 */
   quietGreeting?: () => boolean;
+  /** Reading a dense detail: automatic speech stays quiet; explicit menu actions remain available. */
+  quietReading?: () => boolean;
   /** Physical page bottom may be a loading/error boundary rather than a completed list. */
   canListEnd?: () => boolean;
   /** Present only while the homepage desktop sidebar is mounted. */
@@ -412,7 +414,8 @@ export class SukiPet {
     }
   }
   private act(a: Act, urgent = false) {
-    if (this.sidebarIdle || a.showIf?.() === false) return;
+    const showIf = !urgent && this.opts.quietReading ? () => a.showIf?.() !== false && !this.opts.quietReading!() : a.showIf;
+    if (this.sidebarIdle || showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
@@ -420,7 +423,7 @@ export class SukiPet {
     if (urgent) this.queue = [];
     if (a.expr) { for (const k of EXPRS) this.exprTarget[k] = 0; this.exprTarget[a.expr] = 1; }
     this.actUntil = now + (a.ms ?? 1800);
-    if (a.say) this.speak(a.say, a.ms, a.action, a.showIf);
+    if (a.say) this.speak(a.say, a.ms, a.action, showIf);
     if (a.hop) this.hop();
     if (a.talk || a.say) { this.driver.state.talking = true; setTimeout(() => { this.driver.state.talking = false; }, Math.min(1600, (a.say?.length ?? 6) * 90)); }
   }

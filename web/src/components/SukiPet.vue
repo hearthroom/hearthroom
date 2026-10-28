@@ -126,6 +126,7 @@ async function start() {
     canListEnd: () => props.listEndAllowed,
     sidebarBounds: () => sidebarBounds?.value ?? null,
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
+    quietReading: () => mobile && reviewingDetail.value,
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,
     dailyTag,

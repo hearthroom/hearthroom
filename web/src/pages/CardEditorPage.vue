@@ -922,7 +922,7 @@ async function publish(expected:WorkVisibility) {
       if(!token)throw new Error(t('auth.expired'));
       if(expected.everPublic)await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected,answer.update);
       else await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected);
-    }finally{if(valid())saving.value=false;}
+    }catch(e){if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;throw e;}finally{if(valid())saving.value=false;}
   };
   try{
     if(expected.everPublic){

@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { fetchMyCards, fetchRatingDraft, saveRatingDraft, registerCard, fetchFandomLookup, type MyCard, type MyCardPage } from "@/lib/api";
+import { ApiError, fetchMyCards, fetchRatingDraft, saveRatingDraft, registerCard, fetchFandomLookup, type MyCard, type MyCardPage } from "@/lib/api";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
@@ -151,7 +151,7 @@ async function submitReview(expected:WorkVisibility){
     await saveRatingDraft(source,answers,token,provider).catch(()=>{});if(!valid())return;
     if(expected.everPublic)await registerCard(source,token,answers,[],provider,value.text,value.id,expected,value.update);
     else await registerCard(source,token,answers,[],provider,value.text,value.id,expected);
-   }finally{if(valid())busy.value=null;}
+   }catch(e){if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;throw e;}finally{if(valid())busy.value=null;}
   };
   if(expected.everPublic){
    const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
