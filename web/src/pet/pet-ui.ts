@@ -134,10 +134,11 @@ export class SukiPet {
   private homeParked = false;
   private phoneOriginal: {x:number;y:number} | null = null;
   private phoneFocus: HTMLElement | null = null;
+  private phoneRelocateAt: number | null = null;
   private releasePhone() {
     const original=this.phoneOriginal;
-    this.closeMenu();this.phoneOriginal=null;this.sidebarDocked=false;this.sidebarAwake=false;
-    this.el.classList.remove("suki-pet--phone-suspended","suki-pet--phone-dialog","suki-pet--sidebar-idle","suki-pet--sidebar-expanded");
+    this.closeMenu();this.phoneOriginal=null;this.phoneRelocateAt=null;this.el.inert=false;this.sidebarDocked=false;this.sidebarAwake=false;
+    this.el.classList.remove("suki-pet--phone-suspended","suki-pet--phone-relocating","suki-pet--phone-dialog","suki-pet--sidebar-idle","suki-pet--sidebar-expanded");
     for(const popup of [this.bubble,this.menuEl]){popup.style.translate="";popup.style.maxHeight="";popup.style.overflowY="";}
     if(original){this.place(original);this.refit();}this.layoutEdge();
   }
@@ -154,8 +155,26 @@ export class SukiPet {
     const original=this.opts.mobile&&this.tucked?peekPos(this.viewport(),this.size(),this.side,this.phoneOriginal.y):clampStand(this.viewport(),this.size(),this.phoneOriginal);
     const body={...this.box(),left:original.x,right:original.x+this.box().width},catcher=this.opts.mobile&&this.tucked?peekCatch(this.viewport(),this.size(),this.side,this.pos.y):null;
     const y=nearestClearPetY({...space,left:Math.min(body.left,catcher?.x??body.left),right:Math.max(body.right,catcher?catcher.x+catcher.w:body.right),height:Math.max(body.height,catcher?.h??0),original:original.y,current:this.pos.y});
-    this.el.classList.toggle("suki-pet--phone-suspended",y===null);
-    if(y!==null)this.place({x:original.x,y});
+    const relocate=y!==null&&(y!==this.pos.y||original.x!==this.pos.x);
+    if(y===null||relocate){
+      // Fade at the current position first. Moving a visible character to each
+      // newly clear slot makes scrolling look like a series of teleports.
+      if(!this.el.classList.contains("suki-pet--phone-suspended")){
+        const duration=getComputedStyle(this.el).getPropertyValue('--dur').trim(),value=parseFloat(duration);
+        const ms=this.opts.reducedMotion?0:Number.isFinite(value)?value*(duration.endsWith('ms')?1:1000):160;
+        this.phoneRelocateAt=performance.now()+ms;
+        this.el.classList.add("suki-pet--phone-suspended");
+      }
+      this.el.inert=true;
+      if(y===null||performance.now()<(this.phoneRelocateAt??0)){this.layoutEdge();return;}
+      this.el.classList.add("suki-pet--phone-relocating");
+      this.place({x:original.x,y});
+      // Commit the new transform while invisible, then fade in at that point.
+      void this.el.offsetWidth;
+      this.el.classList.remove("suki-pet--phone-relocating");
+    }
+    this.phoneRelocateAt=null;this.el.inert=false;
+    this.el.classList.remove("suki-pet--phone-suspended");
     this.layoutEdge();
   }
   /** Ordinary homepage entry: preserve the enabled preference and saved position. */
@@ -164,6 +183,7 @@ export class SukiPet {
     this.updatePhone(space);this.phoneFocus=opener;
     this.sidebarDocked=true;this.sidebarAwake=true;
     this.el.classList.remove("suki-pet--phone-suspended","suki-pet--sidebar-idle");
+    this.el.inert=false;
     this.el.classList.add("suki-pet--phone-dialog");this.updatePhone(space);this.openMenu();
     this.menuEl.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
   }

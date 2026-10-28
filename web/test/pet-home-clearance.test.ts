@@ -27,3 +27,7 @@ it('keeps the tablet lane ahead of the phone/coarse policy',async()=>{
  expect(homePhoneMode(390,false)).toBe(true);expect(homePhoneMode(768,true)).toBe(false);
  expect(homePhoneMode(1080,true)).toBe(true);expect(homePhoneMode(1080,false)).toBe(false);
 });
+
+it('keeps a safe temporary location when the original slot becomes free again',()=>{
+ expect(nearestClearPetY({...frame,current:690,obstacles:[]})).toBe(690);
+});

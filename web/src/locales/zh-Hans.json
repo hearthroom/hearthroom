@@ -3454,7 +3454,7 @@
   "cardUpdate.history.reviewTimeHint": "这个版本未记录公开时间，显示的是审核通过的时间。",
   "cardUpdate.history.unknownTimeHint": "这个版本未记录公开时间或审核通过的时间。",
   "home.dailyEnd": "日榜已全部显示",
-  "home.dailyEmpty": "目前没有符合条件的日榜卡片",
+  "home.dailyEmpty": "目前没有其他符合条件的日榜卡片",
   "home.loading": "卡片加载中",
   "home.firstError": "卡片暂时加载不了",
   "home.appendError": "更多卡片暂时加载不了",
@@ -3576,5 +3576,9 @@
   "board.tags.next": "显示{group}后面的类型",
   "import.regex.invalid": "以下正则内容需要修改后才能保存，目前尚未保存；你可以先套用到表单再修改。",
   "editor.regex.invalid": "这次尚未保存，请修改以下正则问题后再保存。",
-  "regex.issue.rule": "第 {index} 条“{name}”：{why}"
+  "regex.issue.rule": "第 {index} 条“{name}”：{why}",
+  "home.weekEnd": "周榜已全部显示",
+  "home.weekEmpty": "目前没有其他符合条件的周榜卡片",
+  "home.monthEnd": "月榜已全部显示",
+  "home.monthEmpty": "目前没有其他符合条件的月榜卡片"
 }

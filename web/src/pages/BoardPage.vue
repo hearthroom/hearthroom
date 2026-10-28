@@ -54,10 +54,20 @@ const stream = createBoardStream(fetchBoard, canLoad);
 const feed = stream.state;
 const boardEnded = inject(boardEndKey, ref(false));
 const boardListEnd = inject(boardListEndKey, ref(false));
-watch(() => feed.done && !feed.loading && !feed.error && ((feed.first?.items.length ?? 0) + (feed.hot?.items.length ?? 0) > 0), allowed => { boardListEnd.value = allowed; }, { immediate: true });
+watch(() => feed.done && !feed.loading && !feed.error && [feed.first, feed.week, feed.month, feed.hot].some(part => !!part?.items.length), allowed => { boardListEnd.value = allowed; }, { immediate: true });
 watch(() => feed.done, done => { boardEnded.value = done; }, { immediate: true });
 const page = computed(() => feed.first);
-const more = computed(() => feed.hot?.items ?? []);
+const more = computed(() => [feed.week, feed.month, feed.hot].flatMap(part => part?.items ?? []));
+const continuations = computed(() => {
+  if (!feed.dayEnded) return [];
+  const order: Array<"week" | "month" | "hot"> = defaultFeed.value ? ["week", "month", "hot"] : ["hot"];
+  const current = order.indexOf(feed.phase as "week" | "month" | "hot");
+  return order.slice(0, current + 1).map((sort, index) => {
+    const previous = index ? order[index - 1]! : "day";
+    const previousPage = previous === "day" ? feed.first : feed[previous];
+    return { sort, endKey: `home.${previous === "day" ? "daily" : previous}${previousPage?.items.length ? "End" : "Empty"}`, items: feed[sort]?.items ?? [] };
+  });
+});
 const loading = computed(() => feed.loading);
 const SORTS: Sort[] = ["day", "hot", "score", "favorites", "week", "month", "new", "updated", "random"];
 const restoring = ref(false);
@@ -81,6 +91,8 @@ const tags = computed(() => selectedTags(route.query.tag));
 const MENU_RATINGS = RATINGS.filter((r) => r !== "R");
 const maxRating = computed<Rating | undefined>(() => (MENU_RATINGS as readonly string[]).includes(String(route.query.rating)) ? route.query.rating as Rating : undefined);
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
+/** Only an untouched landing feed expands the four ranking windows. Explicit tabs keep their current behavior. */
+const defaultFeed = computed(() => route.query.sort === undefined && !tags.value.length && !maxRating.value && offset.value === 0);
 /** 不想看的類型（設定頁勾的）：類型列少畫那幾顆，排尾一顆「已隱藏 N 類」帶去設定頁；清單本身由伺服器過濾。 */
 const hidden = computed(() => session.profile?.hiddenTags ?? []);
 
@@ -112,7 +124,7 @@ function memoryKey(query: Record<string, unknown>): string | null {
   if (query.sort === "random" && typeof position !== "number") return null;
   // 遊客的開關在遊客憑證上（頁首 R18 遊客也能開），一樣算進鍵裡
   const p = session.me ? session.profile : viewerAdult(session);
-  return JSON.stringify([query, position, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
+  return JSON.stringify([query, defaultFeed.value, position, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
 const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value,...(typeof route.query.cursor==='string'?{cursor:route.query.cursor}:{}), lang: contentLang(locale.value), rating: maxRating.value });
@@ -138,7 +150,7 @@ async function loadMore() {
 }
 async function load() {
   ++loadId;
-  stream.reset(currentQuery());
+  stream.reset(currentQuery(), defaultFeed.value);
   shownKey = null;
   restoring.value = false;
   prepareBoardScroll(null);
@@ -148,7 +160,7 @@ async function load() {
   const remembered = key ? recallStream(key) : null;
   if (remembered) {
     restoring.value = true;
-    stream.restore(query, remembered.stream);
+    stream.restore(query, remembered.stream, defaultFeed.value);
     shownKey = key;
     prepareBoardScroll(remembered.scroll);
     return;
@@ -298,12 +310,14 @@ const ratingOptions = computed(() => {
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
     <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
+    <div class="board-hero">
     <NewcomerStrip v-if="offset === 0" />
     <NewcomerNudge v-if="offset === 0" />
     <BoardCarousel :hero="hasHero" :campaigns="offset === 0" :tour-hero="tourHero">
       <MascotWelcome />
       <MascotHome v-if="showHome" @discover="toNewCards" />
     </BoardCarousel>
+    </div>
     <DownloadBanner />
     <UpdateStrip />
 
@@ -347,10 +361,10 @@ const ratingOptions = computed(() => {
         :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />
-      <section v-if="feed.dayEnded" class="more" data-board-more>
-        <p class="subtle">{{ $t(page?.items.length ? "home.dailyEnd" : "home.dailyEmpty") }}</p>
-        <h2 class="more__title">{{ $t("board.sort.hot") }}</h2>
-        <CardGrid v-if="more.length" data-board-list :cards="more" />
+      <section v-for="part in continuations" :key="part.sort" class="more" data-board-more :data-board-segment="part.sort">
+        <p class="subtle">{{ $t(part.endKey) }}</p>
+        <h2 class="more__title">{{ $t(`board.sort.${part.sort}`) }}</h2>
+        <CardGrid v-if="part.items.length" data-board-list :cards="part.items" />
       </section>
       <div ref="sentinel" class="stream-tail" data-board-tail>
         <div v-if="feed.error" class="notice notice--error" role="alert">
@@ -379,6 +393,8 @@ const ratingOptions = computed(() => {
 </template>
 
 <style scoped>
+.board-hero { --hero-gutter: var(--s-5); width: min(calc(100vw - 2 * var(--hero-gutter)), calc(var(--page) - 2 * var(--hero-gutter))); position: relative; left: 50%; transform: translateX(-50%); }
+@media(max-width:640px) { .board-hero { --hero-gutter: var(--s-4); } }
 .board-page { max-width: 2400px; width: calc(100% - 2 * clamp(16px, 2.5vw, 64px)); padding-inline: 0; --board-columns: 2; }
 .board-page :deep(.grid), .board-page .tail-skeleton { grid-template-columns: repeat(var(--board-columns), minmax(0, 1fr)); }
 @media(min-width:600px) { .board-page { --board-columns: 3; } }
@@ -429,6 +445,7 @@ const ratingOptions = computed(() => {
 
 /* The enabled pet has a real non-content lane before its assets finish loading. */
 @media(min-width:640px) and (max-width:1079px) {
+  .board-page--pet-enabled .board-hero { transform: translateX(calc(-50% + (48px + env(safe-area-inset-right, 0px)) / 2)); }
   .board-page--pet-enabled {
     width: calc(100% - 2 * clamp(16px, 2.5vw, 64px) - 48px - env(safe-area-inset-right, 0px));
     margin-inline-start: clamp(16px, 2.5vw, 64px);

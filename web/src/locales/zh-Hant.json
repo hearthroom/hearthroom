@@ -3454,7 +3454,7 @@
   "cardUpdate.history.reviewTimeHint": "這個版本未記錄公開時間，日期以審核通過時間顯示。",
   "cardUpdate.history.unknownTimeHint": "這個版本未記錄公開或審核通過時間。",
   "home.dailyEnd": "日榜已全部顯示",
-  "home.dailyEmpty": "目前沒有符合條件的日榜卡片",
+  "home.dailyEmpty": "目前沒有其他符合條件的日榜卡片",
   "home.loading": "卡片載入中",
   "home.firstError": "卡片暫時載入不了",
   "home.appendError": "更多卡片暫時載入不了",
@@ -3576,5 +3576,9 @@
   "board.tags.next": "顯示{group}後面的類型",
   "import.regex.invalid": "以下正則內容需要修正才能儲存，目前尚未儲存；你可以先套用到表單再修改。",
   "editor.regex.invalid": "這次尚未儲存，請修正以下正則問題後再儲存。",
-  "regex.issue.rule": "第 {index} 條「{name}」：{why}"
+  "regex.issue.rule": "第 {index} 條「{name}」：{why}",
+  "home.weekEnd": "週榜已全部顯示",
+  "home.weekEmpty": "目前沒有其他符合條件的週榜卡片",
+  "home.monthEnd": "月榜已全部顯示",
+  "home.monthEmpty": "目前沒有其他符合條件的月榜卡片"
 }

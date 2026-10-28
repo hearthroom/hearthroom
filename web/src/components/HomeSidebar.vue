@@ -57,6 +57,9 @@ let clearanceFrame = 0;
 let sizeObserver: ResizeObserver | undefined;
 let position: SidebarPosition | undefined;
 function scheduleClearance() { if (!clearanceFrame) clearanceFrame = requestAnimationFrame(measureClearance); }
+// Scroll already runs before paint. Deferring its transform to another RAF exposes
+// the natural document movement for a frame, then snaps the pinned rail back.
+function scrollClearance() { cancelAnimationFrame(clearanceFrame); measureClearance(); }
 function measureClearance() {
   clearanceFrame = 0;
   const outer = host.value, inner = sidebar.value;
@@ -86,7 +89,7 @@ onMounted(() => {
   if (typeof ResizeObserver !== 'undefined' && host.value && sidebar.value) {
     sizeObserver = new ResizeObserver(scheduleClearance); sizeObserver.observe(host.value); sizeObserver.observe(sidebar.value);
   }
-  window.addEventListener('scroll', scheduleClearance, { passive: true });
+  window.addEventListener('scroll', scrollClearance, { passive: true });
   window.addEventListener('resize', scheduleClearance);
   scheduleClearance();
 });
@@ -94,7 +97,7 @@ onUpdated(scheduleClearance);
 onBeforeUnmount(() => {
   sidebarBounds.value = null;
   cancelAnimationFrame(clearanceFrame); sizeObserver?.disconnect();
-  window.removeEventListener('scroll', scheduleClearance); window.removeEventListener('resize', scheduleClearance);
+  window.removeEventListener('scroll', scrollClearance); window.removeEventListener('resize', scheduleClearance);
   live = false; latestEpoch++;
 });
 </script>

@@ -3454,7 +3454,7 @@
   "cardUpdate.history.reviewTimeHint": "This version has no recorded publication time. The date shown is when its review was approved.",
   "cardUpdate.history.unknownTimeHint": "Neither a publication time nor a review approval time was recorded for this version.",
   "home.dailyEnd": "End of the daily list",
-  "home.dailyEmpty": "No matching cards in the daily list",
+  "home.dailyEmpty": "No more matching cards in the daily list",
   "home.loading": "Loading cards",
   "home.firstError": "Cards could not be loaded",
   "home.appendError": "More cards could not be loaded",
@@ -3576,5 +3576,9 @@
   "board.tags.next": "Show more tags in {group}",
   "import.regex.invalid": "These regex rules need changes before saving. Nothing has been saved yet; you can apply them to the form and fix the issues below.",
   "editor.regex.invalid": "Nothing was saved this time. Fix the regex issues below before saving again.",
-  "regex.issue.rule": "Rule {index} ({name}): {why}"
+  "regex.issue.rule": "Rule {index} ({name}): {why}",
+  "home.weekEnd": "End of this week's list",
+  "home.weekEmpty": "No more matching cards in this week's list",
+  "home.monthEnd": "End of this month's list",
+  "home.monthEmpty": "No more matching cards in this month's list"
 }

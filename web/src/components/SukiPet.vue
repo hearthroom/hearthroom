@@ -370,8 +370,10 @@ body:has(.header [role="menu"]) .suki-pet--mobile.suki-pet--tucked .suki-pet__go
 </style>
 
 <style>
-.suki-pet--phone-suspended {visibility:hidden;opacity:0;pointer-events:none;}
+.suki-pet--phone-suspended {visibility:hidden;opacity:0;pointer-events:none;transition:opacity var(--dur),visibility 0s linear var(--dur);}
+.suki-pet--phone-relocating {transition:none;}
 .suki-pet--phone-dialog {pointer-events:none;}
 .suki-pet--phone-dialog .suki-pet__canvas,.suki-pet--phone-dialog .suki-pet__hit {visibility:hidden;pointer-events:none;}
 .suki-pet--phone-dialog .suki-pet__menu,.suki-pet--phone-dialog .suki-pet__bubble {pointer-events:auto;}
+@media (prefers-reduced-motion:reduce){.suki-pet--phone-suspended {transition:none;}}
 </style>
