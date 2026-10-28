@@ -143,6 +143,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.link { display: inline-flex; align-items: center; min-height: var(--h-lg); }
 .link, .link:hover { color: var(--accent-text); }
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: center; justify-content: space-between; margin-bottom: var(--s-4); }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); }

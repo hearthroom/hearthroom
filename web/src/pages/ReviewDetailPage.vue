@@ -191,6 +191,25 @@ async function load() {
   }
 }
 
+async function showCorrectionError(message:string,target:string){
+ if(!active||id.value!==target)return;
+ correctionError.value=message;
+ await nextTick();
+ if(!active||id.value!==target)return;
+ correctionErrorNotice.value?.focus({preventScroll:true});
+ correctionErrorNotice.value?.scrollIntoView({block:'start'});
+}
+
+async function reloadCorrection(){
+ const target=id.value,sequence=loadSequence+1;
+ await load();
+ if(!active||id.value!==target||loadSequence!==sequence)return;
+ if(error.value){
+  const message=error.value;error.value='';
+  await showCorrectionError(message,target);
+ }
+}
+
 async function claim() {
   busy.value = true;
   error.value = "";
@@ -269,12 +288,7 @@ async function correct(){
   if(!active||id.value!==target)return;
   const message=err instanceof ApiError&&err.code==='review_correction_reward_pending'?t('review.correction.rewardPending'):err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
   await load();
-  if(!active||id.value!==target)return;
-  correctionError.value=message;
-  await nextTick();
-  if(!active||id.value!==target)return;
-  correctionErrorNotice.value?.focus({preventScroll:true});
-  correctionErrorNotice.value?.scrollIntoView({block:'start'});
+  await showCorrectionError(message,target);
  }finally{busy.value=false;}
 }
 
@@ -515,14 +529,14 @@ onMounted(() => { void load(); });
 
       <section class="verdict panel">
         <RouterLink class="link" :to="lp('/review/decisions')">{{t('review.history.title')}}</RouterLink>
-        <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
+        <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button></p>
         <div v-if="data.submission.correction" class="records">
           <h3>{{t('review.correction.recordTitle')}}</h3>
           <p>{{dateTime(data.submission.correction.at)}}</p>
           <p class="text record__note">{{data.submission.correction.note}}</p>
           <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
           <p v-if="data.submission.correction.state==='conflict'" class="notice">{{t('review.correction.changed')}}</p>
-          <button v-if="data.submission.correction.state==='pending'" class="btn" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button>
+          <button v-if="data.submission.correction.state==='pending'" class="btn" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button>
           <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.action')}}</button>
         </div>
         <template v-if="data.submission.canCorrect&&(!data.submission.correction||data.submission.correction.state==='conflict')">
@@ -567,6 +581,7 @@ onMounted(() => { void load(); });
 </template>
 
 <style scoped>
+.link { display: inline-flex; align-items: center; min-height: var(--h-lg); }
 .link, .link:hover { color: var(--accent-text); }
 .correction-error { scroll-margin-block-start: calc(var(--header-h) + var(--s-4)); }
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-4); }

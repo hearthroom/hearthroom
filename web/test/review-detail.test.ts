@@ -117,9 +117,15 @@ it.each([
  const notice=el.querySelector<HTMLElement>('.verdict [role="alert"]')!;
  await vi.waitFor(()=>expect(document.activeElement).toBe(notice));
  expect(input.value).toBe('The setting needs more detail.');
+ api.fetchReviewDetail.mockRejectedValueOnce(new Error('reload unavailable'));
  notice.querySelector('button')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain('reload unavailable'));
+ await vi.waitFor(()=>expect(document.activeElement).toBe(el.querySelector('.verdict [role="alert"]')));
+ expect(api.correctReviewDecision).toHaveBeenCalledTimes(1);
+ expect(input.value).toBe('The setting needs more detail.');
+ el.querySelector<HTMLButtonElement>('.verdict [role="alert"] button')!.click();
  await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')).toBeNull());
- expect(api.fetchReviewDetail).toHaveBeenCalledTimes(3);
+ expect(api.fetchReviewDetail).toHaveBeenCalledTimes(4);
  expect(api.correctReviewDecision).toHaveBeenCalledTimes(1);
 });
 
