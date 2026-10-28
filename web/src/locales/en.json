@@ -3573,5 +3573,8 @@
   "home.checkinHintDismiss": "Dismiss check-in reminder",
   "home.allUpdates": "View all updates",
   "board.tags.previous": "Show previous tags in {group}",
-  "board.tags.next": "Show more tags in {group}"
+  "board.tags.next": "Show more tags in {group}",
+  "import.regex.invalid": "These regex rules need changes before saving. Nothing has been saved yet; you can apply them to the form and fix the issues below.",
+  "editor.regex.invalid": "Nothing was saved this time. Fix the regex issues below before saving again.",
+  "regex.issue.rule": "Rule {index} ({name}): {why}"
 }

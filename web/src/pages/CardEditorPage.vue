@@ -55,6 +55,7 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
+import RegexIssueList from "@/components/editor/RegexIssueList.vue";
 import { can } from "@/lib/provider";
 import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
@@ -299,6 +300,7 @@ watch([panel, panelOpen], () => {
 });
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+const regexSaveIssues = ref<ReturnType<typeof validateRuleSet>>([]);
 
 const saveLabel = computed(() => {
   if (!saving.value) return isNew.value ? t("editor.saveDraft") : t("edit.save");
@@ -717,10 +719,20 @@ function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':mis
 
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
+  regexSaveIssues.value = [];
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
     return;
+  }
+  // 文件、開場與作者資產是獨立請求；先擋已知無法保存的規則，避免留下只有開場的卡。
+  if (can("regex")) {
+    const issues = validateRuleSet(regexSet.value);
+    if (issues.length) {
+      regexSaveIssues.value = issues;
+      error.value = t("editor.regex.invalid");
+      return;
+    }
   }
   // 條目超長在送出前就攔下並點名：計數器只是變紅、不擋輸入，上游會整段拒收，
   // 而拒收訊息是英文散句，作者看不懂就重新整理——那條沒存過的條目就這樣「蒸發」了。
@@ -1069,7 +1081,10 @@ async function exportCard(format: "png" | "json") {
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
-        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+        <div v-if="error" class="notice notice--error" role="alert">
+          {{ error }}
+          <RegexIssueList v-if="regexSaveIssues.length" :set="regexSet" :issues="regexSaveIssues" />
+        </div>
         <p v-else-if="restoredDraft" class="notice restored" role="status">
           <span>{{ $t("editor.draftRestored") }}</span>
           <button type="button" class="btn btn--sm btn--ghost" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>

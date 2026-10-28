@@ -3573,5 +3573,8 @@
   "home.checkinHintDismiss": "チェックインのお知らせを閉じる",
   "home.allUpdates": "更新履歴をすべて見る",
   "board.tags.previous": "{group}の前のタグを表示",
-  "board.tags.next": "{group}の続きのタグを表示"
+  "board.tags.next": "{group}の続きのタグを表示",
+  "import.regex.invalid": "以下の正規表現の内容は修正が必要で、まだ保存されていません。フォームに反映してから修正できます。",
+  "editor.regex.invalid": "今回の変更は保存されていません。以下の正規表現の問題を修正してから保存してください。",
+  "regex.issue.rule": "ルール {index}「{name}」：{why}"
 }

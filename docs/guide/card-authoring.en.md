@@ -78,7 +78,7 @@ The "Function bar" field in the rules editor is content pinned above the message
 
 ### Limits
 
-- A single rule is limited to 128 KB.
+- A single rule is limited to 256 KB.
 - When the whole rule set exceeds its limit, the editor shows by how much.
 
 The "Test" box in the rules editor takes a sample reply and shows the result of applying the rules.

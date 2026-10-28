@@ -3573,5 +3573,8 @@
   "home.checkinHintDismiss": "关闭签到提醒",
   "home.allUpdates": "查看全部更新",
   "board.tags.previous": "显示{group}前面的类型",
-  "board.tags.next": "显示{group}后面的类型"
+  "board.tags.next": "显示{group}后面的类型",
+  "import.regex.invalid": "以下正则内容需要修改后才能保存，目前尚未保存；你可以先套用到表单再修改。",
+  "editor.regex.invalid": "这次尚未保存，请修改以下正则问题后再保存。",
+  "regex.issue.rule": "第 {index} 条“{name}”：{why}"
 }

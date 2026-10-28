@@ -1291,3 +1291,41 @@ it('keeps a length refusal on the editor after the author returns from the submi
  expect([...root.querySelectorAll('[role=alert]')].map(node=>node.textContent).join(' ')).toContain(message);
  expect(router.currentRoute.value.path).toBe('/cards/r1/edit');
 });
+
+describe('匯入正則在寫入前驗證', () => {
+  const oversized = { beginning: 'synthetic-image-marker', regex_scripts: [{ id: 'synthetic-rule', scriptName: 'Synthetic oversized rule', findRegex: 'synthetic-image-marker', replaceString: 'x'.repeat(256 * 1024 + 1) }] };
+  it('匯入預覽指出超限規則，仍可套用修正', async () => {
+    await mount('/create');
+    localStorage.setItem('hr.import.kind', 'mmd');
+    const radio = root.querySelectorAll<HTMLButtonElement>('.import__kind button')[1];
+    radio.click(); await flush();
+    await pickFile($('.import input[type=file]'), new File([JSON.stringify(oversized)], 'synthetic.json'));
+    const notice = root.querySelector('.review [role=alert]');
+    expect(notice?.textContent).toContain('Synthetic oversized rule');
+    expect(notice?.textContent).toContain('256');
+    const apply = byText('套用到表單');
+    expect(apply.disabled).toBe(false);
+    apply.click(); await flush();
+    expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('synthetic-image-marker');
+  });
+  it.each(['/create', '/cards/r1/edit'])('%s 超限正則不得先存開場或建立空卡', async (path) => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Synthetic card', roleWelcome: '' });
+    await mount(path);
+    if (path === '/create') await type($('#f-name'), 'Synthetic card');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify(oversized)], 'synthetic.json'));
+    await submit();
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.patchRoleWelcome).not.toHaveBeenCalled();
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect(root.querySelector('[role=alert]')?.textContent).toContain('Synthetic oversized rule');
+    expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('synthetic-image-marker');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ ...oversized, regex_scripts: [{ ...oversized.regex_scripts[0], replaceString: 'x'.repeat(256 * 1024) }] })], 'corrected.json'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace: 'x'.repeat(256 * 1024) })] }), 'tok');
+    expect(api.createRole).toHaveBeenCalledTimes(path === '/create' ? 1 : 0);
+  });
+});

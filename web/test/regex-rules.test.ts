@@ -172,3 +172,12 @@ describe("上游作者資產 ↔ 本站規則組", () => {
     expect(ruleSetToAuthorAsset(ruleSetFromAuthorAsset({}), 0).mountLayer).toBe("over");
   });
 });
+
+it('接受256KiB的UTF-8替換，超過1byte仍拒收', () => {
+ for (const n of [128 * 1024 + 1, 256 * 1024, 256 * 1024 + 1]) {
+  const set = { version: 1 as const, lowered: false, statusbar: '', rules: [makeRule({ find: 'x', replace: '界'.repeat(Math.floor(n / 3)) + 'x'.repeat(n % 3) })] };
+  const issue = validateRuleSet(set).find(i => i.key === 'regex.issue.replaceLong');
+  expect(Boolean(issue)).toBe(n > 256 * 1024);
+  if (issue) expect(issue.params?.max).toBe(256);
+ }
+});

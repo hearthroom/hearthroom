@@ -3573,5 +3573,8 @@
   "home.checkinHintDismiss": "關閉簽到提醒",
   "home.allUpdates": "查看全部更新",
   "board.tags.previous": "顯示{group}前面的類型",
-  "board.tags.next": "顯示{group}後面的類型"
+  "board.tags.next": "顯示{group}後面的類型",
+  "import.regex.invalid": "以下正則內容需要修正才能儲存，目前尚未儲存；你可以先套用到表單再修改。",
+  "editor.regex.invalid": "這次尚未儲存，請修正以下正則問題後再儲存。",
+  "regex.issue.rule": "第 {index} 條「{name}」：{why}"
 }
