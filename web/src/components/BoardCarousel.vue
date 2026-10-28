@@ -186,7 +186,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   >
     <div class="carousel__track" :aria-live="on ? (running ? 'off' : 'polite') : undefined">
       <div
-        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i }"
+        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i, 'carousel__slide--poster': !!c.poster }"
         v-bind="slideAttrs(i)" :data-slide="c.slug"
       >
         <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': !c.poster && c.bannerUrl, 'carousel__card--poster': !!c.poster }" :to="lp(`/campaign/${c.slug}`)" @click="clicked(c.slug)">
@@ -282,7 +282,9 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 
 /* 有橫幅圖：圖鋪滿，左邊與下緣壓暗讓白字讀得到 */
 .carousel__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; background: var(--surface-2); }
-.carousel__card--poster .carousel__img { object-position: 50% 50%; }
+.carousel__card--poster .carousel__img { object-position: 50% 50%; object-fit: contain; }
+/* Pure artwork keeps its complete embedded copy; interactive hero slots retain their content height. */
+.carousel--on .carousel__slide--poster { height: clamp(112px, 15vw, 224px); min-height: 0; align-self: center; }
 .carousel__card--banner { color: #fff; }
 .carousel__card--banner::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
@@ -332,6 +334,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 
 @media (max-width: 760px) {
   .carousel--on .carousel__slide { min-height: 176px; }
+  .carousel--on .carousel__slide--poster { min-height: 0; }
   /* 文字區從左 16 到卡寬 55%、一律貼底 16：每張的字在同一個位置，右邊留給橫幅的安全框 */
   .carousel__body { width: 55%; max-width: none; box-sizing: border-box; padding: var(--s-4); padding-right: 0; gap: var(--s-1); }
   .carousel__mark { display: none; }

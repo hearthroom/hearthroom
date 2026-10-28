@@ -79,3 +79,11 @@ it("keeps a public-page retry entry during identity outages and its pending retr
   await nextTick();
   expect(retry()?.disabled).toBe(true);
 });
+
+it.each([{ready:false,restoreError:false}, {ready:true,restoreError:true}])("public navigation survives identity state %o", async state => {
+  Object.assign(sessionFixture,state);
+  await mount("/cards/100216", "zh-Hant");
+  const trigger=root.querySelector<HTMLButtonElement>('.site-menu > button');
+  expect(trigger).not.toBeNull(); trigger!.click(); await nextTick();
+  for (const path of ['/guide','/developers','/updates','/blog','/campaigns']) expect(root.querySelector(`.site-menu a[href^="${path}"]`)).not.toBeNull();
+});

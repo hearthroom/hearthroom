@@ -42,19 +42,11 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("類型列分組", () => {
-  it("四組各有組名；預設只攤開玩法、題材，點「更多類型」才看到角色與偏好", async () => {
+  it("首頁四組預設顯示，不再有更多類型收合", async () => {
     await mount("/");
     expect(groupLabel("play")).toBe(i18n.global.t("board.tagGroup.play"));
-    expect(groupLabel("setting")).toBe(i18n.global.t("board.tagGroup.setting"));
-    expect(visible(chip("角色扮演"))).toBe(true);
-    expect(visible(chip("武俠"))).toBe(true);
-    expect(visible(chip("御姐"))).toBe(false);
-    expect(visible(chip("催眠"))).toBe(false);
-    expect(more()?.getAttribute("aria-expanded")).toBe("false");
-    more()!.click(); await nextTick();
-    expect(visible(chip("御姐"))).toBe(true);
-    expect(visible(chip("催眠"))).toBe(true);
-    expect(more()?.getAttribute("aria-expanded")).toBe("true");
+    for (const label of ["角色扮演", "武俠", "御姐", "催眠"]) expect(visible(chip(label))).toBe(true);
+    expect(more()).toBeNull();
   });
 
   it("沒選類型時不畫一顆點不動的「全部」；選了才在籤尾出現「清除類型」，點了清空", async () => {

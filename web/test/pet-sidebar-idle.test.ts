@@ -34,3 +34,8 @@ it('does not introduce the desktop avatar fallback on phone pages', () => {
   expect(p.idleButton.hidden).toBe(true);
   expect(p.el.classList.contains('suki-pet--sidebar-idle')).toBe(false);
 });
+
+it('docks for partial rail overlap even when another operation row remains clear',()=>{
+ const {p}=setup();vi.mocked(p.box).mockReturnValue({left:909,right:1055,top:500,width:146,height:220});
+ p.updateSidebar();expect(p.idleButton.hidden).toBe(false);expect(p.el.classList.contains('suki-pet--sidebar-idle')).toBe(true);
+});

@@ -3567,5 +3567,10 @@
   "review.correction.authorReason": "駁回理由",
   "review.correction.authorOpen": "查看審核結果",
   "review.correction.rewardKept": "已發放的這筆創作季獎勵不受影響。",
-  "review.correction.rewardPending": "創作季獎勵是否已發放仍待確認，請稍後重新載入再改判。"
+  "review.correction.rewardPending": "創作季獎勵是否已發放仍待確認，請稍後重新載入再改判。",
+  "home.checkinHint": "簽到開今天的寶箱",
+  "home.checkinHintDismiss": "關閉簽到提醒",
+  "home.allUpdates": "查看全部更新",
+  "board.tags.previous": "顯示{group}前面的類型",
+  "board.tags.next": "顯示{group}後面的類型"
 }

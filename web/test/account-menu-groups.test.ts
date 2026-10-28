@@ -81,23 +81,24 @@ describe("頭像選單分組", () => {
     rewards = panel(true);
     const menu = await openMenu();
     const groups = [...menu.querySelectorAll(".menu__group")];
-    expect(groups.length).toBe(4);
+    expect(groups.length).toBe(3);
     // 主頁改版（2026-10-19）後「我的」頁不再列整串入口：邀請獎勵跟積分同組，徽章收藏跟我的卡片同組，任何頁面兩步就到；簽到跟積分同組
     expect(hrefs(groups[0])).toEqual(["/wallet", "/checkin", "/me/referral"]);
     expect(hrefs(groups[1])).toContain("/mine");
     expect(hrefs(groups[1])).toContain("/me/badges");
     // 更新紀錄、部落格、活動中心跟設定、開發者文件同一組：都是「關於這個站」而不是「我的東西」
-    expect(hrefs(groups[2])).toEqual(["/settings", "/developers", "/updates?from=menu", "/blog", "/campaigns"]);
+    expect(hrefs(menu.querySelector('[data-menu-section="preferences"]')!)).toContain('/settings');
+    expect(hrefs(menu.querySelector('[data-menu-section="community"]')!)).toEqual(['/guide','/campaigns','/blog','/updates?from=menu']);
+    expect(hrefs(menu.querySelector('[data-menu-section="developers"]')!)).toContain('/developers');
     const last = groups[groups.length - 1];
     expect(last.querySelectorAll("a")).toHaveLength(0);
     expect(last.textContent).toContain(i18n.global.t("nav.logout"));
     expect(menu.lastElementChild).toBe(last);
   });
 
-  it("活動中心用 spark 圖示（跟「我的」頁一致），gift 留給邀請", async () => {
+  it("寬版沿用公開網站導覽，指南與完整更新不依賴頁尾", async () => {
     const menu = await openMenu();
-    const icon = (href: string) => menu.querySelector(`a[href="${href}"] svg`)!.innerHTML;
-    expect(icon("/campaigns")).toBe(icon("/updates?from=menu"));
+    for (const path of ['/guide','/developers','/updates?from=menu','/blog','/campaigns']) expect(hrefs(menu)).toContain(path);
   });
 
   it("今天還沒簽到：選單的「簽到」與頭像各有一個點；簽過就沒有", async () => {

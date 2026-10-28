@@ -1,6 +1,6 @@
 import { computed, inject, onBeforeUnmount, watch, type ComputedRef, type InjectionKey, type Ref } from "vue";
 import type { SidebarRect } from "./sidebar-clearance";
-import { footerGroups, footerLegal, type FooterContext } from "./footer-nav";
+import { footerGroups, footerLegal, footerSupport, type FooterContext } from "./footer-nav";
 
 export const siteLinksKey: InjectionKey<ComputedRef<FooterContext>> = Symbol("site-links");
 export const sidebarBoundsKey: InjectionKey<Ref<SidebarRect | null>> = Symbol("sidebar-bounds");
@@ -19,5 +19,6 @@ export function useSiteLinks() {
   const groups = computed(() => footerGroups(context.value));
   const legal = computed(() => footerLegal(context.value));
   const links = computed(() => [...groups.value.flatMap(group => group.links), ...legal.value]);
-  return { context, groups, legal, links };
+  const support = computed(() => footerSupport(context.value));
+  return { context, groups, legal, links, support };
 }

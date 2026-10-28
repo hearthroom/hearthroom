@@ -4,20 +4,18 @@ import { RouterLink } from "vue-router";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
-import { whole } from "@/lib/format";
 import { fetchPublicCampaigns, localized, type CampaignSummary } from "@/lib/campaign";
-import { fetchPanel, RewardsError } from "@/lib/rewards";
-import { fetchWallet } from "@/lib/api";
 import { fetchUpdates } from "@/lib/updates";
 import { fetchPosts, postPath } from "@/lib/blog";
 import { withLocale } from "@/router";
 import { sidebarBoundsKey, useSiteLinks } from "@/lib/site-links";
-import { sidebarClearance, type SidebarRect } from "@/lib/sidebar-clearance";
+import { type SidebarRect } from "@/lib/sidebar-clearance";
+import { sidebarPosition, type SidebarPosition } from "@/lib/sidebar-position";
 import SiteLink from "./SiteLink.vue";
 
 const session = useSession();
 const { locale, lp } = useLocalePath();
-const { links } = useSiteLinks();
+const { support } = useSiteLinks();
 const campaigns = ref<CampaignSummary[]>([]);
 const campaignState = ref("loading");
 const running = computed(() => campaigns.value.filter(c => c.phase === "open").sort((a, b) => (a.featuredRank ?? Infinity) - (b.featuredRank ?? Infinity) || (a.startsAt ?? 0) - (b.startsAt ?? 0)));
@@ -52,50 +50,12 @@ async function loadLatest() {
 }
 watch([locale, () => !!session.me], loadLatest, { immediate: true });
 
-// These reads belong to the current member. The shared check-in panel is not
-// account-scoped, so a late response must not become another member's status.
-const balance = ref<number | null>(null);
-const balanceState = ref("loading");
-const checkinState = ref("loading");
-const claimed = ref(false);
-let memberEpoch = 0;
-async function loadBalance(epoch = memberEpoch) {
-  balanceState.value = "loading";
-  try {
-    const token = await session.accessToken();
-    if (!live || epoch !== memberEpoch) return;
-    if (!token) throw new Error("auth");
-    const wallet = await fetchWallet(token);
-    if (!Number.isFinite(wallet.score) || !Number.isFinite(wallet.tempScore)) throw new Error("wallet_shape");
-    if (live && epoch === memberEpoch) { balance.value = wallet.score + wallet.tempScore; balanceState.value = "ready"; }
-  } catch { if (live && epoch === memberEpoch) { balance.value = null; balanceState.value = "error"; } }
-}
-async function loadCheckin(epoch = memberEpoch) {
-  checkinState.value = "loading";
-  try {
-    const token = await session.accessToken();
-    if (!live || epoch !== memberEpoch) return;
-    if (!token) throw new Error("auth");
-    const panel = await fetchPanel(token);
-    if (live && epoch === memberEpoch) { claimed.value = panel.checkin.todayClaimed; checkinState.value = "ready"; }
-  } catch (err) {
-    if (live && epoch === memberEpoch) checkinState.value = err instanceof RewardsError && err.code === "rewards_disabled" ? "disabled" : "error";
-  }
-}
-watch(() => session.me?.accountNumId, id => {
-  const epoch = ++memberEpoch;
-  balance.value = null; claimed.value = false;
-  balanceState.value = checkinState.value = "loading";
-  if (id) { void loadBalance(epoch); void loadCheckin(epoch); }
-}, { immediate: true });
 const sidebarBounds = inject(sidebarBoundsKey, ref<SidebarRect | null>(null));
 const host = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
 let clearanceFrame = 0;
-let petObserver: MutationObserver | undefined;
-let bodyObserver: MutationObserver | undefined;
 let sizeObserver: ResizeObserver | undefined;
-let observedPet: HTMLElement | null = null;
+let position: SidebarPosition | undefined;
 function scheduleClearance() { if (!clearanceFrame) clearanceFrame = requestAnimationFrame(measureClearance); }
 function measureClearance() {
   clearanceFrame = 0;
@@ -103,64 +63,44 @@ function measureClearance() {
   if (!outer || !inner) return;
   const tokens = getComputedStyle(document.documentElement);
   const header = parseFloat(tokens.getPropertyValue('--site-header-h')) || parseFloat(tokens.getPropertyValue('--header-h')) || 60;
-  const topGap = parseFloat(tokens.getPropertyValue('--s-5')) || 24;
-  const bottomGap = parseFloat(tokens.getPropertyValue('--s-6')) || 32;
-  const maxHeight = Math.max(0, window.innerHeight - header - topGap - bottomGap);
-  const reservedHeight = Math.min(inner.scrollHeight, maxHeight);
-  const reservation = `${reservedHeight}px`;
-  if (outer.style.minHeight !== reservation) outer.style.minHeight = reservation;
+  const bottomLimit = window.innerHeight - (parseFloat(getComputedStyle(inner).scrollMarginBottom) || 80);
   const natural = outer.getBoundingClientRect();
-  const top = Math.max(natural.top, header + topGap);
-  const bottom = Math.min(window.innerHeight - bottomGap, natural.bottom);
-  const bounds = { left: natural.left, right: natural.right, top, bottom };
-  if (!sidebarBounds.value || Object.keys(bounds).some(key => bounds[key as keyof SidebarRect] !== sidebarBounds.value?.[key as keyof SidebarRect])) sidebarBounds.value = bounds;
-  const pet = document.querySelector<HTMLElement>('.suki-pet');
-  if (pet !== observedPet) {
-    petObserver?.disconnect(); observedPet = pet;
-    if (pet) petObserver?.observe(pet, { attributes: true, attributeFilter: ['hidden', 'style', 'class'], childList: true, subtree: true, characterData: true });
-  }
-  const obstacles: SidebarRect[] = [];
-  if (pet && getComputedStyle(pet).visibility !== 'hidden' && Number(getComputedStyle(pet).opacity) > 0.05) {
-    for (const el of pet.querySelectorAll<HTMLElement>('.suki-pet__bubble, .suki-pet__menu, .suki-pet__hit')) {
-      const rect = el.getBoundingClientRect(), style = getComputedStyle(el);
-      if (rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none') obstacles.push(rect);
-    }
-  }
-  const idle = document.querySelector<HTMLElement>('.suki-pet__idle:not([hidden])');
-  if (idle) obstacles.push(idle.getBoundingClientRect());
-  const range = sidebarClearance(bounds, obstacles);
-  const height = bottom > top ? Math.max(0, range.bottom - range.top) : maxHeight;
-  const offset = range.top > top ? range.top : header + topGap;
-  if (inner.style.maxHeight !== `${height}px`) inner.style.maxHeight = `${height}px`;
-  if (inner.style.top !== `${offset}px`) inner.style.top = `${offset}px`;
-  // Expose the genuinely impossible geometry to runtime verification, without
-  // pretending that a CSS floor makes the overlapping controls reachable.
-  inner.toggleAttribute('data-pet-clearance-blocked', !!range.blocked);
-  // CSS popup/placement transitions change rects without changing attributes.
-  // Follow only their active frames, then stop once actual geometry settles.
-  if (pet?.getAnimations?.({ subtree: true }).some(animation => animation.playState === 'running')) scheduleClearance();
+  const height = inner.offsetHeight;
+  position = sidebarPosition({ scrollY: window.scrollY, naturalTop: natural.top, height,
+    parentHeight: outer.offsetHeight, top: header + 24, bottom: bottomLimit }, position);
+  inner.style.transform = `translateY(${position.offset}px)`;
+  const rect = inner.getBoundingClientRect();
+  const bounds = { left: rect.left, right: rect.right, top: Math.max(rect.top, header + 24), bottom: Math.min(rect.bottom, bottomLimit) };
+  sidebarBounds.value = bounds.bottom > bounds.top ? bounds : null;
+}
+function revealFocus(event: FocusEvent) {
+  const target = event.target as HTMLElement;
+  requestAnimationFrame(() => {
+    const rect = target.getBoundingClientRect();
+    const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-h')) || 60;
+    const delta = rect.top < header + 24 ? rect.top - header - 24 : rect.bottom > innerHeight - 80 ? rect.bottom - innerHeight + 80 : 0;
+    if (delta) { window.scrollBy({ top: delta, behavior: 'instant' }); scheduleClearance(); }
+  });
 }
 onMounted(() => {
-  petObserver = new MutationObserver(scheduleClearance);
-  bodyObserver = new MutationObserver(scheduleClearance);
-  bodyObserver.observe(document.body, { childList: true });
-  if (typeof ResizeObserver !== 'undefined' && host.value) { sizeObserver = new ResizeObserver(scheduleClearance); sizeObserver.observe(host.value); }
+  if (typeof ResizeObserver !== 'undefined' && host.value && sidebar.value) {
+    sizeObserver = new ResizeObserver(scheduleClearance); sizeObserver.observe(host.value); sizeObserver.observe(sidebar.value);
+  }
   window.addEventListener('scroll', scheduleClearance, { passive: true });
   window.addEventListener('resize', scheduleClearance);
-  window.addEventListener('pointermove', scheduleClearance, { passive: true });
   scheduleClearance();
 });
 onUpdated(scheduleClearance);
 onBeforeUnmount(() => {
   sidebarBounds.value = null;
-  cancelAnimationFrame(clearanceFrame); petObserver?.disconnect(); bodyObserver?.disconnect(); sizeObserver?.disconnect();
-  window.removeEventListener('scroll', scheduleClearance); window.removeEventListener('resize', scheduleClearance); window.removeEventListener('pointermove', scheduleClearance);
+  cancelAnimationFrame(clearanceFrame); sizeObserver?.disconnect();
+  window.removeEventListener('scroll', scheduleClearance); window.removeEventListener('resize', scheduleClearance);
+  live = false; latestEpoch++;
 });
-onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
 </script>
 
 <template>
-  <div ref="host" class="home-sidebar-host"><aside ref="sidebar" class="home-sidebar" :aria-label="$t('home.siteInfo')">
+  <div ref="host" class="home-sidebar-host"><aside ref="sidebar" class="home-sidebar" :aria-label="$t('home.siteInfo')" @focusin="revealFocus">
     <section class="panel sidebar-block" data-sidebar-campaigns>
       <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5" /></svg><span>{{ $t('home.eventsTitle') }}</span></h2>
       <div v-if="campaignState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
@@ -169,40 +109,28 @@ onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
       <p v-else class="muted">{{ $t('home.noEvents') }}</p>
       <RouterLink class="sidebar-link sidebar-link--accent" :to="lp('/campaigns')"><span>{{ $t('campaign.hub.title') }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
     </section>
-    <section v-if="can('editor')" class="panel sidebar-block sidebar-invite">
-      <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg><span>{{ $t('home.writeTitle') }}</span></h2>
-      <RouterLink class="btn sidebar-create" :class="{ 'btn--primary': session.me }" :to="lp('/create')">{{ $t('home.write') }}</RouterLink>
-      <RouterLink class="sidebar-link" :to="lp('/guide')"><span>{{ $t('footer.guide') }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
-      <RouterLink v-if="season" class="sidebar-link" :to="lp(`/campaign/${season.slug}`)"><span>{{ localized(season.title, locale) }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
-    </section>
-    <section v-if="session.me" class="panel sidebar-block" data-sidebar-member>
-      <template v-if="checkinState !== 'disabled'">
-        <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4m8-4v4" /></svg><span>{{ $t('home.dailyTitle') }}</span></h2>
-        <div v-if="checkinState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
-        <template v-else-if="checkinState === 'error'"><p role="alert">{{ $t('home.checkinError') }}</p><button class="btn btn--sm" @click="loadCheckin()">{{ $t('home.retry') }}</button></template>
-        <div v-else class="sidebar-checkin-row"><p class="sidebar-state" :class="{ 'sidebar-state--done': claimed }"><i aria-hidden="true" />{{ $t(claimed ? 'home.claimed' : 'home.pending') }}</p><RouterLink class="btn btn--sm" :class="{ 'btn--ghost': claimed }" :to="lp('/checkin')">{{ $t(claimed ? 'home.checkinDoneAction' : 'home.checkinAction') }}</RouterLink></div>
-      </template>
-      <div data-sidebar-balance class="sidebar-balance" :class="{ 'sidebar-balance--divided': checkinState !== 'disabled' }">
-        <span class="muted">{{ $t('wallet.balance') }}</span>
-        <div v-if="balanceState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
-        <template v-else-if="balanceState === 'error'"><p role="alert">{{ $t('home.balanceError') }}</p><button class="btn btn--sm" @click="loadBalance()">{{ $t('home.retry') }}</button></template>
-        <RouterLink v-else-if="balance !== null" class="sidebar-link sidebar-score" :to="lp('/wallet')">{{ whole(balance) }}</RouterLink>
-      </div>
-    </section>
     <section class="panel sidebar-block" data-sidebar-latest>
       <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" /></svg><span>{{ $t('home.latestTitle') }}</span></h2>
       <div v-if="latestState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
       <template v-else-if="latestState === 'error'"><p role="alert">{{ $t('home.latestError') }}</p><button class="btn btn--sm" @click="loadLatest">{{ $t('home.retry') }}</button></template>
       <RouterLink v-else-if="latest" class="sidebar-title" :to="latest.to">{{ latest.title }}</RouterLink>
       <template v-else><p class="muted">{{ $t('home.noUpdates') }}</p><RouterLink class="sidebar-link" :to="lp('/blog')">{{ $t('blog.title') }}</RouterLink></template>
+      <RouterLink class="sidebar-link" :to="lp('/updates')">{{ $t('home.allUpdates') }}</RouterLink>
     </section>
-    <nav id="home-site-info" tabindex="-1" class="sidebar-info" :aria-label="$t('home.siteInfo')"><SiteLink v-for="link in links" :key="link.id" :link="link" /></nav>
+    <section v-if="can('editor')" class="panel sidebar-block sidebar-invite">
+      <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg><span>{{ $t('home.writeTitle') }}</span></h2>
+      <RouterLink class="btn sidebar-create" :class="{ 'btn--primary': session.me }" :to="lp('/create')">{{ $t('home.write') }}</RouterLink>
+      <RouterLink class="sidebar-link" :to="lp('/guide')"><span>{{ $t('footer.guide') }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
+      <RouterLink v-if="season" class="sidebar-link" :to="lp(`/campaign/${season.slug}`)"><span>{{ localized(season.title, locale) }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
+    </section>
+    <nav id="home-site-info" tabindex="-1" class="sidebar-info" :aria-label="$t('home.siteInfo')"><SiteLink v-for="link in support" :key="link.id" :link="link" /></nav>
   </aside></div>
 </template>
 
 <style scoped>
 .home-sidebar-host { align-self: stretch; min-width: 0; }
-.home-sidebar { align-self: start; display: grid; gap: var(--s-4); align-content: start; position: sticky; top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-6)); overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+.home-sidebar :deep(a), .home-sidebar button { scroll-margin-top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); }
+.home-sidebar { align-self: start; scroll-margin-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--s-4); align-content: start; overflow: visible; padding-block: var(--s-1); }
 .sidebar-block { padding: var(--s-4); min-width: 0; display: grid; gap: var(--s-2); }
 .sidebar-block h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .sidebar-label { display: flex; align-items: center; gap: var(--s-2); }
@@ -226,7 +154,7 @@ onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
 .sidebar-balance--divided { margin-top: var(--s-1); padding-top: var(--s-3); border-top: 1px solid var(--line); }
 .sidebar-score { justify-content: flex-start; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; line-height: 1.15; color: var(--text); }
 .sidebar-skeleton { height: 44px; margin: var(--s-2) 0; }
-.sidebar-info { display: flex; flex-wrap: wrap; gap: 0 var(--s-3); font-size: 12px; color: var(--text-3); padding: 0 var(--s-2); }
+.sidebar-info { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); line-height: 1.5; font-size: 12px; color: var(--text-3); padding: 0 var(--s-2); }
 .sidebar-info :deep(a), .sidebar-info :deep(button) { display: inline-flex; align-items: center; min-height: 30px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: start; overflow-wrap: anywhere; }
 .sidebar-info :deep(a:hover), .sidebar-info :deep(button:hover) { color: var(--text); }
 :lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }

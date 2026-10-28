@@ -3567,5 +3567,10 @@
   "review.correction.authorReason": "Reason for rejection",
   "review.correction.authorOpen": "View review result",
   "review.correction.rewardKept": "The Creator Season reward you received for this submission is unaffected.",
-  "review.correction.rewardPending": "The Creator Season reward payout is not yet confirmed. Reload later before correcting the review."
+  "review.correction.rewardPending": "The Creator Season reward payout is not yet confirmed. Reload later before correcting the review.",
+  "home.checkinHint": "Check in for today's chest",
+  "home.checkinHintDismiss": "Dismiss check-in reminder",
+  "home.allUpdates": "View all updates",
+  "board.tags.previous": "Show previous tags in {group}",
+  "board.tags.next": "Show more tags in {group}"
 }

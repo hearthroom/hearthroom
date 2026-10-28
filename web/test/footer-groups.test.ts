@@ -6,7 +6,7 @@
  *   - 每個標籤在五種語言都有字。
  */
 import { describe, expect, it } from "vitest";
-import { FOOTER_LIMITS, footerGroups, footerLegal, type FooterContext } from "../src/lib/footer-nav";
+import { FOOTER_LIMITS, footerGroups, footerLegal, footerSupport, type FooterContext } from "../src/lib/footer-nav";
 import zhHant from "../src/locales/zh-Hant.json";
 import zhHans from "../src/locales/zh-Hans.json";
 import en from "../src/locales/en.json";
@@ -85,4 +85,11 @@ describe("頁尾分組", () => {
     for (const dict of [zhHant, zhHans, en, ja, ko] as Record<string, string>[])
       for (const k of keys) expect(dict[k], k).toBeTruthy();
   });
+});
+
+it('compact footer keeps four support entries without removing public navigation',()=>{
+ const ctx:FooterContext={repoUrl:'https://example.test/repo',license:'AGPL-3.0',discordInvite:null,showDownloadEntry:true,canInstallSite:false,routeLine:null};
+ expect(footerSupport(ctx).map(l=>l.id)).toEqual(['github','issues','privacy','license']);
+ expect(footerGroups(ctx).flatMap(g=>g.links).map(l=>l.id)).toContain('developers');
+ expect(footerSupport({...ctx,repoUrl:''}).map(l=>l.id)).toEqual(['privacy']);
 });

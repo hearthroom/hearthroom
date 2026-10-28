@@ -6,6 +6,8 @@ import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, provide, reactive, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import CheckinHint from "@/components/CheckinHint.vue";
+import SiteLink from "@/components/SiteLink.vue";
 import SiteMenu from "@/components/SiteMenu.vue";
 import { siteLinksKey, boardEndKey, boardListEndKey, sidebarBoundsKey, headerOverlaysKey } from "@/lib/site-links";
 import AccountMenu from "@/components/AccountMenu.vue";
@@ -33,7 +35,7 @@ import NewcomerTour from "@/components/NewcomerTour.vue";
 import SukiPet from "@/components/SukiPet.vue";
 import { watchCheckinNudges } from "@/lib/checkin-nudges";
 import { useUpdates } from "@/lib/updates";
-import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
+import { footerSupport, type FooterContext } from "@/lib/footer-nav";
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
 import { refreshGa4Account } from "@/lib/ga4";
 import { fetchMe } from "@/lib/api";
@@ -100,8 +102,7 @@ onMounted(() => {
   if (typeof ResizeObserver !== 'undefined' && headerElement.value) { headerObserver = new ResizeObserver(measureHeader); headerObserver.observe(headerElement.value); }
 });
 onBeforeUnmount(() => { window.removeEventListener('resize', measureHeader); headerObserver?.disconnect(); });
-const footerNav = computed(() => footerGroups(footerCtx.value));
-const legalNav = computed(() => footerLegal(footerCtx.value));
+const supportNav = computed(() => footerSupport(footerCtx.value));
 onMounted(()=>{void communityRequest<{invite:string|null}>("/community/config").then(r=>{discordInvite.value=r.invite;}).catch(()=>{});});
 const notifications = useNotifications();
 // 更新說明的摘要：首頁提示列與「新」標記用。閒置時才讀，不跟第一屏搶；換語言重讀。
@@ -219,7 +220,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <RouterLink v-else-if="session.ready && !session.restoreError" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}
         </RouterLink>
-        <SiteMenu v-if="compactHeader && session.ready && !session.me && !session.restoreError" />
+        <SiteMenu v-if="!session.me" />
       </div>
     </div>
   </header>
@@ -229,6 +230,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/library')" data-tour="library" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
+  <CheckinHint v-if="onBoardPage && session.me && !route.meta.bare" />
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
   <main id="main" tabindex="-1" :inert="headerOverlays.size > 0" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
   <CoachTour />
@@ -250,31 +252,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <div class="footer__inner">
       <div class="footer__about">
         <p class="footer__name">{{ footerName }}</p>
-        <p class="footer__tagline">{{ $t("footer.tagline") }}</p>
       </div>
-      <nav class="footer__groups" :aria-label="$t('footer.links')">
-        <section v-for="g in footerNav" :key="g.id" class="footer__group" :aria-labelledby="`footer-${g.id}`">
-          <p :id="`footer-${g.id}`" class="footer__title">{{ $t(g.title) }}</p>
-          <ul>
-            <li v-for="l in g.links" :key="l.id">
-              <RouterLink v-if="'to' in l" :to="{ path: lp(l.to), query: l.query }">{{ $t(l.label, l.labelArgs ?? {}) }}<NewMark v-if="l.newMark" :k="l.newMark" /></RouterLink>
-              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }}</span><span v-if="l.detailHost" class="footer__host">{{ l.detailHost }}</span></a>
-              <a v-else-if="'action' in l" href="#" @click.prevent="openInstall()">{{ $t(l.label) }}</a>
-              <a v-else :href="l.href" target="_blank" rel="noopener noreferrer" :title="l.id === 'github' ? $t('footer.github') : undefined">
-                <CommunityIcon v-if="l.icon === 'discord'" name="discord" />
-                <svg v-else-if="l.icon === 'github'" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
-                {{ $t(l.label, l.labelArgs ?? {}) }}
-              </a>
-            </li>
-          </ul>
-        </section>
-      </nav>
-      <div class="footer__legal">
-        <template v-for="l in legalNav" :key="l.id">
-          <RouterLink v-if="'to' in l" :to="lp(l.to)">{{ $t(l.label, l.labelArgs ?? {}) }}</RouterLink>
-          <a v-else-if="'href' in l" :href="l.href" target="_blank" rel="noopener noreferrer">{{ $t(l.label, l.labelArgs ?? {}) }}</a>
-        </template>
-      </div>
+      <nav class="footer__support" :aria-label="$t('footer.links')"><SiteLink v-for="link in supportNav" :key="link.id" :link="link" /></nav>
     </div>
   </footer>
 </template>
@@ -367,29 +346,19 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .header__inner--signal .brand__name { display: none; }
 }
 
-/* 頁尾：左邊是站名與一句話，右邊是分組連結，最底下一條放授權。手機上分組排成兩欄，不摺疊——每組就幾個連結，收起來反而多點一下。 */
+/* 精簡站務：品牌與四個支援／法律入口；完整導覽留在網站與帳號選單。 */
 .footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
 .footer__inner {
   max-width: var(--page); margin: 0 auto; padding: var(--s-6) var(--s-5) var(--s-4);
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--s-5) var(--s-6);
   font-size: 13px; color: var(--text-3);
 }
+.footer__support { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); font-size: 12px; }
+.footer__support :deep(a) { min-height: var(--h-sm); display: inline-flex; align-items: center; color: var(--text-3); }
 .footer__about { min-width: 0; }
 .footer__name { margin: 0 0 var(--s-2); font-weight: 600; color: var(--text); font-size: 14px; }
-.footer__tagline { margin: 0; line-height: 1.6; max-width: 22rem; }
-.footer__groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s-4) var(--s-5); }
-.footer__title { margin: 0 0 var(--s-1); font-size: 12px; font-weight: 600; color: var(--text-3); }
-.footer__group ul { list-style: none; margin: 0; padding: 0; }
-.footer__group a { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: var(--text-2); }
-.footer__group a:hover, .footer__legal a:hover { color: var(--text); }
-.footer__group svg { width: 15px; height: 15px; flex: none; }
-.footer__group svg[viewBox="0 0 16 16"] { fill: currentColor; }
-.footer__legal { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line); font-size: 12px; }
-.footer__legal a { color: var(--text-3); display: inline-flex; align-items: center; min-height: 32px; }
 @media (max-width: 720px) {
   .footer__inner { grid-template-columns: minmax(0, 1fr); padding: var(--s-5) var(--s-4) var(--s-3); }
-  .footer__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .footer__group a { min-height: 44px; }
 }
 
 /* 平板（iPad 直放 744–834）跟桌機一樣：導覽留在頁首那一排，搜尋收成圖示讓出位置（owner 2026-10-11）。

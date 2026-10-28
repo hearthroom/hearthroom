@@ -13,7 +13,7 @@ import {
 import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
-import { sidebarClearance, type SidebarRect } from "../lib/sidebar-clearance";
+import { type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
 type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
@@ -137,7 +137,7 @@ export class SukiPet {
       if (this.sidebarPosition) this.place(this.sidebarPosition);
       this.sidebarPosition = null; this.sidebarDocked = false; this.sidebarAwake = false;
       this.idleButton.hidden = true;
-      this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded");
+      this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded", "suki-pet--sidebar-avatar");
       if (wasIdle && this.guide) this.setGuide(this.guide);
       return;
     }
@@ -145,7 +145,7 @@ export class SukiPet {
     const body = this.box();
     const obstacles: SidebarRect[] = [{ left: body.left, right: body.right, top: body.top, bottom: body.top + body.height }];
     for (const popup of [this.bubble, this.menuEl]) if (!popup.hidden) obstacles.push(popup.getBoundingClientRect());
-    if (!sidebarClearance(bounds, obstacles).blocked) return;
+    if (!obstacles.some(r => r.left < bounds.right && r.right > bounds.left && r.top < bounds.bottom && r.bottom > bounds.top)) return;
     if (!this.sidebarAwake) {
       this.sidebarPosition = { ...this.pos };
       this.sidebarDocked = true;
@@ -160,6 +160,7 @@ export class SukiPet {
     // After the sidebar becomes sticky, a bottom-standing pet leaves its upper row clear.
     if (!this.drag) {
       const above = bounds.top - 12 - body.height;
+      this.el.classList.toggle("suki-pet--sidebar-avatar", above < 60);
       this.place({ x: this.pos.x, y: above >= 60 ? above : Math.max(0, innerHeight - body.height - 8) });
     }
   }

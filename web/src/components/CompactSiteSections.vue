@@ -5,7 +5,7 @@ import SiteLink from "./SiteLink.vue";
 defineProps<{ opener?: () => HTMLElement | null }>();
 const emit = defineEmits<{ activate: []; appearance: []; language: [] }>();
 const { links } = useSiteLinks();
-const pick = (ids: string[]) => computed(() => ids.flatMap(id => links.value.filter(link => link.id === id)));
+const pick = (ids: string[]) => computed(() => ids.flatMap(id => links.value.filter(link => link.id === id).map(link => link.id === "updates" && "to" in link ? { ...link, query: { ...link.query, from: "menu" } } : link)));
 const otherOpen = ref(false);
 const routes = pick(['routes']);
 const community = pick(['guide', 'campaign', 'blog', 'updates', 'discord']);

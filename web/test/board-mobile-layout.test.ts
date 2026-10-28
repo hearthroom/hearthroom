@@ -83,49 +83,14 @@ describe("首頁：關注併進排序列", () => {
   });
 });
 
-describe("首頁：類型列在窄螢幕收合", () => {
-  it("預設收合，鈕上寫全部幾類；點開展開、再點收回", async () => {
-    await mount("/");
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(true);
-    expect(expander()?.textContent?.trim()).toBe(i18n.global.t("board.tags.expand", { n: TAG_CATALOG.length }));
-    expect(expander()?.getAttribute("aria-expanded")).toBe("false");
-    // 收合時每一顆籤仍在文件裡（鍵盤與讀屏照常可達），只是容器限高
-    expect(button("催眠")).toBeTruthy();
-    expander()!.click(); await nextTick();
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(false);
-    expect(expander()?.textContent?.trim()).toBe(i18n.global.t("board.tags.collapse"));
-    expect(expander()?.getAttribute("aria-expanded")).toBe("true");
-    expander()!.click(); await nextTick();
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(true);
-  });
-
-  it("有選中的類型就自動展開；清掉選擇才收回去", async () => {
-    await mount("/?tag=hypnosis");
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(false);
-    expect(button("催眠")?.getAttribute("aria-pressed")).toBe("true");
-    expect(expander(), "清單被選擇撐開時沒有收合鈕可按").toBeNull();
-    button("清除類型")!.click(); await settle();
-    expect(expander()).not.toBeNull();
-    expect(router.currentRoute.value.query.tag).toBeUndefined();
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(true);
-  });
-
-  it("「已隱藏 N 類」在標題列，收合時也看得到；寬螢幕沒有窄螢幕那顆收合鈕、隱藏連結排在籤尾那一行", async () => {
-    await mount("/", ["loli", "ntr"]);
-    const head = root.querySelector(".discovery-tags__head");
-    expect(head?.querySelector("a")?.textContent?.trim()).toBe(i18n.global.t("board.hidden", { n: 2 }));
-    expect(root.querySelectorAll('a[href$="#hidden"]'), "同一條連結只出現一次，不在籤尾重複").toHaveLength(1);
-    expect(button("蘿莉"), "隱藏的類型不畫").toBeUndefined();
-    app!.unmount(); root.remove();
-
-    narrow = false;
-    await mount("/", ["loli", "ntr"]);
-    expect(expander()).toBeNull();
-    expect(root.querySelector(".discovery-tags__head")).toBeNull();
-    expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(false);
-    // 類型分組後（2026-10-11）籤尾自成一行：「更多類型」與「已隱藏 N 類」
-    const tail = root.querySelector(".discovery-tags__inner")!.lastElementChild!;
-    expect(tail.classList.contains("discovery-tags__tail")).toBe(true);
-    expect(tail.lastElementChild?.classList.contains("tagchip--hidden")).toBe(true);
-  });
+describe("首頁：四組直接橫捲", () => {
+ it("四組預設顯示，沒有更多或展開控制",async()=>{
+  await mount("/");expect(expander()).toBeNull();expect(tagsNav()?.classList.contains('discovery-tags--browse')).toBe(true);
+  expect(root.querySelectorAll('[data-group]')).toHaveLength(4);expect(root.querySelectorAll('.discovery-tags__chips')).toHaveLength(4);
+ });
+ it("清除選擇不收合，隱藏入口一直可達",async()=>{
+  await mount('/?tag=hypnosis',['loli','ntr']);expect(button('催眠')?.getAttribute('aria-pressed')).toBe('true');
+  expect(root.querySelectorAll('a[href$="#hidden"]')).toHaveLength(1);expect(button('蘿莉')).toBeUndefined();
+  button('清除類型')!.click();await settle();expect(router.currentRoute.value.query.tag).toBeUndefined();expect(expander()).toBeNull();
+ });
 });

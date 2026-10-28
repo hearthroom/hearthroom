@@ -3567,5 +3567,10 @@
   "review.correction.authorReason": "却下理由",
   "review.correction.authorOpen": "審査結果を見る",
   "review.correction.rewardKept": "今回の申請で受け取った創作シーズンの特典は、そのまま残ります。",
-  "review.correction.rewardPending": "創作シーズンの特典が付与済みか確認できていません。時間をおいて再読み込みしてから訂正してください。"
+  "review.correction.rewardPending": "創作シーズンの特典が付与済みか確認できていません。時間をおいて再読み込みしてから訂正してください。",
+  "home.checkinHint": "チェックインで今日の宝箱",
+  "home.checkinHintDismiss": "チェックインのお知らせを閉じる",
+  "home.allUpdates": "更新履歴をすべて見る",
+  "board.tags.previous": "{group}の前のタグを表示",
+  "board.tags.next": "{group}の続きのタグを表示"
 }

@@ -293,7 +293,7 @@ const ratingOptions = computed(() => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page board-page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
     <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
@@ -320,7 +320,7 @@ const ratingOptions = computed(() => {
     </div>
 
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
-    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" :counts="tagCounts" collapsible @change="navigate({ tag: $event.length ? $event : undefined })" />
+    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" :counts="tagCounts" browse @change="navigate({ tag: $event.length ? $event : undefined })" />
 
 
     <template v-if="mode === 'cards'">
@@ -378,12 +378,19 @@ const ratingOptions = computed(() => {
 </template>
 
 <style scoped>
+.board-page { max-width: 2400px; width: calc(100% - 2 * clamp(16px, 2.5vw, 64px)); padding-inline: 0; --board-columns: 2; }
+.board-page :deep(.grid), .board-page .tail-skeleton { grid-template-columns: repeat(var(--board-columns), minmax(0, 1fr)); }
+@media(min-width:600px) { .board-page { --board-columns: 3; } }
+@media(min-width:820px) { .board-page { --board-columns: 4; } }
+@media(min-width:1440px) { .board-page { --board-columns: 5; } }
+@media(min-width:1920px) { .board-page { --board-columns: 6; } .board-page .board-layout { grid-template-columns: minmax(0,1fr) 288px; } }
+@media(min-width:2400px) { .board-page { --board-columns: 8; } }
 /* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
 .board-main { min-width: 0; }
 /* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
 .board-main--restored :deep(.settle) { animation: none; }
 .board-sidebar { display: none; }
-@media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: grid; } .board-main :deep(.grid) { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: grid; } }
 .sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }
 .sorts__item {
   height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);

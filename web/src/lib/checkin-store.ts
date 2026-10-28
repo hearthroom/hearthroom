@@ -3,7 +3,7 @@
  * 面板只在需要時讀（進簽到頁、回到分頁、登入後一次），不輪詢。
  */
 import { defineStore } from "pinia";
-import { computed, ref, shallowRef } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import {
   checkin as postCheckin, claimNewcomer as postNewcomer, claimTask as postTask, fetchPanel, fetchPlan, forgetCurrentPlan, makeup as postMakeup,
   RewardsError, type CheckinResponse, type ClaimResult, type RewardPlan, type RewardsPanel, type RewardTask,
@@ -22,6 +22,8 @@ export const useCheckin = defineStore("checkin", () => {
   const error = ref<RewardsError | Error | null>(null);
   /** 這個帳號的應用沒有開獎勵（rewards_disabled）：入口全部不出現 */
   const disabled = ref(false);
+  let generation = 0;
+  watch(() => session.me?.accountNumId, reset, { flush: "sync" });
   let inflight: Promise<void> | null = null;
 
   async function token(): Promise<string> {
@@ -33,27 +35,31 @@ export const useCheckin = defineStore("checkin", () => {
   async function ensurePlan(version?: number): Promise<RewardPlan> {
     if (plan.value && (version == null || plan.value.version === version)) return plan.value;
     if (version != null && plan.value && plan.value.version !== version) forgetCurrentPlan();
-    plan.value = await fetchPlan();
-    return plan.value;
+    const epoch = generation;
+    const result = await fetchPlan();
+    if (epoch === generation) plan.value = result;
+    return result;
   }
 
   function load(): Promise<void> {
     if (inflight) return inflight;
+    const epoch = generation;
     loading.value = true;
     inflight = (async () => {
       try {
         const p = await fetchPanel(await token());
+        if (epoch !== generation) return;
         panel.value = p;
         fetchedAt.value = Date.now();
         error.value = null;
         disabled.value = false;
         await ensurePlan(p.planVersion).catch(() => undefined);
       } catch (e) {
+        if (epoch !== generation) return;
         if (e instanceof RewardsError && e.code === "rewards_disabled") disabled.value = true;
         error.value = e as Error;
       } finally {
-        loading.value = false;
-        inflight = null;
+        if (epoch === generation) { loading.value = false; inflight = null; }
       }
     })();
     return inflight;
@@ -130,7 +136,7 @@ export const useCheckin = defineStore("checkin", () => {
   /** 今天還沒簽：帳號選單的點、「我的」頁與首頁 chip 用 */
   const canCheckIn = computed(() => !!panel.value && !panel.value.checkin.todayClaimed);
 
-  function reset() { panel.value = null; plan.value = null; error.value = null; disabled.value = false; }
+  function reset() { generation++; inflight = null; loading.value = false; panel.value = null; plan.value = null; error.value = null; disabled.value = false; }
 
   /** 領完（開箱舞台關掉、任務領好）：面板與頁首的餘額一起重讀。領的當下不讀，餘額才不會比滾輪先揭曉 */
   async function settle(): Promise<void> {

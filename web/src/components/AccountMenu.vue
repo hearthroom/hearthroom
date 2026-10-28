@@ -9,8 +9,6 @@ import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
 import { logoutWithRoutes } from "@/lib/logout";
-import { currentLine, openRoutesDialog, routesAvailable, routesState } from "@/lib/routes";
-import SignalBars from "@/components/routes/SignalBars.vue";
 import NewMark from "@/components/NewMark.vue";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import { useCheckin } from "@/lib/checkin-store";
@@ -60,14 +58,6 @@ const balance = computed(() => {
   return n >= 1_000_000 ? compact(n) : whole(n);
 });
 const root = ref<HTMLElement | null>(null);
-/** 線路：官方網域上才有（App 裡用 App 自己的線路畫面）；右側寫目前在哪條 */
-const hereLine = routesAvailable() ? currentLine() : undefined;
-function openRoutes() {
-  openRoutesDialog();
-  // 選單項目點完就消失了：關掉清單時焦點回到頭像
-  routesState.opener = root.value?.querySelector<HTMLElement>(".acct__btn") ?? null;
-}
-
 /** 點外面或按 Esc 就收起來。 */
 function onDocClick(e: MouseEvent) {
   if (root.value && !root.value.contains(e.target as Node)) open.value = false;
@@ -119,24 +109,15 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
         <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </div>
-      <CompactSiteSections v-if="props.compact" :opener="opener" @activate="open = false" @appearance="preference('appearance')" @language="preference('language')">
+      <CompactSiteSections :opener="opener" @activate="open = false" @appearance="preference('appearance')" @language="preference('language')">
         <template #settings><RouterLink :to="lp('/settings')" role="menuitem">{{ $t('nav.settings') }}</RouterLink></template>
       </CompactSiteSections>
-      <div v-else class="menu__group">
-        <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem"><AccountIcon name="settings" />{{ $t("nav.settings") }}</RouterLink>
-        <button v-if="hereLine" type="button" class="menu__item" role="menuitem" @click="openRoutes"><SignalBars :level="3" />{{ $t("routes.title") }}<span class="menu__aside">{{ $t(`routes.name.${hereLine.n}`) }}<span class="menu__aside-host">{{ hereLine.host }}</span></span></button>
-        <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
-        <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
-        <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
-        <RouterLink :to="lp('/blog')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("blog.title") }}</RouterLink>
-        <RouterLink :to="lp('/campaigns')" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("campaign.hub.title") }}</RouterLink>
-      </div>
       <div class="menu__group">
         <button class="menu__item" role="menuitem" @click="logoutWithRoutes(session)"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
       </div>
     </div>
-    <AppearanceMenu v-if="props.compact" ref="appearance" external />
-    <LocaleSwitch v-if="props.compact" ref="language" external />
+    <AppearanceMenu ref="appearance" external />
+    <LocaleSwitch ref="language" external />
   </div>
 </template>
 

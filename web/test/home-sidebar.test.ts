@@ -56,34 +56,17 @@ it("separates errors from truly empty sources and retries only the failed block"
   expect(root.textContent).toContain(i18n.global.t("home.noEvents"));
   expect(updates.fetchUpdates).toHaveBeenCalledTimes(1);
 });
-it("displays a real zero balance and known check-in state, with navigation rather than a claim", async () => {
-  await mount(true);
-  expect(root.querySelector('[data-sidebar-balance]')?.textContent).toContain("0");
-  expect(root.textContent).toContain(i18n.global.t("home.pending"));
-  expect(root.querySelector('a[href="/checkin"]')?.textContent).toContain(i18n.global.t("home.checkinAction"));
-});
-it("never labels a missing panel as claimed or pending, and discards old-account responses", async () => {
-  let resolve!: (value: never) => void;
-  vi.mocked(rewards.fetchPanel).mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockRejectedValueOnce(new Error("offline"));
-  await mount(true);
-  expect(root.textContent).not.toContain(i18n.global.t("home.pending"));
-  useSession().me = { accountNumId: 8 } as never; await settle();
-  resolve({ checkin: { todayClaimed: true } } as never); await settle();
-  expect(root.textContent).toContain(i18n.global.t("home.checkinError"));
-  expect(root.textContent).not.toContain(i18n.global.t("home.claimed"));
+it("does not duplicate check-in or wallet, and places updates before creation", async () => {
+ await mount(true);
+ expect(root.querySelector('[data-sidebar-member]')).toBeNull();expect(root.querySelector('a[href="/checkin"]')).toBeNull();
+ expect(rewards.fetchPanel).not.toHaveBeenCalled();expect(api.fetchWallet).not.toHaveBeenCalled();
+ expect([...root.querySelectorAll('section')].map(el=>el.hasAttribute('data-sidebar-latest'))).toEqual([false,true,false]);
+ expect(root.querySelector('[data-sidebar-latest] a[href="/updates"]')?.textContent).toBe(i18n.global.t('home.allUpdates'));
 });
 it("falls back to a published blog only after updates successfully return empty", async () => {
   vi.mocked(blog.fetchPosts).mockResolvedValue({ total: 1, pinned: [], items: [{ title: "公開新文章", columnSlug: "news", slug: "hello", locale: "zh-Hant", firstPublishedAt: 123 }] as never });
   await mount();
   expect(root.querySelector('a[href="/blog/news/hello"]')?.textContent).toBe("公開新文章");
-});
-
-it("omits disabled check-in while keeping the member balance", async () => {
-  vi.mocked(rewards.fetchPanel).mockRejectedValueOnce(new rewards.RewardsError(404, "disabled", "rewards_disabled"));
-  await mount(true);
-  expect(root.querySelector('a[href="/checkin"]')).toBeNull();
-  expect(root.textContent).not.toContain(i18n.global.t("home.checkinError"));
-  expect(root.querySelector('[data-sidebar-balance]')?.textContent).toContain("0");
 });
 
 it("keeps anonymous creation available with a secondary action", async () => {
@@ -93,13 +76,7 @@ it("keeps anonymous creation available with a secondary action", async () => {
   expect(create?.classList.contains("btn--primary")).toBe(false);
 });
 
-it("makes member creation primary while keeping check-in secondary in both states", async () => {
-  await mount(true);
-  expect(root.querySelector('a[href="/create"]')?.classList.contains("btn--primary")).toBe(true);
-  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn")).toBe(true);
-  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn--primary")).toBe(false);
-  vi.mocked(rewards.fetchPanel).mockResolvedValue({ checkin: { todayClaimed: true } } as never);
-  useSession().me = { accountNumId: 8 } as never; await settle();
-  expect(root.querySelector('a[href="/checkin"]')?.textContent).toContain(i18n.global.t("home.checkinDoneAction"));
-  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn--primary")).toBe(false);
+it("keeps member creation primary without a duplicate check-in block",async()=>{
+ await mount(true);expect(root.querySelector('a[href="/create"]')?.classList.contains('btn--primary')).toBe(true);
+ expect(root.querySelector('a[href="/checkin"]')).toBeNull();
 });

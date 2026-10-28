@@ -89,3 +89,11 @@ export function footerLegal(ctx: FooterContext): FooterLink[] {
     { id: "license", label: "footer.license", labelArgs: { name: ctx.license }, href: `${ctx.repoUrl}/blob/main/LICENSE` },
   ];
 }
+
+/** Compact presentation only; public menus retain the complete navigation catalog. */
+export function footerSupport(ctx: FooterContext): FooterLink[] {
+  return [
+    ...(ctx.repoUrl ? [{ id: "github", label: "footer.githubShort", href: ctx.repoUrl }, { id: "issues", label: "footer.issues", href: `${ctx.repoUrl}/issues` }] : []),
+    ...footerLegal(ctx).filter(link => link.id !== "license" || !!ctx.repoUrl),
+  ];
+}
