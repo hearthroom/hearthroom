@@ -79,8 +79,8 @@ function search() {
 
 function menu(): MenuItem[] {
   const items: MenuItem[] = [];
-  if (session.me) items.push({ label: line("menu.resume"), run: () => void resume() });
-  items.push({ label: line("menu.roll"), run: () => void roll() });
+  if (session.me) items.push({ label: line("menu.resume"), run: resume });
+  items.push({ label: line("menu.roll"), run: roll });
   items.push({ label: line("menu.search"), run: search });
   if (notifications.unread > 0) items.push({ label: line("menu.notifications"), run: () => router.push(lp("/me/notifications")) });
   if (session.me && can("editor")) items.push({ label: line("menu.write"), run: () => router.push(lp("/create")) });
@@ -152,7 +152,7 @@ async function start() {
       if (push === "on" || dm) pet.value?.say(line("recallOn"));
       else pet.value?.on({ type: "hint", text: line("recallNeedsChannel"), action: { label: line("go.look"), run: () => router.push(lp("/me/notifications")) } });
     },    nickname: () => session.me?.nickName?.trim() || null,
-    resume: { label: line("menu.resume"), run: () => void resume() },
+    resume: { label: line("menu.resume"), run: resume },
     menuLabel: () => line("menu.off"),
     onOff: () => { petEnabled.value = false; },
   });

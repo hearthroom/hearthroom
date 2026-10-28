@@ -58,3 +58,13 @@ it('keeps a visible answer and overlay ownership for a deliberate topic action',
  expect(p.el.classList.contains('suki-pet--sidebar-idle')).toBe(false);expect(change).toHaveBeenLastCalledWith(true);
  manual.closeMenu();expect(manual.bubble.hidden).toBe(true);expect(change).toHaveBeenLastCalledWith(false);
 });
+it('waits for a manual async action before deciding whether to return to idle',async()=>{
+ const change=vi.fn();const {p}=setup(false,change);
+ const manual=pet as unknown as {opts:PetOptions;menuEl:HTMLElement;bubble:HTMLElement;closeMenu:()=>void};
+ let resolve!:()=>void;const pending=new Promise<void>(r=>resolve=r);
+ manual.opts.menu=()=>[{label:'Resume',run:async()=>{await pending;pet.say('No previous conversation.');}}];
+ p.updateSidebar();p.idleButton.click();manual.menuEl.querySelector<HTMLButtonElement>('button')!.click();
+ resolve();for(let i=0;i<5;i++)await Promise.resolve();
+ expect(manual.bubble.hidden).toBe(false);expect(manual.bubble.textContent).toBe('No previous conversation.');
+ expect(change).toHaveBeenLastCalledWith(true);manual.closeMenu();
+});

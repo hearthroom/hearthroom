@@ -21,7 +21,7 @@ type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink"
 interface Act { showIf?: () => boolean; expr?: Expr; say?: string; ms?: number; hop?: boolean; talk?: boolean; action?: MenuItem }
 
 /** 選單的一項：她能直接幫你做的事 */
-export interface MenuItem { label: string; run: () => void }
+export interface MenuItem { label: string; run: () => unknown }
 /** 每一頁的用途：第一次到這頁說的那句、選單裡「這頁怎麼用」的問答、還沒做完的事 */
 export interface PageGuide {
   id: string;
@@ -128,6 +128,7 @@ export class SukiPet {
   private idleButton: HTMLButtonElement;
   private sidebarDocked = false;
   private sidebarAwake = false;
+  private sidebarActions = 0;
   private sidebarPosition: { x: number; y: number } | null = null;
   private get sidebarIdle() { return this.sidebarDocked && !this.sidebarAwake; }
 
@@ -312,9 +313,16 @@ export class SukiPet {
     this.menuEl.replaceChildren(...items.map((it) => {
       const b = document.createElement("button");
       b.type = "button"; b.setAttribute("role", "menuitem"); b.textContent = it.label;
-      b.addEventListener("click", (e) => {
-        e.stopPropagation(); this.closeMenu(this.sidebarAwake); it.run();
-        if (this.sidebarAwake && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
+      b.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const deliberate = this.sidebarAwake;
+        if (deliberate) this.sidebarActions++;
+        this.closeMenu(deliberate);
+        try { await it.run(); }
+        finally {
+          if (deliberate) this.sidebarActions--;
+          if (this.sidebarAwake && !this.sidebarActions && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
+        }
       });
       return b;
     }));
@@ -595,7 +603,7 @@ export class SukiPet {
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
     if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.drainQueue(); }
-    if (this.sidebarAwake && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
+    if (this.sidebarAwake && !this.sidebarActions && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
   }
 
   // ---- 自主行動（瑞星小獅子、Office 迴紋針、拓麻歌子：她自己會走、會換姿勢、會自己玩） ----
