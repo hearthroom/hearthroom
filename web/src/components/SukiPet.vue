@@ -6,7 +6,7 @@
  * 頁面載完（load 事件）、瀏覽器空閒才載入（動態 import），不拖慢第一眼；可在設定裡關掉。
  * 這裡只做「網站 → 她」的接線：她怎麼演在 pet/pet-ui.ts，各頁的用途在 pet/guides.ts。
  */
-import { inject, onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { sidebarBoundsKey } from "@/lib/site-links";
@@ -39,6 +39,7 @@ const reviewer = useReviewer();
 const { t, te, locale } = useI18n();
 const { lp } = useLocalePath();
 const pet = shallowRef<Pet | null>(null);
+const reviewingDetail = computed(()=>route.meta.managementTab==="reviews" && typeof route.params.id==="string");
 
 /** 一句台詞：mascot.pet.<key>，有 _2 _3… 就隨機挑一句 */
 function line(key: string, params: Record<string, string | number> = {}): string {
@@ -230,8 +231,8 @@ watch(() => notifications.unread, (n) => {
 document.addEventListener("visibilitychange", () => { if (!document.hidden && baseTitle.value) { document.title = document.title.replace(/^\(\d+\) /, ""); baseTitle.value = ""; } });
 
 // 審核員：佇列有卡在等，一天說一次
-watch(() => [reviewer.pending, pet.value] as const, ([n, p]) => {
-  if (p && n > 0) p.on({ type: "daily", key: "review", text: line("reviewQueue", { n }), action: { label: line("go.look"), run: () => router.push(lp("/review")) } });
+watch(() => [reviewer.pending, pet.value, reviewingDetail.value] as const, ([n, p, reading]) => {
+  if (p && n > 0 && !reading) p.on({ type: "daily", key: "review", text: line("reviewQueue", { n }), showIf:()=>!reviewingDetail.value, action: { label: line("go.look"), run: () => router.push(lp("/review")) } });
 }, { immediate: true });
 
 // 方案三天內到期：提醒一次

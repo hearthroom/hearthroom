@@ -118,7 +118,7 @@ const pages: RouteRecordRaw[] = [
       // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著
       { path: "blog/:id", component: () => import("./pages/ReviewBlogEditorPage.vue"), meta: { managementTab: "blog" } },
       { path: "manage", redirect: (to) => ({ path: withLocale("/review/cases", localeOf(to)), query: to.query, hash: to.hash }) },
-      { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews" } },
+      { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
     ],
   },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
