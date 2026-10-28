@@ -1309,7 +1309,7 @@ describe('匯入正則在寫入前驗證', () => {
     expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('synthetic-image-marker');
   });
   it.each(['/create', '/cards/r1/edit'])('%s 超限正則不得先存開場或建立空卡', async (path) => {
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Synthetic card', roleWelcome: '' });
+    if (path !== '/create') api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Synthetic card', roleWelcome: '' });
     await mount(path);
     if (path === '/create') await type($('#f-name'), 'Synthetic card');
     await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify(oversized)], 'synthetic.json'));
@@ -1328,4 +1328,28 @@ describe('匯入正則在寫入前驗證', () => {
     expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace: 'x'.repeat(256 * 1024) })] }), 'tok');
     expect(api.createRole).toHaveBeenCalledTimes(path === '/create' ? 1 : 0);
   });
+});
+
+describe('正則預檢與保存快照', () => {
+ it('未修改的伺服器合法規則不阻擋只改卡名', async () => {
+  api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Before', roleWelcome: 'Opening' });
+  api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [{ id: 'existing', name: 'n'.repeat(41), find: 'x', replace: 'y', enabled: true }], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', status: 'passed', version: 4 } as any);
+  await mount('/cards/r1/edit'); await type($('#f-name'), 'After'); await submit();
+  expect(api.patchRoleDocument).toHaveBeenCalledWith('r1', expect.objectContaining({roleName: 'After'}), 'tok');
+  expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+ });
+ it('保存期間重新匯入不會取代已驗證的規則快照，新修改仍待保存', async () => {
+  let complete!: (value: {roleId: string}) => void;
+  api.createRole.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  await mount('/create'); await type($('#f-name'), 'Snapshot fixture');
+  const file = (replace: string) => new File([JSON.stringify({ beginning: 'snapshot-opening', regex_scripts: [{ id: 'snapshot', scriptName: 'Snapshot', findRegex: 'snapshot-opening', replaceString: replace }] })], 'snapshot.json');
+  await pickFile($('.rxbar input[type=file]'), file('verified-before-save'));
+  $('form').dispatchEvent(new Event('submit', { cancelable: true })); await flush();
+  await pickFile($('.rxbar input[type=file]'), file('x'.repeat(256 * 1024 + 1)));
+  complete({roleId: 'r1'}); await flush(); await flush();
+  expect((api.saveAuthorAsset.mock.calls[0][1] as any).rules[0].replace).toBe('verified-before-save');
+  await submit();
+  expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+  expect(root.querySelector('[role=alert]')?.textContent).toContain('256');
+ });
 });

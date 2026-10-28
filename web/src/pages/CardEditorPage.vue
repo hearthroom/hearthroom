@@ -656,12 +656,11 @@ async function loadRegexRules(token: string) {
 }
 
 /** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
-async function saveRegex(token: string, targetRoleId: string) {
-  // 匯入的卡可能帶正則進來；這一家存不了就不送
-  if (!can('regex') || !regexDirty.value) return;
-  const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(regexSet.value, regexVersion.value), token);
+async function saveRegex(token: string, targetRoleId: string, snapshot: RegexRuleSet | null, version: number) {
+  if (!snapshot) return;
+  const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(snapshot, version), token);
   regexVersion.value = saved.version;
-  regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
+  regexOriginal.value = snapshot;
 }
 
 function onRegexFile(event: Event) {
@@ -726,8 +725,10 @@ async function save() {
     return;
   }
   // 文件、開場與作者資產是獨立請求；先擋已知無法保存的規則，避免留下只有開場的卡。
-  if (can("regex")) {
-    const issues = validateRuleSet(regexSet.value);
+  const regexSnapshot: RegexRuleSet | null = can("regex") && regexDirty.value ? JSON.parse(JSON.stringify(regexSet.value)) : null;
+  const regexSnapshotVersion = regexVersion.value;
+  if (regexSnapshot) {
+    const issues = validateRuleSet(regexSnapshot);
     if (issues.length) {
       regexSaveIssues.value = issues;
       error.value = t("editor.regex.invalid");
@@ -820,7 +821,7 @@ async function save() {
       if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
       else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
     }
-    await saveRegex(token, targetRoleId);
+    await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
 
     // Editing cancels this submission. Only the explicit public flow may submit again.
     if (review.resubmit) { reviewRetry.value=false; reviewResubmitted.value=true; }
