@@ -94,10 +94,23 @@ it('clears the old actionable submission immediately while the next route detail
  release({...pendingDetail(),submission:{...pendingDetail().submission,id:'s2'}});
 });
 
-it.each([
+const correctionFailures=[
  ['review_correction_reward_pending','review.correction.rewardPending'],
  ['review_correction_unknown','review.correction.unknown'],
-])('focuses the correction error and offers a read-only reload after %s',async(code,key)=>{
+];
+const readFailures=[
+ [503,'temporary_failure','state.loadFailed'],
+ [502,'unexpected_upstream_reason','state.loadFailed'],
+ [0,'private network diagnostic','state.loadFailed'],
+ [401,'unauthorized','auth.expired'],
+ [403,'reviewer_required','state.forbidden'],
+ [403,'age_verification_required','error.ageVerificationRequired'],
+ [400,'invalid_arguments','error.invalidArguments'],
+ [404,'snapshot not found','state.notFound'],
+ [410,'review no longer active','review.inactive'],
+ [409,'claim this submission first','review.claimFirst'],
+] as const;
+it.each(correctionFailures.flatMap(([code,key])=>readFailures.map(([status,readCode,readKey])=>({code,key,status,readCode,readKey}))))('keeps $code and subsequent $readCode read failures localized and actionable',async({code,key,status,readCode,readKey})=>{
  const detail=pendingDetail();
  api.fetchReviewDetail.mockReset().mockResolvedValue({...detail,submission:{...detail.submission,status:'approved',canCorrect:true,claimedByMe:false,stampedByMe:true}});
  api.correctReviewDecision.mockRejectedValue(new api.ApiError(503,'request failed',code));
@@ -117,9 +130,10 @@ it.each([
  const notice=el.querySelector<HTMLElement>('.verdict [role="alert"]')!;
  await vi.waitFor(()=>expect(document.activeElement).toBe(notice));
  expect(input.value).toBe('The setting needs more detail.');
- api.fetchReviewDetail.mockRejectedValueOnce(new Error('reload unavailable'));
+ api.fetchReviewDetail.mockRejectedValueOnce(status?new api.ApiError(status,'diagnostic ('+readCode+')',readCode):new Error(readCode));
  notice.querySelector('button')!.click();
- await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain('reload unavailable'));
+ await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t(readKey)));
+ expect(el.querySelector('.verdict [role="alert"]')!.textContent).not.toContain(readCode);
  await vi.waitFor(()=>expect(document.activeElement).toBe(el.querySelector('.verdict [role="alert"]')));
  expect(api.correctReviewDecision).toHaveBeenCalledTimes(1);
  expect(input.value).toBe('The setting needs more detail.');

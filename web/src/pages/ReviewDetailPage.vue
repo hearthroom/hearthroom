@@ -186,6 +186,7 @@ async function load() {
     // 伺服器原文在 code；message 是給人看的「請求失敗」
     needsClaim.value=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
     error.value = needsClaim.value ? t("review.claimFirst") : err instanceof ApiError && err.status===410 ? t("review.inactive") : err instanceof Error ? err.message : t("state.loadFailed");
+    return err;
   } finally {
     if(seq===loadSequence)loading.value = false;
   }
@@ -202,12 +203,30 @@ async function showCorrectionError(message:string,target:string){
 
 async function reloadCorrection(){
  const target=id.value,sequence=loadSequence+1;
- await load();
+ const failure=await load();
  if(!active||id.value!==target||loadSequence!==sequence)return;
  if(error.value){
-  const message=error.value;error.value='';
-  await showCorrectionError(message,target);
+  error.value='';
+  await showCorrectionError(correctionReadMessage(failure),target);
  }
+}
+
+function correctionReadMessage(failure:unknown){
+ if(failure instanceof ApiError){
+  switch(failure.code){
+   case 'age_verification_required':return t('error.ageVerificationRequired');
+   case 'invalid_arguments':case 'invalid_argument':case 'invalid_request':return t('error.invalidArguments');
+   case 'insufficient_scope':return t('error.insufficientScope');
+  }
+  if(failure.status===409&&failure.code==='claim this submission first')return t('review.claimFirst');
+  switch(failure.status){
+   case 401:return t('auth.expired');
+   case 403:return t('state.forbidden');
+   case 404:return t('state.notFound');
+   case 410:return t('review.inactive');
+  }
+ }
+ return failure instanceof Error&&failure.message===t('auth.expired')?t('auth.expired'):t('state.loadFailed');
 }
 
 async function claim() {
