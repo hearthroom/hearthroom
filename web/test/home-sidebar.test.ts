@@ -85,3 +85,21 @@ it("omits disabled check-in while keeping the member balance", async () => {
   expect(root.textContent).not.toContain(i18n.global.t("home.checkinError"));
   expect(root.querySelector('[data-sidebar-balance]')?.textContent).toContain("0");
 });
+
+it("keeps anonymous creation available with a secondary action", async () => {
+  await mount();
+  const create = root.querySelector('a[href="/create"]');
+  expect(create?.classList.contains("btn")).toBe(true);
+  expect(create?.classList.contains("btn--primary")).toBe(false);
+});
+
+it("makes member creation primary while keeping check-in secondary in both states", async () => {
+  await mount(true);
+  expect(root.querySelector('a[href="/create"]')?.classList.contains("btn--primary")).toBe(true);
+  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn")).toBe(true);
+  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn--primary")).toBe(false);
+  vi.mocked(rewards.fetchPanel).mockResolvedValue({ checkin: { todayClaimed: true } } as never);
+  useSession().me = { accountNumId: 8 } as never; await settle();
+  expect(root.querySelector('a[href="/checkin"]')?.textContent).toContain(i18n.global.t("home.checkinDoneAction"));
+  expect(root.querySelector('a[href="/checkin"]')?.classList.contains("btn--primary")).toBe(false);
+});

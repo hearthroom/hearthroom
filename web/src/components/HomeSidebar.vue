@@ -162,35 +162,35 @@ onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
 <template>
   <div ref="host" class="home-sidebar-host"><aside ref="sidebar" class="home-sidebar" :aria-label="$t('home.siteInfo')">
     <section class="panel sidebar-block" data-sidebar-campaigns>
-      <h2>{{ $t('home.eventsTitle') }}</h2>
+      <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5" /></svg><span>{{ $t('home.eventsTitle') }}</span></h2>
       <div v-if="campaignState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
       <template v-else-if="campaignState === 'error'"><p role="alert">{{ $t('home.activityError') }}</p><button class="btn btn--sm" @click="loadCampaigns">{{ $t('home.retry') }}</button></template>
       <RouterLink v-else-if="running[0]" class="sidebar-title" :to="lp(`/campaign/${running[0].slug}`)">{{ localized(running[0].title, locale) }}</RouterLink>
       <p v-else class="muted">{{ $t('home.noEvents') }}</p>
-      <RouterLink class="sidebar-link" :to="lp('/campaigns')">{{ $t('campaign.hub.title') }}</RouterLink>
+      <RouterLink class="sidebar-link sidebar-link--accent" :to="lp('/campaigns')"><span>{{ $t('campaign.hub.title') }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
     </section>
-    <section v-if="can('editor')" class="panel sidebar-block">
-      <h2>{{ $t('home.writeTitle') }}</h2>
-      <RouterLink class="sidebar-link" :to="lp('/create')">{{ $t('home.write') }}</RouterLink>
-      <RouterLink class="sidebar-link" :to="lp('/guide')">{{ $t('footer.guide') }}</RouterLink>
-      <RouterLink v-if="season" class="sidebar-link" :to="lp(`/campaign/${season.slug}`)">{{ localized(season.title, locale) }}</RouterLink>
+    <section v-if="can('editor')" class="panel sidebar-block sidebar-invite">
+      <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg><span>{{ $t('home.writeTitle') }}</span></h2>
+      <RouterLink class="btn sidebar-create" :class="{ 'btn--primary': session.me }" :to="lp('/create')">{{ $t('home.write') }}</RouterLink>
+      <RouterLink class="sidebar-link" :to="lp('/guide')"><span>{{ $t('footer.guide') }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
+      <RouterLink v-if="season" class="sidebar-link" :to="lp(`/campaign/${season.slug}`)"><span>{{ localized(season.title, locale) }}</span><svg class="sidebar-icon sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></RouterLink>
     </section>
     <section v-if="session.me" class="panel sidebar-block" data-sidebar-member>
       <template v-if="checkinState !== 'disabled'">
-        <h2>{{ $t('home.dailyTitle') }}</h2>
+        <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4m8-4v4" /></svg><span>{{ $t('home.dailyTitle') }}</span></h2>
         <div v-if="checkinState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
         <template v-else-if="checkinState === 'error'"><p role="alert">{{ $t('home.checkinError') }}</p><button class="btn btn--sm" @click="loadCheckin()">{{ $t('home.retry') }}</button></template>
-        <template v-else><p>{{ $t(claimed ? 'home.claimed' : 'home.pending') }}</p><RouterLink class="sidebar-link" :to="lp('/checkin')">{{ $t(claimed ? 'home.checkinDoneAction' : 'home.checkinAction') }}</RouterLink></template>
+        <div v-else class="sidebar-checkin-row"><p class="sidebar-state" :class="{ 'sidebar-state--done': claimed }"><i aria-hidden="true" />{{ $t(claimed ? 'home.claimed' : 'home.pending') }}</p><RouterLink class="btn btn--sm" :class="{ 'btn--ghost': claimed }" :to="lp('/checkin')">{{ $t(claimed ? 'home.checkinDoneAction' : 'home.checkinAction') }}</RouterLink></div>
       </template>
-      <div data-sidebar-balance class="sidebar-balance">
+      <div data-sidebar-balance class="sidebar-balance" :class="{ 'sidebar-balance--divided': checkinState !== 'disabled' }">
         <span class="muted">{{ $t('wallet.balance') }}</span>
         <div v-if="balanceState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
         <template v-else-if="balanceState === 'error'"><p role="alert">{{ $t('home.balanceError') }}</p><button class="btn btn--sm" @click="loadBalance()">{{ $t('home.retry') }}</button></template>
-        <RouterLink v-else-if="balance !== null" class="sidebar-link stat" :to="lp('/wallet')">{{ whole(balance) }}</RouterLink>
+        <RouterLink v-else-if="balance !== null" class="sidebar-link sidebar-score" :to="lp('/wallet')">{{ whole(balance) }}</RouterLink>
       </div>
     </section>
     <section class="panel sidebar-block" data-sidebar-latest>
-      <h2>{{ $t('home.latestTitle') }}</h2>
+      <h2 class="sidebar-label"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" /></svg><span>{{ $t('home.latestTitle') }}</span></h2>
       <div v-if="latestState === 'loading'" class="ghost sidebar-skeleton" aria-hidden="true" />
       <template v-else-if="latestState === 'error'"><p role="alert">{{ $t('home.latestError') }}</p><button class="btn btn--sm" @click="loadLatest">{{ $t('home.retry') }}</button></template>
       <RouterLink v-else-if="latest" class="sidebar-title" :to="latest.to">{{ latest.title }}</RouterLink>
@@ -203,14 +203,28 @@ onBeforeUnmount(() => { live = false; memberEpoch++; latestEpoch++; });
 <style scoped>
 .home-sidebar-host { align-self: stretch; min-width: 0; }
 .home-sidebar { align-self: start; display: grid; gap: var(--s-4); align-content: start; position: sticky; top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-6)); overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
-.sidebar-block { padding: var(--s-4); min-width: 0; }
-.sidebar-block h2 { margin: 0 0 var(--s-2); font-size: 16px; font-weight: 600; }
-.sidebar-block p { font-size: 13px; margin: var(--s-2) 0; overflow-wrap: anywhere; }
-.sidebar-title { display: block; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; min-height: 30px; }
+.sidebar-block { padding: var(--s-4); min-width: 0; display: grid; gap: var(--s-2); }
+.sidebar-block h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.sidebar-label { display: flex; align-items: center; gap: var(--s-2); }
+.sidebar-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.sidebar-label .sidebar-icon { color: var(--accent-text); }
+.sidebar-chevron { width: 14px; height: 14px; }
+.sidebar-block p { font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+.sidebar-title { display: block; font-size: 15px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; min-height: var(--h-sm); }
+[data-sidebar-latest] .sidebar-title { font-size: 14px; font-weight: 500; }
 .sidebar-title:hover, .sidebar-link:hover { color: var(--accent-text); }
-.sidebar-link { display: flex; align-items: center; min-height: 30px; font-size: 13px; }
-.sidebar-balance { margin-top: var(--s-3); font-size: 13px; }
-.sidebar-balance .stat { font-size: 18px; }
+.sidebar-link { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--h-sm); font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
+.sidebar-link > span { min-width: 0; }
+.sidebar-link--accent { color: var(--accent-text); }
+.sidebar-invite { background: var(--accent-tint); }
+.sidebar-create { width: 100%; white-space: normal; height: auto; min-height: var(--h-md); text-align: center; }
+.sidebar-checkin-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); }
+.sidebar-state { display: flex; align-items: center; gap: var(--s-2); color: var(--text-2); }
+.sidebar-state i { width: 6px; height: 6px; flex: none; border-radius: var(--r-pill); background: var(--accent-btn); }
+.sidebar-state--done i { background: var(--text-3); }
+.sidebar-balance { display: grid; gap: var(--s-1); font-size: 12px; }
+.sidebar-balance--divided { margin-top: var(--s-1); padding-top: var(--s-3); border-top: 1px solid var(--line); }
+.sidebar-score { justify-content: flex-start; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; line-height: 1.15; color: var(--text); }
 .sidebar-skeleton { height: 44px; margin: var(--s-2) 0; }
 .sidebar-info { display: flex; flex-wrap: wrap; gap: 0 var(--s-3); font-size: 12px; color: var(--text-3); padding: 0 var(--s-2); }
 .sidebar-info :deep(a), .sidebar-info :deep(button) { display: inline-flex; align-items: center; min-height: 30px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: start; overflow-wrap: anywhere; }
