@@ -158,8 +158,9 @@ onBeforeUnmount(() => observer?.disconnect());
 
 @media (max-width: 640px) {
   .discovery-tags--browse .discovery-tags__inner { gap: var(--s-1); }
-  .discovery-tags--browse .discovery-tags__group { overflow-wrap: anywhere; line-height: 1.3; letter-spacing: 0; }
-  .discovery-tags--browse [data-group] { display: grid; grid-template-columns: 40px 30px minmax(0, 1fr) 30px; gap: var(--s-2); }
+  :lang(en).discovery-tags--browse { --discovery-label-width: 80px; }
+  .discovery-tags--browse .discovery-tags__group { white-space: nowrap; overflow-wrap: normal; line-height: 1.3; letter-spacing: 0; }
+  .discovery-tags--browse [data-group] { display: grid; grid-template-columns: var(--discovery-label-width, 40px) 30px minmax(0, 1fr) 30px; gap: var(--s-2); }
   .discovery-tags--browse .discovery-tags__chips { display: flex; gap: var(--s-2); min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .discovery-tags--browse .discovery-tags__chips::-webkit-scrollbar { display: none; }
   .discovery-tags--browse .tagchip { flex: none; min-height: var(--h-lg); }

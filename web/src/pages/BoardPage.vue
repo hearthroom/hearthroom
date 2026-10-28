@@ -29,6 +29,7 @@ import { useSession } from "@/lib/session";
 import { currentStep } from "@/lib/newcomer-tour";
 import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
+import { petEnabled } from "@/pet/enabled";
 import UpdateStrip from "@/components/UpdateStrip.vue";
 import { RATINGS, RATING_NAMES, type Rating } from "../../../shared/content-rating";
 
@@ -293,7 +294,7 @@ const ratingOptions = computed(() => {
 </script>
 
 <template>
-  <div class="page board-page">
+  <div class="page board-page" :class="{ 'board-page--pet-enabled': petEnabled }">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
     <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
@@ -425,4 +426,13 @@ const ratingOptions = computed(() => {
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
 .empty__hint { font-size: 13.5px; }
 
+
+/* The enabled pet has a real non-content lane before its assets finish loading. */
+@media(min-width:640px) and (max-width:1079px) {
+  .board-page--pet-enabled {
+    width: calc(100% - 2 * clamp(16px, 2.5vw, 64px) - 48px - env(safe-area-inset-right, 0px));
+    margin-inline-start: clamp(16px, 2.5vw, 64px);
+    margin-inline-end: calc(clamp(16px, 2.5vw, 64px) + 48px + env(safe-area-inset-right, 0px));
+  }
+}
 </style>

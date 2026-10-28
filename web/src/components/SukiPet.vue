@@ -111,6 +111,23 @@ function guide(path: string): PageGuide | null {
   return { id: g.id, hello: line(`${base}.hello`), topics };
 }
 
+// The rail is absent below1080; its former null bounds must not let a desktop
+// pet sit on the homepage filters or cards at tablet widths.
+function homepageParking() {
+  return petEnabled.value && innerWidth >= 640 && innerWidth < 1080
+    && route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, '');
+}
+function homepagePetBounds() {
+  if (sidebarBounds?.value) return sidebarBounds.value;
+  if (!homepageParking()) return null;
+  const main = document.querySelector<HTMLElement>('.board-main');
+  if (!main) return null;
+  const rect = main.getBoundingClientRect();
+  const header = document.querySelector('.header')?.getBoundingClientRect().bottom ?? 60;
+  const top = header + 24, bottom = innerHeight - 80;
+  return bottom > top ? { left: rect.left, right: rect.right, top, bottom } : null;
+}
+
 let disposed = false;
 async function start() {
   const { SukiPet } = await import("@/pet/pet-ui");
@@ -126,7 +143,8 @@ async function start() {
     // 手機上活動頁的主要按鈕剛好在她招呼泡泡的位置（約戰 QA 2026-10-17）：那幾頁進來時不招呼，她照常在
     // petQuiet：不分手機桌機都不招呼（錢包、機率頁的泡泡會蓋到主按鈕與紀錄，美術總監最終 r2 M8）
     canListEnd: () => props.listEndAllowed,
-    sidebarBounds: () => sidebarBounds?.value ?? null,
+    sidebarBounds: homepagePetBounds,
+    parkOnHomepage: homepageParking,
     onSidebarMenuChange: open => { sidebarMenuOpen.value = open; },
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     quietReading: () => mobile && reviewingDetail.value,
@@ -259,7 +277,7 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet--sidebar-avatar .suki-pet__menu, .suki-pet--sidebar-avatar .suki-pet__bubble { pointer-events: auto; }
 .suki-pet--sidebar-avatar .suki-pet__canvas, .suki-pet--sidebar-avatar .suki-pet__hit { visibility: hidden; pointer-events: none; }
 .suki-pet--sidebar-idle { visibility: hidden; opacity: 0; pointer-events: none; }
-.suki-pet__idle { position: fixed; right: 8px; bottom: 8px; z-index: 45; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-md); cursor: pointer; overflow: hidden; }
+.suki-pet__idle { position: fixed; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 45; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-md); cursor: pointer; overflow: hidden; }
 .suki-pet__idle img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .suki-pet__idle[hidden] { display: none !important; }
 .suki-pet__idle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

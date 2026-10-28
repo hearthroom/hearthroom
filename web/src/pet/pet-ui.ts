@@ -51,6 +51,8 @@ export interface PetOptions {
   canListEnd?: () => boolean;
   /** Present only while the homepage desktop sidebar is mounted. */
   sidebarBounds?: () => SidebarRect | null;
+  /** Homepage 640–1079 has a dedicated avatar lane, including coarse-pointer devices. */
+  parkOnHomepage?: () => boolean;
   /** A deliberate homepage rail popup owns interaction until it closes. */
   onSidebarMenuChange?: (open: boolean) => void;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
@@ -126,23 +128,52 @@ export class SukiPet {
   private typed = "";
   private stopped = false;
   private idleButton: HTMLButtonElement;
+  private homeParked = false;
   private sidebarDocked = false;
   private sidebarAwake = false;
   private sidebarActions = 0;
   private sidebarPosition: { x: number; y: number } | null = null;
   private get sidebarIdle() { return this.sidebarDocked && !this.sidebarAwake; }
 
+  private releaseSidebar() {
+    const wasIdle = this.sidebarIdle, original = this.sidebarPosition;
+    this.closeMenu();
+    for (const popup of [this.bubble, this.menuEl]) { popup.style.translate = ""; popup.style.maxHeight = ""; popup.style.overflowY = ""; }
+    this.homeParked = false; this.sidebarDocked = false; this.sidebarAwake = false; this.sidebarPosition = null;
+    if (original) this.place(original);
+    this.idleButton.hidden = true;
+    this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded", "suki-pet--sidebar-avatar", "suki-pet--home-parked");
+    if (this.opts.mobile && this.ready) this.layoutEdge();
+    if (wasIdle && this.guide) this.setGuide(this.guide);
+  }
+
   private updateSidebar() {
+    const parking = this.opts.parkOnHomepage?.() === true;
+    if (parking) {
+      if (!this.homeParked) {
+        if (this.sidebarDocked) this.releaseSidebar();
+        this.sidebarPosition = { ...this.pos };
+        this.homeParked = true; this.sidebarDocked = true;
+        this.idleButton.setAttribute("aria-expanded", "false");
+      }
+      this.idleButton.hidden = false;
+      this.el.classList.add("suki-pet--home-parked", "suki-pet--sidebar-avatar");
+      if (this.tab) this.tab.hidden = true;
+      if (this.catcher) this.catcher.hidden = true;
+      if (!this.sidebarAwake) {
+        this.el.classList.add("suki-pet--sidebar-idle");
+        this.bubble.hidden = true; this.queue = []; this.closeMenu(); petSpeaking.value = false;
+      } else {
+        const body = this.box();
+        this.place({ x: innerWidth - body.width - 8, y: Math.max(0, innerHeight - body.height - 8) });
+      }
+      return;
+    }
+    if (this.homeParked) this.releaseSidebar();
     const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
     if (!bounds) {
       this.opts.onSidebarMenuChange?.(false);
-      if (!this.sidebarDocked && !this.sidebarPosition) return;
-      const wasIdle = this.sidebarIdle;
-      if (this.sidebarPosition) this.place(this.sidebarPosition);
-      this.sidebarPosition = null; this.sidebarDocked = false; this.sidebarAwake = false;
-      this.idleButton.hidden = true;
-      this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded", "suki-pet--sidebar-avatar");
-      if (wasIdle && this.guide) this.setGuide(this.guide);
+      if (this.sidebarDocked || this.sidebarPosition) this.releaseSidebar();
       return;
     }
     if (this.sidebarIdle) return;
@@ -522,6 +553,12 @@ export class SukiPet {
   private frame(dt: number, now: number) {
     this.updateSidebar();
     if (this.sidebarIdle) return;
+    if (this.homeParked) {
+      this.fitPopups();
+      if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.queue = []; }
+      if (this.sidebarAwake && !this.sidebarActions && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
+      return;
+    }
     if (this.sidebarAwake) this.fitPopups();
     const p = this.rig.params;
     // 表情淡入淡出；演完回到平常
@@ -1092,7 +1129,8 @@ export class SukiPet {
     this.fitPopups();
   }
   private save(p: { x: number; y: number }, peeking = false) {
-    if (this.sidebarDocked && this.sidebarAwake) this.sidebarPosition = { ...p };
+    if (this.homeParked || this.opts.parkOnHomepage?.()) return;
+    if (this.sidebarDocked && this.sidebarAwake && !this.homeParked) this.sidebarPosition = { ...p };
     if (this.opts.mobile) {
       try { localStorage.setItem("suki.pet.pos", JSON.stringify(toSaved(this.viewport(), p, peeking ? this.side : null))); } catch { /* 存不了就算了 */ }
       return;
@@ -1281,6 +1319,7 @@ export class SukiPet {
   }
   /** 螢幕邊上的東西：站著時的細條頁籤、探出時的接觸區 */
   private layoutEdge() {
+    if (this.opts.parkOnHomepage?.()) { if (this.tab) this.tab.hidden = true; if (this.catcher) this.catcher.hidden = true; return; }
     if (!this.opts.mobile) return;
     const f = this.viewport(), size = this.size(), s = Math.max(0, Math.min(1, this.peekS));
     // 頁籤只在她站著時當「她住這一側」的細條；探出時收掉，她的身體直接貼著螢幕邊（owner 2026-10-24：中間不能有一條底色）
@@ -1298,8 +1337,8 @@ export class SukiPet {
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
-    if (!this.opts.mobile) {
-      const bounds = this.opts.sidebarBounds?.();
+    if (!this.opts.mobile || this.homeParked) {
+      const bounds = this.opts.sidebarBounds?.() ?? (this.homeParked ? { left: 0, right: innerWidth, top: 0, bottom: innerHeight } : null);
       for (const el of [this.bubble, this.menuEl]) {
         if (!bounds || !this.sidebarAwake || el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
         const minimumTop = Math.max(8, (document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0) + 8);
@@ -1308,8 +1347,8 @@ export class SukiPet {
         const r = el.getBoundingClientRect();
         const previous = el.style.translate.split(" ").map(v => parseFloat(v) || 0);
         const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
-        let x = left, y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
-        if (x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
+        let x = Math.max(8, Math.min(left, innerWidth - 8 - r.width)), y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
+        if (!this.homeParked && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
         const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
         if (el.style.translate !== translate) el.style.translate = translate;
       }

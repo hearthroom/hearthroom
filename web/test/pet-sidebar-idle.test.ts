@@ -68,3 +68,21 @@ it('waits for a manual async action before deciding whether to return to idle',a
  expect(manual.bubble.hidden).toBe(false);expect(manual.bubble.textContent).toBe('No previous conversation.');
  expect(change).toHaveBeenLastCalledWith(true);manual.closeMenu();
 });
+
+it.each([false,true])('parks the homepage avatar for mouse/touch (%s) without automatic speech or saved-position writes',mobile=>{
+ const {p,leave}=setup(mobile);let parking=true;
+ const manual=pet as unknown as {opts:PetOptions;save:(pos:{x:number;y:number})=>void};manual.opts.parkOnHomepage=()=>parking;
+ localStorage.setItem('suki.pet.pos','saved-user-position');p.updateSidebar();
+ expect(p.idleButton.hidden).toBe(false);expect(p.el.classList.contains('suki-pet--home-parked')).toBe(true);
+ pet.on({type:'say',text:'automatic greeting'});expect(p.bubble.hidden).toBe(true);
+ manual.save({x:100,y:200});expect(localStorage.getItem('suki.pet.pos')).toBe('saved-user-position');
+ parking=false;leave();p.updateSidebar();expect(p.idleButton.hidden).toBe(true);expect(p.el.classList.contains('suki-pet--home-parked')).toBe(false);
+ localStorage.removeItem('suki.pet.pos');
+});
+it('releases temporary popup placement with the homepage lane',()=>{
+ const {p,leave}=setup(true);let parking=true;
+ const manual=pet as unknown as {opts:PetOptions;menuEl:HTMLElement};manual.opts.parkOnHomepage=()=>parking;p.updateSidebar();
+ manual.menuEl.style.translate='100px 20px';manual.menuEl.style.maxHeight='400px';manual.menuEl.style.overflowY='auto';
+ parking=false;leave();p.updateSidebar();
+ expect(manual.menuEl.style.translate).toBe('');expect(manual.menuEl.style.maxHeight).toBe('');
+});

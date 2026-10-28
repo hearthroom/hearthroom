@@ -6,6 +6,7 @@ import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, provide, reactive, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { petEnabled } from "@/pet/enabled";
 import CheckinHint from "@/components/CheckinHint.vue";
 import SiteLink from "@/components/SiteLink.vue";
 import SiteMenu from "@/components/SiteMenu.vue";
@@ -248,7 +249,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
     連結分組放在 lib/footer-nav.ts：新入口先決定屬於哪一組，不再往同一排後面接。
   -->
-  <footer v-if="SITE.repoUrl && !route.meta.bare && (!onBoardPage || boardEnded || route.query.mode === 'following' || route.query.mode === 'authors')" class="footer" :inert="headerOverlays.size > 0" :lang="locale">
+  <footer v-if="SITE.repoUrl && !route.meta.bare && (!onBoardPage || boardEnded || route.query.mode === 'following' || route.query.mode === 'authors')" class="footer" :class="{ 'footer--home-pet': onBoardPage && petEnabled }" :inert="headerOverlays.size > 0" :lang="locale">
     <div class="footer__inner">
       <div class="footer__about">
         <p class="footer__name">{{ footerName }}</p>
@@ -406,5 +407,9 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .mobile-library-nav { display:flex; justify-content:center; gap:var(--s-3); padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border); }
   .mobile-library-nav a { display:flex; align-items:center; justify-content:center; min-height:44px; flex:1; border-radius:var(--r-pill); font-size:.875rem; text-align:center; }
   .mobile-library-nav a[aria-current=page] { color:var(--accent-text); background:var(--accent-tint); font-weight:600; }
+}
+
+@media(min-width:640px) and (max-width:1079px) {
+  .footer--home-pet .footer__inner { padding-inline-end: calc(clamp(16px, 2.5vw, 64px) + 48px + env(safe-area-inset-right, 0px)); }
 }
 </style>
