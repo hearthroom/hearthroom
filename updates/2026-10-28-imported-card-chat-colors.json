@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "部分外站匯入的沙箱卡，聊天底色與文字顏色現在會套用作者設定的日夜配色。",
+    "zh-Hans": "部分从其他平台导入的沙箱卡，聊天背景和文字颜色现在会采用作者设置的日夜配色。",
+    "en": "Some sandbox cards from other platforms now use the author's day and night colors for chat backgrounds and text.",
+    "ja": "他サイトから移した一部のサンドボックスカードで、背景と文字に作者設定の昼・夜の配色が反映されます。",
+    "ko": "다른 플랫폼에서 가져온 일부 샌드박스 카드의 채팅 배경과 글자 색에 제작자의 낮·밤 색상이 적용돼요."
+  }
+}
