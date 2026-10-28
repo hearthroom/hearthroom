@@ -1,11 +1,11 @@
 import type {SidebarRect} from '../lib/sidebar-clearance';
 export interface PhoneClearance {top:number;bottom:number;obstacles:SidebarRect[]}
-/** Preserve a safe location; otherwise use the nearest full-height gap on the same side. */
+/** Keep the current safe location; otherwise use the nearest full-height gap on the same side. */
 export function nearestClearPetY(f:PhoneClearance & {left:number;right:number;height:number;original:number;current:number}):number|null {
  const min=f.top+8,max=f.bottom-f.height-8;if(max<min)return null;
  const obstacles=f.obstacles.filter(r=>r.right+8>f.left&&r.left-8<f.right&&r.bottom>f.top&&r.top<f.bottom);
  const safe=(y:number)=>y>=min&&y<=max&&obstacles.every(r=>y+f.height+8<=r.top||y>=r.bottom+8);
- if(safe(f.original))return f.original;if(safe(f.current))return f.current;
+ if(safe(f.current))return f.current;if(safe(f.original))return f.original;
  const candidates=[min,max,...obstacles.flatMap(r=>[r.top-f.height-8,r.bottom+8])].filter(safe);
  return candidates.sort((a,b)=>Math.abs(a-f.current)-Math.abs(b-f.current))[0]??null;
 }

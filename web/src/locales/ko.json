@@ -3454,7 +3454,7 @@
   "cardUpdate.history.reviewTimeHint": "이 버전은 공개 시간이 기록되지 않아 심사를 통과한 날짜와 시간을 표시해요.",
   "cardUpdate.history.unknownTimeHint": "이 버전은 공개 시간과 심사 통과 시간이 기록되지 않았어요.",
   "home.dailyEnd": "일간 카드가 모두 표시되었어요",
-  "home.dailyEmpty": "조건에 맞는 일간 카드가 없어요",
+  "home.dailyEmpty": "조건에 맞는 다른 일간 카드가 없어요",
   "home.loading": "카드를 불러오고 있어요",
   "home.firstError": "카드를 불러오지 못했어요",
   "home.appendError": "다음 카드를 불러오지 못했어요",
@@ -3576,5 +3576,9 @@
   "board.tags.next": "{group} 다음 태그 보기",
   "import.regex.invalid": "아래 정규식 내용은 수정이 필요해서 아직 저장되지 않았어요. 양식에 적용한 뒤 수정할 수 있어요.",
   "editor.regex.invalid": "이번 변경 내용은 저장되지 않았어요. 아래 정규식 문제를 수정한 뒤 다시 저장해 주세요.",
-  "regex.issue.rule": "{index}번 규칙 「{name}」: {why}"
+  "regex.issue.rule": "{index}번 규칙 「{name}」: {why}",
+  "home.weekEnd": "주간 카드가 모두 표시되었어요",
+  "home.weekEmpty": "조건에 맞는 다른 주간 카드가 없어요",
+  "home.monthEnd": "월간 카드가 모두 표시되었어요",
+  "home.monthEmpty": "조건에 맞는 다른 월간 카드가 없어요"
 }

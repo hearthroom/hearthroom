@@ -3454,7 +3454,7 @@
   "cardUpdate.history.reviewTimeHint": "このバージョンは公開時刻の記録がないため、審査を通過した日時を表示しています。",
   "cardUpdate.history.unknownTimeHint": "このバージョンには公開時刻も審査を通過した日時も記録されていません。",
   "home.dailyEnd": "日間ランキングのカードをすべて表示しました",
-  "home.dailyEmpty": "条件に合う日間ランキングのカードがありません",
+  "home.dailyEmpty": "条件に合う日間ランキングのカードはほかにありません",
   "home.loading": "カードを読み込み中",
   "home.firstError": "カードを読み込めませんでした",
   "home.appendError": "続きのカードを読み込めませんでした",
@@ -3576,5 +3576,9 @@
   "board.tags.next": "{group}の続きのタグを表示",
   "import.regex.invalid": "以下の正規表現の内容は修正が必要で、まだ保存されていません。フォームに反映してから修正できます。",
   "editor.regex.invalid": "今回の変更は保存されていません。以下の正規表現の問題を修正してから保存してください。",
-  "regex.issue.rule": "ルール {index}「{name}」：{why}"
+  "regex.issue.rule": "ルール {index}「{name}」：{why}",
+  "home.weekEnd": "週間ランキングのカードをすべて表示しました",
+  "home.weekEmpty": "条件に合う週間ランキングのカードはほかにありません",
+  "home.monthEnd": "月間ランキングのカードをすべて表示しました",
+  "home.monthEmpty": "条件に合う月間ランキングのカードはほかにありません"
 }

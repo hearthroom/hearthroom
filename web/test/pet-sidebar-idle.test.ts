@@ -122,3 +122,34 @@ it('keeps manual async phone answers readable and restores the passive policy af
  expect(p.bubble.hidden).toBe(false);expect(change).toHaveBeenLastCalledWith(true);
  manual.closeMenu();expect(p.bubble.hidden).toBe(true);expect(change).toHaveBeenLastCalledWith(false);expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
 });
+
+it('fades before relocating a passive phone pet and never restores a distant original slot while scrolling',()=>{
+ const {p}=setup(true);vi.stubGlobal('innerWidth',390);vi.stubGlobal('innerHeight',844);
+ const manual=pet as unknown as {opts:PetOptions;pos:{x:number;y:number};size:()=>{w:number;h:number};phoneOriginal:{x:number;y:number}|null};
+ let now=0;vi.spyOn(performance,'now').mockImplementation(()=>now);
+ let obstacles=[{left:0,right:390,top:400,bottom:800}];
+ manual.opts.phoneClearance=()=>({top:121,bottom:836,obstacles});
+ vi.mocked(p.place).mockRestore();manual.pos={x:270,y:478};
+ vi.spyOn(manual,'size').mockReturnValue({w:88,h:132});
+ vi.mocked(p.box).mockImplementation(()=>({left:manual.pos.x,right:manual.pos.x+88,top:manual.pos.y,width:88,height:132}));
+ localStorage.setItem('suki.pet.pos','keep-user-preference');
+ p.updateSidebar();
+ expect(manual.pos.y).toBe(478);expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);expect(p.el.inert).toBe(true);
+ now=100;p.updateSidebar();expect(manual.pos.y).toBe(478);
+ now=300;p.updateSidebar();expect(manual.pos.y).toBe(260);expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);expect(p.el.inert).toBe(false);
+ obstacles=[];now=350;p.updateSidebar();expect(manual.pos.y).toBe(260);
+ expect(localStorage.getItem('suki.pet.pos')).toBe('keep-user-preference');localStorage.removeItem('suki.pet.pos');
+});
+
+it('cancels a pending phone relocation when scrolling clears the current slot',()=>{
+ const {p}=setup(true);vi.stubGlobal('innerWidth',390);vi.stubGlobal('innerHeight',844);
+ const manual=pet as unknown as {opts:PetOptions;pos:{x:number;y:number};size:()=>{w:number;h:number}};
+ let now=0;vi.spyOn(performance,'now').mockImplementation(()=>now);
+ let obstacles=[{left:0,right:390,top:400,bottom:800}];
+ manual.opts.phoneClearance=()=>({top:121,bottom:836,obstacles});
+ vi.mocked(p.place).mockRestore();manual.pos={x:270,y:478};
+ vi.spyOn(manual,'size').mockReturnValue({w:88,h:132});
+ vi.mocked(p.box).mockImplementation(()=>({left:manual.pos.x,right:manual.pos.x+88,top:manual.pos.y,width:88,height:132}));
+ p.updateSidebar();obstacles=[];now=100;p.updateSidebar();
+ expect(manual.pos.y).toBe(478);expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);expect(p.el.inert).toBe(false);
+});

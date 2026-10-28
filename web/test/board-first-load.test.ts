@@ -136,16 +136,46 @@ describe("切換分頁", () => {
   });
 });
 
-describe("首頁預設日榜接最熱", () => {
+describe("首頁預設日週月榜接最熱", () => {
   const on = () => el!.querySelector(".sorts__item--on")?.textContent?.trim();
-  // 新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張；首頁改放全站卡都參與的最熱
-  it("一進首頁先日榜：排在最左，載完接最熱", async () => {
+  // 預設首頁依序擴大上榜時間窗口，最後才接不開窗的最熱。
+  it("一進首頁先日榜：排在最左，載完依序接週榜、月榜與最熱", async () => {
     await open();
     expect(on()).toBe(i18n.global.t("board.sort.day"));
     expect(el!.querySelector(".sorts__item")?.textContent?.trim()).toBe(i18n.global.t("board.sort.day"));
     expect(el!.textContent).toContain("day（成人版）");
     expect(boardCalls[0]).toContain("sort=day");
-    expect(boardCalls[1]).toContain("sort=hot");
+    expect(boardCalls.slice(0, 4).map(url => new URL(url, "https://x").searchParams.get("sort"))).toEqual(["day", "week", "month", "hot"]);
+    expect([...el!.querySelectorAll<HTMLElement>("[data-board-segment]")].map(el => el.dataset.boardSegment)).toEqual(["week", "month", "hot"]);
+  });
+});
+
+describe("default ranking continuation", () => {
+  it("keeps a manual day tab separate from the four-segment landing snapshot", async () => {
+    await open();
+    expect(el!.querySelector('[data-board-segment="week"]')).not.toBeNull();
+    const before = boardCalls.length;
+    await router.push("/?sort=day"); await later(100, () => null); await nextTick();
+    expect(boardCalls.slice(before).map(url => new URL(url, "https://x").searchParams.get("sort"))).toEqual(["day", "hot"]);
+    expect(el!.querySelector('[data-board-segment="week"]')).toBeNull();
+    expect(el!.querySelector('[data-board-segment="month"]')).toBeNull();
+  });
+
+  it("uses the completed previous segment's visible-card count for each boundary message", async () => {
+    empty = new Set(["week", "month"]);
+    await open();
+    const ending = (sort: string) => el!.querySelector(`[data-board-segment="${sort}"] > p`)?.textContent;
+    expect(ending("week")).toBe(i18n.global.t("home.dailyEnd"));
+    expect(ending("month")).toBe(i18n.global.t("home.weekEmpty"));
+    expect(ending("hot")).toBe(i18n.global.t("home.monthEmpty"));
+  });
+
+  it("counts week and month cards when exposing the list-end landing surface", async () => {
+    empty = new Set(["day", "hot"]);
+    await open();
+    expect(listEndAllowed.value).toBe(true);
+    expect(el!.querySelector('[data-board-segment="week"] .card')).not.toBeNull();
+    expect(el!.querySelector('[data-board-segment="month"] .card')).not.toBeNull();
   });
 });
 
@@ -231,7 +261,7 @@ describe("桌寵到底台詞的清單事實", () => {
     await open(); expect(listEndAllowed.value).toBe(true);
   });
   it("成功空清單不允許", async () => {
-    empty = new Set(['day', 'hot']); await open(); expect(listEndAllowed.value).toBe(false);
+    empty = new Set(['day', 'week', 'month', 'hot']); await open(); expect(listEndAllowed.value).toBe(false);
   });
   it("仍在載入不允許", async () => {
     boardDelay = 600; await open(); expect(listEndAllowed.value).toBe(false);
