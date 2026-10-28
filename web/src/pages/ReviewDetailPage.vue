@@ -6,11 +6,12 @@
  * 正規表示式規則與常駐區塊的原文，外加成本側寫。要看效果按「試玩」開遊玩頁。
  * 分區沿用編輯頁的分法（基本／人設／對話／世界書），只是每一格都是唯讀。不顯示作者。
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
 import { fetchFandomLookup } from "@/lib/api";
@@ -37,6 +38,21 @@ const needsClaim = ref(false);
 const done = ref("");
 const busy = ref(false);
 const note = ref("");
+const correctionNote=ref('');
+const correctionOpen=ref(false);
+let active=true;
+let loadSequence=0;
+let ownedConfirm:typeof confirmState.current=null;
+const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
+onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
+watch(id,()=>{cancelOwnedConfirm();correctionOpen.value=false;correctionNote.value='';void load();});
+async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
+ const answer=confirmDialog(options);ownedConfirm=confirmState.current;
+ try{return await answer;}finally{ownedConfirm=null;}
+}
+function summary(name:string,submittedAt:number,verdict:string,reason:string){
+ return `${t('review.confirm.card')}: ${name}\n${t('review.confirm.version')}: ${dateTime(submittedAt)}\n${t('review.confirm.decision')}: ${verdict}\n${t('review.confirm.note')}: ${reason||t('review.confirm.noNote')}`;
+}
 const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
 const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
@@ -152,19 +168,23 @@ async function token() {
 }
 
 async function load() {
+  const seq=++loadSequence,target=id.value;
   error.value = "";
   loading.value = !data.value;
   try {
     needsClaim.value=false;
-    data.value = await fetchReviewDetail(id.value, await token());
+    const result=await fetchReviewDetail(target, await token());
+    if(!active||seq!==loadSequence||target!==id.value)return;
+    data.value=result;
     void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
+    if(!active||seq!==loadSequence||target!==id.value)return;
     // 伺服器原文在 code；message 是給人看的「請求失敗」
     needsClaim.value=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
     error.value = needsClaim.value ? t("review.claimFirst") : err instanceof ApiError && err.status===410 ? t("review.inactive") : err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
-    loading.value = false;
+    if(seq===loadSequence)loading.value = false;
   }
 }
 
@@ -194,26 +214,58 @@ async function release() {
 }
 
 async function stamp(verdict: "approve" | "reject") {
+  if(busy.value||!data.value)return;
   if (!claimedByMe.value) {
     error.value = t("review.claimFirst");
     return;
   }
   busy.value = true;
   error.value = "";
+  const target=id.value,review=data.value,reason=note.value,generation=review.submission.claimGeneration;
   try {
-    const res = await stampReview(id.value, await token(), { verdict, note: note.value, generation:data.value?.submission.claimGeneration });
+    const confirmedToken=await token();
+    const approved=review.submission.stamps.filter(s=>s.verdict==='approve').length+1>=review.submission.required;
+    if(!await decisionConfirm({title:t(verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(`review.action.${verdict}`),reason)+'\n\n'+t(verdict==='reject'?'review.confirm.rejectBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending'),confirmText:t(verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    if(!active||id.value!==target||data.value!==review)return;
+    if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
+    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation });
+    if(!active||id.value!==target)return;
     done.value = verdict === "reject" ? t("review.done.rejected") : res.cardStatus === "approved" ? t("review.done.approved") : t("review.done.approve");
     if (data.value) {
       data.value.submission.status = res.status;
       data.value.submission.claimedByMe = false;
       data.value.submission.stampedByMe = true;
-      data.value.submission.stamps.push({ verdict, note: note.value, at: Date.now() });
+      data.value.submission.stamps.push({ verdict, note:reason, at: Date.now() });
+      await load();
     }
   } catch (err) {
     error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
+}
+
+async function correct(){
+ if(busy.value||!data.value)return;
+ const review=data.value,target=id.value,pending=review.submission.correction;
+ const reason=pending?.state==='pending'?pending.note:correctionNote.value.trim();
+ if(!reason){error.value=t('review.correction.reasonRequired');return;}
+ busy.value=true;error.value='';
+ try{
+  const confirmedToken=await token();
+  if(!await decisionConfirm({title:t('review.correction.confirmTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,`${t('review.action.approve')} → ${t('review.action.reject')}`,reason)+'\n\n'+t('review.correction.confirmBody')+'\n'+t('review.correction.publicEffect'),confirmText:t('review.correction.confirm'),cancelText:t('review.correction.back'),danger:true,dangerAppearance:'subdued'}))return;
+  if(!active||id.value!==target||data.value!==review)return;
+  const operationId=pending?.operationId??crypto.randomUUID();
+  if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
+  const result=await correctReviewDecision(target,confirmedToken,{operationId,note:reason});
+  if(!active||id.value!==target)return;
+  done.value=t('review.correction.done')+' '+t(result.publicState==='previous_version'?'review.correction.donePrevious':result.publicState==='unpublished'?'review.correction.doneUnpublished':'review.correction.doneUnchanged');
+  correctionOpen.value=false;await load();
+ }catch(err){
+  const message=err instanceof ApiError&&err.status===503?t('review.correction.unknown'):err instanceof Error?err.message:t('state.actionFailed');
+  await load();
+  error.value=message;
+ }finally{busy.value=false;}
 }
 
 onMounted(() => { void load(); });
@@ -452,6 +504,25 @@ onMounted(() => { void load(); });
       </section>
 
       <section class="verdict panel">
+        <RouterLink class="link" :to="lp('/review/decisions')">{{t('review.history.title')}}</RouterLink>
+        <div v-if="data.submission.correction" class="records">
+          <h3>{{t('review.correction.recordTitle')}}</h3>
+          <p>{{dateTime(data.submission.correction.at)}}</p>
+          <p class="text record__note">{{data.submission.correction.note}}</p>
+          <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
+          <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.reload')}}</button>
+        </div>
+        <template v-else-if="data.submission.canCorrect">
+          <button class="btn" :disabled="busy" @click="correctionOpen=!correctionOpen">{{t('review.correction.action')}}</button>
+          <div v-if="correctionOpen" class="field">
+            <p v-if="!data.submission.manager">{{t('review.correction.window',{hours:24})}}</p>
+            <p v-if="!data.submission.manager&&data.submission.deadline">{{t('review.correction.deadline',{deadline:dateTime(data.submission.deadline)})}}</p>
+            <label for="correction-note">{{t('review.correction.reason')}}</label>
+            <textarea autocomplete="off" id="correction-note" v-model="correctionNote" class="input" rows="5" maxlength="2000" :disabled="busy" />
+            <p class="subtle">{{t('review.correction.reasonHint')}}</p>
+            <button class="btn" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
+          </div>
+        </template>
         <!-- 駁回說明可能很長（逐條列問題）：不能塞進固定高度的 chip，會溢出去壓到下面的輸入框 -->
         <div v-if="data.submission.stamps.length" class="records">
           <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
@@ -467,7 +538,7 @@ onMounted(() => { void load(); });
         </div>
         <div class="field">
           <label for="review-note">{{ $t("review.note.label") }}</label>
-          <textarea autocomplete="off" id="review-note" v-model="note" class="input" rows="3" :disabled="decided" />
+          <textarea autocomplete="off" id="review-note" v-model="note" class="input" rows="3" maxlength="2000" :disabled="decided||busy" />
           <!-- 常見的駁回理由一鍵填入；審核人不改作者的宣告，只駁回 -->
           <button type="button" class="btn btn--sm btn--ghost" :disabled="decided" @click="note = $t('review.rating.mismatch')">{{ $t("review.rating.mismatchFill") }}</button>
         </div>

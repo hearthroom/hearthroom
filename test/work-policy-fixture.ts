@@ -32,6 +32,7 @@ export function legacyPolicyFixture(){
   if(command.action==='private'||command.action==='unlisted')after.access=command.action;
   if(command.action==='restore')after.access='public';
   if(command.action==='restrict')after.restriction=command.restriction!;
+  if(command.action==='correct_review'&&before.approvedRoleId===command.versionRoleId){after.approvedRoleId=command.approvedRoles?.[0]??'';if(!after.approvedRoleId&&after.access==='public')after.access='private';}
   after.policyRevision='fixture-owner-revision:'+source+':'+after.epoch;
   after.state=command.action==='prepare'?'prepared':'complete';policies.set(source,after);
   const receipt={...after};operations.set(key,receipt);commands.set(key,command);return receipt;

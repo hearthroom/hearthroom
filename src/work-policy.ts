@@ -12,9 +12,10 @@ export interface WorkPolicyReceipt {
 }
 export interface WorkPolicyCommand {
  workId:string;operationId:string;expectedEpoch:number;
- action:'bind'|'private'|'unlisted'|'restore'|'prepare'|'cancel'|'restrict';
+ action:'bind'|'private'|'unlisted'|'restore'|'prepare'|'cancel'|'restrict'|'correct_review';
  access?:WorkAccess;restriction?:WorkRestriction;versionRoleId?:string;approvedRoles?:string[];permitId?:string;
  expectedOwnerRevision?:string;
+ rewardPayoutEntryIds?:string[];
 }
 export interface WorkOwnerView extends WorkPolicyReceipt {
  rewardRetention?:{publicUntil:string;days:number;recoveryCredits:number};

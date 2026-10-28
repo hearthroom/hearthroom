@@ -3,6 +3,7 @@ import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
 import {fenceManagedWork,syncManagedRestriction} from './work-fence';
 import {finalizeManagedReview} from './work-publication';
+import {correctReview} from './review-correction';
 import {projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand} from './work-policy';
 import {finishManagedWithdrawal} from './cards';
 import {recoverAuthorVisibility,type AuthorOperation} from './work-sharing-commands';
@@ -43,6 +44,11 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
    const decision=await env.DB.prepare(`SELECT d.submission_id FROM work_review_decisions d JOIN hosting_versions v ON v.submission_id=d.submission_id
     JOIN work_publication_permits g ON g.version_id=v.version_id WHERE v.work_id=? AND g.operation_id=? AND g.state='prepared'`)
     .bind(row.work_id,row.sync_operation_id).first<{submission_id:string}>();
+   const correction=await env.DB.prepare(`SELECT x.submission_id,x.actor_member_id,x.operation_id,x.note FROM review_corrections x JOIN hosting_versions v ON v.submission_id=x.submission_id WHERE v.work_id=? AND x.state='pending'`).bind(row.work_id).first<{submission_id:string;actor_member_id:string;operation_id:string;note:string}>();
+   if(correction){
+    await correctReview(env,{id:correction.submission_id,member:correction.actor_member_id,operationId:correction.operation_id,note:correction.note,now:Date.now()});
+    complete++;continue;
+   }
    const saved=row.command?JSON.parse(row.command) as WorkPolicyCommand:null;
    if(row.moderation_revision>row.confirmed_moderation_revision||!saved||saved.action==='restrict'){await syncManagedRestriction(env,row.provider,row.source_role_id,'reconcile');}
    else if(decision){await finalizeManagedReview(env,decision.submission_id);}else{
@@ -57,7 +63,7 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
      const state=await workPolicyGateway.state(env,row.provider,row.source_role_id);
      if(!state||state.workId!==row.work_id)throw new HttpError(503,'visibility_sync_pending');
      await projectWorkReceipt(env,row.provider,{...state,operationId:row.sync_operation_id});
-    }else{
+    }else if(command.action!=='correct_review'){
      if(['private','unlisted','restore'].includes(command.action)){
       const receipt=await workPolicyGateway.operation(env,row.provider,row.source_role_id,row.work_id,command.operationId);
       if(!receipt)throw new HttpError(503,'visibility_sync_pending');

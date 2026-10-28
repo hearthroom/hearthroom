@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "審核新增決定前確認與改判，作者也能查看完整理由。",
+    "zh-Hans": "审核新增决定前确认和改判，作者也能查看完整理由。",
+    "en": "Reviews now include confirmation and corrections, and authors can view the full reasons.",
+    "ja": "審査に決定前の確認と訂正が加わり、作者は理由の全文を確認できます。",
+    "ko": "심사 결정 전 확인과 정정 기능이 생겼고, 작성자는 사유 전체를 볼 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "審核員能查看自己的處理紀錄，並在定案後 24 小時內更正自己誤判的通過；超時或他人審核由管理員處理。",
+    "zh-Hans": "审核员能查看自己的处理记录，并在定案后 24 小时内更正自己误判的通过；超时或他人审核由管理员处理。",
+    "en": "Reviewers can view their review history and change their own mistaken approvals to rejections within 24 hours of the final decision; an administrator handles older reviews or another reviewer's decisions.",
+    "ja": "審査担当者は自分の履歴を確認でき、最終結果の確定から24時間以内なら自分の誤承認を却下に訂正でき、それ以外は管理者が対応します。",
+    "ko": "심사자는 자신의 기록을 보고 최종 결과 확정 후 24시간 이내에 자신이 잘못 승인한 심사를 반려로 정정할 수 있고, 기한이 지났거나 다른 심사자의 결정은 관리자가 처리해요."
+  }
+}

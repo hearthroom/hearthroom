@@ -6,6 +6,7 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  */
 const METRICS = {
   review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight and sealed revision.',label:'phase',operations:['draft','sealed'],outcomes:['eligible','insufficient']},
+  review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',
     help:'Publication readback, occupied submission admission and author-initiated cancellation outcomes.',

@@ -15,6 +15,8 @@ import { cardStateRoutes } from './card-state-routes';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
+import { listReviewDecisions, correctReview, correctionEligibility } from './review-correction';
+import { pickLocale } from './types';
 import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
@@ -1520,6 +1522,42 @@ app.post("/v1/review/cards/:id/featured", async (c) => {
   return c.json({ id: row.id, featured: body.featured, featuredAt });
 });
 
+app.get('/v1/review/decisions',async(c)=>{
+ const member=await requireReviewer(c);
+ const raw=c.req.query('before');
+ const before=raw===undefined?undefined:Number(raw);
+ if(before!==undefined&&(!Number.isSafeInteger(before)||before<=0))throw new HttpError(400,'invalid cursor');
+ return c.json(await listReviewDecisions(c.env.DB,member.id,Date.now(),lang(c),before),200,{'Cache-Control':'private, no-store'});
+});
+
+app.get('/v1/mine/reviews/:id',async(c)=>{
+ const member=await requireMember(c);
+ const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,
+  v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
+  coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
+  FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
+  LEFT JOIN review_corrections x ON x.submission_id=s.id
+  WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
+   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;
+  }>();
+ if(!row)throw new HttpError(404,'review result not found');
+ const {public_role,correctionState,...result}=row;
+ return c.json({...result,name:pickLocale(JSON.parse(public_role).names,lang(c)),corrected:correctionState==='complete'},200,{'Cache-Control':'private, no-store'});
+});
+
+app.post('/v1/review/:id/correction',async(c)=>{
+ const member=await requireReviewer(c);
+ const body=await c.req.json().catch(()=>({})) as {operationId?:unknown;note?:unknown};
+ if(typeof body.operationId!=='string'||typeof body.note!=='string')throw new HttpError(400,'invalid review correction');
+ try{
+  const result=await correctReview(c.env,{id:c.req.param('id'),member:member.id,operationId:body.operationId,note:body.note,now:Date.now()});
+  queuePush(c);return c.json(result,200,{'Cache-Control':'private, no-store'});
+ }catch(error){
+  if(error instanceof HttpError&&(error.status===400||error.status===403))await bumpOp(c.env.DB,'review_correction','correct','denied');
+  throw error;
+ }
+});
+
 app.get("/v1/review/queue", async (c) => {
   const member = await requireReviewer(c);
   const items = await listQueue(c.env.DB, member.id, Date.now(), lang(c));
@@ -1650,7 +1688,8 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id")!);
   const stampedByMe = await hasStamped(c.env.DB, s.id, member.id);
-  if(!stampedByMe){
+  const role=await reviewerRole(c.env.DB,member.id);
+  if(!stampedByMe&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
     if(s.status!=='pending')throw new HttpError(410,'review no longer active');
     if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
   }
@@ -1668,6 +1707,12 @@ app.get("/v1/review/:id/detail", async (c) => {
     const row = await getCard(c.env.DB, String(s.card_id));
     if (!row) throw new HttpError(404, 'card not found');
     const card = toCard(row, lang(c));
+    const version=await c.env.DB.prepare('SELECT public_role FROM hosting_versions WHERE submission_id=?').bind(s.id).first<{public_role:string}>();
+    if(version){
+     const publicRole=JSON.parse(version.public_role) as UpstreamRole;
+     card.name=pickLocale(publicRole.names,lang(c));card.summary=pickLocale(publicRole.summaries,lang(c));
+     card.tags=publicRole.tags;card.backgroundUrl=publicRole.backgroundUrl??publicRole.avatarUrl??null;
+    }
     detail = closedDetail(card, s.content_hash);
   }
   if(!detail&&s.content_hash.startsWith('version:'))throw new HttpError(404,'snapshot not found');
@@ -1704,6 +1749,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
+        correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=?").bind(member.id,s.id).first(),
+        ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份
       card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },

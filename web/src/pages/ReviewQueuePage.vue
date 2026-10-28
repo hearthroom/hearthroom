@@ -90,6 +90,7 @@ onMounted(() => {
     <header class="head">
       <div>
         <h2 class="head__title">{{ $t("review.title") }}</h2>
+        <RouterLink class="link" :to="lp('/review/decisions')">{{$t('review.history.title')}}</RouterLink>
       </div>
       <button class="btn btn--sm" :disabled="loading" @click="load">{{ $t("review.refresh") }}</button>
     </header>

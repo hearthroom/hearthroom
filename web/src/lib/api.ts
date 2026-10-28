@@ -111,6 +111,9 @@ const SITE_CODE_KEY: Record<string, string> = {
   visibility_operation_conflict: "workspace.submitConflict",
   visibility_provider_unavailable: "visibility.loadFailed",
   visibility_sync_pending: "visibility.operation.unknown",
+  review_correction_manager_required:'review.correction.managerRequired',
+  review_correction_not_final:'review.correction.notFinal',
+  review_correction_changed:'review.correction.changed',
   visibility_read_budget_exceeded: "state.serverBusy",
   visibility_disabled: "visibility.loadFailed",
   visibility_restricted: "state.forbidden",
@@ -511,6 +514,8 @@ export interface ReviewDetail {
     stampedByMe?: boolean;
     claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
+    canCorrect?:boolean;manager?:boolean;deadline?:number|null;
+    correction?:{note:string;at:number;state:'pending'|'complete';operationId:string;publicState:string|null;canResume:boolean}|null;
   };
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };
@@ -583,6 +588,17 @@ export const claimReview = (id: string, token: string) => reviewAction<{ id: str
 export const releaseReview = (id: string, token: string, generation?:string) => reviewAction<void>(id, "release", token, {generation});
 export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
+
+export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean}
+export async function fetchReviewDecisions(token:string,lang:string,before?:number):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
+ const query=new URLSearchParams({lang});if(before)query.set('before',String(before));
+ return json(await fetch(`${COMMUNITY_API}/review/decisions?${query}`,{headers:{...from(),...authHeaders(token)}}));
+}
+export const correctReviewDecision=(id:string,token:string,body:{operationId:string;note:string})=>reviewAction<{status:'rejected';publicVersionId:string|null;publicState:'previous_version'|'unpublished'|'unchanged';operationId:string;replayed:boolean}>(id,'correction',token,body);
+export interface AuthorReviewResult {name:string;status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;corrected:boolean;correctedAt:number|null;rewardKept?:boolean}
+export async function fetchAuthorReviewResult(id:string,token:string,lang:string):Promise<AuthorReviewResult>{
+ return json(await fetch(`${COMMUNITY_API}/mine/reviews/${encodeURIComponent(id)}?lang=${encodeURIComponent(lang)}`,{headers:{...from(),...authHeaders(token)}}));
+}
 
 /** 審核時直接改標籤：要領著這張單。回傳存下去的那一份（去空白、去重後）。 */
 export const updateReviewTags = (id: string, token: string, body: { tags: string[]; fandom?: string; fandomId?: string; generation?: string }) =>

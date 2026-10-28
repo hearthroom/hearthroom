@@ -2,6 +2,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
+import {confirmState,settleConfirm} from '../src/lib/confirm';
 const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code=''){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
@@ -60,6 +61,23 @@ const remount=async()=>{
  app.unmount();
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
 };
+
+it('requires confirmation before approval, cancels without POST, and snapshots the reviewed decision',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
+ api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ const approve=()=>[...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.action.approve'))!;
+ approve().click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(api.stampReview).not.toHaveBeenCalled();
+ expect(confirmState.current!.message).toContain('Night Detective');
+ settleConfirm(false);
+ await vi.waitFor(()=>expect(approve().disabled).toBe(false));expect(api.stampReview).not.toHaveBeenCalled();
+ approve().click();await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1'}));
+});
 
 it('the reviewer holding the claim fixes a missing tag and the page shows the saved tags',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());

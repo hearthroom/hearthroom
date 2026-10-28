@@ -17,6 +17,7 @@ export async function resetDb(): Promise<void> {
   frozenFixtureRoles.clear();hostedFixture();
   await env.DB.batch(['qa_session_exclusion','legacy_account_fence','qa_account_operation','qa_session_generation','qa_browser_nonce','qa_browser_receipt'].map(table=>env.DB.prepare(`DELETE FROM ${table}`)));
   await env.DB.prepare('DELETE FROM author_card_deletions').run();
+  await env.DB.prepare('DELETE FROM review_corrections').run();
   await env.DB.prepare('DELETE FROM author_visibility_operations').run();
   await env.DB.prepare('DELETE FROM account_route_handoffs').run();
   await env.DB.prepare('DELETE FROM account_route_families').run();

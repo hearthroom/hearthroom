@@ -1,5 +1,6 @@
 import {updateNoticeVisibility} from './update-visibility';
 import {privateUpdateCopy} from '../../shared/card-update-copy';
+import {reviewCorrectionCopy} from '../../shared/review-correction-copy';
 import {eligibleNotification} from '../test-accounts';
 import { SITE_NAME, siteName } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
@@ -120,6 +121,10 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
     return fill(extra.event === "new" ? c.workNew : extra.event === "update" ? c.workUpdate : c.work, { actor, card }) + (extra.event === "update" && typeof extra.note === "string" ? "\n" + extra.note : "");
   }
   if (row.kind === "review_result") {
+    if(extra.correction===true){
+      const corrected=reviewCorrectionCopy[locale],note=noticeNote(extra.note),reward=extra.rewardKept===true;
+      return fill(!card?reward?corrected.correctedPlainReward:corrected.correctedPlain:note?reward?corrected.correctedNoteReward:corrected.correctedNote:reward?corrected.correctedReward:corrected.corrected,{card,note});
+    }
     if (!card) return c.reviewPlain;
     const update = extra.kind === "re";
     if (extra.status !== "rejected") return fill(update ? c.approvedUpdate : c.approved, { card });

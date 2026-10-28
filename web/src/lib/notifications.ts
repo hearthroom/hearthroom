@@ -82,6 +82,11 @@ export function noticeText(n: CommunityNotice): string {
   const actor = n.actor?.name ?? "";
   const extra = n.extra ?? {};
   const count = Number(extra.count ?? 1);
+  if(n.kind==='review_result'&&extra.correction===true){
+    const note=noticeNote(extra.note),reward=extra.rewardKept===true;
+    const key='community.noticeText.review_corrected'+(!card?'_plain':note?'_note':'')+(reward?'_reward':'');
+    return t(key,{card,note});
+  }
   if (n.kind === "comment_reply" && actor && card) return t("community.noticeText.comment_reply", { actor, card });
   if(n.kind==='followed_work'&&typeof extra.version==='string')return actor&&card?t('cardUpdate.notice.updateBy',{actor,card}):t('cardUpdate.notice.updatePrivate');
   if (n.kind === "followed_work" && actor && card)

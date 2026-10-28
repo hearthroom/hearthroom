@@ -158,13 +158,14 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
   display: grid; gap: var(--s-3);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
   animation: pop var(--dur-slow) var(--ease);
+  max-height:calc(100dvh - var(--s-6));overflow-y:auto;
 }
 /* 標題與內文可能帶使用者或作者給的長字（卡名、項目 key）：不斷行會把框撐得比畫面還寬 */
 .dlg > * { min-width: 0; }
 .dlg--publication { width:min(420px,100%); max-height:calc(100dvh - var(--s-6)); overflow-y:auto; }
 .dlg--publication .dlg__actions { min-width:0; }
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; white-space:pre-wrap; }
 .dlg__detail {
   display: block; padding: 10px 12px;
   border-radius: var(--r-sm); background: var(--surface-2);

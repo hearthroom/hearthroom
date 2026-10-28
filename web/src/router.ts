@@ -47,6 +47,7 @@ const pages: RouteRecordRaw[] = [
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
+  { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true}},
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuiet: true } },
@@ -99,6 +100,7 @@ const pages: RouteRecordRaw[] = [
       { path: "cases", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cases" } },
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },
+      {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews'}},
       // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判
       { path: "members", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
