@@ -15,7 +15,7 @@ import { useI18n } from "vue-i18n";
 import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
 import { isPng } from "@/lib/png-chunks";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
-import { validateRuleSet } from "@/lib/regex-rules";
+import { ruleSetWarnings, validateRuleSet } from "@/lib/regex-rules";
 import RegexIssueList from "./RegexIssueList.vue";
 
 const props = defineProps<{ language: string; detailMax?: number }>();
@@ -153,6 +153,7 @@ function onPick(event: Event) {
 
 /** 目前要套用的那份（兩種模式擇一）。 */
 const current = computed<ImportResult | null>(() => (kind.value === "mmd" ? mmdPreview.value : preview.value));
+const regexWarnings = computed(() => current.value?.regex ? ruleSetWarnings(current.value.regex) : []);
 const regexIssues = computed(() => current.value?.regex ? validateRuleSet(current.value.regex) : []);
 
 function reset() {
@@ -244,6 +245,11 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       <div v-if="current.regex && regexIssues.length" class="notice notice--error" role="alert">
         {{ $t("import.regex.invalid") }}
         <RegexIssueList :set="current.regex" :issues="regexIssues" />
+      </div>
+
+      <div v-if="current.regex && regexWarnings.length" class="notice regex-warning" role="status">
+        {{ $t("regex.warning.largeNotice") }}
+        <RegexIssueList :set="current.regex" :issues="regexWarnings" />
       </div>
 
       <div v-if="current.dropped.length" class="dropped">

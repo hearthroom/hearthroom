@@ -3583,5 +3583,7 @@
   "home.monthEnd": "月榜已全部顯示",
   "home.monthEmpty": "目前沒有其他符合條件的月榜卡片",
   "mascot.pet.offHintMember": "你可以點頁首頭像，在「偏好設定」叫回蘇綺。",
-  "mascot.pet.offHintGuest": "你可以點頁首的三橫線選單，在「偏好設定」叫回蘇綺。"
+  "mascot.pet.offHintGuest": "你可以點頁首的三橫線選單，在「偏好設定」叫回蘇綺。",
+  "regex.warning.largeNotice": "這些規則的替換內容較大，可能影響遊玩流暢度，建議拆成幾條；這項提醒不會阻止儲存。",
+  "regex.warning.largeReplacement": "替換內容較大"
 }

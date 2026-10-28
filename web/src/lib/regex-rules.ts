@@ -94,6 +94,8 @@ export const REGEX_LIMITS = {
   find: 1000,
   /** 單條替換內容（位元組）。 */
   replaceBytes: 512 * 1024,
+  /** 大型替換的非阻擋提醒門檻（UTF-8 bytes）。 */
+  replaceWarningBytes: 256 * 1024,
   statusbar: 4000,
   /** 整份規則的上限（位元組）：每條 id+name+find+replace 加總，跟上游同一把尺。 */
   total: 32 * 1024 * 1024,
@@ -171,6 +173,14 @@ export function renderStatusbar(set: RegexRuleSet): string {
 
 /** 哪些規則有問題。key 是 i18n key，畫面翻譯。 */
 export interface RuleIssue { ruleId: string; key: string; params?: Record<string, string | number> }
+/** 提醒與拒收分開，匯入、套用及保存不因提醒而停下。 */
+export function ruleSetWarnings(set: RegexRuleSet): RuleIssue[] {
+  return set.rules.filter(rule => {
+    const bytes = utf8Bytes(rule.replace);
+    return bytes > REGEX_LIMITS.replaceWarningBytes && bytes <= REGEX_LIMITS.replaceBytes;
+  }).map(rule => ({ ruleId: rule.id, key: "regex.warning.largeReplacement" }));
+}
+
 export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
   const issues: RuleIssue[] = [];
   if (set.rules.length > REGEX_LIMITS.rules) issues.push({ ruleId: "", key: "regex.issue.tooMany", params: { max: REGEX_LIMITS.rules } });

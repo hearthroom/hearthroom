@@ -3583,5 +3583,7 @@
   "home.monthEnd": "月榜已全部显示",
   "home.monthEmpty": "目前没有其他符合条件的月榜卡片",
   "mascot.pet.offHintMember": "你可以点击顶部头像，在「偏好设置」叫回苏绮。",
-  "mascot.pet.offHintGuest": "你可以点击顶部的三横线菜单，在「偏好设置」叫回苏绮。"
+  "mascot.pet.offHintGuest": "你可以点击顶部的三横线菜单，在「偏好设置」叫回苏绮。",
+  "regex.warning.largeNotice": "这些规则的替换内容较大，可能影响游玩流畅度，建议拆成几条；这项提醒不会阻止保存。",
+  "regex.warning.largeReplacement": "替换内容较大"
 }

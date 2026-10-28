@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, ruleSetBytes, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
+import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, ruleSetBytes, ruleSetWarnings, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
 
 describe("parseFind", () => {
   it("/pat/flags 是正則，其他是字面", () => {
@@ -180,4 +180,15 @@ it('接受512KiB的UTF-8替換，超過1byte仍拒收', () => {
   expect(Boolean(issue)).toBe(n > 512 * 1024);
   if (issue) expect(issue.params?.max).toBe(512);
  }
+});
+
+
+describe("large replacement warnings", () => {
+  it.each([136325, 262144, 262145, 300 * 1024, 524288, 524289])("measures %i UTF-8 bytes independently from blockers", bytes => {
+    const replace = "界".repeat(Math.floor(bytes / 3)) + "x".repeat(bytes % 3);
+    const rule = makeRule({ find: "marker", replace, enabled: false });
+    const set = { version: 1 as const, rules: [rule], statusbar: "", lowered: false };
+    expect(ruleSetWarnings(set)).toEqual(bytes > 262144 && bytes <= 524288 ? [{ ruleId: rule.id, key: "regex.warning.largeReplacement" }] : []);
+    expect(validateRuleSet(set).some(issue => issue.key === "regex.issue.replaceLong")).toBe(bytes > 524288);
+  });
 });

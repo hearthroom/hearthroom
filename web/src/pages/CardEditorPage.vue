@@ -53,7 +53,7 @@ import {
   uploadImage,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import RegexIssueList from "@/components/editor/RegexIssueList.vue";
 import { can } from "@/lib/provider";
@@ -300,6 +300,7 @@ watch([panel, panelOpen], () => {
 });
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+const regexWarnings = computed(() => can("regex") ? ruleSetWarnings(regexSet.value) : []);
 const regexSaveIssues = ref<ReturnType<typeof validateRuleSet>>([]);
 
 const saveLabel = computed(() => {
@@ -1090,6 +1091,11 @@ async function exportCard(format: "png" | "json") {
           <span>{{ $t("editor.draftRestored") }}</span>
           <button type="button" class="btn btn--sm btn--ghost" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>
         </p>
+
+        <div v-if="regexWarnings.length" class="notice regex-warning" role="status">
+          {{ $t("regex.warning.largeNotice") }}
+          <RegexIssueList :set="regexSet" :issues="regexWarnings" />
+        </div>
 
         <!-- 基础 -->
         <section data-section="basic" class="pane">

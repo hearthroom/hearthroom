@@ -3583,5 +3583,7 @@
   "home.monthEnd": "End of this month's list",
   "home.monthEmpty": "No more matching cards in this month's list",
   "mascot.pet.offHintMember": "You can bring Suki back from Preferences in your profile menu at the top of the page.",
-  "mascot.pet.offHintGuest": "You can bring Suki back from Preferences in the three-line menu at the top of the page."
+  "mascot.pet.offHintGuest": "You can bring Suki back from Preferences in the three-line menu at the top of the page.",
+  "regex.warning.largeNotice": "These rules have large replacements that may slow down play; consider splitting each into smaller rules. This warning does not prevent saving.",
+  "regex.warning.largeReplacement": "Large replacement"
 }

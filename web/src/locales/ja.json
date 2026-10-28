@@ -3583,5 +3583,7 @@
   "home.monthEnd": "月間ランキングのカードをすべて表示しました",
   "home.monthEmpty": "条件に合う月間ランキングのカードはほかにありません",
   "mascot.pet.offHintMember": "ページ上部のアイコンから「環境設定」を開くと、スキを呼び戻せます。",
-  "mascot.pet.offHintGuest": "ページ上部の三本線のメニューから「環境設定」を開くと、スキを呼び戻せます。"
+  "mascot.pet.offHintGuest": "ページ上部の三本線のメニューから「環境設定」を開くと、スキを呼び戻せます。",
+  "regex.warning.largeNotice": "これらのルールは置換内容が大きく、プレイ中の動作が重くなる場合があるため、複数のルールに分けることをお勧めします。この注意で保存が制限されることはありません。",
+  "regex.warning.largeReplacement": "置換内容が大きい"
 }

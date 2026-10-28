@@ -3583,5 +3583,7 @@
   "home.monthEnd": "월간 카드가 모두 표시되었어요",
   "home.monthEmpty": "조건에 맞는 다른 월간 카드가 없어요",
   "mascot.pet.offHintMember": "페이지 상단의 프로필 아이콘을 누르면 ‘환경 설정’에서 스키를 다시 부를 수 있어요.",
-  "mascot.pet.offHintGuest": "페이지 상단의 세 줄 메뉴를 누르면 ‘환경 설정’에서 스키를 다시 부를 수 있어요."
+  "mascot.pet.offHintGuest": "페이지 상단의 세 줄 메뉴를 누르면 ‘환경 설정’에서 스키를 다시 부를 수 있어요.",
+  "regex.warning.largeNotice": "이 규칙들은 치환 내용이 커서 플레이가 느려질 수 있으니 여러 규칙으로 나눠 보세요. 이 알림 자체가 저장을 막지는 않아요.",
+  "regex.warning.largeReplacement": "치환 내용이 커요"
 }

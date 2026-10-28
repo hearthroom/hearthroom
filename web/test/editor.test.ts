@@ -1353,3 +1353,20 @@ describe('正則預檢與保存快照', () => {
   expect(root.querySelector('[role=alert]')?.textContent).toContain('512');
  });
 });
+
+
+describe('large replacement advisory', () => {
+ it.each([136325, 262144, 262145, 300 * 1024, 524288])('import and save %i bytes without blocking', async bytes => {
+  await mount('/create'); await type($('#f-name'), 'Large rule fixture');
+  root.querySelectorAll<HTMLButtonElement>('.import__kind button')[1].click(); await flush();
+  const replace = '界'.repeat(Math.floor(bytes / 3)) + 'x'.repeat(bytes % 3);
+  const file = new File([JSON.stringify({ beginning: 'marker', regex_scripts: [{ scriptName: 'Large rule fixture', findRegex: 'marker', replaceString: replace }] })], 'large.json');
+  await pickFile($('.import input[type=file]'), file);
+  expect(root.querySelector('.review .regex-warning') !== null).toBe(bytes > 262144);
+  if (bytes > 262144) expect(root.querySelector('.review .regex-warning')?.textContent).toContain('Large rule fixture');
+  byText('套用到表單').click(); await flush();
+  expect(root.querySelector('.editor .regex-warning') !== null).toBe(bytes > 262144);
+  await submit();
+  expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace })] }), 'tok');
+ });
+});
