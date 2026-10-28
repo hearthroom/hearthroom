@@ -140,7 +140,7 @@ export class SukiPet {
     this.closeMenu();
     for (const popup of [this.bubble, this.menuEl]) { popup.style.translate = ""; popup.style.maxHeight = ""; popup.style.overflowY = ""; }
     this.homeParked = false; this.sidebarDocked = false; this.sidebarAwake = false; this.sidebarPosition = null;
-    if (original) this.place(original);
+    if (original) { this.place(original); this.refit(); }
     this.idleButton.hidden = true;
     this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded", "suki-pet--sidebar-avatar", "suki-pet--home-parked");
     if (this.opts.mobile && this.ready) this.layoutEdge();

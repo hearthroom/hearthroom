@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { SukiPet, type PetOptions } from '../src/pet/pet-ui';
 import type { SidebarRect } from '../src/lib/sidebar-clearance';
 let pet: SukiPet;
-afterEach(() => { pet?.stop(); vi.restoreAllMocks(); });
+afterEach(() => { pet?.stop(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 function setup(mobile = false, onSidebarMenuChange = vi.fn()) {
   let bounds: SidebarRect | null = { left: 792, right: 1056, top: 428, bottom: 568 };
   pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 220, line: key => key, mobile, onSidebarMenuChange, sidebarBounds: () => bounds } as PetOptions);
@@ -85,4 +85,17 @@ it('releases temporary popup placement with the homepage lane',()=>{
  manual.menuEl.style.translate='100px 20px';manual.menuEl.style.maxHeight='400px';manual.menuEl.style.overflowY='auto';
  parking=false;leave();p.updateSidebar();
  expect(manual.menuEl.style.translate).toBe('');expect(manual.menuEl.style.maxHeight).toBe('');
+});
+
+it.each([false,true])('keeps the pet reachable after shrinking out of the homepage lane (%s)',mobile=>{
+ const {p,leave}=setup(mobile);let parking=true;
+ const manual=pet as unknown as {opts:PetOptions;pos:{x:number;y:number};size:()=>{w:number;h:number}};
+ manual.opts.parkOnHomepage=()=>parking;
+ vi.mocked(p.place).mockRestore();vi.spyOn(manual,'size').mockReturnValue({w:147,h:220});
+ vi.stubGlobal('innerWidth',768);vi.stubGlobal('innerHeight',900);
+ manual.pos={x:537.6,y:630};localStorage.setItem('suki.pet.pos','original-preference');p.updateSidebar();
+ vi.stubGlobal('innerWidth',390);parking=false;leave();p.updateSidebar();
+ expect(manual.pos.x).toBeGreaterThanOrEqual(0);expect(manual.pos.x+147).toBeLessThanOrEqual(390);
+ expect(localStorage.getItem('suki.pet.pos')).toBe('original-preference');
+ localStorage.removeItem('suki.pet.pos');vi.unstubAllGlobals();
 });
