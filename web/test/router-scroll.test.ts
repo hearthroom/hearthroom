@@ -3,6 +3,18 @@ import { expect, it } from 'vitest';
 import { prepareBoardScroll } from '../src/lib/board-memory';
 import { scrollFor } from '../src/router';
 
+it('bounds author workspaces and parks the pet only on working surfaces', async () => {
+  const { router } = await import('../src/router');
+  for (const prefix of ['', '/en', '/ja', '/ko', '/zh-Hans']) {
+    for (const path of ['/create', '/cards/100001/edit']) {
+      expect(router.resolve(prefix + path).meta.workspace, prefix + path).toBe(true);
+      expect(router.resolve(prefix + path).meta.petAway, prefix + path).toBe(true);
+    }
+    expect(router.resolve(prefix + '/review/local-review').meta.petAway).toBe(true);
+    expect(router.resolve(prefix + '/review').meta.petAway).not.toBe(true);
+  }
+});
+
 const at = (path: string, query: Record<string, string> = {}, meta: Record<string, unknown> = {}) => ({ path, query, meta }) as any;
 
 it('keeps the position when only the query changes on a page that asks for it', () => {

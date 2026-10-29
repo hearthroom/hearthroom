@@ -34,7 +34,7 @@ const pages: RouteRecordRaw[] = [
   { path: "", component: BoardPage, meta: { board: true } },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
-  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
+  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
   { path: "library", component: () => import("./pages/LibraryPage.vue"), meta: { auth: true } },
   { path: "me/badges", component: () => import("./pages/BadgesPage.vue"), meta: { auth: true } },
@@ -49,7 +49,7 @@ const pages: RouteRecordRaw[] = [
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
   { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true}},
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
-  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
+  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuiet: true } },
   // 簽到相關頁：手機上桌寵不說話，泡泡會壓在軌道與里程碑上（ui.md §6.13）
   // petAway：這一頁的蘇綺是頁面插圖，桌寵整頁退場（美術總監最終 r1 H1）
@@ -120,7 +120,7 @@ const pages: RouteRecordRaw[] = [
       // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著
       { path: "blog/:id", component: () => import("./pages/ReviewBlogEditorPage.vue"), meta: { managementTab: "blog" } },
       { path: "manage", redirect: (to) => ({ path: withLocale("/review/cases", localeOf(to)), query: to.query, hash: to.hash }) },
-      { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
+      { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true, petAway: true } },
     ],
   },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },

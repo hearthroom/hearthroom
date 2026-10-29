@@ -234,7 +234,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   </nav>
   <CheckinHint v-if="onBoardPage && session.me && !route.meta.bare" />
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
-  <main id="main" tabindex="-1" :inert="headerOverlays.size > 0" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
+  <main id="main" tabindex="-1" :inert="headerOverlays.size > 0" :class="{ 'site-main': !route.meta.bare, 'site-main--workspace': route.meta.workspace, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
   <CoachTour />
   <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
@@ -243,14 +243,14 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
-  <InstallToast v-if="(!route.meta.bare || isPlayHost()) && !route.meta.readingNotice" />
+  <InstallToast v-if="(!route.meta.bare || isPlayHost()) && !route.meta.readingNotice" :defer="route.meta.workspace === true || (route.meta.managementTab === 'reviews' && typeof route.params.id === 'string')" />
   <RoutesLayer v-if="routesOn" />
 
   <!--
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
     連結分組放在 lib/footer-nav.ts：新入口先決定屬於哪一組，不再往同一排後面接。
   -->
-  <footer v-if="SITE.repoUrl && !route.meta.bare && (!onBoardPage || boardEnded || route.query.mode === 'following' || route.query.mode === 'authors')" class="footer" :class="{ 'footer--home-pet': onBoardPage && petEnabled }" :inert="headerOverlays.size > 0" :lang="locale">
+  <footer v-if="SITE.repoUrl && !route.meta.bare && !route.meta.workspace && (!onBoardPage || boardEnded || route.query.mode === 'following' || route.query.mode === 'authors')" class="footer" :class="{ 'footer--home-pet': onBoardPage && petEnabled }" :inert="headerOverlays.size > 0" :lang="locale">
     <div class="footer__inner">
       <div class="footer__about">
         <p class="footer__name">{{ footerName }}</p>
@@ -267,6 +267,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
  */
 .skip-info { left: auto; right: var(--s-2); }
 .site-main { min-height: 100vh; min-height: 100dvh; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.site-main--workspace { min-height: 0; height: calc(100vh - var(--site-header-h, var(--header-h))); height: calc(100dvh - var(--site-header-h, var(--header-h))); }
 .header {
   padding-top: env(safe-area-inset-top, 0px);
   padding-left: env(safe-area-inset-left, 0px);

@@ -201,6 +201,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('bounded author workspace scrolling', () => {
+  it('tracks the last section from the form viewport instead of document scroll', async () => {
+    await mount('/create');
+    const viewport = root.querySelector<HTMLElement>('.body__scroll');
+    expect(viewport, 'the form viewport stays separate from persistent actions').not.toBeNull();
+    Object.defineProperties(viewport!, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 900 },
+      scrollTop: { configurable: true, value: 600 },
+    });
+    root.querySelector('.side')!.getBoundingClientRect = () => ({ bottom: 100 }) as DOMRect;
+    root.querySelectorAll<HTMLElement>('[data-section]').forEach(e => {
+      e.getBoundingClientRect = () => ({ top: 200 }) as DOMRect;
+    });
+    viewport!.dispatchEvent(new Event('scroll'));
+    await new Promise(r => setTimeout(r, 40));
+    await nextTick();
+    expect(root.querySelector('.side__item[aria-current=true]')?.textContent).toContain(i18n.global.t('editor.section.publish'));
+  });
+});
+
 describe("正則匯入的聊天頁模式", () => {
   const oldMmd = { beginning: "<identity>", statusbar: "<theme>", regex_scripts: [{ scriptName: "theme", findRegex: "<theme>", replaceString: "<style>body{color:red}</style>", placement: [2] }] };
 

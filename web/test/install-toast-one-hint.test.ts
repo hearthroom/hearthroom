@@ -1,7 +1,7 @@
 // 一次只有一個提示（美術總監最終 r1 M6、r2 M6）：導覽或新手提示卡在畫面上時，安裝提示收起；
 // 桌寵說話時先不出現，但出現之後不跟著她每一句話收放。
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { createApp, nextTick } from "vue";
+import { createApp, h, nextTick, ref } from "vue";
 import { i18n } from "../src/lib/i18n";
 import { installPrompt } from "../src/lib/pwa";
 import { tourState } from "../src/lib/coach-tour";
@@ -12,14 +12,26 @@ import InstallToast from "../src/components/InstallToast.vue";
 
 let root: HTMLElement;
 let app: ReturnType<typeof createApp>;
+const deferred = ref(false);
 // 收起時有離場動畫：還在離場的不算在畫面上
 const shown = () => !!root.querySelector(".install:not([class*=leave])");
 beforeEach(() => {
+  deferred.value = false;
   installPrompt.visible = false; tourState.step = null; newcomerTour.day = 0; newcomerPrompt.showing = false; petSpeaking.value = false;
   root = document.createElement("div"); document.body.append(root);
-  app = createApp(InstallToast).use(i18n); app.mount(root);
+  app = createApp({ render: () => h(InstallToast, { defer: deferred.value }) }).use(i18n); app.mount(root);
 });
 afterEach(() => { app.unmount(); root.remove(); installPrompt.visible = false; });
+
+it('defers an existing installation hint during work and restores it without dismissing it', async () => {
+  installPrompt.visible = true; await nextTick();
+  expect(shown()).toBe(true);
+  deferred.value = true; await nextTick();
+  expect(shown()).toBe(false);
+  expect(installPrompt.visible).toBe(true);
+  deferred.value = false; await nextTick();
+  expect(shown()).toBe(true);
+});
 
 it("waits while a tour or the newcomer card is on screen", async () => {
   newcomerTour.day = 4; installPrompt.visible = true; await nextTick();

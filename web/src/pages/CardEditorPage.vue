@@ -343,6 +343,7 @@ const section = ref<Section>("basic");
 const worldShown = ref(false);
 const sections = computed(() => SECTIONS.filter((key) => key !== "world" || (can("world") && worldShown.value)));
 const body = ref<HTMLElement | null>(null);
+const scrollBody = ref<HTMLElement | null>(null);
 
 /**
  * 七個分區排成一整頁（使用者回饋，2026-09-13）：導覽是錨點，點了捲到那一區；
@@ -360,7 +361,7 @@ function goto(next: Section) {
   spyHoldUntil = Date.now() + 1200;
   el.scrollIntoView({ block: "start", behavior: "smooth" });
 }
-/** 黏住的導覽列底緣就是「目前在哪一區」的判斷線：最後一個頂端過了線的分區就是所在區。 */
+/** 導覽列底緣就是「目前在哪一區」的判斷線：最後一個頂端過了線的分區就是所在區。 */
 let spyFrame = 0;
 function spy() {
   spyFrame = 0;
@@ -373,7 +374,8 @@ function spy() {
     if (el && el.getBoundingClientRect().top <= line) current = key;
   }
   // 捲到頁底時最後一區未必過得了線（它可能比一屏短），到底就算它
-  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = sections.value[sections.value.length - 1];
+  const viewport = scrollBody.value;
+  if (viewport && viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2) current = sections.value[sections.value.length - 1];
   if (section.value !== current) section.value = current;
 }
 function onScroll() {
@@ -611,12 +613,10 @@ const onKey = (e: KeyboardEvent) => {
 onMounted(() => {
   window.addEventListener("beforeunload", guard);
   window.addEventListener("keydown", onKey);
-  window.addEventListener("scroll", onScroll, { passive: true });
 });
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", guard);
   window.removeEventListener("keydown", onKey);
-  window.removeEventListener("scroll", onScroll);
   if (spyFrame) cancelAnimationFrame(spyFrame);
   clearTimeout(toastTimer);
   clearTimeout(draftTimer);
@@ -1070,6 +1070,7 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
+        <div ref="scrollBody" class="body__scroll" @scroll.passive="onScroll">
         <div v-if="isNew" class="field">
           <label for="new-card-visibility">{{ $t('visibility.title') }}</label>
           <select id="new-card-visibility" v-model="newCardVisibility" class="input" :disabled="saving" aria-describedby="new-card-visibility-description">
@@ -1111,7 +1112,7 @@ async function exportCard(format: "png" | "json") {
               <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
                       :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
             </div>
-            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink class="link" :to="`${lp('/guide')}?way=web`">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink class="link chatpage-guide" :to="`${lp('/guide')}?way=web`">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
           </div>
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
@@ -1415,11 +1416,11 @@ async function exportCard(format: "png" | "json") {
           </div>
         </section>
 
+        </div>
+
         <!--
-          底部黏著的動作條。以前只在窄螢幕出現，寬螢幕的儲存與檢查清單擺在右欄——
-          但那些東西每一條都是從對話測試那個手機框身上扣下來的高度，扣完框就只剩
-          面板的七成，卡片本來的版面全擠變形。它們黏在表單底下一樣一直在視野裡，
-          右欄就整條讓給手機框。
+          動作列與表單可視區分列：五語換行、安全區改變列高時，grid 會重分剩餘空間；
+          可捲內容不再延伸到儲存鈕底下，桌機右欄保留完整高度。
         -->
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
@@ -1524,12 +1525,8 @@ async function exportCard(format: "png" | "json") {
    688px。上限放到 1720：夠寬的螢幕表單能過千像素，超寬螢幕（3440）不至於把輸入框
    拉成兩千多像素的一行。分區導覽改成頂部一列（跟手機一樣），不再佔一整欄。
 */
-/*
-   底部不留頁面留白：右欄是 sticky，它能走的距離是自己那格的高度減掉框高，
-   而頁面能捲的距離還多算了這塊留白。多出來的那段一到底，框就被推到頁首背後。
-   讓版面的底就是頁面的底，兩邊的行程才對得上；底下的呼吸由動作列自己的 padding 給。
-*/
-.editor { max-width: 1720px; padding-bottom: 0; }
+/* 作者工作區填滿實際頁首下方的可視高度，只有表單內容捲動。 */
+.editor { max-width: 1720px; width: 100%; height: 100%; min-height: 0; padding-bottom: 0; overflow: hidden; }
 /* 頁首只佔表單那一欄：右欄要從頁面最上緣開始，不然手機框整條被壓到標題底下 */
 .head { grid-column: 1; }
 h1 { margin: 0 0 var(--s-1); font-size: 22px; }
@@ -1539,22 +1536,21 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* 兩欄：表單（頁首、分區導覽、表單三列）＋右欄 */
 .layout {
   display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w, 240px);
-  gap: var(--s-5); align-items: start;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--s-4) var(--s-5); align-items: start;
 }
-/*
-   表單撐滿整行的高度，底下那條動作列才黏得住視窗底部。不撐的話（align-items: start）
-   短的分頁一捲到底，sticky 的容器就到頭了，動作列會停在表單結尾浮在半空中。
-*/
-.body { align-self: stretch; }
+/* 表單內容與動作列分佔兩行；列高由內容決定，不用預猜72px。 */
+.body { align-self: stretch; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
+.body__scroll { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: var(--s-2) var(--s-2) var(--s-4) 0; scroll-padding-block: var(--s-2); }
 
-/* ---- 分區導覽：頂部一列，捲動時黏在站台頁首底下 ---------------------------------- */
+/* ---- 分區導覽：工作區內獨立一列 ---------------------------------------------- */
 /*
-   出血到頁面兩側（負邊距＝頁面的左右內距），黏住時底色才能整條蓋住捲過去的表單；
+   出血到頁面兩側（負邊距＝頁面的左右內距）；
    分區多到放不下就橫向捲，右緣淡出提示後面還有。
 */
 .side {
   grid-column: 1;
-  position: sticky; top: var(--header-h); z-index: 5;
+  position: relative; z-index: 5;
   display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
   margin: 0 calc(var(--s-5) * -1); padding: var(--s-2) var(--s-5);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -1580,14 +1576,14 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 
 /* ---- 中欄 ---------------------------------------------------------------- */
 .body { min-width: 0; }
-.body > [role="alert"], .body > .restored { margin-bottom: var(--s-4); }
+.body__scroll > [role="alert"], .body__scroll > .restored { margin-bottom: var(--s-4); }
 .restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 /* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
 /*
    分區一整頁排下來：每區一個標題；錨點捲動要留出站台頁首與黏住的導覽列的高度，
    不然標題會被導覽列蓋掉。區與區之間拉開一段，比欄位間距大，眼睛才分得出段落。
 */
-.pane { display: grid; gap: var(--s-4); scroll-margin-top: calc(var(--header-h) + 62px); }
+.pane { display: grid; gap: var(--s-4); scroll-margin-top: var(--s-2); }
 .pane + .pane { margin-top: var(--s-7); }
 .pane__title { margin: 0; padding-bottom: var(--s-2); font-size: 17px; border-bottom: 1px solid var(--line); }
 .pane > .field, .pane :deep(.field) { margin-bottom: 0; }
@@ -1641,16 +1637,16 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .panel .muted { margin: 0; }
 .panel .btn { justify-self: start; }
 .checklist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--text-3); }
-.checklist li.ok { color: var(--success); }
+.checklist li.ok { color: var(--text-2); }
 /*
-   動作條一直黏在表單底下：儲存、送審、檢查清單、未存提示都在這裡，不再佔右欄的高度。
+   動作列在表單可視區外：儲存、送審、檢查清單、未存提示都在這裡，不佔右欄高度。
    z-index 壓過表單內容但低於浮層分層（§3.2 的 10–19 那一階）。
 */
 .bar {
-  position: sticky; bottom: 0; z-index: 12;
+  position: relative; z-index: 12;
   display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
-  margin: var(--s-6) 0 0; padding: var(--s-3) 0;
-  background: linear-gradient(to top, var(--bg) 78%, transparent);
+  margin: 0; padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line); background: var(--bg);
 }
 /* 檢查清單推到最右邊：左邊是要按的，右邊是要看的 */
 .bar__check {
@@ -1658,11 +1654,12 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   display: flex; flex-wrap: wrap; gap: 4px var(--s-3); font-size: 13px; color: var(--text-3);
 }
 .bar__check li { display: flex; align-items: center; gap: 6px; }
-.bar__check li.ok { color: var(--success); }
+.bar__check li.ok { color: var(--text-2); }
+.bar__check li.ok svg { color: var(--success); }
 .bar__check svg { width: 14px; height: 14px; flex: none; }
 /* 開浮層的兩顆只有窄螢幕要：寬螢幕的面板就在旁邊 */
 .bar__panel { display: none; }
-.body { padding-bottom: var(--s-2); }
+.body { padding-bottom: 0; }
 .is-off { pointer-events: none; opacity: 0.45; }
 
 /* ---- 右欄 ---------------------------------------------------------------- */
@@ -1672,6 +1669,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    高度一路吃到視窗底，除了分頁列以外不放別的東西——多放一行，框就矮一行。
 */
 .chatpage { width: fit-content; }
+.chatpage-guide { color: var(--accent-text); }
 /* 拖曳把手貼在右欄左緣：一條細桿，滑上去變粗；只在寬螢幕、面板展開時有 */
 .rail__grip {
   position: absolute; left: calc(var(--s-5) * -0.5 - 7px); top: 0; bottom: 0; width: 14px;
@@ -1684,8 +1682,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .rail__grip:hover::before, .rail__grip:active::before { background: var(--muted); height: 96px; margin-top: -48px; }
 .rail {
   grid-column: 2; grid-row: 1 / span 3;
-  position: sticky; top: calc(var(--header-h) + var(--s-4));
-  height: calc(100vh - var(--header-h) - var(--s-5));
+  position: relative; min-height: 0;
+  height: 100%;
   display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-3);
 }
 /* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
@@ -1727,7 +1725,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
     padding: var(--s-3); gap: var(--s-3);
     background: var(--bg);
   }
-  .body { padding-bottom: 72px; }
+  .body { padding-bottom: 0; }
   .bar__panel { display: inline-flex; }
   /* 窄螢幕的動作條已經三顆鈕，清單再擠上去會折行蓋住表單尾端 */
   .bar__check { display: none; }
@@ -1737,7 +1735,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 @media (max-width: 760px) {
   .layout { gap: var(--s-4); }
   .side__item { height: var(--h-sm); font-size: 13px; }
-  /* 底部動作列一排收完：四顆鈕在手機上會折成兩行，蓋住表單尾端（.body 只留了一行的位置）。
+  /* 手機動作列保留三個工作操作，按鈕可換行增高，由grid自動縮短表單可視區。
      「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
   .bar { flex-wrap: nowrap; gap: var(--s-2); }
   .bar > .btn { flex: 1 1 min-content; min-width: min-content; padding-inline: var(--s-2); white-space: normal; min-height:var(--h-lg); height:auto; align-self:stretch; line-height:1.25; overflow-wrap:normal; word-break:normal; }
