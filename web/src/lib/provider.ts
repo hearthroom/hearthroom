@@ -57,6 +57,9 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true,
     world: true,
+    // 我的預設（任務 2026-10-29-preset-library）。2026-10-29 上線後正式站新建失敗（422），依批准的回退方案先關；
+    // 修好重驗後改回 true，Worker 的 PRESET_SCOPES_ENABLED 一起開
+    presets: false,
   },
 };
 
@@ -121,6 +124,8 @@ export function oauthBaseOf(id: ProviderId = currentProvider()): string {
 }
 
 export function scopeOf(id: ProviderId = currentProvider()): string {
+  // 預設的 preset.read／preset.write 只給第一方固定客戶端，由託管登入（src/account-auth.ts）要；
+  // 這裡是自架的動態註冊路徑，Harbor 不讓動態註冊的客戶端申請，加了整個登入會被拒。
   return SCOPES[id] ?? "";
 }
 

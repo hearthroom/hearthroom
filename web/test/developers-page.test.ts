@@ -34,13 +34,18 @@ describe('community developer documentation', () => {
     // Bulk-authoring endpoints publish the connected provider's wire shape.
     // Other endpoints retain the canonical shape; prose remains vendor-neutral.
     const bulkPaths = new Set(['/open/v1/role', '/open/v1/worldbook/{worldbookId}/document', '/open/v1/worldbook/limits']);
+    // x-unpublished：契約裡已經寫好、站台也在打，但還沒對外公開的端點與 schema（例如只給第一方客戶端的預設，
+    // 外部開放前不上開發者頁）。內部規格照樣寫齊（protocol-doc 檢查），公開版不帶。
+    const published = (node: unknown) => !(node && typeof node === 'object' && 'x-unpublished' in node);
     const expectedPaths = Object.fromEntries(Object.entries(sourceSpec.paths).map(([path, methods]) => [path,
-      Object.fromEntries(Object.entries(methods).map(([method, operation]) => [method,
+      Object.fromEntries(Object.entries(methods).filter(([, operation]) => published(operation)).map(([method, operation]) => [method,
         bulkPaths.has(path) ? { ...operation, ...((operation as Record<string, unknown>)['x-harperharbor'] as object ?? {}) } : operation,
       ])),
-    ]));
+    ]).filter(([, methods]) => Object.keys(methods).length));
+    const expectedComponents = { ...sourceSpec.components, schemas: Object.fromEntries(Object.entries(sourceSpec.components.schemas).filter(([, schema]) => published(schema))) };
     expect(protocol(integrationSpec.paths)).toEqual(protocol(expectedPaths));
-    expect(protocol(integrationSpec.components)).toEqual(protocol(sourceSpec.components));
+    expect(protocol(integrationSpec.components)).toEqual(protocol(expectedComponents));
+    expect(JSON.stringify(integrationSpec)).not.toContain('x-unpublished');
     // operationId is a stable client identifier, not reader-facing prose.
     const publicText = JSON.stringify(integrationSpec, (key, value) => key === 'operationId' ? undefined : value);
     expect(publicText).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|Lunarhub|x-harperharbor|hh_live_/i);

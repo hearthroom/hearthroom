@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "title": {
+    "zh-Hant": "新增「預設」，匯入酒館預設也能用",
+    "zh-Hans": "新增「预设」，导入酒馆预设也能用",
+    "en": "Presets are here, and SillyTavern presets work too",
+    "ja": "「プリセット」が登場、SillyTavernのプリセットも使えます",
+    "ko": "'프리셋'이 생겼고 SillyTavern 프리셋도 쓸 수 있습니다"
+  },
+  "body": {
+    "zh-Hant": "現在可以匯入酒館預設或自己編寫，再到回覆偏好選用，可以只用在這段對話，或用在這張卡的新存檔。",
+    "zh-Hans": "现在可以导入酒馆预设或自己编写，再到回复偏好选用，可以只用在这段对话，或用在这张卡的新存档。",
+    "en": "Import a SillyTavern preset or write your own, then choose it in Response preferences for This conversation or for New conversations with this card.",
+    "ja": "SillyTavernのプリセットを読み込むか自分で作って、返信の好みで「この会話」か「このカードの新しい会話」に選べます。",
+    "ko": "SillyTavern 프리셋을 가져오거나 직접 만들어 '답변 취향'에서 '이 대화'나 '이 카드의 새 대화'에 고를 수 있습니다."
+  },
+  "draft": true
+}

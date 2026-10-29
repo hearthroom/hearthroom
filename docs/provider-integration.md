@@ -38,7 +38,8 @@ Mapped onto sentences the site already had: `invalid_request`, `forbidden`, `not
 `role_not_passed_review`, `temporarily_unavailable`, `file_too_large`, `upload_not_found`,
 `size_mismatch`. Given their own: `insufficient_scope` (the token lacks a scope the site
 needs — the user is told to sign in again and approve it), `unsupported_media_type`,
-`invalid_cursor`, `quota_exceeded`, `asset_not_passed_review`.
+`invalid_cursor`, `quota_exceeded`, `asset_not_passed_review`, and for presets
+`preset_invalid`, `preset_conflict`, `preset_preview_expired`, `preset_profile_required`.
 
 ## Capability levels
 
@@ -93,6 +94,10 @@ Cards created through the site must **not** carry a player name at card level; t
 ### Level 4 — Play
 
 The embedded stage is the canonical consumer of this level; its endpoint table in the repository (`stage/src/config/request-url.js`) is checked against the spec by the drift test. Note that `POST /open/v1/conversation/start` only creates or resumes a conversation; sending a message, regenerating and continuing all happen over the WebSocket described under `POST /open/v1/conversation/ws-ticket` in the reference. Behaviour with a partially implemented level 4 is currently unspecified: the stage assumes the whole group exists.
+
+### Optional — Private presets
+
+"My presets" on the site (`web/src/lib/presets.ts`) calls `/open/v1/presets*` and `/open/v1/preset-imports/*`; the stage chooses a preset for a card or a conversation through `GET /open/v1/player/preset-default`, `POST /open/v1/player/preset-default/save`, `GET /open/v1/conversation/preset` and `POST /open/v1/conversation/preset/apply` (`/preview` checks first). Both need the `preset.read` / `preset.write` scopes, which only first-party clients can be granted; writes carry an `Idempotency-Key` header and errors put the stable detail code in `reason`. While no preset is chosen (`mode: "card_default"`), a card plays as its author set it up.
 
 ### Sandbox cards (new-style chat page)
 

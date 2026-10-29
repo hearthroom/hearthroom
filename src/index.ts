@@ -819,7 +819,7 @@ app.get("/v1/me/cards", async (c) => {
   const started = performance.now();
   const me = await requestIdentity(c, bearer, provider);
   const identified = performance.now();
-  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider, q,...(access?{access:access as 'private'|'unlisted'|'public'}:{}) });
+  const { body, source } = await loadMine(c.env, bearer, me, { page, pageSize, fresh, filter, provider, q,...(access?{access:access as 'private'|'unlisted'|'public'}:{}) });
 
   const listedAt = performance.now();
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });

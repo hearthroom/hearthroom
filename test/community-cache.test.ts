@@ -51,8 +51,8 @@ it('validates adult comment identity only once per request, never across request
 it('separates mine caches by verified Harbor account',async()=>{
  myRolesOnUpstream({'one':[{roleId:'one'}],'two':[{roleId:'two'}]});
  const options={page:1,pageSize:24,fresh:false,filter:'all' as const};
- await loadMine(env,'one',11,{...options,provider:'harbor'});
- const other=await loadMine(env,'two',22,{...options,provider:'harbor'});
+ await loadMine(env,'one',{accountNumId:11},{...options,provider:'harbor'});
+ const other=await loadMine(env,'two',{accountNumId:22},{...options,provider:'harbor'});
  expect(other.body.items[0].roleId).toBe('two');
 });
 it('reuses author aggregates and invalidates profile and card visibility',async()=>{

@@ -526,6 +526,18 @@ it('asks Harbor for the sign-in page in the player\'s language',async()=>{
   expect(new URL((await odd.json() as any).url).searchParams.has('ui_locales')).toBe(false);
 });
 
+// 我的預設的授權範圍：Harbor 那邊允許固定客戶端申請之前不能送，送了整個登入會被拒。
+// 開關打開前登入請求一字不改；打開後才多要 preset.read／preset.write（任務 2026-10-29-preset-library）。
+it('asks for the preset scopes only once the switch is on',async()=>{
+  providers();
+  const scopeOf=async()=>new URL((await (await request('start',{provider:'harbor',returnTo:'/me'})).json() as any).url).searchParams.get('scope') ?? '';
+  // wrangler.toml 現在預設開著（2026-10-29 上線）；關掉時要回到原本的範圍，回退才安全
+  envOverride={...envOverride,PRESET_SCOPES_ENABLED:'false'};
+  expect((await scopeOf()).split(' ')).not.toContain('preset.read');
+  envOverride={...envOverride,PRESET_SCOPES_ENABLED:'true'};
+  expect((await scopeOf()).split(' ')).toEqual(expect.arrayContaining(['chat.play','preset.read','preset.write']));
+});
+
 // 遊客確認過成年再登入：帶進帳號，從此不必再填（owner 2026-10-10）
 async function guestConfirm(body:Record<string,unknown>){
   const year=new Date().getUTCFullYear()-20;

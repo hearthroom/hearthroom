@@ -5,7 +5,7 @@ import { type ProviderId, DEFAULT_PROVIDER } from "./providers";
 import { quotaFor, type Quota } from "./quota";
 import { type CardStatus, statusAmong } from "./review";
 import type { Env } from "./types";
-import { type DraftVersion, type MyRole, upstream } from "./upstream";
+import { type DraftVersion, type MyRole, type ProviderIdentity, upstream } from "./upstream";
 import {loadSharingMine} from './mine-sharing';
 import type {WorkAccess} from './work-policy';
 import type {WorkVisibility} from './work-sharing';
@@ -88,19 +88,20 @@ export interface MineResult {
 export async function loadMine(
   env: Env,
   bearer: string,
-  accountNumId: number,
+  me: ProviderIdentity,
   opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string;access?:WorkAccess },
 ): Promise<MineResult> {
+  const { accountNumId } = me;
   const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
-  if(provider==='harbor'&&env.WORK_SHARING_ENABLED==='true')return loadSharingMine(env,bearer,accountNumId,opts);
+  if(provider==='harbor'&&env.WORK_SHARING_ENABLED==='true')return loadSharingMine(env,bearer,me,opts);
   // 已登記張數與本週額度只看是誰，跟下面讀清單互不相依：一起問，不一趟接一趟（每趟 D1 約 40 ms）
-  const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, accountNumId, Date.now(), provider)]);
+  const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, me, Date.now(), provider)]);
 
   // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
   // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。
   if (opts.filter === "listed") {
     // 作者條件是本站成員 id（0005 起）；第一次來就建成員，跟登記那條路一致
-    const [memberId, [registeredTotal, quota]] = await Promise.all([resolveMember(env.DB, provider, accountNumId, Date.now()), counted]);
+    const [memberId, [registeredTotal, quota]] = await Promise.all([resolveMember(env.DB, provider, accountNumId, Date.now(), me), counted]);
     const q = opts.q ?? "";
     const offset = (opts.page - 1) * opts.pageSize;
     let rows: Awaited<ReturnType<typeof listCards>>["rows"];

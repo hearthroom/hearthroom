@@ -18,7 +18,8 @@ import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "
 
 export class ApiError extends Error {
   /** 上游回的穩定錯誤碼（例如 image_in_use）。畫面要分情況說話時看它，不看訊息文字。 */
-  constructor(readonly status: number, message: string, readonly code = "", readonly reviewLength?:ReviewLength) {
+  /** reason：同一個碼底下更細的原因（例如預設格式錯在哪），上游有給才有。 */
+  constructor(readonly status: number, message: string, readonly code = "", readonly reviewLength?:ReviewLength, readonly reason = "") {
     super(message);
   }
 }
@@ -78,6 +79,11 @@ const CODE_KEY: Record<string, string> = {
   invalid_cursor: "error.invalidCursor",
   quota_exceeded: "error.quotaExceeded",
   asset_not_passed_review: "error.assetNotPassedReview",
+  // 我的預設（/presets、/preset-imports）
+  preset_invalid: "preset.error.format",
+  preset_conflict: "preset.error.revisionConflict",
+  preset_preview_expired: "preset.import.expired",
+  preset_profile_required: "preset.error.profileRequired",
 };
 
 /** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
@@ -177,9 +183,9 @@ export function describeApiError(status: number, raw: string, detail?: LimitDeta
   return text && looksLikeCode(text) ? `${msg} (${text})` : msg;
 }
 
-async function json<T>(res: Response): Promise<T> {
+export async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail; until?: number | null;publicUntil?:string;publicDays?:number;requiredCredits?:number;availableCredits?:number;shortfallCredits?:number };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string; message?: string; detail?: LimitDetail; until?: number | null;publicUntil?:string;publicDays?:number;requiredCredits?:number;availableCredits?:number;shortfallCredits?:number };
     if (body.detail?.field === "customInstructions") body.detail.field = "jailbreak";
     const raw = body.error ?? body.message ?? "";
     // 禁言帶著到期時間：null＝永久。沒帶（舊回應）就用不講期限的那一句。
@@ -190,12 +196,12 @@ async function json<T>(res: Response): Promise<T> {
       : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
-    throw new ApiError(res.status, said, body.error ?? "", body.detail?.reviewLength);
+    throw new ApiError(res.status, said, body.error ?? "", body.detail?.reviewLength, typeof body.reason === "string" ? body.reason : "");
   }
   return (await res.json()) as T;
 }
 
-const authHeaders = (token?: string): Record<string, string> =>
+export const authHeaders = (token?: string): Record<string, string> =>
   token ? { Authorization: `Bearer ${token}` } : {};
 
 /**
