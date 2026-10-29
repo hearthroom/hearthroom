@@ -4,7 +4,15 @@
  * 相容判定用很粗的規則模擬——非系統身分、插進歷史中間、白名單外的巨集標「不支援」；
  * 對話記錄之前用了 {{lastUserMessage}} 標「需調整」。真正的判定在 Harbor，這裡只為了看畫面。
  *
- * /__presets?scenario=empty|full|busy 切情境；/__presets/reset 清空。
+ * /__presets?scenario=<名稱> 切情境（再送一次不帶 scenario 就回到預設）；/__presets/reset 清空。
+ *   empty     清單是空的（不自動放範例）
+ *   full      額度 50／50，其中 2 份封存
+ *   busy      畫布套用回 409 operation_active（對話正在回覆）
+ *   scope     所有預設請求回 403 insufficient_scope（舊登入沒同意過）
+ *   expired   匯入的 selection／confirm 回 410 preset_preview_expired
+ *   conflict  下一次存新版本回 409 preset_revision_conflict（別處先存了）
+ *   unavailable  綁定 GET 回 state=unavailable（選用的版本讀不到）
+ * 在畫布套用到某個預設，那個預設的 bindingCount 會加一，列表就只能封存。
  */
 import crypto from "node:crypto";
 
@@ -105,6 +113,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
   let mm;
   if (path === "/__presets") { scenario = url.searchParams.get("scenario") ?? ""; return json(res, 200, { scenario }), true; }
   if (path === "/__presets/reset") { presets.clear(); revisions.clear(); previews.clear(); receipts.clear(); return json(res, 200, { ok: true }), true; }
+  if (scenario === "scope" && (path.startsWith("/open/v1/preset") || path.includes("/preset"))) return json(res, 403, { error: "insufficient_scope", required_scope: "preset.read" }), true;
   if (m === "GET" && path === "/open/v1/presets") {
     if (scenario !== "empty") seedPresets();
     return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota() }), true;
@@ -126,6 +135,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)\/(revisions|delete|archive|copy)$/))) {
     const p = presets.get(mm[1]); if (!p) return json(res, 404, { error: "not_found" }), true;
     if (mm[2] === "copy") { const head = revisions.get(p.headRevisionId); return json(res, 201, idempotent(req, null, () => create(body.title, structuredClone(head.document), head.recommendedModels, p.sourceKind))), true; }
+    if (scenario === "conflict" && mm[2] === "revisions") { scenario = ""; p.version++; return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true; }
     if (body.expectedVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     if (mm[2] === "revisions") {
       if (analyze(body.document).entries.some((e) => e.enabled && e.uiStatus === "unsupported")) return json(res, 422, { error: "preset_invalid", reason: "preset_adjustment_required" }), true;
@@ -149,13 +159,13 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     return json(res, 201, preview), true;
   }
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/preset-imports\/([^/]+)\/(selection|confirm)$/))) {
-    const p = previews.get(mm[1]); if (!p) return json(res, 410, { error: "preset_preview_expired" }), true;
+    const p = previews.get(mm[1]); if (!p || scenario === "expired") return json(res, 410, { error: "preset_preview_expired" }), true;
     if (body.expectedPreviewVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     if (mm[2] === "selection") { Object.assign(p, { version: p.version + 1, selectionDigest: uuid(), document: { ...p.document, selection: body.selection } }); p.report = analyze(p.document); return json(res, 200, p), true; }
     return json(res, 201, idempotent(req, null, () => create(body.title, p.document, body.recommendedModels, "imported"))), true;
   }
   // ── 綁定（畫布） ──
-  if (m === "GET" && path === "/open/v1/conversation/preset") return json(res, 200, bindingBody(conversationBinding)), true;
+  if (m === "GET" && path === "/open/v1/conversation/preset") return json(res, 200, scenario === "unavailable" && conversationBinding.mode === "revision" ? { ...bindingBody(conversationBinding), state: "unavailable" } : bindingBody(conversationBinding)), true;
   if (m === "GET" && path === "/open/v1/player/preset-default") return json(res, 200, bindingBody(cardBinding)), true;
   if (m === "POST" && (path === "/open/v1/conversation/preset/apply" || path === "/open/v1/player/preset-default/save")) {
     if (scenario === "busy" && path.includes("conversation")) return json(res, 409, { error: "preset_conflict", reason: "operation_active" }), true;
@@ -165,6 +175,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     const rev = body.revisionId ? revisions.get(body.revisionId) : null;
     const next = rev ? { mode: "revision", presetId: rev.presetId, revisionId: rev.revisionId, bindingVersion: cur.bindingVersion + 1, state: "ready" } : { mode: "card_default", presetId: null, revisionId: null, bindingVersion: cur.bindingVersion + 1, state: "ready" };
     if (card) cardBinding = next; else conversationBinding = next;
+    if (rev) presets.get(rev.presetId).bindingCount += 1;
     return json(res, 200, { ...bindingBody(next), cacheEffect: "prefix_rebuild_once", effectiveFrom: "next_admitted_operation" }), true;
   }
   if (path === "/open/v1/conversation/response-settings" || path === "/open/v1/conversation/response-settings/save") {
