@@ -220,7 +220,7 @@ async function probeGeneration() {
   const id = provider.value;
   generationProbed = id;
   try {
-    const models = await (await generator()).models();
+    const models = await (await generator()).models(String(locale.value));
     if (provider.value === id) imageGen.value = { access: "ready", models };
   } catch (e) {
     if (provider.value !== id || !(e instanceof ApiError) || e.status !== 403) return;

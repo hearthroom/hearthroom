@@ -1625,6 +1625,8 @@
   "resource.gen.model": "模型",
   "resource.gen.modelPrice": "{name} · 每張 {n} 點",
   "resource.gen.modelFrom": "{name} · 每張 {n} 點起",
+  "resource.gen.modelLanePrice": "{name} · {lane} · 每張 {n} 點",
+  "resource.gen.modelLaneFrom": "{name} · {lane} · 每張 {n} 點起",
   "resource.gen.size": "尺寸",
   "resource.gen.count": "張數",
   "resource.gen.cost": "這次會用掉 {n} 點儲值的點數，生成好的圖片會放進「{folder}」。",

@@ -1625,6 +1625,8 @@
   "resource.gen.model": "Model",
   "resource.gen.modelPrice": "{name} · {n} credits per image",
   "resource.gen.modelFrom": "{name} · from {n} credits per image",
+  "resource.gen.modelLanePrice": "{name} · {lane} · {n} credits per image",
+  "resource.gen.modelLaneFrom": "{name} · {lane} · from {n} credits per image",
   "resource.gen.size": "Size",
   "resource.gen.count": "Images",
   "resource.gen.cost": "This uses {n} purchased credits, and the images go into “{folder}”.",

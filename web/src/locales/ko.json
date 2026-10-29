@@ -1625,6 +1625,8 @@
   "resource.gen.model": "모델",
   "resource.gen.modelPrice": "{name} · 장당 {n}포인트",
   "resource.gen.modelFrom": "{name} · 장당 {n}포인트부터",
+  "resource.gen.modelLanePrice": "{name} · {lane} · 장당 {n}포인트",
+  "resource.gen.modelLaneFrom": "{name} · {lane} · 장당 {n}포인트부터",
   "resource.gen.size": "크기",
   "resource.gen.count": "장수",
   "resource.gen.cost": "구매한 포인트를 {n}포인트 쓰고, 만든 이미지는 「{folder}」에 들어가요.",

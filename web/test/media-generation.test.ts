@@ -28,6 +28,16 @@ describe("generation models", () => {
     ]);
   });
 
+  it("asks for lane names in the page language and keeps them on same-name models", async () => {
+    const fetcher = stub(() => json({ data: [
+      { id: "gpt-image-2-dawn", name: "GPT Image 2", lane: "dawn", lane_name: "晨光", type: "image", pricing: { credits: { standard: 35 } }, capabilities: { sizes: ["1024x1024"], max_images: 2 } },
+      { id: "gpt-image-2", name: "GPT Image 2", type: "image", pricing: { credits: { standard: 52 } }, capabilities: { sizes: ["1024x1024"], max_images: 4 } },
+    ] }));
+    const models = await client().models("zh-Hant");
+    expect(new URL(fetcher.mock.calls[0]![0]).searchParams.get("language")).toBe("zh-Hant");
+    expect(models.map((m) => m.laneName)).toEqual(["晨光", undefined]);
+  });
+
   it("reports a sign-in without media.generate as 403 so the page can ask to sign in again", async () => {
     stub(() => harborError(403, "permission_error"));
     await expect(client().models()).rejects.toMatchObject({ status: 403, code: "permission_error" });

@@ -30,7 +30,8 @@ vi.mock("../src/lib/media-generation", () => ({
 const capabilities = { kinds: ["image"], formats: ["image/png"], maxFileBytes: 1e8, search: true, sorts: ["newest"], overwrite: true, relativePaths: true, moves: true };
 const folders = [{ folderId: "f-art", name: "card/art", imageCount: 0 }];
 const models = [
-  { id: "gpt-image-2-dawn", name: "GPT Image 2", credits: 35, priced: 1, sizes: ["1024x1024", "1536x1024"], maxImages: 2 },
+  { id: "gpt-image-2-dawn", name: "GPT Image 2", laneName: "Dawn", credits: 35, priced: 1, sizes: ["1024x1024", "1536x1024"], maxImages: 2 },
+  { id: "gpt-image-2-dew", name: "GPT Image 2", laneName: "Dew", credits: 61, priced: 1, sizes: ["1024x1024"], maxImages: 2 },
   { id: "gpt-image-2", name: "GPT Image 2", credits: 52, priced: 3, sizes: ["1024x1024"], maxImages: 4 },
 ];
 let saved: string[] = [];
@@ -123,7 +124,13 @@ it("generates with the cheapest model and puts the result into the open folder",
   const box = await open();
   const [modelSelect] = box.querySelectorAll("select");
   expect((modelSelect as HTMLSelectElement).value).toBe("gpt-image-2-dawn");
-  expect(box.textContent).toContain("GPT Image 2 · 35 credits per image");
+  // 三個都叫 GPT Image 2：有線路名的帶上線路名，選項才分得出來；模型清單照頁面語言要
+  expect(mocks.models).toHaveBeenCalledWith("en");
+  expect([...modelSelect!.querySelectorAll("option")].map((o) => o.textContent?.trim())).toEqual([
+    "GPT Image 2 · Dawn · 35 credits per image",
+    "GPT Image 2 · Dew · 61 credits per image",
+    "GPT Image 2 · from 52 credits per image",
+  ]);
   expect(box.textContent).toContain("“card/art”");
   await describe("  a lighthouse at dusk ");
   const [input, key] = mocks.create.mock.calls[0]!;

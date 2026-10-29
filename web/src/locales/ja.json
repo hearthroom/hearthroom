@@ -1625,6 +1625,8 @@
   "resource.gen.model": "モデル",
   "resource.gen.modelPrice": "{name} · 1 枚 {n} ポイント",
   "resource.gen.modelFrom": "{name} · 1 枚 {n} ポイントから",
+  "resource.gen.modelLanePrice": "{name} · {lane} · 1 枚 {n} ポイント",
+  "resource.gen.modelLaneFrom": "{name} · {lane} · 1 枚 {n} ポイントから",
   "resource.gen.size": "サイズ",
   "resource.gen.count": "枚数",
   "resource.gen.cost": "購入したポイントを {n} ポイント使い、できた画像は「{folder}」に入ります。",

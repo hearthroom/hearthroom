@@ -186,7 +186,7 @@ const action = computed(() =>
             <span>{{ $t("resource.gen.model") }}</span>
             <select v-model="modelId" class="input" :disabled="running || pending">
               <option v-for="m in models" :key="m.id" :value="m.id">
-                {{ $t(m.priced > 1 ? "resource.gen.modelFrom" : "resource.gen.modelPrice", { name: m.name, n: m.credits }) }}
+                {{ $t(m.laneName ? (m.priced > 1 ? "resource.gen.modelLaneFrom" : "resource.gen.modelLanePrice") : m.priced > 1 ? "resource.gen.modelFrom" : "resource.gen.modelPrice", { name: m.name, lane: m.laneName, n: m.credits }) }}
               </option>
             </select>
           </label>

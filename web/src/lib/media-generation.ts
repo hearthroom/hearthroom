@@ -9,6 +9,8 @@ import { apiBaseOf, type ProviderId } from "./provider";
 export interface GenerationModel {
   id: string;
   name: string;
+  /** 同一模型分線路上架時的線路名（已照 language 在地化）；同名的幾個模型靠它分得出來。 */
+  laneName?: string;
   /** 每張最低價；有幾檔價（依尺寸）時畫面寫「起」。 */
   credits: number;
   priced: number;
@@ -57,8 +59,9 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
     call(path, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
 
   return {
-    async models(): Promise<GenerationModel[]> {
-      const { body } = await call("/models");
+    /** language：頁面目前的語言（zh-Hant／zh-Hans／en／ja／ko），線路名照它回。 */
+    async models(language?: string): Promise<GenerationModel[]> {
+      const { body } = await call("/models" + (language ? `?${new URLSearchParams({ language })}` : ""));
       return (body.data ?? [])
         .filter((m: any) => m.type === "image" && m.capabilities?.sizes?.length)
         .map((m: any) => {
@@ -66,6 +69,7 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
           return {
             id: String(m.id),
             name: String(m.name || m.id),
+            ...(m.lane_name ? { laneName: String(m.lane_name) } : {}),
             credits: prices.length ? Math.min(...prices) : 0,
             priced: prices.length,
             sizes: m.capabilities.sizes.map(String),
