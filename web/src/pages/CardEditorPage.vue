@@ -97,6 +97,7 @@ import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookT
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog, confirmForm, confirmPublication } from "@/lib/confirm";
+import { wrapTab } from "@/lib/focus-trap";
 import { askRating, rate, usable } from "@/lib/rating";
 import RatingMark from "@/components/RatingMark.vue";
 import type { RatingAnswers } from "../../../shared/content-rating";
@@ -286,10 +287,73 @@ try {
 } catch { /* 隱私模式讀不到：用預設，功能照常 */ }
 /** 窄螢幕上右欄整條收起來，這兩塊改成鋪滿視窗的浮層，從底部動作列打開。 */
 const sheetOpen = ref(false);
-function openSheet(next: Panel) {
+const sheetRail = ref<HTMLElement | null>(null);
+let sheetOpener: HTMLElement | null = null;
+let sheetBackground: HTMLElement | null = null;
+let backgroundWasInert = false;
+const sheetDocuments = new Set<Document>();
+const SHEET_FOCUSABLE = 'button:not(:disabled), a[href], input:not([type="file"]):not(:disabled), textarea:not(:disabled), select:not(:disabled), iframe, [tabindex="0"]:not([data-sheet-guard])';
+function openSheet(next: Panel, event: MouseEvent) {
+  sheetOpener = event.currentTarget as HTMLElement;
   panel.value = next;
   sheetOpen.value = true;
 }
+function closeSheet() { sheetOpen.value = false; }
+function focusSheetEdge(last = false) {
+  const items = [...sheetRail.value?.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE) ?? []]
+    .filter(el => el.getClientRects().length && !el.closest('[hidden], [inert]'));
+  (last ? items.at(-1) : items[0])?.focus();
+}
+function sheetKey(event: KeyboardEvent) {
+  if (!sheetOpen.value || event.defaultPrevented) return;
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeSheet(); }
+  else wrapTab(event, sheetRail.value, SHEET_FOCUSABLE);
+}
+function sheetFrameKey(event: KeyboardEvent) {
+  // 同源試聊先處理自己的選單／彈層，再讓未消費的 Escape 關閉工具面板。
+  if (event.key === 'Escape') setTimeout(() => {
+    if (sheetOpen.value && !event.defaultPrevented) closeSheet();
+  }, 0);
+}
+function sheetFrameLoad(event: Event) {
+  if ((event.target as Element | null)?.tagName === 'IFRAME') connectSheetFrame(event.target as HTMLIFrameElement);
+}
+function connectSheetFrame(frame: HTMLIFrameElement) {
+  if (!sheetOpen.value) return;
+  try {
+    const doc = frame.contentDocument;
+    if (!doc || sheetDocuments.has(doc)) return;
+    sheetDocuments.add(doc);
+    doc.addEventListener('keydown', sheetFrameKey);
+    doc.addEventListener('load', sheetFrameLoad, true);
+    doc.querySelectorAll('iframe').forEach(connectSheetFrame);
+  } catch { /* 作者自己的跨來源沙箱不讀取其文件。 */ }
+}
+function releaseSheetBackground() {
+  for (const doc of sheetDocuments) {
+    doc.removeEventListener('keydown', sheetFrameKey);
+    doc.removeEventListener('load', sheetFrameLoad, true);
+  }
+  sheetDocuments.clear();
+  if (sheetBackground) sheetBackground.inert = backgroundWasInert;
+  sheetBackground = null;
+}
+watch(sheetOpen, async open => {
+  if (!open) {
+    releaseSheetBackground();
+    if (sheetOpener?.isConnected) sheetOpener.focus();
+    return;
+  }
+  // 面板 Teleport 到 body 後才隔離 #app，避免把面板本身一起設成 inert。
+  sheetBackground = document.getElementById('app');
+  backgroundWasInert = sheetBackground?.inert === true;
+  if (sheetBackground) sheetBackground.inert = true;
+  await nextTick();
+  if (!sheetOpen.value) return;
+  sheetRail.value?.querySelector<HTMLElement>('[data-sheet-close]')?.focus();
+  sheetRail.value?.querySelectorAll('iframe').forEach(connectSheetFrame);
+}, { flush: 'post' });
+function fitSheetToViewport() { if (window.innerWidth > 1100 && sheetOpen.value) closeSheet(); }
 function openPanel(next: Panel) {
   if (panelOpen.value && panel.value === next) return;
   panel.value = next;
@@ -605,6 +669,7 @@ const guard = (e: BeforeUnloadEvent) => {
 };
 /* Ctrl/⌘+S 存檔：寫長文的人手已經在鍵盤上，不該為了存一次去找按鈕。攔下瀏覽器的「另存網頁」。 */
 const onKey = (e: KeyboardEvent) => {
+  if (sheetOpen.value) return;
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "s") {
     e.preventDefault();
     void save();
@@ -613,10 +678,13 @@ const onKey = (e: KeyboardEvent) => {
 onMounted(() => {
   window.addEventListener("beforeunload", guard);
   window.addEventListener("keydown", onKey);
+  window.addEventListener('resize', fitSheetToViewport);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", guard);
   window.removeEventListener("keydown", onKey);
+  window.removeEventListener('resize', fitSheetToViewport);
+  releaseSheetBackground();
   if (spyFrame) cancelAnimationFrame(spyFrame);
   clearTimeout(toastTimer);
   clearTimeout(draftTimer);
@@ -1430,8 +1498,8 @@ async function exportCard(format: "png" | "json") {
           <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
             {{ workVisibility?.syncState!=='complete'?$t('visibility.title'):workVisibility?.review==='pending'?$t('mine.badge.pending'):workVisibility?$t(`visibility.short.${workVisibility.access}`):$t('visibility.title') }}
           </button>
-          <button v-if="can('chatTest')" type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
-          <button v-if="can('library')" type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
+          <button v-if="can('chatTest')" type="button" class="btn bar__panel" @click="openSheet('test', $event)">{{ $t("editor.test.title") }}</button>
+          <button v-if="can('library')" type="button" class="btn bar__panel" @click="openSheet('res', $event)">{{ $t("editor.panel.resources") }}</button>
           <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
             {{ $t("edit.back") }}
@@ -1452,7 +1520,11 @@ async function exportCard(format: "png" | "json") {
       </form>
 
       <!-- 右：預覽與動作 -->
-      <aside v-if="can('chatTest') || can('library')" class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
+      <Teleport to="body" :disabled="!sheetOpen">
+      <aside v-if="can('chatTest') || can('library')" ref="sheetRail" class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }"
+             :role="sheetOpen ? 'dialog' : undefined" :aria-modal="sheetOpen ? true : undefined" :aria-label="sheetOpen ? $t(panel === 'test' ? 'editor.test.title' : 'editor.panel.resources') : undefined"
+             :tabindex="sheetOpen ? -1 : undefined" @keydown="sheetKey" @load.capture="sheetFrameLoad">
+        <span v-if="sheetOpen" class="sr-only" tabindex="0" data-sheet-guard @focus="focusSheetEdge(true)" />
         <!-- 拖曳把手：寬螢幕上右欄的寬度由作者自己拉，看卡在不同寬度下長什麼樣（站台管理者 2026-09-14） -->
         <div v-if="panelOpen && !sheetOpen" class="rail__grip" role="separator" aria-orientation="vertical"
              :aria-label="$t('editor.panel.resize')" :title="$t('editor.panel.resize')" @pointerdown="onGripDown" @dblclick="railWidth = null" />
@@ -1490,7 +1562,7 @@ async function exportCard(format: "png" | "json") {
               </svg>
             </a>
           </template>
-          <button v-if="sheetOpen" type="button" class="btn btn--sm btn--ghost" @click="sheetOpen = false">
+          <button v-if="sheetOpen" type="button" class="btn btn--sm btn--ghost" data-sheet-close @click="closeSheet">
             {{ $t("dialog.close") }}
           </button>
           <button v-else type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="panelOpen"
@@ -1509,7 +1581,9 @@ async function exportCard(format: "png" | "json") {
           <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :card-number="cardNumber" :provider="editorProvider" :dirty="dirty" :saving="saving" @save="save" />
           <ResourcePanel v-else />
         </div>
+        <span v-if="sheetOpen" class="sr-only" tabindex="0" data-sheet-guard @focus="focusSheetEdge()" />
       </aside>
+      </Teleport>
     </template>
 
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
@@ -1723,7 +1797,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .rail--sheet {
     display: grid; position: fixed; inset: 0; z-index: 100;
     height: auto; grid-template-rows: auto minmax(0, 1fr);
-    padding: var(--s-3); gap: var(--s-3);
+    padding: calc(var(--s-3) + env(safe-area-inset-top, 0px)) calc(var(--s-3) + env(safe-area-inset-right, 0px)) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) calc(var(--s-3) + env(safe-area-inset-left, 0px)); gap: var(--s-3);
     background: var(--bg);
   }
   .body { padding-bottom: 0; }

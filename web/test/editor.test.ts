@@ -222,6 +222,64 @@ describe('bounded author workspace scrolling', () => {
   });
 });
 
+describe('mobile editor tool dialog', () => {
+  it('isolates the background and returns focus after Escape without changing the form', async () => {
+    await mount('/create');
+    root.id = 'app';
+    const input = root.querySelector<HTMLInputElement>('#f-name')!;
+    input.value = 'Retained while using tools';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const opener = root.querySelector<HTMLButtonElement>('.bar__panel')!;
+    opener.focus(); opener.click(); await flush();
+    const sheet = document.querySelector<HTMLElement>('.rail--sheet')!;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
+    expect(sheet.getAttribute('aria-label')).toBe(i18n.global.t('editor.test.title'));
+    expect(sheet.closest('#app')).toBeNull();
+    expect(root.inert).toBe(true);
+    expect(sheet.contains(document.activeElement)).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
+    await flush();
+    expect(api.createRole).not.toHaveBeenCalled();
+    document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await flush();
+    expect(document.querySelector('.rail--sheet')).toBeNull();
+    expect(root.inert).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(input.value).toBe('Retained while using tools');
+  });
+
+  it('lets the chat iframe consume Escape before closing the outer sheet', async () => {
+    await mount('/cards/r1/edit'); root.id = 'app';
+    const opener = root.querySelector<HTMLButtonElement>('.bar__panel')!;
+    opener.focus(); opener.click(); await flush();
+    const frame = document.querySelector<HTMLIFrameElement>('.rail--sheet iframe')!;
+    const doc = frame.contentDocument!;
+    doc.body.innerHTML = '<button>Inner tool</button>';
+    doc.addEventListener('keydown', event => event.preventDefault(), { once: true });
+    doc.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await flush();
+    expect(document.querySelector('.rail--sheet')).not.toBeNull();
+    doc.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await flush();
+    expect(document.querySelector('.rail--sheet')).toBeNull();
+    expect(root.inert).toBe(false);
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('restores focus on Close and removes background isolation on unmount', async () => {
+    await mount('/create'); root.id = 'app';
+    const opener = root.querySelectorAll<HTMLButtonElement>('.bar__panel')[1];
+    opener.focus(); opener.click(); await flush();
+    document.querySelector<HTMLButtonElement>('[data-sheet-close]')!.click(); await flush();
+    expect(root.inert).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    opener.click(); await flush(); expect(root.inert).toBe(true);
+    app!.unmount(); app = null;
+    expect(root.inert).toBe(false);
+  });
+});
+
 describe("正則匯入的聊天頁模式", () => {
   const oldMmd = { beginning: "<identity>", statusbar: "<theme>", regex_scripts: [{ scriptName: "theme", findRegex: "<theme>", replaceString: "<style>body{color:red}</style>", placement: [2] }] };
 
