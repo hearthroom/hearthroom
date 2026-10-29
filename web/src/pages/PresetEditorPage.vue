@@ -419,7 +419,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->
       <details v-if="!isPromptPack(doc.st)" class="panel preset-editor__section" open>
         <summary>{{ $t("preset.params.title") }}</summary>
-        <fieldset class="preset-editor__fieldset" :disabled="readOnly"><PresetParams :doc="doc" :fields="compat?.fields ?? []" /></fieldset>
+        <fieldset class="preset-editor__fieldset" :disabled="readOnly"><PresetParams :doc="doc" :fields="compat?.fields ?? []" :native="!imported" /></fieldset>
       </details>
 
       <details v-if="detail?.revisions?.length" class="panel preset-editor__section" data-testid="preset-versions">

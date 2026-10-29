@@ -64,6 +64,28 @@ export function analyze(doc) {
   return { compilerVersion: "mock-p1", entries, fields, reviewRequired: entries.some((e) => e.uiStatus) };
 }
 
+/**
+ * 跟 Harbor 的 ValidateNative 一樣嚴：本站寫的預設只收這幾個欄位，多一個就 422。
+ * 本機先擋，免得畫面在假上游存得進去、正式站卻存不進去（2026-10-29 正式站 422 的教訓）。
+ */
+export function validateNative(doc) {
+  const st = doc.st ?? {};
+  if (st.data && st.type) return "preset_native_pack_invalid";
+  for (const k of Object.keys(st)) if (!["prompts", "prompt_order", "temperature", "top_p"].includes(k)) return "preset_native_field_unsupported";
+  for (const p of st.prompts ?? []) {
+    for (const k of Object.keys(p)) if (!["identifier", "name", "role", "content", "marker", "injection_position"].includes(k)) return "preset_native_field_unsupported";
+    const framework = MARKERS.has(p.identifier);
+    if (!!p.marker !== framework || (p.injection_position ?? 0) !== 0) return "preset_native_entry_unsupported";
+    if (framework ? (p.content || (p.role && p.role !== "system")) : p.role !== "system") return "preset_native_entry_unsupported";
+    if (!framework && MACROS.test(p.content ?? "")) return "preset_native_entry_unsupported";
+  }
+  for (const prof of st.prompt_order ?? []) {
+    for (const k of Object.keys(prof)) if (k !== "character_id" && k !== "order") return "preset_native_field_unsupported";
+    for (const e of prof.order ?? []) for (const k of Object.keys(e)) if (k !== "identifier" && k !== "enabled") return "preset_native_field_unsupported";
+  }
+  return "";
+}
+
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
   return { ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
@@ -120,7 +142,11 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota() }), true;
   }
   if (m === "POST" && path === "/open/v1/presets/analyze") return json(res, 200, { compatibility: analyze(body.document) }), true;
-  if (m === "POST" && path === "/open/v1/presets") return json(res, 201, idempotent(req, null, () => create(body.title, body.document, body.recommendedModels))), true;
+  if (m === "POST" && path === "/open/v1/presets") {
+    const bad = validateNative(body.document);
+    if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
+    return json(res, 201, idempotent(req, null, () => create(body.title, body.document, body.recommendedModels))), true;
+  }
   if (m === "GET" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)$/))) {
     const p = presets.get(mm[1]); if (!p) return json(res, 404, { error: "not_found" }), true;
     const revs = [...revisions.values()].filter((r) => r.presetId === p.id).sort((a, b) => b.version - a.version)
@@ -139,6 +165,8 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     if (scenario === "conflict" && mm[2] === "revisions") { scenario = ""; p.version++; return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true; }
     if (body.expectedVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     if (mm[2] === "revisions") {
+      const bad = p.sourceKind === "native" ? validateNative(body.document) : "";
+      if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
       if (analyze(body.document).entries.some((e) => e.enabled && e.uiStatus === "unsupported")) return json(res, 422, { error: "preset_invalid", reason: "preset_adjustment_required" }), true;
       return json(res, 201, idempotent(req, null, () => addRevision(p, body.title, body.document, body.recommendedModels))), true;
     }

@@ -219,3 +219,25 @@ describe("ST 預設文件操作", () => {
     expect(canDeleteEntry(doc, "spare")).toBe(true);
   });
 });
+
+// 在本站寫的預設（native）上游只收這些欄位（Harbor ValidateNative）：建立時多一個鍵整份就被拒（2026-10-29 正式站 422）
+describe("本站寫的預設只用上游收的欄位", () => {
+  const ROOT = new Set(["prompts", "prompt_order", "temperature", "top_p"]);
+  const PROMPT = new Set(["identifier", "name", "role", "content", "marker", "injection_position"]);
+  const allowed = (doc: PresetDocument) => {
+    const bad: string[] = [];
+    for (const k of Object.keys(doc.st)) if (!ROOT.has(k)) bad.push(`root.${k}`);
+    for (const p of doc.st.prompts as Record<string, unknown>[]) for (const k of Object.keys(p)) if (!PROMPT.has(k)) bad.push(`${p.identifier}.${k}`);
+    for (const prof of doc.st.prompt_order as Record<string, unknown>[]) for (const k of Object.keys(prof)) if (k !== "character_id" && k !== "order") bad.push(`order.${k}`);
+    return bad;
+  };
+  it("新建的預設與新增、複製後的條目都只有允許的欄位", () => {
+    const doc = newDocument("主要指示");
+    expect(allowed(doc)).toEqual([]);
+    const id = addEntry(doc, { name: "新條目", slot: "S" });
+    duplicateEntry(doc, id, "副本");
+    duplicateEntry(doc, "main", "主要指示 副本");
+    setParamValue(doc, "temperature", 0.8);
+    expect(allowed(doc)).toEqual([]);
+  });
+});

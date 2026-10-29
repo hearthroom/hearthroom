@@ -51,6 +51,8 @@ export const ADVANCED_PARAMS = [
   "seed", "openai_max_tokens", "reasoning_effort", "verbosity",
 ] as const;
 export type ParamKey = (typeof BASIC_PARAMS)[number] | (typeof ADVANCED_PARAMS)[number];
+/** 本站寫的預設上游只收 Temperature 與 Top P；其餘採樣參數只在匯入的酒館預設裡保留與調整 */
+export const NATIVE_PARAMS: readonly ParamKey[] = BASIC_PARAMS;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -274,6 +276,10 @@ export function setAdaptation(doc: PresetDocument, id: string, accepted: boolean
 /**
  * 新建的原生預設：一條空白的主要指示，加上 ST 預設排序裡的框架佔位（名字照 ST 原文，
  * 匯出回 ST 時看起來跟 ST 自己的一樣；畫面上的名字另外翻譯）。
+ *
+ * 只用 Harbor 對本站預設收的欄位（條目 identifier／name／role／content／marker／injection_position、
+ * 最外層 prompts／prompt_order／temperature／top_p）：ST 自己的 system_prompt 這類欄位帶上去整份會被拒
+ * （2026-10-29 正式站新建 422）。
  */
 export function newDocument(mainName: string): PresetDocument {
   const markers: [string, string][] = [
@@ -282,8 +288,8 @@ export function newDocument(mainName: string): PresetDocument {
     ["worldInfoAfter", "World Info (after)"], ["dialogueExamples", "Chat Examples"], ["chatHistory", "Chat History"],
   ];
   const prompts: StPrompt[] = [
-    { identifier: "main", name: mainName, role: "system", content: "", system_prompt: true, injection_position: 0 },
-    ...markers.map(([identifier, name]) => ({ identifier, name, marker: true, system_prompt: true })),
+    { identifier: "main", name: mainName, role: "system", content: "", injection_position: 0 },
+    ...markers.map(([identifier, name]) => ({ identifier, name, marker: true })),
   ];
   return {
     schemaVersion: SCHEMA_VERSION,

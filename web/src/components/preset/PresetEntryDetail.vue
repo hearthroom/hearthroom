@@ -18,6 +18,8 @@ import type { CompatibilityEntry } from "@/lib/presets";
 import { settingLabel } from "./preset-params";
 
 const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean; readOnly?: boolean }>();
+/** 本站寫的預設條目一律是系統指示（上游不收玩家／AI 身分）；匯入的照來源，可以改 */
+const native = computed(() => !props.keepSource);
 const emit = defineEmits<{ select: [id: string]; back: []; status: [text: string]; inspect: [] }>();
 const { t, te } = useI18n();
 
@@ -125,7 +127,7 @@ async function reset() {
           <option v-if="row.slot === 'D'" value="D" disabled>{{ $t("preset.entry.position.middle") }}</option>
         </select>
       </div>
-      <div class="field">
+      <div v-if="!native || prompt.role !== 'system'" class="field">
         <label :for="`role-${row.identifier}`">{{ $t("preset.entry.role") }}</label>
         <select :id="`role-${row.identifier}`" v-model="prompt.role" class="input">
           <option v-for="r in ROLES" :key="r" :value="r">{{ $t(`preset.entry.role.${r}`) }}</option>

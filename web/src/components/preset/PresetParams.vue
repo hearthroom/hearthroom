@@ -8,7 +8,7 @@ import { ADVANCED_PARAMS, BASIC_PARAMS, paramState, type PresetDocument } from "
 import type { CompatibilityField } from "@/lib/presets";
 import PresetParamField from "./PresetParamField.vue";
 
-const props = defineProps<{ doc: PresetDocument; fields: CompatibilityField[] }>();
+const props = defineProps<{ doc: PresetDocument; fields: CompatibilityField[]; native?: boolean }>();
 const field = (key: string) => props.fields.find((f) => f.path === key);
 const advancedSet = computed(() => ADVANCED_PARAMS.filter((k) => paramState(props.doc, k).adopted).length);
 </script>
@@ -19,7 +19,8 @@ const advancedSet = computed(() => ADVANCED_PARAMS.filter((k) => paramState(prop
     <div class="params__grid">
       <PresetParamField v-for="key in BASIC_PARAMS" :key="key" :doc="doc" :param="key" :field="field(key)" />
     </div>
-    <details class="params__more" :open="advancedSet > 0">
+    <!-- 本站寫的預設只有 Temperature 與 Top P（上游只收這兩項） -->
+    <details v-if="!native" class="params__more" :open="advancedSet > 0">
       <summary>{{ $t("preset.params.advanced") }}</summary>
       <div class="params__grid">
         <PresetParamField v-for="key in ADVANCED_PARAMS" :key="key" :doc="doc" :param="key" :field="field(key)" />
