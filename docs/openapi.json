@@ -31401,7 +31401,7 @@
           },
           "externalToolBindingsDetected": {
             "type": "boolean",
-            "description": "The source preset replied through a SillyTavern extension's tool. Show a hint; this never turns `enabled` on."
+            "description": "The source contains enabled tool bindings from a SillyTavern extension. It does not show the tool was called or used to reply. Show a hint only; this never turns `enabled` on."
           }
         }
       }
