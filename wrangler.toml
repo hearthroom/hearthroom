@@ -114,6 +114,9 @@ PRESET_SCOPES_ENABLED = "true"
 CARD_STATE_ENABLED = "true"
 # Keep off until Harbor prompt=none is deployed and independently verified.
 AUTH_SILENT_ENABLED = "false"
+# 資源頁「生成圖片」要的 media.generate 授權。Harbor 的固定客戶端（HARBOR_CLIENT_ID）登記這項之前打開，
+# 每一次登入都會被回 invalid_scope；客戶端登記好、生圖端點上線並讀回確認後才改成 "true"。
+AUTH_MEDIA_GENERATE_ENABLED = "false"
 # Preserve AUTH_ALLOWED_ORIGINS and add only the new domain's three app origins.
 AUTH_ADDITIONAL_ORIGINS = "https://sukisuki.pro,https://www.sukisuki.pro,https://play.sukisuki.pro"
 # HarperHarbor is the sole account, hosting and play service.

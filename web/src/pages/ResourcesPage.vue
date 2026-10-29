@@ -30,6 +30,8 @@ import { useLocalePath } from "@/lib/use-locale";
 import ResourcePreview from "@/components/ResourcePreview.vue";
 import ResourceSelect from "@/components/ResourceSelect.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
+import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
+import { generationClient, type GenerationModel, type SaveTarget } from "@/lib/media-generation";
 const { lp } = useLocalePath();
 const session = useSession(),
   route = useRoute(),
@@ -174,7 +176,7 @@ function query(targetPage = page.value) {
         : undefined,
   };
 }
-async function client(id = provider.value) {
+async function credentials(id: ProviderId | "") {
   if (!id) throw new Error(t("resource.choose"));
   const identity = session.profile?.identities.find((i) => i.provider === id);
   if (!identity) throw new Error(t("auth.expired"));
@@ -189,7 +191,72 @@ async function client(id = provider.value) {
     return value;
   };
   await token();
-  return resourceClient(id, token);
+  return { id, token };
+}
+async function client(id = provider.value) {
+  const c = await credentials(id);
+  return resourceClient(c.id, c.token);
+}
+// 生成圖片：Harbor 有這組端點才出現入口（還沒上線時 404，就不顯示）；這次登入沒有 media.generate 時是 403，
+// 入口照樣出現，打開後請他重新登入授權。剛授權回來還是 403，就不再帶去登入，免得在登入頁之間繞圈。
+const imageGen = ref<{ access: "ready" | "reauth" | "unavailable"; models: GenerationModel[] } | null>(null);
+const generateOpen = ref(false),
+  generateMounted = ref(false),
+  generateRunning = ref(false);
+let generationProbed = "";
+const REAUTH_KEY = "hearthroom.resources.generateReauthAt";
+const recentlyReauthorized = () => {
+  try {
+    return Date.now() - Number(sessionStorage.getItem(REAUTH_KEY) || 0) < 120_000;
+  } catch {
+    return false;
+  }
+};
+async function generator() {
+  const c = await credentials(provider.value);
+  return generationClient(c.id, c.token);
+}
+async function probeGeneration() {
+  const id = provider.value;
+  generationProbed = id;
+  try {
+    const models = await (await generator()).models(String(locale.value));
+    if (provider.value === id) imageGen.value = { access: "ready", models };
+  } catch (e) {
+    if (provider.value !== id || !(e instanceof ApiError) || e.status !== 403) return;
+    imageGen.value = { access: recentlyReauthorized() ? "unavailable" : "reauth", models: [] };
+  }
+}
+function reauthorizeGeneration() {
+  try {
+    sessionStorage.setItem(REAUTH_KEY, String(Date.now()));
+  } catch {}
+  void reconnect();
+}
+// 存到正在看的地方：真的資料夾給 id，只以路徑存在的夾給路徑，根目錄什麼都不給。
+const generateTarget = computed<SaveTarget>(() =>
+  activeFolder.value
+    ? { folderIds: [activeFolder.value.folderId] }
+    : currentPath.value
+      ? { directory: currentPath.value }
+      : {},
+);
+const generateFolder = computed(() => activeFolder.value?.name || currentPath.value || t("resource.root"));
+function openGenerate() {
+  generateMounted.value = true;
+  generateOpen.value = true;
+}
+function closeGenerate() {
+  generateOpen.value = false;
+  if (!generateRunning.value) generateMounted.value = false;
+}
+async function generated(n: number, folder: string) {
+  generateOpen.value = false;
+  generateMounted.value = false;
+  generateRunning.value = false;
+  notice.value = t("resource.gen.saved", { n, folder });
+  // 新圖片排在最新的前面：照最新排序時回第一頁，才看得到它。
+  await load(sort.value === "newest" ? 1 : page.value, true);
 }
 async function remember() {
   const q = {
@@ -236,6 +303,7 @@ async function load(targetPage = page.value, withFolders = false) {
       folderError.value = groups.error;
     }
     await remember();
+    if (generationProbed !== provider.value) void probeGeneration();
     return true;
   } catch (e) {
     if (ticket === generation) {
@@ -720,6 +788,15 @@ async function previewMove(direction: number) {
         >
           {{ $t("res.folder.new") }}
         </button>
+        <button
+          v-if="imageGen"
+          class="btn gen-btn"
+          :disabled="!result || busy || expired || quotaFull"
+          :aria-label="$t('resource.gen.open')"
+          @click="openGenerate"
+        >
+          <AccountIcon name="spark" /><span class="gen-label">{{ $t("resource.gen.open") }}</span>
+        </button>
         <details v-if="cap?.relativePaths" ref="uploadMenu" class="menu">
           <summary
             class="btn btn--primary"
@@ -772,6 +849,10 @@ async function previewMove(direction: number) {
         </button>
       </p>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <p v-if="generateRunning && !generateOpen" class="notice" role="status">
+        {{ $t("resource.gen.inBackground") }}
+        <button class="btn btn--sm" @click="generateOpen = true">{{ $t("resource.gen.show") }}</button>
+      </p>
       <input
         v-if="copyFallback"
         readonly
@@ -1171,6 +1252,19 @@ async function previewMove(direction: number) {
             </div>
           </div>
         </section></template>
+    <GenerateImageDialog
+      v-if="generateMounted && imageGen"
+      :open="generateOpen"
+      :access="imageGen.access"
+      :models="imageGen.models"
+      :client="generator"
+      :target="generateTarget"
+      :folder="generateFolder"
+      @close="closeGenerate"
+      @reauth="reauthorizeGeneration"
+      @running="generateRunning = $event"
+      @saved="generated"
+    />
     <ResourcePreview
       v-if="preview"
       :item="preview"
@@ -1658,6 +1752,8 @@ async function previewMove(direction: number) {
   .resource-actions {
     flex: none;
     flex-wrap: nowrap;
+    /* 多了「生成圖片」一顆：鈕間距收窄，標題才放得下 */
+    gap: var(--s-1);
   }
   .resource-actions .btn {
     height: 40px;
@@ -1667,8 +1763,13 @@ async function previewMove(direction: number) {
     width: 40px;
     padding: 0;
   }
-  .refresh-label {
+  .refresh-label,
+  .gen-label {
     display: none;
+  }
+  .gen-btn {
+    width: 40px;
+    padding: 0;
   }
   .resource-toolbar .seg__item,
   .resource-toolbar .btn,

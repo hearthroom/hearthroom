@@ -4,7 +4,7 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
   QA_BROWSER_CONTEXT_KEY?: string;
  QA_ACCOUNT_CONTROL_KEY?: string;
   HARBOR_TEST_ACCOUNTS_ENABLED?: string;
@@ -16,6 +16,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   AUTH_ENABLED?: string;
   /** Enable only after Harbor prompt=none has deployed and passed live readback. */
   AUTH_SILENT_ENABLED?: string;
+  /** Request media.generate only after Harbor's fixed client allows it (otherwise every sign-in fails). */
+  AUTH_MEDIA_GENERATE_ENABLED?: string;
   AUTH_ROUTE_LIMIT?: RateLimit;
   AUTH_ALLOWED_ORIGINS?: string;
   /** Add explicit serving origins without replacing the existing encrypted allowlist. */
