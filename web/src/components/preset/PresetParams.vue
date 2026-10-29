@@ -17,7 +17,7 @@ const advancedSet = computed(() => ADVANCED_PARAMS.filter((k) => paramState(prop
   <div class="params">
     <p class="subtle">{{ $t("preset.params.lede") }}</p>
     <div class="params__grid">
-      <PresetParamField v-for="key in BASIC_PARAMS" :key="key" :doc="doc" :param="key" :field="field(key)" />
+      <PresetParamField v-for="key in BASIC_PARAMS" :key="key" :doc="doc" :param="key" :field="field(key)" :native="native" />
     </div>
     <!-- 本站寫的預設只有 Temperature 與 Top P（上游只收這兩項） -->
     <details v-if="!native" class="params__more" :open="advancedSet > 0">

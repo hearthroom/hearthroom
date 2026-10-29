@@ -68,16 +68,30 @@ export function analyze(doc) {
  * 跟 Harbor 的 ValidateNative 一樣嚴：本站寫的預設只收這幾個欄位，多一個就 422。
  * 本機先擋，免得畫面在假上游存得進去、正式站卻存不進去（2026-10-29 正式站 422 的教訓）。
  */
+/** 跟 server 的 executableMacros 一樣：只認 {{char}}、{{user}}、{{lastUserMessage}}，字一模一樣、括號成對 */
+export function nativeMacrosValid(text) {
+  let s = text;
+  for (;;) {
+    const i = s.indexOf("{{");
+    if (i < 0) return !s.includes("}}");
+    if (s.slice(0, i).includes("}}")) return false;
+    const j = s.indexOf("}}", i + 2);
+    if (j < 0 || !["char", "user", "lastUserMessage"].includes(s.slice(i + 2, j))) return false;
+    s = s.slice(j + 2);
+  }
+}
+
 export function validateNative(doc) {
   const st = doc.st ?? {};
-  if (st.data && st.type) return "preset_native_pack_invalid";
+  if ("data" in st) return "preset_native_pack_invalid";
   for (const k of Object.keys(st)) if (!["prompts", "prompt_order", "temperature", "top_p"].includes(k)) return "preset_native_field_unsupported";
+  for (const [k, max] of [["temperature", 2], ["top_p", 1]]) if (k in st && (typeof st[k] !== "number" || st[k] < 0 || st[k] > max)) return "preset_native_field_unsupported";
   for (const p of st.prompts ?? []) {
     for (const k of Object.keys(p)) if (!["identifier", "name", "role", "content", "marker", "injection_position"].includes(k)) return "preset_native_field_unsupported";
     const framework = MARKERS.has(p.identifier);
     if (!!p.marker !== framework || (p.injection_position ?? 0) !== 0) return "preset_native_entry_unsupported";
     if (framework ? (p.content || (p.role && p.role !== "system")) : p.role !== "system") return "preset_native_entry_unsupported";
-    if (!framework && MACROS.test(p.content ?? "")) return "preset_native_entry_unsupported";
+    if (!framework && !nativeMacrosValid(p.content ?? "")) return "preset_native_entry_unsupported";
   }
   for (const prof of st.prompt_order ?? []) {
     for (const k of Object.keys(prof)) if (k !== "character_id" && k !== "order") return "preset_native_field_unsupported";

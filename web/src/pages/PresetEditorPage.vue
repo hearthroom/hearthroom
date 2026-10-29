@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, adaptationId, isPromptPack, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
+  FRAMEWORK_IDS, adaptationId, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -31,7 +31,7 @@ import PresetParams from "@/components/preset/PresetParams.vue";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
 import PresetInspectDialog from "@/components/preset/PresetInspectDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
-import { anyParamInvalid } from "@/components/preset/preset-params";
+import { anyParamInvalid, paramLabelKey } from "@/components/preset/preset-params";
 
 const { t } = useI18n();
 const { lp } = useLocalePath();
@@ -109,7 +109,19 @@ const blocked = computed(() => custom.value.filter((r) => {
 const blockedText = computed(() => t("preset.editor.saveBlocked", {
   n: whole(blocked.value.length), names: blocked.value.map((r) => r.prompt.name || t("preset.entry.untitled")).join(t("preset.setting.separator")),
 }, blocked.value.length));
-const canSave = computed(() => !readOnly.value && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
+/**
+ * 本站寫的預設：上游每一條都查（關著、移出排序的也算），所以「停用後再存」對它沒用，
+ * 只能改掉或刪掉。這裡照上游的規則先找出來，存檔鈕不開，免得送出去才 422。
+ */
+const nativeBlocked = computed(() => {
+  if (imported.value || !doc.value) return [];
+  const prompts = (doc.value.st.prompts ?? []) as { identifier: string; name?: string }[];
+  return nativeProblems(doc.value).map((id) => {
+    if (id === "temperature" || id === "top_p") return t(paramLabelKey(id));
+    return prompts.find((p) => p.identifier === id)?.name || t("preset.entry.untitled");
+  });
+});
+const canSave = computed(() => !readOnly.value && !nativeBlocked.value.length && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
 
 function adopt(next: PresetDocument, nextTitle: string, nextModels: string[], version: number, clean = true) {
   doc.value = next;
@@ -437,6 +449,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       <footer class="preset-editor__foot">
         <div class="preset-editor__state" role="status">
           <template v-if="unconfirmed"><strong>{{ $t("preset.editor.saveUnconfirmed") }}</strong> <span class="subtle">{{ $t("preset.editor.saveUnconfirmed.hint") }}</span></template>
+          <template v-else-if="dirty && nativeBlocked.length"><span data-testid="preset-native-blocked">{{ $t("preset.error.native") }} {{ nativeBlocked.join($t("preset.setting.separator")) }}</span></template>
           <template v-else-if="dirty && blocked.length"><span data-testid="preset-blocked">{{ blockedText }}</span></template>
           <template v-else-if="dirty">{{ $t("preset.editor.dirty") }}</template>
           <template v-else-if="savedVersion"><strong>{{ $t("preset.editor.saved", { n: savedVersion }) }}</strong> <span class="subtle">{{ $t("preset.editor.saved.hint") }}</span></template>

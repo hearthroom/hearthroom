@@ -297,3 +297,47 @@ export function newDocument(mainName: string): PresetDocument {
     selection: { profileId: 100001, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: [] },
   };
 }
+
+/**
+ * Harbor 對本站寫的預設可執行的巨集只有 {{char}}、{{user}}、{{lastUserMessage}}，字一模一樣、括號成對
+ * （對照 server 的 executableMacros）。其他寫法 analyze 會標「不支援」，存檔整份被拒。
+ */
+export function nativeMacrosValid(text: string): boolean {
+  let s = text;
+  for (;;) {
+    const i = s.indexOf("{{");
+    if (i < 0) return !s.includes("}}");
+    if (s.slice(0, i).includes("}}")) return false;
+    const j = s.indexOf("}}", i + 2);
+    if (j < 0) return false;
+    if (!["char", "user", "lastUserMessage"].includes(s.slice(i + 2, j))) return false;
+    s = s.slice(j + 2);
+  }
+}
+
+const NATIVE_RANGE: Record<string, number> = { temperature: 2, top_p: 1 };
+
+/**
+ * 本站寫的預設存檔前會被上游擋下的地方：所有自訂條目（開著、關著、移出排序的都算——上游每條都查）
+ * 身分不是系統、不在相對位置或巨集不合；以及最外層的 temperature／top_p 不在範圍內（不管有沒有採用）。
+ * 回傳條目的 identifier 或參數鍵。
+ */
+export function nativeProblems(doc: PresetDocument): string[] {
+  const out: string[] = [];
+  for (const p of promptsOf(doc.st)) {
+    if (isFramework(p.identifier)) continue;
+    if (p.role !== "system" || (p.injection_position ?? 0) !== 0 || !nativeMacrosValid(p.content ?? "")) out.push(p.identifier);
+  }
+  for (const [key, max] of Object.entries(NATIVE_RANGE)) {
+    if (!(key in doc.st)) continue;
+    const v = doc.st[key];
+    if (typeof v !== "number" || v < 0 || v > max) out.push(key);
+  }
+  return out;
+}
+
+/** 本站寫的預設改回沿用模型設定：沒有來源檔要保留，值直接拿掉（留著的值上游一樣會查）。 */
+export function clearParam(doc: PresetDocument, key: ParamKey): void {
+  delete doc.st[key];
+  doc.selection.excludedFields = doc.selection.excludedFields.filter((f) => f !== key);
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  adaptationId, addEntry, canDeleteEntry, deleteEntry, moveToSide, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
+  adaptationId, addEntry, canDeleteEntry, clearParam, deleteEntry, moveToSide, nativeMacrosValid, nativeProblems, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
   isPromptPack, moveEntry, newDocument, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
@@ -239,5 +239,33 @@ describe("本站寫的預設只用上游收的欄位", () => {
     duplicateEntry(doc, "main", "主要指示 副本");
     setParamValue(doc, "temperature", 0.8);
     expect(allowed(doc)).toEqual([]);
+  });
+});
+
+describe("本站寫的預設：存檔前照上游規則找出存不進去的地方", () => {
+  it("巨集只認 char、user、lastUserMessage，括號要成對", () => {
+    for (const ok of ["純文字", "{{char}} 對 {{user}} 說", "回應 {{lastUserMessage}}"]) expect(nativeMacrosValid(ok)).toBe(true);
+    for (const bad of ["{{random}}", "{{trim}}", "{{ char }}", "多了 }}", "少了 {{char", "{{// 註解}}"]) expect(nativeMacrosValid(bad)).toBe(false);
+  });
+  it("停用或移出排序的條目一樣要過；參數就算改回沿用模型，留著的值也要在範圍內", () => {
+    const doc = newDocument("主要指示");
+    const a = addEntry(doc, { name: "停用的", slot: "P", content: "{{random}}" });
+    setEnabled(doc, a, false);
+    const b = addEntry(doc, { name: "移出的", slot: "S", content: "{{trim}}" });
+    detachEntry(doc, b);
+    setParamValue(doc, "temperature", 3);
+    setParamAdopted(doc, "temperature", false);
+    expect(nativeProblems(doc).sort()).toEqual([a, b, "temperature"].sort());
+    clearParam(doc, "temperature");
+    expect(doc.st.temperature).toBeUndefined();
+    expect(doc.selection.excludedFields).toEqual([]);
+    expect(nativeProblems(doc).sort()).toEqual([a, b].sort());
+  });
+  it("新建、新增、複製、換位置後的值也符合（系統身分、位置 0、只有框架條目是 marker）", () => {
+    const doc = newDocument("主要指示");
+    const id = addEntry(doc, { name: "新", slot: "P", content: "{{char}}" });
+    duplicateEntry(doc, id, "副本");
+    moveToSide(doc, id, "after");
+    expect(nativeProblems(doc)).toEqual([]);
   });
 });

@@ -2,11 +2,11 @@
 /** 一項採樣參數：沿用模型設定（值留著，匯出回酒館時還在），或自訂一個值。 */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { paramState, setParamAdopted, setParamValue, type ParamKey, type PresetDocument } from "@/lib/st-preset";
+import { clearParam, paramState, setParamAdopted, setParamValue, type ParamKey, type PresetDocument } from "@/lib/st-preset";
 import type { CompatibilityField } from "@/lib/presets";
 import { PARAM_CHOICES, PARAM_RANGE, fieldReason, paramInvalid, paramLabelKey } from "./preset-params";
 
-const props = defineProps<{ doc: PresetDocument; param: ParamKey; field?: CompatibilityField }>();
+const props = defineProps<{ doc: PresetDocument; param: ParamKey; field?: CompatibilityField; native?: boolean }>();
 const { t, te } = useI18n();
 
 const state = computed(() => paramState(props.doc, props.param));
@@ -19,6 +19,8 @@ const id = `param-${props.param}`;
 
 function mode(custom: boolean) {
   if (custom && state.value.value === undefined) setParamValue(props.doc, props.param, choices.value?.[1] ?? (props.param === "temperature" ? 1 : range.value?.min ?? 0));
+  // 本站寫的預設沒有來源檔要保留：改回沿用模型就把值拿掉（留著的值上游一樣會查範圍）
+  else if (!custom && props.native) clearParam(props.doc, props.param);
   else setParamAdopted(props.doc, props.param, custom);
 }
 function setNumber(raw: string) {
