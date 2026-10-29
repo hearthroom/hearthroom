@@ -1,0 +1,22 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/resources",
+  "spotlight": [
+    "menu.resources"
+  ],
+  "title": {
+    "zh-Hant": "我的資源可以直接生成圖片了",
+    "zh-Hans": "我的资源可以直接生成图片了",
+    "en": "Generate images right in My resources",
+    "ja": "マイリソースで画像を直接生成できるようになりました",
+    "ko": "내 리소스에서 바로 이미지를 생성할 수 있습니다"
+  },
+  "body": {
+    "zh-Hant": "在資源頁按「生成圖片」，寫下描述、選好模型，圖片就會存進你正在看的資料夾，只扣你儲值的點數。",
+    "zh-Hans": "在资源页点「生成图片」，写下描述、选好模型，图片就会存进你正在看的文件夹，只扣你充值的点数。",
+    "en": "Tap Generate image on the resources page, describe the picture and pick a model, and it is saved to the folder you have open using only credits you purchased.",
+    "ja": "リソースページで「画像を生成」を押して内容とモデルを選ぶと、開いているフォルダに保存され、購入したポイントだけが使われます。",
+    "ko": "리소스 페이지에서 '이미지 생성'을 눌러 설명과 모델을 고르면 지금 열린 폴더에 저장되고, 충전한 포인트만 사용됩니다."
+  }
+}

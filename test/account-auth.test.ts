@@ -381,7 +381,8 @@ it('asks for media.generate only after the switch is on',async()=>{
     expect(start.status).toBe(200);
     return new URL((await start.json() as any).url).searchParams.get('scope')!.split(' ');
   };
-  envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom'};
+  // wrangler.toml 現在預設開著（2026-10-30 上線）；關掉時要回到原本的範圍，回退才安全
+  envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom',AUTH_MEDIA_GENERATE_ENABLED:'false'};
   expect(await scopeOf()).not.toContain('media.generate');
   envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom',AUTH_MEDIA_GENERATE_ENABLED:'true'};
   expect(await scopeOf()).toEqual(expect.arrayContaining(['role.write','media.generate']));
