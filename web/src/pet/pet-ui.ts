@@ -125,6 +125,7 @@ export class SukiPet {
   private dangle = 0;
   private dangleV = 0;
   private tucked = false;
+  private returningFromEdge = false;
   private said = new Set<string>();
   private hoverTimer = 0;
   private lastScroll = { y: 0, t: 0 };
@@ -135,6 +136,8 @@ export class SukiPet {
   private phoneOriginal: {x:number;y:number} | null = null;
   private phoneFocus: HTMLElement | null = null;
   private phoneRelocateAt: number | null = null;
+  private entryAwake = false;
+  private entryFocus: HTMLElement | null = null;
   private releasePhone() {
     const original=this.phoneOriginal;
     this.closeMenu();this.phoneOriginal=null;this.phoneRelocateAt=null;this.el.inert=false;this.sidebarDocked=false;this.sidebarAwake=false;
@@ -177,9 +180,18 @@ export class SukiPet {
     this.el.classList.remove("suki-pet--phone-suspended");
     this.layoutEdge();
   }
-  /** Ordinary homepage entry: preserve the enabled preference and saved position. */
+  /** Preference-menu entry: preserve the enabled preference and saved position. */
   openFrom(opener:HTMLElement|null) {
-    const space=this.opts.phoneClearance?.();if(!space||this.opts.parkOnHomepage?.())return;
+    const space=this.opts.phoneClearance?.();
+    if(!space||this.opts.parkOnHomepage?.()){
+      this.entryFocus=opener;this.entryAwake=true;this.sidebarAwake=true;
+      this.el.classList.remove("suki-pet--sidebar-idle");
+      if(this.sidebarDocked)this.el.classList.add("suki-pet--sidebar-expanded");
+      this.idleButton.setAttribute("aria-expanded","true");
+      this.openMenu();
+      this.menuEl.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
+      return;
+    }
     this.updatePhone(space);this.phoneFocus=opener;
     this.sidebarDocked=true;this.sidebarAwake=true;
     this.el.classList.remove("suki-pet--phone-suspended","suki-pet--sidebar-idle");
@@ -193,12 +205,12 @@ export class SukiPet {
   private sidebarPosition: { x: number; y: number } | null = null;
   private get sidebarIdle() { return this.sidebarDocked && !this.sidebarAwake; }
 
-  private releaseSidebar() {
+  private releaseSidebar(preservePosition = false) {
     const wasIdle = this.sidebarIdle, original = this.sidebarPosition;
     this.closeMenu();
     for (const popup of [this.bubble, this.menuEl]) { popup.style.translate = ""; popup.style.maxHeight = ""; popup.style.overflowY = ""; }
     this.homeParked = false; this.sidebarDocked = false; this.sidebarAwake = false; this.sidebarPosition = null;
-    if (original) { this.place(original); this.refit(); }
+    if (original && !preservePosition) { this.place(original); this.refit(); }
     this.idleButton.hidden = true;
     this.el.classList.remove("suki-pet--sidebar-idle", "suki-pet--sidebar-expanded", "suki-pet--sidebar-avatar", "suki-pet--home-parked");
     if (this.opts.mobile && this.ready) this.layoutEdge();
@@ -206,7 +218,9 @@ export class SukiPet {
   }
 
   private updateSidebar() {
-    const parking = this.opts.parkOnHomepage?.() === true;
+    if(this.entryAwake)return;
+    const explicitDesktop = !this.opts.mobile && (this.tucked || this.desktopChosenStand || this.drag?.moved);
+    const parking = this.opts.parkOnHomepage?.() === true && !explicitDesktop;
     if (parking) {
       if(this.phoneOriginal)this.releasePhone();
       if (!this.homeParked) {
@@ -228,11 +242,17 @@ export class SukiPet {
       }
       return;
     }
-    if (this.homeParked) this.releaseSidebar();
+    if (this.homeParked) this.releaseSidebar(!!explicitDesktop);
     const phone=this.opts.phoneClearance?.();
     if(phone){this.updatePhone(phone);return;}
     if(this.phoneOriginal)this.releasePhone();
-    const bounds = this.opts.mobile ? null : this.opts.sidebarBounds?.();
+    // A deliberate desktop drag/edge peek takes priority over the passive rail
+    // avatar. Keep the current drag position when releasing an expanded avatar.
+    if (!this.opts.mobile && (this.drag?.moved || this.tucked)) {
+      if (this.sidebarDocked || this.sidebarPosition) this.releaseSidebar(true);
+      return;
+    }
+    const bounds = this.opts.mobile || this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
     if (!bounds) {
       this.opts.onSidebarMenuChange?.(false);
       if (this.sidebarDocked || this.sidebarPosition) this.releaseSidebar();
@@ -377,7 +397,7 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.closeMenu(); this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
+  stop() { this.closeMenu(); this.stopped = true; removeEventListener("resize", this.desktopResize); this.el.remove(); this.tab?.remove(); this.catcher?.remove(); this.idleButton.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
@@ -402,7 +422,7 @@ export class SukiPet {
     const h = new Date().getHours();
     if (h >= 21 || h < 6) items.push({ label: this.line("menu.sleep"), run: () => { this.act({ expr: "sleepy", say: this.line("act.goodnight") }, true); setTimeout(() => this.sleep(), 2600); } });
     for (const t of this.guide?.topics ?? []) items.push({ label: t.q, run: () => this.act({ say: t.a, talk: true, ms: 4200, action: t.action }, true) });
-    items.push({ label: this.line("menu.tuck"), run: () => (this.opts.mobile ? this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x)) : this.tuck(this.box().left < innerWidth / 2 ? "left" : "right")) });
+    items.push({ label: this.line("menu.tuck"), run: () => (this.opts.mobile ? this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x)) : this.tuck(this.box().left < innerWidth / 2 ? "left" : "right", false, this.pos)) });
     if (this.opts.onOff) items.push({ label: this.opts.menuLabel?.() ?? "×", run: this.opts.onOff });
     this.menuEl.replaceChildren(...items.map((it) => {
       const b = document.createElement("button");
@@ -422,7 +442,7 @@ export class SukiPet {
     }));
     this.bubble.hidden = true;
     this.menuEl.hidden = false;
-    this.opts.onSidebarMenuChange?.(this.sidebarDocked);
+    this.opts.onSidebarMenuChange?.(this.sidebarDocked||this.entryAwake);
     this.fitPopups();
     this.act({ expr: "happy" });
     clearTimeout(this.menuTimer);
@@ -447,6 +467,12 @@ export class SukiPet {
     // until the answer closes; automatic idle chatter must stay suppressed.
     if (!keepSidebarAnswer) {
       this.opts.onSidebarMenuChange?.(false);
+      if(this.entryAwake){
+        const focus=this.entryFocus;this.entryFocus=null;this.entryAwake=false;
+        this.bubble.hidden=true;
+        if(!this.sidebarDocked)this.sidebarAwake=false;
+        if(focus?.isConnected)setTimeout(()=>focus.focus({preventScroll:true}),0);
+      }
       if(this.phoneOriginal&&this.sidebarAwake){
         const focus=this.phoneFocus;this.phoneFocus=null;this.sidebarDocked=false;this.sidebarAwake=false;
         this.el.classList.remove("suki-pet--phone-dialog");this.bubble.hidden=true;
@@ -621,6 +647,15 @@ export class SukiPet {
 
   // ---- 每一格 ----
   private frame(dt: number, now: number) {
+    if (!this.opts.mobile) {
+      // CSS keeps the rendered anchor moving after place() stores its target.
+      // Fit before the rail checks so a returning popup cannot trigger docking.
+      this.fitPopups();
+      if (this.returningFromEdge) {
+        const anchor = this.el.getBoundingClientRect();
+        if (Math.abs(anchor.left - Math.round(this.pos.x)) < .5 && Math.abs(anchor.top - Math.round(this.pos.y)) < .5) this.returningFromEdge = false;
+      }
+    }
     this.updateSidebar();
     if (this.sidebarIdle) return;
     if (this.homeParked || (this.phoneOriginal&&this.sidebarAwake)) {
@@ -630,16 +665,17 @@ export class SukiPet {
       return;
     }
     if(this.el.classList.contains("suki-pet--phone-suspended"))return;
-    if (this.sidebarAwake) this.fitPopups();
+    if (this.sidebarAwake && this.opts.mobile) this.fitPopups();
     const p = this.rig.params;
     // 表情淡入淡出；演完回到平常
     const idle = (now - this.lastInput) / 1000, acting = now <= this.actUntil;
     this.exprTarget = exprTargets(this.exprTarget, { sleeping: this.sleeping, acting, idle });
     if (this.opts.mobile) {
       this.mobileFrame(dt, now);
-      // 探出時是偷看的表情
-      if (this.peekS < 0.5 && !acting && !this.sleeping) this.exprTarget.peek = 1;
-    }
+    } else this.faceEdge(dt);
+    const peek = this.opts.mobile ? this.peekS : this.tucked ? 0 : 1;
+    // 探出時是偷看的表情
+    if (peek < 0.5 && !acting && !this.sleeping) this.exprTarget.peek = 1;
     if (idle > 40 && idle < 41 && !acting && !this.sleeping) this.speak(this.line("sleepy"), 3000);
     for (const k of EXPRS) {
       const cur = this.expr[k] ?? 0, tgt = this.exprTarget[k] ?? 0;
@@ -697,7 +733,7 @@ export class SukiPet {
     // 拿望遠鏡時頭不轉：鏡筒畫在眼睛前面、掛在身體上，頭一轉就對不上；改成整個上身慢慢掃
     if (this.activity?.set === "scope") { p.AngleX = 0; p.AngleY = 0; p.AngleZ = 0; p.EyeX = 0; p.EyeY = 0; p.BodyZ = Math.sin(this.activity.t * 0.9) * 3; }
     // 探出：身體與頭往頁面這邊歪（左側整張畫布翻面，歪的方向跟著翻）
-    if (this.opts.mobile && this.peekS < 1) { const k = 1 - Math.max(0, this.peekS); p.BodyZ = (p.BodyZ ?? 0) + LEAN * k; p.AngleZ = (p.AngleZ ?? 0) + LEAN * 0.6 * k; }
+    if (peek < 1) { const k = 1 - Math.max(0, peek); p.BodyZ = (p.BodyZ ?? 0) + LEAN * k; p.AngleZ = (p.AngleZ ?? 0) + LEAN * 0.6 * k; }
     for (const k in SukiPet.LIMITS) if (p[k] !== undefined) p[k] = Math.max(SukiPet.LIMITS[k][0], Math.min(SukiPet.LIMITS[k][1], p[k]));
     // 小惡魔：右手與手肘只往外（滑肩的衣服在右手後面沒補畫，往內會露出一條黑縫）。
     // 尾巴梗藏在右手後面、沒畫的那種（尾巴掛在右手上）也不擺，不然梗會斷；整條補畫好的尾巴掛在身體上，照物理擺
@@ -710,6 +746,7 @@ export class SukiPet {
     if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
+    if (!this.opts.mobile) this.updateClip(now);
     if (!this.bubble.hidden && (now > this.bubbleUntil || this.bubbleCondition?.() === false)) { this.bubble.hidden = true; this.drainQueue(); }
     if (this.sidebarAwake && !this.sidebarActions && this.menuEl.hidden && this.bubble.hidden) this.closeMenu();
   }
@@ -932,6 +969,7 @@ export class SukiPet {
     });
     document.addEventListener("focusout", () => { if (this.opts.mobile) this.hide(false, "typing"); });
     if (this.opts.mobile) this.bindMobile();
+    else addEventListener("resize", this.desktopResize);
     addEventListener("suki", (e) => this.on((e as CustomEvent<SukiEvent>).detail));
 
     this.touch.addEventListener("pointerdown", this.down);
@@ -1100,10 +1138,15 @@ export class SukiPet {
     } else {
       // 拖到螢幕邊：縮進去，只露半個頭
       const edge = r.left < -r.width * 0.25 ? "left" : r.right > innerWidth + r.width * 0.25 ? "right" : null;
-      if (edge) return this.tuck(edge);
+      if (edge) return this.tuck(edge, false, { x: d.ox - d.dx, y: d.oy - d.dy });
       pos = { x: Math.max(0, Math.min(innerWidth - r.width, r.left)), y: Math.max(0, Math.min(innerHeight - r.height, r.top)) };
+      if (this.tucked) {
+        this.tucked = false; this.el.classList.remove("suki-pet--tucked");
+      }
+      this.rememberDesktopStand(pos);
+      this.desktopChosenStand = true;
     }
-    this.place(pos); this.save(pos);
+    this.place(pos); this.save(pos, false, !this.opts.mobile);
     // 放在卡片上：讀出那張卡寫的原作與類型
     this.el.style.pointerEvents = "none";
     const under = (document.elementFromPoint(e.clientX, e.clientY + r.height * 0.4) as HTMLElement | null)?.closest?.("[data-suki-card]") as HTMLElement | null;
@@ -1114,14 +1157,35 @@ export class SukiPet {
     this.act({ expr: "happy", say: this.line("land") }, true);
   }
 
-  private tuck(edge: "left" | "right", silent = false) {
-    this.tucked = true;
+  private tuck(edge: "left" | "right", silent = false, origin?: { x: number; y: number }) {
+    if (origin && !silent && !this.tucked && !this.desktopStand) this.rememberDesktopStand(origin);
+    this.tucked = true; this.side = edge;
     const r = this.box();
     this.el.classList.add("suki-pet--tucked");
     this.el.classList.toggle("suki-pet--edge-right", edge === "right");
     this.place({ x: edge === "left" ? -r.width * 0.62 : innerWidth - r.width * 0.38, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
-    this.save({ x: edge === "left" ? -1 : innerWidth, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
+    this.save({ x: edge === "left" ? -1 : innerWidth, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) }, false, !!origin);
     if (!silent) this.act({ expr: "peek", say: this.line("tuck"), ms: 2600 }, true);
+  }
+
+  /** User-selected stand coordinates, normalized independently of the edge save. */
+  private desktopStand: { x: number; y: number } | null = null;
+  private desktopChosenStand = false;
+  private desktopResize = () => { this.insets = null; if (!this.stopped) this.refit(); };
+  private rememberDesktopStand(pos: { x: number; y: number }) {
+    if (Number.isFinite(pos.x) && Number.isFinite(pos.y) && pos.x >= 0 && pos.x <= innerWidth && pos.y >= 0 && pos.y <= innerHeight) {
+      this.desktopStand = { x: pos.x / innerWidth, y: pos.y / innerHeight };
+    }
+  }
+  private desktopReturn() {
+    const choice = this.desktopStand ? { x: this.desktopStand.x * innerWidth, y: this.desktopStand.y * innerHeight } : this.deskHome();
+    const pos = clampStand(this.viewport(), this.size(), choice), body = this.box();
+    if (pos.x < 0 || pos.y < 0 || pos.x + body.width > innerWidth || pos.y + body.height > innerHeight) return null;
+    const blockers = [...document.querySelectorAll<HTMLElement>('.header, .sorts__item, .sorts__mode')].map(el => el.getBoundingClientRect());
+    const rail = this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
+    if (rail) blockers.push(new DOMRect(rail.left, rail.top, rail.right - rail.left, rail.bottom - rail.top));
+    if (blockers.some(r => r.width > 0 && r.height > 0 && pos.x < r.right && pos.x + body.width > r.left && pos.y < r.bottom && pos.y + body.height > r.top)) return null;
+    return pos;
   }
 
   private poke(e: PointerEvent) {
@@ -1130,10 +1194,12 @@ export class SukiPet {
     if (this.sleeping) return this.wake("poked");
     if (this.tucked && this.opts.mobile) return this.pullOut();
     if (this.tucked) {
+      const pos = this.desktopReturn();
+      if (!pos) { this.openFrom(document.querySelector<HTMLElement>('.acct__btn,.site-menu > button')); return; }
       this.tucked = false; this.el.classList.remove("suki-pet--tucked");
-      const r = this.box();
-      const pos = { x: Math.max(8, Math.min(innerWidth - r.width - 8, r.left)), y: r.top };
-      this.place(pos); this.save(pos);
+      this.desktopChosenStand = true;
+      this.returningFromEdge = true;
+      this.place(pos); this.save(pos, false, true);
       this.act({ expr: "happy", say: this.line("untuck"), hop: true }, true);
       this.daily();
       if (this.guide) this.setGuide(this.guide);
@@ -1170,7 +1236,8 @@ export class SukiPet {
     const root = this.rig.model.nodes.find((n) => n.id === "root");
     const down = Object.entries(root?.moveY ?? {}).reduce((v, [k, c]) => (k.startsWith("Set_") ? v + (this.rig.params[k] ?? 0) * c : v), 0);
     const sunk = (down / this.rig.model.size[1]) * this.hit.h;
-    const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h - sunk);
+    const u = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w);
+    const x = this.flip < 0 ? this.hit.w - 1 - u : u, y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h - sunk);
     if (x < 0 || y < 0 || x >= this.hit.w || y >= this.hit.h) return null;
     const v = this.hit.data[(y * this.hit.w + x) * 4];
     return v ? this.hit.names[v - 1] ?? "body" : null;
@@ -1199,8 +1266,8 @@ export class SukiPet {
     this.layoutEdge();
     this.fitPopups();
   }
-  private save(p: { x: number; y: number }, peeking = false) {
-    if (this.homeParked || this.opts.parkOnHomepage?.() || (this.phoneOriginal&&this.sidebarAwake)) return;
+  private save(p: { x: number; y: number }, peeking = false, desktopUser = false) {
+    if (((this.homeParked || this.opts.parkOnHomepage?.()) && !desktopUser) || (this.phoneOriginal&&this.sidebarAwake)) return;
     if(this.phoneOriginal&&!this.sidebarAwake)this.phoneOriginal={...p};
     if (this.sidebarDocked && this.sidebarAwake && !this.homeParked) this.sidebarPosition = { ...p };
     if (this.opts.mobile) {
@@ -1208,7 +1275,7 @@ export class SukiPet {
       return;
     }
     const x = p.x < 0 ? -1 : p.x >= innerWidth ? 2 : p.x / innerWidth;
-    try { localStorage.setItem("suki.pet.pos", JSON.stringify({ x, y: p.y / innerHeight })); } catch { /* 存不了就算了 */ }
+    try { localStorage.setItem("suki.pet.pos", JSON.stringify({ x, y: p.y / innerHeight, ...(this.desktopStand ? { stand: this.desktopStand } : {}) })); } catch { /* 存不了就算了 */ }
   }
   private restore(): { x: number; y: number } | null {
     try {
@@ -1222,11 +1289,14 @@ export class SukiPet {
         this.save(got.pos, true);
         return null;
       }
+      const stand = (v as Saved & { stand?: { x: number; y: number } }).stand;
+      const validStand = (p: { x: number; y: number } | undefined) => !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+      this.desktopStand = validStand(stand) ? { ...stand! } : !v.dock && validStand(v) ? { x: v.x, y: v.y } : null;
       const r = { w: this.touch.clientWidth || 120, h: this.touch.clientHeight || 180 };
       if (v.x < 0 || v.x > 1) { setTimeout(() => this.tuck(v.x < 0 ? "left" : "right", true), 0); return { x: v.x < 0 ? 0 : innerWidth - r.w, y: v.y * innerHeight }; }
       // 手機存的「探出」：桌機沒有這個狀態，站回桌機的預設位置
       if (v.dock) return this.deskHome();
-      return { x: v.x * innerWidth, y: v.y * innerHeight };
+      return clampStand(this.viewport(), this.size(), { x: v.x * innerWidth, y: v.y * innerHeight });
     } catch { return null; }
   }
 
@@ -1247,7 +1317,10 @@ export class SukiPet {
   private refit() {
     if (this.drag || this.hidden || this.slide) return;
     const f = this.viewport(), s = this.size();
-    if (this.tucked) return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y));
+    if (this.tucked) {
+      if (!this.opts.mobile) return this.tuck(this.side, true);
+      return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y));
+    }
     const pos = clampStand(f, s, this.pos);
     if (pos.x !== this.pos.x || pos.y !== this.pos.y) this.place(pos);
   }
@@ -1331,6 +1404,7 @@ export class SukiPet {
   private summon() {
     if (this.sleeping) { this.sleeping = false; this.exprTarget = {}; }
     if (this.opts.mobile) { const d = defaultPeek(this.viewport(), this.size()); this.peekAt(d.side, d.pos); return this.pullOut(); }
+    this.desktopStand = null; this.desktopChosenStand = false; this.returningFromEdge = false;
     this.tucked = false; this.el.classList.remove("suki-pet--tucked");
     const pos = this.deskHome();
     this.place(pos); this.save(pos);
@@ -1345,7 +1419,7 @@ export class SukiPet {
   private clipSide: Side = "right";
   private clipMirror = false;
   private updateClip(now: number) {
-    const want = this.tucked && this.peekS < 0.5 && !this.drag && !this.hidden;
+    const want = this.tucked && (!this.opts.mobile || this.peekS < 0.5) && !this.drag && !this.hidden;
     if (!want) { if (this.clipped) { this.touch.style.clipPath = ""; this.clipped = false; } return; }
     // 左側翻面是動畫：翻到一半就重描，不等 0.6 秒
     const mirror = this.flip < 0;
@@ -1377,17 +1451,22 @@ export class SukiPet {
     this.peekClock = peeking ? this.peekClock + dt : 0;
     const w = this.peekClock % 9;
     this.peekWaving = peeking && w > 7.2 && w < 8.8 && this.hasSet("wave");
-    if (this.tucked && !this.drag) { this.driver.state.look = [-0.8, 0.1]; this.peekLook = true; }
-    else if (this.peekLook) { this.peekLook = false; this.driver.state.look = null; }
-    const ft = this.side === "left" && this.peekS < 0.97 ? -1 : 1;
-    this.flip = this.opts.reducedMotion || Math.abs(ft - this.flip) < 0.01 ? ft : this.flip + (ft - this.flip) * (1 - Math.exp(-dt * 16));
-    this.canvas.style.transform = this.flip === 1 ? "" : `scaleX(${this.flip})`;
+    this.faceEdge(dt);
     this.updateClip(now);
     // 站著 60 秒沒有人碰頁面：靜靜縮回比較近的一側（ui-v3.md §2.3，接在 40 秒的想睡之後）
     const busy = this.slide || this.drag || this.walk || this.activity || this.sleeping || this.hidden || this.jumpT >= 0 || now <= this.actUntil;
     if (!this.tucked && !busy && this.bubble.hidden && this.menuEl.hidden && now - this.lastInput > 60_000) {
       this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x), true);
     }
+  }
+  /** Share the existing v3 inward look and canvas orientation on both surfaces. */
+  private faceEdge(dt: number) {
+    if (this.tucked && !this.drag) { this.driver.state.look = [-0.8, 0.1]; this.peekLook = true; }
+    else if (this.peekLook) { this.peekLook = false; this.driver.state.look = null; }
+    const peek = this.opts.mobile ? this.peekS : this.tucked ? 0 : 1;
+    const ft = this.side === "left" && peek < 0.97 ? -1 : 1;
+    this.flip = this.opts.reducedMotion || Math.abs(ft - this.flip) < 0.01 ? ft : this.flip + (ft - this.flip) * (1 - Math.exp(-dt * 16));
+    this.canvas.style.transform = this.flip === 1 ? "" : `scaleX(${this.flip})`;
   }
   /** 螢幕邊上的東西：站著時的細條頁籤、探出時的接觸區 */
   private layoutEdge() {
@@ -1409,18 +1488,19 @@ export class SukiPet {
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
-    if (!this.opts.mobile || this.homeParked || this.phoneOriginal) {
-      const bounds = this.opts.sidebarBounds?.() ?? ((this.homeParked||this.phoneOriginal) ? { left: 0, right: innerWidth, top: 0, bottom: innerHeight } : null);
+    if (!this.opts.mobile || this.homeParked || this.phoneOriginal || this.entryAwake) {
+      const bounds = this.entryAwake || this.opts.parkOnHomepage?.() ? null : this.opts.sidebarBounds?.();
       for (const el of [this.bubble, this.menuEl]) {
-        if (!bounds || !this.sidebarAwake || el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
+        if (el.hidden) { if (el.style.translate) el.style.translate = ""; continue; }
         const minimumTop = Math.max(8, (document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0) + 8);
         const available = `${Math.max(0, innerHeight - minimumTop - 8)}px`;
         if (el.style.maxHeight !== available) { el.style.maxHeight = available; el.style.overflowY = 'auto'; }
         const r = el.getBoundingClientRect();
-        const previous = el.style.translate.split(" ").map(v => parseFloat(v) || 0);
+        // A CSS transition may not have applied the latest inline target yet.
+        const previous = (getComputedStyle(el).translate || "").split(" ").map(v => parseFloat(v) || 0);
         const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
         let x = Math.max(8, Math.min(left, innerWidth - 8 - r.width)), y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
-        if (!this.homeParked && !this.phoneOriginal && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
+        if (bounds && (this.sidebarAwake || this.returningFromEdge) && !this.entryAwake && !this.homeParked && !this.phoneOriginal && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
         const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
         if (el.style.translate !== translate) el.style.translate = translate;
       }

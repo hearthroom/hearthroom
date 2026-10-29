@@ -223,7 +223,7 @@
   "mascot.pet.menu.notifications": "看通知",
   "mascot.pet.menu.write": "写一张卡",
   "mascot.pet.menu.tuck": "先躲起来",
-  "mascot.pet.menu.off": "关闭桌宠",
+  "mascot.pet.menu.off": "让苏绮离开",
   "mascot.pet.go.look": "看看",
   "mascot.pet.notice.approved": "恭喜！",
   "mascot.pet.notice.rejected": "别灰心～",
@@ -3577,8 +3577,11 @@
   "import.regex.invalid": "以下正则内容需要修改后才能保存，目前尚未保存；你可以先套用到表单再修改。",
   "editor.regex.invalid": "这次尚未保存，请修改以下正则问题后再保存。",
   "regex.issue.rule": "第 {index} 条“{name}”：{why}",
+  "mascot.pet.bringBack": "叫回苏绮",
   "home.weekEnd": "周榜已全部显示",
   "home.weekEmpty": "目前没有其他符合条件的周榜卡片",
   "home.monthEnd": "月榜已全部显示",
-  "home.monthEmpty": "目前没有其他符合条件的月榜卡片"
+  "home.monthEmpty": "目前没有其他符合条件的月榜卡片",
+  "mascot.pet.offHintMember": "你可以点击顶部头像，在「偏好设置」叫回苏绮。",
+  "mascot.pet.offHintGuest": "你可以点击顶部的三横线菜单，在「偏好设置」叫回苏绮。"
 }

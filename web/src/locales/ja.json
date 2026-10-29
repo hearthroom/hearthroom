@@ -223,7 +223,7 @@
   "mascot.pet.menu.notifications": "お知らせを見る",
   "mascot.pet.menu.write": "カードを書く",
   "mascot.pet.menu.tuck": "ちょっと隠れる",
-  "mascot.pet.menu.off": "デスクペットをオフ",
+  "mascot.pet.menu.off": "スキを非表示にする",
   "mascot.pet.go.look": "見てみる",
   "mascot.pet.notice.approved": "おめでとう！",
   "mascot.pet.notice.rejected": "元気出してね～",
@@ -3577,8 +3577,11 @@
   "import.regex.invalid": "以下の正規表現の内容は修正が必要で、まだ保存されていません。フォームに反映してから修正できます。",
   "editor.regex.invalid": "今回の変更は保存されていません。以下の正規表現の問題を修正してから保存してください。",
   "regex.issue.rule": "ルール {index}「{name}」：{why}",
+  "mascot.pet.bringBack": "スキを呼び戻す",
   "home.weekEnd": "週間ランキングのカードをすべて表示しました",
   "home.weekEmpty": "条件に合う週間ランキングのカードはほかにありません",
   "home.monthEnd": "月間ランキングのカードをすべて表示しました",
-  "home.monthEmpty": "条件に合う月間ランキングのカードはほかにありません"
+  "home.monthEmpty": "条件に合う月間ランキングのカードはほかにありません",
+  "mascot.pet.offHintMember": "ページ上部のアイコンから「環境設定」を開くと、スキを呼び戻せます。",
+  "mascot.pet.offHintGuest": "ページ上部の三本線のメニューから「環境設定」を開くと、スキを呼び戻せます。"
 }

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "Gemini 4 新增白露・Ultra 線路",
+    "zh-Hans": "Gemini 4 新增白露・Ultra 线路",
+    "en": "Gemini 4 adds the Dew · Ultra lane",
+    "ja": "Gemini 4 に白露・ウルトラ回線が登場",
+    "ko": "Gemini 4에 이슬 · 울트라 경로가 추가됐어요"
+  },
+  "body": {
+    "zh-Hant": "曙光對話價格調為五折，舊白露線路已下架，預設維持凌波。",
+    "zh-Hans": "曙光对话价格调整为五折，旧白露线路已下线，默认仍为凌波。",
+    "en": "Dawn chat prices are now 50% off, the original Dew lane is retired, and Ripple remains the default.",
+    "ja": "曙光の対話料金は50％オフになり、旧白露回線は提供を終了しましたが、既定の回線は引き続き凌波です。",
+    "ko": "여명 대화 요금은 50% 할인되며 기존 이슬 경로는 제공이 종료되고 기본 경로는 잔물결로 유지돼요."
+  }
+}

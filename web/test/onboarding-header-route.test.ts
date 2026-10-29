@@ -87,3 +87,12 @@ it.each([{ready:false,restoreError:false}, {ready:true,restoreError:true}])("pub
   expect(trigger).not.toBeNull(); trigger!.click(); await nextTick();
   for (const path of ['/guide','/developers','/updates','/blog','/campaigns']) expect(root.querySelector(`.site-menu a[href^="${path}"]`)).not.toBeNull();
 });
+
+it.each(['/', '/cards/100216'])("%s keeps the Suki preference available on desktop after dismissal", async path => {
+  const { petEnabled } = await import('../src/pet/enabled');
+  petEnabled.value = false;
+  await mount(path, 'zh-Hant');
+  root.querySelector<HTMLButtonElement>('.site-menu > button')!.click(); await nextTick();
+  expect(root.querySelector('[data-menu-section="preferences"] [data-pet-menu]')).not.toBeNull();
+  petEnabled.value = true;
+});

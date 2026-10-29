@@ -142,7 +142,7 @@ function phoneClearance():PhoneClearance|null {
 }
 let pendingMenu:HTMLElement|null=null,starting=false;
 function menuRequest(e:Event){
- if(!phoneClearance())return;
+ if(route.meta.bare || route.meta.readingNotice || route.meta.petAway)return;
  const opener=(e as CustomEvent<HTMLElement|null>).detail;
  if(pet.value)pet.value.openFrom(opener);else{pendingMenu=opener;void start();}
 }
@@ -193,7 +193,7 @@ async function start() {
     },    nickname: () => session.me?.nickName?.trim() || null,
     resume: { label: line("menu.resume"), run: resume },
     menuLabel: () => line("menu.off"),
-    onOff: () => { petEnabled.value = false; },
+    onOff: dismissPet,
   });
   try { await p.start(document.body); } catch { return; /* 沒有 WebGL 之類：她就不出來 */ }
   if (disposed) { p.stop(); return; }
@@ -206,6 +206,15 @@ async function start() {
   }finally{starting=false;}
 }
 
+const offHint = ref("");
+let offHintTimer: ReturnType<typeof setTimeout> | undefined;
+function dismissPet() {
+  offHint.value = t(session.me ? "mascot.pet.offHintMember" : "mascot.pet.offHintGuest");
+  petEnabled.value = false;
+  clearTimeout(offHintTimer);
+  offHintTimer = setTimeout(() => { offHint.value = ""; }, 8000);
+}
+onBeforeUnmount(() => clearTimeout(offHintTimer));
 function stop() { pet.value?.stop(); pet.value = null; }
 
 // 她的貼圖四十多張、約 740 KB。只等閒置不夠：閒置的 3 秒時限一到，卡片頁的橫幅、封面都還在下載，
@@ -290,7 +299,7 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 </script>
 
 <template>
-  <span hidden />
+  <Teleport to="body"><p v-if="offHint" class="toast" role="status">{{ offHint }}</p></Teleport>
 </template>
 
 <style>
@@ -339,7 +348,7 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet--right .suki-pet__bubble::after { left: auto; right: calc(var(--pw, 120px) / 2 - 14px); transform: rotate(45deg); }
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble, .suki-pet:not(.suki-pet--right) .suki-pet__menu { right: auto; left: 8px; transform: none; }
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble::after { left: calc(var(--pw, 120px) / 2 - 14px); transform: rotate(45deg); }
-@keyframes suki-in { from { opacity: 0; translate: 0 6px; scale: .96; } }
+@keyframes suki-in { from { opacity: 0; transform: translateY(6px); scale: .96; } }
 /* 手機：左右各留一條邊距帶（曲面屏邊緣點不到，pet/placement.ts 的 BAND），泡泡與選單不伸進去；
    超出時 JS 把泡泡挪回帶內，--tail-dx 讓尖角還指著她 */
 .suki-pet--mobile .suki-pet__bubble, .suki-pet--mobile .suki-pet__menu { max-width: min(260px, calc(100vw - max(32px, env(safe-area-inset-left, 0px)) - max(32px, env(safe-area-inset-right, 0px)))); }
@@ -354,6 +363,10 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet__catch[hidden], body:has(.header [role="menu"]) .suki-pet__catch { display: none; }
 /* 泡泡或選單開著時她浮到接觸區上面，泡泡裡的按鈕與選單才按得到（泡泡其他地方照樣穿到接觸區，點了就是點她） */
 .suki-pet--mobile:has(.suki-pet__bubble:not([hidden])), .suki-pet--mobile:has(.suki-pet__menu:not([hidden])) { z-index: 48; }
+/* Desktop peeks use the rendered alpha contour too; the rectangular root must not catch its transparent holes. */
+.suki-pet--tucked:not(.suki-pet--mobile) { pointer-events: none; }
+.suki-pet--tucked:not(.suki-pet--mobile):not(.suki-pet--away) :is(.suki-pet__hit, .suki-pet__bubble, .suki-pet__menu) { pointer-events: auto; }
+body:has(.header [role="menu"]) .suki-pet--tucked:not(.suki-pet--mobile) :is(.suki-pet__hit, .suki-pet__bubble, .suki-pet__menu) { pointer-events: none; }
 /* 探出時她整個容器不接點擊，只留裁成她輪廓的接觸塊、選單與泡泡裡的按鈕：透明處的點擊落到底下的網頁（owner 2026-10-23） */
 .suki-pet--mobile.suki-pet--tucked { pointer-events: none; }
 .suki-pet--mobile.suki-pet--tucked:not(.suki-pet--away) .suki-pet__hit, .suki-pet--mobile.suki-pet--tucked:not(.suki-pet--away) .suki-pet__menu { pointer-events: auto; }

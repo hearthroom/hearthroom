@@ -223,7 +223,7 @@
   "mascot.pet.menu.notifications": "Notifications",
   "mascot.pet.menu.write": "Write a card",
   "mascot.pet.menu.tuck": "Hide for now",
-  "mascot.pet.menu.off": "Turn off desk pet",
+  "mascot.pet.menu.off": "Dismiss Suki",
   "mascot.pet.go.look": "Take a look",
   "mascot.pet.notice.approved": "Congrats!",
   "mascot.pet.notice.rejected": "Don't give up~",
@@ -3577,8 +3577,11 @@
   "import.regex.invalid": "These regex rules need changes before saving. Nothing has been saved yet; you can apply them to the form and fix the issues below.",
   "editor.regex.invalid": "Nothing was saved this time. Fix the regex issues below before saving again.",
   "regex.issue.rule": "Rule {index} ({name}): {why}",
+  "mascot.pet.bringBack": "Bring Suki back",
   "home.weekEnd": "End of this week's list",
   "home.weekEmpty": "No more matching cards in this week's list",
   "home.monthEnd": "End of this month's list",
-  "home.monthEmpty": "No more matching cards in this month's list"
+  "home.monthEmpty": "No more matching cards in this month's list",
+  "mascot.pet.offHintMember": "You can bring Suki back from Preferences in your profile menu at the top of the page.",
+  "mascot.pet.offHintGuest": "You can bring Suki back from Preferences in the three-line menu at the top of the page."
 }
