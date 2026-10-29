@@ -2411,5 +2411,5 @@
   "d579271456592": "minor is a silent content update. major explicitly requests notifications after the approved version becomes public.",
   "d7e6f2cc17c4f": "visibility_operation_conflict, visibility_restricted, review_required or visibility_disabled. update_notification_cooldown includes nextMajorUpdateAt (UTC milliseconds).",
   "de2c39bfe0977": "Optional capability on services that support account model preferences: `true` only when this call first starts an agent configuration for this user and saves the application default because the account's preferred model or exact lane is unavailable or absent from the selectable catalog. The account preference is retained for future configurations. Resuming a previously opened configuration does not reapply the account preference.",
-  "d6f403ac9e821": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, this is the unused amount at expiry; 0 means fully consumed."
+  "d6f403ac9e821": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, settlement of reserved credits can still reduce this amount; 0 means fully consumed."
 }

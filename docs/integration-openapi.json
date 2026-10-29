@@ -24404,7 +24404,7 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0,
-            "description": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, this is the unused amount at expiry; 0 means fully consumed."
+            "description": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, settlement of reserved credits can still reduce this amount; 0 means fully consumed."
           },
           "item": {
             "type": "string",
