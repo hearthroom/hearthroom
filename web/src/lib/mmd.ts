@@ -10,7 +10,7 @@
  */
 
 import { bookEntriesToDrafts, bookEntryDrops, countSplitEntries, entryContentMax, worldInfoToBook, type DropNote, type ImportResult, type TavernBook } from "./tavern";
-import { isMeimoRegexItem, loweredFromPageDepth, ruleSetFromImport, rulesFromMeimoList, type RegexRuleSet } from "./regex-rules";
+import { isMeimoRegexItem, loweredFromPageDepth, ruleSetFromImport, rulesFromMeimoList, REGEX_LIMITS, type RegexRuleSet } from "./regex-rules";
 import mmdDockCopy from "../locales/card-defaults/mmd-dock.json";
 import { makeDraft } from "./role-draft";
 
@@ -74,7 +74,7 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   const imported = ruleSetFromImport(raw);
   if (imported) {
     if (!Array.isArray(raw) && "pageDepth" in obj) imported.set.lowered = loweredFromPageDepth(obj.pageDepth);
-    return { part: "rules", fileName, set: imported.set, dockOffByDefault: !Array.isArray(obj.rules) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
+    return { part: "rules", fileName, set: imported.set, dockOffByDefault: (!Array.isArray(obj.rules) || "pageDepth" in obj || "chatVersion" in obj) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
   }
   throw new Error("mmd_unknown");
 }
@@ -113,24 +113,30 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
     if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: entryContentMax(options.language) } });
   }
 
+  let regex = rules?.set ?? null;
+  if (rules?.dockOffByDefault && regex && !regex.rules.some(r => r.find === MMD_DOCK_FIND && r.replace.includes(MMD_DOCK_CSS))) {
+    if (regex.rules.length >= REGEX_LIMITS.rules) {
+      dropped.push({ key: "import.mmd.dockAtLimit" });
+    } else {
+      // Copy the array: previews must not mutate classified files.
+      // Nonempty matching also installs the style on classic pages.
+      regex = { ...regex, rules: [...regex.rules, {
+        id: "hearthroom-mmd-dock-off",
+        name: dockCopy.name,
+        find: MMD_DOCK_FIND,
+        replace: `$1<style>/* ${dockCopy.description} */\n${MMD_DOCK_CSS}\n</style>`,
+        enabled: true,
+      }] };
+    }
+  }
+
   return {
     draft,
     worldbook,
     dropped,
     image: null,
     spec: "mmd",
-    regex: rules ? rules.dockOffByDefault && !rules.set.rules.some(r => r.find === MMD_DOCK_FIND && r.replace.includes(MMD_DOCK_CSS)) ? {
-      ...rules.set,
-      // Copy the array: the preview is recomputed as files/language change.
-      // The final rule also works on classic pages, which render styles by matching.
-      rules: [...rules.set.rules, {
-        id: "hearthroom-mmd-dock-off",
-        name: dockCopy.name,
-        find: MMD_DOCK_FIND,
-        replace: `$1<style>/* ${dockCopy.description} */\n${MMD_DOCK_CSS}\n</style>`,
-        enabled: true,
-      }],
-    } : rules.set : null,
+    regex,
     parts: { rules: !!rules, book: !!book, definition: !!definition },
   };
 }

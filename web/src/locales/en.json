@@ -3586,5 +3586,6 @@
   "mascot.pet.offHintMember": "You can bring Suki back from Preferences in your profile menu at the top of the page.",
   "mascot.pet.offHintGuest": "You can bring Suki back from Preferences in the three-line menu at the top of the page.",
   "regex.warning.largeNotice": "These rules have large replacements that may slow down play; consider splitting each into smaller rules. This warning does not prevent saving.",
-  "regex.warning.largeReplacement": "Large replacement"
+  "regex.warning.largeReplacement": "Large replacement",
+  "import.mmd.dockAtLimit": "The rule limit has been reached, so automatic side spacing keeps its current setting; remove rules from the source file and import again to turn it off by default."
 }

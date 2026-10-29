@@ -3586,5 +3586,6 @@
   "mascot.pet.offHintMember": "ページ上部のアイコンから「環境設定」を開くと、スキを呼び戻せます。",
   "mascot.pet.offHintGuest": "ページ上部の三本線のメニューから「環境設定」を開くと、スキを呼び戻せます。",
   "regex.warning.largeNotice": "これらのルールは置換内容が大きく、プレイ中の動作が重くなる場合があるため、複数のルールに分けることをお勧めします。この注意で保存が制限されることはありません。",
-  "regex.warning.largeReplacement": "置換内容が大きい"
+  "regex.warning.largeReplacement": "置換内容が大きい",
+  "import.mmd.dockAtLimit": "ルール数が上限に達しているため左右の自動余白は元の設定のままですが、取り込み時に無効にするには元ファイルのルールを減らしてから再度取り込んでください。"
 }

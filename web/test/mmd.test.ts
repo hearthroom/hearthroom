@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport } from "../src/lib/regex-rules";
+import { applyRules, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
 import { installCard } from "../../stage/src/sandbox/rules";
 import { stylePolicyFor } from "../../stage/src/common/author-style-policy";
 import { classifyMmdFile, mergeMmdFiles, stemOf } from "../src/lib/mmd";
@@ -153,6 +153,24 @@ describe("MMD import dock default", () => {
     const second = mergeMmdFiles([classifyMmdFile("again.json", JSON.stringify(exported))], { language: "ja" }).regex!;
     expect(second.rules).toHaveLength(first.rules.length);
     expect(second.rules.at(-1)!.enabled).toBe(false);
+  });
+
+  it("keeps a valid full-capacity import saveable and explains the unchanged default", () => {
+    const raw = { statusbar: "HUD", regex_scripts: Array.from({ length: REGEX_LIMITS.rules }, (_, i) => ({ scriptName: `r${i}`, findRegex: `token${i}`, replaceString: "text" })) };
+    const file = classifyMmdFile("full.json", JSON.stringify(raw));
+    const got = mergeMmdFiles([file], { language: "en" });
+    expect(got.regex?.rules).toHaveLength(REGEX_LIMITS.rules);
+    expect(validateRuleSet(got.regex!)).toEqual([]);
+    expect(got.dropped).toContainEqual({ key: "import.mmd.dockAtLimit" });
+  });
+
+  it("recognizes the supported MMD rules-array payload", () => {
+    const raw = { chatVersion: 1, pageDepth: 1, statusbar: "<s>", welcome: "Hi", rules: [{ find: "<s>", replace: "<b>HUD</b>" }] };
+    const got = mergeMmdFiles([classifyMmdFile("mmd.json", JSON.stringify(raw))], { language: "en" });
+    expect(got.regex?.rules).toHaveLength(2);
+    expect(got.regex?.rules.at(-1)?.replace).toContain("--lt-dock: none !important");
+    expect(got.regex?.pageMode).toBe("sandbox");
+    expect(got.draft.roleWelcome).toBe("Hi");
   });
 
   it("leaves native rule imports and Tavern cards alone, even in the multi-file picker", () => {

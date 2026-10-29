@@ -3586,5 +3586,6 @@
   "mascot.pet.offHintMember": "你可以點頁首頭像，在「偏好設定」叫回蘇綺。",
   "mascot.pet.offHintGuest": "你可以點頁首的三橫線選單，在「偏好設定」叫回蘇綺。",
   "regex.warning.largeNotice": "這些規則的替換內容較大，可能影響遊玩流暢度，建議拆成幾條；這項提醒不會阻止儲存。",
-  "regex.warning.largeReplacement": "替換內容較大"
+  "regex.warning.largeReplacement": "替換內容較大",
+  "import.mmd.dockAtLimit": "規則已達上限，側邊自動留白維持原設定；若要在匯入時關閉，請先刪減來源檔的規則再重新匯入。"
 }
