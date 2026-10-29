@@ -45,7 +45,8 @@ export function analyze(doc) {
   const history = order.findIndex((o) => o.identifier === "chatHistory");
   const entries = order.map((o, i) => {
     const p = promptsOf(doc).find((x) => x.identifier === o.identifier) ?? {};
-    const base = { identifier: o.identifier, level: "full", enabled: o.enabled !== false, frameworkOwned: false, reasonCodes: [], availableAdaptationIds: [], inertSettings: [] };
+    // 跟上游一樣：實際啟用＝來源開著而且沒有列為不採用
+    const base = { identifier: o.identifier, level: "full", enabled: o.enabled !== false && !(doc.selection.excludedEntryIds ?? []).includes(o.identifier), frameworkOwned: false, reasonCodes: [], availableAdaptationIds: [], inertSettings: [] };
     if (MARKERS.has(o.identifier)) return { ...base, level: "partial", frameworkOwned: true, targetSlot: "F", reasonCodes: ["framework_owned"] };
     const inert = ["injection_order", "injection_depth", "injection_trigger", "forbid_overrides"].filter((k) => p[k] !== undefined && !(k === "injection_depth" && p.injection_position !== 1));
     const before = history < 0 || i < history;

@@ -15188,7 +15188,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "post": {
         "operationId": "createPreset",
@@ -15316,7 +15317,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/analyze": {
@@ -15413,7 +15415,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}": {
@@ -15502,7 +15505,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/revisions": {
@@ -15642,7 +15646,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/revisions/{revisionId}": {
@@ -15741,7 +15746,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/revisions/{revisionId}/export": {
@@ -15840,7 +15846,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/delete": {
@@ -15970,7 +15977,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/archive": {
@@ -16100,7 +16108,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/presets/{presetId}/copy": {
@@ -16240,7 +16249,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/preset-imports/preview": {
@@ -16337,7 +16347,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/preset-imports/{previewId}/selection": {
@@ -16466,7 +16477,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/preset-imports/{previewId}/confirm": {
@@ -16616,7 +16628,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/player/preset-default": {
@@ -16705,7 +16718,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/player/preset-default/save": {
@@ -16825,7 +16839,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/conversation/preset": {
@@ -16914,7 +16929,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/conversation/preset/preview": {
@@ -17021,7 +17037,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     },
     "/open/v1/conversation/preset/apply": {
@@ -17141,7 +17158,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       }
     }
   },
@@ -30238,7 +30256,8 @@
             },
             "description": "Top-level SillyTavern settings left out."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetDocument": {
         "type": "object",
@@ -30262,7 +30281,8 @@
           "selection": {
             "$ref": "#/components/schemas/PresetSelection"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetCompatibilityEntry": {
         "type": "object",
@@ -30342,7 +30362,8 @@
             "type": "string",
             "description": "The adaptation this entry needs. Until it is accepted, `uiStatus` is `needs_adjustment`."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetCompatibilityField": {
         "type": "object",
@@ -30391,7 +30412,8 @@
             },
             "description": "SillyTavern keys that do not take effect here; they are kept for export. Treat them as text, not HTML."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetCompatibility": {
         "type": "object",
@@ -30423,7 +30445,8 @@
             "type": "boolean",
             "description": "True while an enabled entry or a setting still needs attention; saving fails with `preset_adjustment_required` until it is resolved."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetSummary": {
         "type": "object",
@@ -30499,7 +30522,8 @@
             "type": "integer",
             "description": "Agent configurations and conversations that use one of its revisions."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetRevisionSummary": {
         "type": "object",
@@ -30529,7 +30553,8 @@
             "type": "integer",
             "description": "Number of entries that run."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetDetail": {
         "allOf": [
@@ -30547,7 +30572,8 @@
               }
             }
           }
-        ]
+        ],
+        "x-unpublished": "p2"
       },
       "PresetList": {
         "type": "object",
@@ -30589,7 +30615,8 @@
               }
             }
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetRevision": {
         "type": "object",
@@ -30650,7 +30677,8 @@
             "type": "string",
             "format": "date-time"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetRevisionResponse": {
         "type": "object",
@@ -30665,7 +30693,8 @@
           "compatibility": {
             "$ref": "#/components/schemas/PresetCompatibility"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetCreateRequest": {
         "type": "object",
@@ -30688,7 +30717,8 @@
             },
             "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetReviseRequest": {
         "type": "object",
@@ -30716,7 +30746,8 @@
             },
             "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetVersionRequest": {
         "type": "object",
@@ -30728,7 +30759,8 @@
             "type": "integer",
             "description": "The head `version` you last read."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetCopyRequest": {
         "type": "object",
@@ -30740,7 +30772,8 @@
             "type": "string",
             "description": "1 to 120 characters after trimming."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetAnalyzeRequest": {
         "type": "object",
@@ -30751,7 +30784,8 @@
           "document": {
             "$ref": "#/components/schemas/PresetDocument"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetAnalyzeResponse": {
         "type": "object",
@@ -30762,7 +30796,8 @@
           "compatibility": {
             "$ref": "#/components/schemas/PresetCompatibility"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetWriteReceipt": {
         "type": "object",
@@ -30791,7 +30826,8 @@
             ],
             "description": "On delete and archive: what actually happened."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetImportUpload": {
         "type": "object",
@@ -30808,7 +30844,8 @@
             "type": "integer",
             "description": "Prompt order to import. Required unless the file is a Prompt Manager export, which uses 0."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetImportPreview": {
         "type": "object",
@@ -30848,7 +30885,8 @@
           "report": {
             "$ref": "#/components/schemas/PresetCompatibility"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetImportSelectionRequest": {
         "type": "object",
@@ -30863,7 +30901,8 @@
           "selection": {
             "$ref": "#/components/schemas/PresetSelection"
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetImportConfirmRequest": {
         "type": "object",
@@ -30890,7 +30929,8 @@
             },
             "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetBinding": {
         "type": "object",
@@ -30967,7 +31007,8 @@
             ],
             "description": "Context size is checked with each turn before it is sent, not by this call."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetDefaultSaveRequest": {
         "type": "object",
@@ -31002,7 +31043,8 @@
             "type": "integer",
             "description": "The `bindingVersion` you last read."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "ConversationPresetPreviewRequest": {
         "type": "object",
@@ -31039,7 +31081,8 @@
             "type": "string",
             "description": "Language used to fix the names for `{{char}}` and `{{user}}`."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "ConversationPresetApplyRequest": {
         "type": "object",
@@ -31082,7 +31125,8 @@
             "type": "string",
             "description": "Language used to fix the names for `{{char}}` and `{{user}}`."
           }
-        }
+        },
+        "x-unpublished": "p2"
       },
       "PresetError": {
         "allOf": [
@@ -31137,7 +31181,8 @@
               }
             }
           }
-        ]
+        ],
+        "x-unpublished": "p2"
       }
     }
   },

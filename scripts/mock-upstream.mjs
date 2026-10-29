@@ -23,6 +23,7 @@ const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
 const roles = new Map(); const regex = new Map(); const books = new Map(); const bindings = new Map(); const entries = new Map();
 let seq = 1; const id = (p) => `${p}-${seq++}`;
+let sandboxAll = false;
 const log = [];
 const json = (res, code, body) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((r) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => r(Buffer.concat(c))); });
@@ -33,6 +34,8 @@ http.createServer(async (req, res) => {
   log.push({ m, path, body }); if (path !== "/__log") console.log(m, path, JSON.stringify(body).slice(0, 160));
   if (path === "/__log") return json(res, 200, log);
   if (path.startsWith("/fixtures/")) { const f = pathMod.join(CARDS, path.slice(10)); if (!fs.existsSync(f)) return json(res, 404, {}); res.writeHead(200, { "content-type": f.endsWith(".png") ? "image/png" : "application/json", "access-control-allow-origin": "*" }); return res.end(fs.readFileSync(f)); }
+  // 沙箱卡：/__sandbox?on=1 之後所有卡都當沙箱卡開（on=0 關）；或對某張卡 PUT author-asset 存 pageMode=sandbox
+  if (path === "/__sandbox") { sandboxAll = url.searchParams.get("on") === "1"; return json(res, 200, { sandboxAll }); }
   if (path === "/__reset") { roles.clear(); regex.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
   // 圖片本體是公開網址，<img> 不會帶 Bearer：放在鑑權前面
   if (path.startsWith("/img/")) { const n = parseInt(path.slice(5), 10); if (!path.endsWith(".png")) { res.writeHead(200, { "content-type": "application/octet-stream", "access-control-allow-origin": "*" }); return res.end(Buffer.alloc(16)); } res.writeHead(200, { "content-type": "image/svg+xml", "access-control-allow-origin": "*" }); return res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768"><rect width="100%" height="100%" fill="hsl(${(n * 47) % 360} 60% 70%)"/><text x="50%" y="50%" font-size="64" text-anchor="middle" fill="#fff">${n}</text></svg>`); }
@@ -59,7 +62,7 @@ http.createServer(async (req, res) => {
   if (path === "/open/v1/player/role-settings") return json(res, 200, { roleId: url.searchParams.get("roleId"), context: 1, selectModel: "kiro-claude-sonnet-4-5-ripple", selectModelName: "kiro-claude-sonnet-4-5-ripple", thinkingDepth: "", userName: "", userSex: "", userDefine: "", sandboxLevel: "", autoCompactEnabled: true, permanentMemory: false, multiPassEnabled: false, showAll: false, backgroundUrl: "" });
   if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
   if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
-  if (path === "/open/v1/role/author-asset/serve") return json(res, 200, { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0, variants: {} });
+  if (path === "/open/v1/role/author-asset/serve") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, { rules: a?.rules ?? [], mountTrigger: a?.mountTrigger ?? "", mountLayer: a?.mountLayer ?? "", pageMode: sandboxAll ? "sandbox" : a?.pageMode ?? "classic", status: a ? "passed" : "none", version: a?.version ?? 0, variants: {} }); }
   if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
   if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
