@@ -2,7 +2,7 @@
   "tier": "feature",
   "audience": "everyone",
   "try": "/",
-  "draft": true,
+  "draft": false,
   "title": {
     "zh-Hant": "卡片頁新增知音榜",
     "zh-Hans": "卡片页新增知音榜",
