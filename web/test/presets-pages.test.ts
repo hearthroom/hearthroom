@@ -298,6 +298,52 @@ describe("預設編輯器：封存與匯入確認（QA N03／N04）", () => {
   });
 });
 
+describe("位置略有調整（上游自動調到最近的穩定位置，owner 2026-10-30）", () => {
+  const relocatedCompat = (): Compatibility => ({ ...compat(), entries: [
+    ...compat().entries.filter((e) => e.identifier !== "turn" && e.identifier !== "script"),
+    { identifier: "turn", enabled: true, frameworkOwned: false, targetSlot: "S", uiStatus: "relocated", reasonCodes: ["dynamic_after_history"], availableAdaptationIds: [], inertSettings: [] },
+    { identifier: "script", enabled: true, frameworkOwned: false, targetSlot: "P", uiStatus: "relocated", reasonCodes: ["relocated_before_history"], availableAdaptationIds: [], inertSettings: [] },
+  ] });
+
+  it("匯入報告分三類：可直接用、位置略有調整、不會執行；調整過的照常採用，不用玩家處理", async () => {
+    await mount(PresetImportPage, "/me/presets/import");
+    const d = doc();
+    mocks.preview.mockResolvedValue({ previewId: "pv", version: 1, expiresAt: "", sourceHash: "s", selectionDigest: "dg1", document: d, report: relocatedCompat() });
+    const input = $<HTMLInputElement>("[data-testid=import-file]");
+    Object.defineProperty(input, "files", { value: [new File([JSON.stringify({ prompts: [{ identifier: "a" }], prompt_order: [{ character_id: 100001, order: [{ identifier: "a", enabled: true }] }] })], "p.json")], configurable: true });
+    input.dispatchEvent(new Event("change")); await flush();
+    const report = $("[data-testid=import-report]").textContent ?? "";
+    expect(report).toContain(t("preset.report.summary.ok", { n: "1" }));
+    expect(report).toContain(t("preset.report.summary.relocated", { n: "2" }));
+    // 數量是 0 的類別整個不列
+    expect(report).not.toContain(t("preset.report.summary.unsupported", { n: "0" }, 0));
+    expect(report).toContain(t("preset.reason.entry.dynamic_after_history"));
+    expect(report).toContain(t("preset.reason.entry.relocated_before_history"));
+    // 沒有被排除、不用按確認調整：可以直接存
+    expect(mocks.selection).not.toHaveBeenCalled();
+    expect($("[data-testid=import-accept]")).toBeNull();
+    expect($<HTMLButtonElement>("[data-testid=import-confirm]").disabled).toBe(false);
+  });
+
+  it("編輯器裡調整過的條目照調整後的位置列，標位置略有調整，不擋存檔", async () => {
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.2", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: relocatedCompat() });
+    mocks.analyze.mockImplementation(async () => relocatedCompat());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    const groups = $$(".preset-editor__group");
+    const before = groups.find((g) => g.textContent?.includes(t("preset.entries.group.before")))!;
+    const after = groups.find((g) => g.textContent?.includes(t("preset.entries.group.after")))!;
+    expect(before.textContent).toContain("腳本");
+    expect(after.textContent).toContain("回應玩家");
+    expect(after.textContent).toContain(t("preset.report.status.relocated"));
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改名";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    expect($("[data-testid=preset-blocked]")).toBeNull();
+    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(false);
+  });
+});
+
 describe("預設編輯器：匯入的不採用與新建", () => {
   it("匯入時列為不採用的條目算關著，不擋存檔；關掉匯入的條目只記不採用，來源不動", async () => {
     const d = doc(); d.selection.excludedEntryIds = ["script"];
@@ -350,34 +396,52 @@ describe("從 ST 匯入", () => {
   }
   const preview = (over: Partial<PresetDocument["selection"]> = {}, version = 1) => {
     const d = doc(); d.selection = { ...d.selection, ...over };
-    return { previewId: "pv", version, expiresAt: "", sourceHash: "s", selectionDigest: `dg${version}`, document: d, report: compat() };
+    return { previewId: "pv", version, expiresAt: "", sourceHash: "s", selectionDigest: `dg${version}`, document: d, report: importCompat() };
   };
+  // 新匯入一律用新規則分析：插進對話記錄的條目自動調位置，不會再出現要玩家確認的狀態
+  const importCompat = (): Compatibility => ({ ...compat(), compilerVersion: "preset-p1.2", reviewRequired: false, entries: compat().entries.map((e) => e.identifier === "turn"
+    ? { ...e, uiStatus: "relocated", reasonCodes: ["dynamic_after_history"], availableAdaptationIds: [], adaptationId: undefined }
+    : e) });
 
-  it("多組排序不替玩家選；選了才讀檔，不支援的條目先排除", async () => {
+  // 酒館的預設常有一組空的排序（100000）和一組真正在用的（100001）：跟酒館一樣用有內容的那組（owner 2026-10-30）
+  const fileOrder = (...ids: string[]) => ids.map((identifier) => ({ identifier, enabled: true }));
+  const filePrompts = [{ identifier: "a", name: "甲", role: "system", content: "x" }, { identifier: "b", name: "乙", role: "system", content: "y" }, { identifier: "chatHistory", name: "Chat History", marker: true }];
+
+  it("空的排序組不列；只有一組有內容就直接用那組讀檔，不讓玩家選", async () => {
     await mount(PresetImportPage, "/me/presets/import");
     mocks.preview.mockResolvedValue(preview());
     mocks.selection.mockImplementation(async (_t, _id, v, selection) => ({ ...preview(selection, v + 1) }));
-    await pick({ prompts: [], prompt_order: [{ character_id: 100000 }, { character_id: 100001 }] });
-    const radios = $$("[data-testid=import-profile]") as HTMLInputElement[];
-    expect(radios).toHaveLength(2);
-    expect(radios.some((r) => r.checked)).toBe(false);
-    expect($<HTMLButtonElement>("[data-testid=import-profile-confirm]").disabled).toBe(true);
-    expect(mocks.preview).not.toHaveBeenCalled();
-    radios[1]!.click();
-    await flush();
-    $("[data-testid=import-profile-confirm]").click();
-    await flush();
+    await pick({ prompts: filePrompts, prompt_order: [{ character_id: 100000, order: [] }, { character_id: 100001, order: fileOrder("a", "chatHistory", "b") }] });
+    expect($("[data-testid=import-profile-step]")).toBeNull();
     expect(mocks.preview).toHaveBeenCalledWith("tok", expect.any(File), 100001);
     expect(mocks.selection.mock.calls[0]![3].excludedEntryIds).toEqual(["script"]);
     const report = $("[data-testid=import-report]").textContent ?? "";
-    for (const key of ["preset.report.summary.ok", "preset.report.summary.adjust", "preset.report.summary.unsupported"]) expect(report).toContain(t(key, { n: "1" }));
+    for (const key of ["preset.report.summary.ok", "preset.report.summary.relocated", "preset.report.summary.unsupported"]) expect(report).toContain(t(key, { n: "1" }));
     expect($("[data-testid=import-fields]").textContent).toContain(t("preset.setting.extensions"));
-    // 需調整的條目要先確認調整（或不採用）才能存
-    expect($<HTMLButtonElement>("[data-testid=import-confirm]").disabled).toBe(true);
-    $("[data-testid=import-accept]").click();
-    await flush();
-    expect(mocks.selection.mock.calls.at(-1)![3].acceptedAdaptationIds).toEqual(["turn:move_to_suffix"]);
+    expect($("[data-testid=import-accept]")).toBeNull();
     expect($<HTMLButtonElement>("[data-testid=import-confirm]").disabled).toBe(false);
+  });
+
+  it("多組都有內容時預選條目最多的那組，玩家可以換", async () => {
+    await mount(PresetImportPage, "/me/presets/import");
+    mocks.preview.mockResolvedValue(preview());
+    await pick({ prompts: filePrompts, prompt_order: [{ character_id: 100000, order: fileOrder("a") }, { character_id: 100001, order: fileOrder("a", "chatHistory", "b") }] });
+    const radios = $$("[data-testid=import-profile]") as HTMLInputElement[];
+    expect(radios).toHaveLength(2);
+    expect(radios.map((r) => r.checked)).toEqual([false, true]);
+    expect($<HTMLButtonElement>("[data-testid=import-profile-confirm]").disabled).toBe(false);
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it("上線前建的預覽在上線後確認會被拒：請玩家重新選檔案，不叫他重新載入", async () => {
+    await mount(PresetImportPage, "/me/presets/import");
+    mocks.preview.mockResolvedValue(preview());
+    mocks.confirmImport.mockRejectedValue(new ApiError(409, "x", "preset_conflict", undefined, "preset_revision_conflict"));
+    await pick({ prompts: [], prompt_order: [{ character_id: 100001 }] });
+    $("[data-testid=import-confirm]").click();
+    await flush();
+    expect(root.textContent).toContain(t("preset.import.expired"));
+    expect(root.textContent).not.toContain(t("preset.error.revisionConflict"));
   });
 
   it("確認時帶最新的預覽版本與摘要，建好後打開編輯器", async () => {

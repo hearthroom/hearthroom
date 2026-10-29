@@ -10,7 +10,8 @@ import { ApiError, authHeaders, json as upstreamJson } from "./api";
 import { i18n } from "./i18n";
 import { entryRows, isPromptPack, profilesOf, type PresetDocument, type PresetSelection, type StDocument } from "./st-preset";
 
-export type UiStatus = "needs_adjustment" | "unsupported";
+/** relocated：上游自動把位置調到最近的穩定位置，照常使用、不擋存檔；needs_adjustment 只剩舊版本會出現 */
+export type UiStatus = "needs_adjustment" | "relocated" | "unsupported";
 export type PresetAction = "delete" | "archive";
 
 export interface PresetSummary {

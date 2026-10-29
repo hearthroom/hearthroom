@@ -50,18 +50,17 @@ export function analyze(doc) {
     if (MARKERS.has(o.identifier)) return { ...base, level: "partial", frameworkOwned: true, targetSlot: "F", reasonCodes: ["framework_owned"] };
     const inert = ["injection_order", "injection_depth", "injection_trigger", "forbid_overrides"].filter((k) => p[k] !== undefined && !(k === "injection_depth" && p.injection_position !== 1));
     const before = history < 0 || i < history;
-    if (p.role && p.role !== "system") return { ...base, level: "unsupported", uiStatus: "unsupported", reasonCodes: ["message_role_not_supported"], inertSettings: inert };
-    if (p.injection_position === 1) return { ...base, level: "unsupported", uiStatus: "unsupported", reasonCodes: ["history_injection_not_supported"], inertSettings: inert };
+    // 跟上游 preset-p1.2 一樣：user／assistant 角色照原位置；插進對話記錄的依深度自動放到最近的穩定位置，不用玩家確認
     if (MACROS.test(p.content ?? "")) return { ...base, level: "unsupported", uiStatus: "unsupported", reasonCodes: ["macro_not_supported"], inertSettings: inert };
-    if (before && (p.content ?? "").includes("{{lastUserMessage}}")) {
-      const adaptationId = `${o.identifier}:move_to_suffix`;
-      if (doc.selection.acceptedAdaptationIds?.includes(adaptationId)) return { ...base, level: "partial", targetSlot: "S", reasonCodes: [], availableAdaptationIds: [adaptationId], adaptationId, inertSettings: inert };
-      return { ...base, level: "partial", targetSlot: "S", uiStatus: "needs_adjustment", reasonCodes: ["move_to_suffix"], availableAdaptationIds: [adaptationId], adaptationId, inertSettings: inert };
+    if (p.injection_position === 1) {
+      const after = (p.injection_depth ?? 4) <= 4;
+      return { ...base, level: "partial", targetSlot: after ? "S" : "P", uiStatus: "relocated", reasonCodes: [after ? "relocated_after_history" : "relocated_before_history"], inertSettings: inert };
     }
+    if (before && (p.content ?? "").includes("{{lastUserMessage}}")) return { ...base, level: "partial", targetSlot: "S", uiStatus: "relocated", reasonCodes: ["dynamic_after_history"], inertSettings: inert };
     return { ...base, targetSlot: before ? "P" : "S", inertSettings: inert };
   });
   const fields = Object.keys(doc.st).filter((k) => !KNOWN_FIELDS.has(k)).map((k) => ({ path: k, status: "unsupported", reason: "source_only", uiStatus: "unsupported", reasonCodes: ["source_only"], inertSettings: [k] }));
-  return { compilerVersion: "mock-p1", entries, fields, reviewRequired: entries.some((e) => e.uiStatus) };
+  return { compilerVersion: "mock-p1.2", entries, fields, reviewRequired: entries.some((e) => e.uiStatus === "unsupported") };
 }
 
 /**

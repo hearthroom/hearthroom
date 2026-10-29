@@ -93,7 +93,14 @@ const matches = (r: EntryRow) => !q.value || `${r.prompt.name ?? ""}\n${r.prompt
 const found = computed(() => custom.value.filter(matches));
 /** 已確認改放到對話記錄之後的條目：照採用後的位置列、不再標需調整（來源的位置不動，匯出照原檔） */
 const movedAfter = (r: EntryRow) => !!doc.value?.selection.acceptedAdaptationIds.includes(adaptationId(r.identifier));
-const groupOf = (side: "before" | "after") => found.value.filter((r) => (movedAfter(r) ? "after" : r.side) === side);
+/** 上游自動調過位置的條目照調整後的位置列（targetSlot S＝之後、P＝之前） */
+const shownSide = (r: EntryRow): "before" | "after" => {
+  if (movedAfter(r)) return "after";
+  const c = compatOf(r.identifier);
+  if (c?.uiStatus === "relocated" && (c.targetSlot === "S" || c.targetSlot === "P")) return c.targetSlot === "S" ? "after" : "before";
+  return r.side;
+};
+const groupOf = (side: "before" | "after") => found.value.filter((r) => shownSide(r) === side);
 const tagOf = (r: EntryRow) => (movedAfter(r) ? undefined : compatOf(r.identifier)?.uiStatus);
 const provided = computed(() => {
   const present = new Set(rows.value.filter((r) => r.slot === "F" && FRAMEWORK_IDS.has(r.identifier)).map((r) => PROVIDED[r.identifier]));
@@ -372,7 +379,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                 <li v-for="r in groupOf(side)" :key="r.identifier">
                   <button type="button" class="preset-editor__row" :class="{ 'is-on': r.identifier === selected, 'is-off': !r.enabled }" :aria-current="r.identifier === selected || undefined" data-testid="entry-row" @click="pick(r.identifier)">
                     <span class="preset-editor__rowName">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
-                    <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
+                    <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : tagOf(r) === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</span>
                     <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                   </button>
                   <label class="preset-editor__toggle">
@@ -415,7 +422,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
             v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
-            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = movedAfter(selectedRow) ? 'after' : selectedRow.side"
+            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = shownSide(selectedRow)"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
             <button type="button" class="btn btn--sm btn--ghost preset-editor__back" @click="providedOpen = ''">{{ $t("preset.entry.back") }}</button>
@@ -453,7 +460,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           <template v-else-if="dirty && blocked.length"><span data-testid="preset-blocked">{{ blockedText }}</span></template>
           <template v-else-if="dirty">{{ $t("preset.editor.dirty") }}</template>
           <template v-else-if="savedVersion"><strong>{{ $t("preset.editor.saved", { n: savedVersion }) }}</strong> <span class="subtle">{{ $t("preset.editor.saved.hint") }}</span></template>
-          <template v-if="status"> <span class="subtle">{{ status }}</span></template>
+          <template v-if="status"><span v-if="unconfirmed || dirty || savedVersion" class="subtle" aria-hidden="true"> · </span><span class="subtle">{{ status }}</span></template>
         </div>
         <div class="preset-editor__actions">
           <button v-if="detail" type="button" class="btn" @click="exporting = true">{{ $t("preset.row.export") }}</button>

@@ -41,7 +41,12 @@ const inert = computed(() => [...new Set((props.compat?.inertSettings ?? []).map
 
 const enabled = computed({ get: () => props.row.enabled, set: (on: boolean) => setEnabled(props.doc, props.row.identifier, on, { keepSource: props.keepSource }) });
 const position = computed({
-  get: () => (accepted.value ? "after" : props.row.slot === "D" ? "D" : props.row.side),
+  get: () => {
+    if (accepted.value) return "after";
+    // 上游自動調過位置的照調整後的位置顯示；玩家再選就是明確改位置
+    if (props.compat?.uiStatus === "relocated" && (props.compat.targetSlot === "S" || props.compat.targetSlot === "P")) return props.compat.targetSlot === "S" ? "after" : "before";
+    return props.row.slot === "D" ? "D" : props.row.side;
+  },
   set: (side) => {
     if (side !== "before" && side !== "after") return;
     // 需調整的條目：改到之後＝確認調整（來源位置不動）；已確認的改回之前＝撤回確認
@@ -102,7 +107,7 @@ async function reset() {
     <fieldset class="entry__fieldset" :disabled="readOnly">
 
     <div v-if="status" class="entry__notice" :class="`entry__notice--${status}`" role="note" data-testid="entry-status">
-      <strong>{{ $t(status === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</strong>
+      <strong>{{ $t(status === "needs_adjustment" ? "preset.report.status.adjust" : status === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</strong>
       <p v-for="text in reasons" :key="text">{{ text }}</p>
       <template v-if="adaptation">
         <p v-if="accepted">{{ $t("preset.adapt.moveToSuffix.done") }}</p>
@@ -150,10 +155,6 @@ async function reset() {
       <p v-if="macro === 'lastUserMessage'" class="subtle">{{ $t("preset.entry.macro.lastUserMessage.hint") }}</p>
     </div>
     <p v-if="inert" class="subtle" data-testid="entry-inert">{{ $t("preset.entry.inert", { settings: inert }) }}</p>
-    <details v-if="row.side === 'after'" class="entry__diff">
-      <summary>{{ $t("preset.entry.diff.summary") }}</summary>
-      <p class="subtle">{{ $t("preset.entry.diff.suffix") }}</p>
-    </details>
 
     <label class="entry__check">
       <input v-model="enabled" type="checkbox" />
@@ -191,6 +192,7 @@ async function reset() {
 .entry__notice p { margin: 0; font-size: 13px; color: var(--text-2); }
 .entry__notice--needs_adjustment strong { color: var(--warning-text); }
 .entry__notice--unsupported strong { color: var(--danger); }
+.entry__notice--relocated strong { color: var(--text); }
 .entry__accept { justify-self: start; height: auto; min-height: var(--h-sm); white-space: normal; }
 .entry__diff summary { cursor: pointer; font-size: 13px; color: var(--text-2); min-height: var(--h-sm); display: flex; align-items: center; }
 .entry__diff p { margin: var(--s-1) 0 0; }

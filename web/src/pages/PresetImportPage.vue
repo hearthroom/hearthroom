@@ -13,7 +13,7 @@ import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { whole } from "@/lib/format";
 import { confirmImport, previewImport, readLocalProfiles, resultUnknown, updateImportSelection, type ImportPreview, type LocalProfile } from "@/lib/presets";
-import { adaptationId, entryRows, type PresetSelection } from "@/lib/st-preset";
+import { entryRows, type PresetSelection } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import { settingLabel } from "@/components/preset/preset-params";
@@ -52,13 +52,10 @@ const custom = computed(() => rows.value.filter((r) => r.slot !== "F"));
 const statusOf = (id: string) => compatOf(id)?.uiStatus;
 const counts = computed(() => ({
   ok: custom.value.filter((r) => !statusOf(r.identifier)).length,
-  adjust: custom.value.filter((r) => statusOf(r.identifier) === "needs_adjustment").length,
+  relocated: custom.value.filter((r) => statusOf(r.identifier) === "relocated").length,
   unsupported: custom.value.filter((r) => statusOf(r.identifier) === "unsupported").length,
 }));
 const excluded = (id: string) => !!selection.value?.excludedEntryIds.includes(id);
-const accepted = (id: string) => !!selection.value?.acceptedAdaptationIds.includes(adaptationId(id));
-/** 要採用、但還沒確認調整的條目：不處理就不能存 */
-const needFix = computed(() => custom.value.filter((r) => r.enabled && statusOf(r.identifier) === "needs_adjustment" && !accepted(r.identifier)).length);
 const fields = computed(() => [...new Set((report.value?.fields ?? []).filter((f) => f.uiStatus === "unsupported").flatMap((f) => f.inertSettings.length ? f.inertSettings : [f.path]).map((k) => settingLabel(k, t, te)))]);
 const reasonText = (id: string, code: string) => {
   const role = rows.value.find((r) => r.identifier === id)?.prompt.role === "assistant" ? "assistant" : "user";
@@ -69,6 +66,11 @@ const reasonText = (id: string, code: string) => {
 const profileLabel = (p: LocalProfile, index: number) => t("preset.import.profile.option", {
   index: index + 1, n: whole(p.count), names: p.names.join(t("preset.setting.separator")) + (p.more ? "…" : ""),
 }, p.count);
+
+// 新的匯入報告只有這兩種標示；要玩家確認調整的舊狀態只出現在上線前存的版本（編輯頁）
+/** 預覽過期，或上游換了分析規則後不再收這份預覽（版本對不上）：都只能重新選檔案 */
+const stalePreview = (err: unknown) => err instanceof ApiError && (err.code === "preset_preview_expired" || err.reason === "preset_revision_conflict");
+const statusKey = (s?: string) => (s === "relocated" ? "relocated" : "unsupported");
 
 function choose() {
   picker.value?.click();
@@ -86,10 +88,12 @@ async function onFile(e: Event) {
   if (!local.ok) { fileError.value = t(LOCAL_ERROR[local.reason], { limit: LIMIT }); file.value = null; return; }
   file.value = picked;
   title.value = picked.name.replace(/\.(json|settings)$/i, "").slice(0, 60);
-  profiles.value = local.profiles;
-  // 只有一組排序就用那組；多組時不替玩家選（每組可能是完全不同的寫法）
-  profileAsked.value = local.profiles.length > 1;
-  profileId.value = local.profiles.length === 1 ? local.profiles[0]!.id : null;
+  // 跟酒館一樣用有內容的那組：空的排序組不列（常見的是空的 100000 配上真正在用的 100001）。
+  // 只剩一組就直接用；多組都有內容時預選條目最多的那組，玩家可以換（owner 2026-10-30）
+  const usable = local.profiles.filter((p) => p.count > 0);
+  profiles.value = usable.length ? usable : local.profiles;
+  profileAsked.value = profiles.value.length > 1;
+  profileId.value = [...profiles.value].sort((a, b) => b.count - a.count)[0]?.id ?? null;
   if (!profileAsked.value) await analyze();
 }
 
@@ -130,7 +134,7 @@ async function select(next: PresetSelection, announce = true) {
     preview.value = out;
   } catch (err) {
     if (consentNeeded(err) || mine !== seq) return;
-    if (err instanceof ApiError && err.code === "preset_preview_expired") expired.value = true;
+    if (stalePreview(err)) expired.value = true;
     else error.value = err instanceof Error ? err.message : t("preset.error.unavailable");
   } finally {
     if (mine === seq) updating.value = false;
@@ -142,18 +146,12 @@ function setUse(id: string, use: boolean) {
   if (!s) return;
   const ex = s.excludedEntryIds.filter((x) => x !== id);
   if (!use) ex.push(id);
-  void select({ ...s, excludedEntryIds: ex, acceptedAdaptationIds: use ? s.acceptedAdaptationIds : s.acceptedAdaptationIds.filter((x) => x !== adaptationId(id)) });
-}
-
-function accept(id: string) {
-  const s = selection.value;
-  if (!s) return;
-  void select({ ...s, excludedEntryIds: s.excludedEntryIds.filter((x) => x !== id), acceptedAdaptationIds: [...new Set([...s.acceptedAdaptationIds, adaptationId(id)])] });
+  void select({ ...s, excludedEntryIds: ex });
 }
 
 async function confirm() {
   const p = preview.value;
-  if (!p || confirming.value || updating.value || needFix.value || !title.value.trim()) return;
+  if (!p || confirming.value || updating.value || !title.value.trim()) return;
   confirming.value = true;
   error.value = "";
   const name = title.value.trim();
@@ -175,7 +173,7 @@ async function confirm() {
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
     if (consentNeeded(err)) return;
-    if (err instanceof ApiError && err.code === "preset_preview_expired") expired.value = true;
+    if (stalePreview(err)) expired.value = true;
     else error.value = resultUnknown(err) ? t("preset.error.unknown") : err instanceof Error ? err.message : t("preset.error.unavailable");
   } finally {
     unconfirmed.value = false;
@@ -225,9 +223,9 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
         <section class="panel preset-import__card" data-testid="import-report">
           <h2>{{ $t("preset.report.title") }}</h2>
           <p class="preset-import__summary">
-            <span>{{ $t("preset.report.summary.ok", { n: whole(counts.ok) }, counts.ok) }}</span>
-            <span>{{ $t("preset.report.summary.adjust", { n: whole(counts.adjust) }, counts.adjust) }}</span>
-            <span>{{ $t("preset.report.summary.unsupported", { n: whole(counts.unsupported) }, counts.unsupported) }}</span>
+            <span v-if="counts.ok">{{ $t("preset.report.summary.ok", { n: whole(counts.ok) }, counts.ok) }}</span>
+            <span v-if="counts.relocated">{{ $t("preset.report.summary.relocated", { n: whole(counts.relocated) }, counts.relocated) }}</span>
+            <span v-if="counts.unsupported">{{ $t("preset.report.summary.unsupported", { n: whole(counts.unsupported) }, counts.unsupported) }}</span>
           </p>
           <p v-if="counts.unsupported" class="subtle">{{ $t("preset.report.unsupported.note") }}</p>
           <p v-if="stale" class="notice" role="status">{{ $t("preset.report.stale") }}</p>
@@ -246,17 +244,10 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
                   <span class="preset-import__name">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
                   <span class="sr-only">{{ $t("preset.report.use") }}</span>
                 </label>
-                <span v-if="statusOf(r.identifier)" class="preset-import__tag" :class="`preset-import__tag--${statusOf(r.identifier)}`">{{ $t(statusOf(r.identifier) === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
+                <span v-if="statusOf(r.identifier)" class="preset-import__tag" :class="`preset-import__tag--${statusOf(r.identifier)}`">{{ $t(`preset.report.status.${statusKey(statusOf(r.identifier))}`) }}</span>
                 <span v-else-if="excluded(r.identifier)" class="subtle">{{ $t("preset.report.skip") }}</span>
                 <div v-if="compatOf(r.identifier)?.reasonCodes.length" class="preset-import__reason">
                   <p v-for="code in compatOf(r.identifier)!.reasonCodes" :key="code">{{ reasonText(r.identifier, code) }}</p>
-                  <template v-if="statusOf(r.identifier) === 'needs_adjustment' && !excluded(r.identifier)">
-                    <p v-if="accepted(r.identifier)">{{ $t("preset.adapt.moveToSuffix.done") }}</p>
-                    <template v-else>
-                      <p class="subtle">{{ $t("preset.adapt.moveToSuffix.from") }}<br />{{ $t("preset.adapt.moveToSuffix.to") }}</p>
-                      <button type="button" class="btn btn--sm preset-import__accept" :disabled="updating" data-testid="import-accept" @click="accept(r.identifier)">{{ $t("preset.adapt.moveToSuffix.accept") }}</button>
-                    </template>
-                  </template>
                 </div>
               </template>
             </li>
@@ -274,9 +265,8 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
             <label for="import-title">{{ $t("preset.report.name") }}</label>
             <input id="import-title" v-model="title" class="input" maxlength="60" required data-testid="import-title" />
           </div>
-          <p v-if="needFix" class="subtle" role="status" data-testid="import-needfix">{{ $t("preset.report.needFix", { n: whole(needFix) }, needFix) }}</p>
           <p v-if="unconfirmed" class="subtle" role="status">{{ $t("preset.error.unknown") }} {{ $t("preset.error.unknown.hint") }}</p>
-          <button type="button" class="btn btn--primary btn--lg" :disabled="confirming || updating || expired || needFix > 0 || !title.trim()" data-testid="import-confirm" @click="confirm">
+          <button type="button" class="btn btn--primary btn--lg" :disabled="confirming || updating || expired || !title.trim()" data-testid="import-confirm" @click="confirm">
             {{ confirming ? $t("preset.report.confirming") : $t("preset.report.confirm") }}
           </button>
         </section>
@@ -306,11 +296,9 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
 .preset-import__name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .preset-import__lock { flex-shrink: 0; width: 18px; color: var(--text-3); }
 .preset-import__tag { font-size: 12px; font-weight: 600; }
-.preset-import__tag--needs_adjustment { color: var(--warning-text); }
 .preset-import__tag--unsupported { color: var(--danger); }
 .preset-import__reason { flex-basis: 100%; margin: 0 0 var(--s-3) 26px; display: grid; gap: var(--s-1); justify-items: start; }
-.preset-import__reason p { margin: 0; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
-.preset-import__accept { height: auto; min-height: var(--h-sm); white-space: normal; }
+.preset-import__reason p { margin: 0; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; text-wrap: pretty; }
 .preset-import__fields { justify-self: stretch; display: grid; gap: var(--s-1); }
 .preset-import__fields h3 { margin: 0; font-size: 14px; }
 .preset-import__fields p { margin: 0; }

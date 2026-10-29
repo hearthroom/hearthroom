@@ -30986,7 +30986,10 @@
                 "conditional_not_supported",
                 "history_injection_not_supported",
                 "macro_not_supported",
-                "move_to_suffix"
+                "move_to_suffix",
+                "relocated_after_history",
+                "relocated_before_history",
+                "dynamic_after_history"
               ],
               "type": "string"
             },
@@ -30995,10 +30998,11 @@
           "uiStatus": {
             "enum": [
               "needs_adjustment",
+              "relocated",
               "unsupported"
             ],
             "type": "string",
-            "description": "Absent when it can be used as is."
+            "description": "Absent when it can be used as is. relocated: the entry runs at the nearest stable position (before or after the chat history) and needs no confirmation. needs_adjustment appears only on revisions saved before relocation was automatic."
           },
           "availableAdaptationIds": {
             "description": "Adaptations that make the entry usable; accept one in `acceptedAdaptationIds`.",
