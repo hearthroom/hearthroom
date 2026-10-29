@@ -64,7 +64,7 @@ function expand() { open.value = true; emit("expand"); }
 </template>
 
 <style scoped>
-.hist { padding:var(--s-4); display:grid; gap:var(--s-2); }
+.hist { padding:var(--s-4); display:grid; gap:var(--s-2); scroll-margin-top:calc(var(--site-header-h, var(--header-h)) + var(--s-4)); }
 .hist__head { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); }
 .hist__head h2 { margin:0; font-size:16px; font-weight:700; }
 .hist__list { list-style:none; margin:0; padding:0; display:grid; }
