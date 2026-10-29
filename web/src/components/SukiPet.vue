@@ -26,6 +26,7 @@ import { platformPath } from "@/lib/connection-ui";
 import { can } from "@/lib/provider";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
+import {rankingClearance} from '@/pet/ranking-clearance';
 import {homePhoneMode,homePhoneObstacles,type PhoneClearance} from "@/pet/home-clearance";
 import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
@@ -131,6 +132,9 @@ function homepagePetBounds() {
 
 let obstacleKey="",obstacleCache:PhoneClearance|null=null;
 function phoneClearance():PhoneClearance|null {
+ if(!petEnabled.value)return null;
+ // Read each live rect: async preferences, locale changes and scrolling alter it.
+ const ranking=rankingClearance();if(ranking)return ranking;
  if(!petEnabled.value||!homePhoneMode(innerWidth,matchMedia("(pointer: coarse)").matches)||route.path.replace(/\/+$/,'')!==lp('/').replace(/\/+$/,''))return null;
  const board=document.querySelector<HTMLElement>('.board-page');
  const header=document.querySelector('.header')?.getBoundingClientRect().bottom??60;
