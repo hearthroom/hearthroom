@@ -169,7 +169,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
             </span>
           </RouterLink>
           <div class="presets__rowActions">
-            <RouterLink :to="lp(`/me/presets/${p.id}`)" class="btn btn--sm">{{ $t("preset.row.edit") }}</RouterLink>
+            <!-- 封存的不能編輯：不給編輯鈕，點名稱打開是唯讀（QA N03） -->
+            <RouterLink v-if="!p.archived" :to="lp(`/me/presets/${p.id}`)" class="btn btn--sm">{{ $t("preset.row.edit") }}</RouterLink>
             <div class="presets__menuWrap">
               <button type="button" class="btn btn--sm btn--icon" :aria-label="$t('preset.row.more')" :aria-expanded="menu === p.id" :disabled="busy === p.id" data-testid="preset-more" @click="openMenu(p.id)">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75" /><circle cx="12" cy="12" r="1.75" /><circle cx="19" cy="12" r="1.75" /></svg>

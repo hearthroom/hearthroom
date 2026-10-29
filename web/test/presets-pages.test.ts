@@ -264,6 +264,40 @@ describe("預設編輯器：英文版本紀錄", () => {
   });
 });
 
+describe("預設編輯器：封存與匯入確認（QA N03／N04）", () => {
+  it("封存的預設只能看：欄位、開關與存檔都停用，並說明已封存；列表不給編輯鈕", async () => {
+    mocks.detail.mockResolvedValue(detail({ archived: true, allowedActions: ["archive"] }));
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    await mount(PresetEditorPage, "/me/presets/p1");
+    expect(root.textContent).toContain(t("preset.error.archived"));
+    // 欄位包在停用的 fieldset 裡（瀏覽器因此停用整組；測試環境不模擬這層，只驗結構）
+    expect($("[data-testid=preset-title]").closest("fieldset")?.disabled).toBe(true);
+    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(true);
+    expect($("[data-testid=entry-add]")).toBeNull();
+    const row = $$("[data-testid=entry-row]")[0]!;
+    expect((row.parentElement!.querySelector("input[type=checkbox]") as HTMLInputElement).disabled).toBe(true);
+    row.click(); await flush();
+    // 條目照樣能點開來看，內容不能改
+    expect($("textarea").closest("fieldset")?.disabled).toBe(true);
+  });
+
+  it("封存的預設在列表裡沒有編輯鈕，點名稱打開是唯讀", async () => {
+    mocks.list.mockResolvedValue({ items: [summary({ archived: true })], nextCursor: "", quota: { used: 1, limit: 50, archived: 1 } });
+    await mount(PresetListPage, "/me/presets");
+    $<HTMLInputElement>("[data-testid=preset-show-archived]").click(); await flush();
+    const row = $("[data-testid=preset-row]");
+    expect([...row.querySelectorAll("a.btn")].map((a) => a.textContent?.trim())).not.toContain(t("preset.row.edit"));
+  });
+
+  it("匯入後的確認只講一次：網址上的參數用完就拿掉", async () => {
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    await mount(PresetEditorPage, "/me/presets/p1?imported=%E6%88%91%E7%9A%84");
+    expect(root.textContent).toContain(t("preset.report.confirmed", { name: "我的" }));
+    expect(router.currentRoute.value.fullPath).toBe("/me/presets/p1");
+  });
+});
+
 describe("預設編輯器：匯入的不採用與新建", () => {
   it("匯入時列為不採用的條目算關著，不擋存檔；關掉匯入的條目只記不採用，來源不動", async () => {
     const d = doc(); d.selection.excludedEntryIds = ["script"];

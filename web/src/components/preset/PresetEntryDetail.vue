@@ -17,7 +17,7 @@ import {
 import type { CompatibilityEntry } from "@/lib/presets";
 import { settingLabel } from "./preset-params";
 
-const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean }>();
+const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean; readOnly?: boolean }>();
 const emit = defineEmits<{ select: [id: string]; back: []; status: [text: string]; inspect: [] }>();
 const { t, te } = useI18n();
 
@@ -96,6 +96,8 @@ async function reset() {
 <template>
   <section class="entry" :aria-label="$t('preset.entry.title')">
     <button type="button" class="btn btn--sm btn--ghost entry__back" @click="emit('back')">{{ $t("preset.entry.back") }}</button>
+    <!-- 封存的預設：內容照樣看得到，欄位與動作一起停用 -->
+    <fieldset class="entry__fieldset" :disabled="readOnly">
 
     <div v-if="status" class="entry__notice" :class="`entry__notice--${status}`" role="note" data-testid="entry-status">
       <strong>{{ $t(status === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</strong>
@@ -163,6 +165,7 @@ async function reset() {
       <button type="button" class="btn btn--sm btn--ghost" @click="reset">{{ $t("preset.entry.reset") }}</button>
       <button type="button" class="btn btn--sm btn--ghost" data-testid="entry-detach" @click="detach">{{ $t("preset.entry.detach") }}</button>
     </div>
+    </fieldset>
   </section>
 </template>
 
@@ -171,6 +174,7 @@ async function reset() {
 .entry .input { min-width: 0; max-width: 100%; }
 .entry .field__foot { flex-wrap: wrap; align-items: center; }
 .entry__back { display: none; justify-self: start; }
+.entry__fieldset { display: contents; }
 .entry .field { margin-bottom: 0; min-width: 0; }
 .entry .field > p { margin: 0; }
 .entry__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }

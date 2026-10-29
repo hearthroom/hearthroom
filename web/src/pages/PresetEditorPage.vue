@@ -85,6 +85,8 @@ const selectedRow = computed(() => custom.value.find((r) => r.identifier === sel
 const savedPrompt = (id: string) => savedDoc.value ? entryRows(savedDoc.value).find((r) => r.identifier === id)?.prompt ?? (savedDoc.value.st.prompts as { identifier: string }[] | undefined)?.find((p) => p.identifier === id) : undefined;
 const head = computed(() => detail.value?.version ?? 0);
 const imported = computed(() => detail.value?.sourceKind === "imported");
+/** 封存的預設只能看：上游不收它的新版本，畫面上也不讓改（匯出照樣可以） */
+const readOnly = computed(() => !!detail.value?.archived);
 
 const q = computed(() => query.value.trim().toLowerCase());
 const matches = (r: EntryRow) => !q.value || `${r.prompt.name ?? ""}\n${r.prompt.content ?? ""}`.toLowerCase().includes(q.value);
@@ -107,7 +109,7 @@ const blocked = computed(() => custom.value.filter((r) => {
 const blockedText = computed(() => t("preset.editor.saveBlocked", {
   n: whole(blocked.value.length), names: blocked.value.map((r) => r.prompt.name || t("preset.entry.untitled")).join(t("preset.setting.separator")),
 }, blocked.value.length));
-const canSave = computed(() => dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
+const canSave = computed(() => !readOnly.value && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
 
 function adopt(next: PresetDocument, nextTitle: string, nextModels: string[], version: number, clean = true) {
   doc.value = next;
@@ -289,7 +291,11 @@ onMounted(() => {
   document.title = pageTitle(t(presetId.value ? "preset.editor.title.edit" : "preset.editor.title.new"));
   window.addEventListener("beforeunload", guard);
   // 從匯入頁過來：告訴他存好了、在哪裡找得到
-  if (typeof route.query.imported === "string") status.value = t("preset.report.confirmed", { name: route.query.imported });
+  if (typeof route.query.imported === "string") {
+    status.value = t("preset.report.confirmed", { name: route.query.imported });
+    // 只講這一次：重新整理或改名之後不該還顯示當初的名字（QA N04）
+    void router.replace({ path: route.path, hash: route.hash });
+  }
   void load();
 });
 onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clearTimeout(timer); });
@@ -306,6 +312,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
     <template v-else-if="doc">
       <header class="panel preset-editor__head">
+        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
         <div class="field">
           <label for="preset-title">{{ $t("preset.editor.name") }}</label>
           <input id="preset-title" v-model="title" class="input" maxlength="60" required :placeholder="$t('preset.editor.name.placeholder')" data-testid="preset-title" />
@@ -321,7 +328,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </div>
           <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
         </div>
+        </fieldset>
       </header>
+      <p v-if="readOnly" class="notice" role="status" data-testid="preset-archived">{{ $t("preset.row.archived") }} · {{ $t("preset.error.archived") }}</p>
 
       <p v-if="conflict" class="notice" role="alert" data-testid="preset-conflict">
         {{ $t("preset.error.revisionConflict") }}
@@ -333,7 +342,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <aside class="panel preset-editor__list" :aria-label="$t('preset.entries.title')">
           <div class="preset-editor__listHead">
             <h2>{{ $t("preset.entries.title") }}</h2>
-            <button type="button" class="btn btn--sm" data-testid="entry-add" @click="newEntry">{{ $t("preset.entries.add") }}</button>
+            <button v-if="!readOnly" type="button" class="btn btn--sm" data-testid="entry-add" @click="newEntry">{{ $t("preset.entries.add") }}</button>
           </div>
           <p class="subtle">{{ $t("preset.entries.hint") }}</p>
           <input v-model="query" type="search" class="input" :placeholder="$t('preset.entries.search')" :aria-label="$t('preset.entries.search')" data-testid="entry-search" />
@@ -355,7 +364,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                     <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                   </button>
                   <label class="preset-editor__toggle">
-                    <input type="checkbox" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
+                    <input type="checkbox" :disabled="readOnly" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
                   </label>
                 </li>
               </ul>
@@ -374,7 +383,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             </div>
           </template>
 
-          <div class="preset-editor__tools">
+          <div v-if="!readOnly" class="preset-editor__tools">
             <button type="button" class="btn btn--sm btn--ghost" :disabled="!savedDoc" @click="resetOrder">{{ $t("preset.entries.resetOrder") }}</button>
           </div>
           <details class="preset-editor__library" data-testid="entry-library">
@@ -383,9 +392,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             <ul>
               <li v-for="p in detached" :key="p.identifier">
                 <span class="preset-editor__rowName">{{ p.name || $t("preset.entry.untitled") }}</span>
-                <button type="button" class="btn btn--sm btn--ghost" @click="reinsert(p.identifier)">{{ $t("preset.unused.reinsert") }}</button>
+                <button v-if="!readOnly" type="button" class="btn btn--sm btn--ghost" @click="reinsert(p.identifier)">{{ $t("preset.unused.reinsert") }}</button>
                 <!-- 檔案裡另一組排序還用著的條目不給刪：刪了那一組會懸空 -->
-                <button v-if="canDeleteEntry(doc, p.identifier)" type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
+                <button v-if="!readOnly && canDeleteEntry(doc, p.identifier)" type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
               </li>
             </ul>
           </details>
@@ -393,7 +402,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
-            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported"
+            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
             @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = movedAfter(selectedRow) ? 'after' : selectedRow.side"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
@@ -410,7 +419,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->
       <details v-if="!isPromptPack(doc.st)" class="panel preset-editor__section" open>
         <summary>{{ $t("preset.params.title") }}</summary>
-        <PresetParams :doc="doc" :fields="compat?.fields ?? []" />
+        <fieldset class="preset-editor__fieldset" :disabled="readOnly"><PresetParams :doc="doc" :fields="compat?.fields ?? []" /></fieldset>
       </details>
 
       <details v-if="detail?.revisions?.length" class="panel preset-editor__section" data-testid="preset-versions">
@@ -420,7 +429,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           <li v-for="v in detail.revisions" :key="v.revisionId">
             <span>{{ $t("preset.versions.item", { version: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }, v.enabledEntryCount) }}</span>
             <span v-if="v.version === head" class="subtle">{{ $t("preset.versions.current") }}</span>
-            <button v-else type="button" class="btn btn--sm btn--ghost" @click="restoreFrom(v.revisionId, v.version)">{{ $t("preset.versions.restore") }}</button>
+            <button v-else-if="!readOnly" type="button" class="btn btn--sm btn--ghost" @click="restoreFrom(v.revisionId, v.version)">{{ $t("preset.versions.restore") }}</button>
           </li>
         </ul>
       </details>
@@ -450,6 +459,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 <style scoped>
 .preset-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
 .preset-editor__crumb { font-size: 13px; }
+/* 封存時整組停用用的外框：不佔版面 */
+.preset-editor__fieldset { display: contents; }
 /* 返回連結用內文次要色＋底線（站上的粉色小字在這裡只有 3.2:1） */
 .preset-crumb { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--h-sm); }
 .preset-crumb:hover { color: var(--text); }
