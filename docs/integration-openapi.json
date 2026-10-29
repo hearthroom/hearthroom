@@ -46,6 +46,10 @@
       "description": "Persona, per-card play settings, appearance and agent-mode preferences."
     },
     {
+      "name": "Presets",
+      "description": "Private prompt presets in SillyTavern format: create, revise, import and export them, and choose one for an agent configuration or a conversation. Only first-party clients can be granted `preset.read` and `preset.write`."
+    },
+    {
       "name": "Conversation",
       "description": "Starting, streaming, rewriting and reading conversations."
     },
@@ -12971,20 +12975,234 @@
         }
       }
     },
-    "/open/v1/hosting/spend-leaderboard": {
-      "post": {
+    "/open/v1/presets": {
+      "get": {
+        "operationId": "listPresets",
         "tags": [
-          "Hosting"
+          "Presets"
         ],
-        "operationId": "issuerSpendLeaderboard",
-        "summary": "Read agent-conversation spending for an issuer ranking",
-        "description": "Issuer-only aggregation for a currently accessible agent configuration, including a private one, and every version of the same work, including unpublished working drafts. Requires the hosting issuer key; a player bearer alone cannot call this operation. When the issuer forwards the player’s bearer, it is verified through the existing OAuth check and used to confirm that the viewer may open the card (required for private cards) and to find the viewer’s own rank, so the request carries no viewer account number. An author opening their own private card also needs the role.read scope. Public account numbers are returned only to the issuer, which must apply the current ranking anonymity settings and community profile projection before returning player-facing data. Totals use actual net ledger debits from ordinary and Agent conversation turns across all credit sources, excluding authors, server test accounts, review trials, memory processing and suggested replies. Refunds attributed to the payer and the same operation reduce spend; author rebates do not. Reads have a five-second service timeout and responses are private, no-store. This operation does not change billing.",
+        "summary": "List my presets",
+        "description": "Lists the caller's own presets, archived ones included. Requires `preset.read`. Archived presets count toward the limit of 50 in `quota`. Documents are not included; read a revision for its content.",
         "security": [
           {
-            "HostingIssuerKey": []
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25
+            },
+            "description": "Page size, 1 to 50."
           },
           {
-            "HostingIssuerKey": [],
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "`nextCursor` from the previous page."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of presets and the account's quota.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `limit` is outside 1 to 50, or `cursor` is malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Create a preset",
+        "description": "Creates a private preset and its first revision (`version` 1) from a document written in this service. Requires `preset.write`. A document taken from an imported preset is refused here; use the copy endpoint instead. Counts toward the limit of 50.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new preset and its first revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`preset_invalid` with `reason` `preset_source_too_large` — the SillyTavern preset exceeds 1 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`quota_exceeded` — the account already holds 50 presets, archived ones included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/analyze": {
+      "post": {
+        "operationId": "analyzePreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Check a draft document",
+        "description": "Returns the compatibility report for a document without saving a revision or calling a model. Requires `preset.write`. Use it while editing to mark entries that need adjustment or are not supported.",
+        "security": [
+          {
             "userToken": []
           }
         ],
@@ -12993,131 +13211,1829 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "roleId",
-                  "limit"
-                ],
-                "properties": {
-                  "roleId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 50
-                  },
-                  "offset": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 1000000,
-                    "default": 0
-                  }
-                }
+                "$ref": "#/components/schemas/PresetAnalyzeRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "A page of rankings plus the viewer’s own rank, even when it falls outside that page. Amounts are exact integer credits encoded as decimal strings. Equal totals are ordered by the earliest qualifying debit, then by a stable internal tie-breaker.",
+            "description": "The compatibility report.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "list",
-                    "self",
-                    "total"
-                  ],
-                  "properties": {
-                    "list": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "accountNumId",
-                          "credits",
-                          "rank"
-                        ],
-                        "properties": {
-                          "accountNumId": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "description": "Public numeric account number; no internal account UUID."
-                          },
-                          "credits": {
-                            "type": "string",
-                            "pattern": "^[1-9][0-9]*$",
-                            "description": "Exact whole-credit amount encoded as a decimal string."
-                          },
-                          "rank": {
-                            "type": "integer",
-                            "minimum": 1
-                          }
-                        }
-                      }
-                    },
-                    "self": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": [
-                            "accountNumId",
-                            "credits",
-                            "rank"
-                          ],
-                          "properties": {
-                            "accountNumId": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "description": "Public numeric account number; no internal account UUID."
-                            },
-                            "credits": {
-                              "type": "string",
-                              "pattern": "^[1-9][0-9]*$",
-                              "description": "Exact whole-credit amount encoded as a decimal string."
-                            },
-                            "rank": {
-                              "type": "integer",
-                              "minimum": 1
-                            }
-                          }
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "total": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "updatedAt": {
-                      "type": "string",
-                      "format": "date-time",
-                      "description": "Latest qualifying ledger record timestamp, omitted when no records exist."
-                    }
-                  }
+                  "$ref": "#/components/schemas/PresetAnalyzeResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid arguments"
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Missing or invalid issuer key"
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
           },
-          "404": {
-            "description": "Agent configuration is not currently accessible"
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`preset_invalid` with `reason` `preset_source_too_large` — the SillyTavern preset exceeds 1 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Hosting service unavailable"
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}": {
+      "get": {
+        "operationId": "readPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Read a preset",
+        "description": "Returns the preset with its revisions. Requires `preset.read`. Another account's preset returns 404, the same as a missing one.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The preset and its revisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/revisions": {
+      "post": {
+        "operationId": "revisePreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Save a new revision",
+        "description": "Saves `title`, `document` and `recommendedModels` as a new immutable revision and moves the preset's head to it. Requires `preset.write`. `expectedVersion` is the head `version` you started editing from; if another save came first, the request fails with 409 `preset_revision_conflict` and nothing is overwritten. Agent configurations and conversations that chose an earlier revision keep it. Archived presets cannot be revised.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetReviseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new revision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`preset_invalid` with `reason` `preset_source_too_large` — the SillyTavern preset exceeds 1 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/revisions/{revisionId}": {
+      "get": {
+        "operationId": "readPresetRevision",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Read a preset revision",
+        "description": "Returns one immutable revision and the compatibility report the current compiler produces for it. Requires `preset.read`. The uploaded source file is never returned; use the export endpoint to download the SillyTavern file.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Revision ID (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The revision and its compatibility report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetRevisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/revisions/{revisionId}/export": {
+      "get": {
+        "operationId": "exportPresetRevision",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Export a revision as a SillyTavern file",
+        "description": "Downloads the revision as a SillyTavern preset JSON attachment, without a response envelope. Requires `preset.read`. An imported revision that was never edited is returned as uploaded; after edits, only the edited parts change and settings this service does not run are kept. Take the file name from `Content-Disposition`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Revision ID (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The SillyTavern preset file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/delete": {
+      "post": {
+        "operationId": "deletePreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Delete a preset",
+        "description": "Deletes the preset when no agent configuration or conversation uses it and it was never published; otherwise archives it instead. The service decides, and `disposition` says which happened. Archived presets keep working where they are already chosen and still count toward the limit. Requires `preset.write`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`disposition` is `deleted` or `archived`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/archive": {
+      "post": {
+        "operationId": "archivePreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Archive a preset",
+        "description": "Removes the preset from the choices for agent configurations and conversations. Revisions already chosen keep working. Archived presets still count toward the limit of 50 and can still be copied. Requires `preset.write`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The archived preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/copy": {
+      "post": {
+        "operationId": "copyPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Save a copy of a preset",
+        "description": "Copies the preset's latest revision into a new private preset at `version` 1, keeping its source kind, its uploaded source file and `recommendedModels`. Works on archived presets too. The original and the conversations that use it are unchanged. Requires `preset.write`; counts toward the limit of 50.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preset ID (UUID)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetCopyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preset or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`quota_exceeded` — the account already holds 50 presets, archived ones included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-imports/preview": {
+      "post": {
+        "operationId": "previewPresetImport",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Upload a SillyTavern preset for preview",
+        "description": "Reads a SillyTavern preset file and returns a preview with its compatibility report; no preset is saved yet. Requires `preset.write`. A file with several prompt orders needs `profileId`: without it the response is 400 `preset_profile_required` listing the choices, and you upload again with one of them. Previews expire after 15 minutes.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetImportUpload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The preview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetImportPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`preset_profile_required` (with `reason` `profile_required` and `preset_profiles`) — choose one of the listed prompt orders and upload again. `invalid_request` — the form is malformed or has no `file`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`invalid_request` — the upload or the file exceeds 1 MiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-imports/{previewId}/selection": {
+      "post": {
+        "operationId": "selectPresetImport",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Change what an import keeps",
+        "description": "Replaces the preview's whole `selection` and returns the recalculated document, report and `selectionDigest`. Requires `preset.write`. `expectedPreviewVersion` is the preview `version` you last read; a stale value fails with 409.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "previewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preview ID (UUID)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetImportSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The updated preview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetImportPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preview does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`preset_preview_expired` — the preview is older than 15 minutes; upload the file again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-imports/{previewId}/confirm": {
+      "post": {
+        "operationId": "confirmPresetImport",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Save an imported preset",
+        "description": "Creates a private preset from the preview. Requires `preset.write`. `expectedPreviewVersion` and `selectionDigest` must match the latest preview; the service checks the stored file again and does not trust a document sent by the client. Excluded entries and settings this service does not run do not run, but are kept for export. Importing a private preset needs no rights statement. Counts toward the limit of 50.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "previewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Preview ID (UUID)."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetImportConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the preview does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`preset_preview_expired` — the preview is older than 15 minutes; upload the file again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid`, with `reason` naming what to fix in the document, the selection or the request. A missing or invalid `Idempotency-Key` returns `preset_invalid_input`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`quota_exceeded` — the account already holds 50 presets, archived ones included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/preset-default": {
+      "get": {
+        "operationId": "readPresetDefault",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Read the preset chosen for an agent configuration",
+        "description": "Returns the revision that new conversations with this agent configuration start with. Requires `preset.read` and `chat.play`. `mode` `card_default` means none is chosen and the agent configuration plays as its author set it up. Existing conversations are not affected by this choice.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Agent configuration ID (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current choice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_revision_unavailable` — the chosen revision can no longer be loaded. The conversation does not fall back to `card_default` on its own; apply another revision or `card_default` explicitly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/preset-default/save": {
+      "post": {
+        "operationId": "savePresetDefault",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Choose a preset for an agent configuration",
+        "description": "Sets the revision that new conversations with this agent configuration start with, or returns to `card_default`. Requires `preset.write` and `chat.play`. Existing conversations keep their own choice. `expectedVersion` is the `bindingVersion` you last read; a stale value fails with 409 `preset_revision_conflict`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetDefaultSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved choice; `effectiveFrom` is `new_conversation`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` — `mode`, `revisionId` or `Idempotency-Key` is invalid. With `reason` `preset_model_setting_unsupported`, the revision uses a model setting that `model` does not support.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/preset": {
+      "get": {
+        "operationId": "readConversationPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Read the preset a conversation uses",
+        "description": "Returns the revision this conversation uses, fixed when the conversation started or when a preset was last applied to it. Requires `preset.read` and `chat.play`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Conversation ID (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The conversation's current choice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_revision_unavailable` — the chosen revision can no longer be loaded. The conversation does not fall back to `card_default` on its own; apply another revision or `card_default` explicitly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/preset/preview": {
+      "post": {
+        "operationId": "previewConversationPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Preview applying a preset to a conversation",
+        "description": "Checks whether a revision can be applied to this conversation with `model`, without changing anything or calling a model. Requires `preset.write` and `chat.play`. Omit `revisionId` to preview returning to `card_default`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPresetPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What applying would set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` — `mode`, `revisionId` or `Idempotency-Key` is invalid. With `reason` `preset_model_setting_unsupported`, the revision uses a model setting that `model` does not support.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/preset/apply": {
+      "post": {
+        "operationId": "applyConversationPreset",
+        "tags": [
+          "Presets"
+        ],
+        "summary": "Apply a preset to a conversation",
+        "description": "Changes the revision this conversation uses, or returns it to `card_default`. Requires `preset.write` and `chat.play`. The change takes effect from the next reply that starts; while a reply is in progress the request fails with 409 `operation_active`. While a revision is applied it replaces the agent configuration's writing style, and the reply length setting stays independent. History and memory are not rewritten, and applying costs no credits. `expectedBindingVersion` is the `bindingVersion` you last read. The names for `{{char}}` and `{{user}}` are fixed in `language` when applied.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPresetApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The applied choice; `effectiveFrom` is `next_admitted_operation`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetBinding"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field or invalid ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` — `mode`, `revisionId` or `Idempotency-Key` is invalid. With `reason` `preset_model_setting_unsupported`, the revision uses a model setting that `model` does not support.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
           }
         }
       }
@@ -24551,12 +26467,6 @@
             "type": "integer",
             "description": "Credits paid. For a duplicate item, the credits paid instead."
           },
-          "unusedCredits": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0,
-            "description": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, settlement of reserved credits can still reduce this amount; 0 means fully consumed."
-          },
           "item": {
             "type": "string",
             "description": "Item won, when the prize is an item. Still set for a duplicate."
@@ -26186,6 +28096,938 @@
             "description": "The retained change range is unavailable; obtain a fresh complete index."
           }
         }
+      },
+      "PresetSelection": {
+        "type": "object",
+        "description": "Which parts of the SillyTavern preset run here. It never changes the original `enabled` flags or order.",
+        "required": [
+          "profileId",
+          "excludedEntryIds",
+          "acceptedAdaptationIds",
+          "excludedFields"
+        ],
+        "properties": {
+          "profileId": {
+            "type": "integer",
+            "description": "SillyTavern prompt order to use; 0 for a Prompt Manager export."
+          },
+          "excludedEntryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Prompt `identifier` values left out."
+          },
+          "acceptedAdaptationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Adaptations you accept, taken from `availableAdaptationIds`, such as `<identifier>:move_to_suffix`."
+          },
+          "excludedFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Top-level SillyTavern settings left out."
+          }
+        }
+      },
+      "PresetDocument": {
+        "type": "object",
+        "description": "A preset document: the complete SillyTavern preset and what runs from it here.",
+        "required": [
+          "schemaVersion",
+          "st",
+          "selection"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "enum": [
+              "hearthroom.st-preset.v1"
+            ]
+          },
+          "st": {
+            "type": "object",
+            "description": "The complete SillyTavern preset JSON, including the `version`, `type` and `data` of a Prompt Manager export. Send every field; settings this service does not run are kept for export."
+          },
+          "selection": {
+            "$ref": "#/components/schemas/PresetSelection"
+          }
+        }
+      },
+      "PresetCompatibilityEntry": {
+        "type": "object",
+        "required": [
+          "identifier",
+          "enabled",
+          "frameworkOwned",
+          "reasonCodes",
+          "availableAdaptationIds",
+          "inertSettings"
+        ],
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Prompt `identifier` in the SillyTavern preset."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the entry runs with the current selection."
+          },
+          "frameworkOwned": {
+            "type": "boolean",
+            "description": "This position is filled by the service, for example with chat history; the entry's own text does not run."
+          },
+          "level": {
+            "type": "string",
+            "description": "Detailed grading; display `uiStatus` and `reasonCodes` instead."
+          },
+          "targetSlot": {
+            "type": "string",
+            "enum": [
+              "P",
+              "S",
+              "F"
+            ],
+            "description": "Where the text goes: `P` before the chat history, `S` after it, `F` filled by the service."
+          },
+          "uiStatus": {
+            "type": "string",
+            "enum": [
+              "needs_adjustment",
+              "unsupported"
+            ],
+            "description": "Absent when it can be used as is."
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "framework_owned",
+                "unknown_marker",
+                "message_role_not_supported",
+                "conditional_not_supported",
+                "history_injection_not_supported",
+                "macro_not_supported",
+                "move_to_suffix"
+              ]
+            },
+            "description": "Stable codes explaining the entry's status; empty for plain text that can be used as is."
+          },
+          "availableAdaptationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Adaptations that make the entry usable; accept one in `acceptedAdaptationIds`."
+          },
+          "inertSettings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "SillyTavern keys that do not take effect here; they are kept for export. Treat them as text, not HTML."
+          },
+          "adaptationId": {
+            "type": "string",
+            "description": "The adaptation this entry needs. Until it is accepted, `uiStatus` is `needs_adjustment`."
+          }
+        }
+      },
+      "PresetCompatibilityField": {
+        "type": "object",
+        "required": [
+          "path",
+          "reasonCodes",
+          "inertSettings"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Top-level SillyTavern setting."
+          },
+          "status": {
+            "type": "string",
+            "description": "Detailed grading; display `uiStatus` and `reasonCodes` instead."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Detailed grading; display `uiStatus` and `reasonCodes` instead."
+          },
+          "uiStatus": {
+            "type": "string",
+            "enum": [
+              "needs_adjustment",
+              "unsupported"
+            ],
+            "description": "Absent when it can be used as is."
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "source_only",
+                "invalid_parameter",
+                "requires_model_validation"
+              ]
+            },
+            "description": "`source_only` — kept for export but not run; `invalid_parameter` — the value is out of range; `requires_model_validation` — runs only on models confirmed to support it."
+          },
+          "inertSettings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "SillyTavern keys that do not take effect here; they are kept for export. Treat them as text, not HTML."
+          }
+        }
+      },
+      "PresetCompatibility": {
+        "type": "object",
+        "description": "How the service will run the document. Translate the stable codes; do not display raw source JSON.",
+        "required": [
+          "compilerVersion",
+          "entries",
+          "fields",
+          "reviewRequired"
+        ],
+        "properties": {
+          "compilerVersion": {
+            "type": "string",
+            "description": "Version of the compiler that produced this report."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetCompatibilityEntry"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetCompatibilityField"
+            }
+          },
+          "reviewRequired": {
+            "type": "boolean",
+            "description": "True while an enabled entry or a setting still needs attention; saving fails with `preset_adjustment_required` until it is resolved."
+          }
+        }
+      },
+      "PresetSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "headRevisionId",
+          "version",
+          "sourceKind",
+          "archived",
+          "recommendedModels",
+          "createdAt",
+          "updatedAt",
+          "allowedActions",
+          "bindingCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Preset ID."
+          },
+          "title": {
+            "type": "string"
+          },
+          "headRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Latest revision."
+          },
+          "version": {
+            "type": "integer",
+            "description": "Head version; send it as `expectedVersion` when writing."
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "native",
+              "imported"
+            ],
+            "description": "`native` — written in this service; `imported` — from a SillyTavern file."
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "recommendedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "delete",
+                "archive"
+              ]
+            },
+            "description": "Offer only these actions. A preset that is in use or was published lists only `archive`."
+          },
+          "bindingCount": {
+            "type": "integer",
+            "description": "Agent configurations and conversations that use one of its revisions."
+          }
+        }
+      },
+      "PresetRevisionSummary": {
+        "type": "object",
+        "required": [
+          "revisionId",
+          "version",
+          "title",
+          "createdAt",
+          "enabledEntryCount"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "enabledEntryCount": {
+            "type": "integer",
+            "description": "Number of entries that run."
+          }
+        }
+      },
+      "PresetDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PresetSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "revisions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PresetRevisionSummary"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PresetList": {
+        "type": "object",
+        "required": [
+          "items",
+          "nextCursor",
+          "quota"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetSummary"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Pass as `cursor` for the next page; empty when there is none."
+          },
+          "quota": {
+            "type": "object",
+            "required": [
+              "used",
+              "limit",
+              "archived"
+            ],
+            "properties": {
+              "used": {
+                "type": "integer",
+                "description": "Presets held, archived ones included."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Most presets one account can hold."
+              },
+              "archived": {
+                "type": "integer",
+                "description": "Archived presets."
+              }
+            }
+          }
+        }
+      },
+      "PresetRevision": {
+        "type": "object",
+        "description": "An immutable revision. Uploaded source files are never returned here.",
+        "required": [
+          "revisionId",
+          "presetId",
+          "version",
+          "title",
+          "document",
+          "sourceKind",
+          "compilerVersion",
+          "contentHash",
+          "recommendedModels",
+          "createdAt"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "presetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/PresetDocument"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "native",
+              "imported"
+            ],
+            "description": "`native` — written in this service; `imported` — from a SillyTavern file."
+          },
+          "compilerVersion": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string",
+            "description": "Hash of what runs from this revision."
+          },
+          "recommendedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PresetRevisionResponse": {
+        "type": "object",
+        "required": [
+          "revision",
+          "compatibility"
+        ],
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/PresetRevision"
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/PresetCompatibility"
+          }
+        }
+      },
+      "PresetCreateRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "document"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "1 to 120 characters after trimming."
+          },
+          "document": {
+            "$ref": "#/components/schemas/PresetDocument"
+          },
+          "recommendedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+          }
+        }
+      },
+      "PresetReviseRequest": {
+        "type": "object",
+        "required": [
+          "expectedVersion",
+          "title",
+          "document"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "description": "The head `version` you last read."
+          },
+          "title": {
+            "type": "string",
+            "description": "1 to 120 characters after trimming."
+          },
+          "document": {
+            "$ref": "#/components/schemas/PresetDocument"
+          },
+          "recommendedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+          }
+        }
+      },
+      "PresetVersionRequest": {
+        "type": "object",
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "description": "The head `version` you last read."
+          }
+        }
+      },
+      "PresetCopyRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "1 to 120 characters after trimming."
+          }
+        }
+      },
+      "PresetAnalyzeRequest": {
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/PresetDocument"
+          }
+        }
+      },
+      "PresetAnalyzeResponse": {
+        "type": "object",
+        "required": [
+          "compatibility"
+        ],
+        "properties": {
+          "compatibility": {
+            "$ref": "#/components/schemas/PresetCompatibility"
+          }
+        }
+      },
+      "PresetWriteReceipt": {
+        "type": "object",
+        "required": [
+          "presetId",
+          "revisionId",
+          "version"
+        ],
+        "properties": {
+          "presetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "deleted",
+              "archived"
+            ],
+            "description": "On delete and archive: what actually happened."
+          }
+        }
+      },
+      "PresetImportUpload": {
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "SillyTavern preset JSON, at most 1 MiB."
+          },
+          "profileId": {
+            "type": "integer",
+            "description": "Prompt order to import. Required unless the file is a Prompt Manager export, which uses 0."
+          }
+        }
+      },
+      "PresetImportPreview": {
+        "type": "object",
+        "required": [
+          "previewId",
+          "version",
+          "expiresAt",
+          "sourceHash",
+          "selectionDigest",
+          "document",
+          "report"
+        ],
+        "properties": {
+          "previewId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Send as `expectedPreviewVersion`."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceHash": {
+            "type": "string",
+            "description": "SHA-256 of the uploaded file."
+          },
+          "selectionDigest": {
+            "type": "string",
+            "description": "Send unchanged when confirming."
+          },
+          "document": {
+            "$ref": "#/components/schemas/PresetDocument"
+          },
+          "report": {
+            "$ref": "#/components/schemas/PresetCompatibility"
+          }
+        }
+      },
+      "PresetImportSelectionRequest": {
+        "type": "object",
+        "required": [
+          "expectedPreviewVersion",
+          "selection"
+        ],
+        "properties": {
+          "expectedPreviewVersion": {
+            "type": "integer"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/PresetSelection"
+          }
+        }
+      },
+      "PresetImportConfirmRequest": {
+        "type": "object",
+        "required": [
+          "expectedPreviewVersion",
+          "selectionDigest",
+          "title"
+        ],
+        "properties": {
+          "expectedPreviewVersion": {
+            "type": "integer"
+          },
+          "selectionDigest": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "1 to 120 characters after trimming."
+          },
+          "recommendedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+          }
+        }
+      },
+      "PresetBinding": {
+        "type": "object",
+        "required": [
+          "mode",
+          "revisionId",
+          "bindingVersion",
+          "state",
+          "cacheEffect"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "card_default",
+              "revision"
+            ],
+            "description": "`card_default` — the agent configuration plays as its author set it up; `revision` — `revisionId` is used."
+          },
+          "revisionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The chosen revision; null with `card_default`."
+          },
+          "presetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The preset that owns `revisionId`, when known."
+          },
+          "presetTitle": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Version of the chosen revision."
+          },
+          "bindingVersion": {
+            "type": "integer",
+            "description": "Send as `expectedVersion` or `expectedBindingVersion` with the next change; 0 when nothing was saved yet."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready"
+            ]
+          },
+          "cacheEffect": {
+            "type": "string",
+            "enum": [
+              "none",
+              "prefix_may_rebuild"
+            ],
+            "description": "`prefix_may_rebuild` — the next reply may rebuild the prompt cache once."
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "enum": [
+              "new_conversation",
+              "next_admitted_operation"
+            ],
+            "description": "When a saved change takes effect: `new_conversation` for conversations started afterwards, `next_admitted_operation` from the next reply that starts."
+          },
+          "capacityStatus": {
+            "type": "string",
+            "enum": [
+              "checked_at_generation"
+            ],
+            "description": "Context size is checked with each turn before it is sent, not by this call."
+          }
+        }
+      },
+      "PresetDefaultSaveRequest": {
+        "type": "object",
+        "required": [
+          "roleId",
+          "mode",
+          "expectedVersion"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration ID (UUID)."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "card_default",
+              "revision"
+            ],
+            "description": "`card_default` — the agent configuration plays as its author set it up; `revision` — `revisionId` is used."
+          },
+          "revisionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required with `revision`; omit or send null with `card_default`."
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "description": "The `bindingVersion` you last read."
+          }
+        }
+      },
+      "ConversationPresetPreviewRequest": {
+        "type": "object",
+        "required": [
+          "conversationId"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversation ID (UUID)."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "card_default",
+              "revision"
+            ],
+            "description": "`card_default` — the agent configuration plays as its author set it up; `revision` — `revisionId` is used."
+          },
+          "revisionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required with `revision`; omit or send null with `card_default`."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model code the conversation will use, from `GET /open/v1/models`."
+          },
+          "language": {
+            "type": "string",
+            "description": "Language used to fix the names for `{{char}}` and `{{user}}`."
+          }
+        }
+      },
+      "ConversationPresetApplyRequest": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "mode",
+          "expectedBindingVersion"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversation ID (UUID)."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "card_default",
+              "revision"
+            ],
+            "description": "`card_default` — the agent configuration plays as its author set it up; `revision` — `revisionId` is used."
+          },
+          "revisionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required with `revision`; omit or send null with `card_default`."
+          },
+          "expectedBindingVersion": {
+            "type": "integer",
+            "description": "The `bindingVersion` you last read."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model code the conversation will use, from `GET /open/v1/models`."
+          },
+          "language": {
+            "type": "string",
+            "description": "Language used to fix the names for `{{char}}` and `{{user}}`."
+          }
+        }
+      },
+      "PresetError": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "preset_invalid_object",
+                  "preset_invalid_input",
+                  "preset_invalid_json",
+                  "preset_invalid_utf8",
+                  "preset_native_field_unsupported",
+                  "preset_native_entry_unsupported",
+                  "preset_selection_invalid",
+                  "preset_duplicate_identifier",
+                  "preset_invalid_prompt",
+                  "preset_pack_invalid",
+                  "preset_profile_not_found",
+                  "preset_macro_invalid",
+                  "preset_native_pack_invalid",
+                  "preset_adjustment_required",
+                  "preset_expected_object",
+                  "preset_invalid_order",
+                  "preset_invalid_order_reference",
+                  "preset_invalid_prompts",
+                  "preset_schema_invalid",
+                  "preset_model_setting_unsupported",
+                  "preset_source_too_large",
+                  "profile_required",
+                  "preset_revision_conflict",
+                  "preset_idempotency_conflict",
+                  "preset_archived",
+                  "operation_active"
+                ],
+                "description": "Stable detail code. Translate by `reason` first, then by `error`."
+              },
+              "preset_profiles": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Only on `preset_profile_required`: the prompt orders in the file."
+              },
+              "required_scope": {
+                "type": "string",
+                "description": "Only on `insufficient_scope`: the scope that was checked."
+              }
+            }
+          }
+        ]
       }
     }
   },
