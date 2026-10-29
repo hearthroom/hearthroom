@@ -57,9 +57,8 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true,
     world: true,
-    // 我的預設：等 Harbor 的預設 API 與授權範圍上線才開（任務 2026-10-29-preset-library）。
-    // 本機與預覽環境用 VITE_PRESETS=1 先開
-    presets: import.meta.env.VITE_PRESETS === "1",
+    // 我的預設（任務 2026-10-29-preset-library，2026-10-29 owner 批准上線）。要關就改回 false，Worker 的 PRESET_SCOPES_ENABLED 一起關
+    presets: true,
   },
 };
 
