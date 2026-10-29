@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  adaptationId, addEntry, deleteEntry, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
+  adaptationId, addEntry, deleteEntry, moveToSide, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
   isPromptPack, moveEntry, newDocument, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
@@ -191,5 +191,24 @@ describe("ST 預設文件操作", () => {
     // 來源本來就關著的條目，玩家明確打開才改來源
     setEnabled(doc, "style", true, { keepSource: true });
     expect(entryRows(doc).find((r) => r.identifier === "style")!.enabled).toBe(true);
+  });
+
+  it("換區時整個排序項目搬過去，來源的開關與其他欄位不變", () => {
+    const doc = imported();
+    const before = structuredClone((doc.st.prompt_order as { order: unknown[] }[])[1]!.order.find((o) => (o as { identifier: string }).identifier === "style"));
+    expect(moveToSide(doc, "style", "after")).toBe(true);
+    const rows = entryRows(doc);
+    expect(rows.at(-1)!.identifier).toBe("style");
+    expect((doc.st.prompt_order as { order: unknown[] }[])[1]!.order.at(-1)).toEqual(before);
+    expect(moveToSide(doc, "chatHistory", "after")).toBe(false);
+  });
+
+  it("刪掉的條目一併從不採用與已確認的調整裡拿掉，不留指向不存在條目的選擇", () => {
+    const doc = imported();
+    doc.selection.excludedEntryIds = ["spare", "main"];
+    doc.selection.acceptedAdaptationIds = ["spare:move_to_suffix"];
+    expect(deleteEntry(doc, "spare")).toBe(true);
+    expect(doc.selection.excludedEntryIds).toEqual(["main"]);
+    expect(doc.selection.acceptedAdaptationIds).toEqual([]);
   });
 });

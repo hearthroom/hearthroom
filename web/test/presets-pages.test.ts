@@ -333,3 +333,14 @@ describe("從 ST 匯入", () => {
     expect(mocks.preview).not.toHaveBeenCalled();
   });
 });
+
+describe("重新授權", () => {
+  it("剛同意完回來還是缺權限，就不再請他同意，照一般錯誤講", async () => {
+    sessionStorage.setItem("hearthroom.presetConsentAskedAt", String(Date.now()));
+    mocks.list.mockRejectedValue(new ApiError(403, t("preset.error.scope"), "insufficient_scope"));
+    await mount(PresetListPage, "/me/presets");
+    expect($("[data-testid=preset-reauth]")).toBeNull();
+    expect(root.textContent).toContain(t("preset.list.loadFailed"));
+    sessionStorage.removeItem("hearthroom.presetConsentAskedAt");
+  });
+});

@@ -11,6 +11,12 @@ import { beginLogin } from "./oauth";
 import { currentProvider } from "./provider";
 import { useSession } from "./session";
 
+const ASKED_KEY = "hearthroom.presetConsentAskedAt";
+const ASK_WINDOW = 2 * 60_000;
+function recentlyAsked(): boolean {
+  try { return Date.now() - Number(sessionStorage.getItem(ASKED_KEY) || 0) < ASK_WINDOW; } catch { return false; }
+}
+
 export function usePresetAccess() {
   const session = useSession();
   const route = useRoute();
@@ -24,16 +30,19 @@ export function usePresetAccess() {
     return value;
   }
 
-  /** 是授權缺權限的錯就記下來並回 true，呼叫端不必再顯示錯誤。 */
+  /**
+   * 是授權缺權限的錯就記下來並回 true，呼叫端不必再顯示錯誤。剛同意完回來還是缺（例如站台這邊
+   * 還沒開這兩項授權），就不再請他同意——那只會一直繞圈——回 false 讓呼叫端照一般錯誤講。
+   */
   function consentNeeded(err: unknown): boolean {
-    if (err instanceof ApiError && err.code === "insufficient_scope") {
-      needsConsent.value = true;
-      return true;
-    }
-    return false;
+    if (!(err instanceof ApiError && err.code === "insufficient_scope")) return false;
+    if (recentlyAsked()) return false;
+    needsConsent.value = true;
+    return true;
   }
 
   function reauthorize() {
+    try { sessionStorage.setItem(ASKED_KEY, String(Date.now())); } catch { /* 存不了：最多多問一次 */ }
     void beginLogin(route.fullPath, { provider });
   }
 

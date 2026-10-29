@@ -160,6 +160,18 @@ export function insertEntry(doc: PresetDocument, id: string, slot: "P" | "S"): b
   return true;
 }
 
+/** 換到聊天歷史之前或之後：整個排序項目搬過去（來源的開關與其他欄位照舊），排在那一區的最後。 */
+export function moveToSide(doc: PresetDocument, id: string, side: "before" | "after"): boolean {
+  if (isFramework(id)) return false;
+  const order = orderOf(doc);
+  const at = order.findIndex((o) => o.identifier === id);
+  if (at < 0) return false;
+  const [entry] = order.splice(at, 1);
+  const history = order.findIndex((o) => o.identifier === HISTORY);
+  order.splice(side === "before" && history >= 0 ? history : order.length, 0, entry!);
+  return true;
+}
+
 function newIdentifier(doc: PresetDocument): string {
   const taken = new Set(promptsOf(doc.st).map((p) => p.identifier));
   let id = crypto.randomUUID();
@@ -201,6 +213,9 @@ export function deleteEntry(doc: PresetDocument, id: string): boolean {
   const at = prompts.findIndex((p) => p.identifier === id);
   if (at < 0) return false;
   prompts.splice(at, 1);
+  // 上游只收指向現有條目的選擇：一起拿掉，不然整份存不進去
+  doc.selection.excludedEntryIds = doc.selection.excludedEntryIds.filter((x) => x !== id);
+  doc.selection.acceptedAdaptationIds = doc.selection.acceptedAdaptationIds.filter((x) => x !== adaptationId(id));
   return true;
 }
 

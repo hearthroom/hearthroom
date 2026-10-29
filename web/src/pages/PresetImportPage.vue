@@ -236,7 +236,8 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
               </template>
               <template v-else>
                 <label class="preset-import__pick">
-                  <input type="checkbox" :checked="!excluded(r.identifier)" :disabled="statusOf(r.identifier) === 'unsupported' || updating" @change="setUse(r.identifier, ($event.target as HTMLInputElement).checked)" />
+                  <!-- 來源本來就關著的條目：照來源，不在這裡打開（要用的話匯入後在編輯器裡開） -->
+                  <input type="checkbox" :checked="r.enabled" :disabled="statusOf(r.identifier) === 'unsupported' || (!r.enabled && !excluded(r.identifier)) || updating" @change="setUse(r.identifier, ($event.target as HTMLInputElement).checked)" />
                   <span class="preset-import__name">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
                   <span class="sr-only">{{ $t("preset.report.use") }}</span>
                 </label>

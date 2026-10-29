@@ -11,7 +11,7 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import { whole } from "@/lib/format";
 import {
-  adaptationId, detachEntry, duplicateEntry, insertEntry, moveEntry, setAdaptation, setEnabled,
+  adaptationId, detachEntry, duplicateEntry, moveEntry, moveToSide, setAdaptation, setEnabled,
   type EntryRow, type PresetDocument, type StPrompt,
 } from "@/lib/st-preset";
 import type { CompatibilityEntry } from "@/lib/presets";
@@ -42,11 +42,8 @@ const position = computed({
   get: () => (props.row.slot === "D" ? "D" : props.row.side),
   set: (side) => {
     if (side !== "before" && side !== "after") return;
-    const on = props.row.enabled;
     prompt.value.injection_position = 0;
-    detachEntry(props.doc, props.row.identifier);
-    insertEntry(props.doc, props.row.identifier, side === "before" ? "P" : "S");
-    setEnabled(props.doc, props.row.identifier, on, { keepSource: props.keepSource });
+    moveToSide(props.doc, props.row.identifier, side);
   },
 });
 
