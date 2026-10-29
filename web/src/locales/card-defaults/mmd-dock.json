@@ -1,0 +1,22 @@
+{
+  "zh-Hant": {
+    "name": "側邊自動留白（關閉）",
+    "description": "這條規則讓正文不再為側邊按鈕自動留白；停用或刪除這條規則，就會恢復自動留白。"
+  },
+  "zh-Hans": {
+    "name": "侧边自动留白（关闭）",
+    "description": "这条规则会取消正文为侧边按钮自动预留的空间；停用或删除这条规则，就会恢复自动留白。"
+  },
+  "en": {
+    "name": "No auto side spacing",
+    "description": "This rule removes auto side spacing. Disable or delete it to restore spacing."
+  },
+  "ja": {
+    "name": "左右の自動余白（無効）",
+    "description": "このルールはサイドボタン用の自動余白をなくします。ルールを無効にするか削除すると、自動余白が元に戻ります。"
+  },
+  "ko": {
+    "name": "자동 좌우 여백 해제",
+    "description": "이 규칙은 양옆 버튼을 위한 자동 여백을 없애요. 규칙을 끄거나 삭제하면 자동 여백이 돌아와요."
+  }
+}

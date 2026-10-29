@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { applyRules, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport } from "../src/lib/regex-rules";
+import { installCard } from "../../stage/src/sandbox/rules";
+import { stylePolicyFor } from "../../stage/src/common/author-style-policy";
 import { classifyMmdFile, mergeMmdFiles, stemOf } from "../src/lib/mmd";
 
 /** 合成的三件套：形狀照原站匯出，內容是假的。 */
@@ -96,7 +99,7 @@ describe("mergeMmdFiles", () => {
     expect(got.worldbook?.name).toBe("小鎮");
     expect(got.worldbook?.entries.map((e) => e.keywords)).toEqual([["酒館", "老闆"], []]);
     expect(got.worldbook?.entries[1].isConstant).toBe(true);
-    expect(got.regex?.rules).toHaveLength(2);
+    expect(got.regex?.rules).toHaveLength(3);
     expect(got.regex?.lowered).toBe(true);
     expect(got.image).toBeNull();
     expect(got.dropped).toEqual([]);
@@ -117,5 +120,51 @@ describe("mergeMmdFiles", () => {
   it("stemOf 去副檔名", () => {
     expect(stemOf("莉亞.v2.txt")).toBe("莉亞.v2");
     expect(stemOf("noext")).toBe("noext");
+  });
+});
+
+
+describe("MMD import dock default", () => {
+  it("adds one removable rule without changing the source or repeated previews", () => {
+    const source = classifyMmdFile("rules.json", JSON.stringify(EXPORT));
+    if (source.part !== "rules") throw new Error("rules expected");
+    const before = structuredClone(source.set);
+    const got = mergeMmdFiles([source], { language: "zh-Hant" }).regex!;
+    expect(got.rules.slice(0, -1)).toEqual(before.rules);
+    expect(source.set).toEqual(before);
+    expect(mergeMmdFiles([source], { language: "zh-Hant" }).regex).toEqual(got);
+    const added = got.rules.at(-1)!;
+    expect(added.enabled).toBe(true);
+    expect(added.replace).toContain("--lt-dock: none !important");
+    const asset = ruleSetToAuthorAsset(got, 1);
+    const installed = installCard(asset.rules, stylePolicyFor("mmd"));
+    expect(installed.styles.join("\n")).toContain("--lt-dock: none !important");
+    expect(applyRules("<p>Story.</p>\n", installed.rules)).toBe("<p>Story.</p>\n");
+    const disabled = asset.rules.map(r => r.id === added.id ? { ...r, enabled: false } : r);
+    expect(installCard(disabled, stylePolicyFor("mmd")).styles.join("\n")).not.toContain("--lt-dock");
+    expect(installCard(asset.rules.slice(0, -1), stylePolicyFor("mmd")).styles.join("\n")).not.toContain("--lt-dock");
+  });
+
+  it("keeps a disabled default when an MMD export is re-imported", () => {
+    const file = classifyMmdFile("rules.json", JSON.stringify(EXPORT));
+    const first = mergeMmdFiles([file], { language: "en" }).regex!;
+    first.rules.at(-1)!.enabled = false;
+    const exported = ruleSetToExport(first, "Opening");
+    const second = mergeMmdFiles([classifyMmdFile("again.json", JSON.stringify(exported))], { language: "ja" }).regex!;
+    expect(second.rules).toHaveLength(first.rules.length);
+    expect(second.rules.at(-1)!.enabled).toBe(false);
+  });
+
+  it("leaves native rule imports and Tavern cards alone, even in the multi-file picker", () => {
+    for (const raw of [
+      { version: 1, rules: [{ id: "own", name: "own", find: "x", replace: "y", enabled: true }] },
+      [{ scriptName: "tavern", findRegex: "x", replaceString: "y" }],
+    ]) {
+      const direct = ruleSetFromImport(raw)!.set;
+      const file = classifyMmdFile("rules.json", JSON.stringify(raw));
+      const got = mergeMmdFiles([file], { language: "en" }).regex!;
+      expect(got.rules.map(({ id, ...rule }) => rule)).toEqual(direct.rules.map(({ id, ...rule }) => rule));
+      expect(got.statusbar).toBe(direct.statusbar);
+    }
   });
 });

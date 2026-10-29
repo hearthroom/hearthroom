@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "從 MMD 三件套匯入的卡片，不再為側邊按鈕多留空白。",
+    "zh-Hans": "从 MMD 三件套导入的卡片，不再为侧边按钮额外留白。",
+    "en": "Cards imported from MMD file sets no longer add extra space for side buttons.",
+    "ja": "MMDの3点セットから取り込んだカードで、左右の余分な空白がなくなりました。",
+    "ko": "MMD 파일 세트로 가져온 카드에 양옆 버튼용 여백이 더 생기던 문제를 수정했어요."
+  },
+  "body": {
+    "zh-Hant": "這項調整只套用到新匯入的卡片，停用或刪除新增的「側邊自動留白（關閉）」規則，就能恢復自動留白。",
+    "zh-Hans": "这项调整仅对新导入的卡片生效，停用或删除新增的「侧边自动留白（关闭）」规则，就能恢复自动留白。",
+    "en": "This applies only to new imports; disable or delete the added “No auto side spacing” rule to restore automatic spacing.",
+    "ja": "この変更は新しく取り込むカードだけに適用され、追加された「左右の自動余白（無効）」ルールを無効にするか削除すると、自動余白を元に戻せます。",
+    "ko": "이번 변경은 새로 가져오는 카드에만 적용되며, 추가된 ‘자동 좌우 여백 해제’ 규칙을 끄거나 삭제하면 자동 여백이 돌아와요."
+  }
+}

@@ -11,14 +11,18 @@
 
 import { bookEntriesToDrafts, bookEntryDrops, countSplitEntries, entryContentMax, worldInfoToBook, type DropNote, type ImportResult, type TavernBook } from "./tavern";
 import { isMeimoRegexItem, loweredFromPageDepth, ruleSetFromImport, rulesFromMeimoList, type RegexRuleSet } from "./regex-rules";
+import mmdDockCopy from "../locales/card-defaults/mmd-dock.json";
 import { makeDraft } from "./role-draft";
+
+const MMD_DOCK_FIND = "/([\\s\\S])$/";
+const MMD_DOCK_CSS = ":root * { --lt-dock: none !important; }";
 
 export type MmdPart = "rules" | "book" | "definition";
 export const MMD_PARTS: MmdPart[] = ["rules", "book", "definition"];
 
 /** 一個檔案認出來是哪一部分，連同它帶的東西。 */
 export type MmdFile =
-  | { part: "rules"; fileName: string; set: RegexRuleSet; welcome: string; roleName: string }
+  | { part: "rules"; fileName: string; set: RegexRuleSet; dockOffByDefault?: boolean; welcome: string; roleName: string }
   | { part: "book"; fileName: string; book: TavernBook }
   | { part: "definition"; fileName: string; text: string };
 
@@ -56,7 +60,7 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   if (list && list.length && list.every(isMeimoRegexItem)) {
     const set: RegexRuleSet = { version: 1, rules: rulesFromMeimoList(list), statusbar: "", lowered: false, format: "mmd" };
     if (!set.rules.length) throw new Error("mmd_empty");
-    return { part: "rules", fileName, set, welcome: "", roleName: "" };
+    return { part: "rules", fileName, set, dockOffByDefault: true, welcome: "", roleName: "" };
   }
 
   // 世界書（酒館世界書檔，或一張卡裡的 book）
@@ -70,7 +74,7 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   const imported = ruleSetFromImport(raw);
   if (imported) {
     if (!Array.isArray(raw) && "pageDepth" in obj) imported.set.lowered = loweredFromPageDepth(obj.pageDepth);
-    return { part: "rules", fileName, set: imported.set, welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
+    return { part: "rules", fileName, set: imported.set, dockOffByDefault: !Array.isArray(obj.rules) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
   }
   throw new Error("mmd_unknown");
 }
@@ -87,6 +91,7 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
   const book = files.filter((f): f is Extract<MmdFile, { part: "book" }> => f.part === "book").at(-1) ?? null;
   const definition = files.filter((f): f is Extract<MmdFile, { part: "definition" }> => f.part === "definition").at(-1) ?? null;
 
+  const dockCopy = (mmdDockCopy as Record<string, { name: string; description: string }>)[options.language] ?? mmdDockCopy.en;
   const draft = makeDraft(options.language);
   // 名字：匯出檔裡帶的 > 設定檔的檔名 > 世界書名 > 任一檔的檔名
   draft.roleName =
@@ -114,7 +119,18 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
     dropped,
     image: null,
     spec: "mmd",
-    regex: rules?.set ?? null,
+    regex: rules ? rules.dockOffByDefault && !rules.set.rules.some(r => r.find === MMD_DOCK_FIND && r.replace.includes(MMD_DOCK_CSS)) ? {
+      ...rules.set,
+      // Copy the array: the preview is recomputed as files/language change.
+      // The final rule also works on classic pages, which render styles by matching.
+      rules: [...rules.set.rules, {
+        id: "hearthroom-mmd-dock-off",
+        name: dockCopy.name,
+        find: MMD_DOCK_FIND,
+        replace: `$1<style>/* ${dockCopy.description} */\n${MMD_DOCK_CSS}\n</style>`,
+        enabled: true,
+      }],
+    } : rules.set : null,
     parts: { rules: !!rules, book: !!book, definition: !!definition },
   };
 }
