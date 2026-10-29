@@ -106,6 +106,9 @@ simple = { limit = 120, period = 60 }
 # 卡內分享情境（?share=，sdk.share／stage.share）。關掉（改成 "false"）時卡片讀到的情境碼一律是 null，
 # 分享鈕照常能用。2026-10-25 owner 批准上線。
 SHARE_CONTEXT_ENABLED = "true"
+# 我的預設：登入時多要 preset.read／preset.write。要等 Harbor 允許綺夢社固定客戶端申請這兩項才能開（否則整個登入被拒）；
+# 關掉（"false"）就回到原本的授權範圍。2026-10-29 owner 批准上線（任務 2026-10-29-preset-library）。
+PRESET_SCOPES_ENABLED = "true"
 # 卡片的投票、共鬥計數、排行榜與分享回流（sdk.shared／stage.shared、share.tallyLink…）。關掉（改成 "false"）時
 # 卡片讀寫都回 SHARED_DISABLED、編輯頁的「玩家投票與計數」整塊不顯示，已存的數字不刪。2026-10-25 owner 批准上線。
 CARD_STATE_ENABLED = "true"

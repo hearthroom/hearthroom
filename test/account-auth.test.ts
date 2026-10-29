@@ -518,6 +518,8 @@ it('asks Harbor for the sign-in page in the player\'s language',async()=>{
 it('asks for the preset scopes only once the switch is on',async()=>{
   providers();
   const scopeOf=async()=>new URL((await (await request('start',{provider:'harbor',returnTo:'/me'})).json() as any).url).searchParams.get('scope') ?? '';
+  // wrangler.toml 現在預設開著（2026-10-29 上線）；關掉時要回到原本的範圍，回退才安全
+  envOverride={...envOverride,PRESET_SCOPES_ENABLED:'false'};
   expect((await scopeOf()).split(' ')).not.toContain('preset.read');
   envOverride={...envOverride,PRESET_SCOPES_ENABLED:'true'};
   expect((await scopeOf()).split(' ')).toEqual(expect.arrayContaining(['chat.play','preset.read','preset.write']));
