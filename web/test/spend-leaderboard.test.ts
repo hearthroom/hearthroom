@@ -56,3 +56,13 @@ it('closes with Escape after a disabled control leaves focus on the body and ret
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await flush();
  expect(document.querySelector('.spend-sheet')).toBeNull();expect(host.inert).toBe(false);expect(document.activeElement).toBe(opener);
 });
+
+it('keeps the compact excluded status short and preserves the complete author reason inside the board',async()=>{
+ vi.stubGlobal('ResizeObserver',class {observe(){}disconnect(){}});
+ mocks.board.mockResolvedValue({list:[],self:null,selfState:'author',total:0,nextOffset:null});
+ const host=document.createElement('div');document.body.append(host);
+ app=createApp(CardSpendLeaderboard,{cardId:'fixture'});app.use(i18n);app.mount(host);await flush();
+ expect(host.querySelector('.spend-mobile__mine')?.textContent).toBe(i18n.global.t('spendBoard.excluded'));
+ host.querySelector<HTMLButtonElement>('.spend-mobile button')!.click();await flush();
+ expect(document.querySelector('.spend-mine>div')?.textContent).toContain(i18n.global.t('spendBoard.author'));
+});
