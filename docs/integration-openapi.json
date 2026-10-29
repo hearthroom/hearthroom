@@ -14569,16 +14569,6 @@
               }
             }
           },
-          "409": {
-            "description": "`preset_revision_unavailable` — the chosen revision can no longer be loaded. The conversation does not fall back to `card_default` on its own; apply another revision or `card_default` explicitly.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetError"
-                }
-              }
-            }
-          },
           "503": {
             "description": "`temporarily_unavailable` — retry later.",
             "content": {
@@ -14780,16 +14770,6 @@
           },
           "404": {
             "description": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`preset_revision_unavailable` — the chosen revision can no longer be loaded. The conversation does not fall back to `card_default` on its own; apply another revision or `card_default` explicitly.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28813,7 +28793,10 @@
             "description": "The chosen revision; null with `card_default`."
           },
           "presetId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid",
             "description": "The preset that owns `revisionId`, when known."
           },
@@ -28831,7 +28814,8 @@
           "state": {
             "type": "string",
             "enum": [
-              "ready"
+              "ready",
+              "unavailable"
             ]
           },
           "cacheEffect": {

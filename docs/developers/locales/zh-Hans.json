@@ -2447,7 +2447,6 @@
   "dd57638e82e05": "`not_found` — 这个账号没有这个智能体配置、对话或版本。",
   "d13621b001372": "`preset_conflict`，`reason` 为：`preset_revision_conflict` — 预期版本已过时，请重新读取后再试；`preset_idempotency_conflict` — 这个 `Idempotency-Key` 已用于不同的请求；`preset_archived` — 这份预设已归档。",
   "dd694053860c2": "`preset_conflict`，`reason` 为：`preset_revision_conflict` — 预期的绑定版本已过时；`operation_active` — 这段对话正在生成回复，请等它完成后再试。`preset_revision_unavailable` — 选用的版本已无法加载。",
-  "d16aa9c283b86": "`preset_revision_unavailable` — 选用的版本已无法加载。对话不会自行改回 `card_default`；请明确应用其他版本或 `card_default`。",
   "dd6a408115792": "`preset_preview_expired` — 预览已超过 15 分钟；请重新上传文件。",
   "de8a47ca60d03": "`preset_invalid`，`reason` 为 `preset_source_too_large` — SillyTavern 预设超过 1 MiB。",
   "d8f2f95d381d1": "`invalid_request` — 上传内容或文件超过 1 MiB。",

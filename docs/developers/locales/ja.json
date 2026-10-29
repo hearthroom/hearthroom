@@ -2447,7 +2447,6 @@
   "dd57638e82e05": "`not_found` — このアカウントにそのエージェント設定、会話、またはリビジョンはありません。",
   "d13621b001372": "`preset_conflict`。`reason` は次のとおりです。`preset_revision_conflict` — 想定したバージョンが古いため、読み直してから再試行してください。`preset_idempotency_conflict` — この `Idempotency-Key` は別のリクエストで使用済みです。`preset_archived` — プリセットはアーカイブ済みです。",
   "dd694053860c2": "`preset_conflict`。`reason` は次のとおりです。`preset_revision_conflict` — 想定したバインドのバージョンが古くなっています。`operation_active` — この会話で返信を生成中のため、完了してから再試行してください。`preset_revision_unavailable` — 選んだリビジョンを読み込めなくなりました。",
-  "d16aa9c283b86": "`preset_revision_unavailable` — 選んだリビジョンを読み込めなくなりました。会話が自動で `card_default` に戻ることはありません。別のリビジョンか `card_default` を明示的に適用してください。",
   "dd6a408115792": "`preset_preview_expired` — プレビューから 15 分以上経過しました。ファイルをもう一度アップロードしてください。",
   "de8a47ca60d03": "`preset_invalid`（`reason` は `preset_source_too_large`）— SillyTavern プリセットが 1 MiB を超えています。",
   "d8f2f95d381d1": "`invalid_request` — アップロードまたはファイルが 1 MiB を超えています。",

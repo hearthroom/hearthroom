@@ -2447,7 +2447,6 @@
   "dd57638e82e05": "`not_found` — 이 계정에 해당 에이전트 설정, 대화 또는 리비전이 없습니다.",
   "d13621b001372": "`preset_conflict`이며 `reason`은 다음과 같습니다. `preset_revision_conflict` — 예상 버전이 오래되었으니 다시 읽은 뒤 재시도하세요. `preset_idempotency_conflict` — 이 `Idempotency-Key`는 다른 요청에 이미 사용되었습니다. `preset_archived` — 프리셋이 보관되었습니다.",
   "dd694053860c2": "`preset_conflict`이며 `reason`은 다음과 같습니다. `preset_revision_conflict` — 예상한 바인딩 버전이 오래되었습니다. `operation_active` — 이 대화에서 답변을 생성하는 중이니 끝난 뒤 다시 시도하세요. `preset_revision_unavailable` — 선택한 리비전을 더 이상 불러올 수 없습니다.",
-  "d16aa9c283b86": "`preset_revision_unavailable` — 선택한 리비전을 더 이상 불러올 수 없습니다. 대화가 저절로 `card_default`로 돌아가지는 않으니, 다른 리비전이나 `card_default`를 명시적으로 적용하세요.",
   "dd6a408115792": "`preset_preview_expired` — 미리보기가 15분을 넘었습니다. 파일을 다시 업로드하세요.",
   "de8a47ca60d03": "`preset_invalid`(`reason`은 `preset_source_too_large`) — SillyTavern 프리셋이 1 MiB를 넘습니다.",
   "d8f2f95d381d1": "`invalid_request` — 업로드 또는 파일이 1 MiB를 넘습니다.",

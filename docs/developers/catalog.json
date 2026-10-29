@@ -2447,7 +2447,6 @@
   "dd57638e82e05": "`not_found` — the agent configuration, conversation or revision does not exist for this account.",
   "d13621b001372": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived.",
   "dd694053860c2": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded.",
-  "d16aa9c283b86": "`preset_revision_unavailable` — the chosen revision can no longer be loaded. The conversation does not fall back to `card_default` on its own; apply another revision or `card_default` explicitly.",
   "dd6a408115792": "`preset_preview_expired` — the preview is older than 15 minutes; upload the file again.",
   "de8a47ca60d03": "`preset_invalid` with `reason` `preset_source_too_large` — the SillyTavern preset exceeds 1 MiB.",
   "d8f2f95d381d1": "`invalid_request` — the upload or the file exceeds 1 MiB.",
