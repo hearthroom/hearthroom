@@ -24400,6 +24400,12 @@
             "type": "integer",
             "description": "Credits paid. For a duplicate item, the credits paid instead."
           },
+          "unusedCredits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Credits not consumed from this draw, including reserved credits. Only present for a credit award with a linked balance lot. After expiry, this is the unused amount at expiry; 0 means fully consumed."
+          },
           "item": {
             "type": "string",
             "description": "Item won, when the prize is an item. Still set for a duplicate."
