@@ -12970,6 +12970,158 @@
           }
         }
       }
+    },
+    "/open/v1/hosting/spend-leaderboard": {
+      "post": {
+        "tags": [
+          "Hosting"
+        ],
+        "operationId": "issuerSpendLeaderboard",
+        "summary": "Read agent-conversation spending for an issuer ranking",
+        "description": "Issuer-only aggregation for a currently accessible, published agent configuration and the released revisions of the same work. Requires the hosting issuer key; a player bearer alone cannot call this operation. Public account numbers are returned only to the issuer, which must apply the current ranking anonymity settings and community profile projection before returning player-facing data. Totals use actual net ledger debits from ordinary and Agent conversation turns across all credit sources, excluding authors, server test accounts, review trials, memory processing and suggested replies. Refunds attributed to the payer and the same operation reduce spend; author rebates do not. Reads have a five-second service timeout and responses are private, no-store. This operation does not change billing.",
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "roleId",
+                  "limit"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "viewerAccountNumId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A page of rankings plus the viewer’s own rank, even when it falls outside that page. Amounts are exact integer credits encoded as decimal strings. Equal totals are ordered by the earliest qualifying debit, then by a stable internal tie-breaker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "list",
+                    "self",
+                    "total"
+                  ],
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "accountNumId",
+                          "credits",
+                          "rank"
+                        ],
+                        "properties": {
+                          "accountNumId": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Public numeric account number; no internal account UUID."
+                          },
+                          "credits": {
+                            "type": "string",
+                            "pattern": "^[1-9][0-9]*$",
+                            "description": "Exact whole-credit amount encoded as a decimal string."
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        }
+                      }
+                    },
+                    "self": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "accountNumId",
+                            "credits",
+                            "rank"
+                          ],
+                          "properties": {
+                            "accountNumId": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "Public numeric account number; no internal account UUID."
+                            },
+                            "credits": {
+                              "type": "string",
+                              "pattern": "^[1-9][0-9]*$",
+                              "description": "Exact whole-credit amount encoded as a decimal string."
+                            },
+                            "rank": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Latest qualifying ledger record timestamp, omitted when no records exist."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid arguments"
+          },
+          "401": {
+            "description": "Missing or invalid issuer key"
+          },
+          "404": {
+            "description": "Agent configuration is not currently accessible"
+          },
+          "503": {
+            "description": "Hosting service unavailable"
+          }
+        }
+      }
     }
   },
   "components": {

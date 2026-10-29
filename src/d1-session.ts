@@ -33,6 +33,9 @@ const READ_MOSTLY_POSTS = new Set(["/v1/auth/session", "/v1/auth/token"]);
 const AUTHOR_VISIBILITY = /^\/v1\/me\/cards\/[^/]+\/(?:visibility(?:\/operations\/[^/]+)?|publication\/operations\/[^/]+)$/;
 
 export function startsAtPrimary(method: string, path: string): boolean {
+  // A saved anonymity choice must apply to every viewer immediately, not only
+  // the writer's bookmark session. Recovery receipts must also be authoritative.
+  if (/^\/v1\/(?:me\/leaderboard-privacy(?:\/|$)|cards\/[^/]+\/leaderboard(?:\/|$))/.test(path)) return true;
   if (path.startsWith("/auth/") || path.startsWith("/internal/")) return true;
   if (AUTHOR_VISIBILITY.test(path)) return true;
   if (READ_METHODS.has(method)) return false;

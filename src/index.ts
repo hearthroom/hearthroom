@@ -1,4 +1,5 @@
 import { reviewLength } from './review-length';
+import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import { maintenanceResponse, readMaintenance } from './maintenance';
 import {qaAccountControlRoutes} from './qa-account-control';
@@ -1091,6 +1092,7 @@ app.route("/", sukiRoutes);
 app.route("/", rewardRoutes);
 app.route("/", rewardEventRoutes);
 app.route("/", updatesRoutes);
+app.route('/',spendLeaderboardRoutes);
 
 app.get("/v1/me", async (c) => {
   const timings: string[] = [];

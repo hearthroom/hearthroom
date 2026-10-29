@@ -3855,6 +3855,428 @@
         },
         "description": "Current card access and individual historical adult ratings apply. Cache-Control is private, no-store. Timestamps labelled review are approval dates, not asserted exact publication instants; unknown is null, never created_at. target uses the same visibility checks and does not scan client-side pages."
       }
+    },
+    "/v1/cards/{id}/leaderboard": {
+      "get": {
+        "tags": [
+          "Rankings"
+        ],
+        "operationId": "cardSpendLeaderboard",
+        "summary": "Read the lifetime conversation ranking",
+        "description": "Ranks actual net ordinary and Agent conversation-turn debits across all credit sources, with no publication-date cutoff. Released versions of the same work share one ranking. Authors, test accounts, review trials, memory processing and suggested replies are excluded. Anonymous rows contain rank, credits, anonymous and isSelf only; no nickname, avatar, profile link or public account number. Optional viewer authentication adds the viewer rank and privacy settings. Exact whole-credit amounts are decimal strings. Identity projections are read from the primary database and never cached.",
+        "security": [
+          {},
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result; responses are private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "list",
+                    "self",
+                    "total",
+                    "offset",
+                    "nextOffset",
+                    "selfState"
+                  ],
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "rank",
+                          "credits",
+                          "anonymous",
+                          "isSelf"
+                        ],
+                        "properties": {
+                          "rank": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "credits": {
+                            "type": "string",
+                            "pattern": "^[1-9][0-9]*$"
+                          },
+                          "anonymous": {
+                            "type": "boolean"
+                          },
+                          "isSelf": {
+                            "type": "boolean"
+                          },
+                          "accountNumId": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "nickname": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "handle": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "self": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "rank",
+                            "credits",
+                            "anonymous",
+                            "isSelf"
+                          ],
+                          "properties": {
+                            "rank": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "credits": {
+                              "type": "string",
+                              "pattern": "^[1-9][0-9]*$"
+                            },
+                            "anonymous": {
+                              "type": "boolean"
+                            },
+                            "isSelf": {
+                              "type": "boolean"
+                            },
+                            "accountNumId": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "nickname": {
+                              "type": "string"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "handle": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "nextOffset": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "selfState": {
+                      "type": "string",
+                      "enum": [
+                        "guest",
+                        "ranked",
+                        "unranked",
+                        "author",
+                        "test"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "privacy": {
+                      "type": "object",
+                      "required": [
+                        "anonymous",
+                        "mode",
+                        "revision"
+                      ],
+                      "properties": {
+                        "anonymous": {
+                          "type": "boolean",
+                          "description": "Site-wide default, initially false."
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "anonymous",
+                            "public"
+                          ],
+                          "description": "This card’s override; inherit follows future site-default changes."
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Card is not currently accessible"
+          },
+          "503": {
+            "description": "Ranking could not be confirmed; do not infer an empty ranking or default privacy."
+          }
+        }
+      }
+    },
+    "/v1/me/leaderboard-privacy": {
+      "get": {
+        "tags": [
+          "Rankings"
+        ],
+        "operationId": "myLeaderboardPrivacy",
+        "summary": "Read ranking privacy",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cardId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result; responses are private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "anonymous",
+                    "mode",
+                    "revision"
+                  ],
+                  "properties": {
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "Site-wide default, initially false."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "anonymous",
+                        "public"
+                      ],
+                      "description": "This card’s override; inherit follows future site-default changes."
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Rankings"
+        ],
+        "operationId": "saveLeaderboardPrivacy",
+        "summary": "Atomically save site-wide and card-specific ranking privacy settings",
+        "description": "Only the authenticated member’s settings are updated. A card-specific choice survives site-default changes and published card revisions. Settings apply to past rankings. Changing from anonymous to showing a nickname and avatar requires confirmed=true. The revision is an optimistic concurrency check: a conflict commits none of the request. The requestId is an idempotency key; replaying the same payload returns its durable receipt, while a different payload using that key conflicts. After a lost response, query the operation receipt and, if necessary, retry the identical operation; do not send a new requestId while the result is unknown.",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "requestId",
+                  "revision",
+                  "anonymous"
+                ],
+                "properties": {
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "anonymous": {
+                    "type": "boolean"
+                  },
+                  "cardId": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "inherit",
+                      "anonymous",
+                      "public"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result; responses are private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "anonymous",
+                    "mode",
+                    "revision"
+                  ],
+                  "properties": {
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "Site-wide default, initially false."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "anonymous",
+                        "public"
+                      ],
+                      "description": "This card’s override; inherit follows future site-default changes."
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "privacy_conflict, privacy_request_conflict or privacy_confirmation_required. No new save is committed."
+          }
+        }
+      }
+    },
+    "/v1/me/leaderboard-privacy/operations/{requestId}": {
+      "get": {
+        "tags": [
+          "Rankings"
+        ],
+        "operationId": "leaderboardPrivacyOperation",
+        "summary": "Read a committed privacy save receipt",
+        "description": "Owner-scoped durable receipt. A 404 means no receipt was observed at this instant; it does not prove that an in-flight request cannot commit. A receipt reflects that operation, so reread current preferences after recovery when other devices may have saved later.",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result; responses are private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "anonymous",
+                    "mode",
+                    "revision"
+                  ],
+                  "properties": {
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "Site-wide default, initially false."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "anonymous",
+                        "public"
+                      ],
+                      "description": "This card’s override; inherit follows future site-default changes."
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Receipt has not been observed."
+          }
+        }
+      }
     }
   },
   "components": {

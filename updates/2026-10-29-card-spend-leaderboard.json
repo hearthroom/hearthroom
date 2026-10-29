@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "draft": true,
+  "title": {
+    "zh-Hant": "卡片頁新增知音榜",
+    "zh-Hans": "卡片页新增知音榜",
+    "en": "Kindred Spirits on Card Pages",
+    "ja": "カードページの共感ランキング",
+    "ko": "카드 페이지의 공감 랭킹"
+  },
+  "body": {
+    "zh-Hant": "知音榜依累計對話消耗的積分排名，你可以設定全站預設匿名，或為每張卡另選顯示方式；匿名只隱藏暱稱與頭像，名次和積分仍會公開。",
+    "zh-Hans": "知音榜按累计对话消耗的积分排名，你可以设置全站默认匿名，或为每张卡单独选择显示方式；匿名只隐藏昵称和头像，名次和积分仍会公开。",
+    "en": "Rankings use credits spent chatting on each card; you can use anonymity by default or choose separately for each card; it hides your nickname and avatar while your rank and credits spent stay public.",
+    "ja": "順位はチャットで使った累計ポイント順で、匿名表示は全体またはカードごとに選べますが、隠れるのはニックネームとアイコンだけで、順位と使用ポイントは公開されます。",
+    "ko": "랭킹은 누적 대화 사용 포인트 순이며, 사이트 기본 익명 설정이나 카드별 표시 방식을 선택해도 순위와 사용 포인트는 공개되고 닉네임과 프로필 사진만 숨겨져요."
+  }
+}

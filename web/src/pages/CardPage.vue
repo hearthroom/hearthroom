@@ -24,6 +24,7 @@ import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import CardScore from "@/components/CardScore.vue";
+import CardSpendLeaderboard from '@/components/CardSpendLeaderboard.vue';
 import ReadmeView from "@/components/ReadmeView.vue";
 import CoverImg from "@/components/CoverImg.vue";
 import { cardThumb, thumbChain } from "@/lib/card-thumb";
@@ -471,6 +472,8 @@ watch(() => session.profile?.showNsfw, (now, before) => {
         <aside ref="side" class="role__side">
           <CardScore v-if="listed && score" id="score" class="role__score-box" :score="score" :own="own" :busy="scoreBusy" @rate="rate" @write="writeReview" />
 
+          <CardSpendLeaderboard v-if="listed && card.provider==='harbor' && (!card.status || card.status==='approved')" :key="card.id" :card-id="card.id" :play-url="playAppUrl(String(card.num??card.id),locale,{provider:card.provider})" />
+
           <section class="panel role__info" :aria-label="$t('card.info')">
             <dl class="role__stats">
               <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
@@ -701,7 +704,7 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__cta > .library-toggle { order: 1; flex: none; }
   .role__cta > .sh { order: 1; }
 
-  .role__body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "versions" "score" "comments" "info" "more"; gap: var(--s-5); margin-top: var(--s-5); }
+  .role__body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "versions" "score" "spend" "comments" "info" "more"; gap: var(--s-5); margin-top: var(--s-5); }
   .role__main, .role__side { display: contents; }
   .role__intro-wrap { grid-area: intro; }
   .role__versions-wrap { grid-area: versions; }
@@ -710,7 +713,7 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__info { grid-area: info; }
   .role__more { grid-area: more; }
   /* 作者綁了打賞：作者區塊從最底下移到介紹正下方，讀完介紹就看得到（其他作品跟著上來） */
-  .role__body:has(.role__more--tips) { grid-template-areas: "intro" "versions" "more" "score" "comments" "info"; }
+  .role__body:has(.role__more--tips) { grid-template-areas: "intro" "versions" "more" "score" "spend" "comments" "info"; }
   .role__intro { padding: var(--s-4); }
   .role__comments { padding: var(--s-4); }
 }

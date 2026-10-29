@@ -16,6 +16,7 @@
  * 主頁數據開關（預設關）、卡片與遊玩服務的授權（原本在「我的」頁右欄），以及 Discord 社區、通知設定的入口。
  */
 import { computed, onMounted, reactive, ref } from "vue";
+import LeaderboardPrivacy from '@/components/LeaderboardPrivacy.vue';
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
 import { can } from "@/lib/provider";
@@ -187,6 +188,7 @@ onMounted(() => {
   void load();
   // 從榜單「已隱藏 N 類」來的：捲到那一區
   if (location.hash === "#hidden") requestAnimationFrame(() => document.getElementById("hidden")?.scrollIntoView({ block: "start" }));
+  if (location.hash === '#leaderboard-privacy') requestAnimationFrame(()=>document.getElementById('leaderboard-privacy')?.scrollIntoView({block:'start'}));
 });
 </script>
 
@@ -258,6 +260,11 @@ onMounted(() => {
           <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? $t("state.loading") : $t("settings.save") }}</button>
         </div>
       </form>
+    </section>
+
+    <section id="leaderboard-privacy" class="panel content">
+      <h2 class="eyebrow">{{ $t('spendBoard.privacySettings') }}</h2>
+      <LeaderboardPrivacy />
     </section>
 
     <section class="panel content">
