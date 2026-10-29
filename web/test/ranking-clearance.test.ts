@@ -20,3 +20,13 @@ it('protects the desktop compact board and ignores its hidden mobile duplicate',
  panel.getBoundingClientRect=()=>({left:0,right:0,top:0,bottom:0,width:0,height:0} as DOMRect);
  expect(rankingClearance()).toBeNull();
 });
+it('keeps card comments and version actions protected when the compact ranking is outside the viewport',()=>{
+ vi.stubGlobal('innerHeight',844);document.body.innerHTML='<main class="page role"><section id="comments"><div class="panel"></div></section><section class="version-history"></section></main>';
+ const comments=document.querySelector<HTMLElement>('#comments')!,versions=document.querySelector<HTMLElement>('.version-history')!;let commentTop=420,versionTop=950;
+ comments.getBoundingClientRect=()=>({left:16,right:374,top:commentTop,bottom:commentTop+340,width:358,height:340} as DOMRect);
+ versions.getBoundingClientRect=()=>({left:16,right:374,top:versionTop,bottom:versionTop+120,width:358,height:120} as DOMRect);
+ expect(rankingClearance()?.obstacles.some(r=>r.top===420&&r.bottom===760)).toBe(true);
+ const frame={left:335,right:390,height:132,original:650,current:650};expect(nearestClearPetY({...rankingClearance()!,...frame})).not.toBe(650);
+ commentTop=950;versionTop=170;expect(rankingClearance()?.obstacles.some(r=>r.top===170&&r.bottom===290)).toBe(true);
+ versionTop=950;expect(rankingClearance()).toBeNull();
+});
