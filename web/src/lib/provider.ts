@@ -57,9 +57,8 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true,
     world: true,
-    // 我的預設（任務 2026-10-29-preset-library）。2026-10-29 上線後正式站新建失敗（422），依批准的回退方案先關；
-    // 修好重驗後改回 true，Worker 的 PRESET_SCOPES_ENABLED 一起開
-    presets: false,
+    // 我的預設（任務 2026-10-29-preset-library，owner 批准上線）。要關就改回 false，Worker 的 PRESET_SCOPES_ENABLED 一起關
+    presets: true,
   },
 };
 
