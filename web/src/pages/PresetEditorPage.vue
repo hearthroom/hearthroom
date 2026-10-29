@@ -9,7 +9,7 @@
  * 哪條要調整、哪條不支援，以服務端 analyze 為準；編輯中停手半秒就重判一次。
  * 每次儲存是一個新版本：已經在用舊版本的對話不會跟著變，要用新版得在畫布裡自己換。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, addEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
+  FRAMEWORK_IDS, isPromptPack, addEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -48,7 +48,8 @@ const PROVIDED: Record<string, string> = {
 };
 const PROVIDED_ROWS = ["charDescription", "worldInfo", "chatHistory", "memory"] as const;
 
-const presetId = computed(() => (typeof route.params.presetId === "string" ? route.params.presetId : ""));
+// /me/presets/new 與 /me/presets/:id 是同一條路由：建好之後換網址時元件沿用，離開前的確認也跟著走
+const presetId = computed(() => (typeof route.params.presetId === "string" && route.params.presetId !== "new" ? route.params.presetId : ""));
 const detail = ref<PresetDetail | null>(null);
 const doc = ref<PresetDocument | null>(null);
 const savedDoc = ref<PresetDocument | null>(null);
@@ -121,6 +122,8 @@ async function load() {
     const tk = await token();
     void fetchModelOptions(tk).then((o) => { modelOptions.value = o; }).catch(() => {});
     if (!presetId.value) {
+      detail.value = null;
+      savedVersion.value = 0;
       adopt(newDocument(t("preset.entries.newName")), "", [], 0);
       compat.value = null;
       return;
@@ -182,7 +185,9 @@ async function save() {
   status.value = "";
   const action = presetId.value ? `revise:${presetId.value}:${baseVersion.value}:${snapshot()}` : `create:${snapshot()}`;
   try {
-    const input = { title: title.value.trim(), document: doc.value, recommendedModels: models.value };
+    // 同一把冪等鍵重送的必須是同一份內容：先凍住，重試期間玩家再改也不會混進去
+    const input = structuredClone({ title: title.value.trim(), document: toRaw(doc.value), recommendedModels: [...models.value] });
+    const sent = snapshot();
     const id = presetId.value;
     const tk = await token();
     const receipt = await send(action, (key) => id
@@ -190,8 +195,8 @@ async function save() {
       : createPreset(tk, input, key));
     conflict.value = false;
     savedVersion.value = receipt.version;
-    saved.value = snapshot();
-    savedDoc.value = structuredClone(doc.value);
+    saved.value = sent;
+    savedDoc.value = structuredClone(input.document);
     if (!id) {
       await router.replace(lp(`/me/presets/${receipt.presetId}`));
       await load();
@@ -346,7 +351,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                     <span v-if="compatOf(r.identifier)?.uiStatus" class="preset-editor__tag" :class="`preset-editor__tag--${compatOf(r.identifier)!.uiStatus}`">{{ $t(compatOf(r.identifier)!.uiStatus === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
                     <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                   </button>
-                  <input type="checkbox" class="preset-editor__toggle" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked)" />
+                  <input type="checkbox" class="preset-editor__toggle" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
                 </li>
               </ul>
             </div>
@@ -382,7 +387,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
-            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)"
+            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported"
             @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = selectedRow.side"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
@@ -396,7 +401,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         </section>
       </div>
 
-      <details class="panel preset-editor__section" open>
+      <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->
+      <details v-if="!isPromptPack(doc.st)" class="panel preset-editor__section" open>
         <summary>{{ $t("preset.params.title") }}</summary>
         <PresetParams :doc="doc" :fields="compat?.fields ?? []" />
       </details>

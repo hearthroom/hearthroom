@@ -58,7 +58,7 @@ const counts = computed(() => ({
 const excluded = (id: string) => !!selection.value?.excludedEntryIds.includes(id);
 const accepted = (id: string) => !!selection.value?.acceptedAdaptationIds.includes(adaptationId(id));
 /** 要採用、但還沒確認調整的條目：不處理就不能存 */
-const needFix = computed(() => custom.value.filter((r) => statusOf(r.identifier) === "needs_adjustment" && !excluded(r.identifier) && !accepted(r.identifier)).length);
+const needFix = computed(() => custom.value.filter((r) => r.enabled && statusOf(r.identifier) === "needs_adjustment" && !accepted(r.identifier)).length);
 const fields = computed(() => [...new Set((report.value?.fields ?? []).filter((f) => f.uiStatus === "unsupported").flatMap((f) => f.inertSettings.length ? f.inertSettings : [f.path]).map((k) => settingLabel(k, t, te)))]);
 const reasonText = (id: string, code: string) => {
   const role = rows.value.find((r) => r.identifier === id)?.prompt.role === "assistant" ? "assistant" : "user";

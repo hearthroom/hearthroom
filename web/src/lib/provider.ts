@@ -124,8 +124,9 @@ export function oauthBaseOf(id: ProviderId = currentProvider()): string {
 }
 
 export function scopeOf(id: ProviderId = currentProvider()): string {
-  // 我的預設的兩項授權跟著功能開關走：Harbor 允許之前送出去，整個登入會被拒（伺服器端同一條規則見 src/account-auth.ts）
-  return [SCOPES[id] ?? "", FEATURES[id]?.presets ? "preset.read preset.write" : ""].filter(Boolean).join(" ");
+  // 預設的 preset.read／preset.write 只給第一方固定客戶端，由託管登入（src/account-auth.ts）要；
+  // 這裡是自架的動態註冊路徑，Harbor 不讓動態註冊的客戶端申請，加了整個登入會被拒。
+  return SCOPES[id] ?? "";
 }
 
 /** 目前這家有沒有這項能力。 */

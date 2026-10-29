@@ -43,8 +43,8 @@ const pages: RouteRecordRaw[] = [
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
   // 我的預設：私人資產的管理頁。哪張卡用哪個預設在遊玩畫布裡選，不在這裡
   { path: "me/presets", component: () => import("./pages/PresetListPage.vue"), meta: { auth: true, feature: "presets" } },
-  { path: "me/presets/new", component: () => import("./pages/PresetEditorPage.vue"), meta: { auth: true, feature: "presets", petAway: true } },
   { path: "me/presets/import", component: () => import("./pages/PresetImportPage.vue"), meta: { auth: true, feature: "presets" } },
+  // new 與既有預設共用一條：建好後換網址時元件沿用，離開前的確認跟著走（import 是靜態路徑，排在前面）
   { path: "me/presets/:presetId", component: () => import("./pages/PresetEditorPage.vue"), meta: { auth: true, feature: "presets", petAway: true } },
   // 舊的「我的分享申請」：現在是活動中心的「我參加的」頁籤。通知與舊書籤還指著這裡
   { path: "me/campaign", redirect: (to) => ({ path: withLocale("/campaigns", localeOf(to)), query: { ...to.query, tab: "mine" }, hash: to.hash }) },

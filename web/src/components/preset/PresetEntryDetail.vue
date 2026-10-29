@@ -6,7 +6,7 @@
  * 可以直接用的條目什麼都不標（owner 2026-10-29：「部分相容就是相容」）。
  * 這條在酒館還有、但本站不執行的設定只寫一行，匯出時原樣保留；不給看原始 JSON。
  */
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, toRaw } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import { whole } from "@/lib/format";
@@ -17,7 +17,7 @@ import {
 import type { CompatibilityEntry } from "@/lib/presets";
 import { settingLabel } from "./preset-params";
 
-const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt }>();
+const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean }>();
 const emit = defineEmits<{ select: [id: string]; back: []; status: [text: string]; inspect: [] }>();
 const { t, te } = useI18n();
 
@@ -37,7 +37,7 @@ const adaptation = computed(() => props.compat?.availableAdaptationIds.find((id)
 const accepted = computed(() => !!adaptation.value && props.doc.selection.acceptedAdaptationIds.includes(adaptation.value));
 const inert = computed(() => [...new Set((props.compat?.inertSettings ?? []).map((k) => settingLabel(k, t, te)))].join(t("preset.setting.separator")));
 
-const enabled = computed({ get: () => props.row.enabled, set: (on: boolean) => setEnabled(props.doc, props.row.identifier, on) });
+const enabled = computed({ get: () => props.row.enabled, set: (on: boolean) => setEnabled(props.doc, props.row.identifier, on, { keepSource: props.keepSource }) });
 const position = computed({
   get: () => (props.row.slot === "D" ? "D" : props.row.side),
   set: (side) => {
@@ -46,7 +46,7 @@ const position = computed({
     prompt.value.injection_position = 0;
     detachEntry(props.doc, props.row.identifier);
     insertEntry(props.doc, props.row.identifier, side === "before" ? "P" : "S");
-    setEnabled(props.doc, props.row.identifier, on);
+    setEnabled(props.doc, props.row.identifier, on, { keepSource: props.keepSource });
   },
 });
 
@@ -87,7 +87,7 @@ async function reset() {
     confirmText: t("preset.entry.reset.confirm"), cancelText: t("preset.entry.reset.keep"), focusCancel: true,
   });
   if (!ok) return;
-  const saved = structuredClone(props.saved);
+  const saved = structuredClone(toRaw(props.saved));
   for (const key of Object.keys(prompt.value)) if (!(key in saved)) delete prompt.value[key];
   Object.assign(prompt.value, saved);
 }

@@ -177,4 +177,19 @@ describe("ST 預設文件操作", () => {
     expect(ids(doc)).toEqual(["main", "charDescription", "style", fresh, "chatHistory", "jailbreak", "deep"]);
     expect(entryRows(doc)[0]!.enabled).toBe(false);
   });
+
+  it("不採用的條目（excludedEntryIds）算關著；匯入的預設開關只改採用範圍，不動來源的 enabled", () => {
+    const doc = imported();
+    doc.selection.excludedEntryIds = ["jailbreak"];
+    expect(entryRows(doc).find((r) => r.identifier === "jailbreak")!.enabled).toBe(false);
+    setEnabled(doc, "main", false, { keepSource: true });
+    expect(doc.selection.excludedEntryIds).toEqual(["jailbreak", "main"]);
+    expect(entryRows(doc)[0]!.enabled).toBe(false);
+    expect((doc.st.prompt_order as { order: { identifier: string; enabled: boolean }[] }[])[1]!.order[0]!.enabled).toBe(true);
+    setEnabled(doc, "jailbreak", true, { keepSource: true });
+    expect(doc.selection.excludedEntryIds).toEqual(["main"]);
+    // 來源本來就關著的條目，玩家明確打開才改來源
+    setEnabled(doc, "style", true, { keepSource: true });
+    expect(entryRows(doc).find((r) => r.identifier === "style")!.enabled).toBe(true);
+  });
 });

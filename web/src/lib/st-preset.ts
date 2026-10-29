@@ -97,7 +97,9 @@ export function entryRows(doc: PresetDocument): EntryRow[] {
       : prompt.injection_position === IN_CHAT ? "D"
       : history >= 0 && i > history ? "S" : "P";
     const side = history >= 0 && i > history ? "after" : "before";
-    return [{ identifier: o.identifier, prompt, enabled: o.enabled !== false, slot, side }];
+    // 開著＝來源排序裡開著，而且本站沒有把它列為不採用
+    const enabled = o.enabled !== false && !doc.selection.excludedEntryIds.includes(o.identifier);
+    return [{ identifier: o.identifier, prompt, enabled, slot, side }];
   });
 }
 
@@ -107,11 +109,20 @@ export function detachedPrompts(doc: PresetDocument): StPrompt[] {
   return promptsOf(doc.st).filter((p) => !used.has(p.identifier) && !isFramework(p.identifier));
 }
 
-export function setEnabled(doc: PresetDocument, id: string, enabled: boolean): boolean {
+/**
+ * 開關一個條目。keepSource（匯入的預設）：關掉只記進 excludedEntryIds，來源的 enabled 不動，
+ * 匯出回酒館跟原檔一樣；打開時拿掉不採用，來源本來就關著的才改來源（那是玩家明確要開）。
+ * 自己寫的預設直接改來源，匯出就是畫面上看到的樣子。
+ */
+export function setEnabled(doc: PresetDocument, id: string, enabled: boolean, opts: { keepSource?: boolean } = {}): boolean {
   if (isFramework(id)) return false;
   const entry = orderOf(doc).find((o) => o.identifier === id);
   if (!entry) return false;
-  entry.enabled = enabled;
+  const excluded = doc.selection.excludedEntryIds.filter((x) => x !== id);
+  if (enabled) entry.enabled = true;
+  else if (opts.keepSource) excluded.push(id);
+  else entry.enabled = false;
+  doc.selection.excludedEntryIds = excluded;
   return true;
 }
 

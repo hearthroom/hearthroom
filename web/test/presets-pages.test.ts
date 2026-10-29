@@ -49,7 +49,7 @@ async function mount(page: Component, path: string) {
   session.profile = { identities: [{ provider: "harbor", externalId: 7 }] } as never;
   const stub = { template: "<div />" };
   router = createRouter({ history: createMemoryHistory(), routes: [
-    { path: "/me/presets", component: PresetListPage }, { path: "/me/presets/new", component: PresetEditorPage },
+    { path: "/me/presets", component: PresetListPage },
     { path: "/me/presets/import", component: PresetImportPage }, { path: "/me/presets/:presetId", component: PresetEditorPage },
     { path: "/:p(.*)*", component: stub },
   ] });
@@ -225,6 +225,48 @@ describe("預設編輯器", () => {
     expect(mocks.revise).toHaveBeenCalledTimes(2);
     expect(mocks.revise.mock.calls[1]![3]).toBe(mocks.revise.mock.calls[0]![3]);
     expect(root.textContent).toContain(t("preset.editor.saved", { n: 3 }));
+  });
+});
+
+describe("預設編輯器：匯入的不採用與新建", () => {
+  it("匯入時列為不採用的條目算關著，不擋存檔；關掉匯入的條目只記不採用，來源不動", async () => {
+    const d = doc(); d.selection.excludedEntryIds = ["script"];
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    mocks.analyze.mockImplementation(async () => compat());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    const row = $$("[data-testid=entry-row]").find((b) => b.textContent?.includes("回應玩家"))!;
+    (row.parentElement!.querySelector("input[type=checkbox]") as HTMLInputElement).click();
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    expect($("[data-testid=preset-blocked]")).toBeNull();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click();
+    await flush();
+    const sent = mocks.revise.mock.calls[0]![2].document;
+    expect(sent.selection.excludedEntryIds).toEqual(["script", "turn"]);
+    expect(sent.st.prompt_order[0].order.every((o: { enabled: boolean }) => o.enabled)).toBe(true);
+  });
+
+  it("新建存好之後換到預設的網址，之後有未存的修改離開時一樣會問", async () => {
+    mocks.analyze.mockImplementation(async () => ({ ...compat(), entries: [] }));
+    await mount(PresetEditorPage, "/me/presets/new");
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "新的";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.create.mockResolvedValue({ presetId: "p7", revisionId: "r1", version: 1 });
+    mocks.detail.mockResolvedValue(detail({ id: "p7", version: 1 }));
+    mocks.revision.mockImplementation(async () => ({ revision: { revisionId: "r1", presetId: "p7", version: 1, document: mocks.create.mock.calls[0]![1].document, sourceKind: "native", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: { ...compat(), entries: [] } }));
+    $("[data-testid=preset-save]").click();
+    await flush(); await flush();
+    expect(router.currentRoute.value.path).toBe("/me/presets/p7");
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "又改了";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await flush();
+    mocks.confirm.mockClear();
+    mocks.confirm.mockResolvedValue(false);
+    await router.push("/me/presets");
+    expect(mocks.confirm).toHaveBeenCalledTimes(1);
+    expect(router.currentRoute.value.path).toBe("/me/presets/p7");
   });
 });
 
