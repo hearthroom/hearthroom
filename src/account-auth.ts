@@ -24,7 +24,8 @@ const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read profile.wr
 // 所以由 PRESET_SCOPES_ENABLED 開；開了之後舊登入沒有這兩項，玩家第一次進預設頁會被請去重新同意一次。
 const scopeFor=(env:Env,provider:ProviderId)=>{
   const base=scopes[provider]!;
-  return provider==='harbor'&&env.PRESET_SCOPES_ENABLED==='true'?`${base} preset.read preset.write`:base;
+  // wrangler types 把變數收成字面型別（"false" 時跟 'true' 比會被判成永遠不等），先轉成 string 再比
+  return provider==='harbor'&&String(env.PRESET_SCOPES_ENABLED)==='true'?`${base} preset.read preset.write`:base;
 };
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};

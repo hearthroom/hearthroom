@@ -15,5 +15,6 @@
     "en": "Import a SillyTavern preset or write your own, then choose it in Response preferences for This conversation or for New conversations with this card.",
     "ja": "SillyTavernのプリセットを読み込むか自分で作って、返信の好みで「この会話」か「このカードの新しい会話」に選べます。",
     "ko": "SillyTavern 프리셋을 가져오거나 직접 만들어 '답변 취향'에서 '이 대화'나 '이 카드의 새 대화'에 고를 수 있습니다."
-  }
+  },
+  "draft": true
 }
