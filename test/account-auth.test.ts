@@ -374,6 +374,19 @@ it('uses the configured Harbor client for every origin and never registers one',
   expect(new URLSearchParams(String(token?.[1]?.body)).get('client_id')).toBe('hh_client_hearthroom');
 });
 
+// 固定客戶端沒登記 media.generate 時要它，每一次登入都會被回 invalid_scope：開關打開才要。
+it('asks for media.generate only after the switch is on',async()=>{
+  const scopeOf=async()=>{
+    const start=await request('start',{provider:'harbor',returnTo:'/resources'});
+    expect(start.status).toBe(200);
+    return new URL((await start.json() as any).url).searchParams.get('scope')!.split(' ');
+  };
+  envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom'};
+  expect(await scopeOf()).not.toContain('media.generate');
+  envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom',AUTH_MEDIA_GENERATE_ENABLED:'true'};
+  expect(await scopeOf()).toEqual(expect.arrayContaining(['role.write','media.generate']));
+});
+
 // 讀取複寫：第一次讀授權可能讀到複本上的舊版（src/d1-session.ts）。
 function staleCredentialRead(db:D1Database,stale:Record<string,unknown>):D1Database{
   let served=false;
