@@ -1,14 +1,15 @@
 import { env, SELF } from 'cloudflare:test';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { upsertCard } from '../src/cards';
 import { makeMember, resetDb, restoreUpstream, role, rolesOnProviders, testHandle } from './helpers';
 import { upstream } from '../src/upstream';
+import {spendGateway} from '../src/spend-leaderboard';
 
 beforeEach(async () => {
   await resetDb();
   rolesOnProviders({ harbor: [{ roleId: 'draft', authorNumId: 22 }], lunatalk: [] });
 });
-afterEach(restoreUpstream);
+afterEach(()=>{vi.restoreAllMocks();restoreUpstream()});
 const read = (path: string) => SELF.fetch(`https://c.test${path}`);
 
 it('uses the connected community owner profile for a never-submitted preview without leaking private fields', async () => {
@@ -116,4 +117,15 @@ it('keeps a global card identity authoritative over a colliding work alias', asy
   const res=await read(`/v1/cards/${row!.id}`);
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({id:String(row!.id),provider:'harbor',roleId:'draft'});
+});
+
+it.each(['pending','rejected','needs_review','unshared'] as const)('keeps the %s legacy card link and its ranking under the same access rule',async status=>{
+ await upsertCard(env.DB,role({roleId:'draft',authorNumId:22}),Date.now(),{provider:'harbor',status});
+ const gateway=vi.spyOn(spendGateway,'read').mockResolvedValue({list:[],self:null,total:0});
+ expect((await read('/v1/cards/draft')).status).toBe(200);
+ expect((await read('/v1/cards/draft/leaderboard')).status).toBe(200);expect(gateway).toHaveBeenCalled();
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id='draft'").run();
+ expect((await read('/v1/cards/draft/leaderboard')).status).toBe(403);
+ await env.DB.prepare("UPDATE cards SET rating='G',public_blocked=1 WHERE source_role_id='draft'").run();
+ expect((await read('/v1/cards/draft/leaderboard')).status).toBe(404);
 });

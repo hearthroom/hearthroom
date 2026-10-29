@@ -49,6 +49,14 @@ async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
    if((row.rating==='R'||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
    return {...row,rankRoleId:access.shareRoleId||row.approved_hosted_role_id||row.source_role_id};
   }
+
+  // Legacy review status is a discovery state, not a link-access denial.
+  // Managed private/suspended works keep the stricter branches below.
+  if(!access.managed&&row.status!=='unlisted'){
+   if(row.rating==='R'&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+   const preview=await linkPreview(c.env,id,link,'en');
+   if(preview)return {...row,rankRoleId:preview.roleId};
+  }
   const own=await readOwnCardView(c.env,source,row,'en',bearerOf(c),providerOf(c));
   if(own)return {...row,rankRoleId:row.source_role_id};
   if(access.access==='private'){
