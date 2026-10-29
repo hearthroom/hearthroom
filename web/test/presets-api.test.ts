@@ -43,8 +43,13 @@ describe("預設 API", () => {
   });
 
   it("本機先讀出排序設定：完整預設列 character_id，條目包是 0，不是預設就說不是", async () => {
-    expect(await readLocalProfiles(file({ prompts: [], prompt_order: [{ character_id: 100000 }, { character_id: 100001 }] }))).toEqual({ ok: true, profiles: [100000, 100001] });
-    expect(await readLocalProfiles(file({ version: 1, type: "prompts", data: { prompts: [] } }))).toEqual({ ok: true, profiles: [0] });
+    // 每組附條目數與前三條自訂條目的名稱（由綺夢社提供的不算），讓玩家分得出是哪一組
+    const prompts = [{ identifier: "a", name: "甲" }, { identifier: "b", name: "乙" }, { identifier: "chatHistory", name: "Chat History", marker: true }, { identifier: "c", name: "丙" }, { identifier: "d" }];
+    expect(await readLocalProfiles(file({ prompts, prompt_order: [
+      { character_id: 100000, order: [{ identifier: "a", enabled: true }, { identifier: "chatHistory", enabled: true }] },
+      { character_id: 100001, order: ["a", "b", "chatHistory", "c", "d"].map((identifier) => ({ identifier, enabled: true })) },
+    ] }))).toEqual({ ok: true, profiles: [{ id: 100000, count: 1, names: ["甲"], more: false }, { id: 100001, count: 4, names: ["甲", "乙", "丙"], more: true }] });
+    expect(await readLocalProfiles(file({ version: 1, type: "prompts", data: { prompts: [{ identifier: "a", name: "甲" }], prompt_order: [{ identifier: "a", enabled: true }] } }))).toEqual({ ok: true, profiles: [{ id: 0, count: 1, names: ["甲"], more: false }] });
     expect(await readLocalProfiles(file("{not json"))).toEqual({ ok: false, reason: "not_json" });
     expect(await readLocalProfiles(file({ name: "card", data: { description: "x" } }))).toEqual({ ok: false, reason: "not_preset" });
     // 有條目卻沒有任何排序設定：讀不出要用哪些、怎麼排，不上傳

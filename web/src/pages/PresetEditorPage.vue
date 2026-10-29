@@ -297,7 +297,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
 <template>
   <div class="page preset-editor" :class="{ 'preset-editor--entry': !!selectedRow || !!providedOpen }">
-    <nav class="preset-editor__crumb"><RouterLink :to="lp('/me/presets')" class="link">{{ $t("preset.editor.back") }}</RouterLink></nav>
+    <nav class="preset-editor__crumb"><RouterLink :to="lp('/me/presets')" class="preset-crumb">{{ $t("preset.editor.back") }}</RouterLink></nav>
     <h1 class="sr-only">{{ $t(presetId ? "preset.editor.title.edit" : "preset.editor.title.new") }}</h1>
 
     <PresetReauth v-if="needsConsent" @confirm="reauthorize" @cancel="router.push(lp('/me/presets'))" />
@@ -354,7 +354,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                     <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
                     <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                   </button>
-                  <input type="checkbox" class="preset-editor__toggle" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
+                  <label class="preset-editor__toggle">
+                    <input type="checkbox" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
+                  </label>
                 </li>
               </ul>
             </div>
@@ -446,15 +448,20 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 </template>
 
 <style scoped>
-.preset-editor { display: grid; gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
+.preset-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
 .preset-editor__crumb { font-size: 13px; }
+/* 返回連結用內文次要色＋底線（站上的粉色小字在這裡只有 3.2:1） */
+.preset-crumb { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--h-sm); }
+.preset-crumb:hover { color: var(--text); }
+
 .preset-editor__card { padding: var(--s-5); }
-.preset-editor__head { padding: var(--s-4) var(--s-5); display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); }
+.preset-editor__head { padding: var(--s-4) var(--s-5); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-4); }
 .preset-editor__head .field { margin-bottom: 0; }
 .preset-editor__head .field > p { margin: 0; }
 .preset-editor__models { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
 .preset-editor__modelPick { flex: 1 1 160px; width: auto; }
-.preset-editor__body { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: var(--s-4); align-items: start; }
+.preset-editor__body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+.preset-editor__list, .preset-editor__detail, .preset-editor__section { min-width: 0; }
 .preset-editor__ghost { min-height: 320px; }
 .preset-editor__list { padding: var(--s-3); display: grid; gap: var(--s-3); }
 .preset-editor__list > p { margin: 0; padding-inline: var(--s-2); }
@@ -474,7 +481,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__tag { flex-shrink: 0; font-size: 12px; font-weight: 600; }
 .preset-editor__tag--needs_adjustment { color: var(--warning-text); }
 .preset-editor__tag--unsupported { color: var(--danger); }
-.preset-editor__toggle { width: 18px; height: 18px; margin: 0 var(--s-2); accent-color: var(--accent); flex-shrink: 0; }
+/* 開關自己一塊 44×44 的點擊區，不跟條目按鈕重疊 */
+.preset-editor__toggle { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: var(--h-lg); height: var(--h-lg); cursor: pointer; }
+.preset-editor__toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .preset-editor__tools { display: flex; justify-content: flex-end; }
 .preset-editor__library summary, .preset-editor__section > summary { cursor: pointer; min-height: var(--h-md); display: flex; align-items: center; font-weight: 600; }
 .preset-editor__library { padding-inline: var(--s-2); }
@@ -495,11 +504,11 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
   padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line);
 }
-.preset-editor__state { flex: 1 1 280px; font-size: 13px; overflow-wrap: anywhere; }
-.preset-editor__actions { display: flex; gap: var(--s-2); align-items: center; }
+.preset-editor__state { flex: 1 1 240px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.preset-editor__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-width: 0; }
 @media (max-width: 760px) {
-  .preset-editor__head { grid-template-columns: 1fr; }
-  .preset-editor__body { grid-template-columns: 1fr; }
+  .preset-editor__head { grid-template-columns: minmax(0, 1fr); }
+  .preset-editor__body { grid-template-columns: minmax(0, 1fr); }
   .preset-editor__back { display: inline-flex; }
   .preset-editor--entry .preset-editor__list { display: none; }
   .preset-editor:not(.preset-editor--entry) .preset-editor__detail { display: none; }

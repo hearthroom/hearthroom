@@ -50,7 +50,9 @@ function setNumber(raw: string) {
 <style scoped>
 .param { display: grid; gap: var(--s-1); align-content: start; }
 .param__label { font-size: 13px; font-weight: 600; }
-.param__controls { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.param { min-width: 0; }
+.param__controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-2); }
+.param__controls .input { min-width: 0; }
 .param__controls > :only-child { grid-column: 1 / -1; }
 .param__error { margin: 0; font-size: 12px; color: var(--danger); overflow-wrap: anywhere; }
 .param__note { margin: 0; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }

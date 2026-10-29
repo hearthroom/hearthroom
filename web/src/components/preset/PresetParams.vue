@@ -32,8 +32,8 @@ const advancedSet = computed(() => ADVANCED_PARAMS.filter((k) => paramState(prop
 <style scoped>
 .params { display: grid; gap: var(--s-3); }
 .params > p { margin: 0; }
-.params__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-3); }
+.params__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: var(--s-3); }
 .params__more summary { cursor: pointer; min-height: var(--h-md); display: flex; align-items: center; font-weight: 600; }
 .params__more .params__grid { margin-top: var(--s-3); }
-@media (max-width: 760px) { .params__grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .params__grid { grid-template-columns: minmax(0, 1fr); } }
 </style>

@@ -167,11 +167,13 @@ async function reset() {
 </template>
 
 <style scoped>
-.entry { display: grid; gap: var(--s-3); align-content: start; }
+.entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
+.entry .input { min-width: 0; max-width: 100%; }
+.entry .field__foot { flex-wrap: wrap; align-items: center; }
 .entry__back { display: none; justify-self: start; }
 .entry .field { margin-bottom: 0; }
 .entry .field > p { margin: 0; }
-.entry__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.entry__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }
 .entry__content { min-height: 220px; font-size: 14px; }
 .entry__macro { display: flex; align-items: center; gap: var(--s-2); }
 .entry__macroPick { width: auto; height: var(--h-sm); font-size: 13px; }
@@ -188,6 +190,6 @@ async function reset() {
 .entry p { overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .entry__back { display: inline-flex; }
-  .entry__row { grid-template-columns: 1fr; }
+  .entry__row { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

@@ -194,7 +194,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 </template>
 
 <style scoped>
-.presets { display: grid; gap: var(--s-4); padding-block: var(--s-6) var(--s-7); max-width: 860px; }
+.presets { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-6) var(--s-7); max-width: 860px; }
 .presets__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-4); }
 .presets__head p { margin: var(--s-2) 0 0; }
 .presets__actions { display: flex; gap: var(--s-2); }

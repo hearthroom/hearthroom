@@ -12,7 +12,7 @@ import { useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { whole } from "@/lib/format";
-import { confirmImport, previewImport, readLocalProfiles, resultUnknown, updateImportSelection, type ImportPreview } from "@/lib/presets";
+import { confirmImport, previewImport, readLocalProfiles, resultUnknown, updateImportSelection, type ImportPreview, type LocalProfile } from "@/lib/presets";
 import { adaptationId, entryRows, type PresetSelection } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
@@ -30,7 +30,7 @@ const LOCAL_ERROR = { too_large: "preset.error.tooLarge", not_json: "preset.erro
 
 const picker = ref<HTMLInputElement | null>(null);
 const file = ref<File | null>(null);
-const profiles = ref<number[]>([]);
+const profiles = ref<LocalProfile[]>([]);
 const profileId = ref<number | null>(null);
 const profileAsked = ref(false);
 const fileError = ref("");
@@ -65,6 +65,11 @@ const reasonText = (id: string, code: string) => {
   return te(`preset.reason.entry.${code}`) ? t(`preset.reason.entry.${code}`, { role: t(`preset.entry.role.${role}`) }) : "";
 };
 
+// 每組附條目數與前三條自訂條目的名稱：只有序號的話玩家分不出要選哪一組
+const profileLabel = (p: LocalProfile, index: number) => t("preset.import.profile.option", {
+  index: index + 1, n: whole(p.count), names: p.names.join(t("preset.setting.separator")) + (p.more ? "…" : ""),
+}, p.count);
+
 function choose() {
   picker.value?.click();
 }
@@ -84,7 +89,7 @@ async function onFile(e: Event) {
   profiles.value = local.profiles;
   // 只有一組排序就用那組；多組時不替玩家選（每組可能是完全不同的寫法）
   profileAsked.value = local.profiles.length > 1;
-  profileId.value = local.profiles.length === 1 ? local.profiles[0]! : null;
+  profileId.value = local.profiles.length === 1 ? local.profiles[0]!.id : null;
   if (!profileAsked.value) await analyze();
 }
 
@@ -183,7 +188,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
 
 <template>
   <div class="page page--narrow preset-import">
-    <nav class="preset-import__crumb"><RouterLink :to="lp('/me/presets')" class="link">{{ $t("preset.editor.back") }}</RouterLink></nav>
+    <nav class="preset-import__crumb"><RouterLink :to="lp('/me/presets')" class="preset-crumb">{{ $t("preset.editor.back") }}</RouterLink></nav>
     <header>
       <h1 class="display">{{ $t("preset.import.title") }}</h1>
       <p class="muted">{{ $t("preset.import.lede") }}</p>
@@ -194,7 +199,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
     <template v-else>
       <section class="panel preset-import__card">
         <input ref="picker" type="file" accept=".json,application/json" hidden data-testid="import-file" @change="onFile" />
-        <button type="button" class="btn" :class="{ 'btn--primary': !preview }" :disabled="analyzing" @click="choose">{{ $t(file ? "preset.import.change" : "preset.import.pick") }}</button>
+        <button type="button" class="btn" :class="{ 'btn--primary': !file }" :disabled="analyzing" @click="choose">{{ $t(file ? "preset.import.change" : "preset.import.pick") }}</button>
         <p class="subtle">{{ file ? file.name : $t("preset.import.formats", { limit: LIMIT }) }}</p>
         <p v-if="fileError" class="notice notice--error" role="alert" data-testid="import-file-error">{{ fileError }}</p>
         <p v-if="analyzing" class="subtle" role="status">{{ $t("preset.import.analyzing") }}</p>
@@ -205,9 +210,9 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
         <p class="muted">{{ $t("preset.import.profile.body") }}</p>
         <fieldset class="preset-import__profiles">
           <legend class="sr-only">{{ $t("preset.import.profile.title") }}</legend>
-          <label v-for="(id, index) in profiles" :key="id" class="preset-import__pick">
-            <input v-model="profileId" type="radio" name="import-profile" :value="id" data-testid="import-profile" />
-            <span>{{ $t("preset.import.profile.option", { index: index + 1 }) }}</span>
+          <label v-for="(p, index) in profiles" :key="p.id" class="preset-import__pick">
+            <input v-model="profileId" type="radio" name="import-profile" :value="p.id" data-testid="import-profile" />
+            <span class="preset-import__name">{{ profileLabel(p, index) }}</span>
           </label>
         </fieldset>
         <button type="button" class="btn btn--primary" :disabled="profileId === null || analyzing" data-testid="import-profile-confirm" @click="analyze">{{ $t("preset.import.profile.confirm") }}</button>
@@ -281,9 +286,13 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
 </template>
 
 <style scoped>
-.preset-import { display: grid; gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
+.preset-import { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
 .preset-import header p { margin: var(--s-2) 0 0; }
 .preset-import__crumb { font-size: 13px; }
+/* 返回連結用內文次要色＋底線（站上的粉色小字在這裡只有 3.2:1） */
+.preset-crumb { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--h-sm); }
+.preset-crumb:hover { color: var(--text); }
+
 .preset-import__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }
 .preset-import__card h2 { margin: 0; font-size: 16px; }
 .preset-import__card > p, .preset-import__card .field { margin: 0; justify-self: stretch; }

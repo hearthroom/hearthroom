@@ -8,7 +8,7 @@
 import { UPSTREAM_API } from "./config";
 import { ApiError, authHeaders, json as upstreamJson } from "./api";
 import { i18n } from "./i18n";
-import { isPromptPack, profilesOf, type PresetDocument, type PresetSelection, type StDocument } from "./st-preset";
+import { entryRows, isPromptPack, profilesOf, type PresetDocument, type PresetSelection, type StDocument } from "./st-preset";
 
 export type UiStatus = "needs_adjustment" | "unsupported";
 export type PresetAction = "delete" | "archive";
@@ -208,8 +208,11 @@ export async function exportRevision(token: string, presetId: string, revisionId
   return { blob: await res.blob(), filename: named ? decodeURIComponent(named) : `${fallbackName}.json` };
 }
 
+/** 一組排序設定的摘要：多組時讓玩家分得出是哪一組（條目數、前三條自訂條目的名稱）。 */
+export interface LocalProfile { id: number; count: number; names: string[]; more: boolean }
+
 /** 選檔後先在本機讀出排序設定，有多組就讓玩家選，不替他猜；上游一樣會再驗一次。 */
-export async function readLocalProfiles(file: File): Promise<{ ok: true; profiles: number[] } | { ok: false; reason: "too_large" | "not_json" | "not_preset" }> {
+export async function readLocalProfiles(file: File): Promise<{ ok: true; profiles: LocalProfile[] } | { ok: false; reason: "too_large" | "not_json" | "not_preset" }> {
   if (file.size > PRESET_LIMIT_BYTES) return { ok: false, reason: "too_large" };
   let parsed: unknown;
   try { parsed = JSON.parse(await file.text()); } catch { return { ok: false, reason: "not_json" }; }
@@ -218,8 +221,13 @@ export async function readLocalProfiles(file: File): Promise<{ ok: true; profile
   const prompts = isPromptPack(st) ? (st.data as StDocument).prompts : st.prompts;
   if (!Array.isArray(prompts)) return { ok: false, reason: "not_preset" };
   // 有條目卻沒有任何排序設定：讀不出要用哪些、怎麼排
-  const profiles = profilesOf(st);
-  if (!profiles.length) return { ok: false, reason: "not_preset" };
+  const ids = profilesOf(st);
+  if (!ids.length) return { ok: false, reason: "not_preset" };
+  const profiles = ids.map((id) => {
+    const doc = { schemaVersion: "", st: structuredClone(st), selection: { profileId: id, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: [] } };
+    const custom = entryRows(doc).filter((r) => r.slot !== "F");
+    return { id, count: custom.length, names: custom.slice(0, 3).map((r) => r.prompt.name || r.identifier), more: custom.length > 3 };
+  });
   return { ok: true, profiles };
 }
 
