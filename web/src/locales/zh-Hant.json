@@ -2923,6 +2923,7 @@
   "task.progress.days": "{cur}/{max} 天",
   "task.progress.people": "{cur}/{max} 人",
   "task.progress.items": "{cur}/{max} 則",
+  "task.progress.ratings": "{cur}/{max} 次評分",
   "task.cta.chat": "去聊天",
   "task.cta.tryNew": "找新卡",
   "task.cta.comment": "去留言",

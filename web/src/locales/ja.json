@@ -2923,6 +2923,7 @@
   "task.progress.days": "{cur}/{max}日",
   "task.progress.people": "{cur}/{max}人",
   "task.progress.items": "{cur}/{max}件",
+  "task.progress.ratings": "{cur}/{max}件の評価",
   "task.cta.chat": "チャットする",
   "task.cta.tryNew": "カードを探す",
   "task.cta.comment": "コメントする",

@@ -2923,6 +2923,7 @@
   "task.progress.days": "{cur}/{max}일",
   "task.progress.people": "{cur}/{max}명",
   "task.progress.items": "{cur}/{max}개",
+  "task.progress.ratings": "평가 {cur}/{max}개",
   "task.cta.chat": "대화하기",
   "task.cta.tryNew": "카드 찾기",
   "task.cta.comment": "댓글 달기",

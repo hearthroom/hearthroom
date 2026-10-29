@@ -185,7 +185,7 @@ const TASKS: Record<string, { title: string; progress: string; action: TaskCta }
   turns: { title: "task.chat5.title", progress: "task.progress.turns", action: "chat" },
   new_work_turns: { title: "task.tryNew.title", progress: "task.progress.turns", action: "tryNew" },
   comment: { title: "task.comment.title", progress: "task.progress.items", action: "comment" },
-  rating: { title: "task.rate.title", progress: "task.progress.items", action: "rate" },
+  rating: { title: "task.rate.title", progress: "task.progress.ratings", action: "rate" },
   share_open: { title: "task.shareOpen.title", progress: "task.progress.people", action: "copyLink" },
   active_days: { title: "task.weeklyChat.title", progress: "task.progress.days", action: "chat" },
   author_replies: { title: "task.authorReply.title", progress: "task.progress.items", action: "reply" },

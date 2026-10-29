@@ -69,3 +69,30 @@ it.each(locales)("%s: the shipped comment title explains both configured thresho
   expect(title).toMatch(/(?:^|\D)3(?=\D|$)/);
   expect(title).not.toMatch(/\{(?:min|cjkMin|latinMin|minTurns)\}/);
 });
+
+it.each([
+  { target: 1, progress: 0, expected: "0/1 rating" },
+  { target: 1, progress: 1, expected: "1/1 rating" },
+  { target: 2, progress: 0, expected: "0/2 ratings" },
+  { target: 2, progress: 1, expected: "1/2 ratings" },
+  { target: 2, progress: 2, expected: "2/2 ratings" },
+])("rating progress $expected keeps its unit separate from comments and replies", async ({ target, progress, expected }) => {
+  const i18n = createI18n({ legacy: false, locale: "en", messages });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
+  await router.push("/");
+  const tasks: RewardTask[] = ["rating", "comment", "author_replies"].map(type => ({
+    id: type, type, target: type === "rating" ? target : 1, progress: type === "rating" ? progress : 0,
+    reward: { credits: 20 }, status: "locked", period: "2026-10-29",
+    ...(type === "comment" ? { minTextUnits: { cjk: 15, latin: 40 } } : {}),
+  }));
+  app = createApp(TaskPanel, {
+    kind: "daily", tasks, plan: null, resetLabel: "", claiming: new Set<string>(), failed: new Set<string>(),
+  }).use(i18n).use(router);
+  const root = document.createElement("div");
+  app.mount(root);
+  const labels = [...root.querySelectorAll(".task__progress")].map(e => e.textContent);
+  expect(labels[0]).toBe(expected);
+  expect(labels[0]).not.toContain("comment");
+  expect(labels[1]).toContain("comments");
+  expect(labels[2]).toContain("comments");
+});

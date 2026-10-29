@@ -2923,6 +2923,7 @@
   "task.progress.days": "{cur}/{max} days",
   "task.progress.people": "{cur}/{max} people",
   "task.progress.items": "{cur}/{max} comments",
+  "task.progress.ratings": "{cur}/{max} rating | {cur}/{max} ratings",
   "task.cta.chat": "Chat",
   "task.cta.tryNew": "Find a card",
   "task.cta.comment": "Comment",
