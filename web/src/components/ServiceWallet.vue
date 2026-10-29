@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { fetchScoreRecords, fetchScoreSummary, fetchWallet, type Wallet, type ScoreDay, type ScoreRecord } from "@/lib/api";
-import { clock, dayLabel, localDate, monthDayTime, whole } from "@/lib/format";
+import { dayLabel, hourMinute, localDate, monthDayTime, whole } from "@/lib/format";
 import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
 import { accountToken } from "@/lib/connections";
 import { providerName, type ProviderId } from "@/lib/provider";
@@ -102,7 +102,16 @@ type Range = "7" | "30" | "week";
 const range = ref<Range>("30");
 const bars = computed(() => (!days.value ? [] : range.value === "week" ? byWeek(days.value).slice(-12) : lastDays(days.value, Number(range.value))));
 
-/** 按日分組：同一天的擠在一起，時間只顯示時分；每一天附上當天的支出與收入小計。 */
+/** 今天、昨天用時分，更早的記錄補月日；按使用者本地日曆判定，跨夏令時間也一致。 */
+function timeOf(input: string): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const date = localDate(input);
+  return date === localDate(today) || date === localDate(yesterday) ? hourMinute(input) : monthDayTime(input);
+}
+
+/** 按日分組：同一天的擠在一起；每一天附上當天的支出與收入小計。 */
 const groups = computed(() => {
   const out: { key: string; label: string; rows: ScoreRecord[]; spent: number; earned: number }[] = [];
   for (const r of shown.value) {
@@ -271,8 +280,10 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
             <li v-for="r in g.rows" :key="r.id" class="row">
               <span class="row__dot" :class="r.recordType === 'add' ? 'row__dot--add' : 'row__dot--sub'" aria-hidden="true">{{ r.recordType === "add" ? "+" : "−" }}</span>
               <span class="row__item" :class="{ 'row__item--off': subOf(r)?.off }"><span class="row__name">{{ itemOf(r) }}</span><small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small></span>
-              <span class="row__time subtle">{{ clock(r.createTime) }}</span>
-              <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
+              <span class="row__value">
+                <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
+                <time class="row__time" :datetime="r.createTime">{{ timeOf(r.createTime) }}</time>
+              </span>
             </li>
           </ul>
         </section>
@@ -323,7 +334,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 .ledger__sum { font-weight: 500; font-variant-numeric: tabular-nums; }
 .ledger__rows { list-style: none; margin: 0; padding: 0; }
 .row {
-  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: var(--s-3);
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3);
   padding: 9px 8px; margin: 0 -8px; border-radius: var(--r-sm);
   font-size: 13.5px;
   transition: background var(--dur) var(--ease);
@@ -355,12 +366,9 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 .expiring__list strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .expiring__src { font-size: 12px; color: var(--text-2); text-align: right; }
 .expiring__at { grid-column: 1 / -1; font-size: 12px; color: var(--text-2); }
-.row__time { font-variant-numeric: tabular-nums; }
+.row__value { display: grid; justify-items: end; gap: var(--s-1); white-space: nowrap; }
+.row__time { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .row__num { min-width: 5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .row__num--add { color: var(--success); }
 
-@media (max-width: 820px) {
-  .row { grid-template-columns: 26px minmax(0, 1fr) auto; }
-  .row__time { display: none; }
-}
 </style>
