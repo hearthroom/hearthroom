@@ -2852,7 +2852,7 @@
   "checkin.history.all": "전체 보기",
   "checkin.history.more": "더 보기",
   "checkin.history.validUntil": "{datetime}까지 유효",
-  "checkin.history.usedUp": "모두 사용",
+  "checkin.history.usedUp": "사용 완료",
   "checkin.history.expiredLeft": "만료 · {n} 미사용",
   "checkin.history.pending": "처리 중",
   "checkin.history.empty.title": "아직 연 상자가 없어요",

@@ -2,8 +2,8 @@
   "tier": "fix",
   "audience": "everyone",
   "title": {
-    "zh-Hant": "最近開箱會寫出每箱積分已用完、還剩多少，或有效到哪天。",
-    "zh-Hans": "最近开箱会写出每箱积分已用完、还剩多少，或有效到哪天。",
+    "zh-Hant": "最近開箱會寫出每箱積分已用完、到期沒用掉多少，或有效到哪天。",
+    "zh-Hans": "最近开箱会写出每箱积分已用完、到期没用掉多少，或有效到哪天。",
     "en": "Recent chests now show whether each chest's credits were used up, how many expired unused, or when they expire.",
     "ja": "最近の開封履歴に、各宝箱のポイントの使い切り・期限切れの残り・有効期限が表示されます。",
     "ko": "최근 상자 기록에 상자마다 포인트를 모두 썼는지, 쓰지 못하고 만료된 양, 또는 유효 기한이 표시돼요."
