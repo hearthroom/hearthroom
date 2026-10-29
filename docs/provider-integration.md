@@ -38,7 +38,8 @@ Mapped onto sentences the site already had: `invalid_request`, `forbidden`, `not
 `role_not_passed_review`, `temporarily_unavailable`, `file_too_large`, `upload_not_found`,
 `size_mismatch`. Given their own: `insufficient_scope` (the token lacks a scope the site
 needs — the user is told to sign in again and approve it), `unsupported_media_type`,
-`invalid_cursor`, `quota_exceeded`, `asset_not_passed_review`.
+`invalid_cursor`, `quota_exceeded`, `asset_not_passed_review`, and for presets
+`preset_invalid`, `preset_conflict`, `preset_preview_expired`, `preset_profile_required`.
 
 ## Capability levels
 

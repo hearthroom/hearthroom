@@ -15,6 +15,7 @@
  * 後面每一步都需要前一步產生的 id。任何一步失敗就停下並保留草稿，不做局部回滾——
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
+import { downloadBlob, safeFileName } from "@/lib/save-file";
 import {retentionText} from '@/lib/reward-retention';
 import {hasPublicationOperation} from '@/lib/publication-operation';
 import {fetchWorkVisibility} from '@/lib/work-visibility';
@@ -1057,16 +1058,8 @@ function applyImport(result: ImportResult) {
   goto("basic");
 }
 
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-const safeName = () => (draft.value.roleName || "card").replace(/[/\\?%*:|"<>]/g, "_").slice(0, 60);
+const download = downloadBlob;
+const safeName = () => safeFileName(draft.value.roleName, "card");
 
 /**
  * 匯出成酒館卡。

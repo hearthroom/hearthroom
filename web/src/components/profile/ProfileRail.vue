@@ -10,6 +10,7 @@ import { RouterLink } from 'vue-router';
 import AccountIcon from '@/components/AccountIcon.vue';
 import CommunityIcon from '@/components/CommunityIcon.vue';
 import ReviewBadge from '@/components/ReviewBadge.vue';
+import { can } from '@/lib/provider';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { useNotifications } from '@/lib/notifications';
@@ -63,6 +64,7 @@ const next = computed(() => steps.value.find((s) => !s.done) ?? null);
       <RouterLink :to="lp('/me/community')" class="quick__row"><span class="quick__icon quick__icon--discord"><CommunityIcon name="discord" /></span><span class="quick__label">{{ $t('community.title') }}</span><span class="quick__meta" :class="{ 'quick__meta--ok': linked }">{{ discordState }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <RouterLink v-if="reviewer.reviewer || reviewer.blogWriter" :to="lp(reviewer.reviewer ? '/review' : '/review/blog')" class="quick__row"><span class="quick__icon"><AccountIcon name="shield" /></span><span class="quick__label">{{ $t('nav.review') }}</span><ReviewBadge /><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="quick__row"><span class="quick__icon"><AccountIcon name="eye" /></span><span class="quick__label">{{ $t('me.publicPage') }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
+      <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="quick__row"><span class="quick__icon"><AccountIcon name="news" /></span><span class="quick__label">{{ $t('preset.nav') }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <RouterLink :to="lp('/settings')" class="quick__row"><span class="quick__icon"><AccountIcon name="settings" /></span><span class="quick__label">{{ $t('nav.settings') }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <hr class="quick__rule" />
       <button type="button" class="quick__row quick__logout" @click="logoutWithRoutes(session)"><span class="quick__icon quick__icon--plain"><AccountIcon name="logout" /></span><span class="quick__label">{{ $t('nav.logout') }}</span></button>
