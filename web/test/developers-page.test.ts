@@ -42,7 +42,13 @@ describe('community developer documentation', () => {
         bulkPaths.has(path) ? { ...operation, ...((operation as Record<string, unknown>)['x-harperharbor'] as object ?? {}) } : operation,
       ])),
     ]).filter(([, methods]) => Object.keys(methods).length));
-    const expectedComponents = { ...sourceSpec.components, schemas: Object.fromEntries(Object.entries(sourceSpec.components.schemas).filter(([, schema]) => published(schema))) };
+    // 公開的 schema 裡單一欄位也可以標 x-unpublished（例如回覆偏好裡只跟預設有關的狀態），公開版不帶那個欄位
+    const withoutUnpublishedProps = (schema: unknown): unknown => {
+      const props = (schema as { properties?: Record<string, unknown> }).properties;
+      if (!props) return schema;
+      return { ...(schema as object), properties: Object.fromEntries(Object.entries(props).filter(([, v]) => published(v))) };
+    };
+    const expectedComponents = { ...sourceSpec.components, schemas: Object.fromEntries(Object.entries(sourceSpec.components.schemas).filter(([, schema]) => published(schema)).map(([k, schema]) => [k, withoutUnpublishedProps(schema)])) };
     expect(protocol(integrationSpec.paths)).toEqual(protocol(expectedPaths));
     expect(protocol(integrationSpec.components)).toEqual(protocol(expectedComponents));
     expect(JSON.stringify(integrationSpec)).not.toContain('x-unpublished');

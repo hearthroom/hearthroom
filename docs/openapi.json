@@ -26574,6 +26574,35 @@
               }
             ],
             "description": "What applies when the player has chosen nothing: platform defaults with the card's author defaults on top. Show these for axes absent from overrides; resetting an axis returns to this value."
+          },
+          "toolReply": {
+            "x-unpublished": "p2",
+            "type": "object",
+            "required": [
+              "enabled",
+              "effective",
+              "status"
+            ],
+            "description": "Whether the bound preset's tool reply applies. Only `active` turns streaming off in `effective`; `overrides` and `defaults` keep the player's own choice.",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "effective": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "off",
+                  "active",
+                  "model_unsupported",
+                  "mode_unsupported",
+                  "unavailable"
+                ],
+                "type": "string",
+                "description": "`off` — no preset, or its tool reply is off; `active` — in use for this model; `model_unsupported` — the current model can't reply through the tool, so replies follow the player's settings; `mode_unsupported` — agent and world conversations keep their own protocol; `unavailable` — the bound version can't be read, so `enabled` is unknown rather than off."
+              }
+            }
           }
         }
       },
@@ -30515,6 +30544,9 @@
               "$ref": "#/components/schemas/PresetCompatibilityEntry"
             },
             "type": "array"
+          },
+          "toolReply": {
+            "$ref": "#/components/schemas/PresetToolReplyReport"
           }
         },
         "description": "How the service will run the document. Translate the stable codes; do not display raw source JSON.",
@@ -30756,6 +30788,10 @@
             },
             "description": "Prompt `identifier` values left out.",
             "type": "array"
+          },
+          "toolReply": {
+            "type": "boolean",
+            "description": "Reply through the service's own reply tool: the reply is shown once it is complete, on models that support it. Absent means false. Imports always start false."
           }
         },
         "x-unpublished": "p2",
@@ -31129,10 +31165,12 @@
               "enum": [
                 "source_only",
                 "invalid_parameter",
-                "requires_model_validation"
+                "requires_model_validation",
+                "external_tools_not_executed",
+                "external_scripts_not_executed"
               ]
             },
-            "description": "`source_only` — kept for export but not run; `invalid_parameter` — the value is out of range; `requires_model_validation` — runs only on models confirmed to support it.",
+            "description": "`source_only` — kept for export but not run; `invalid_parameter` — the value is out of range; `requires_model_validation` — runs only on models confirmed to support it. `external_tools_not_executed` / `external_scripts_not_executed` — tools or scripts defined by a SillyTavern extension; kept for export, never run.",
             "type": "array"
           },
           "uiStatus": {
@@ -31347,6 +31385,25 @@
             "type": "object"
           }
         ]
+      },
+      "PresetToolReplyReport": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "enabled",
+          "externalToolBindingsDetected"
+        ],
+        "description": "May be absent on reports for versions saved before tool replies existed; treat absence as both false.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "The document's own choice (`selection.toolReply`)."
+          },
+          "externalToolBindingsDetected": {
+            "type": "boolean",
+            "description": "The source preset replied through a SillyTavern extension's tool. Show a hint; this never turns `enabled` on."
+          }
+        }
       }
     }
   },
