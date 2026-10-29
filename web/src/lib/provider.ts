@@ -124,7 +124,8 @@ export function oauthBaseOf(id: ProviderId = currentProvider()): string {
 }
 
 export function scopeOf(id: ProviderId = currentProvider()): string {
-  return SCOPES[id] ?? "";
+  // 我的預設的兩項授權跟著功能開關走：Harbor 允許之前送出去，整個登入會被拒（伺服器端同一條規則見 src/account-auth.ts）
+  return [SCOPES[id] ?? "", FEATURES[id]?.presets ? "preset.read preset.write" : ""].filter(Boolean).join(" ");
 }
 
 /** 目前這家有沒有這項能力。 */

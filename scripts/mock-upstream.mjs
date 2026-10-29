@@ -17,6 +17,7 @@ import fs from "node:fs";
 import pathMod from "node:path";
 import { handleRewards, mockAccountNumId, walletExtras } from "./mock-rewards.mjs";
 import { handlePlans, planRecords } from "./mock-plans.mjs";
+import { handlePresets } from "./mock-presets.mjs";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
@@ -28,7 +29,7 @@ const readBody = (req) => new Promise((r) => { const c = []; req.on("data", (d) 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://x`); const path = url.pathname; const m = req.method; let mm;
   if (m === "OPTIONS") return json(res, 204, {});
-  const raw = await readBody(req); let body = {}; try { body = raw.length && !path.includes("/image/upload") ? JSON.parse(raw.toString()) : {}; } catch {}
+  const raw = await readBody(req); let body = {}; try { body = raw.length && !path.includes("/image/upload") && !path.includes("/preset-imports/preview") ? JSON.parse(raw.toString()) : {}; } catch {}
   log.push({ m, path, body }); if (path !== "/__log") console.log(m, path, JSON.stringify(body).slice(0, 160));
   if (path === "/__log") return json(res, 200, log);
   if (path.startsWith("/fixtures/")) { const f = pathMod.join(CARDS, path.slice(10)); if (!fs.existsSync(f)) return json(res, 404, {}); res.writeHead(200, { "content-type": f.endsWith(".png") ? "image/png" : "application/json", "access-control-allow-origin": "*" }); return res.end(fs.readFileSync(f)); }
@@ -43,6 +44,8 @@ http.createServer(async (req, res) => {
   if ((path === "/__plans" || path === "/open/v1/plans") && handlePlans({ m, path, url, body, json, res })) return;
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
+  // 我的預設與畫布的預設綁定：形狀與情境見 mock-presets.mjs
+  if ((path === "/__presets" || path.startsWith("/__presets/") || path.includes("preset") || path.startsWith("/open/v1/conversation/response-settings")) && await handlePresets({ m, path, url, body, raw, req, json, res })) return;
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: mockAccountNumId(), nickName: "測試作者", avatar: "" });
   if (path === "/open/v1/tag/canonical") return json(res, 200, { language: url.searchParams.get("language"), dimensions: [
     { dimension: "genre", tags: [{ slug: "romance", name: "戀愛", dimension: "genre", visibility: "public" }, { slug: "mystery", name: "推理", dimension: "genre", visibility: "public" }, { slug: "fantasy", name: "西幻", dimension: "genre", visibility: "public" }] },
@@ -57,7 +60,7 @@ http.createServer(async (req, res) => {
   if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
   if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
   if (path === "/open/v1/role/author-asset/serve") return json(res, 200, { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0, variants: {} });
-  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
+  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
   if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
   if (path === "/open/v1/conversation/directives") return json(res, 200, { list: [], max: 10 });

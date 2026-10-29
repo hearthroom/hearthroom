@@ -43,6 +43,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   WORK_SHARING_ENABLED?: string;
   /** 卡片分享情境（?share=）的平台總開關："true" 才轉送給卡片；其他值一律關（卡片拿到 null、分享鈕照常）。 */
   SHARE_CONTEXT_ENABLED?: string;
+  /** "true"：登入時多要 preset.read／preset.write（Harbor 固定客戶端允許之後才開） */
+  PRESET_SCOPES_ENABLED?: string;
   /** 卡片共用狀態（投票、共鬥計數器、排行榜）的平台總開關："true" 才開。 */
   CARD_STATE_ENABLED?: string;
   /** 共用狀態寫入的限流：每位會員（全部卡合計）與每張卡（wrangler.toml [[ratelimits]]）；沒綁就不限。 */

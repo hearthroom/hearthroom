@@ -20,6 +20,12 @@ const ROUTE_SOURCE='__Host-hr-route-source', ROUTE_TARGET='__Host-hr-route-targe
 // profile.write：把本站的顯示名稱寫回 Harbor 當暱稱（見 syncNickname）。加這項之前，Harbor 那邊的固定客戶端要先登記它，
 // 否則授權請求會因為超出客戶端的範圍被拒。
 const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read profile.write email.read role.read role.write chat.play referral'};
+// 我的預設：Harbor 只讓登記過的第一方客戶端申請這兩項。固定客戶端那邊允許之前不能送（整個登入會被拒），
+// 所以由 PRESET_SCOPES_ENABLED 開；開了之後舊登入沒有這兩項，玩家第一次進預設頁會被請去重新同意一次。
+const scopeFor=(env:Env,provider:ProviderId)=>{
+  const base=scopes[provider]!;
+  return provider==='harbor'&&env.PRESET_SCOPES_ENABLED==='true'?`${base} preset.read preset.write`:base;
+};
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};
@@ -235,7 +241,7 @@ async function exchange(env:Env,provider:ProviderId,clientId:string,body:Record<
 async function registeredClient(c:C,provider:ProviderId,origin:string){
   const fixed=provider==='harbor'?(c.env.HARBOR_CLIENT_ID??'').trim():'';
   if(fixed)return fixed;
-  const scope=scopes[provider]!;
+  const scope=scopeFor(c.env,provider);
   let row=await c.env.DB.prepare('SELECT client_id FROM account_auth_clients WHERE origin=? AND provider=? AND scope=?').bind(origin,provider,scope).first<{client_id:string}>();
   if(row)return row.client_id;
   const response=await fetch(apiBaseOf(c.env,provider)+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Hearthroom',redirect_uris:[origin+'/auth/callback'],grant_types:['authorization_code','refresh_token'],token_endpoint_auth_method:'none',...(scope?{scope}:{})}),redirect:'manual',signal:AbortSignal.timeout(15000)});
@@ -436,7 +442,7 @@ accountAuthRoutes.post('/v1/auth/start',async c=>{
   const url=new URL(apiBaseOf(c.env,provider)+'/oauth/authorize');
   // 玩家在這裡用的介面語言：Harbor 的登入／同意頁用它，也記成成員的語言。只收像語言標籤的值。
   const locale=typeof body.locale==='string'&&/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(body.locale)?body.locale:'';
-  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]!?{scope:scopes[provider]!}:{}),...(locale?{ui_locales:locale}:{})}).toString();
+  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopeFor(c.env,provider)?{scope:scopeFor(c.env,provider)}:{}),...(locale?{ui_locales:locale}:{})}).toString();
   if(flow.silent)url.searchParams.set('prompt','none');
   return c.json({url:url.toString()});
 });

@@ -16,7 +16,7 @@ export { preloadStage } from "./stage-preload";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
 import { recordConversation } from '@/lib/library';
-import { apiBaseOf, currentProvider, type ProviderId } from '@/lib/provider';
+import { apiBaseOf, can, currentProvider, type ProviderId } from '@/lib/provider';
 import type { Me } from '@/lib/api';
 import { UPSTREAM_API } from "@/lib/config";
 import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
@@ -225,6 +225,13 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         // 從主畫面圖示開進來的獨立卡片 App：沒有上一頁，舞台（頁首與沙箱殼的頁首）都不畫返回鍵
         canBack: () => !(isPlayHost() && isStandalone()),
         toLogin: (returnTo) => { void deps.router.push(deps.lp(loginPath(returnTo || deps.currentPath()))); },
+        // 回覆偏好裡「管理我的預設」：站台有這一頁才給；卡片 App 網域上沒有站台頁面，到社群站開
+        ...(can('presets') ? {
+          toPresets: () => {
+            if (isPlayHost()) window.location.assign(`https://${communityHostForHistory()}${deps.lp('/me/presets')}`);
+            else void deps.router.push(deps.lp('/me/presets'));
+          },
+        } : {}),
       },
       locale: {
         get: () => i18n.global.locale.value,
