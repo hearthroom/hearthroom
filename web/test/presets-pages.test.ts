@@ -228,6 +228,26 @@ describe("預設編輯器", () => {
   });
 });
 
+describe("預設編輯器：版本紀錄", () => {
+  it("存好新版本後，版本紀錄馬上列出新的一版並標成最新", async () => {
+    const d = doc(); d.selection.excludedEntryIds = ["script"]; d.selection.acceptedAdaptationIds = ["turn:move_to_suffix"];
+    mocks.detail.mockResolvedValueOnce(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    mocks.analyze.mockImplementation(async () => compat());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改名";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    mocks.detail.mockResolvedValue(detail({ version: 3, headRevisionId: "r3", revisions: [{ revisionId: "r3", version: 3, title: "改名", createdAt: "2026-10-29T01:00:00Z", enabledEntryCount: 2 }, ...detail().revisions] }));
+    $("[data-testid=preset-save]").click();
+    await flush(); await flush();
+    const items = $$("[data-testid=preset-versions] li").map((li) => li.textContent ?? "");
+    expect(items[0]).toContain("v3");
+    expect(items[0]).toContain(t("preset.versions.current"));
+  });
+});
+
 describe("預設編輯器：匯入的不採用與新建", () => {
   it("匯入時列為不採用的條目算關著，不擋存檔；關掉匯入的條目只記不採用，來源不動", async () => {
     const d = doc(); d.selection.excludedEntryIds = ["script"];

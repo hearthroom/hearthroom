@@ -164,7 +164,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <span>{{ $t("preset.row.version", { n: p.version }) }}</span>
               <span class="chip presets__chip">{{ $t(p.sourceKind === "imported" ? "preset.row.source.import" : "preset.row.source.native") }}</span>
               <span v-if="p.archived" class="chip presets__chip">{{ $t("preset.row.archived") }}</span>
-              <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }) }}</span>
+              <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }, p.bindingCount) }}</span>
               <span>{{ $t("preset.row.updated", { datetime: dateTime(p.updatedAt) }) }}</span>
             </span>
           </RouterLink>

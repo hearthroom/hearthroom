@@ -3930,5 +3930,14 @@
   "preset.setting.n": "同时生成份数",
   "preset.setting.stream_openai": "流式设置",
   "preset.setting.function_calling": "函数调用",
-  "preset.setting.connection": "连接与模型设置"
+  "preset.setting.connection": "连接与模型设置",
+  "preset.list.more": "加载更多",
+  "preset.entry.untitled": "未命名条目",
+  "preset.entry.back": "返回条目",
+  "preset.params.level.low": "低",
+  "preset.params.level.medium": "中",
+  "preset.params.level.high": "高",
+  "preset.import.change": "换一个文件",
+  "preset.entry.position.middle": "对话记录中间",
+  "preset.error.reload": "载入最新版本"
 }

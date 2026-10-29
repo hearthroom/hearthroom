@@ -33,7 +33,8 @@ export interface PresetDocument { schemaVersion: string; st: StDocument; selecti
 /** P 固定區（歷史之前）、F 由框架提供、S 生成前（歷史之後）、D 插在歷史中間（不執行）。 */
 export type Slot = "P" | "F" | "S" | "D";
 /** side：在排序裡位於聊天歷史之前或之後（插在歷史中間的條目也照這個歸區顯示） */
-export interface EntryRow { identifier: string; prompt: StPrompt; enabled: boolean; slot: Slot; side: "before" | "after" }
+/** enabled：實際會用（來源開著且沒有列為不採用）；sourceEnabled：來源檔裡的開關 */
+export interface EntryRow { identifier: string; prompt: StPrompt; enabled: boolean; sourceEnabled: boolean; slot: Slot; side: "before" | "after" }
 
 /** ST 標準的框架佔位：內容由綺夢社的卡片、玩家設定、Lorebook 與聊天歷史提供，不能改、不能關、不能搬。 */
 export const FRAMEWORK_IDS: ReadonlySet<string> = new Set([
@@ -99,7 +100,7 @@ export function entryRows(doc: PresetDocument): EntryRow[] {
     const side = history >= 0 && i > history ? "after" : "before";
     // 開著＝來源排序裡開著，而且本站沒有把它列為不採用
     const enabled = o.enabled !== false && !doc.selection.excludedEntryIds.includes(o.identifier);
-    return [{ identifier: o.identifier, prompt, enabled, slot, side }];
+    return [{ identifier: o.identifier, prompt, enabled, sourceEnabled: o.enabled !== false, slot, side }];
   });
 }
 

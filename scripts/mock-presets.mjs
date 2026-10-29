@@ -46,6 +46,7 @@ export function analyze(doc) {
     if (MACROS.test(p.content ?? "")) return { ...base, level: "unsupported", uiStatus: "unsupported", reasonCodes: ["macro_not_supported"], inertSettings: inert };
     if (before && (p.content ?? "").includes("{{lastUserMessage}}")) {
       const adaptationId = `${o.identifier}:move_to_suffix`;
+      if (doc.selection.acceptedAdaptationIds?.includes(adaptationId)) return { ...base, level: "partial", targetSlot: "S", reasonCodes: [], availableAdaptationIds: [adaptationId], adaptationId, inertSettings: inert };
       return { ...base, level: "partial", targetSlot: "S", uiStatus: "needs_adjustment", reasonCodes: ["move_to_suffix"], availableAdaptationIds: [adaptationId], adaptationId, inertSettings: inert };
     }
     return { ...base, targetSlot: before ? "P" : "S", inertSettings: inert };

@@ -3930,5 +3930,14 @@
   "preset.setting.n": "동시 생성 개수",
   "preset.setting.stream_openai": "스트리밍 설정",
   "preset.setting.function_calling": "함수 호출",
-  "preset.setting.connection": "연결 및 모델 설정"
+  "preset.setting.connection": "연결 및 모델 설정",
+  "preset.list.more": "더 불러오기",
+  "preset.entry.untitled": "이름 없는 항목",
+  "preset.entry.back": "항목 목록으로",
+  "preset.params.level.low": "낮음",
+  "preset.params.level.medium": "보통",
+  "preset.params.level.high": "높음",
+  "preset.import.change": "다른 파일 선택",
+  "preset.entry.position.middle": "대화 기록 중간",
+  "preset.error.reload": "최신 버전 불러오기"
 }

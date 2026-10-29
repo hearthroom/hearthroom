@@ -3930,5 +3930,14 @@
   "preset.setting.n": "同時に生成する返信数",
   "preset.setting.stream_openai": "ストリーミング設定",
   "preset.setting.function_calling": "関数呼び出し",
-  "preset.setting.connection": "接続とモデルの設定"
+  "preset.setting.connection": "接続とモデルの設定",
+  "preset.list.more": "さらに読み込む",
+  "preset.entry.untitled": "名前のない項目",
+  "preset.entry.back": "項目一覧に戻る",
+  "preset.params.level.low": "低",
+  "preset.params.level.medium": "中",
+  "preset.params.level.high": "高",
+  "preset.import.change": "別のファイルを選ぶ",
+  "preset.entry.position.middle": "会話履歴の途中",
+  "preset.error.reload": "最新版を読み込む"
 }

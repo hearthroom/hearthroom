@@ -3930,5 +3930,14 @@
   "preset.setting.n": "multiple replies at once",
   "preset.setting.stream_openai": "streaming settings",
   "preset.setting.function_calling": "function calling",
-  "preset.setting.connection": "connection and model settings"
+  "preset.setting.connection": "connection and model settings",
+  "preset.list.more": "Load more",
+  "preset.entry.untitled": "Untitled entry",
+  "preset.entry.back": "Back to entries",
+  "preset.params.level.low": "Low",
+  "preset.params.level.medium": "Medium",
+  "preset.params.level.high": "High",
+  "preset.import.change": "Choose another file",
+  "preset.entry.position.middle": "Inside the chat history",
+  "preset.error.reload": "Load latest version"
 }

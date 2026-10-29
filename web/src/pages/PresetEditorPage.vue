@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, isPromptPack, addEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
+  FRAMEWORK_IDS, adaptationId, isPromptPack, addEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -89,7 +89,10 @@ const imported = computed(() => detail.value?.sourceKind === "imported");
 const q = computed(() => query.value.trim().toLowerCase());
 const matches = (r: EntryRow) => !q.value || `${r.prompt.name ?? ""}\n${r.prompt.content ?? ""}`.toLowerCase().includes(q.value);
 const found = computed(() => custom.value.filter(matches));
-const groupOf = (side: "before" | "after") => found.value.filter((r) => r.side === side);
+/** 已確認改放到對話記錄之後的條目：照採用後的位置列、不再標需調整（來源的位置不動，匯出照原檔） */
+const movedAfter = (r: EntryRow) => !!doc.value?.selection.acceptedAdaptationIds.includes(adaptationId(r.identifier));
+const groupOf = (side: "before" | "after") => found.value.filter((r) => (movedAfter(r) ? "after" : r.side) === side);
+const tagOf = (r: EntryRow) => (movedAfter(r) ? undefined : compatOf(r.identifier)?.uiStatus);
 const provided = computed(() => {
   const present = new Set(rows.value.filter((r) => r.slot === "F" && FRAMEWORK_IDS.has(r.identifier)).map((r) => PROVIDED[r.identifier]));
   return PROVIDED_ROWS.filter((k) => k === "memory" || present.has(k));
@@ -102,8 +105,8 @@ const blocked = computed(() => custom.value.filter((r) => {
   return c?.uiStatus === "needs_adjustment" && !(c.adaptationId && doc.value?.selection.acceptedAdaptationIds.includes(c.adaptationId));
 }));
 const blockedText = computed(() => t("preset.editor.saveBlocked", {
-  n: blocked.value.length, names: blocked.value.map((r) => r.prompt.name || t("preset.entry.untitled")).join(t("preset.setting.separator")),
-}));
+  n: whole(blocked.value.length), names: blocked.value.map((r) => r.prompt.name || t("preset.entry.untitled")).join(t("preset.setting.separator")),
+}, blocked.value.length));
 const canSave = computed(() => dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
 
 function adopt(next: PresetDocument, nextTitle: string, nextModels: string[], version: number, clean = true) {
@@ -334,7 +337,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </div>
           <p class="subtle">{{ $t("preset.entries.hint") }}</p>
           <input v-model="query" type="search" class="input" :placeholder="$t('preset.entries.search')" :aria-label="$t('preset.entries.search')" data-testid="entry-search" />
-          <p v-if="q" class="subtle" role="status">{{ found.length ? $t("preset.entries.searchResult", { n: found.length }) : $t("preset.entries.searchEmpty", { q: query.trim() }) }}</p>
+          <p v-if="q" class="subtle" role="status">{{ found.length ? $t("preset.entries.searchResult", { n: whole(found.length) }, found.length) : $t("preset.entries.searchEmpty", { q: query.trim() }) }}</p>
 
           <div v-if="!custom.length" class="preset-editor__empty">
             <strong>{{ $t("preset.editor.emptyEntries.title") }}</strong>
@@ -348,7 +351,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                 <li v-for="r in groupOf(side)" :key="r.identifier">
                   <button type="button" class="preset-editor__row" :class="{ 'is-on': r.identifier === selected, 'is-off': !r.enabled }" :aria-current="r.identifier === selected || undefined" data-testid="entry-row" @click="pick(r.identifier)">
                     <span class="preset-editor__rowName">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
-                    <span v-if="compatOf(r.identifier)?.uiStatus" class="preset-editor__tag" :class="`preset-editor__tag--${compatOf(r.identifier)!.uiStatus}`">{{ $t(compatOf(r.identifier)!.uiStatus === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
+                    <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : "preset.report.status.unsupported") }}</span>
                     <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                   </button>
                   <input type="checkbox" class="preset-editor__toggle" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
@@ -388,7 +391,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
             v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported"
-            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = selectedRow.side"
+            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = movedAfter(selectedRow) ? 'after' : selectedRow.side"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
             <button type="button" class="btn btn--sm btn--ghost preset-editor__back" @click="providedOpen = ''">{{ $t("preset.entry.back") }}</button>
@@ -412,7 +415,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <p class="subtle">{{ $t("preset.versions.body") }}</p>
         <ul class="preset-editor__versions">
           <li v-for="v in detail.revisions" :key="v.revisionId">
-            <span>{{ $t("preset.versions.item", { n: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }) }}</span>
+            <span>{{ $t("preset.versions.item", { n: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }, v.enabledEntryCount) }}</span>
             <span v-if="v.version === head" class="subtle">{{ $t("preset.versions.current") }}</span>
             <button v-else type="button" class="btn btn--sm btn--ghost" @click="restoreFrom(v.revisionId, v.version)">{{ $t("preset.versions.restore") }}</button>
           </li>
@@ -485,7 +488,12 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__section { padding: var(--s-3) var(--s-5) var(--s-5); display: grid; gap: var(--s-3); }
 .preset-editor__section > p { margin: 0; }
 .preset-editor__versions li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--h-lg); }
-.preset-editor__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+/* 存檔列固定在畫面底部：被擋的原因、已存成 vN、匯入完成這些話一進頁面就看得到 */
+.preset-editor__foot {
+  position: sticky; bottom: 0; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line);
+}
 .preset-editor__state { flex: 1 1 280px; font-size: 13px; overflow-wrap: anywhere; }
 .preset-editor__actions { display: flex; gap: var(--s-2); align-items: center; }
 @media (max-width: 760px) {
@@ -494,10 +502,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
   .preset-editor__back { display: inline-flex; }
   .preset-editor--entry .preset-editor__list { display: none; }
   .preset-editor:not(.preset-editor--entry) .preset-editor__detail { display: none; }
-  .preset-editor__foot {
-    position: sticky; bottom: 0; z-index: 15; margin-inline: calc(-1 * var(--s-4)); padding: var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line);
-  }
+  .preset-editor__foot { margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); }
   .preset-editor__actions { width: 100%; }
   .preset-editor__actions .btn--primary { flex: 1; }
 }

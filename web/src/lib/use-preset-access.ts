@@ -13,8 +13,13 @@ import { useSession } from "./session";
 
 const ASKED_KEY = "hearthroom.presetConsentAskedAt";
 const ASK_WINDOW = 2 * 60_000;
+/** 只算一次：剛回來那一次不再請他同意；他按重試、或之後再碰到，照常請他同意。 */
 function recentlyAsked(): boolean {
-  try { return Date.now() - Number(sessionStorage.getItem(ASKED_KEY) || 0) < ASK_WINDOW; } catch { return false; }
+  try {
+    const at = Number(sessionStorage.getItem(ASKED_KEY) || 0);
+    sessionStorage.removeItem(ASKED_KEY);
+    return Date.now() - at < ASK_WINDOW;
+  } catch { return false; }
 }
 
 export function usePresetAccess() {

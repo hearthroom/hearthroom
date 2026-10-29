@@ -28,20 +28,23 @@ const prompt = computed(() => props.row.prompt);
 const content = ref<HTMLTextAreaElement | null>(null);
 const macro = ref<(typeof MACROS)[number]>("char");
 
-const status = computed(() => props.compat?.uiStatus);
 const reasonText = (code: string) => te(`preset.reason.entry.${code}`)
   ? t(`preset.reason.entry.${code}`, { role: t(`preset.entry.role.${prompt.value.role === "assistant" ? "assistant" : "user"}`) })
   : "";
 const reasons = computed(() => (props.compat?.reasonCodes ?? []).filter((c) => c !== "framework_owned").map(reasonText).filter(Boolean));
 const adaptation = computed(() => props.compat?.availableAdaptationIds.find((id) => id === adaptationId(props.row.identifier)));
-const accepted = computed(() => !!adaptation.value && props.doc.selection.acceptedAdaptationIds.includes(adaptation.value));
+const accepted = computed(() => props.doc.selection.acceptedAdaptationIds.includes(adaptationId(props.row.identifier)));
+const status = computed(() => (accepted.value ? undefined : props.compat?.uiStatus));
 const inert = computed(() => [...new Set((props.compat?.inertSettings ?? []).map((k) => settingLabel(k, t, te)))].join(t("preset.setting.separator")));
 
 const enabled = computed({ get: () => props.row.enabled, set: (on: boolean) => setEnabled(props.doc, props.row.identifier, on, { keepSource: props.keepSource }) });
 const position = computed({
-  get: () => (props.row.slot === "D" ? "D" : props.row.side),
+  get: () => (accepted.value ? "after" : props.row.slot === "D" ? "D" : props.row.side),
   set: (side) => {
     if (side !== "before" && side !== "after") return;
+    // 需調整的條目：改到之後＝確認調整（來源位置不動）；已確認的改回之前＝撤回確認
+    if (accepted.value) { if (side === "before") setAdaptation(props.doc, props.row.identifier, false); return; }
+    if (adaptation.value && side === "after") { accept(); return; }
     prompt.value.injection_position = 0;
     moveToSide(props.doc, props.row.identifier, side);
   },

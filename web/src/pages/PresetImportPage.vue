@@ -220,9 +220,9 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
         <section class="panel preset-import__card" data-testid="import-report">
           <h2>{{ $t("preset.report.title") }}</h2>
           <p class="preset-import__summary">
-            <span>{{ $t("preset.report.summary.ok", { n: whole(counts.ok) }) }}</span>
-            <span>{{ $t("preset.report.summary.adjust", { n: whole(counts.adjust) }) }}</span>
-            <span>{{ $t("preset.report.summary.unsupported", { n: whole(counts.unsupported) }) }}</span>
+            <span>{{ $t("preset.report.summary.ok", { n: whole(counts.ok) }, counts.ok) }}</span>
+            <span>{{ $t("preset.report.summary.adjust", { n: whole(counts.adjust) }, counts.adjust) }}</span>
+            <span>{{ $t("preset.report.summary.unsupported", { n: whole(counts.unsupported) }, counts.unsupported) }}</span>
           </p>
           <p v-if="counts.unsupported" class="subtle">{{ $t("preset.report.unsupported.note") }}</p>
           <p v-if="stale" class="notice" role="status">{{ $t("preset.report.stale") }}</p>
@@ -237,7 +237,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
               <template v-else>
                 <label class="preset-import__pick">
                   <!-- 來源本來就關著的條目：照來源，不在這裡打開（要用的話匯入後在編輯器裡開） -->
-                  <input type="checkbox" :checked="r.enabled" :disabled="statusOf(r.identifier) === 'unsupported' || (!r.enabled && !excluded(r.identifier)) || updating" @change="setUse(r.identifier, ($event.target as HTMLInputElement).checked)" />
+                  <input type="checkbox" :checked="r.enabled" :disabled="statusOf(r.identifier) === 'unsupported' || !r.sourceEnabled || updating" @change="setUse(r.identifier, ($event.target as HTMLInputElement).checked)" />
                   <span class="preset-import__name">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
                   <span class="sr-only">{{ $t("preset.report.use") }}</span>
                 </label>
@@ -269,7 +269,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
             <label for="import-title">{{ $t("preset.report.name") }}</label>
             <input id="import-title" v-model="title" class="input" maxlength="60" required data-testid="import-title" />
           </div>
-          <p v-if="needFix" class="subtle" role="status" data-testid="import-needfix">{{ $t("preset.report.needFix", { n: needFix }) }}</p>
+          <p v-if="needFix" class="subtle" role="status" data-testid="import-needfix">{{ $t("preset.report.needFix", { n: whole(needFix) }, needFix) }}</p>
           <p v-if="unconfirmed" class="subtle" role="status">{{ $t("preset.error.unknown") }} {{ $t("preset.error.unknown.hint") }}</p>
           <button type="button" class="btn btn--primary btn--lg" :disabled="confirming || updating || expired || needFix > 0 || !title.trim()" data-testid="import-confirm" @click="confirm">
             {{ confirming ? $t("preset.report.confirming") : $t("preset.report.confirm") }}
