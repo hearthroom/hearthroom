@@ -62,6 +62,19 @@ const remount=async()=>{
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
 };
 
+it('reveals a focused review tab before activation without changing the selected section', async () => {
+ api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(8));
+ const tabs=el.querySelectorAll<HTMLButtonElement>('.tabs button');
+ const reveal=vi.fn();
+ tabs[4].scrollIntoView=reveal;
+ tabs[4].focus();
+ await vi.waitFor(()=>expect(reveal).toHaveBeenCalledWith({block:'nearest',inline:'nearest'}));
+ expect(tabs[0].getAttribute('aria-pressed')).toBe('true');
+ expect(tabs[4].getAttribute('aria-pressed')).toBe('false');
+});
+
 it('requires confirmation before approval, cancels without POST, and snapshots the reviewed decision',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});

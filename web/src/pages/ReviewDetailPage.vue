@@ -59,6 +59,14 @@ const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" 
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
 const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
 
+function revealFocusedTab(event: FocusEvent) {
+  const tab = event.currentTarget as HTMLElement;
+  // 原生 focus 捲動完成後再揭露整個項目；聚焦不會切換正在閱讀的分頁。
+  requestAnimationFrame(() => {
+    if (document.activeElement === tab) tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+}
+
 /**
  * 作者的分級問卷（owner 2026-10-10）：審核人看一眼答案，對照內容是不是他說的那樣。
  * 每一類列出作者選的那一項與它對應的級別；沒勾的類型也列出來，審核人才看得出「他說沒有」。
@@ -365,7 +373,7 @@ onMounted(() => { void load(); });
       </section>
 
       <div class="seg tabs">
-        <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
+        <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @focus="revealFocusedTab" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
           {{ sectionLabel(s) }}
         </button>
       </div>
@@ -608,9 +616,9 @@ onMounted(() => { void load(); });
 .head__acts { display: flex; gap: var(--s-2); }
 /* 分段控制預設是 inline-flex，會照內容撐寬、自己永遠不捲；外層又把超出的部分裁掉，窄螢幕右邊的分頁就點不到。
    這裡改成跟容器同寬、可以橫向滑動，每格不壓縮 */
-.tabs { display: flex; max-width: 100%; margin-bottom: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.tabs { display: flex; max-width: 100%; margin-bottom: var(--s-4); padding: var(--s-1); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
-.tabs .seg__item { flex: none; }
+.tabs .seg__item { flex: none; scroll-margin-inline: var(--s-1); }
 .pane { padding: var(--s-4); margin-bottom: var(--s-4); }
 .pane .field:last-child { margin-bottom: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
