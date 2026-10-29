@@ -202,6 +202,34 @@ afterEach(() => {
 });
 
 describe('bounded author workspace scrolling', () => {
+  it.each([114, 230, 160])('keeps a settled anchor and manual adjacent sections aligned at viewport top %i', async (top) => {
+    await mount('/create');
+    const viewport = $('.body__scroll') as HTMLElement;
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 297 },
+      scrollHeight: { configurable: true, value: 9000 },
+      scrollTop: { configurable: true, value: 5800 },
+    });
+    viewport.style.scrollPaddingTop = '8px';
+    viewport.getBoundingClientRect = () => ({ top }) as DOMRect;
+    $('.side').getBoundingClientRect = () => ({ bottom: top - 8 }) as DOMRect;
+    let destination = 'publish';
+    const keys = ['basic', 'persona', 'dialogue', 'worldbook', 'publish'];
+    root.querySelectorAll<HTMLElement>('[data-section]').forEach(el => {
+      el.style.scrollMarginTop = '8px';
+      el.getBoundingClientRect = () => ({ top: top + 16 + (keys.indexOf(el.dataset.section!) - keys.indexOf(destination)) * 500 }) as DOMRect;
+    });
+    const now = Date.now();
+    byText(i18n.global.t('editor.section.publish')).click();
+    vi.spyOn(Date, 'now').mockReturnValue(now + 1600);
+    for (const key of ['publish', 'worldbook', 'dialogue', 'publish']) {
+      destination = key;
+      viewport.dispatchEvent(new Event('scroll'));
+      await new Promise(r => setTimeout(r, 40));
+      await nextTick();
+      expect($('.side__item[aria-current=true]').textContent).toContain(i18n.global.t(`editor.section.${key}`));
+    }
+  });
   it('tracks the last section from the form viewport instead of document scroll', async () => {
     await mount('/create');
     const viewport = root.querySelector<HTMLElement>('.body__scroll');

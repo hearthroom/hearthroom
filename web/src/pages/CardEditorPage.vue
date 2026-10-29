@@ -429,20 +429,20 @@ function goto(next: Section) {
   spyHoldUntil = Date.now() + 1200;
   el.scrollIntoView({ block: "start", behavior: "smooth" });
 }
-/** 導覽列底緣就是「目前在哪一區」的判斷線：最後一個頂端過了線的分區就是所在區。 */
+/** 以表單錨點的實際到位位置判定，與 scrollIntoView 的 padding／margin 一致。 */
 let spyFrame = 0;
 function spy() {
   spyFrame = 0;
-  if (Date.now() < spyHoldUntil || !body.value) return;
-  const nav = body.value.parentElement?.querySelector(".side");
-  const line = (nav ? nav.getBoundingClientRect().bottom : 60) + 12;
+  const viewport = scrollBody.value;
+  if (Date.now() < spyHoldUntil || !body.value || !viewport) return;
+  const anchorTop = viewport.getBoundingClientRect().top + (parseFloat(getComputedStyle(viewport).scrollPaddingTop) || 0);
   let current: Section = SECTIONS[0];
   for (const key of sections.value) {
     const el = paneOf(key);
-    if (el && el.getBoundingClientRect().top <= line) current = key;
+    // 捲動座標可含小數；容許一個 CSS px 的原生捲動取整誤差。
+    if (el && el.getBoundingClientRect().top <= anchorTop + (parseFloat(getComputedStyle(el).scrollMarginTop) || 0) + 1) current = key;
   }
   // 捲到頁底時最後一區未必過得了線（它可能比一屏短），到底就算它
-  const viewport = scrollBody.value;
   if (viewport && viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2) current = sections.value[sections.value.length - 1];
   if (section.value !== current) section.value = current;
 }
