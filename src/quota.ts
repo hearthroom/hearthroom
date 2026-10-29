@@ -1,4 +1,5 @@
 import { resolveMember } from "./members";
+import type { ProviderIdentity } from "./upstream";
 import type { ProviderId } from "./providers";
 /**
  * 每週登記額度。
@@ -91,8 +92,8 @@ export async function registeredThisWeek(db: D1Database, authorNumId: number, no
   return new Set(rows.results.map(r=>r.work_key));
 }
 
-export async function quotaFor(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "harbor"): Promise<Quota> {
-  return quotaForMember(db, await resolveMember(db, provider, authorNumId, now), now);
+export async function quotaFor(db: D1Database, me: ProviderIdentity, now: number, provider: ProviderId = "harbor"): Promise<Quota> {
+  return quotaForMember(db, await resolveMember(db, provider, me.accountNumId, now, me), now);
 }
 
 /** 同 quotaFor，但從社群成員出發（管理端看某個作者的額度用這個）。 */

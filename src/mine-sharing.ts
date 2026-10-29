@@ -1,15 +1,16 @@
 import {loadMine,mineCache,type MineFilter,type MineResult} from './mine';
 import {type Env,HttpError} from './types';
-import {upstream,type MyRole} from './upstream';
+import {upstream,type MyRole,type ProviderIdentity} from './upstream';
 import {quotaFor} from './quota';
 import {readOwnerVisibilities} from './work-sharing';
 import type {WorkAccess} from './work-policy';
 
 // A filter must see the whole bounded candidate set before slicing a page. Raw
 // inventory may be cached; current author permissions and review facts never are.
-export async function loadSharingMine(env:Env,token:string,account:number,opts:{page:number;pageSize:number;fresh:boolean;filter:MineFilter;q?:string;access?:WorkAccess}):Promise<MineResult>{
+export async function loadSharingMine(env:Env,token:string,me:ProviderIdentity,opts:{page:number;pageSize:number;fresh:boolean;filter:MineFilter;q?:string;access?:WorkAccess}):Promise<MineResult>{
+ const account=me.accountNumId;
  if(!opts.access){
-  const result=await loadMine({...env,WORK_SHARING_ENABLED:'false'},token,account,{...opts,provider:'harbor'});
+  const result=await loadMine({...env,WORK_SHARING_ENABLED:'false'},token,me,{...opts,provider:'harbor'});
   const projections=await readOwnerVisibilities(env,result.body.items.map(r=>r.roleId),token);
   return {...result,body:{...result.body,items:result.body.items.map(r=>({...r,workVisibility:projections.get(r.roleId)!,draftChanged:projections.get(r.roleId)!.draftChanged}))}};
  }
@@ -35,7 +36,7 @@ export async function loadSharingMine(env:Env,token:string,account:number,opts:{
    (c.approved_version_id IS NOT NULL OR (c.status='approved' AND c.registered_at>0)
     OR EXISTS(SELECT 1 FROM card_registrations r WHERE r.provider=c.provider AND r.source_role_id=c.source_role_id)
     OR EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider=c.provider AND (s.card_id=c.id OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider=c.provider AND source_role_id=c.source_role_id))))`).bind(account).all<{source_role_id:string}>(),
-  quotaFor(env.DB,account,Date.now(),'harbor'),
+  quotaFor(env.DB,me,Date.now(),'harbor'),
  ]);
  const registered=new Set(submitted.results.map(r=>r.source_role_id));
  const rows=all.filter(r=>(!opts.access||projections.get(r.roleId)!.access===opts.access)

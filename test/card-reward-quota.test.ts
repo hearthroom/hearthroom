@@ -102,9 +102,9 @@ describe("活動期間的每週額度", () => {
 
   it("作者看到的額度上限跟著登記那一刻的活動設定", async () => {
     await campaign();
-    expect((await quotaFor(env.DB, ALICE, START - 1)).limit).toBe(3);
-    expect((await quotaFor(env.DB, ALICE, START)).limit).toBe(6);
-    expect((await quotaFor(env.DB, ALICE, END)).limit).toBe(3);
+    expect((await quotaFor(env.DB, {accountNumId: ALICE}, START - 1)).limit).toBe(3);
+    expect((await quotaFor(env.DB, {accountNumId: ALICE}, START)).limit).toBe(6);
+    expect((await quotaFor(env.DB, {accountNumId: ALICE}, END)).limit).toBe(3);
   });
 });
 
