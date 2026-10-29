@@ -69,7 +69,13 @@ export async function enqueueRewardEvent(db: D1Database, ev: RewardEvent, now: n
 
 /** 成員在 Harbor 的公開數字帳號；沒有 Harbor 身分就是 null（那就不是 Harbor 的玩家，不報）。 */
 export async function harborAccountNo(db: D1Database, memberId: string): Promise<number | null> {
-  const row = await db.prepare("SELECT external_id FROM member_identities WHERE member_id = ? AND provider = 'harbor' AND EXISTS(SELECT 1 FROM members WHERE id=member_id AND account_class='normal')").bind(memberId).first<{ external_id: string }>();
+  // Connections select the current owner, while founding identities are retained.
+  // Match connectedMemberId: do not attribute an identity moved to another member.
+  const row = await db.prepare(`SELECT COALESCE(
+    (SELECT external_id FROM member_connections WHERE owner_member_id=m.id AND provider='harbor'),
+    (SELECT i.external_id FROM member_identities i WHERE i.member_id=m.id AND i.provider='harbor'
+      AND NOT EXISTS(SELECT 1 FROM member_connections c WHERE c.provider=i.provider AND c.external_id=i.external_id))
+  ) AS external_id FROM members m WHERE m.id=? AND m.account_class='normal'`).bind(memberId).first<{ external_id: string | null }>();
   const n = Number(row?.external_id);
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }

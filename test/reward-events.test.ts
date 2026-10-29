@@ -7,7 +7,7 @@
 import { env, SELF } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
-import { flushRewardEvents, rewardTransport, scriptOf, visitorHash } from "../src/reward-events";
+import { flushRewardEvents, harborAccountNo, rewardTransport, scriptOf, visitorHash } from "../src/reward-events";
 import { opsMetrics } from "../src/ops-metrics";
 
 const json = async (r: Response) => (await r.json()) as any;
@@ -115,6 +115,57 @@ describe("分享連結被打開：公開端點出錯也不透露", () => {
 });
 
 describe("留言、評分與分享連結", () => {
+  it("連結帳號的目前成員留言：使用 Harbor 連結身分建立獎勵事件", async () => {
+    const original = await makeMember(20001);
+    const owner = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO members(id,handle,created_at) VALUES(?,'linkedaa',0)").bind(owner).run();
+    await env.DB.prepare("INSERT INTO member_connections(provider,external_id,owner_member_id,linked_at) VALUES('harbor','20001',?,0)").bind(owner).run();
+    await harborCard("200001", "role-1", 20002);
+    const response = await SELF.fetch("https://c.test/v1/cards/200001/comments", {
+      method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "這張卡的故事和人物互動都很有趣，我很喜歡" }),
+    });
+    expect(response.status).toBe(201);
+    const posted = await json(response);
+    const comment = await env.DB.prepare("SELECT member_id FROM comments WHERE id=?").bind(posted.commentId).first<{ member_id: string }>();
+    expect(comment?.member_id).toBe(owner);
+    expect(owner).not.toBe(original);
+    expect((await outbox()).filter(e => e.type === "comment_posted")).toEqual([
+      expect.objectContaining({ body: expect.objectContaining({ accountNo: 20001, workRoleId: "role-1", attrs: expect.objectContaining({ commentId: posted.commentId, script: "cjk" }) }) }),
+    ]);
+    expect(await opsMetrics(env.DB)).toContain('hearthroom_reward_events_total{type="comment_posted",outcome="queued"} 1');
+    expect((await SELF.fetch("https://c.test/v1/cards/200001/score", {
+      method: "PUT", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ score: 4 }),
+    })).status).toBe(204);
+    expect((await SELF.fetch("https://c.test/v1/me/share/created", {
+      method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ roleId: "role-1" }),
+    })).status).toBe(204);
+    expect((await SELF.fetch(`https://c.test/v1/comments/${posted.commentId}`, { method: "DELETE", headers: bearer("fan") })).status).toBe(204);
+    const events = await outbox();
+    expect(events.map(e => e.type)).toEqual(expect.arrayContaining(["comment_posted", "comment_removed", "rating_set", "share_link_created"]));
+    expect(events.every(e => e.body.accountNo === 20001)).toBe(true);
+  });
+
+  it("已連到另一個成員的舊身分不再歸原成員；解除後才恢復", async () => {
+    const original = await makeMember(20001);
+    const owner = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO members(id,handle,created_at) VALUES(?,'linkedab',0)").bind(owner).run();
+    await env.DB.prepare("INSERT INTO member_connections(provider,external_id,owner_member_id,linked_at) VALUES('harbor','20001',?,0)").bind(owner).run();
+    expect(await harborAccountNo(env.DB, original)).toBeNull();
+    expect(await harborAccountNo(env.DB, owner)).toBe(20001);
+    await env.DB.prepare("DELETE FROM member_connections WHERE provider='harbor' AND external_id='20001'").run();
+    expect(await harborAccountNo(env.DB, original)).toBe(20001);
+    expect(await harborAccountNo(env.DB, owner)).toBeNull();
+  });
+
+  it("目前連結優先於成員保留的舊 Harbor 身分，測試成員仍不參與", async () => {
+    const owner = await makeMember(20001);
+    await env.DB.prepare("INSERT INTO member_connections(provider,external_id,owner_member_id,linked_at) VALUES('harbor','20099',?,0)").bind(owner).run();
+    expect(await harborAccountNo(env.DB, owner)).toBe(20099);
+    await env.DB.prepare("UPDATE members SET account_class='test',test_generation=1 WHERE id=?").bind(owner).run();
+    expect(await harborAccountNo(env.DB, owner)).toBeNull();
+  });
+
   it("在 Harbor 卡片留言：報留言與字數；作者回覆再多報一筆", async () => {
     await makeMember(20001); await makeMember(20002);
     await harborCard("200001", "role-1", 20002);
