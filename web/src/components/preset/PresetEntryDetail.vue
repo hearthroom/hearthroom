@@ -132,7 +132,7 @@ async function reset() {
     </div>
     <div class="field">
       <label :for="`content-${row.identifier}`">{{ $t("preset.entry.content") }}</label>
-      <textarea :id="`content-${row.identifier}`" ref="content" v-model="prompt.content" class="input entry__content" spellcheck="false" />
+      <textarea :id="`content-${row.identifier}`" ref="content" v-model="prompt.content" class="input entry__content" spellcheck="false" autocomplete="off" />
       <div class="field__foot">
         <div class="entry__macro">
           <label class="sr-only" :for="`macro-${row.identifier}`">{{ $t("preset.entry.macro") }}</label>
