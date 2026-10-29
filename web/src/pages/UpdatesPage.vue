@@ -121,7 +121,7 @@ watch(locale, () => { document.title = pageTitle(t("updates.title")); void load(
         <ul v-if="openFixes.has(day.key)" class="updates__fix-list">
           <li v-for="fix in day.fixes" :id="fix.id" :key="fix.id">
             <span v-if="unseen(fix)" class="updates__dot" :title="t('updates.unseen')" />
-            <span>{{ fix.title }}<template v-if="fix.body"> {{ fix.body }}</template></span>
+            <span>{{ fix.title }}<template v-if="fix.body">{{ " " }}{{ fix.body }}</template></span>
           </li>
         </ul>
       </div>

@@ -214,6 +214,17 @@ describe("更新頁", () => {
     expect(JSON.parse(localStorage.getItem("hearthroom.updates")!).seenThrough).toBeGreaterThan(NOW - DAY);
   });
 
+  it.each([
+    ["Cards no longer add space for side buttons.", "New imports keep their layout."],
+    ["양옆 여백 문제를 수정했어요.", "새로 가져오는 카드에 적용돼요."],
+  ])("separates a fix title from its optional body: %s", async (title, body) => {
+    respond([item("fix-spacing", { tier: "fix", try: null, title, body })]);
+    const { root } = await mount(UpdatesPage, "/updates");
+    root.querySelector<HTMLButtonElement>(".updates__fixes-toggle")!.click();
+    await nextTick();
+    expect(root.querySelector("#fix-spacing")!.textContent!.trim()).toBe(`${title} ${body}`);
+  });
+
   it("讀不到時說清楚，並給重新載入", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
     const { root } = await mount(UpdatesPage, "/updates");
