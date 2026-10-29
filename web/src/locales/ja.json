@@ -3651,7 +3651,7 @@
   "spendBoard.globalOn": "サイト全体：匿名表示",
   "spendBoard.globalOff": "サイト全体：ニックネーム表示",
   "spendBoard.historyScope": "この設定は過去のランキングにも適用されます。",
-  "spendBoard.historyVisibility": "匿名にしても非表示になるのはニックネームとアイコンだけで、順位と使用ポイントは公開されます。",
+  "spendBoard.historyVisibility": "匿名にしても非表示になるのはニックネームとアイコンだけです。ランキングを見られる人には、順位と使用ポイントが引き続き表示されます。",
   "spendBoard.back": "ランキングに戻る",
   "spendBoard.backSettings": "設定に戻る",
   "spendBoard.save": "設定を保存",

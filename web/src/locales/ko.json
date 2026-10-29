@@ -3651,7 +3651,7 @@
   "spendBoard.globalOn": "사이트 기본 설정: 익명",
   "spendBoard.globalOff": "사이트 기본 설정: 닉네임 표시",
   "spendBoard.historyScope": "이 설정은 이전 랭킹 기록에도 적용돼요.",
-  "spendBoard.historyVisibility": "익명으로 설정해도 닉네임과 프로필 사진만 숨겨지며, 순위와 사용한 포인트는 계속 공개돼요.",
+  "spendBoard.historyVisibility": "익명으로 설정해도 닉네임과 프로필 사진만 숨겨지며, 랭킹을 볼 수 있는 사람에게는 순위와 사용한 포인트가 계속 보여요.",
   "spendBoard.back": "랭킹으로 돌아가기",
   "spendBoard.backSettings": "설정으로 돌아가기",
   "spendBoard.save": "설정 저장",

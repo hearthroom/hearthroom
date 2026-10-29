@@ -472,7 +472,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
         <aside ref="side" class="role__side">
           <CardScore v-if="listed && score" id="score" class="role__score-box" :score="score" :own="own" :busy="scoreBusy" @rate="rate" @write="writeReview" />
 
-          <CardSpendLeaderboard v-if="listed && card.provider==='harbor' && (!card.status || card.status==='approved')" :key="card.id" :card-id="card.id" :play-url="playAppUrl(String(card.num??card.id),locale,{provider:card.provider})" />
+          <CardSpendLeaderboard v-if="card.provider==='harbor'" :key="card.id" :card-id="card.id" :play-url="playAppUrl(String(card.num??card.id),locale,{provider:card.provider})" />
 
           <section class="panel role__info" :aria-label="$t('card.info')">
             <dl class="role__stats">

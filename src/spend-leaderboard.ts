@@ -1,7 +1,11 @@
 import {Hono,type Context} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import type {CardRow} from './cards';
-import {cardLink} from './card-link';
+import {cardLink,linkPreview} from './card-link';
+import {readOwnCardView} from './card-owner-view';
+import {privatePlayerCard} from './private-player';
+import {registerLegacyShare} from './work-share-registration';
+import {bearerOf} from './staff';
 import {currentCardAccess} from './work-read';
 import {requireMember,viewerAllowsNsfw,providerOf,type Member} from './members';
 import {type Env,HttpError} from './types';
@@ -14,9 +18,9 @@ type Ctx=Context<{Bindings:Env}>;
 type RawPlayer={accountNumId:number;credits:string;rank:number};
 type RawBoard={list:RawPlayer[];self:RawPlayer|null;total:number;updatedAt?:string};
 export const spendGateway={
- async read(env:Env,input:{roleId:string;viewerAccountNumId:number;limit:number;offset:number}):Promise<RawBoard>{
+ async read(env:Env,input:{roleId:string;limit:number;offset:number},token?:string):Promise<RawBoard>{
   const key=hostingKey(env,'harbor');if(!key)throw new HttpError(503,'leaderboard_unavailable');
-  const res=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/hosting/spend-leaderboard`,{method:'POST',headers:{'Content-Type':'application/json','X-Hosting-Key':key},body:JSON.stringify(input),redirect:'manual',signal:AbortSignal.timeout(7000)});
+  const res=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/hosting/spend-leaderboard`,{method:'POST',headers:{'Content-Type':'application/json','X-Hosting-Key':key,...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(input),redirect:'manual',signal:AbortSignal.timeout(7000)});
   if(!res.ok)throw new HttpError(res.status===404?404:503,'leaderboard_unavailable');
   const body=await res.json() as RawBoard;
   const valid=(p:RawPlayer)=>p&&Number.isSafeInteger(p.accountNumId)&&p.accountNumId>0&&Number.isSafeInteger(p.rank)&&p.rank>0&&typeof p.credits==='string'&&/^[1-9]\d*$/.test(p.credits);
@@ -25,16 +29,40 @@ export const spendGateway={
  }
 };
 
-async function visibleCard(c:Ctx,id:string):Promise<CardRow>{
+type RankCard=Pick<CardRow,'id'|'provider'|'source_role_id'|'author_num_id'> & {rankRoleId:string};
+async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
  c.header('Cache-Control','private, no-store');
- const {row}=await cardLink(c.env,id,providerOf(c));
- if(!row||row.provider!=='harbor'||row.public_blocked||row.status!=='approved')throw new HttpError(404,'card not found');
- const access=await currentCardAccess(c.env,row,'aggregate');
- if(!access.reachable)throw new HttpError(404,'card not found');
- if(row.rating==='R'&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
- return row;
+ const link=await cardLink(c.env,id,providerOf(c));let row=link.row;
+ const source=link.source?.roleId??id;
+ if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
+  row=await registerLegacyShare(c.env,source,()=>viewerAllowsNsfw(c,{card:true}));
+  if(!row){
+   const own=await readOwnCardView(c.env,source,null,'en',bearerOf(c),providerOf(c));
+   if(!own||own.provider!=='harbor')throw new HttpError(404,'card not found');
+   return {id:own.id,provider:'harbor',source_role_id:source,author_num_id:own.author.accountNumId,rankRoleId:own.roleId};
+  }
+ }
+ if(row){
+  if(row.provider!=='harbor'||row.public_blocked)throw new HttpError(404,'card not found');
+  const access=await currentCardAccess(c.env,row,'aggregate');
+  if(access.reachable){
+   if((row.rating==='R'||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+   return {...row,rankRoleId:access.shareRoleId||row.approved_hosted_role_id||row.source_role_id};
+  }
+  const own=await readOwnCardView(c.env,source,row,'en',bearerOf(c),providerOf(c));
+  if(own)return {...row,rankRoleId:row.source_role_id};
+  if(access.access==='private'){
+   const played=await privatePlayerCard(c.env,row,bearerOf(c),'en','detail',()=>viewerAllowsNsfw(c,{card:true}));
+   if(played)return {...row,rankRoleId:played.roleId};
+  }
+  throw new HttpError(404,'card not found');
+ }
+ const preview=await linkPreview(c.env,id,link,'en')??await readOwnCardView(c.env,source,null,'en',bearerOf(c),providerOf(c));
+ if(!preview||preview.provider!=='harbor')throw new HttpError(404,'card not found');
+ return {id:preview.id,provider:'harbor',source_role_id:source,author_num_id:preview.author.accountNumId,rankRoleId:preview.roleId};
 }
-const keyOf=(row:CardRow)=>`${row.provider}:${row.source_role_id}`;
+
+const keyOf=(row:RankCard)=>`${row.provider}:${row.source_role_id}`;
 async function optionalViewer(c:Ctx):Promise<Member|null>{return c.req.header('Authorization')?requireMember(c):null;}
 
 // Every public identity projection and preference read uses the primary D1
@@ -46,7 +74,7 @@ spendLeaderboardRoutes.get('/v1/cards/:id/leaderboard',async c=>{
   const card=await visibleCard(c,c.req.param('id')),viewer=await optionalViewer(c);
   const offset=Number(c.req.query('offset')??0);
   if(!Number.isSafeInteger(offset)||offset<0||offset>1000000)throw new HttpError(400,'invalid_request');
-  const raw=await spendGateway.read(c.env,{roleId:card.approved_hosted_role_id??card.source_role_id,viewerAccountNumId:viewer?.externalId??0,limit:10,offset});
+  const raw=await spendGateway.read(c.env,{roleId:card.rankRoleId,limit:10,offset},bearerOf(c));
   const ids=[...new Set([...raw.list,...(raw.self?[raw.self]:[])].map(r=>String(r.accountNumId)))];
   type Profile={public_no:string;handle:string;display_name:string|null;avatar_url:string|null;account_class:string;anonymous:number|null;overrides:string|null;fenced:number};
   const rows=ids.length?(await c.env.DB.prepare(`SELECT j.value AS public_no,m.handle,m.display_name,m.avatar_url,m.account_class,p.anonymous,p.overrides,EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id) AS fenced

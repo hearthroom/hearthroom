@@ -11,10 +11,10 @@
     "ko": "카드 페이지의 공감 랭킹"
   },
   "body": {
-    "zh-Hant": "知音榜依累計對話消耗的積分排名，你可以設定全站預設匿名，或為每張卡另選顯示方式；匿名只隱藏暱稱與頭像，名次和積分仍會公開。",
-    "zh-Hans": "知音榜按累计对话消耗的积分排名，你可以设置全站默认匿名，或为每张卡单独选择显示方式；匿名只隐藏昵称和头像，名次和积分仍会公开。",
-    "en": "Rankings use credits spent chatting on each card; you can use anonymity by default or choose separately for each card; it hides your nickname and avatar while your rank and credits spent stay public.",
-    "ja": "順位はチャットで使った累計ポイント順で、匿名表示は全体またはカードごとに選べますが、隠れるのはニックネームとアイコンだけで、順位と使用ポイントは公開されます。",
-    "ko": "랭킹은 누적 대화 사용 포인트 순이며, 사이트 기본 익명 설정이나 카드별 표시 방식을 선택해도 순위와 사용 포인트는 공개되고 닉네임과 프로필 사진만 숨겨져요."
+    "zh-Hant": "知音榜依累計對話消耗的積分排名，你可以設定全站預設匿名，或為每張卡另選顯示方式；匿名只隱藏暱稱與頭像，看得到榜單的人仍看得到名次和積分。",
+    "zh-Hans": "知音榜按累计对话消耗的积分排名，你可以设置全站默认匿名，或为每张卡单独选择显示方式；匿名只隐藏昵称和头像，能看到榜单的人仍能看到名次和积分。",
+    "en": "Rankings use credits spent chatting on each card; you can use anonymity by default or choose separately for each card; it hides your nickname and avatar while anyone who can see the ranking still sees your rank and credits spent.",
+    "ja": "順位はチャットで使った累計ポイント順で、匿名表示は全体またはカードごとに選べますが、隠れるのはニックネームとアイコンだけで、ランキングを見られる人には順位と使用ポイントが表示されます。",
+    "ko": "랭킹은 누적 대화 사용 포인트 순이며, 사이트 기본 익명 설정이나 카드별 표시 방식을 선택해도 닉네임과 프로필 사진만 숨겨지고, 랭킹을 볼 수 있는 사람에게는 순위와 사용 포인트가 보여요."
   }
 }

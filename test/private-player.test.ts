@@ -7,8 +7,11 @@ import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 import {opsMetrics} from '../src/ops-metrics';
 import {workPolicyGateway} from '../src/work-policy';
 import {HttpError} from '../src/types';
+import {spendGateway} from '../src/spend-leaderboard';
+import {hostGateway} from '../src/hosting';
+import {upstream} from '../src/upstream';
 
-beforeEach(async()=>{await resetDb();identities({player:42,stranger:43});});
+beforeEach(async()=>{await resetDb();identities({player:42,stranger:43,owner:11});});
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
 
 async function fixture(approved=true){
@@ -209,4 +212,34 @@ it('rejects contradictory work mappings instead of selecting one lineage',async(
  const {ownedHistory}=await import('../src/owned-history');
  vi.spyOn(ownedHistory,'read').mockResolvedValue({conversationId:'ambiguous-saved',roleId:target,canGenerate:true});
  expect((await request('/v1/me/conversations/ambiguous-saved?provider=harbor','player')).status).toBe(404);
+});
+
+it('gives a private card ranking only to the same qualified player/author and forwards the real bearer',async()=>{
+ const f=await fixture(),card=await getCard(env.DB,f.source,'harbor');
+ const ranking=vi.spyOn(spendGateway,'read').mockResolvedValue({list:[{rank:1,credits:'225',accountNumId:42}],self:null,total:1});
+ let response=await request(`/v1/cards/${card!.id}/leaderboard`,'player');
+ expect(response.status).toBe(200);expect((await response.json() as any).list[0].credits).toBe('225');
+ expect(ranking.mock.calls[0]![1]).toEqual({roleId:f.target,limit:10,offset:0});expect(ranking.mock.calls[0]![2]).toBe('player');
+ for(const token of [undefined,'stranger'])expect((await request(`/v1/cards/${card!.id}/leaderboard`,token)).status).toBe(404);
+ vi.spyOn(workPolicyGateway,'owner').mockResolvedValue({} as Awaited<ReturnType<typeof workPolicyGateway.owner>>);
+ vi.spyOn(hostGateway,'read').mockResolvedValue(role({roleId:f.source,authorNumId:11}));
+ response=await request(`/v1/cards/${card!.id}/leaderboard`,'owner');expect(response.status).toBe(200);expect(await response.json()).toMatchObject({selfState:'author'});
+ await env.DB.prepare("UPDATE cards SET public_blocked=1 WHERE id=?").bind(card!.id).run();
+ expect((await request(`/v1/cards/${card!.id}/leaderboard`,'owner')).status).toBe(404);
+});
+it('does not let private rankings bypass a current suspension or identity mismatch',async()=>{
+ const f=await fixture(),card=await getCard(env.DB,f.source,'harbor');const ranking=vi.spyOn(spendGateway,'read');
+ await env.DB.prepare("UPDATE managed_work_access SET restriction='suspended' WHERE work_id=?").bind(f.work).run();
+ expect((await request(`/v1/cards/${card!.id}/leaderboard`,'player')).status).toBe(404);expect(ranking).not.toHaveBeenCalled();
+});
+
+it('retains the original sharing registration fence for an unregistered link ranking',async()=>{
+ const id=crypto.randomUUID();vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:id}));
+ const ranking=vi.spyOn(spendGateway,'read').mockResolvedValue({list:[],self:null,total:0});
+ vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+  if(!String(input).includes('/hosting/work-access/batch'))throw new Error('Unexpected registration fixture call');
+  const data=JSON.parse(String(init?.body));return Response.json({items:data.items.map((item:any)=>({...item,managed:false,access:'',restriction:'',epoch:0,shareRoleId:'',approvedRoleId:'',targetReadable:false,listed:false}))});
+ });
+ const context=createExecutionContext();const response=await worker.fetch(new Request(`https://c.test/v1/cards/${id}/leaderboard`),{...env,WORK_SHARING_ENABLED:'true',HOSTING_SERVICE_KEY:'fixture'},context);await waitOnExecutionContext(context);
+ expect(response.status).toBe(404);expect(ranking).not.toHaveBeenCalled();
 });

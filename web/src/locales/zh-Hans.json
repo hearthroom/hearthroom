@@ -3651,7 +3651,7 @@
   "spendBoard.globalOn": "全站默认：匿名",
   "spendBoard.globalOff": "全站默认：显示昵称",
   "spendBoard.historyScope": "这些设置也会应用于过去的排行记录。",
-  "spendBoard.historyVisibility": "匿名只隐藏昵称和头像，名次和消耗积分仍会公开。",
+  "spendBoard.historyVisibility": "匿名只隐藏昵称和头像，能看到榜单的人仍能看到名次和消耗积分。",
   "spendBoard.back": "返回榜单",
   "spendBoard.backSettings": "返回设置",
   "spendBoard.save": "保存设置",

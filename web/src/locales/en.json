@@ -3651,7 +3651,7 @@
   "spendBoard.globalOn": "Site default: anonymous",
   "spendBoard.globalOff": "Site default: show nickname",
   "spendBoard.historyScope": "These settings also apply to past rankings.",
-  "spendBoard.historyVisibility": "Anonymity hides only your nickname and avatar. Your rank and credits spent remain public.",
+  "spendBoard.historyVisibility": "Anonymity hides only your nickname and avatar. Anyone who can see the ranking still sees your rank and credits spent.",
   "spendBoard.back": "Back to rankings",
   "spendBoard.backSettings": "Back to settings",
   "spendBoard.save": "Save settings",

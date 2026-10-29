@@ -3863,7 +3863,7 @@
         ],
         "operationId": "cardSpendLeaderboard",
         "summary": "Read the lifetime conversation ranking",
-        "description": "Ranks actual net ordinary and Agent conversation-turn debits across all credit sources, with no publication-date cutoff. Released versions of the same work share one ranking. Authors, test accounts, review trials, memory processing and suggested replies are excluded. Anonymous rows contain rank, credits, anonymous and isSelf only; no nickname, avatar, profile link or public account number. Optional viewer authentication adds the viewer rank and privacy settings. Exact whole-credit amounts are decimal strings. Identity projections are read from the primary database and never cached.",
+        "description": "Ranks actual net ordinary and Agent conversation-turn debits across all credit sources, with no publication-date cutoff. The original card, unpublished working drafts and every version of the same work share one ranking. Authors, test accounts, review trials, memory processing and suggested replies are excluded. A card that can be read without signing in can be ranked without a bearer; a private card requires a valid bearer from a player who can open it, and a bearer that is sent but invalid is rejected rather than treated as anonymous. Anonymous rows contain rank, credits, anonymous and isSelf only; no nickname, avatar, profile link or public account number. A valid bearer also adds the viewer rank and privacy settings. Exact whole-credit amounts are decimal strings. Identity projections are read from the primary database and never cached.",
         "security": [
           {},
           {

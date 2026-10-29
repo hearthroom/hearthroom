@@ -1,3 +1,4 @@
+import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {reviewPlayAccessRoutes} from './review-play-access';
@@ -25,7 +26,6 @@ import { libraryRoutes } from "./library";
 import {workSharingRoutes} from './work-sharing';
 import {workSharingCommandRoutes} from './work-sharing-commands';
 import {workSubmissionRoutes} from './work-submission';
-import {managedWork,workPolicyGateway} from './work-policy';
 import {registerLegacyShare} from './work-share-registration';
 import {privatePlayerCard} from './private-player';
 import {publicPosition,publicCandidates,publicCandidatePage,parsePublicCandidates} from './work-pagination';
@@ -601,29 +601,9 @@ async function checkedCardAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}
   }
 }
 
-async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, id: string, row: Awaited<ReturnType<typeof getCard>>) {
-  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
-  if (!bearer) return null;
-  const provider = providerOf(c);
-  const me = await upstream.fetchMe(c.env, bearer, provider).catch(() => null);
-  if (!me) return null;
-  if (row) {
-    if(row.provider!==provider||row.author_num_id!==me.accountNumId)return null;
-    if(provider==='harbor'&&(row.status==='unlisted'||await managedWork(c.env.DB,provider,row.source_role_id))){
-      try{
-        await workPolicyGateway.owner(c.env,provider,row.source_role_id,bearer);
-        const role=await hostGateway.read(c.env,bearer,row.source_role_id,provider);
-        if(role.roleId!==row.source_role_id||role.authorNumId!==me.accountNumId)return null;
-        return {...previewCard(role,lang(c),provider,row.num??Number(row.id)),status:row.status,canInteract:false,listed:false};
-      }catch{return null;}
-    }
-    return {...toCard(row,lang(c)),status:row.status};
-  }
-  // 卡號查不到就是沒這張卡；只有上游的卡片 ID 才值得去上游問
-  if (CARD_NUMBER.test(id)) return null;
-  const role = await (provider==='harbor'?hostGateway.read(c.env,bearer,id):upstream.fetchRole(c.env,id,provider)).catch(() => null);
-  if (!role || role.authorNumId !== me.accountNumId) return null;
-  return previewCard(role, lang(c), provider, await ensureCardNumber(c.env.DB,provider,role.roleId));
+
+async function ownCardView(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:string,row:Awaited<ReturnType<typeof getCard>>){
+ return readOwnCardView(c.env,id,row,lang(c),bearerOf(c),providerOf(c));
 }
 
 app.get("/v1/cards/:id", async (c) => {

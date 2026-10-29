@@ -57,7 +57,7 @@ it('sends the stable work revision without a publication cutoff, including after
  await env.DB.prepare("UPDATE cards SET registered_at=9999999999999,approved_hosted_role_id='hosted-v3' WHERE id=100001").run();
  expect((await SELF.fetch('https://c.test/v1/cards/100001/leaderboard')).status).toBe(200);
  expect(inputs).toEqual([
-  {roleId:'hosted-v2',viewerAccountNumId:0,limit:10,offset:0},
-  {roleId:'hosted-v3',viewerAccountNumId:0,limit:10,offset:0},
+  {roleId:'hosted-v2',limit:10,offset:0},
+  {roleId:'hosted-v3',limit:10,offset:0},
  ]);
 });
