@@ -47,6 +47,8 @@ describe("預設 API", () => {
     expect(await readLocalProfiles(file({ version: 1, type: "prompts", data: { prompts: [] } }))).toEqual({ ok: true, profiles: [0] });
     expect(await readLocalProfiles(file("{not json"))).toEqual({ ok: false, reason: "not_json" });
     expect(await readLocalProfiles(file({ name: "card", data: { description: "x" } }))).toEqual({ ok: false, reason: "not_preset" });
+    // 有條目卻沒有任何排序設定：讀不出要用哪些、怎麼排，不上傳
+    expect(await readLocalProfiles(file({ prompts: [{ identifier: "a" }] }))).toEqual({ ok: false, reason: "not_preset" });
     expect(await readLocalProfiles(file("x".repeat(1024 * 1024 + 1)))).toEqual({ ok: false, reason: "too_large" });
   });
 

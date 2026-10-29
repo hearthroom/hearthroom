@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  adaptationId, addEntry, deleteEntry, moveToSide, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
+  adaptationId, addEntry, canDeleteEntry, deleteEntry, moveToSide, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
   isPromptPack, moveEntry, newDocument, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
@@ -210,5 +210,12 @@ describe("ST 預設文件操作", () => {
     expect(deleteEntry(doc, "spare")).toBe(true);
     expect(doc.selection.excludedEntryIds).toEqual(["main"]);
     expect(doc.selection.acceptedAdaptationIds).toEqual([]);
+  });
+
+  it("另一組排序還在用的條目不能刪，畫面據此不給刪除鈕", () => {
+    const doc = imported();
+    detachEntry(doc, "main");
+    expect(canDeleteEntry(doc, "main")).toBe(false);
+    expect(canDeleteEntry(doc, "spare")).toBe(true);
   });
 });

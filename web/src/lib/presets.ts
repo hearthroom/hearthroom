@@ -217,7 +217,10 @@ export async function readLocalProfiles(file: File): Promise<{ ok: true; profile
   const st = parsed as StDocument;
   const prompts = isPromptPack(st) ? (st.data as StDocument).prompts : st.prompts;
   if (!Array.isArray(prompts)) return { ok: false, reason: "not_preset" };
-  return { ok: true, profiles: profilesOf(st) };
+  // 有條目卻沒有任何排序設定：讀不出要用哪些、怎麼排
+  const profiles = profilesOf(st);
+  if (!profiles.length) return { ok: false, reason: "not_preset" };
+  return { ok: true, profiles };
 }
 
 /**

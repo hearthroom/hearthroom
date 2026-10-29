@@ -203,13 +203,18 @@ export function duplicateEntry(doc: PresetDocument, id: string, name: string): s
 }
 
 /** 只刪沒有任何一組排序在用的條目；另一組排序還用著的話，刪了它那組會懸空。 */
-export function deleteEntry(doc: PresetDocument, id: string): boolean {
+export function canDeleteEntry(doc: PresetDocument, id: string): boolean {
   if (isFramework(id)) return false;
   const st = doc.st;
   const orders: StOrderEntry[][] = isPromptPack(st)
     ? [orderOf(doc)]
     : ((st.prompt_order ?? []) as { order?: StOrderEntry[] }[]).map((p) => p.order ?? []);
-  if (orders.some((order) => order.some((o) => o.identifier === id))) return false;
+  return !orders.some((order) => order.some((o) => o.identifier === id));
+}
+
+export function deleteEntry(doc: PresetDocument, id: string): boolean {
+  if (!canDeleteEntry(doc, id)) return false;
+  const st = doc.st;
   const prompts = promptsOf(st);
   const at = prompts.findIndex((p) => p.identifier === id);
   if (at < 0) return false;

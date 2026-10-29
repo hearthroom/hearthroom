@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, adaptationId, isPromptPack, addEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
+  FRAMEWORK_IDS, adaptationId, isPromptPack, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -382,7 +382,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
               <li v-for="p in detached" :key="p.identifier">
                 <span class="preset-editor__rowName">{{ p.name || $t("preset.entry.untitled") }}</span>
                 <button type="button" class="btn btn--sm btn--ghost" @click="reinsert(p.identifier)">{{ $t("preset.unused.reinsert") }}</button>
-                <button type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
+                <!-- 檔案裡另一組排序還用著的條目不給刪：刪了那一組會懸空 -->
+                <button v-if="canDeleteEntry(doc, p.identifier)" type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
               </li>
             </ul>
           </details>
