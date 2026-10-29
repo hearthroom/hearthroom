@@ -63,6 +63,9 @@ http.createServer(async (req, res) => {
   if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
   if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
   if (path === "/open/v1/role/author-asset/serve") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, { rules: a?.rules ?? [], mountTrigger: a?.mountTrigger ?? "", mountLayer: a?.mountLayer ?? "", pageMode: sandboxAll ? "sandbox" : a?.pageMode ?? "classic", status: a ? "passed" : "none", version: a?.version ?? 0, variants: {} }); }
+  // 畫布一開就讀的兩支：真上游都有（沒存過就回空的），這裡沒接的話畫布會彈「操作未完成」
+  if (m === "GET" && path === "/open/v1/player/preference") return json(res, 200, { prefs: {} });
+  if (m === "GET" && path === "/open/v1/player/conversation-persona") return json(res, 200, { userName: "", userSex: "", userDefine: "", exists: false });
   if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
   if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
