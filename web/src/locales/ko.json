@@ -3890,9 +3890,7 @@
   "preset.report.status.unsupported": "실행 안 됨",
   "preset.report.use": "이 항목 사용",
   "preset.report.skip": "사용 안 함",
-  "preset.report.fields.title": "적용되지 않는 설정",
   "preset.report.fields.body": "이 설정들은 {site}에서 실행되지 않습니다. 프리셋에는 남아 있고, 내보낼 때 그대로 나갑니다.",
-  "preset.report.fields.item": "{name}",
   "preset.report.name": "프리셋 이름",
   "preset.report.confirm": "내 프리셋으로 저장",
   "preset.report.confirming": "저장 중…",
@@ -3974,5 +3972,11 @@
   "preset.report.status.relocated": "위치 조금 조정",
   "preset.reason.entry.relocated_after_history": "SillyTavern에서는 대화 기록 중간에 들어가는 항목입니다. {site}에서는 대화 기록 뒤, 최신 대화 가까이에 두고 그대로 사용합니다.",
   "preset.reason.entry.relocated_before_history": "SillyTavern에서는 이전 대화 기록 안에 들어가는 항목입니다. {site}에서는 대화 기록 앞에 두고 그대로 사용합니다.",
-  "preset.reason.entry.dynamic_after_history": "이번 턴에 플레이어가 입력한 내용을 쓰므로 {site}에서는 대화 기록 뒤에 두고 그대로 사용합니다."
+  "preset.reason.entry.dynamic_after_history": "이번 턴에 플레이어가 입력한 내용을 쓰므로 {site}에서는 대화 기록 뒤에 두고 그대로 사용합니다.",
+  "preset.toolReply.label": "도구로 답장",
+  "preset.toolReply.hint": "답장이 끝까지 생성된 뒤에 표시됩니다. 지원하는 모델에서만 적용되고, 다른 모델은 평소처럼 답장합니다.",
+  "preset.toolReply.detected": "이 프리셋은 원래 SillyTavern 확장 기능의 도구로 답장하도록 되어 있고, {site}에는 그 도구가 없습니다. 쓰려면 '도구로 답장'을 켜세요. {site}의 답장 도구가 대신 쓰이며, 결과가 원래와 다를 수 있습니다.",
+  "preset.reason.field.external_tools_not_executed": "확장 기능의 도구는 실행되지 않습니다.",
+  "preset.reason.field.external_scripts_not_executed": "확장 기능의 스크립트는 실행되지 않습니다.",
+  "preset.report.fields.summary": "적용되지 않는 설정 {n}개"
 }

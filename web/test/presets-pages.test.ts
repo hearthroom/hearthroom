@@ -417,7 +417,12 @@ describe("從 ST 匯入", () => {
     expect(mocks.selection.mock.calls[0]![3].excludedEntryIds).toEqual(["script"]);
     const report = $("[data-testid=import-report]").textContent ?? "";
     for (const key of ["preset.report.summary.ok", "preset.report.summary.relocated", "preset.report.summary.unsupported"]) expect(report).toContain(t(key, { n: "1" }));
-    expect($("[data-testid=import-fields]").textContent).toContain(t("preset.setting.extensions"));
+    // 不生效的設定收成一行「n 項設定不生效」，點開才列原始鍵名
+    const fieldsBox = $<HTMLDetailsElement>("[data-testid=import-fields]");
+    expect(fieldsBox.tagName).toBe("DETAILS");
+    expect(fieldsBox.open).toBe(false);
+    expect(fieldsBox.querySelector("summary")!.textContent).toBe(t("preset.report.fields.summary", { n: "1" }, 1));
+    expect(fieldsBox.textContent).toContain("extensions");
     expect($("[data-testid=import-accept]")).toBeNull();
     expect($<HTMLButtonElement>("[data-testid=import-confirm]").disabled).toBe(false);
   });
@@ -476,5 +481,64 @@ describe("重新授權", () => {
     expect($("[data-testid=preset-reauth]")).toBeNull();
     expect(root.textContent).toContain(t("preset.list.loadFailed"));
     sessionStorage.removeItem("hearthroom.presetConsentAskedAt");
+  });
+});
+
+describe("用工具回覆（預設關，匯入不自動打開；PM 2026-10-30）", () => {
+  const toolCompat = (enabled: boolean): Compatibility => ({ ...compat(), compilerVersion: "preset-p1.3", reviewRequired: false,
+    entries: compat().entries.filter((e) => e.identifier !== "turn" && e.identifier !== "script"),
+    fields: [{ path: "extensions", uiStatus: "unsupported", reasonCodes: ["external_tools_not_executed", "external_scripts_not_executed"], inertSettings: ["extensions"] }],
+    toolReply: { enabled, externalToolBindingsDetected: true } });
+
+  it("匯入報告：來源用擴充功能的工具回覆時只提示、開關關著；玩家打開才帶 toolReply；擴充功能的工具與程式寫明不會執行", async () => {
+    await mount(PresetImportPage, "/me/presets/import");
+    const d = doc();
+    mocks.preview.mockResolvedValue({ previewId: "pv", version: 1, expiresAt: "", sourceHash: "s", selectionDigest: "dg1", document: d, report: toolCompat(false) });
+    mocks.selection.mockImplementation(async (_t, _id, v, selection) => ({ previewId: "pv", version: v + 1, expiresAt: "", sourceHash: "s", selectionDigest: `dg${v + 1}`, document: { ...d, selection }, report: toolCompat(!!selection.toolReply) }));
+    const input = $<HTMLInputElement>("[data-testid=import-file]");
+    Object.defineProperty(input, "files", { value: [new File([JSON.stringify({ prompts: [{ identifier: "a" }], prompt_order: [{ character_id: 100001, order: [{ identifier: "a", enabled: true }] }] })], "p.json")], configurable: true });
+    input.dispatchEvent(new Event("change")); await flush();
+    const toggle = $<HTMLInputElement>("[data-testid=preset-tool-reply-toggle]");
+    expect(toggle.checked).toBe(false);
+    expect($("[data-testid=preset-tool-reply-detected]").textContent).toBe(t("preset.toolReply.detected"));
+    const fields = $("[data-testid=import-fields]").textContent ?? "";
+    expect(fields).toContain(t("preset.reason.field.external_tools_not_executed", { name: "extensions" }));
+    expect(fields).toContain(t("preset.reason.field.external_scripts_not_executed", { name: "extensions" }));
+    // 偵測到擴充功能的工具：開關和提示排在摘要正下方、條目清單之前，玩家不用捲到底才看到
+    const tool = $("[data-testid=preset-tool-reply]");
+    const entries = $(".preset-import__entries");
+    expect(tool.compareDocumentPosition(entries) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    toggle.click(); await flush();
+    expect(mocks.selection.mock.calls.at(-1)![3].toolReply).toBe(true);
+    expect($<HTMLInputElement>("[data-testid=preset-tool-reply-toggle]").checked).toBe(true);
+    // 已經打開了，「想用的話打開」的提示就收起來
+    expect($("[data-testid=preset-tool-reply-detected]")).toBeNull();
+  });
+
+  it("編輯頁：開關照文件的選擇；改了算未存，存檔帶 toolReply；沒偵測到外掛工具就不提示", async () => {
+    const d = doc();
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: { ...toolCompat(false), toolReply: { enabled: false, externalToolBindingsDetected: false } } });
+    mocks.analyze.mockImplementation(async () => ({ ...toolCompat(false), toolReply: { enabled: false, externalToolBindingsDetected: false } }));
+    await mount(PresetEditorPage, "/me/presets/p1");
+    const toggle = $<HTMLInputElement>("[data-testid=preset-tool-reply-toggle]");
+    expect(toggle.checked).toBe(false);
+    expect($("[data-testid=preset-tool-reply-detected]")).toBeNull();
+    toggle.click();
+    // 改了就重新分析一次，分析完才能存
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(false);
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush();
+    expect(mocks.revise.mock.calls[0]![2].document.selection.toolReply).toBe(true);
+  });
+
+  it("舊版本的報告沒有工具回覆資訊：開關照文件（缺省＝關），不提示", async () => {
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.1", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    mocks.analyze.mockImplementation(async () => compat());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    expect($<HTMLInputElement>("[data-testid=preset-tool-reply-toggle]").checked).toBe(false);
+    expect($("[data-testid=preset-tool-reply-detected]")).toBeNull();
   });
 });

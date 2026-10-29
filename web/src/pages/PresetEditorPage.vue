@@ -31,6 +31,7 @@ import PresetParams from "@/components/preset/PresetParams.vue";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
 import PresetInspectDialog from "@/components/preset/PresetInspectDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
+import PresetToolReply from "@/components/preset/PresetToolReply.vue";
 import { anyParamInvalid, paramLabelKey } from "@/components/preset/preset-params";
 
 const { t } = useI18n();
@@ -434,6 +435,13 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           <p v-else class="muted preset-editor__pick">{{ $t("preset.entry.title") }}</p>
         </section>
       </div>
+
+      <section class="panel preset-editor__section">
+        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
+          <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected"
+            @change="(v) => { doc!.selection.toolReply = v; }" />
+        </fieldset>
+      </section>
 
       <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->
       <details v-if="!isPromptPack(doc.st)" class="panel preset-editor__section" open>

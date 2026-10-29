@@ -16,8 +16,9 @@ import { confirmImport, previewImport, readLocalProfiles, resultUnknown, updateI
 import { entryRows, type PresetSelection } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
-import { settingLabel } from "@/components/preset/preset-params";
+import { fieldReason } from "@/components/preset/preset-params";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
+import PresetToolReply from "@/components/preset/PresetToolReply.vue";
 
 const { t, te } = useI18n();
 const { lp } = useLocalePath();
@@ -56,7 +57,23 @@ const counts = computed(() => ({
   unsupported: custom.value.filter((r) => statusOf(r.identifier) === "unsupported").length,
 }));
 const excluded = (id: string) => !!selection.value?.excludedEntryIds.includes(id);
-const fields = computed(() => [...new Set((report.value?.fields ?? []).filter((f) => f.uiStatus === "unsupported").flatMap((f) => f.inertSettings.length ? f.inertSettings : [f.path]).map((k) => settingLabel(k, t, te)))]);
+/** 不生效的設定：每項一個名字；擴充功能裡的工具、程式另外寫明不會執行 */
+const toolDetected = computed(() => !!report.value?.toolReply?.externalToolBindingsDetected);
+const fields = computed(() => {
+  const out = new Map<string, Set<string>>();
+  for (const f of (report.value?.fields ?? []).filter((x) => x.uiStatus === "unsupported")) {
+    for (const k of f.inertSettings.length ? f.inertSettings : [f.path]) {
+      const name = k;
+      const reasons = out.get(name) ?? new Set<string>();
+      for (const code of f.reasonCodes.filter((c) => c.startsWith("external_"))) {
+        const text = fieldReason(code, f.uiStatus, name, t, te);
+        if (text) reasons.add(text);
+      }
+      out.set(name, reasons);
+    }
+  }
+  return [...out].map(([name, reasons]) => ({ name, reasons: [...reasons] }));
+});
 const reasonText = (id: string, code: string) => {
   const role = rows.value.find((r) => r.identifier === id)?.prompt.role === "assistant" ? "assistant" : "user";
   return te(`preset.reason.entry.${code}`) ? t(`preset.reason.entry.${code}`, { role: t(`preset.entry.role.${role}`) }) : "";
@@ -229,6 +246,8 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
           </p>
           <p v-if="counts.unsupported" class="subtle">{{ $t("preset.report.unsupported.note") }}</p>
           <p v-if="stale" class="notice" role="status">{{ $t("preset.report.stale") }}</p>
+          <PresetToolReply v-if="toolDetected" :enabled="!!selection?.toolReply" detected :disabled="updating"
+            @change="(v) => selection && select({ ...selection, toolReply: v })" />
 
           <ul class="preset-import__entries">
             <li v-for="r in rows" :key="r.identifier" data-testid="import-entry">
@@ -253,11 +272,21 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
             </li>
           </ul>
 
-          <div v-if="fields.length" class="preset-import__fields" data-testid="import-fields">
-            <h3>{{ $t("preset.report.fields.title") }}</h3>
+          <!-- 來源靠擴充功能用工具回覆：開關和提示排在摘要下面，不然要捲過整份條目才看得到 -->
+          <PresetToolReply v-if="!toolDetected" :enabled="!!selection?.toolReply" :disabled="updating"
+            @change="(v) => selection && select({ ...selection, toolReply: v })" />
+
+          <!-- 不生效的設定多半是一長串酒館鍵名：收成一行，點開才列（原始鍵名，酒館玩家認得） -->
+          <details v-if="fields.length" class="preset-import__fields" data-testid="import-fields">
+            <summary>{{ $t("preset.report.fields.summary", { n: whole(fields.length) }, fields.length) }}</summary>
             <p class="subtle">{{ $t("preset.report.fields.body") }}</p>
-            <ul><li v-for="f in fields" :key="f">{{ $t("preset.report.fields.item", { name: f }) }}</li></ul>
-          </div>
+            <ul>
+              <li v-for="f in fields" :key="f.name">
+                {{ f.name }}
+                <span v-for="r in f.reasons" :key="r" class="preset-import__fieldReason">{{ r }}</span>
+              </li>
+            </ul>
+          </details>
         </section>
 
         <section class="panel preset-import__card">
@@ -300,8 +329,9 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
 .preset-import__reason { flex-basis: 100%; margin: 0 0 var(--s-3) 26px; display: grid; gap: var(--s-1); justify-items: start; }
 .preset-import__reason p { margin: 0; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; text-wrap: pretty; }
 .preset-import__fields { justify-self: stretch; display: grid; gap: var(--s-1); }
-.preset-import__fields h3 { margin: 0; font-size: 14px; }
+.preset-import__fields summary { cursor: pointer; padding: calc((var(--h-lg) - 1.5em) / 2) 0; line-height: 1.5; font-weight: 600; font-size: 14px; }
 .preset-import__fields p { margin: 0; }
+.preset-import__fieldReason { display: block; }
 .preset-import__fields ul { margin: 0; padding-left: var(--s-5); font-size: 13px; color: var(--text-2); }
 @media (max-width: 480px) { .preset-import__card .btn--lg { width: 100%; } }
 </style>

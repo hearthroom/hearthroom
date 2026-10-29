@@ -3890,9 +3890,7 @@
   "preset.report.status.unsupported": "不会执行",
   "preset.report.use": "采用这个条目",
   "preset.report.skip": "不采用",
-  "preset.report.fields.title": "不生效的设置",
   "preset.report.fields.body": "这些设置在绮梦社不会执行，保留在预设里，导出时原样带回。",
-  "preset.report.fields.item": "{name}",
   "preset.report.name": "预设名称",
   "preset.report.confirm": "存成我的预设",
   "preset.report.confirming": "保存中…",
@@ -3974,5 +3972,11 @@
   "preset.report.status.relocated": "位置略有调整",
   "preset.reason.entry.relocated_after_history": "这条在酒馆插在对话记录中间；{site}放在对话记录之后，靠近最新的对话，内容照常使用。",
   "preset.reason.entry.relocated_before_history": "这条在酒馆插在较早的对话记录里；{site}放在对话记录之前，内容照常使用。",
-  "preset.reason.entry.dynamic_after_history": "这条用到玩家这一轮的输入；{site}放在对话记录之后，内容照常使用。"
+  "preset.reason.entry.dynamic_after_history": "这条用到玩家这一轮的输入；{site}放在对话记录之后，内容照常使用。",
+  "preset.toolReply.label": "用工具回复",
+  "preset.toolReply.hint": "回复会整段生成后才显示。只在支持的模型上生效，其他模型照常回复。",
+  "preset.toolReply.detected": "这份预设原本靠酒馆的扩展功能用工具回复，{site}没有那个工具。想用的话，打开「用工具回复」，改用{site}自己的回复工具，效果可能和原本不同。",
+  "preset.reason.field.external_tools_not_executed": "扩展功能里的工具不会执行。",
+  "preset.reason.field.external_scripts_not_executed": "扩展功能里的程序不会执行。",
+  "preset.report.fields.summary": "{n} 项设置不生效"
 }

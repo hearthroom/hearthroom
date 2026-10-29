@@ -3890,9 +3890,7 @@
   "preset.report.status.unsupported": "実行されない",
   "preset.report.use": "このエントリーを使う",
   "preset.report.skip": "使わない",
-  "preset.report.fields.title": "反映されない設定",
   "preset.report.fields.body": "これらの設定は{site}では実行されません。プリセットには残り、書き出すときもそのままです。",
-  "preset.report.fields.item": "{name}",
   "preset.report.name": "プリセット名",
   "preset.report.confirm": "マイプリセットとして保存",
   "preset.report.confirming": "保存中…",
@@ -3974,5 +3972,11 @@
   "preset.report.status.relocated": "位置を少し調整",
   "preset.reason.entry.relocated_after_history": "SillyTavernでは会話履歴の途中に入るエントリーです。{site}では会話履歴の後、最新の会話の近くに置いて、そのまま使います。",
   "preset.reason.entry.relocated_before_history": "SillyTavernでは古い会話履歴の中に入るエントリーです。{site}では会話履歴の前に置いて、そのまま使います。",
-  "preset.reason.entry.dynamic_after_history": "このターンにプレイヤーが入力した内容を使うため、{site}では会話履歴の後に置いて、そのまま使います。"
+  "preset.reason.entry.dynamic_after_history": "このターンにプレイヤーが入力した内容を使うため、{site}では会話履歴の後に置いて、そのまま使います。",
+  "preset.toolReply.label": "ツールで返信",
+  "preset.toolReply.hint": "返信は最後まで生成されてから表示されます。対応しているモデルでのみ有効で、ほかのモデルでは通常どおり返信します。",
+  "preset.toolReply.detected": "このプリセットは、もともとSillyTavernの拡張機能のツールで返信する設定です。{site}にはそのツールがありません。使いたい場合は「ツールで返信」をオンにすると、{site}の返信ツールが使われます。結果が元と異なる場合があります。",
+  "preset.reason.field.external_tools_not_executed": "拡張機能のツールは実行されません。",
+  "preset.reason.field.external_scripts_not_executed": "拡張機能のスクリプトは実行されません。",
+  "preset.report.fields.summary": "反映されない設定 {n} 件"
 }

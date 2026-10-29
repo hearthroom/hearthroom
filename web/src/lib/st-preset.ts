@@ -27,6 +27,8 @@ export interface PresetSelection {
   excludedEntryIds: string[];
   acceptedAdaptationIds: string[];
   excludedFields: string[];
+  /** 用綺夢社自己的回覆工具（整段生成後才顯示）；省略＝關，匯入一律從關開始 */
+  toolReply?: boolean;
 }
 export interface PresetDocument { schemaVersion: string; st: StDocument; selection: PresetSelection }
 

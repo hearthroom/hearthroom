@@ -3890,9 +3890,7 @@
   "preset.report.status.unsupported": "Won't run",
   "preset.report.use": "Use this entry",
   "preset.report.skip": "Don't use",
-  "preset.report.fields.title": "Settings that have no effect",
   "preset.report.fields.body": "{site} doesn't apply these settings. They stay in the preset and come back unchanged when you export.",
-  "preset.report.fields.item": "{name}",
   "preset.report.name": "Preset name",
   "preset.report.confirm": "Save as my preset",
   "preset.report.confirming": "Saving…",
@@ -3974,5 +3972,11 @@
   "preset.report.status.relocated": "Slightly moved",
   "preset.reason.entry.relocated_after_history": "In SillyTavern this goes inside the conversation history; {site} puts it after the history, next to the latest messages, and uses it as usual.",
   "preset.reason.entry.relocated_before_history": "In SillyTavern this goes into earlier conversation history; {site} puts it before the history and uses it as usual.",
-  "preset.reason.entry.dynamic_after_history": "This uses what the player typed this turn, so {site} puts it after the conversation history and uses it as usual."
+  "preset.reason.entry.dynamic_after_history": "This uses what the player typed this turn, so {site} puts it after the conversation history and uses it as usual.",
+  "preset.toolReply.label": "Reply with tools",
+  "preset.toolReply.hint": "The reply appears only after it's fully generated. Takes effect on supported models; other models reply as usual.",
+  "preset.toolReply.detected": "This preset originally replied with a tool from a SillyTavern extension, which {site} doesn't have. To use tool replies, turn on \"Reply with tools\" so {site}'s own reply tool is used. Results may differ from the original.",
+  "preset.reason.field.external_tools_not_executed": "Tools from extensions don't run.",
+  "preset.reason.field.external_scripts_not_executed": "Scripts from extensions don't run.",
+  "preset.report.fields.summary": "{n} setting has no effect | {n} settings have no effect"
 }

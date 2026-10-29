@@ -12,6 +12,8 @@
  *   expired   匯入的 selection／confirm 回 410 preset_preview_expired
  *   conflict  下一次存新版本回 409 preset_revision_conflict（別處先存了）
  *   unavailable  綁定 GET 回 state=unavailable（選用的版本讀不到）
+ *   toolModel    回覆偏好的工具回覆狀態回 model_unsupported（目前模型不支援）
+ *   toolMode     回覆偏好的工具回覆狀態回 mode_unsupported（Agent／世界模式）
  * 在畫布套用到某個預設，那個預設的 bindingCount 會加一，列表就只能封存。
  */
 import crypto from "node:crypto";
@@ -40,6 +42,14 @@ function orderOf(doc) {
 }
 function promptsOf(doc) { return (doc.st.data && doc.st.type ? doc.st.data.prompts : doc.st.prompts) ?? []; }
 
+// 跟上游一樣只看酒館 SPreset 擴充功能：有啟用的工具綁定只提示；擴充功能的工具與程式都不執行
+function extensionFlags(st) {
+  const sp = (st.data && st.type ? st.data.extensions : st.extensions)?.SPreset ?? {};
+  const tools = Object.values(sp.ToolBindings ?? {}).some((b) => b && b.enabled);
+  const scripts = !!(sp.OutputPreprocessing?.enabled || sp.FinalRequestProcessing?.enabled || sp.ChatSquash?.squashed_post_script_enable);
+  return { tools, scripts };
+}
+
 export function analyze(doc) {
   const order = orderOf(doc);
   const history = order.findIndex((o) => o.identifier === "chatHistory");
@@ -59,8 +69,10 @@ export function analyze(doc) {
     if (before && (p.content ?? "").includes("{{lastUserMessage}}")) return { ...base, level: "partial", targetSlot: "S", uiStatus: "relocated", reasonCodes: ["dynamic_after_history"], inertSettings: inert };
     return { ...base, targetSlot: before ? "P" : "S", inertSettings: inert };
   });
-  const fields = Object.keys(doc.st).filter((k) => !KNOWN_FIELDS.has(k)).map((k) => ({ path: k, status: "unsupported", reason: "source_only", uiStatus: "unsupported", reasonCodes: ["source_only"], inertSettings: [k] }));
-  return { compilerVersion: "mock-p1.2", entries, fields, reviewRequired: entries.some((e) => e.uiStatus === "unsupported") };
+  const ext = extensionFlags(doc.st);
+  const fields = Object.keys(doc.st).filter((k) => !KNOWN_FIELDS.has(k)).map((k) => ({ path: k, status: "unsupported", reason: "source_only", uiStatus: "unsupported",
+    reasonCodes: ["source_only", ...(k === "extensions" && ext.tools ? ["external_tools_not_executed"] : []), ...(k === "extensions" && ext.scripts ? ["external_scripts_not_executed"] : [])], inertSettings: [k] }));
+  return { compilerVersion: "mock-p1.3", entries, fields, reviewRequired: entries.some((e) => e.uiStatus === "unsupported"), toolReply: { enabled: !!doc.selection.toolReply, externalToolBindingsDetected: ext.tools } };
 }
 
 /**
@@ -228,8 +240,13 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       for (const [k, v] of Object.entries(body.patch ?? {})) { if (v === null) delete responseOverrides[k]; else responseOverrides[k] = v; }
       responseRevision++;
     }
-    const effective = { agency: "coauthor", style: "card", perspective: "card", length: "auto", pace: "natural", streaming: "on", ...responseOverrides };
-    return json(res, 200, { conversationId: url.searchParams.get("conversationId") ?? body.conversationId, scope: "conversation", schemaVersion: 1, revision: responseRevision, overrides: { ...responseOverrides }, effective, styleSource: locked ? "preset" : "card_default", styleLocked: locked }), true;
+    // 工具回覆：綁定的版本打開了才算；只有 active 時有效設定的串流是關，玩家自己的設定不動
+    const bound = locked ? revisions.get(conversationBinding.revisionId) : null;
+    const enabled = !!bound?.document?.selection?.toolReply;
+    const status = !locked ? "off" : !bound ? "unavailable" : !enabled ? "off" : scenario === "toolModel" ? "model_unsupported" : scenario === "toolMode" ? "mode_unsupported" : "active";
+    const effective = { agency: "coauthor", style: "card", perspective: "card", length: "auto", pace: "natural", streaming: "on", ...responseOverrides, ...(status === "active" ? { streaming: "off" } : {}) };
+    return json(res, 200, { conversationId: url.searchParams.get("conversationId") ?? body.conversationId, scope: "conversation", schemaVersion: 1, revision: responseRevision, overrides: { ...responseOverrides }, effective, styleSource: locked ? "preset" : "card_default", styleLocked: locked,
+      toolReply: { enabled: status === "unavailable" ? false : enabled, effective: status === "active", status } }), true;
   }
   return false;
 }

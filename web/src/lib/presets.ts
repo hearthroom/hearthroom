@@ -47,7 +47,9 @@ export interface CompatibilityEntry {
   adaptationId?: string;
 }
 export interface CompatibilityField { path: string; uiStatus?: UiStatus; reasonCodes: string[]; inertSettings: string[] }
-export interface Compatibility { compilerVersion: string; entries: CompatibilityEntry[]; fields: CompatibilityField[]; reviewRequired: boolean }
+/** 舊版本的報告沒有這一項，當兩者都是 false */
+export interface ToolReplyReport { enabled: boolean; externalToolBindingsDetected: boolean }
+export interface Compatibility { compilerVersion: string; entries: CompatibilityEntry[]; fields: CompatibilityField[]; reviewRequired: boolean; toolReply?: ToolReplyReport }
 
 export interface PresetRevision {
   revisionId: string;

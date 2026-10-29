@@ -3890,9 +3890,7 @@
   "preset.report.status.unsupported": "不會執行",
   "preset.report.use": "採用這個條目",
   "preset.report.skip": "不採用",
-  "preset.report.fields.title": "不生效的設定",
   "preset.report.fields.body": "這些設定在綺夢社不會執行，保留在預設裡，匯出時原樣帶回。",
-  "preset.report.fields.item": "{name}",
   "preset.report.name": "預設名稱",
   "preset.report.confirm": "存成我的預設",
   "preset.report.confirming": "儲存中…",
@@ -3974,5 +3972,11 @@
   "preset.report.status.relocated": "位置略有調整",
   "preset.reason.entry.relocated_after_history": "這條在酒館插在對話記錄中間；{site}放在對話記錄之後，靠近最新的對話，內容照常使用。",
   "preset.reason.entry.relocated_before_history": "這條在酒館插在較早的對話記錄裡；{site}放在對話記錄之前，內容照常使用。",
-  "preset.reason.entry.dynamic_after_history": "這條用到玩家這一輪的輸入；{site}放在對話記錄之後，內容照常使用。"
+  "preset.reason.entry.dynamic_after_history": "這條用到玩家這一輪的輸入；{site}放在對話記錄之後，內容照常使用。",
+  "preset.toolReply.label": "用工具回覆",
+  "preset.toolReply.hint": "回覆會整段生成後才顯示。只在支援的模型上生效，其他模型照常回覆。",
+  "preset.toolReply.detected": "這份預設原本靠酒館的擴充功能用工具回覆，{site}沒有那個工具。想用的話，打開「用工具回覆」，改用{site}自己的回覆工具，效果可能和原本不同。",
+  "preset.reason.field.external_tools_not_executed": "擴充功能裡的工具不會執行。",
+  "preset.reason.field.external_scripts_not_executed": "擴充功能裡的程式不會執行。",
+  "preset.report.fields.summary": "{n} 項設定不生效"
 }

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "title": {
+    "zh-Hant": "預設可以用工具回覆",
+    "zh-Hans": "预设可以用工具回复",
+    "en": "Presets can reply with tools",
+    "ja": "プリセットでツール返信が使えます",
+    "ko": "프리셋에서 도구로 답장할 수 있습니다"
+  },
+  "body": {
+    "zh-Hant": "在預設裡打開「用工具回覆」，回覆會整段生成後才顯示，只在支援的模型上生效。",
+    "zh-Hans": "在预设里打开「用工具回复」，回复会整段生成后才显示，只在支持的模型上生效。",
+    "en": "Turn on \"Reply with tools\" in a preset, and on supported models the reply appears once it is complete.",
+    "ja": "プリセットで「ツールで返信」をオンにすると、対応モデルでは返信が完成後にまとめて表示されます。",
+    "ko": "프리셋에서 '도구로 답장'을 켜면 답장이 완성된 뒤 한 번에 표시되며, 지원하는 모델에서만 적용됩니다."
+  }
+}
