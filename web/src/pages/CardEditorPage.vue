@@ -341,7 +341,11 @@ function releaseSheetBackground() {
 watch(sheetOpen, async open => {
   if (!open) {
     releaseSheetBackground();
-    if (sheetOpener?.isConnected) sheetOpener.focus();
+    if (sheetOpener?.isConnected) {
+      sheetOpener.focus();
+      // 跨桌機斷點時原手機按鈕已隱藏，回到同一工具的桌機分頁。
+      if (document.activeElement !== sheetOpener) sheetRail.value?.querySelector<HTMLElement>(`[data-editor-tool="${panel.value}"]`)?.focus();
+    }
     return;
   }
   // 面板 Teleport 到 body 後才隔離 #app，避免把面板本身一起設成 inert。
@@ -1536,11 +1540,11 @@ async function exportCard(format: "png" | "json") {
         <div class="rail__tabs">
           <div class="seg" role="tablist" :aria-label="$t('editor.panel.tabs')">
             <button v-if="can('chatTest')" type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'test' }"
-                    role="tab" :aria-selected="panelOpen && panel === 'test'" @click="openPanel('test')">
+                    role="tab" data-editor-tool="test" :aria-selected="panelOpen && panel === 'test'" @click="openPanel('test')">
               {{ $t("editor.test.title") }}
             </button>
             <button v-if="can('library')" type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'res' }"
-                    role="tab" :aria-selected="panelOpen && panel === 'res'" @click="openPanel('res')">
+                    role="tab" data-editor-tool="res" :aria-selected="panelOpen && panel === 'res'" @click="openPanel('res')">
               {{ $t("editor.panel.resources") }}
             </button>
           </div>

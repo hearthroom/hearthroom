@@ -278,6 +278,23 @@ describe('mobile editor tool dialog', () => {
     app!.unmount(); app = null;
     expect(root.inert).toBe(false);
   });
+
+  it('returns focus to the desktop tool tab when resizing hides the mobile opener', async () => {
+    localStorage.setItem('hearthroom.editor.panel', 'closed');
+    await mount('/create'); root.id = 'app';
+    const opener = root.querySelectorAll<HTMLButtonElement>('.bar__panel')[1];
+    opener.focus(); opener.click(); await flush();
+    // Happy DOM has no responsive layout: model display:none rejecting focus.
+    vi.spyOn(opener, 'focus').mockImplementation(() => {});
+    vi.stubGlobal('innerWidth', 1440);
+    window.dispatchEvent(new Event('resize')); await flush();
+    const desktopTool = [...root.querySelectorAll<HTMLButtonElement>('.rail__tabs [role=tab]')]
+      .find(button => button.textContent?.includes(i18n.global.t('editor.panel.resources')))!;
+    expect(document.querySelector('.rail--sheet')).toBeNull();
+    expect(root.inert).toBe(false);
+    expect(document.activeElement).toBe(desktopTool);
+    expect(root.querySelector('.rail--wide')).toBeNull();
+  });
 });
 
 describe("正則匯入的聊天頁模式", () => {
