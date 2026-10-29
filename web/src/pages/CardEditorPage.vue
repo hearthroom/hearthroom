@@ -1422,6 +1422,7 @@ async function exportCard(format: "png" | "json") {
           動作列與表單可視區分列：五語換行、安全區改變列高時，grid 會重分剩餘空間；
           可捲內容不再延伸到儲存鈕底下，桌機右欄保留完整高度。
         -->
+        <div class="toast editor-status" role="status" :hidden="!toast">{{ toast }}</div>
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}
@@ -1511,7 +1512,6 @@ async function exportCard(format: "png" | "json") {
       </aside>
     </template>
 
-    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
   </div>
 </template>
@@ -1540,7 +1540,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   gap: var(--s-4) var(--s-5); align-items: start;
 }
 /* 表單內容與動作列分佔兩行；列高由內容決定，不用預猜72px。 */
-.body { align-self: stretch; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
+.body { align-self: stretch; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; min-height: 0; overflow: hidden; }
+.editor-status { position: static; justify-self: center; max-width: 100%; margin: var(--s-2); transform: none; animation: none; }
 .body__scroll { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; padding: var(--s-2) var(--s-2) var(--s-4) 0; scroll-padding-block: var(--s-2); }
 
 /* ---- 分區導覽：工作區內獨立一列 ---------------------------------------------- */
@@ -1759,4 +1760,13 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .readme-head .seg__item { height: 28px; padding: 0 12px; font-size: 12.5px; }
 .showcase :deep(.field) { margin: 0; }
 .readme-preview { min-height: 180px; padding: var(--s-4); border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: auto; }
+/* 手機鍵盤或橫向短視窗：保留導覽與操作，標題不再佔用表單的閱讀高度。 */
+@media (max-height: 500px) {
+  .editor { padding-top: var(--s-2); }
+  .layout { grid-template-rows: auto minmax(0, 1fr); row-gap: var(--s-2); }
+  .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .side { grid-row: 1; }
+  .body { grid-row: 2; }
+  .rail { grid-row: 1 / span 2; }
+}
 </style>
