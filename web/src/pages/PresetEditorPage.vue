@@ -418,7 +418,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <p class="subtle">{{ $t("preset.versions.body") }}</p>
         <ul class="preset-editor__versions">
           <li v-for="v in detail.revisions" :key="v.revisionId">
-            <span>{{ $t("preset.versions.item", { n: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }, v.enabledEntryCount) }}</span>
+            <span>{{ $t("preset.versions.item", { version: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }, v.enabledEntryCount) }}</span>
             <span v-if="v.version === head" class="subtle">{{ $t("preset.versions.current") }}</span>
             <button v-else type="button" class="btn btn--sm btn--ghost" @click="restoreFrom(v.revisionId, v.version)">{{ $t("preset.versions.restore") }}</button>
           </li>

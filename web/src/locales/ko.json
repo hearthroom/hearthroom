@@ -3828,7 +3828,7 @@
   "preset.params.rangeError": "{param} 값이 허용 범위를 벗어났습니다. 범위 안의 값으로 바꾸거나 '모델 설정 따르기'로 되돌리세요.",
   "preset.versions.title": "버전 기록",
   "preset.versions.body": "저장할 때마다 버전이 남습니다. 이전 버전은 덮어쓰지 않으며, 그것을 쓰는 대화도 바뀌지 않습니다.",
-  "preset.versions.item": "v{n}・{datetime}・사용 중인 항목 {count}개",
+  "preset.versions.item": "v{version}・{datetime}・사용 중인 항목 {count}개",
   "preset.versions.current": "최신 버전",
   "preset.versions.restore": "이 버전에서 계속 편집",
   "preset.versions.restore.done": "v{n}의 내용을 불러왔습니다. 저장하면 새 버전이 됩니다.",

@@ -3828,7 +3828,7 @@
   "preset.params.rangeError": "{param} の値が受け付けられる範囲外です。範囲内の値にするか、「モデルの設定を使う」に戻してください。",
   "preset.versions.title": "バージョン履歴",
   "preset.versions.body": "保存するたびにバージョンが残ります。古いバージョンは上書きされず、それを使っている会話も変わりません。",
-  "preset.versions.item": "v{n}・{datetime}・有効 {count} 件",
+  "preset.versions.item": "v{version}・{datetime}・有効 {count} 件",
   "preset.versions.current": "最新バージョン",
   "preset.versions.restore": "このバージョンから編集を続ける",
   "preset.versions.restore.done": "v{n} の内容を読み込みました。保存すると新しいバージョンになります。",

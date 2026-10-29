@@ -3828,7 +3828,7 @@
   "preset.params.rangeError": "{param} 的值不在可接受的範圍內，改成範圍內的值，或改回「沿用模型設定」。",
   "preset.versions.title": "版本紀錄",
   "preset.versions.body": "每次儲存都會留下一個版本。舊版本不會被覆蓋，正在用它的對話也不會被改動。",
-  "preset.versions.item": "v{n}・{datetime}・{count} 條已啟用",
+  "preset.versions.item": "v{version}・{datetime}・{count} 條已啟用",
   "preset.versions.current": "最新版本",
   "preset.versions.restore": "以此版本繼續編輯",
   "preset.versions.restore.done": "已載入 v{n} 的內容。儲存後會成為新的版本。",

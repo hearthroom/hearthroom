@@ -3828,7 +3828,7 @@
   "preset.params.rangeError": "The value for {param} is outside the accepted range. Use a value in range, or switch back to \"Use model setting\".",
   "preset.versions.title": "Version history",
   "preset.versions.body": "Every save keeps a version. Older versions are never overwritten, and conversations using them aren't changed.",
-  "preset.versions.item": "v{n} · {datetime} · {count} entry enabled | v{n} · {datetime} · {count} entries enabled",
+  "preset.versions.item": "v{version} · {datetime} · {count} entry enabled | v{version} · {datetime} · {count} entries enabled",
   "preset.versions.current": "Latest version",
   "preset.versions.restore": "Keep editing from this version",
   "preset.versions.restore.done": "Loaded the content of v{n}. Saving creates a new version.",

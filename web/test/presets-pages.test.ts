@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type Component } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
-import { i18n, SOURCE_LOCALE } from "../src/lib/i18n";
+import { i18n, loadLocale, SOURCE_LOCALE } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
 import { ApiError } from "../src/lib/api";
@@ -245,6 +245,22 @@ describe("預設編輯器：版本紀錄", () => {
     const items = $$("[data-testid=preset-versions] li").map((li) => li.textContent ?? "");
     expect(items[0]).toContain("v3");
     expect(items[0]).toContain(t("preset.versions.current"));
+  });
+});
+
+describe("預設編輯器：英文版本紀錄", () => {
+  it("單複數照條目數選，不照版本號（v1 啟用 6 條要寫 entries）", async () => {
+    mocks.detail.mockResolvedValue(detail({ revisions: [{ revisionId: "r1", version: 1, title: "x", createdAt: "2026-10-28T00:00:00Z", enabledEntryCount: 6 }, { revisionId: "r2", version: 2, title: "x", createdAt: "2026-10-29T00:00:00Z", enabledEntryCount: 1 }] }));
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    await loadLocale("en");
+    await mount(PresetEditorPage, "/me/presets/p1");
+    i18n.global.locale.value = "en";
+    await flush();
+    const rows = $$("[data-testid=preset-versions] li").map((li) => li.textContent ?? "");
+    expect(rows[0]).toContain("v1");
+    expect(rows[0]).toContain("6 entries enabled");
+    expect(rows[1]).toContain("1 entry enabled");
+    i18n.global.locale.value = SOURCE_LOCALE;
   });
 });
 
