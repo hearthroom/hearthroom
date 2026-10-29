@@ -1367,6 +1367,9 @@ describe('large replacement advisory', () => {
   byText('套用到表單').click(); await flush();
   expect(root.querySelector('.editor .regex-warning') !== null).toBe(bytes > 262144);
   await submit();
-  expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace })] }), 'tok');
+  expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [
+   expect.objectContaining({ name: 'Large rule fixture', find: 'marker', replace, enabled: true }),
+   expect.objectContaining({ id: 'hearthroom-mmd-dock-off', enabled: true, replace: expect.stringContaining('--lt-dock: none !important') }),
+  ] }), 'tok');
  });
 });
