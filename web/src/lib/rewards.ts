@@ -114,6 +114,8 @@ export interface DrawRecord {
   item?: string;
   duplicate?: boolean;
   expiresAt?: string;
+  /** 這批積分還沒用掉的量（到期後就是到期時剩下的）；開到道具、還在處理中、舊伺服器都不帶 */
+  unusedCredits?: number;
   releaseAt?: string;
   pity?: boolean;
   status: ClaimStatus;

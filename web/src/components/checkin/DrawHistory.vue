@@ -19,8 +19,15 @@ const tierDot = (tier?: number) => (!tier ? "" : tier >= 5 ? "dot--gold" : tier 
 const right = (d: DrawRecord) => {
   if (d.status === "pending") return d.releaseAt ? t("checkin.done.pending", { date: monthDayOf(d.releaseAt) }) : t("checkin.history.pending");
   if (!d.expiresAt) return "";
-  return Date.parse(d.expiresAt) <= props.now ? t("checkin.history.expired") : t("checkin.history.expires", { datetime: monthDayTime(d.expiresAt) });
+  if (d.unusedCredits === 0) return t("checkin.history.usedUp");
+  if (expiredLeft(d)) return t("checkin.history.expiredLeft", { n: whole(d.unusedCredits!) });
+  // 沒有剩餘資料（舊伺服器）就只寫日期：過了日期不代表沒用掉
+  return t("checkin.history.validUntil", { datetime: monthDayTime(d.expiresAt) });
 };
+/** 到期時這批還有沒用掉的。 */
+const expiredLeft = (d: DrawRecord) => !!d.expiresAt && !!d.unusedCredits && Date.parse(d.expiresAt) <= props.now;
+/** 變灰＝這批已經不能再用：用完了，或到期了還有剩。 */
+const off = (d: DrawRecord) => d.status !== "pending" && !!d.expiresAt && (d.unusedCredits === 0 || expiredLeft(d));
 const date = (at: string) => monthDayOf(at);
 function expand() { open.value = true; emit("expand"); }
 </script>
@@ -38,7 +45,7 @@ function expand() { open.value = true; emit("expand"); }
       <a href="#" class="link" @click.prevent="emit('top')">{{ t("checkin.history.empty.cta") }}</a>
     </div>
     <ul v-else class="hist__list">
-      <li v-for="d in shown" :key="`${d.at}-${d.chest}-${d.stripSeed ?? ''}`" class="hist__row" :class="{ 'hist__row--off': d.status !== 'pending' && !!d.expiresAt && Date.parse(d.expiresAt) <= now }">
+      <li v-for="d in shown" :key="`${d.at}-${d.chest}-${d.stripSeed ?? ''}`" class="hist__row" :class="{ 'hist__row--off': off(d) }">
         <span class="hist__date">{{ date(d.at) }}</span>
         <span class="hist__box">{{ title(d) }}</span>
         <span class="hist__prize">
