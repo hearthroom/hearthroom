@@ -5,11 +5,11 @@
  */
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { exportRevision, type PresetSummary } from "@/lib/presets";
+import { exportPreset, type PresetSummary } from "@/lib/presets";
 import { downloadBlob, safeFileName } from "@/lib/save-file";
 import PresetDialog from "./PresetDialog.vue";
 
-const props = defineProps<{ preset: Pick<PresetSummary, "id" | "headRevisionId" | "title" | "sourceKind">; token: () => Promise<string> }>();
+const props = defineProps<{ preset: Pick<PresetSummary, "id" | "title" | "sourceKind">; token: () => Promise<string> }>();
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
 const busy = ref(false);
@@ -19,7 +19,7 @@ async function download() {
   busy.value = true;
   state.value = "";
   try {
-    const { blob, filename } = await exportRevision(await props.token(), props.preset.id, props.preset.headRevisionId, safeFileName(props.preset.title, "preset"));
+    const { blob, filename } = await exportPreset(await props.token(), props.preset.id, safeFileName(props.preset.title, "preset"));
     downloadBlob(blob, filename);
     state.value = "done";
   } catch {

@@ -5,8 +5,8 @@
  * 這一頁只管預設本身（建立、匯入、匯出、另存副本、刪除）。哪張卡、哪段對話用哪個預設，是在遊玩畫布的
  * 回覆偏好裡由玩家自己為那張卡選的——沒有「全部的卡都用這個」的選項（owner 2026-10-29）。
  *
- * 刪除不一定真的刪：還有對話在用、或發布過的版本，上游只會封存，原本的對話照常。
- * 能刪還是只能封存由上游的 allowedActions 決定，結果照回來的 disposition 講，不自己猜。
+ * 每份都能刪（owner 2026-10-30，封存拿掉了）：刪除後作者看不到、不能再套用；作者自己正在用它的卡改回原本的選擇，
+ * 已公開時別人用過或喜愛的照常用。確認框把這幾件事講在前面（有卡在用、已公開時才講對應那句）。
  *
  * P2 分享：頁首下三格「我的｜喜愛與用過｜預設庫」（PM 2026-10-30）。前兩格是這一頁的分頁（?tab=，重新整理還在），
  * 預設庫是自己的一頁（/presets/library）；舊的 ?tab=public 連結轉過去。
@@ -19,7 +19,7 @@ import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { dateTime, whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
-import { archivePreset, deletePreset, listPresets, resultUnknown, unpublishPreset, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
+import { deletePreset, listPresets, resultUnknown, unpublishPreset, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
@@ -41,7 +41,6 @@ const cursor = ref("");
 const loading = ref(true);
 const loadingMore = ref(false);
 const loadFailed = ref(false);
-const showArchived = ref(false);
 const busy = ref("");
 const status = ref("");
 const actionError = ref("");
@@ -62,7 +61,6 @@ function say(text: string) {
 }
 function shareConsent(err: unknown) { consentNeeded(err); }
 
-const shown = computed(() => items.value.filter((p) => showArchived.value || !p.archived));
 const full = computed(() => !!quota.value && quota.value.used >= quota.value.limit);
 
 async function load(more = false) {
@@ -84,25 +82,25 @@ async function load(more = false) {
 
 async function remove(p: PresetSummary) {
   menu.value = "";
-  const archiveOnly = !p.allowedActions.includes("delete");
-  const kind = archiveOnly ? "archive" : "delete";
+  // 一句一行（中日文用空格接會多出空白）
+  const message = [
+    t("preset.share.delete.body"),
+    p.bindingCount > 0 ? t("preset.share.delete.inUse", { n: whole(p.bindingCount) }, p.bindingCount) : "",
+    p.visibility === "public" ? t("preset.share.delete.public") : "",
+  ].filter(Boolean).join("\n");
   const ok = await confirmDialog({
-    title: t(`preset.${kind}.title`, { name: p.title }), message: t(`preset.${kind}.body`),
-    confirmText: t(`preset.${kind}.confirm`), cancelText: t(`preset.${kind}.keep`), danger: !archiveOnly, focusCancel: true,
+    title: t("preset.delete.title", { name: p.title }), message, scrollMessage: true,
+    confirmText: t("preset.delete.confirm"), cancelText: t("preset.delete.keep"), danger: true, focusCancel: true,
   });
   if (!ok) return;
-  const action = `${kind}:${p.id}`;
+  const action = `delete:${p.id}`;
   busy.value = p.id;
   actionError.value = "";
   status.value = "";
   try {
-    const receipt: WriteReceipt = archiveOnly
-      ? await archivePreset(await token(), p.id, p.version, ops.key(action))
-      : await deletePreset(await token(), p.id, p.version, ops.key(action));
+    await deletePreset(await token(), p.id, p.version, ops.key(action));
     ops.done(action);
-    status.value = archiveOnly ? t("preset.archive.done", { name: p.title })
-      : receipt.disposition === "archived" ? t("preset.disposition.archivedInstead", { name: p.title })
-      : t("preset.delete.done", { name: p.title });
+    status.value = t("preset.delete.done", { name: p.title });
     await load();
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
@@ -219,12 +217,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
       <div v-if="quota" class="presets__meta">
         <p class="subtle" data-testid="preset-quota">
           {{ $t("preset.quota", { used: whole(quota.used), limit: whole(quota.limit) }) }}
-          <template v-if="quota.archived > 0"> · {{ $t("preset.quotaArchived", { archived: whole(quota.archived) }) }}</template>
         </p>
-        <label v-if="quota.archived > 0" class="presets__toggle">
-          <input v-model="showArchived" type="checkbox" data-testid="preset-show-archived" />
-          <span>{{ $t("preset.list.showArchived") }}</span>
-        </label>
       </div>
       <p v-if="full" class="notice">{{ $t("preset.error.quota", { limit: whole(quota!.limit) }) }}</p>
       <p class="subtle presets__status" role="status">{{ status }}</p>
@@ -238,41 +231,38 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
         <p v-if="items.length" class="muted">{{ $t("preset.list.loadFailed.hint") }}</p>
         <button type="button" class="btn btn--sm" @click="load()">{{ $t("preset.list.retry") }}</button>
       </section>
-      <section v-else-if="!shown.length" class="panel presets__card" data-testid="preset-empty">
+      <section v-else-if="!items.length" class="panel presets__card" data-testid="preset-empty">
         <h2>{{ $t("preset.list.empty.title") }}</h2>
         <p class="muted">{{ $t("preset.list.empty.body") }}</p>
       </section>
 
-      <ul v-if="!loading && shown.length" class="presets__list">
-        <li v-for="p in shown" :key="p.id" class="panel presets__row" data-testid="preset-row">
+      <ul v-if="!loading && items.length" class="presets__list">
+        <li v-for="p in items" :key="p.id" class="panel presets__row" data-testid="preset-row">
           <RouterLink :to="lp(`/me/presets/${p.id}`)" class="presets__main">
             <strong class="presets__name">{{ p.title }}</strong>
             <span class="presets__facts subtle">
-              <span>{{ $t("preset.row.version", { n: p.version }) }}</span>
               <span class="chip presets__chip">{{ $t(p.sourceKind === "imported" ? "preset.row.source.import" : "preset.row.source.native") }}</span>
-              <span v-if="p.archived" class="chip presets__chip">{{ $t("preset.row.archived") }}</span>
               <span v-if="p.removed" class="chip presets__chip presets__chip--down" data-testid="preset-taken-down">{{ $t("preset.share.chip.takenDown") }}</span>
-              <span v-else-if="p.visibility === 'public' && !p.archived" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
+              <span v-else-if="p.visibility === 'public'" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
               <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }, p.bindingCount) }}</span>
               <span>{{ $t("preset.row.updated", { datetime: dateTime(p.updatedAt) }) }}</span>
             </span>
             <span v-if="p.removed" class="subtle presets__note">{{ $t("preset.share.takenDown.note") }}</span>
           </RouterLink>
           <div class="presets__rowActions">
-            <!-- 封存的不能編輯：不給編輯鈕，點名稱打開是唯讀（QA N03） -->
-            <RouterLink v-if="!p.archived" :to="lp(`/me/presets/${p.id}`)" class="btn btn--sm">{{ $t("preset.row.edit") }}</RouterLink>
+            <RouterLink :to="lp(`/me/presets/${p.id}`)" class="btn btn--sm">{{ $t("preset.row.edit") }}</RouterLink>
             <div class="presets__menuWrap">
               <button type="button" class="btn btn--sm btn--icon" :aria-label="$t('preset.row.more')" :aria-expanded="menu === p.id" :disabled="busy === p.id" data-testid="preset-more" @click="openMenu(p.id)">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75" /><circle cx="12" cy="12" r="1.75" /><circle cx="19" cy="12" r="1.75" /></svg>
               </button>
               <div v-if="menu === p.id" class="presets__menu panel" :class="{ 'presets__menu--up': menuUp }" role="menu">
                 <button type="button" role="menuitem" @click="menu = ''; exporting = p">{{ $t("preset.row.export") }}</button>
-                <button v-if="!p.archived" type="button" role="menuitem" :disabled="full" @click="menu = ''; copying = p">{{ $t("preset.row.copy") }}</button>
+                <button type="button" role="menuitem" :disabled="full" @click="menu = ''; copying = p">{{ $t("preset.row.copy") }}</button>
                 <!-- 被下架的也能改回私人：平台恢復後才不會又自動回到公開。封存的不在公開列表，上游也不收 -->
-                <button v-if="p.visibility === 'public' && !p.archived" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
-                <button v-else-if="!p.archived" type="button" role="menuitem" :disabled="p.removed || !declaration" data-testid="preset-publish" @click="menu = ''; publishing = p">{{ $t("preset.share.menu.publish") }}</button>
-                <button v-if="!p.archived && p.allowedActions.length" type="button" role="menuitem" class="presets__danger" data-testid="preset-remove" @click="remove(p)">
-                  {{ $t(p.allowedActions.includes("delete") ? "preset.row.delete" : "preset.row.archive") }}
+                <button v-if="p.visibility === 'public'" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
+                <button v-else type="button" role="menuitem" :disabled="p.removed || !declaration" data-testid="preset-publish" @click="menu = ''; publishing = p">{{ $t("preset.share.menu.publish") }}</button>
+                <button type="button" role="menuitem" class="presets__danger" data-testid="preset-remove" @click="remove(p)">
+                  {{ $t("preset.row.delete") }}
                 </button>
               </div>
             </div>
@@ -297,8 +287,6 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__mine-note { margin: 0 0 var(--s-2); }
 .presets__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4); }
 .presets__meta p { margin: 0; }
-.presets__toggle { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-md); font-size: 13px; cursor: pointer; }
-.presets__toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
 .presets__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }
 .presets__card h2 { margin: 0; font-size: 16px; }
 .presets__card p { margin: 0; }

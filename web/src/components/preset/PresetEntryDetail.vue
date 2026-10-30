@@ -17,7 +17,7 @@ import {
 import type { CompatibilityEntry } from "@/lib/presets";
 import { settingLabel } from "./preset-params";
 
-const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean; readOnly?: boolean }>();
+const props = defineProps<{ doc: PresetDocument; row: EntryRow; compat?: CompatibilityEntry; saved?: StPrompt; keepSource?: boolean }>();
 /** 本站寫的預設條目一律是系統指示（上游不收玩家／AI 身分）；匯入的照來源，可以改 */
 const native = computed(() => !props.keepSource);
 const emit = defineEmits<{ select: [id: string]; back: []; status: [text: string]; inspect: [] }>();
@@ -105,8 +105,6 @@ async function reset() {
   <section class="entry" :aria-label="$t('preset.entry.title')">
     <!-- 點清單進來時焦點落在這裡（不是名稱輸入框）：觸控裝置上不會自己彈出鍵盤 -->
     <h2 :id="`entry-title-${row.identifier}`" class="entry__title" tabindex="-1" data-testid="entry-title">{{ prompt.name || $t("preset.entry.untitled") }}</h2>
-    <!-- 封存的預設：內容照樣看得到，欄位與動作一起停用 -->
-    <fieldset class="entry__fieldset" :disabled="readOnly">
 
     <div v-if="status" class="entry__notice" :class="`entry__notice--${status}`" role="note" data-testid="entry-status">
       <strong>{{ $t(status === "needs_adjustment" ? "preset.report.status.adjust" : status === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</strong>
@@ -170,7 +168,6 @@ async function reset() {
       <button type="button" class="btn btn--sm btn--ghost" @click="reset">{{ $t("preset.entry.reset") }}</button>
       <button type="button" class="btn btn--sm btn--ghost" data-testid="entry-detach" @click="detach">{{ $t("preset.entry.detach") }}</button>
     </div>
-    </fieldset>
   </section>
 </template>
 
@@ -180,7 +177,6 @@ async function reset() {
 .entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
 .entry .input { min-width: 0; max-width: 100%; }
 .entry .field__foot { flex-wrap: wrap; align-items: center; }
-.entry__fieldset { display: contents; }
 .entry .field { margin-bottom: 0; min-width: 0; }
 .entry .field > p { margin: 0; }
 .entry__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }

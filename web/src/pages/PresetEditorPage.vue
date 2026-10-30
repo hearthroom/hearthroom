@@ -17,7 +17,7 @@ import { pageTitle } from "@/lib/i18n";
 import { dateTime, whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import {
-  analyzePreset, createPreset, fetchModelCatalog, fetchPreset, fetchRevision, resultUnknown, revisePreset,
+  analyzePreset, createPreset, fetchModelCatalog, fetchContent, fetchPreset, resultUnknown, revisePreset,
   type Compatibility, type ModelCatalogGroup, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
@@ -78,10 +78,8 @@ const detached = computed(() => (doc.value ? detachedPrompts(doc.value) : []));
 const compatOf = (id: string) => compat.value?.entries.find((e) => e.identifier === id);
 const selectedRow = computed(() => custom.value.find((r) => r.identifier === selected.value));
 const savedPrompt = (id: string) => savedDoc.value ? entryRows(savedDoc.value).find((r) => r.identifier === id)?.prompt ?? (savedDoc.value.st.prompts as { identifier: string }[] | undefined)?.find((p) => p.identifier === id) : undefined;
-const head = computed(() => detail.value?.version ?? 0);
 const imported = computed(() => detail.value?.sourceKind === "imported");
 /** 封存的預設只能看：上游不收它的新版本，畫面上也不讓改（匯出照樣可以） */
-const readOnly = computed(() => !!detail.value?.archived);
 
 const q = computed(() => query.value.trim().toLowerCase());
 const matches = (r: EntryRow) => !q.value || `${r.prompt.name ?? ""}\n${r.prompt.content ?? ""}`.toLowerCase().includes(q.value);
@@ -98,7 +96,7 @@ const shownSide = (r: EntryRow): "before" | "after" => {
 const groupOf = (side: "before" | "after") => found.value.filter((r) => shownSide(r) === side);
 // 拖曳排序（owner 2026-10-30）：搜尋中、唯讀時不給拖——篩過的清單看不出真正的前後
 const listEl = ref<HTMLElement | null>(null);
-const canDrag = computed(() => !readOnly.value && !q.value);
+const canDrag = computed(() => !q.value);
 const reorder = usePointerReorder({ list: listEl, enabled: () => canDrag.value, onDrop: (id, target) => { if (doc.value) moveEntryTo(doc.value, id, target); } });
 const dropBefore = computed(() => (reorder.target.value && "beforeId" in reorder.target.value ? reorder.target.value.beforeId : ""));
 const dropEnd = computed(() => (reorder.target.value && "side" in reorder.target.value ? reorder.target.value.side : ""));
@@ -156,7 +154,7 @@ const nativeBlocked = computed(() => {
     return prompts.find((p) => p.identifier === id)?.name || t("preset.entry.untitled");
   });
 });
-const canSave = computed(() => !readOnly.value && !nativeBlocked.value.length && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
+const canSave = computed(() => !nativeBlocked.value.length && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
 
 function adopt(next: PresetDocument, nextTitle: string, nextModels: string[], version: number, clean = true) {
   doc.value = withSelectionDefaults(next);
@@ -181,7 +179,7 @@ async function load() {
       return;
     }
     detail.value = await fetchPreset(tk, presetId.value);
-    const { revision, compatibility } = await fetchRevision(tk, presetId.value, detail.value.headRevisionId);
+    const { revision, compatibility } = await fetchContent(tk, presetId.value);
     adopt(revision.document, detail.value.title, revision.recommendedModels, revision.version);
     compat.value = compatibility;
     document.title = pageTitle(detail.value.title);
@@ -267,27 +265,13 @@ async function save() {
   }
 }
 
-/** 別處先存了新版本：讀回最新的版本號當基準，草稿不動，再存就是更新的一版。 */
+/** 別處先存過：讀回最新的計數當基準，草稿不動，再存就覆蓋成這份草稿。 */
 async function reloadLatest() {
   if (!presetId.value) return;
   try {
     detail.value = await fetchPreset(await token(), presetId.value);
     baseVersion.value = detail.value.version;
     conflict.value = false;
-  } catch (err) {
-    if (!consentNeeded(err)) saveError.value = err instanceof Error ? err.message : t("preset.error.unavailable");
-  }
-}
-
-async function restoreFrom(revisionId: string, version: number) {
-  if (!presetId.value) return;
-  if (dirty.value && !(await confirmDialog({ title: t("preset.editor.leave.title"), message: t("preset.editor.leave.body"), confirmText: t("preset.editor.leave.confirm"), cancelText: t("preset.editor.leave.keep"), focusCancel: true }))) return;
-  try {
-    const { revision, compatibility } = await fetchRevision(await token(), presetId.value, revisionId);
-    // 從舊版本開始的草稿：存檔時仍以目前最新版本為基準，存成新的一版，不改舊版
-    adopt(revision.document, title.value, revision.recommendedModels, head.value, false);
-    compat.value = compatibility;
-    status.value = t("preset.versions.restore.done", { n: version });
   } catch (err) {
     if (!consentNeeded(err)) saveError.value = err instanceof Error ? err.message : t("preset.error.unavailable");
   }
@@ -429,12 +413,10 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
     <template v-else-if="doc">
       <header class="panel preset-editor__head">
-        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
         <div class="field preset-editor__titleField">
           <label for="preset-title">{{ $t("preset.editor.name") }}</label>
           <input id="preset-title" v-model="title" class="input" maxlength="60" required :placeholder="$t('preset.editor.name.placeholder')" data-testid="preset-title" />
         </div>
-        </fieldset>
         <div class="seg preset-editor__tabs" role="tablist" :aria-label="$t('preset.editor.tabs.label')" @keydown="tabKey">
           <button v-for="k in TABS" :key="k" type="button" role="tab" class="seg__item" :class="{ 'seg__item--on': tab === k }" :aria-selected="tab === k" :tabindex="tab === k ? 0 : -1"
             :aria-controls="`editor-panel-${k}`" :data-testid="`editor-tab-${k}`" @click="tab = k">
@@ -443,7 +425,6 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </button>
         </div>
       </header>
-      <p v-if="readOnly" class="notice" role="status" data-testid="preset-archived">{{ $t("preset.row.archived") }} · {{ $t("preset.error.archived") }}</p>
 
       <p v-if="conflict" class="notice" role="alert" data-testid="preset-conflict">
         {{ $t("preset.error.revisionConflict") }}
@@ -455,7 +436,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <aside ref="listEl" class="panel preset-editor__list" :aria-label="$t('preset.entries.title')">
           <div class="preset-editor__listHead">
             <h2>{{ $t("preset.entries.title") }}</h2>
-            <button v-if="!readOnly" type="button" class="btn btn--sm" data-testid="entry-add" @click="newEntry">{{ $t("preset.entries.add") }}</button>
+            <button type="button" class="btn btn--sm" data-testid="entry-add" @click="newEntry">{{ $t("preset.entries.add") }}</button>
           </div>
           <p class="subtle">{{ $t("preset.entries.hint") }}</p>
           <input v-model="query" type="search" class="input" :placeholder="$t('preset.entries.search')" :aria-label="$t('preset.entries.search')" data-testid="entry-search" />
@@ -486,7 +467,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                       <span v-else-if="!it.row.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
                     </button>
                     <label class="preset-editor__toggle">
-                      <input type="checkbox" :disabled="readOnly" :checked="it.row.enabled" :aria-label="`${$t('preset.entry.enabled')}：${it.row.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, it.row.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
+                      <input type="checkbox" :checked="it.row.enabled" :aria-label="`${$t('preset.entry.enabled')}：${it.row.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, it.row.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
                     </label>
                   </li>
                   <li v-else :data-drop-id="it.dropId || undefined" :class="{ 'is-drop-before': !!it.dropId && dropBefore === it.dropId }">
@@ -502,7 +483,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             </div>
           </template>
 
-          <div v-if="!readOnly" class="preset-editor__tools">
+          <div class="preset-editor__tools">
             <button type="button" class="btn btn--sm btn--ghost" :disabled="!savedDoc" @click="resetOrder">{{ $t("preset.entries.resetOrder") }}</button>
           </div>
           <details class="preset-editor__library" data-testid="entry-library">
@@ -511,9 +492,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             <ul>
               <li v-for="p in detached" :key="p.identifier">
                 <span class="preset-editor__rowName">{{ p.name || $t("preset.entry.untitled") }}</span>
-                <button v-if="!readOnly" type="button" class="btn btn--sm btn--ghost" @click="reinsert(p.identifier)">{{ $t("preset.unused.reinsert") }}</button>
+                <button type="button" class="btn btn--sm btn--ghost" @click="reinsert(p.identifier)">{{ $t("preset.unused.reinsert") }}</button>
                 <!-- 檔案裡另一組排序還用著的條目不給刪：刪了那一組會懸空 -->
-                <button v-if="!readOnly && canDeleteEntry(doc, p.identifier)" type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
+                <button v-if="canDeleteEntry(doc, p.identifier)" type="button" class="btn btn--sm btn--danger" @click="removeUnused(p.identifier, p.name || $t('preset.entry.untitled'))">{{ $t("preset.unused.delete") }}</button>
               </li>
             </ul>
           </details>
@@ -521,7 +502,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
         <section ref="detailEl" class="panel preset-editor__detail" tabindex="-1" :aria-label="$t('preset.entry.title')">
           <PresetEntryDetail
-            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
+            v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported"
             @select="pick" @back="leaveEntry" @status="status = $event" @inspect="inspect(selectedRow)"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
@@ -532,45 +513,30 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </div>
           <div v-else class="preset-editor__pick" data-testid="editor-pick-hint">
             <p class="muted">{{ $t("preset.editor.pickHint") }}</p>
-            <button v-if="!readOnly" type="button" class="btn btn--sm" @click="newEntry">{{ $t("preset.entries.add") }}</button>
+            <button type="button" class="btn btn--sm" @click="newEntry">{{ $t("preset.entries.add") }}</button>
           </div>
         </section>
       </div>
 
       <div v-show="tab === 'settings'" id="editor-panel-settings" class="preset-editor__settings" role="tabpanel">
       <section class="panel preset-editor__section">
-        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
         <div class="field">
           <label for="preset-models">{{ $t("preset.editor.models") }}</label>
-          <PresetModelPicker v-model="models" :groups="modelCatalog" input-id="preset-models" :disabled="readOnly" />
+          <PresetModelPicker v-model="models" :groups="modelCatalog" input-id="preset-models" />
           <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
         </div>
-        </fieldset>
       </section>
       <section class="panel preset-editor__section">
-        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
           <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected" :tool="compat?.toolReply?.tool"
             @change="(v) => { doc!.selection.toolReply = v; }" />
-        </fieldset>
       </section>
 
       <!-- 條目包（Prompt Manager 匯出的那種）只有條目，沒有採樣參數 -->
       <details v-if="!isPromptPack(doc.st)" class="panel preset-editor__section" open>
         <summary>{{ $t("preset.params.title") }}</summary>
-        <fieldset class="preset-editor__fieldset" :disabled="readOnly"><PresetParams :doc="doc" :fields="compat?.fields ?? []" :native="!imported" /></fieldset>
+        <PresetParams :doc="doc" :fields="compat?.fields ?? []" :native="!imported" />
       </details>
 
-      <details v-if="detail?.revisions?.length" class="panel preset-editor__section" data-testid="preset-versions">
-        <summary>{{ $t("preset.versions.title") }}</summary>
-        <p class="subtle">{{ $t("preset.versions.body") }}</p>
-        <ul class="preset-editor__versions">
-          <li v-for="v in detail.revisions" :key="v.revisionId">
-            <span>{{ $t("preset.versions.item", { version: v.version, datetime: dateTime(v.createdAt), count: whole(v.enabledEntryCount) }, v.enabledEntryCount) }}</span>
-            <span v-if="v.version === head" class="subtle">{{ $t("preset.versions.current") }}</span>
-            <button v-else-if="!readOnly" type="button" class="btn btn--sm btn--ghost" @click="restoreFrom(v.revisionId, v.version)">{{ $t("preset.versions.restore") }}</button>
-          </li>
-        </ul>
-      </details>
 
       </div>
 
@@ -586,7 +552,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             </span>
           </template>
           <template v-else-if="dirty">{{ $t("preset.editor.dirty") }}</template>
-          <template v-else-if="savedVersion"><strong>{{ $t("preset.editor.saved", { n: savedVersion }) }}</strong> <span class="subtle">{{ $t("preset.editor.saved.hint") }}</span></template>
+          <template v-else-if="savedVersion"><strong>{{ $t("preset.editor.saved") }}</strong> <span class="subtle">{{ $t("preset.editor.saved.hint") }}</span></template>
           <template v-if="status"><span v-if="unconfirmed || dirty || savedVersion" class="subtle" aria-hidden="true"> · </span><span class="subtle">{{ status }}</span></template>
         </div>
         <div class="preset-editor__actions">
@@ -607,7 +573,6 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-5) var(--s-8); }
 .preset-editor__crumb { font-size: 13px; }
 /* 封存時整組停用用的外框：不佔版面 */
-.preset-editor__fieldset { display: contents; }
 /* 返回連結用內文次要色＋底線（站上的粉色小字在這裡只有 3.2:1） */
 .preset-editor__entryBack { display: none; gap: 4px; }
 .preset-crumb { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--h-sm); }

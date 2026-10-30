@@ -12,21 +12,18 @@ import { entryRows, isPromptPack, profilesOf, type PresetDocument, type PresetSe
 
 /** relocated：上游自動把位置調到最近的穩定位置，照常使用、不擋存檔；needs_adjustment 只剩舊版本會出現 */
 export type UiStatus = "needs_adjustment" | "relocated" | "unsupported";
-export type PresetAction = "delete" | "archive";
 
 export interface PresetSummary {
   id: string;
   title: string;
-  headRevisionId: string;
+  /** 防兩處同時編輯的計數：存檔時當 expectedVersion 送回，不顯示（預設不留版本，owner 2026-10-30） */
   version: number;
   /** native：在本站寫的；imported：從 ST 檔匯入的 */
   sourceKind: string;
-  archived: boolean;
   recommendedModels: string[];
   createdAt: string;
   updatedAt: string;
-  /** 上游依綁定與發布紀錄決定能刪還是只能封存；畫面照這個出選項，不自己猜 */
-  allowedActions: PresetAction[];
+  /** 作者自己有幾張卡套用它（刪除時這些卡會改回原本的選擇） */
   bindingCount: number;
   /** 分享（P2）。舊上游沒有這幾項：當成私人、沒被下架 */
   visibility?: "private" | "public";
@@ -35,10 +32,9 @@ export interface PresetSummary {
   /** 平台下架了：作者看得到這個標示，不能再公開 */
   removed?: boolean;
 }
-export interface RevisionSummary { revisionId: string; version: number; title: string; createdAt: string; enabledEntryCount: number }
-export interface PresetDetail extends PresetSummary { revisions: RevisionSummary[] }
+export type PresetDetail = PresetSummary;
 export interface PresetList {
-  items: PresetSummary[]; nextCursor: string; quota: { used: number; limit: number; archived: number };
+  items: PresetSummary[]; nextCursor: string; quota: { used: number; limit: number };
   /** 公開鈕旁那句聲明的版本；公開時原樣送回，上游據此記下作者看到的是哪一版 */
   declarationVersion?: string;
 }
@@ -74,7 +70,7 @@ export interface PresetRevision {
   recommendedModels: string[];
   createdAt: string;
 }
-export interface WriteReceipt { presetId: string; revisionId: string; version: number; disposition?: "deleted" | "archived" }
+export interface WriteReceipt { presetId: string; revisionId: string; version: number }
 export interface ImportPreview {
   previewId: string;
   version: number;
@@ -110,7 +106,6 @@ const REASON_KEY: Record<string, string> = {
   preset_model_setting_unsupported: "preset.error.modelSetting",
   preset_revision_conflict: "preset.error.revisionConflict",
   preset_idempotency_conflict: "preset.error.idempotency",
-  preset_archived: "preset.error.archived",
   operation_active: "preset.error.busy",
   preset_removed: "preset.share.takenDown.note",
   preset_declaration_changed: "preset.share.error.declarationChanged",
@@ -168,8 +163,9 @@ export async function fetchPreset(token: string, presetId: string): Promise<Pres
   return json<PresetDetail>(await get(`/presets/${id(presetId)}`, token));
 }
 
-export async function fetchRevision(token: string, presetId: string, revisionId: string): Promise<{ revision: PresetRevision; compatibility: Compatibility }> {
-  return json(await get(`/presets/${id(presetId)}/revisions/${id(revisionId)}`, token));
+/** 這份預設目前的內容（每份只有一份，儲存即覆蓋）。 */
+export async function fetchContent(token: string, presetId: string): Promise<{ revision: PresetRevision; compatibility: Compatibility }> {
+  return json(await get(`/presets/${id(presetId)}/content`, token));
 }
 
 /** 不建版本，只回這份草稿的相容判定；編輯中用來即時標「需調整」「不支援」。 */
@@ -184,18 +180,14 @@ export async function createPreset(token: string, input: PresetWrite, key: strin
   return json<WriteReceipt>(await send("/presets", token, input, key));
 }
 
-/** 存成新版本。expectedVersion 是開始編輯時讀到的版本；別的分頁先存了就回 409，草稿留著。 */
+/** 儲存＝覆蓋目前內容。expectedVersion 是開始編輯時讀到的計數；別的分頁先存了就回 409，草稿留著。 */
 export async function revisePreset(token: string, presetId: string, input: PresetWrite & { expectedVersion: number }, key: string): Promise<WriteReceipt> {
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/revisions`, token, input, key));
 }
 
-/** 回 disposition：deleted 真的刪了；archived 是還有對話在用或發布過，只封存，原對話照常。 */
+/** 刪除後作者看不到、不能再套用；作者自己的卡改回原本的選擇，別人已套用的照常用。 */
 export async function deletePreset(token: string, presetId: string, expectedVersion: number, key: string): Promise<WriteReceipt> {
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/delete`, token, { expectedVersion }, key));
-}
-
-export async function archivePreset(token: string, presetId: string, expectedVersion: number, key: string): Promise<WriteReceipt> {
-  return json<WriteReceipt>(await send(`/presets/${id(presetId)}/archive`, token, { expectedVersion }, key));
 }
 
 export async function previewImport(token: string, file: File, profileId: number | null): Promise<ImportPreview> {
@@ -217,8 +209,8 @@ export async function confirmImport(
 }
 
 /** 下載 ST 格式的預設檔。檔名用上游給的；沒給就用預設名稱。 */
-export async function exportRevision(token: string, presetId: string, revisionId: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
-  const res = await get(`/presets/${id(presetId)}/revisions/${id(revisionId)}/export`, token);
+export async function exportPreset(token: string, presetId: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await get(`/presets/${id(presetId)}/export`, token);
   if (!res.ok) await json(res);
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const named = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ?? /filename="?([^";]+)"?/i.exec(disposition)?.[1];

@@ -72,11 +72,11 @@ const DAY = 24 * 3600 * 1000;
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 
 const summary = (over: Partial<PresetSummary> = {}): PresetSummary => ({
-  id: "p1", title: "細膩第三人稱", headRevisionId: "r2", version: 2, sourceKind: "native", archived: false,
-  recommendedModels: ["model:Gemini 4"], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", allowedActions: ["delete"], bindingCount: 0,
+  id: "p1", title: "細膩第三人稱", version: 2, sourceKind: "native",
+  recommendedModels: ["model:Gemini 4"], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", bindingCount: 0,
   visibility: "private", publishedAt: null, attribution: "", removed: false, ...over,
 });
-const mineList = (items: PresetSummary[]) => ({ items, nextCursor: "", quota: { used: items.length, limit: 50, archived: 0 }, declarationVersion: "preset-publish-2026-10-30" });
+const mineList = (items: PresetSummary[]) => ({ items, nextCursor: "", quota: { used: items.length, limit: 50, }, declarationVersion: "preset-publish-2026-10-30" });
 
 const item = (over: Partial<PresetLibraryItem> = {}): PresetLibraryItem => ({
   presetId: "s1", title: "電影感長篇", authorName: "Aster", authorNumId: 12345, authorAvatar: "", attribution: "",
@@ -345,17 +345,6 @@ describe("我的：公開與改回私人", () => {
     await flush();
     expect($("[data-testid=preset-unpublish]")).toBeNull();
     expect($<HTMLButtonElement>("[data-testid=preset-publish]").disabled).toBe(true);
-  });
-
-  it("封存的預設不標已公開，也不給改回私人或公開", async () => {
-    mocks.list.mockResolvedValue({ ...mineList([summary({ archived: true, visibility: "public" })]), quota: { used: 1, limit: 50, archived: 1 } });
-    await mount("/me/presets");
-    $<HTMLInputElement>("[data-testid=preset-show-archived]").click();
-    await flush();
-    expect($("[data-testid=preset-public]")).toBeNull();
-    await openMenu();
-    expect($("[data-testid=preset-unpublish]")).toBeNull();
-    expect($("[data-testid=preset-publish]")).toBeNull();
   });
 
   it("公開彈層：聲明句貼著公開鈕、連到服務條款；沒有取消鈕；送出帶目前的聲明版本", async () => {

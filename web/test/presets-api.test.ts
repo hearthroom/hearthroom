@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/lib/api";
 import { i18n, loadLocale } from "../src/lib/i18n";
-import { createPreset, exportRevision, previewImport, readLocalProfiles, revisePreset } from "../src/lib/presets";
+import { createPreset, exportPreset, previewImport, readLocalProfiles, revisePreset } from "../src/lib/presets";
 import { newDocument } from "../src/lib/st-preset";
 
 const calls: { url: string; init: RequestInit }[] = [];
@@ -35,11 +35,12 @@ describe("預設 API", () => {
     expect(err.message).not.toContain("preset_conflict");
   });
 
-  it("匯出檔名用上游的 Content-Disposition，沒有就用預設名稱", async () => {
+  it("匯出目前內容；檔名用上游的 Content-Disposition，沒有就用預設名稱", async () => {
     reply = () => new Response("{}", { headers: { "Content-Disposition": "attachment; filename*=UTF-8''%E6%96%87%E9%A2%A8.json" } });
-    expect((await exportRevision("t", "p", "r", "fallback")).filename).toBe("文風.json");
+    expect((await exportPreset("t", "p", "fallback")).filename).toBe("文風.json");
+    expect(calls.at(-1)!.url).toMatch(/\/presets\/p\/export$/);
     reply = () => new Response("{}");
-    expect((await exportRevision("t", "p", "r", "fallback")).filename).toBe("fallback.json");
+    expect((await exportPreset("t", "p", "fallback")).filename).toBe("fallback.json");
   });
 
   it("本機先讀出排序設定：完整預設列 character_id，條目包是 0，不是預設就說不是", async () => {

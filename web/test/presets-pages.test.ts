@@ -15,16 +15,16 @@ import PresetImportPage from "../src/pages/PresetImportPage.vue";
 const mocks = vi.hoisted(() => ({
   token: vi.fn(), login: vi.fn(), confirm: vi.fn(),
   list: vi.fn(), detail: vi.fn(), revision: vi.fn(), analyze: vi.fn(), create: vi.fn(), revise: vi.fn(),
-  remove: vi.fn(), archive: vi.fn(), preview: vi.fn(), selection: vi.fn(), confirmImport: vi.fn(), exportRevision: vi.fn(), models: vi.fn(),
+  remove: vi.fn(), preview: vi.fn(), selection: vi.fn(), confirmImport: vi.fn(), exportPreset: vi.fn(), models: vi.fn(),
 }));
 vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token }));
 vi.mock("../src/lib/oauth", async (original) => ({ ...(await original<typeof import("../src/lib/oauth")>()), beginLogin: mocks.login }));
 vi.mock("../src/lib/confirm", async (original) => ({ ...(await original<typeof import("../src/lib/confirm")>()), confirmDialog: mocks.confirm }));
 vi.mock("../src/lib/presets", async (original) => ({
   ...(await original<typeof import("../src/lib/presets")>()),
-  listPresets: mocks.list, fetchPreset: mocks.detail, fetchRevision: mocks.revision, analyzePreset: mocks.analyze,
-  createPreset: mocks.create, revisePreset: mocks.revise, deletePreset: mocks.remove, archivePreset: mocks.archive,
-  previewImport: mocks.preview, updateImportSelection: mocks.selection, confirmImport: mocks.confirmImport, exportRevision: mocks.exportRevision, fetchModelCatalog: mocks.models,
+  listPresets: mocks.list, fetchPreset: mocks.detail, fetchContent: mocks.revision, analyzePreset: mocks.analyze,
+  createPreset: mocks.create, revisePreset: mocks.revise, deletePreset: mocks.remove,
+  previewImport: mocks.preview, updateImportSelection: mocks.selection, confirmImport: mocks.confirmImport, exportPreset: mocks.exportPreset, fetchModelCatalog: mocks.models,
 }));
 
 let app: ReturnType<typeof createApp> | undefined;
@@ -61,8 +61,8 @@ async function mount(page: Component, path: string) {
 }
 
 const summary = (over: Partial<PresetSummary> = {}): PresetSummary => ({
-  id: "p1", title: "細膩第三人稱", headRevisionId: "r2", version: 2, sourceKind: "imported", archived: false,
-  recommendedModels: [], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", allowedActions: ["delete"], bindingCount: 0, ...over,
+  id: "p1", title: "細膩第三人稱", version: 2, sourceKind: "imported",
+  recommendedModels: [], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", bindingCount: 0, ...over,
 });
 
 function doc(): PresetDocument {
@@ -94,38 +94,38 @@ const compat = (): Compatibility => ({
   ],
   fields: [{ path: "extensions", uiStatus: "unsupported", reasonCodes: ["source_only"], inertSettings: ["extensions"] }],
 });
-const detail = (over: Partial<PresetDetail> = {}): PresetDetail => ({ ...summary(), revisions: [
-  { revisionId: "r2", version: 2, title: "細膩第三人稱", createdAt: "2026-10-29T00:00:00Z", enabledEntryCount: 3 },
-  { revisionId: "r1", version: 1, title: "細膩第三人稱", createdAt: "2026-10-28T00:00:00Z", enabledEntryCount: 2 },
-], ...over });
+const detail = (over: Partial<PresetDetail> = {}): PresetDetail => ({ ...summary(), ...over });
 
 describe("我的預設列表", () => {
-  it("能刪的給刪除；上游實際只封存時照實說封存", async () => {
-    mocks.list.mockResolvedValue({ items: [summary()], nextCursor: "", quota: { used: 1, limit: 50, archived: 0 } });
-    mocks.remove.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 2, disposition: "archived" });
+  it("每份都能刪：確認框說刪除後看不到；刪完照實說已刪除，列表重讀", async () => {
+    mocks.list.mockResolvedValue({ items: [summary()], nextCursor: "", quota: { used: 1, limit: 50 } });
+    mocks.remove.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 2 });
     await mount(PresetListPage, "/me/presets");
     expect($("[data-testid=preset-quota]").textContent).toContain(t("preset.quota", { used: "1", limit: "50" }));
+    expect($("[data-testid=preset-row]").textContent).not.toMatch(/v\d/);
     $("[data-testid=preset-more]").click();
     await flush();
+    expect($("[data-testid=preset-remove]").textContent?.trim()).toBe(t("preset.row.delete"));
     $("[data-testid=preset-remove]").click();
     await flush();
-    expect(mocks.confirm.mock.calls[0]![0]).toMatchObject({ danger: true, focusCancel: true, cancelText: t("preset.delete.keep") });
+    expect(mocks.confirm.mock.calls[0]![0]).toMatchObject({ title: t("preset.delete.title", { name: "細膩第三人稱" }), message: t("preset.share.delete.body"), danger: true, focusCancel: true, cancelText: t("preset.delete.keep") });
     expect(mocks.remove).toHaveBeenCalledWith("tok", "p1", 2, expect.any(String));
-    expect(root.textContent).toContain(t("preset.disposition.archivedInstead", { name: "細膩第三人稱" }));
-    expect(root.textContent).not.toContain(t("preset.delete.done", { name: "細膩第三人稱" }));
+    expect(root.textContent).toContain(t("preset.delete.done", { name: "細膩第三人稱" }));
+    expect(mocks.list).toHaveBeenCalledTimes(2);
   });
 
-  it("有對話在用的只給封存，不給刪除", async () => {
-    mocks.list.mockResolvedValue({ items: [summary({ allowedActions: ["archive"], bindingCount: 2 })], nextCursor: "", quota: { used: 1, limit: 50, archived: 0 } });
-    mocks.archive.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 2 });
+  it("有卡在用、已公開的也能刪：確認框各多一句，一句一行", async () => {
+    mocks.list.mockResolvedValue({ items: [summary({ bindingCount: 2, visibility: "public" })], nextCursor: "", quota: { used: 1, limit: 50 } });
+    mocks.remove.mockResolvedValue({ presetId: "p1", revisionId: "r2", version: 2 });
     await mount(PresetListPage, "/me/presets");
     $("[data-testid=preset-more]").click();
     await flush();
-    expect($("[data-testid=preset-remove]").textContent?.trim()).toBe(t("preset.row.archive"));
     $("[data-testid=preset-remove]").click();
     await flush();
-    expect(mocks.archive).toHaveBeenCalled();
-    expect(mocks.remove).not.toHaveBeenCalled();
+    const opts = mocks.confirm.mock.calls[0]![0];
+    expect(opts.message.split("\n")).toEqual([t("preset.share.delete.body"), t("preset.share.delete.inUse", { n: "2" }, 2), t("preset.share.delete.public")]);
+    expect(opts.scrollMessage).toBe(true);
+    expect(mocks.remove).toHaveBeenCalled();
   });
 
   it("舊授權沒有預設權限時請他重新同意，不顯示成錯誤", async () => {
@@ -137,7 +137,7 @@ describe("我的預設列表", () => {
   });
 
   it("沒有預設時說明下一步，不出現全域套用之類的選項", async () => {
-    mocks.list.mockResolvedValue({ items: [], nextCursor: "", quota: { used: 0, limit: 50, archived: 0 } });
+    mocks.list.mockResolvedValue({ items: [], nextCursor: "", quota: { used: 0, limit: 50 } });
     await mount(PresetListPage, "/me/presets");
     expect($("[data-testid=preset-empty]")).not.toBeNull();
     expect(root.textContent).not.toMatch(/全部的卡|所有卡|全域/);
@@ -191,7 +191,7 @@ describe("預設編輯器", () => {
     expect(typeof key).toBe("string");
   });
 
-  it("別處先存了新版本：草稿留著，再按一次以最新版本為基準存", async () => {
+  it("別處先存過：草稿留著，再按一次以最新的計數為基準存（覆蓋成這份草稿）", async () => {
     await open();
     $<HTMLInputElement>("[data-testid=preset-title]").value = "新名字";
     $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
@@ -225,43 +225,30 @@ describe("預設編輯器", () => {
     await flush();
     expect(mocks.revise).toHaveBeenCalledTimes(2);
     expect(mocks.revise.mock.calls[1]![3]).toBe(mocks.revise.mock.calls[0]![3]);
-    expect(root.textContent).toContain(t("preset.editor.saved", { n: 3 }));
+    expect(root.textContent).toContain(t("preset.editor.saved"));
   });
 });
 
-describe("預設編輯器：版本紀錄", () => {
-  it("存好新版本後，版本紀錄馬上列出新的一版並標成最新", async () => {
+describe("預設編輯器：不留版本（owner 2026-10-30）", () => {
+  it("讀目前內容；存好只說已儲存，沒有版本號也沒有版本紀錄", async () => {
     const d = doc(); d.selection.excludedEntryIds = ["script"]; d.selection.acceptedAdaptationIds = ["turn:move_to_suffix"];
-    mocks.detail.mockResolvedValueOnce(detail());
+    mocks.detail.mockResolvedValue(detail());
     mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
     mocks.analyze.mockImplementation(async () => compat());
     await mount(PresetEditorPage, "/me/presets/p1");
+    expect(mocks.revision).toHaveBeenCalledWith("tok", "p1");
+    expect($("[data-testid=preset-versions]")).toBeNull();
     $<HTMLInputElement>("[data-testid=preset-title]").value = "改名";
     $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
     await new Promise((r) => setTimeout(r, 600)); await flush();
     mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
-    mocks.detail.mockResolvedValue(detail({ version: 3, headRevisionId: "r3", revisions: [{ revisionId: "r3", version: 3, title: "改名", createdAt: "2026-10-29T01:00:00Z", enabledEntryCount: 2 }, ...detail().revisions] }));
     $("[data-testid=preset-save]").click();
     await flush(); await flush();
-    const items = $$("[data-testid=preset-versions] li").map((li) => li.textContent ?? "");
-    expect(items[0]).toContain("v3");
-    expect(items[0]).toContain(t("preset.versions.current"));
-  });
-});
-
-describe("預設編輯器：英文版本紀錄", () => {
-  it("單複數照條目數選，不照版本號（v1 啟用 6 條要寫 entries）", async () => {
-    mocks.detail.mockResolvedValue(detail({ revisions: [{ revisionId: "r1", version: 1, title: "x", createdAt: "2026-10-28T00:00:00Z", enabledEntryCount: 6 }, { revisionId: "r2", version: 2, title: "x", createdAt: "2026-10-29T00:00:00Z", enabledEntryCount: 1 }] }));
-    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
-    await loadLocale("en");
-    await mount(PresetEditorPage, "/me/presets/p1");
-    i18n.global.locale.value = "en";
-    await flush();
-    const rows = $$("[data-testid=preset-versions] li").map((li) => li.textContent ?? "");
-    expect(rows[0]).toContain("v1");
-    expect(rows[0]).toContain("6 entries enabled");
-    expect(rows[1]).toContain("1 entry enabled");
-    i18n.global.locale.value = SOURCE_LOCALE;
+    expect(mocks.revise.mock.calls[0]![2].expectedVersion).toBe(2);
+    expect(root.textContent).toContain(t("preset.editor.saved"));
+    expect(root.textContent).toContain(t("preset.editor.saved.hint"));
+    expect($("[data-testid=preset-save]").textContent?.trim()).toBe(t("preset.editor.save"));
+    expect(root.textContent).not.toMatch(/v3/);
   });
 });
 
@@ -283,31 +270,7 @@ describe("預設編輯器：API 建立的預設（選擇欄位可省略）", () 
   });
 });
 
-describe("預設編輯器：封存與匯入確認（QA N03／N04）", () => {
-  it("封存的預設只能看：欄位、開關與存檔都停用，並說明已封存；列表不給編輯鈕", async () => {
-    mocks.detail.mockResolvedValue(detail({ archived: true, allowedActions: ["archive"] }));
-    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
-    await mount(PresetEditorPage, "/me/presets/p1");
-    expect(root.textContent).toContain(t("preset.error.archived"));
-    // 欄位包在停用的 fieldset 裡（瀏覽器因此停用整組；測試環境不模擬這層，只驗結構）
-    expect($("[data-testid=preset-title]").closest("fieldset")?.disabled).toBe(true);
-    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(true);
-    expect($("[data-testid=entry-add]")).toBeNull();
-    const row = $$("[data-testid=entry-row]")[0]!;
-    expect((row.parentElement!.querySelector("input[type=checkbox]") as HTMLInputElement).disabled).toBe(true);
-    row.click(); await flush();
-    // 條目照樣能點開來看，內容不能改
-    expect($("textarea").closest("fieldset")?.disabled).toBe(true);
-  });
-
-  it("封存的預設在列表裡沒有編輯鈕，點名稱打開是唯讀", async () => {
-    mocks.list.mockResolvedValue({ items: [summary({ archived: true })], nextCursor: "", quota: { used: 1, limit: 50, archived: 1 } });
-    await mount(PresetListPage, "/me/presets");
-    $<HTMLInputElement>("[data-testid=preset-show-archived]").click(); await flush();
-    const row = $("[data-testid=preset-row]");
-    expect([...row.querySelectorAll("a.btn")].map((a) => a.textContent?.trim())).not.toContain(t("preset.row.edit"));
-  });
-
+describe("預設編輯器：匯入確認（QA N04）", () => {
   it("匯入後的確認只講一次：網址上的參數用完就拿掉", async () => {
     mocks.detail.mockResolvedValue(detail());
     mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
