@@ -677,7 +677,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
   .preset-editor__list > .preset-editor__listHead { top: 0; padding-top: var(--s-3); padding-bottom: var(--s-2); }
   /* 上下各補一條底色，蓋住標題列與搜尋框之間、以及下方捲過去的列 */
   .preset-editor__list > input[type="search"] { top: 52px; box-shadow: 0 calc(-1 * var(--s-2)) 0 var(--surface), 0 var(--s-2) 0 var(--surface), 0 calc(var(--s-2) + 1px) 0 var(--line); }
-  .preset-editor__settings { padding-bottom: var(--s-4); }
+  /* 捲動區的下內距在部分瀏覽器不算進捲動高度：最後一張卡片自己留底，才不會貼著存檔列 */
+  .preset-editor__settings > :last-child { margin-bottom: var(--s-5); }
   .preset-editor__foot { position: static; }
 }
 @media (max-width: 760px) {

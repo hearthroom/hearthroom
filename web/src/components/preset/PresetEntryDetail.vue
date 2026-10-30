@@ -182,8 +182,10 @@ async function reset() {
 .entry__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }
 .entry__content { min-height: 220px; font-size: 14px; }
 /* 巨集選單的選項在英文很長：選單可以縮、整列可以換行，不把內容欄撐出卡片 */
-.entry__macro { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; max-width: 100%; }
-.entry__macroPick { flex: 1 1 140px; min-width: 0; max-width: 100%; width: auto; height: var(--h-sm); font-size: 13px; }
+/* 下拉與「插入」同一列：欄位窄時下拉縮，不把按鈕擠到下一行（UI/UX 複核 756 寬） */
+.entry__macro { display: flex; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: var(--s-2); min-width: 0; max-width: 100%; }
+.entry__macroPick { flex: 0 1 240px; min-width: 0; width: auto; height: var(--h-sm); font-size: 13px; }
+.entry__macro .btn { flex-shrink: 0; }
 .entry__check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); cursor: pointer; }
 .entry__check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .entry__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
