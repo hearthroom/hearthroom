@@ -28,6 +28,7 @@ import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
 import {rankingClearance} from '@/pet/ranking-clearance';
 import {homePhoneMode,homePhoneObstacles,type PhoneClearance} from "@/pet/home-clearance";
+import {phoneControls} from "@/pet/standby-clearance";
 import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
@@ -131,10 +132,14 @@ function homepagePetBounds() {
 }
 
 let obstacleKey="",obstacleCache:PhoneClearance|null=null;
+/** 這兩頁的版面避讓之外，畫面上其他可點的東西也一起讓（其他頁由桌寵自己在待機時讓，見 standby-clearance.ts） */
+function withControls(space:PhoneClearance):PhoneClearance {
+ return {...space,obstacles:[...space.obstacles,...(phoneControls()?.obstacles??[])]};
+}
 function phoneClearance():PhoneClearance|null {
  if(!petEnabled.value)return null;
  // Read each live rect: async preferences, locale changes and scrolling alter it.
- const ranking=rankingClearance();if(ranking)return ranking;
+ const ranking=rankingClearance();if(ranking)return withControls(ranking);
  if(!petEnabled.value||!homePhoneMode(innerWidth,matchMedia("(pointer: coarse)").matches)||route.path.replace(/\/+$/,'')!==lp('/').replace(/\/+$/,''))return null;
  const board=document.querySelector<HTMLElement>('.board-page');
  const header=document.querySelector('.header')?.getBoundingClientRect().bottom??60;
@@ -142,7 +147,7 @@ function phoneClearance():PhoneClearance|null {
  const rail=document.querySelector('.home-sidebar')?.getBoundingClientRect();
  const key=[route.fullPath,scrollY,innerWidth,innerHeight,board?.offsetHeight,document.querySelector<HTMLElement>('.footer')?.offsetHeight,header,rail?.left,rail?.right,rail?.top,rail?.bottom].join(':');
  if(key!==obstacleKey||!obstacleCache){obstacleKey=key;obstacleCache={top:header,bottom:innerHeight,obstacles:homePhoneObstacles()};}
- return obstacleCache;
+ return withControls(obstacleCache);
 }
 let pendingMenu:HTMLElement|null=null,starting=false;
 function menuRequest(e:Event){

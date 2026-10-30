@@ -64,16 +64,16 @@ export function peekRange(f: Frame, s: Size) {
   return { minY, maxY: Math.max(minY, f.h - s.h - Math.max(f.inset.bottom, FOOT)) };
 }
 
-/** 探出在 y 時的接觸區（貼著 side 那一側的螢幕邊） */
-export function peekCatch(f: Frame, s: Size, side: Side, y: number) {
-  const b = bands(f), w = (side === "right" ? b.right : b.left) + CATCH_OUT;
+/** 探出在 y 時的接觸區（貼著 side 那一側的螢幕邊）；reach 是底下有可點的東西時縮到的寬度（standby-clearance.ts） */
+export function peekCatch(f: Frame, s: Size, side: Side, y: number, reach: number | null = null) {
+  const b = bands(f), w = Math.min((side === "right" ? b.right : b.left) + CATCH_OUT, reach ?? Infinity);
   return { x: side === "right" ? f.w - w : 0, y, w, h: s.h };
 }
 
-/** 靠在 side 那一側探出：外框留 PEEK_IN 在螢幕裡，其餘伸到螢幕外（貼的是螢幕邊，不是邊距帶） */
-export function peekPos(f: Frame, s: Size, side: Side, y: number): Point {
-  const r = peekRange(f, s);
-  const x = side === "right" ? f.w - PEEK_IN : PEEK_IN - s.w;
+/** 靠在 side 那一側探出：外框留 PEEK_IN 在螢幕裡（縮窄時留 reach），其餘伸到螢幕外（貼的是螢幕邊，不是邊距帶） */
+export function peekPos(f: Frame, s: Size, side: Side, y: number, reach: number | null = null): Point {
+  const r = peekRange(f, s), keep = Math.min(PEEK_IN, reach ?? Infinity);
+  const x = side === "right" ? f.w - keep : keep - s.w;
   return { x, y: clamp(y, r.minY, r.maxY) };
 }
 

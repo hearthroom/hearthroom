@@ -7,13 +7,14 @@
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
 import {
-  clampStand, defaultPeek, fitShift, tailShift, fromSaved, peekCatch, peekPos, silhouettePath, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved,
+  bands, CATCH_OUT, PEEK_IN, clampStand, defaultPeek, fitShift, tailShift, fromSaved, peekCatch, peekPos, peekRange, silhouettePath, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved,
   type Frame, type Inset, type Saved, type Side,
 } from "./placement";
 import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
 import {nearestClearPetY,type PhoneClearance} from "./home-clearance";
+import {phoneControls,standbySpot} from "./standby-clearance";
 import { type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
@@ -138,6 +139,10 @@ export class SukiPet {
   private phoneRelocateAt: number | null = null;
   private entryAwake = false;
   private entryFocus: HTMLElement | null = null;
+  /** 手機待機時為了讓出底下可點的東西而縮窄的露出寬度（null＝照舊）；standbyY 是使用者選的高度，standbyAway＝暫時退場 */
+  private standbyReach: number | null = null;
+  private standbyY: number | null = null;
+  private standbyAway = false;
   private releasePhone() {
     const original=this.phoneOriginal;
     this.closeMenu();this.phoneOriginal=null;this.phoneRelocateAt=null;this.el.inert=false;this.sidebarDocked=false;this.sidebarAwake=false;
@@ -146,7 +151,7 @@ export class SukiPet {
     if(original){this.place(original);this.refit();}this.layoutEdge();
   }
   private updatePhone(space:PhoneClearance) {
-    if(!this.phoneOriginal){if(this.sidebarDocked)this.releaseSidebar();this.phoneOriginal={...this.pos};}
+    if(!this.phoneOriginal){if(this.sidebarDocked)this.releaseSidebar();this.phoneOriginal={x:this.pos.x,y:this.standbyY??this.pos.y};this.standbyReach=null;this.standbyY=null;this.standbyAway=false;}
     this.idleButton.hidden=true;
     if(this.sidebarAwake){
       const body=this.box();this.place({x:innerWidth-body.width-8,y:Math.max(space.top+8,innerHeight-body.height-8)});
@@ -159,26 +164,58 @@ export class SukiPet {
     const body={...this.box(),left:original.x,right:original.x+this.box().width},catcher=this.opts.mobile&&this.tucked?peekCatch(this.viewport(),this.size(),this.side,this.pos.y):null;
     const y=nearestClearPetY({...space,left:Math.min(body.left,catcher?.x??body.left),right:Math.max(body.right,catcher?catcher.x+catcher.w:body.right),height:Math.max(body.height,catcher?.h??0),original:original.y,current:this.pos.y});
     const relocate=y!==null&&(y!==this.pos.y||original.x!==this.pos.x);
-    if(y===null||relocate){
-      // Fade at the current position first. Moving a visible character to each
-      // newly clear slot makes scrolling look like a series of teleports.
-      if(!this.el.classList.contains("suki-pet--phone-suspended")){
-        const duration=getComputedStyle(this.el).getPropertyValue('--dur').trim(),value=parseFloat(duration);
-        const ms=this.opts.reducedMotion?0:Number.isFinite(value)?value*(duration.endsWith('ms')?1:1000):160;
-        this.phoneRelocateAt=performance.now()+ms;
-        this.el.classList.add("suki-pet--phone-suspended");
-      }
-      this.el.inert=true;
-      if(y===null||performance.now()<(this.phoneRelocateAt??0)){this.layoutEdge();return;}
-      this.el.classList.add("suki-pet--phone-relocating");
-      this.place({x:original.x,y});
-      // Commit the new transform while invisible, then fade in at that point.
-      void this.el.offsetWidth;
-      this.el.classList.remove("suki-pet--phone-relocating");
-    }
+    if((y===null||relocate)&&this.fadeTo(y===null?null:{x:original.x,y}))return;
     this.phoneRelocateAt=null;this.el.inert=false;
     this.el.classList.remove("suki-pet--phone-suspended");
     this.layoutEdge();
+  }
+  /** 淡出後在 to 出現；to 是 null 就留在淡出。還沒出現（淡出中或沒有地方）回傳 true */
+  private fadeTo(to:{x:number;y:number}|null) {
+    // Fade at the current position first. Moving a visible character to each
+    // newly clear slot makes scrolling look like a series of teleports.
+    if(!this.el.classList.contains("suki-pet--phone-suspended")){
+      const duration=getComputedStyle(this.el).getPropertyValue('--dur').trim(),value=parseFloat(duration);
+      const ms=this.opts.reducedMotion?0:Number.isFinite(value)?value*(duration.endsWith('ms')?1:1000):160;
+      this.phoneRelocateAt=performance.now()+ms;
+      this.el.classList.add("suki-pet--phone-suspended");
+    }
+    this.el.inert=true;
+    if(to===null||performance.now()<(this.phoneRelocateAt??0)){this.layoutEdge();return true;}
+    this.el.classList.add("suki-pet--phone-relocating");
+    this.place(to);
+    // Commit the new transform while invisible, then fade in at that point.
+    void this.el.offsetWidth;
+    this.el.classList.remove("suki-pet--phone-relocating");
+    return false;
+  }
+  /**
+   * 手機待機（探出）時讓出底下可點的東西（standby-clearance.ts）：縮窄、換高度，都不行就暫時退場。
+   * 只管探出；站著是使用者自己放的，60 秒沒人碰她自己會縮回來再走這裡。不存位置：讓開的地方是暫時的。
+   */
+  private updateStandby() {
+    const on=this.opts.mobile&&this.tucked&&this.ready&&!this.hidden&&this.peekS<0.5&&!this.phoneOriginal;
+    if(!on){this.releaseStandby();return;}
+    // 拖她、拉出縮回的動畫中不動；沿邊拖完的高度就是她新的位置
+    if(this.drag||this.slide){this.standbyY=null;return;}
+    const f=this.viewport(),s=this.size(),b=bands(f),space=phoneControls();
+    const original=this.standbyY??this.pos.y;
+    // 只在探出可以停的高度裡找，否則 peekPos 夾回去的位置又會被判成要讓，一直閃
+    const range=peekRange(f,s);
+    const spot=space?standbySpot({...space,top:Math.max(space.top,range.minY-8),bottom:Math.min(space.bottom,range.maxY+s.h+8),w:f.w,side:this.side,height:s.h,full:Math.max(PEEK_IN,(this.side==="right"?b.right:b.left)+CATCH_OUT),original,current:this.pos.y}):{y:original,reach:null};
+    this.standbyY=spot&&spot.y===original&&spot.reach===null?null:original;
+    if(!spot){this.standbyAway=true;this.fadeTo(null);return;}
+    const to=peekPos(f,s,this.side,spot.y,spot.reach);
+    if(to.y!==this.pos.y){this.standbyAway=true;if(this.fadeTo(to))return;}
+    else if(spot.reach!==this.standbyReach)this.place(to);
+    this.standbyReach=spot.reach;
+    if(this.standbyAway){this.standbyAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");}
+    this.layoutEdge();
+  }
+  private releaseStandby() {
+    if(this.standbyAway&&!this.phoneOriginal){this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");this.layoutEdge();}
+    this.standbyAway=false;
+    // 拉出來的動畫從縮窄的位置起步，站好了才放掉
+    if(!this.tucked&&!this.slide){this.standbyReach=null;this.standbyY=null;}
   }
   /** Preference-menu entry: preserve the enabled preference and saved position. */
   openFrom(opener:HTMLElement|null) {
@@ -246,6 +283,7 @@ export class SukiPet {
     const phone=this.opts.phoneClearance?.();
     if(phone){this.updatePhone(phone);return;}
     if(this.phoneOriginal)this.releasePhone();
+    if(this.opts.mobile)this.updateStandby();
     // A deliberate desktop drag/edge peek takes priority over the passive rail
     // avatar. Keep the current drag position when releasing an expanded avatar.
     if (!this.opts.mobile && (this.drag?.moved || this.tucked)) {
@@ -1113,7 +1151,7 @@ export class SukiPet {
     }
     const f = this.viewport(), s = this.size();
     // 拉的距離＝從探出到站好要走的距離：她跟著手指一比一移動
-    const travel = Math.abs(standOutPos(f, s, this.side, this.pos.y).x - peekPos(f, s, this.side, this.pos.y).x) || 1;
+    const travel = Math.abs(standOutPos(f, s, this.side, this.pos.y).x - peekPos(f, s, this.side, this.pos.y, this.standbyReach).x) || 1;
     if (d.mode === "pull") this.peekS = Math.max(0, Math.min(1, d.s0 + (this.side === "right" ? -dx : dx) / travel));
     else this.pos.y = peekPos(f, s, this.side, d.y0 + dy).y;
     this.layoutPeek();
@@ -1319,7 +1357,7 @@ export class SukiPet {
     const f = this.viewport(), s = this.size();
     if (this.tucked) {
       if (!this.opts.mobile) return this.tuck(this.side, true);
-      return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y));
+      return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y, this.standbyReach));
     }
     const pos = clampStand(f, s, this.pos);
     if (pos.x !== this.pos.x || pos.y !== this.pos.y) this.place(pos);
@@ -1364,7 +1402,7 @@ export class SukiPet {
   /** 探出到站出來之間的位置：x 在兩端之間，高度不變 */
   private layoutPeek() {
     const f = this.viewport(), s = this.size();
-    const peek = peekPos(f, s, this.side, this.pos.y);
+    const peek = peekPos(f, s, this.side, this.pos.y, this.standbyReach);
     const stand = this.standX ?? standOutPos(f, s, this.side, peek.y).x;
     this.place({ x: peek.x + (stand - peek.x) * this.peekS, y: peek.y });
   }
@@ -1394,7 +1432,7 @@ export class SukiPet {
   /** 縮回 side 那一側：從現在站的地方滑回螢幕邊探頭 */
   private tuckTo(side: Side, silent = false) {
     this.tucked = true; this.el.classList.add("suki-pet--tucked");
-    this.standX = this.pos.x; this.side = side;
+    this.standX = this.pos.x; this.side = side; this.standbyReach = null; this.standbyY = null;
     this.closeMenu();
     if (silent) this.bubble.hidden = true;
     this.slideTo(0, 320, false, () => { this.standX = null; this.save(this.pos, true); });
@@ -1484,7 +1522,7 @@ export class SukiPet {
     // 縮回的動畫走到一半才出現：還站在畫面中間時不先在邊上攔點擊
     const c = this.catcher!, on = this.tucked && !this.hidden && this.peekS < 0.5;
     c.hidden = !on;
-    if (on) { const r = peekCatch(f, size, this.side, this.pos.y); Object.assign(c.style, { width: `${r.w}px`, height: `${r.h}px`, transform: `translate(${r.x}px, ${Math.round(r.y)}px)` }); }
+    if (on) { const r = peekCatch(f, size, this.side, this.pos.y, this.standbyReach); Object.assign(c.style, { width: `${r.w}px`, height: `${r.h}px`, transform: `translate(${r.x}px, ${Math.round(r.y)}px)` }); }
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
