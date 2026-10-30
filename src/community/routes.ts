@@ -10,7 +10,8 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
 import { siteName } from "../../shared/site-name";
-import { hasSubscription, pushConfigured, pushLine, pushLocale, queuePush, removeSubscription, saveSubscription } from "./push";
+import { isEnforcementKind } from "../../shared/enforcement-notice";
+import { hasSubscription, pushConfigured, pushLine, pushLocale, pushTitle, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard, isAdult } from "../cards";
 import { updateBridge, updateTitle } from "../updates";
@@ -271,11 +272,12 @@ const langOf = (c: { req: { query: (k: string) => string | undefined; header: (k
 app.get("/v1/me/community/notifications", async (c) => {
   const m = await requireMember(c);
   const lang = langOf(c);
+  // Unread platform account notices come first so a busy list never pushes them out of the 50.
   const rows = await c.env.DB.prepare(
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
      a.handle AS actor_handle,a.display_name AS actor_name,n.card_id,c.id AS card_num,c.names AS card_names
      FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
-     WHERE ${eligibleNotification()} AND n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
+     WHERE ${eligibleNotification()} AND n.member_id=? ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
   )
     .bind(Date.now(),Date.now(),m.id)
     .all<{ card_id:string|number|null; id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
@@ -679,7 +681,9 @@ app.post("/internal/community/:operation", async (c) => {
     // stays bilingual, as the bot's DMs always were. Adult card titles reach Discord only for
     // the card's author (review result) and its claiming reviewer, who are adults by policy;
     // followers and commenters are not guaranteed to be.
-    const text = n.locale ? pushLine(n, pushLocale(n.locale)) : pushLine(n, "zh-Hant") + " / " + pushLine(n, "en");
+    // A HarperHarbor account notice names its sender first; its link is off-site, so the bot falls back to the notification list.
+    const line = (l: ReturnType<typeof pushLocale>) => (isEnforcementKind(n.kind) ? pushTitle(n, l) + "\n" + pushLine(n, l) : pushLine(n, l));
+    const text = n.locale ? line(pushLocale(n.locale)) : line("zh-Hant") + " / " + line("en");
     return c.json({ kind: n.kind, path: n.path, discord_id: n.discord_id, locale: n.locale, text });
   }
   if (op === "review-ack") {

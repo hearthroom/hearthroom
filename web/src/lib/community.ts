@@ -24,6 +24,7 @@ export interface CommunityView {
 export interface CommunityNotice {
   id: string;
   kind: string;
+  /** A path on this site; for HarperHarbor account notices (enforcement_notice, enforcement_result) an absolute https link to the appeal page on the console. */
   path: string;
   created_at: number;
   read_at: number | null;
@@ -31,7 +32,7 @@ export interface CommunityNotice {
   actor?: { handle: string; name: string } | null;
   /** Which card, named in the requested language. */
   card?: { id: number; name: string } | null;
-  /** Kind-specific detail: review verdict, first review or update, reviewer note, new work or update, like count, comment id, listings granted. */
+  /** Kind-specific detail: review verdict, first review or update, reviewer note, new work or update, like count, comment id, listings granted, appeal deadline (ISO) or appeal decision. */
   extra?: Record<string, unknown> | null;
 }
 export interface CommunityCase {

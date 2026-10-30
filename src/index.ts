@@ -2,6 +2,7 @@ import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {reviewPlayAccessRoutes} from './review-play-access';
+import {enforcementNoticeRoutes} from './enforcement-notices';
 import { maintenanceResponse, readMaintenance } from './maintenance';
 import {qaAccountControlRoutes} from './qa-account-control';
 import {qaSessionHint} from './test-accounts';
@@ -228,6 +229,7 @@ app.use("*", async (c, next) => {
 });
 
 app.route('/',reviewPlayAccessRoutes());
+app.route('/',enforcementNoticeRoutes());
 app.route("/", moderationRoutes);
 app.route("/", commentModerationRoutes);
 app.use('/v1/*',async(c,next)=>{

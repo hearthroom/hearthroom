@@ -7,7 +7,7 @@ const mock = vi.hoisted(() => ({ request: vi.fn(), me: { accountNumId: 1 } as { 
 vi.mock('../src/lib/community', async original => ({ ...await original<object>(), communityRequest: mock.request }));
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ get me() { return mock.me; }, accessToken: async () => 'fixture' }) }));
 import NotificationBell from '../src/components/NotificationBell.vue';
-import { noticeText, useNotifications } from '../src/lib/notifications';
+import { leave, noticeDetail, noticeText, useNotifications } from '../src/lib/notifications';
 import type { CommunityNotice } from '../src/lib/community';
 
 // 頁首鈴鐺：未讀數來自摘要輪詢，打開才載清單；每一則都說得出誰、哪張卡，點了就標已讀並跳過去。
@@ -85,4 +85,51 @@ it('says whether it was an update, what the reviewer wrote, how many listings an
   expect(noticeText(notice({ kind: 'followed_work', extra: { event: 'new' } }))).toBe('小雨 發佈了「雨夜書店」');
   expect(noticeText(notice({ kind: 'review_reminder', actor: null, extra: null }))).toBe('你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單');
   expect(noticeText(notice({ kind: 'review_reminder_expired', actor: null, card: null, extra: null }))).toBe(i18n.global.t('community.notices.review_reminder_expired'));
+});
+
+const APPEAL = 'https://console.harperharbor.com/appeal/n0123456789abcdef0123';
+const platform = (over: Partial<CommunityNotice> = {}): CommunityNotice => ({ id: 'p1', kind: 'enforcement_notice', path: APPEAL, created_at: 1600000000000, read_at: null, actor: null, card: null, extra: { deadline: '2026-11-29T15:59:59.000Z' }, ...over });
+it('words HarperHarbor account notices with the email deadline in every language', async () => {
+  const result = (decision: string) => platform({ kind: 'enforcement_result', extra: { decision } });
+  await applyLocale('zh-Hant');
+  expect(noticeText(platform())).toBe('HarperHarbor 帳號處置通知');
+  expect(noticeDetail(platform())).toEqual({ body: '你的推薦碼出現異常，我們已採取處置。2026-11-29 23:59（台北時間）前可以申訴。', cta: '查看處置' });
+  expect(noticeText(result('maintained'))).toBe('申訴結果：維持原處置');
+  expect(noticeDetail(result('maintained'))).toEqual({ body: '點開查看我們的回覆。', cta: '' });
+  await applyLocale('zh-Hans');
+  expect(noticeDetail(platform())!.body).toBe('你的推荐码出现异常，我们已采取处置。2026-11-29 23:59（北京时间）前可以申诉。');
+  await applyLocale('en');
+  expect(noticeDetail(platform())).toEqual({ body: 'We found unusual activity on your referral code and took action. You can appeal until 2026-11-29 23:59 (UTC+8).', cta: 'View details' });
+  expect(noticeText(result('revoked'))).toBe('Appeal result: the action was withdrawn');
+  await applyLocale('ja');
+  expect(noticeDetail(platform())!.body).toBe('紹介コードに異常が見つかり、対応を行いました。2026-11-29 23:59（UTC+8）まで異議を申し立てられます。');
+  await applyLocale('ko');
+  expect(noticeDetail(platform())!.body).toBe('추천 코드에서 이상 징후를 발견해 조치했어요. 2026-11-29 23:59 (UTC+8)까지 이의를 신청할 수 있어요.');
+  expect(noticeText(result('revoked'))).toBe('이의 신청 결과: 조치 취소');
+});
+it('pins an unread HarperHarbor notice on top, links it off-site and marks it read before leaving', async () => {
+  const to = vi.spyOn(leave, 'to').mockImplementation(() => {});
+  items.push(platform());
+  el.querySelector<HTMLButtonElement>('.bell__btn')!.click(); await settle();
+  const links = [...el.querySelectorAll<HTMLAnchorElement>('.bell__item')];
+  expect(links[0].getAttribute('href')).toBe(APPEAL);
+  expect(links[0].getAttribute('rel')).toBe('noopener');
+  expect(links[0].getAttribute('target')).toBeNull();
+  expect(links[0].classList.contains('bell__item--pinned')).toBe(true);
+  expect(links[0].querySelector('.bell__text svg[aria-hidden="true"]')).not.toBeNull();
+  expect(links[0].querySelector('.bell__cta')!.textContent).toBe('查看處置');
+  expect(links[0].textContent).toContain('2026-11-29 23:59（台北時間）');
+  expect(links.slice(1).some(a => a.classList.contains('bell__item--pinned'))).toBe(false);
+  links[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })); await settle();
+  expect(mock.request).toHaveBeenCalledWith('/me/community/notifications/read', 'fixture', 'POST', { id: 'p1' });
+  expect(to).toHaveBeenCalledWith(APPEAL);
+  expect(router.currentRoute.value.path).toBe('/');
+  to.mockRestore();
+});
+it('treats a read HarperHarbor notice like any other, by time and without the stripe', async () => {
+  items.push(platform({ read_at: 9 }));
+  el.querySelector<HTMLButtonElement>('.bell__btn')!.click(); await settle();
+  const links = [...el.querySelectorAll<HTMLAnchorElement>('.bell__item')];
+  expect(links.map(a => a.getAttribute('href'))).toEqual(['/cards/12', '/cards/13', APPEAL]);
+  expect(links[2].classList.contains('bell__item--pinned')).toBe(false);
 });

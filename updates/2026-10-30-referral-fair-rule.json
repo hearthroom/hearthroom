@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "try": "/me/referral",
+  "draft": true,
+  "title": {
+    "zh-Hant": "邀請獎勵說明加上一條規則：獎勵限邀請真實朋友加入。",
+    "zh-Hans": "邀请奖励说明加上一条规则：奖励限邀请真实好友加入。",
+    "en": "The referral rules now state that rewards are for inviting real friends.",
+    "ja": "紹介特典の説明に、実在の友だちを招待した場合に限るというルールを加えました。",
+    "ko": "추천 보상 안내에 실제 친구를 초대한 경우에만 지급된다는 규칙을 추가했습니다."
+  },
+  "body": {
+    "zh-Hant": "HarperHarbor 對帳號的處置通知與申訴結果也會出現在通知鈴鐺，點開後到 HarperHarbor 查看。",
+    "zh-Hans": "HarperHarbor 对账号的处置通知与申诉结果也会出现在通知铃铛，点开后到 HarperHarbor 查看。",
+    "en": "HarperHarbor account action notices and appeal results also appear in the notification bell and open on HarperHarbor.",
+    "ja": "HarperHarbor からのアカウント対応のお知らせと異議申し立ての結果も通知ベルに届き、開くと HarperHarbor で確認できます。",
+    "ko": "HarperHarbor 계정 조치 안내와 이의 신청 결과도 알림 벨에 표시되며, 누르면 HarperHarbor에서 확인할 수 있습니다."
+  }
+}

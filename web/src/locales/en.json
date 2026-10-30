@@ -1917,6 +1917,7 @@
   "referral.rule.beforeCode": "Top-ups your friend made before entering your code count too",
   "referral.rule.invitee": "Your friend gets an extra {percent}% on their first top-up",
   "referral.rule.refund": "If your friend gets a refund, the reward from that top-up is withdrawn",
+  "referral.rule.fair": "Referral rewards are for inviting real friends. Accounts that sign up in clusters from the same devices don't earn rewards, and we may disable the code and reclaim the rewards",
   "referral.rule.scope": "Reward credits can be used for character chats",
   "referral.redeemTitle": "Enter a referral code",
   "referral.redeemHelp": "You can enter one code before {date}. It can't be changed later",
@@ -4001,5 +4002,12 @@
   "preset.editor.tab.settings.alert": "A setting needs attention",
   "preset.editor.tabs.label": "Editor sections",
   "preset.editor.paramsBlocked": "{names}: the value is outside the accepted range. Fix it to save.",
-  "preset.editor.paramsBlocked.go": "Fix it"
+  "preset.editor.paramsBlocked.go": "Fix it",
+  "enforcement.notification.title": "HarperHarbor account action notice",
+  "enforcement.reason.referral_abuse.notification": "We found unusual activity on your referral code and took action. You can appeal until {deadline}.",
+  "enforcement.notification.cta": "View details",
+  "enforcement.deadlineZone": " (UTC+8)",
+  "enforcement.result.subject.maintained": "Appeal result: the action stands",
+  "enforcement.result.subject.revoked": "Appeal result: the action was withdrawn",
+  "enforcement.result.notification.body": "Open to read our reply."
 }

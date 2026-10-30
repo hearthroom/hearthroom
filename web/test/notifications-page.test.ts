@@ -8,7 +8,7 @@ vi.mock('../src/lib/community', async original => ({ ...await original<object>()
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 1 }, accessToken: async () => 'fixture' }) }));
 vi.mock('../src/lib/push', () => ({ pushSupported: () => true, pushConfig: async () => ({ enabled: true, publicKey: 'k' }), pushState: async () => mock.push.state, enablePush: mock.push.enable, disablePush: mock.push.disable }));
 import NotificationsPage from '../src/pages/NotificationsPage.vue';
-import {useNotifications} from '../src/lib/notifications';
+import {leave,useNotifications} from '../src/lib/notifications';
 
 // 通知頁：清單、全部標為已讀、站內／按讚／推播開關，以及一句 Discord 引導（綁定或開私訊）。
 let app: App, el: HTMLDivElement, router: Router;
@@ -76,4 +76,24 @@ it('tells linked members whether Discord reminders are on and sends them to the 
   view.preferences.discord_dm = 0;
   await router.push('/'); await router.push('/me/notifications'); await settle(); await settle();
   expect(el.textContent).toContain(i18n.global.t('notifications.discordOff'));
+});
+
+it('shows a HarperHarbor account notice on top with its deadline and action, leaving for the console in the same tab', async () => {
+  const appeal = 'https://console.harperharbor.com/appeal/n0123456789abcdef0123';
+  items.push({ id: 'p1', kind: 'enforcement_notice', path: appeal, created_at: 1600000000000, read_at: null, actor: null, card: null, extra: { deadline: '2026-11-29T15:59:59.000Z' } });
+  await useNotifications().load('zh-Hant'); await settle();
+  const first = el.querySelector<HTMLAnchorElement>('.notices__item')!;
+  expect(first.getAttribute('href')).toBe(appeal);
+  expect(first.getAttribute('rel')).toBe('noopener');
+  expect(first.classList.contains('notices__item--pinned')).toBe(true);
+  expect(first.querySelector('.notices__title')!.textContent).toBe('HarperHarbor 帳號處置通知');
+  expect(first.querySelector('.notices__body')!.textContent).toBe('你的推薦碼出現異常，我們已採取處置。2026-11-29 23:59（台北時間）前可以申訴。');
+  expect(first.querySelector('.notices__cta')!.textContent).toBe('查看處置');
+  const to = vi.spyOn(leave, 'to').mockImplementation(() => {});
+  first.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })); await settle();
+  expect(mock.request).toHaveBeenCalledWith('/me/community/notifications/read', 'fixture', 'POST', { id: 'p1' });
+  expect(to).toHaveBeenCalledWith(appeal);
+  expect(router.currentRoute.value.path).toBe('/me/notifications');
+  expect(first.classList.contains('notices__item--pinned')).toBe(false);
+  to.mockRestore();
 });

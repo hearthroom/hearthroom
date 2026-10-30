@@ -41,6 +41,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   VISIT_LIMIT?: RateLimit;
   /** Hearthroom → Harbor issuer credential. */
   HOSTING_SERVICE_KEY?: string;
+  /** Extra https origins (comma-separated) a platform account notice may link to, beside https://console.harperharbor.com; for staging consoles and tests. */
+  ENFORCEMENT_CONSOLE_ORIGINS?: string;
   /** Author controls remain off until the complete visibility release is approved. */
   WORK_SHARING_ENABLED?: string;
   /** 卡片分享情境（?share=）的平台總開關："true" 才轉送給卡片；其他值一律關（卡片拿到 null、分享鈕照常）。 */

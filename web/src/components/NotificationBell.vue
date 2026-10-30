@@ -2,10 +2,11 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
+import { isExternalNotice, isPinnedNotice, noticeDetail, noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityNotice } from "@/lib/community";
 import NewMark from "@/components/NewMark.vue";
+import AccountIcon from "@/components/AccountIcon.vue";
 
 // 頁首的通知入口。未讀數由 App.vue 的輪詢餵進 store；清單在打開浮層時才抓，
 // 點一則就標已讀並跳到它指的地方。完整清單仍在 /me/community。
@@ -21,6 +22,13 @@ function toggle() {
   if (open.value) void store.load(locale.value);
 }
 function pick(n: CommunityNotice) { void store.read(n); open.value = false; }
+/** An off-site notice (HarperHarbor console) leaves in the same tab after the read mark; a new-tab click just marks it read. */
+function pickExternal(n: CommunityNotice, e: MouseEvent) {
+  open.value = false;
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) { void store.read(n); return; }
+  e.preventDefault();
+  void store.follow(n);
+}
 function onDocClick(e: MouseEvent) { if (root.value && !root.value.contains(e.target as Node)) open.value = false; }
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape" && open.value) { open.value = false; root.value?.querySelector<HTMLElement>("button")?.focus(); }
@@ -49,7 +57,13 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
       <p v-else-if="!store.items.length" class="bell__empty subtle">{{ t("notifications.empty") }}</p>
       <ul v-else class="bell__list">
         <li v-for="n in store.items.slice(0, 20)" :key="n.id">
-          <RouterLink :to="lp(n.path)" class="bell__item" :class="{ 'bell__item--unread': !n.read_at }" @click="pick(n)">
+          <a v-if="isExternalNotice(n)" :href="n.path" rel="noopener" class="bell__item bell__item--platform" :class="{ 'bell__item--unread': !n.read_at, 'bell__item--pinned': isPinnedNotice(n) }" @click="pickExternal(n, $event)">
+            <span class="bell__text">{{ noticeText(n) }}<AccountIcon name="external" class="bell__out" /></span>
+            <span v-if="noticeDetail(n)?.body" class="bell__note">{{ noticeDetail(n)!.body }}</span>
+            <span v-if="noticeDetail(n)?.cta" class="bell__cta">{{ noticeDetail(n)!.cta }}</span>
+            <small class="bell__when">{{ when(n) }}</small>
+          </a>
+          <RouterLink v-else :to="lp(n.path)" class="bell__item" :class="{ 'bell__item--unread': !n.read_at }" @click="pick(n)">
             <span class="bell__text">{{ noticeText(n) }}</span>
             <span v-if="noticeUpdateNote(n)" class="bell__note">{{ noticeUpdateNote(n) }}</span>
             <small class="bell__when">{{ when(n) }}</small>
@@ -98,6 +112,11 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
 .bell__item--unread { background: var(--accent-tint); }
 .bell__item--unread:hover { background: var(--surface-2); }
 .bell__text { overflow-wrap: anywhere; }
+/* HarperHarbor 帳號通知：標題加粗、行尾離站箭頭；未讀時置頂並在未讀底上疊 3px 警示色條（inset 陰影，不推動內距）。 */
+.bell__item--platform .bell__text { font-weight: 600; }
+.bell__out { display: inline-block; width: 14px; height: 14px; margin-inline-start: var(--s-1); vertical-align: -2px; color: var(--text-2); }
+.bell__cta { color: var(--accent-text); font-size: 13px; }
+.bell__item--pinned { box-shadow: inset 3px 0 0 var(--warning-text); }
 .bell__when { color: var(--text-2); font-size: 11.5px; }
 .bell__all { display: block; margin-top: 4px; padding: 8px 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--accent-text); }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }

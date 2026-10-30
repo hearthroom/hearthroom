@@ -4,6 +4,7 @@ import { communityRequest, type CommunityNotice } from "./community";
 import { i18n } from "./i18n";
 import { useSession } from "./session";
 import { noticeNote } from "../../../shared/notice-note";
+import { enforcementDeadline, isEnforcementKind } from "../../../shared/enforcement-notice";
 
 /**
  * 頁首鈴鐺的狀態：未讀數（每分鐘與回到分頁時輪詢）與打開浮層時才載入的清單。
@@ -41,7 +42,7 @@ export const useNotifications = defineStore("notifications", () => {
       if (!t || requestGeneration !== generation) return;
       const result = await communityRequest<{ items: CommunityNotice[] }>(`/me/community/notifications?lang=${encodeURIComponent(locale)}`, t);
       if (requestGeneration !== generation) return;
-      items.value = result.items;
+      items.value = orderNotices(result.items);
       unread.value = result.items.filter(n => !n.read_at).length;
       loaded.value = true;
     } catch { /* 清單載不到時浮層顯示空態與重試 */ } finally { busy.value = false; }
@@ -52,6 +53,11 @@ export const useNotifications = defineStore("notifications", () => {
     unread.value = Math.max(0, unread.value - 1);
     try { const t = await token(); if (t) await communityRequest("/me/community/notifications/read", t, "POST", { id: notice.id }); } catch { /* 下一次輪詢修正 */ }
   }
+  /** Leave for an off-site notice in the same tab once the read mark is sent (or has had a moment to be). */
+  async function follow(notice: CommunityNotice): Promise<void> {
+    await Promise.race([read(notice), new Promise(resolve => setTimeout(resolve, 800))]);
+    leave.to(notice.path);
+  }
   async function readAll(): Promise<void> {
     const now = Date.now();
     for (const n of items.value) if (!n.read_at) n.read_at = now;
@@ -60,8 +66,37 @@ export const useNotifications = defineStore("notifications", () => {
   }
 
   watch(() => session.me?.accountNumId ?? null, () => reset());
-  return { unread, items, loaded, busy, refresh, load, read, readAll };
+  return { unread, items, loaded, busy, refresh, load, read, follow, readAll };
 });
+
+/** Same-tab navigation off the site; a seam so tests can watch where a notice leads. */
+export const leave = { to: (url: string) => { window.location.assign(url); } };
+
+/**
+ * HarperHarbor account notices (account action, appeal result) point at the appeal page on the
+ * HarperHarbor console, an absolute https link; every other notice is a path on this site.
+ */
+export function isExternalNotice(n: CommunityNotice): boolean {
+  return isEnforcementKind(n.kind) && /^https:\/\//.test(n.path);
+}
+/** An unread account notice stays on top and carries the warning stripe; once read it is an ordinary notice. */
+export function isPinnedNotice(n: CommunityNotice): boolean {
+  return isEnforcementKind(n.kind) && !n.read_at;
+}
+/** Pinned notices first, otherwise the server's newest-first order. */
+export function orderNotices(list: CommunityNotice[]): CommunityNotice[] {
+  return [...list].sort((a, b) => Number(isPinnedNotice(b)) - Number(isPinnedNotice(a)));
+}
+/** The line under the title and the call to action, for notices that have them. */
+export function noticeDetail(n: CommunityNotice): { body: string; cta: string } | null {
+  const t = i18n.global.t;
+  if (n.kind === "enforcement_notice") {
+    const deadline = enforcementDeadline(n.extra?.deadline);
+    return { body: deadline ? t("enforcement.reason.referral_abuse.notification", { deadline: deadline + t("enforcement.deadlineZone") }) : "", cta: t("enforcement.notification.cta") };
+  }
+  if (n.kind === "enforcement_result") return { body: t("enforcement.result.notification.body"), cta: "" };
+  return null;
+}
 
 /** Quote a card name the way each language does; vue-i18n keeps the brackets out of the translations. */
 function quote(locale: string, name: string): string {
@@ -82,6 +117,8 @@ export function noticeText(n: CommunityNotice): string {
   const actor = n.actor?.name ?? "";
   const extra = n.extra ?? {};
   const count = Number(extra.count ?? 1);
+  if (n.kind === "enforcement_notice") return t("enforcement.notification.title");
+  if (n.kind === "enforcement_result") return t(extra.decision === "revoked" ? "enforcement.result.subject.revoked" : "enforcement.result.subject.maintained");
   if(n.kind==='review_result'&&extra.correction===true){
     const note=noticeNote(extra.note),reward=extra.rewardKept===true;
     const key='community.noticeText.review_corrected'+(!card?'_plain':note?'_note':'')+(reward?'_reward':'');

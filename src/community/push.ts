@@ -7,6 +7,7 @@ import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
 import { updateTitle } from "../updates";
 import { noticeNote } from "../../shared/notice-note";
+import { enforcementDeadline, isEnforcementKind } from "../../shared/enforcement-notice";
 
 /**
  * 瀏覽器推播。
@@ -39,6 +40,8 @@ type Copy = {
   sukiTitle: string; sukiHungry: string; sukiPostcard: string;
   /** 分享活動：只說結果，不提金額與發放方式；理由在活動頁看 */
   share: Record<"share_needs_info" | "share_approved" | "share_rejected" | "share_paid" | "share_queued", string>;
+  /** HarperHarbor 平台的帳號通知：平台口吻（蘇綺不說），標題帶 HarperHarbor；字照 docs/studio/tasks/2026-10-30-enforcement-notice-appeal/copy.md C、E2 */
+  enforcement: { title: string; notice: string; zone: string; maintained: string; revoked: string; result: string };
 };
 const copy: Record<PushLocale, Copy> = {
   "zh-Hant": {
@@ -53,6 +56,7 @@ const copy: Record<PushLocale, Copy> = {
     shipped: "你回報的事已經處理好了：{title}", generic: "有新的通知",
     sukiTitle: "蘇綺", sukiHungry: "肚子餓了……今晚講一個故事給我聽好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那邊的人在問你什麼時候回去～",
     share: { share_needs_info: "你的分享申請需要補充資料", share_approved: "你的分享申請通過了", share_rejected: "你的分享申請沒有通過", share_paid: "分享獎勵已入帳", share_queued: "分享獎勵排隊發放中" },
+    enforcement: { title: "HarperHarbor 帳號處置通知", notice: "你的推薦碼出現異常，我們已採取處置。{deadline}前可以申訴。", zone: "（台北時間）", maintained: "申訴結果：維持原處置", revoked: "申訴結果：處置已撤銷", result: "點開查看我們的回覆。" },
   },
   "zh-Hans": {
     title: siteName("zh-Hans"), reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
@@ -66,6 +70,7 @@ const copy: Record<PushLocale, Copy> = {
     shipped: "你反馈的事已经处理好了：{title}", generic: "有新的通知",
     sukiTitle: "苏绮", sukiHungry: "肚子饿了……今晚讲一个故事给我听好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那边的人在问你什么时候回去～",
     share: { share_needs_info: "你的分享申请需要补充资料", share_approved: "你的分享申请通过了", share_rejected: "你的分享申请没有通过", share_paid: "分享奖励已到账", share_queued: "分享奖励排队发放中" },
+    enforcement: { title: "HarperHarbor 账号处置通知", notice: "你的推荐码出现异常，我们已采取处置。{deadline}前可以申诉。", zone: "（北京时间）", maintained: "申诉结果：维持原处置", revoked: "申诉结果：处置已撤销", result: "点开查看我们的回复。" },
   },
   en: {
     title: SITE_NAME, reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
@@ -79,6 +84,7 @@ const copy: Record<PushLocale, Copy> = {
     shipped: "What you reported is now live: {title}", generic: "You have a new notification",
     sukiTitle: "Suki", sukiHungry: "I'm hungry… tell me a story tonight?", sukiPostcard: "I took a trip into the world of {card}. Everyone there is asking when you'll be back~",
     share: { share_needs_info: "Your share submission needs more information", share_approved: "Your share submission was approved", share_rejected: "Your share submission was not approved", share_paid: "Your share reward has arrived", share_queued: "Your share reward is in the queue" },
+    enforcement: { title: "HarperHarbor account action notice", notice: "We found unusual activity on your referral code and took action. You can appeal until {deadline}.", zone: " (UTC+8)", maintained: "Appeal result: the action stands", revoked: "Appeal result: the action was withdrawn", result: "Open to read our reply." },
   },
   ja: {
     title: SITE_NAME, reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
@@ -92,6 +98,7 @@ const copy: Record<PushLocale, Copy> = {
     shipped: "ご報告いただいた件が反映されました：{title}", generic: "新しいお知らせがあります",
     sukiTitle: "スキ", sukiHungry: "おなかすいた……今夜、お話ひとつ聞かせてくれる？", sukiPostcard: "{card}の世界をひとまわりしてきたよ。みんな、あなたはいつ戻るのって聞いてた～",
     share: { share_needs_info: "シェアの申請に追加の情報が必要です", share_approved: "シェアの申請が承認されました", share_rejected: "シェアの申請は承認されませんでした", share_paid: "シェア特典が付与されました", share_queued: "シェア特典は順番待ちです" },
+    enforcement: { title: "HarperHarbor アカウント対応のお知らせ", notice: "紹介コードに異常が見つかり、対応を行いました。{deadline}まで異議を申し立てられます。", zone: "（UTC+8）", maintained: "異議申し立ての結果：対応は維持されます", revoked: "異議申し立ての結果：対応を取り消しました", result: "タップして回答を確認できます。" },
   },
   ko: {
     title: SITE_NAME, reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
@@ -105,9 +112,21 @@ const copy: Record<PushLocale, Copy> = {
     shipped: "제보하신 내용이 반영되었습니다: {title}", generic: "새 알림이 있습니다",
     sukiTitle: "스키", sukiHungry: "배고파… 오늘 밤에 이야기 하나 들려줄래?", sukiPostcard: "{card}의 세계에 잠깐 다녀왔어. 다들 너 언제 돌아오냐고 묻더라~",
     share: { share_needs_info: "공유 신청에 추가 자료가 필요해요", share_approved: "공유 신청이 승인되었어요", share_rejected: "공유 신청이 승인되지 않았어요", share_paid: "공유 보상이 지급되었어요", share_queued: "공유 보상이 지급 대기 중이에요" },
+    enforcement: { title: "HarperHarbor 계정 조치 안내", notice: "추천 코드에서 이상 징후를 발견해 조치했어요. {deadline}까지 이의를 신청할 수 있어요.", zone: " (UTC+8)", maintained: "이의 신청 결과: 조치 유지", revoked: "이의 신청 결과: 조치 취소", result: "눌러서 답변을 확인하세요." },
   },
 };
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ""));
+/** The browser notification's title: the site name, except where someone else is speaking (Suki, the HarperHarbor platform). */
+export function pushTitle(row: Pick<Row, "kind" | "extra">, locale: PushLocale): string {
+  const c = copy[locale];
+  if (row.kind === "suki_recall") return c.sukiTitle;
+  if (row.kind === "enforcement_notice") return c.enforcement.title;
+  if (row.kind === "enforcement_result") {
+    const extra = row.extra ? (JSON.parse(row.extra) as Record<string, unknown>) : {};
+    return extra.decision === "revoked" ? c.enforcement.revoked : c.enforcement.maintained;
+  }
+  return c.title;
+}
 /** The sentence a browser notification and a Discord DM show; mirrors noticeText on the website. */
 export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor_handle" | "card_names">, locale: PushLocale): string {
   const c = copy[locale];
@@ -132,6 +151,11 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
     return fill(note ? (update ? c.rejectedUpdateNote : c.rejectedNote) : update ? c.rejectedUpdate : c.rejected, { card, note });
   }
   if (Object.hasOwn(c.share, row.kind)) return c.share[row.kind as keyof Copy["share"]];
+  if (row.kind === "enforcement_notice") {
+    const deadline = enforcementDeadline(extra.deadline);
+    return deadline ? fill(c.enforcement.notice, { deadline: deadline + c.enforcement.zone }) : c.enforcement.title;
+  }
+  if (row.kind === "enforcement_result") return c.enforcement.result;
   if (row.kind === "suki_recall") return extra.variant === "postcard" && card ? fill(c.sukiPostcard, { card }) : c.sukiHungry;
   if (row.kind === "comment_like" && actor && card) return count > 1 ? fill(c.likes, { actor, card, others: count - 1 }) : fill(c.like, { actor, card });
   if (row.kind === "registration_pack") return Number(extra.granted) > 0 ? fill(c.packCount, { count: Number(extra.granted) }) : c.pack;
@@ -203,12 +227,13 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
     }
     if(visibility.newIds.has(row.id)&&!visibility.readable.has(row.id))row.card_names=null;
     const subs = (await env.DB.prepare("SELECT id,endpoint,p256dh,auth,locale,failures FROM push_subscriptions WHERE member_id=?").bind(row.member_id).all<Sub>()).results;
-    const site = row.path.startsWith("/") ? row.path : "/me/community";
+    // A platform account notice links off-site (the HarperHarbor console); the push opens the notification list, where it sits on top.
+    const site = row.path.startsWith("/") ? row.path : isEnforcementKind(row.kind) ? "/me/notifications" : "/me/community";
     for (const sub of subs) {
       const locale = pushLocale(sub.locale);
       let status = 0;
       try {
-        status = await send({ endpoint: sub.endpoint, expirationTime: null, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: row.kind === "suki_recall" ? copy[locale].sukiTitle : copy[locale].title, body: pushLine(row, locale), path: site, tag: row.id }, env);
+        status = await send({ endpoint: sub.endpoint, expirationTime: null, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: pushTitle(row, locale), body: pushLine(row, locale), path: site, tag: row.id }, env);
       } catch { status = 0; }
       if (status >= 200 && status < 300) {
         sent++;

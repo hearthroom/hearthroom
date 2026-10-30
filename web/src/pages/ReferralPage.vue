@@ -177,6 +177,7 @@ onMounted(() => {
             <li v-if="data.terms.firstPercent > 0 || data.terms.rebatePercent > 0 || data.terms.inviteePercent > 0">{{ $t("referral.rule.beforeCode") }}</li>
             <li v-if="data.terms.inviteePercent > 0">{{ $t("referral.rule.invitee", { percent: data.terms.inviteePercent }) }}</li>
             <li>{{ $t("referral.rule.refund") }}</li>
+            <li>{{ $t("referral.rule.fair") }}</li>
             <li>{{ $t("referral.rule.scope") }}</li>
           </ul>
         </section>

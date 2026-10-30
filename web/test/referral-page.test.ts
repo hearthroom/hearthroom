@@ -189,3 +189,12 @@ it.each([0, 30])('keeps the friend gift after both inviter rewards become zero (
   expect(root.querySelector('.referral__rules')?.textContent).not.toContain(String(i18n.global.t('referral.rule.permanent')));
   expect(root.querySelector('[data-testid="inviter-bonus"]')).toBeNull();
 });
+
+it('states the real-friends rule right after the refund rule', async () => {
+  mocks.summary.mockResolvedValue(page());
+  await mount();
+  const rules = [...root.querySelectorAll('.referral__rules li')].map(li => li.textContent!.trim());
+  const refund = rules.indexOf(String(i18n.global.t('referral.rule.refund')));
+  expect(refund).toBeGreaterThanOrEqual(0);
+  expect(rules[refund + 1]).toBe(String(i18n.global.t('referral.rule.fair')));
+});

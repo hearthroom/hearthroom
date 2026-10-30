@@ -14,6 +14,7 @@ const METRICS = {
     label:'operation', operations:['read','submit','cancel'], outcomes:['complete','pending','conflict','error'],
   },
   review_play: {name:'hearthroom_review_play_checks_total',help:'Fresh issuer review playback authorization checks.',label:'operation',operations:['admission'],outcomes:['allow','denied','unavailable']},
+  enforcement_notice: {name:'hearthroom_enforcement_notices_total',help:'Harbor platform account notices (account action, appeal result) dropped into member notifications; dry_run is the language lookup.',label:'operation',operations:['notice','result','dry_run'],outcomes:['delivered','duplicate','no_member','dry_run','denied','invalid','error']},
   card_update: {
     name:'hearthroom_card_update_notifications_total',
     help:'Card update publication events and notification cooldown admission blocks; queued counts events, not device delivery.',

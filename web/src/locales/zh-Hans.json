@@ -1917,6 +1917,7 @@
   "referral.rule.beforeCode": "好友填写推荐码前的充值也会计入",
   "referral.rule.invitee": "好友首次充值另得 {percent}% 积分",
   "referral.rule.refund": "好友退款的那一笔，奖励会收回",
+  "referral.rule.fair": "邀请奖励限邀请真实好友加入；集中注册、由同一组设备操作的账号不发放奖励，我们会停用推荐码并收回奖励",
   "referral.rule.scope": "奖励积分仅可用于角色对话",
   "referral.redeemTitle": "填写推荐码",
   "referral.redeemHelp": "{date} 前可填写一次，填写后无法更改",
@@ -4001,5 +4002,12 @@
   "preset.editor.tab.settings.alert": "有设置需要处理",
   "preset.editor.tabs.label": "编辑器分页",
   "preset.editor.paramsBlocked": "{names} 的值不在可接受的范围内，改好才能保存。",
-  "preset.editor.paramsBlocked.go": "前往修改"
+  "preset.editor.paramsBlocked.go": "前往修改",
+  "enforcement.notification.title": "HarperHarbor 账号处置通知",
+  "enforcement.reason.referral_abuse.notification": "你的推荐码出现异常，我们已采取处置。{deadline}前可以申诉。",
+  "enforcement.notification.cta": "查看处置",
+  "enforcement.deadlineZone": "（北京时间）",
+  "enforcement.result.subject.maintained": "申诉结果：维持原处置",
+  "enforcement.result.subject.revoked": "申诉结果：处置已撤销",
+  "enforcement.result.notification.body": "点开查看我们的回复。"
 }

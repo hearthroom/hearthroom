@@ -1917,6 +1917,7 @@
   "referral.rule.beforeCode": "友だちがコードを入力する前のチャージも対象です",
   "referral.rule.invitee": "友だちは初回チャージで {percent}% 追加",
   "referral.rule.refund": "友だちが返金を受けたチャージの特典は回収されます",
+  "referral.rule.fair": "紹介特典は実在の友だちを招待した場合に限ります。同じ端末から集中して作成されたアカウントには特典を付与せず、紹介コードの停止や特典の回収を行うことがあります",
   "referral.rule.scope": "特典ポイントはキャラクターとの会話に使えます",
   "referral.redeemTitle": "紹介コードを入力",
   "referral.redeemHelp": "{date} までに 1 回だけ入力でき、あとから変更できません",
@@ -4001,5 +4002,12 @@
   "preset.editor.tab.settings.alert": "確認が必要な設定があります",
   "preset.editor.tabs.label": "エディターのセクション",
   "preset.editor.paramsBlocked": "{names} の値が受け付けられる範囲外です。直すと保存できます。",
-  "preset.editor.paramsBlocked.go": "修正する"
+  "preset.editor.paramsBlocked.go": "修正する",
+  "enforcement.notification.title": "HarperHarbor アカウント対応のお知らせ",
+  "enforcement.reason.referral_abuse.notification": "紹介コードに異常が見つかり、対応を行いました。{deadline}まで異議を申し立てられます。",
+  "enforcement.notification.cta": "内容を見る",
+  "enforcement.deadlineZone": "（UTC+8）",
+  "enforcement.result.subject.maintained": "異議申し立ての結果：対応は維持されます",
+  "enforcement.result.subject.revoked": "異議申し立ての結果：対応を取り消しました",
+  "enforcement.result.notification.body": "タップして回答を確認できます。"
 }

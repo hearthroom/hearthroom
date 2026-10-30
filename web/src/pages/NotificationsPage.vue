@@ -12,7 +12,7 @@ import AccountIcon from "@/components/AccountIcon.vue";
 import MascotSay from "@/components/MascotSay.vue";
 import { communityRequest, type CommunityNotice, type CommunityView } from "@/lib/community";
 import { pageTitle } from "@/lib/i18n";
-import { noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
+import { isExternalNotice, isPinnedNotice, noticeDetail, noticeText, noticeUpdateNote, useNotifications } from "@/lib/notifications";
 import { disablePush, enablePush, pushConfig, pushState, pushSupported, type PushConfig, type PushState } from "@/lib/push";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -61,6 +61,12 @@ function togglePush() {
   void run(async () => { push.value = push.value === "on" ? await disablePush(await token()) : await enablePush(token, locale.value, config.value); });
 }
 function pick(n: CommunityNotice) { void store.read(n); }
+/** An off-site notice (HarperHarbor console) leaves in the same tab after the read mark; a new-tab click just marks it read. */
+function pickExternal(n: CommunityNotice, e: MouseEvent) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) { void store.read(n); return; }
+  e.preventDefault();
+  void store.follow(n);
+}
 watch(()=>[route.hash,store.items],async()=>{
  let id='';try{if(route.hash.startsWith('#notice-'))id=decodeURIComponent(route.hash.slice(8));}catch{return;}
  const n=store.items.find(n=>n.id===id);if(!n||!noticeUpdateNote(n))return;
@@ -87,7 +93,13 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
       </div>
       <ul v-else class="notices__list">
         <li v-for="n in store.items" :key="n.id" :id="'notice-'+n.id">
-          <RouterLink :to="lp(n.path)" class="notices__item" :class="{ 'notices__item--unread': !n.read_at }" @click="pick(n)">
+          <a v-if="isExternalNotice(n)" :href="n.path" rel="noopener" class="notices__item notices__item--platform" :class="{ 'notices__item--unread': !n.read_at, 'notices__item--pinned': isPinnedNotice(n) }" @click="pickExternal(n, $event)">
+            <span class="notices__title">{{ noticeText(n) }}<AccountIcon name="external" class="notices__out" /></span>
+            <span v-if="noticeDetail(n)?.body" class="notices__body">{{ noticeDetail(n)!.body }}</span>
+            <span v-if="noticeDetail(n)?.cta" class="notices__cta">{{ noticeDetail(n)!.cta }}</span>
+            <small>{{ when(n) }} · {{ t(n.read_at ? "community.read" : "community.unread") }}</small>
+          </a>
+          <RouterLink v-else :to="lp(n.path)" class="notices__item" :class="{ 'notices__item--unread': !n.read_at }" @click="pick(n)">
             <span>{{ noticeText(n) }}</span>
             <small>{{ when(n) }} · {{ t(n.read_at ? "community.read" : "community.unread") }}</small>
           </RouterLink>
@@ -141,6 +153,12 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
 .notices__item:hover { background: var(--line); }
 .notices__item--unread { background: var(--accent-tint); }
 .notices__item small { color: var(--text-3); font-size: 12px; }
+/* HarperHarbor 帳號通知：標題加粗、行尾離站箭頭；未讀時置頂並在未讀底上疊 3px 警示色條（inset 陰影，不推動內距）。 */
+.notices__title { font-weight: 600; overflow-wrap: anywhere; }
+.notices__out { display: inline-block; width: 14px; height: 14px; margin-inline-start: var(--s-1); vertical-align: -2px; color: var(--text-2); }
+.notices__body { color: var(--text-2); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.notices__cta { color: var(--accent-text); font-size: 13px; }
+.notices__item--pinned { box-shadow: inset 3px 0 0 var(--warning-text); }
 .notices__toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); min-height: 44px; border: 0; border-bottom: 1px solid var(--line-strong); background: transparent; color: var(--text); text-align: start; cursor: pointer; padding: var(--s-3) 0; }
 .notices__toggle strong { color: var(--text-3); flex: none; }
 .notices__toggle[aria-pressed="true"] strong { color: var(--accent-text); }

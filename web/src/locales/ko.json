@@ -1917,6 +1917,7 @@
   "referral.rule.beforeCode": "친구가 코드를 입력하기 전에 한 충전도 포함돼요",
   "referral.rule.invitee": "친구는 첫 충전 시 {percent}% 추가 지급",
   "referral.rule.refund": "친구가 환불받은 충전의 보상은 회수됩니다",
+  "referral.rule.fair": "추천 보상은 실제 친구를 초대한 경우에만 지급돼요. 같은 기기에서 한꺼번에 만든 계정에는 보상을 지급하지 않으며, 추천 코드를 중지하고 보상을 회수할 수 있어요",
   "referral.rule.scope": "보상 포인트는 캐릭터 대화에 사용할 수 있습니다",
   "referral.redeemTitle": "추천 코드 입력",
   "referral.redeemHelp": "{date}까지 한 번 입력할 수 있으며, 이후 변경할 수 없습니다",
@@ -4001,5 +4002,12 @@
   "preset.editor.tab.settings.alert": "확인이 필요한 설정이 있습니다",
   "preset.editor.tabs.label": "편집기 구역",
   "preset.editor.paramsBlocked": "{names} 값이 허용 범위를 벗어났습니다. 고쳐야 저장할 수 있습니다.",
-  "preset.editor.paramsBlocked.go": "수정하러 가기"
+  "preset.editor.paramsBlocked.go": "수정하러 가기",
+  "enforcement.notification.title": "HarperHarbor 계정 조치 안내",
+  "enforcement.reason.referral_abuse.notification": "추천 코드에서 이상 징후를 발견해 조치했어요. {deadline}까지 이의를 신청할 수 있어요.",
+  "enforcement.notification.cta": "자세히 보기",
+  "enforcement.deadlineZone": " (UTC+8)",
+  "enforcement.result.subject.maintained": "이의 신청 결과: 조치 유지",
+  "enforcement.result.subject.revoked": "이의 신청 결과: 조치 취소",
+  "enforcement.result.notification.body": "눌러서 답변을 확인하세요."
 }

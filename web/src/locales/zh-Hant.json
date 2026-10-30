@@ -1917,6 +1917,7 @@
   "referral.rule.beforeCode": "朋友填寫推薦碼前的儲值也會計入",
   "referral.rule.invitee": "朋友首次儲值另得 {percent}% 積分",
   "referral.rule.refund": "朋友退款的那一筆，獎勵會收回",
+  "referral.rule.fair": "邀請獎勵限邀請真實朋友加入；集中註冊、由同一組裝置操作的帳號不發放獎勵，我們會停用推薦碼並收回獎勵",
   "referral.rule.scope": "獎勵積分僅可用於角色對話",
   "referral.redeemTitle": "填寫推薦碼",
   "referral.redeemHelp": "{date} 前可填寫一次，填寫後無法更改",
@@ -4001,5 +4002,12 @@
   "preset.editor.tab.settings.alert": "有設定需要處理",
   "preset.editor.tabs.label": "編輯器分頁",
   "preset.editor.paramsBlocked": "{names} 的值不在可接受的範圍內，改好才能儲存。",
-  "preset.editor.paramsBlocked.go": "前往修改"
+  "preset.editor.paramsBlocked.go": "前往修改",
+  "enforcement.notification.title": "HarperHarbor 帳號處置通知",
+  "enforcement.reason.referral_abuse.notification": "你的推薦碼出現異常，我們已採取處置。{deadline}前可以申訴。",
+  "enforcement.notification.cta": "查看處置",
+  "enforcement.deadlineZone": "（台北時間）",
+  "enforcement.result.subject.maintained": "申訴結果：維持原處置",
+  "enforcement.result.subject.revoked": "申訴結果：處置已撤銷",
+  "enforcement.result.notification.body": "點開查看我們的回覆。"
 }
