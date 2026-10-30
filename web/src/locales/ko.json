@@ -3997,6 +3997,6 @@
   "preset.editor.pickHint": "왼쪽에서 항목을 골라 편집하거나 새 항목을 추가할 수 있습니다.",
   "preset.editor.tab.settings.alert": "확인이 필요한 설정이 있습니다",
   "preset.editor.tabs.label": "편집기 구역",
-  "preset.editor.paramsBlocked": "{names} 값이 허용 범위를 벗어났습니다. 고치면 저장할 수 있습니다.",
-  "preset.editor.paramsBlocked.go": "설정으로 이동"
+  "preset.editor.paramsBlocked": "{names} 값이 허용 범위를 벗어났습니다. 고쳐야 저장할 수 있습니다.",
+  "preset.editor.paramsBlocked.go": "수정하러 가기"
 }
