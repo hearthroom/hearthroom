@@ -148,6 +148,8 @@ export class SukiPet {
   /** 桌機站著讓路時：她自己走到或使用者拖到的 x（null＝沒讓開），deskAway＝這一排沒空位、暫時淡出 */
   private deskX: number | null = null;
   private deskAway = false;
+  /** 淡出後這一排從什麼時候開始有空位：卡片格捲動時列與列之間的空隙一閃而過，要空出一陣子才回來，不然她會閃 */
+  private deskClearAt: number | null = null;
   private releasePhone() {
     const original=this.phoneOriginal;
     this.closeMenu();this.phoneOriginal=null;this.phoneRelocateAt=null;this.el.inert=false;this.sidebarDocked=false;this.sidebarAwake=false;
@@ -230,14 +232,19 @@ export class SukiPet {
     // 左右界線跟放下時的夾邊一樣，貼邊放的她底下沒東西就不動
     const x=space?deskSpot({minX:0,maxX:innerWidth-b.width,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
     this.deskX=x===original?null:original;
-    if(x===null){this.deskAway=true;this.fadeTo(null);return;}
+    if(x===null){this.deskAway=true;this.deskClearAt=null;this.fadeTo(null);return;}
     if(this.deskAway){
+      const now=performance.now();
+      if(this.deskClearAt===null)this.deskClearAt=now;
+      if(now-this.deskClearAt<300)return;
       if(this.fadeTo({x,y:this.pos.y}))return;
+      this.deskClearAt=null;
       this.deskAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");
     }else if(x!==this.pos.x)this.place({x,y:this.pos.y});
   }
   /** 讓路暫停時（選單、收邊、別的避讓接手）：淡出先解除，原位記著 */
   private releaseDesk() {
+    this.deskClearAt=null;
     if(this.deskAway&&!this.phoneOriginal){this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");}
     this.deskAway=false;
   }

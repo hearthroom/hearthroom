@@ -34,12 +34,13 @@ it('壓到金額：沿這一排讓開，不存位置；金額捲走了回原位'
 });
 
 it('這一排滿了：淡出、點擊穿過；空出來在原位出現', () => {
+  let now = 1000; vi.spyOn(performance, 'now').mockImplementation(() => now);
   space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
   p.updateDesk();
   expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
   expect(p.el.inert).toBe(true);
   space = { top: 60, bottom: 900, obstacles: [] };
-  p.updateDesk();
+  p.updateDesk(); now += 300; p.updateDesk();
   expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);
   expect(p.el.inert).toBe(false);
   expect(p.pos.x).toBe(1110);
@@ -117,4 +118,17 @@ it('桌機招呼泡泡蓋到關鍵數字：泡泡在視窗內左右挪開；挪�
   q.fitPopups();
   expect(q.bubble.hidden).toBe(true);
   amt.remove();
+});
+
+it('捲過卡片列之間的短空隙不閃：淡出後要空出 300ms 才回來', () => {
+  let now = 1000; vi.spyOn(performance, 'now').mockImplementation(() => now);
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
+  p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
+  space = { top: 60, bottom: 900, obstacles: [] };
+  now = 1100; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
+  now = 1200; p.updateDesk();
+  space = { top: 60, bottom: 900, obstacles: [] };
+  now = 1300; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
+  now = 1650; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);
 });
