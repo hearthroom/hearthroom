@@ -24,7 +24,7 @@ vi.mock("../src/lib/presets", async (original) => ({
   ...(await original<typeof import("../src/lib/presets")>()),
   listPresets: mocks.list, fetchPreset: mocks.detail, fetchRevision: mocks.revision, analyzePreset: mocks.analyze,
   createPreset: mocks.create, revisePreset: mocks.revise, deletePreset: mocks.remove, archivePreset: mocks.archive,
-  previewImport: mocks.preview, updateImportSelection: mocks.selection, confirmImport: mocks.confirmImport, exportRevision: mocks.exportRevision, fetchModelOptions: mocks.models,
+  previewImport: mocks.preview, updateImportSelection: mocks.selection, confirmImport: mocks.confirmImport, exportRevision: mocks.exportRevision, fetchModelCatalog: mocks.models,
 }));
 
 let app: ReturnType<typeof createApp> | undefined;
@@ -859,6 +859,21 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     expect(shown("[data-testid=entry-search]")).toBe(false);
     tab("entries").click(); await flush();
     expect($<HTMLInputElement>("[data-testid=preset-title]").value).toBe("改過的名字");
+  });
+
+  it("測試過的模型：目錄只列系列與模型兩層；選了存 series:／model:，隨存檔送出", async () => {
+    mocks.models.mockResolvedValueOnce([{ group: "DeepSeek", families: ["DeepSeek V4 Pro"] }]);
+    await open();
+    expect(mocks.models).toHaveBeenCalledWith("tok");
+    tab("settings").click(); await flush();
+    const input = $<HTMLInputElement>("#preset-models");
+    input.focus(); input.dispatchEvent(new Event("focus")); await flush();
+    expect($$("[role=option]").map((o) => o.textContent?.trim())).toEqual([`DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4 Pro"]);
+    $$("[role=option]")[0]!.click(); await flush();
+    expect($$("[data-testid=model-chip]").map((c) => c.textContent?.trim())).toEqual([t("preset.models.series", { name: "DeepSeek" })]);
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush();
+    expect(mocks.revise.mock.calls[0]![2].recommendedModels).toEqual(["series:DeepSeek"]);
   });
 
   it("採樣值不合法時，預設設定分頁上有紅點", async () => {

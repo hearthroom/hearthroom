@@ -17,8 +17,8 @@ import { pageTitle } from "@/lib/i18n";
 import { dateTime, whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import {
-  analyzePreset, createPreset, fetchModelOptions, fetchPreset, fetchRevision, resultUnknown, revisePreset,
-  type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
+  analyzePreset, createPreset, fetchModelCatalog, fetchPreset, fetchRevision, resultUnknown, revisePreset,
+  type Compatibility, type ModelCatalogGroup, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
   adaptationId, inspectRows, withSelectionDefaults, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
@@ -32,6 +32,7 @@ import PresetParams from "@/components/preset/PresetParams.vue";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
 import PresetInspectDialog from "@/components/preset/PresetInspectDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
+import PresetModelPicker from "@/components/preset/PresetModelPicker.vue";
 import PresetToolReply from "@/components/preset/PresetToolReply.vue";
 import { anyParamInvalid, invalidParams, paramLabelKey } from "@/components/preset/preset-params";
 
@@ -49,7 +50,7 @@ const doc = ref<PresetDocument | null>(null);
 const savedDoc = ref<PresetDocument | null>(null);
 const title = ref("");
 const models = ref<string[]>([]);
-const modelOptions = ref<ModelOption[]>([]);
+const modelCatalog = ref<ModelCatalogGroup[]>([]);
 const saved = ref("");
 /** 這份草稿是以哪個版本為基準改的；存檔時拿它跟上游比，別處先存了就會知道 */
 const baseVersion = ref(0);
@@ -171,7 +172,7 @@ async function load() {
   loadError.value = "";
   try {
     const tk = await token();
-    void fetchModelOptions(tk).then((o) => { modelOptions.value = o; }).catch(() => {});
+    void fetchModelCatalog(tk).then((o) => { modelCatalog.value = o; }).catch(() => {});
     if (!presetId.value) {
       detail.value = null;
       savedVersion.value = 0;
@@ -389,10 +390,6 @@ function pickProvided(key: string) {
   enterEntry(".preset-editor__provided h2");
 }
 
-function toggleModel(value: string, on: boolean) {
-  models.value = on ? [...new Set([...models.value, value])] : models.value.filter((m) => m !== value);
-}
-const modelLabel = (value: string) => modelOptions.value.find((o) => o.value === value)?.label ?? value;
 
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
 onBeforeRouteLeave(async () => {
@@ -545,13 +542,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <fieldset class="preset-editor__fieldset" :disabled="readOnly">
         <div class="field">
           <label for="preset-models">{{ $t("preset.editor.models") }}</label>
-          <div class="preset-editor__models">
-            <button v-for="m in models" :key="m" type="button" class="chip chip--on" :aria-label="`${modelLabel(m)} ×`" @click="toggleModel(m, false)">{{ modelLabel(m) }} ×</button>
-            <select id="preset-models" class="input preset-editor__modelPick" :value="''" @change="toggleModel(($event.target as HTMLSelectElement).value, true); ($event.target as HTMLSelectElement).value = ''">
-              <option value="" disabled>{{ $t("preset.editor.models.placeholder") }}</option>
-              <option v-for="o in modelOptions.filter((o) => !models.includes(o.value))" :key="o.value" :value="o.value">{{ o.label }}</option>
-            </select>
-          </div>
+          <PresetModelPicker v-model="models" :groups="modelCatalog" input-id="preset-models" :disabled="readOnly" />
           <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
         </div>
         </fieldset>
@@ -631,10 +622,6 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__settings { display: grid; gap: var(--s-4); align-content: start; max-width: 760px; width: 100%; }
 .preset-editor__head .field { margin-bottom: 0; }
 .preset-editor__head .field > p { margin: 0; }
-.preset-editor__models { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); min-width: 0; }
-/* 原生下拉會撐到最長的選項那麼寬（模型名可能很長）：限制在欄位寬度內，名稱過長的已選模型自己換行 */
-.preset-editor__modelPick { flex: 1 1 160px; width: auto; min-width: 0; max-width: 100%; }
-.preset-editor__models .chip { max-width: 100%; height: auto; min-height: 26px; padding-block: 4px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .preset-editor__body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 .preset-editor__list, .preset-editor__detail, .preset-editor__section { min-width: 0; }
 .preset-editor__ghost { min-height: 320px; }

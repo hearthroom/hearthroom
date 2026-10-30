@@ -256,25 +256,23 @@ export async function copyPreset(token: string, presetId: string, title: string,
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/copy`, token, { title }, key));
 }
 
-export interface ModelOption { value: string; label: string }
+/** 模型目錄的兩層：系列（catalog 的 group）與它底下的模型（family）。線路（variants）不進「測試過的模型」。 */
+export interface ModelCatalogGroup { group: string; families: string[] }
 
 /**
- * 「測試過的模型」選單：存模型目錄裡穩定的 variant 代碼，顯示站上公開的模型名稱。
- * 只是標示，不限制能用在哪個模型；目錄裡已經沒有的舊代碼照樣留著。
+ * 「測試過的模型」選單的資料：存 `series:<系列>` 或 `model:<模型>`，名稱照目錄原字。
+ * 只是標示，不限制能用在哪個模型；目錄裡已經沒有的舊值照樣留著。
  */
-export async function fetchModelOptions(token: string): Promise<ModelOption[]> {
-  type Variant = { value?: string; name?: string };
-  const groups = await json<{ families?: { family?: string; variants?: Variant[] }[] }[]>(await get("/models", token));
-  const seen = new Map<string, ModelOption>();
-  for (const family of groups.flatMap((g) => g.families ?? [])) {
-    const variants = (family.variants ?? []).filter((v) => v.value);
-    for (const v of variants) {
-      if (seen.has(v.value!)) continue;
-      const label = variants.length > 1 && v.name ? `${family.family ?? ""} · ${v.name}` : family.family || v.name || v.value!;
-      seen.set(v.value!, { value: v.value!, label });
-    }
+export async function fetchModelCatalog(token: string): Promise<ModelCatalogGroup[]> {
+  const raw = await json<{ group?: string; families?: { family?: string }[] }[]>(await get("/models", token));
+  const out = new Map<string, Set<string>>();
+  for (const g of raw) {
+    if (!g.group) continue;
+    const families = out.get(g.group) ?? new Set<string>();
+    for (const f of g.families ?? []) if (f.family) families.add(f.family);
+    out.set(g.group, families);
   }
-  return [...seen.values()];
+  return [...out].map(([group, families]) => ({ group, families: [...families] }));
 }
 
 /* ---- 分享（P2）：公開、公開列表、喜愛與用過、檢舉 ---------------------------------------- */
