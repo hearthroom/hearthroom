@@ -3981,5 +3981,6 @@
   "preset.report.fields.summary": "적용되지 않는 설정 {n}개",
   "preset.toolReply.format.title": "답장 도구 형식",
   "preset.toolReply.format.hint": "프롬프트에서 답장 형식을 보강하고 싶다면 AI에게 이 형식으로 도구를 호출하도록 요청하면 됩니다. 도구 밖의 글은 답장에 표시되지 않습니다.",
-  "preset.toolReply.format.copyLabel": "답장 도구 형식 복사"
+  "preset.toolReply.format.copyLabel": "답장 도구 형식 복사",
+  "preset.params.temperature.high": "Temperature가 매우 높으면 일부 모델은 매우 길고 맥락이 이어지지 않는 글을 출력할 수 있습니다."
 }

@@ -581,3 +581,26 @@ describe("回覆工具格式（用工具回覆打開時顯示；PM 2026-10-30）
     expect($("[data-testid=preset-tool-format]")).toBeNull();
   });
 });
+
+describe("溫度偏高提示（owner 2026-10-30：只提示，不擋、不改值）", () => {
+  async function openWith(temperature: number) {
+    const d = doc(); (d.st as Record<string, unknown>).temperature = temperature;
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "turn" && e.identifier !== "script"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+
+  it("溫度大於 1.5 時欄位下面一行提示，數值不變", async () => {
+    await openWith(1.8);
+    const field = $("[data-testid=param-temperature]");
+    expect(field.querySelector("[data-testid=param-temperature-high]")!.textContent).toBe(t("preset.params.temperature.high"));
+    expect(field.querySelector<HTMLInputElement>("input[type=number]")!.value).toBe("1.8");
+  });
+
+  it("1.5 以下不提示", async () => {
+    await openWith(1.5);
+    expect($("[data-testid=param-temperature-high]")).toBeNull();
+  });
+});

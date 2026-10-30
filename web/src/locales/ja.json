@@ -3981,5 +3981,6 @@
   "preset.report.fields.summary": "反映されない設定 {n} 件",
   "preset.toolReply.format.title": "返信ツールの形式",
   "preset.toolReply.format.hint": "プロンプトで返信の形式を補強したいときは、この形式でツールを呼び出すようAIに求めることができます。ツール以外の文章は返信に表示されません。",
-  "preset.toolReply.format.copyLabel": "返信ツールの形式をコピー"
+  "preset.toolReply.format.copyLabel": "返信ツールの形式をコピー",
+  "preset.params.temperature.high": "Temperature がとても高いと、モデルによっては非常に長く、まとまりのない文章が出力されることがあります。"
 }

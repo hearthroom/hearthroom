@@ -3981,5 +3981,6 @@
   "preset.report.fields.summary": "{n} 项设置不生效",
   "preset.toolReply.format.title": "回复工具格式",
   "preset.toolReply.format.hint": "想在提示词里加强回复格式，可以要求 AI 照这个格式调用；工具以外的文字不会出现在回复里。",
-  "preset.toolReply.format.copyLabel": "复制回复工具格式"
+  "preset.toolReply.format.copyLabel": "复制回复工具格式",
+  "preset.params.temperature.high": "Temperature 很高时，部分模型可能输出很长、不连贯的文字。"
 }

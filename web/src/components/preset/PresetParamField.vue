@@ -15,6 +15,8 @@ const choices = computed(() => PARAM_CHOICES[props.param]);
 const invalid = computed(() => paramInvalid(props.doc, props.param));
 const label = computed(() => t(paramLabelKey(props.param)));
 const reasons = computed(() => (props.field?.reasonCodes ?? []).map((c) => fieldReason(c, props.field?.uiStatus, label.value, t, te)).filter(Boolean));
+// 溫度偏高只提示一句（owner 2026-10-30）：不擋存檔、不改值；套用與遊玩畫面都不提
+const temperatureHigh = computed(() => props.param === "temperature" && state.value.adopted && !invalid.value && Number(state.value.value) > 1.5);
 const id = `param-${props.param}`;
 
 function mode(custom: boolean) {
@@ -45,6 +47,7 @@ function setNumber(raw: string) {
       </template>
     </div>
     <p v-if="invalid" class="param__error">{{ $t("preset.params.rangeError", { param: label }) }}</p>
+    <p v-if="temperatureHigh" class="param__note" data-testid="param-temperature-high">{{ $t("preset.params.temperature.high") }}</p>
     <p v-for="text in state.adopted ? reasons : []" :key="text" class="param__note">{{ text }}</p>
   </div>
 </template>

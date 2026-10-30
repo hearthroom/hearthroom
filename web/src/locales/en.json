@@ -3981,5 +3981,6 @@
   "preset.report.fields.summary": "{n} setting has no effect | {n} settings have no effect",
   "preset.toolReply.format.title": "Reply tool format",
   "preset.toolReply.format.hint": "To reinforce the reply format in a prompt, ask the AI to call the tool like this; text outside the tool doesn't appear in the reply.",
-  "preset.toolReply.format.copyLabel": "Copy reply tool format"
+  "preset.toolReply.format.copyLabel": "Copy reply tool format",
+  "preset.params.temperature.high": "At a very high Temperature, some models may output very long, incoherent text."
 }
