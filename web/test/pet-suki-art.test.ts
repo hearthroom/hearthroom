@@ -30,7 +30,7 @@ it('捲出視野、沒有大小、被藏起來：不算', () => {
 
 it('啾啾、站名旁的小頭像、她自己、標了 data-pet-stays 的區塊：不算', () => {
   document.body.innerHTML = `<img class="x" src="/mascot/chuchu-heart.webp"><img class="x" src="/mascot/suki-mark.webp">
-    <div class="suki-pet"><img class="x" src="/mascot/suki-avatar.webp"></div><button class="suki-pet__idle"><img class="x" src="/mascot/suki-avatar.webp"></button>
+    <div class="suki-pet"><img class="x" src="/mascot/suki-avatar.webp"></div>
     <section data-pet-stays><img class="x" src="/mascot/home/pose-wave.webp"></section><img class="x" data-pet-stays src="/mascot/suki-avatar.webp">`;
   at('.x', new DOMRect(95, 100, 200, 200));
   expect(sukiArtInView()).toBe(false);

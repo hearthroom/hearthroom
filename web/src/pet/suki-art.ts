@@ -8,7 +8,7 @@
  */
 const ART = 'img[src*="/mascot/"]';
 const NOT_SUKI = /\/mascot\/(?:pet\/|chuchu|suki-mark)/;
-const STAYS = '.suki-pet,.suki-pet__idle,.suki-pet__catch,.suki-pet__tab,[data-pet-stays]';
+const STAYS = '.suki-pet,.suki-pet__catch,.suki-pet__tab,[data-pet-stays]';
 
 let at = -Infinity, cached = false;
 /** 每一格都會問：插圖不多，但捲動時還是每 200ms 才重量一次 */

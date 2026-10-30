@@ -1,12 +1,14 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {SukiPet,type PetOptions} from '../src/pet/pet-ui';
 type Point={x:number;y:number};
-type Harness={opts:PetOptions;pos:Point;tucked:boolean;el:HTMLElement;touch:HTMLElement;menuEl:HTMLElement;bubble:HTMLElement;idleButton:HTMLButtonElement;driver:object;restore:()=>Point|null;place:(p:Point)=>void;save:(p:Point)=>void;tuck:(side:'left'|'right',silent?:boolean)=>void;poke:(e:PointerEvent)=>void;drop:(e:PointerEvent,d:unknown)=>void;refit:()=>void;updateSidebar:()=>void;fitPopups:()=>void;daily:()=>void;act:()=>void;summon:()=>void;view:object;rig:object};
+type Harness={opts:PetOptions;pos:Point;tucked:boolean;el:HTMLElement;touch:HTMLElement;menuEl:HTMLElement;bubble:HTMLElement;driver:object;restore:()=>Point|null;place:(p:Point)=>void;save:(p:Point)=>void;tuck:(side:'left'|'right',silent?:boolean)=>void;poke:(e:PointerEvent)=>void;drop:(e:PointerEvent,d:unknown)=>void;refit:()=>void;updateClearance:()=>void;fitPopups:()=>void;daily:()=>void;act:()=>void;summon:()=>void;view:object;rig:object};
 const pets:SukiPet[]=[];
 afterEach(()=>{vi.clearAllTimers();vi.useRealTimers();for(const pet of pets.splice(0))pet.stop();localStorage.removeItem('suki.pet.pos');document.querySelectorAll('[data-qa04]').forEach(e=>e.remove());vi.unstubAllGlobals();vi.restoreAllMocks();});
 function setup(width=1440,rail=true){
  vi.useFakeTimers();vi.stubGlobal('innerWidth',width);vi.stubGlobal('innerHeight',900);
- const pet=new SukiPet({base:'',skin:'day',label:'Suki',height:220,line:k=>k,menu:()=>[{label:'Existing action',run:()=>{}}],sidebarBounds:()=>rail?{left:width-300,right:width-36,top:428,bottom:880}:null} as PetOptions);pets.push(pet);
+ const pet=new SukiPet({base:'',skin:'day',label:'Suki',height:220,line:k=>k,menu:()=>[{label:'Existing action',run:()=>{}}]} as PetOptions);pets.push(pet);
+ // 首頁右側欄：從邊上叫她回來時不落在側欄上
+ if(rail){const aside=document.createElement('aside');aside.className='home-sidebar';aside.dataset.qa04='';vi.spyOn(aside,'getBoundingClientRect').mockReturnValue(new DOMRect(width-300,428,264,452));document.body.append(aside);}
  const p=pet as unknown as Harness;p.driver={state:{talking:false}};
  Object.defineProperty(p.touch,'clientWidth',{configurable:true,value:146});Object.defineProperty(p.touch,'clientHeight',{configurable:true,value:220});
  vi.spyOn(p,'fitPopups').mockImplementation(()=>{});vi.spyOn(p,'daily').mockImplementation(()=>{});vi.spyOn(p,'act').mockImplementation(()=>{});
@@ -21,8 +23,8 @@ it.each(['left','right'] as const)('persists and restores the chosen stand after
  const p=setup();startAt(p,{x:576,y:405});dragToEdge(p,side);
  expect(p.tucked).toBe(true);const stored=localStorage.getItem('suki.pet.pos');
  const next=setup();const restored=next.restore();if(restored)next.place(restored);vi.runOnlyPendingTimers();
- next.poke({clientX:side==='left'?20:1420,clientY:445} as PointerEvent);next.updateSidebar();
- expect(next.pos).toEqual({x:576,y:405});expect(next.tucked).toBe(false);expect(next.idleButton.hidden).toBe(true);
+ next.poke({clientX:side==='left'?20:1420,clientY:445} as PointerEvent);next.updateClearance();
+ expect(next.pos).toEqual({x:576,y:405});expect(next.tucked).toBe(false);
  expect(stored).toContain('stand');
 });
 it('keeps the release position when the user pulls inward instead of choosing a system landing',()=>{
@@ -49,19 +51,9 @@ it('does not restore a resized choice over the actual following control',()=>{
  p.poke({clientX:1420,clientY:445} as PointerEvent);expect(p.tucked).toBe(true);expect(p.menuEl.hidden).toBe(false);
 });
 
-it('keeps a valid explicit desktop return visible in the homepage parking width',()=>{
- const p=setup(1000,false);p.opts.parkOnHomepage=()=>true;startAt(p,{x:400,y:300});dragToEdge(p,'right');p.updateSidebar();
- expect(p.idleButton.hidden).toBe(true);p.poke({clientX:980,clientY:340} as PointerEvent);p.updateSidebar();
- expect(p.pos).toEqual({x:400,y:300});expect(p.tucked).toBe(false);expect(p.idleButton.hidden).toBe(true);
-});
-
 it('preserves the last user stand while passive positions are saved',()=>{
  const p=setup();startAt(p,{x:576,y:405});p.save({x:700,y:600});
  expect(JSON.parse(localStorage.getItem('suki.pet.pos')!).stand).toEqual({x:.4,y:.45});
-});
-it('persists an explicit edge choice even while the default homepage parking policy is active',()=>{
- const p=setup(1000,false);p.opts.parkOnHomepage=()=>true;startAt(p,{x:400,y:300});dragToEdge(p,'right');
- const saved=JSON.parse(localStorage.getItem('suki.pet.pos')!);expect(saved.x).toBe(2);expect(saved.stand).toEqual({x:.4,y:1/3});
 });
 it('refits ordinary saved desktop coordinates on a narrower reload without replacing the preference',()=>{
  const p=setup(768,false);const preference=JSON.stringify({x:.9,y:.9});localStorage.setItem('suki.pet.pos',preference);const restored=p.restore()!;
@@ -75,9 +67,4 @@ it('does not replace a normalized stand with a one-time reload clamp before tuck
 it('clears the remembered desktop choice when the existing settings reset summons her',()=>{
  const p=setup(1440,false);startAt(p,{x:576,y:405});p.summon();
  expect(JSON.parse(localStorage.getItem('suki.pet.pos')!).stand).toBeUndefined();
-});
-it('distinguishes the parking caller whole-main bounds from a real rail on explicit return',()=>{
- const p=setup(1000);p.opts.parkOnHomepage=()=>true;p.opts.sidebarBounds=()=>({left:25,right:927,top:84,bottom:820});
- startAt(p,{x:400,y:585});dragToEdge(p,'right');p.poke({clientX:980,clientY:625} as PointerEvent);p.updateSidebar();
- expect(p.pos).toEqual({x:400,y:585});expect(p.tucked).toBe(false);expect(p.idleButton.hidden).toBe(true);
 });

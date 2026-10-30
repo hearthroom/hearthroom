@@ -94,9 +94,9 @@ it('卡片頁的版面避讓接手時，桌機讓路的淡出狀態一起放掉'
   vi.spyOn(p, 'box').mockImplementation(() => ({ left: p.pos.x, top: p.pos.y, width: 146, height: 220, right: p.pos.x + 146 }));
   p.pos = { x: 1110, y: 672 };
   space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
-  const q = p as unknown as { updateSidebar: () => void; deskAway: boolean };
-  q.updateSidebar(); expect(q.deskAway).toBe(true);
-  clearance = { top: 60, bottom: 900, obstacles: [] }; q.updateSidebar();
+  const q = p as unknown as { updateClearance: () => void; deskAway: boolean };
+  q.updateClearance(); expect(q.deskAway).toBe(true);
+  clearance = { top: 60, bottom: 900, obstacles: [] }; q.updateClearance();
   expect(q.deskAway).toBe(false);
 });
 

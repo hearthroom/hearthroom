@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -8,8 +8,7 @@ import { fetchPublicCampaigns, localized, type CampaignSummary } from "@/lib/cam
 import { fetchUpdates } from "@/lib/updates";
 import { fetchPosts, postPath } from "@/lib/blog";
 import { withLocale } from "@/router";
-import { sidebarBoundsKey, useSiteLinks } from "@/lib/site-links";
-import { type SidebarRect } from "@/lib/sidebar-clearance";
+import { useSiteLinks } from "@/lib/site-links";
 import { sidebarPosition, type SidebarPosition } from "@/lib/sidebar-position";
 import SiteLink from "./SiteLink.vue";
 
@@ -50,7 +49,6 @@ async function loadLatest() {
 }
 watch([locale, () => !!session.me], loadLatest, { immediate: true });
 
-const sidebarBounds = inject(sidebarBoundsKey, ref<SidebarRect | null>(null));
 const host = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
 let clearanceFrame = 0;
@@ -72,9 +70,6 @@ function measureClearance() {
   position = sidebarPosition({ scrollY: window.scrollY, naturalTop: natural.top, height,
     parentHeight: outer.offsetHeight, top: header + 24, bottom: bottomLimit }, position);
   inner.style.transform = `translateY(${position.offset}px)`;
-  const rect = inner.getBoundingClientRect();
-  const bounds = { left: rect.left, right: rect.right, top: Math.max(rect.top, header + 24), bottom: Math.min(rect.bottom, bottomLimit) };
-  sidebarBounds.value = bounds.bottom > bounds.top ? bounds : null;
 }
 function revealFocus(event: FocusEvent) {
   const target = event.target as HTMLElement;
@@ -95,7 +90,6 @@ onMounted(() => {
 });
 onUpdated(scheduleClearance);
 onBeforeUnmount(() => {
-  sidebarBounds.value = null;
   cancelAnimationFrame(clearanceFrame); sizeObserver?.disconnect();
   window.removeEventListener('scroll', scrollClearance); window.removeEventListener('resize', scheduleClearance);
   live = false; latestEpoch++;

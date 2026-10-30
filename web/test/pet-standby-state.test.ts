@@ -6,7 +6,7 @@ let space: PhoneClearance | null = null;
 vi.mock('../src/pet/standby-clearance', async (orig) => ({ ...(await orig<typeof import('../src/pet/standby-clearance')>()), phoneControls: () => space }));
 const { SukiPet } = await import('../src/pet/pet-ui');
 type Pet = { el: HTMLElement; tucked: boolean; peekS: number; side: string; pos: { x: number; y: number }; drag: unknown; standbyY: number | null; menuEl: HTMLElement;
-  driver: object; updateSidebar: () => void; updateStandby: () => void; save: (p: object, peeking?: boolean) => void; openFrom: (o: HTMLElement | null) => void };
+  driver: object; updateClearance: () => void; updateStandby: () => void; save: (p: object, peeking?: boolean) => void; openFrom: (o: HTMLElement | null) => void };
 let pet: InstanceType<typeof SukiPet>, p: Pet;
 const full = (top: number, bottom: number) => ({ left: 16, right: 374, top, bottom });
 

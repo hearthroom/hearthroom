@@ -22,5 +22,5 @@ export function homePhoneObstacles():SidebarRect[] {
  });
 }
 
-/** Keep the approved tablet lane ahead of the existing coarse/phone caller. */
-export const homePhoneMode=(width:number,coarse:boolean)=>(width<640||coarse)&&!(width>=640&&width<1080);
+/** 手機與觸控平板走手機避讓（跟其他頁一樣；首頁不另留平板的小頭像通道，owner 2026-10-30） */
+export const homePhoneMode=(width:number,coarse:boolean)=>width<640||coarse;

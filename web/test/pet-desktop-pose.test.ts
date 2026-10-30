@@ -5,7 +5,7 @@ afterEach(()=>{pet?.stop();vi.restoreAllMocks();vi.unstubAllGlobals();localStora
 function setup(mobile=false,reducedMotion=false){
  vi.stubGlobal('innerWidth',1440);vi.stubGlobal('innerHeight',900);
  pet=new SukiPet({base:'',skin:'day',label:'Suki',height:100,line:k=>k,mobile,reducedMotion} as PetOptions);
- const p=pet as unknown as {opts:PetOptions;tucked:boolean;side:string;flip:number;pos:{x:number;y:number};clipped:boolean;canvas:HTMLCanvasElement;touch:HTMLElement;el:HTMLElement;bubble:HTMLElement;idleButton:HTMLButtonElement;hit:{w:number;h:number;data:Uint8ClampedArray;names:string[]};rig:{params:Record<string,number>;kick:()=>void;model:{nodes:object[];size:number[]}};driver:{state:{look:number[]|null;talking:boolean};update:()=>void};view:{draw:()=>void;readRect:()=>{px:Uint8Array;w:number;h:number}};tuck:(side:'left'|'right',silent?:boolean)=>void;peekAt:(side:'left'|'right',pos:{x:number;y:number})=>void;drop:(e:PointerEvent,d:{shake:number})=>void;frame:(dt:number,now:number)=>void;region:(e:PointerEvent)=>string|null;playActivity:()=>void;brain:()=>void};
+ const p=pet as unknown as {opts:PetOptions;tucked:boolean;side:string;flip:number;pos:{x:number;y:number};clipped:boolean;canvas:HTMLCanvasElement;touch:HTMLElement;el:HTMLElement;bubble:HTMLElement;hit:{w:number;h:number;data:Uint8ClampedArray;names:string[]};rig:{params:Record<string,number>;kick:()=>void;model:{nodes:object[];size:number[]}};driver:{state:{look:number[]|null;talking:boolean};update:()=>void};view:{draw:()=>void;readRect:()=>{px:Uint8Array;w:number;h:number}};tuck:(side:'left'|'right',silent?:boolean)=>void;peekAt:(side:'left'|'right',pos:{x:number;y:number})=>void;drop:(e:PointerEvent,d:{shake:number})=>void;frame:(dt:number,now:number)=>void;region:(e:PointerEvent)=>string|null;playActivity:()=>void;brain:()=>void};
  const px=new Uint8Array(10*10*4);for(let y=0;y<10;y++)for(let x=1;x<3;x++)px[(y*10+x)*4+3]=255;
  Object.assign(p.canvas.style,{width:'180px',height:'124px',left:'-40px',top:'-12px'});
  vi.spyOn(p.touch,'clientWidth','get').mockReturnValue(100);vi.spyOn(p.touch,'clientHeight','get').mockReturnValue(100);
@@ -38,8 +38,8 @@ it('returns an inward desktop drag to normal orientation and removes its peek co
  expect(p.flip).toBe(1);expect(p.canvas.style.transform).toBe('');expect(p.touch.style.clipPath).toBe('');
 });
 it('preserves the user release position when dragging a right peek back inside',()=>{
- const {p,settle}=setup();p.opts.sidebarBounds=()=>({left:1140,right:1404,top:431,bottom:884});p.tuck('right',true);p.pos={x:1220,y:585};
+ const {p,settle}=setup();p.tuck('right',true);p.pos={x:1220,y:585};
  p.drop({clientX:1270,clientY:635} as PointerEvent,{shake:0});settle();
- // The chosen release is no longer moved left; the existing passive rail fallback remains active.
- expect(p.tucked).toBe(false);expect(p.pos.x).toBe(1220);expect(p.idleButton.hidden).toBe(false);
+ // The chosen release is no longer moved left.
+ expect(p.tucked).toBe(false);expect(p.pos.x).toBe(1220);
 });

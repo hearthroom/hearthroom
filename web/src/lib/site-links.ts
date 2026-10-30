@@ -1,10 +1,8 @@
 import { computed, inject, onBeforeUnmount, watch, type ComputedRef, type InjectionKey, type Ref } from "vue";
-import type { SidebarRect } from "./sidebar-clearance";
 import { footerGroups, footerLegal, footerSupport, type FooterContext } from "./footer-nav";
 
 export const petMenuKey: InjectionKey<ComputedRef<boolean>> = Symbol("pet-menu");
 export const siteLinksKey: InjectionKey<ComputedRef<FooterContext>> = Symbol("site-links");
-export const sidebarBoundsKey: InjectionKey<Ref<SidebarRect | null>> = Symbol("sidebar-bounds");
 export const boardListEndKey: InjectionKey<Ref<boolean>> = Symbol("board-list-end");
 export const boardEndKey: InjectionKey<Ref<boolean>> = Symbol("board-end");
 export const headerOverlaysKey: InjectionKey<Set<symbol>> = Symbol("header-overlays");

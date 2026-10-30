@@ -52,7 +52,7 @@ export function deskSpot(f:{minX:number;maxX:number;y:number;w:number;h:number;o
 }
 
 const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"]),article.card,[data-pet-avoid]';
-const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab,.suki-pet__idle';
+const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab';
 
 /**
  * 關鍵數字（data-pet-avoid）不能點，但要看得到；它們常是撐滿整格、靠右對齊的格子，量外框會把整格算進去，

@@ -29,9 +29,10 @@ it('protects cover art even when the carousel uses a boxless wrapper, and no lon
  page.remove();
 });
 
-it('keeps the tablet lane ahead of the phone/coarse policy',async()=>{
+// 觸控平板跟手機一樣走手機避讓：首頁不再為小頭像留平板通道（owner 2026-10-30，有意改語意）
+it('phones and touch tablets use the phone policy on the homepage',async()=>{
  const {homePhoneMode}=await import('../src/pet/home-clearance');
- expect(homePhoneMode(390,false)).toBe(true);expect(homePhoneMode(768,true)).toBe(false);
+ expect(homePhoneMode(390,false)).toBe(true);expect(homePhoneMode(768,true)).toBe(true);expect(homePhoneMode(768,false)).toBe(false);
  expect(homePhoneMode(1080,true)).toBe(true);expect(homePhoneMode(1080,false)).toBe(false);
 });
 
