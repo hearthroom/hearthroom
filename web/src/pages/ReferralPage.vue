@@ -149,8 +149,8 @@ onMounted(() => {
               <time :datetime="invite.boundAt">{{ $t("referral.invites.joined", { date: monthDayOf(invite.boundAt) }) }}</time>
               <span :data-testid="`invite-${invite.firstChat}`">{{ $t(`referral.invites.${invite.firstChat}`, { firstChatBy: dateTime(invite.firstChatBy) }) }}</span>
               <div class="referral__invite-amounts">
-                <strong class="num" data-testid="invite-credited">{{ $t(invite.credited > 0 ? "referral.invites.credited" : "referral.invites.none", { credited: whole(invite.credited) }) }}</strong>
-                <span v-if="invite.pending > 0" class="subtle" data-testid="invite-pending">{{ $t(invite.pendingUntil ? "referral.invites.pending" : "referral.invites.pendingReview", { pending: whole(invite.pending), pendingUntil: invite.pendingUntil ? dateTime(invite.pendingUntil) : "" }) }}</span>
+                <strong class="num" data-testid="invite-credited" data-pet-avoid>{{ $t(invite.credited > 0 ? "referral.invites.credited" : "referral.invites.none", { credited: whole(invite.credited) }) }}</strong>
+                <span v-if="invite.pending > 0" class="subtle" data-testid="invite-pending" data-pet-avoid>{{ $t(invite.pendingUntil ? "referral.invites.pending" : "referral.invites.pendingReview", { pending: whole(invite.pending), pendingUntil: invite.pendingUntil ? dateTime(invite.pendingUntil) : "" }) }}</span>
               </div>
             </li>
           </ul>

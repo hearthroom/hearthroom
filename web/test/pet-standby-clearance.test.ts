@@ -87,3 +87,39 @@ it("收集畫面上看得到、按得到的控制項；她自己的、停用的�
   expect(got.top).toBe(52);
   expect(got.obstacles).toEqual([rect(328, 358, 526, 556), rect(328, 358, 526, 556), rect(16, 216, 300, 340), rect(203, 374, 600, 1012), rect(219, 339, 840, 864)]);
 });
+
+// 第三班（PM 2026-10-30 A）：關鍵數字用 data-pet-avoid 標；桌機站著時沿這一排左右讓
+import { deskSpot } from "../src/pet/standby-clearance";
+const desk = (obstacles: ReturnType<typeof rect>[], o: Partial<Parameters<typeof deskSpot>[0]> = {}) =>
+  deskSpot({ minX: 8, maxX: 1280 - 146 - 8, y: 672, w: 146, h: 220, obstacles, original: 1110, current: 1110, ...o });
+
+it("桌機：底下沒有東西就留在原處", () => {
+  expect(desk([])).toBe(1110);
+  expect(desk([rect(124, 1156, 100, 600)])).toBe(1110);
+});
+
+it("桌機：右對齊的金額壓在她身上，沿這一排挪到最近的空位", () => {
+  // 1280 寬，金額在 1060–1132：右邊放不下她（146 寬），往左讓到金額左邊 8px
+  expect(desk([rect(1060, 1132, 700, 740)])).toBe(906);
+  // 右邊放得下時往右
+  expect(desk([rect(1000, 1050, 700, 740)], { original: 1020, current: 1020 })).toBe(1058);
+});
+
+it("桌機：這一排滿了就淡出；原位空出來就回去", () => {
+  expect(desk([rect(0, 1280, 700, 740)])).toBeNull();
+  expect(desk([], { current: 1126 })).toBe(1110);
+});
+
+it("關鍵數字只量字本身，量不到時退回元素外框", () => {
+  vi.stubGlobal("innerHeight", 844);
+  document.body.innerHTML = `<strong id="amt" data-pet-avoid>+1,000 積分</strong>`;
+  const el = document.getElementById("amt")!;
+  el.getBoundingClientRect = () => new DOMRect(16, 500, 358, 24);
+  const range = { selectNodeContents: () => {}, getBoundingClientRect: () => new DOMRect(290, 500, 84, 24) };
+  vi.spyOn(document, "createRange").mockReturnValue(range as unknown as Range);
+  vi.spyOn(performance, "now").mockReturnValue(1e9);
+  expect(phoneControls()!.obstacles).toEqual([rect(290, 374, 500, 524)]);
+  range.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
+  vi.spyOn(performance, "now").mockReturnValue(2e9);
+  expect(phoneControls()!.obstacles).toEqual([rect(16, 374, 500, 524)]);
+});

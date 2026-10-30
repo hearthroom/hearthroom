@@ -14,7 +14,7 @@ import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
 import {nearestClearPetY,type PhoneClearance} from "./home-clearance";
-import {phoneControls,standbySpot} from "./standby-clearance";
+import {deskSpot,phoneControls,standbySpot} from "./standby-clearance";
 import { type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
@@ -145,6 +145,9 @@ export class SukiPet {
   private standbyReach: number | null = null;
   private standbyY: number | null = null;
   private standbyAway = false;
+  /** 桌機站著讓路時：她自己走到或使用者拖到的 x（null＝沒讓開），deskAway＝這一排沒空位、暫時淡出 */
+  private deskX: number | null = null;
+  private deskAway = false;
   private releasePhone() {
     const original=this.phoneOriginal;
     this.closeMenu();this.phoneOriginal=null;this.phoneRelocateAt=null;this.el.inert=false;this.sidebarDocked=false;this.sidebarAwake=false;
@@ -213,6 +216,29 @@ export class SukiPet {
     if(this.standbyAway){this.standbyAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");}
     this.layoutEdge();
   }
+  /**
+   * 桌機站著時讓路（PM 2026-10-30 第三班 A）：身體壓到可點的東西或關鍵數字（data-pet-avoid），沿這一排左右挪到
+   * 最近的空位；這一排都滿了才淡出（不擋點擊）；原位空出來就回去。不存位置。首頁側欄、卡片頁的版面避讓、
+   * 收在邊上、選單開著時不管；拖她或她自己走動之後，那裡就是新的原位。
+   */
+  private updateDesk() {
+    const on=!this.opts.mobile&&this.ready&&!this.hidden&&!this.tucked&&!this.phoneOriginal&&!this.sidebarDocked&&!this.homeParked&&!this.opts.sidebarBounds?.()&&this.menuEl.hidden&&!this.entryAwake;
+    if(!on){this.releaseDesk();return;}
+    if(this.drag||this.walk){this.deskX=null;return;}
+    const b=this.box(),space=phoneControls(),original=this.deskX??this.pos.x;
+    const x=space?deskSpot({minX:8,maxX:innerWidth-b.width-8,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
+    this.deskX=x===original?null:original;
+    if(x===null){this.deskAway=true;this.fadeTo(null);return;}
+    if(this.deskAway){
+      if(this.fadeTo({x,y:this.pos.y}))return;
+      this.deskAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");
+    }else if(x!==this.pos.x)this.place({x,y:this.pos.y});
+  }
+  /** 讓路暫停時（選單、收邊、別的避讓接手）：淡出先解除，原位記著 */
+  private releaseDesk() {
+    if(this.deskAway&&!this.phoneOriginal){this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");}
+    this.deskAway=false;
+  }
   private releaseStandby() {
     if(this.standbyAway&&!this.phoneOriginal){this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");this.layoutEdge();}
     this.standbyAway=false;
@@ -224,7 +250,7 @@ export class SukiPet {
     const space=this.opts.phoneClearance?.();
     if(!space||this.opts.parkOnHomepage?.()){
       // 暫時退場中也要看得到這份選單（它長在她身上）
-      this.releaseStandby();
+      this.releaseStandby();this.releaseDesk();
       this.entryFocus=opener;this.entryAwake=true;this.sidebarAwake=true;
       this.el.classList.remove("suki-pet--sidebar-idle");
       if(this.sidebarDocked)this.el.classList.add("suki-pet--sidebar-expanded");
@@ -264,7 +290,7 @@ export class SukiPet {
     const parking = this.opts.parkOnHomepage?.() === true && !explicitDesktop;
     if (parking) {
       if(this.phoneOriginal)this.releasePhone();
-      this.releaseStandby();
+      this.releaseStandby();this.releaseDesk();
       if (!this.homeParked) {
         if (this.sidebarDocked) this.releaseSidebar();
         this.sidebarPosition = { ...this.pos };
@@ -288,7 +314,7 @@ export class SukiPet {
     const phone=this.opts.phoneClearance?.();
     if(phone){this.updatePhone(phone);return;}
     if(this.phoneOriginal)this.releasePhone();
-    if(this.opts.mobile)this.updateStandby();
+    if(this.opts.mobile)this.updateStandby();else this.updateDesk();
     // A deliberate desktop drag/edge peek takes priority over the passive rail
     // avatar. Keep the current drag position when releasing an expanded avatar.
     if (!this.opts.mobile && (this.drag?.moved || this.tucked)) {

@@ -39,12 +39,36 @@ export function standbySpot(f:{w:number;side:Side;top:number;bottom:number;obsta
 }
 
 // article.card：卡片整張可點，但連結本身只有標題（用 ::after 撐滿整張卡），量連結量不到整張卡
-const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"]),article.card';
+/**
+ * 桌機站著時（PM 2026-10-30 第三班 A）：她的身體壓到可點的東西或關鍵數字，就沿現在這一排左右挪到最近的空位。
+ * 回傳 x；null＝這一排沒有空位，暫時淡出。original 是她自己走到或使用者拖到的位置：空出來就回去。
+ */
+export function deskSpot(f:{minX:number;maxX:number;y:number;w:number;h:number;obstacles:SidebarRect[];original:number;current:number}):number|null {
+ const row=f.obstacles.filter(r=>r.bottom+GAP>f.y&&r.top-GAP<f.y+f.h);
+ const safe=(x:number)=>x>=f.minX&&x<=f.maxX&&row.every(r=>x+f.w+GAP<=r.left||x>=r.right+GAP);
+ if(safe(f.original))return f.original;
+ if(safe(f.current))return f.current;
+ return [f.minX,f.maxX,...row.flatMap(r=>[r.left-f.w-GAP,r.right+GAP])].filter(safe).sort((a,b)=>Math.abs(a-f.current)-Math.abs(b-f.current))[0]??null;
+}
+
+const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"]),article.card,[data-pet-avoid]';
 const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab,.suki-pet__idle';
+
+/**
+ * 關鍵數字（data-pet-avoid）不能點，但要看得到；它們常是撐滿整格、靠右對齊的格子，量外框會把整格算進去，
+ * 所以量字本身（Range），量不到才退回外框。
+ */
+function extent(el:HTMLElement):DOMRect {
+ if(el.hasAttribute('data-pet-avoid')){
+  const range=document.createRange();range.selectNodeContents(el);
+  const r=range.getBoundingClientRect();if(r.width>1&&r.height>1)return r;
+ }
+ return el.getBoundingClientRect();
+}
 
 let key='',at=0,cache:PhoneClearance|null=null;
 /**
- * 畫面上看得到、點得到的控制項。每一格都會問：捲動中最多每 100ms 重讀一次（慣性捲動時每格量整頁太貴），
+ * 畫面上看得到、點得到的控制項，加上標了 data-pet-avoid 的關鍵數字（手機與桌機的讓路共用）。每一格都會問：捲動中最多每 100ms 重讀一次（慣性捲動時每格量整頁太貴），
  * 捲動、視窗、頁面高度都沒變時半秒重讀一次（清單非同步載入會改頁面高度，展開收合不一定會）。
  */
 export function phoneControls():PhoneClearance|null {
@@ -53,7 +77,7 @@ export function phoneControls():PhoneClearance|null {
  key=k;at=now;
  const obstacles=[...document.querySelectorAll<HTMLElement>(CONTROLS)].flatMap(el=>{
   if(el.closest(OWN)||el.closest('[inert]')||(el as HTMLButtonElement).disabled)return [];
-  const r=el.getBoundingClientRect();
+  const r=extent(el);
   if(r.width<=1||r.height<=1||r.bottom<=0||r.top>=innerHeight)return [];
   const cs=getComputedStyle(el);
   if(cs.pointerEvents==='none'||cs.visibility==='hidden')return [];
