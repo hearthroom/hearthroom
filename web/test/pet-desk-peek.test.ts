@@ -83,3 +83,31 @@ it('自動探頭時點她：開選單，不站回那一排滿的地方；視窗�
   expect(p.tucked).toBe(true);
   expect(p.menuEl.hidden).toBe(false);
 });
+
+it('自動探頭時視窗變矮：高度跟著夾回畫面裡，站回去時不會在視窗外', () => {
+  const touch = (p as unknown as { touch: HTMLElement }).touch;
+  Object.defineProperty(touch, 'clientWidth', { configurable: true, value: 146 }); Object.defineProperty(touch, 'clientHeight', { configurable: true, value: 220 });
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1232)] };
+  p.updateDesk();
+  vi.stubGlobal('innerHeight', 600);
+  p.refit();
+  expect(p.pos.y + 220).toBeLessThanOrEqual(600);
+  expect(localStorage.getItem('suki.pet.pos')).toBeNull();
+});
+
+it('自動探頭時進編輯器：照樣收到邊上（使用者點她會站出來，不只開選單）', () => {
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1232)] };
+  p.updateDesk();
+  (p as unknown as { tuckAside: () => void; deskPeeked: boolean }).tuckAside();
+  expect((p as unknown as { deskPeeked: boolean }).deskPeeked).toBe(false);
+  expect(p.tucked).toBe(true);
+});
+
+it('從自動探頭拖她、拖到一半被取消：仍是自動探頭，不變成使用者的收邊', () => {
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1232)] };
+  p.updateDesk();
+  const q = p as unknown as { drag: unknown; deskPeeked: boolean };
+  q.drag = { moved: true }; p.updateDesk();
+  q.drag = undefined;
+  expect(q.deskPeeked).toBe(true);
+});

@@ -223,7 +223,8 @@ export class SukiPet {
     const on=!this.opts.mobile&&this.ready&&!this.hidden&&!this.phoneOriginal&&this.menuEl.hidden&&!this.entryAwake;
     if(!on){this.releaseDesk();return;}
     // 拖動過、她自己走動才是換位置；只是按著（點、長按）不算
-    if(this.drag||this.walk){if(this.walk||this.drag?.moved){this.deskX=null;this.deskPeeked=false;}return;}
+    // 從自動探頭拖走：放下（drop）才決定是站著還是收邊；拖到一半被取消就還是自動探頭
+    if(this.drag||this.walk){if(this.walk||this.drag?.moved)this.deskX=null;return;}
     const b=this.box(),obstacles=phoneControls()?.obstacles??[],y=this.pos.y;
     const peek=(side:Side)=>{const reach=deskPeekReach({vw:innerWidth,side,y,h:b.height,obstacles,full:b.width*DESK_PEEK});return reach===null?null:{x:side==="right"?innerWidth-reach:reach-b.width,y};};
     let to:{x:number;y:number}|null,side=this.side,stand=false;
@@ -1051,7 +1052,8 @@ export class SukiPet {
   }
   /** 工作區這種滿版的頁面：她先收到最近的邊上，點一下再出來 */
   tuckAside() {
-    if (this.tucked) return;
+    // 自動探頭也要變成真的收邊：點她時站出來，不是只開選單
+    if (this.tucked && !this.deskPeeked) return;
     if (this.opts.mobile) this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x), true);
     else this.tuck(this.pos.x + this.box().width / 2 < innerWidth / 2 ? "left" : "right", true);
   }
@@ -1310,7 +1312,8 @@ export class SukiPet {
     if (this.drag || this.hidden || this.slide) return;
     const f = this.viewport(), s = this.size();
     if (this.tucked) {
-      if (!this.opts.mobile) { if (!this.deskPeeked) this.tuck(this.side, true); return; }
+      // 自動探頭不存位置：只把高度夾回畫面，左右下一格讓路時重算
+      if (!this.opts.mobile) { if (!this.deskPeeked) this.tuck(this.side, true); else { const y = clampStand(f, s, this.pos).y; if (y !== this.pos.y) this.place({ x: this.pos.x, y }); } return; }
       return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y, this.standbyReach));
     }
     const pos = clampStand(f, s, this.pos);
