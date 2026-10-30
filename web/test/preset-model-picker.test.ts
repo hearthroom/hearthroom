@@ -2,7 +2,7 @@
  * 「測試過的模型」選單：只到系列與模型兩層，兩層都能搜、都能選；存 series:／model: 值。
  * 編輯器與公開列表的篩選共用這一個元件。
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
 import { i18n, SOURCE_LOCALE } from "../src/lib/i18n";
 import PresetModelPicker from "../src/components/preset/PresetModelPicker.vue";
@@ -108,13 +108,62 @@ describe("PresetModelPicker", () => {
     expect(value).toEqual(["series:DeepSeek"]);
   });
 
-  it("單選（公開列表篩選）：選了就換掉原本的值並收起，目前選的那一列標為已選", async () => {
+  it("單選（公開列表篩選）：值寫在框裡、沒有標籤；點進去列出全部，選了換掉原本的值並收起，目前選的那一列標為已選", async () => {
     await mount(["series:DeepSeek"], false);
+    expect(input().value).toBe(t("preset.models.series", { name: "DeepSeek" }));
+    expect(chips()).toEqual([]);
     await open();
+    expect(options()).toHaveLength(5);
     expect(options()[0]!.getAttribute("aria-selected")).toBe("true");
     options().find((o) => o.textContent === "Gemini 3 Pro")!.click(); await flush();
     expect(value).toEqual(["model:Gemini 3 Pro"]);
     expect(options()).toHaveLength(0);
-    expect(chips()).toEqual(["Gemini 3 Pro"]);
+    expect(input().value).toBe("Gemini 3 Pro");
+  });
+
+  it("單選：打字就搜尋，Esc 放棄時框裡回到目前的值；× 清掉回到沒選", async () => {
+    await mount(["model:Gemini 3 Pro"], false);
+    await open();
+    await type("deep");
+    expect(texts()).toEqual([`DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4 Pro", "DeepSeek V4.1 Flash"]);
+    await key("Escape");
+    expect(input().value).toBe("Gemini 3 Pro");
+    const clear = document.querySelector<HTMLButtonElement>("[data-testid=model-pick-clear]")!;
+    expect(clear.getAttribute("aria-label")).toBe(t("preset.models.remove", { name: "Gemini 3 Pro" }));
+    clear.click(); await flush();
+    expect(value).toEqual([]);
+    expect(input().value).toBe("");
+    expect(document.querySelector("[data-testid=model-pick-clear]")).toBeNull();
+  });
+
+  it("Esc 只關清單，不傳到外層（彈層不會跟著關）；清單沒開時 Esc 照常往外傳", async () => {
+    const outer = vi.fn();
+    document.addEventListener("keydown", outer);
+    try {
+      await mount();
+      await open();
+      await key("Escape");
+      expect(options()).toHaveLength(0);
+      expect(outer).not.toHaveBeenCalled();
+      await key("Escape");
+      expect(outer).toHaveBeenCalledTimes(1);
+    } finally { document.removeEventListener("keydown", outer); }
+  });
+
+  it("清單掛在 body 用 fixed 定位，不受外層捲動區裁切；下方放不下時往上開", async () => {
+    await mount();
+    const rect = (top: number) => ({ top, bottom: top + 36, left: 20, right: 320, width: 300, height: 36, x: 20, y: top, toJSON: () => ({}) });
+    input().getBoundingClientRect = () => rect(100) as DOMRect;
+    await open();
+    const pop = () => document.querySelector<HTMLElement>("[data-testid=model-pick-pop]")!;
+    expect(pop().parentElement).toBe(document.body);
+    expect(pop().style.top).toBe("142px");
+    expect(pop().style.left).toBe("20px");
+    expect(pop().style.width).toBe("300px");
+    await key("Escape");
+    input().getBoundingClientRect = () => rect(innerHeight - 60) as DOMRect;
+    await open();
+    expect(pop().style.top).toBe("");
+    expect(pop().style.bottom).toBe(`${60 + 6}px`);
   });
 });
