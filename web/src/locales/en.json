@@ -3991,5 +3991,10 @@
   "preset.provided.history": "Lorebook, conversation history and memory",
   "preset.inspect.beforePersona": "Before character and user details",
   "preset.inspect.afterPersona": "After character and user details, before conversation history",
-  "preset.provided.examples": "Example dialogue"
+  "preset.provided.examples": "Example dialogue",
+  "preset.editor.tab.entries": "Entries {n}",
+  "preset.editor.tab.settings": "Model and parameters",
+  "preset.editor.pickHint": "Pick an entry on the left to edit, or add a new one.",
+  "preset.editor.tab.settings.alert": "A setting needs attention",
+  "preset.editor.tabs.label": "Editor sections"
 }

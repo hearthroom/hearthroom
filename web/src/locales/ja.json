@@ -3991,5 +3991,10 @@
   "preset.provided.history": "世界設定・会話履歴・記憶",
   "preset.inspect.beforePersona": "キャラクターとユーザーの設定の前",
   "preset.inspect.afterPersona": "キャラクターとユーザーの設定の後、会話履歴の前",
-  "preset.provided.examples": "会話例"
+  "preset.provided.examples": "会話例",
+  "preset.editor.tab.entries": "エントリー {n}",
+  "preset.editor.tab.settings": "モデルとパラメーター",
+  "preset.editor.pickHint": "左のリストからエントリーを選んで編集するか、新しく追加できます。",
+  "preset.editor.tab.settings.alert": "確認が必要な設定があります",
+  "preset.editor.tabs.label": "エディターのセクション"
 }

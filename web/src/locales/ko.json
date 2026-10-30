@@ -3991,5 +3991,10 @@
   "preset.provided.history": "세계관, 대화 기록, 기억",
   "preset.inspect.beforePersona": "캐릭터와 사용자 설정 앞",
   "preset.inspect.afterPersona": "캐릭터와 사용자 설정 뒤, 대화 기록 앞",
-  "preset.provided.examples": "대화 예시"
+  "preset.provided.examples": "대화 예시",
+  "preset.editor.tab.entries": "항목 {n}",
+  "preset.editor.tab.settings": "모델과 매개변수",
+  "preset.editor.pickHint": "왼쪽에서 항목을 골라 편집하거나 새 항목을 추가할 수 있습니다.",
+  "preset.editor.tab.settings.alert": "확인이 필요한 설정이 있습니다",
+  "preset.editor.tabs.label": "편집기 구역"
 }

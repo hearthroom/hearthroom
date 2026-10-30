@@ -15,8 +15,9 @@ const SLOP_PX = 8;
 const EDGE_PX = 56;
 const MAX_SPEED = 12;
 
+// 從清單本身找起：桌機的清單自己就是捲動區（拖到它上下緣捲清單，不捲視窗）
 function scrollParent(el: HTMLElement | null): HTMLElement | null {
-  for (let e = el?.parentElement ?? null; e; e = e.parentElement) {
+  for (let e = el; e; e = e.parentElement) {
     const oy = getComputedStyle(e).overflowY;
     if ((oy === "auto" || oy === "scroll") && e.scrollHeight > e.clientHeight) return e;
   }

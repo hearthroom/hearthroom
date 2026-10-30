@@ -808,3 +808,56 @@ describe("條目編輯層（owner 2026-10-30：點進條目停在名稱、只留
     expect(btn("preset.entry.moveDown").disabled).toBe(true);
   });
 });
+
+describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", () => {
+  async function open() {
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+  const tab = (k: "entries" | "settings") => $<HTMLButtonElement>(`[data-testid=editor-tab-${k}]`);
+  const shown = (sel: string) => { const el = $(sel); return !!el && !el.closest("[style*='display: none']"); };
+
+  it("頁首分頁：條目（預設）與預設設定；測試過的模型、用工具回覆、採樣都在預設設定，切換不丟草稿", async () => {
+    await open();
+    expect(tab("entries").getAttribute("aria-selected")).toBe("true");
+    expect(tab("entries").textContent).toContain(t("preset.editor.tab.entries", { n: "3" }, 3));
+    expect(shown("[data-testid=entry-search]")).toBe(true);
+    expect(shown("#preset-models")).toBe(false);
+    expect(shown("[data-testid=preset-tool-reply]")).toBe(false);
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改過的名字"; $("[data-testid=preset-title]").dispatchEvent(new Event("input")); await flush();
+    tab("settings").click(); await flush();
+    expect(tab("settings").getAttribute("aria-selected")).toBe("true");
+    expect(shown("#preset-models")).toBe(true);
+    expect(shown("[data-testid=preset-tool-reply]")).toBe(true);
+    expect(shown("[data-testid=param-temperature]")).toBe(true);
+    expect(shown("[data-testid=entry-search]")).toBe(false);
+    tab("entries").click(); await flush();
+    expect($<HTMLInputElement>("[data-testid=preset-title]").value).toBe("改過的名字");
+  });
+
+  it("採樣值不合法時，預設設定分頁上有紅點", async () => {
+    await open();
+    expect($("[data-testid=editor-tab-settings] .editor-tab__dot")).toBeNull();
+    tab("settings").click(); await flush();
+    const f = $("[data-testid=param-temperature]");
+    const mode = f.querySelector<HTMLSelectElement>("select")!; mode.value = "custom"; mode.dispatchEvent(new Event("change")); await flush();
+    const n = f.querySelector<HTMLInputElement>("input[type=number]")!; n.value = "9"; n.dispatchEvent(new Event("input")); await flush();
+    expect($("[data-testid=editor-tab-settings] .editor-tab__dot")).not.toBeNull();
+  });
+
+  it("桌機點條目：不捲整頁，編輯區自己回頂端、焦點在名稱；右欄沒選條目時有引導和新增條目", async () => {
+    await open();
+    expect($("[data-testid=editor-pick-hint]").textContent).toContain(t("preset.editor.pickHint"));
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }));
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const detailEl = $(".preset-editor__detail"); detailEl.scrollTop = 300;
+    $$("[data-testid=entry-row]").find((b) => b.textContent?.includes("腳本"))!.click(); await flush(); await flush();
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(detailEl.scrollTop).toBe(0);
+    expect((document.activeElement as HTMLElement | null)?.id).toBe("name-script");
+    vi.unstubAllGlobals(); scrollTo.mockRestore();
+  });
+});

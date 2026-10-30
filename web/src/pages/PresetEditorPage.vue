@@ -320,6 +320,18 @@ async function removeUnused(id: string, name: string) {
 }
 
 const inEntry = computed(() => !!selected.value || !!providedOpen.value);
+// 頁首兩個分頁（UI/UX editor-layout 規格）：條目／預設設定。用 v-show 切，草稿與欄位狀態都留著
+const tab = ref<"entries" | "settings">("entries");
+const TABS = ["entries", "settings"] as const;
+function tabKey(e: KeyboardEvent) {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  tab.value = tab.value === "entries" ? "settings" : "entries";
+  void nextTick(() => document.querySelector<HTMLElement>(`[data-testid=editor-tab-${tab.value}]`)?.focus());
+}
+// 存檔被擋的原因可能在另一個分頁：採樣值不合法時在「預設設定」上點一個紅點
+const settingsAlert = computed(() => !!doc.value && anyParamInvalid(doc.value));
+const detailEl = ref<HTMLElement | null>(null);
 /** 剛才從哪一列點進來：返回時捲回那一列、焦點也回去 */
 let cameFrom = "";
 const phoneLayout = () => window.matchMedia?.("(max-width: 760px)").matches ?? true;
@@ -329,11 +341,9 @@ const phoneLayout = () => window.matchMedia?.("(max-width: 760px)").matches ?? t
  */
 function enterEntry(focusSelector: string) {
   void nextTick(() => {
+    // 手機：清單藏起來、頁面變短，回頁頂。桌機：頁面不捲，只有編輯區自己回頂端（清單位置不動）
     if (phoneLayout()) window.scrollTo({ top: 0 });
-    else {
-      const top = document.querySelector(".preset-editor__detail")?.getBoundingClientRect().top ?? 0;
-      if (top < 0) window.scrollTo({ top: window.scrollY + top - 80 });
-    }
+    else if (detailEl.value) detailEl.value.scrollTop = 0;
     document.querySelector<HTMLElement>(focusSelector)?.focus({ preventScroll: true });
   });
 }
@@ -408,22 +418,18 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
     <template v-else-if="doc">
       <header class="panel preset-editor__head">
         <fieldset class="preset-editor__fieldset" :disabled="readOnly">
-        <div class="field">
+        <div class="field preset-editor__titleField">
           <label for="preset-title">{{ $t("preset.editor.name") }}</label>
           <input id="preset-title" v-model="title" class="input" maxlength="60" required :placeholder="$t('preset.editor.name.placeholder')" data-testid="preset-title" />
         </div>
-        <div class="field">
-          <label for="preset-models">{{ $t("preset.editor.models") }}</label>
-          <div class="preset-editor__models">
-            <button v-for="m in models" :key="m" type="button" class="chip chip--on" :aria-label="`${modelLabel(m)} ×`" @click="toggleModel(m, false)">{{ modelLabel(m) }} ×</button>
-            <select id="preset-models" class="input preset-editor__modelPick" :value="''" @change="toggleModel(($event.target as HTMLSelectElement).value, true); ($event.target as HTMLSelectElement).value = ''">
-              <option value="" disabled>{{ $t("preset.editor.models.placeholder") }}</option>
-              <option v-for="o in modelOptions.filter((o) => !models.includes(o.value))" :key="o.value" :value="o.value">{{ o.label }}</option>
-            </select>
-          </div>
-          <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
-        </div>
         </fieldset>
+        <div class="seg preset-editor__tabs" role="tablist" :aria-label="$t('preset.editor.tabs.label')" @keydown="tabKey">
+          <button v-for="k in TABS" :key="k" type="button" role="tab" class="seg__item" :class="{ 'seg__item--on': tab === k }" :aria-selected="tab === k" :tabindex="tab === k ? 0 : -1"
+            :aria-controls="`editor-panel-${k}`" :data-testid="`editor-tab-${k}`" @click="tab = k">
+            {{ k === "entries" ? $t("preset.editor.tab.entries", { n: whole(custom.length) }, custom.length) : $t("preset.editor.tab.settings") }}
+            <template v-if="k === 'settings' && settingsAlert"><span class="editor-tab__dot" aria-hidden="true"></span><span class="sr-only">{{ $t("preset.editor.tab.settings.alert") }}</span></template>
+          </button>
+        </div>
       </header>
       <p v-if="readOnly" class="notice" role="status" data-testid="preset-archived">{{ $t("preset.row.archived") }} · {{ $t("preset.error.archived") }}</p>
 
@@ -433,7 +439,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       </p>
       <p v-if="saveError" class="notice notice--error" role="alert">{{ saveError }}</p>
 
-      <div class="preset-editor__body">
+      <div v-show="tab === 'entries'" id="editor-panel-entries" class="preset-editor__body" role="tabpanel">
         <aside ref="listEl" class="panel preset-editor__list" :aria-label="$t('preset.entries.title')">
           <div class="preset-editor__listHead">
             <h2>{{ $t("preset.entries.title") }}</h2>
@@ -501,7 +507,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </details>
         </aside>
 
-        <section class="panel preset-editor__detail">
+        <section ref="detailEl" class="panel preset-editor__detail" tabindex="-1" :aria-label="$t('preset.entry.title')">
           <PresetEntryDetail
             v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
             @select="pick" @back="leaveEntry" @status="status = $event" @inspect="inspect(selectedRow)"
@@ -512,10 +518,29 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
             <p class="muted">{{ $t("preset.provided.body") }}</p>
             <p v-if="imported" class="subtle">{{ $t("preset.provided.imported") }}</p>
           </div>
-          <p v-else class="muted preset-editor__pick">{{ $t("preset.entry.title") }}</p>
+          <div v-else class="preset-editor__pick" data-testid="editor-pick-hint">
+            <p class="muted">{{ $t("preset.editor.pickHint") }}</p>
+            <button v-if="!readOnly" type="button" class="btn btn--sm" @click="newEntry">{{ $t("preset.entries.add") }}</button>
+          </div>
         </section>
       </div>
 
+      <div v-show="tab === 'settings'" id="editor-panel-settings" class="preset-editor__settings" role="tabpanel">
+      <section class="panel preset-editor__section">
+        <fieldset class="preset-editor__fieldset" :disabled="readOnly">
+        <div class="field">
+          <label for="preset-models">{{ $t("preset.editor.models") }}</label>
+          <div class="preset-editor__models">
+            <button v-for="m in models" :key="m" type="button" class="chip chip--on" :aria-label="`${modelLabel(m)} ×`" @click="toggleModel(m, false)">{{ modelLabel(m) }} ×</button>
+            <select id="preset-models" class="input preset-editor__modelPick" :value="''" @change="toggleModel(($event.target as HTMLSelectElement).value, true); ($event.target as HTMLSelectElement).value = ''">
+              <option value="" disabled>{{ $t("preset.editor.models.placeholder") }}</option>
+              <option v-for="o in modelOptions.filter((o) => !models.includes(o.value))" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+          </div>
+          <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
+        </div>
+        </fieldset>
+      </section>
       <section class="panel preset-editor__section">
         <fieldset class="preset-editor__fieldset" :disabled="readOnly">
           <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected" :tool="compat?.toolReply?.tool"
@@ -540,6 +565,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </li>
         </ul>
       </details>
+
+      </div>
 
       <footer class="preset-editor__foot">
         <div class="preset-editor__state" role="status">
@@ -575,7 +602,12 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-crumb:hover { color: var(--text); }
 
 .preset-editor__card { padding: var(--s-5); }
-.preset-editor__head { padding: var(--s-4) var(--s-5); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-4); }
+.preset-editor__head { padding: var(--s-4) var(--s-5); display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3) var(--s-4); }
+.preset-editor__titleField { flex: 1 1 280px; max-width: 520px; }
+.preset-editor__tabs { flex-shrink: 0; }
+.preset-editor__tabs .seg__item { position: relative; min-height: var(--h-lg); padding-inline: var(--s-4); }
+.editor-tab__dot { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.preset-editor__settings { display: grid; gap: var(--s-4); align-content: start; max-width: 760px; width: 100%; }
 .preset-editor__head .field { margin-bottom: 0; }
 .preset-editor__head .field > p { margin: 0; }
 .preset-editor__models { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); min-width: 0; }
@@ -592,7 +624,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__empty { padding: var(--s-3) var(--s-2); display: grid; gap: var(--s-1); }
 .preset-editor__empty p { margin: 0; }
 .preset-editor__group h3 { margin: 0 0 var(--s-1); padding-inline: var(--s-2); }
-.preset-editor__group ul, .preset-editor__library ul, .preset-editor__versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.preset-editor__group ul, .preset-editor__library ul, .preset-editor__versions { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .preset-editor__group li { display: flex; align-items: center; gap: var(--s-1); }
 .preset-editor__handle { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; margin-left: -8px; min-height: var(--h-lg); color: var(--text-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .preset-editor__handle:hover { color: var(--text-2); }
@@ -617,7 +649,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__library > p { margin: var(--s-1) 0; }
 .preset-editor__library li { display: flex; align-items: center; gap: var(--s-1); min-height: var(--h-lg); }
 .preset-editor__detail { padding: var(--s-5); min-height: 320px; }
-.preset-editor__pick { margin: 0; }
+.preset-editor__pick { display: grid; gap: var(--s-3); justify-items: start; }
+.preset-editor__pick p { margin: 0; }
 .preset-editor__provided { display: grid; gap: var(--s-2); align-content: start; }
 .preset-editor__provided h2 { margin: 0; font-size: 18px; }
 .preset-editor__provided p { margin: 0; }
@@ -632,7 +665,24 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 }
 .preset-editor__state { flex: 1 1 240px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .preset-editor__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-width: 0; }
+/* 桌機：一屏工作區，頁面不為長清單而捲；左清單與右編輯區各自捲動（UI/UX editor-layout 規格） */
+@media (min-width: 761px) {
+  .preset-editor { height: calc(100dvh - var(--header-h)); min-height: 560px; box-sizing: border-box; display: flex; flex-direction: column; padding-block: var(--s-4) 0; }
+  .preset-editor > * { flex-shrink: 0; }
+  .preset-editor__body, .preset-editor__settings { flex: 1 1 auto; min-height: 360px; }
+  .preset-editor__body { grid-template-columns: clamp(300px, 27vw, 380px) minmax(0, 1fr); align-items: stretch; }
+  .preset-editor__list, .preset-editor__detail, .preset-editor__settings { overflow: auto; overscroll-behavior: contain; min-height: 0; }
+  .preset-editor__list { align-content: start; padding-top: 0; }
+  .preset-editor__list > .preset-editor__listHead, .preset-editor__list > input[type="search"] { position: sticky; z-index: 1; background: var(--surface); }
+  .preset-editor__list > .preset-editor__listHead { top: 0; padding-top: var(--s-3); padding-bottom: var(--s-2); }
+  /* 上下各補一條底色，蓋住標題列與搜尋框之間、以及下方捲過去的列 */
+  .preset-editor__list > input[type="search"] { top: 52px; box-shadow: 0 calc(-1 * var(--s-2)) 0 var(--surface), 0 var(--s-2) 0 var(--surface), 0 calc(var(--s-2) + 1px) 0 var(--line); }
+  .preset-editor__settings { padding-bottom: var(--s-4); }
+  .preset-editor__foot { position: static; }
+}
 @media (max-width: 760px) {
+  .preset-editor__tabs { width: 100%; display: flex; }
+  .preset-editor__tabs .seg__item { flex: 1 1 0; }
   .preset-editor__entryBack { display: inline-flex; min-height: var(--h-lg); }
   .preset-crumb[data-in-entry] { display: none; }
   .preset-editor__head { grid-template-columns: minmax(0, 1fr); }

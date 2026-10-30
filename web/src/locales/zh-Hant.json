@@ -3991,5 +3991,10 @@
   "preset.provided.history": "世界書、對話記錄與記憶",
   "preset.inspect.beforePersona": "角色與玩家設定之前",
   "preset.inspect.afterPersona": "角色與玩家設定之後、對話記錄之前",
-  "preset.provided.examples": "對話示例"
+  "preset.provided.examples": "對話示例",
+  "preset.editor.tab.entries": "條目 {n}",
+  "preset.editor.tab.settings": "模型與參數",
+  "preset.editor.pickHint": "從左邊選一條來編輯，或新增一條。",
+  "preset.editor.tab.settings.alert": "有設定需要處理",
+  "preset.editor.tabs.label": "編輯器分頁"
 }
