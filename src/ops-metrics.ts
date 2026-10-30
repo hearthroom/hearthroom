@@ -55,9 +55,9 @@ const METRICS = {
   },
   comment_moderation: {
     name: "hearthroom_comment_moderation_total",
-    help: "Comment moderation: holds, releases, removals, mutes, reports, AI flags, keyword and settings changes.",
+    help: "Comment moderation: flags (rules, report threshold, AI; comments stay public), releases, removals, mutes, reports, keyword and settings changes.",
     label: "action",
-    operations: ["hold", "release", "remove", "mute", "unmute", "report", "flag", "dismiss", "keyword", "settings"],
+    operations: ["release", "remove", "mute", "unmute", "report", "flag", "dismiss", "keyword", "settings"],
     outcomes: ["success", "denied", "error"],
   },
   blog: {

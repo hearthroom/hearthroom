@@ -1056,7 +1056,7 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
   const target = await mustCommentPost(c);
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
   const created = await postComment(c.env.DB, { target, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
-  note(c, { event: "comment_create", subject: c.req.param("postId"), detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
+  note(c, { event: "comment_create", subject: c.req.param("postId"), detail: body.rootId || body.parentId ? "reply" : "root" });
   queuePush(c);
   return c.json(created, 201);
 });
@@ -1249,9 +1249,9 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
   const now = Date.now();
   const created = await postComment(c.env.DB, { target: { kind: "card", card }, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now });
-  note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
-  // 應用獎勵：公開的留言才報（被擋下待審的不算）；作者在自己的卡下回覆另報一筆，Harbor 會再核對
-  if (card.rewardEligible && created.status === "visible" && typeof body.content === "string") {
+  note(c, { event: "comment_create", subject: card.id, detail: body.rootId || body.parentId ? "reply" : "root" });
+  // 應用獎勵：留言一發表就公開，就報（被標記待審的也算，先發布、後審核）；作者在自己的卡下回覆另報一筆，Harbor 會再核對
+  if (card.rewardEligible && typeof body.content === "string") {
     await reportRewardComment(c.env.DB, { cardId: String(card.id), memberId: member.id, commentId: created.commentId, content: body.content, reply: !!(body.rootId || body.parentId), now });
     c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   }
@@ -1291,8 +1291,8 @@ app.post("/v1/comments/:id/report", async (c) => {
   await commentTargetAccess(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown; note?: unknown };
   const out = await reportComment(c.env.DB, { commentId: c.req.param("id"), reporterId: member.id, reason: body.reason, note: body.note, now: Date.now() }, await readSettings(c.env.DB));
-  note(c, { event: "comment_report", detail: out.folded ? "folded" : "recorded" });
-  return c.json({ ok: true, folded: out.folded }, 200, { "Cache-Control": "no-store" });
+  note(c, { event: "comment_report", detail: out.flagged ? "flagged" : "recorded" });
+  return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
 });
 
 /** 評分（src/card-scores.ts）：讀不用登入，評與收回要登入。門跟留言一樣：只有在榜的卡、成人卡要過門。 */

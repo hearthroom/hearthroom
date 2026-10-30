@@ -887,8 +887,8 @@ export interface Comment {
   canDelete: boolean;
   /** 留言者給這張卡的星數；沒評過是 null。舊版回應沒有這一欄。 */
   score?: number | null;
-  /** held＝只有本人看得到、等審核；removed＝頂層被移除但還有回覆，只留佔位（content 是空的）。 */
-  status: "visible" | "held" | "removed";
+  /** removed＝頂層被移除但還有回覆，只留佔位（content 是空的）。被標記待審的留言照常是 visible。 */
+  status: "visible" | "removed";
   removed: boolean;
   /** 文章留言：留言者是官方（寫文章的人）。卡片留言沒有這一欄。 */
   official?: boolean;
@@ -921,9 +921,9 @@ export async function fetchReplies(on: CommentOn, rootId: string, page: number, 
   return json<{ total: number; replies: Comment[] }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
-export async function createComment(on: CommentOn, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string; status: "visible" | "held" }> {
+export async function createComment(on: CommentOn, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string; status: "visible" }> {
   const { url } = await commentUrl(on);
-  return json<{ commentId: string; status: "visible" | "held" }>(
+  return json<{ commentId: string; status: "visible" }>(
     await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }),
   );
 }
@@ -939,13 +939,17 @@ export async function likeComment(commentId: string, like: boolean, token: strin
 export const REPORT_REASONS = ["spam", "abuse", "sexual", "privacy", "other"] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
-export async function reportComment(commentId: string, body: { reason: ReportReason; note: string }, token: string): Promise<{ ok: boolean; folded: boolean }> {
+export async function reportComment(commentId: string, body: { reason: ReportReason; note: string }, token: string): Promise<{ ok: boolean }> {
   return json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}/report`, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }));
 }
 
 // ---- 留言審核：審核人（含 AI 審核帳號）處理留言；權限由服務端判 ----------------------
 
+/** held＝待審：公開、被規則／檢舉／AI 標記的留言；放行清掉標記，移除才撤下。 */
 export type CommentQueueTab = "held" | "reported" | "removed";
+/** 待審的原因（comment-moderation.ts 的 FLAG_REASONS） */
+export const COMMENT_FLAG_REASONS = ["keyword", "new_account_link", "too_many_links", "recent_removal", "reports", "ai"] as const;
+export type CommentFlagReason = (typeof COMMENT_FLAG_REASONS)[number];
 export interface QueuedComment {
   id: string;
   /** 卡片底下的留言，或部落格文章底下的留言（文章連到短網址 /blog/p/<id>）。 */
@@ -960,7 +964,7 @@ export interface QueuedComment {
   moderationReason: string | null;
   suggestedBy: "ai" | null;
 }
-/** holdRate7d：近 7 天新留言中曾被攔下的比例，沒有新留言時 null；reports7d：近 7 天的檢舉數。 */
+/** held：待審數；holdRate7d：近 7 天新留言中曾被標記的比例，沒有新留言時 null；reports7d：近 7 天的檢舉數。 */
 export interface CommentStats { held: number; openReports: number; removed7d: number; medianHandleMs7d: number | null; holdReasons7d: Record<string, number>; holdRate7d: number | null; reports7d: number }
 /** 沒設（null）＝那條規則不啟用。 */
 export interface CommentSettings { commentNewAccountDays: number | null; commentMaxLinks: number | null; commentReportFoldThreshold: number | null }
@@ -976,8 +980,8 @@ async function staffRequest<T>(path: string, token: string, method = "GET", body
   return json<T>(res);
 }
 
-export const fetchCommentQueue = (tab: CommentQueueTab, page: number, token: string) =>
-  staffRequest<{ total: number; items: QueuedComment[] }>(`/comments?tab=${tab}&page=${page}`, token);
+export const fetchCommentQueue = (tab: CommentQueueTab, page: number, token: string, reason: CommentFlagReason | null = null) =>
+  staffRequest<{ total: number; items: QueuedComment[] }>(`/comments?tab=${tab}&page=${page}${reason ? `&reason=${reason}` : ""}`, token);
 export const fetchCommentStats = (token: string) => staffRequest<CommentStats>("/comments/stats", token);
 export const decideComment = (id: string, body: { action: "release" | "remove" | "dismiss" | "flag"; reason: string; operationId: string }, token: string) =>
   staffRequest<{ id: string; status: string }>(`/comments/${encodeURIComponent(id)}/decision`, token, "POST", body);

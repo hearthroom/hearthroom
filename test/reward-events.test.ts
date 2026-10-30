@@ -201,19 +201,21 @@ describe("留言、評分與分享連結", () => {
   });
 });
 
-describe("待審的留言", () => {
-  it("被擋下待審的不報；審核放行之後才報", async () => {
+describe("被標記待審的留言", () => {
+  it("發表時就報（先發布、後審核）；放行不再報第二次；移除另報一筆", async () => {
     await makeMember(20001); await makeMember(20002); await makeReviewer(30001);
     await harborCard("200001", "role-1", 20002);
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
-    const held = await json(await SELF.fetch("https://c.test/v1/cards/200001/comments", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ content: "違禁的留言" }) }));
-    expect(held.status).toBe("held");
-    expect((await outbox()).filter((r) => r.type === "comment_posted")).toHaveLength(0);
-    const res = await SELF.fetch(`https://c.test/v1/moderation/comments/${held.commentId}/decision`, { method: "POST", headers: { ...bearer("mod"), "Content-Type": "application/json" }, body: JSON.stringify({ action: "release", reason: "ok", operationId: crypto.randomUUID() }) });
-    expect(res.status).toBe(200);
+    const created = await json(await SELF.fetch("https://c.test/v1/cards/200001/comments", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ content: "違禁的留言" }) }));
+    expect(created.status).toBe("visible");
     const posted = (await outbox()).filter((r) => r.type === "comment_posted");
     expect(posted).toHaveLength(1);
-    expect(posted[0].body).toMatchObject({ accountNo: 20001, workRoleId: "role-1", attrs: { commentId: held.commentId, textUnits: 5 } });
+    expect(posted[0].body).toMatchObject({ accountNo: 20001, workRoleId: "role-1", attrs: { commentId: created.commentId, textUnits: 5 } });
+    const decide = (action: string) => SELF.fetch(`https://c.test/v1/moderation/comments/${created.commentId}/decision`, { method: "POST", headers: { ...bearer("mod"), "Content-Type": "application/json" }, body: JSON.stringify({ action, reason: "ok", operationId: crypto.randomUUID() }) });
+    expect((await decide("release")).status).toBe(200);
+    expect((await outbox()).filter((r) => r.type === "comment_posted")).toHaveLength(1);
+    expect((await decide("remove")).status).toBe(200);
+    expect((await outbox()).filter((r) => r.type === "comment_removed")).toHaveLength(1);
   });
 });
 

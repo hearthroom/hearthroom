@@ -68,7 +68,7 @@ export async function reviewSummary(db:D1Database,member:{id:string}){
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
  AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,Date.now()-45*60*1000,member.id,member.id,member.id).first<{n:number}>();
  // 待審留言（卡片與文章）另外算，不混進卡片審核的徽章數（pending）；成人門檻只看卡片留言。
- const comments=await db.prepare("SELECT count(*) n FROM comments c LEFT JOIN cards k ON k.id=c.card_id WHERE c.status='held' AND c.member_id<>? AND (k.id IS NOT NULL OR c.post_id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?)").bind(member.id,Number(age)).first<{n:number}>();
+ const comments=await db.prepare("SELECT count(*) n FROM comments c LEFT JOIN cards k ON k.id=c.card_id WHERE c.status='visible' AND c.hold_reason IS NOT NULL AND c.member_id<>? AND (k.id IS NOT NULL OR c.post_id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?)").bind(member.id,Number(age)).first<{n:number}>();
  return {reviewer:true,role,cases:cases?.n??0,reviews:reviews?.n??0,pending:(cases?.n??0)+(reviews?.n??0),comments:comments?.n??0};
 }
 moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummary(c.env.DB,await requireMember(c))));

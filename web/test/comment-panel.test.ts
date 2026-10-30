@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   createComment: vi.fn(),
   deleteComment: vi.fn(),
   likeComment: vi.fn(),
-  reportComment: vi.fn(async () => ({ ok: true, folded: false })),
+  reportComment: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("../src/lib/api", async (original) => ({ ...(await original<object>()), ...api, fetchComments: (...a: unknown[]) => api.fetchComments(...a) }));
 const tokenFixture = vi.hoisted(() => ({ accessToken: vi.fn(async () => "synthetic") }));
@@ -52,15 +52,18 @@ async function mount(props: Record<string, unknown> = { cardId: "1", roleId: "r1
 const t = (k: string) => i18n.global.t(k);
 const buttons = (root: ParentNode, text: string) => [...root.querySelectorAll("button")].filter((b) => b.textContent?.trim() === text);
 
-it("keeps a held comment in place, marked as under review, and says it will appear once reviewed", async () => {
+it("shows a new comment right away with the usual actions and no review badge (rules only flag it for moderators)", async () => {
   await mount();
-  api.createComment.mockImplementation(async () => { api.list = [comment("new", { isOwner: true, canDelete: true, status: "held" })]; return { commentId: "new", status: "held" }; });
+  api.createComment.mockImplementation(async () => { api.list = [comment("new", { isOwner: true, canDelete: true, content: "hello" })]; return { commentId: "new", status: "visible" }; });
   const box = host.querySelector<HTMLTextAreaElement>(".cmt__composer textarea")!;
   box.value = "hello"; box.dispatchEvent(new Event("input")); await nextTick();
   buttons(host, t("comment.submit"))[0]!.click();
-  await vi.waitFor(() => expect(host.querySelector(".cmt__item")?.textContent).toContain(t("comment.held")));
+  await vi.waitFor(() => expect(host.querySelector(".cmt__item .cmt__text")?.textContent).toBe("hello"));
+  const item = host.querySelector(".cmt__item")!;
   expect(host.querySelector<HTMLTextAreaElement>(".cmt__composer textarea")!.value).toBe("");
-  expect(host.textContent).toContain(t("comment.submitted"));
+  expect(item.querySelectorAll(".cmt__badge")).toHaveLength(0);
+  expect(buttons(item, t("comment.reply"))).toHaveLength(1);
+  expect(item.querySelector(`[aria-label="${t("comment.like")}"]`)).not.toBeNull();
 });
 
 it("shows a removed top-level comment as one line without its author or actions, and keeps its replies", async () => {
@@ -108,17 +111,15 @@ it("keeps Tab inside the report dialog: the last control wraps to the first and 
   expect(document.activeElement).toBe(last);
 });
 
-it("offers reply only under a public top-level comment, not under a removed one or the viewer's own held one", async () => {
+it("offers reply only under a public top-level comment, not under a removed one", async () => {
   const child = (id: string, root: string) => comment(id, { rootId: root, parentId: root });
   api.list = [
     comment("gone", { removed: true, status: "removed", content: "", replyCount: 1, replies: [child("c1", "gone")] }),
-    comment("folded", { status: "held", isOwner: true, canDelete: true, replyCount: 1, replies: [child("c2", "folded")] }),
     comment("open", { replyCount: 1, replies: [child("c3", "open")] }),
   ];
   await mount();
-  const [gone, folded, open] = [...host.querySelectorAll(".cmt__item")];
+  const [gone, open] = [...host.querySelectorAll(".cmt__item")];
   expect(buttons(gone!, t("comment.reply"))).toHaveLength(0);
-  expect(buttons(folded!, t("comment.reply"))).toHaveLength(0);
   expect(buttons(open!, t("comment.reply"))).toHaveLength(2);
 });
 
@@ -169,12 +170,12 @@ it("closes the composer when the post is closed while someone is writing", async
 it("lets a blog writer pin a public comment on a post and unpin it again", async () => {
   Object.assign(staff, { reviewer: false, blogWriter: true });
   let pinned: string | null = null;
-  api.list = [comment("c1"), comment("held", { isOwner: true, status: "held" })];
+  api.list = [comment("c1"), comment("gone", { removed: true, status: "removed", content: "", replyCount: 1, replies: [comment("child", { rootId: "gone", parentId: "gone" })] })];
   api.fetchComments.mockImplementation(async () => ({ total: 2, comments: api.list, isRoleCreator: false, pinnedCommentId: pinned }));
   staff.setPostState.mockImplementation(async (_t: unknown, _id: unknown, change: { pinnedCommentId: string | null }) => { pinned = change.pinnedCommentId; return {}; });
   await mount(postTarget());
-  const [first, held] = [...host.querySelectorAll(".cmt__item")];
-  expect(buttons(held!, t("comment.pin"))).toHaveLength(0);
+  const [first, gone] = [...host.querySelectorAll(".cmt__item")];
+  expect(buttons(gone!, t("comment.pin"))).toHaveLength(0);
   buttons(first!, t("comment.pin"))[0]!.click();
   await vi.waitFor(() => expect(host.querySelector(".cmt__item .cmt__badge--pin")).not.toBeNull());
   expect(staff.setPostState).toHaveBeenLastCalledWith("synthetic", "p1", { pinnedCommentId: "c1" }, expect.any(String));

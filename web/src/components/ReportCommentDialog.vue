@@ -10,7 +10,7 @@ import { useSession } from "@/lib/session";
 import { wrapTab } from "@/lib/focus-trap";
 
 const props = defineProps<{ commentId: string }>();
-const emit = defineEmits<{ close: []; reported: [folded: boolean] }>();
+const emit = defineEmits<{ close: []; reported: [] }>();
 const { t } = useI18n();
 const session = useSession();
 
@@ -28,8 +28,8 @@ async function submit() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const res = await reportComment(props.commentId, { reason: reason.value, note: note.value.trim() }, token);
-    emit("reported", !!res.folded);
+    await reportComment(props.commentId, { reason: reason.value, note: note.value.trim() }, token);
+    emit("reported");
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {

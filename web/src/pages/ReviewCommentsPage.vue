@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 社群管理的「留言」分頁：待審、被檢舉、最近移除三個佇列，加上頂部的統計與底部的關鍵詞。
+ * 先發布、後審核：待審的留言照常公開，放行清掉標記，移除才撤下。待審分頁可以依標記原因篩選。
  *
  * 移除、駁回檢舉、禁言都要理由，在對話框裡填；每開一次對話框配一個操作編號，送失敗重按沿用同一個，
  * 服務端靠它認出重送。放行不用理由，按一下就送，同樣一則留言重按沿用上一次的編號。
@@ -9,7 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ApiError, addKeyword, decideComment, fetchCommentQueue, fetchCommentStats, fetchKeywords, muteMember, removeKeyword, type CommentKeyword, type CommentQueueTab, type CommentStats, type QueuedComment } from '@/lib/api';
+import { ApiError, COMMENT_FLAG_REASONS, addKeyword, decideComment, fetchCommentQueue, fetchCommentStats, fetchKeywords, muteMember, removeKeyword, type CommentFlagReason, type CommentKeyword, type CommentQueueTab, type CommentStats, type QueuedComment } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useReviewer } from '@/lib/review';
 import { useLocalePath } from '@/lib/use-locale';
@@ -26,6 +27,8 @@ const TABS: CommentQueueTab[] = ['held', 'reported', 'removed'];
 /** 服務端一頁的筆數（comment-moderation.ts 的 QUEUE_PAGE） */
 const PAGE = 20;
 const tab = ref<CommentQueueTab>('held');
+/** 待審分頁的原因篩選；null 是全部 */
+const reason = ref<CommentFlagReason | null>(null);
 const page = ref(1);
 const items = ref<QueuedComment[]>([]);
 const total = ref(0);
@@ -67,7 +70,7 @@ async function load() {
   loading.value = true; error.value = '';
   try {
     const access = await token();
-    const [queue, numbers] = await Promise.all([fetchCommentQueue(tab.value, page.value, access), fetchCommentStats(access)]);
+    const [queue, numbers] = await Promise.all([fetchCommentQueue(tab.value, page.value, access, tab.value === 'held' ? reason.value : null), fetchCommentStats(access)]);
     if (!alive || gen !== generation) return;
     items.value = queue.items; total.value = queue.total; stats.value = numbers;
   } catch (e) { if (gen === generation) error.value = message(e, 'state.loadFailed'); } finally { if (gen === generation) loading.value = false; }
@@ -167,7 +170,7 @@ async function drop(k: CommentKeyword) {
   try { keywords.value = (await removeKeyword(k.id, crypto.randomUUID(), await token())).items; } catch (e) { error.value = message(e, 'moderation.error.retry'); } finally { keywordBusy.value = false; }
 }
 
-/** 攔截率：一位小數的百分比 */
+/** 標記率：一位小數的百分比 */
 const percent = computed(() => new Intl.NumberFormat(String(locale.value), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 /** 處理時間中位數：一小時內講分鐘，兩天內講小時，再久講天；單位交給 Intl。 */
 function duration(ms: number | null): string {
@@ -176,8 +179,9 @@ function duration(ms: number | null): string {
   return new Intl.NumberFormat(String(locale.value), { style: 'unit', unit: unit as string, unitDisplay: 'short', maximumFractionDigits: 0 }).format(Math.max(1, Math.round(n as number)));
 }
 
-watch([tab, page], () => { void load(); });
+watch([tab, page, reason], () => { void load(); });
 function pick(next: CommentQueueTab) { if (tab.value === next) return; page.value = 1; tab.value = next; done.value = ''; }
+function filter(next: CommentFlagReason | null) { if (reason.value === next) return; page.value = 1; reason.value = next; done.value = ''; }
 onMounted(() => {
   document.title = pageTitle(t('moderation.title'));
   document.addEventListener('keydown', onKey);
@@ -200,6 +204,13 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
     <div ref="tabsBox" class="seg cmod-tabs">
       <button v-for="key in TABS" :key="key" type="button" class="seg__item" :class="{ 'seg__item--on': tab === key }" :aria-pressed="tab === key" @click="pick(key)">{{ t(`moderation.comments.${key}`) }}</button>
     </div>
+
+    <template v-if="tab === 'held'">
+      <p class="subtle cmod-note">{{ t('moderation.comments.heldNote') }}</p>
+      <div class="cmod-reasons" role="group" :aria-label="t('moderation.comments.held')">
+        <button v-for="r in [null, ...COMMENT_FLAG_REASONS]" :key="String(r)" type="button" class="chip" :class="{ 'chip--on': reason === r }" :aria-pressed="reason === r" :data-reason="r ?? 'all'" @click="filter(r)">{{ r ? t(`moderation.comments.holdReason.${r}`) : t('moderation.comments.reasonAll') }}</button>
+      </div>
+    </template>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="load">{{ t('review.refresh') }}</button></p>
     <p v-if="done" class="notice" role="status">{{ done }}</p>
@@ -279,6 +290,10 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
 .cmod-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin: 0; padding: var(--s-4) var(--s-5); }
 .cmod-stats dd { margin: 0; }
 .cmod-tabs { justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.cmod-note { margin: 0; }
+.cmod-reasons { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cmod-reasons .chip { font-family: inherit; }
+.cmod-reasons .chip--on { background: var(--accent-tint); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent); }
 .cmod-list { display: grid; gap: var(--s-3); }
 .cmod-ghost { height: 120px; }
 .cmod-empty { padding: var(--s-5); margin: 0; }

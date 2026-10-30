@@ -8,7 +8,7 @@
  *   - 兩層：頂層留言與其回覆。回覆可以回頂層、也可以回同一串裡的另一則回覆（顯示成 @對方）。
  *   - 內容 1–500 字；每個成員一分鐘最多 6 則（429 comment_rate_limited）。
  *   - 刪除：留言者本人、這張卡的作者、站方審核人。軟刪；刪頂層連同底下的回覆一起消失。
- *   - 審核：status = visible／held（命中風險規則，只給本人看）／removed（被移除，頂層有回覆時留佔位）／deleted（刪除）。
+ *   - 審核：status = visible／removed（被移除，頂層有回覆時留佔位）／deleted（刪除）。命中風險規則照常公開，只記 hold_reason 進待審。
  *   - 讚：一人一則一票，重複按不重複算。
  *   - 納管作品依目前 reachable；未納管舊卡維持 approved 規則。
  *
@@ -95,7 +95,7 @@ function view(r: Row, viewer: Viewer, authorMemberId: string | null, post: boole
   // 被移除的佔位只說「這裡有過一則留言」，不留是誰寫的、評了幾星、多少讚。
   return {
     commentId: r.id,
-    status: (r.status === "deleted" ? "removed" : r.status) as "visible" | "held" | "removed",
+    status: (removed ? "removed" : "visible") as "visible" | "removed",
     removed,
     content: removed ? "" : r.content,
     parentId: r.parent_id ?? "",
@@ -125,9 +125,9 @@ const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.
   ${t.kind === "post" ? `NULL AS score, ${officialSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score"}
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
-/** 看得到的留言：公開的，加上本人自己被攔下的（?1 是看的人）；頂層被移除但還有回覆時留佔位。 */
-const SHOWN = "(c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1)))";
-const TOP_SHOWN = "((c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1))) OR (c.status = 'removed' AND c.reply_count > 0))";
+/** 看得到的留言：公開的（被標記待審的也是）；頂層被移除但還有回覆時留佔位。 */
+const SHOWN = "(c.deleted_at IS NULL AND c.status = 'visible')";
+const TOP_SHOWN = "((c.deleted_at IS NULL AND c.status = 'visible') OR (c.status = 'removed' AND c.reply_count > 0))";
 
 export async function listTop(
   db: D1Database, target: CommentTarget, viewer: Viewer, page: number, sort: CommentSort = "new",
@@ -194,7 +194,7 @@ export async function countTop(db: D1Database, target: CommentTarget): Promise<n
 export async function postComment(
   db: D1Database,
   input: { target: CommentTarget; memberId: string; content: unknown; parentId?: unknown; rootId?: unknown; now: number },
-): Promise<{ commentId: string; status: "visible" | "held" }> {
+): Promise<{ commentId: string; status: "visible" }> {
   const { target } = input;
   if (target.kind === "post" && target.post.commentsClosed) throw new HttpError(403, "blog_comments_closed");
   const { col, id: targetId } = targetOf(target);
@@ -235,22 +235,22 @@ export async function postComment(
   }
 
   const id = crypto.randomUUID();
+  // 先發布、後審核：命中規則只記原因進待審，留言照常公開（comment-moderation.ts）。
   const reason = await holdReason(db, { memberId: input.memberId, content, now: input.now }, await readSettings(db));
-  const status = reason ? "held" : "visible";
   const postId = target.kind === "post" ? target.post.id : null;
   // 文章在讀取之後才關閉留言：條件式 INSERT 寫不進去，後面的寫入用 changes() 串在它後面一起不動。
   const writes = [
     db.prepare(
       `INSERT INTO comments (id, card_id, post_id, member_id, parent_id, root_id, content, reply_to_name, created_at, status, hold_reason)
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 WHERE ?3 IS NULL OR EXISTS (SELECT 1 FROM blog_posts WHERE id = ?3 AND comments_closed = 0)`,
-    ).bind(id, target.kind === "card" ? target.card.id : 0, postId, input.memberId, parentId, rootId, content, replyToName, input.now, status, reason),
+    ).bind(id, target.kind === "card" ? target.card.id : 0, postId, input.memberId, parentId, rootId, content, replyToName, input.now, "visible", reason),
   ];
-  if (rootId && !reason) writes.push(db.prepare("UPDATE comments SET reply_count = reply_count + 1 WHERE id = ? AND changes() > 0").bind(rootId));
-  if (reason) writes.push(auditStmtIfChanged(db, { subjectKind: "comment", subjectId: id, actorMemberId: null, actorKind: "system", action: "hold", reason, after: { status: "held", holdReason: reason }, operationId: `hold:${id}`, now: input.now }));
+  if (rootId) writes.push(db.prepare("UPDATE comments SET reply_count = reply_count + 1 WHERE id = ? AND changes() > 0").bind(rootId));
+  if (reason) writes.push(auditStmtIfChanged(db, { subjectKind: "comment", subjectId: id, actorMemberId: null, actorKind: "system", action: "flag", reason, after: { status: "visible", holdReason: reason }, operationId: `hold:${id}`, now: input.now }));
   const results = await db.batch(writes);
   if (!results[0].meta.changes) throw new HttpError(403, "blog_comments_closed");
-  if (reason) await bumpOp(db, "comment_moderation", "hold", "success");
-  return { commentId: id, status };
+  if (reason) await bumpOp(db, "comment_moderation", "flag", "success");
+  return { commentId: id, status: "visible" };
 }
 
 export async function deleteComment(db: D1Database, commentId: string, viewer: Viewer, now: number): Promise<void> {

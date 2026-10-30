@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { memberByHandle } from "./members";
 import { readSettings, writeSettings, type CommunitySettings } from "./community-settings";
-import { addKeyword, clearMute, conflictOnDuplicate, decide, listKeywords, moderationQueue, moderationStats, removeKeyword, setMute, type Decision } from "./comment-moderation";
+import { addKeyword, clearMute, conflictOnDuplicate, decide, FLAG_REASONS, listKeywords, moderationQueue, moderationStats, removeKeyword, setMute, type Decision, type FlagReason } from "./comment-moderation";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
 import { communityAdmin, humanOnly, staff } from "./staff";
@@ -55,7 +55,9 @@ commentModerationRoutes.get("/v1/moderation/comments", async (c) => {
   const s = await staff(c);
   const tab = c.req.query("tab");
   if (tab !== "held" && tab !== "reported" && tab !== "removed") throw new HttpError(400, "invalid_arguments");
-  return c.json(await moderationQueue(c.env.DB, s.member.id, tab, Math.max(1, Math.floor(Number(c.req.query("page")) || 1))));
+  const reason = c.req.query("reason") || null;
+  if (reason !== null && !(FLAG_REASONS as readonly string[]).includes(reason)) throw new HttpError(400, "invalid_arguments");
+  return c.json(await moderationQueue(c.env.DB, s.member.id, tab, Math.max(1, Math.floor(Number(c.req.query("page")) || 1)), reason as FlagReason | null));
 });
 
 commentModerationRoutes.get("/v1/moderation/comments/stats", async (c) => {

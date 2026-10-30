@@ -3,14 +3,16 @@ import type { CommunitySettings } from "./community-settings";
 import { memberNsfw } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, pickLocale, type Localized } from "./types";
-import { reportComment as reportRewardComment, reportCommentRemoved } from "./reward-events";
+import { reportCommentRemoved } from "./reward-events";
 
 /**
- * 留言審核（開業活動設計 §7）：大部分留言直接公開，命中風險規則的先攔下、只給本人看。
- * 數字門檻來自運營設定，沒設就不啟用（0 天＝規則開著但永遠不攔，只有沒設才是關）；
- * 兩條固定規則照 spec：24 小時內重複相同內容、近 30 天被移除過。
+ * 留言審核：先發布、後審核（owner 2026-10-30）。每則留言都直接公開，留言任務與獎勵照常算；
+ * 命中風險規則只在留言上記一個原因（hold_reason），進後台待審。審核人放行＝清掉原因，移除才撤下；
+ * 沒人處理就一直公開。檢舉達門檻、AI 審核帳號標記也一樣只記原因、不隱藏。
+ * 數字門檻來自運營設定，沒設就不啟用（0 天＝規則開著但永遠不標記，只有沒設才是關）；
+ * 固定規則一條：近 30 天被移除過。不查重複內容：「好玩」「頂」這類短評本來就會重複（owner 2026-10-30）。
  */
-export type HoldReason = "keyword" | "new_account_link" | "too_many_links" | "duplicate" | "recent_removal";
+export type HoldReason = "keyword" | "new_account_link" | "too_many_links" | "recent_removal";
 
 const DAY = 86_400_000;
 /** 檢舉的目標種類跟著留言本身走：掛在文章上的是 post，其餘是 card。`c` 是 comments 的別名。 */
@@ -39,8 +41,6 @@ export async function holdReason(db: D1Database, input: { memberId: string; cont
     const m = await db.prepare("SELECT created_at FROM members WHERE id = ?").bind(input.memberId).first<{ created_at: number }>();
     if (m && input.now - m.created_at < s.commentNewAccountDays * DAY) return "new_account_link";
   }
-  const dup = await db.prepare("SELECT 1 AS ok FROM comments WHERE member_id = ? AND content = ? AND created_at > ? AND status IN ('visible','held') LIMIT 1").bind(input.memberId, input.content, input.now - DAY).first();
-  if (dup) return "duplicate";
   const removed = await db.prepare("SELECT 1 AS ok FROM comments WHERE member_id = ? AND status = 'removed' AND moderated_at > ? LIMIT 1").bind(input.memberId, input.now - 30 * DAY).first();
   if (removed) return "recent_removal";
   return null;
@@ -49,12 +49,12 @@ export async function holdReason(db: D1Database, input: { memberId: string; cont
 export const REPORT_REASONS = ["spam", "abuse", "sexual", "privacy", "other"] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 
-/** 檢舉：一人一則一次（重複按不重複算），目標種類依留言掛在卡還是文章。檢舉人數達到設定門檻，公開的留言轉成待審並摺疊。 */
+/** 檢舉：一人一則一次（重複按不重複算），目標種類依留言掛在卡還是文章。檢舉人數達到設定門檻，留言標記進待審（照常公開）。 */
 export async function reportComment(
   db: D1Database,
   input: { commentId: string; reporterId: string; reason: unknown; note: unknown; now: number },
   s: CommunitySettings,
-): Promise<{ folded: boolean }> {
+): Promise<{ flagged: boolean }> {
   if (typeof input.reason !== "string" || !(REPORT_REASONS as readonly string[]).includes(input.reason)) throw new HttpError(400, "invalid_report_reason");
   const note = typeof input.note === "string" ? input.note.trim().slice(0, 300) : "";
   const c = await db.prepare(`SELECT member_id, status, ${KIND} AS kind FROM comments c WHERE id = ? AND deleted_at IS NULL`).bind(input.commentId).first<{ member_id: string; status: string; kind: "card" | "post" }>();
@@ -62,30 +62,25 @@ export async function reportComment(
   if (c.member_id === input.reporterId) throw new HttpError(403, "cannot_report_own_comment");
   const res = await db.prepare("INSERT OR IGNORE INTO comment_reports (id, target_kind, comment_id, reporter_member_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(crypto.randomUUID(), c.kind, input.commentId, input.reporterId, input.reason, note, input.now).run();
-  if (!res.meta.changes) return { folded: c.status === "held" };
+  if (!res.meta.changes) return { flagged: false };
   await bumpOp(db, "comment_moderation", "report", "success");
-  if (c.status !== "visible" || s.commentReportFoldThreshold === null) return { folded: c.status === "held" };
+  if (c.status !== "visible" || s.commentReportFoldThreshold === null) return { flagged: false };
   const open = await db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE target_kind = ? AND comment_id = ? AND resolved_at IS NULL").bind(c.kind, input.commentId).first<{ n: number }>();
-  if ((open?.n ?? 0) < s.commentReportFoldThreshold) return { folded: false };
-  await holdVisible(db, input.commentId, "reports", null, "system", "fold:" + input.commentId, input.now);
-  return { folded: true };
+  if ((open?.n ?? 0) < s.commentReportFoldThreshold) return { flagged: false };
+  return { flagged: await flagVisible(db, input.commentId, "reports", null, "system", "fold:" + input.commentId, input.now) };
 }
 
 /**
- * 把一則公開留言轉成待審（檢舉達門檻、AI 標記）。回覆數同步減一；條件式 UPDATE 讓並發只生效一次。
+ * 把一則公開、還沒有標記的留言標記進待審（檢舉達門檻、AI 標記）。留言照常公開，回覆數不動；條件式 UPDATE 讓並發只生效一次。
  */
-export async function holdVisible(db: D1Database, commentId: string, reason: "reports" | "ai", actorId: string | null, actorKind: "system" | "ai", operationId: string, now: number, note = ""): Promise<boolean> {
-  const row = await db.prepare("SELECT root_id FROM comments WHERE id = ? AND status = 'visible'").bind(commentId).first<{ root_id: string | null }>();
-  if (!row) return false;
-  // 三條寫入同一個 batch、用 changes() 串起來：只有第一條條件式 UPDATE 真的改到列，稽核與回覆數才會跟著動。
-  const writes = [
-    db.prepare("UPDATE comments SET status = 'held', hold_reason = ?, moderation_reason = ?, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible'").bind(reason, note || null, actorId, now, commentId),
-    auditStmtIfChanged(db, { subjectKind: "comment", subjectId: commentId, actorMemberId: actorId, actorKind, action: reason === "ai" ? "flag" : "hold", reason: note || reason, before: { status: "visible" }, after: { status: "held", holdReason: reason }, operationId, now }),
-  ];
-  if (row.root_id) writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND changes() > 0").bind(row.root_id));
-  const results = await db.batch(writes);
+export async function flagVisible(db: D1Database, commentId: string, reason: "reports" | "ai", actorId: string | null, actorKind: "system" | "ai", operationId: string, now: number, note = ""): Promise<boolean> {
+  // 稽核用 changes() 串在條件式 UPDATE 後面：只有真的標記到列，才寫稽核。
+  const results = await db.batch([
+    db.prepare("UPDATE comments SET hold_reason = ?, moderation_reason = ?, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible' AND hold_reason IS NULL").bind(reason, note || null, actorId, now, commentId),
+    auditStmtIfChanged(db, { subjectKind: "comment", subjectId: commentId, actorMemberId: actorId, actorKind, action: "flag", reason: note || reason, before: { status: "visible" }, after: { status: "visible", holdReason: reason }, operationId, now }),
+  ]);
   if (!results[0].meta.changes) return false;
-  await bumpOp(db, "comment_moderation", reason === "ai" ? "flag" : "hold", "success");
+  await bumpOp(db, "comment_moderation", "flag", "success");
   return true;
 }
 
@@ -126,29 +121,28 @@ export async function decide(
   const closeReports = (resolution: "released" | "removed" | "dismissed", gated: boolean) =>
     db.prepare(`UPDATE comment_reports SET resolved_at = ?, resolution = ?, resolved_by = ? WHERE target_kind = ? AND comment_id = ? AND resolved_at IS NULL${gated ? " AND " + MINE : ""}`)
       .bind(i.now, resolution, i.actorId, c.kind, c.id, ...(gated ? [auditId] : []));
-  const replyCount = (delta: 1 | -1) =>
-    db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count + ?) WHERE id = ? AND ${MINE}`).bind(delta, c.root_id, auditId);
-  const toVisible = (extra = "") =>
-    // 回到公開就清掉攔下的原因：之後再被攔（例如檢舉摺疊）不會帶著上一次的原因。
-    db.prepare(`UPDATE comments SET status = 'visible', hold_reason = NULL, moderation_reason = NULL, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'held'${extra}`).bind(i.actorId, i.now, c.id);
+  const replyDown = () =>
+    db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND ${MINE}`).bind(c.root_id, auditId);
+  const clearFlag = (extra = "") =>
+    // 清掉標記的原因：之後再被標記（例如檢舉達門檻）不會帶著上一次的原因。
+    db.prepare(`UPDATE comments SET hold_reason = NULL, moderation_reason = NULL, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible' AND hold_reason IS NOT NULL${extra}`).bind(i.actorId, i.now, c.id);
 
   let writes: D1PreparedStatement[];
   let next: string;
   if (i.action === "flag") {
-    if (c.status === "visible" && (await conflictOnDuplicate(() => holdVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) return { id: c.id, status: "held" };
-    // 已經不是公開的（已在待審、已移除）：只記下 AI 的意見（稽核），不改狀態；待審佇列從稽核讀出這次攔下之後的 AI 建議。
+    if (c.status === "visible" && (await conflictOnDuplicate(() => flagVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) return { id: c.id, status: "visible" };
+    // 已經有標記、或已移除：只記下 AI 的意見（稽核），不改狀態；待審佇列從稽核讀出這次標記之後的 AI 建議。
     const now = await db.prepare("SELECT status FROM comments WHERE id = ?").bind(c.id).first<{ status: string }>();
     next = now?.status ?? c.status;
     await conflictOnDuplicate(() => auditStmt(db, entry("flag", { status: next }, { status: next })).run());
     await bumpOp(db, "comment_moderation", "flag", "success");
     return { id: c.id, status: next };
   } else if (i.action === "release") {
-    if (c.status !== "held") throw new HttpError(409, "moderation_conflict");
+    if (c.status !== "visible" || c.hold_reason === null) throw new HttpError(409, "moderation_conflict");
     next = "visible";
-    writes = [toVisible(), auditStmtIfChanged(db, entry("release", { status: "held", holdReason: c.hold_reason }, { status: "visible" })), closeReports("released", true)];
-    if (c.root_id) writes.push(replyCount(1));
+    writes = [clearFlag(), auditStmtIfChanged(db, entry("release", { status: "visible", holdReason: c.hold_reason }, { status: "visible" })), closeReports("released", true)];
   } else if (i.action === "remove") {
-    if (c.status !== "visible" && c.status !== "held") throw new HttpError(409, "moderation_conflict");
+    if (c.status !== "visible") throw new HttpError(409, "moderation_conflict");
     next = "removed";
     writes = [
       db.prepare("UPDATE comments SET status = 'removed', deleted_at = ?, moderated_by = ?, moderated_at = ?, moderation_reason = ? WHERE id = ? AND status = ?").bind(i.now, i.actorId, i.now, i.reason, c.id, c.status),
@@ -157,12 +151,11 @@ export async function decide(
       db.prepare(`INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, card_id, extra, delivered) SELECT ?, ?, 'comment_removed', ?, ?, ?, json_object('reason', ?), 1 WHERE ${MINE}`)
         .bind("removed:" + c.id, c.member_id, c.post_id ? "/blog/p/" + c.post_id : "/cards/" + c.card_id, i.now, c.post_id ? null : c.card_id, i.reason, auditId),
     ];
-    if (c.root_id && c.status === "visible") writes.push(replyCount(-1));
-  } else if (c.status === "held" && c.hold_reason === "reports") {
-    // 駁回檢舉：因檢舉被摺疊的一併放行。
+    if (c.root_id) writes.push(replyDown());
+  } else if (c.status === "visible" && c.hold_reason === "reports") {
+    // 駁回檢舉：因檢舉達門檻的標記一併清掉。
     next = "visible";
-    writes = [toVisible(" AND hold_reason = 'reports'"), auditStmtIfChanged(db, entry("dismiss", { status: "held", holdReason: "reports" }, { status: "visible" })), closeReports("dismissed", true)];
-    if (c.root_id) writes.push(replyCount(1));
+    writes = [clearFlag(" AND hold_reason = 'reports'"), auditStmtIfChanged(db, entry("dismiss", { status: "visible", holdReason: "reports" }, { status: "visible" })), closeReports("dismissed", true)];
   } else {
     // 只結案檢舉、不改狀態：沒有可輸的條件式更新，稽核直接寫。
     next = c.status;
@@ -173,13 +166,8 @@ export async function decide(
   const results = await conflictOnDuplicate(() => db.batch(writes));
   if (!results[0].meta.changes) throw new HttpError(409, "moderation_conflict");
   await bumpOp(db, "comment_moderation", i.action, "success");
-  // 應用獎勵：被移除的卡片留言報給 Harbor（已發的獎勵不收回，只是之後不再算這則）
+  // 應用獎勵：被移除的卡片留言報給 Harbor（已發的獎勵不收回，只是之後不再算這則）。留言本身在發表時就報過了，放行不再報。
   if (i.action === "remove" && !c.post_id) await reportCommentRemoved(db, { cardId: String(c.card_id), memberId: c.member_id, commentId: c.id, now: i.now });
-  // 待審後放行：這時才公開，才報留言（留言任務、新手第 4 階段）
-  if (next === "visible" && c.status === "held" && !c.post_id) {
-    const row = await db.prepare("SELECT content FROM comments WHERE id = ?").bind(c.id).first<{ content: string }>().catch(() => null);
-    if (row) await reportRewardComment(db, { cardId: String(c.card_id), memberId: c.member_id, commentId: c.id, content: row.content, reply: !!c.root_id, now: i.now });
-  }
   return { id: c.id, status: next };
 }
 
@@ -232,26 +220,32 @@ export async function removeKeyword(db: D1Database, i: { id: string; actorId: st
 
 export type QueueTab = "held" | "reported" | "removed";
 const QUEUE_PAGE = 20;
+/** 待審＝公開且有標記；被檢舉＝公開、沒有標記、有未結檢舉（有標記的已經在待審，不重複出現）。 */
+export const FLAGGED = "c.status = 'visible' AND c.hold_reason IS NOT NULL";
 const TABS: Record<QueueTab, { where: string; order: string }> = {
-  held: { where: "c.status = 'held'", order: "c.created_at DESC" },
-  reported: { where: `c.status = 'visible' AND EXISTS (SELECT 1 FROM comment_reports r WHERE r.target_kind = ${KIND} AND r.comment_id = c.id AND r.resolved_at IS NULL)`, order: "open_reports DESC, c.created_at DESC" },
+  held: { where: FLAGGED, order: "c.created_at DESC" },
+  reported: { where: `c.status = 'visible' AND c.hold_reason IS NULL AND EXISTS (SELECT 1 FROM comment_reports r WHERE r.target_kind = ${KIND} AND r.comment_id = c.id AND r.resolved_at IS NULL)`, order: "open_reports DESC, c.created_at DESC" },
   removed: { where: "c.status = 'removed'", order: "c.moderated_at DESC" },
 };
 
-/** 審核佇列：卡片與文章的留言一起排；自己的留言不出現；沒做年齡驗證的人看不到成人卡上的留言（文章沒有分級）。 */
-export async function moderationQueue(db: D1Database, viewerId: string, tab: QueueTab, page: number) {
+/**
+ * 審核佇列：卡片與文章的留言一起排；自己的留言不出現；沒做年齡驗證的人看不到成人卡上的留言（文章沒有分級）。
+ * reason：只看待審分頁裡這個原因的標記；null 是全部。
+ */
+export async function moderationQueue(db: D1Database, viewerId: string, tab: QueueTab, page: number, reason: FlagReason | null = null) {
   const age = Number((await memberNsfw(db, viewerId)).ageVerifiedAt !== null);
   const t = TABS[tab];
   const from = `FROM comments c LEFT JOIN cards k ON k.id = c.card_id LEFT JOIN blog_posts p ON p.id = c.post_id LEFT JOIN blog_columns col ON col.id = p.column_id
-    JOIN members m ON m.id = c.member_id WHERE ${t.where} AND c.member_id <> ?1 AND (k.id IS NOT NULL OR p.id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?2)`;
+    JOIN members m ON m.id = c.member_id WHERE ${t.where} AND c.member_id <> ?1 AND (k.id IS NOT NULL OR p.id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?2) AND (?5 IS NULL OR c.hold_reason = ?5)`;
+  const filter = tab === "held" ? reason : null;
   const [total, rows] = await db.batch([
-    db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age),
-    // ai_reason：這次攔下之後（攔下時間起算）AI 最近一次的標記理由；只看待審中的，放行過的舊標記不算。
+    db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age, null, null, filter),
+    // ai_reason：這次標記之後（標記時間起算）AI 最近一次的標記理由；只看還有標記的，放行過的舊標記不算。
     db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason, m.handle, m.display_name, k.names, c.post_id, p.title AS post_title, p.slug AS post_slug, col.slug AS column_slug,
-      (SELECT a.reason FROM audit_log a WHERE c.status = 'held' AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
+      (SELECT a.reason FROM audit_log a WHERE c.hold_reason IS NOT NULL AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
       (SELECT num FROM card_numbers n WHERE n.provider = k.provider AND n.source_role_id = k.source_role_id) AS card_number,
       (SELECT COUNT(*) FROM comment_reports r WHERE r.target_kind = ${KIND} AND r.comment_id = c.id AND r.resolved_at IS NULL) AS open_reports
-      ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE),
+      ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE, filter),
   ]);
   type Row = { id: string; card_id: string; content: string; status: string; hold_reason: string | null; created_at: number; moderated_at: number | null; moderation_reason: string | null; ai_reason: string | null; handle: string; display_name: string | null; names: string | null; card_number: number | null;
     post_id: string | null; post_title: string | null; post_slug: string | null; column_slug: string | null };
@@ -284,20 +278,22 @@ export async function moderationQueue(db: D1Database, viewerId: string, tab: Que
   };
 }
 
-const HOLD_KEYS = ["keyword", "new_account_link", "too_many_links", "duplicate", "recent_removal", "reports", "ai"] as const;
+export const FLAG_REASONS = ["keyword", "new_account_link", "too_many_links", "recent_removal", "reports", "ai"] as const;
+export type FlagReason = (typeof FLAG_REASONS)[number];
 
 export async function moderationStats(db: D1Database, now: number) {
   const since = now - 7 * DAY;
   const [held, open, removed, handled, reasons, holds, reports] = await db.batch([
-    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'held'"),
-    db.prepare("SELECT COUNT(DISTINCT r.comment_id) AS n FROM comment_reports r JOIN comments c ON c.id = r.comment_id WHERE r.resolved_at IS NULL AND c.status IN ('visible','held')"),
+    db.prepare(`SELECT COUNT(*) AS n FROM comments c WHERE ${FLAGGED}`),
+    db.prepare("SELECT COUNT(DISTINCT r.comment_id) AS n FROM comment_reports r JOIN comments c ON c.id = r.comment_id WHERE r.resolved_at IS NULL AND c.status = 'visible'"),
     db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'removed' AND moderated_at > ?").bind(since),
-    // 公開且有處理時間＝被放行過；已移除＝被移除。待審中的 moderated_at 是攔下的時間，不算處理。
-    db.prepare("SELECT moderated_at - created_at AS ms FROM comments WHERE status IN ('visible','removed') AND moderated_at > ? ORDER BY moderated_at DESC LIMIT 500").bind(since),
-    // 每一次攔下都有一筆稽核（發表時的規則、檢舉摺疊、AI 標記），依當時的原因分組。
+    // 公開、沒有標記、有處理時間＝被放行過；已移除＝被移除。還有標記的，moderated_at 是標記的時間，不算處理。
+    db.prepare("SELECT moderated_at - created_at AS ms FROM comments WHERE ((status = 'visible' AND hold_reason IS NULL) OR status = 'removed') AND moderated_at > ? ORDER BY moderated_at DESC LIMIT 500").bind(since),
+    // 每一次標記都有一筆稽核（發表時的規則、檢舉達門檻、AI 標記），依當時的原因分組。
     db.prepare("SELECT json_extract(after_json, '$.holdReason') AS reason, COUNT(*) AS n FROM audit_log WHERE subject_kind = 'comment' AND action IN ('hold','flag') AND created_at > ? GROUP BY reason").bind(since),
-    // 攔截率：近 7 天新留言中「曾被攔下」的比例。放行會清掉 hold_reason，所以看攔下的稽核（同上，每次攔下都有一筆），不看欄位。
-    // 只算真的攔下的那幾筆（after 有 holdReason）：AI 對已在待審或已移除的留言再標記，只記意見，不算攔下。
+    // 標記率：近 7 天新留言中「曾被標記」的比例。放行會清掉 hold_reason，所以看標記的稽核（同上，每次標記都有一筆），不看欄位。
+    // 只算真的標記到的那幾筆（after 有 holdReason）：AI 對已有標記或已移除的留言再標記，只記意見，不算標記。
+    // 舊稽核的 action 是 hold（2026-10-30 前留言會被藏起來），一起算。
     // ponytail: 這條與下一條（近 7 天檢舉）依 created_at 掃整張表；量大時給 comments、comment_reports 補 created_at 索引。
     db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(EXISTS (SELECT 1 FROM audit_log a WHERE a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action IN ('hold','flag')
         AND json_extract(a.after_json, '$.holdReason') IS NOT NULL)), 0) AS held
@@ -307,7 +303,7 @@ export async function moderationStats(db: D1Database, now: number) {
   const n = (r: D1Result) => (r.results[0] as { n: number }).n;
   const ms = (handled.results as { ms: number }[]).map((r) => r.ms).sort((a, b) => a - b);
   const mid = ms.length >> 1;
-  const holdReasons7d = Object.fromEntries(HOLD_KEYS.map((k) => [k, 0])) as Record<(typeof HOLD_KEYS)[number], number>;
+  const holdReasons7d = Object.fromEntries(FLAG_REASONS.map((k) => [k, 0])) as Record<FlagReason, number>;
   const fresh = holds.results[0] as { total: number; held: number };
   for (const r of reasons.results as { reason: string | null; n: number }[]) if (r.reason && r.reason in holdReasons7d) holdReasons7d[r.reason as keyof typeof holdReasons7d] = r.n;
   return {

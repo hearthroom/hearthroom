@@ -96,25 +96,25 @@ describe("文章留言", () => {
     expect((await json(reply)).error).toBe("blog_comments_closed");
   });
 
-  it("命中關鍵詞的文章留言進待審，佇列標出文章；放行後被回覆的人收到指向文章的通知", async () => {
+  it("命中關鍵詞的文章留言照常公開、進待審，佇列標出文章；被回覆的人立刻收到指向文章的通知", async () => {
     const root = await say("fan", "頂層");
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
-    const held = await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }));
-    expect(held.status).toBe("held");
+    const flagged = await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }));
+    expect(flagged.status).toBe("visible");
     const queue = await json(await send("/v1/moderation/comments?tab=held", "mod"));
     expect(queue.total).toBe(1);
-    expect(queue.items[0]).toMatchObject({ id: held.commentId, target: { kind: "post", id: postId, title: "開站了", column: "news", slug: "hello" } });
-    expect((await decide(held.commentId, "release")).status).toBe(200);
+    expect(queue.items[0]).toMatchObject({ id: flagged.commentId, target: { kind: "post", id: postId, title: "開站了", column: "news", slug: "hello" } });
     const n = await env.DB.prepare("SELECT path, card_id FROM community_notifications WHERE kind = 'comment_reply' AND member_id = ?").bind(memberOf(FAN)).first();
     expect(n).toEqual({ path: `/blog/p/${postId}`, card_id: null });
+    expect((await decide(flagged.commentId, "release")).status).toBe(200);
   });
 
   it("待審的文章留言算進其他審核人的徽章數，自己的不算", async () => {
     const summary = async (token: string) => (await json(await send("/v1/moderation/summary", token))).comments;
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
-    expect((await json(await post("fan", { content: "違禁一" }))).status).toBe("held");
+    expect((await json(await post("fan", { content: "違禁一" }))).status).toBe("visible");
     expect(await summary("mod")).toBe(1);
-    expect((await json(await post("mod", { content: "違禁二" }))).status).toBe("held");
+    expect((await json(await post("mod", { content: "違禁二" }))).status).toBe("visible");
     expect(await summary("mod")).toBe(1);
     expect(await summary("editor")).toBe(2);
   });

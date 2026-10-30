@@ -8,10 +8,11 @@ import { createPinia } from 'pinia';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 
-const held = { id: 'c1', target: { kind: 'card', id: '12', title: '雨夜書店', cardNumber: 3 }, author: { handle: 'rainy', displayName: '小雨' }, content: 'buy now', status: 'held', holdReason: 'keyword', reports: { total: 0, byReason: {} }, createdAt: 1, moderatedAt: 1, moderationReason: null, suggestedBy: null };
+const held = { id: 'c1', target: { kind: 'card', id: '12', title: '雨夜書店', cardNumber: 3 }, author: { handle: 'rainy', displayName: '小雨' }, content: 'buy now', status: 'visible', holdReason: 'keyword', reports: { total: 0, byReason: {} }, createdAt: 1, moderatedAt: 1, moderationReason: null, suggestedBy: null };
 const mocks = vi.hoisted(() => ({
   ApiError: null as unknown as new (s: number, m: string, c: string) => Error,
   queue: [] as unknown[],
+  fetchQueue: vi.fn(),
   decide: vi.fn(),
   keywords: vi.fn(),
   settings: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('../src/lib/api', async (original) => {
   return {
     ...real,
     fetchReviewMe: async () => ({ reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 4, role: 'reviewer' }),
-    fetchCommentQueue: async () => ({ total: mocks.queue.length, items: mocks.queue }),
+    fetchCommentQueue: async (...args: unknown[]) => { mocks.fetchQueue(...args); return { total: mocks.queue.length, items: mocks.queue }; },
     fetchCommentStats: async () => ({ held: 4, openReports: 1, removed7d: 2, medianHandleMs7d: 30 * 60_000, holdReasons7d: {} }),
     fetchKeywords: mocks.keywords,
     decideComment: mocks.decide,
@@ -47,6 +48,7 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
   mocks.keywords.mockReset().mockResolvedValue({ items: [{ id: 'k1', pattern: 'buy now', createdAt: 1 }] });
   mocks.decide.mockReset();
+  mocks.fetchQueue.mockReset();
   mocks.queue = [held];
 });
 afterEach(() => { app?.unmount(); document.body.innerHTML = ''; });
@@ -164,4 +166,19 @@ it('saves blank settings as off and keeps the page read-only for non-admins', as
   await vi.waitFor(() => expect(host.querySelector('[data-read-only]')?.textContent).toBe(t('moderation.settings.readOnly')));
   expect(days().disabled).toBe(true);
   expect(host.querySelector('button.settings-save')).toBeNull();
+});
+
+it('says pending comments stay visible, and filters the pending queue by flag reason', async () => {
+  await mount('/review/comments');
+  await vi.waitFor(() => expect(host.querySelector('[data-comment="c1"]')).not.toBeNull());
+  expect(host.textContent).toContain(t('moderation.comments.heldNote'));
+  expect(mocks.fetchQueue).toHaveBeenLastCalledWith('held', 1, 'synthetic', null);
+  const chip = host.querySelector<HTMLButtonElement>('[data-reason="keyword"]')!;
+  expect(chip.getAttribute('aria-pressed')).toBe('false');
+  chip.click();
+  await vi.waitFor(() => expect(mocks.fetchQueue).toHaveBeenLastCalledWith('held', 1, 'synthetic', 'keyword'));
+  expect(chip.getAttribute('aria-pressed')).toBe('true');
+  expect(host.querySelector('[data-reason="duplicate"]')).toBeNull();
+  host.querySelector<HTMLButtonElement>('[data-reason="all"]')!.click();
+  await vi.waitFor(() => expect(mocks.fetchQueue).toHaveBeenLastCalledWith('held', 1, 'synthetic', null));
 });

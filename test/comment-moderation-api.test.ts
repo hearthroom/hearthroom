@@ -40,19 +40,28 @@ const decide = (token: string, id: string, action: string, reason = "理由", op
 const count = async (sql: string, ...binds: unknown[]) => (await env.DB.prepare(sql).bind(...binds).first<{ n: number }>())!.n;
 
 describe("處理", () => {
-  it("放行：本人以外的人看得到、回覆數補上、被回覆者收到通知、留稽核", async () => {
+  it("放行：清掉標記、離開待審；留言一直公開，回覆數與通知不重複；留稽核", async () => {
     const root = await say("fan", "頂層");
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const reply = (await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }))).commentId;
-    expect((await json(await SELF.fetch("https://c.test/v1/moderation/summary", { headers: bearer("mod") }))).comments).toBe(1);
+    const summary = async () => (await json(await SELF.fetch("https://c.test/v1/moderation/summary", { headers: bearer("mod") }))).comments;
+    expect(await summary()).toBe(1);
+    expect((await queue("held")).map((i) => i.id)).toEqual([reply]);
     expect((await decide("mod", reply, "release")).status).toBe(200);
+    expect(await summary()).toBe(0);
+    expect(await queue("held")).toEqual([]);
+    expect(await rowOf(reply)).toMatchObject({ status: "visible", hold_reason: null });
     const top = (await json(await list())).comments[0];
     expect(top.replyCount).toBe(1);
     expect(top.replies[0].content).toBe("違禁回覆");
-    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'").first<{ n: number }>();
-    expect(n!.n).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(1);
     const a = await env.DB.prepare("SELECT actor_kind, action FROM audit_log WHERE subject_id=? AND action='release'").bind(reply).first();
     expect(a).toEqual({ actor_kind: "human", action: "release" });
+  });
+
+  it("沒有標記的留言不能放行", async () => {
+    const id = await say("fan", "普通");
+    expect((await decide("mod", id, "release")).status).toBe(409);
   });
 
   it("兩個人同時放行同一則：一個成功一個衝突，回覆數、稽核、通知都只有一次", async () => {
@@ -83,8 +92,6 @@ describe("處理", () => {
 
   it("同一個操作編號連點移除：回覆數只減一次，移除通知只有一則", async () => {
     for (let round = 1; round <= 3; round++) { // 每輪 fan 留兩則，3 輪剛好在每分鐘 6 則的上限內
-      // 上一輪的移除放到 30 天前，不然「近 30 天被移除過」會把這一輪的回覆先攔下。
-      await env.DB.prepare("UPDATE comments SET moderated_at = 0 WHERE status = 'removed'").run();
       const root = await say("fan", "頂層 " + round);
       const reply = await say("other", "回覆 " + round, { rootId: root, parentId: root });
       await say("fan", "再一則 " + round, { rootId: root, parentId: root });
@@ -112,13 +119,15 @@ describe("處理", () => {
     expect(q.items[0]).toMatchObject({ id, status: "removed", moderationReason: "廣告", reports: { total: 1, byReason: { spam: 1 } }, author: { handle: testHandle(FAN) } });
   });
 
-  it("駁回檢舉：因檢舉被摺疊的留言恢復公開，檢舉結案", async () => {
+  it("駁回檢舉：因檢舉達門檻的標記一併清掉，檢舉結案；留言從頭到尾都公開", async () => {
     await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','1',NULL,1)").run();
     const id = await say("fan", "正常的話");
-    expect((await json(await report("other", id, { reason: "abuse" }))).folded).toBe(true);
-    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=held", { headers: bearer("mod") }))).items[0]).toMatchObject({ id, holdReason: "reports", reports: { total: 1, byReason: { abuse: 1 } } });
+    expect((await report("other", id, { reason: "abuse" })).status).toBe(200);
+    expect((await json(await list())).total).toBe(1);
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=held", { headers: bearer("mod") }))).items[0]).toMatchObject({ id, status: "visible", holdReason: "reports", reports: { total: 1, byReason: { abuse: 1 } } });
     expect((await decide("mod", id, "dismiss", "")).status).toBe(400);
     expect(await json(await decide("mod", id, "dismiss", "沒問題"))).toEqual({ id, status: "visible" });
+    expect(await rowOf(id)).toMatchObject({ status: "visible", hold_reason: null });
     expect((await json(await list())).total).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM comment_reports WHERE comment_id=? AND resolution='dismissed'", id)).toBe(1);
   });
@@ -127,9 +136,10 @@ describe("處理", () => {
     const id = await say("fan", "看起來可疑");
     expect((await decide("agent", id, "remove")).status).toBe(403);
     expect((await env.DB.prepare("SELECT status FROM comments WHERE id=?").bind(id).first<{ status: string }>())!.status).toBe("visible");
-    expect((await decide("agent", id, "flag", "疑似廣告")).status).toBe(200);
+    expect(await json(await decide("agent", id, "flag", "疑似廣告"))).toEqual({ id, status: "visible" });
+    expect((await json(await list())).total).toBe(1);
     const q = await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=held", { headers: bearer("mod") }));
-    expect(q.items[0]).toMatchObject({ id, suggestedBy: "ai", holdReason: "ai" });
+    expect(q.items[0]).toMatchObject({ id, status: "visible", suggestedBy: "ai", holdReason: "ai" });
     const a = await env.DB.prepare("SELECT actor_kind FROM audit_log WHERE subject_id=? AND action='flag'").bind(id).first<{ actor_kind: string }>();
     expect(a!.actor_kind).toBe("ai");
     const handle = (await json(await list("mod"))).comments[0]?.handle ?? testHandle(FAN);
@@ -167,7 +177,9 @@ describe("禁言與關鍵詞", () => {
   it("關鍵詞新增後立刻生效", async () => {
     const add = await SELF.fetch("https://c.test/v1/moderation/comment-keywords", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ pattern: "代儲", operationId: crypto.randomUUID() }) });
     expect(add.status).toBe(200);
-    expect((await json(await post("fan", { content: "有人要代儲嗎" }))).status).toBe("held");
+    const body = await json(await post("fan", { content: "有人要代儲嗎" }));
+    expect(body.status).toBe("visible");
+    expect(await rowOf(body.commentId)).toMatchObject({ hold_reason: "keyword" });
   });
 });
 
@@ -196,16 +208,16 @@ describe("統計與指標", () => {
     expect(s.held).toBe(0);
     expect(s.medianHandleMs7d).toBeGreaterThanOrEqual(0);
     const metrics = await (await SELF.fetch("https://c.test/metrics")).text();
-    expect(metrics).toContain('hearthroom_comment_moderation_total{action="hold",outcome="success"} 1');
+    expect(metrics).toContain('hearthroom_comment_moderation_total{action="flag",outcome="success"} 1');
     expect(metrics).toContain('hearthroom_comment_moderation_total{action="release",outcome="success"} 1');
   });
 
-  it("攔截率：近 7 天新留言中曾被攔下的比例（放行過的也算）；近 7 天檢舉數", async () => {
+  it("標記率：近 7 天新留言中曾被標記的比例（放行過的也算）；近 7 天檢舉數", async () => {
     const stats = async () => json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
     expect(await stats()).toMatchObject({ holdRate7d: null, reports7d: 0 });
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const released = (await json(await post("fan", { content: "違禁一" }))).commentId;
-    await decide("mod", released, "release"); // 放行後 hold_reason 清空，仍算曾被攔下
+    await decide("mod", released, "release"); // 放行後 hold_reason 清空，仍算曾被標記
     const plain = await say("fan", "普通");
     const old = (await json(await post("fan", { content: "違禁二" }))).commentId;
     await env.DB.prepare("UPDATE comments SET created_at = ? WHERE id = ?").bind(Date.now() - 8 * 86_400_000, old).run();
@@ -215,7 +227,7 @@ describe("統計與指標", () => {
     expect(await stats()).toMatchObject({ holdRate7d: 0.5, reports7d: 1 });
   });
 
-  it("攔截率：AI 對已移除的留言再標記一次，不算被攔下", async () => {
+  it("標記率：AI 對已移除的留言再標記一次，不算被標記", async () => {
     const stats = async () => json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
     const id = await say("fan", "普通");
     expect((await decide("mod", id, "remove")).status).toBe(200);
@@ -260,20 +272,20 @@ describe("AI 審核帳號只有留言審核的權限", () => {
 });
 
 describe("AI 的建議只在待審時出現", () => {
-  it("AI 標記一則已經被規則攔下的留言：待審佇列看得到 AI 建議與理由，原本的攔截原因保留", async () => {
+  it("AI 標記一則已經被規則標記的留言：待審佇列看得到 AI 建議與理由，原本的標記原因保留", async () => {
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const id = (await json(await post("fan", { content: "違禁" }))).commentId;
-    expect(await json(await decide("agent", id, "flag", "像是廣告"))).toEqual({ id, status: "held" });
+    expect(await json(await decide("agent", id, "flag", "像是廣告"))).toEqual({ id, status: "visible" });
     expect((await queue("held"))[0]).toMatchObject({ id, holdReason: "keyword", suggestedBy: "ai", moderationReason: "像是廣告" });
   });
 
-  it("AI 標記後被放行，之後又因檢舉被摺疊：不再顯示 AI 建議；放行與駁回都清掉攔截原因", async () => {
+  it("AI 標記後被放行，之後又因檢舉達門檻被標記：不再顯示 AI 建議；放行與駁回都清掉標記原因", async () => {
     const id = await say("fan", "正常的話");
     await decide("agent", id, "flag", "疑似廣告");
     expect((await decide("mod", id, "release")).status).toBe(200);
     expect(await rowOf(id)).toMatchObject({ status: "visible", hold_reason: null, moderation_reason: null });
     await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','1',NULL,1)").run();
-    expect((await json(await report("other", id, { reason: "spam" }))).folded).toBe(true);
+    expect((await report("other", id, { reason: "spam" })).status).toBe(200);
     expect((await queue("held"))[0]).toMatchObject({ id, holdReason: "reports", suggestedBy: null, moderationReason: null });
     expect((await decide("mod", id, "dismiss", "沒問題")).status).toBe(200);
     expect(await rowOf(id)).toMatchObject({ status: "visible", hold_reason: null, moderation_reason: null });
@@ -292,7 +304,7 @@ describe("留言被刪掉時檢舉一起結案", () => {
     expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }))).openReports).toBe(0);
   });
 
-  it("統計只算還看得到或待審的留言上的未結檢舉", async () => {
+  it("統計只算還看得到的留言上的未結檢舉", async () => {
     const id = await say("fan", "留言");
     await report("other", id, { reason: "spam" });
     await env.DB.prepare("UPDATE comments SET status='removed', deleted_at=1 WHERE id=?").bind(id).run();
@@ -316,15 +328,15 @@ describe("刪除只生效一次", () => {
   });
 });
 
-describe("放行回覆的通知時間", () => {
-  it("通知的時間是放行的時間，不是發表的時間", async () => {
+describe("被標記的回覆的通知", () => {
+  it("發表時就通知；放行不再通知第二次", async () => {
     const root = await say("fan", "頂層");
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const reply = (await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }))).commentId;
-    await env.DB.prepare("UPDATE comments SET created_at = created_at - 3600000 WHERE id=?").bind(reply).run();
+    const created = await count("SELECT created_at AS n FROM comments WHERE id=?", reply);
+    expect(await count("SELECT created_at AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(created);
     await decide("mod", reply, "release");
-    const r = await env.DB.prepare("SELECT moderated_at FROM comments WHERE id=?").bind(reply).first<{ moderated_at: number }>();
-    expect(await count("SELECT created_at AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(r!.moderated_at);
+    expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(1);
   });
 });
 
@@ -353,5 +365,31 @@ describe("留言列表告訴被禁言的人", () => {
     expect("mutedUntil" in (await json(await list()))).toBe(false);
     await mute(null);
     expect((await json(await list("fan"))).mutedUntil).toBeNull();
+  });
+});
+
+describe("待審分頁", () => {
+  it("依原因篩選；不認得的原因 400", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)"),
+      env.DB.prepare("INSERT INTO community_settings VALUES ('commentMaxLinks','0',NULL,1)"),
+    ]);
+    const keyword = await say("fan", "違禁");
+    const links = await say("fan", "看 https://a.test");
+    const ids = async (q: string) => ((await json(await SELF.fetch(`https://c.test/v1/moderation/comments?tab=held${q}`, { headers: bearer("mod") }))).items as any[]).map((i) => i.id).sort();
+    expect(await ids("")).toEqual([keyword, links].sort());
+    expect(await ids("&reason=keyword")).toEqual([keyword]);
+    expect(await ids("&reason=too_many_links")).toEqual([links]);
+    expect((await SELF.fetch("https://c.test/v1/moderation/comments?tab=held&reason=duplicate", { headers: bearer("mod") })).status).toBe(400);
+  });
+
+  it("有標記又被檢舉的留言只在待審出現，被檢舉分頁不重複列", async () => {
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const flagged = await say("fan", "違禁");
+    const plain = await say("fan", "普通");
+    await report("other", flagged, { reason: "spam" });
+    await report("other", plain, { reason: "spam" });
+    expect((await queue("held")).map((i) => i.id)).toEqual([flagged]);
+    expect((await queue("reported")).map((i) => i.id)).toEqual([plain]);
   });
 });

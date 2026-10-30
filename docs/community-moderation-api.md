@@ -19,7 +19,7 @@ All paths are under the API origin (`https://hearthroom.club` for the hosted sit
 |---|---|---|---|
 | Read comment queue and stats | yes | yes | yes |
 | Comment `release` | yes | yes | yes |
-| Comment `flag` (hold a visible comment for review) | no | no | yes |
+| Comment `flag` (put a visible comment in the pending queue) | no | no | yes |
 | Comment `remove`, `dismiss` | yes | yes | no, 403 `agent_not_allowed` |
 | Mutes, keywords | yes | yes | no |
 | Read campaign queue, detail, settings list | yes | yes | yes |
@@ -42,9 +42,11 @@ Every write takes `operationId`, a string matching `^[a-zA-Z0-9-]{16,80}$` (a UU
 
 Cards' comments and blog post comments are in one queue. Your own comments never appear in it, and comments on adult-rated cards are hidden from reviewers without age verification.
 
-### `GET /v1/moderation/comments?tab=held|reported|removed&page=1`
+Comments are published first and reviewed afterwards. A comment that matches a rule (keyword, links, recent removal), reaches the report threshold, or is flagged by the AI stays public; it only gets a `holdReason` and appears in the `held` (pending) tab. `release` clears that reason. Only `remove` takes a comment down, and a comment nobody handles stays public.
 
-20 per page. A missing or other `tab` gives 400 `invalid_arguments`.
+### `GET /v1/moderation/comments?tab=held|reported|removed&page=1&reason=`
+
+20 per page. A missing or other `tab` gives 400 `invalid_arguments`. `reason` (one of the `holdReason` values) narrows the `held` tab to that reason; an unknown one gives 400 `invalid_arguments`, and other tabs ignore it.
 
 ```ts
 { total: number, items: {
@@ -52,34 +54,37 @@ Cards' comments and blog post comments are in one queue. Your own comments never
     target: { kind: "card", id, title, cardNumber: number|null } | { kind: "post", id, title, column, slug },
     author: { handle, displayName },
     content: string,
-    status: "visible"|"held"|"removed",
-    holdReason: "keyword"|"new_account_link"|"too_many_links"|"duplicate"|"recent_removal"|"reports"|"ai"|null,
+    status: "visible"|"removed",
+    holdReason: "keyword"|"new_account_link"|"too_many_links"|"recent_removal"|"reports"|"ai"|null,
     reports: { total: number, byReason: Record<string, number> },
     createdAt: number, moderatedAt: number|null,
-    moderationReason: string|null,   // the removal reason, or the AI's flag reason while held
+    moderationReason: string|null,   // the removal reason, or the AI's flag reason while pending
     suggestedBy: "ai"|null           // "ai" when moderationReason is an AI flag
   }[] }
 ```
 
-`held` is newest first; `reported` is visible comments with open reports, most reports first; `removed` is most recently removed first.
+`held` is visible comments with a `holdReason`, newest first; `reported` is visible comments without a `holdReason` that have open reports, most reports first; `removed` is most recently removed first.
 
 ### `GET /v1/moderation/comments/stats`
 
 ```ts
 { held, openReports, removed7d: number, medianHandleMs7d: number|null,
-  holdReasons7d: Record<"keyword"|"new_account_link"|"too_many_links"|"duplicate"|"recent_removal"|"reports"|"ai", number> }
+  holdReasons7d: Record<"keyword"|"new_account_link"|"too_many_links"|"recent_removal"|"reports"|"ai", number>,
+  holdRate7d: number|null, reports7d: number }
 ```
+
+`held` is the number of pending (flagged) comments; `holdRate7d` is the share of the last 7 days' new comments that were ever flagged.
 
 ### `POST /v1/moderation/comments/:id/decision`
 
-Body: `{ action: "release"|"remove"|"dismiss"|"flag", reason?: string, operationId }`. Response: `{ id, status: "visible"|"held"|"removed" }`.
+Body: `{ action: "release"|"remove"|"dismiss"|"flag", reason?: string, operationId }`. Response: `{ id, status: "visible"|"removed" }`.
 
 | action | Who | Effect | `reason` |
 |---|---|---|---|
-| `release` | human, AI | held comment becomes visible and its open reports close | optional |
-| `remove` | human | visible or held comment becomes removed; the author is notified with the reason | required |
-| `dismiss` | human | closes the open reports; a comment folded because of reports is also made visible | required |
-| `flag` | AI only | a visible comment becomes held with hold reason `ai`; on a comment that is already held or removed it only records the AI's opinion and changes nothing else | required |
+| `release` | human, AI | clears a pending comment's `holdReason` and closes its open reports; 409 on a comment that is not pending | optional |
+| `remove` | human | visible comment becomes removed; the author is notified with the reason | required |
+| `dismiss` | human | closes the open reports; a comment pending because of reports also loses that `holdReason` | required |
+| `flag` | AI only | a visible comment without a `holdReason` gets hold reason `ai` and stays public; on a comment that is already pending or removed it only records the AI's opinion and changes nothing else | required |
 
 `reason` is trimmed and cut to 2000 characters. Errors:
 

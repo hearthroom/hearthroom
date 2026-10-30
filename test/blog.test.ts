@@ -220,20 +220,17 @@ describe("留言目標", () => {
     await expect(env.DB.prepare("INSERT INTO comments (id, card_id, member_id, content, created_at) VALUES ('y', 0, 'm', 't', 1)").run()).rejects.toThrow(/comment target invalid/);
   });
 
-  it("文章留言的回覆、放行與按讚通知走文章短網址，card_id 寫 NULL", async () => {
+  it("文章留言的回覆與按讚通知走文章短網址，card_id 寫 NULL", async () => {
     const a = await makeMember(50010);
     const b = await makeMember(50011);
     await env.DB.batch([
       env.DB.prepare("INSERT INTO comments (id, card_id, post_id, member_id, content, created_at) VALUES ('top', 0, 'p1', ?, 't', 1)").bind(a),
       env.DB.prepare("INSERT INTO comments (id, card_id, post_id, member_id, parent_id, root_id, content, created_at) VALUES ('r1', 0, 'p1', ?, 'top', 'top', 't', 2)").bind(b),
-      env.DB.prepare("INSERT INTO comments (id, card_id, post_id, member_id, parent_id, root_id, content, created_at, status) VALUES ('r2', 0, 'p1', ?, 'top', 'top', 't', 3, 'held')").bind(b),
-      env.DB.prepare("UPDATE comments SET status='visible', moderated_at=9 WHERE id='r2'"),
       env.DB.prepare("INSERT INTO comment_likes (comment_id, member_id, created_at) VALUES ('top', ?, 4)").bind(b),
     ]);
     const rows = await env.DB.prepare("SELECT event_key, path, card_id, created_at FROM community_notifications ORDER BY event_key").all<{ event_key: string; path: string; card_id: number | null; created_at: number }>();
     expect(rows.results).toEqual([
       { event_key: "comment:r1", path: "/blog/p/p1", card_id: null, created_at: 2 },
-      { event_key: "comment:r2", path: "/blog/p/p1", card_id: null, created_at: 9 },
       { event_key: "like:top", path: "/blog/p/p1", card_id: null, created_at: 4 },
     ]);
   });

@@ -137,16 +137,13 @@ async function submit(root?: Comment, target?: Comment) {
     const created = await createComment(where.value, { content: text, parentId: target?.commentId, rootId: root?.commentId }, token);
     if (root) { replyDraft.value = ""; replyTo.value = null; delete expanded.value[root.commentId]; } else draft.value = "";
     await load(true);
-    // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，翻回覆串本身把它找出來，留在原位（審核中的也是，只有本人看得到）
+    // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，翻回覆串本身把它找出來，留在原位
     const fresh = root && comments.value.find((c) => c.commentId === root.commentId);
     if (fresh && !fresh.replies?.some((r) => r.commentId === created.commentId)) {
       do await showAllReplies(fresh);
       while (!repliesOf(fresh).some((r) => r.commentId === created.commentId) && expanded.value[fresh.commentId]?.hasMore);
     }
-    const held = created.status === "held";
-    // 審核中的留言別人看不到——說一聲，不然像是已經公開了
-    if (held) say(t("comment.submitted"));
-    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: !held });
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: true });
   } catch (err) {
     track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: false });
     if (err instanceof ApiError && err.code === "blog_comments_closed") { closedLate.value = true; replyTo.value = null; return; }
@@ -251,21 +248,17 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.official" class="cmt__badge">{{ $t("comment.official") }}</span>
             <span v-if="c.isPinned || (pinnedId && c.commentId === pinnedId)" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
-            <span v-if="c.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
             <span v-if="c.score" class="cmt__stars" role="img" :aria-label="$t('score.stars', { n: c.score })">{{ "★".repeat(c.score) }}<span class="cmt__stars-off">{{ "★".repeat(5 - c.score) }}</span></span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
           </div>
           <p class="cmt__text">{{ c.content }}</p>
           <div class="cmt__actions">
-            <!-- 審核中的還沒公開：不能按讚、不能回覆 -->
-            <template v-if="c.status !== 'held'">
-              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="c.isLiked" @click="toggleLike(c)">
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
-                {{ c.likeCount || "" }}
-              </button>
-              <button v-if="session.me && !blocked && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
-              <button v-if="canPin && c.status === 'visible'" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t(pinnedId === c.commentId ? "comment.unpin" : "comment.pin") }}</button>
-            </template>
+            <button class="cmt__act" :class="{ 'is-on': c.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="c.isLiked" @click="toggleLike(c)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
+              {{ c.likeCount || "" }}
+            </button>
+            <button v-if="session.me && !blocked" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+            <button v-if="canPin" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t(pinnedId === c.commentId ? "comment.unpin" : "comment.pin") }}</button>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
             <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
           </div>
@@ -279,19 +272,16 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
                   <CommunityName :handle="r.handle" :name="r.accountNickName" class="cmt__name" />
                   <span v-if="r.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
                   <span v-if="r.official" class="cmt__badge">{{ $t("comment.official") }}</span>
-                  <span v-if="r.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
                   <span class="subtle">{{ relativeTime(Date.parse(r.createTime)) }}</span>
                 </div>
                 <p class="cmt__text"><span v-if="r.replyToNickName && r.parentId !== c.commentId" class="cmt__to">@{{ r.replyToNickName }} </span>{{ r.content }}</p>
                 <div class="cmt__actions">
-                  <template v-if="r.status !== 'held'">
-                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="r.isLiked" @click="toggleLike(r)">
-                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
-                      {{ r.likeCount || "" }}
-                    </button>
-                    <!-- 只有公開的頂層收得到回覆：被移除或自己待審中的頂層底下不給回 -->
-                    <button v-if="session.me && !blocked && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
-                  </template>
+                  <button class="cmt__act" :class="{ 'is-on': r.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="r.isLiked" @click="toggleLike(r)">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
+                    {{ r.likeCount || "" }}
+                  </button>
+                  <!-- 只有公開的頂層收得到回覆：被移除的頂層底下不給回 -->
+                  <button v-if="session.me && !blocked && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
                   <button v-if="r.canDelete" class="cmt__act cmt__act--danger" @click="remove(r)">{{ $t("comment.delete") }}</button>
                   <button v-if="reportable(r)" class="cmt__act cmt__act--report" @click="report(r)">{{ $t("comment.report") }}</button>
                 </div>
@@ -344,7 +334,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
 .cmt__name { font-size: 13.5px; font-weight: 600; }
 a.cmt__name:hover { color: var(--accent-text); }
 .cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-tint); color: var(--accent-text); }
-.cmt__badge--pin, .cmt__badge--held { background: var(--surface-2); color: var(--text-2); }
+.cmt__badge--pin { background: var(--surface-2); color: var(--text-2); }
 .cmt__removed { margin: 0; font-size: 13.5px; color: var(--text-3); }
 .cmt__text { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 .cmt__to { color: var(--accent-text); }
