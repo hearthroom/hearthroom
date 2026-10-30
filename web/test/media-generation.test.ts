@@ -105,4 +105,19 @@ describe("generating and saving", () => {
     expect(url).toBe("https://api.harperharbor.com/open/v1/generations/t1/save");
     expect(JSON.parse(String(init.body))).toEqual({ folderIds: ["f-art"] });
   });
+
+  it("finds the library URLs of saved files by the task id in their names", async () => {
+    const fetcher = stub(() => json({ code: 0, data: { imageList: [
+      { id: "a2", imageUrl: "https://assets.test/Mira/gpt-image-2-3f2a9c1e-2.png" },
+      { id: "other", imageUrl: "https://assets.test/Mira/old.png" },
+      { id: "a1", imageUrl: "https://assets.test/Mira/gpt-image-2-3f2a9c1e-1.png" },
+    ] } }));
+    expect(await client().savedUrls("3f2a9c1e-0000-4000-8000-000000000000", ["a1", "a2", "gone"])).toEqual([
+      "https://assets.test/Mira/gpt-image-2-3f2a9c1e-1.png",
+      "https://assets.test/Mira/gpt-image-2-3f2a9c1e-2.png",
+    ]);
+    const url = new URL(fetcher.mock.calls[0]![0]);
+    expect(url.pathname).toBe("/open/v1/image/list");
+    expect(url.searchParams.get("q")).toBe("3f2a9c1e");
+  });
 });

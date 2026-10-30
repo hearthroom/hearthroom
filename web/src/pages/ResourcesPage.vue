@@ -10,8 +10,7 @@ import {
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
-import { accountToken, connectAccount } from "@/lib/connections";
-import { dropManagedToken } from "@/lib/managed-auth";
+import { connectAccount } from "@/lib/connections";
 import { PROVIDERS, providerName, type ProviderId } from "@/lib/provider";
 import {
   resourceClient,
@@ -31,7 +30,8 @@ import ResourcePreview from "@/components/ResourcePreview.vue";
 import ResourceSelect from "@/components/ResourceSelect.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
 import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
-import { generationClient, type GenerationModel, type SaveTarget } from "@/lib/media-generation";
+import type { SaveTarget } from "@/lib/media-generation";
+import { useImageGeneration } from "@/lib/use-image-generation";
 const { lp } = useLocalePath();
 const session = useSession(),
   route = useRoute(),
@@ -176,61 +176,22 @@ function query(targetPage = page.value) {
         : undefined,
   };
 }
-async function credentials(id: ProviderId | "") {
-  if (!id) throw new Error(t("resource.choose"));
-  const identity = session.profile?.identities.find((i) => i.provider === id);
-  if (!identity) throw new Error(t("auth.expired"));
-  const account = identity.externalId;
-  const sameAccount = () => session.profile?.identities.some(i => i.provider === id && i.externalId === account);
-  const token = async (rejected?: string) => {
-    if (!sameAccount()) throw new ApiError(401, t("auth.expired"));
-    if (rejected) dropManagedToken(id, rejected);
-    const value = await accountToken(id, account, { verifyManaged: true });
-    // A sign-out/account change can also happen while token renewal is in flight.
-    if (!value || !sameAccount()) throw new ApiError(401, t("auth.expired"));
-    return value;
-  };
-  await token();
-  return { id, token };
-}
+// 平台憑證與生成圖片的入口狀態、授權見 use-image-generation。
+const { credentials, imageGen, generator, probeGeneration: probe, markReauthorizing } = useImageGeneration(() => provider.value);
 async function client(id = provider.value) {
   const c = await credentials(id);
   return resourceClient(c.id, c.token);
 }
-// 生成圖片：Harbor 有這組端點才出現入口（還沒上線時 404，就不顯示）；這次登入沒有 media.generate 時是 403，
-// 入口照樣出現，打開後請他重新登入授權。剛授權回來還是 403，就不再帶去登入，免得在登入頁之間繞圈。
-const imageGen = ref<{ access: "ready" | "reauth" | "unavailable"; models: GenerationModel[] } | null>(null);
 const generateOpen = ref(false),
   generateMounted = ref(false),
   generateRunning = ref(false);
 let generationProbed = "";
-const REAUTH_KEY = "hearthroom.resources.generateReauthAt";
-const recentlyReauthorized = () => {
-  try {
-    return Date.now() - Number(sessionStorage.getItem(REAUTH_KEY) || 0) < 120_000;
-  } catch {
-    return false;
-  }
-};
-async function generator() {
-  const c = await credentials(provider.value);
-  return generationClient(c.id, c.token);
-}
-async function probeGeneration() {
-  const id = provider.value;
-  generationProbed = id;
-  try {
-    const models = await (await generator()).models(String(locale.value));
-    if (provider.value === id) imageGen.value = { access: "ready", models };
-  } catch (e) {
-    if (provider.value !== id || !(e instanceof ApiError) || e.status !== 403) return;
-    imageGen.value = { access: recentlyReauthorized() ? "unavailable" : "reauth", models: [] };
-  }
+function probeGeneration() {
+  generationProbed = provider.value;
+  return probe();
 }
 function reauthorizeGeneration() {
-  try {
-    sessionStorage.setItem(REAUTH_KEY, String(Date.now()));
-  } catch {}
+  markReauthorizing();
   void reconnect();
 }
 // 存到正在看的地方：真的資料夾給 id，只以路徑存在的夾給路徑，根目錄什麼都不給。

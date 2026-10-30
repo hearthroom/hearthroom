@@ -21,11 +21,14 @@ const props = defineProps<{
   /** 畫出中央 75%×75% 的安全區虛線：背景在舞台用 cover 裁邊，重要元素要放在這裡面。 */
   safeZone?: boolean;
   libraryLabel: string;
+  /** 有給才出現「生成」：用登入身分生圖，對話框與存放位置由編輯器管。 */
+  generateLabel?: string;
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [string];
   pick: [File, (url: string) => void, (message: string) => void];
+  generate: [];
 }>();
 
 const input = ref<HTMLInputElement | null>(null);
@@ -91,6 +94,7 @@ function pick(file: File) {
             {{ busy ? uploading : pickLabel }}
           </button>
           <button type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
+          <button v-if="generateLabel" type="button" class="btn btn--sm" :disabled="busy" @click="emit('generate')">{{ generateLabel }}</button>
           <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy"
                   @click="emit('update:modelValue', '')">
             {{ clearLabel }}

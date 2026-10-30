@@ -22,7 +22,8 @@ import {fetchWorkVisibility} from '@/lib/work-visibility';
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted } from "@/lib/oauth";
-import { accountToken } from "@/lib/connections";
+import { accountToken, connectAccount } from "@/lib/connections";
+import { useImageGeneration } from "@/lib/use-image-generation";
 import { platformPath } from "@/lib/distribution";
 import { suki } from "@/pet/events";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
@@ -106,6 +107,7 @@ import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
+import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
 import TagPicker from "@/components/editor/TagPicker.vue";
@@ -715,6 +717,55 @@ async function onPickImage(file: File, ok: (url: string) => void, fail: (message
   }
 }
 
+// ── 生成圖片 ──────────────────────────────────────────────────────
+// 直式背景（立繪）與橫式背景旁的「生成」：登入身分、只扣購買點數、權限與內容規則都跟資源頁同一套。
+// 存進這張卡的資源庫資料夾——卡名，跟 CLI 推卡時 media.folder 的預設一樣——存好直接填進那一欄。
+
+type GenField = "roleBackground" | "roleBackgroundLandscape";
+const { imageGen, generator, probeGeneration, markReauthorizing } = useImageGeneration(() => editorProvider.value);
+onMounted(() => { void probeGeneration(); });
+const genField = ref<GenField | null>(null);
+const genOpen = ref(false);
+const genRunning = ref(false);
+// 卡名當路徑用：斜線會多出一層資料夾
+const genFolder = computed(() => draft.value.roleName.trim().replaceAll("/", "-"));
+const genPrompt = computed(() =>
+  genField.value
+    ? t(genField.value === "roleBackground" ? "editor.image.promptTall" : "editor.image.promptWide", {
+        name: draft.value.roleName.trim(),
+        desc: draft.value.roleDesc.trim(),
+      }).trim()
+    : "",
+);
+const genLabel = (field: GenField) =>
+  imageGen.value ? t(genRunning.value && genField.value === field ? "editor.image.generating" : "editor.image.generate") : undefined;
+function openGenerate(field: GenField) {
+  if (!genFolder.value) return flash(t("editor.image.generateNeedsName"));
+  // 還在生成的那張沒存好之前，打開的都是它：一次只生一張，存好才知道要填哪一欄
+  if (!genRunning.value) genField.value = field;
+  genOpen.value = true;
+}
+function closeGenerate() {
+  genOpen.value = false;
+  if (!genRunning.value) genField.value = null;
+}
+function generated(_n: number, folder: string, urls: string[]) {
+  const field = genField.value;
+  genOpen.value = false;
+  genRunning.value = false;
+  genField.value = null;
+  if (field && urls[0]) {
+    draft.value[field] = urls[0];
+    flash(t("editor.image.generated", { folder }));
+  } else flash(t("editor.image.generatedSaved", { folder }));
+}
+function reauthorizeGeneration() {
+  markReauthorizing();
+  connectAccount(editorProvider.value, route.fullPath).catch((err) => {
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+  });
+}
+
 // ── 正則規則 ──────────────────────────────────────────────────────
 
 // 上游把「正則規則 + 功能欄」叫作者資產（author asset）；本站只是換個說法，存的是同一份。
@@ -1192,11 +1243,13 @@ async function exportCard(format: "png" | "json") {
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
                       :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
                       :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage" />
+                      :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage"
+                      :generate-label="genLabel('roleBackground')" @generate="openGenerate('roleBackground')" />
           <ImageField v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
                       :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
                       :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage" />
+                      :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage"
+                      :generate-label="genLabel('roleBackgroundLandscape')" @generate="openGenerate('roleBackgroundLandscape')" />
           <!-- 分享圖（選填）：連結預覽的大圖，1.91:1。沒有就用橫式背景，再沒有就用直式背景（src/index.ts 卡片頁 og:image）。 -->
           <ImageField v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
                       :hint="$t('editor.shareImage.hint')" :pick-label="$t('editor.image.pick')"
@@ -1488,6 +1541,22 @@ async function exportCard(format: "png" | "json") {
           可捲內容不再延伸到儲存鈕底下，桌機右欄保留完整高度。
         -->
         <div class="toast editor-status" role="status" :hidden="!toast">{{ toast }}</div>
+        <GenerateImageDialog
+          v-if="genField && imageGen"
+          :open="genOpen"
+          :access="imageGen.access"
+          :models="imageGen.models"
+          :client="generator"
+          :target="{ directory: genFolder }"
+          :folder="genFolder"
+          :shape="genField === 'roleBackground' ? 'tall' : 'wide'"
+          :initial-prompt="genPrompt"
+          select
+          @close="closeGenerate"
+          @reauth="reauthorizeGeneration"
+          @running="genRunning = $event"
+          @saved="generated"
+        />
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}

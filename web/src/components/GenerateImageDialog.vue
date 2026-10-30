@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 資源頁的「生成圖片」：寫描述、選模型尺寸張數，用登入身分生成，成功就放進正在看的資料夾。
+ * 「生成圖片」：寫描述、選模型尺寸張數，用登入身分生成，成功就放進指定的資料夾。
+ * 資源頁存進正在看的資料夾；卡片編輯器存進這張卡的資料夾，按欄位預選直式或橫式，存好直接填進欄位。
  * 生成要 30–90 秒：關掉框（v-show 收起）不會中斷，頁面等它存好才卸下這個元件。
  * 同一次生成沿用同一個 Idempotency-Key：連線斷掉重送不會多扣；伺服器明確回應之後才換新的。
  */
@@ -19,20 +20,36 @@ const props = defineProps<{
   client: () => Promise<GenerationClient>;
   target: SaveTarget;
   folder: string;
+  /** 預選最接近 9:16（tall）或 16:9（wide）的尺寸；不給就用模型的第一個。 */
+  shape?: "tall" | "wide";
+  /** 描述的起點，作者可以改。 */
+  initialPrompt?: string;
+  /** 存好之後查出資源庫網址，跟著 saved 送出（編輯器要填進欄位）。 */
+  select?: boolean;
 }>();
-const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [count: number, folder: string] }>();
+const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [count: number, folder: string, urls: string[]] }>();
 const { t } = useI18n();
 
 const PROMPT_MAX = 4000;
 const TOP_UP = "https://console.harperharbor.com/me/billing";
-const prompt = ref("");
+const prompt = ref(props.initialPrompt ?? "");
 const modelId = ref(props.models[0]?.id ?? "");
 const model = computed(() => props.models.find((m) => m.id === modelId.value));
-const size = ref(model.value?.sizes[0] ?? "");
+function fit(sizes: string[]) {
+  if (!props.shape) return sizes[0] ?? "";
+  const target = props.shape === "tall" ? 9 / 16 : 16 / 9;
+  // 「1024x1536」的寬高比離目標多遠（取對數，太寬太窄一樣算）；認不出的尺寸當正方形
+  const off = (s: string) => {
+    const [w, h] = s.split("x").map(Number);
+    return Math.abs(Math.log((w! / h! || 1) / target));
+  };
+  return sizes.reduce((best, s) => (off(s) < off(best) ? s : best), sizes[0] ?? "");
+}
+const size = ref(fit(model.value?.sizes ?? []));
 const count = ref(1);
 watch(model, (m) => {
   if (!m) return;
-  if (!m.sizes.includes(size.value)) size.value = m.sizes[0] ?? "";
+  if (!m.sizes.includes(size.value)) size.value = fit(m.sizes);
   count.value = Math.min(count.value, m.maxImages);
 });
 const cost = computed(() => (model.value ? model.value.credits * count.value : 0));
@@ -93,13 +110,15 @@ async function submit() {
     }
     results.value = task.urls;
     phase.value = "saving";
-    await c.save(task.id, savedTo!.target);
+    const ids = await c.save(task.id, savedTo!.target);
+    // 查網址失敗就跟存檔失敗一樣重試：save 是冪等的，回同一批檔案
+    const urls = props.select ? await c.savedUrls(task.id, ids) : [];
     const n = task.urls.length || count.value;
     task = null;
     pending.value = false;
     results.value = [];
     prompt.value = "";
-    emit("saved", n, savedTo!.folder);
+    emit("saved", n, savedTo!.folder, urls);
   } catch (e) {
     failure.value = failureOf(e);
     if (failure.value === "failed") {

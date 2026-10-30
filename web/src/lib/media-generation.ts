@@ -39,10 +39,10 @@ function task(raw: Record<string, any>): GenerationTask {
 
 export function generationClient(provider: ProviderId, credentials: (rejectedToken?: string) => Promise<string | null>) {
   const base = `${apiBaseOf(provider)}/open/v1/generations`;
-  async function call(path: string, init: RequestInit = {}) {
+  async function call(path: string, init: RequestInit = {}, prefix = base) {
     const token = await credentials();
     if (!token) throw new ApiError(401, describeApiError(401, ""));
-    const send = (bearer: string) => fetch(base + path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${bearer}` } });
+    const send = (bearer: string) => fetch(prefix + path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${bearer}` } });
     let r = await send(token);
     if (r.status === 401) {
       const renewed = await credentials(token);
@@ -101,6 +101,16 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
     async save(id: string, target: SaveTarget): Promise<string[]> {
       const { body } = await post(`/${encodeURIComponent(id)}/save`, target);
       return (body.asset_ids ?? []).map(String);
+    },
+    /**
+     * 存好的檔案在資源庫的網址（編輯器要直接填進欄位）。Harbor 存檔時檔名帶任務 id 前八碼，
+     * 用它搜尋，再按 asset id 對上；找不到的就少一個，畫面請作者去資源庫挑。
+     */
+    async savedUrls(id: string, assetIds: string[]): Promise<string[]> {
+      const q = new URLSearchParams({ scope: "all", kind: "image", q: id.slice(0, 8), pageSize: "20" });
+      const { body } = await call(`/list?${q}`, {}, `${apiBaseOf(provider)}/open/v1/image`);
+      const list: { id: unknown; imageUrl?: string }[] = body.data?.imageList ?? [];
+      return assetIds.map((a) => list.find((i) => String(i.id) === a)?.imageUrl ?? "").filter(Boolean);
     },
   };
 }

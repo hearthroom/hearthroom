@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "寫卡時可以直接生成立繪和橫式背景了",
+    "zh-Hans": "写卡时可以直接生成立绘和横版背景了",
+    "en": "Generate the portrait and wide background while you write a card",
+    "ja": "カードを書きながら立ち絵と横長の背景を生成できるようになりました",
+    "ko": "카드를 쓰면서 세로 일러스트와 가로 배경을 바로 생성할 수 있습니다"
+  },
+  "body": {
+    "zh-Hant": "在編輯器的直式或橫式背景旁按「生成」，描述會先帶上卡名和簡介，生成的圖片存進以卡名命名的資料夾並直接填進那一欄，只扣你儲值的點數。",
+    "zh-Hans": "在编辑器的竖版或横版背景旁点「生成」，描述会先带上卡名和简介，生成的图片存进以卡名命名的文件夹并直接填进那一栏，只扣你充值的点数。",
+    "en": "Tap Generate next to the portrait or wide background in the editor, start from a description that already has the card name and summary, and the image goes into the card's folder and fills the field, using only credits you purchased.",
+    "ja": "エディタの縦長・横長の背景の横にある「生成」を押すと、カード名と紹介文から説明が始まり、できた画像は購入したポイントだけを使ってカード名のフォルダに保存され、その欄に入ります。",
+    "ko": "편집기의 세로·가로 배경 옆에서 '생성'을 누르면 카드 이름과 소개로 설명이 시작되고, 만든 이미지는 충전한 포인트만 써서 카드 이름 폴더에 저장된 뒤 그 칸에 바로 들어갑니다."
+  }
+}

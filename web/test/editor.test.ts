@@ -71,6 +71,25 @@ vi.mock("../src/lib/session", () => ({
   useSession: () => ({ profile:platforms.profile, accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "create", setSurface: () => {} }));
+// 編輯器裡的「生成」：入口狀態與授權由 use-image-generation 管（資源頁的測試跑的是真的那份）
+const gen = vi.hoisted(() => ({
+  imageGen: null as unknown,
+  create: vi.fn(),
+  wait: vi.fn(),
+  save: vi.fn(),
+  savedUrls: vi.fn(),
+}));
+vi.mock("../src/lib/use-image-generation", async () => {
+  const { ref } = await import("vue");
+  return {
+    useImageGeneration: () => ({
+      imageGen: ref(gen.imageGen),
+      generator: async () => ({ create: gen.create, wait: gen.wait, save: gen.save, savedUrls: gen.savedUrls }),
+      probeGeneration: async () => {},
+      markReauthorizing: () => {},
+    }),
+  };
+});
 
 /** 一張帶了所有東西的 V2 卡：三段人設、備選開場白、對話示例、世界書（含次要關鍵詞）、太多標籤。 */
 const CARD: TavernCard = {
@@ -440,6 +459,68 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(root.querySelector(`img[src="${landscape}"]`)).not.toBeNull();
     await submit();
     expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleBackground: avatar, roleAvatar: avatar }, "tok");
+  });
+
+  it("直式與橫式旁可以直接生成：預選直圖／橫圖尺寸、描述帶卡名與簡介、存進卡名資料夾後填進欄位", async () => {
+    gen.imageGen = { access: "ready", models: [{ id: "gpt-image-2-dawn", name: "GPT Image 2", credits: 35, priced: 1, sizes: ["1024x1024", "1024x1536", "1536x1024"], maxImages: 2 }] };
+    gen.create.mockImplementation(async (input: { size: string }) => ({ id: input.size === "1024x1536" ? "3f2a9c1e-tall" : "77aa00bb-wide", status: "queued", urls: [] }));
+    gen.wait.mockImplementation(async (t: { id: string }) => ({ id: t.id, status: "completed", urls: [`https://gen.test/${t.id}.png`] }));
+    gen.save.mockImplementation(async (id: string) => [`asset-${id}`]);
+    gen.savedUrls.mockImplementation(async (id: string) => [`https://assets.test/Mira/${id}.png`]);
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Mira", roleDesc: "A lighthouse keeper.", roleDetailDesc: "Synthetic settings" });
+    try {
+      await mount("/cards/r1/edit");
+      const fieldOf = (key: string) => [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t(key))!;
+      const generate = i18n.global.t("editor.image.generate");
+      const dialog = () => document.querySelector<HTMLFormElement>('[aria-labelledby="gen-title"]');
+
+      btnIn(fieldOf("editor.background"), generate).click();
+      await flush();
+      const box = dialog()!;
+      const [, size] = box.querySelectorAll("select");
+      expect((size as HTMLSelectElement).value).toBe("1024x1536");
+      const prompt = box.querySelector("textarea")!;
+      expect(prompt.value).toContain("Mira");
+      expect(prompt.value).toContain("A lighthouse keeper.");
+      // 作者可以改描述
+      await type(prompt, "Mira on the cliff at dusk");
+      box.dispatchEvent(new Event("submit", { cancelable: true }));
+      await flush();
+      expect(gen.create).toHaveBeenCalledWith({ model: "gpt-image-2-dawn", prompt: "Mira on the cliff at dusk", size: "1024x1536", n: 1 }, expect.any(String));
+      expect(gen.save).toHaveBeenCalledWith("3f2a9c1e-tall", { directory: "Mira" });
+      expect(dialog()).toBeNull();
+      expect(fieldOf("editor.background").querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/3f2a9c1e-tall.png");
+
+      btnIn(fieldOf("editor.backgroundLandscape"), generate).click();
+      await flush();
+      expect((dialog()!.querySelectorAll("select")[1] as HTMLSelectElement).value).toBe("1536x1024");
+      dialog()!.dispatchEvent(new Event("submit", { cancelable: true }));
+      await flush();
+      expect(fieldOf("editor.backgroundLandscape").querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/77aa00bb-wide.png");
+
+      await submit();
+      expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", {
+        roleBackground: "https://assets.test/Mira/3f2a9c1e-tall.png",
+        roleAvatar: "https://assets.test/Mira/3f2a9c1e-tall.png",
+        roleBackgroundLandscape: "https://assets.test/Mira/77aa00bb-wide.png",
+      }, "tok");
+    } finally {
+      gen.imageGen = null;
+    }
+  });
+
+  it("還沒有卡名就不生成：圖片要放進卡名資料夾", async () => {
+    gen.imageGen = { access: "ready", models: [{ id: "m", name: "M", credits: 35, priced: 1, sizes: ["1024x1024"], maxImages: 1 }] };
+    try {
+      await mount("/create");
+      const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
+      btnIn(field, i18n.global.t("editor.image.generate")).click();
+      await flush();
+      expect(document.querySelector('[aria-labelledby="gen-title"]')).toBeNull();
+      expect(root.querySelector(".editor-status")?.textContent).toBe(i18n.global.t("editor.image.generateNeedsName"));
+    } finally {
+      gen.imageGen = null;
+    }
   });
 
   it("分享圖是選填的第三格：讀得到上游的值，提示寫明 1200×630 與構圖，改了才送", async () => {
