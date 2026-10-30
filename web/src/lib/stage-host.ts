@@ -232,6 +232,13 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
             else void deps.router.push(deps.lp('/me/presets'));
           },
         } : {}),
+        // 長期指令面板裡「管理指令組」：站台有「長期指令」頁才給
+        ...(can('instructions') ? {
+          toInstructions: () => {
+            if (isPlayHost()) window.location.assign(`https://${communityHostForHistory()}${deps.lp('/me/instructions')}`);
+            else void deps.router.push(deps.lp('/me/instructions'));
+          },
+        } : {}),
       },
       locale: {
         get: () => i18n.global.locale.value,

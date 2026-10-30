@@ -47,6 +47,8 @@ const pages: RouteRecordRaw[] = [
   { path: "me/presets/import", component: () => import("./pages/PresetImportPage.vue"), meta: { auth: true, feature: "presets", petAway: true } },
   // new 與既有預設共用一條：建好後換網址時元件沿用，離開前的確認跟著走（import 是靜態路徑，排在前面）
   { path: "me/presets/:presetId", component: () => import("./pages/PresetEditorPage.vue"), meta: { auth: true, feature: "presets", petAway: true } },
+  // 長期指令組：只管組本身；哪張卡的新存檔自動帶上哪一組在遊玩畫布選。畫布的「管理指令組」連到這裡
+  { path: "me/instructions", component: () => import("./pages/InstructionSetsPage.vue"), meta: { auth: true, feature: "instructions" } },
   // 舊的「我的分享申請」：現在是活動中心的「我參加的」頁籤。通知與舊書籤還指著這裡
   { path: "me/campaign", redirect: (to) => ({ path: withLocale("/campaigns", localeOf(to)), query: { ...to.query, tab: "mine" }, hash: to.hash }) },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true, keepScrollOnQuery: true } },
@@ -291,6 +293,7 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/authors")) return "author";
   if (bare.startsWith("/mine")) return "mine";
   if (bare.startsWith("/me/presets")) return "presets";
+  if (bare.startsWith("/me/instructions")) return "instructions";
   // 活動頁與活動中心（含「我參加的」）都算活動
   if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";

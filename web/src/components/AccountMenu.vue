@@ -107,6 +107,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
         <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
         <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("preset.nav") }}</RouterLink>
+        <RouterLink v-if="can('instructions')" :to="lp('/me/instructions')" class="menu__item" role="menuitem"><AccountIcon name="chat" />{{ $t("instructions.nav") }}</RouterLink>
         <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
         <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </div>

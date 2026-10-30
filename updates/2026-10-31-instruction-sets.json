@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/instructions",
+  "draft": true,
+  "title": {
+    "zh-Hant": "長期指令可以存成指令組，新存檔自動帶上",
+    "zh-Hans": "长期指令可以存成指令组，新存档自动带上",
+    "en": "Save standing instructions as sets that new saves pick up automatically",
+    "ja": "定常指示をセットにして、新しいセーブデータに自動で入れられるようになりました",
+    "ko": "상시 지시를 세트로 저장하면 새 저장본에 자동으로 들어갑니다"
+  },
+  "body": {
+    "zh-Hant": "在長期指令面板選一組給這張卡，之後每個新存檔一開就帶著，不用再重打一次。",
+    "zh-Hans": "在长期指令面板给这张卡选一组，之后每个新存档一开就带着，不用再重打一遍。",
+    "en": "Pick a set for a card in the Standing Instructions panel and every new save of that card starts with it.",
+    "ja": "定常指示のパネルでカードにセットを選ぶと、そのカードの新しいセーブデータに最初から入ります。",
+    "ko": "상시 지시 패널에서 카드에 세트를 고르면 그 카드의 새 저장본에 처음부터 들어갑니다."
+  }
+}

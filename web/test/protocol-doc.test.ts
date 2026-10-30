@@ -48,6 +48,7 @@ const SOURCES: Record<string, { file: string; atLeast: number }> = {
   "站台前端 oauth.ts": { file: at("../src/lib/oauth.ts"), atLeast: 3 },
   "站台前端 rewards.ts（獎勵與月卡）": { file: at("../src/lib/rewards.ts"), atLeast: 11 },
   "站台前端 presets.ts（我的預設）": { file: at("../src/lib/presets.ts"), atLeast: 12 },
+  "站台前端 instruction-sets.ts（長期指令組）": { file: at("../src/lib/instruction-sets.ts"), atLeast: 3 },
   "站台伺服器 upstream.ts": { file: at("../../src/upstream.ts"), atLeast: 3 },
   "舞台端點表": { file: at("../../stage/src/config/request-url.js"), atLeast: 40 },
 };

@@ -62,7 +62,7 @@
       "name": "Conversation archives"
     },
     {
-      "description": "Standing instructions attached to a conversation.",
+      "description": "Standing instructions attached to a conversation, and the saved sets that new conversations of a card start with.",
       "name": "Directives"
     },
     {
@@ -1171,7 +1171,7 @@
           "Directives"
         ],
         "summary": "List the standing instructions of a conversation",
-        "description": "Returns the currently visible standing instructions (long-term user directives) of a conversation the caller owns, one entry per slot, in ledger order. Entries come either from the user (type `manual`) or were extracted automatically from the dialogue (types `language`, `format`, `perspective`, `boundary`). `maxCount` (10) and `maxLength` (200 characters) are the limits enforced by the add/update endpoints. Errors use the legacy `{error}` shape.",
+        "description": "Returns the currently visible standing instructions (long-term user directives) of a conversation the caller owns, one entry per slot, in ledger order. Entries come either from the user (type `manual`) or were extracted automatically from the dialogue (types `language`, `format`, `perspective`, `boundary`). `maxCount` (10) and `maxLength` (200 characters) are the limits enforced by the add/update endpoints. `cardPresetId`, `cardPresetChosen` and `suggestSavePreset` describe the saved set chosen for the conversation's card. Errors use the legacy `{error}` shape.",
         "security": [
           {
             "userToken": []
@@ -1226,6 +1226,447 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LegacyError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/directive/apply-preset": {
+      "post": {
+        "operationId": "applyConversationDirectivePreset",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "Replace a conversation's standing instructions with a saved set",
+        "description": "Retires every visible standing instruction of the conversation and adds the items of the chosen set in their place, as user-authored directives (type `manual`, `origin: \"manual\"`) recorded at the current user turn. Returns the updated visible list. The items are copied: later edits to the set do not reach this conversation. The change takes effect on the next generation.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectiveApplyPresetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Directives replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectiveMutationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`error` = `DIRECTIVE_PRESET_NOT_FOUND` (`presetId` blank, unknown or not owned by the caller), \"missing conversationId\", \"conversation not found\" (unknown id or not owned by the caller), or `invalid_request` (malformed body).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/directive/save-as-preset": {
+      "post": {
+        "operationId": "saveConversationDirectivesAsPreset",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "Save a conversation's standing instructions as a set",
+        "description": "Creates a new saved set from the conversation's currently visible standing instructions, in list order, including automatically extracted ones. `title` is trimmed and cut to its first 40 characters instead of being rejected; a blank title is refused. With `bindCard` true, the new set also becomes the default of the conversation's card, so new conversations of that card start with it. The new set counts toward the limit of 20 sets per account. The returned `cardCount` is always 0.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectiveSaveAsPresetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectivePresetSaveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`errorCode` = `DIRECTIVE_PRESET_TITLE_INVALID` (blank title; includes `maxTitle`), `DIRECTIVE_PRESET_ITEMS_INVALID` (the conversation has no visible directives; includes `maxCount`), `DIRECTIVE_PRESET_LIMIT_REACHED` (the caller already owns 20 sets; includes `maxCount`) — in each case `error` carries the same code. Otherwise `{error}` with \"missing conversationId\", \"conversation not found\" (unknown id or not owned by the caller), or `invalid_request` (malformed body).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DirectivePresetValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LegacyError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/card-directive/save": {
+      "post": {
+        "operationId": "saveCardDirectivePreset",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "Choose the standing-instruction set of a card",
+        "description": "Sets which saved set every new conversation of the card starts with; an empty `presetId` records the choice of none. When a conversation is created, the set's items are copied into it as user-authored directives; conversations that already exist are not changed, and forked conversations copy the visible directives of their source instead. The choice belongs to the caller and applies to that card only.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardDirectiveSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Choice saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardDirectiveSaveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`error` = `DIRECTIVE_PRESET_NOT_FOUND` (`presetId` unknown, not owned by the caller or not a UUID) or `invalid_request` (malformed body or `roleId` not a UUID).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the card is unknown or the caller cannot play it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/directive-preset/delete": {
+      "post": {
+        "operationId": "deleteDirectivePreset",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "Delete a standing-instruction set",
+        "description": "Deletes a set owned by the caller. Cards that used it as their default fall back to none; the choice still counts as made. Conversations that already received its items keep them. Deleting an unknown or already-deleted set returns `DIRECTIVE_PRESET_NOT_FOUND`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectivePresetDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Set deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessOk"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`error` = `DIRECTIVE_PRESET_NOT_FOUND` (`presetId` blank, unknown, already deleted or not owned by the caller) or `invalid_request` (malformed body).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/directive-preset/save": {
+      "post": {
+        "operationId": "saveDirectivePreset",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "Create or update a standing-instruction set",
+        "description": "With `presetId` set, overwrites the title and items of that set (it must be owned by the caller); without it, creates a new set with a server-generated id. `title` is trimmed and must be 1–40 characters; `items` must hold 1–10 entries, each trimmed, 1–200 characters and free of `<` and `>`. Creation is refused once the caller owns 20 sets. Editing a set never changes conversations that already received its items; conversations created afterwards start with the new items. The returned `cardCount` is always 0; the list endpoint reports the current count.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectivePresetSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectivePresetSaveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`errorCode` = `DIRECTIVE_PRESET_TITLE_INVALID` (blank or over 40 characters; includes `maxTitle`), `DIRECTIVE_PRESET_ITEMS_INVALID` (no items or more than 10; includes `maxCount`), `DIRECTIVE_PRESET_LIMIT_REACHED` (creating a 21st set; includes `maxCount`) — in each case `error` carries the same code. An invalid item returns `error` = `DIRECTIVE_EMPTY`, `DIRECTIVE_TOO_LONG` or `DIRECTIVE_INVALID_CHARS` with `detail.index`. Otherwise `{error}` with `DIRECTIVE_PRESET_NOT_FOUND` (`presetId` unknown, not owned by the caller or not a UUID) or `invalid_request` (malformed body).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DirectivePresetValidationError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DirectiveItemError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LegacyError"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/directive-presets": {
+      "get": {
+        "operationId": "listDirectivePresets",
+        "tags": [
+          "Directives"
+        ],
+        "summary": "List saved standing-instruction sets",
+        "description": "Returns the saved standing-instruction sets of the caller, most recently updated first, with the limits enforced by the save endpoints. A set belongs to the account and can be chosen for any card; `cardCount` is the number of cards that currently use it as their default. With `roleId`, the response also reports the choice made for that card (`cardPresetId`, `cardPresetChosen`), which is readable before any conversation of the card exists.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Card whose chosen set should be included in the response."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Set list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectivePresetListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `roleId` is not a UUID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the card is unknown or the caller cannot play it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — storage failure; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -19143,7 +19584,10 @@
         "required": [
           "list",
           "maxCount",
-          "maxLength"
+          "maxLength",
+          "cardPresetId",
+          "cardPresetChosen",
+          "suggestSavePreset"
         ],
         "properties": {
           "list": {
@@ -19160,6 +19604,18 @@
           "maxLength": {
             "type": "integer",
             "description": "Maximum directive text length in characters (200)."
+          },
+          "cardPresetId": {
+            "type": "string",
+            "description": "Saved set that new conversations of this card start with; empty string when none was chosen or the chosen set was deleted."
+          },
+          "cardPresetChosen": {
+            "type": "boolean",
+            "description": "Whether the caller has made a choice for this card, including choosing none."
+          },
+          "suggestSavePreset": {
+            "type": "boolean",
+            "description": "True when no choice has been made for this card yet and this conversation has visible directives; a client can offer to save them as a set."
           }
         }
       },
@@ -31454,6 +31910,302 @@
                     "type": "string"
                   }
                 }
+              }
+            }
+          }
+        }
+      },
+      "DirectivePreset": {
+        "type": "object",
+        "description": "A saved set of standing instructions owned by the caller. Its items are copied into conversations; editing or deleting the set later does not change them.",
+        "required": [
+          "presetId",
+          "title",
+          "items",
+          "cardCount",
+          "lastUpdateTime"
+        ],
+        "properties": {
+          "presetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Set id."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "Set title."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Instruction texts in order."
+          },
+          "cardCount": {
+            "type": "integer",
+            "description": "Number of cards that use this set as their default. Only the list endpoint computes it; save responses return 0."
+          },
+          "lastUpdateTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update time, RFC 3339."
+          }
+        }
+      },
+      "DirectivePresetListResponse": {
+        "type": "object",
+        "required": [
+          "list",
+          "maxCount",
+          "maxItems",
+          "maxLength",
+          "maxTitle"
+        ],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectivePreset"
+            },
+            "description": "Saved sets of the caller, most recently updated first."
+          },
+          "maxCount": {
+            "type": "integer",
+            "description": "Maximum saved sets per account (20)."
+          },
+          "maxItems": {
+            "type": "integer",
+            "description": "Maximum items per set (10)."
+          },
+          "maxLength": {
+            "type": "integer",
+            "description": "Maximum directive text length in characters (200)."
+          },
+          "maxTitle": {
+            "type": "integer",
+            "description": "Maximum title length in characters (40)."
+          },
+          "cardPresetId": {
+            "type": "string",
+            "description": "Present only when `roleId` is given: the saved set that new conversations of that card start with; empty string for none."
+          },
+          "cardPresetChosen": {
+            "type": "boolean",
+            "description": "Present only when `roleId` is given: whether the caller has made a choice for that card, including choosing none."
+          }
+        }
+      },
+      "DirectivePresetSaveRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "items"
+        ],
+        "properties": {
+          "presetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Existing set to overwrite. Omit or leave empty to create a new one."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "Title; trimmed, must be non-blank."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Instruction texts. Each is trimmed and must not contain `<` or `>`."
+          }
+        }
+      },
+      "DirectivePresetSaveResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "preset"
+        ],
+        "properties": {
+          "success": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "description": "Always `ok`."
+          },
+          "preset": {
+            "$ref": "#/components/schemas/DirectivePreset"
+          }
+        }
+      },
+      "DirectivePresetDeleteRequest": {
+        "type": "object",
+        "required": [
+          "presetId"
+        ],
+        "properties": {
+          "presetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Set to delete."
+          }
+        }
+      },
+      "CardDirectiveSaveRequest": {
+        "type": "object",
+        "required": [
+          "roleId"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Card whose new conversations start with the set."
+          },
+          "presetId": {
+            "type": "string",
+            "description": "Set to use. An empty string or an absent field means none."
+          }
+        }
+      },
+      "CardDirectiveSaveResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "cardPresetId"
+        ],
+        "properties": {
+          "success": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "description": "Always `ok`."
+          },
+          "cardPresetId": {
+            "type": "string",
+            "description": "The set the card now uses; empty string for none."
+          }
+        }
+      },
+      "DirectiveApplyPresetRequest": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "presetId"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target conversation (must be owned by the caller)."
+          },
+          "presetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Set whose items replace the visible directives."
+          }
+        }
+      },
+      "DirectiveSaveAsPresetRequest": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "title"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target conversation (must be owned by the caller)."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Title of the new set; trimmed and cut to 40 characters, must be non-blank."
+          },
+          "bindCard": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also make the new set the default of the conversation's card."
+          }
+        }
+      },
+      "DirectivePresetValidationError": {
+        "type": "object",
+        "required": [
+          "error",
+          "errorCode"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "DIRECTIVE_PRESET_TITLE_INVALID",
+              "DIRECTIVE_PRESET_ITEMS_INVALID",
+              "DIRECTIVE_PRESET_LIMIT_REACHED"
+            ],
+            "description": "Error code (same as `errorCode`)."
+          },
+          "errorCode": {
+            "type": "string",
+            "enum": [
+              "DIRECTIVE_PRESET_TITLE_INVALID",
+              "DIRECTIVE_PRESET_ITEMS_INVALID",
+              "DIRECTIVE_PRESET_LIMIT_REACHED"
+            ],
+            "description": "Error code."
+          },
+          "maxTitle": {
+            "type": "integer",
+            "description": "Present with `DIRECTIVE_PRESET_TITLE_INVALID` (40)."
+          },
+          "maxCount": {
+            "type": "integer",
+            "description": "Present with `DIRECTIVE_PRESET_ITEMS_INVALID` (10, items per set) and `DIRECTIVE_PRESET_LIMIT_REACHED` (20, sets per account)."
+          }
+        }
+      },
+      "DirectiveItemError": {
+        "type": "object",
+        "description": "An item of a standing-instruction set breaks the directive text rules.",
+        "required": [
+          "error",
+          "detail"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "DIRECTIVE_EMPTY",
+              "DIRECTIVE_TOO_LONG",
+              "DIRECTIVE_INVALID_CHARS"
+            ],
+            "description": "Rule broken by the first invalid item: blank, over 200 characters, or containing `<` or `>`."
+          },
+          "detail": {
+            "type": "object",
+            "required": [
+              "index"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Position of the invalid item in `items`, counted from 0."
               }
             }
           }
