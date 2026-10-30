@@ -4130,5 +4130,5 @@
   "preset.share.new": "새로 공개",
   "preset.share.error.declarationChanged": "공개 안내가 방금 업데이트되었습니다. 다시 확인한 뒤 '공개하기'를 누르세요.",
   "preset.share.mine.note": "프리셋은 공개하기 전까지 나에게만 보입니다.",
-  "preset.share.unlisted.short": "계속 사용할 수 있습니다."
+  "preset.share.unlisted.short": "계속 쓸 수 있습니다."
 }
