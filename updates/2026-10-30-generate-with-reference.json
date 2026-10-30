@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/resources",
+  "title": {
+    "zh-Hant": "以資源庫裡的圖為參考生成，角色長相不會跑掉",
+    "zh-Hans": "以资源库里的图为参考生成，角色长相不会跑掉",
+    "en": "Generate from a library image so the character keeps their look",
+    "ja": "ライブラリの画像を参考に生成して、キャラクターの見た目をそろえられます",
+    "ko": "라이브러리 이미지를 참고해 생성하면 캐릭터 외모가 그대로 유지됩니다"
+  },
+  "body": {
+    "zh-Hant": "在資源頁的圖片旁按「以這張為參考生成」，新的橫幅、表情和場景圖會照立繪畫同一張臉、同一套髮型和服裝，價格和一般生成一樣。",
+    "zh-Hans": "在资源页的图片旁点「以这张为参考生成」，新的横幅、表情和场景图会照立绘画同一张脸、同一套发型和服装，价格和普通生成一样。",
+    "en": "Tap Use as reference next to an image on the resources page, and new banners, expressions and scenes keep the portrait's face, hair and outfit, at the same price as a normal generation.",
+    "ja": "リソースページで画像の横の「これを参考に生成」を押すと、新しいバナーや表情、シーンの画像も通常の生成と同じ料金で、立ち絵と同じ顔・髪型・服装で描かれます。",
+    "ko": "리소스 페이지에서 이미지 옆 '이 이미지를 참고해 생성'을 누르면 새 배너, 표정, 장면 이미지도 세로 일러스트와 같은 얼굴, 헤어스타일, 의상으로 그려지고, 가격은 일반 생성과 같습니다."
+  }
+}

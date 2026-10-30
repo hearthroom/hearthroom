@@ -28,6 +28,14 @@ describe("generation models", () => {
     ]);
   });
 
+  it("keeps how many reference images each model takes, none when Harbor does not say", async () => {
+    stub(() => json({ data: [
+      { id: "gpt-image-2", name: "GPT Image 2", type: "image", pricing: { credits: { standard: 52 } }, capabilities: { sizes: ["1024x1024"], max_images: 4, max_reference_images: 4 } },
+      { id: "gpt-image-2-dawn", name: "GPT Image 2", type: "image", pricing: { credits: { standard: 35 } }, capabilities: { sizes: ["1024x1024"], max_images: 2 } },
+    ] }));
+    expect((await client().models()).map((m) => [m.id, m.maxReferences])).toEqual([["gpt-image-2-dawn", 0], ["gpt-image-2", 4]]);
+  });
+
   it("asks for lane names in the page language and keeps them on same-name models", async () => {
     const fetcher = stub(() => json({ data: [
       { id: "gpt-image-2-dawn", name: "GPT Image 2", lane: "dawn", lane_name: "晨光", type: "image", pricing: { credits: { standard: 35 } }, capabilities: { sizes: ["1024x1024"], max_images: 2 } },
@@ -65,6 +73,12 @@ describe("generating and saving", () => {
     expect(url).toBe("https://api.harperharbor.com/open/v1/generations/images");
     expect(new Headers(init.headers).get("Idempotency-Key")).toBe("key-1");
     expect(JSON.parse(String(init.body))).toEqual(input);
+  });
+
+  it("sends reference images from the library as images", async () => {
+    const fetcher = stub(() => json({ id: "t1", status: "queued" }, 202));
+    await client().create({ ...input, images: ["https://assets.test/Mira/portrait.png"] }, "key-r");
+    expect(JSON.parse(String(fetcher.mock.calls[0]![1].body)).images).toEqual(["https://assets.test/Mira/portrait.png"]);
   });
 
   it("polls a 202 task until it completes", async () => {

@@ -32,7 +32,7 @@ const folders = [{ folderId: "f-art", name: "card/art", imageCount: 0 }];
 const models = [
   { id: "gpt-image-2-dawn", name: "GPT Image 2", laneName: "Dawn", credits: 35, priced: 1, sizes: ["1024x1024", "1536x1024"], maxImages: 2 },
   { id: "gpt-image-2-dew", name: "GPT Image 2", laneName: "Dew", credits: 61, priced: 1, sizes: ["1024x1024"], maxImages: 2 },
-  { id: "gpt-image-2", name: "GPT Image 2", credits: 52, priced: 3, sizes: ["1024x1024"], maxImages: 4 },
+  { id: "gpt-image-2", name: "GPT Image 2", credits: 52, priced: 3, sizes: ["1024x1024"], maxImages: 4, maxReferences: 4 },
 ];
 let saved: string[] = [];
 
@@ -211,4 +211,42 @@ it("keeps generating after the dialog closes and still saves the result", async 
   await settle();
   expect(mocks.save).toHaveBeenCalledWith("t5", {});
   expect(dialog()).toBeNull();
+});
+
+// 「以這張為參考」：圖片列有入口，框裡看得到參考圖，只列收參考圖的模型，送出帶 images；拿掉參考就回到全部模型。
+it("generates from an image in the library as the reference", async () => {
+  mocks.models.mockResolvedValue(models);
+  mocks.create.mockResolvedValue({ id: "t7", status: "completed", urls: ["u"] });
+  mocks.wait.mockImplementation(async (t: unknown) => t);
+  mocks.save.mockResolvedValue(["a7"]);
+  saved = ["portrait.png"];
+  await mount("/resources?folder=f-art");
+  const use = root.querySelector<HTMLButtonElement>('button[aria-label="Use as reference"]');
+  expect(use).not.toBeNull();
+  use!.click();
+  await settle();
+  const box = dialog()!;
+  expect(box.querySelector<HTMLImageElement>(".gen__reference img")!.src).toBe("https://assets.test/card/art/portrait.png");
+  expect(box.textContent).toContain("keep this character’s face, hair and outfit");
+  const options = () => [...box.querySelector("select")!.querySelectorAll("option")].map((o) => o.value);
+  expect(options()).toEqual(["gpt-image-2"]);
+  await describe("the same girl under a red umbrella");
+  expect(mocks.create.mock.calls[0]![0]).toEqual({
+    model: "gpt-image-2", prompt: "the same girl under a red umbrella", size: "1024x1024", n: 1,
+    images: ["https://assets.test/card/art/portrait.png"],
+  });
+
+  root.querySelector<HTMLButtonElement>('button[aria-label="Use as reference"]')!.click();
+  await settle();
+  [...dialog()!.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Remove reference")!.click();
+  await settle();
+  expect(dialog()!.querySelector(".gen__reference")).toBeNull();
+  expect([...dialog()!.querySelector("select")!.querySelectorAll("option")].map((o) => o.value)).toEqual(["gpt-image-2-dawn", "gpt-image-2-dew", "gpt-image-2"]);
+});
+
+it("offers no reference entry when no model takes reference images", async () => {
+  mocks.models.mockResolvedValue(models.map(({ maxReferences: _, ...m }) => m));
+  saved = ["portrait.png"];
+  await mount("/resources?folder=f-art");
+  expect(root.querySelector('button[aria-label="Use as reference"]')).toBeNull();
 });

@@ -184,7 +184,10 @@ async function client(id = provider.value) {
 }
 const generateOpen = ref(false),
   generateMounted = ref(false),
-  generateRunning = ref(false);
+  generateRunning = ref(false),
+  generateReference = ref("");
+// 「以這張為參考」只在有模型收參考圖時出現。
+const canReference = computed(() => imageGen.value?.access === "ready" && imageGen.value.models.some((m) => m.maxReferences > 0));
 let generationProbed = "";
 function probeGeneration() {
   generationProbed = provider.value;
@@ -203,7 +206,9 @@ const generateTarget = computed<SaveTarget>(() =>
       : {},
 );
 const generateFolder = computed(() => activeFolder.value?.name || currentPath.value || t("resource.root"));
-function openGenerate() {
+function openGenerate(reference = "") {
+  // 背景還在生成的那一個不換參考圖：重新打開看的是同一次生成。
+  if (!generateRunning.value) generateReference.value = reference;
   generateMounted.value = true;
   generateOpen.value = true;
 }
@@ -754,7 +759,7 @@ async function previewMove(direction: number) {
           class="btn gen-btn"
           :disabled="!result || busy || expired || quotaFull"
           :aria-label="$t('resource.gen.open')"
-          @click="openGenerate"
+          @click="openGenerate()"
         >
           <AccountIcon name="spark" /><span class="gen-label">{{ $t("resource.gen.open") }}</span>
         </button>
@@ -1085,6 +1090,15 @@ async function previewMove(direction: number) {
                   </td>
                   <td class="col-time subtle">{{ when(r.createTime) }}</td>
                   <td class="col-actions">
+                    <button
+                      v-if="canReference && r.kind === 'image'"
+                      class="btn btn--sm btn--ghost"
+                      :aria-label="$t('resource.gen.useReference')"
+                      :title="$t('resource.gen.useReference')"
+                      @click="openGenerate(r.imageUrl)"
+                    >
+                      <AccountIcon name="spark" />
+                    </button>
                     <button class="btn btn--sm btn--ghost copy-btn" :aria-label="$t('res.copy')" @click="copy(r.imageUrl)">
                       <AccountIcon name="copy" /><span class="copy-label">{{ $t("res.copy") }}</span>
                     </button>
@@ -1221,6 +1235,7 @@ async function previewMove(direction: number) {
       :client="generator"
       :target="generateTarget"
       :folder="generateFolder"
+      :reference="generateReference"
       @close="closeGenerate"
       @reauth="reauthorizeGeneration"
       @running="generateRunning = $event"
@@ -1469,7 +1484,7 @@ async function previewMove(direction: number) {
   white-space: nowrap;
 }
 .col-actions {
-  width: 110px;
+  width: 150px;
   text-align: right;
 }
 .col-name {
@@ -1798,7 +1813,7 @@ async function previewMove(direction: number) {
   }
   .resource-table th.col-actions,
   .resource-table td.col-actions {
-    width: 48px;
+    width: 88px;
   }
   .col-actions .btn {
     padding-inline: var(--s-2);

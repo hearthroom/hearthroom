@@ -30,6 +30,8 @@ const props = defineProps<{
   initialPrompt?: string;
   /** 存好之後查出資源庫網址，跟著 saved 送出（編輯器要填進欄位）。 */
   select?: boolean;
+  /** 參考圖（資源庫裡的網址）：同一個角色照它畫；有參考圖時只列收參考圖的模型。 */
+  reference?: string;
 }>();
 const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [count: number, folder: string, urls: string[]] }>();
 const { t } = useI18n();
@@ -37,8 +39,13 @@ const { t } = useI18n();
 const PROMPT_MAX = 4000;
 const TOP_UP = "https://console.harperharbor.com/me/billing";
 const prompt = ref(props.initialPrompt ?? "");
-const modelId = ref(props.models[0]?.id ?? "");
-const model = computed(() => props.models.find((m) => m.id === modelId.value));
+const reference = ref(props.reference ?? "");
+const usable = computed(() => (reference.value ? props.models.filter((m) => m.maxReferences > 0) : props.models));
+const modelId = ref(usable.value[0]?.id ?? "");
+const model = computed(() => usable.value.find((m) => m.id === modelId.value));
+watch(usable, (list) => {
+  if (!list.some((m) => m.id === modelId.value)) modelId.value = list[0]?.id ?? "";
+});
 function fit(sizes: string[]) {
   if (!props.shape) return sizes[0] ?? "";
   const target = props.shape === "tall" ? 9 / 16 : 16 / 9;
@@ -94,7 +101,8 @@ async function submit() {
     const c = await props.client();
     if (!task) {
       try {
-        task = await c.create({ model: model.value!.id, prompt: prompt.value.trim(), size: size.value, n: count.value }, key);
+        const images = reference.value ? { images: [reference.value] } : {};
+        task = await c.create({ model: model.value!.id, prompt: prompt.value.trim(), size: size.value, n: count.value, ...images }, key);
       } catch (e) {
         // 伺服器回了話（拒絕、點數不夠）這把 key 就用完了；連線斷掉才留著重送。
         if (e instanceof ApiError) key = "";
@@ -224,7 +232,7 @@ const action = computed(() =>
             </button>
           </div>
         </template>
-        <p v-else-if="!models.length" class="subtle">{{ $t("resource.gen.noModels") }}</p>
+        <p v-else-if="!usable.length" class="subtle">{{ $t("resource.gen.noModels") }}</p>
         <template v-else-if="choices.length">
           <p class="subtle gen__note">{{ $t("resource.gen.choose", { folder: chosenFor?.folder ?? folder }) }}</p>
           <ul class="gen__choices">
@@ -239,6 +247,13 @@ const action = computed(() =>
           </div>
         </template>
         <template v-else>
+          <div v-if="reference" class="gen__reference">
+            <img :src="reference" alt="" />
+            <p class="subtle">{{ $t("resource.gen.reference") }}</p>
+            <button type="button" class="btn btn--sm btn--ghost" :disabled="running || pending" @click="reference = ''">
+              {{ $t("resource.gen.dropReference") }}
+            </button>
+          </div>
           <label class="gen__field">
             <span>{{ $t("resource.gen.prompt") }}</span>
             <textarea
@@ -255,7 +270,7 @@ const action = computed(() =>
           <label class="gen__field">
             <span>{{ $t("resource.gen.model") }}</span>
             <select v-model="modelId" class="input" :disabled="running || pending">
-              <option v-for="m in models" :key="m.id" :value="m.id">
+              <option v-for="m in usable" :key="m.id" :value="m.id">
                 {{ $t(m.laneName ? (m.priced > 1 ? "resource.gen.modelLaneFrom" : "resource.gen.modelLanePrice") : m.priced > 1 ? "resource.gen.modelFrom" : "resource.gen.modelPrice", { name: m.name, lane: m.laneName, n: m.credits }) }}
               </option>
             </select>
@@ -315,6 +330,10 @@ const action = computed(() =>
 .gen__field .input { font-weight: 400; }
 .gen__row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--s-3); }
 .gen__note { margin: 0; font-size: 13px; }
+.gen__reference { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: var(--s-2) var(--s-3); }
+.gen__reference img { grid-row: span 2; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.gen__reference p { margin: 0; font-size: 13px; }
+.gen__reference .btn { justify-self: start; }
 .gen__progress { display: flex; align-items: center; gap: var(--s-2); margin: 0; }
 .gen__spinner {
   width: 16px; height: 16px; flex: none; border-radius: 50%;

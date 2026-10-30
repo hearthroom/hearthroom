@@ -16,6 +16,8 @@ export interface GenerationModel {
   priced: number;
   sizes: string[];
   maxImages: number;
+  /** 一次最多帶幾張參考圖（資源庫裡本人的圖）；0 是這個模型不收參考圖。 */
+  maxReferences: number;
 }
 export interface GenerationTask {
   id: string;
@@ -74,12 +76,13 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
             priced: prices.length,
             sizes: m.capabilities.sizes.map(String),
             maxImages: Math.max(1, Number(m.capabilities.max_images) || 1),
+            maxReferences: Math.max(0, Number(m.capabilities.max_reference_images) || 0),
           };
         })
         .sort((a: GenerationModel, b: GenerationModel) => a.credits - b.credits);
     },
-    /** 同一個 key 重送是同一個任務、只扣一次；換一次生成就換一個 key。 */
-    async create(input: { model: string; prompt: string; size: string; n: number }, idempotencyKey: string): Promise<GenerationTask> {
+    /** 同一個 key 重送是同一個任務、只扣一次；換一次生成就換一個 key。images 是參考圖（本人資源庫的網址）。 */
+    async create(input: { model: string; prompt: string; size: string; n: number; images?: string[] }, idempotencyKey: string): Promise<GenerationTask> {
       const { status, body } = await post("/images", input, { "Idempotency-Key": idempotencyKey });
       // 200 是等到了結果（任務在 harbor 底下）；202 回的就是任務本身，要接著查。
       return status === 200 ? { ...task(body.harbor ?? {}), status: "completed", urls: task(body).urls } : task(body);
