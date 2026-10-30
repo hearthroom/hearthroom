@@ -98,3 +98,23 @@ it('卡片頁的版面避讓接手時，桌機讓路的淡出狀態一起放掉'
   clearance = { top: 60, bottom: 900, obstacles: [] }; q.updateSidebar();
   expect(q.deskAway).toBe(false);
 });
+
+it('桌機招呼泡泡蓋到關鍵數字：泡泡在視窗內左右挪開；挪不開就不說', () => {
+  vi.stubGlobal('innerWidth', 1440);
+  document.body.insertAdjacentHTML('beforeend', '<strong id="amt" data-pet-avoid>處理中：3,000 積分</strong>');
+  const amt = document.getElementById('amt')!;
+  let key = new DOMRect(1099, 500, 113, 18);
+  amt.getBoundingClientRect = () => key;
+  vi.spyOn(document, 'createRange').mockImplementation(() => ({ selectNodeContents: () => {}, getBoundingClientRect: () => key }) as unknown as Range);
+  const q = p as unknown as { bubble: HTMLElement; fitPopups: () => void };
+  q.bubble.hidden = false;
+  q.bubble.getBoundingClientRect = () => new DOMRect(1045, 430, 217, 79);
+  q.fitPopups();
+  expect(q.bubble.style.translate).toBe('-171px 0px');
+  expect(q.bubble.hidden).toBe(false);
+  key = new DOMRect(0, 500, 1440, 18);
+  q.bubble.style.translate = '';
+  q.fitPopups();
+  expect(q.bubble.hidden).toBe(true);
+  amt.remove();
+});

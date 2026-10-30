@@ -14,7 +14,7 @@ import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
 import {nearestClearPetY,type PhoneClearance} from "./home-clearance";
-import {deskSpot,phoneControls,standbySpot} from "./standby-clearance";
+import {deskSpot,keyNumbers,phoneControls,standbySpot} from "./standby-clearance";
 import { type SidebarRect } from "../lib/sidebar-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
@@ -1581,6 +1581,13 @@ export class SukiPet {
         const left = r.left - (previous[0] ?? 0), top = r.top - (previous[1] ?? 0);
         let x = Math.max(8, Math.min(left, innerWidth - 8 - r.width)), y = Math.max(minimumTop, Math.min(top, innerHeight - 8 - r.height));
         if (bounds && (this.sidebarAwake || this.returningFromEdge) && !this.entryAwake && !this.homeParked && !this.phoneOriginal && x < bounds.right && left + r.width > bounds.left && y < bounds.bottom && y + r.height > bounds.top) x = Math.max(8, bounds.left - 12 - r.width);
+        // 桌機泡泡不蓋關鍵數字：在視窗內左右挪到最近的空位，挪不開這句就不說（美術總監第三班 D1）
+        if (el === this.bubble && !this.opts.mobile) {
+          const keys = keyNumbers();
+          const clear = keys.length ? deskSpot({ minX: 8, maxX: innerWidth - 8 - r.width, y, w: r.width, h: r.height, obstacles: keys, original: x, current: x }) : x;
+          if (clear === null) { el.hidden = true; el.style.translate = ""; petSpeaking.value = false; continue; }
+          x = clear;
+        }
         const translate = x !== left || y !== top ? `${x - left}px ${y - top}px` : "";
         if (el.style.translate !== translate) el.style.translate = translate;
       }

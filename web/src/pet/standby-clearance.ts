@@ -66,6 +66,14 @@ function extent(el:HTMLElement):DOMRect {
  return el.getBoundingClientRect();
 }
 
+/** 畫面上看得到的關鍵數字（data-pet-avoid）：桌機的對話泡泡也要避開它們（美術總監第三班 D1） */
+export function keyNumbers():SidebarRect[] {
+ return [...document.querySelectorAll<HTMLElement>('[data-pet-avoid]')].flatMap(el=>{
+  const r=extent(el);
+  return r.width>1&&r.height>1&&r.bottom>0&&r.top<innerHeight?[{left:r.left,right:r.right,top:r.top,bottom:r.bottom}]:[];
+ });
+}
+
 let key='',at=0,cache:PhoneClearance|null=null;
 /**
  * 畫面上看得到、點得到的控制項，加上標了 data-pet-avoid 的關鍵數字（手機與桌機的讓路共用）。每一格都會問：捲動中最多每 100ms 重讀一次（慣性捲動時每格量整頁太貴），
