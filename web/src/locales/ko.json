@@ -3806,7 +3806,6 @@
   "preset.entry.enabled": "이 항목 사용",
   "preset.entry.moveUp": "위로",
   "preset.entry.moveDown": "아래로",
-  "preset.entry.moveEdge": "이 위치의 끝입니다. {site}에서 제공하는 내용을 넘어 옮길 수 없습니다.",
   "preset.entry.detach": "순서에서 빼기",
   "preset.entry.detach.done": "순서에서 뺐습니다. 내용은 사용하지 않는 항목에 남아 있습니다.",
   "preset.entry.duplicate": "항목 복제",

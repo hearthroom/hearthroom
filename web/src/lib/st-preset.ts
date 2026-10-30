@@ -205,19 +205,28 @@ function stepsOf(order: StOrderEntry[], side: "before" | "after"): string[][] {
   return steps;
 }
 
+/** 上移／下移一步要跨過的那一步（一條自訂條目或一列鎖定的設定）；到一區頂端或對話記錄前最後一格就沒有。 */
+function neighbourStep(order: StOrderEntry[], id: string, dir: -1 | 1): string[] | null {
+  if (isFramework(id)) return null;
+  const at = order.findIndex((o) => o.identifier === id);
+  if (at < 0) return null;
+  const history = order.findIndex((o) => o.identifier === HISTORY);
+  const steps = stepsOf(order, history >= 0 && at > history ? "after" : "before");
+  const mine = steps.findIndex((st) => st.length === 1 && st[0] === id);
+  return mine < 0 ? null : steps[mine + dir] ?? null;
+}
+
+/** 上移／下移按鈕能不能按：跟 moveEntry 實際會不會動同一個判斷。 */
+export function canMoveEntry(doc: PresetDocument, id: string, dir: -1 | 1): boolean {
+  return !!neighbourStep(orderOf(doc), id, dir);
+}
+
 /** 上移／下移一步：跨過一條自訂條目或一列「角色與玩家設定」，不跨聊天歷史。框架條目本身不動。 */
 export function moveEntry(doc: PresetDocument, id: string, dir: -1 | 1): boolean {
-  if (isFramework(id)) return false;
   const order = orderOf(doc);
-  const at = order.findIndex((o) => o.identifier === id);
-  if (at < 0) return false;
-  const history = order.findIndex((o) => o.identifier === HISTORY);
-  const side = history >= 0 && at > history ? "after" : "before";
-  const steps = stepsOf(order, side);
-  const mine = steps.findIndex((st) => st.length === 1 && st[0] === id);
-  const other = steps[mine + dir];
-  if (mine < 0 || !other) return false;
-  const [entry] = order.splice(at, 1);
+  const other = neighbourStep(order, id, dir);
+  if (!other) return false;
+  const [entry] = order.splice(order.findIndex((o) => o.identifier === id), 1);
   const anchor = order.findIndex((o) => o.identifier === (dir < 0 ? other[0] : other[other.length - 1]));
   order.splice(dir < 0 ? anchor : anchor + 1, 0, entry!);
   return true;

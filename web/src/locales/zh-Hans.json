@@ -3806,7 +3806,6 @@
   "preset.entry.enabled": "启用这个条目",
   "preset.entry.moveUp": "上移",
   "preset.entry.moveDown": "下移",
-  "preset.entry.moveEdge": "已经到这个位置的边界，不能越过由绮梦社提供的内容。",
   "preset.entry.detach": "移出排序",
   "preset.entry.detach.done": "已移出排序，内容保留在未使用的条目里。",
   "preset.entry.duplicate": "复制条目",

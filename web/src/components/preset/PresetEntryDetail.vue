@@ -11,7 +11,7 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import { whole } from "@/lib/format";
 import {
-  adaptationId, detachEntry, duplicateEntry, moveEntry, moveToSide, setAdaptation, setEnabled,
+  adaptationId, canMoveEntry, detachEntry, duplicateEntry, moveEntry, moveToSide, setAdaptation, setEnabled,
   type EntryRow, type PresetDocument, type StPrompt,
 } from "@/lib/st-preset";
 import type { CompatibilityEntry } from "@/lib/presets";
@@ -72,9 +72,10 @@ function insertMacro() {
   void nextTick(() => { el?.focus(); el?.setSelectionRange(at + token.length, at + token.length); });
 }
 
-function move(dir: -1 | 1) {
-  if (!moveEntry(props.doc, props.row.identifier, dir)) emit("status", t("preset.entry.moveEdge"));
-}
+// 到頂或到對話記錄前最後一格時按鈕就停用，不讓玩家按了沒反應（QA ⚠️2）
+const canUp = computed(() => canMoveEntry(props.doc, props.row.identifier, -1));
+const canDown = computed(() => canMoveEntry(props.doc, props.row.identifier, 1));
+function move(dir: -1 | 1) { moveEntry(props.doc, props.row.identifier, dir); }
 
 function duplicate() {
   const id = duplicateEntry(props.doc, props.row.identifier, t("preset.copy.name.default", { name: prompt.value.name || t("preset.entry.untitled") }));
@@ -102,7 +103,6 @@ async function reset() {
 
 <template>
   <section class="entry" :aria-label="$t('preset.entry.title')">
-    <button type="button" class="btn btn--sm btn--ghost entry__back" @click="emit('back')">{{ $t("preset.entry.back") }}</button>
     <!-- 封存的預設：內容照樣看得到，欄位與動作一起停用 -->
     <fieldset class="entry__fieldset" :disabled="readOnly">
 
@@ -161,8 +161,8 @@ async function reset() {
       <span>{{ $t("preset.entry.enabled") }}</span>
     </label>
     <div class="entry__actions">
-      <button type="button" class="btn btn--sm" @click="move(-1)">{{ $t("preset.entry.moveUp") }}</button>
-      <button type="button" class="btn btn--sm" @click="move(1)">{{ $t("preset.entry.moveDown") }}</button>
+      <button type="button" class="btn btn--sm" :disabled="!canUp" @click="move(-1)">{{ $t("preset.entry.moveUp") }}</button>
+      <button type="button" class="btn btn--sm" :disabled="!canDown" @click="move(1)">{{ $t("preset.entry.moveDown") }}</button>
       <button type="button" class="btn btn--sm" @click="emit('inspect')">{{ $t("preset.entry.inspect") }}</button>
       <button type="button" class="btn btn--sm" @click="duplicate">{{ $t("preset.entry.duplicate") }}</button>
       <button type="button" class="btn btn--sm btn--ghost" @click="reset">{{ $t("preset.entry.reset") }}</button>
@@ -176,7 +176,6 @@ async function reset() {
 .entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
 .entry .input { min-width: 0; max-width: 100%; }
 .entry .field__foot { flex-wrap: wrap; align-items: center; }
-.entry__back { display: none; justify-self: start; }
 .entry__fieldset { display: contents; }
 .entry .field { margin-bottom: 0; min-width: 0; }
 .entry .field > p { margin: 0; }
@@ -198,7 +197,6 @@ async function reset() {
 .entry__diff p { margin: var(--s-1) 0 0; }
 .entry p { overflow-wrap: anywhere; }
 @media (max-width: 760px) {
-  .entry__back { display: inline-flex; }
   .entry__row { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

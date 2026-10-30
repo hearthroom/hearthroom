@@ -3806,7 +3806,6 @@
   "preset.entry.enabled": "啟用這個條目",
   "preset.entry.moveUp": "上移",
   "preset.entry.moveDown": "下移",
-  "preset.entry.moveEdge": "已經到這個位置的邊界，不能越過由綺夢社提供的內容。",
   "preset.entry.detach": "移出排序",
   "preset.entry.detach.done": "已移出排序，內容保留在未使用的條目裡。",
   "preset.entry.duplicate": "複製條目",

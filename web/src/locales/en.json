@@ -3806,7 +3806,6 @@
   "preset.entry.enabled": "Enable this entry",
   "preset.entry.moveUp": "Move up",
   "preset.entry.moveDown": "Move down",
-  "preset.entry.moveEdge": "This is the edge of the position. Entries can't move past content provided by {site}.",
   "preset.entry.detach": "Remove from order",
   "preset.entry.detach.done": "Removed from the order. The content is kept in Unused entries.",
   "preset.entry.duplicate": "Duplicate entry",

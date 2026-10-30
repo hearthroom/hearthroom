@@ -9,7 +9,7 @@
  * 哪條要調整、哪條不支援，以服務端 analyze 為準；編輯中停手半秒就重判一次。
  * 每次儲存是一個新版本：已經在用舊版本的對話不會跟著變，要用新版得在畫布裡自己換。
  */
-import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
@@ -319,14 +319,50 @@ async function removeUnused(id: string, name: string) {
   if (ok) deleteEntry(doc.value, id);
 }
 
-function pick(id: string) { selected.value = id; providedOpen.value = ""; }
+const inEntry = computed(() => !!selected.value || !!providedOpen.value);
+/** 剛才從哪一列點進來：返回時捲回那一列、焦點也回去 */
+let cameFrom = "";
+const phoneLayout = () => window.matchMedia?.("(max-width: 760px)").matches ?? true;
+/**
+ * 進條目編輯：捲到頂、焦點在條目名稱。手機上條目清單會整個藏起來、頁面一下子變短，不重設捲動的話
+ * 瀏覽器會停在原本的高度，畫面就落在頁底的「更多參數」（owner 2026-10-30 回報）。
+ */
+function enterEntry(focusSelector: string) {
+  void nextTick(() => {
+    if (phoneLayout()) window.scrollTo({ top: 0 });
+    else {
+      const top = document.querySelector(".preset-editor__detail")?.getBoundingClientRect().top ?? 0;
+      if (top < 0) window.scrollTo({ top: window.scrollY + top - 80 });
+    }
+    document.querySelector<HTMLElement>(focusSelector)?.focus({ preventScroll: true });
+  });
+}
+function pick(id: string) {
+  selected.value = id; providedOpen.value = ""; cameFrom = `entry:${id}`;
+  enterEntry(`#${CSS.escape(`name-${id}`)}`);
+}
+function leaveEntry() {
+  const from = cameFrom;
+  selected.value = ""; providedOpen.value = "";
+  void nextTick(() => {
+    const [kind, id] = [from.slice(0, from.indexOf(":")), from.slice(from.indexOf(":") + 1)];
+    const el = kind === "entry"
+      ? [...document.querySelectorAll<HTMLElement>("[data-testid=entry-row]")].find((b) => b.closest("[data-drag-id]")?.getAttribute("data-drag-id") === id)
+      : [...document.querySelectorAll<HTMLElement>("[data-testid=provided-row]")].find((b) => b.dataset.provided === id);
+    el?.scrollIntoView({ block: "center" });
+    el?.focus({ preventScroll: true });
+  });
+}
 /** 查看位置：照條目真實的位置；上游調到對話記錄之後的照調整後的位置 */
 function inspect(r: EntryRow) {
   if (!doc.value) return;
   const place = entryPlace(doc.value, r.identifier, inPrefix);
   inspecting.value = shownSide(r) === "after" ? "after" : place === "after" || place === null ? "afterPersona" : place;
 }
-function pickProvided(key: string) { providedOpen.value = key; selected.value = ""; }
+function pickProvided(key: string) {
+  providedOpen.value = key; selected.value = ""; cameFrom = `provided:${key}`;
+  enterEntry(".preset-editor__provided h2");
+}
 
 function toggleModel(value: string, on: boolean) {
   models.value = on ? [...new Set([...models.value, value])] : models.value.filter((m) => m !== value);
@@ -355,7 +391,14 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
 <template>
   <div class="page preset-editor" :class="{ 'preset-editor--entry': !!selectedRow || !!providedOpen }">
-    <nav class="preset-editor__crumb"><RouterLink :to="lp('/me/presets')" class="preset-crumb">{{ $t("preset.editor.back") }}</RouterLink></nav>
+    <!-- 一個高度只有一個返回（owner 2026-10-30）：手機的條目編輯層頂端是「返回條目」，回到條目清單層才是「返回我的預設」 -->
+    <nav class="preset-editor__crumb">
+      <RouterLink :to="lp('/me/presets')" class="preset-crumb" data-testid="preset-crumb" :data-in-entry="inEntry || undefined">{{ $t("preset.editor.back") }}</RouterLink>
+      <button v-if="inEntry" type="button" class="btn btn--sm preset-editor__entryBack" data-testid="entry-back" @click="leaveEntry">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+        {{ $t("preset.entry.back") }}
+      </button>
+    </nav>
     <h1 class="sr-only">{{ $t(presetId ? "preset.editor.title.edit" : "preset.editor.title.new") }}</h1>
 
     <PresetReauth v-if="needsConsent" @confirm="reauthorize" @cancel="router.push(lp('/me/presets'))" />
@@ -430,7 +473,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
                   </li>
                   <li v-else :data-drop-id="it.dropId || undefined" :class="{ 'is-drop-before': !!it.dropId && dropBefore === it.dropId }">
                     <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true"></span>
-                    <button type="button" class="preset-editor__row" :class="{ 'is-on': providedOpen === it.provided }" data-testid="provided-row" @click="pickProvided(it.provided!)">
+                    <button type="button" class="preset-editor__row" :class="{ 'is-on': providedOpen === it.provided }" data-testid="provided-row" :data-provided="it.provided" @click="pickProvided(it.provided!)">
                       <svg class="preset-editor__lock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
                       <span class="preset-editor__rowName">{{ $t(`preset.provided.${it.provided}`) }}</span>
                       <span class="sr-only">{{ $t("preset.provided.label") }}</span>
@@ -461,12 +504,11 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
             v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
-            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspect(selectedRow)"
+            @select="pick" @back="leaveEntry" @status="status = $event" @inspect="inspect(selectedRow)"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
-            <button type="button" class="btn btn--sm btn--ghost preset-editor__back" @click="providedOpen = ''">{{ $t("preset.entry.back") }}</button>
             <p class="eyebrow">{{ $t("preset.provided.label") }}</p>
-            <h2>{{ $t(`preset.provided.${providedOpen}`) }}</h2>
+            <h2 tabindex="-1">{{ $t(`preset.provided.${providedOpen}`) }}</h2>
             <p class="muted">{{ $t("preset.provided.body") }}</p>
             <p v-if="imported" class="subtle">{{ $t("preset.provided.imported") }}</p>
           </div>
@@ -528,6 +570,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 /* 封存時整組停用用的外框：不佔版面 */
 .preset-editor__fieldset { display: contents; }
 /* 返回連結用內文次要色＋底線（站上的粉色小字在這裡只有 3.2:1） */
+.preset-editor__entryBack { display: none; gap: 4px; }
 .preset-crumb { color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--h-sm); }
 .preset-crumb:hover { color: var(--text); }
 
@@ -551,7 +594,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__group h3 { margin: 0 0 var(--s-1); padding-inline: var(--s-2); }
 .preset-editor__group ul, .preset-editor__library ul, .preset-editor__versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .preset-editor__group li { display: flex; align-items: center; gap: var(--s-1); }
-.preset-editor__handle { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: var(--h-lg); color: var(--text-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.preset-editor__handle { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; margin-left: -8px; min-height: var(--h-lg); color: var(--text-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .preset-editor__handle:hover { color: var(--text-2); }
 .preset-editor__group li.is-dragging { opacity: 0.45; }
 .preset-editor__group li.is-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
@@ -578,7 +621,6 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__provided { display: grid; gap: var(--s-2); align-content: start; }
 .preset-editor__provided h2 { margin: 0; font-size: 18px; }
 .preset-editor__provided p { margin: 0; }
-.preset-editor__back { display: none; justify-self: start; }
 .preset-editor__section { padding: var(--s-3) var(--s-5) var(--s-5); display: grid; gap: var(--s-3); }
 .preset-editor__section > p { margin: 0; }
 .preset-editor__versions li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--h-lg); }
@@ -591,9 +633,10 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__state { flex: 1 1 240px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .preset-editor__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-width: 0; }
 @media (max-width: 760px) {
+  .preset-editor__entryBack { display: inline-flex; min-height: var(--h-lg); }
+  .preset-crumb[data-in-entry] { display: none; }
   .preset-editor__head { grid-template-columns: minmax(0, 1fr); }
   .preset-editor__body { grid-template-columns: minmax(0, 1fr); }
-  .preset-editor__back { display: inline-flex; }
   .preset-editor--entry .preset-editor__list { display: none; }
   .preset-editor:not(.preset-editor--entry) .preset-editor__detail { display: none; }
   .preset-editor__foot { margin-inline: calc(-1 * var(--s-4)); padding-inline: var(--s-4); }

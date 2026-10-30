@@ -758,3 +758,53 @@ describe("拖曳到「對話記錄之後」最上面（QA ❌，2026-10-30）", 
     expect(order.indexOf("clear")).toBeGreaterThan(order.indexOf("chatHistory"));
   });
 });
+
+
+describe("條目編輯層（owner 2026-10-30：點進條目停在名稱、只留一個返回）", () => {
+  async function open() {
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+  const rowNamed = (name: string) => $$("[data-testid=entry-row]").find((b) => b.textContent?.includes(name))!;
+
+  it("點進條目：捲回頂端、焦點在條目名稱（不再停在頁底的參數）", async () => {
+    await open();
+    // 手機寬度：條目清單會藏起來，一定要捲回頂端
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    rowNamed("腳本").click(); await flush(); await flush();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+    vi.unstubAllGlobals();
+    expect((document.activeElement as HTMLElement | null)?.id).toBe("name-script");
+    scrollTo.mockRestore();
+  });
+
+  it("條目編輯層只有一個返回：頂端「返回條目」按鈕；按了回到清單、焦點回到剛才那一列", async () => {
+    await open();
+    rowNamed("腳本").click(); await flush();
+    const backs = $$("button, a").filter((e) => e.textContent?.includes(t("preset.entry.back")));
+    expect(backs).toHaveLength(1);
+    expect(backs[0]!.tagName).toBe("BUTTON");
+    expect(backs[0]!.closest("nav")).not.toBeNull();
+    // 條目編輯層不畫「返回我的預設」
+    expect($("[data-testid=preset-crumb]")?.closest("[hidden]") ?? $("[data-testid=preset-crumb]")?.getAttribute("data-in-entry")).toBeTruthy();
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    (backs[0] as HTMLButtonElement).click(); await flush(); await flush();
+    expect($$("button, a").some((e) => e.textContent?.includes(t("preset.entry.back")))).toBe(false);
+    expect(document.activeElement).toBe(rowNamed("腳本"));
+    vi.restoreAllMocks();
+  });
+
+  it("到頂或到對話記錄前最後一格時，上移／下移停用", async () => {
+    await open();
+    rowNamed("清楚敘述").click(); await flush();
+    const btn = (k: string) => $$("button").find((b) => b.textContent?.trim() === t(k)) as HTMLButtonElement;
+    expect(btn("preset.entry.moveUp").disabled).toBe(true);
+    expect(btn("preset.entry.moveDown").disabled).toBe(false);
+    rowNamed("腳本").click(); await flush();
+    expect(btn("preset.entry.moveDown").disabled).toBe(true);
+  });
+});

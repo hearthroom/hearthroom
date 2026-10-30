@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptationId, addEntry, canDeleteEntry, clearParam, deleteEntry, moveToSide, nativeMacrosValid, nativeProblems, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
-  entryPlace, isPromptPack, moveEntry, moveEntryTo, newDocument, prefixLayout, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
+  canMoveEntry, entryPlace, isPromptPack, moveEntry, moveEntryTo, newDocument, prefixLayout, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
 
@@ -64,6 +64,23 @@ describe("ST 預設文件操作", () => {
     expect(entryRows(doc)[0]!.enabled).toBe(false);
     expect((doc.st.prompt_order as { order: { enabled: boolean }[] }[])[0]!.order[0]!.enabled).toBe(true);
     expect(setEnabled(doc, "chatHistory", false)).toBe(false);
+  });
+
+  it("上移／下移能不能按：到一區頂端或對話記錄前最後一格就不能再移（QA ⚠️2）", () => {
+    const doc = imported();
+    // main, charDescription, style, chatHistory, jailbreak, deep
+    expect(canMoveEntry(doc, "main", -1)).toBe(false);
+    expect(canMoveEntry(doc, "main", 1)).toBe(true);
+    expect(canMoveEntry(doc, "style", 1)).toBe(false);
+    expect(canMoveEntry(doc, "jailbreak", -1)).toBe(false);
+    expect(canMoveEntry(doc, "deep", 1)).toBe(false);
+    expect(canMoveEntry(doc, "deep", -1)).toBe(true);
+    expect(canMoveEntry(doc, "chatHistory", 1)).toBe(false);
+    // 能不能按跟實際移動一致
+    for (const id of ["main", "style", "jailbreak", "deep"]) for (const dir of [-1, 1] as const) {
+      const d = imported();
+      expect(moveEntry(d, id, dir)).toBe(canMoveEntry(imported(), id, dir));
+    }
   });
 
   it("玩家／角色 marker 是一步；個性、情境、世界書是空槽，不算一步", () => {

@@ -3806,7 +3806,6 @@
   "preset.entry.enabled": "このエントリーを有効にする",
   "preset.entry.moveUp": "上へ",
   "preset.entry.moveDown": "下へ",
-  "preset.entry.moveEdge": "この位置の端です。{site}が用意する内容を越えて動かすことはできません。",
   "preset.entry.detach": "並びから外す",
   "preset.entry.detach.done": "並びから外しました。内容は未使用のエントリーに残っています。",
   "preset.entry.duplicate": "エントリーを複製",
