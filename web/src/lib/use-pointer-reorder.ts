@@ -1,7 +1,7 @@
 /**
  * 清單拖曳排序（預設編輯器的條目，owner 2026-10-30）。不靠套件：只用 pointer events。
  *
- * 版面約定：每一區是一個 `[data-drop-side]` 元素，裡面每一列是 `[data-drag-id]`。拖曳中
+ * 版面約定：每一區是一個 `[data-drop-side]` 元素，裡面每一列是 `[data-drop-id]`（可以拖的那幾列另有 `[data-drag-id]`）。拖曳中
  * 依指標的 y 算落點——落在哪一區，就找那一區第一個中線在指標下面的列，放在它前面；都沒有就放到那一區最後面。
  *
  * 桌機（滑鼠）按住把手直接拖；手機與觸控筆要長按把手，長按前手指先移動就當作捲動、不開始拖。
@@ -39,9 +39,10 @@ export function usePointerReorder(opts: { list: Ref<HTMLElement | null>; enabled
     for (const [i, g] of groups.entries()) {
       if (y >= g.getBoundingClientRect().bottom && i < groups.length - 1) continue;
       const side = g.dataset.dropSide as "before" | "after";
-      const rows = [...g.querySelectorAll<HTMLElement>("[data-drag-id]")].filter((r) => r.dataset.dragId !== dragging.value);
+      // 落點可以是任何一列（含鎖住的那幾列），只是被拖的那一列自己不算
+      const rows = [...g.querySelectorAll<HTMLElement>("[data-drop-id]")].filter((r) => r.dataset.dragId !== dragging.value);
       const next = rows.find((r) => { const b = r.getBoundingClientRect(); return b.top + b.height / 2 > y; });
-      target.value = next ? { beforeId: next.dataset.dragId! } : { side };
+      target.value = next ? { beforeId: next.dataset.dropId! } : { side };
       return;
     }
     target.value = null;

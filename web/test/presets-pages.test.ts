@@ -161,7 +161,8 @@ describe("預設編輯器", () => {
     expect(rowNamed("腳本").textContent).toContain(t("preset.report.status.unsupported"));
     expect(rowNamed("回應玩家").textContent).toContain(t("preset.report.status.adjust"));
     const provided = $$("[data-testid=provided-row]");
-    expect(provided.map((b) => b.textContent?.trim().replace(t("preset.provided.label"), "").trim())).toEqual([t("preset.provided.chatHistory"), t("preset.provided.memory")]);
+    // 這份沒有任何 marker、也沒有 ST 預設的條目可當錨點：角色與玩家設定、對話示例照伺服器補在前綴最後
+    expect(provided.map((b) => b.textContent?.trim().replace(t("preset.provided.label"), "").trim())).toEqual([t("preset.provided.charDescription"), t("preset.provided.examples"), t("preset.provided.history")]);
     expect(provided[0]!.parentElement!.querySelector("input[type=checkbox]")).toBeNull();
     expect(root.textContent).not.toContain("相容");
   });
@@ -686,5 +687,39 @@ describe("條目拖曳排序（owner 2026-10-30：桌機直接拖、手機長按
     const search = $<HTMLInputElement>("[data-testid=entry-search]");
     search.value = "清楚"; search.dispatchEvent(new Event("input")); await flush();
     expect($("[data-testid=entry-drag]")).toBeNull();
+  });
+});
+
+
+describe("條目清單照真實送出順序（畫面規格 (a)，PM 2026-10-30）", () => {
+  async function open() {
+    const d = doc();
+    d.st.prompts!.push({ identifier: "charDescription", name: "Char Description", marker: true });
+    const g = d.st.prompt_order!.find((x) => x.character_id === 100001)!;
+    g.order = ["clear", "charDescription", "script", "chatHistory", "turn"].map((identifier) => ({ identifier, enabled: true }));
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+  const listed = () => $$("[data-testid=entry-row], [data-testid=provided-row]").map((b) => (b.querySelector(".preset-editor__rowName")?.textContent ?? "").trim());
+
+  it("「角色與玩家設定」插在它真正的位置，「世界書、對話記錄與記憶」在對話記錄之前那一區最後", async () => {
+    await open();
+    // 對話示例的 marker 不在：伺服器補在角色設定後面（ST 預設順序最近的前一個錨點）
+    expect(listed()).toEqual(["清楚敘述", t("preset.provided.charDescription"), t("preset.provided.examples"), "腳本", t("preset.provided.history"), "回應玩家"]);
+    expect($("[data-testid=entry-list]")?.textContent ?? root.textContent).not.toContain(t("preset.entries.group.provided"));
+  });
+
+  it("查看位置照條目真實的位置標「角色與玩家設定之前／之後」", async () => {
+    await open();
+    for (const [name, step] of [["清楚敘述", "beforePersona"], ["腳本", "afterPersona"], ["回應玩家", "s4"]] as const) {
+      $$("[data-testid=entry-row]").find((b) => b.textContent?.includes(name))!.click(); await flush();
+      $$("button").find((b) => b.textContent?.trim() === t("preset.entry.inspect"))!.click(); await flush();
+      const here = document.body.querySelector(".inspect__here")!;
+      expect(here.textContent).toContain(t(`preset.inspect.${step}`));
+      document.body.querySelector<HTMLButtonElement>(".modal__actions .btn")!.click(); await flush();
+    }
   });
 });

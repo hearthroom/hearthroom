@@ -132,18 +132,110 @@ export function setEnabled(doc: PresetDocument, id: string, enabled: boolean, op
 }
 
 /** 和同一區相鄰的自訂條目交換位置；框架條目不動，也不跨過聊天歷史。 */
-export function moveEntry(doc: PresetDocument, id: string, dir: -1 | 1): boolean {
+/**
+ * 會送出內容的框架 marker：玩家設定、角色設定（畫面上合成「角色與玩家設定」）與對話示例（另一列）。
+ * 其他 marker（個性、情境、世界書）是空槽，伺服器不放內容，清單不畫、上下移也不算一步。
+ */
+export const PERSONA_IDS: ReadonlySet<string> = new Set(["personaDescription", "charDescription"]);
+const EXAMPLES_ID = "dialogueExamples";
+/** SillyTavern 預設的 prompt_order：marker 缺席時，伺服器照它找最近的錨點補位（server renderPresetPrefixLayout，6376f7af）。 */
+const ST_DEFAULT_ORDER = ["main", "worldInfoBefore", "personaDescription", "charDescription", "charPersonality", "scenario", "enhanceDefinitions", "nsfw", "worldInfoAfter", "dialogueExamples"];
+
+/** 對話記錄之前那一區照送出順序的一列。virtual：marker 缺席，位置是伺服器補上的（只顯示，不能拖到它前面、上下移不算一步）。 */
+export type PrefixRow = { kind: "entry"; id: string } | { kind: "persona" | "dialogueExamples"; virtual: boolean; markers: string[] };
+
+/**
+ * 對話記錄之前的版面，跟伺服器組前綴同一套規則：自訂條目照排序（停用、不支援的也照樣列出）；
+ * 開著的玩家／角色 marker 畫「角色與玩家設定」，相鄰的併成一列；開著的對話示例 marker 畫一列。
+ * 缺席的材料找錨點：ST 預設順序裡前面最近、伺服器有收進前綴的條目之後；沒有就後面最近的之前；
+ * 都沒有就放在最後（角色、玩家、範例）。錨點只看伺服器收的：開著的，而且 inPrefix 說收（不支援、被移到對話記錄之後的不算）。
+ */
+export function prefixLayout(doc: PresetDocument, inPrefix: (id: string) => boolean = () => true): PrefixRow[] {
   const rows = entryRows(doc);
-  const row = rows.find((r) => r.identifier === id);
-  if (!row || row.slot === "F") return false;
-  const peers = rows.filter((r) => r.slot === row.slot);
-  const target = peers[peers.indexOf(row) + dir];
-  if (!target) return false;
+  const history = rows.findIndex((r) => r.identifier === HISTORY);
+  const before = history < 0 ? rows : rows.slice(0, history);
+  const blocks = before.filter((r) => r.enabled && (isFramework(r.identifier) || inPrefix(r.identifier))).map((r) => r.identifier);
+  const emitted = new Set(blocks.filter((id) => PERSONA_IDS.has(id) || id === EXAMPLES_ID));
+  const placedBefore = new Map<string, string[]>(), placedAfter = new Map<string, string[]>();
+  const tail: string[] = [];
+  for (const m of ["personaDescription", "charDescription", EXAMPLES_ID]) {
+    if (emitted.has(m)) continue;
+    const rank = ST_DEFAULT_ORDER.indexOf(m);
+    const earlier = ST_DEFAULT_ORDER.slice(0, rank).reverse().find((id) => blocks.includes(id));
+    const later = earlier ? undefined : ST_DEFAULT_ORDER.slice(rank + 1).find((id) => blocks.includes(id));
+    if (earlier) placedAfter.set(earlier, [...(placedAfter.get(earlier) ?? []), m]);
+    else if (later) placedBefore.set(later, [...(placedBefore.get(later) ?? []), m]);
+    else tail.push(m);
+  }
+  const out: PrefixRow[] = [];
+  const material = (m: string, virtual: boolean) => {
+    const kind = m === EXAMPLES_ID ? "dialogueExamples" : "persona";
+    const prev = out[out.length - 1];
+    if (kind === "persona" && prev?.kind === "persona") { prev.markers.push(m); prev.virtual &&= virtual; return; }
+    out.push({ kind, virtual, markers: [m] });
+  };
+  for (const r of before) {
+    const id = r.identifier;
+    for (const m of placedBefore.get(id) ?? []) material(m, true);
+    if (!isFramework(id)) out.push({ kind: "entry", id });
+    else if (emitted.has(id) && r.enabled) material(id, false);
+    for (const m of placedAfter.get(id) ?? []) material(m, true);
+  }
+  for (const m of ["charDescription", "personaDescription", EXAMPLES_ID]) if (tail.includes(m)) material(m, true);
+  return out;
+}
+
+/**
+ * 一區照送出順序的「一步」：每條自訂條目一步；開著的玩家／角色 marker 相鄰的合成一步，對話示例一步。
+ * 空槽 marker、停用的 marker 與伺服器補位的列都不算（補位的列黏著錨點，跨過錨點就跨過它）。
+ */
+function stepsOf(order: StOrderEntry[], side: "before" | "after"): string[][] {
+  const history = order.findIndex((o) => o.identifier === HISTORY);
+  const from = side === "before" ? 0 : history + 1;
+  const to = side === "before" ? (history < 0 ? order.length : history) : history < 0 ? from : order.length;
+  const steps: string[][] = [];
+  let persona: string[] | null = null;
+  for (let i = from; i < to; i++) {
+    const { identifier: id, enabled } = order[i]!;
+    if (PERSONA_IDS.has(id) && enabled !== false) { if (!persona) { persona = []; steps.push(persona); } persona.push(id); continue; }
+    if (isFramework(id)) { if (id === EXAMPLES_ID && enabled !== false) { persona = null; steps.push([id]); } continue; }
+    persona = null;
+    steps.push([id]);
+  }
+  return steps;
+}
+
+/** 上移／下移一步：跨過一條自訂條目或一列「角色與玩家設定」，不跨聊天歷史。框架條目本身不動。 */
+export function moveEntry(doc: PresetDocument, id: string, dir: -1 | 1): boolean {
+  if (isFramework(id)) return false;
   const order = orderOf(doc);
-  const a = order.findIndex((o) => o.identifier === id);
-  const b = order.findIndex((o) => o.identifier === target.identifier);
-  [order[a], order[b]] = [order[b]!, order[a]!];
+  const at = order.findIndex((o) => o.identifier === id);
+  if (at < 0) return false;
+  const history = order.findIndex((o) => o.identifier === HISTORY);
+  const side = history >= 0 && at > history ? "after" : "before";
+  const steps = stepsOf(order, side);
+  const mine = steps.findIndex((st) => st.length === 1 && st[0] === id);
+  const other = steps[mine + dir];
+  if (mine < 0 || !other) return false;
+  const [entry] = order.splice(at, 1);
+  const anchor = order.findIndex((o) => o.identifier === (dir < 0 ? other[0] : other[other.length - 1]));
+  order.splice(dir < 0 ? anchor : anchor + 1, 0, entry!);
   return true;
+}
+
+/** 條目落在哪一段：最後一份玩家／角色材料（含伺服器補位的）之前、之後（對話記錄之前），或對話記錄之後。框架條目回 null。 */
+export function entryPlace(doc: PresetDocument, id: string, inPrefix?: (id: string) => boolean): "beforePersona" | "afterPersona" | "after" | null {
+  if (isFramework(id)) return null;
+  const order = orderOf(doc);
+  const at = order.findIndex((o) => o.identifier === id);
+  if (at < 0) return null;
+  const history = order.findIndex((o) => o.identifier === HISTORY);
+  if (history >= 0 && at > history) return "after";
+  const layout = prefixLayout(doc, inPrefix);
+  const mine = layout.findIndex((r) => r.kind === "entry" && r.id === id);
+  let last = -1;
+  layout.forEach((r, i) => { if (r.kind === "persona") last = i; });
+  return mine >= 0 && mine < last ? "beforePersona" : "afterPersona";
 }
 
 export function detachEntry(doc: PresetDocument, id: string): boolean {
@@ -195,12 +287,9 @@ export function moveEntryTo(doc: PresetDocument, id: string, target: DropTarget)
   } else if (target.side === "after") {
     at = order.length;
   } else {
-    // 之前區的最後面：最後一條自訂條目之後；之前區沒有自訂條目就排在聊天歷史前面
+    // 之前區的最後面＝聊天歷史正前方（清單最後那列「世界書、對話記錄與記憶」之前）
     const history = order.findIndex((o) => o.identifier === HISTORY);
-    const end = history < 0 ? order.length : history;
-    let last = -1;
-    for (let i = 0; i < end; i++) if (!isFramework(order[i]!.identifier)) last = i;
-    at = last >= 0 ? last + 1 : end;
+    at = history < 0 ? order.length : history;
   }
   if (at < 0) { order.splice(from, 0, entry!); return false; }
   order.splice(at, 0, entry!);

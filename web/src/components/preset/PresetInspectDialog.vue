@@ -3,19 +3,21 @@
 import { useI18n } from "vue-i18n";
 import PresetDialog from "./PresetDialog.vue";
 
-const props = defineProps<{ side: "before" | "after" }>();
+// 條目真實的位置（畫面規格 (a)）：角色與玩家設定之前、之後（對話記錄之前），或對話記錄之後
+const props = defineProps<{ place: "beforePersona" | "afterPersona" | "after" }>();
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
-const here = (n: number) => (props.side === "before" ? n === 2 : n === 4);
+const STEPS = ["beforePersona", "s1", "afterPersona", "s3", "s4", "s5"] as const;
+const here = (step: (typeof STEPS)[number]) => step === (props.place === "after" ? "s4" : props.place);
 </script>
 
 <template>
   <PresetDialog :title="t('preset.inspect.title')" @close="emit('close')">
     <p class="muted">{{ $t("preset.inspect.lede") }}</p>
     <ol class="inspect">
-      <li v-for="n in 5" :key="n" :class="{ 'inspect__here': here(n) }" :aria-current="here(n) ? 'step' : undefined">
-        <span>{{ $t(`preset.inspect.s${n}`) }}</span>
-        <strong v-if="here(n)">{{ $t("preset.inspect.here") }}</strong>
+      <li v-for="step in STEPS" :key="step" :class="{ 'inspect__here': here(step) }" :aria-current="here(step) ? 'step' : undefined">
+        <span>{{ $t(`preset.inspect.${step}`) }}</span>
+        <strong v-if="here(step)">{{ $t("preset.inspect.here") }}</strong>
       </li>
     </ol>
     <template #actions>

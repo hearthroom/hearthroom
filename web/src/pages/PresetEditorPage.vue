@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, adaptationId, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, restoreOrder, setEnabled,
+  adaptationId, entryPlace, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -41,14 +41,6 @@ const route = useRoute();
 const router = useRouter();
 const { token, needsConsent, consentNeeded, reauthorize } = usePresetAccess();
 const ops = operationKeys();
-
-/** 由綺夢社提供的條目在畫面上合成幾列（酒館把角色資料拆成五條，對玩家是同一件事），另加一列記憶。 */
-const PROVIDED: Record<string, string> = {
-  charDescription: "charDescription", charPersonality: "charDescription", scenario: "charDescription",
-  personaDescription: "charDescription", dialogueExamples: "charDescription",
-  worldInfoBefore: "worldInfo", worldInfoAfter: "worldInfo", chatHistory: "chatHistory",
-};
-const PROVIDED_ROWS = ["charDescription", "worldInfo", "chatHistory", "memory"] as const;
 
 // /me/presets/new 與 /me/presets/:id 是同一條路由：建好之後換網址時元件沿用，離開前的確認也跟著走
 const presetId = computed(() => (typeof route.params.presetId === "string" && route.params.presetId !== "new" ? route.params.presetId : ""));
@@ -75,7 +67,7 @@ const conflict = ref(false);
 const status = ref("");
 const savedVersion = ref(0);
 const exporting = ref(false);
-const inspecting = ref<"before" | "after" | null>(null);
+const inspecting = ref<"beforePersona" | "afterPersona" | "after" | null>(null);
 
 const snapshot = () => JSON.stringify({ title: title.value, models: models.value, doc: doc.value });
 const dirty = computed(() => !!doc.value && snapshot() !== saved.value);
@@ -110,10 +102,36 @@ const reorder = usePointerReorder({ list: listEl, enabled: () => canDrag.value, 
 const dropBefore = computed(() => (reorder.target.value && "beforeId" in reorder.target.value ? reorder.target.value.beforeId : ""));
 const dropEnd = computed(() => (reorder.target.value && "side" in reorder.target.value ? reorder.target.value.side : ""));
 const tagOf = (r: EntryRow) => (movedAfter(r) ? undefined : compatOf(r.identifier)?.uiStatus);
-const provided = computed(() => {
-  const present = new Set(rows.value.filter((r) => r.slot === "F" && FRAMEWORK_IDS.has(r.identifier)).map((r) => PROVIDED[r.identifier]));
-  return PROVIDED_ROWS.filter((k) => k === "memory" || present.has(k));
-});
+/**
+ * 清單上的一列：自訂條目，或由綺夢社提供、鎖住的一列。對話記錄之前那一區照真實送出順序（畫面規格 (a)）：
+ * 版面跟伺服器組前綴同一套規則（prefixLayout）。dropId 是拖曳時「放在這一列前面」用的排序識別；
+ * marker 缺席、由伺服器補位的那幾列沒有 dropId——那裡沒有能放進去的位置，只顯示。
+ */
+type ListItem = { key: string; dropId: string; row?: EntryRow; provided?: "charDescription" | "examples" | "history" };
+// 伺服器有收進前綴的條目：開著、不是不支援、也沒被調到對話記錄之後（錨點只看這些）
+const inPrefix = (id: string) => {
+  const r = rows.value.find((x) => x.identifier === id);
+  return !!r && compatOf(id)?.uiStatus !== "unsupported" && shownSide(r) === "before";
+};
+const itemsOf = (side: "before" | "after"): ListItem[] => {
+  const shown = groupOf(side);
+  const entry = (r: EntryRow): ListItem => ({ key: r.identifier, dropId: r.identifier, row: r });
+  if (side === "after" || q.value || !doc.value) return shown.map(entry);
+  const byId = new Map(shown.map((r) => [r.identifier, r]));
+  const items: ListItem[] = [];
+  prefixLayout(doc.value, inPrefix).forEach((it, n) => {
+    if (it.kind === "entry") {
+      const r = byId.get(it.id);
+      if (r) { items.push(entry(r)); byId.delete(it.id); }
+      return;
+    }
+    items.push({ key: `${it.kind}:${n}`, dropId: it.virtual ? "" : it.markers[0]!, provided: it.kind === "persona" ? "charDescription" : "examples" });
+  });
+  // 位置被上游調到對話記錄之前、但排序上在後面的條目，接在最後
+  for (const r of byId.values()) items.push(entry(r));
+  items.push({ key: "history", dropId: "chatHistory", provided: "history" });
+  return items;
+};
 
 const blocked = computed(() => custom.value.filter((r) => {
   if (!r.enabled) return false;
@@ -301,6 +319,12 @@ async function removeUnused(id: string, name: string) {
 }
 
 function pick(id: string) { selected.value = id; providedOpen.value = ""; }
+/** 查看位置：照條目真實的位置；上游調到對話記錄之後的照調整後的位置 */
+function inspect(r: EntryRow) {
+  if (!doc.value) return;
+  const place = entryPlace(doc.value, r.identifier, inPrefix);
+  inspecting.value = shownSide(r) === "after" ? "after" : place === "after" || place === null ? "afterPersona" : place;
+}
 function pickProvided(key: string) { providedOpen.value = key; selected.value = ""; }
 
 function toggleModel(value: string, on: boolean) {
@@ -382,37 +406,36 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
           <template v-for="side in (['before', 'after'] as const)" :key="side">
             <!-- 拖曳中兩區都要看得到，空的那一區才放得進去 -->
-            <div v-if="groupOf(side).length || (side === 'before' && !q) || reorder.dragging.value" class="preset-editor__group" :data-drop-side="side"
+            <div v-if="itemsOf(side).length || reorder.dragging.value" class="preset-editor__group" :data-drop-side="side"
               :class="{ 'is-drop-end': dropEnd === side }">
               <h3 class="eyebrow">{{ $t(`preset.entries.group.${side}`) }}</h3>
+              <!-- 照真實送出順序（畫面規格 (a)）：由綺夢社提供的內容是鎖住的一列，插在它真正的位置 -->
               <ul>
-                <li v-for="r in groupOf(side)" :key="r.identifier" :data-drag-id="r.identifier"
-                  :class="{ 'is-drop-before': dropBefore === r.identifier, 'is-dragging': reorder.dragging.value === r.identifier }">
-                  <!-- 把手：滑鼠直接拖、手機長按拖；鍵盤與輔助科技用條目選單的上移／下移，所以不進 Tab 順序 -->
-                  <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true" data-testid="entry-drag" @pointerdown="reorder.start($event, r.identifier)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
-                  </span>
-                  <button type="button" class="preset-editor__row" :class="{ 'is-on': r.identifier === selected, 'is-off': !r.enabled }" :aria-current="r.identifier === selected || undefined" data-testid="entry-row" @click="pick(r.identifier)">
-                    <span class="preset-editor__rowName">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
-                    <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : tagOf(r) === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</span>
-                    <span v-else-if="!r.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
-                  </button>
-                  <label class="preset-editor__toggle">
-                    <input type="checkbox" :disabled="readOnly" :checked="r.enabled" :aria-label="`${$t('preset.entry.enabled')}：${r.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, r.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
-                  </label>
-                </li>
-              </ul>
-            </div>
-            <div v-if="side === 'before' && !q" class="preset-editor__group">
-              <h3 class="eyebrow">{{ $t("preset.entries.group.provided") }}</h3>
-              <ul>
-                <li v-for="k in provided" :key="k">
-                  <button type="button" class="preset-editor__row" :class="{ 'is-on': providedOpen === k }" data-testid="provided-row" @click="pickProvided(k)">
-                    <svg class="preset-editor__lock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-                    <span class="preset-editor__rowName">{{ $t(`preset.provided.${k}`) }}</span>
-                    <span class="sr-only">{{ $t("preset.provided.label") }}</span>
-                  </button>
-                </li>
+                <template v-for="it in itemsOf(side)" :key="it.key">
+                  <li v-if="it.row" :data-drag-id="it.row.identifier" :data-drop-id="it.dropId"
+                    :class="{ 'is-drop-before': dropBefore === it.dropId, 'is-dragging': reorder.dragging.value === it.row.identifier }">
+                    <!-- 把手：滑鼠直接拖、手機長按拖；鍵盤與輔助科技用條目選單的上移／下移，所以不進 Tab 順序 -->
+                    <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true" data-testid="entry-drag" @pointerdown="reorder.start($event, it.row.identifier)">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+                    </span>
+                    <button type="button" class="preset-editor__row" :class="{ 'is-on': it.row.identifier === selected, 'is-off': !it.row.enabled }" :aria-current="it.row.identifier === selected || undefined" data-testid="entry-row" @click="pick(it.row.identifier)">
+                      <span class="preset-editor__rowName">{{ it.row.prompt.name || $t("preset.entry.untitled") }}</span>
+                      <span v-if="tagOf(it.row)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(it.row)}`">{{ $t(tagOf(it.row) === "needs_adjustment" ? "preset.report.status.adjust" : tagOf(it.row) === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</span>
+                      <span v-else-if="!it.row.enabled" class="subtle">{{ $t("preset.entries.disabled") }}</span>
+                    </button>
+                    <label class="preset-editor__toggle">
+                      <input type="checkbox" :disabled="readOnly" :checked="it.row.enabled" :aria-label="`${$t('preset.entry.enabled')}：${it.row.prompt.name || $t('preset.entry.untitled')}`" @change="setEnabled(doc, it.row.identifier, ($event.target as HTMLInputElement).checked, { keepSource: imported })" />
+                    </label>
+                  </li>
+                  <li v-else :data-drop-id="it.dropId || undefined" :class="{ 'is-drop-before': !!it.dropId && dropBefore === it.dropId }">
+                    <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true"></span>
+                    <button type="button" class="preset-editor__row" :class="{ 'is-on': providedOpen === it.provided }" data-testid="provided-row" @click="pickProvided(it.provided!)">
+                      <svg class="preset-editor__lock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                      <span class="preset-editor__rowName">{{ $t(`preset.provided.${it.provided}`) }}</span>
+                      <span class="sr-only">{{ $t("preset.provided.label") }}</span>
+                    </button>
+                  </li>
+                </template>
               </ul>
             </div>
           </template>
@@ -437,14 +460,14 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
         <section class="panel preset-editor__detail">
           <PresetEntryDetail
             v-if="selectedRow" :key="selectedRow.identifier" :doc="doc" :row="selectedRow" :compat="compatOf(selectedRow.identifier)" :saved="savedPrompt(selectedRow.identifier)" :keep-source="imported" :read-only="readOnly"
-            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspecting = shownSide(selectedRow)"
+            @select="pick" @back="selected = ''" @status="status = $event" @inspect="inspect(selectedRow)"
           />
           <div v-else-if="providedOpen" class="preset-editor__provided" data-testid="provided-detail">
             <button type="button" class="btn btn--sm btn--ghost preset-editor__back" @click="providedOpen = ''">{{ $t("preset.entry.back") }}</button>
             <p class="eyebrow">{{ $t("preset.provided.label") }}</p>
             <h2>{{ $t(`preset.provided.${providedOpen}`) }}</h2>
             <p class="muted">{{ $t("preset.provided.body") }}</p>
-            <p v-if="imported && providedOpen !== 'memory'" class="subtle">{{ $t("preset.provided.imported") }}</p>
+            <p v-if="imported" class="subtle">{{ $t("preset.provided.imported") }}</p>
           </div>
           <p v-else class="muted preset-editor__pick">{{ $t("preset.entry.title") }}</p>
         </section>
@@ -494,7 +517,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
     </template>
 
     <PresetExportDialog v-if="exporting && detail" :preset="detail" :token="token" @close="exporting = false" />
-    <PresetInspectDialog v-if="inspecting" :side="inspecting" @close="inspecting = null" />
+    <PresetInspectDialog v-if="inspecting" :place="inspecting" @close="inspecting = null" />
   </div>
 </template>
 
