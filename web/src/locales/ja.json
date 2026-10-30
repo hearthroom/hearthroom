@@ -4135,5 +4135,5 @@
   "preset.share.unfavorite.body": "このプリセットは公開されていないため、外すと見つけられなくなります。",
   "preset.share.unfavorite.confirm": "外す",
   "preset.share.unfavorite.keep": "残す",
-  "preset.share.error.conflict": "このプリセットはたった今ほかの場所で更新されました。再読み込みしてから、もう一度公開してください。"
+  "preset.share.error.conflict": "このプリセットはたった今ほかの場所で更新されました。再読み込みしてから、もう一度お試しください。"
 }

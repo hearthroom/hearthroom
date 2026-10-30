@@ -4135,5 +4135,5 @@
   "preset.share.unfavorite.body": "This preset is no longer public, so you won't be able to find it again.",
   "preset.share.unfavorite.confirm": "Remove",
   "preset.share.unfavorite.keep": "Keep",
-  "preset.share.error.conflict": "This preset was just updated elsewhere. Reload, then make it public again."
+  "preset.share.error.conflict": "This preset was just updated elsewhere. Reload and try again."
 }

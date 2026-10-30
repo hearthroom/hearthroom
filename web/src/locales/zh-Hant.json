@@ -4135,5 +4135,5 @@
   "preset.share.unfavorite.body": "這份預設已不公開，取消後就找不回來了。",
   "preset.share.unfavorite.confirm": "取消喜愛",
   "preset.share.unfavorite.keep": "保留喜愛",
-  "preset.share.error.conflict": "這份預設剛剛在別處更新了。重新載入後再公開。"
+  "preset.share.error.conflict": "這份預設剛剛在別處更新了。重新載入後再試一次。"
 }
