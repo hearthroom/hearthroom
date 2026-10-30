@@ -28,10 +28,20 @@ export interface PresetSummary {
   /** 上游依綁定與發布紀錄決定能刪還是只能封存；畫面照這個出選項，不自己猜 */
   allowedActions: PresetAction[];
   bindingCount: number;
+  /** 分享（P2）。舊上游沒有這幾項：當成私人、沒被下架 */
+  visibility?: "private" | "public";
+  publishedAt?: string | null;
+  attribution?: string;
+  /** 平台下架了：作者看得到這個標示，不能再公開 */
+  removed?: boolean;
 }
 export interface RevisionSummary { revisionId: string; version: number; title: string; createdAt: string; enabledEntryCount: number }
 export interface PresetDetail extends PresetSummary { revisions: RevisionSummary[] }
-export interface PresetList { items: PresetSummary[]; nextCursor: string; quota: { used: number; limit: number; archived: number } }
+export interface PresetList {
+  items: PresetSummary[]; nextCursor: string; quota: { used: number; limit: number; archived: number };
+  /** 公開鈕旁那句聲明的版本；公開時原樣送回，上游據此記下作者看到的是哪一版 */
+  declarationVersion?: string;
+}
 
 export interface CompatibilityEntry {
   identifier: string;
@@ -102,6 +112,8 @@ const REASON_KEY: Record<string, string> = {
   preset_idempotency_conflict: "preset.error.idempotency",
   preset_archived: "preset.error.archived",
   operation_active: "preset.error.busy",
+  preset_removed: "preset.share.takenDown.note",
+  preset_declaration_changed: "preset.share.error.declarationChanged",
 };
 /** 沒有細碼時看碼本身；這幾個在預設頁上有比站上通用句更準的說法。 */
 const CODE_KEY: Record<string, string> = {
@@ -263,4 +275,81 @@ export async function fetchModelOptions(token: string): Promise<ModelOption[]> {
     }
   }
   return [...seen.values()];
+}
+
+/* ---- 分享（P2）：公開、公開列表、喜愛與用過、檢舉 ---------------------------------------- */
+
+/** 公開列表與「喜愛與用過」共用的一列。作者用公開身分（authorNumId），不回帳號 UUID。 */
+export interface PresetLibraryItem {
+  presetId: string;
+  title: string;
+  authorName: string;
+  authorNumId: number;
+  authorAvatar: string;
+  attribution: string;
+  /** 作者測試過的模型代碼；空＝通用 */
+  recommendedModels: string[];
+  enabledEntryCount: number;
+  /** 近 7 天作者以外實際玩過的不同玩家數 */
+  usesLast7d: number;
+  publishedAt: string | null;
+  updatedAt: string;
+  favorited: boolean;
+  lastAppliedAt: string | null;
+  /** false：作者改回私人、刪了，或平台下架；喜愛與用過裡照常可用 */
+  listed: boolean;
+  mine: boolean;
+}
+export interface PresetLibraryList { items: PresetLibraryItem[] }
+export interface PresetLibraryDetail {
+  item: PresetLibraryItem;
+  revision: PresetRevision;
+  compatibility: Compatibility;
+  /** 這份預設有設的取樣參數（只有設了的鍵），數值原樣 */
+  parameters: Record<string, number>;
+  reportedByMe: boolean;
+}
+export const REPORT_REASONS = ["copyright", "inappropriate", "spam", "other"] as const;
+export type PresetReportReason = (typeof REPORT_REASONS)[number];
+/** 公開列表一頁幾筆；回來的筆數等於它，就還有下一頁 */
+export const LIBRARY_PAGE = 20;
+
+export interface PublishInput { expectedVersion: number; declaration: string; attribution: string; recommendedModels?: string[] }
+
+/** 公開：不改內容。recommendedModels 不送就沿用原本的；送空陣列＝通用。 */
+export async function publishPreset(token: string, presetId: string, input: PublishInput, key: string): Promise<WriteReceipt> {
+  return json<WriteReceipt>(await send(`/presets/${id(presetId)}/publish`, token, input, key));
+}
+
+/** 改回私人：只離開公開列表與搜尋，用過或喜愛的人照常用。 */
+export async function unpublishPreset(token: string, presetId: string, expectedVersion: number, key: string): Promise<WriteReceipt> {
+  return json<WriteReceipt>(await send(`/presets/${id(presetId)}/unpublish`, token, { expectedVersion }, key));
+}
+
+/** model：all（全部）、general（沒標測試模型的）或模型代碼；排序由上游決定（近 7 天使用人數）。 */
+export async function listPresetLibrary(token: string, opts: { model?: string; q?: string; offset?: number } = {}): Promise<PresetLibraryList> {
+  const q = new URLSearchParams({ limit: String(LIBRARY_PAGE), offset: String(opts.offset ?? 0) });
+  if (opts.model && opts.model !== "all") q.set("model", opts.model);
+  if (opts.q?.trim()) q.set("q", opts.q.trim().slice(0, 64));
+  return json<PresetLibraryList>(await get(`/preset-library?${q}`, token));
+}
+
+/** 我的「喜愛與用過」：喜愛的在前，接著用過的。自己的預設不在這裡。 */
+export async function listPresetShelf(token: string, offset = 0): Promise<PresetLibraryList> {
+  const q = new URLSearchParams({ limit: String(LIBRARY_PAGE), offset: String(offset) });
+  return json<PresetLibraryList>(await get(`/preset-shelf?${q}`, token));
+}
+
+export async function fetchLibraryPreset(token: string, presetId: string): Promise<PresetLibraryDetail> {
+  return json<PresetLibraryDetail>(await get(`/preset-library/${id(presetId)}`, token));
+}
+
+/** 冪等：送幾次都是同一個結果，不需要冪等鍵。 */
+export async function favoritePreset(token: string, presetId: string, favorite: boolean): Promise<{ favorited: boolean }> {
+  return json<{ favorited: boolean }>(await send(`/preset-library/${id(presetId)}/favorite`, token, { favorite }));
+}
+
+/** 同一人還沒處理的檢舉不重記，照樣回 reported。 */
+export async function reportPreset(token: string, presetId: string, reason: PresetReportReason, detail: string): Promise<{ reported: boolean }> {
+  return json<{ reported: boolean }>(await send(`/preset-library/${id(presetId)}/report`, token, detail ? { reason, detail } : { reason }));
 }

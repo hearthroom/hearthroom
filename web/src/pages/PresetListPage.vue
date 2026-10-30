@@ -7,20 +7,26 @@
  *
  * 刪除不一定真的刪：還有對話在用、或發布過的版本，上游只會封存，原本的對話照常。
  * 能刪還是只能封存由上游的 allowedActions 決定，結果照回來的 disposition 講，不自己猜。
+ *
+ * P2 分享：頁首下三格「我的／喜愛與用過／公開」，選中的那格記在網址的 ?tab=（重新整理還在）。
+ * 「我的」的選單多了公開／改回私人；改回私人不另外確認（PM 2026-10-30），完成後 toast 一行說明。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { dateTime, whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
-import { archivePreset, deletePreset, listPresets, resultUnknown, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
+import { archivePreset, deletePreset, listPresets, resultUnknown, unpublishPreset, type PresetList, type PresetSummary, type WriteReceipt } from "@/lib/presets";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
 import PresetCopyDialog from "@/components/preset/PresetCopyDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
+import PresetPublishSheet from "@/components/preset/PresetPublishSheet.vue";
+import PresetShelfTab from "@/components/preset/PresetShelfTab.vue";
+import PresetLibraryTab from "@/components/preset/PresetLibraryTab.vue";
 
 const { t } = useI18n();
 const { lp } = useLocalePath();
@@ -42,6 +48,22 @@ const menu = ref("");
 const exporting = ref<PresetSummary | null>(null);
 const copying = ref<PresetSummary | null>(null);
 
+const route = useRoute();
+const TABS = ["mine", "fav", "public"] as const;
+type Tab = (typeof TABS)[number];
+const tab = computed<Tab>(() => (TABS as readonly string[]).includes(String(route.query.tab)) ? (route.query.tab as Tab) : "mine");
+const tabLink = (k: Tab) => ({ path: lp("/me/presets"), query: k === "mine" ? {} : { tab: k } });
+const declaration = ref("");
+const publishing = ref<PresetSummary | null>(null);
+const toast = ref("");
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function say(text: string) {
+  toast.value = text;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.value = ""; }, 5000);
+}
+function shareConsent(err: unknown) { consentNeeded(err); }
+
 const shown = computed(() => items.value.filter((p) => showArchived.value || !p.archived));
 const full = computed(() => !!quota.value && quota.value.used >= quota.value.limit);
 
@@ -52,6 +74,7 @@ async function load(more = false) {
     const page = await listPresets(await token(), more ? cursor.value : "");
     items.value = more ? [...items.value, ...page.items] : page.items;
     quota.value = page.quota;
+    if (!more) declaration.value = page.declarationVersion ?? "";
     cursor.value = page.nextCursor;
   } catch (err) {
     if (!consentNeeded(err)) loadFailed.value = true;
@@ -93,6 +116,32 @@ async function remove(p: PresetSummary) {
   }
 }
 
+function published(p: PresetSummary) {
+  publishing.value = null;
+  say(t("preset.share.published.toast", { name: p.title }));
+  void load();
+}
+
+async function unpublish(p: PresetSummary) {
+  menu.value = "";
+  const action = `unpublish:${p.id}`;
+  busy.value = p.id;
+  actionError.value = "";
+  try {
+    await unpublishPreset(await token(), p.id, p.version, ops.key(action));
+    ops.done(action);
+    say(t("preset.share.unpublished.toast"));
+    await load();
+  } catch (err) {
+    if (!resultUnknown(err)) ops.done(action);
+    if (consentNeeded(err)) return;
+    actionError.value = resultUnknown(err) ? t("preset.error.unknown") : err instanceof Error ? err.message : t("preset.error.unavailable");
+    if (err instanceof ApiError && err.code === "preset_conflict") void load();
+  } finally {
+    busy.value = "";
+  }
+}
+
 function copied(receipt: WriteReceipt, name: string) {
   copying.value = null;
   status.value = t("preset.copy.done", { name });
@@ -110,7 +159,7 @@ onMounted(() => {
   document.addEventListener("keydown", escMenu);
   void load();
 });
-onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); document.removeEventListener("keydown", escMenu); });
+onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); document.removeEventListener("keydown", escMenu); clearTimeout(toastTimer); });
 </script>
 
 <template>
@@ -120,13 +169,23 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
         <h1 class="display">{{ $t("preset.title") }}</h1>
         <p class="muted">{{ $t("preset.lede") }}</p>
       </div>
-      <div v-if="!needsConsent" class="presets__actions">
+      <div v-if="!needsConsent && tab === 'mine'" class="presets__actions">
         <RouterLink :to="lp('/me/presets/import')" class="btn" :class="{ 'is-disabled': full }" :aria-disabled="full || undefined" data-testid="preset-import">{{ $t("preset.import") }}</RouterLink>
         <RouterLink :to="lp('/me/presets/new')" class="btn btn--primary" :class="{ 'is-disabled': full }" :aria-disabled="full || undefined" data-testid="preset-create">{{ $t("preset.create") }}</RouterLink>
       </div>
     </header>
 
+    <nav v-if="!needsConsent" class="seg presets__tabs" :aria-label="$t('preset.share.tabs.label')" data-testid="preset-tabs">
+      <RouterLink
+        v-for="k in TABS" :key="k" :to="tabLink(k)" replace class="seg__item presets__tab" :class="{ 'seg__item--on': tab === k }"
+        :aria-current="tab === k ? 'page' : undefined" :data-testid="`preset-tab-${k}`"
+      >{{ $t(`preset.share.tabs.${k}`) }}</RouterLink>
+    </nav>
+
     <PresetReauth v-if="needsConsent" @confirm="reauthorize" @cancel="router.push(lp('/me'))" />
+
+    <PresetShelfTab v-else-if="tab === 'fav'" :token="token" @toast="say" @consent="shareConsent" @browse="router.replace(tabLink('public'))" />
+    <PresetLibraryTab v-else-if="tab === 'public'" :token="token" @toast="say" @consent="shareConsent" />
 
     <template v-else>
       <div v-if="quota" class="presets__meta">
@@ -164,9 +223,12 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <span>{{ $t("preset.row.version", { n: p.version }) }}</span>
               <span class="chip presets__chip">{{ $t(p.sourceKind === "imported" ? "preset.row.source.import" : "preset.row.source.native") }}</span>
               <span v-if="p.archived" class="chip presets__chip">{{ $t("preset.row.archived") }}</span>
+              <span v-if="p.removed" class="chip presets__chip presets__chip--strong" data-testid="preset-taken-down">{{ $t("preset.share.chip.takenDown") }}</span>
+              <span v-else-if="p.visibility === 'public'" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
               <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }, p.bindingCount) }}</span>
               <span>{{ $t("preset.row.updated", { datetime: dateTime(p.updatedAt) }) }}</span>
             </span>
+            <span v-if="p.removed" class="subtle presets__note">{{ $t("preset.share.takenDown.note") }}</span>
           </RouterLink>
           <div class="presets__rowActions">
             <!-- 封存的不能編輯：不給編輯鈕，點名稱打開是唯讀（QA N03） -->
@@ -178,6 +240,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <div v-if="menu === p.id" class="presets__menu panel" role="menu">
                 <button type="button" role="menuitem" @click="menu = ''; exporting = p">{{ $t("preset.row.export") }}</button>
                 <button v-if="!p.archived" type="button" role="menuitem" :disabled="full" @click="menu = ''; copying = p">{{ $t("preset.row.copy") }}</button>
+                <button v-if="p.visibility === 'public' && !p.removed" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
+                <button v-else-if="!p.archived" type="button" role="menuitem" :disabled="p.removed || !declaration" data-testid="preset-publish" @click="menu = ''; publishing = p">{{ $t("preset.share.menu.publish") }}</button>
                 <button v-if="!p.archived && p.allowedActions.length" type="button" role="menuitem" class="presets__danger" data-testid="preset-remove" @click="remove(p)">
                   {{ $t(p.allowedActions.includes("delete") ? "preset.row.delete" : "preset.row.archive") }}
                 </button>
@@ -191,6 +255,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 
     <PresetExportDialog v-if="exporting" :preset="exporting" :token="token" @close="exporting = null" />
     <PresetCopyDialog v-if="copying" :source="copying" :token="token" @close="copying = null" @done="copied" />
+    <PresetPublishSheet v-if="publishing" :preset="publishing" :declaration="declaration" :token="token" @close="publishing = null" @done="published(publishing!)" @stale="load()" />
+    <div class="toast" role="status" :hidden="!toast" data-testid="preset-toast">{{ toast }}</div>
   </div>
 </template>
 
@@ -220,6 +286,11 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__menu button:hover:not(:disabled) { background: var(--surface-2); }
 .presets__menu button:disabled { opacity: .45; cursor: not-allowed; }
 .presets__danger { color: var(--danger) !important; }
+.presets__tabs { display: flex; justify-self: stretch; }
+.presets__tab { flex: 1; display: flex; align-items: center; justify-content: center; height: var(--h-md); text-decoration: none; }
+.presets__chip--public { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
+.presets__chip--strong { background: var(--border); color: var(--text); font-weight: 500; }
+.presets__note { line-height: 1.5; }
 .presets__more { justify-self: center; }
 .presets__status:empty { display: none; }
 .is-disabled { opacity: .45; pointer-events: none; }
