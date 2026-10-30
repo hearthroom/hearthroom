@@ -2,6 +2,9 @@
 -- 'held' 狀態從此不再寫入；CHECK 約束留著（SQLite 改約束要重建整張表，不值得）。
 -- 殘留的待審留言一律轉公開、保留原因。上線前正式站盤點為 0 筆；有的話，獎勵另行補報（見任務書）。
 
+-- 重複內容的規則拿掉了（不擋也不標記）：舊的這個原因一併清掉，不留在待審或已移除的列表上。
+UPDATE comments SET hold_reason = NULL WHERE hold_reason = 'duplicate';
+
 -- 先補回覆數：待審的回覆當時沒算進頂層。
 UPDATE comments SET reply_count = reply_count + (SELECT COUNT(*) FROM comments r WHERE r.root_id = comments.id AND r.status = 'held')
 WHERE root_id IS NULL AND EXISTS (SELECT 1 FROM comments r WHERE r.root_id = comments.id AND r.status = 'held');

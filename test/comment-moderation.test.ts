@@ -263,6 +263,7 @@ describe("0098：殘留的待審留言轉公開", () => {
     // 重建上線前的樣子：待審的留言不算進回覆數。
     await env.DB.batch([
       env.DB.prepare("UPDATE comments SET status='held', hold_reason='keyword' WHERE id IN (?, ?)").bind(top, reply),
+      env.DB.prepare("UPDATE comments SET hold_reason='duplicate' WHERE id=?").bind(root),
       env.DB.prepare("UPDATE comments SET reply_count=0 WHERE id=?").bind(root),
     ]);
     const migration = env.TEST_MIGRATIONS.find((m) => m.name.includes("0098_comment_post_then_review"))!;

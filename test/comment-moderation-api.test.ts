@@ -227,6 +227,14 @@ describe("統計與指標", () => {
     expect(await stats()).toMatchObject({ holdRate7d: 0.5, reports7d: 1 });
   });
 
+  it("AI 對已移除的留言再標記一次：已移除分頁不顯示 AI 建議，留著原本的原因", async () => {
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const id = (await json(await post("fan", { content: "違禁" }))).commentId;
+    expect((await decide("mod", id, "remove", "廣告")).status).toBe(200);
+    expect((await decide("agent", id, "flag", "像是廣告")).status).toBe(200);
+    expect((await queue("removed"))[0]).toMatchObject({ id, holdReason: "keyword", suggestedBy: null, moderationReason: "廣告" });
+  });
+
   it("標記率：AI 對已移除的留言再標記一次，不算被標記", async () => {
     const stats = async () => json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
     const id = await say("fan", "普通");

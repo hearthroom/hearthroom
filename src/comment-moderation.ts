@@ -242,7 +242,7 @@ export async function moderationQueue(db: D1Database, viewerId: string, tab: Que
     db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age, null, null, filter),
     // ai_reason：這次標記之後（標記時間起算）AI 最近一次的標記理由；只看還有標記的，放行過的舊標記不算。
     db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason, m.handle, m.display_name, k.names, c.post_id, p.title AS post_title, p.slug AS post_slug, col.slug AS column_slug,
-      (SELECT a.reason FROM audit_log a WHERE c.hold_reason IS NOT NULL AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
+      (SELECT a.reason FROM audit_log a WHERE ${FLAGGED} AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
       (SELECT num FROM card_numbers n WHERE n.provider = k.provider AND n.source_role_id = k.source_role_id) AS card_number,
       (SELECT COUNT(*) FROM comment_reports r WHERE r.target_kind = ${KIND} AND r.comment_id = c.id AND r.resolved_at IS NULL) AS open_reports
       ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE, filter),
