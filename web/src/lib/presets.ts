@@ -388,7 +388,10 @@ export async function fetchCardPreset(token: string, roleId: string): Promise<Ca
   return json<CardPresetBinding>(await get(`/player/preset-default?${new URLSearchParams({ roleId })}`, token));
 }
 
-/** 套用到這張卡；別處先改了回 409 preset_revision_conflict，由呼叫端重讀再送一次。 */
+/**
+ * 套用到這張卡；別處先改了回 409 preset_revision_conflict，由呼叫端重讀再送一次。
+ * scope 一定是 card：卡片層上線後，上游拒收不帶 scope 的舊寫法（409 preset_scope_changed）。
+ */
 export async function applyPresetToCard(token: string, input: { roleId: string; presetId: string; expectedVersion: number }, key: string): Promise<CardPresetBinding> {
-  return json<CardPresetBinding>(await send("/player/preset-default/save", token, { roleId: input.roleId, mode: "preset", presetId: input.presetId, expectedVersion: input.expectedVersion }, key));
+  return json<CardPresetBinding>(await send("/player/preset-default/save", token, { roleId: input.roleId, scope: "card", mode: "preset", presetId: input.presetId, expectedVersion: input.expectedVersion }, key));
 }

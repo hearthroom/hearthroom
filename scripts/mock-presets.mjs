@@ -345,6 +345,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     if (body.expectedVersion !== cur.bindingVersion) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     const rev = body.revisionId ? revisions.get(body.revisionId) : null;
     // 跟著作者走（mode=preset）：自己的預設或預設庫裡的都收；套用預設庫的會記進「喜愛與用過」的用過
+    if (body.mode === "preset") seedLibrary();
     const target = body.mode === "preset" && body.presetId ? (presets.get(body.presetId) ?? library.get(body.presetId)) : null;
     if (body.mode === "preset" && !target) return json(res, 404, { error: "not_found" }), true;
     if (cur.presetId && presets.get(cur.presetId)) presets.get(cur.presetId).bindingCount = 0;

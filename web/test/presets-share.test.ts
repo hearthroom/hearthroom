@@ -682,9 +682,17 @@ describe("分享的上游請求", () => {
       expect(new URL(reportUrl).pathname).toBe("/open/v1/preset-library/s1/report");
       expect(JSON.parse(String(init.body))).toEqual({ reason: "spam" });
 
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ mode: "preset", presetId: "s1", bindingVersion: 4 }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      await real.applyPresetToCard("tok", { roleId: "r1", presetId: "s1", expectedVersion: 3 }, "k-apply");
+      const [applyUrl, applyInit] = fetchMock.mock.calls.at(-1)! as [string, RequestInit];
+      expect(new URL(applyUrl).pathname).toBe("/open/v1/player/preset-default/save");
+      // 卡片層：上游拒收不帶 scope 的寫法
+      expect(JSON.parse(String(applyInit.body))).toEqual({ roleId: "r1", scope: "card", mode: "preset", presetId: "s1", expectedVersion: 3 });
+      expect((applyInit.headers as Record<string, string>)["Idempotency-Key"]).toBe("k-apply");
+
       fetchMock.mockResolvedValue(new Response(JSON.stringify({ presetId: "p1", revisionId: "r", version: 2 }), { status: 200, headers: { "Content-Type": "application/json" } }));
       await real.publishPreset("tok", "p1", { expectedVersion: 2, declaration: "d1", attribution: "" }, "k1");
-      const [publishUrl, publishInit] = fetchMock.mock.calls[2]! as [string, RequestInit];
+      const [publishUrl, publishInit] = fetchMock.mock.calls.at(-1)! as [string, RequestInit];
       expect(new URL(publishUrl).pathname).toBe("/open/v1/presets/p1/publish");
       expect((publishInit.headers as Record<string, string>)["Idempotency-Key"]).toBe("k1");
     } finally {
