@@ -446,6 +446,7 @@
   "wallet.reason.grant": "平台贈送",
   "wallet.reason.campaign": "活動獎勵",
   "wallet.reason.chat": "角色對話",
+  "wallet.reason.memory": "記憶壓縮",
   "wallet.reason.api": "API 使用",
   "wallet.reason.image": "圖片生成",
   "wallet.reason.speech": "語音",

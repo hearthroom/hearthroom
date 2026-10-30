@@ -1153,6 +1153,8 @@ export interface ScoreRecord {
   /** 支出列當時扣點的模型與線路，名字跟模型選單一樣、依 language 標頭；目錄對不到的舊列沒有 */
   modelName?: string;
   laneName?: string;
+  /** 記憶壓縮另外扣的點數（和那一輪對話分開記帳） */
+  memoryCompaction?: boolean;
 }
 export interface ScoreRecordPage {
   total: number;

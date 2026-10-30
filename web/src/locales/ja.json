@@ -446,6 +446,7 @@
   "wallet.reason.grant": "ボーナス",
   "wallet.reason.campaign": "イベント報酬",
   "wallet.reason.chat": "キャラクターとの会話",
+  "wallet.reason.memory": "記憶の圧縮",
   "wallet.reason.api": "API 利用",
   "wallet.reason.image": "画像生成",
   "wallet.reason.speech": "音声",

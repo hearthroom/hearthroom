@@ -446,6 +446,7 @@
   "wallet.reason.grant": "Bonus",
   "wallet.reason.campaign": "Event reward",
   "wallet.reason.chat": "Character chat",
+  "wallet.reason.memory": "Memory compaction",
   "wallet.reason.api": "API usage",
   "wallet.reason.image": "Image generation",
   "wallet.reason.speech": "Voice",
