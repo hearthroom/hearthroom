@@ -231,7 +231,8 @@ export class SukiPet {
     const b=this.box(),space=phoneControls(),original=this.deskX??this.pos.x;
     // 左右界線跟放下時的夾邊一樣，貼邊放的她底下沒東西就不動
     const x=space?deskSpot({minX:0,maxX:innerWidth-b.width,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
-    this.deskX=x===original?null:original;
+    // 記著她自己的位置，直到她真的站回那裡（淡出等待中、淡入前都還沒回去）
+    this.deskX=original;
     if(x===null){this.deskAway=true;this.deskClearAt=null;this.fadeTo(null);return;}
     if(this.deskAway){
       const now=performance.now();
@@ -241,6 +242,7 @@ export class SukiPet {
       this.deskClearAt=null;
       this.deskAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");
     }else if(x!==this.pos.x)this.place({x,y:this.pos.y});
+    if(this.pos.x===original)this.deskX=null;
   }
   /** 讓路暫停時（選單、收邊、別的避讓接手）：淡出先解除，原位記著 */
   private releaseDesk() {

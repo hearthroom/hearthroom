@@ -132,3 +132,16 @@ it('捲過卡片列之間的短空隙不閃：淡出後要空出 300ms 才回來
   now = 1300; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
   now = 1650; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);
 });
+
+it('先讓開、再整排淡出、空出來後：回到她自己的位置，不是讓開的那個位置（正式站回讀 2026-10-30）', () => {
+  let now = 1000; vi.spyOn(performance, 'now').mockImplementation(() => now);
+  space = { top: 60, bottom: 900, obstacles: [row(1060, 1132)] };
+  p.updateDesk(); expect(p.pos.x).toBe(906);
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
+  now += 16; p.updateDesk(); expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(true);
+  space = { top: 60, bottom: 900, obstacles: [] };
+  for (let i = 0; i < 30; i++) { now += 16; p.updateDesk(); }
+  expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);
+  expect(p.pos.x).toBe(1110);
+  expect(p.deskX).toBeNull();
+});
