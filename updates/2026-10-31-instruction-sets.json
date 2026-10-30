@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "everyone",
   "try": "/me/instructions",
-  "draft": true,
   "title": {
     "zh-Hant": "長期指令可以存成指令組，新存檔自動帶上",
     "zh-Hans": "长期指令可以存成指令组，新存档自动带上",
