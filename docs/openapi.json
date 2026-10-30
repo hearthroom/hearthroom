@@ -17761,6 +17761,776 @@
           }
         ]
       }
+    },
+    "/open/v1/presets/{presetId}/publish": {
+      "post": {
+        "operationId": "publishPreset",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Publish a preset",
+        "description": "Lists the preset in the shared library so other players can find, favorite and use it. Publishing records the rights statement shown beside the button: send its `declarationVersion` from `GET /open/v1/presets`. Players who already use the preset follow its current content. Requires `preset.write`.",
+        "parameters": [
+          {
+            "description": "Preset ID (UUID).",
+            "in": "path",
+            "name": "presetId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The published preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no such preset, or the caller cannot see it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived; `preset_removed` — the platform took the preset down, so it cannot be published again; `preset_declaration_changed` — the rights statement changed, so reload and show the current one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` with `reason` `preset_invalid_input` — a field is out of range, or the request is not allowed for this preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetPublishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/presets/{presetId}/unpublish": {
+      "post": {
+        "operationId": "unpublishPreset",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Make a preset private",
+        "description": "Removes the preset from the shared library and search. Players who applied, favorited or used it keep using it. Requires `preset.write`.",
+        "parameters": [
+          {
+            "description": "Preset ID (UUID).",
+            "in": "path",
+            "name": "presetId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. 1 to 128 characters without surrounding spaces. Generate one per operation and send the same key when retrying: the original result is returned instead of a second write.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The private preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetWriteReceipt"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no such preset, or the caller cannot see it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected version is stale, so reload and retry; `preset_idempotency_conflict` — this `Idempotency-Key` was already used for a different request; `preset_archived` — the preset is archived; `preset_removed` — the platform took the preset down, so it cannot be published again; `preset_declaration_changed` — the rights statement changed, so reload and show the current one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetVersionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-library": {
+      "get": {
+        "operationId": "listPresetLibrary",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Browse shared presets",
+        "description": "Lists shared presets, most used in the last 7 days first, then the newest. Test-account presets are visible only to their author. Requires `preset.read`.",
+        "parameters": [
+          {
+            "description": "`all` (default); `general` — presets with no tested models; or a model code from `GET /open/v1/models`, which matches presets tested on any variant of that model.",
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Matches the title or the author name, case-insensitively, up to 64 characters.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Items to skip, 0 to 10000.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size, 1 to 50.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "One page of shared presets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetLibraryList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-library/{presetId}": {
+      "get": {
+        "operationId": "getPresetLibraryEntry",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Read a shared preset",
+        "description": "Returns a shared preset with its entries, compatibility and sampling parameters, read-only. Available while the preset is listed, to its author, and to players who favorited or used it. The imported source file is never included. Requires `preset.read`.",
+        "parameters": [
+          {
+            "description": "Preset ID (UUID).",
+            "in": "path",
+            "name": "presetId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The shared preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetLibraryDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no such preset, or the caller cannot see it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-library/{presetId}/favorite": {
+      "post": {
+        "operationId": "favoritePreset",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Favorite a shared preset",
+        "description": "Adds or removes a favorite. Adding needs a listed preset or one already on the caller's shelf; removing always works. Authors cannot favorite their own presets. Requires `preset.write`.",
+        "parameters": [
+          {
+            "description": "Preset ID (UUID).",
+            "in": "path",
+            "name": "presetId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Whether the preset is now a favorite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetFavoriteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no such preset, or the caller cannot see it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` with `reason` `preset_invalid_input` — a field is out of range, or the request is not allowed for this preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetFavoriteRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-library/{presetId}/report": {
+      "post": {
+        "operationId": "reportPreset",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "Report a shared preset",
+        "description": "Reports a preset the caller can see. A second report while the first is still open is not recorded again and still returns `reported: true`. Authors cannot report their own presets. Requires `preset.write`.",
+        "parameters": [
+          {
+            "description": "Preset ID (UUID).",
+            "in": "path",
+            "name": "presetId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The report is on file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetReportResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no such preset, or the caller cannot see it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`preset_invalid` with `reason` `preset_invalid_input` — a field is out of range, or the request is not allowed for this preset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetReportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/preset-shelf": {
+      "get": {
+        "operationId": "listPresetShelf",
+        "x-unpublished": "p2",
+        "tags": [
+          "Presets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "summary": "List favorite and used presets",
+        "description": "Lists the caller's favorites first, then presets they applied before, newest first. Presets that left the shared library stay here with `listed: false` and can still be used. The caller's own presets are not included. Requires `preset.read`.",
+        "parameters": [
+          {
+            "description": "Items to skip, 0 to 10000.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Page size, 1 to 50.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "`invalid_request` — malformed body, unknown field, invalid ID or query value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token lacks a required scope or does not belong to a first-party client; `required_scope` names the scope that was checked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetError"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "One page of the shelf.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetLibraryList"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -30930,6 +31700,29 @@
           "bindingCount": {
             "description": "Agent configurations and conversations that use one of its revisions.",
             "type": "integer"
+          },
+          "visibility": {
+            "enum": [
+              "private",
+              "public"
+            ],
+            "type": "string"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "First publish time; kept after it is made private."
+          },
+          "attribution": {
+            "description": "Source or original author; empty when unset.",
+            "type": "string"
+          },
+          "removed": {
+            "description": "The platform took it down; it cannot be published again until restored.",
+            "type": "boolean"
           }
         },
         "type": "object",
@@ -30945,7 +31738,11 @@
           "createdAt",
           "updatedAt",
           "allowedActions",
-          "bindingCount"
+          "bindingCount",
+          "visibility",
+          "publishedAt",
+          "attribution",
+          "removed"
         ]
       },
       "PresetWriteReceipt": {
@@ -31305,7 +32102,8 @@
         "required": [
           "items",
           "nextCursor",
-          "quota"
+          "quota",
+          "declarationVersion"
         ],
         "properties": {
           "quota": {
@@ -31339,6 +32137,10 @@
             "items": {
               "$ref": "#/components/schemas/PresetSummary"
             }
+          },
+          "declarationVersion": {
+            "description": "Version of the rights statement shown beside the publish button; send it with `POST /open/v1/presets/{presetId}/publish`.",
+            "type": "string"
           }
         },
         "type": "object",
@@ -32208,6 +33010,229 @@
                 "description": "Position of the invalid item in `items`, counted from 0."
               }
             }
+          }
+        }
+      },
+      "PresetPublishRequest": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "expectedVersion",
+          "declaration"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "description": "The head `version` you last read.",
+            "type": "integer"
+          },
+          "declaration": {
+            "description": "The `declarationVersion` of the rights statement shown to the author.",
+            "type": "string"
+          },
+          "attribution": {
+            "description": "Source or original author, up to 200 characters; empty or omitted clears it.",
+            "type": "string"
+          },
+          "recommendedModels": {
+            "description": "Replaces the tested models when present; omit to keep them. An empty list marks the preset as general.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        }
+      },
+      "PresetFavoriteRequest": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "favorite"
+        ],
+        "properties": {
+          "favorite": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PresetFavoriteResponse": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "favorited"
+        ],
+        "properties": {
+          "favorited": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PresetReportRequest": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "enum": [
+              "copyright",
+              "inappropriate",
+              "spam",
+              "other"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "description": "Up to 500 characters.",
+            "type": "string"
+          }
+        }
+      },
+      "PresetReportResponse": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "reported"
+        ],
+        "properties": {
+          "reported": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PresetLibraryItem": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "presetId",
+          "title",
+          "authorName",
+          "authorNumId",
+          "authorAvatar",
+          "attribution",
+          "recommendedModels",
+          "enabledEntryCount",
+          "usesLast7d",
+          "publishedAt",
+          "updatedAt",
+          "favorited",
+          "lastAppliedAt",
+          "listed",
+          "mine"
+        ],
+        "properties": {
+          "presetId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authorName": {
+            "description": "Author nickname in this app; empty when unset.",
+            "type": "string"
+          },
+          "authorNumId": {
+            "description": "Author public account number.",
+            "type": "integer"
+          },
+          "authorAvatar": {
+            "type": "string"
+          },
+          "attribution": {
+            "description": "Source or original author; empty when unset.",
+            "type": "string"
+          },
+          "recommendedModels": {
+            "description": "Tested models; empty means general.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabledEntryCount": {
+            "type": "integer"
+          },
+          "usesLast7d": {
+            "description": "Distinct players other than the author who played with it in the last 7 days.",
+            "type": "integer"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "favorited": {
+            "type": "boolean"
+          },
+          "lastAppliedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "listed": {
+            "description": "False once the author made it private or deleted it, or the platform took it down. It can still be used from the shelf.",
+            "type": "boolean"
+          },
+          "mine": {
+            "description": "The caller is the author.",
+            "type": "boolean"
+          }
+        }
+      },
+      "PresetLibraryList": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresetLibraryItem"
+            }
+          }
+        }
+      },
+      "PresetLibraryDetail": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "item",
+          "revision",
+          "compatibility",
+          "parameters",
+          "reportedByMe"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/PresetLibraryItem"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/PresetRevision"
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/PresetCompatibility"
+          },
+          "parameters": {
+            "description": "Sampling parameters the preset sets, such as `temperature` and `top_p`; only keys it sets.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "reportedByMe": {
+            "description": "The caller has an open report on it.",
+            "type": "boolean"
           }
         }
       }
