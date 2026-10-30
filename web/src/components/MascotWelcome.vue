@@ -25,7 +25,8 @@ function close(source: "close" | "browse") {
 </script>
 
 <template>
-  <aside v-if="visible" class="welcome" :aria-label="$t('mascot.name')">
+  <aside v-if="visible" class="welcome" :aria-label="$t('mascot.name')" data-pet-stays>
+    <!-- data-pet-stays：歡迎橫幅在的時候桌寵也不躲（owner 2026-10-13，見 pet/suki-art.ts） -->
     <img class="welcome__art" src="/mascot/suki-banner.webp" alt="" width="1500" height="600" decoding="async" />
     <div class="welcome__text">
       <h2 class="welcome__title">{{ $t("mascot.welcome.title") }}</h2>

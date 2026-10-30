@@ -57,6 +57,8 @@ export interface PetOptions {
   parkOnHomepage?: () => boolean;
   /** Only the homepage phone caller supplies content obstacles. */
   phoneClearance?: () => PhoneClearance | null;
+  /** 頁面上已經有蘇綺插圖在視野內（suki-art.ts）：一個畫面只有一個蘇綺，她先淡出 */
+  sukiArtInView?: () => boolean;
   /** A deliberate homepage rail popup owns interaction until it closes. */
   onSidebarMenuChange?: (open: boolean) => void;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
@@ -687,7 +689,12 @@ export class SukiPet {
   }
 
   // ---- 每一格 ----
+  /** 別的蘇綺在視野內就淡出（不擋點擊）；使用者從選單叫她、正拖著她時不躲 */
+  private updateArt() {
+    this.hide(!!this.opts.sukiArtInView?.() && this.menuEl.hidden && !this.entryAwake && !this.drag, "art");
+  }
   private frame(dt: number, now: number) {
+    this.updateArt();
     if (!this.opts.mobile) {
       // CSS keeps the rendered anchor moving after place() stores its target.
       // Fit before the rail checks so a returning popup cannot trigger docking.

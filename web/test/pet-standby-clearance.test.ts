@@ -74,13 +74,16 @@ it("收集畫面上看得到、按得到的控制項；她自己的、停用的�
     <button id="more"></button><a id="row" href="/x"></a><a id="plain"></a><button id="off" disabled></button>
     <a id="ghost" href="/y" style="pointer-events:none"></a><button id="below"></button><label id="lab"></label>
     <div class="suki-pet"><button id="mine"></button></div><div class="suki-pet__catch"></div>
-    <div inert><button id="behind"></button></div><button id="unseen" style="visibility:hidden"></button>`;
+    <div inert><button id="behind"></button></div><button id="unseen" style="visibility:hidden"></button>
+    <article class="card" id="tile"><a href="/c/1" id="title"></a></article>`;
   const box = (id: string, r: DOMRect) => { document.getElementById(id)!.getBoundingClientRect = () => r; };
   document.querySelector<HTMLElement>(".header")!.getBoundingClientRect = () => new DOMRect(0, 0, 390, 52);
   for (const id of ["more", "row", "plain", "off", "ghost", "mine", "lab", "behind", "unseen"]) box(id, new DOMRect(328, 526, 30, 30));
   box("below", new DOMRect(328, 900, 30, 30));
   document.getElementById("lab")!.getBoundingClientRect = () => new DOMRect(16, 300, 200, 40);
+  // 整張卡都可點（標題連結用 ::after 撐滿），連結本身只有標題那一小塊：卡片外框也要算
+  box("tile", new DOMRect(203, 600, 171, 412)); box("title", new DOMRect(219, 840, 120, 24));
   const got = phoneControls()!;
   expect(got.top).toBe(52);
-  expect(got.obstacles).toEqual([rect(328, 358, 526, 556), rect(328, 358, 526, 556), rect(16, 216, 300, 340)]);
+  expect(got.obstacles).toEqual([rect(328, 358, 526, 556), rect(328, 358, 526, 556), rect(16, 216, 300, 340), rect(203, 374, 600, 1012), rect(219, 339, 840, 864)]);
 });

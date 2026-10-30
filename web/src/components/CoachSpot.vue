@@ -35,7 +35,8 @@ const bubbleStyle = computed(() => {
 </script>
 
 <template>
-  <div class="coach" aria-live="polite">
+  <div class="coach" aria-live="polite" data-pet-stays>
+    <!-- data-pet-stays：新手引導在的時候桌寵也不躲（owner 2026-10-13，見 pet/suki-art.ts） -->
     <div v-if="hole" class="coach__hole" :style="hole" />
     <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': mascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
       <!-- 蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->

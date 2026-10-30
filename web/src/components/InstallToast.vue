@@ -51,7 +51,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
       <div class="install__row">
         <span class="install__tile" aria-hidden="true">
           <img v-if="installPrompt.target === 'card' && installPrompt.icon" :src="installPrompt.icon" alt="" />
-          <img v-else-if="!overStage" class="install__mascot" src="/mascot/suki-avatar.webp" alt="" />
+          <img v-else-if="!overStage" class="install__mascot" src="/mascot/suki-avatar.webp" alt="" data-pet-stays />
           <svg v-else viewBox="0 0 24 24"><path d="M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.5L7 21.5V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" /></svg>
         </span>
         <div class="install__text">

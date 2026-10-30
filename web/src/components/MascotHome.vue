@@ -150,7 +150,8 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 </script>
 
 <template>
-  <section class="home" :class="{ 'home--dark': dark }" :aria-label="$t('mascot.name')">
+  <section class="home" :class="{ 'home--dark': dark }" :aria-label="$t('mascot.name')" data-pet-stays>
+    <!-- data-pet-stays：首頁面板在的時候桌寵也不躲（owner 2026-10-13，見 pet/suki-art.ts） -->
     <img class="home__scene" :src="`/mascot/home/scene-${scene.id}.webp`" alt="" decoding="async" />
     <div class="home__veil" aria-hidden="true" />
 

@@ -38,7 +38,8 @@ export function standbySpot(f:{w:number;side:Side;top:number;bottom:number;obsta
  return pick(near);
 }
 
-const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"])';
+// article.card：卡片整張可點，但連結本身只有標題（用 ::after 撐滿整張卡），量連結量不到整張卡
+const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"]),article.card';
 const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab,.suki-pet__idle';
 
 let key='',at=0,cache:PhoneClearance|null=null;

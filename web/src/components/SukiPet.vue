@@ -29,6 +29,7 @@ import { guideFor } from "@/pet/guides";
 import {rankingClearance} from '@/pet/ranking-clearance';
 import {homePhoneMode,homePhoneObstacles,type PhoneClearance} from "@/pet/home-clearance";
 import {phoneControls} from "@/pet/standby-clearance";
+import {sukiArtInView} from "@/pet/suki-art";
 import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
@@ -177,6 +178,7 @@ async function start() {
     sidebarBounds: homepagePetBounds,
     parkOnHomepage: homepageParking,
     phoneClearance,
+    sukiArtInView,
     onSidebarMenuChange: open => { sidebarMenuOpen.value = open; },
     quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     quietReading: () => mobile && reviewingDetail.value,
