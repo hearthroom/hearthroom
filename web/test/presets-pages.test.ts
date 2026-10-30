@@ -868,8 +868,10 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     tab("settings").click(); await flush();
     const input = $<HTMLInputElement>("#preset-models");
     input.focus(); input.dispatchEvent(new Event("focus")); await flush();
-    expect($$("[role=option]").map((o) => o.textContent?.trim())).toEqual([`DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4 Pro"]);
-    $$("[role=option]")[0]!.click(); await flush();
+    // 清單掛在 body 上，不在頁面元件裡
+    const options = () => [...document.body.querySelectorAll<HTMLElement>("[role=option]")];
+    expect(options().map((o) => o.textContent?.trim())).toEqual([`DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4 Pro"]);
+    options()[0]!.click(); await flush();
     expect($$("[data-testid=model-chip]").map((c) => c.textContent?.trim())).toEqual([t("preset.models.series", { name: "DeepSeek" })]);
     mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
     $("[data-testid=preset-save]").click(); await flush();

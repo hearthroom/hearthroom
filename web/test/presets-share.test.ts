@@ -109,13 +109,17 @@ describe("公開列表", () => {
     // 網頁沒有目前的模型：選單（跟編輯器同一個）只列系列與模型兩層，單選；值照原字送 model=
     const pick = $<HTMLInputElement>("#share-filter-model");
     pick.focus(); pick.dispatchEvent(new Event("focus")); await flush();
-    expect($$("[role=option]").map((o) => o.textContent?.trim())).toEqual([
+    // 清單掛在 body 上（選單在彈層裡也不會被裁掉），不在頁面元件裡
+    const options = () => [...document.body.querySelectorAll<HTMLElement>("[role=option]")];
+    expect(options().map((o) => o.textContent?.trim())).toEqual([
       `Gemini ${t("preset.models.seriesAll")}`, "Gemini 4", `DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4",
     ]);
-    $$("[role=option]")[1]!.click(); await flush();
+    options()[1]!.click(); await flush();
     expect(router.currentRoute.value.query.model).toBe("model:Gemini 4");
     expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "", offset: 0 });
-    expect($$("[data-testid=model-chip]").map((c) => c.textContent?.trim())).toEqual(["Gemini 4"]);
+    // 單選：選到的值在框裡，不在框上方另起一列標籤
+    expect(pick.value).toBe("Gemini 4");
+    expect($("[data-testid=model-chip]")).toBeNull();
 
     const search = $<HTMLInputElement>("[data-testid=share-search]");
     search.value = "Aster";
@@ -126,9 +130,10 @@ describe("公開列表", () => {
     expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "Aster", offset: 0 });
     // 選整個系列送 series:；拿掉選的值就回到全部
     pick.focus(); pick.dispatchEvent(new Event("focus")); await flush();
-    $$("[role=option]").find((o) => o.textContent?.includes("DeepSeek") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
+    options().find((o) => o.textContent?.includes("DeepSeek") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
     expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "series:DeepSeek", q: "Aster", offset: 0 });
-    $<HTMLButtonElement>("[data-testid=model-chip] button").click(); await flush();
+    expect(pick.value).toBe(t("preset.models.series", { name: "DeepSeek" }));
+    $<HTMLButtonElement>("[data-testid=model-pick-clear]").click(); await flush();
     expect(router.currentRoute.value.query.model).toBeUndefined();
     expect($("[data-testid=share-filter-all]").getAttribute("aria-pressed")).toBe("true");
   });

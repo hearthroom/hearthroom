@@ -127,8 +127,7 @@ async function toggle(item: PresetLibraryItem) {
 .share-tab__search { position: relative; display: block; }
 .share-tab__search svg { position: absolute; left: 14px; top: 50%; translate: 0 -50%; color: var(--text-3); pointer-events: none; }
 .share-tab__search .input { width: 100%; height: var(--h-lg); padding-left: 42px; font-size: 15px; }
-/* 選了值時選單會在框上方多一個標籤：全部／通用跟輸入框底部對齊，不跟標籤對齊 */
-.share-tab__filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-2); }
+.share-tab__filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .share-tab__pill {
   height: var(--h-md); padding: 0 var(--s-4); border-radius: var(--r-pill);
   border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
@@ -148,4 +147,10 @@ async function toggle(item: PresetLibraryItem) {
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
 :lang(ko) .share-tab__card p, :lang(ko) .share-tab__sort { word-break: keep-all; }
 .share-tab__more { justify-self: center; }
+@media (min-width: 761px) {
+  .share-tab__controls { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  /* 輸入框寬度是 100%，算不進 auto 欄的寬：給選單一個固定寬，才會跟全部／通用同排 */
+  .share-tab__filters { flex-wrap: nowrap; }
+  .share-tab__pick { flex: none; width: 280px; }
+}
 </style>
