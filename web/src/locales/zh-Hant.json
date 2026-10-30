@@ -3153,7 +3153,7 @@
   "referral.leadSplit": "邀朋友來玩：朋友註冊，你拿 {inviter} 積分、朋友拿 {friend} 積分；朋友開聊，你再拿 {first} 積分。",
   "referral.rule.bindSplit": "朋友用你的連結註冊或填寫你的推薦碼，你得 {inviter} 積分，朋友得 {friend} 積分",
   "campaign.tierDesc.inviteSplit": "朋友註冊，你拿 {inviter} 積分、朋友拿 {friend} 積分；朋友開聊，你再拿 {first} 積分",
-  "referral.invites.pendingReview": "處理中：{pending} 積分",
+  "referral.invites.pendingReview": "審核中：{pending} 積分",
   "campaign.field.poster": "文字海報",
   "campaign.field.posterHint": "沒有設定這個語言的文字海報時，使用上面的橫幅。",
   "campaign.field.posterAlt": "圖片說明（螢幕閱讀器用）",
