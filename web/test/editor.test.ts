@@ -509,6 +509,89 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     }
   });
 
+  it("一次生成兩張：存好後讓作者挑一張填進欄位，關掉框等於先不填", async () => {
+    gen.imageGen = { access: "ready", models: [{ id: "m", name: "M", credits: 35, priced: 1, sizes: ["1024x1536"], maxImages: 2 }] };
+    gen.create.mockResolvedValue({ id: "a1b2c3d4-two", status: "completed", urls: ["https://gen.test/1.png", "https://gen.test/2.png"] });
+    gen.save.mockResolvedValue(["asset-1", "asset-2"]);
+    gen.savedUrls.mockResolvedValue(["https://assets.test/Mira/1.png", "https://assets.test/Mira/2.png"]);
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Mira", roleDesc: "", roleDetailDesc: "Synthetic settings" });
+    try {
+      await mount("/cards/r1/edit");
+      const field = () => [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
+      const dialog = () => document.querySelector<HTMLFormElement>('[aria-labelledby="gen-title"]');
+      const generateOnce = async () => {
+        btnIn(field(), i18n.global.t("editor.image.generate")).click();
+        await flush();
+        const count = dialog()!.querySelectorAll("select")[2] as HTMLSelectElement;
+        count.value = "2";
+        count.dispatchEvent(new Event("change"));
+        await flush();
+        dialog()!.dispatchEvent(new Event("submit", { cancelable: true }));
+        await flush();
+      };
+      await generateOnce();
+      expect(gen.create).toHaveBeenLastCalledWith(expect.objectContaining({ n: 2 }), expect.any(String));
+      const choices = [...dialog()!.querySelectorAll<HTMLButtonElement>(".gen__choice")];
+      expect(choices.map((b) => b.querySelector("img")?.getAttribute("src"))).toEqual(["https://assets.test/Mira/1.png", "https://assets.test/Mira/2.png"]);
+      expect(dialog()!.textContent).toContain(i18n.global.t("resource.gen.choose", { folder: "Mira" }));
+      choices[1]!.click();
+      await flush();
+      expect(dialog()).toBeNull();
+      expect(field().querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/2.png");
+
+      // 再生一次，按 Esc 關掉：欄位不動，狀態列說圖片在資料夾裡
+      await generateOnce();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await flush();
+      expect(dialog()).toBeNull();
+      expect(field().querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/2.png");
+      expect(root.querySelector(".editor-status")?.textContent).toBe(i18n.global.t("editor.image.generatedSaved", { folder: "Mira" }));
+    } finally {
+      gen.imageGen = null;
+      gen.create.mockReset();
+      gen.save.mockReset();
+      gen.savedUrls.mockReset();
+    }
+  });
+
+  it("圖片還沒放進資料夾時離開編輯器：先問一聲，取消就留在原頁、生成照跑", async () => {
+    gen.imageGen = { access: "ready", models: [{ id: "m", name: "M", credits: 35, priced: 1, sizes: ["1024x1536"], maxImages: 1 }] };
+    let finish!: (t: unknown) => void;
+    gen.create.mockResolvedValue({ id: "a1b2c3d4-slow", status: "queued", urls: [] });
+    gen.wait.mockImplementation(() => new Promise((r) => { finish = r; }));
+    gen.save.mockResolvedValue(["asset-1"]);
+    gen.savedUrls.mockResolvedValue(["https://assets.test/Mira/slow.png"]);
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Mira", roleDesc: "", roleDetailDesc: "Synthetic settings" });
+    try {
+      await mount("/cards/r1/edit");
+      const field = () => [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
+      btnIn(field(), i18n.global.t("editor.image.generate")).click();
+      await flush();
+      document.querySelector<HTMLFormElement>('[aria-labelledby="gen-title"]')!.dispatchEvent(new Event("submit", { cancelable: true }));
+      await flush();
+      const unload = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(true);
+      void router.push("/mine");
+      await flush();
+      expect(confirmState.current?.message).toBe(i18n.global.t("resource.gen.leave"));
+      settleConfirm(false);
+      await flush();
+      expect(router.currentRoute.value.path).toBe("/cards/r1/edit");
+      finish({ id: "a1b2c3d4-slow", status: "completed", urls: ["https://gen.test/slow.png"] });
+      await flush();
+      expect(field().querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/slow.png");
+      // 存好之後框收掉，它的離開提示跟著拆掉（欄位改了，之後由編輯器自己的「還沒儲存」來攔）
+      expect(document.querySelector('[aria-labelledby="gen-title"]')).toBeNull();
+    } finally {
+      gen.imageGen = null;
+      gen.create.mockReset();
+      gen.wait.mockReset();
+      gen.save.mockReset();
+      gen.savedUrls.mockReset();
+    }
+  });
+
   it("還沒有卡名就不生成：圖片要放進卡名資料夾", async () => {
     gen.imageGen = { access: "ready", models: [{ id: "m", name: "M", credits: 35, priced: 1, sizes: ["1024x1024"], maxImages: 1 }] };
     try {

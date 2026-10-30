@@ -2,7 +2,7 @@
 id: EDITOR-GEN-01
 page: /cards/:roleId/edit, /create
 platforms: [desktop, mobile]
-states: [hidden, reauth, ready, running, background, saved-and-filled, saved-not-found, unnamed-card]
+states: [hidden, reauth, ready, running, background, choose, saved-and-filled, saved-not-found, unnamed-card, leave-while-unsaved]
 critical_payloads: [size, prompt, directory, roleBackground, roleBackgroundLandscape]
 mutating: true
 ---
@@ -31,13 +31,21 @@ locally, and a live run needs the owner's go-ahead.
 5. The dialog closes, the frame shows the new image, and the status line says it
    is in the folder and filled the field. If no URL matches, the image is still in
    the folder and the status line says to pick it from the library.
+   With 2 or more images, the dialog shows them as thumbnails, with focus on the first.
+   The one clicked fills the field. Not now, Escape or a click outside leaves the field
+   unchanged, and the status line says the images are in the folder.
 6. Save the card: `POST /open/v1/role/{id}/document` carries the generated URLs as
    `roleBackground` (plus its `roleAvatar` alias) and `roleBackgroundLandscape`.
 7. 403 on models: the dialog asks to sign in again and allow generation, once;
    after returning, a second 403 says generation is not available here yet.
 8. Close while running: generation continues. That field's button reads
    Generating… and reopens the same dialog; the result still fills that field.
-9. Check desktop 1440px and phone 390×844, light and dark, all five languages:
+9. While a result is not yet in the folder (running, interrupted, or save failed),
+   reload or close-tab asks first. In-app navigation shows the dialog's
+   leave warning after any editor unsaved-changes prompt; Cancel stays put
+   and generation continues. Once saved, the dialog's guard is gone. The same
+   dialog guard covers the resources page.
+10. Check desktop 1440px and phone 390×844, light and dark, all five languages:
    the phone dialog is a bottom sheet with full-width actions, there is no
    horizontal overflow, and the dialog audits clean. Screenshot after the backdrop
    fade-in, because mid-animation captures show the page through the panel.
@@ -73,3 +81,14 @@ HTTP/MCP: no server or schema change. The editor calls the existing
 `/open/v1/generations` and library list endpoints, and agents already have
 `hearthroom media generate --dir`. Observability: web-only change; Harbor's existing
 media generation metrics cover the requests.
+
+### Follow-up — multi-image choice and leave warning
+
+Same harness. Desktop light zh-Hans and phone dark en, 2 images per run: the tall
+dialog showed two 9:16 thumbnails and the wide one two 16:9. Focus started on the
+first thumbnail. The picked image (the second for tall, the first for wide) filled
+the field. Choice-state audits: 0 overlaps, clipped, contrast issues or small targets.
+Leaving through the header logo during a held generation showed the editor's
+unsaved-changes prompt, then the generation warning. Cancel kept the editor open.
+No console errors. Escape-as-not-now and the reload prompt are covered in
+`web/test/editor.test.ts`.

@@ -3,11 +3,15 @@
  * 「生成圖片」：寫描述、選模型尺寸張數，用登入身分生成，成功就放進指定的資料夾。
  * 資源頁存進正在看的資料夾；卡片編輯器存進這張卡的資料夾，按欄位預選直式或橫式，存好直接填進欄位。
  * 生成要 30–90 秒：關掉框（v-show 收起）不會中斷，頁面等它存好才卸下這個元件。
+ * 還在生成或還沒存好時離開這一頁（站內換頁、重新整理、關分頁）先問一聲：離開就拿不回結果，點數照樣可能扣。
+ * select 時一次生成好幾張：存好後讓作者挑一張填進欄位，其餘留在資料夾。
  * 同一次生成沿用同一個 Idempotency-Key：連線斷掉重送不會多扣；伺服器明確回應之後才換新的。
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { onBeforeRouteLeave } from "vue-router";
 import { ApiError } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import type { GenerationClient, GenerationModel, GenerationTask, SaveTarget } from "@/lib/media-generation";
 import { wrapTab } from "@/lib/focus-trap";
 import { track } from "@/lib/track";
@@ -118,6 +122,11 @@ async function submit() {
     pending.value = false;
     results.value = [];
     prompt.value = "";
+    if (urls.length > 1) {
+      choices.value = urls;
+      chosenFor = { n, folder: savedTo!.folder };
+      return;
+    }
     emit("saved", n, savedTo!.folder, urls);
   } catch (e) {
     failure.value = failureOf(e);
@@ -130,11 +139,39 @@ async function submit() {
   }
 }
 
+// 好幾張存好了：挑一張填進欄位，或都先不填（都已經在資料夾裡）
+const choices = ref<string[]>([]);
+let chosenFor: { n: number; folder: string } | null = null;
+function choose(url: string | null) {
+  const done = chosenFor!;
+  choices.value = [];
+  chosenFor = null;
+  emit("saved", done.n, done.folder, url ? [url] : []);
+}
+/** 關掉框：在挑圖時等於「先不填」，不然挑圖的機會就跟著元件一起沒了。 */
+function dismiss() {
+  if (choices.value.length) choose(null);
+  else emit("close");
+}
+watch(choices, async (list) => {
+  if (!list.length) return;
+  await nextTick();
+  box.value?.querySelector<HTMLElement>(".gen__choice")?.focus();
+});
+
+// 結果還沒進資料夾（生成中、存檔失敗、連線中斷）時離開，任務照跑、點數照扣，畫面卻再也接不回來。
+const unsaved = computed(() => running.value || pending.value);
+const onUnload = (e: BeforeUnloadEvent) => {
+  if (unsaved.value) e.preventDefault();
+};
+window.addEventListener("beforeunload", onUnload);
+onBeforeRouteLeave(() => !unsaved.value || confirmDialog({ message: t("resource.gen.leave"), confirmText: t("dialog.leave"), danger: true }));
+
 const box = ref<HTMLElement | null>(null);
 const field = ref<HTMLTextAreaElement | null>(null);
 let restore: HTMLElement | null = null;
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") { e.preventDefault(); emit("close"); return; }
+  if (e.key === "Escape") { e.preventDefault(); dismiss(); return; }
   wrapTab(e, box.value, "a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)");
 }
 watch(
@@ -154,6 +191,7 @@ watch(
 );
 onBeforeUnmount(() => {
   disposed = true;
+  window.removeEventListener("beforeunload", onUnload);
   document.removeEventListener("keydown", onKey);
 });
 const action = computed(() =>
@@ -167,7 +205,7 @@ const action = computed(() =>
 
 <template>
   <Teleport to="body">
-    <div v-show="open" class="modal-backdrop" @click.self="emit('close')">
+    <div v-show="open" class="modal-backdrop" @click.self="dismiss">
       <form
         ref="box"
         class="modal panel gen"
@@ -187,6 +225,19 @@ const action = computed(() =>
           </div>
         </template>
         <p v-else-if="!models.length" class="subtle">{{ $t("resource.gen.noModels") }}</p>
+        <template v-else-if="choices.length">
+          <p class="subtle gen__note">{{ $t("resource.gen.choose", { folder: chosenFor?.folder ?? folder }) }}</p>
+          <ul class="gen__choices">
+            <li v-for="(u, i) in choices" :key="u">
+              <button type="button" class="gen__choice" :aria-label="$t('resource.gen.chooseOne', { n: i + 1 })" @click="choose(u)">
+                <img :src="u" alt="" />
+              </button>
+            </li>
+          </ul>
+          <div class="modal__actions">
+            <button type="button" class="btn" @click="choose(null)">{{ $t("resource.gen.chooseNone") }}</button>
+          </div>
+        </template>
         <template v-else>
           <label class="gen__field">
             <span>{{ $t("resource.gen.prompt") }}</span>
@@ -245,7 +296,7 @@ const action = computed(() =>
             </span>
           </div>
           <div class="modal__actions">
-            <button type="button" class="btn" @click="emit('close')">
+            <button type="button" class="btn" @click="dismiss">
               {{ $t(running ? "resource.gen.background" : "dialog.cancel") }}
             </button>
             <button type="submit" class="btn btn--primary" :disabled="running || (!pending && !prompt.trim())">
@@ -274,4 +325,12 @@ const action = computed(() =>
 .gen__error { display: grid; gap: var(--s-2); justify-items: start; margin: 0; }
 .gen__error p { margin: 0; }
 .gen__links { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.gen__choices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.gen__choice {
+  display: block; width: 100%; padding: 0; border: 0; border-radius: var(--r-md); overflow: hidden;
+  background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); cursor: pointer;
+  transition: box-shadow var(--dur) var(--ease);
+}
+.gen__choice:hover, .gen__choice:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
+.gen__choice img { display: block; width: 100%; height: auto; max-height: 40vh; object-fit: contain; }
 </style>
