@@ -224,9 +224,11 @@ export class SukiPet {
   private updateDesk() {
     const on=!this.opts.mobile&&this.ready&&!this.hidden&&!this.tucked&&!this.phoneOriginal&&!this.sidebarDocked&&!this.homeParked&&!this.opts.sidebarBounds?.()&&this.menuEl.hidden&&!this.entryAwake;
     if(!on){this.releaseDesk();return;}
-    if(this.drag||this.walk){this.deskX=null;return;}
+    // 拖動過、她自己走動才是換位置；只是按著（點、長按）不算
+    if(this.drag||this.walk){if(this.walk||this.drag?.moved)this.deskX=null;return;}
     const b=this.box(),space=phoneControls(),original=this.deskX??this.pos.x;
-    const x=space?deskSpot({minX:8,maxX:innerWidth-b.width-8,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
+    // 左右界線跟放下時的夾邊一樣，貼邊放的她底下沒東西就不動
+    const x=space?deskSpot({minX:0,maxX:innerWidth-b.width,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
     this.deskX=x===original?null:original;
     if(x===null){this.deskAway=true;this.fadeTo(null);return;}
     if(this.deskAway){
@@ -312,7 +314,7 @@ export class SukiPet {
     }
     if (this.homeParked) this.releaseSidebar(!!explicitDesktop);
     const phone=this.opts.phoneClearance?.();
-    if(phone){this.updatePhone(phone);return;}
+    if(phone){this.releaseDesk();this.updatePhone(phone);return;}
     if(this.phoneOriginal)this.releasePhone();
     if(this.opts.mobile)this.updateStandby();else this.updateDesk();
     // A deliberate desktop drag/edge peek takes priority over the passive rail
@@ -1235,7 +1237,7 @@ export class SukiPet {
 
   private tuck(edge: "left" | "right", silent = false, origin?: { x: number; y: number }) {
     if (origin && !silent && !this.tucked && !this.desktopStand) this.rememberDesktopStand(origin);
-    this.tucked = true; this.side = edge;
+    this.tucked = true; this.side = edge; this.deskX = null;
     const r = this.box();
     this.el.classList.add("suki-pet--tucked");
     this.el.classList.toggle("suki-pet--edge-right", edge === "right");
@@ -1482,7 +1484,7 @@ export class SukiPet {
   private summon() {
     if (this.sleeping) { this.sleeping = false; this.exprTarget = {}; }
     if (this.opts.mobile) { const d = defaultPeek(this.viewport(), this.size()); this.peekAt(d.side, d.pos); return this.pullOut(); }
-    this.desktopStand = null; this.desktopChosenStand = false; this.returningFromEdge = false;
+    this.desktopStand = null; this.desktopChosenStand = false; this.returningFromEdge = false; this.deskX = null;
     this.tucked = false; this.el.classList.remove("suki-pet--tucked");
     const pos = this.deskHome();
     this.place(pos); this.save(pos);

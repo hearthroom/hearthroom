@@ -62,3 +62,39 @@ it('淡出時從帳號選單叫她：選單看得到', () => {
   expect(p.el.classList.contains('suki-pet--phone-suspended')).toBe(false);
   expect(p.el.inert).toBe(false);
 });
+
+it('只是點她、長按（沒拖動）：原位不變，讓開後照樣回去', () => {
+  space = { top: 60, bottom: 900, obstacles: [row(1060, 1132)] };
+  p.updateDesk(); expect(p.deskX).toBe(1110);
+  p.drag = { moved: false }; p.updateDesk();
+  expect(p.deskX).toBe(1110);
+  p.drag = null; space = { top: 60, bottom: 900, obstacles: [] }; p.updateDesk();
+  expect(p.pos.x).toBe(1110);
+});
+
+it('設定頁「叫她出來」：回預設位置，不再滑回之前讓開前的位置', () => {
+  space = { top: 60, bottom: 900, obstacles: [row(1060, 1132)] };
+  p.updateDesk(); expect(p.deskX).toBe(1110);
+  (p as unknown as { summon: () => void }).summon();
+  expect(p.deskX).toBeNull();
+});
+
+it('放在螢幕最邊上、底下沒東西：不動', () => {
+  space = { top: 60, bottom: 900, obstacles: [] };
+  p.pos = { x: 0, y: 672 }; p.updateDesk(); expect(p.pos.x).toBe(0);
+  p.pos = { x: 1280 - 146, y: 672 }; p.updateDesk(); expect(p.pos.x).toBe(1134);
+});
+
+it('卡片頁的版面避讓接手時，桌機讓路的淡出狀態一起放掉', () => {
+  pet.stop();
+  let clearance: PhoneClearance | null = null;
+  pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 220, line: (k: string) => k, mobile: false, reducedMotion: true, phoneClearance: () => clearance } as never);
+  p = pet as unknown as Pet; p.driver = { state: { talking: false } }; document.body.append(p.el); Object.assign(p, { rig: {} });
+  vi.spyOn(p, 'box').mockImplementation(() => ({ left: p.pos.x, top: p.pos.y, width: 146, height: 220, right: p.pos.x + 146 }));
+  p.pos = { x: 1110, y: 672 };
+  space = { top: 60, bottom: 900, obstacles: [row(0, 1280)] };
+  const q = p as unknown as { updateSidebar: () => void; deskAway: boolean };
+  q.updateSidebar(); expect(q.deskAway).toBe(true);
+  clearance = { top: 60, bottom: 900, obstacles: [] }; q.updateSidebar();
+  expect(q.deskAway).toBe(false);
+});
