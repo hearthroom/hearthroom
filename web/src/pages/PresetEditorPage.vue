@@ -21,8 +21,8 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  adaptationId, entryPlace, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
-  type EntryRow, type PresetDocument,
+  adaptationId, inspectRows, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
+  type EntryRow, type InspectRow, type PresetDocument, type ProvidedKind,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
 import { usePointerReorder } from "@/lib/use-pointer-reorder";
@@ -67,7 +67,7 @@ const conflict = ref(false);
 const status = ref("");
 const savedVersion = ref(0);
 const exporting = ref(false);
-const inspecting = ref<"beforePersona" | "afterPersona" | "after" | null>(null);
+const inspecting = ref<{ rows: InspectRow[]; name: string } | null>(null);
 
 const snapshot = () => JSON.stringify({ title: title.value, models: models.value, doc: doc.value });
 const dirty = computed(() => !!doc.value && snapshot() !== saved.value);
@@ -107,7 +107,7 @@ const tagOf = (r: EntryRow) => (movedAfter(r) ? undefined : compatOf(r.identifie
  * 版面跟伺服器組前綴同一套規則（prefixLayout）。dropId 是拖曳時「放在這一列前面」用的排序識別；
  * marker 缺席、由伺服器補位的那幾列沒有 dropId——那裡沒有能放進去的位置，只顯示。
  */
-type ListItem = { key: string; dropId: string; row?: EntryRow; provided?: "charDescription" | "examples" | "history" };
+type ListItem = { key: string; dropId: string; row?: EntryRow; provided?: ProvidedKind | "history" };
 // 伺服器有收進前綴的條目：開著、不是不支援、也沒被調到對話記錄之後（錨點只看這些）
 const inPrefix = (id: string) => {
   const r = rows.value.find((x) => x.identifier === id);
@@ -126,7 +126,7 @@ const itemsOf = (side: "before" | "after"): ListItem[] => {
       if (r) { items.push(entry(r)); byId.delete(it.id); }
       return;
     }
-    items.push({ key: `${it.kind}:${n}`, dropId: it.virtual ? "" : it.markers[0]!, provided: it.kind === "persona" ? "charDescription" : "examples" });
+    items.push({ key: `${it.kind}:${n}`, dropId: it.virtual ? "" : it.marker, provided: it.kind });
   });
   // 位置被上游調到對話記錄之前、但排序上在後面的條目，接在最後
   for (const r of byId.values()) items.push(entry(r));
@@ -363,7 +363,8 @@ function enterEntry(focusSelector: string) {
 }
 function pick(id: string) {
   selected.value = id; providedOpen.value = ""; cameFrom = `entry:${id}`;
-  enterEntry(`#${CSS.escape(`name-${id}`)}`);
+  // 焦點放條目標題，不放名稱輸入框：iPad 等觸控裝置不會沒點輸入框就彈鍵盤（owner 2026-10-30）
+  enterEntry(`#${CSS.escape(`entry-title-${id}`)}`);
 }
 function leaveEntry() {
   const from = cameFrom;
@@ -380,8 +381,8 @@ function leaveEntry() {
 /** 查看位置：照條目真實的位置；上游調到對話記錄之後的照調整後的位置 */
 function inspect(r: EntryRow) {
   if (!doc.value) return;
-  const place = entryPlace(doc.value, r.identifier, inPrefix);
-  inspecting.value = shownSide(r) === "after" ? "after" : place === "after" || place === null ? "afterPersona" : place;
+  const rows = inspectRows(doc.value, r.identifier, inPrefix, shownSide(r) === "after");
+  if (rows) inspecting.value = { rows, name: r.prompt.name || t("preset.entry.untitled") };
 }
 function pickProvided(key: string) {
   providedOpen.value = key; selected.value = ""; cameFrom = `provided:${key}`;
@@ -607,7 +608,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
     </template>
 
     <PresetExportDialog v-if="exporting && detail" :preset="detail" :token="token" @close="exporting = false" />
-    <PresetInspectDialog v-if="inspecting" :place="inspecting" @close="inspecting = null" />
+    <PresetInspectDialog v-if="inspecting" :rows="inspecting.rows" :name="inspecting.name" @close="inspecting = null" />
   </div>
 </template>
 

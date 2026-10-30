@@ -103,6 +103,8 @@ async function reset() {
 
 <template>
   <section class="entry" :aria-label="$t('preset.entry.title')">
+    <!-- 點清單進來時焦點落在這裡（不是名稱輸入框）：觸控裝置上不會自己彈出鍵盤 -->
+    <h2 :id="`entry-title-${row.identifier}`" class="entry__title" tabindex="-1" data-testid="entry-title">{{ prompt.name || $t("preset.entry.untitled") }}</h2>
     <!-- 封存的預設：內容照樣看得到，欄位與動作一起停用 -->
     <fieldset class="entry__fieldset" :disabled="readOnly">
 
@@ -173,6 +175,8 @@ async function reset() {
 </template>
 
 <style scoped>
+.entry__title { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.entry__title:focus { outline: none; }
 .entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
 .entry .input { min-width: 0; max-width: 100%; }
 .entry .field__foot { flex-wrap: wrap; align-items: center; }

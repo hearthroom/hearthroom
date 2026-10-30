@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptationId, addEntry, canDeleteEntry, clearParam, deleteEntry, moveToSide, nativeMacrosValid, nativeProblems, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
-  canMoveEntry, entryPlace, isPromptPack, moveEntry, moveEntryTo, newDocument, prefixLayout, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
+  canMoveEntry, inspectRows, isPromptPack, moveEntry, moveEntryTo, newDocument, prefixLayout, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
 
@@ -98,17 +98,28 @@ describe("ST 預設文件操作", () => {
     expect(moveEntry(doc, "b", 1)).toBe(false);
   });
 
-  it("條目在送出順序裡的段落：最後一份玩家／角色材料之前、之後，或聊天歷史之後", () => {
+  it("上移／下移一次跨過一列：相鄰的玩家人設與角色設定是兩步", () => {
     const doc = imported();
-    expect(entryPlace(doc, "main")).toBe("beforePersona");
-    expect(entryPlace(doc, "style")).toBe("afterPersona");
-    expect(entryPlace(doc, "jailbreak")).toBe("after");
-    expect(entryPlace(doc, "chatHistory")).toBeNull();
-    // 沒有角色 marker：角色與玩家設定補在 main 後面（ST 預設順序最近的前一個），之後的條目算「之後」
     const g = doc.st.prompt_order!.find((x) => x.character_id === 100001)!;
-    g.order = g.order.filter((o) => o.identifier !== "charDescription");
-    expect(entryPlace(doc, "main")).toBe("beforePersona");
-    expect(entryPlace(doc, "style")).toBe("afterPersona");
+    g.order = ["main", "personaDescription", "charDescription", "x", "chatHistory"].map((identifier) => ({ identifier, enabled: true }));
+    doc.st.prompts!.push({ identifier: "x", name: "x", role: "system", content: "x" });
+    expect(moveEntry(doc, "x", -1)).toBe(true);
+    expect(g.order.map((o) => o.identifier)).toEqual(["main", "personaDescription", "x", "charDescription", "chatHistory"]);
+    expect(moveEntry(doc, "x", -1)).toBe(true);
+    expect(g.order.map((o) => o.identifier)).toEqual(["main", "x", "personaDescription", "charDescription", "chatHistory"]);
+  });
+
+  it("查看位置照真實順序：綺夢社帶入的每份材料、這條的位置、世界書與對話記錄、格式規則", () => {
+    const doc = imported();
+    const g = doc.st.prompt_order!.find((x) => x.character_id === 100001)!;
+    g.order = ["main", "personaDescription", "style", "charDescription", "chatHistory", "jailbreak"].map((identifier) => ({ identifier, enabled: true }));
+    expect(inspectRows(doc, "main")).toEqual(["here", "player", "character", "examples", "history", "format"]);
+    expect(inspectRows(doc, "style")).toEqual(["player", "here", "character", "examples", "history", "format"]);
+    expect(inspectRows(doc, "jailbreak")).toEqual(["player", "character", "examples", "history", "here", "format"]);
+    // 上游調到對話記錄之後的條目：照調整後的位置
+    expect(inspectRows(doc, "style", undefined, true)).toEqual(["player", "character", "examples", "history", "here", "format"]);
+    expect(inspectRows(doc, "chatHistory")).toBeNull();
+    expect(inspectRows(doc, "nope")).toBeNull();
   });
 
   // 缺席的玩家／角色／範例材料：跟伺服器 renderPresetPrefixLayout（6376f7af）同一個補位規則
@@ -124,33 +135,37 @@ describe("ST 預設文件操作", () => {
 
     it("前面最近的錨點之後（標記 * 是伺服器補上的位置）", () => {
       const d = docWith(["main", "worldInfoBefore", "charPersonality", "scenario", "worldInfoAfter", "bridge", "dialogueExamples"], [...markers, { id: "bridge" }]);
-      expect(show(d)).toEqual(["main", "persona*", "bridge", "dialogueExamples"]);
+      expect(show(d)).toEqual(["main", "player*", "character*", "bridge", "examples"]);
     });
     it("前面沒有就放在後面最近的錨點之前", () => {
       const d = docWith(["a", "scenario", "b", "dialogueExamples"], [...markers, { id: "a" }, { id: "b" }]);
-      expect(show(d)).toEqual(["a", "persona*", "b", "dialogueExamples"]);
+      expect(show(d)).toEqual(["a", "player*", "character*", "b", "examples"]);
     });
-    it("只缺角色：接在玩家設定後面，同一列", () => {
+    it("只缺角色：接在玩家人設後面，各自一列", () => {
       const d = docWith(["main", "personaDescription", "c", "dialogueExamples", "d"], [...markers, { id: "c" }, { id: "d" }]);
-      expect(show(d)).toEqual(["main", "persona", "c", "dialogueExamples", "d"]);
+      expect(show(d)).toEqual(["main", "player", "character*", "c", "examples", "d"]);
     });
     it("空的內建條目（nsfw）也算錨點；範例接在它後面", () => {
       const d = docWith(["x", "nsfw", "y"], [{ id: "x" }, { id: "nsfw" }, { id: "y" }]);
-      expect(show(d)).toEqual(["x", "persona*", "nsfw", "dialogueExamples*", "y"]);
+      expect(show(d)).toEqual(["x", "player*", "character*", "nsfw", "examples*", "y"]);
     });
     it("完全沒有錨點：放在最後（角色、玩家、範例）", () => {
       const d = docWith(["a"], [{ id: "a" }]);
-      expect(show(d)).toEqual(["a", "persona*", "dialogueExamples*"]);
+      expect(show(d)).toEqual(["a", "character*", "player*", "examples*"]);
     });
     it("伺服器不收的條目（不支援、停用）不當錨點，但照樣列在清單裡", () => {
       const d = docWith(["main", "a", "charDescription"], [{ id: "a" }]);
-      expect(show(d)).toEqual(["main", "persona*", "a", "persona", "dialogueExamples*"]);
-      // main 不收：玩家設定改找後面最近的角色 marker，補在它前面，跟它併成同一列
-      expect(show(d, (id) => id !== "main")).toEqual(["main", "a", "persona", "dialogueExamples*"]);
+      expect(show(d)).toEqual(["main", "player*", "a", "character", "examples*"]);
+      // main 不收：玩家人設改找後面最近的角色 marker，補在它前面
+      expect(show(d, (id) => id !== "main")).toEqual(["main", "a", "player*", "character", "examples*"]);
     });
-    it("被自訂條目隔開的玩家與角色 marker 照實出現兩列", () => {
+    it("被自訂條目隔開的玩家與角色 marker：兩列各用自己的名字（owner 2026-10-30：不再兩列同名）", () => {
       const d = docWith(["personaDescription", "u", "charDescription", "bridge", "dialogueExamples"], [...markers, { id: "u" }, { id: "bridge" }]);
-      expect(show(d)).toEqual(["persona", "u", "persona", "bridge", "dialogueExamples"]);
+      expect(show(d)).toEqual(["player", "u", "character", "bridge", "examples"]);
+    });
+    it("相鄰的玩家與角色 marker 也不併成一列", () => {
+      const d = docWith(["main", "personaDescription", "charDescription", "dialogueExamples"], markers);
+      expect(show(d)).toEqual(["main", "player", "character", "examples"]);
     });
   });
 

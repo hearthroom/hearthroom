@@ -161,8 +161,8 @@ describe("預設編輯器", () => {
     expect(rowNamed("腳本").textContent).toContain(t("preset.report.status.unsupported"));
     expect(rowNamed("回應玩家").textContent).toContain(t("preset.report.status.adjust"));
     const provided = $$("[data-testid=provided-row]");
-    // 這份沒有任何 marker、也沒有 ST 預設的條目可當錨點：角色與玩家設定、對話示例照伺服器補在前綴最後
-    expect(provided.map((b) => b.textContent?.trim().replace(t("preset.provided.label"), "").trim())).toEqual([t("preset.provided.charDescription"), t("preset.provided.examples"), t("preset.provided.history")]);
+    // 這份沒有任何 marker、也沒有 ST 預設的條目可當錨點：角色設定、玩家人設、對話示例照伺服器補在前綴最後，各自一列
+    expect(provided.map((b) => b.textContent?.trim().replace(t("preset.provided.label"), "").trim())).toEqual([t("preset.provided.character"), t("preset.provided.player"), t("preset.provided.examples"), t("preset.provided.history")]);
     expect(provided[0]!.parentElement!.querySelector("input[type=checkbox]")).toBeNull();
     expect(root.textContent).not.toContain("相容");
   });
@@ -705,20 +705,23 @@ describe("條目清單照真實送出順序（畫面規格 (a)，PM 2026-10-30�
   }
   const listed = () => $$("[data-testid=entry-row], [data-testid=provided-row]").map((b) => (b.querySelector(".preset-editor__rowName")?.textContent ?? "").trim());
 
-  it("「角色與玩家設定」插在它真正的位置，「世界書、對話記錄與記憶」在對話記錄之前那一區最後", async () => {
+  it("角色設定、玩家人設、對話示例各自一列插在真正的位置，「世界書、對話記錄與記憶」在對話記錄之前那一區最後", async () => {
     await open();
-    // 對話示例的 marker 不在：伺服器補在角色設定後面（ST 預設順序最近的前一個錨點）
-    expect(listed()).toEqual(["清楚敘述", t("preset.provided.charDescription"), t("preset.provided.examples"), "腳本", t("preset.provided.history"), "回應玩家"]);
+    // 玩家人設與對話示例的 marker 不在：伺服器把玩家人設補在角色設定前面、對話示例補在它後面
+    expect(listed()).toEqual(["清楚敘述", t("preset.provided.player"), t("preset.provided.character"), t("preset.provided.examples"), "腳本", t("preset.provided.history"), "回應玩家"]);
     expect($("[data-testid=entry-list]")?.textContent ?? root.textContent).not.toContain(t("preset.entries.group.provided"));
   });
 
-  it("查看位置照條目真實的位置標「角色與玩家設定之前／之後」", async () => {
+  it("查看位置照真實順序逐列：每份帶入的材料有名稱與說明，這條標在它真正的位置", async () => {
     await open();
-    for (const [name, step] of [["清楚敘述", "beforePersona"], ["腳本", "afterPersona"], ["回應玩家", "s4"]] as const) {
+    const order = { 清楚敘述: ["here", "player", "character", "examples", "history", "format"], 腳本: ["player", "character", "examples", "here", "history", "format"], 回應玩家: ["player", "character", "examples", "history", "here", "format"] };
+    for (const [name, rows] of Object.entries(order)) {
       $$("[data-testid=entry-row]").find((b) => b.textContent?.includes(name))!.click(); await flush();
       $$("button").find((b) => b.textContent?.trim() === t("preset.entry.inspect"))!.click(); await flush();
-      const here = document.body.querySelector(".inspect__here")!;
-      expect(here.textContent).toContain(t(`preset.inspect.${step}`));
+      const items = [...document.body.querySelectorAll<HTMLElement>("[data-testid=inspect-rows] li")];
+      expect(items.map((li) => li.dataset.row)).toEqual(rows);
+      expect(document.body.querySelector(".inspect__here")!.textContent).toContain(name);
+      expect(items.find((li) => li.dataset.row === "player")!.textContent).toContain(t("preset.inspect.player.note"));
       document.body.querySelector<HTMLButtonElement>(".modal__actions .btn")!.click(); await flush();
     }
   });
@@ -770,7 +773,7 @@ describe("條目編輯層（owner 2026-10-30：點進條目停在名稱、只留
   }
   const rowNamed = (name: string) => $$("[data-testid=entry-row]").find((b) => b.textContent?.includes(name))!;
 
-  it("點進條目：捲回頂端、焦點在條目名稱（不再停在頁底的參數）", async () => {
+  it("點進條目：捲回頂端、焦點在條目標題，不在輸入框（iPad 不會自己彈鍵盤）", async () => {
     await open();
     // 手機寬度：條目清單會藏起來，一定要捲回頂端
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }));
@@ -778,7 +781,9 @@ describe("條目編輯層（owner 2026-10-30：點進條目停在名稱、只留
     rowNamed("腳本").click(); await flush(); await flush();
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
     vi.unstubAllGlobals();
-    expect((document.activeElement as HTMLElement | null)?.id).toBe("name-script");
+    expect((document.activeElement as HTMLElement | null)?.id).toBe("entry-title-script");
+    expect(document.activeElement?.tagName).toBe("H2");
+    expect(document.activeElement?.textContent).toContain("腳本");
     scrollTo.mockRestore();
   });
 
@@ -848,7 +853,7 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     expect($("[data-testid=editor-tab-settings] .editor-tab__dot")).not.toBeNull();
   });
 
-  it("桌機點條目：不捲整頁，編輯區自己回頂端、焦點在名稱；右欄沒選條目時有引導和新增條目", async () => {
+  it("桌機點條目：不捲整頁，編輯區自己回頂端、焦點在條目標題；右欄沒選條目時有引導和新增條目", async () => {
     await open();
     expect($("[data-testid=editor-pick-hint]").textContent).toContain(t("preset.editor.pickHint"));
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }));
@@ -857,7 +862,8 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     $$("[data-testid=entry-row]").find((b) => b.textContent?.includes("腳本"))!.click(); await flush(); await flush();
     expect(scrollTo).not.toHaveBeenCalled();
     expect(detailEl.scrollTop).toBe(0);
-    expect((document.activeElement as HTMLElement | null)?.id).toBe("name-script");
+    expect((document.activeElement as HTMLElement | null)?.id).toBe("entry-title-script");
+    expect(document.activeElement?.tagName).not.toBe("INPUT");
     vi.unstubAllGlobals(); scrollTo.mockRestore();
   });
 });

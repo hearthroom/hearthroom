@@ -136,17 +136,20 @@ export function setEnabled(doc: PresetDocument, id: string, enabled: boolean, op
  * 會送出內容的框架 marker：玩家設定、角色設定（畫面上合成「角色與玩家設定」）與對話示例（另一列）。
  * 其他 marker（個性、情境、世界書）是空槽，伺服器不放內容，清單不畫、上下移也不算一步。
  */
-export const PERSONA_IDS: ReadonlySet<string> = new Set(["personaDescription", "charDescription"]);
 const EXAMPLES_ID = "dialogueExamples";
 /** SillyTavern 預設的 prompt_order：marker 缺席時，伺服器照它找最近的錨點補位（server renderPresetPrefixLayout，6376f7af）。 */
 const ST_DEFAULT_ORDER = ["main", "worldInfoBefore", "personaDescription", "charDescription", "charPersonality", "scenario", "enhanceDefinitions", "nsfw", "worldInfoAfter", "dialogueExamples"];
 
+/** 綺夢社帶入的三份材料，各自一列（owner 2026-10-30：同名兩列會讓人困惑；伺服器本來就把它們放在各自 marker 的位置）。 */
+export type ProvidedKind = "character" | "player" | "examples";
+const KIND_OF: Record<string, ProvidedKind> = { charDescription: "character", personaDescription: "player", dialogueExamples: "examples" };
+
 /** 對話記錄之前那一區照送出順序的一列。virtual：marker 缺席，位置是伺服器補上的（只顯示，不能拖到它前面、上下移不算一步）。 */
-export type PrefixRow = { kind: "entry"; id: string } | { kind: "persona" | "dialogueExamples"; virtual: boolean; markers: string[] };
+export type PrefixRow = { kind: "entry"; id: string } | { kind: ProvidedKind; virtual: boolean; marker: string };
 
 /**
  * 對話記錄之前的版面，跟伺服器組前綴同一套規則：自訂條目照排序（停用、不支援的也照樣列出）；
- * 開著的玩家／角色 marker 畫「角色與玩家設定」，相鄰的併成一列；開著的對話示例 marker 畫一列。
+ * 開著的角色、玩家、對話示例 marker 各畫一列（相鄰也不併）。
  * 缺席的材料找錨點：ST 預設順序裡前面最近、伺服器有收進前綴的條目之後；沒有就後面最近的之前；
  * 都沒有就放在最後（角色、玩家、範例）。錨點只看伺服器收的：開著的，而且 inPrefix 說收（不支援、被移到對話記錄之後的不算）。
  */
@@ -155,7 +158,7 @@ export function prefixLayout(doc: PresetDocument, inPrefix: (id: string) => bool
   const history = rows.findIndex((r) => r.identifier === HISTORY);
   const before = history < 0 ? rows : rows.slice(0, history);
   const blocks = before.filter((r) => r.enabled && (isFramework(r.identifier) || inPrefix(r.identifier))).map((r) => r.identifier);
-  const emitted = new Set(blocks.filter((id) => PERSONA_IDS.has(id) || id === EXAMPLES_ID));
+  const emitted = new Set(blocks.filter((id) => id in KIND_OF));
   const placedBefore = new Map<string, string[]>(), placedAfter = new Map<string, string[]>();
   const tail: string[] = [];
   for (const m of ["personaDescription", "charDescription", EXAMPLES_ID]) {
@@ -168,12 +171,7 @@ export function prefixLayout(doc: PresetDocument, inPrefix: (id: string) => bool
     else tail.push(m);
   }
   const out: PrefixRow[] = [];
-  const material = (m: string, virtual: boolean) => {
-    const kind = m === EXAMPLES_ID ? "dialogueExamples" : "persona";
-    const prev = out[out.length - 1];
-    if (kind === "persona" && prev?.kind === "persona") { prev.markers.push(m); prev.virtual &&= virtual; return; }
-    out.push({ kind, virtual, markers: [m] });
-  };
+  const material = (m: string, virtual: boolean) => { out.push({ kind: KIND_OF[m]!, virtual, marker: m }); };
   for (const r of before) {
     const id = r.identifier;
     for (const m of placedBefore.get(id) ?? []) material(m, true);
@@ -186,7 +184,7 @@ export function prefixLayout(doc: PresetDocument, inPrefix: (id: string) => bool
 }
 
 /**
- * 一區照送出順序的「一步」：每條自訂條目一步；開著的玩家／角色 marker 相鄰的合成一步，對話示例一步。
+ * 一區照送出順序的「一步」：每條自訂條目一步；開著的角色、玩家、對話示例 marker 各一步（跟清單上一列一列對齊）。
  * 空槽 marker、停用的 marker 與伺服器補位的列都不算（補位的列黏著錨點，跨過錨點就跨過它）。
  */
 function stepsOf(order: StOrderEntry[], side: "before" | "after"): string[][] {
@@ -194,12 +192,9 @@ function stepsOf(order: StOrderEntry[], side: "before" | "after"): string[][] {
   const from = side === "before" ? 0 : history + 1;
   const to = side === "before" ? (history < 0 ? order.length : history) : history < 0 ? from : order.length;
   const steps: string[][] = [];
-  let persona: string[] | null = null;
   for (let i = from; i < to; i++) {
     const { identifier: id, enabled } = order[i]!;
-    if (PERSONA_IDS.has(id) && enabled !== false) { if (!persona) { persona = []; steps.push(persona); } persona.push(id); continue; }
-    if (isFramework(id)) { if (id === EXAMPLES_ID && enabled !== false) { persona = null; steps.push([id]); } continue; }
-    persona = null;
+    if (isFramework(id) && !(id in KIND_OF && enabled !== false)) continue;
     steps.push([id]);
   }
   return steps;
@@ -232,19 +227,30 @@ export function moveEntry(doc: PresetDocument, id: string, dir: -1 | 1): boolean
   return true;
 }
 
-/** 條目落在哪一段：最後一份玩家／角色材料（含伺服器補位的）之前、之後（對話記錄之前），或對話記錄之後。框架條目回 null。 */
-export function entryPlace(doc: PresetDocument, id: string, inPrefix?: (id: string) => boolean): "beforePersona" | "afterPersona" | "after" | null {
+/** 「查看位置」的一列：這條條目、綺夢社帶入的材料、世界書與對話記錄、格式規則。 */
+export type InspectRow = "here" | ProvidedKind | "history" | "format";
+
+/**
+ * 「查看位置」照真實送出順序列出：對話記錄之前那區的角色、玩家、對話示例（含伺服器補位的）與這條條目的位置，
+ * 接著世界書與對話記錄、對話記錄之後的條目、格式規則。只列這一條，不列其他自訂條目。
+ * after：這條實際送在對話記錄之後（上游會把某些條目調過去，編輯器照調整後的位置畫）。
+ */
+export function inspectRows(doc: PresetDocument, id: string, inPrefix?: (id: string) => boolean, after = false): InspectRow[] | null {
   if (isFramework(id)) return null;
   const order = orderOf(doc);
   const at = order.findIndex((o) => o.identifier === id);
   if (at < 0) return null;
   const history = order.findIndex((o) => o.identifier === HISTORY);
-  if (history >= 0 && at > history) return "after";
-  const layout = prefixLayout(doc, inPrefix);
-  const mine = layout.findIndex((r) => r.kind === "entry" && r.id === id);
-  let last = -1;
-  layout.forEach((r, i) => { if (r.kind === "persona") last = i; });
-  return mine >= 0 && mine < last ? "beforePersona" : "afterPersona";
+  const late = after || (history >= 0 && at > history);
+  const rows: InspectRow[] = [];
+  for (const r of prefixLayout(doc, inPrefix)) {
+    if (r.kind !== "entry") rows.push(r.kind);
+    else if (r.id === id && !late) rows.push("here");
+  }
+  rows.push("history");
+  if (late) rows.push("here");
+  rows.push("format");
+  return rows;
 }
 
 export function detachEntry(doc: PresetDocument, id: string): boolean {
