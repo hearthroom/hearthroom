@@ -237,6 +237,8 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__content { grid-area: content; }
 .shared__title { margin: 0; font-size: clamp(24px, 4vw, 30px); overflow-wrap: anywhere; }
 .shared__by { margin: 0; overflow-wrap: anywhere; }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .shared__unlisted, :lang(ko) .shared__apply, :lang(ko) .shared__facts dd, :lang(ko) .shared__card p { word-break: keep-all; }
 .shared__unlisted { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
 .shared__chip { height: auto; min-height: 22px; padding-block: 2px; cursor: default; overflow-wrap: anywhere; }
 .shared__chip:hover { background: var(--surface-2); color: var(--text-2); }

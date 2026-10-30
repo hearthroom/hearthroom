@@ -165,6 +165,8 @@ async function toggle(item: PresetLibraryItem) {
 .share-tab__ghost { height: 104px; }
 .share-tab__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }
 .share-tab__card p { margin: 0; }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .share-tab__card p, :lang(ko) .share-tab__sort { word-break: keep-all; }
 .share-tab__more { justify-self: center; }
 @media (min-width: 761px) {
   .share-tab__controls { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }

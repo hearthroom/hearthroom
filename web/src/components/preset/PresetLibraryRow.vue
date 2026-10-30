@@ -63,6 +63,8 @@ const fresh = computed(() => isNew(props.item));
 .share-row__chip--strong, .share-row__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
 .share-row__chip--new, .share-row__chip--new:hover { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
 .share-row__note { font-size: 12px; color: var(--text-3); }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .share-row__note { word-break: keep-all; }
 .share-row__fav {
   flex: none; width: var(--h-lg); height: var(--h-lg); border-radius: var(--r-pill);
   display: flex; align-items: center; justify-content: center;

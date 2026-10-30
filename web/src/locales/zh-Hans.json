@@ -4134,5 +4134,6 @@
   "preset.share.unfavorite.title": "取消喜爱「{name}」？",
   "preset.share.unfavorite.body": "这份预设已不公开，取消后就找不回来了。",
   "preset.share.unfavorite.confirm": "取消喜爱",
-  "preset.share.unfavorite.keep": "保留喜爱"
+  "preset.share.unfavorite.keep": "保留喜爱",
+  "preset.share.error.conflict": "这份预设刚刚在别处更新了。重新加载后再公开。"
 }

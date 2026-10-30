@@ -52,6 +52,8 @@ async function submit() {
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
     if (resultUnknown(err)) error.value = t("preset.error.unknown");
+    // 版本衝突在這裡不是「存檔」：不用編輯器那句，用公開自己的說法
+    else if (err instanceof ApiError && err.reason === "preset_revision_conflict") error.value = t("preset.share.error.conflict");
     else error.value = (err instanceof ApiError && presetErrorText(err)) || t("preset.share.error.publish");
     // 聲明換版或別處先改了：清單要重讀，下一次按才會送新的版本與聲明
     if (err instanceof ApiError && err.code === "preset_conflict") emit("stale");
@@ -99,6 +101,8 @@ async function submit() {
 
 <style scoped>
 .publish__lede { font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .publish__lede, :lang(ko) .publish__hint, :lang(ko) .publish__declaration, :lang(ko) .notice { word-break: keep-all; }
 .publish__field { display: grid; gap: var(--s-2); }
 .publish__label { font-size: 13px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-2); }
 .publish__hint { font-weight: 400; color: var(--text-3); font-size: 12px; }

@@ -135,7 +135,9 @@ async function unpublish(p: PresetSummary) {
   } catch (err) {
     if (!resultUnknown(err)) ops.done(action);
     if (consentNeeded(err)) return;
-    actionError.value = resultUnknown(err) ? t("preset.error.unknown") : err instanceof Error ? err.message : t("preset.error.unavailable");
+    actionError.value = resultUnknown(err) ? t("preset.error.unknown")
+      : err instanceof ApiError && err.reason === "preset_revision_conflict" ? t("preset.share.error.conflict")
+      : err instanceof Error ? err.message : t("preset.error.unavailable");
     if (err instanceof ApiError && err.code === "preset_conflict") void load();
   } finally {
     busy.value = "";
@@ -151,7 +153,8 @@ function copied(receipt: WriteReceipt, name: string) {
 
 /**
  * 選單開在按鈕下方；靠近畫面底部時會被固定在底部的東西（安裝提示、視窗邊緣）蓋住，點下去點到的是
- * 提示（QA W1）。開出來後量每一項的中心點上是不是自己，被蓋到就往上翻，翻了還蓋到就捲進視窗中間。
+ * 提示（QA W1）。開出來後量每一項的中心點上是不是自己，被蓋到、或底下貼著視窗邊緣而上面放得下，
+ * 就往上翻；翻了還蓋到就捲進視窗中間。
  */
 const menuUp = ref(false);
 async function openMenu(id: string) {
@@ -166,7 +169,12 @@ async function openMenu(id: string) {
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return !hit || !box.contains(hit);
   });
-  if (!covered()) return;
+  // 底下不夠一個間距（桌機最後一列會貼著視窗底，美術 A6）而上面放得下，也往上開
+  const rect = box.getBoundingClientRect();
+  const button = box.parentElement!.getBoundingClientRect();
+  const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+  const tight = rect.bottom > window.innerHeight - 16 && button.top - rect.height - 8 > headerBottom;
+  if (!covered() && !tight) return;
   menuUp.value = true;
   await nextTick();
   if (covered()) box.scrollIntoView({ block: "center" });
@@ -317,6 +325,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 /* 已下架是出事的狀態，不是類型：用站上錯誤提示（.notice--error）同一組危險淡底 */
 .presets__chip--down { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-weight: 500; }
 .presets__note { line-height: 1.5; }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .presets__note, :lang(ko) .presets__mine-note, :lang(ko) .presets__head p, :lang(ko) .presets__card p, :lang(ko) .notice { word-break: keep-all; }
 .presets__more { justify-self: center; }
 .presets__status:empty { display: none; }
 .is-disabled { opacity: .45; pointer-events: none; }

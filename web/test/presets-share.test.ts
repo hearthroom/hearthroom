@@ -338,6 +338,19 @@ describe("我的：公開與改回私人", () => {
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ recommendedModels: [] });
   });
 
+  it("版本衝突用公開自己的說法，不用編輯器存檔那句", async () => {
+    mocks.list.mockResolvedValue(mineList([summary()]));
+    mocks.publish.mockRejectedValue(new ApiError(409, "x", "preset_conflict", undefined, "preset_revision_conflict"));
+    await mount("/me/presets");
+    await openMenu();
+    $("[data-testid=preset-publish]").click();
+    await flush();
+    body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
+    await flush();
+    expect(body$("[data-testid=publish-error]").textContent).toBe(t("preset.share.error.conflict"));
+    expect(body$("[data-testid=publish-error]").textContent).not.toBe(t("preset.error.revisionConflict"));
+  });
+
   it("聲明換版：留在彈層說明，清單重讀拿新版本", async () => {
     mocks.list.mockResolvedValue(mineList([summary()]));
     mocks.publish.mockRejectedValue(new ApiError(409, "x", "preset_conflict", undefined, "preset_declaration_changed"));

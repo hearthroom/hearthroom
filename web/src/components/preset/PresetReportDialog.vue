@@ -73,4 +73,6 @@ async function submit() {
 .report__reason input { margin: 0; width: 18px; height: 18px; accent-color: var(--accent); }
 .report__field { display: grid; gap: 6px; }
 .report__wide { width: 100%; }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .report :deep(p), :lang(ko) .report__reason { word-break: keep-all; }
 </style>

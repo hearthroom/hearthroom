@@ -114,6 +114,8 @@ onMounted(() => void load());
 .share-tab__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }
 .share-tab__card h2 { margin: 0; font-size: 16px; }
 .share-tab__card p { margin: 0; line-height: 1.6; }
+/* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
+:lang(ko) .share-tab__card h2, :lang(ko) .share-tab__card p { word-break: keep-all; }
 .share-tab__icon { width: 48px; height: 48px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
 .share-tab__cta { justify-self: stretch; }
 .share-tab__more { justify-self: center; }
