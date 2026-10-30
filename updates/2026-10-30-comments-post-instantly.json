@@ -6,13 +6,13 @@
     "zh-Hans": "评论发出就会显示，不会再卡在审核里",
     "en": "Comments now appear as soon as you post them",
     "ja": "コメントは投稿するとすぐ表示されるようになりました",
-    "ko": "댓글이 올리는 즉시 보이도록 바뀌었습니다"
+    "ko": "댓글을 올리면 바로 보이도록 바뀌었습니다"
   },
   "body": {
     "zh-Hant": "像「好玩」這樣的短評重複發也不會被擋下，留言任務也不用再等審核。",
     "zh-Hans": "像「好玩」这样的短评重复发也不会被拦下，评论任务也不用再等审核。",
     "en": "Short comments like \"So fun\" are no longer held back for repeating, and comment tasks no longer wait for review.",
     "ja": "「面白い」のような短いコメントを繰り返しても止められず、コメントのタスクも審査を待たなくてよくなりました。",
-    "ko": "'재밌어요' 같은 짧은 댓글을 반복해도 막히지 않고, 댓글 미션도 더 이상 검토를 기다리지 않아요."
+    "ko": "'재밌어요' 같은 짧은 댓글을 반복해도 막히지 않고, 댓글 미션도 더 이상 검토를 기다리지 않습니다."
   }
 }
