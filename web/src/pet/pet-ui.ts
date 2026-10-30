@@ -14,7 +14,7 @@ import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
 import {nearestClearPetY,type PhoneClearance} from "./home-clearance";
-import {deskSpot,keyNumbers,phoneControls,standbySpot} from "./standby-clearance";
+import {deskPeekReach,deskSpot,keyNumbers,phoneControls,standbySpot} from "./standby-clearance";
 import { petSpeaking, type SukiEvent } from "./events";
 
 type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
@@ -93,6 +93,8 @@ interface Drag { dx: number; dy: number; x: number; y: number; ox: number; oy: n
 
 /** 探出時身體往頁面這邊歪（探頭）的角度；站出來回正 */
 const LEAN = -11;
+/** 桌機探頭時留在畫面裡的身體比例 */
+const DESK_PEEK = 0.38;
 const easeBack = (t: number) => { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 const easeIO = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
@@ -140,6 +142,8 @@ export class SukiPet {
   /** 桌機站著讓路時：她自己走到或使用者拖到的 x（null＝沒讓開），deskAway＝這一排沒空位、暫時淡出 */
   private deskX: number | null = null;
   private deskAway = false;
+  /** 桌機這一排沒有站的地方，她暫時縮回邊上探頭（tucked 也是 true）；不是使用者選的收邊，不存位置 */
+  private deskPeeked = false;
   /** 淡出後這一排從什麼時候開始有空位：卡片格捲動時列與列之間的空隙一閃而過，要空出一陣子才回來，不然她會閃 */
   private deskClearAt: number | null = null;
   private releasePhone() {
@@ -210,30 +214,49 @@ export class SukiPet {
     this.layoutEdge();
   }
   /**
-   * 桌機站著時讓路（PM 2026-10-30 第三班 A）：身體壓到可點的東西或關鍵數字（data-pet-avoid），沿這一排左右挪到
-   * 最近的空位；這一排都滿了才淡出（不擋點擊）；原位空出來就回去。不存位置。卡片頁的版面避讓、
-   * 收在邊上、選單開著時不管；拖她或她自己走動之後，那裡就是新的原位。
+   * 桌機讓路（PM 2026-10-30 第三班 A）：站著時身體壓到可點的東西或關鍵數字（data-pet-avoid），沿這一排左右挪到
+   * 最近的空位；這一排沒有空位就縮回比較近的邊上探頭（首頁桌寵 A：首頁與卡片格頁原本整頁淡出）；探頭本身也
+   * 縮窄讓開，縮不下才淡出（不擋點擊）。使用者自己收在邊上時同樣縮窄或淡出。原位空出來就回去，都不存位置。
+   * 卡片頁的版面避讓、選單開著時不管；拖她或她自己走動之後，那裡就是新的原位。
    */
   private updateDesk() {
-    const on=!this.opts.mobile&&this.ready&&!this.hidden&&!this.tucked&&!this.phoneOriginal&&this.menuEl.hidden&&!this.entryAwake;
+    const on=!this.opts.mobile&&this.ready&&!this.hidden&&!this.phoneOriginal&&this.menuEl.hidden&&!this.entryAwake;
     if(!on){this.releaseDesk();return;}
     // 拖動過、她自己走動才是換位置；只是按著（點、長按）不算
-    if(this.drag||this.walk){if(this.walk||this.drag?.moved)this.deskX=null;return;}
-    const b=this.box(),space=phoneControls(),original=this.deskX??this.pos.x;
-    // 左右界線跟放下時的夾邊一樣，貼邊放的她底下沒東西就不動
-    const x=space?deskSpot({minX:0,maxX:innerWidth-b.width,y:this.pos.y,w:b.width,h:b.height,obstacles:space.obstacles,original,current:this.pos.x}):original;
-    // 記著她自己的位置，直到她真的站回那裡（淡出等待中、淡入前都還沒回去）
-    this.deskX=original;
-    if(x===null){this.deskAway=true;this.deskClearAt=null;this.fadeTo(null);return;}
-    if(this.deskAway){
+    if(this.drag||this.walk){if(this.walk||this.drag?.moved){this.deskX=null;this.deskPeeked=false;}return;}
+    const b=this.box(),obstacles=phoneControls()?.obstacles??[],y=this.pos.y;
+    const peek=(side:Side)=>{const reach=deskPeekReach({vw:innerWidth,side,y,h:b.height,obstacles,full:b.width*DESK_PEEK});return reach===null?null:{x:side==="right"?innerWidth-reach:reach-b.width,y};};
+    let to:{x:number;y:number}|null,side=this.side,stand=false;
+    // 使用者自己收在邊上：探頭也不壓東西，縮窄或淡出
+    if(this.tucked&&!this.deskPeeked)to=peek(side);
+    else{
+      const original=this.deskX??this.pos.x;
+      // 左右界線跟放下時的夾邊一樣，貼邊放的她底下沒東西就不動
+      const x=deskSpot({minX:0,maxX:innerWidth-b.width,y,w:b.width,h:b.height,obstacles,original,current:this.deskPeeked?original:this.pos.x});
+      // 記著她自己的位置，直到她真的站回那裡（淡出、探頭等待中都還沒回去）
+      this.deskX=original;
+      if(x!==null){to={x,y};stand=true;}
+      // 這一排沒有站的地方：縮回比較近的邊上探頭（PM 2026-10-30 首頁桌寵 A），探頭也碰到東西才淡出
+      else{side=original+b.width/2<innerWidth/2?"left":"right";to=peek(side);}
+    }
+    // 往讓得少的方向走（淡出→探頭→站）要先空出 300ms：卡片格捲動時列與列之間的空隙一閃而過，不等她會閃
+    const level=(away:boolean,peeked:boolean)=>away?2:peeked?1:0;
+    if(level(to===null,!stand)<level(this.deskAway,this.tucked)){
       const now=performance.now();
       if(this.deskClearAt===null)this.deskClearAt=now;
       if(now-this.deskClearAt<300)return;
-      if(this.fadeTo({x,y:this.pos.y}))return;
-      this.deskClearAt=null;
+    }else this.deskClearAt=null;
+    if(to===null){this.deskAway=true;this.fadeTo(null);return;}
+    if(this.deskAway){
+      if(this.fadeTo(to))return;
       this.deskAway=false;this.phoneRelocateAt=null;this.el.inert=false;this.el.classList.remove("suki-pet--phone-suspended");
-    }else if(x!==this.pos.x)this.place({x,y:this.pos.y});
-    if(this.pos.x===original)this.deskX=null;
+    }
+    this.deskClearAt=null;
+    // 自動探頭不存位置，也不算使用者選的收邊
+    if(!stand&&!this.tucked){this.deskPeeked=true;this.tucked=true;this.side=side;this.el.classList.add("suki-pet--tucked");this.el.classList.toggle("suki-pet--edge-right",side==="right");}
+    else if(stand&&this.deskPeeked){this.deskPeeked=false;this.tucked=false;this.el.classList.remove("suki-pet--tucked");}
+    if(to.x!==this.pos.x)this.place(to);
+    if(stand&&this.pos.x===this.deskX)this.deskX=null;
   }
   /** 讓路暫停時（選單、收邊、別的避讓接手）：淡出先解除，原位記著 */
   private releaseDesk() {
@@ -1111,7 +1134,7 @@ export class SukiPet {
       if (edge) return this.tuck(edge, false, { x: d.ox - d.dx, y: d.oy - d.dy });
       pos = { x: Math.max(0, Math.min(innerWidth - r.width, r.left)), y: Math.max(0, Math.min(innerHeight - r.height, r.top)) };
       if (this.tucked) {
-        this.tucked = false; this.el.classList.remove("suki-pet--tucked");
+        this.tucked = false; this.deskPeeked = false; this.el.classList.remove("suki-pet--tucked");
       }
       this.rememberDesktopStand(pos);
       this.desktopChosenStand = true;
@@ -1129,11 +1152,11 @@ export class SukiPet {
 
   private tuck(edge: "left" | "right", silent = false, origin?: { x: number; y: number }) {
     if (origin && !silent && !this.tucked && !this.desktopStand) this.rememberDesktopStand(origin);
-    this.tucked = true; this.side = edge; this.deskX = null;
+    this.tucked = true; this.side = edge; this.deskX = null; this.deskPeeked = false;
     const r = this.box();
     this.el.classList.add("suki-pet--tucked");
     this.el.classList.toggle("suki-pet--edge-right", edge === "right");
-    this.place({ x: edge === "left" ? -r.width * 0.62 : innerWidth - r.width * 0.38, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
+    this.place({ x: edge === "left" ? -r.width * (1 - DESK_PEEK) : innerWidth - r.width * DESK_PEEK, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
     this.save({ x: edge === "left" ? -1 : innerWidth, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
     if (!silent) this.act({ expr: "peek", say: this.line("tuck"), ms: 2600 }, true);
   }
@@ -1162,7 +1185,8 @@ export class SukiPet {
     if (this.sleeping) return this.wake("poked");
     if (this.tucked && this.opts.mobile) return this.pullOut();
     if (this.tucked) {
-      const pos = this.desktopReturn();
+      // 自動探頭時她那一排沒有站的地方，站出來下一格又會縮回去：直接開選單
+      const pos = this.deskPeeked ? null : this.desktopReturn();
       if (!pos) { this.openFrom(document.querySelector<HTMLElement>('.acct__btn,.site-menu > button')); return; }
       this.tucked = false; this.el.classList.remove("suki-pet--tucked");
       this.desktopChosenStand = true;
@@ -1286,7 +1310,7 @@ export class SukiPet {
     if (this.drag || this.hidden || this.slide) return;
     const f = this.viewport(), s = this.size();
     if (this.tucked) {
-      if (!this.opts.mobile) return this.tuck(this.side, true);
+      if (!this.opts.mobile) { if (!this.deskPeeked) this.tuck(this.side, true); return; }
       return this.peekAt(this.side, peekPos(f, s, this.side, this.pos.y, this.standbyReach));
     }
     const pos = clampStand(f, s, this.pos);
@@ -1372,7 +1396,7 @@ export class SukiPet {
   private summon() {
     if (this.sleeping) { this.sleeping = false; this.exprTarget = {}; }
     if (this.opts.mobile) { const d = defaultPeek(this.viewport(), this.size()); this.peekAt(d.side, d.pos); return this.pullOut(); }
-    this.desktopStand = null; this.desktopChosenStand = false; this.deskX = null;
+    this.desktopStand = null; this.desktopChosenStand = false; this.deskX = null; this.deskPeeked = false;
     this.tucked = false; this.el.classList.remove("suki-pet--tucked");
     const pos = this.deskHome();
     this.place(pos); this.save(pos);

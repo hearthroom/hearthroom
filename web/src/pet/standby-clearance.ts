@@ -51,6 +51,16 @@ export function deskSpot(f:{minX:number;maxX:number;y:number;w:number;h:number;o
  return [f.minX,f.maxX,...row.flatMap(r=>[r.left-f.w-GAP,r.right+GAP])].filter(safe).sort((a,b)=>Math.abs(a-f.current)-Math.abs(b-f.current))[0]??null;
 }
 
+/**
+ * 桌機探頭（收在邊上，或這一排沒有站的地方時自動縮回邊上）露多寬：跟手機一樣先縮不先搬，離同一排最近的
+ * 可點東西或關鍵數字留 GAP；縮到 MIN_REACH 還碰到回 null（淡出）。1280 寬首頁的側欄連結右緣在 1232，
+ * 原寬 0.38 個身體（約 56）會蓋到它最右邊 8px。
+ */
+export function deskPeekReach(f:{vw:number;side:Side;y:number;h:number;obstacles:SidebarRect[];full:number}):number|null {
+ const reach=Math.min(f.full,...f.obstacles.filter(r=>r.bottom+GAP>f.y&&r.top-GAP<f.y+f.h).map(r=>f.side==='right'?f.vw-r.right-GAP:r.left-GAP));
+ return reach>=MIN_REACH?reach:null;
+}
+
 const CONTROLS='a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=switch],[role=checkbox],[role=tab],[tabindex]:not([tabindex="-1"]),article.card,[data-pet-avoid]';
 const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab';
 
