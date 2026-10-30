@@ -4067,7 +4067,6 @@
   "preset.share.filter.label": "Filter by model",
   "preset.share.filter.general": "General",
   "preset.share.filter.all": "All",
-  "preset.share.filter.pickModel": "Choose a model",
   "preset.share.sort.note": "Sorted by how many people used them in the last 7 days.",
   "preset.share.fav.add": "Add to favorites",
   "preset.share.fav.remove": "Remove from favorites",

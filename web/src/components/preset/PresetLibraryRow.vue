@@ -5,16 +5,16 @@
  */
 import { computed } from "vue";
 import { whole, monthDayOf } from "@/lib/format";
-import type { PresetLibraryItem } from "@/lib/presets";
+import { modelValueLabel, type PresetLibraryItem } from "@/lib/presets";
 import { useLocalePath } from "@/lib/use-locale";
-import { authorLabel, isNew, modelLabel } from "./preset-share";
+import { authorLabel, isNew } from "./preset-share";
 
 const props = defineProps<{ item: PresetLibraryItem; busy?: boolean; showUsedOn?: boolean }>();
 const emit = defineEmits<{ favorite: [item: PresetLibraryItem] }>();
 const { lp } = useLocalePath();
 
 /** 卡片格的慣例：前兩個，其餘「+N」 */
-const models = computed(() => props.item.recommendedModels.slice(0, 2).map(modelLabel));
+const models = computed(() => props.item.recommendedModels.slice(0, 2).map(modelValueLabel));
 const moreModels = computed(() => Math.max(0, props.item.recommendedModels.length - 2));
 const fresh = computed(() => isNew(props.item));
 </script>

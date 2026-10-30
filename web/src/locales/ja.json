@@ -4067,7 +4067,6 @@
   "preset.share.filter.label": "モデルで絞り込み",
   "preset.share.filter.general": "汎用",
   "preset.share.filter.all": "すべて",
-  "preset.share.filter.pickModel": "モデルを選ぶ",
   "preset.share.sort.note": "直近7日間の使用人数順に並んでいます。",
   "preset.share.fav.add": "お気に入りに追加",
   "preset.share.fav.remove": "お気に入りから外す",

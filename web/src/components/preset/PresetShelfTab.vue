@@ -11,12 +11,10 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import { favoritePreset, LIBRARY_PAGE, listPresetShelf, type PresetLibraryItem } from "@/lib/presets";
 import PresetLibraryRow from "./PresetLibraryRow.vue";
-import { useModelOptions } from "./preset-share";
 
 const props = defineProps<{ token: () => Promise<string> }>();
 const emit = defineEmits<{ toast: [text: string]; consent: [err: unknown]; browse: [] }>();
 const { t } = useI18n();
-useModelOptions(props.token);
 
 const items = ref<PresetLibraryItem[]>([]);
 /** 載入當下哪些是喜愛：分組照這個，按 ♥ 不會讓一列跳到另一組 */

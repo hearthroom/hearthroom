@@ -15,12 +15,12 @@ import { ApiError } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
 import { dateOnly, whole } from "@/lib/format";
-import { favoritePreset, fetchLibraryPreset, type PresetLibraryDetail } from "@/lib/presets";
+import { favoritePreset, fetchLibraryPreset, modelValueLabel, type PresetLibraryDetail } from "@/lib/presets";
 import { entryRows, type ParamKey } from "@/lib/st-preset";
 import { usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import { paramLabelKey } from "@/components/preset/preset-params";
-import { authorLabel, modelLabel, useModelOptions } from "@/components/preset/preset-share";
+import { authorLabel } from "@/components/preset/preset-share";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetReportDialog from "@/components/preset/PresetReportDialog.vue";
 
@@ -29,7 +29,6 @@ const route = useRoute();
 const router = useRouter();
 const { lp } = useLocalePath();
 const { token, needsConsent, consentNeeded, reauthorize } = usePresetAccess();
-useModelOptions(token);
 
 const presetId = computed(() => String(route.params.presetId ?? ""));
 const data = ref<PresetLibraryDetail | null>(null);
@@ -182,7 +181,7 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
           <div>
             <dt>{{ $t("preset.share.detail.tested.label") }}</dt>
             <dd v-if="item.recommendedModels.length">
-              <span class="shared__models"><span v-for="m in item.recommendedModels" :key="m" class="chip shared__chip">{{ modelLabel(m) }}</span></span>
+              <span class="shared__models"><span v-for="m in item.recommendedModels" :key="m" class="chip shared__chip">{{ modelValueLabel(m) }}</span></span>
               <span class="subtle">{{ $t("preset.share.detail.tested.note") }}</span>
             </dd>
             <dd v-else>{{ $t("preset.share.untested") }}</dd>

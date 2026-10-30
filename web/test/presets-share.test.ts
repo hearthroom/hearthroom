@@ -21,7 +21,7 @@ vi.mock("../src/lib/presets", async (original) => ({
   ...(await original<typeof import("../src/lib/presets")>()),
   listPresets: mocks.list, publishPreset: mocks.publish, unpublishPreset: mocks.unpublish,
   listPresetLibrary: mocks.library, listPresetShelf: mocks.shelf, fetchLibraryPreset: mocks.detail,
-  favoritePreset: mocks.favorite, reportPreset: mocks.report, fetchModelOptions: mocks.models,
+  favoritePreset: mocks.favorite, reportPreset: mocks.report, fetchModelCatalog: mocks.models,
 }));
 
 let app: ReturnType<typeof createApp> | undefined;
@@ -42,7 +42,7 @@ async function mount(path: string) {
   i18n.global.locale.value = SOURCE_LOCALE;
   mocks.token.mockResolvedValue("tok");
   mocks.confirm.mockResolvedValue(true);
-  mocks.models.mockResolvedValue([{ value: "gemini-4", label: "Gemini 4" }, { value: "deepseek-v4", label: "DeepSeek V4" }]);
+  mocks.models.mockResolvedValue([{ group: "Gemini", families: ["Gemini 4"] }, { group: "DeepSeek", families: ["DeepSeek V4"] }]);
   const pinia = createPinia(); setActivePinia(pinia);
   const session = useSession();
   session.me = { accountNumId: 7, nickName: "Fixture", avatar: "" };
@@ -65,14 +65,14 @@ const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 
 const summary = (over: Partial<PresetSummary> = {}): PresetSummary => ({
   id: "p1", title: "細膩第三人稱", headRevisionId: "r2", version: 2, sourceKind: "native", archived: false,
-  recommendedModels: ["gemini-4"], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", allowedActions: ["delete"], bindingCount: 0,
+  recommendedModels: ["model:Gemini 4"], createdAt: "2026-10-29T00:00:00Z", updatedAt: "2026-10-29T00:00:00Z", allowedActions: ["delete"], bindingCount: 0,
   visibility: "private", publishedAt: null, attribution: "", removed: false, ...over,
 });
 const mineList = (items: PresetSummary[]) => ({ items, nextCursor: "", quota: { used: items.length, limit: 50, archived: 0 }, declarationVersion: "preset-publish-2026-10-30" });
 
 const item = (over: Partial<PresetLibraryItem> = {}): PresetLibraryItem => ({
   presetId: "s1", title: "電影感長篇", authorName: "Aster", authorNumId: 12345, authorAvatar: "", attribution: "",
-  recommendedModels: ["deepseek-v4"], enabledEntryCount: 3, usesLast7d: 215, publishedAt: iso(30 * DAY), updatedAt: "2026-10-28T00:00:00Z",
+  recommendedModels: ["model:DeepSeek V4"], enabledEntryCount: 3, usesLast7d: 215, publishedAt: iso(30 * DAY), updatedAt: "2026-10-28T00:00:00Z",
   favorited: false, lastAppliedAt: null, listed: true, mine: false, ...over,
 });
 
@@ -106,20 +106,31 @@ describe("公開列表", () => {
     expect(router.currentRoute.value.query.model).toBe("general");
     expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "general", q: "", offset: 0 });
 
-    const select = $<HTMLSelectElement>("[data-testid=share-filter-model]");
-    expect([...select.options].map((o) => o.textContent)).toEqual([t("preset.share.filter.pickModel"), "Gemini 4", "DeepSeek V4"]);
-    select.value = "gemini-4";
-    select.dispatchEvent(new Event("change"));
-    await flush();
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "gemini-4", q: "", offset: 0 });
+    // 網頁沒有目前的模型：選單（跟編輯器同一個）只列系列與模型兩層，單選；值照原字送 model=
+    const pick = $<HTMLInputElement>("#share-filter-model");
+    pick.focus(); pick.dispatchEvent(new Event("focus")); await flush();
+    expect($$("[role=option]").map((o) => o.textContent?.trim())).toEqual([
+      `Gemini ${t("preset.models.seriesAll")}`, "Gemini 4", `DeepSeek ${t("preset.models.seriesAll")}`, "DeepSeek V4",
+    ]);
+    $$("[role=option]")[1]!.click(); await flush();
+    expect(router.currentRoute.value.query.model).toBe("model:Gemini 4");
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "", offset: 0 });
+    expect($$("[data-testid=model-chip]").map((c) => c.textContent?.trim())).toEqual(["Gemini 4"]);
 
     const search = $<HTMLInputElement>("[data-testid=share-search]");
     search.value = "Aster";
     search.dispatchEvent(new Event("input"));
     await wait(350);
     await flush();
-    expect(router.currentRoute.value.query).toMatchObject({ tab: "public", model: "gemini-4", q: "Aster" });
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "gemini-4", q: "Aster", offset: 0 });
+    expect(router.currentRoute.value.query).toMatchObject({ tab: "public", model: "model:Gemini 4", q: "Aster" });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "Aster", offset: 0 });
+    // 選整個系列送 series:；拿掉選的值就回到全部
+    pick.focus(); pick.dispatchEvent(new Event("focus")); await flush();
+    $$("[role=option]").find((o) => o.textContent?.includes("DeepSeek") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "series:DeepSeek", q: "Aster", offset: 0 });
+    $<HTMLButtonElement>("[data-testid=model-chip] button").click(); await flush();
+    expect(router.currentRoute.value.query.model).toBeUndefined();
+    expect($("[data-testid=share-filter-all]").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("每列有作者、測試過的模型與近 7 天人數；0 人且公開未滿 7 天標新公開", async () => {
@@ -133,6 +144,7 @@ describe("公開列表", () => {
     expect(rows).toHaveLength(3);
     expect(rows[0]!.textContent).toContain("Aster");
     expect(rows[0]!.textContent).toContain(t("preset.share.tested", { model: "DeepSeek V4" }));
+    expect(rows[0]!.textContent).not.toContain("model:");
     expect(rows[0]!.textContent).toContain(t("preset.share.users7d", { n: "215" }, 215));
     expect(rows[1]!.textContent).toContain(t("preset.share.new"));
     expect(rows[1]!.textContent).toContain(t("preset.share.untested"));
@@ -308,11 +320,11 @@ describe("我的：公開與改回私人", () => {
     expect(decl.textContent).toBe(t("preset.publish.declaration", { terms: t("login.terms") }));
     expect([...sheet.querySelectorAll("button")].map((b) => b.textContent?.trim())).not.toContain(t("dialog.cancel"));
     // 原本標的模型帶進來；來源選填
-    expect([...sheet.querySelectorAll("[data-testid=publish-model]")].map((b) => b.textContent?.trim())).toEqual(["Gemini 4"]);
-    // 還沒加的模型：下拉顯示提示字，不是一個看起來已選的選項
-    const add = sheet.querySelector<HTMLSelectElement>("[data-testid=publish-model-add]")!;
+    expect([...sheet.querySelectorAll("[data-testid=model-chip]")].map((b) => b.textContent?.trim())).toEqual(["Gemini 4"]);
+    // 還沒加的：選單框裡是提示字，不是一個看起來已選的選項
+    const add = sheet.querySelector<HTMLInputElement>("#publish-models")!;
     expect(add.value).toBe("");
-    expect(add.options[0]!.textContent).toBe(t("preset.share.filter.pickModel"));
+    expect(add.placeholder).toBe(t("preset.models.placeholder"));
     const source = sheet.querySelector<HTMLInputElement>("[data-testid=publish-source]")!;
     source.value = "  原作者 A  ";
     source.dispatchEvent(new Event("input"));
@@ -331,11 +343,29 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
-    body$<HTMLButtonElement>("[data-testid=publish-model]").click();
+    body$<HTMLButtonElement>("[data-testid=model-chip] button").click();
     await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ recommendedModels: [] });
+  });
+
+  it("公開彈層加測試過的模型：選系列存 series:，選模型存 model:", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ recommendedModels: [] })]));
+    mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    await mount("/me/presets");
+    await openMenu();
+    $("[data-testid=preset-publish]").click();
+    await flush();
+    const input = body$<HTMLInputElement>("#publish-models");
+    input.focus(); input.dispatchEvent(new Event("focus")); await flush();
+    const options = () => [...document.body.querySelectorAll<HTMLElement>("[role=option]")];
+    options().find((o) => o.textContent?.includes("Gemini") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
+    options().find((o) => o.textContent?.trim() === "DeepSeek V4")!.click(); await flush();
+    expect([...document.body.querySelectorAll("[data-testid=model-chip]")].map((c) => c.textContent?.trim())).toEqual([t("preset.models.series", { name: "Gemini" }), "DeepSeek V4"]);
+    body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
+    await flush();
+    expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ recommendedModels: ["series:Gemini", "model:DeepSeek V4"] });
   });
 
   it("版本衝突用公開自己的說法，不用編輯器存檔那句", async () => {
@@ -414,6 +444,7 @@ describe("公開預設詳情", () => {
     expect($$("[data-testid=shared-entry]")).toHaveLength(5);
     expect($$("[data-testid=shared-entry] .shared__chevron")).toHaveLength(5);
     expect(root.textContent).toContain("DeepSeek V4");
+    expect(root.textContent).not.toContain("model:");
     expect(root.textContent).toContain("原作者 A");
     expect($("[data-testid=shared-apply]").textContent).toBe(t("preset.share.detail.apply"));
     expect($("[data-testid=shared-fav]").classList.contains("btn--primary")).toBe(true);
@@ -479,6 +510,16 @@ describe("公開預設詳情", () => {
     mocks.detail.mockRejectedValueOnce(new ApiError(404, "x", "not_found"));
     await mount("/preset-library/zzz");
     expect($("[data-testid=shared-not-found]")).not.toBeNull();
+  });
+});
+
+describe("測試過的模型的顯示名", () => {
+  it("series: 顯示全系列，model: 顯示模型名，目錄沒有的舊值照原字", async () => {
+    i18n.global.locale.value = SOURCE_LOCALE;
+    const { modelValueLabel } = await vi.importActual<typeof import("../src/lib/presets")>("../src/lib/presets");
+    expect(modelValueLabel("series:Gemini")).toBe(t("preset.models.series", { name: "Gemini" }));
+    expect(modelValueLabel("model:DeepSeek V4")).toBe("DeepSeek V4");
+    expect(modelValueLabel("deepseek-v4-lane")).toBe("deepseek-v4-lane");
   });
 });
 

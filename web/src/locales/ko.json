@@ -4067,7 +4067,6 @@
   "preset.share.filter.label": "모델 필터",
   "preset.share.filter.general": "범용",
   "preset.share.filter.all": "전체",
-  "preset.share.filter.pickModel": "모델 선택",
   "preset.share.sort.note": "최근 7일 사용 인원 순으로 정렬됩니다.",
   "preset.share.fav.add": "즐겨찾기에 추가",
   "preset.share.fav.remove": "즐겨찾기에서 제거",

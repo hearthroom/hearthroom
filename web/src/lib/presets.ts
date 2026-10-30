@@ -351,3 +351,13 @@ export async function favoritePreset(token: string, presetId: string, favorite: 
 export async function reportPreset(token: string, presetId: string, reason: PresetReportReason, detail: string): Promise<{ reported: boolean }> {
   return json<{ reported: boolean }>(await send(`/preset-library/${id(presetId)}/report`, token, detail ? { reason, detail } : { reason }));
 }
+
+/**
+ * 「測試過的模型」存值的顯示名：`series:<系列>` 顯示成「<系列> 全系列」，`model:<模型>` 顯示模型名，
+ * 目錄已經沒有的舊值照原字。跟選單（PresetModelPicker）的標籤同一個規則，列表與詳情不用先載入目錄。
+ */
+export function modelValueLabel(value: string): string {
+  if (value.startsWith("series:")) return i18n.global.t("preset.models.series", { name: value.slice(7) });
+  if (value.startsWith("model:")) return value.slice(6);
+  return value;
+}

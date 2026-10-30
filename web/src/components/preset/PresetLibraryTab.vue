@@ -10,19 +10,24 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { favoritePreset, LIBRARY_PAGE, listPresetLibrary, type PresetLibraryItem } from "@/lib/presets";
 import PresetLibraryRow from "./PresetLibraryRow.vue";
-import { useModelOptions } from "./preset-share";
+import PresetModelPicker from "./PresetModelPicker.vue";
+import { useModelCatalog } from "./preset-share";
 
 const props = defineProps<{ token: () => Promise<string> }>();
 const emit = defineEmits<{ toast: [text: string]; consent: [err: unknown] }>();
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
-const models = useModelOptions(props.token);
+const catalog = useModelCatalog(props.token);
 
 const model = computed(() => (typeof route.query.model === "string" && route.query.model ? route.query.model : "all"));
 const q = computed(() => (typeof route.query.q === "string" ? route.query.q : ""));
 const typed = ref(q.value);
-const picked = computed(() => (model.value === "all" || model.value === "general" ? "" : model.value));
+/** 選單是單選：v-model 給它一個值的陣列；拿掉那個值就回到「全部」。值照原字送上游（series:／model:，舊連結裡的線路代號也收） */
+const picked = computed({
+  get: () => (model.value === "all" || model.value === "general" ? [] : [model.value]),
+  set: (v: string[]) => setQuery({ model: v[0] ?? "all" }),
+});
 
 const items = ref<PresetLibraryItem[]>([]);
 const loading = ref(true);
@@ -64,10 +69,6 @@ watch(typed, (v) => { clearTimeout(timer); timer = setTimeout(() => setQuery({ q
 onBeforeUnmount(() => clearTimeout(timer));
 watch([model, q], () => void load(), { immediate: true });
 
-function onPick(e: Event) {
-  const value = (e.target as HTMLSelectElement).value;
-  if (value) setQuery({ model: value });
-}
 
 async function toggle(item: PresetLibraryItem) {
   busy.value = item.presetId;
@@ -96,13 +97,9 @@ async function toggle(item: PresetLibraryItem) {
       <div class="share-tab__filters" role="group" :aria-label="$t('preset.share.filter.label')">
         <button type="button" class="share-tab__pill" :class="{ 'share-tab__pill--on': model === 'all' }" :aria-pressed="model === 'all'" data-testid="share-filter-all" @click="setQuery({ model: 'all' })">{{ $t("preset.share.filter.all") }}</button>
         <button type="button" class="share-tab__pill" :class="{ 'share-tab__pill--on': model === 'general' }" :aria-pressed="model === 'general'" data-testid="share-filter-general" @click="setQuery({ model: 'general' })">{{ $t("preset.share.filter.general") }}</button>
-        <span class="share-tab__selectWrap" :class="{ 'share-tab__selectWrap--on': picked }">
-          <select class="share-tab__pill share-tab__select" :class="{ 'share-tab__pill--on': picked }" :value="picked" :aria-label="$t('preset.share.filter.pickModel')" data-testid="share-filter-model" @change="onPick">
-            <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
-            <option v-if="picked && !models.some((m) => m.value === picked)" :value="picked">{{ picked }}</option>
-            <option v-for="m in models" :key="m.value" :value="m.value">{{ m.label }}</option>
-          </select>
-        </span>
+        <div class="share-tab__pick" data-testid="share-filter-model">
+          <PresetModelPicker v-model="picked" :groups="catalog" :multiple="false" input-id="share-filter-model" :label="$t('preset.share.filter.label')" />
+        </div>
       </div>
     </div>
     <p class="subtle share-tab__sort">{{ $t("preset.share.sort.note") }}</p>
@@ -130,7 +127,8 @@ async function toggle(item: PresetLibraryItem) {
 .share-tab__search { position: relative; display: block; }
 .share-tab__search svg { position: absolute; left: 14px; top: 50%; translate: 0 -50%; color: var(--text-3); pointer-events: none; }
 .share-tab__search .input { width: 100%; height: var(--h-lg); padding-left: 42px; font-size: 15px; }
-.share-tab__filters { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* 選了值時選單會在框上方多一個標籤：全部／通用跟輸入框底部對齊，不跟標籤對齊 */
+.share-tab__filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-2); }
 .share-tab__pill {
   height: var(--h-md); padding: 0 var(--s-4); border-radius: var(--r-pill);
   border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
@@ -139,27 +137,9 @@ async function toggle(item: PresetLibraryItem) {
 }
 .share-tab__pill:hover { background: var(--surface-2); }
 .share-tab__pill--on, .share-tab__pill--on:hover { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
-/* 選了模型就顯示模型名；名字很長時截斷，不撐破這一排 */
-/*
- * 箭頭由外框畫（跟搜尋頁的下拉同一個細線折角）：手機保留系統選擇器，只換掉粗的系統箭頭；
- * 滑鼠用站內浮層（base.css），它自己的箭頭關掉，不然會有兩個。
- */
-.share-tab__selectWrap { position: relative; display: inline-flex; flex: 0 1 auto; min-width: 0; max-width: min(100%, 280px); color: var(--text-3); }
-.share-tab__selectWrap--on { color: var(--accent-text); }
-.share-tab__selectWrap::after {
-  content: ""; position: absolute; inset-inline-end: var(--s-4); top: 50%;
-  width: 6px; height: 6px; border-inline-end: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-  transform: translateY(-70%) rotate(45deg); pointer-events: none;
-}
-.share-tab__select { appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; padding-right: var(--s-7); text-overflow: ellipsis; }
-@supports (appearance: base-select) {
-  @media (hover: hover) and (pointer: fine) {
-    .share-tab__select { appearance: base-select; }
-    .share-tab__select::picker-icon { display: none; }
-  }
-}
-/* 手機的原生下拉以最長的模型名算寬度：讓它吃剩下的寬，跟全部／通用同排 */
-@media (max-width: 760px) { .share-tab__selectWrap { flex: 1 1 0; } }
+/* 系列／模型選單（跟編輯器、公開彈層同一個）：放得下就跟全部／通用同排，手機吃剩下的寬 */
+.share-tab__pick { flex: 0 1 280px; min-width: 0; }
+@media (max-width: 760px) { .share-tab__pick { flex: 1 1 0; min-width: 140px; } }
 .share-tab__sort { margin: 0; }
 .share-tab__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .share-tab__ghost { height: 104px; }
@@ -168,7 +148,4 @@ async function toggle(item: PresetLibraryItem) {
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
 :lang(ko) .share-tab__card p, :lang(ko) .share-tab__sort { word-break: keep-all; }
 .share-tab__more { justify-self: center; }
-@media (min-width: 761px) {
-  .share-tab__controls { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-}
 </style>

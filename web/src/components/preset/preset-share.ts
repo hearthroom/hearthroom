@@ -1,25 +1,21 @@
 /**
- * 預設分享（P2）共用的小工具：模型代碼換成站上公開的模型名、判斷「新公開」。
+ * 預設分享（P2）共用的小工具：模型目錄（系列／模型兩層）整頁共用一份、判斷「新公開」。
  */
 import { shallowRef } from "vue";
-import { fetchModelOptions, type ModelOption, type PresetLibraryItem } from "@/lib/presets";
+import { fetchModelCatalog, type ModelCatalogGroup, type PresetLibraryItem } from "@/lib/presets";
 
-const options = shallowRef<ModelOption[]>([]);
+const catalog = shallowRef<ModelCatalogGroup[]>([]);
 let pending: Promise<void> | null = null;
 
 /**
- * 模型目錄整頁共用一份，三個分頁與公開彈層不各抓一次。抓不到就顯示代碼本身：
- * 模型名只是標示，不該因為目錄讀不到就讓整列消失；下次再呼叫會重抓。
+ * 公開分頁的篩選與公開彈層都要用目錄，整頁共用一份，不各抓一次。抓不到就是空清單：
+ * 列表與詳情顯示模型名用 `modelValueLabel`，不靠目錄；下次再呼叫會重抓。
  */
-export function useModelOptions(token: () => Promise<string>) {
-  if (!options.value.length && !pending) {
-    pending = token().then(fetchModelOptions).then((list) => { options.value = list; }).catch(() => {}).finally(() => { pending = null; });
+export function useModelCatalog(token: () => Promise<string>) {
+  if (!catalog.value.length && !pending) {
+    pending = token().then(fetchModelCatalog).then((list) => { catalog.value = list; }).catch(() => {}).finally(() => { pending = null; });
   }
-  return options;
-}
-
-export function modelLabel(code: string): string {
-  return options.value.find((o) => o.value === code)?.label ?? code;
+  return catalog;
 }
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
