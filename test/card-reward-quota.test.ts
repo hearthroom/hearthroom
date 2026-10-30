@@ -52,11 +52,54 @@ describe("遷移 0071：中文活動名去掉「社」", () => {
   });
 });
 
+// 延長後的結束：台北 12-01 00:00。
+const EXTENDED_END = Date.UTC(2026, 10, 30, 16);
+
+describe("遷移 0097：第一期延長一個月", () => {
+  const run0097 = async () => {
+    const m = (env.TEST_MIGRATIONS as { name: string; queries: string[] }[]).find((x) => x.name.startsWith("0097_"))!;
+    for (const q of m.queries) await env.DB.prepare(q).run();
+  };
+  const seed = (endsAt: number) => env.DB.prepare(
+    `INSERT INTO card_reward_campaigns (id, slug, starts_at, ends_at, payout_deadline, weekly_limit, reward, public_days, status, created_at, updated_at)
+     VALUES ('creator-season-1', 'creator-season', ?, ?, NULL, 6, 20000, 30, 'active', 0, 0)`,
+  ).bind(START, endsAt).run();
+  const audits = async () => (await env.DB.prepare("SELECT before_json, after_json FROM audit_log WHERE subject_kind = 'card_reward' AND subject_id = 'creator-season-1' AND action = 'configure'").all<{ before_json: string; after_json: string }>()).results;
+
+  it("結束改到 12-01，其他設定不動，留一筆稽核；重跑不重複", async () => {
+    await seed(END);
+    await run0097();
+    await run0097();
+    const row = (await env.DB.prepare("SELECT starts_at, ends_at, payout_deadline, weekly_limit, reward, public_days FROM card_reward_campaigns WHERE id = 'creator-season-1'").first())!;
+    expect(row).toEqual({ starts_at: START, ends_at: EXTENDED_END, payout_deadline: null, weekly_limit: 6, reward: 20000, public_days: 30 });
+    const log = await audits();
+    expect(log).toHaveLength(1);
+    expect(JSON.parse(log[0].before_json)).toEqual({ endsAt: END });
+    expect(JSON.parse(log[0].after_json)).toEqual({ endsAt: EXTENDED_END });
+  });
+
+  it("延長後 11 月仍是每週 6 張，12-01 起恢復 3 張", async () => {
+    await seed(END);
+    await run0097();
+    expect(await weeklyLimitAt(env.DB, Date.UTC(2026, 10, 15))).toBe(6);
+    expect(await weeklyLimitAt(env.DB, EXTENDED_END - 1)).toBe(6);
+    expect(await weeklyLimitAt(env.DB, EXTENDED_END)).toBe(3);
+  });
+
+  it("結束時間已經不是原值就不動", async () => {
+    await seed(END + DAY);
+    await run0097();
+    expect((await env.DB.prepare("SELECT ends_at FROM card_reward_campaigns WHERE id = 'creator-season-1'").first<{ ends_at: number }>())!.ends_at).toBe(END + DAY);
+    expect(await audits()).toHaveLength(0);
+  });
+});
+
 describe("台北時間換算", () => {
-  it("第一期的起訖在台北是 10-17 00:00 與 11-01 00:00", () => {
+  it("第一期的起訖在台北是 10-17 00:00 與 11-01 00:00，延長後到 12-01 00:00", () => {
     const fmt = (t: number) => new Date(t).toLocaleString("sv-SE", { timeZone: "Asia/Taipei" });
     expect(fmt(START)).toBe("2026-10-17 00:00:00");
     expect(fmt(END)).toBe("2026-11-01 00:00:00");
+    expect(fmt(EXTENDED_END)).toBe("2026-12-01 00:00:00");
   });
 });
 
