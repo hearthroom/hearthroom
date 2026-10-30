@@ -3996,5 +3996,7 @@
   "preset.editor.tab.settings": "Model and parameters",
   "preset.editor.pickHint": "Pick an entry on the left to edit, or add a new one.",
   "preset.editor.tab.settings.alert": "A setting needs attention",
-  "preset.editor.tabs.label": "Editor sections"
+  "preset.editor.tabs.label": "Editor sections",
+  "preset.editor.paramsBlocked": "{names} is out of range. Fix it to save.",
+  "preset.editor.paramsBlocked.go": "Go to setting"
 }

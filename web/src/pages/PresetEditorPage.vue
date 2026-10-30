@@ -33,7 +33,7 @@ import PresetExportDialog from "@/components/preset/PresetExportDialog.vue";
 import PresetInspectDialog from "@/components/preset/PresetInspectDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetToolReply from "@/components/preset/PresetToolReply.vue";
-import { anyParamInvalid, paramLabelKey } from "@/components/preset/preset-params";
+import { anyParamInvalid, invalidParams, paramLabelKey } from "@/components/preset/preset-params";
 
 const { t } = useI18n();
 const { lp } = useLocalePath();
@@ -331,6 +331,20 @@ function tabKey(e: KeyboardEvent) {
 }
 // 存檔被擋的原因可能在另一個分頁：採樣值不合法時在「預設設定」上點一個紅點
 const settingsAlert = computed(() => !!doc.value && anyParamInvalid(doc.value));
+// 存檔被不合法的採樣值擋住時，存檔列說是哪幾個，並給一顆鍵跳過去（QA Q1）
+const badParams = computed(() => (doc.value ? invalidParams(doc.value) : []));
+function goToBadParam() {
+  const key = badParams.value[0];
+  if (!key) return;
+  tab.value = "settings";
+  void nextTick(() => {
+    // 數值欄；選項型參數（推理強度等）是第二個下拉——第一個下拉是「沿用模型設定／自訂」
+    const field = document.querySelector<HTMLElement>(`[data-testid=param-${key}]`);
+    const input = field?.querySelector<HTMLElement>("input[type=number]") ?? field?.querySelectorAll<HTMLElement>("select")[1] ?? field?.querySelector<HTMLElement>("select");
+    input?.scrollIntoView({ block: "center" });
+    input?.focus({ preventScroll: true });
+  });
+}
 const detailEl = ref<HTMLElement | null>(null);
 /** 剛才從哪一列點進來：返回時捲回那一列、焦點也回去 */
 let cameFrom = "";
@@ -573,6 +587,12 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           <template v-if="unconfirmed"><strong>{{ $t("preset.editor.saveUnconfirmed") }}</strong> <span class="subtle">{{ $t("preset.editor.saveUnconfirmed.hint") }}</span></template>
           <template v-else-if="dirty && nativeBlocked.length"><span data-testid="preset-native-blocked">{{ $t("preset.error.native") }} {{ nativeBlocked.join($t("preset.setting.separator")) }}</span></template>
           <template v-else-if="dirty && blocked.length"><span data-testid="preset-blocked">{{ blockedText }}</span></template>
+          <template v-else-if="dirty && badParams.length">
+            <span data-testid="preset-params-blocked">
+              {{ $t("preset.editor.paramsBlocked", { names: badParams.map((k) => $t(paramLabelKey(k))).join($t("preset.setting.separator")) }) }}
+              <button type="button" class="btn btn--sm" @click="goToBadParam">{{ $t("preset.editor.paramsBlocked.go") }}</button>
+            </span>
+          </template>
           <template v-else-if="dirty">{{ $t("preset.editor.dirty") }}</template>
           <template v-else-if="savedVersion"><strong>{{ $t("preset.editor.saved", { n: savedVersion }) }}</strong> <span class="subtle">{{ $t("preset.editor.saved.hint") }}</span></template>
           <template v-if="status"><span v-if="unconfirmed || dirty || savedVersion" class="subtle" aria-hidden="true"> · </span><span class="subtle">{{ status }}</span></template>

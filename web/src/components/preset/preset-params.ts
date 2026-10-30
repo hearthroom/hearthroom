@@ -25,7 +25,8 @@ export function paramInvalid(doc: PresetDocument, key: ParamKey): boolean {
   return adopted && !!range && (typeof value !== "number" || value < range.min || value > range.max);
 }
 
-export const anyParamInvalid = (doc: PresetDocument) => [...BASIC_PARAMS, ...ADVANCED_PARAMS].some((k) => paramInvalid(doc, k));
+export const invalidParams = (doc: PresetDocument): ParamKey[] => [...BASIC_PARAMS, ...ADVANCED_PARAMS].filter((k) => paramInvalid(doc, k));
+export const anyParamInvalid = (doc: PresetDocument) => invalidParams(doc).length > 0;
 
 /** 參數在文案裡的名字（key 用駝峰，跟酒館的欄位名分開）。 */
 const PARAM_COPY: Record<ParamKey, string> = {

@@ -3996,5 +3996,7 @@
   "preset.editor.tab.settings": "模型與參數",
   "preset.editor.pickHint": "從左邊選一條來編輯，或新增一條。",
   "preset.editor.tab.settings.alert": "有設定需要處理",
-  "preset.editor.tabs.label": "編輯器分頁"
+  "preset.editor.tabs.label": "編輯器分頁",
+  "preset.editor.paramsBlocked": "{names} 的值不在可接受的範圍內，改好才能儲存。",
+  "preset.editor.paramsBlocked.go": "前往修改"
 }

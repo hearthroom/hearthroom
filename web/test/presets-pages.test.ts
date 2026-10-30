@@ -861,3 +861,24 @@ describe("編輯器桌機版面（UI/UX 規格 editor-layout，2026-10-30）", (
     vi.unstubAllGlobals(); scrollTo.mockRestore();
   });
 });
+
+describe("採樣值不合法時存檔列說明原因（QA Q1，2026-10-30）", () => {
+  it("存檔列寫出哪個參數不合法，按「前往修改」切到模型與參數分頁、焦點在那一欄", async () => {
+    const d = doc(); (d.st as Record<string, unknown>).temperature = 3;
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改名"; $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(true);
+    const msg = $("[data-testid=preset-params-blocked]");
+    expect(msg.textContent).toContain(t("preset.editor.paramsBlocked", { names: t("preset.params.temperature") }));
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+    msg.querySelector<HTMLButtonElement>("button")!.click(); await flush(); await flush();
+    expect($("[data-testid=editor-tab-settings]").getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe($("[data-testid=param-temperature] input[type=number]"));
+    vi.restoreAllMocks();
+  });
+});

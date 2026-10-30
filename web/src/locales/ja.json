@@ -3996,5 +3996,7 @@
   "preset.editor.tab.settings": "モデルとパラメーター",
   "preset.editor.pickHint": "左のリストからエントリーを選んで編集するか、新しく追加できます。",
   "preset.editor.tab.settings.alert": "確認が必要な設定があります",
-  "preset.editor.tabs.label": "エディターのセクション"
+  "preset.editor.tabs.label": "エディターのセクション",
+  "preset.editor.paramsBlocked": "{names} の値が範囲外です。直すと保存できます。",
+  "preset.editor.paramsBlocked.go": "設定へ移動"
 }
