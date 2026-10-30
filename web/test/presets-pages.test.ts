@@ -723,3 +723,38 @@ describe("條目清單照真實送出順序（畫面規格 (a)，PM 2026-10-30�
     }
   });
 });
+
+describe("拖曳到「對話記錄之後」最上面（QA ❌，2026-10-30）", () => {
+  it("後區第一列是上游調過去、實際還在對話記錄之前的條目：它前面不是落點，放開一定落在對話記錄之後", async () => {
+    // 腳本實際排在對話記錄之前，但上游把它調到之後（targetSlot S），畫在後區第一列
+    const c = (): Compatibility => ({ ...compat(), entries: [
+      ...compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"),
+      { identifier: "script", enabled: true, frameworkOwned: false, targetSlot: "S", uiStatus: "relocated", reasonCodes: ["dynamic_after_history"], availableAdaptationIds: [], inertSettings: [] },
+    ], fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    const RECTS: Record<string, [number, number]> = { "side:before": [0, 100], "side:after": [100, 200], clear: [10, 50], script: [110, 150], turn: [150, 190] };
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const el = this as HTMLElement;
+      const key = el.dataset?.dropSide ? `side:${el.dataset.dropSide}` : el.dataset?.dragId ?? "";
+      const [top, bottom] = RECTS[key] ?? [0, 0];
+      return { top, bottom, height: bottom - top, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+    const ev = (type: string, y: number) => { const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY: y, button: 0 }); Object.defineProperty(e, "pointerType", { value: "mouse" }); return e; };
+    $$("[data-testid=entry-row]").find((b) => b.textContent?.includes("清楚敘述"))!.parentElement!.querySelector("[data-testid=entry-drag]")!.dispatchEvent(ev("pointerdown", 30));
+    window.dispatchEvent(ev("pointermove", 115));
+    await flush();
+    // 落點線不畫在腳本上面（那裡放不進去）
+    expect($$("[data-testid=entry-row]").find((b) => b.textContent?.includes("腳本"))!.parentElement!.classList.contains("is-drop-before")).toBe(false);
+    window.dispatchEvent(ev("pointerup", 115));
+    await flush();
+    spy.mockRestore();
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush();
+    const order = (mocks.revise.mock.calls[0]![2].document.st.prompt_order as { character_id: number; order: { identifier: string }[] }[]).find((g) => g.character_id === 100001)!.order.map((o) => o.identifier);
+    expect(order.indexOf("clear")).toBeGreaterThan(order.indexOf("chatHistory"));
+  });
+});

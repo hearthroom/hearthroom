@@ -115,7 +115,8 @@ const inPrefix = (id: string) => {
 };
 const itemsOf = (side: "before" | "after"): ListItem[] => {
   const shown = groupOf(side);
-  const entry = (r: EntryRow): ListItem => ({ key: r.identifier, dropId: r.identifier, row: r });
+  // 上游把位置調到另一邊的條目（畫在這一區、實際排在對話記錄另一邊）：它前面不是能放進去的位置
+  const entry = (r: EntryRow): ListItem => ({ key: r.identifier, dropId: shownSide(r) === r.side ? r.identifier : "", row: r });
   if (side === "after" || q.value || !doc.value) return shown.map(entry);
   const byId = new Map(shown.map((r) => [r.identifier, r]));
   const items: ListItem[] = [];
@@ -412,8 +413,8 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
               <!-- 照真實送出順序（畫面規格 (a)）：由綺夢社提供的內容是鎖住的一列，插在它真正的位置 -->
               <ul>
                 <template v-for="it in itemsOf(side)" :key="it.key">
-                  <li v-if="it.row" :data-drag-id="it.row.identifier" :data-drop-id="it.dropId"
-                    :class="{ 'is-drop-before': dropBefore === it.dropId, 'is-dragging': reorder.dragging.value === it.row.identifier }">
+                  <li v-if="it.row" :data-drag-id="it.row.identifier" :data-drop-id="it.dropId || undefined"
+                    :class="{ 'is-drop-before': !!it.dropId && dropBefore === it.dropId, 'is-dragging': reorder.dragging.value === it.row.identifier }">
                     <!-- 把手：滑鼠直接拖、手機長按拖；鍵盤與輔助科技用條目選單的上移／下移，所以不進 Tab 順序 -->
                     <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true" data-testid="entry-drag" @pointerdown="reorder.start($event, it.row.identifier)">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>

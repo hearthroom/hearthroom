@@ -13,7 +13,7 @@ import type { DropTarget } from "@/lib/st-preset";
 const LONG_PRESS_MS = 300;
 const SLOP_PX = 8;
 const EDGE_PX = 56;
-const MAX_SPEED = 18;
+const MAX_SPEED = 12;
 
 function scrollParent(el: HTMLElement | null): HTMLElement | null {
   for (let e = el?.parentElement ?? null; e; e = e.parentElement) {
@@ -40,9 +40,11 @@ export function usePointerReorder(opts: { list: Ref<HTMLElement | null>; enabled
       if (y >= g.getBoundingClientRect().bottom && i < groups.length - 1) continue;
       const side = g.dataset.dropSide as "before" | "after";
       // 落點可以是任何一列（含鎖住的那幾列），只是被拖的那一列自己不算
-      const rows = [...g.querySelectorAll<HTMLElement>("[data-drop-id]")].filter((r) => r.dataset.dragId !== dragging.value);
-      const next = rows.find((r) => { const b = r.getBoundingClientRect(); return b.top + b.height / 2 > y; });
-      target.value = next ? { beforeId: next.dataset.dropId! } : { side };
+      const dropRows = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>("[data-drop-id]")].filter((r) => r.dataset.dragId !== dragging.value);
+      const next = dropRows(g).find((r) => { const b = r.getBoundingClientRect(); return b.top + b.height / 2 > y; });
+      // 一區最後一列再往下＝下一區最上面（例如對話記錄之前那區的最後一列下面，就是對話記錄之後）
+      const after = next ?? (groups[i + 1] ? dropRows(groups[i + 1]!)[0] : undefined);
+      target.value = after ? { beforeId: after.dataset.dropId! } : next === undefined && groups[i + 1] ? { side: groups[i + 1]!.dataset.dropSide as "before" | "after" } : { side };
       return;
     }
     target.value = null;
