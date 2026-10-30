@@ -28,3 +28,17 @@ it('從帳號選單叫她：選單開著時她出來，關了再淡出', () => {
   p.closeMenu(); p.updateArt();
   expect(p.el.classList.contains('suki-pet--away')).toBe(true);
 });
+
+it('從手機避讓頁的選單點了會說話的項目：回答留著，不被淡出收掉', () => {
+  pet.stop();
+  pet = new SukiPet({ base: '', skin: 'day', label: 'Suki', height: 132, line: (k: string) => k, mobile: true, reducedMotion: true, sukiArtInView: () => art,
+    phoneClearance: () => ({ top: 52, bottom: 844, obstacles: [] }) } as never);
+  p = pet as unknown as Pet;
+  p.driver = { state: { talking: false } };
+  document.body.append(p.el);
+  p.openFrom(null); p.updateArt();
+  expect(p.el.classList.contains('suki-pet--away')).toBe(false);
+  // 點了選單項目：選單收起、她留著說話
+  (p as unknown as { closeMenu: (keep: boolean) => void }).closeMenu(true); p.updateArt();
+  expect(p.el.classList.contains('suki-pet--away')).toBe(false);
+});

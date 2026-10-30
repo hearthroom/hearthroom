@@ -35,3 +35,9 @@ it('啾啾、站名旁的小頭像、她自己、標了 data-pet-stays 的區塊
   at('.x', new DOMRect(95, 100, 200, 200));
   expect(sukiArtInView()).toBe(false);
 });
+
+it('首頁新手簽到條的蘇綺頭像和我的頁簽到卡一樣算（PM 2026-10-30：簽到卡的頭像算）', () => {
+  document.body.innerHTML = '<div class="ns"><img class="ns__face" src="/mascot/suki-avatar.webp"></div>';
+  at('.ns__face', new DOMRect(16, 140, 44, 44));
+  expect(sukiArtInView()).toBe(true);
+});

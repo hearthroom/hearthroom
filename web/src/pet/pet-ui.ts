@@ -689,9 +689,9 @@ export class SukiPet {
   }
 
   // ---- 每一格 ----
-  /** 別的蘇綺在視野內就淡出（不擋點擊）；使用者從選單叫她、正拖著她時不躲 */
+  /** 別的蘇綺在視野內就淡出（不擋點擊）；使用者從選單叫她（選單收起後還在說回答時也算）、正拖著她時不躲 */
   private updateArt() {
-    this.hide(!!this.opts.sukiArtInView?.() && this.menuEl.hidden && !this.entryAwake && !this.drag, "art");
+    this.hide(!!this.opts.sukiArtInView?.() && this.menuEl.hidden && !this.entryAwake && !this.sidebarAwake && !this.drag, "art");
   }
   private frame(dt: number, now: number) {
     this.updateArt();
