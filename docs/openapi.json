@@ -18030,7 +18030,7 @@
         "description": "Lists shared presets, most used in the last 7 days first, then the newest. Test-account presets are visible only to their author. Requires `preset.read`.",
         "parameters": [
           {
-            "description": "`all` (default); `general` — presets with no tested models; or a model code from `GET /open/v1/models`, which matches presets tested on any variant of that model.",
+            "description": "`all` (default); `general` — presets with no tested models; a lane code, `model:<model>` or `series:<series>`. A value matches its model and its series, so a lane code also finds presets tested on its model or series.",
             "in": "query",
             "name": "model",
             "required": false,
@@ -31648,7 +31648,7 @@
               "type": "string"
             },
             "type": "array",
-            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general."
           },
           "createdAt": {
             "format": "date-time",
@@ -31895,7 +31895,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with.",
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general.",
             "type": "array"
           },
           "title": {
@@ -31937,7 +31937,7 @@
           },
           "recommendedModels": {
             "type": "array",
-            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with.",
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general.",
             "items": {
               "type": "string"
             }
@@ -32092,7 +32092,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with."
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general."
           }
         },
         "type": "object",
@@ -32329,7 +32329,7 @@
             "type": "string"
           },
           "recommendedModels": {
-            "description": "Model codes from `GET /open/v1/models` the author tested with, at most 50, each up to 128 bytes. A label only: it never limits which model the preset can be used with.",
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general.",
             "items": {
               "type": "string"
             },
@@ -33034,7 +33034,7 @@
             "type": "string"
           },
           "recommendedModels": {
-            "description": "Replaces the tested models when present; omit to keep them. An empty list marks the preset as general.",
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general.",
             "items": {
               "type": "string"
             },
@@ -33144,7 +33144,7 @@
             "type": "string"
           },
           "recommendedModels": {
-            "description": "Tested models; empty means general.",
+            "description": "Tested models, at most 50: `series:<series>` or `model:<model>`, using the group and family names from `GET /open/v1/models`. A lane code sent here is stored as its model. A label only: it never limits which model the preset can be used with. Empty means general.",
             "items": {
               "type": "string"
             },
