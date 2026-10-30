@@ -1148,6 +1148,8 @@ export class SukiPet {
       const m = pullMode(this.side, dx, dy);
       if (!m) return;
       d.mode = m; d.moved = true;
+      // 沿邊拖到哪就是她的新高度（不等下一格的讓路判斷：拖得快時下一格已經放開了）
+      if (m === "slide") this.standbyY = null;
       // 長按開了選單之後才拉：一樣算拉，放開時要照拉的結果走
       clearTimeout(this.pressTimer); this.closeMenu(); this.pressed = false;
       this.el.classList.add("suki-pet--held");

@@ -49,3 +49,13 @@ it('讓開之後點她或往內拉，不會把讓開的高度當成她的位置'
   p.drag = { mode: 'slide' }; p.updateStandby();
   expect(p.standbyY).toBeNull();
 });
+
+it('很快的沿邊拖（同一格內放開）也算換位置', () => {
+  space = { top: 52, bottom: 844, obstacles: [full(470, 520)] };
+  p.updateStandby();
+  expect(p.standbyY).toBe(478);
+  const d = { ox: 380, oy: 600, s0: 0, y0: p.pos.y, moved: false } as Record<string, unknown>;
+  (p as unknown as { peekDrag: (e: object, d: object) => void }).peekDrag({ clientX: 380, clientY: 660 }, d);
+  expect(d.mode).toBe('slide');
+  expect(p.standbyY).toBeNull();
+});
