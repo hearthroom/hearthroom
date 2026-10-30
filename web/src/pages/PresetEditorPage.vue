@@ -618,7 +618,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__list, .preset-editor__detail, .preset-editor__section { min-width: 0; }
 .preset-editor__ghost { min-height: 320px; }
 .preset-editor__list { padding: var(--s-3); display: grid; gap: var(--s-3); }
-.preset-editor__list > p { margin: 0; padding-inline: var(--s-2); }
+.preset-editor__list > p { margin: 0; padding-inline: var(--s-2); text-wrap: pretty; }
 .preset-editor__listHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding-inline: var(--s-2); }
 .preset-editor__listHead h2 { margin: 0; font-size: 16px; }
 .preset-editor__empty { padding: var(--s-3) var(--s-2); display: grid; gap: var(--s-1); }
