@@ -16915,7 +16915,7 @@
                 }
               }
             },
-            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded. `preset_binding_changed` — the content was replaced; reload."
+            "description": "`preset_conflict`, with `reason`: `preset_revision_conflict` — the expected binding version is stale; `operation_active` — a reply is in progress in this conversation, so retry after it finishes. `preset_revision_unavailable` — the chosen revision can no longer be loaded. `preset_binding_changed` — the content was replaced; reload. `preset_scope_changed` — the request did not say `scope: card`; reload to the current client."
           },
           "400": {
             "content": {
@@ -32363,6 +32363,13 @@
             ],
             "format": "uuid",
             "description": "The preset to apply; required with `preset`."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "card"
+            ],
+            "description": "Required: `card`. The choice applies to every save of this card, from its next reply."
           }
         },
         "type": "object",
@@ -32370,7 +32377,8 @@
         "required": [
           "roleId",
           "mode",
-          "expectedVersion"
+          "expectedVersion",
+          "scope"
         ]
       },
       "PresetAnalyzeResponse": {
