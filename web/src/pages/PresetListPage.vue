@@ -8,7 +8,8 @@
  * 刪除不一定真的刪：還有對話在用、或發布過的版本，上游只會封存，原本的對話照常。
  * 能刪還是只能封存由上游的 allowedActions 決定，結果照回來的 disposition 講，不自己猜。
  *
- * P2 分享：頁首下三格「我的／喜愛與用過／公開」，選中的那格記在網址的 ?tab=（重新整理還在）。
+ * P2 分享：頁首下三格「我的｜喜愛與用過｜預設庫」（PM 2026-10-30）。前兩格是這一頁的分頁（?tab=，重新整理還在），
+ * 預設庫是自己的一頁（/presets/library）；舊的 ?tab=public 連結轉過去。
  * 「我的」的選單多了公開／改回私人；改回私人不另外確認（PM 2026-10-30），完成後 toast 一行說明。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
@@ -26,7 +27,7 @@ import PresetCopyDialog from "@/components/preset/PresetCopyDialog.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetPublishSheet from "@/components/preset/PresetPublishSheet.vue";
 import PresetShelfTab from "@/components/preset/PresetShelfTab.vue";
-import PresetLibraryTab from "@/components/preset/PresetLibraryTab.vue";
+import PresetTabs from "@/components/preset/PresetTabs.vue";
 
 const { t } = useI18n();
 const { lp } = useLocalePath();
@@ -49,10 +50,7 @@ const exporting = ref<PresetSummary | null>(null);
 const copying = ref<PresetSummary | null>(null);
 
 const route = useRoute();
-const TABS = ["mine", "fav", "public"] as const;
-type Tab = (typeof TABS)[number];
-const tab = computed<Tab>(() => (TABS as readonly string[]).includes(String(route.query.tab)) ? (route.query.tab as Tab) : "mine");
-const tabLink = (k: Tab) => ({ path: lp("/me/presets"), query: k === "mine" ? {} : { tab: k } });
+const tab = computed<"mine" | "fav">(() => (route.query.tab === "fav" ? "fav" : "mine"));
 const declaration = ref("");
 const publishing = ref<PresetSummary | null>(null);
 const toast = ref("");
@@ -183,6 +181,12 @@ const closeMenu = (e: Event) => { if (!(e.target as HTMLElement).closest?.(".pre
 const escMenu = (e: KeyboardEvent) => { if (e.key === "Escape") menu.value = ""; };
 
 onMounted(() => {
+  // 舊的「公開」分頁已經是預設庫那一頁：篩選與搜尋一起帶過去
+  if (route.query.tab === "public") {
+    const { tab: _tab, ...rest } = route.query;
+    void router.replace({ path: lp("/presets/library"), query: rest });
+    return;
+  }
   document.title = pageTitle(t("preset.title"));
   document.addEventListener("click", closeMenu);
   document.addEventListener("keydown", escMenu);
@@ -204,17 +208,11 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
       </div>
     </header>
 
-    <nav v-if="!needsConsent" class="seg presets__tabs" :aria-label="$t('preset.share.tabs.label')" data-testid="preset-tabs">
-      <RouterLink
-        v-for="k in TABS" :key="k" :to="tabLink(k)" replace class="seg__item presets__tab" :class="{ 'seg__item--on': tab === k }"
-        :aria-current="tab === k ? 'page' : undefined" :data-testid="`preset-tab-${k}`"
-      >{{ $t(`preset.share.tabs.${k}`) }}</RouterLink>
-    </nav>
+    <PresetTabs v-if="!needsConsent" :current="tab" />
 
     <PresetReauth v-if="needsConsent" @confirm="reauthorize" @cancel="router.push(lp('/me'))" />
 
-    <PresetShelfTab v-else-if="tab === 'fav'" :token="token" @toast="say" @consent="shareConsent" @browse="router.replace(tabLink('public'))" />
-    <PresetLibraryTab v-else-if="tab === 'public'" :token="token" @toast="say" @consent="shareConsent" />
+    <PresetShelfTab v-else-if="tab === 'fav'" :token="token" @toast="say" @consent="shareConsent" @browse="router.push(lp('/presets/library'))" />
 
     <template v-else>
       <p class="subtle presets__mine-note" data-testid="preset-mine-note">{{ $t("preset.share.mine.note") }}</p>
@@ -319,8 +317,6 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__menu button:hover:not(:disabled) { background: var(--surface-2); }
 .presets__menu button:disabled { opacity: .45; cursor: not-allowed; }
 .presets__danger { color: var(--danger) !important; }
-.presets__tabs { display: flex; justify-self: stretch; }
-.presets__tab { flex: 1; display: flex; align-items: center; justify-content: center; height: var(--h-md); text-decoration: none; }
 .presets__chip--public { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
 /* 已下架是出事的狀態，不是類型：用站上錯誤提示（.notice--error）同一組危險淡底 */
 .presets__chip--down { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-weight: 500; }

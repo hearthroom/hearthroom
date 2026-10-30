@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 別人公開的預設，唯讀：條目、取樣參數、測試過的模型、來源與作者。
+ * 一份公開預設的詳情（/presets/:id），唯讀：條目、取樣參數、測試過的模型、來源與作者。
  *
- * 網頁上沒有「套用」：套用只在遊玩畫布的回覆偏好裡為某一張卡做（卡片層，沿用 P1 的決定），
- * 這裡用一行字指過去。主行動是加入喜愛——加了之後在畫布選擇器的「喜愛與用過」就找得到。
+ * 主行動「套用到某張卡」（PM 2026-10-30 資訊架構）：選一張玩過的卡，設成那張卡的預設；
+ * 次要是加入喜愛、複製連結（分享到 Discord 等，點開就是這一頁），檢舉降為最低權重。
  * 沒有匯出、沒有另存副本（owner 2026-10-30：不做 fork）。
  *
  * 看得到的條件由上游判斷（公開中、在我的喜愛與用過裡，或我是作者），否則 404。
@@ -23,6 +23,7 @@ import { paramLabelKey } from "@/components/preset/preset-params";
 import { authorLabel } from "@/components/preset/preset-share";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetReportDialog from "@/components/preset/PresetReportDialog.vue";
+import PresetCardPickSheet from "@/components/preset/PresetCardPickSheet.vue";
 
 const { t, te } = useI18n();
 const route = useRoute();
@@ -37,11 +38,10 @@ const notFound = ref(false);
 const failed = ref(false);
 const favBusy = ref(false);
 const reporting = ref(false);
-const showAll = ref(false);
+const picking = ref(false);
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-const PREVIEW = 4;
 const item = computed(() => data.value?.item ?? null);
 /** 只列會執行的自訂條目：數量對得上上方的「共 N 條」；由綺夢社提供的那幾格（歷史、角色卡）不在這裡 */
 const entries = computed(() => {
@@ -51,14 +51,13 @@ const entries = computed(() => {
     .filter((r) => r.slot !== "F" && r.enabled)
     .map((r) => ({ row: r, unsupported: compat.get(r.identifier)?.uiStatus === "unsupported" }));
 });
-const shown = computed(() => (showAll.value ? entries.value : entries.value.slice(0, PREVIEW)));
 const params = computed(() => Object.entries(data.value?.parameters ?? {})
   .map(([k, v]) => {
     const key = paramLabelKey(k as ParamKey);
     return te(key) ? `${t(key)} ${typeof v === "number" ? v : String(v)}` : "";
   })
   .filter(Boolean));
-/** 數的是下面列得出來的條目（含收在「看其餘」裡的），不是上游的 enabledEntryCount：那個連綺夢社提供的幾格也算進去，對不上列表 */
+/** 數的是下面列出來的條目，不是上游的 enabledEntryCount：那個連綺夢社提供的幾格也算進去，對不上列表 */
 const summary = computed(() => [t("preset.share.detail.summary", { n: whole(entries.value.length) }, entries.value.length), ...params.value].join(" · "));
 const roleLabel = (role?: string) => t(`preset.entry.role.${role === "user" || role === "assistant" ? role : "system"}`);
 
@@ -107,20 +106,37 @@ async function toggleFavorite() {
 
 function reported() { if (data.value) data.value.reportedByMe = true; }
 
-/** 從列表點進來就回到原本那一格（公開或喜愛與用過），直接打開的才回到公開 */
-function back(e: MouseEvent) {
-  const prev = (window.history.state as { back?: string } | null)?.back;
-  if (prev && prev.includes("/me/presets")) { e.preventDefault(); router.back(); }
+function applied(card: string) {
+  picking.value = false;
+  say(t("preset.share.cardPick.applied", { name: item.value?.title ?? "", card }));
 }
 
-watch(presetId, () => { showAll.value = false; void load(); });
+/** 分享出去的是這一頁的網址（含語言前綴），點開就是詳情 */
+async function copyLink() {
+  const url = `${window.location.origin}${lp(`/presets/${presetId.value}`)}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    say(t("preset.share.detail.linkCopied"));
+  } catch {
+    // 剪貼簿被擋（非安全來源、權限）：把網址顯示出來讓人自己複製
+    say(url);
+  }
+}
+
+/** 從預設庫或喜愛與用過點進來就回到原本那一頁（保留篩選與捲動），直接打開的才去預設庫 */
+function back(e: MouseEvent) {
+  const prev = (window.history.state as { back?: string } | null)?.back;
+  if (prev && (prev.includes("/me/presets") || prev.includes("/presets/library"))) { e.preventDefault(); router.back(); }
+}
+
+watch(presetId, () => void load());
 onMounted(() => { document.title = pageTitle(t("preset.nav")); void load(); });
 onBeforeUnmount(() => clearTimeout(toastTimer));
 </script>
 
 <template>
   <div class="page shared">
-    <RouterLink :to="{ path: lp('/me/presets'), query: { tab: 'public' } }" class="shared__back link" data-testid="shared-back" @click="back">
+    <RouterLink :to="lp('/presets/library')" class="shared__back link" data-testid="shared-back" @click="back">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
       {{ $t("preset.share.detail.back") }}
     </RouterLink>
@@ -152,26 +168,34 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
       </header>
 
       <aside class="shared__side">
-        <div v-if="!item.mine" class="shared__actions">
-          <button
-            type="button" class="btn btn--lg shared__fav" :class="item.favorited ? 'shared__fav--on' : 'btn--primary'" :aria-pressed="item.favorited"
-            :disabled="favBusy" data-testid="shared-fav" @click="toggleFavorite"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" :fill="item.favorited ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.3-9.4C1.4 7.2 3.5 4 6.8 4c2 0 3.6 1.1 5.2 3.1C13.6 5.1 15.2 4 17.2 4c3.3 0 5.4 3.2 4.1 6.6C19.5 15.4 12 20 12 20z" /></svg>
-            {{ $t(item.favorited ? "preset.share.fav.on" : "preset.share.fav.add") }}
-          </button>
-          <span v-if="data.reportedByMe" class="shared__reported" role="status" data-testid="shared-reported">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4.5 4.5L19 7" /></svg>
-            {{ $t("preset.share.report.reported") }}
-          </span>
-          <button v-else type="button" class="btn btn--lg btn--ghost shared__report" data-testid="shared-report" @click="reporting = true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5" /></svg>
-            {{ $t("preset.share.report.action") }}
-          </button>
+        <div class="shared__actions">
+          <button type="button" class="btn btn--primary btn--lg shared__apply" data-testid="shared-apply" @click="picking = true">{{ $t("preset.share.detail.applyAction") }}</button>
+          <div class="shared__minor">
+            <button
+              v-if="!item.mine" type="button" class="btn btn--lg shared__fav" :class="{ 'shared__fav--on': item.favorited }" :aria-pressed="item.favorited"
+              :disabled="favBusy" data-testid="shared-fav" @click="toggleFavorite"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" :fill="item.favorited ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.3-9.4C1.4 7.2 3.5 4 6.8 4c2 0 3.6 1.1 5.2 3.1C13.6 5.1 15.2 4 17.2 4c3.3 0 5.4 3.2 4.1 6.6C19.5 15.4 12 20 12 20z" /></svg>
+              {{ $t(item.favorited ? "preset.share.fav.on" : "preset.share.fav.add") }}
+            </button>
+            <RouterLink v-else :to="lp(`/me/presets/${item.presetId}`)" class="btn btn--lg shared__edit">{{ $t("preset.row.edit") }}</RouterLink>
+            <button type="button" class="btn btn--lg shared__copy" data-testid="shared-copy" @click="copyLink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+              {{ $t("preset.share.detail.copyLink") }}
+            </button>
+            <template v-if="!item.mine">
+              <span v-if="data.reportedByMe" class="shared__reported" role="status" data-testid="shared-reported">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4.5 4.5L19 7" /></svg>
+                <span class="shared__reportText">{{ $t("preset.share.report.reported") }}</span>
+              </span>
+              <!-- 檢舉是最低權重：無框；手機只留圖示（aria-label 有字），桌機帶字 -->
+              <button v-else type="button" class="btn btn--lg btn--ghost shared__report" :aria-label="$t('preset.share.report.action')" data-testid="shared-report" @click="reporting = true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5" /></svg>
+                <span class="shared__reportText" aria-hidden="true">{{ $t("preset.share.report.action") }}</span>
+              </button>
+            </template>
+          </div>
         </div>
-        <RouterLink v-else :to="lp(`/me/presets/${item.presetId}`)" class="btn btn--lg shared__edit">{{ $t("preset.row.edit") }}</RouterLink>
-
-        <p class="subtle shared__apply" data-testid="shared-apply">{{ $t("preset.share.detail.apply") }}</p>
 
         <dl class="panel shared__facts">
           <div>
@@ -190,10 +214,6 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             <dt>{{ $t("preset.share.detail.source.label") }}</dt>
             <dd class="shared__wrap">{{ item.attribution }}</dd>
           </div>
-          <div>
-            <dt>{{ $t("preset.share.detail.price.label") }}</dt>
-            <dd>{{ $t("preset.share.detail.price.free") }}</dd>
-          </div>
         </dl>
       </aside>
 
@@ -201,7 +221,7 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
         <h2 class="shared__h2">{{ $t("preset.share.detail.content") }}</h2>
         <p class="subtle" data-testid="shared-summary">{{ summary }}</p>
         <ul class="shared__entries">
-          <li v-for="{ row, unsupported } in shown" :key="row.identifier" data-testid="shared-entry">
+          <li v-for="{ row, unsupported } in entries" :key="row.identifier" data-testid="shared-entry">
             <details class="shared__entry">
               <summary>
                 <span class="shared__entryName">{{ row.prompt.name || $t("preset.entry.untitled") }}</span>
@@ -215,14 +235,12 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             </details>
           </li>
         </ul>
-        <button v-if="!showAll && entries.length > PREVIEW" type="button" class="btn shared__more" data-testid="shared-more" @click="showAll = true">
-          {{ $t("preset.share.detail.more", { n: whole(entries.length - PREVIEW) }) }}
-        </button>
       </section>
     </div>
 
     <PresetReportDialog v-if="reporting && item" :preset-id="item.presetId" :title="item.title" :token="token" @close="reporting = false" @reported="reported" @consent="consentNeeded" />
-    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
+    <PresetCardPickSheet v-if="picking && item" :preset-id="item.presetId" :preset-name="item.title" :token="token" @close="picking = false" @applied="applied" @consent="consentNeeded" />
+    <div class="toast" role="status" :hidden="!toast" data-testid="shared-toast">{{ toast }}</div>
   </div>
 </template>
 
@@ -237,18 +255,22 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__title { margin: 0; font-size: clamp(24px, 4vw, 30px); overflow-wrap: anywhere; }
 .shared__by { margin: 0; overflow-wrap: anywhere; }
 /* 韓文在詞中間斷行會剩一個音節掛在下一行：照站上 ConfirmDialog、CoachSpot 的做法整詞換行 */
-:lang(ko) .shared__unlisted, :lang(ko) .shared__apply, :lang(ko) .shared__facts dd, :lang(ko) .shared__card p { word-break: keep-all; }
+:lang(ko) .shared__unlisted, :lang(ko) .shared__facts dd, :lang(ko) .shared__card p { word-break: keep-all; }
 .shared__unlisted { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
 .shared__chip { height: auto; min-height: 22px; padding-block: 2px; cursor: default; overflow-wrap: anywhere; }
 .shared__chip:hover { background: var(--surface-2); color: var(--text-2); }
 .shared__chip--strong, .shared__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
-.shared__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.shared__actions > * { flex: 1 1 0; min-width: fit-content; }
-.shared__fav, .shared__report, .shared__edit { gap: var(--s-2); }
+.shared__actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+.shared__apply { width: 100%; }
+/* 手機：加入喜愛、複製連結並排，檢舉只留圖示；放不下就換行，不切掉按鈕 */
+.shared__minor { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.shared__minor > .btn:not(.shared__report) { flex: 1 1 0; min-width: fit-content; }
+.shared__fav, .shared__copy, .shared__report, .shared__edit { gap: var(--s-2); }
+.shared__report { flex: none; width: var(--h-lg); padding: 0; color: var(--text-2); }
+.shared__reportText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .shared__fav--on { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
 .shared__fav--on:hover { background: var(--accent-soft); }
-.shared__reported { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-1); min-height: var(--h-lg); font-size: 14px; color: var(--text-2); }
-.shared__apply { margin: 0; line-height: 1.6; text-wrap: pretty; }
+.shared__reported { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-1); min-height: var(--h-lg); padding: 0 var(--s-2); font-size: 14px; color: var(--text-2); }
 .shared__facts { margin: 0; padding: var(--s-4); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
 .shared__facts div { display: grid; gap: var(--s-1); }
 .shared__facts dt { font-size: 12.5px; color: var(--text-3); }
@@ -267,7 +289,6 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__chevron { color: var(--text-3); transition: rotate var(--dur) var(--ease); }
 .shared__entry[open] .shared__chevron { rotate: 180deg; }
 .shared__entryBody { margin: 0 0 var(--s-3); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
-.shared__more { justify-self: start; }
 .shared__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }
 .shared__card p { margin: 0; }
 .shared__ghostTitle { height: 34px; width: 60%; border-radius: var(--r-sm); }
@@ -276,7 +297,13 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__ghostContent { height: 280px; }
 @media (min-width: 861px) {
   .shared__grid { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "head side" "content side"; grid-template-rows: auto 1fr; align-items: start; column-gap: var(--s-6); }
-  .shared__actions { flex-direction: column; }
-  .shared__actions > * { flex: none; }
+  /* 桌機側欄：加入喜愛一整排，複製連結與檢舉降成無框的一排 */
+  .shared__actions { padding: var(--s-4); background: var(--surface); border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); }
+  .shared__minor { display: grid; grid-template-columns: 1fr 1fr; }
+  .shared__minor > .shared__fav, .shared__minor > .shared__edit { grid-column: 1 / -1; }
+  .shared__copy, .shared__report, .shared__reported { height: var(--h-md); min-height: var(--h-md); background: transparent; border-color: transparent; color: var(--text-2); font-size: 14px; }
+  .shared__copy:hover, .shared__report:hover { background: var(--surface-2); }
+  .shared__report { width: auto; padding: 0 var(--s-3); }
+  .shared__reportText { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
 }
 </style>

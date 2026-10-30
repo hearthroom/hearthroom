@@ -10,11 +10,14 @@ import type { PresetLibraryDetail, PresetLibraryItem, PresetSummary } from "../s
 import { isNew } from "../src/components/preset/preset-share";
 import PresetListPage from "../src/pages/PresetListPage.vue";
 import PresetLibraryPage from "../src/pages/PresetLibraryPage.vue";
+import PresetLibraryHomePage from "../src/pages/PresetLibraryHomePage.vue";
 
 const mocks = vi.hoisted(() => ({
   token: vi.fn(), confirm: vi.fn(), models: vi.fn(),
   list: vi.fn(), publish: vi.fn(), unpublish: vi.fn(), library: vi.fn(), shelf: vi.fn(), detail: vi.fn(), favorite: vi.fn(), report: vi.fn(),
+  hot: vi.fn(), binding: vi.fn(), apply: vi.fn(), conversations: vi.fn(),
 }));
+vi.mock("../src/lib/library", async (original) => ({ ...(await original<typeof import("../src/lib/library")>()), fetchConversations: mocks.conversations }));
 vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token }));
 vi.mock("../src/lib/confirm", async (original) => ({ ...(await original<typeof import("../src/lib/confirm")>()), confirmDialog: mocks.confirm }));
 vi.mock("../src/lib/presets", async (original) => ({
@@ -22,6 +25,7 @@ vi.mock("../src/lib/presets", async (original) => ({
   listPresets: mocks.list, publishPreset: mocks.publish, unpublishPreset: mocks.unpublish,
   listPresetLibrary: mocks.library, listPresetShelf: mocks.shelf, fetchLibraryPreset: mocks.detail,
   favoritePreset: mocks.favorite, reportPreset: mocks.report, fetchModelCatalog: mocks.models,
+  listPresetLibraryHot: mocks.hot, fetchCardPreset: mocks.binding, applyPresetToCard: mocks.apply,
 }));
 
 let app: ReturnType<typeof createApp> | undefined;
@@ -43,14 +47,18 @@ async function mount(path: string) {
   mocks.token.mockResolvedValue("tok");
   mocks.confirm.mockResolvedValue(true);
   mocks.models.mockResolvedValue([{ group: "Gemini", families: ["Gemini 4"] }, { group: "DeepSeek", families: ["DeepSeek V4"] }]);
+  if (!mocks.hot.getMockImplementation()) mocks.hot.mockResolvedValue({ items: [] });
+  if (!mocks.library.getMockImplementation()) mocks.library.mockResolvedValue({ items: [] });
   const pinia = createPinia(); setActivePinia(pinia);
   const session = useSession();
   session.me = { accountNumId: 7, nickName: "Fixture", avatar: "" };
   session.profile = { identities: [{ provider: "harbor", externalId: 7 }] } as never;
+  vi.spyOn(session, "accessToken").mockResolvedValue("site-tok");
   const stub: Component = { template: "<div />" };
   router = createRouter({ history: createMemoryHistory(), routes: [
     { path: "/me/presets", component: PresetListPage },
-    { path: "/preset-library/:presetId", component: PresetLibraryPage },
+    { path: "/presets/library", component: PresetLibraryHomePage },
+    { path: "/presets/:presetId", component: PresetLibraryPage },
     { path: "/:p(.*)*", component: stub },
   ] });
   await router.push(path);
@@ -77,34 +85,76 @@ const item = (over: Partial<PresetLibraryItem> = {}): PresetLibraryItem => ({
 });
 
 describe("預設頁的三個分類", () => {
-  it("預設是「我的」；切到公開記在網址上，重新整理還在", async () => {
+  it("我的｜喜愛與用過｜預設庫：前兩格是這一頁的分頁，預設庫是自己的一頁", async () => {
     mocks.list.mockResolvedValue(mineList([summary()]));
     mocks.library.mockResolvedValue({ items: [item()] });
     await mount("/me/presets");
     expect($("[data-testid=preset-tab-mine]").getAttribute("aria-current")).toBe("page");
     expect($("[data-testid=preset-row]")).not.toBeNull();
-    $("[data-testid=preset-tab-public]").click();
+    expect($("[data-testid=preset-tab-library]").textContent?.trim()).toBe(t("preset.share.tabs.public"));
+    $("[data-testid=preset-tab-library]").click();
     await flush();
-    expect(router.currentRoute.value.query.tab).toBe("public");
-    expect($("[data-testid=share-public]")).not.toBeNull();
-    // 只有「我的」有匯入與新增
+    expect(router.currentRoute.value.path).toBe("/presets/library");
+    expect($("[data-testid=library-list]")).not.toBeNull();
+    expect($("[data-testid=preset-tab-library]").getAttribute("aria-current")).toBe("page");
+    // 管理動作只在「我的」
     expect($("[data-testid=preset-create]")).toBeNull();
-    app!.unmount(); root.remove();
-    await mount("/me/presets?tab=public");
-    expect($("[data-testid=preset-tab-public]").getAttribute("aria-current")).toBe("page");
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "all", q: "", offset: 0 });
+  });
+
+  it("舊的「公開」分頁連結轉到預設庫，篩選一起帶過去", async () => {
+    mocks.list.mockResolvedValue(mineList([summary()]));
+    await mount("/me/presets?tab=public&model=general");
+    expect(router.currentRoute.value.fullPath).toBe("/presets/library?model=general");
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "general", q: "", sort: "hot", offset: 0 });
+  });
+
+  it("舊的詳情網址 /preset-library/:id 轉到 /presets/:id", async () => {
+    const { router: appRouter } = await import("../src/router");
+    const record = appRouter.getRoutes().find((r) => r.path.endsWith("/preset-library/:presetId"))!;
+    const redirect = record.redirect as (to: unknown) => { path: string };
+    expect(redirect({ params: { presetId: "abc" }, query: {}, hash: "", path: "/preset-library/abc" }).path).toBe("/presets/abc");
+    expect(redirect({ params: { presetId: "abc", locale: "en" }, query: {}, hash: "", path: "/en/preset-library/abc" }).path).toBe("/en/presets/abc");
   });
 });
 
-describe("公開列表", () => {
+describe("預設庫首頁：熱門", () => {
+  it("熱門區依篩選讀上游；補滿用的最新公開標新公開，其餘寫使用人數與喜愛數", async () => {
+    mocks.hot.mockResolvedValue({ items: [item({ usesLast7d: 342, favoriteCount: 58 }), item({ presetId: "s9", title: "古風章回", usesLast7d: 0, favoriteCount: 0, fresh: true })] });
+    await mount("/presets/library");
+    expect(mocks.hot).toHaveBeenLastCalledWith("tok", "all");
+    const cards = $$("[data-testid=library-hot-card]");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]!.textContent).toContain(t("preset.share.hot.stats", { n: "342", m: "58" }));
+    expect(cards[1]!.querySelector("[data-testid=library-fresh]")!.textContent).toBe(t("preset.share.new"));
+    expect(cards[1]!.getAttribute("href")).toBe("/presets/s9");
+    $("[data-testid=share-filter-general]").click();
+    await flush();
+    expect(mocks.hot).toHaveBeenLastCalledWith("tok", "general");
+  });
+
+  it("沒有熱門就不出這一區；全部預設可切最新，排序記在網址上", async () => {
+    mocks.hot.mockResolvedValue({ items: [] });
+    mocks.library.mockResolvedValue({ items: [item()] });
+    await mount("/presets/library");
+    expect($("[data-testid=library-hot]")).toBeNull();
+    $("[data-testid=library-sort-new]").click();
+    await flush();
+    expect(router.currentRoute.value.query.sort).toBe("new");
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "all", q: "", sort: "new", offset: 0 });
+    // 換排序不重抓熱門
+    expect(mocks.hot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("預設庫首頁：全部預設", () => {
   it("預設全部；點通用、選模型、搜尋都重新向上游要，條件放在網址上", async () => {
     mocks.library.mockResolvedValue({ items: [item()] });
-    await mount("/me/presets?tab=public");
+    await mount("/presets/library");
     expect($("[data-testid=share-filter-all]").getAttribute("aria-pressed")).toBe("true");
     $("[data-testid=share-filter-general]").click();
     await flush();
     expect(router.currentRoute.value.query.model).toBe("general");
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "general", q: "", offset: 0 });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "general", q: "", sort: "hot", offset: 0 });
 
     // 網頁沒有目前的模型：選單（跟編輯器同一個）只列系列與模型兩層，單選；值照原字送 model=
     const pick = $<HTMLInputElement>("#share-filter-model");
@@ -116,7 +166,7 @@ describe("公開列表", () => {
     ]);
     options()[1]!.click(); await flush();
     expect(router.currentRoute.value.query.model).toBe("model:Gemini 4");
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "", offset: 0 });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "", sort: "hot", offset: 0 });
     // 單選：選到的值在框裡，不在框上方另起一列標籤
     expect(pick.value).toBe("Gemini 4");
     expect($("[data-testid=model-chip]")).toBeNull();
@@ -126,12 +176,12 @@ describe("公開列表", () => {
     search.dispatchEvent(new Event("input"));
     await wait(350);
     await flush();
-    expect(router.currentRoute.value.query).toMatchObject({ tab: "public", model: "model:Gemini 4", q: "Aster" });
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "Aster", offset: 0 });
+    expect(router.currentRoute.value.query).toMatchObject({ model: "model:Gemini 4", q: "Aster" });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "model:Gemini 4", q: "Aster", sort: "hot", offset: 0 });
     // 選整個系列送 series:；拿掉選的值就回到全部
     pick.focus(); pick.dispatchEvent(new Event("focus")); await flush();
     options().find((o) => o.textContent?.includes("DeepSeek") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "series:DeepSeek", q: "Aster", offset: 0 });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "series:DeepSeek", q: "Aster", sort: "hot", offset: 0 });
     expect(pick.value).toBe(t("preset.models.series", { name: "DeepSeek" }));
     $<HTMLButtonElement>("[data-testid=model-pick-clear]").click(); await flush();
     expect(router.currentRoute.value.query.model).toBeUndefined();
@@ -144,7 +194,7 @@ describe("公開列表", () => {
       item({ presetId: "s2", title: "新來的", usesLast7d: 0, publishedAt: iso(2 * DAY), recommendedModels: [] }),
       item({ presetId: "s3", title: "沒人用", usesLast7d: 0, publishedAt: iso(20 * DAY) }),
     ] });
-    await mount("/me/presets?tab=public");
+    await mount("/presets/library");
     const rows = $$("[data-testid=share-row]");
     expect(rows).toHaveLength(3);
     expect(rows[0]!.textContent).toContain("Aster");
@@ -161,7 +211,7 @@ describe("公開列表", () => {
   it("按 ♥ 加入喜愛：按鈕變成選中，toast 一行；自己的預設沒有 ♥", async () => {
     mocks.library.mockResolvedValue({ items: [item(), item({ presetId: "own", mine: true })] });
     mocks.favorite.mockResolvedValue({ favorited: true });
-    await mount("/me/presets?tab=public");
+    await mount("/presets/library");
     const favs = $$("[data-testid=share-fav]");
     expect(favs).toHaveLength(1);
     expect($$("[data-testid=share-row]")[1]!.textContent).toContain(t("preset.share.tabs.mine"));
@@ -175,21 +225,21 @@ describe("公開列表", () => {
 
   it("滿一頁才給載入更多，下一頁從已載入的筆數接著要", async () => {
     mocks.library.mockResolvedValueOnce({ items: Array.from({ length: 20 }, (_, i) => item({ presetId: `s${i}` })) }).mockResolvedValueOnce({ items: [item({ presetId: "last" })] });
-    await mount("/me/presets?tab=public");
+    await mount("/presets/library");
     $("[data-testid=share-more]").click();
     await flush();
-    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "all", q: "", offset: 20 });
+    expect(mocks.library).toHaveBeenLastCalledWith("tok", { model: "all", q: "", sort: "hot", offset: 20 });
     expect($$("[data-testid=share-row]")).toHaveLength(21);
     expect($("[data-testid=share-more]")).toBeNull();
   });
 
   it("沒有符合的說明換條件；讀不到的給重新載入", async () => {
     mocks.library.mockResolvedValueOnce({ items: [] });
-    await mount("/me/presets?tab=public&q=zzz");
+    await mount("/presets/library?q=zzz");
     expect($("[data-testid=share-public-empty]").textContent).toContain(t("preset.share.empty.public"));
     app!.unmount(); root.remove();
     mocks.library.mockRejectedValueOnce(new ApiError(503, "x", "temporarily_unavailable"));
-    await mount("/me/presets?tab=public");
+    await mount("/presets/library");
     expect($("[role=alert]").textContent).toContain(t("preset.share.error.load"));
   });
 });
@@ -211,7 +261,7 @@ describe("喜愛與用過", () => {
     // 列表上只留標示加一句短的，長說明在詳情頁
     expect(gone.textContent).toContain(t("preset.share.unlisted.short"));
     expect(gone.textContent).not.toContain(t("preset.share.unlisted.hint"));
-    expect(gone.querySelector("a")!.getAttribute("href")).toBe("/preset-library/gone");
+    expect(gone.querySelector("a")!.getAttribute("href")).toBe("/presets/gone");
   });
 
   it("已不公開的取消喜愛會找不回來：先確認；不取消就什麼都不送，確認了就從清單拿掉", async () => {
@@ -253,7 +303,7 @@ describe("喜愛與用過", () => {
     expect($("[data-testid=share-shelf-empty]").textContent).toContain(t("preset.share.empty.fav.title"));
     $("[data-testid=share-browse]").click();
     await flush();
-    expect(router.currentRoute.value.query.tab).toBe("public");
+    expect(router.currentRoute.value.path).toBe("/presets/library");
   });
 });
 
@@ -434,25 +484,24 @@ describe("公開預設詳情", () => {
     ...over,
   });
 
-  it("唯讀內容：啟用的條目、取樣參數、測試過的模型與作者；沒有套用鈕，只有一行說明", async () => {
+  it("唯讀內容：啟用的條目全部列出、取樣參數、測試過的模型與作者；主行動是套用到某張卡", async () => {
     // 上游的 enabledEntryCount 連綺夢社提供的格也算；畫面上的數字要跟列出來的條目一致
     mocks.detail.mockResolvedValue(detail({}, { enabledEntryCount: 9, attribution: "原作者 A" }));
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     expect(mocks.detail).toHaveBeenCalledWith("tok", "s1");
     expect($("[data-testid=shared-title]").textContent).toBe("電影感長篇");
     expect(root.textContent).toContain("Aster");
     expect($("[data-testid=shared-summary]").textContent).toBe(`${t("preset.share.detail.summary", { n: "5" }, 5)} · Temperature 0.9 · Top P 0.95`);
-    // 只列會執行的：關掉的與歷史那格不列；先顯示四條
-    expect($$("[data-testid=shared-entry]").map((e) => e.querySelector(".shared__entryName")!.textContent)).toEqual(["主敘事規則", "文風細節", "對話格式", "收尾"]);
-    $("[data-testid=shared-more]").click();
-    await flush();
-    expect($$("[data-testid=shared-entry]")).toHaveLength(5);
+    // 只列會執行的：關掉的與歷史那格不列；原型拿掉了「看其餘」，全部列出
+    expect($$("[data-testid=shared-entry]").map((e) => e.querySelector(".shared__entryName")!.textContent)).toEqual(["主敘事規則", "文風細節", "對話格式", "收尾", "多的一條"]);
     expect($$("[data-testid=shared-entry] .shared__chevron")).toHaveLength(5);
     expect(root.textContent).toContain("DeepSeek V4");
     expect(root.textContent).not.toContain("model:");
     expect(root.textContent).toContain("原作者 A");
-    expect($("[data-testid=shared-apply]").textContent).toBe(t("preset.share.detail.apply"));
-    expect($("[data-testid=shared-fav]").classList.contains("btn--primary")).toBe(true);
+    expect($("[data-testid=shared-apply]").textContent?.trim()).toBe(t("preset.share.detail.applyAction"));
+    expect($("[data-testid=shared-apply]").classList.contains("btn--primary")).toBe(true);
+    expect($("[data-testid=shared-fav]").classList.contains("btn--primary")).toBe(false);
+    expect($("[data-testid=shared-back]").getAttribute("href")).toBe("/presets/library");
     // 檢舉是無框的次要鈕，不跟喜愛同權重
     expect($("[data-testid=shared-report]").classList.contains("btn--ghost")).toBe(true);
     expect(root.textContent).not.toMatch(/匯出|另存/);
@@ -461,7 +510,7 @@ describe("公開預設詳情", () => {
   it("檢舉：選原因、補充選填，送出後頁面一直標你已檢舉", async () => {
     mocks.detail.mockResolvedValue(detail());
     mocks.report.mockResolvedValue({ reported: true });
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     $("[data-testid=shared-report]").click();
     await flush();
     const sheet = body$("[data-testid=report-sheet]");
@@ -480,22 +529,100 @@ describe("公開預設詳情", () => {
     expect($("[data-testid=shared-report]")).toBeNull();
   });
 
+  it("複製連結：複製這一頁的網址，toast 一行", async () => {
+    mocks.detail.mockResolvedValue(detail());
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await mount("/presets/s1");
+    $("[data-testid=shared-copy]").click();
+    await flush();
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/presets/s1`);
+    expect($("[data-testid=shared-toast]").textContent).toBe(t("preset.share.detail.linkCopied"));
+  });
+
+  describe("套用到某張卡", () => {
+    const conv = (roleId: string, roleName: string) => ({ provider: "harbor", conversationId: `c-${roleId}`, conversationRoleId: roleId, conversationTitle: null, roleName, roleAvatar: "" });
+    async function open() {
+      mocks.detail.mockResolvedValue(detail());
+      mocks.conversations.mockResolvedValue({ conversations: [conv("r1", "QA 探針"), conv("r2", "白露的書店"), conv("r1", "QA 探針")], hasNextPage: false });
+      mocks.binding.mockImplementation(async (_tk: string, roleId: string) => roleId === "r1"
+        ? { mode: "preset", presetId: "x", presetTitle: "細膩第三人稱", bindingVersion: 3 }
+        : { mode: "card_default", presetId: null, bindingVersion: 0 });
+      await mount("/presets/s1");
+      $("[data-testid=shared-apply]").click();
+      await flush();
+    }
+    const rows = () => [...document.body.querySelectorAll<HTMLElement>("[data-testid=card-pick-row]")];
+
+    it("列我玩過的卡（同一張只列一次）與它目前的預設；選了才能套用，套用後 toast", async () => {
+      await open();
+      const sheet = body$("[data-testid=card-pick-sheet]");
+      expect(sheet.querySelector("h2")!.textContent).toBe(t("preset.share.cardPick.title", { name: "電影感長篇" }));
+      expect(mocks.conversations).toHaveBeenCalledWith("site-tok", expect.any(String), 1);
+      expect(rows().map((r) => [r.querySelector(".pick__name")!.textContent, r.querySelector(".pick__using")!.textContent])).toEqual([
+        ["QA 探針", t("preset.share.cardPick.row.using", { name: "細膩第三人稱" })],
+        ["白露的書店", t("preset.share.cardPick.row.none")],
+      ]);
+      expect(body$<HTMLButtonElement>("[data-testid=card-pick-apply]").disabled).toBe(true);
+      // 已有預設的卡說會換掉；沒有預設的卡用另一句
+      rows()[1]!.click(); await flush();
+      expect(body$("[data-testid=card-pick-note]").textContent).toBe(t("preset.share.cardPick.note.fresh"));
+      rows()[0]!.click(); await flush();
+      expect(body$("[data-testid=card-pick-note]").textContent).toBe(t("preset.share.cardPick.note.replace"));
+      expect(body$("[data-testid=card-pick-apply]").textContent?.trim()).toBe(t("preset.share.cardPick.apply", { card: "QA 探針" }));
+      mocks.apply.mockResolvedValue({ mode: "preset", presetId: "s1", bindingVersion: 4 });
+      body$<HTMLButtonElement>("[data-testid=card-pick-apply]").click();
+      await flush();
+      expect(mocks.apply).toHaveBeenCalledWith("tok", { roleId: "r1", presetId: "s1", expectedVersion: 3 }, expect.any(String));
+      expect(body$("[data-testid=card-pick-sheet]")).toBeNull();
+      expect($("[data-testid=shared-toast]").textContent).toBe(t("preset.share.cardPick.applied", { name: "電影感長篇", card: "QA 探針" }));
+    });
+
+    it("別處剛改過這張卡（409）：重讀綁定再送一次", async () => {
+      await open();
+      rows()[1]!.click(); await flush();
+      mocks.binding.mockResolvedValueOnce({ mode: "card_default", presetId: null, bindingVersion: 0 }).mockResolvedValueOnce({ mode: "preset", presetId: "y", bindingVersion: 1 });
+      mocks.apply.mockRejectedValueOnce(new ApiError(409, "x", "preset_conflict", undefined, "preset_revision_conflict")).mockResolvedValueOnce({ mode: "preset", presetId: "s1", bindingVersion: 2 });
+      body$<HTMLButtonElement>("[data-testid=card-pick-apply]").click();
+      await flush();
+      expect(mocks.apply).toHaveBeenCalledTimes(2);
+      expect(mocks.apply.mock.calls[1]![1]).toEqual({ roleId: "r2", presetId: "s1", expectedVersion: 1 });
+      expect(mocks.apply.mock.calls[0]![2]).not.toBe(mocks.apply.mock.calls[1]![2]);
+      expect($("[data-testid=shared-toast]").textContent).toBe(t("preset.share.cardPick.applied", { name: "電影感長篇", card: "白露的書店" }));
+    });
+
+    it("搜尋卡名；沒玩過任何卡時說明怎麼才有", async () => {
+      await open();
+      const search = body$<HTMLInputElement>("[data-testid=card-pick-search]");
+      search.value = "書店"; search.dispatchEvent(new Event("input")); await flush();
+      expect(rows()).toHaveLength(1);
+      search.value = "沒有這張"; search.dispatchEvent(new Event("input")); await flush();
+      expect(body$("[data-testid=card-pick-no-results]").textContent).toBe(t("preset.share.cardPick.noResults"));
+      body$<HTMLButtonElement>("[data-testid=sheet-close]").click(); await flush();
+      mocks.conversations.mockResolvedValue({ conversations: [], hasNextPage: false });
+      $("[data-testid=shared-apply]").click(); await flush();
+      expect(body$("[data-testid=card-pick-empty]").textContent).toContain(t("preset.share.cardPick.empty.title"));
+    });
+  });
+
   it("之前檢舉過的一打開就標你已檢舉；自己的預設不給喜愛與檢舉", async () => {
     mocks.detail.mockResolvedValueOnce(detail({ reportedByMe: true }));
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     expect($("[data-testid=shared-reported]")).not.toBeNull();
     expect($("[data-testid=shared-report]")).toBeNull();
     app!.unmount(); root.remove();
     mocks.detail.mockResolvedValueOnce(detail({}, { mine: true }));
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     expect($("[data-testid=shared-fav]")).toBeNull();
     expect($("[data-testid=shared-report]")).toBeNull();
+    // 自己的也能套用到自己的卡
+    expect($("[data-testid=shared-apply]")).not.toBeNull();
   });
 
   it("詳情：已不公開的取消喜愛先確認，取消後回到喜愛與用過", async () => {
     mocks.detail.mockResolvedValue(detail({}, { listed: false, favorited: true }));
     mocks.favorite.mockResolvedValue({ favorited: false });
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     mocks.confirm.mockResolvedValueOnce(false);
     $("[data-testid=shared-fav]").click();
     await flush();
@@ -508,12 +635,12 @@ describe("公開預設詳情", () => {
 
   it("已不公開的標示加說明；看不到的說找不到", async () => {
     mocks.detail.mockResolvedValueOnce(detail({}, { listed: false, favorited: true }));
-    await mount("/preset-library/s1");
+    await mount("/presets/s1");
     expect($("[data-testid=shared-unlisted]").textContent).toContain(t("preset.share.unlisted.hint"));
     expect($("[data-testid=shared-fav]").getAttribute("aria-pressed")).toBe("true");
     app!.unmount(); root.remove();
     mocks.detail.mockRejectedValueOnce(new ApiError(404, "x", "not_found"));
-    await mount("/preset-library/zzz");
+    await mount("/presets/zzz");
     expect($("[data-testid=shared-not-found]")).not.toBeNull();
   });
 });

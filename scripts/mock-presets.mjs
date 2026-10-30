@@ -14,7 +14,15 @@
  *   unavailable  綁定 GET 回 state=unavailable（選用的版本讀不到）
  *   toolModel    回覆偏好的工具回覆狀態回 model_unsupported（目前模型不支援）
  *   toolMode     回覆偏好的工具回覆狀態回 mode_unsupported（Agent／世界模式）
+ *   libraryEmpty 預設庫是空的（熱門與全部預設都沒有）
+ *   applyConflict 下一次「套用到某張卡」回 409 preset_revision_conflict（別處剛改過；前端會重讀再送一次）
  * 在畫布套用到某張卡，那個預設的 bindingCount（正在用它的卡數）就是 1，列表就只能封存。
+ *
+ * 分享（P2，docs/studio/tasks/2026-10-29-preset-library/p2-share-backend-contract.md §4、§10、§11）：
+ * 預設庫是另一批「別的作者」公開的預設（記憶體裡），熱度＝3 × 近 7 天使用人數＋喜愛數；
+ * /preset-library/hot 有熱度的不足 12 份時用最新公開的補滿並標 fresh。模型篩選認 series:／model:／general／all。
+ * 帶 roleId 讀寫的卡片綁定照卡分開存（預設庫的「套用到某張卡」）；畫布與回覆偏好照舊看最近存的那一份。
+ * 「套用到某張卡」（mode=preset）會把那份記進「喜愛與用過」的用過。
  */
 import crypto from "node:crypto";
 
@@ -29,6 +37,9 @@ const receipts = new Map();
 let scenario = "";
 // 自訂預設只套用到整張卡（owner 2026-10-30）：只有一份卡層綁定，這段對話讀到的也是它
 let cardBinding = { mode: "card_default", presetId: null, revisionId: null, bindingVersion: 0, state: "ready" };
+/** 帶 roleId 讀寫的卡片綁定照卡分開存；沒存過的卡是 card_default。cardBinding 仍是畫布與回覆偏好看的那一份（最近存的） */
+const cardBindings = new Map();
+const bindingOf = (roleId) => (roleId ? cardBindings.get(roleId) ?? { mode: "card_default", presetId: null, revisionId: null, bindingVersion: 0, state: "ready" } : cardBinding);
 // 套用時由預設決定的項目（上游的 presetLocked）
 const PRESET_LOCKED = ["agency", "style", "perspective", "pace", "sandboxLevel", "jailbreak"];
 let responseRevision = 0;
@@ -118,7 +129,7 @@ export function validateNative(doc) {
 
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
-  return { ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
+  return { visibility: "private", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
 }
 function addRevision(preset, title, document, recommendedModels) {
   const revisionId = uuid();
@@ -141,6 +152,53 @@ function idempotent(req, key, fn) {
   return out;
 }
 const bindingBody = (b) => b.mode === "revision" ? { ...b, presetTitle: presets.get(b.presetId)?.title, version: revisions.get(b.revisionId)?.version } : b;
+
+// ── 預設庫（別的作者公開的預設）──
+const DECLARATION = "preset-publish-2026-10-30";
+const SERIES = { "Gemini 4": "Gemini", "Gemini 4 Flash": "Gemini", "DeepSeek V4": "DeepSeek", "DeepSeek V4 Pro": "DeepSeek", "Claude Opus": "Claude", "Claude Sonnet": "Claude" };
+const library = new Map();
+const shelf = new Map(); // presetId → { favoritedAt, lastAppliedAt }
+const reports = new Set();
+const daysAgo = (d) => new Date(Date.now() - d * 864e5).toISOString();
+function seedLibrary() {
+  if (library.size || scenario === "libraryEmpty") return;
+  const doc = (lines) => ({ schemaVersion: "hearthroom.st-preset.v1", st: { temperature: 0.9, top_p: 0.95,
+    prompts: [...lines.map(([identifier, name, content]) => ({ identifier, name, role: "system", content })), { identifier: "chatHistory", name: "Chat History", marker: true }],
+    prompt_order: [{ character_id: 100001, order: [...lines.map(([identifier]) => ({ identifier, enabled: true })), { identifier: "chatHistory", enabled: true }] }] },
+    selection: { profileId: 100001, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: [] } });
+  const rows = [
+    ["慢熱日常", "小麥", ["model:Gemini 4"], 342, 58, 30],
+    ["電影感長篇", "Aster", ["model:DeepSeek V4", "series:Gemini"], 215, 41, 25],
+    ["長篇冒險（酒館匯入）", "林夜", ["model:Gemini 4"], 128, 17, 20],
+    ["簡潔對話體", "阿澈", [], 61, 9, 18],
+    ["古風章回", "青蓮", ["model:Gemini 4"], 0, 0, 2],
+    ["夜讀筆記", "墨痕", ["series:Claude"], 0, 0, 1],
+    ["推理現場", "", ["model:Claude Opus"], 0, 3, 6],
+  ];
+  rows.forEach(([title, authorName, recommendedModels, usesLast7d, favoriteCount, age], i) => {
+    const presetId = `10000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
+    library.set(presetId, { presetId, title, authorName, authorNumId: 4000 + i, authorAvatar: "", attribution: i === 1 ? "改寫自 Aster 的酒館預設" : "", recommendedModels, usesLast7d, favoriteCount,
+      publishedAt: daysAgo(age), updatedAt: daysAgo(Math.max(0, age - 1)), listed: true, mine: false,
+      document: doc([["main", "主敘事規則", "用鏡頭的方式寫場景：先交代整體環境，再帶到人物與細節。"], ["style", "文風細節", "旁白用第三人稱，台詞自然口語。"], ["end", "收尾處理", "每次回覆結尾留一個可以接話的地方。"]]) });
+  });
+}
+const heatOf = (x) => 3 * x.usesLast7d + x.favoriteCount;
+function libraryItem(x, extra = {}) {
+  const { document: _d, ...rest } = x;
+  const mark = shelf.get(x.presetId);
+  return { ...rest, enabledEntryCount: orderOf(x.document).filter((o) => o.enabled !== false && o.identifier !== "chatHistory").length, heat: heatOf(x), fresh: false,
+    favorited: !!mark?.favoritedAt, lastAppliedAt: mark?.lastAppliedAt ?? null, ...extra };
+}
+function modelHit(x, model) {
+  if (!model || model === "all") return true;
+  if (model === "general") return !x.recommendedModels.length;
+  if (x.recommendedModels.includes(model)) return true;
+  if (model.startsWith("series:")) return x.recommendedModels.some((v) => v.startsWith("model:") && SERIES[v.slice(6)] === model.slice(7));
+  if (model.startsWith("model:")) return x.recommendedModels.includes(`series:${SERIES[model.slice(6)]}`);
+  return false;
+}
+const byNew = (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || a.presetId.localeCompare(b.presetId);
+const byHot = (a, b) => heatOf(b) - heatOf(a) || byNew(a, b);
 
 export function seedPresets() {
   if (presets.size) return;
@@ -165,17 +223,68 @@ export function seedPresets() {
 export async function handlePresets({ m, path, url, body, raw, req, json, res }) {
   let mm;
   if (path === "/__presets") { scenario = url.searchParams.get("scenario") ?? ""; return json(res, 200, { scenario }), true; }
-  if (path === "/__presets/reset") { presets.clear(); revisions.clear(); previews.clear(); receipts.clear(); return json(res, 200, { ok: true }), true; }
+  if (path === "/__presets/reset") { presets.clear(); revisions.clear(); previews.clear(); receipts.clear(); library.clear(); shelf.clear(); reports.clear(); cardBindings.clear(); return json(res, 200, { ok: true }), true; }
   if (scenario === "scope" && (path.startsWith("/open/v1/preset") || path.includes("/preset"))) return json(res, 403, { error: "insufficient_scope", required_scope: "preset.read" }), true;
   if (m === "GET" && path === "/open/v1/presets") {
     if (scenario !== "empty") seedPresets();
-    return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota() }), true;
+    return json(res, 200, { items: [...presets.values()].map(summary), nextCursor: "", quota: scenario === "full" ? { used: 50, limit: 50, archived: 2 } : quota(), declarationVersion: DECLARATION }), true;
   }
   if (m === "POST" && path === "/open/v1/presets/analyze") return json(res, 200, { compatibility: analyze(body.document) }), true;
   if (m === "POST" && path === "/open/v1/presets") {
     const bad = validateNative(body.document);
     if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
     return json(res, 201, idempotent(req, null, () => create(body.title, body.document, body.recommendedModels))), true;
+  }
+  // ── 分享：公開／改回私人（自己的預設）──
+  if (m === "POST" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)\/(publish|unpublish)$/))) {
+    const p = presets.get(mm[1]); if (!p) return json(res, 404, { error: "not_found" }), true;
+    if (body.expectedVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
+    if (mm[2] === "publish") {
+      if (p.removed) return json(res, 409, { error: "preset_conflict", reason: "preset_removed" }), true;
+      if (body.declaration !== DECLARATION) return json(res, 409, { error: "preset_conflict", reason: "preset_declaration_changed" }), true;
+      Object.assign(p, { visibility: "public", publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
+      if (body.recommendedModels) revisions.get(p.headRevisionId).recommendedModels = body.recommendedModels;
+    } else p.visibility = "private";
+    return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version }), true;
+  }
+  // ── 分享：預設庫、熱門、詳情、喜愛、檢舉、喜愛與用過 ──
+  if (m === "GET" && path === "/open/v1/preset-library/hot") {
+    seedLibrary();
+    const model = url.searchParams.get("model") || "all";
+    const pool = [...library.values()].filter((x) => x.listed && modelHit(x, model));
+    const hot = pool.filter((x) => heatOf(x) > 0).sort(byHot).slice(0, 12);
+    const fill = hot.length < 12 ? pool.filter((x) => heatOf(x) === 0).sort(byNew).slice(0, 12 - hot.length) : [];
+    return json(res, 200, { items: [...hot.map((x) => libraryItem(x)), ...fill.map((x) => libraryItem(x, { fresh: true }))] }), true;
+  }
+  if (m === "GET" && path === "/open/v1/preset-library") {
+    seedLibrary();
+    const model = url.searchParams.get("model") || "all";
+    const q = (url.searchParams.get("q") || "").toLowerCase();
+    const offset = Number(url.searchParams.get("offset") || 0), limit = Math.min(50, Number(url.searchParams.get("limit") || 20));
+    let rows = [...library.values()].filter((x) => x.listed && modelHit(x, model) && (!q || x.title.toLowerCase().includes(q) || x.authorName.toLowerCase().includes(q)));
+    rows = rows.sort(url.searchParams.get("sort") === "new" ? byNew : byHot);
+    return json(res, 200, { items: rows.slice(offset, offset + limit).map((x) => libraryItem(x)) }), true;
+  }
+  if (m === "GET" && path === "/open/v1/preset-shelf") {
+    seedLibrary();
+    const rows = [...shelf].map(([id, mark]) => ({ x: library.get(id), mark })).filter((r) => r.x);
+    const fav = rows.filter((r) => r.mark.favoritedAt).sort((a, b) => b.mark.favoritedAt.localeCompare(a.mark.favoritedAt));
+    const used = rows.filter((r) => !r.mark.favoritedAt && r.mark.lastAppliedAt).sort((a, b) => b.mark.lastAppliedAt.localeCompare(a.mark.lastAppliedAt));
+    return json(res, 200, { items: [...fav, ...used].map((r) => libraryItem(r.x)) }), true;
+  }
+  if ((mm = path.match(/^\/open\/v1\/preset-library\/([^/]+)(?:\/(favorite|report))?$/))) {
+    seedLibrary();
+    const x = library.get(mm[1]); if (!x) return json(res, 404, { error: "not_found" }), true;
+    if (m === "POST" && mm[2] === "favorite") {
+      const mark = shelf.get(x.presetId) ?? {};
+      if (body.favorite) { if (!mark.favoritedAt) x.favoriteCount++; mark.favoritedAt = now(); }
+      else if (mark.favoritedAt) { x.favoriteCount--; delete mark.favoritedAt; }
+      if (mark.favoritedAt || mark.lastAppliedAt) shelf.set(x.presetId, mark); else shelf.delete(x.presetId);
+      return json(res, 200, { favorited: !!body.favorite }), true;
+    }
+    if (m === "POST" && mm[2] === "report") { reports.add(x.presetId); return json(res, 200, { reported: true }), true; }
+    if (m === "GET" && !mm[2]) return json(res, 200, { item: libraryItem(x), revision: { revisionId: `${x.presetId}-r`, presetId: x.presetId, version: 1, document: x.document, sourceKind: "native", compilerVersion: "mock-p1", contentHash: "mock", recommendedModels: x.recommendedModels, createdAt: x.updatedAt },
+      compatibility: analyze(x.document), parameters: { temperature: x.document.st.temperature, top_p: x.document.st.top_p }, reportedByMe: reports.has(x.presetId) }), true;
   }
   if (m === "GET" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)$/))) {
     const p = presets.get(mm[1]); if (!p) return json(res, 404, { error: "not_found" }), true;
@@ -224,19 +333,30 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     return json(res, 201, idempotent(req, null, () => create(body.title, p.document, body.recommendedModels, "imported"))), true;
   }
   // ── 綁定（畫布） ──
-  const cardBody = () => scenario === "unavailable" && cardBinding.mode === "revision" ? { ...bindingBody(cardBinding), state: "unavailable" } : bindingBody(cardBinding);
-  if (m === "GET" && (path === "/open/v1/conversation/preset" || path === "/open/v1/player/preset-default")) return json(res, 200, { ...cardBody(), scope: "card" }), true;
+  const cardBody = (b = cardBinding) => scenario === "unavailable" && b.mode === "revision" ? { ...bindingBody(b), state: "unavailable" } : bindingBody(b);
+  if (m === "GET" && (path === "/open/v1/conversation/preset" || path === "/open/v1/player/preset-default")) return json(res, 200, { ...cardBody(bindingOf(url.searchParams.get("roleId"))), scope: "card" }), true;
   // 舊的「只這段對話／只新存檔」寫法：上游拒收，請舊畫面重新載入
   if (m === "POST" && path === "/open/v1/conversation/preset/apply") return json(res, 409, { error: "preset_conflict", reason: "preset_scope_changed" }), true;
   if (m === "POST" && path === "/open/v1/player/preset-default/save") {
     if (body.scope !== "card") return json(res, 409, { error: "preset_conflict", reason: "preset_scope_changed" }), true;
     if (scenario === "busy") return json(res, 409, { error: "preset_conflict", reason: "operation_active" }), true;
-    if (body.expectedVersion !== cardBinding.bindingVersion) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
+    const cur = bindingOf(body.roleId);
+    if (scenario === "applyConflict") { scenario = ""; cardBindings.set(body.roleId ?? "", { ...cur, bindingVersion: cur.bindingVersion + 1 }); return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true; }
+    if (body.expectedVersion !== cur.bindingVersion) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     const rev = body.revisionId ? revisions.get(body.revisionId) : null;
-    if (cardBinding.presetId && presets.get(cardBinding.presetId)) presets.get(cardBinding.presetId).bindingCount = 0;
-    cardBinding = rev ? { mode: "revision", presetId: rev.presetId, revisionId: rev.revisionId, bindingVersion: cardBinding.bindingVersion + 1, state: "ready" } : { mode: "card_default", presetId: null, revisionId: null, bindingVersion: cardBinding.bindingVersion + 1, state: "ready" };
+    // 跟著作者走（mode=preset）：自己的預設或預設庫裡的都收；套用預設庫的會記進「喜愛與用過」的用過
+    const target = body.mode === "preset" && body.presetId ? (presets.get(body.presetId) ?? library.get(body.presetId)) : null;
+    if (body.mode === "preset" && !target) return json(res, 404, { error: "not_found" }), true;
+    if (cur.presetId && presets.get(cur.presetId)) presets.get(cur.presetId).bindingCount = 0;
+    const next = target ? { mode: "preset", presetId: body.presetId, revisionId: null, presetTitle: target.title, bindingVersion: cur.bindingVersion + 1, state: "ready" }
+      : rev ? { mode: "revision", presetId: rev.presetId, revisionId: rev.revisionId, bindingVersion: cur.bindingVersion + 1, state: "ready" }
+      : { mode: "card_default", presetId: null, revisionId: null, bindingVersion: cur.bindingVersion + 1, state: "ready" };
+    if (body.roleId) cardBindings.set(body.roleId, next);
+    cardBinding = next;
     if (rev) presets.get(rev.presetId).bindingCount = 1;
-    return json(res, 200, { ...bindingBody(cardBinding), scope: "card", cacheEffect: "prefix_may_rebuild", effectiveFrom: "next_admitted_operation" }), true;
+    if (target && presets.has(body.presetId)) presets.get(body.presetId).bindingCount = 1;
+    if (target && library.has(body.presetId)) shelf.set(body.presetId, { ...shelf.get(body.presetId), lastAppliedAt: now() });
+    return json(res, 200, { ...bindingBody(next), scope: "card", cacheEffect: "prefix_may_rebuild", effectiveFrom: "next_admitted_operation" }), true;
   }
   if (path === "/open/v1/conversation/response-settings" || path === "/open/v1/conversation/response-settings/save") {
     const locked = cardBinding.mode === "revision";

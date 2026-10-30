@@ -49,8 +49,12 @@ const pages: RouteRecordRaw[] = [
   { path: "me/presets/:presetId", component: () => import("./pages/PresetEditorPage.vue"), meta: { auth: true, feature: "presets", petAway: true } },
   // 長期指令組：只管組本身；哪張卡的新存檔自動帶上哪一組在遊玩畫布選。畫布的「管理指令組」連到這裡
   { path: "me/instructions", component: () => import("./pages/InstructionSetsPage.vue"), meta: { auth: true, feature: "instructions" } },
-  // 別人公開的預設（唯讀）：公開列表、喜愛與用過、畫布選擇器的「在網站查看內容」都連到這裡
-  { path: "preset-library/:presetId", component: () => import("./pages/PresetLibraryPage.vue"), meta: { auth: true, feature: "presets" } },
+  // 預設庫（PM 2026-10-30 資訊架構）：唯一的瀏覽處。熱門＋全部預設，篩選與排序記在網址上
+  { path: "presets/library", component: () => import("./pages/PresetLibraryHomePage.vue"), meta: { auth: true, feature: "presets" } },
+  // 一份公開預設的詳情（唯讀）：預設庫、喜愛與用過、畫布選擇器、分享出去的連結都到這裡。library 是靜態路徑，排在前面
+  { path: "presets/:presetId", component: () => import("./pages/PresetLibraryPage.vue"), meta: { auth: true, feature: "presets" } },
+  // 舊網址（2026-10-30 之前的詳情連結）轉到新的詳情頁
+  { path: "preset-library/:presetId", redirect: (to) => ({ path: withLocale(`/presets/${String(to.params.presetId)}`, localeOf(to)), query: to.query, hash: to.hash }) },
   // 舊的「我的分享申請」：現在是活動中心的「我參加的」頁籤。通知與舊書籤還指著這裡
   { path: "me/campaign", redirect: (to) => ({ path: withLocale("/campaigns", localeOf(to)), query: { ...to.query, tab: "mine" }, hash: to.hash }) },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true, keepScrollOnQuery: true } },
@@ -296,7 +300,7 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/mine")) return "mine";
   if (bare.startsWith("/me/presets")) return "presets";
   if (bare.startsWith("/me/instructions")) return "instructions";
-  if (bare.startsWith("/preset-library")) return "presets";
+  if (bare.startsWith("/preset-library") || bare.startsWith("/presets")) return "presets";
   // 活動頁與活動中心（含「我參加的」）都算活動
   if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";

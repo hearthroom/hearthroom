@@ -2,7 +2,7 @@
   "draft": true,
   "tier": "feature",
   "audience": "everyone",
-  "try": "/me/presets?tab=public",
+  "try": "/presets/library",
   "title": {
     "zh-Hant": "預設可以公開分享，也能逛別人公開的預設",
     "zh-Hans": "预设可以公开分享，也能逛别人公开的预设",

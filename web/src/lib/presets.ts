@@ -297,6 +297,12 @@ export interface PresetLibraryItem {
   /** false：作者改回私人、刪了，或平台下架；喜愛與用過裡照常可用 */
   listed: boolean;
   mine: boolean;
+  /** 目前把它加入喜愛的人數；舊上游沒有時當 0 */
+  favoriteCount?: number;
+  /** 熱度＝3 × 近 7 天使用人數＋喜愛數，上游用來排序；畫面不顯示這個數字 */
+  heat?: number;
+  /** 只有熱門區為了補滿 12 份而放進來的最新公開預設是 true */
+  fresh?: boolean;
 }
 export interface PresetLibraryList { items: PresetLibraryItem[] }
 export interface PresetLibraryDetail {
@@ -324,12 +330,23 @@ export async function unpublishPreset(token: string, presetId: string, expectedV
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/unpublish`, token, { expectedVersion }, key));
 }
 
-/** model：all（全部）、general（沒標測試模型的）或模型代碼；排序由上游決定（近 7 天使用人數）。 */
-export async function listPresetLibrary(token: string, opts: { model?: string; q?: string; offset?: number } = {}): Promise<PresetLibraryList> {
+export type LibrarySort = "hot" | "new";
+
+/** model：all（全部）、general（沒標測試模型的）、series:／model: 或線路代號。sort：hot（熱度，預設）或 new（最新公開）。 */
+export async function listPresetLibrary(token: string, opts: { model?: string; q?: string; offset?: number; sort?: LibrarySort } = {}): Promise<PresetLibraryList> {
   const q = new URLSearchParams({ limit: String(LIBRARY_PAGE), offset: String(opts.offset ?? 0) });
   if (opts.model && opts.model !== "all") q.set("model", opts.model);
   if (opts.q?.trim()) q.set("q", opts.q.trim().slice(0, 64));
+  if (opts.sort === "new") q.set("sort", "new");
   return json<PresetLibraryList>(await get(`/preset-library?${q}`, token));
+}
+
+/** 預設庫頂部的熱門區：最多 12 份；有熱度的不夠時，上游用最新公開的補滿並標 fresh。不分頁。 */
+export async function listPresetLibraryHot(token: string, model = "all"): Promise<PresetLibraryList> {
+  const q = new URLSearchParams();
+  if (model && model !== "all") q.set("model", model);
+  const qs = q.toString();
+  return json<PresetLibraryList>(await get(`/preset-library/hot${qs ? `?${qs}` : ""}`, token));
 }
 
 /** 我的「喜愛與用過」：喜愛的在前，接著用過的。自己的預設不在這裡。 */
@@ -360,4 +377,18 @@ export function modelValueLabel(value: string): string {
   if (value.startsWith("series:")) return i18n.global.t("preset.models.series", { name: value.slice(7) });
   if (value.startsWith("model:")) return value.slice(6);
   return value;
+}
+
+/* ---- 從預設庫套用到某張卡：卡片層的綁定（這張卡所有存檔都用它） ---------------------------- */
+
+/** 一張卡目前選的預設。bindingVersion 是下一次改的時候要送回去的 expectedVersion。 */
+export interface CardPresetBinding { mode: "card_default" | "preset" | "revision"; presetId: string | null; presetTitle?: string; bindingVersion: number; state?: string }
+
+export async function fetchCardPreset(token: string, roleId: string): Promise<CardPresetBinding> {
+  return json<CardPresetBinding>(await get(`/player/preset-default?${new URLSearchParams({ roleId })}`, token));
+}
+
+/** 套用到這張卡；別處先改了回 409 preset_revision_conflict，由呼叫端重讀再送一次。 */
+export async function applyPresetToCard(token: string, input: { roleId: string; presetId: string; expectedVersion: number }, key: string): Promise<CardPresetBinding> {
+  return json<CardPresetBinding>(await send("/player/preset-default/save", token, { roleId: input.roleId, mode: "preset", presetId: input.presetId, expectedVersion: input.expectedVersion }, key));
 }

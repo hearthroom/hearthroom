@@ -21,7 +21,7 @@ const fresh = computed(() => isNew(props.item));
 
 <template>
   <li class="panel share-row" data-testid="share-row">
-    <RouterLink :to="lp(`/preset-library/${item.presetId}`)" class="share-row__main">
+    <RouterLink :to="lp(`/presets/${item.presetId}`)" class="share-row__main">
       <strong class="share-row__name">{{ item.title }}</strong>
       <span class="share-row__author">{{ authorLabel(item) }}</span>
       <span class="share-row__facts">
