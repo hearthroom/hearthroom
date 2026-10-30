@@ -3718,9 +3718,9 @@
   "spendBoard.conflict": "設定已有變更，重新載入後再調整。",
   "spendBoard.previewGlobalPublic": "全站排行榜預設會顯示你的暱稱與頭像，各張卡另選的顯示方式仍優先。",
   "spendBoard.previewGlobalAnonymous": "全站排行榜預設會顯示「匿名玩家」與預設頭像，各張卡另選的顯示方式仍優先。",
-  "preset.nav": "我的預設",
-  "preset.title": "我的預設",
-  "preset.lede": "匯入酒館預設，或自己寫一套，再到對話裡的回覆偏好，用「自訂預設」套用到角色卡。預設只有你看得到。",
+  "preset.nav": "預設",
+  "preset.title": "預設",
+  "preset.lede": "自己寫、從酒館匯入，或試試別人公開的預設，再到回覆偏好的「自訂預設」套用到角色卡。",
   "preset.quota": "已用 {used} / {limit} 份",
   "preset.quotaArchived": "其中 {archived} 份已封存，封存的仍占名額",
   "preset.create": "建立預設",
@@ -3906,7 +3906,7 @@
   "preset.report.name": "預設名稱",
   "preset.report.confirm": "存成我的預設",
   "preset.report.confirming": "儲存中…",
-  "preset.report.confirmed": "已存成「{name}」，在「我的預設」裡可以找到。",
+  "preset.report.confirmed": "已存成「{name}」，在「預設」的「我的」裡可以找到。",
   "preset.report.stale": "分析結果已更新。你的選擇還在，請看過新的結果再確認。",
   "preset.adapt.moveToSuffix.from": "原位置：對話記錄之前",
   "preset.adapt.moveToSuffix.to": "採用後：對話記錄之後",
@@ -4129,5 +4129,6 @@
   "preset.share.error.publish": "沒有公開成功，稍後再試。",
   "preset.share.error.report": "檢舉沒有送出，稍後再試。",
   "preset.share.new": "新公開",
-  "preset.share.error.declarationChanged": "公開聲明已更新，看過新的聲明後再按一次公開。"
+  "preset.share.error.declarationChanged": "公開聲明剛更新了。重新看一遍再按「公開」。",
+  "preset.share.mine.note": "預設只有你看得到，公開後別人才找得到。"
 }

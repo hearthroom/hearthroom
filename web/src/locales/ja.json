@@ -3718,9 +3718,9 @@
   "spendBoard.conflict": "設定が変更されています。再読み込みしてから調整してください。",
   "spendBoard.previewGlobalPublic": "サイト全体のランキングの既定表示はニックネームとアイコンですが、カードごとの指定が優先されます。",
   "spendBoard.previewGlobalAnonymous": "サイト全体のランキングの既定表示は「匿名プレイヤー」と既定のアイコンですが、カードごとの指定が優先されます。",
-  "preset.nav": "マイプリセット",
-  "preset.title": "マイプリセット",
-  "preset.lede": "SillyTavernのプリセットを読み込むか自分で作成し、会話中の「返信の好み」にある「カスタムプリセット」でカードに適用します。プリセットはあなたにだけ表示されます。",
+  "preset.nav": "プリセット",
+  "preset.title": "プリセット",
+  "preset.lede": "自分で作る、SillyTavernから読み込む、ほかの人が公開したものを試す。そのあと、返信の好みの「カスタムプリセット」でカードに適用します。",
   "preset.quota": "{used} / {limit} 件使用中",
   "preset.quotaArchived": "うち {archived} 件はアーカイブ済み（アーカイブ分も枠に含まれます）",
   "preset.create": "プリセットを作成",
@@ -3906,7 +3906,7 @@
   "preset.report.name": "プリセット名",
   "preset.report.confirm": "マイプリセットとして保存",
   "preset.report.confirming": "保存中…",
-  "preset.report.confirmed": "「{name}」として保存しました。「マイプリセット」で見つかります。",
+  "preset.report.confirmed": "「{name}」として保存しました。「プリセット」ページの「マイ」で見つかります。",
   "preset.report.stale": "解析結果が更新されました。選択は残っているので、新しい結果を確認してから確定してください。",
   "preset.adapt.moveToSuffix.from": "元の位置：会話履歴の前",
   "preset.adapt.moveToSuffix.to": "取り込み後：会話履歴の後",
@@ -4129,5 +4129,6 @@
   "preset.share.error.publish": "公開できませんでした。しばらくしてからもう一度お試しください。",
   "preset.share.error.report": "通報を送信できませんでした。しばらくしてからもう一度お試しください。",
   "preset.share.new": "新着",
-  "preset.share.error.declarationChanged": "公開時の表明文が更新されました。新しい内容を確認してから、もう一度公開してください。"
+  "preset.share.error.declarationChanged": "公開に関する表示が更新されました。もう一度確認してから「公開する」を押してください。",
+  "preset.share.mine.note": "プリセットは公開するまであなたにだけ表示されます。"
 }

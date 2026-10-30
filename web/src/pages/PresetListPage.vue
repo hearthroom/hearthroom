@@ -188,6 +188,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
     <PresetLibraryTab v-else-if="tab === 'public'" :token="token" @toast="say" @consent="shareConsent" />
 
     <template v-else>
+      <p class="subtle presets__mine-note" data-testid="preset-mine-note">{{ $t("preset.share.mine.note") }}</p>
       <div v-if="quota" class="presets__meta">
         <p class="subtle" data-testid="preset-quota">
           {{ $t("preset.quota", { used: whole(quota.used), limit: whole(quota.limit) }) }}
@@ -265,6 +266,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-4); }
 .presets__head p { margin: var(--s-2) 0 0; }
 .presets__actions { display: flex; gap: var(--s-2); }
+.presets__mine-note { margin: 0 0 var(--s-2); }
 .presets__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4); }
 .presets__meta p { margin: 0; }
 .presets__toggle { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-md); font-size: 13px; cursor: pointer; }

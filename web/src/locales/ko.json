@@ -3718,9 +3718,9 @@
   "spendBoard.conflict": "설정이 변경됐어요. 다시 불러온 뒤 조정해 주세요.",
   "spendBoard.previewGlobalPublic": "사이트 전체 랭킹에서 기본으로 닉네임과 프로필 사진이 표시되며, 카드별로 따로 선택한 표시 방식이 우선해요.",
   "spendBoard.previewGlobalAnonymous": "사이트 전체 랭킹에서 기본으로 ‘익명 플레이어’와 기본 프로필 사진이 표시되며, 카드별로 따로 선택한 표시 방식이 우선해요.",
-  "preset.nav": "내 프리셋",
-  "preset.title": "내 프리셋",
-  "preset.lede": "SillyTavern 프리셋을 가져오거나 직접 만든 뒤, 대화 중 '답변 취향'의 '사용자 지정 프리셋'에서 카드에 적용하세요. 프리셋은 나에게만 보입니다.",
+  "preset.nav": "프리셋",
+  "preset.title": "프리셋",
+  "preset.lede": "직접 만들거나 SillyTavern에서 가져오거나 다른 사람이 공개한 프리셋을 써 본 뒤, 답변 취향의 '사용자 지정 프리셋'에서 카드에 적용하세요.",
   "preset.quota": "{used} / {limit}개 사용 중",
   "preset.quotaArchived": "그중 보관한 프리셋 {archived}개, 보관한 프리셋도 한도에 포함됩니다",
   "preset.create": "프리셋 만들기",
@@ -3906,7 +3906,7 @@
   "preset.report.name": "프리셋 이름",
   "preset.report.confirm": "내 프리셋으로 저장",
   "preset.report.confirming": "저장 중…",
-  "preset.report.confirmed": "'{name}' 프리셋으로 저장했습니다. '내 프리셋'에서 찾을 수 있습니다.",
+  "preset.report.confirmed": "'{name}'(으)로 저장했습니다. '프리셋' 페이지의 '내 프리셋'에서 찾을 수 있습니다.",
   "preset.report.stale": "분석 결과가 갱신되었습니다. 선택한 내용은 그대로이니, 새 결과를 확인한 뒤 확정하세요.",
   "preset.adapt.moveToSuffix.from": "원래 위치: 대화 기록 앞",
   "preset.adapt.moveToSuffix.to": "적용 후: 대화 기록 뒤",
@@ -4129,5 +4129,6 @@
   "preset.share.error.publish": "공개하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   "preset.share.error.report": "신고를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
   "preset.share.new": "새로 공개",
-  "preset.share.error.declarationChanged": "공개 선언 문구가 바뀌었어요. 새 문구를 확인한 뒤 다시 공개하세요."
+  "preset.share.error.declarationChanged": "공개 안내가 방금 업데이트되었습니다. 다시 확인한 뒤 '공개하기'를 누르세요.",
+  "preset.share.mine.note": "프리셋은 공개하기 전까지 나에게만 보입니다."
 }

@@ -3718,9 +3718,9 @@
   "spendBoard.conflict": "Your settings have changed. Reload them before editing.",
   "spendBoard.previewGlobalPublic": "Rankings will show your nickname and avatar by default; card-specific choices still take priority.",
   "spendBoard.previewGlobalAnonymous": "By default, rankings will show you as “Anonymous player” with a default avatar; card-specific choices still take priority.",
-  "preset.nav": "My presets",
-  "preset.title": "My presets",
-  "preset.lede": "Import a SillyTavern preset or write your own, then apply it to a card with \"Custom preset\" in Response preferences during a conversation. Only you can see your presets.",
+  "preset.nav": "Presets",
+  "preset.title": "Presets",
+  "preset.lede": "Write your own, import from SillyTavern, or try ones other people made public, then apply them to a card with \"Custom preset\" in Response preferences.",
   "preset.quota": "{used} of {limit} used",
   "preset.quotaArchived": "{archived} archived (archived presets still count)",
   "preset.create": "Create preset",
@@ -3906,7 +3906,7 @@
   "preset.report.name": "Preset name",
   "preset.report.confirm": "Save as my preset",
   "preset.report.confirming": "Saving…",
-  "preset.report.confirmed": "Saved as \"{name}\". You'll find it in My presets.",
+  "preset.report.confirmed": "Saved as \"{name}\". You can find it under Mine on the Presets page.",
   "preset.report.stale": "The analysis was updated. Your choices are kept, so look over the new result before confirming.",
   "preset.adapt.moveToSuffix.from": "Original position: before conversation history",
   "preset.adapt.moveToSuffix.to": "After adopting: after conversation history",
@@ -4129,5 +4129,6 @@
   "preset.share.error.publish": "It wasn't made public. Try again later.",
   "preset.share.error.report": "The report wasn't sent. Try again later.",
   "preset.share.new": "New",
-  "preset.share.error.declarationChanged": "The rights statement has changed. Read the new one, then make it public again."
+  "preset.share.error.declarationChanged": "The publishing notice was just updated. Read it again, then press Make public.",
+  "preset.share.mine.note": "Presets are visible only to you until you make them public."
 }
