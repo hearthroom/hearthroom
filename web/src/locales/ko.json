@@ -3150,7 +3150,7 @@
   "referral.leadSplit": "친구를 초대해 같이 놀아요. 친구가 가입하면 나는 {inviter} 포인트, 친구는 {friend} 포인트를 받고, 친구가 대화를 시작하면 나는 {first} 포인트를 더 받아요.",
   "referral.rule.bindSplit": "친구가 내 링크로 가입하거나 코드를 입력하면 나는 {inviter} 포인트, 친구는 {friend} 포인트를 받아요",
   "campaign.tierDesc.inviteSplit": "친구가 가입하면 나는 {inviter} 포인트, 친구는 {friend} 포인트. 대화를 시작하면 나는 {first} 포인트를 더 받아요",
-  "referral.invites.pendingReview": "처리 중: {pending} 포인트",
+  "referral.invites.pendingReview": "검토 중: {pending} 포인트",
   "campaign.field.poster": "문구 포스터",
   "campaign.field.posterHint": "이 언어의 문구 포스터가 없으면 위의 배너를 써요.",
   "campaign.field.posterAlt": "이미지 설명(화면 낭독기용)",

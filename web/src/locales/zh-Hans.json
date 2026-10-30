@@ -3150,7 +3150,7 @@
   "referral.leadSplit": "邀好友来玩：好友注册，你拿 {inviter} 积分、好友拿 {friend} 积分；好友开聊，你再拿 {first} 积分。",
   "referral.rule.bindSplit": "好友用你的链接注册或填写你的推荐码，你得 {inviter} 积分，好友得 {friend} 积分",
   "campaign.tierDesc.inviteSplit": "好友注册，你拿 {inviter} 积分、好友拿 {friend} 积分；好友开聊，你再拿 {first} 积分",
-  "referral.invites.pendingReview": "处理中：{pending} 积分",
+  "referral.invites.pendingReview": "审核中：{pending} 积分",
   "campaign.field.poster": "文字海报",
   "campaign.field.posterHint": "没有设置这个语言的文字海报时，使用上面的横幅。",
   "campaign.field.posterAlt": "图片说明（读屏器用）",

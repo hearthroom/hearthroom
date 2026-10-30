@@ -3150,7 +3150,7 @@
   "referral.leadSplit": "Invite a friend to play: when they sign up, you get {inviter} credits and they get {friend}; when they start chatting, you get {first} more.",
   "referral.rule.bindSplit": "When a friend signs up with your link or enters your code, you get {inviter} credits and they get {friend}",
   "campaign.tierDesc.inviteSplit": "Friend signs up: you get {inviter} credits, they get {friend}. Friend starts chatting: you get {first} more",
-  "referral.invites.pendingReview": "Credits being processed: {pending}",
+  "referral.invites.pendingReview": "Under review: {pending} credits",
   "campaign.field.poster": "Text poster",
   "campaign.field.posterHint": "If this language has no text poster, the banner above is used.",
   "campaign.field.posterAlt": "Image description (for screen readers)",
