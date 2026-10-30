@@ -96,11 +96,13 @@ async function toggle(item: PresetLibraryItem) {
       <div class="share-tab__filters" role="group" :aria-label="$t('preset.share.filter.label')">
         <button type="button" class="share-tab__pill" :class="{ 'share-tab__pill--on': model === 'all' }" :aria-pressed="model === 'all'" data-testid="share-filter-all" @click="setQuery({ model: 'all' })">{{ $t("preset.share.filter.all") }}</button>
         <button type="button" class="share-tab__pill" :class="{ 'share-tab__pill--on': model === 'general' }" :aria-pressed="model === 'general'" data-testid="share-filter-general" @click="setQuery({ model: 'general' })">{{ $t("preset.share.filter.general") }}</button>
-        <select class="share-tab__pill share-tab__select" :class="{ 'share-tab__pill--on': picked }" :value="picked" :aria-label="$t('preset.share.filter.pickModel')" data-testid="share-filter-model" @change="onPick">
-          <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
-          <option v-if="picked && !models.some((m) => m.value === picked)" :value="picked">{{ picked }}</option>
-          <option v-for="m in models" :key="m.value" :value="m.value">{{ m.label }}</option>
-        </select>
+        <span class="share-tab__selectWrap" :class="{ 'share-tab__selectWrap--on': picked }">
+          <select class="share-tab__pill share-tab__select" :class="{ 'share-tab__pill--on': picked }" :value="picked" :aria-label="$t('preset.share.filter.pickModel')" data-testid="share-filter-model" @change="onPick">
+            <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
+            <option v-if="picked && !models.some((m) => m.value === picked)" :value="picked">{{ picked }}</option>
+            <option v-for="m in models" :key="m.value" :value="m.value">{{ m.label }}</option>
+          </select>
+        </span>
       </div>
     </div>
     <p class="subtle share-tab__sort">{{ $t("preset.share.sort.note") }}</p>
@@ -138,9 +140,26 @@ async function toggle(item: PresetLibraryItem) {
 .share-tab__pill:hover { background: var(--surface-2); }
 .share-tab__pill--on, .share-tab__pill--on:hover { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
 /* 選了模型就顯示模型名；名字很長時截斷，不撐破這一排 */
-.share-tab__select { flex: 0 1 auto; min-width: 0; max-width: min(100%, 280px); padding-right: var(--s-3); text-overflow: ellipsis; }
+/*
+ * 箭頭由外框畫（跟搜尋頁的下拉同一個細線折角）：手機保留系統選擇器，只換掉粗的系統箭頭；
+ * 滑鼠用站內浮層（base.css），它自己的箭頭關掉，不然會有兩個。
+ */
+.share-tab__selectWrap { position: relative; display: inline-flex; flex: 0 1 auto; min-width: 0; max-width: min(100%, 280px); color: var(--text-3); }
+.share-tab__selectWrap--on { color: var(--accent-text); }
+.share-tab__selectWrap::after {
+  content: ""; position: absolute; inset-inline-end: var(--s-4); top: 50%;
+  width: 6px; height: 6px; border-inline-end: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+}
+.share-tab__select { appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; padding-right: var(--s-7); text-overflow: ellipsis; }
+@supports (appearance: base-select) {
+  @media (hover: hover) and (pointer: fine) {
+    .share-tab__select { appearance: base-select; }
+    .share-tab__select::picker-icon { display: none; }
+  }
+}
 /* 手機的原生下拉以最長的模型名算寬度：讓它吃剩下的寬，跟全部／通用同排 */
-@media (max-width: 760px) { .share-tab__select { flex: 1 1 0; } }
+@media (max-width: 760px) { .share-tab__selectWrap { flex: 1 1 0; } }
 .share-tab__sort { margin: 0; }
 .share-tab__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .share-tab__ghost { height: 104px; }

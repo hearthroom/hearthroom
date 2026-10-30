@@ -4130,5 +4130,9 @@
   "preset.share.new": "新着",
   "preset.share.error.declarationChanged": "公開に関する表示が更新されました。もう一度確認してから「公開する」を押してください。",
   "preset.share.mine.note": "プリセットは公開するまであなたにだけ表示されます。",
-  "preset.share.unlisted.short": "引き続き使えます。"
+  "preset.share.unlisted.short": "引き続き使えます。",
+  "preset.share.unfavorite.title": "「{name}」をお気に入りから外しますか？",
+  "preset.share.unfavorite.body": "このプリセットは公開されていないため、外すと見つけられなくなります。",
+  "preset.share.unfavorite.confirm": "外す",
+  "preset.share.unfavorite.keep": "残す"
 }

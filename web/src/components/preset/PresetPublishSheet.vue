@@ -72,10 +72,12 @@ async function submit() {
           v-for="code in tested" :key="code" type="button" class="publish__model publish__model--on" aria-pressed="true"
           data-testid="publish-model" @click="removeModel(code)"
         >{{ modelLabel(code) }}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" /></svg></button>
-        <select v-if="others.length" class="publish__model publish__select" value="" :aria-label="$t('preset.share.publish.tested.label')" data-testid="publish-model-add" @change="addModel">
-          <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
-          <option v-for="m in others" :key="m.value" :value="m.value">{{ m.label }}</option>
-        </select>
+        <span v-if="others.length" class="publish__selectWrap">
+          <select class="publish__model publish__select" value="" :aria-label="$t('preset.share.publish.tested.label')" data-testid="publish-model-add" @change="addModel">
+            <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
+            <option v-for="m in others" :key="m.value" :value="m.value">{{ m.label }}</option>
+          </select>
+        </span>
       </div>
     </div>
 
@@ -110,9 +112,25 @@ async function submit() {
 .publish__model:hover { background: var(--surface-2); }
 .publish__model--on, .publish__model--on:hover { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
 /* 還沒選的提示字：看起來是提示，不像已選的 chip */
-.publish__select { height: var(--h-md); max-width: 100%; color: var(--text-2); font-weight: 400; }
+.publish__select { height: var(--h-md); width: 100%; padding-right: var(--s-7); appearance: none; -webkit-appearance: none; color: var(--text-2); font-weight: 400; text-overflow: ellipsis; }
+/* 箭頭由外框畫，跟公開分頁的模型下拉、搜尋頁同一個細線折角 */
+.publish__selectWrap { position: relative; display: inline-flex; max-width: 100%; color: var(--text-3); }
+.publish__selectWrap::after {
+  content: ""; position: absolute; inset-inline-end: var(--s-4); top: 50%;
+  width: 6px; height: 6px; border-inline-end: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+}
+@supports (appearance: base-select) {
+  @media (hover: hover) and (pointer: fine) {
+    .publish__select { appearance: base-select; }
+    .publish__select::picker-icon { display: none; }
+  }
+}
 .publish__field .input { width: 100%; height: var(--h-lg); }
 .publish__submit { display: grid; gap: var(--s-2); margin-top: var(--s-1); }
 .publish__submit .btn { width: 100%; }
 .publish__declaration { font-size: 12.5px; line-height: 1.6; }
+/* 站上 .link 用 --accent，淺色白底只有 3.5:1；小字裡的連結照 tokens 的規定用 --accent-text */
+.publish__declaration a { color: var(--accent-text); padding-block: 8px; }
+/* 行內連結的上下 padding 不改行高，只把點擊區撐到約 31px（QA W4：原本 15px） */
 </style>

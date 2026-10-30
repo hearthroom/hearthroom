@@ -3,10 +3,12 @@
  * 喜愛與用過：加入喜愛的在前，接著套用過的（上游排好）。已經不公開的照樣列著、照常可用，
  * 只標「已不公開」加一句說明（owner 2026-10-30）。
  *
- * 在這裡取消喜愛不把那一列拿掉：手一滑按錯還能馬上按回來；重新整理後才照上游的新順序排。
+ * 還公開的取消喜愛後原位留著、愛心變空心，重新整理後才照上游的新順序排（列不跳動）。
+ * 已不公開的不一樣：取消喜愛後上游就不再讓他看到，也加不回來，所以先確認，取消了就從清單拿掉。
  */
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { confirmDialog } from "@/lib/confirm";
 import { favoritePreset, LIBRARY_PAGE, listPresetShelf, type PresetLibraryItem } from "@/lib/presets";
 import PresetLibraryRow from "./PresetLibraryRow.vue";
 import { useModelOptions } from "./preset-share";
@@ -47,10 +49,16 @@ async function load(more = false) {
 }
 
 async function toggle(item: PresetLibraryItem) {
+  const losing = item.favorited && !item.listed;
+  if (losing && !(await confirmDialog({
+    title: t("preset.share.unfavorite.title", { name: item.title }), message: t("preset.share.unfavorite.body"),
+    confirmText: t("preset.share.unfavorite.confirm"), cancelText: t("preset.share.unfavorite.keep"), danger: true, dangerAppearance: "subdued", focusCancel: true,
+  }))) return;
   busy.value = item.presetId;
   try {
     const res = await favoritePreset(await props.token(), item.presetId, !item.favorited);
     item.favorited = res.favorited;
+    if (losing && !res.favorited) items.value = items.value.filter((i) => i.presetId !== item.presetId);
     emit("toast", t(res.favorited ? "preset.share.fav.added" : "preset.share.fav.removed"));
   } catch (err) {
     emit("consent", err);

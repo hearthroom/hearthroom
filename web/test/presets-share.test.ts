@@ -197,6 +197,29 @@ describe("喜愛與用過", () => {
     expect(gone.querySelector("a")!.getAttribute("href")).toBe("/preset-library/gone");
   });
 
+  it("已不公開的取消喜愛會找不回來：先確認；不取消就什麼都不送，確認了就從清單拿掉", async () => {
+    mocks.shelf.mockResolvedValue({ items: [item({ presetId: "gone", title: "夜讀筆記", favorited: true, listed: false }), item({ favorited: true })] });
+    mocks.favorite.mockResolvedValue({ favorited: false });
+    await mount("/me/presets?tab=fav");
+    mocks.confirm.mockResolvedValueOnce(false);
+    $$("[data-testid=share-fav]")[0]!.click();
+    await flush();
+    expect(mocks.confirm.mock.calls[0]![0]).toMatchObject({
+      title: t("preset.share.unfavorite.title", { name: "夜讀筆記" }), message: t("preset.share.unfavorite.body"),
+      confirmText: t("preset.share.unfavorite.confirm"), cancelText: t("preset.share.unfavorite.keep"), danger: true, dangerAppearance: "subdued", focusCancel: true,
+    });
+    expect(mocks.favorite).not.toHaveBeenCalled();
+    mocks.confirm.mockResolvedValueOnce(true);
+    $$("[data-testid=share-fav]")[0]!.click();
+    await flush();
+    expect(mocks.favorite).toHaveBeenCalledWith("tok", "gone", false);
+    expect($$("[data-testid=share-row]").map((r) => r.querySelector("strong")!.textContent)).toEqual(["電影感長篇"]);
+    // 還公開的不用確認
+    $("[data-testid=share-fav]").click();
+    await flush();
+    expect(mocks.confirm).toHaveBeenCalledTimes(2);
+  });
+
   it("取消喜愛那一列不跳走；空的時候帶去逛公開", async () => {
     mocks.shelf.mockResolvedValueOnce({ items: [item({ favorited: true })] });
     mocks.favorite.mockResolvedValue({ favorited: false });
@@ -238,15 +261,34 @@ describe("我的：公開與改回私人", () => {
     expect(mocks.list).toHaveBeenCalledTimes(2);
   });
 
-  it("被平台下架的標已下架加一行說明，公開不能按", async () => {
-    mocks.list.mockResolvedValue(mineList([summary({ removed: true, visibility: "public" })]));
+  it("被平台下架的標已下架（狀態色）加一行說明；仍能改回私人，私人的公開不能按", async () => {
+    mocks.list.mockResolvedValue(mineList([summary({ removed: true, visibility: "public" }), summary({ id: "p2", removed: true, visibility: "private" })]));
     await mount("/me/presets");
-    expect($("[data-testid=preset-taken-down]").textContent).toBe(t("preset.share.chip.takenDown"));
+    const [publicRow, privateRow] = $$("[data-testid=preset-row]");
+    expect(publicRow!.querySelector("[data-testid=preset-taken-down]")!.textContent).toBe(t("preset.share.chip.takenDown"));
+    expect(publicRow!.querySelector("[data-testid=preset-taken-down]")!.classList.contains("presets__chip--down")).toBe(true);
     expect($("[data-testid=preset-public]")).toBeNull();
-    expect($("[data-testid=preset-row]").textContent).toContain(t("preset.share.takenDown.note"));
-    await openMenu();
+    expect(publicRow!.textContent).toContain(t("preset.share.takenDown.note"));
+    // 作者要能在平台恢復前就先改回私人，恢復後才不會又回到公開
+    publicRow!.querySelector<HTMLElement>("[data-testid=preset-more]")!.click();
+    await flush();
+    expect($("[data-testid=preset-unpublish]")).not.toBeNull();
+    expect($("[data-testid=preset-publish]")).toBeNull();
+    privateRow!.querySelector<HTMLElement>("[data-testid=preset-more]")!.click();
+    await flush();
     expect($("[data-testid=preset-unpublish]")).toBeNull();
     expect($<HTMLButtonElement>("[data-testid=preset-publish]").disabled).toBe(true);
+  });
+
+  it("封存的預設不標已公開，也不給改回私人或公開", async () => {
+    mocks.list.mockResolvedValue({ ...mineList([summary({ archived: true, visibility: "public" })]), quota: { used: 1, limit: 50, archived: 1 } });
+    await mount("/me/presets");
+    $<HTMLInputElement>("[data-testid=preset-show-archived]").click();
+    await flush();
+    expect($("[data-testid=preset-public]")).toBeNull();
+    await openMenu();
+    expect($("[data-testid=preset-unpublish]")).toBeNull();
+    expect($("[data-testid=preset-publish]")).toBeNull();
   });
 
   it("公開彈層：聲明句貼著公開鈕、連到服務條款；沒有取消鈕；送出帶目前的聲明版本", async () => {
@@ -399,6 +441,20 @@ describe("公開預設詳情", () => {
     await mount("/preset-library/s1");
     expect($("[data-testid=shared-fav]")).toBeNull();
     expect($("[data-testid=shared-report]")).toBeNull();
+  });
+
+  it("詳情：已不公開的取消喜愛先確認，取消後回到喜愛與用過", async () => {
+    mocks.detail.mockResolvedValue(detail({}, { listed: false, favorited: true }));
+    mocks.favorite.mockResolvedValue({ favorited: false });
+    await mount("/preset-library/s1");
+    mocks.confirm.mockResolvedValueOnce(false);
+    $("[data-testid=shared-fav]").click();
+    await flush();
+    expect(mocks.favorite).not.toHaveBeenCalled();
+    $("[data-testid=shared-fav]").click();
+    await flush();
+    expect(mocks.favorite).toHaveBeenCalledWith("tok", "s1", false);
+    expect(router.currentRoute.value.fullPath).toBe("/me/presets?tab=fav");
   });
 
   it("已不公開的標示加說明；看不到的說找不到", async () => {

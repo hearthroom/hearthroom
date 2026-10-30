@@ -4130,5 +4130,9 @@
   "preset.share.new": "New",
   "preset.share.error.declarationChanged": "The publishing notice was just updated. Read it again, then press Make public.",
   "preset.share.mine.note": "Presets are visible only to you until you make them public.",
-  "preset.share.unlisted.short": "You can keep using it."
+  "preset.share.unlisted.short": "You can keep using it.",
+  "preset.share.unfavorite.title": "Remove \"{name}\" from favorites?",
+  "preset.share.unfavorite.body": "This preset is no longer public, so you won't be able to find it again.",
+  "preset.share.unfavorite.confirm": "Remove",
+  "preset.share.unfavorite.keep": "Keep"
 }

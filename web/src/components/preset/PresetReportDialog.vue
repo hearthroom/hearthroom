@@ -67,7 +67,8 @@ async function submit() {
 .report { display: grid; gap: var(--s-3); }
 .report__label { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: var(--s-1); }
 .report__reasons { margin: 0; padding: 0; border: 0; display: grid; gap: 2px; }
-.report__reason { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); padding: 0 var(--s-3); border-radius: var(--r-sm); font-size: 14px; cursor: pointer; }
+/* 單選圈與「原因」標題、下方輸入框同一條左緣；hover 底色往外伸，不把圈推進去 */
+.report__reason { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); padding: 0 var(--s-2); margin-inline: calc(-1 * var(--s-2)); border-radius: var(--r-sm); font-size: 14px; cursor: pointer; }
 .report__reason:hover { background: var(--surface-2); }
 .report__reason input { margin: 0; width: 18px; height: 18px; accent-color: var(--accent); }
 .report__field { display: grid; gap: 6px; }

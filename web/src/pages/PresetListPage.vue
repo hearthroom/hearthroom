@@ -11,7 +11,7 @@
  * P2 分享：頁首下三格「我的／喜愛與用過／公開」，選中的那格記在網址的 ?tab=（重新整理還在）。
  * 「我的」的選單多了公開／改回私人；改回私人不另外確認（PM 2026-10-30），完成後 toast 一行說明。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
@@ -149,7 +149,28 @@ function copied(receipt: WriteReceipt, name: string) {
   void router.push(lp(`/me/presets/${receipt.presetId}`));
 }
 
-function openMenu(id: string) { menu.value = menu.value === id ? "" : id; }
+/**
+ * 選單開在按鈕下方；靠近畫面底部時會被固定在底部的東西（安裝提示、視窗邊緣）蓋住，點下去點到的是
+ * 提示（QA W1）。開出來後量每一項的中心點上是不是自己，被蓋到就往上翻，翻了還蓋到就捲進視窗中間。
+ */
+const menuUp = ref(false);
+async function openMenu(id: string) {
+  menu.value = menu.value === id ? "" : id;
+  menuUp.value = false;
+  if (!menu.value) return;
+  await nextTick();
+  const box = document.querySelector<HTMLElement>(".presets__menu");
+  if (!box) return;
+  const covered = () => [...box.querySelectorAll("button")].some((b) => {
+    const r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !hit || !box.contains(hit);
+  });
+  if (!covered()) return;
+  menuUp.value = true;
+  await nextTick();
+  if (covered()) box.scrollIntoView({ block: "center" });
+}
 const closeMenu = (e: Event) => { if (!(e.target as HTMLElement).closest?.(".presets__menuWrap")) menu.value = ""; };
 const escMenu = (e: KeyboardEvent) => { if (e.key === "Escape") menu.value = ""; };
 
@@ -224,8 +245,8 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <span>{{ $t("preset.row.version", { n: p.version }) }}</span>
               <span class="chip presets__chip">{{ $t(p.sourceKind === "imported" ? "preset.row.source.import" : "preset.row.source.native") }}</span>
               <span v-if="p.archived" class="chip presets__chip">{{ $t("preset.row.archived") }}</span>
-              <span v-if="p.removed" class="chip presets__chip presets__chip--strong" data-testid="preset-taken-down">{{ $t("preset.share.chip.takenDown") }}</span>
-              <span v-else-if="p.visibility === 'public'" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
+              <span v-if="p.removed" class="chip presets__chip presets__chip--down" data-testid="preset-taken-down">{{ $t("preset.share.chip.takenDown") }}</span>
+              <span v-else-if="p.visibility === 'public' && !p.archived" class="chip presets__chip presets__chip--public" data-testid="preset-public">{{ $t("preset.share.chip.public") }}</span>
               <span v-if="p.bindingCount > 0">{{ $t("preset.row.inUse", { n: whole(p.bindingCount) }, p.bindingCount) }}</span>
               <span>{{ $t("preset.row.updated", { datetime: dateTime(p.updatedAt) }) }}</span>
             </span>
@@ -238,10 +259,11 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
               <button type="button" class="btn btn--sm btn--icon" :aria-label="$t('preset.row.more')" :aria-expanded="menu === p.id" :disabled="busy === p.id" data-testid="preset-more" @click="openMenu(p.id)">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.75" /><circle cx="12" cy="12" r="1.75" /><circle cx="19" cy="12" r="1.75" /></svg>
               </button>
-              <div v-if="menu === p.id" class="presets__menu panel" role="menu">
+              <div v-if="menu === p.id" class="presets__menu panel" :class="{ 'presets__menu--up': menuUp }" role="menu">
                 <button type="button" role="menuitem" @click="menu = ''; exporting = p">{{ $t("preset.row.export") }}</button>
                 <button v-if="!p.archived" type="button" role="menuitem" :disabled="full" @click="menu = ''; copying = p">{{ $t("preset.row.copy") }}</button>
-                <button v-if="p.visibility === 'public' && !p.removed" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
+                <!-- 被下架的也能改回私人：平台恢復後才不會又自動回到公開。封存的不在公開列表，上游也不收 -->
+                <button v-if="p.visibility === 'public' && !p.archived" type="button" role="menuitem" data-testid="preset-unpublish" @click="unpublish(p)">{{ $t("preset.share.menu.unpublish") }}</button>
                 <button v-else-if="!p.archived" type="button" role="menuitem" :disabled="p.removed || !declaration" data-testid="preset-publish" @click="menu = ''; publishing = p">{{ $t("preset.share.menu.publish") }}</button>
                 <button v-if="!p.archived && p.allowedActions.length" type="button" role="menuitem" class="presets__danger" data-testid="preset-remove" @click="remove(p)">
                   {{ $t(p.allowedActions.includes("delete") ? "preset.row.delete" : "preset.row.archive") }}
@@ -284,6 +306,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__rowActions { display: flex; align-items: center; gap: var(--s-1); flex-shrink: 0; }
 .presets__menuWrap { position: relative; }
 .presets__menu { position: absolute; right: 0; top: calc(100% + var(--s-1)); z-index: 40; min-width: 160px; padding: var(--s-1); display: grid; border-radius: var(--r-md); box-shadow: var(--shadow-md); }
+.presets__menu--up { top: auto; bottom: calc(100% + var(--s-1)); }
 .presets__menu button { min-height: var(--h-md); padding: 0 var(--s-3); border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .presets__menu button:hover:not(:disabled) { background: var(--surface-2); }
 .presets__menu button:disabled { opacity: .45; cursor: not-allowed; }
@@ -291,13 +314,15 @@ onBeforeUnmount(() => { document.removeEventListener("click", closeMenu); docume
 .presets__tabs { display: flex; justify-self: stretch; }
 .presets__tab { flex: 1; display: flex; align-items: center; justify-content: center; height: var(--h-md); text-decoration: none; }
 .presets__chip--public { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
-.presets__chip--strong { background: var(--border); color: var(--text); font-weight: 500; }
+/* 已下架是出事的狀態，不是類型：用站上錯誤提示（.notice--error）同一組危險淡底 */
+.presets__chip--down { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); font-weight: 500; }
 .presets__note { line-height: 1.5; }
 .presets__more { justify-self: center; }
 .presets__status:empty { display: none; }
 .is-disabled { opacity: .45; pointer-events: none; }
 @media (max-width: 760px) {
-  .presets__actions { width: 100%; }
-  .presets__actions .btn { flex: 1; height: var(--h-lg); }
+  /* 日文、英文在 320–360 寬兩顆放不下（QA W2）：放不下就各佔一排，不切掉主按鈕 */
+  .presets__actions { width: 100%; flex-wrap: wrap; }
+  .presets__actions .btn { flex: 1 1 0; min-width: fit-content; height: var(--h-lg); }
 }
 </style>

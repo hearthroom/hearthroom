@@ -4130,5 +4130,9 @@
   "preset.share.new": "新公開",
   "preset.share.error.declarationChanged": "公開聲明剛更新了。重新看一遍再按「公開」。",
   "preset.share.mine.note": "預設只有你看得到，公開後別人才找得到。",
-  "preset.share.unlisted.short": "你仍可繼續使用。"
+  "preset.share.unlisted.short": "你仍可繼續使用。",
+  "preset.share.unfavorite.title": "取消喜愛「{name}」？",
+  "preset.share.unfavorite.body": "這份預設已不公開，取消後就找不回來了。",
+  "preset.share.unfavorite.confirm": "取消喜愛",
+  "preset.share.unfavorite.keep": "保留喜愛"
 }

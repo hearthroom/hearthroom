@@ -12,6 +12,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
 import { dateOnly, whole } from "@/lib/format";
 import { favoritePreset, fetchLibraryPreset, type PresetLibraryDetail } from "@/lib/presets";
@@ -84,12 +85,19 @@ function say(text: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 4000);
 }
 
+/** 已不公開的取消喜愛就再也看不到、加不回來：先確認，取消後回到喜愛與用過 */
 async function toggleFavorite() {
   if (!item.value || favBusy.value) return;
+  const losing = item.value.favorited && !item.value.listed;
+  if (losing && !(await confirmDialog({
+    title: t("preset.share.unfavorite.title", { name: item.value.title }), message: t("preset.share.unfavorite.body"),
+    confirmText: t("preset.share.unfavorite.confirm"), cancelText: t("preset.share.unfavorite.keep"), danger: true, dangerAppearance: "subdued", focusCancel: true,
+  }))) return;
   favBusy.value = true;
   try {
     const res = await favoritePreset(await token(), item.value.presetId, !item.value.favorited);
     item.value.favorited = res.favorited;
+    if (losing && !res.favorited) { void router.replace({ path: lp("/me/presets"), query: { tab: "fav" } }); return; }
     say(t(res.favorited ? "preset.share.fav.added" : "preset.share.fav.removed"));
   } catch (err) {
     if (!consentNeeded(err)) say(t("preset.share.error.fav"));
@@ -220,11 +228,12 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 </template>
 
 <style scoped>
-.shared { display: grid; gap: var(--s-4); padding-block: var(--s-5) var(--s-7); max-width: 1040px; }
-.shared__back { justify-self: start; display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-sm); font-size: 14px; }
+.shared { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); padding-block: var(--s-5) var(--s-7); max-width: 1040px; }
+.shared__back { color: var(--accent-text); justify-self: start; display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-sm); font-size: 14px; }
 .shared__grid { display: grid; gap: var(--s-4); grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "side" "content"; }
-.shared__head { grid-area: head; display: grid; gap: var(--s-2); }
-.shared__side { grid-area: side; display: grid; gap: var(--s-3); align-content: start; }
+.shared__head { grid-area: head; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+/* 欄寬用 minmax(0,1fr)：長的日文、英文不把這一欄撐出視窗（QA W3，320 寬） */
+.shared__side { grid-area: side; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
 .shared__content { grid-area: content; }
 .shared__title { margin: 0; font-size: clamp(24px, 4vw, 30px); overflow-wrap: anywhere; }
 .shared__by { margin: 0; overflow-wrap: anywhere; }
@@ -232,20 +241,20 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__chip { height: auto; min-height: 22px; padding-block: 2px; cursor: default; overflow-wrap: anywhere; }
 .shared__chip:hover { background: var(--surface-2); color: var(--text-2); }
 .shared__chip--strong, .shared__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
-.shared__actions { display: flex; gap: var(--s-2); }
-.shared__actions > * { flex: 1; }
+.shared__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.shared__actions > * { flex: 1 1 0; min-width: fit-content; }
 .shared__fav, .shared__report, .shared__edit { gap: var(--s-2); }
 .shared__fav--on { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
 .shared__fav--on:hover { background: var(--accent-soft); }
 .shared__reported { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-1); min-height: var(--h-lg); font-size: 14px; color: var(--text-2); }
-.shared__apply { margin: 0; line-height: 1.6; }
-.shared__facts { margin: 0; padding: var(--s-4); display: grid; gap: var(--s-3); }
+.shared__apply { margin: 0; line-height: 1.6; text-wrap: pretty; }
+.shared__facts { margin: 0; padding: var(--s-4); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
 .shared__facts div { display: grid; gap: var(--s-1); }
 .shared__facts dt { font-size: 12.5px; color: var(--text-3); }
 .shared__facts dd { margin: 0; font-size: 14px; display: grid; gap: var(--s-1); }
 .shared__models { display: flex; flex-wrap: wrap; gap: 6px; }
 .shared__wrap { overflow-wrap: anywhere; }
-.shared__content { padding: var(--s-4); display: grid; gap: var(--s-3); align-content: start; }
+.shared__content { padding: var(--s-4); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; }
 .shared__content > p { margin: 0; }
 .shared__h2 { margin: 0; font-size: 16px; }
 .shared__entries { list-style: none; margin: 0; padding: 0; display: grid; }
