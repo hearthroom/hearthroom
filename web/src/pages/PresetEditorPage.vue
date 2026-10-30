@@ -500,7 +500,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__models { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); min-width: 0; }
 /* 原生下拉會撐到最長的選項那麼寬（模型名可能很長）：限制在欄位寬度內，名稱過長的已選模型自己換行 */
 .preset-editor__modelPick { flex: 1 1 160px; width: auto; min-width: 0; max-width: 100%; }
-.preset-editor__models .chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.preset-editor__models .chip { max-width: 100%; height: auto; min-height: 26px; padding-block: 4px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .preset-editor__body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: var(--s-4); align-items: start; }
 .preset-editor__list, .preset-editor__detail, .preset-editor__section { min-width: 0; }
 .preset-editor__ghost { min-height: 320px; }
