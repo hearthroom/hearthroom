@@ -3978,5 +3978,8 @@
   "preset.toolReply.detected": "このプリセットは、もともとSillyTavernの拡張機能のツールで返信する設定です。{site}にはそのツールがありません。使いたい場合は「ツールで返信」をオンにすると、{site}の返信ツールが使われます。結果が元と異なる場合があります。",
   "preset.reason.field.external_tools_not_executed": "拡張機能のツールは実行されません。",
   "preset.reason.field.external_scripts_not_executed": "拡張機能のスクリプトは実行されません。",
-  "preset.report.fields.summary": "反映されない設定 {n} 件"
+  "preset.report.fields.summary": "反映されない設定 {n} 件",
+  "preset.toolReply.format.title": "返信ツールの形式",
+  "preset.toolReply.format.hint": "プロンプトで返信の形式を補強したいときは、この形式でツールを呼び出すようAIに求めることができます。ツール以外の文章は返信に表示されません。",
+  "preset.toolReply.format.copyLabel": "返信ツールの形式をコピー"
 }

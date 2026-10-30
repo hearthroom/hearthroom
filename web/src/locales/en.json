@@ -3978,5 +3978,8 @@
   "preset.toolReply.detected": "This preset originally replied with a tool from a SillyTavern extension, which {site} doesn't have. To use tool replies, turn on \"Reply with tools\" so {site}'s own reply tool is used. Results may differ from the original.",
   "preset.reason.field.external_tools_not_executed": "Tools from extensions don't run.",
   "preset.reason.field.external_scripts_not_executed": "Scripts from extensions don't run.",
-  "preset.report.fields.summary": "{n} setting has no effect | {n} settings have no effect"
+  "preset.report.fields.summary": "{n} setting has no effect | {n} settings have no effect",
+  "preset.toolReply.format.title": "Reply tool format",
+  "preset.toolReply.format.hint": "To reinforce the reply format in a prompt, ask the AI to call the tool like this; text outside the tool doesn't appear in the reply.",
+  "preset.toolReply.format.copyLabel": "Copy reply tool format"
 }

@@ -48,7 +48,9 @@ export interface CompatibilityEntry {
 }
 export interface CompatibilityField { path: string; uiStatus?: UiStatus; reasonCodes: string[]; inertSettings: string[] }
 /** 舊版本的報告沒有這一項，當兩者都是 false */
-export interface ToolReplyReport { enabled: boolean; externalToolBindingsDetected: boolean }
+/** 綺夢社自己的回覆工具，上游原樣給（開關關著也給）；名稱、參數、示例是協定文字，不翻譯 */
+export interface ReplyTool { name: string; description: string; parameters: { properties?: Record<string, { description?: string }> } & Record<string, unknown>; example: { name: string; arguments: Record<string, unknown> } }
+export interface ToolReplyReport { enabled: boolean; externalToolBindingsDetected: boolean; tool?: ReplyTool }
 export interface Compatibility { compilerVersion: string; entries: CompatibilityEntry[]; fields: CompatibilityField[]; reviewRequired: boolean; toolReply?: ToolReplyReport }
 
 export interface PresetRevision {

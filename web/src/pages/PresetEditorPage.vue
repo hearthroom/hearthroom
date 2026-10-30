@@ -438,7 +438,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
       <section class="panel preset-editor__section">
         <fieldset class="preset-editor__fieldset" :disabled="readOnly">
-          <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected"
+          <PresetToolReply :enabled="!!doc.selection.toolReply" :detected="!!compat?.toolReply?.externalToolBindingsDetected" :tool="compat?.toolReply?.tool"
             @change="(v) => { doc!.selection.toolReply = v; }" />
         </fieldset>
       </section>

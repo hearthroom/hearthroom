@@ -42,6 +42,9 @@ function orderOf(doc) {
 }
 function promptsOf(doc) { return (doc.st.data && doc.st.type ? doc.st.data.prompts : doc.st.prompts) ?? []; }
 
+// 回覆工具格式的合成示例：形狀照上游，字是假的（真的定義由上游給）
+const REPLY_TOOL = { name: "submit_reply", description: "Submit the complete reply. Text outside this tool is discarded.", parameters: { type: "object", properties: { body: { type: "string", description: "The complete reply text, keeping its formatting and line breaks." } }, required: ["body"] }, example: { name: "submit_reply", arguments: { body: "(示範正文)" } } };
+
 // 跟上游一樣只看酒館 SPreset 擴充功能：有啟用的工具綁定只提示；擴充功能的工具與程式都不執行
 function extensionFlags(st) {
   const sp = (st.data && st.type ? st.data.extensions : st.extensions)?.SPreset ?? {};
@@ -72,7 +75,7 @@ export function analyze(doc) {
   const ext = extensionFlags(doc.st);
   const fields = Object.keys(doc.st).filter((k) => !KNOWN_FIELDS.has(k)).map((k) => ({ path: k, status: "unsupported", reason: "source_only", uiStatus: "unsupported",
     reasonCodes: ["source_only", ...(k === "extensions" && ext.tools ? ["external_tools_not_executed"] : []), ...(k === "extensions" && ext.scripts ? ["external_scripts_not_executed"] : [])], inertSettings: [k] }));
-  return { compilerVersion: "mock-p1.3", entries, fields, reviewRequired: entries.some((e) => e.uiStatus === "unsupported"), toolReply: { enabled: !!doc.selection.toolReply, externalToolBindingsDetected: ext.tools } };
+  return { compilerVersion: "mock-p1.3", entries, fields, reviewRequired: entries.some((e) => e.uiStatus === "unsupported"), toolReply: { enabled: !!doc.selection.toolReply, externalToolBindingsDetected: ext.tools, tool: REPLY_TOOL } };
 }
 
 /**

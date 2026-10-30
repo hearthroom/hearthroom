@@ -3978,5 +3978,8 @@
   "preset.toolReply.detected": "이 프리셋은 원래 SillyTavern 확장 기능의 도구로 답장하도록 되어 있고, {site}에는 그 도구가 없습니다. 쓰려면 '도구로 답장'을 켜세요. {site}의 답장 도구가 대신 쓰이며, 결과가 원래와 다를 수 있습니다.",
   "preset.reason.field.external_tools_not_executed": "확장 기능의 도구는 실행되지 않습니다.",
   "preset.reason.field.external_scripts_not_executed": "확장 기능의 스크립트는 실행되지 않습니다.",
-  "preset.report.fields.summary": "적용되지 않는 설정 {n}개"
+  "preset.report.fields.summary": "적용되지 않는 설정 {n}개",
+  "preset.toolReply.format.title": "답장 도구 형식",
+  "preset.toolReply.format.hint": "프롬프트에서 답장 형식을 보강하고 싶다면 AI에게 이 형식으로 도구를 호출하도록 요청하면 됩니다. 도구 밖의 글은 답장에 표시되지 않습니다.",
+  "preset.toolReply.format.copyLabel": "답장 도구 형식 복사"
 }

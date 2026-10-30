@@ -542,3 +542,42 @@ describe("用工具回覆（預設關，匯入不自動打開；PM 2026-10-30）
     expect($("[data-testid=preset-tool-reply-detected]")).toBeNull();
   });
 });
+
+describe("回覆工具格式（用工具回覆打開時顯示；PM 2026-10-30）", () => {
+  const tool = { name: "submit_reply", description: "Submit the full reply.", parameters: { type: "object", properties: { body: { type: "string", description: "The complete reply text." } }, required: ["body"] }, example: { name: "submit_reply", arguments: { body: "Example reply." } } };
+  const report = (enabled: boolean, withTool = true): Compatibility => ({ ...compat(), compilerVersion: "preset-p1.3", reviewRequired: false,
+    entries: compat().entries.filter((e) => e.identifier !== "turn" && e.identifier !== "script"), fields: [],
+    toolReply: { enabled, externalToolBindingsDetected: false, ...(withTool ? { tool } : {}) } });
+  async function open(enabled: boolean, withTool = true) {
+    const d = doc(); d.selection.toolReply = enabled;
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: report(enabled, withTool) });
+    mocks.analyze.mockImplementation(async () => report(enabled, withTool));
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+
+  it("打開時照上游給的原樣列出工具名、參數說明與呼叫示例，複製整塊", async () => {
+    await open(true);
+    const box = $("[data-testid=preset-tool-format]");
+    expect(box.textContent).toContain(t("preset.toolReply.format.title"));
+    expect(box.textContent).toContain("submit_reply");
+    expect(box.textContent).toContain("body");
+    expect(box.textContent).toContain("The complete reply text.");
+    expect(box.querySelector("pre")!.textContent).toBe(JSON.stringify(tool.example, null, 2));
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    box.querySelector<HTMLButtonElement>("[data-testid=preset-tool-format-copy]")!.click();
+    await flush();
+    const copied = JSON.parse(writeText.mock.calls[0]![0] as string);
+    expect(copied).toEqual({ name: "submit_reply", description: "Submit the full reply.", parameters: tool.parameters, example: tool.example });
+    expect(box.querySelector("[data-testid=preset-tool-format-copy]")!.textContent).toContain(t("me.copied"));
+  });
+
+  it("關著不顯示；上游沒給格式（舊版本）也不顯示", async () => {
+    await open(false);
+    expect($("[data-testid=preset-tool-format]")).toBeNull();
+    app?.unmount(); root?.remove();
+    await open(true, false);
+    expect($("[data-testid=preset-tool-format]")).toBeNull();
+  });
+});

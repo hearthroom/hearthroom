@@ -3978,5 +3978,8 @@
   "preset.toolReply.detected": "這份預設原本靠酒館的擴充功能用工具回覆，{site}沒有那個工具。想用的話，打開「用工具回覆」，改用{site}自己的回覆工具，效果可能和原本不同。",
   "preset.reason.field.external_tools_not_executed": "擴充功能裡的工具不會執行。",
   "preset.reason.field.external_scripts_not_executed": "擴充功能裡的程式不會執行。",
-  "preset.report.fields.summary": "{n} 項設定不生效"
+  "preset.report.fields.summary": "{n} 項設定不生效",
+  "preset.toolReply.format.title": "回覆工具格式",
+  "preset.toolReply.format.hint": "想在提示詞裡加強回覆格式，可以要求 AI 照這個格式呼叫；工具以外的文字不會出現在回覆裡。",
+  "preset.toolReply.format.copyLabel": "複製回覆工具格式"
 }

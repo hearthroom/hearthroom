@@ -246,7 +246,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
           </p>
           <p v-if="counts.unsupported" class="subtle">{{ $t("preset.report.unsupported.note") }}</p>
           <p v-if="stale" class="notice" role="status">{{ $t("preset.report.stale") }}</p>
-          <PresetToolReply v-if="toolDetected" :enabled="!!selection?.toolReply" detected :disabled="updating"
+          <PresetToolReply v-if="toolDetected" :enabled="!!selection?.toolReply" detected :tool="report?.toolReply?.tool" :disabled="updating"
             @change="(v) => selection && select({ ...selection, toolReply: v })" />
 
           <ul class="preset-import__entries">
@@ -273,7 +273,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
           </ul>
 
           <!-- 來源靠擴充功能用工具回覆：開關和提示排在摘要下面，不然要捲過整份條目才看得到 -->
-          <PresetToolReply v-if="!toolDetected" :enabled="!!selection?.toolReply" :disabled="updating"
+          <PresetToolReply v-if="!toolDetected" :enabled="!!selection?.toolReply" :tool="report?.toolReply?.tool" :disabled="updating"
             @change="(v) => selection && select({ ...selection, toolReply: v })" />
 
           <!-- 不生效的設定多半是一長串酒館鍵名：收成一行，點開才列（原始鍵名，酒館玩家認得） -->
