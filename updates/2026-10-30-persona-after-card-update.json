@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "卡片更新後改了用戶人設卻沒生效的問題已修正，現在會套用到目前的對話存檔。",
+    "zh-Hans": "卡片更新后修改用户人设却没生效的问题已修复，现在会用在当前的对话存档上。",
+    "en": "Changes to your persona now take effect in the current conversation, even after the card has been updated.",
+    "ja": "カードの更新後に「あなたの設定」を変えても反映されない問題を直し、今の会話に反映されます。",
+    "ko": "카드가 업데이트된 뒤 내 설정을 바꿔도 반영되지 않던 문제를 고쳐, 이제 현재 대화에 바로 반영됩니다."
+  }
+}
