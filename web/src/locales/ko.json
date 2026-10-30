@@ -3771,6 +3771,7 @@
   "preset.models.placeholder": "시리즈 또는 모델 선택",
   "preset.models.series": "{name} 시리즈 전체",
   "preset.models.seriesAll": "시리즈 전체",
+  "preset.models.inSeries": "시리즈에 포함됨",
   "preset.models.empty": "일치하는 시리즈나 모델이 없습니다",
   "preset.models.remove": "{name} 삭제",
   "preset.editor.save": "새 버전 저장",

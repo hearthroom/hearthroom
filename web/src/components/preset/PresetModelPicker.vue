@@ -4,7 +4,8 @@
  * 編輯器、公開彈層（多選）與公開列表的篩選（單選，`multiple=false`）共用這一份，幾處長得一樣。
  *
  * 一點進框就列出全部，打字同時比對系列名與模型名：模型命中時連它的系列一起留著，給人「選整個系列」的選項。
- * 多選：已選的是框上方的標籤，不再列；選了整個系列，它底下的模型也不列（已經涵蓋）。目錄裡找不到的舊值照原字顯示，可以拿掉。
+ * 多選：已選的是框上方的標籤；已選的模型不再列。選了整個系列會收掉它底下已選的模型（已經涵蓋），清單上這個系列標成已選、
+ * 底下的模型寫「已含於系列」且不能選。目錄裡找不到的舊值照原字顯示，可以拿掉。
  * 單選：選到的值就寫在框裡（篩選列一眼看得出選了什麼）；點進框全選那段字，打字就換成搜尋，框右邊的 × 清掉回到沒選。
  *
  * 清單掛在 body、用 fixed 定位：放在會捲動的彈層裡不會被裁、也不撐出捲軸；下方不夠時往上開（手機的底部彈層）。
@@ -37,23 +38,32 @@ let composing = false;
 const current = computed(() => (!props.multiple && props.modelValue[0] ? modelValueLabel(props.modelValue[0]) : ""));
 const shown = computed(() => (props.multiple || dirty.value ? query.value : current.value));
 
-type Row = { kind: "series" | "model"; value: string; name: string };
+// covered：所屬系列已經選了，這一列只是讓人看到它被涵蓋，不能選
+type Row = { kind: "series" | "model"; value: string; name: string; group: string; chosen?: boolean; covered?: boolean };
 const rows = computed<Row[]>(() => {
   const q = dirty.value ? query.value.trim().toLocaleLowerCase() : "";
   const chosen = new Set(props.multiple ? props.modelValue : []);
   const out: Row[] = [];
   for (const g of props.groups) {
     const series = `series:${g.group}`;
-    if (chosen.has(series)) continue;
+    const whole = chosen.has(series);
     const groupHit = !q || g.group.toLocaleLowerCase().includes(q);
-    const families = g.families.filter((f) => !chosen.has(`model:${f}`) && (groupHit || f.toLocaleLowerCase().includes(q)));
+    const families = g.families.filter((f) => (whole || !chosen.has(`model:${f}`)) && (groupHit || f.toLocaleLowerCase().includes(q)));
     if (!groupHit && !families.length) continue;
-    out.push({ kind: "series", value: series, name: g.group });
-    for (const f of families) out.push({ kind: "model", value: `model:${f}`, name: f });
+    out.push({ kind: "series", value: series, name: g.group, group: g.group, chosen: whole });
+    for (const f of families) out.push({ kind: "model", value: `model:${f}`, name: f, group: g.group, covered: whole });
   }
   return out;
 });
-watch(rows, (r) => { if (active.value >= r.length) active.value = Math.max(0, r.length - 1); });
+const pickable = (r: Row | undefined): r is Row => !!r && !r.chosen && !r.covered;
+// 從 i 往 dir 方向找下一個能選的列（繞回），都不能選就留在原地
+function step(from: number, dir: 1 | -1) {
+  const n = rows.value.length;
+  for (let k = 1; k <= n; k++) { const i = (from + dir * k + n * 2) % n; if (pickable(rows.value[i])) return i; }
+  return from;
+}
+const first = () => Math.max(0, rows.value.findIndex(pickable));
+watch(rows, () => { if (!pickable(rows.value[active.value])) active.value = first(); });
 watch(() => props.disabled, (v) => { if (v) close(); });
 
 function position() {
@@ -76,7 +86,7 @@ function listen(on: boolean) {
   window.visualViewport?.[f]("resize", reposition);
   window.visualViewport?.[f]("scroll", reposition);
 }
-watch(open, (v) => { listen(v); if (v) position(); });
+watch(open, (v) => { listen(v); if (v) { position(); if (!pickable(rows.value[active.value])) active.value = first(); } });
 watch(rows, () => { if (open.value) void nextTick(position); });
 onBeforeUnmount(() => listen(false));
 
@@ -85,11 +95,13 @@ function close() { open.value = false; query.value = ""; dirty.value = false; }
 
 function choose(i: number) {
   const row = rows.value[i];
-  if (!row) return;
+  if (!pickable(row)) return;
   query.value = "";
   dirty.value = false;
   if (props.multiple) {
-    emit("update:modelValue", [...props.modelValue, row.value]);
+    // 選整個系列：它底下已選的模型已經涵蓋，一起收掉
+    const covered = row.kind === "series" ? new Set(props.groups.find((g) => g.group === row.group)?.families.map((f) => `model:${f}`)) : new Set<string>();
+    emit("update:modelValue", [...props.modelValue.filter((v) => !covered.has(v)), row.value]);
     return;
   }
   open.value = false;
@@ -113,7 +125,7 @@ function focused() {
 function typed(value: string) {
   query.value = value;
   dirty.value = true;
-  active.value = 0;
+  active.value = first();
   if (!composing) show();
 }
 function key(e: KeyboardEvent) {
@@ -133,9 +145,9 @@ function key(e: KeyboardEvent) {
   if (!open.value) { show(); return; }
   const n = rows.value.length;
   if (!n) return;
-  if (e.key === "Home") active.value = 0;
-  else if (e.key === "End") active.value = n - 1;
-  else active.value = (active.value + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
+  if (e.key === "Home") active.value = step(n - 1, 1);
+  else if (e.key === "End") active.value = step(0, -1);
+  else active.value = step(active.value, e.key === "ArrowDown" ? 1 : -1);
   void nextTick(() => document.getElementById(`${id}-${active.value}`)?.scrollIntoView?.({ block: "nearest" }));
 }
 function compositionEnd(e: Event) { composing = false; typed((e.target as HTMLInputElement).value); }
@@ -187,11 +199,13 @@ defineExpose({ focus: () => input.value?.focus() });
           <li
             v-for="(row, i) in rows" :id="`${id}-${i}`" :key="row.value" role="option"
             class="model-pick__item" :class="[`model-pick__item--${row.kind}`, { 'is-active': i === active }]"
-            :aria-selected="!multiple && modelValue.includes(row.value)"
-            @pointermove="active = i" @click="choose(i)"
+            :aria-selected="row.chosen || (!multiple && modelValue.includes(row.value))"
+            :aria-disabled="row.chosen || row.covered || undefined"
+            @pointermove="pickable(row) && (active = i)" @click="choose(i)"
           >
             <span class="model-pick__name">{{ row.name }}</span>
             <span v-if="row.kind === 'series'" class="model-pick__all">{{ " " + t("preset.models.seriesAll") }}</span>
+            <span v-else-if="row.covered" class="model-pick__all">{{ " " + t("preset.models.inSeries") }}</span>
           </li>
         </ul>
         <p v-else-if="dirty && query.trim()" class="model-pick__empty subtle" data-testid="model-pick-empty">{{ t("preset.models.empty") }}</p>
@@ -220,6 +234,8 @@ defineExpose({ focus: () => input.value?.focus() });
 .model-pick__item--model { padding-inline-start: calc(var(--s-4) + var(--s-4)); }
 .model-pick__item.is-active { background: var(--surface-2); }
 .model-pick__item[aria-selected="true"] { color: var(--accent-text, var(--accent)); }
+.model-pick__item[aria-disabled="true"] { cursor: default; }
+.model-pick__item--model[aria-disabled="true"] .model-pick__name { color: var(--text-3); }
 .model-pick__name { min-width: 0; overflow-wrap: anywhere; }
 .model-pick__all { flex: none; font-size: 12px; font-weight: 400; color: var(--text-3); }
 .model-pick__empty { margin: 0; padding: var(--s-2) var(--s-4); }

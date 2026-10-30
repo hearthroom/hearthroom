@@ -64,16 +64,32 @@ describe("PresetModelPicker", () => {
     expect(document.querySelector("[data-testid=model-pick-empty]")?.textContent).toContain(t("preset.models.empty"));
   });
 
-  it("選模型存 model:，選系列存 series:；選了整個系列，那個系列的模型就不再列出", async () => {
+  it("選模型存 model:；之後選它的整個系列存 series:，已選的那個模型一起收掉（QA M1）", async () => {
     await mount();
     await open();
     options()[2]!.click(); await flush();
     expect(value).toEqual(["model:DeepSeek V4.1 Flash"]);
     expect(texts()).not.toContain("DeepSeek V4.1 Flash");
-    options().find((o) => o.textContent?.includes("Gemini"))!.click(); await flush();
-    expect(value).toEqual(["model:DeepSeek V4.1 Flash", "series:Gemini"]);
-    expect(texts().some((x) => x?.includes("Gemini"))).toBe(false);
-    expect(chips()).toEqual(["DeepSeek V4.1 Flash", t("preset.models.series", { name: "Gemini" })]);
+    options()[0]!.click(); await flush();
+    expect(value).toEqual(["series:DeepSeek"]);
+    expect(chips()).toEqual([t("preset.models.series", { name: "DeepSeek" })]);
+  });
+
+  it("系列已選：系列那列標已選、底下模型寫「已含於系列」且不能選；鍵盤跳過它們", async () => {
+    await mount(["series:DeepSeek"]);
+    await open();
+    const inSeries = t("preset.models.inSeries");
+    expect(texts().slice(0, 4)).toEqual([`DeepSeek ${t("preset.models.seriesAll")}`, `DeepSeek V4 Pro ${inSeries}`, `DeepSeek V4.1 Flash ${inSeries}`, `Gemini ${t("preset.models.seriesAll")}`]);
+    expect(options()[0]!.getAttribute("aria-selected")).toBe("true");
+    expect(options().slice(0, 3).every((o) => o.getAttribute("aria-disabled") === "true")).toBe(true);
+    options()[1]!.click(); options()[0]!.click(); await flush();
+    expect(value).toEqual(["series:DeepSeek"]);
+    expect(input().getAttribute("aria-activedescendant")).toBe(options()[3]!.id);
+    await key("ArrowUp");
+    expect(input().getAttribute("aria-activedescendant")).toBe(options()[4]!.id);
+    await key("ArrowDown");
+    await key("Enter");
+    expect(value).toEqual(["series:DeepSeek", "series:Gemini"]);
   });
 
   it("標籤上的移除鍵拿掉那一個；目錄裡找不到的舊值照原字顯示，也能拿掉", async () => {

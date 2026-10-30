@@ -3771,6 +3771,7 @@
   "preset.models.placeholder": "シリーズまたはモデルを選択",
   "preset.models.series": "{name} シリーズ全体",
   "preset.models.seriesAll": "シリーズ全体",
+  "preset.models.inSeries": "シリーズに含まれています",
   "preset.models.empty": "一致するシリーズ・モデルはありません",
   "preset.models.remove": "{name} を削除",
   "preset.editor.save": "新しいバージョンを保存",

@@ -3771,6 +3771,7 @@
   "preset.models.placeholder": "选择系列或模型",
   "preset.models.series": "{name} 全系列",
   "preset.models.seriesAll": "全系列",
+  "preset.models.inSeries": "已含于系列",
   "preset.models.empty": "没有符合的系列或模型",
   "preset.models.remove": "移除 {name}",
   "preset.editor.save": "保存新版本",
