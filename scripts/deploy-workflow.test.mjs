@@ -85,3 +85,11 @@ test('review playback authority callback reaches the Worker instead of the SPA f
  const path='/internal/review/11111111-1111-4111-8111-111111111111/play-access';
  assert.ok(patterns.some(p=>p.endsWith('*')?path.startsWith(p.slice(0,-1)):path===p),'review callback bypasses authority handler');
 });
+
+test('Harbor account notice callback reaches the Worker instead of the asset layer',()=>{
+ const config=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+ const routes=/run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1]??'';
+ const patterns=[...routes.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
+ const path='/internal/enforcement/notices';
+ assert.ok(patterns.some(p=>p.endsWith('*')?path.startsWith(p.slice(0,-1)):path===p),'enforcement notice POST is swallowed by static assets (405)');
+});
