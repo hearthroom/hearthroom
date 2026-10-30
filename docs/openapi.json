@@ -31402,6 +31402,55 @@
           "externalToolBindingsDetected": {
             "type": "boolean",
             "description": "The source contains enabled tool bindings from a SillyTavern extension. It does not show the tool was called or used to reply. Show a hint only; this never turns `enabled` on."
+          },
+          "tool": {
+            "$ref": "#/components/schemas/PresetReplyTool"
+          }
+        }
+      },
+      "PresetReplyTool": {
+        "type": "object",
+        "x-unpublished": "p2",
+        "required": [
+          "name",
+          "description",
+          "parameters",
+          "example"
+        ],
+        "description": "The service's own reply tool, sent whether or not tool replies are on, so a preset can tell the model to call it. Show it as given: the name, parameters and example are protocol text, not translated.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tool name, for example `submit_reply`."
+          },
+          "description": {
+            "type": "string",
+            "description": "The tool description the model receives."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "JSON Schema of the tool arguments, as the model receives it."
+          },
+          "example": {
+            "type": "object",
+            "required": [
+              "name",
+              "arguments"
+            ],
+            "description": "One call with synthetic arguments.",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           }
         }
       }
