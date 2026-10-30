@@ -14,7 +14,7 @@
  *   unavailable  綁定 GET 回 state=unavailable（選用的版本讀不到）
  *   toolModel    回覆偏好的工具回覆狀態回 model_unsupported（目前模型不支援）
  *   toolMode     回覆偏好的工具回覆狀態回 mode_unsupported（Agent／世界模式）
- * 在畫布套用到某個預設，那個預設的 bindingCount 會加一，列表就只能封存。
+ * 在畫布套用到某張卡，那個預設的 bindingCount（正在用它的卡數）就是 1，列表就只能封存。
  */
 import crypto from "node:crypto";
 
@@ -27,8 +27,10 @@ const revisions = new Map();
 const previews = new Map();
 const receipts = new Map();
 let scenario = "";
-let conversationBinding = { mode: "card_default", presetId: null, revisionId: null, bindingVersion: 0, state: "ready" };
+// 自訂預設只套用到整張卡（owner 2026-10-30）：只有一份卡層綁定，這段對話讀到的也是它
 let cardBinding = { mode: "card_default", presetId: null, revisionId: null, bindingVersion: 0, state: "ready" };
+// 套用時由預設決定的項目（上游的 presetLocked）
+const PRESET_LOCKED = ["agency", "style", "perspective", "pace", "sandboxLevel", "jailbreak"];
 let responseRevision = 0;
 const responseOverrides = {};
 
@@ -222,33 +224,36 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     return json(res, 201, idempotent(req, null, () => create(body.title, p.document, body.recommendedModels, "imported"))), true;
   }
   // ── 綁定（畫布） ──
-  if (m === "GET" && path === "/open/v1/conversation/preset") return json(res, 200, scenario === "unavailable" && conversationBinding.mode === "revision" ? { ...bindingBody(conversationBinding), state: "unavailable" } : bindingBody(conversationBinding)), true;
-  if (m === "GET" && path === "/open/v1/player/preset-default") return json(res, 200, bindingBody(cardBinding)), true;
-  if (m === "POST" && (path === "/open/v1/conversation/preset/apply" || path === "/open/v1/player/preset-default/save")) {
-    if (scenario === "busy" && path.includes("conversation")) return json(res, 409, { error: "preset_conflict", reason: "operation_active" }), true;
-    const card = path.includes("player");
-    const cur = card ? cardBinding : conversationBinding;
-    if ((card ? body.expectedVersion : body.expectedBindingVersion) !== cur.bindingVersion) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
+  const cardBody = () => scenario === "unavailable" && cardBinding.mode === "revision" ? { ...bindingBody(cardBinding), state: "unavailable" } : bindingBody(cardBinding);
+  if (m === "GET" && (path === "/open/v1/conversation/preset" || path === "/open/v1/player/preset-default")) return json(res, 200, { ...cardBody(), scope: "card" }), true;
+  // 舊的「只這段對話／只新存檔」寫法：上游拒收，請舊畫面重新載入
+  if (m === "POST" && path === "/open/v1/conversation/preset/apply") return json(res, 409, { error: "preset_conflict", reason: "preset_scope_changed" }), true;
+  if (m === "POST" && path === "/open/v1/player/preset-default/save") {
+    if (body.scope !== "card") return json(res, 409, { error: "preset_conflict", reason: "preset_scope_changed" }), true;
+    if (scenario === "busy") return json(res, 409, { error: "preset_conflict", reason: "operation_active" }), true;
+    if (body.expectedVersion !== cardBinding.bindingVersion) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     const rev = body.revisionId ? revisions.get(body.revisionId) : null;
-    const next = rev ? { mode: "revision", presetId: rev.presetId, revisionId: rev.revisionId, bindingVersion: cur.bindingVersion + 1, state: "ready" } : { mode: "card_default", presetId: null, revisionId: null, bindingVersion: cur.bindingVersion + 1, state: "ready" };
-    if (card) cardBinding = next; else conversationBinding = next;
-    if (rev) presets.get(rev.presetId).bindingCount += 1;
-    return json(res, 200, { ...bindingBody(next), cacheEffect: "prefix_rebuild_once", effectiveFrom: "next_admitted_operation" }), true;
+    if (cardBinding.presetId && presets.get(cardBinding.presetId)) presets.get(cardBinding.presetId).bindingCount = 0;
+    cardBinding = rev ? { mode: "revision", presetId: rev.presetId, revisionId: rev.revisionId, bindingVersion: cardBinding.bindingVersion + 1, state: "ready" } : { mode: "card_default", presetId: null, revisionId: null, bindingVersion: cardBinding.bindingVersion + 1, state: "ready" };
+    if (rev) presets.get(rev.presetId).bindingCount = 1;
+    return json(res, 200, { ...bindingBody(cardBinding), scope: "card", cacheEffect: "prefix_may_rebuild", effectiveFrom: "next_admitted_operation" }), true;
   }
   if (path === "/open/v1/conversation/response-settings" || path === "/open/v1/conversation/response-settings/save") {
-    const locked = conversationBinding.mode === "revision";
+    const locked = cardBinding.mode === "revision";
+    const presetLocked = locked ? PRESET_LOCKED : [];
     if (m === "POST") {
-      if (locked && ["style", "customStyle", "styleNote"].some((k) => k in (body.patch ?? {}))) return json(res, 409, { error: "preset_style_locked" }), true;
+      const lockedKeys = presetLocked.flatMap((k) => [k, `${k}Note`, ...(k === "style" ? ["customStyle"] : [])]);
+      if (lockedKeys.some((k) => k in (body.patch ?? {}))) return json(res, 409, { error: "preset_style_locked" }), true;
       if (body.expectedRevision !== responseRevision) return json(res, 409, { error: "conflict" }), true;
       for (const [k, v] of Object.entries(body.patch ?? {})) { if (v === null) delete responseOverrides[k]; else responseOverrides[k] = v; }
       responseRevision++;
     }
     // 工具回覆：綁定的版本打開了才算；只有 active 時有效設定的串流是關，玩家自己的設定不動
-    const bound = locked ? revisions.get(conversationBinding.revisionId) : null;
+    const bound = locked ? revisions.get(cardBinding.revisionId) : null;
     const enabled = !!bound?.document?.selection?.toolReply;
     const status = !locked ? "off" : !bound ? "unavailable" : !enabled ? "off" : scenario === "toolModel" ? "model_unsupported" : scenario === "toolMode" ? "mode_unsupported" : "active";
     const effective = { agency: "coauthor", style: "card", perspective: "card", length: "auto", pace: "natural", streaming: "on", ...responseOverrides, ...(status === "active" ? { streaming: "off" } : {}) };
-    return json(res, 200, { conversationId: url.searchParams.get("conversationId") ?? body.conversationId, scope: "conversation", schemaVersion: 1, revision: responseRevision, overrides: { ...responseOverrides }, effective, styleSource: locked ? "preset" : "card_default", styleLocked: locked,
+    return json(res, 200, { conversationId: url.searchParams.get("conversationId") ?? body.conversationId, scope: "conversation", schemaVersion: 1, revision: responseRevision, overrides: { ...responseOverrides }, effective, styleSource: locked ? "preset" : "card_default", styleLocked: locked, presetLocked,
       toolReply: { enabled: status === "unavailable" ? false : enabled, effective: status === "active", status } }), true;
   }
   return false;

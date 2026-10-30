@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "title": {
+    "zh-Hant": "自訂預設改成套用到整張卡",
+    "zh-Hans": "自定义预设改成应用到整张卡",
+    "en": "Custom presets now apply to the whole card",
+    "ja": "カスタムプリセットはカード全体に適用されるようになりました",
+    "ko": "사용자 지정 프리셋이 카드 전체에 적용됩니다"
+  },
+  "body": {
+    "zh-Hant": "在回覆偏好的「自訂預設」套用後，這張卡的所有存檔從下一次回覆開始都用它，搶話、文風、敘事視角、劇情節奏和破甲強度由預設決定，篇幅照常可調。",
+    "zh-Hans": "在回复偏好的「自定义预设」应用后，这张卡的所有存档从下一次回复开始都用它，抢话、文风、叙事视角、剧情节奏和破甲强度由预设决定，篇幅照常可调。",
+    "en": "Apply a preset under Custom preset and every conversation with that card uses it from the next reply, with writing for your character, style, perspective, story pace and bypass strength set by the preset and length still yours to adjust.",
+    "ja": "返信の好みの「カスタムプリセット」で適用すると、そのカードの全会話で次の返信から使われ、文体・語りの視点・物語のテンポ・突破強度などはプリセットが決め、文章量は調整できます。",
+    "ko": "답변 취향의 '사용자 지정 프리셋'에서 적용하면 그 카드의 모든 대화에서 다음 답변부터 쓰이며, AI가 내 역할을 쓰는 범위·문체·서술 시점·이야기 속도·돌파 강도는 프리셋이 정하고 분량은 계속 조절할 수 있습니다."
+  }
+}
