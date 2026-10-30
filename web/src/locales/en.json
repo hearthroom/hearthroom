@@ -4091,7 +4091,6 @@
   "preset.share.publish.lede": "Free for everyone to find and apply. Your later edits carry over to the people using it, and if you set it back to private, people who used it or added it to favorites can keep using it.",
   "preset.share.publish.tested.label": "Tested models",
   "preset.share.publish.tested.hint": "Optional. Leave empty for general use.",
-  "preset.share.publish.tested.other": "Other",
   "preset.share.publish.source.label": "Source / original author (optional)",
   "preset.share.publish.source.placeholder": "Original author's name or link",
   "preset.share.publish.submit": "Make public",
@@ -4130,5 +4129,6 @@
   "preset.share.error.report": "The report wasn't sent. Try again later.",
   "preset.share.new": "New",
   "preset.share.error.declarationChanged": "The publishing notice was just updated. Read it again, then press Make public.",
-  "preset.share.mine.note": "Presets are visible only to you until you make them public."
+  "preset.share.mine.note": "Presets are visible only to you until you make them public.",
+  "preset.share.unlisted.short": "You can keep using it."
 }

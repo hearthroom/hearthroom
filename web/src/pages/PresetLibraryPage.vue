@@ -58,7 +58,8 @@ const params = computed(() => Object.entries(data.value?.parameters ?? {})
     return te(key) ? `${t(key)} ${typeof v === "number" ? v : String(v)}` : "";
   })
   .filter(Boolean));
-const summary = computed(() => [t("preset.share.detail.summary", { n: whole(item.value?.enabledEntryCount ?? 0) }, item.value?.enabledEntryCount ?? 0), ...params.value].join(" · "));
+/** 數的是下面列得出來的條目（含收在「看其餘」裡的），不是上游的 enabledEntryCount：那個連綺夢社提供的幾格也算進去，對不上列表 */
+const summary = computed(() => [t("preset.share.detail.summary", { n: whole(entries.value.length) }, entries.value.length), ...params.value].join(" · "));
 const roleLabel = (role?: string) => t(`preset.entry.role.${role === "user" || role === "assistant" ? role : "system"}`);
 
 async function load() {
@@ -156,7 +157,7 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4.5 4.5L19 7" /></svg>
             {{ $t("preset.share.report.reported") }}
           </span>
-          <button v-else type="button" class="btn btn--lg shared__report" data-testid="shared-report" @click="reporting = true">
+          <button v-else type="button" class="btn btn--lg btn--ghost shared__report" data-testid="shared-report" @click="reporting = true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5" /></svg>
             {{ $t("preset.share.report.action") }}
           </button>
@@ -200,6 +201,7 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
                 <span class="shared__entryTags">
                   <span v-if="unsupported" class="chip shared__chip">{{ $t("preset.report.status.unsupported") }}</span>
                   <span class="chip shared__chip">{{ roleLabel(row.prompt.role) }}</span>
+                  <svg class="shared__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
                 </span>
               </summary>
               <p class="shared__entryBody">{{ row.prompt.content }}</p>
@@ -251,7 +253,9 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 .shared__entry summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--h-lg); padding: var(--s-2) 0; cursor: pointer; }
 .shared__entry summary::-webkit-details-marker { display: none; }
 .shared__entryName { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
-.shared__entryTags { display: flex; gap: 6px; flex-shrink: 0; }
+.shared__entryTags { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.shared__chevron { color: var(--text-3); transition: rotate var(--dur) var(--ease); }
+.shared__entry[open] .shared__chevron { rotate: 180deg; }
 .shared__entryBody { margin: 0 0 var(--s-3); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
 .shared__more { justify-self: start; }
 .shared__card { padding: var(--s-5); display: grid; gap: var(--s-3); justify-items: start; }

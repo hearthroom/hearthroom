@@ -4091,7 +4091,6 @@
   "preset.share.publish.lede": "무료로 공개되며 누구나 찾아서 적용할 수 있습니다. 이후 수정 내용은 적용한 사람에게도 반영되고, 비공개로 되돌려도 사용했거나 즐겨찾기한 사람은 계속 쓸 수 있습니다.",
   "preset.share.publish.tested.label": "테스트한 모델",
   "preset.share.publish.tested.hint": "선택 사항. 비워 두면 범용입니다.",
-  "preset.share.publish.tested.other": "기타",
   "preset.share.publish.source.label": "출처 / 원작자 (선택)",
   "preset.share.publish.source.placeholder": "원작자 이름 또는 링크",
   "preset.share.publish.submit": "공개하기",
@@ -4130,5 +4129,6 @@
   "preset.share.error.report": "신고를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
   "preset.share.new": "새로 공개",
   "preset.share.error.declarationChanged": "공개 안내가 방금 업데이트되었습니다. 다시 확인한 뒤 '공개하기'를 누르세요.",
-  "preset.share.mine.note": "프리셋은 공개하기 전까지 나에게만 보입니다."
+  "preset.share.mine.note": "프리셋은 공개하기 전까지 나에게만 보입니다.",
+  "preset.share.unlisted.short": "계속 사용할 수 있습니다."
 }

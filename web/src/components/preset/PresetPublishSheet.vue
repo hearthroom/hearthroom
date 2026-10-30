@@ -73,7 +73,7 @@ async function submit() {
           data-testid="publish-model" @click="removeModel(code)"
         >{{ modelLabel(code) }}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" /></svg></button>
         <select v-if="others.length" class="publish__model publish__select" value="" :aria-label="$t('preset.share.publish.tested.label')" data-testid="publish-model-add" @change="addModel">
-          <option value="" disabled>{{ $t("preset.share.publish.tested.other") }}</option>
+          <option value="" disabled>{{ $t("preset.share.filter.pickModel") }}</option>
           <option v-for="m in others" :key="m.value" :value="m.value">{{ m.label }}</option>
         </select>
       </div>
@@ -109,7 +109,8 @@ async function submit() {
 }
 .publish__model:hover { background: var(--surface-2); }
 .publish__model--on, .publish__model--on:hover { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
-.publish__select { height: var(--h-md); max-width: 100%; }
+/* 還沒選的提示字：看起來是提示，不像已選的 chip */
+.publish__select { height: var(--h-md); max-width: 100%; color: var(--text-2); font-weight: 400; }
 .publish__field .input { width: 100%; height: var(--h-lg); }
 .publish__submit { display: grid; gap: var(--s-2); margin-top: var(--s-1); }
 .publish__submit .btn { width: 100%; }

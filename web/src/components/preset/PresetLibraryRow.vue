@@ -25,7 +25,10 @@ const fresh = computed(() => isNew(props.item));
       <strong class="share-row__name">{{ item.title }}</strong>
       <span class="share-row__author">{{ authorLabel(item) }}</span>
       <span class="share-row__facts">
-        <span v-if="!item.listed" class="chip share-row__chip share-row__chip--strong" data-testid="share-unlisted">{{ $t("preset.share.unlisted") }}</span>
+        <template v-if="!item.listed">
+          <span class="chip share-row__chip share-row__chip--strong" data-testid="share-unlisted">{{ $t("preset.share.unlisted") }}</span>
+          <span class="share-row__note">{{ $t("preset.share.unlisted.short") }}</span>
+        </template>
         <span v-if="item.mine" class="chip share-row__chip">{{ $t("preset.share.tabs.mine") }}</span>
         <template v-if="item.recommendedModels.length">
           <span v-for="m in models" :key="m" class="chip share-row__chip">{{ $t("preset.share.tested", { model: m }) }}</span>
@@ -36,7 +39,6 @@ const fresh = computed(() => isNew(props.item));
         <span v-else-if="item.listed" class="share-row__note">{{ $t("preset.share.users7d", { n: whole(item.usesLast7d) }, item.usesLast7d) }}</span>
         <span v-if="showUsedOn && item.lastAppliedAt" class="share-row__note">{{ $t("preset.share.used.on", { date: monthDayOf(item.lastAppliedAt) }) }}</span>
       </span>
-      <span v-if="!item.listed" class="share-row__hint">{{ $t("preset.share.unlisted.hint") }}</span>
     </RouterLink>
     <button
       v-if="!item.mine" type="button" class="share-row__fav" :class="{ 'share-row__fav--on': item.favorited }"
@@ -61,7 +63,6 @@ const fresh = computed(() => isNew(props.item));
 .share-row__chip--strong, .share-row__chip--strong:hover { background: var(--border); color: var(--text); font-weight: 500; }
 .share-row__chip--new, .share-row__chip--new:hover { background: var(--accent-tint); color: var(--accent-text); font-weight: 500; }
 .share-row__note { font-size: 12px; color: var(--text-3); }
-.share-row__hint { font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 .share-row__fav {
   flex: none; width: var(--h-lg); height: var(--h-lg); border-radius: var(--r-pill);
   display: flex; align-items: center; justify-content: center;

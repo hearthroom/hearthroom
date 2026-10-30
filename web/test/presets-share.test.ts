@@ -191,7 +191,9 @@ describe("喜愛與用過", () => {
     expect(used.textContent).toContain("靜夜獨白");
     const gone = fav.querySelectorAll("[data-testid=share-row]")[1]!;
     expect(gone.querySelector("[data-testid=share-unlisted]")!.textContent).toBe(t("preset.share.unlisted"));
-    expect(gone.textContent).toContain(t("preset.share.unlisted.hint"));
+    // 列表上只留標示加一句短的，長說明在詳情頁
+    expect(gone.textContent).toContain(t("preset.share.unlisted.short"));
+    expect(gone.textContent).not.toContain(t("preset.share.unlisted.hint"));
     expect(gone.querySelector("a")!.getAttribute("href")).toBe("/preset-library/gone");
   });
 
@@ -265,6 +267,10 @@ describe("我的：公開與改回私人", () => {
     expect([...sheet.querySelectorAll("button")].map((b) => b.textContent?.trim())).not.toContain(t("dialog.cancel"));
     // 原本標的模型帶進來；來源選填
     expect([...sheet.querySelectorAll("[data-testid=publish-model]")].map((b) => b.textContent?.trim())).toEqual(["Gemini 4"]);
+    // 還沒加的模型：下拉顯示提示字，不是一個看起來已選的選項
+    const add = sheet.querySelector<HTMLSelectElement>("[data-testid=publish-model-add]")!;
+    expect(add.value).toBe("");
+    expect(add.options[0]!.textContent).toBe(t("preset.share.filter.pickModel"));
     const source = sheet.querySelector<HTMLInputElement>("[data-testid=publish-source]")!;
     source.value = "  原作者 A  ";
     source.dispatchEvent(new Event("input"));
@@ -339,7 +345,8 @@ describe("公開預設詳情", () => {
   });
 
   it("唯讀內容：啟用的條目、取樣參數、測試過的模型與作者；沒有套用鈕，只有一行說明", async () => {
-    mocks.detail.mockResolvedValue(detail({}, { enabledEntryCount: 5, attribution: "原作者 A" }));
+    // 上游的 enabledEntryCount 連綺夢社提供的格也算；畫面上的數字要跟列出來的條目一致
+    mocks.detail.mockResolvedValue(detail({}, { enabledEntryCount: 9, attribution: "原作者 A" }));
     await mount("/preset-library/s1");
     expect(mocks.detail).toHaveBeenCalledWith("tok", "s1");
     expect($("[data-testid=shared-title]").textContent).toBe("電影感長篇");
@@ -350,10 +357,13 @@ describe("公開預設詳情", () => {
     $("[data-testid=shared-more]").click();
     await flush();
     expect($$("[data-testid=shared-entry]")).toHaveLength(5);
+    expect($$("[data-testid=shared-entry] .shared__chevron")).toHaveLength(5);
     expect(root.textContent).toContain("DeepSeek V4");
     expect(root.textContent).toContain("原作者 A");
     expect($("[data-testid=shared-apply]").textContent).toBe(t("preset.share.detail.apply"));
     expect($("[data-testid=shared-fav]").classList.contains("btn--primary")).toBe(true);
+    // 檢舉是無框的次要鈕，不跟喜愛同權重
+    expect($("[data-testid=shared-report]").classList.contains("btn--ghost")).toBe(true);
     expect(root.textContent).not.toMatch(/匯出|另存/);
   });
 

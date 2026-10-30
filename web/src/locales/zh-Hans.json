@@ -4091,7 +4091,6 @@
   "preset.share.publish.lede": "免费公开，所有人都能找到并应用。你之后的修改，应用的人也会跟着走；改回私人时，用过或加入喜爱的人仍可继续使用。",
   "preset.share.publish.tested.label": "测试过的模型",
   "preset.share.publish.tested.hint": "选填，留空即通用。",
-  "preset.share.publish.tested.other": "其他",
   "preset.share.publish.source.label": "来源／原作者（选填）",
   "preset.share.publish.source.placeholder": "原作者名称或链接",
   "preset.share.publish.submit": "公开",
@@ -4130,5 +4129,6 @@
   "preset.share.error.report": "举报没有提交，稍后再试。",
   "preset.share.new": "新公开",
   "preset.share.error.declarationChanged": "公开声明刚更新了。重新看一遍再点「公开」。",
-  "preset.share.mine.note": "预设只有你看得到，公开后别人才找得到。"
+  "preset.share.mine.note": "预设只有你看得到，公开后别人才找得到。",
+  "preset.share.unlisted.short": "你仍可继续使用。"
 }

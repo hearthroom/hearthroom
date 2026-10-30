@@ -4091,7 +4091,6 @@
   "preset.share.publish.lede": "無料で、誰でも見つけて適用できます。あとからの変更は使っている人にも反映され、非公開に戻しても、使用したことがある人やお気に入りに入れた人は引き続き使えます。",
   "preset.share.publish.tested.label": "テスト済みのモデル",
   "preset.share.publish.tested.hint": "任意。空欄の場合は汎用になります。",
-  "preset.share.publish.tested.other": "その他",
   "preset.share.publish.source.label": "出典・原作者（任意）",
   "preset.share.publish.source.placeholder": "原作者の名前またはリンク",
   "preset.share.publish.submit": "公開する",
@@ -4130,5 +4129,6 @@
   "preset.share.error.report": "通報を送信できませんでした。しばらくしてからもう一度お試しください。",
   "preset.share.new": "新着",
   "preset.share.error.declarationChanged": "公開に関する表示が更新されました。もう一度確認してから「公開する」を押してください。",
-  "preset.share.mine.note": "プリセットは公開するまであなたにだけ表示されます。"
+  "preset.share.mine.note": "プリセットは公開するまであなたにだけ表示されます。",
+  "preset.share.unlisted.short": "引き続き使えます。"
 }

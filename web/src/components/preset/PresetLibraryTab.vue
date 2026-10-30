@@ -138,7 +138,9 @@ async function toggle(item: PresetLibraryItem) {
 .share-tab__pill:hover { background: var(--surface-2); }
 .share-tab__pill--on, .share-tab__pill--on:hover { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
 /* 選了模型就顯示模型名；名字很長時截斷，不撐破這一排 */
-.share-tab__select { max-width: min(100%, 280px); padding-right: var(--s-3); text-overflow: ellipsis; }
+.share-tab__select { flex: 0 1 auto; min-width: 0; max-width: min(100%, 280px); padding-right: var(--s-3); text-overflow: ellipsis; }
+/* 手機的原生下拉以最長的模型名算寬度：讓它吃剩下的寬，跟全部／通用同排 */
+@media (max-width: 760px) { .share-tab__select { flex: 1 1 0; } }
 .share-tab__sort { margin: 0; }
 .share-tab__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .share-tab__ghost { height: 104px; }
