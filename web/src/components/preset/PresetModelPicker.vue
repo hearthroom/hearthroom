@@ -5,7 +5,7 @@
  *
  * 一點進框就列出全部，打字同時比對系列名與模型名：模型命中時連它的系列一起留著，給人「選整個系列」的選項。
  * 多選時已選的不再列；選了整個系列，它底下的模型也不列（已經涵蓋）。目錄裡找不到的舊值照原字顯示成標籤，可以拿掉。
- * 鍵盤：上下走清單、Enter 選、Esc 關；輸入法組字中不動作。
+ * 鍵盤：上下走清單、Enter 選、Esc 關、空框退格拿掉最後一個標籤；輸入法組字中不動作。
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -75,6 +75,8 @@ function key(e: KeyboardEvent) {
   if (e.isComposing || composing) return;
   if (e.key === "Escape") { if (open.value) { e.preventDefault(); open.value = false; } return; }
   if (e.key === "Enter") { e.preventDefault(); if (open.value && rows.value.length) choose(active.value); return; }
+  // 框是空的時候退格，拿掉最後一個標籤（和一般標籤輸入框一樣）
+  if (e.key === "Backspace" && !query.value && props.multiple && props.modelValue.length) { e.preventDefault(); emit("update:modelValue", props.modelValue.slice(0, -1)); return; }
   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
   e.preventDefault();
   if (!open.value) { show(); return; }

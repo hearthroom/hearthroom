@@ -97,6 +97,17 @@ describe("PresetModelPicker", () => {
     expect(options().length).toBeGreaterThan(0);
   });
 
+  it("空框按退格拿掉最後一個標籤；框裡有字時退格只刪字", async () => {
+    await mount(["series:DeepSeek", "model:Gemini 3 Pro"]);
+    await open();
+    await type("ge");
+    await key("Backspace");
+    expect(value).toEqual(["series:DeepSeek", "model:Gemini 3 Pro"]);
+    await type("");
+    await key("Backspace");
+    expect(value).toEqual(["series:DeepSeek"]);
+  });
+
   it("單選（公開列表篩選）：選了就換掉原本的值並收起，目前選的那一列標為已選", async () => {
     await mount(["series:DeepSeek"], false);
     await open();
