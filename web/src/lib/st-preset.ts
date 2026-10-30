@@ -177,6 +177,36 @@ export function moveToSide(doc: PresetDocument, id: string, side: "before" | "af
   return true;
 }
 
+/**
+ * 拖曳排序的落點：放到某條自訂條目前面，或放到一區（聊天歷史之前／之後）的最後面。
+ * 可以越過框架條目與聊天歷史；框架條目本身拖不動。放回原處回 false，不算改動。
+ */
+export type DropTarget = { beforeId: string } | { side: "before" | "after" };
+export function moveEntryTo(doc: PresetDocument, id: string, target: DropTarget): boolean {
+  if (isFramework(id)) return false;
+  const order = orderOf(doc);
+  const from = order.findIndex((o) => o.identifier === id);
+  if (from < 0) return false;
+  const before = order.map((o) => o.identifier).join("\n");
+  const [entry] = order.splice(from, 1);
+  let at: number;
+  if ("beforeId" in target) {
+    at = order.findIndex((o) => o.identifier === target.beforeId);
+  } else if (target.side === "after") {
+    at = order.length;
+  } else {
+    // 之前區的最後面：最後一條自訂條目之後；之前區沒有自訂條目就排在聊天歷史前面
+    const history = order.findIndex((o) => o.identifier === HISTORY);
+    const end = history < 0 ? order.length : history;
+    let last = -1;
+    for (let i = 0; i < end; i++) if (!isFramework(order[i]!.identifier)) last = i;
+    at = last >= 0 ? last + 1 : end;
+  }
+  if (at < 0) { order.splice(from, 0, entry!); return false; }
+  order.splice(at, 0, entry!);
+  return order.map((o) => o.identifier).join("\n") !== before;
+}
+
 function newIdentifier(doc: PresetDocument): string {
   const taken = new Set(promptsOf(doc.st).map((p) => p.identifier));
   let id = crypto.randomUUID();

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/presets",
+  "title": {
+    "zh-Hant": "預設的條目可以拖曳排序",
+    "zh-Hans": "预设的条目可以拖拽排序",
+    "en": "Drag to reorder preset entries",
+    "ja": "プリセットのエントリーをドラッグで並べ替え",
+    "ko": "프리셋 항목을 끌어서 순서 변경"
+  },
+  "body": {
+    "zh-Hant": "在預設編輯器按住條目左邊的把手拖到想要的位置，手機上長按把手再拖。",
+    "zh-Hans": "在预设编辑器按住条目左边的把手拖到想要的位置，手机上长按把手再拖。",
+    "en": "In the preset editor, drag an entry by the handle on its left, or press and hold the handle first on a phone.",
+    "ja": "プリセット編集画面ではエントリー左のハンドルをドラッグして並べ替えられ、スマホではハンドルを長押ししてからドラッグします。",
+    "ko": "프리셋 편집기에서 항목 왼쪽의 손잡이를 끌어 순서를 바꿀 수 있고, 휴대폰에서는 손잡이를 길게 누른 뒤 끌면 됩니다."
+  }
+}

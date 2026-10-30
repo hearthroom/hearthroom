@@ -21,10 +21,11 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  FRAMEWORK_IDS, adaptationId, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, newDocument, restoreOrder, setEnabled,
+  FRAMEWORK_IDS, adaptationId, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, restoreOrder, setEnabled,
   type EntryRow, type PresetDocument,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
+import { usePointerReorder } from "@/lib/use-pointer-reorder";
 import { useLocalePath } from "@/lib/use-locale";
 import PresetEntryDetail from "@/components/preset/PresetEntryDetail.vue";
 import PresetParams from "@/components/preset/PresetParams.vue";
@@ -102,6 +103,12 @@ const shownSide = (r: EntryRow): "before" | "after" => {
   return r.side;
 };
 const groupOf = (side: "before" | "after") => found.value.filter((r) => shownSide(r) === side);
+// 拖曳排序（owner 2026-10-30）：搜尋中、唯讀時不給拖——篩過的清單看不出真正的前後
+const listEl = ref<HTMLElement | null>(null);
+const canDrag = computed(() => !readOnly.value && !q.value);
+const reorder = usePointerReorder({ list: listEl, enabled: () => canDrag.value, onDrop: (id, target) => { if (doc.value) moveEntryTo(doc.value, id, target); } });
+const dropBefore = computed(() => (reorder.target.value && "beforeId" in reorder.target.value ? reorder.target.value.beforeId : ""));
+const dropEnd = computed(() => (reorder.target.value && "side" in reorder.target.value ? reorder.target.value.side : ""));
 const tagOf = (r: EntryRow) => (movedAfter(r) ? undefined : compatOf(r.identifier)?.uiStatus);
 const provided = computed(() => {
   const present = new Set(rows.value.filter((r) => r.slot === "F" && FRAMEWORK_IDS.has(r.identifier)).map((r) => PROVIDED[r.identifier]));
@@ -359,7 +366,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       <p v-if="saveError" class="notice notice--error" role="alert">{{ saveError }}</p>
 
       <div class="preset-editor__body">
-        <aside class="panel preset-editor__list" :aria-label="$t('preset.entries.title')">
+        <aside ref="listEl" class="panel preset-editor__list" :aria-label="$t('preset.entries.title')">
           <div class="preset-editor__listHead">
             <h2>{{ $t("preset.entries.title") }}</h2>
             <button v-if="!readOnly" type="button" class="btn btn--sm" data-testid="entry-add" @click="newEntry">{{ $t("preset.entries.add") }}</button>
@@ -374,10 +381,17 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
           </div>
 
           <template v-for="side in (['before', 'after'] as const)" :key="side">
-            <div v-if="groupOf(side).length || (side === 'before' && !q)" class="preset-editor__group">
+            <!-- 拖曳中兩區都要看得到，空的那一區才放得進去 -->
+            <div v-if="groupOf(side).length || (side === 'before' && !q) || reorder.dragging.value" class="preset-editor__group" :data-drop-side="side"
+              :class="{ 'is-drop-end': dropEnd === side }">
               <h3 class="eyebrow">{{ $t(`preset.entries.group.${side}`) }}</h3>
               <ul>
-                <li v-for="r in groupOf(side)" :key="r.identifier">
+                <li v-for="r in groupOf(side)" :key="r.identifier" :data-drag-id="r.identifier"
+                  :class="{ 'is-drop-before': dropBefore === r.identifier, 'is-dragging': reorder.dragging.value === r.identifier }">
+                  <!-- 把手：滑鼠直接拖、手機長按拖；鍵盤與輔助科技用條目選單的上移／下移，所以不進 Tab 順序 -->
+                  <span v-if="canDrag" class="preset-editor__handle" aria-hidden="true" data-testid="entry-drag" @pointerdown="reorder.start($event, r.identifier)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+                  </span>
                   <button type="button" class="preset-editor__row" :class="{ 'is-on': r.identifier === selected, 'is-off': !r.enabled }" :aria-current="r.identifier === selected || undefined" data-testid="entry-row" @click="pick(r.identifier)">
                     <span class="preset-editor__rowName">{{ r.prompt.name || $t("preset.entry.untitled") }}</span>
                     <span v-if="tagOf(r)" class="preset-editor__tag" :class="`preset-editor__tag--${tagOf(r)}`">{{ $t(tagOf(r) === "needs_adjustment" ? "preset.report.status.adjust" : tagOf(r) === "relocated" ? "preset.report.status.relocated" : "preset.report.status.unsupported") }}</span>
@@ -513,6 +527,11 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__group h3 { margin: 0 0 var(--s-1); padding-inline: var(--s-2); }
 .preset-editor__group ul, .preset-editor__library ul, .preset-editor__versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .preset-editor__group li { display: flex; align-items: center; gap: var(--s-1); }
+.preset-editor__handle { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: var(--h-lg); color: var(--text-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.preset-editor__handle:hover { color: var(--text-2); }
+.preset-editor__group li.is-dragging { opacity: 0.45; }
+.preset-editor__group li.is-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.preset-editor__group.is-drop-end ul::after { content: ""; display: block; height: 2px; margin-top: 2px; border-radius: 1px; background: var(--accent); }
 .preset-editor__row { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); padding: 0 var(--s-2); border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .preset-editor__row:hover { background: var(--surface-2); }
 .preset-editor__row.is-on { background: var(--accent-tint); color: var(--accent-text); }

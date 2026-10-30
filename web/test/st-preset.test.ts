@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptationId, addEntry, canDeleteEntry, clearParam, deleteEntry, moveToSide, nativeMacrosValid, nativeProblems, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
-  isPromptPack, moveEntry, newDocument, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
+  isPromptPack, moveEntry, moveEntryTo, newDocument, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
   setParamValue, type PresetDocument,
 } from "../src/lib/st-preset";
 
@@ -64,6 +64,40 @@ describe("ST 預設文件操作", () => {
     expect(entryRows(doc)[0]!.enabled).toBe(false);
     expect((doc.st.prompt_order as { order: { enabled: boolean }[] }[])[0]!.order[0]!.enabled).toBe(true);
     expect(setEnabled(doc, "chatHistory", false)).toBe(false);
+  });
+
+  it("拖曳：放到某條自訂條目前面，可以越過框架條目與聊天歷史（owner 2026-10-30）", () => {
+    const doc = imported();
+    expect(moveEntryTo(doc, "jailbreak", { beforeId: "main" })).toBe(true);
+    expect(ids(doc)).toEqual(["jailbreak", "main", "charDescription", "style", "chatHistory", "deep"]);
+    expect(moveEntryTo(doc, "jailbreak", { beforeId: "deep" })).toBe(true);
+    expect(ids(doc)).toEqual(["main", "charDescription", "style", "chatHistory", "jailbreak", "deep"]);
+  });
+
+  it("拖曳：放到一區的最後面＝那一區最後一條自訂條目之後（之前區不越過聊天歷史，之後區放到最後）", () => {
+    const doc = imported();
+    expect(moveEntryTo(doc, "main", { side: "before" })).toBe(true);
+    expect(ids(doc)).toEqual(["charDescription", "style", "main", "chatHistory", "jailbreak", "deep"]);
+    expect(moveEntryTo(doc, "style", { side: "after" })).toBe(true);
+    expect(ids(doc)).toEqual(["charDescription", "main", "chatHistory", "jailbreak", "deep", "style"]);
+  });
+
+  it("拖曳：之前區沒有自訂條目時，放進去就排在聊天歷史前面", () => {
+    const doc = imported();
+    moveEntryTo(doc, "main", { side: "after" });
+    moveEntryTo(doc, "style", { side: "after" });
+    expect(moveEntryTo(doc, "deep", { side: "before" })).toBe(true);
+    expect(ids(doc)).toEqual(["charDescription", "deep", "chatHistory", "jailbreak", "main", "style"]);
+  });
+
+  it("拖曳：框架條目拖不動；放回原處不算改動", () => {
+    const doc = imported();
+    expect(moveEntryTo(doc, "chatHistory", { beforeId: "main" })).toBe(false);
+    expect(moveEntryTo(doc, "charDescription", { side: "after" })).toBe(false);
+    expect(moveEntryTo(doc, "style", { beforeId: "style" })).toBe(false);
+    expect(moveEntryTo(doc, "jailbreak", { beforeId: "deep" })).toBe(false);
+    expect(moveEntryTo(doc, "deep", { side: "after" })).toBe(false);
+    expect(ids(doc)).toEqual(["main", "charDescription", "style", "chatHistory", "jailbreak", "deep"]);
   });
 
   it("上下移只在同一區的自訂條目之間交換，框架條目留在原位", () => {

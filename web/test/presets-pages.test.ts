@@ -604,3 +604,87 @@ describe("溫度偏高提示（owner 2026-10-30：只提示，不擋、不改值
     expect($("[data-testid=param-temperature-high]")).toBeNull();
   });
 });
+
+describe("條目拖曳排序（owner 2026-10-30：桌機直接拖、手機長按把手拖）", () => {
+  // jsdom 沒有版面：照 data 屬性給每一區、每一列一個位置
+  const RECTS: Record<string, [number, number]> = { "side:before": [0, 100], "side:after": [100, 200], clear: [10, 50], script: [50, 90], turn: [110, 150] };
+  function layout() {
+    return vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const el = this as HTMLElement;
+      const key = el.dataset?.dropSide ? `side:${el.dataset.dropSide}` : el.dataset?.dragId ?? "";
+      const [top, bottom] = RECTS[key] ?? [0, 0];
+      return { top, bottom, height: bottom - top, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+  }
+  const pointer = (type: string, y: number, pointerType = "mouse") => {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY: y, button: 0 });
+    Object.defineProperty(e, "pointerType", { value: pointerType });
+    return e;
+  };
+  const handleOf = (name: string) => $$("[data-testid=entry-row]").find((b) => b.textContent?.includes(name))!.parentElement!.querySelector("[data-testid=entry-drag]")!;
+  const names = () => $$("[data-testid=entry-row]").map((b) => b.querySelector(".preset-editor__rowName")!.textContent);
+  async function open() {
+    const c = (): Compatibility => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn"), fields: [] });
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: doc(), sourceKind: "imported", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+  }
+
+  it("桌機：按住把手拖到另一條前面就換位置，可以越過聊天歷史，照常存檔", async () => {
+    await open();
+    const spy = layout();
+    expect(names()).toEqual(["清楚敘述", "腳本", "回應玩家"]);
+    handleOf("回應玩家").dispatchEvent(pointer("pointerdown", 130));
+    window.dispatchEvent(pointer("pointermove", 60));
+    await flush();
+    // 拖曳中在落點那一列上面畫一條線
+    expect($$("[data-testid=entry-row]").find((b) => b.textContent?.includes("腳本"))!.parentElement!.classList.contains("is-drop-before")).toBe(true);
+    window.dispatchEvent(pointer("pointerup", 60));
+    await flush();
+    expect(names()).toEqual(["清楚敘述", "回應玩家", "腳本"]);
+    spy.mockRestore();
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush();
+    const order = (mocks.revise.mock.calls[0]![2].document.st.prompt_order as { character_id: number; order: { identifier: string }[] }[]).find((g) => g.character_id === 100001)!.order.map((o) => o.identifier);
+    expect(order.indexOf("turn")).toBeLessThan(order.indexOf("chatHistory"));
+    expect(order.indexOf("turn")).toBeLessThan(order.indexOf("script"));
+  });
+
+  it("手機：長按把手才開始拖；長按前手指先動就是捲動，不拖", async () => {
+    await open();
+    const spy = layout();
+    vi.useFakeTimers();
+    try {
+      handleOf("清楚敘述").dispatchEvent(pointer("pointerdown", 30, "touch"));
+      window.dispatchEvent(pointer("pointermove", 60, "touch"));
+      vi.advanceTimersByTime(400);
+      window.dispatchEvent(pointer("pointerup", 180, "touch"));
+      await flush();
+      expect(names()).toEqual(["清楚敘述", "腳本", "回應玩家"]);
+
+      handleOf("清楚敘述").dispatchEvent(pointer("pointerdown", 30, "touch"));
+      vi.advanceTimersByTime(350);
+      window.dispatchEvent(pointer("pointermove", 180, "touch"));
+      window.dispatchEvent(pointer("pointerup", 180, "touch"));
+      await flush();
+      expect(names()).toEqual(["腳本", "回應玩家", "清楚敘述"]);
+    } finally { vi.useRealTimers(); spy.mockRestore(); }
+  });
+
+  it("按 Esc 取消，不動順序；搜尋中沒有把手", async () => {
+    await open();
+    const spy = layout();
+    handleOf("回應玩家").dispatchEvent(pointer("pointerdown", 130));
+    window.dispatchEvent(pointer("pointermove", 20));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    window.dispatchEvent(pointer("pointerup", 20));
+    await flush();
+    expect(names()).toEqual(["清楚敘述", "腳本", "回應玩家"]);
+    spy.mockRestore();
+    const search = $<HTMLInputElement>("[data-testid=entry-search]");
+    search.value = "清楚"; search.dispatchEvent(new Event("input")); await flush();
+    expect($("[data-testid=entry-drag]")).toBeNull();
+  });
+});
