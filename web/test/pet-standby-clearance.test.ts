@@ -41,7 +41,9 @@ it("縮窄不夠時改用最近的高度縮窄，也不貼著原本那個按鈕"
 });
 
 it("原本選的高度空出來了就回去", () => {
-  expect(at(390, [], { current: 700 })).toEqual({ y: 700, reach: null });
+  expect(at(390, [], { current: 700 })).toEqual({ y: 478, reach: null });
+  // 原高度只能縮窄、現在的高度不用縮：先不動
+  expect(at(390, rows(328, 358).filter(r => r.top < 650), { current: 700 })).toEqual({ y: 700, reach: null });
   expect(at(390, [rect(16, 374, 650, 860)], { current: 700 })).toEqual({ y: 478, reach: null });
 });
 
@@ -49,9 +51,9 @@ it("左側鏡像：按鈕左緣在 32，露出 24", () => {
   expect(at(390, rows(32, 62), { side: "left" })).toEqual({ y: 478, reach: 24 });
 });
 
-it("露出寬度不小於 MIN_REACH", () => {
-  const spot = at(390, rows(16, 390 - MIN_REACH - 7));
-  expect(spot === null || spot.reach === null || spot.reach >= MIN_REACH).toBe(true);
+it("露出寬度不小於 MIN_REACH：每列都只剩 19px 時暫時退場", () => {
+  expect(at(390, rows(16, 390 - MIN_REACH - 7))).toBeNull();
+  expect(at(390, rows(16, 390 - MIN_REACH - 8))).toEqual({ y: 478, reach: MIN_REACH });
 });
 
 it("縮窄時身體與接觸區一起縮，從螢幕邊算起", () => {
@@ -71,10 +73,11 @@ it("收集畫面上看得到、按得到的控制項；她自己的、停用的�
   document.body.innerHTML = `<header class="header"></header>
     <button id="more"></button><a id="row" href="/x"></a><a id="plain"></a><button id="off" disabled></button>
     <a id="ghost" href="/y" style="pointer-events:none"></a><button id="below"></button><label id="lab"></label>
-    <div class="suki-pet"><button id="mine"></button></div><div class="suki-pet__catch"></div>`;
+    <div class="suki-pet"><button id="mine"></button></div><div class="suki-pet__catch"></div>
+    <div inert><button id="behind"></button></div><button id="unseen" style="visibility:hidden"></button>`;
   const box = (id: string, r: DOMRect) => { document.getElementById(id)!.getBoundingClientRect = () => r; };
   document.querySelector<HTMLElement>(".header")!.getBoundingClientRect = () => new DOMRect(0, 0, 390, 52);
-  for (const id of ["more", "row", "plain", "off", "ghost", "mine", "lab"]) box(id, new DOMRect(328, 526, 30, 30));
+  for (const id of ["more", "row", "plain", "off", "ghost", "mine", "lab", "behind", "unseen"]) box(id, new DOMRect(328, 526, 30, 30));
   box("below", new DOMRect(328, 900, 30, 30));
   document.getElementById("lab")!.getBoundingClientRect = () => new DOMRect(16, 300, 200, 40);
   const got = phoneControls()!;

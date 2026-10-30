@@ -134,6 +134,8 @@ function homepagePetBounds() {
 let obstacleKey="",obstacleCache:PhoneClearance|null=null;
 /** 這兩頁的版面避讓之外，畫面上其他可點的東西也一起讓（其他頁由桌寵自己在待機時讓，見 standby-clearance.ts） */
 function withControls(space:PhoneClearance):PhoneClearance {
+ // 卡片頁的榜單避讓桌機也會用，桌機不改
+ if(!(matchMedia("(pointer: coarse)").matches||innerWidth<640))return space;
  return {...space,obstacles:[...space.obstacles,...(phoneControls()?.obstacles??[])]};
 }
 function phoneClearance():PhoneClearance|null {

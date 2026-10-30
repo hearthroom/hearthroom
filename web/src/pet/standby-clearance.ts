@@ -19,7 +19,8 @@ const GAP = 8;
 
 /**
  * 待機的高度與露出寬度。reach＝她和接觸區從螢幕邊算起占多寬，null＝照舊（full）。回傳 null＝沒有地方，暫時退場。
- * current 是她現在的高度，original 是使用者選的高度：兩個都先試原寬、再試縮窄，最後才找最近的空位。
+ * original 是使用者選的高度，current 是她現在的高度：使用者的高度空出來就回去；否則留在現在的高度（原寬優先，
+ * 再試縮窄），最後才找最近的空位。
  */
 export function standbySpot(f:{w:number;side:Side;top:number;bottom:number;obstacles:SidebarRect[];height:number;full:number;original:number;current:number}):{y:number;reach:number|null}|null {
  const min=f.top+GAP,max=f.bottom-f.height-GAP;if(max<min)return null;
@@ -31,6 +32,7 @@ export function standbySpot(f:{w:number;side:Side;top:number;bottom:number;obsta
   for(const y of ys)if(fits(y)&&room(y)>=MIN_REACH)return {y,reach:room(y)};
   return null;
  };
+ if(fits(f.original)&&room(f.original)>=f.full)return {y:f.original,reach:null};
  const stay=pick([f.current,f.original]);if(stay)return stay;
  const near=[min,max,...f.obstacles.flatMap(r=>[r.top-f.height-GAP,r.bottom+GAP])].filter(fits).sort((a,b)=>Math.abs(a-f.current)-Math.abs(b-f.current));
  return pick(near);
@@ -41,12 +43,12 @@ const OWN='.suki-pet,.suki-pet__catch,.suki-pet__tab,.suki-pet__idle';
 
 let key='',at=0,cache:PhoneClearance|null=null;
 /**
- * 畫面上看得到、點得到的控制項。每一格都會問，所以捲動、視窗或頁面高度沒變時半秒才重讀一次
- * （清單非同步載入會改頁面高度，展開收合不一定會，所以還是要定期重讀）。
+ * 畫面上看得到、點得到的控制項。每一格都會問：捲動中最多每 100ms 重讀一次（慣性捲動時每格量整頁太貴），
+ * 捲動、視窗、頁面高度都沒變時半秒重讀一次（清單非同步載入會改頁面高度，展開收合不一定會）。
  */
 export function phoneControls():PhoneClearance|null {
  const now=performance.now(),k=[location.pathname,scrollY,innerWidth,innerHeight,document.documentElement.scrollHeight].join(':');
- if(k===key&&cache&&now-at<500)return cache;
+ if(cache&&now-at<(k===key?500:100))return cache;
  key=k;at=now;
  const obstacles=[...document.querySelectorAll<HTMLElement>(CONTROLS)].flatMap(el=>{
   if(el.closest(OWN)||el.closest('[inert]')||(el as HTMLButtonElement).disabled)return [];

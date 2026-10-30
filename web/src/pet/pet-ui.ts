@@ -195,8 +195,8 @@ export class SukiPet {
   private updateStandby() {
     const on=this.opts.mobile&&this.tucked&&this.ready&&!this.hidden&&this.peekS<0.5&&!this.phoneOriginal;
     if(!on){this.releaseStandby();return;}
-    // 拖她、拉出縮回的動畫中不動；沿邊拖完的高度就是她新的位置
-    if(this.drag||this.slide){this.standbyY=null;return;}
+    // 拖她、拉出縮回的動畫中不動；只有沿邊拖完的高度才是她新的位置（點一下、往內拉不算）
+    if(this.drag||this.slide){if(this.drag?.mode==="slide")this.standbyY=null;return;}
     const f=this.viewport(),s=this.size(),b=bands(f),space=phoneControls();
     const original=this.standbyY??this.pos.y;
     // 只在探出可以停的高度裡找，否則 peekPos 夾回去的位置又會被判成要讓，一直閃
@@ -221,6 +221,8 @@ export class SukiPet {
   openFrom(opener:HTMLElement|null) {
     const space=this.opts.phoneClearance?.();
     if(!space||this.opts.parkOnHomepage?.()){
+      // 暫時退場中也要看得到這份選單（它長在她身上）
+      this.releaseStandby();
       this.entryFocus=opener;this.entryAwake=true;this.sidebarAwake=true;
       this.el.classList.remove("suki-pet--sidebar-idle");
       if(this.sidebarDocked)this.el.classList.add("suki-pet--sidebar-expanded");
@@ -260,6 +262,7 @@ export class SukiPet {
     const parking = this.opts.parkOnHomepage?.() === true && !explicitDesktop;
     if (parking) {
       if(this.phoneOriginal)this.releasePhone();
+      this.releaseStandby();
       if (!this.homeParked) {
         if (this.sidebarDocked) this.releaseSidebar();
         this.sidebarPosition = { ...this.pos };
@@ -1305,6 +1308,8 @@ export class SukiPet {
     this.fitPopups();
   }
   private save(p: { x: number; y: number }, peeking = false, desktopUser = false) {
+    // 讓路換的高度是暫時的：拉一半彈回去時存的是她原本的高度
+    if (peeking && this.standbyY !== null) p = { x: p.x, y: this.standbyY };
     if (((this.homeParked || this.opts.parkOnHomepage?.()) && !desktopUser) || (this.phoneOriginal&&this.sidebarAwake)) return;
     if(this.phoneOriginal&&!this.sidebarAwake)this.phoneOriginal={...p};
     if (this.sidebarDocked && this.sidebarAwake && !this.homeParked) this.sidebarPosition = { ...p };
