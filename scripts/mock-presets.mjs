@@ -347,7 +347,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
       if (analyze(body.document).entries.some((e) => e.enabled && e.uiStatus === "unsupported")) return json(res, 422, { error: "preset_invalid", reason: "preset_adjustment_required" }), true;
       return json(res, 201, idempotent(req, null, () => { const out = addRevision(p, body.title, body.document, body.recommendedModels); p.purpose = purpose; return out; })), true;
     }
-    if (mm[2] === "delete" && p.bindingCount === 0) { presets.delete(p.id); return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version, disposition: "deleted" }), true; }
+    if (mm[2] === "delete" && p.bindingCount === 0) { presets.delete(p.id); library.delete(p.id); return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version, disposition: "deleted" }), true; }
     p.archived = true;
     return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version, disposition: "archived" }), true;
   }

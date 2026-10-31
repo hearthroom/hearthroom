@@ -58,3 +58,14 @@ test("editor purpose persists for private and public assets, retaining model evi
   assert.equal(general.status,201);
   assert.ok((await request("/open/v1/preset-library?model=general")).body.items.some(p=>p.presetId===id));
 });
+
+test("deleted owned publications disappear from the mock library", async () => {
+ await request("/__presets/reset");
+ const document={schemaVersion:"hearthroom.st-preset.v1",st:{prompts:[]},selection:{profileId:1}};
+ const made=await request("/open/v1/presets","POST",{title:"Delete",document,purpose:"general"});
+ const id=made.body.presetId;
+ const pub=await request(`/open/v1/presets/${id}/publish`,"POST",{expectedVersion:1,purpose:"general",declaration:"preset-publish-2026-10-30"});
+ assert.ok((await request("/open/v1/preset-library")).body.items.some(p=>p.presetId===id));
+ assert.equal((await request(`/open/v1/presets/${id}/delete`,"POST",{expectedVersion:pub.body.version})).status,200);
+ assert.ok(!(await request("/open/v1/preset-library")).body.items.some(p=>p.presetId===id));
+});
