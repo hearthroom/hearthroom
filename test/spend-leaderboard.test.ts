@@ -2,6 +2,7 @@ import {SELF,env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it} from 'vitest';
 import {makeMember,resetDb,identities,bearer,restoreUpstream} from './helpers';
 import {spendGateway} from '../src/spend-leaderboard';
+import {upstream} from '../src/upstream';
 import {savePrivacy} from '../src/leaderboard-privacy';
 import {startsAtPrimary} from '../src/d1-session';
 
@@ -60,4 +61,24 @@ it('sends the stable work revision without a publication cutoff, including after
   {roleId:'hosted-v2',limit:10,offset:0},
   {roleId:'hosted-v3',limit:10,offset:0},
  ]);
+});
+
+it('shows the author their own spend beside an unchanged board, and never to anyone else',async()=>{
+ identities({player:80001,author:90001});
+ spendGateway.read=async()=>({list:[{rank:1,credits:'500',accountNumId:80001}],self:null,total:1,authorCredits:'42'});
+ const author=await (await SELF.fetch('https://c.test/v1/cards/100001/leaderboard',{headers:bearer('author')})).json() as any;
+ expect(author).toMatchObject({selfState:'author',authorCredits:'42',self:null,total:1});
+ expect(author.list).toHaveLength(1);
+ // A provider answer meant for an author is never forwarded to another viewer.
+ for(const headers of [bearer('player'),{}]){
+  const body=await (await SELF.fetch('https://c.test/v1/cards/100001/leaderboard',{headers})).json() as any;
+  expect(Object.hasOwn(body,'authorCredits')).toBe(false);
+  expect(body.list.map((p:any)=>[p.rank,p.credits])).toEqual(author.list.map((p:any)=>[p.rank,p.credits]));expect(body.total).toBe(author.total);
+ }
+});
+it('keeps a test-account author excluded and without a figure',async()=>{
+ spendGateway.read=async()=>({list:[],self:null,total:0,authorCredits:'42'});
+ upstream.fetchMe=async()=>({accountNumId:90001,accountClass:'test',testState:'active',testGeneration:1} as any);
+ const test=await (await SELF.fetch('https://c.test/v1/cards/100001/leaderboard',{headers:bearer('author')})).json() as any;
+ expect(test.selfState).toBe('test');expect(Object.hasOwn(test,'authorCredits')).toBe(false);
 });

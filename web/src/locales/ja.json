@@ -3670,6 +3670,7 @@
   "spendBoard.shortUnranked": "まだランクインしていません",
   "spendBoard.notRanked": "あなたはまだランクインしていません",
   "spendBoard.author": "このカードの作者のため、ランキングの対象外です",
+  "spendBoard.authorSpent": "あなたの使用：{amount}（ランキング対象外）",
   "spendBoard.test": "テストアカウントはランキングの対象外です",
   "spendBoard.excluded": "ランキング対象外",
   "spendBoard.guest": "ログインすると、自分の順位や匿名設定を確認できます",

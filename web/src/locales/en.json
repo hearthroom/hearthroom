@@ -3670,6 +3670,7 @@
   "spendBoard.shortUnranked": "Not ranked yet",
   "spendBoard.notRanked": "You’re not ranked yet",
   "spendBoard.author": "You created this card, so your spending is excluded",
+  "spendBoard.authorSpent": "Your spending: {amount}, not ranked",
   "spendBoard.test": "Test accounts are excluded",
   "spendBoard.excluded": "Not eligible",
   "spendBoard.guest": "Sign in to see your rank and anonymity settings",

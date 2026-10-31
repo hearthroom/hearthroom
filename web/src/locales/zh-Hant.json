@@ -3670,6 +3670,7 @@
   "spendBoard.shortUnranked": "尚未上榜",
   "spendBoard.notRanked": "你尚未上榜",
   "spendBoard.author": "你是這張卡的作者，不列入排行",
+  "spendBoard.authorSpent": "你的消耗 {amount}，不列入排行",
   "spendBoard.test": "測試帳號不列入排行",
   "spendBoard.excluded": "不列入排行",
   "spendBoard.guest": "登入後可查看你的名次與匿名設定",

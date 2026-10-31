@@ -24,7 +24,12 @@ const mine=computed(()=>{
  const b=board.value;
  return b.self?t('spendBoard.myRank',{rank:b.self.rank}):t('spendBoard.'+({guest:'guest',author:'author',test:'test',ranked:'shortUnranked',unranked:'shortUnranked'}[b.selfState]));
 });
-const compactMine=computed(()=>board.value&&['author','test'].includes(board.value.selfState)?t('spendBoard.excluded'):mine.value);
+// The author's own spend sits beside the board; it never takes a rank.
+const ownCredits=computed(()=>board.value?.self?.credits??board.value?.authorCredits);
+const amount=(credits:string)=>t('spendBoard.'+(credits==='1'?'pointsAmountOne':'pointsAmount'),{points:formatCredits(credits,locale.value)});
+const authorSpent=computed(()=>board.value?.authorCredits===undefined?null:t('spendBoard.authorSpent',{amount:amount(board.value.authorCredits)}));
+const summaryMine=computed(()=>authorSpent.value??mine.value);
+const compactMine=computed(()=>authorSpent.value??(board.value&&['author','test'].includes(board.value.selfState)?t('spendBoard.excluded'):mine.value));
 function fitMobileAvatars(){
  if(!mobileTop.value||!mobileTitle.value)return;
  const available=mobileTop.value.clientWidth-mobileTitle.value.getBoundingClientRect().width-8;
@@ -85,7 +90,7 @@ onBeforeUnmount(()=>{mobileObserver?.disconnect();generation++;if(open.value)clo
   <p v-else-if="error">{{ t('spendBoard.shortError') }}</p>
   <ol v-else-if="board?.list.length" class="spend-list"><li v-for="player in board.list.slice(0,3)" :key="player.rank"><SpendPlayer :player="player" /></li></ol>
   <p v-else-if="board">{{ t('spendBoard.shortEmpty') }}</p>
-  <p class="spend-summary__mine">{{ mine }}</p>
+  <p class="spend-summary__mine">{{ summaryMine }}</p>
   <button class="btn btn--lg" type="button" @click="show">{{ t('spendBoard.full') }}</button>
  </section>
  <div class="spend-mobile">
@@ -112,8 +117,8 @@ onBeforeUnmount(()=>{mobileObserver?.disconnect();generation++;if(open.value)clo
      <div class="spend-rules"><p>{{ t('spendBoard.pointsSources') }} {{ t('spendBoard.refundRule') }}</p><p>{{ t('spendBoard.rule') }}</p></div>
     </template>
    </div>
-   <footer v-if="!privacy" class="spend-mine" :class="{'spend-mine--wide':board?.self&&formatCredits(board.self.credits,locale).length>12}">
-    <div><p>{{ mine }}</p><span v-if="board?.self">{{ t('spendBoard.'+(board.self.credits==='1'?'pointsAmountOne':'pointsAmount'),{points:formatCredits(board.self.credits,locale)}) }}</span></div>
+   <footer v-if="!privacy" class="spend-mine" :class="{'spend-mine--wide':ownCredits&&formatCredits(ownCredits,locale).length>12}">
+    <div><p>{{ mine }}</p><span v-if="ownCredits">{{ amount(ownCredits) }}</span></div>
     <button v-if="board?.privacy" type="button" class="btn btn--ghost btn--lg spend-mine__privacy" :aria-label="t('spendBoard.'+(isAnonymous(board.privacy)?'openPrivacyAnonymous':'openPrivacyPublic'))" @click="privacy=true"><span>{{ t('spendBoard.'+(isAnonymous(board.privacy)?'shortAnonymous':'shortPublic')) }}</span><span>{{ t('spendBoard.privacySettings') }}</span></button>
     <a v-else-if="board?.selfState==='guest'" class="btn btn--lg" :href="lp(loginPath(route?.fullPath??'/cards/'+cardId))">{{ t('spendBoard.signin') }}</a>
    </footer>

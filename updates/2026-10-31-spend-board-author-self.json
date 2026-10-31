@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "作者在自己卡的知音榜看得到自己的消耗",
+    "zh-Hans": "作者在自己卡的知音榜看得到自己的消耗",
+    "en": "Creators can see their own spending on their card’s ranking",
+    "ja": "作者は自分のカードのランキングで自分の使用ポイントを確認できます",
+    "ko": "제작자는 자기 카드 순위표에서 내 사용 포인트를 볼 수 있습니다"
+  },
+  "body": {
+    "zh-Hant": "打開自己卡的知音榜，就能看到你在這張卡累計消耗的積分；這個數字只有你看得到，不列入排行，也不影響其他玩家的名次。",
+    "zh-Hans": "打开自己卡的知音榜，就能看到你在这张卡累计消耗的积分；这个数字只有你看得到，不计入排行，也不影响其他玩家的名次。",
+    "en": "Open the ranking on your own card to see the credits you have spent on it, a figure only you can see that is not ranked and does not change other players’ places.",
+    "ja": "自分のカードのランキングを開くと、そのカードで使ったポイントの累計が自分にだけ表示され、ランキングには含まれずほかのプレイヤーの順位にも影響しません。",
+    "ko": "내 카드의 순위표를 열면 이 카드에서 사용한 누적 포인트가 나에게만 보이며, 순위에 포함되지 않고 다른 플레이어의 순위에도 영향을 주지 않습니다."
+  }
+}

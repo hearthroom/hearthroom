@@ -15234,6 +15234,11 @@
                       "type": "string",
                       "format": "date-time",
                       "description": "Latest qualifying ledger record timestamp, omitted when no records exist."
+                    },
+                    "authorCredits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Present only when the forwarded viewer is the card’s author: the author’s own spend on this work, measured like player totals. It is excluded from ranks and totals and must be shown only to that author."
                     }
                   }
                 }

@@ -66,3 +66,18 @@ it('keeps the compact excluded status short and preserves the complete author re
  host.querySelector<HTMLButtonElement>('.spend-mobile button')!.click();await flush();
  expect(document.querySelector('.spend-mine>div')?.textContent).toContain(i18n.global.t('spendBoard.author'));
 });
+it('shows the author their own spend beside the board without a rank',async()=>{
+ vi.stubGlobal('ResizeObserver',class {observe(){}disconnect(){}});
+ const list=[{rank:1,credits:'500',anonymous:true,isSelf:false}];
+ mocks.board.mockResolvedValue({list,self:null,selfState:'author',total:1,nextOffset:null,authorCredits:'1234'});
+ const host=document.createElement('div');document.body.append(host);
+ app=createApp(CardSpendLeaderboard,{cardId:'fixture'});app.use(i18n);app.mount(host);await flush();
+ const spent=i18n.global.t('spendBoard.authorSpent',{amount:i18n.global.t('spendBoard.pointsAmount',{points:formatCredits('1234',i18n.global.locale.value)})});
+ expect(host.querySelector('.spend-mobile__mine')?.textContent).toBe(spent);
+ expect(host.querySelector('.spend-summary__mine')?.textContent).toBe(spent);
+ host.querySelector<HTMLButtonElement>('.spend-mobile button')!.click();await flush();
+ const mine=document.querySelector('.spend-mine>div')!;
+ expect(mine.querySelector('p')?.textContent).toBe(i18n.global.t('spendBoard.author'));
+ expect(mine.querySelector('span')?.textContent).toContain(formatCredits('1234',i18n.global.locale.value));
+ expect(document.querySelectorAll('.spend-sheet .spend-list>li')).toHaveLength(1);
+});

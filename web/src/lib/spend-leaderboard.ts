@@ -2,7 +2,7 @@ import {currentProvider} from './provider';
 export type PrivacyMode='inherit'|'anonymous'|'public';
 export interface BoardPrivacy {anonymous:boolean;mode:PrivacyMode;revision:number}
 export interface SpendPlayer {rank:number;credits:string;anonymous:boolean;isSelf:boolean;accountNumId?:number;nickname?:string;avatarUrl?:string;handle?:string}
-export interface SpendBoard {list:SpendPlayer[];self:SpendPlayer|null;total:number;offset:number;nextOffset:number|null;selfState:'guest'|'author'|'test'|'ranked'|'unranked';updatedAt?:string;privacy?:BoardPrivacy}
+export interface SpendBoard {list:SpendPlayer[];self:SpendPlayer|null;total:number;offset:number;nextOffset:number|null;selfState:'guest'|'author'|'test'|'ranked'|'unranked';updatedAt?:string;privacy?:BoardPrivacy;authorCredits?:string}
 export interface PrivacySave {requestId:string;revision:number;anonymous:boolean;mode?:PrivacyMode;cardId?:string;confirmed?:boolean}
 export class BoardError extends Error {constructor(readonly status:number,readonly code:string){super(code)}}
 async function request<T>(path:string,token?:string,body?:PrivacySave):Promise<T>{
@@ -12,7 +12,7 @@ async function request<T>(path:string,token?:string,body?:PrivacySave):Promise<T
 export async function fetchSpendBoard(id:string,token?:string,offset=0):Promise<SpendBoard>{
  const out=await request<SpendBoard>(`cards/${encodeURIComponent(id)}/leaderboard?offset=${offset}`,token);
  const player=(p:SpendPlayer)=>p&&Number.isSafeInteger(p.rank)&&p.rank>0&&typeof p.credits==='string'&&/^[1-9]\d*$/.test(p.credits)&&typeof p.anonymous==='boolean'&&typeof p.isSelf==='boolean'&&(p.anonymous||typeof p.nickname==='string'&&typeof p.avatarUrl==='string');
- if(!out||!Array.isArray(out.list)||!out.list.every(player)||out.self!==null&&!player(out.self)||!Number.isSafeInteger(out.total)||out.total<0||!Number.isSafeInteger(out.offset)||out.offset<0||out.nextOffset!==null&&(!Number.isSafeInteger(out.nextOffset)||out.nextOffset<=out.offset)||!['guest','author','test','ranked','unranked'].includes(out.selfState)||out.updatedAt!==undefined&&!Number.isFinite(Date.parse(out.updatedAt)))throw new BoardError(502,'leaderboard_invalid_response');
+ if(!out||!Array.isArray(out.list)||!out.list.every(player)||out.self!==null&&!player(out.self)||!Number.isSafeInteger(out.total)||out.total<0||!Number.isSafeInteger(out.offset)||out.offset<0||out.nextOffset!==null&&(!Number.isSafeInteger(out.nextOffset)||out.nextOffset<=out.offset)||!['guest','author','test','ranked','unranked'].includes(out.selfState)||out.updatedAt!==undefined&&!Number.isFinite(Date.parse(out.updatedAt))||out.authorCredits!==undefined&&(typeof out.authorCredits!=='string'||!/^(0|[1-9]\d*)$/.test(out.authorCredits)))throw new BoardError(502,'leaderboard_invalid_response');
  return out;
 }
 export const fetchBoardPrivacy=(token:string,cardId?:string)=>request<BoardPrivacy>(`me/leaderboard-privacy${cardId?'?cardId='+encodeURIComponent(cardId):''}`,token);
