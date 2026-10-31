@@ -19,9 +19,9 @@ export function useModelCatalog(token: () => Promise<string>) {
 }
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
-/** 近 7 天沒人用，而且公開還不到 7 天：顯示「新公開」，不寫成「0 人使用」。 */
-export function isNew(item: Pick<PresetLibraryItem, "usesLast7d" | "publishedAt">, now = Date.now()): boolean {
-  if (item.usesLast7d > 0 || !item.publishedAt) return false;
+/** 近 7 天沒人用，而且公開還不到 7 天：顯示「新公開」，不寫成「0 人使用」。已不公開的不算。 */
+export function isNew(item: Pick<PresetLibraryItem, "usesLast7d" | "publishedAt"> & { listed?: boolean }, now = Date.now()): boolean {
+  if (item.listed === false || item.usesLast7d > 0 || !item.publishedAt) return false;
   const at = Date.parse(item.publishedAt);
   return Number.isFinite(at) && now - at < WEEK_MS;
 }

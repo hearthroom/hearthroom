@@ -651,6 +651,8 @@ describe("新公開的判定", () => {
     expect(isNew({ usesLast7d: 0, publishedAt: "2026-10-20T00:00:00Z" }, now)).toBe(false);
     expect(isNew({ usesLast7d: 3, publishedAt: "2026-10-29T00:00:00Z" }, now)).toBe(false);
     expect(isNew({ usesLast7d: 0, publishedAt: null }, now)).toBe(false);
+    // 已不公開（改回私人或被下架）的那份不再是「新公開」（QA W1）
+    expect(isNew({ usesLast7d: 0, publishedAt: "2026-10-29T00:00:00Z", listed: false }, now)).toBe(false);
   });
 });
 

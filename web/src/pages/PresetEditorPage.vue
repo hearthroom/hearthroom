@@ -180,7 +180,8 @@ async function load() {
     }
     detail.value = await fetchPreset(tk, presetId.value);
     const { revision, compatibility } = await fetchContent(tk, presetId.value);
-    adopt(revision.document, detail.value.title, revision.recommendedModels, revision.version);
+    // 存檔比對的是預設本身的版本（公開、改回私人也會讓它往上跳），不是內容的版本
+    adopt(revision.document, detail.value.title, revision.recommendedModels, detail.value.version);
     compat.value = compatibility;
     document.title = pageTitle(detail.value.title);
   } catch (err) {
@@ -254,6 +255,7 @@ async function save() {
     } else {
       baseVersion.value = receipt.version;
       detail.value = await fetchPreset(await token(), id).catch(() => detail.value);
+      if (detail.value) baseVersion.value = detail.value.version;
     }
   } catch (err) {
     if (consentNeeded(err)) return;

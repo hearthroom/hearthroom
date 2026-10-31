@@ -252,6 +252,29 @@ describe("預設編輯器：不留版本（owner 2026-10-30）", () => {
   });
 });
 
+describe("預設編輯器：公開後再存（QA B1）", () => {
+  it("存檔帶的是預設本身的版本，不是內容的版本：公開／改回私人讓預設版本往上跳，照樣存得下", async () => {
+    const d = doc(); d.selection.excludedEntryIds = ["script"]; d.selection.acceptedAdaptationIds = ["turn:move_to_suffix"];
+    mocks.detail.mockResolvedValue(detail({ version: 5, visibility: "public" }));
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r3", presetId: "p1", version: 3, document: d, sourceKind: "imported", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: compat() });
+    mocks.analyze.mockImplementation(async () => compat());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改名";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r4", version: 6 });
+    mocks.detail.mockResolvedValue(detail({ version: 6, visibility: "public" }));
+    $("[data-testid=preset-save]").click(); await flush(); await flush();
+    expect(mocks.revise.mock.calls[0]![2].expectedVersion).toBe(5);
+    // 再存一次：用存好之後讀回的預設版本
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "再改";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    $("[data-testid=preset-save]").click(); await flush(); await flush();
+    expect(mocks.revise.mock.calls[1]![2].expectedVersion).toBe(6);
+  });
+});
+
 describe("預設編輯器：API 建立的預設（選擇欄位可省略）", () => {
   it("selection 只有 profileId 也能打開：缺的清單當空的，存檔補齊送出", async () => {
     const d = doc(); (d as { selection: unknown }).selection = { profileId: 100001 };
