@@ -719,7 +719,7 @@ async function onPickImage(file: File, ok: (url: string) => void, fail: (message
 
 // ── 生成圖片 ──────────────────────────────────────────────────────
 // 直式背景（立繪）與橫式背景旁的「生成」：登入身分、只扣購買點數、權限與內容規則都跟資源頁同一套。
-// 存進這張卡的資源庫資料夾——卡名，跟 CLI 推卡時 media.folder 的預設一樣——存好直接填進那一欄。
+// 生成好先給作者挑，挑中的那張才存進這張卡的資源庫資料夾——卡名，跟 CLI 推卡時 media.folder 的預設一樣——並填進那一欄。
 
 type GenField = "roleBackground" | "roleBackgroundLandscape";
 const { imageGen, generator, probeGeneration, markReauthorizing } = useImageGeneration(() => editorProvider.value);
@@ -749,15 +749,22 @@ function closeGenerate() {
   genOpen.value = false;
   if (!genRunning.value) genField.value = null;
 }
-function generated(_n: number, folder: string, urls: string[]) {
+function generated(url: string, folder: string) {
   const field = genField.value;
   genOpen.value = false;
   genRunning.value = false;
   genField.value = null;
-  if (field && urls[0]) {
-    draft.value[field] = urls[0];
+  if (field && url) {
+    draft.value[field] = url;
     flash(t("editor.image.generated", { folder }));
   } else flash(t("editor.image.generatedSaved", { folder }));
+}
+/** 一張都沒挑：圖片留在生圖頁的快取區。 */
+function generationKept() {
+  genOpen.value = false;
+  genRunning.value = false;
+  genField.value = null;
+  flash(t("editor.image.kept"));
 }
 function reauthorizeGeneration() {
   markReauthorizing();
@@ -1551,11 +1558,11 @@ async function exportCard(format: "png" | "json") {
           :folder="genFolder"
           :shape="genField === 'roleBackground' ? 'tall' : 'wide'"
           :initial-prompt="genPrompt"
-          select
           @close="closeGenerate"
           @reauth="reauthorizeGeneration"
           @running="genRunning = $event"
           @saved="generated"
+          @kept="generationKept"
         />
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">

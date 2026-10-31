@@ -68,7 +68,7 @@ describe("generating and saving", () => {
   it("sends the order key and returns a finished task when Harbor answers within its wait", async () => {
     const fetcher = stub(() => json({ created: 1, data: [{ url: "https://assets.test/a.png" }, { url: "https://assets.test/b.png" }], harbor: { id: "t1", status: "completed" } }));
     const task = await client().create(input, "key-1");
-    expect(task).toEqual({ id: "t1", status: "completed", urls: ["https://assets.test/a.png", "https://assets.test/b.png"] });
+    expect(task).toEqual({ id: "t1", status: "completed", urls: ["https://assets.test/a.png", "https://assets.test/b.png"], saved: ["", ""] });
     const [url, init] = fetcher.mock.calls[0]!;
     expect(url).toBe("https://api.harperharbor.com/open/v1/generations/images");
     expect(new Headers(init.headers).get("Idempotency-Key")).toBe("key-1");
@@ -112,26 +112,29 @@ describe("generating and saving", () => {
     expect(error).toMatchObject({ status, code: expected });
   });
 
-  it("saves into the folder that is open", async () => {
-    const fetcher = stub(() => json({ id: "t1", object: "media.saved", asset_ids: ["a1", "a2"] }));
-    expect(await client().save("t1", { folderIds: ["f-art"] })).toEqual(["a1", "a2"]);
+  it("saves only the picked image under the name the author typed", async () => {
+    const fetcher = stub(() => json({ id: "t1", object: "media.saved", asset_ids: ["a2"], assets: [{ index: 1, asset_id: "a2", url: "https://assets.test/Mira/hero.png" }] }));
+    expect(await client().save("t1", { directory: "Mira" }, [{ index: 1, name: "hero" }])).toEqual([{ index: 1, assetId: "a2", url: "https://assets.test/Mira/hero.png" }]);
     const [url, init] = fetcher.mock.calls[0]!;
     expect(url).toBe("https://api.harperharbor.com/open/v1/generations/t1/save");
-    expect(JSON.parse(String(init.body))).toEqual({ folderIds: ["f-art"] });
+    expect(JSON.parse(String(init.body))).toEqual({ directory: "Mira", items: [{ index: 1, name: "hero" }] });
   });
 
-  it("finds the library URLs of saved files by the task id in their names", async () => {
-    const fetcher = stub(() => json({ code: 0, data: { imageList: [
-      { id: "a2", imageUrl: "https://assets.test/Mira/gpt-image-2-3f2a9c1e-2.png" },
-      { id: "other", imageUrl: "https://assets.test/Mira/old.png" },
-      { id: "a1", imageUrl: "https://assets.test/Mira/gpt-image-2-3f2a9c1e-1.png" },
-    ] } }));
-    expect(await client().savedUrls("3f2a9c1e-0000-4000-8000-000000000000", ["a1", "a2", "gone"])).toEqual([
-      "https://assets.test/Mira/gpt-image-2-3f2a9c1e-1.png",
-      "https://assets.test/Mira/gpt-image-2-3f2a9c1e-2.png",
-    ]);
-    const url = new URL(fetcher.mock.calls[0]![0]);
-    expect(url.pathname).toBe("/open/v1/image/list");
-    expect(url.searchParams.get("q")).toBe("3f2a9c1e");
+  it("reports a taken name as 409 name_taken so the dialog can ask for another", async () => {
+    stub(() => harborError(409, "invalid_request_error", "name_taken"));
+    const error = await client().save("t1", {}, [{ index: 0, name: "hero" }]).catch((e) => e);
+    expect(error).toMatchObject({ status: 409, code: "name_taken" });
+  });
+
+  it("lists recent generations with which images are already in the library", async () => {
+    const fetcher = stub(() => json({ object: "list", data: [
+      { id: "t2", status: "in_progress", model: "gpt-image-2", price_tier: "1024x1536", created_at: 1700000100 },
+      { id: "t1", status: "completed", model: "gpt-image-2", price_tier: "1024x1024", credits: 104, created_at: 1700000000, expires_at: 1700604800,
+        data: [{ url: "https://assets.test/media-gen/t1/0.png" }, { url: "https://assets.test/media-gen/t1/1.png", asset_id: "a2" }] },
+    ] }));
+    const list = await client().list();
+    expect(new URL(fetcher.mock.calls[0]![0]).search).toBe("?type=image&limit=60");
+    expect(list[0]).toMatchObject({ id: "t2", status: "in_progress", urls: [], saved: [], size: "1024x1536" });
+    expect(list[1]).toMatchObject({ id: "t1", urls: ["https://assets.test/media-gen/t1/0.png", "https://assets.test/media-gen/t1/1.png"], saved: ["", "a2"], credits: 104, expiresAt: 1700604800 });
   });
 });

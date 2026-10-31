@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "audience": "authors",
+  "try": "/studio",
+  "title": {
+    "zh-Hant": "首頁多了「生圖」頁，生成的圖片先讓你挑過再存",
+    "zh-Hans": "首页多了「生图」页，生成的图片先让你挑过再存",
+    "en": "The new Create tab lets you pick the images you like before anything is saved",
+    "ja": "新しい「画像生成」タブでは、気に入った画像を選んでから保存できます",
+    "ko": "새 「이미지 생성」 탭에서는 마음에 드는 이미지를 고른 뒤에 저장할 수 있어요"
+  },
+  "body": {
+    "zh-Hant": "生圖頁可以選模型、比例和張數，也能用角色立繪、表情差分等技能和參考圖，結果保留 7 天，挑中的取個名字存進資源庫或下載。",
+    "zh-Hans": "生图页可以选模型、比例和张数，也能用角色立绘、表情差分等技能和参考图，结果保留 7 天，挑中的取个名字存进资源库或下载。",
+    "en": "Choose the model, aspect ratio and count, use skills like character portraits or expression sheets with a reference image, and name the ones you keep for your library or a download within 7 days.",
+    "ja": "モデル、比率、枚数を選び、立ち絵や表情差分などのスキルと参考画像も使え、結果は 7 日間残るので気に入ったものに名前を付けてライブラリに保存したりダウンロードしたりできます。",
+    "ko": "모델과 비율, 장수를 고르고 전신 일러스트나 표정 모음 같은 스킬과 참고 이미지도 쓸 수 있으며, 결과는 7일 동안 남아 고른 것에 이름을 붙여 보관함에 저장하거나 내려받을 수 있어요."
+  }
+}

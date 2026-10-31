@@ -8,7 +8,7 @@ import { setProvider } from "../src/lib/provider";
 import { ApiError } from "../src/lib/api";
 import ResourcesPage from "../src/pages/ResourcesPage.vue";
 
-// 資源頁的「生成圖片」：用登入身分生成，成功就放進正在看的資料夾，錯誤用使用者聽得懂的話講。
+// 資源頁的「生成圖片」：生成在生圖頁做（結果先進快取區），這裡只是入口——帶著正在看的資料夾與參考圖過去。
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   folders: vi.fn(),
@@ -37,6 +37,7 @@ const models = [
 let saved: string[] = [];
 
 let app: ReturnType<typeof createApp>;
+let router: ReturnType<typeof createRouter>;
 let root: HTMLElement;
 afterEach(() => {
   app?.unmount();
@@ -65,7 +66,7 @@ async function mount(path = "/resources") {
   session.me = { accountNumId: 7, nickName: "Fixture", avatar: "" };
   session.profile = { identities: [{ provider: "harbor", externalId: 7 }] } as never;
   session.ensureProfile = async () => {};
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/resources", component: ResourcesPage }] });
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/resources", component: ResourcesPage }, { path: "/studio", component: { template: "<p>studio</p>" } }] });
   await router.push(path);
   root = document.createElement("div");
   document.body.append(root);
@@ -74,22 +75,6 @@ async function mount(path = "/resources") {
   await settle();
 }
 const entry = () => [...root.querySelectorAll<HTMLButtonElement>(".resource-actions button")].find((b) => b.getAttribute("aria-label") === "Generate image");
-const dialog = () => document.querySelector<HTMLElement>('[aria-labelledby="gen-title"]');
-async function open() {
-  entry()!.click();
-  await settle();
-  return dialog()!;
-}
-async function describe(text: string) {
-  const box = dialog()!;
-  const area = box.querySelector("textarea")!;
-  area.value = text;
-  area.dispatchEvent(new Event("input"));
-  await settle();
-  box.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
-  await settle();
-  return box;
-}
 
 it("stays hidden until Harbor offers signed-in generation", async () => {
   mocks.models.mockRejectedValue(new ApiError(404, "not found"));
@@ -97,151 +82,23 @@ it("stays hidden until Harbor offers signed-in generation", async () => {
   expect(entry()).toBeUndefined();
 });
 
-it("asks for a fresh sign-in when this sign-in lacks the generation permission, once", async () => {
-  mocks.models.mockRejectedValue(new ApiError(403, "forbidden", "permission_error"));
-  await mount();
-  const box = await open();
-  expect(box.textContent).toContain("sign in again and allow this site to generate images");
-  [...box.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Sign in and allow")!.click();
-  await settle();
-  expect(mocks.connect).toHaveBeenCalledWith("harbor", expect.stringMatching(/^\/resources\?/));
-  app.unmount();
-  root.remove();
-  // 授權回來還是沒有：不再帶去登入，免得繞圈
-  await mount();
-  expect((await open()).textContent).toContain("can’t generate images here yet");
-});
-
-it("generates with the cheapest model and puts the result into the open folder", async () => {
+it("opens the studio with the open folder as the place to save", async () => {
   mocks.models.mockResolvedValue(models);
-  mocks.create.mockResolvedValue({ id: "t1", status: "queued", urls: [] });
-  mocks.wait.mockImplementation(async (t: { id: string }) => ({ id: t.id, status: "completed", urls: ["https://assets.harperharbor.com/media-gen/t1.png"] }));
-  mocks.save.mockImplementation(async () => {
-    saved = ["t1.png"];
-    return ["a1"];
-  });
   await mount("/resources?folder=f-art");
-  const box = await open();
-  const [modelSelect] = box.querySelectorAll("select");
-  expect((modelSelect as HTMLSelectElement).value).toBe("gpt-image-2-dawn");
-  // 三個都叫 GPT Image 2：有線路名的帶上線路名，選項才分得出來；模型清單照頁面語言要
-  expect(mocks.models).toHaveBeenCalledWith("en");
-  expect([...modelSelect!.querySelectorAll("option")].map((o) => o.textContent?.trim())).toEqual([
-    "GPT Image 2 · Dawn · 35 credits per image",
-    "GPT Image 2 · Dew · 61 credits per image",
-    "GPT Image 2 · from 52 credits per image",
-  ]);
-  expect(box.textContent).toContain("“card/art”");
-  await describe("  a lighthouse at dusk ");
-  const [input, key] = mocks.create.mock.calls[0]!;
-  expect(input).toEqual({ model: "gpt-image-2-dawn", prompt: "a lighthouse at dusk", size: "1024x1024", n: 1 });
-  expect(key).toMatch(/^[0-9a-f-]{36}$/);
-  expect(mocks.save).toHaveBeenCalledWith("t1", { folderIds: ["f-art"] });
-  expect(dialog()).toBeNull();
-  expect(root.textContent).toContain("1 new image(s) are now in “card/art”.");
-  expect([...root.querySelectorAll(".row-file .row-name")].map((e) => e.textContent?.trim())).toEqual(["t1.png"]);
-});
-
-it.each([
-  ["/resources", {}],
-  ["/resources?folder=dir:card", { directory: "card" }],
-])("saves into the library root or a path-only folder (%s)", async (path, target) => {
-  mocks.models.mockResolvedValue(models);
-  mocks.create.mockResolvedValue({ id: "t1", status: "completed", urls: ["u"] });
-  mocks.wait.mockImplementation(async (t: unknown) => t);
-  mocks.save.mockResolvedValue(["a1"]);
-  await mount(path);
-  await open();
-  await describe("a fox");
-  expect(mocks.save).toHaveBeenCalledWith("t1", target);
-});
-
-it("explains a credit shortfall with a way to top up, and a refused prompt as not charged", async () => {
-  mocks.models.mockResolvedValue(models);
-  mocks.create.mockRejectedValueOnce(new ApiError(402, "x", "insufficient_quota"));
-  await mount();
-  await open();
-  let box = await describe("a fox");
-  expect(box.querySelector('[role="alert"]')!.textContent).toContain("gifted credits can’t be used");
-  expect(box.querySelector<HTMLAnchorElement>('[role="alert"] a')!.href).toBe("https://console.harperharbor.com/me/billing");
-  mocks.create.mockRejectedValueOnce(new ApiError(400, "x", "content_policy_violation"));
-  box = await describe("a fox");
-  expect(box.querySelector('[role="alert"]')!.textContent).toContain("nothing was charged");
-  expect(mocks.create.mock.calls[0]![1]).not.toBe(mocks.create.mock.calls[1]![1]);
-});
-
-it("retries a dropped submission with the same order key, and only saves again after storage fills", async () => {
-  mocks.models.mockResolvedValue(models);
-  mocks.create.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce({ id: "t9", status: "completed", urls: ["https://assets.test/t9.png"] });
-  mocks.wait.mockImplementation(async (t: unknown) => t);
-  mocks.save.mockRejectedValueOnce(new ApiError(507, "x", "insufficient_quota")).mockResolvedValueOnce(["a9"]);
-  await mount();
-  await open();
-  let box = await describe("a fox");
-  expect(box.querySelector('[role="alert"]')!.textContent).toContain("The connection dropped");
-  expect(box.querySelector('button[type="submit"]')!.textContent?.trim()).toBe("Continue");
-  box.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+  entry()!.click();
   await settle();
-  expect(mocks.create.mock.calls[1]![1]).toBe(mocks.create.mock.calls[0]![1]);
-  expect(box.querySelector('[role="alert"]')!.textContent).toContain("file storage is full");
-  expect(box.querySelector<HTMLAnchorElement>('[role="alert"] .gen__links a')!.href).toBe("https://assets.test/t9.png");
-  expect(box.querySelector('button[type="submit"]')!.textContent?.trim()).toBe("Save again");
-  box.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
-  await settle();
-  expect(mocks.create).toHaveBeenCalledTimes(2);
-  expect(mocks.save).toHaveBeenCalledTimes(2);
-  expect(dialog()).toBeNull();
+  expect(router.currentRoute.value.path).toBe("/studio");
+  expect(router.currentRoute.value.query).toEqual({ dir: "card/art" });
+  expect(mocks.create).not.toHaveBeenCalled();
 });
 
-it("keeps generating after the dialog closes and still saves the result", async () => {
+it("opens the studio with an image in the library as the reference", async () => {
   mocks.models.mockResolvedValue(models);
-  let finish!: (t: unknown) => void;
-  mocks.create.mockResolvedValue({ id: "t5", status: "in_progress", urls: [] });
-  mocks.wait.mockImplementation(() => new Promise((r) => (finish = r)));
-  mocks.save.mockResolvedValue(["a5"]);
-  await mount();
-  await open();
-  const box = await describe("a fox");
-  expect(box.textContent).toContain("keeps going if you close this window");
-  [...box.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Keep going in background")!.click();
-  await settle();
-  expect(dialog()!.closest<HTMLElement>(".modal-backdrop")!.style.display).toBe("none");
-  expect(root.textContent).toContain("still being generated");
-  finish({ id: "t5", status: "completed", urls: ["u"] });
-  await settle();
-  expect(mocks.save).toHaveBeenCalledWith("t5", {});
-  expect(dialog()).toBeNull();
-});
-
-// 「以這張為參考」：圖片列有入口，框裡看得到參考圖，只列收參考圖的模型，送出帶 images；拿掉參考就回到全部模型。
-it("generates from an image in the library as the reference", async () => {
-  mocks.models.mockResolvedValue(models);
-  mocks.create.mockResolvedValue({ id: "t7", status: "completed", urls: ["u"] });
-  mocks.wait.mockImplementation(async (t: unknown) => t);
-  mocks.save.mockResolvedValue(["a7"]);
   saved = ["portrait.png"];
   await mount("/resources?folder=f-art");
-  const use = root.querySelector<HTMLButtonElement>('button[aria-label="Use as reference"]');
-  expect(use).not.toBeNull();
-  use!.click();
-  await settle();
-  const box = dialog()!;
-  expect(box.querySelector<HTMLImageElement>(".gen__reference img")!.src).toBe("https://assets.test/card/art/portrait.png");
-  expect(box.textContent).toContain("keep this character’s face, hair and outfit");
-  const options = () => [...box.querySelector("select")!.querySelectorAll("option")].map((o) => o.value);
-  expect(options()).toEqual(["gpt-image-2"]);
-  await describe("the same girl under a red umbrella");
-  expect(mocks.create.mock.calls[0]![0]).toEqual({
-    model: "gpt-image-2", prompt: "the same girl under a red umbrella", size: "1024x1024", n: 1,
-    images: ["https://assets.test/card/art/portrait.png"],
-  });
-
   root.querySelector<HTMLButtonElement>('button[aria-label="Use as reference"]')!.click();
   await settle();
-  [...dialog()!.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Remove reference")!.click();
-  await settle();
-  expect(dialog()!.querySelector(".gen__reference")).toBeNull();
-  expect([...dialog()!.querySelector("select")!.querySelectorAll("option")].map((o) => o.value)).toEqual(["gpt-image-2-dawn", "gpt-image-2-dew", "gpt-image-2"]);
+  expect(router.currentRoute.value.query).toEqual({ dir: "card/art", ref: "https://assets.test/card/art/portrait.png" });
 });
 
 it("offers no reference entry when no model takes reference images", async () => {

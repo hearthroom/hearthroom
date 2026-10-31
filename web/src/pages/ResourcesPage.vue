@@ -29,8 +29,6 @@ import { useLocalePath } from "@/lib/use-locale";
 import ResourcePreview from "@/components/ResourcePreview.vue";
 import ResourceSelect from "@/components/ResourceSelect.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
-import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
-import type { SaveTarget } from "@/lib/media-generation";
 import { useImageGeneration } from "@/lib/use-image-generation";
 const { lp } = useLocalePath();
 const session = useSession(),
@@ -177,15 +175,11 @@ function query(targetPage = page.value) {
   };
 }
 // 平台憑證與生成圖片的入口狀態、授權見 use-image-generation。
-const { credentials, imageGen, generator, probeGeneration: probe, markReauthorizing } = useImageGeneration(() => provider.value);
+const { credentials, imageGen, probeGeneration: probe } = useImageGeneration(() => provider.value);
 async function client(id = provider.value) {
   const c = await credentials(id);
   return resourceClient(c.id, c.token);
 }
-const generateOpen = ref(false),
-  generateMounted = ref(false),
-  generateRunning = ref(false),
-  generateReference = ref("");
 // 「以這張為參考」只在有模型收參考圖時出現。
 const canReference = computed(() => imageGen.value?.access === "ready" && imageGen.value.models.some((m) => m.maxReferences > 0));
 let generationProbed = "";
@@ -193,36 +187,10 @@ function probeGeneration() {
   generationProbed = provider.value;
   return probe();
 }
-function reauthorizeGeneration() {
-  markReauthorizing();
-  void reconnect();
-}
-// 存到正在看的地方：真的資料夾給 id，只以路徑存在的夾給路徑，根目錄什麼都不給。
-const generateTarget = computed<SaveTarget>(() =>
-  activeFolder.value
-    ? { folderIds: [activeFolder.value.folderId] }
-    : currentPath.value
-      ? { directory: currentPath.value }
-      : {},
-);
-const generateFolder = computed(() => activeFolder.value?.name || currentPath.value || t("resource.root"));
+/** 生成在生圖頁做：結果先進那裡的快取區，作者挑了才存；預設存回正在看的資料夾，帶著參考圖就先放進輸入框。 */
 function openGenerate(reference = "") {
-  // 背景還在生成的那一個不換參考圖：重新打開看的是同一次生成。
-  if (!generateRunning.value) generateReference.value = reference;
-  generateMounted.value = true;
-  generateOpen.value = true;
-}
-function closeGenerate() {
-  generateOpen.value = false;
-  if (!generateRunning.value) generateMounted.value = false;
-}
-async function generated(n: number, folder: string) {
-  generateOpen.value = false;
-  generateMounted.value = false;
-  generateRunning.value = false;
-  notice.value = t("resource.gen.saved", { n, folder });
-  // 新圖片排在最新的前面：照最新排序時回第一頁，才看得到它。
-  await load(sort.value === "newest" ? 1 : page.value, true);
+  const dir = activeFolder.value?.name || currentPath.value;
+  void router.push({ path: lp("/studio"), query: { ...(dir ? { dir } : {}), ...(reference ? { ref: reference } : {}) } });
 }
 async function remember() {
   const q = {
@@ -757,7 +725,6 @@ async function previewMove(direction: number) {
         <button
           v-if="imageGen"
           class="btn gen-btn"
-          :disabled="!result || busy || expired || quotaFull"
           :aria-label="$t('resource.gen.open')"
           @click="openGenerate()"
         >
@@ -815,10 +782,6 @@ async function previewMove(direction: number) {
         </button>
       </p>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
-      <p v-if="generateRunning && !generateOpen" class="notice" role="status">
-        {{ $t("resource.gen.inBackground") }}
-        <button class="btn btn--sm" @click="generateOpen = true">{{ $t("resource.gen.show") }}</button>
-      </p>
       <input
         v-if="copyFallback"
         readonly
@@ -1227,20 +1190,6 @@ async function previewMove(direction: number) {
             </div>
           </div>
         </section></template>
-    <GenerateImageDialog
-      v-if="generateMounted && imageGen"
-      :open="generateOpen"
-      :access="imageGen.access"
-      :models="imageGen.models"
-      :client="generator"
-      :target="generateTarget"
-      :folder="generateFolder"
-      :reference="generateReference"
-      @close="closeGenerate"
-      @reauth="reauthorizeGeneration"
-      @running="generateRunning = $event"
-      @saved="generated"
-    />
     <ResourcePreview
       v-if="preview"
       :item="preview"

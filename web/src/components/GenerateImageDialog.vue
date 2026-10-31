@@ -1,19 +1,15 @@
 <script setup lang="ts">
 /**
- * 「生成圖片」：寫描述、選模型尺寸張數，用登入身分生成，成功就放進指定的資料夾。
- * 資源頁存進正在看的資料夾；卡片編輯器存進這張卡的資料夾，按欄位預選直式或橫式，存好直接填進欄位。
- * 生成要 30–90 秒：關掉框（v-show 收起）不會中斷，頁面等它存好才卸下這個元件。
- * 還在生成或還沒存好時離開這一頁（站內換頁、重新整理、關分頁）先問一聲：離開就拿不回結果，點數照樣可能扣。
- * select 時一次生成好幾張：存好後讓作者挑一張填進欄位，其餘留在資料夾。
+ * 卡片編輯器的「生成」：寫描述、選模型尺寸張數，用登入身分生成；結果先給作者看，挑一張才存進這張卡的資料夾並填進欄位。
+ * 沒挑的留在生圖頁的快取區 7 天（生成的圖不再自動進資源庫）。生圖頁本身用的是 StudioComposer，這裡是欄位旁的快捷版。
+ * 生成要 30–90 秒：關掉框（v-show 收起）不會中斷，頁面等它結束才卸下這個元件。
  * 同一次生成沿用同一個 Idempotency-Key：連線斷掉重送不會多扣；伺服器明確回應之後才換新的。
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { useI18n } from "vue-i18n";
-import { onBeforeRouteLeave } from "vue-router";
 import { ApiError } from "@/lib/api";
-import { confirmDialog } from "@/lib/confirm";
 import type { GenerationClient, GenerationModel, GenerationTask, SaveTarget } from "@/lib/media-generation";
 import { wrapTab } from "@/lib/focus-trap";
+import { fitSize } from "@/lib/studio";
 import { track } from "@/lib/track";
 
 const props = defineProps<{
@@ -28,34 +24,15 @@ const props = defineProps<{
   shape?: "tall" | "wide";
   /** 描述的起點，作者可以改。 */
   initialPrompt?: string;
-  /** 存好之後查出資源庫網址，跟著 saved 送出（編輯器要填進欄位）。 */
-  select?: boolean;
-  /** 參考圖（資源庫裡的網址）：同一個角色照它畫；有參考圖時只列收參考圖的模型。 */
-  reference?: string;
 }>();
-const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [count: number, folder: string, urls: string[]] }>();
-const { t } = useI18n();
+const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [url: string, folder: string]; kept: [] }>();
 
 const PROMPT_MAX = 4000;
 const TOP_UP = "https://console.harperharbor.com/me/billing";
 const prompt = ref(props.initialPrompt ?? "");
-const reference = ref(props.reference ?? "");
-const usable = computed(() => (reference.value ? props.models.filter((m) => m.maxReferences > 0) : props.models));
-const modelId = ref(usable.value[0]?.id ?? "");
-const model = computed(() => usable.value.find((m) => m.id === modelId.value));
-watch(usable, (list) => {
-  if (!list.some((m) => m.id === modelId.value)) modelId.value = list[0]?.id ?? "";
-});
-function fit(sizes: string[]) {
-  if (!props.shape) return sizes[0] ?? "";
-  const target = props.shape === "tall" ? 9 / 16 : 16 / 9;
-  // 「1024x1536」的寬高比離目標多遠（取對數，太寬太窄一樣算）；認不出的尺寸當正方形
-  const off = (s: string) => {
-    const [w, h] = s.split("x").map(Number);
-    return Math.abs(Math.log((w! / h! || 1) / target));
-  };
-  return sizes.reduce((best, s) => (off(s) < off(best) ? s : best), sizes[0] ?? "");
-}
+const modelId = ref(props.models[0]?.id ?? "");
+const model = computed(() => props.models.find((m) => m.id === modelId.value));
+const fit = (sizes: string[]) => (props.shape ? fitSize(sizes, props.shape) : sizes[0] ?? "");
 const size = ref(fit(model.value?.sizes ?? []));
 const count = ref(1);
 watch(model, (m) => {
@@ -68,14 +45,15 @@ const cost = computed(() => (model.value ? model.value.credits * count.value : 0
 type Failure = "reauth" | "credits" | "policy" | "storage" | "save" | "interrupted" | "failed";
 const phase = ref<"idle" | "running" | "saving">("idle");
 const failure = ref<Failure | null>(null);
-const results = ref<string[]>([]);
 const running = computed(() => phase.value !== "idle");
 watch(running, (v) => emit("running", v));
-// 一次生成的身分：key 送出前就定好；task 拿到任務才有；saved 前的目標與資料夾名在送出時定住。
-let key = "", task: GenerationTask | null = null, savedTo: { target: SaveTarget; folder: string } | null = null;
+// 一次生成的身分：key 送出前就定好；task 拿到任務才有。
+let key = "", task: GenerationTask | null = null;
 let disposed = false;
-/** 生成成功但還沒存好、或任務還在跑：表單不能改，按鈕是「繼續／重新保存」，不會再生成一次。 */
+/** 任務建了還沒拿到結果（連線中斷）：表單不能改，按鈕是「繼續」，不會再生成一次。 */
 const pending = ref(false);
+/** 生成好了、等作者挑的幾張（Harbor 快取的網址）。 */
+const choices = ref<string[]>([]);
 
 function failureOf(e: unknown): Failure {
   // 連線斷掉：任務可能已經建了，不能說「沒扣點」；用同一把 key 再送一次會拿回同一個任務。
@@ -84,8 +62,7 @@ function failureOf(e: unknown): Failure {
   if (e.status === 402) return "credits";
   if (e.status === 400 && e.code === "content_policy_violation") return "policy";
   if (e.status === 507) return "storage";
-  // 任務已經建了還在跑時查詢出錯，結果可能照樣出來（也照樣扣點）：繼續查同一個，不重新生成。
-  return task?.status === "completed" ? "save" : task ? "interrupted" : "failed";
+  return task ? "interrupted" : "failed";
 }
 
 async function submit() {
@@ -93,16 +70,12 @@ async function submit() {
   if (!pending.value && (!model.value || !prompt.value.trim() || !size.value)) return;
   failure.value = null;
   phase.value = "running";
-  if (!pending.value) {
-    key ||= crypto.randomUUID();
-    savedTo = { target: props.target, folder: props.folder };
-  }
+  if (!pending.value) key ||= crypto.randomUUID();
   try {
     const c = await props.client();
     if (!task) {
       try {
-        const images = reference.value ? { images: [reference.value] } : {};
-        task = await c.create({ model: model.value!.id, prompt: prompt.value.trim(), size: size.value, n: count.value, ...images }, key);
+        task = await c.create({ model: model.value!.id, prompt: prompt.value.trim(), size: size.value, n: count.value }, key);
       } catch (e) {
         // 伺服器回了話（拒絕、點數不夠）這把 key 就用完了；連線斷掉才留著重送。
         if (e instanceof ApiError) key = "";
@@ -113,52 +86,51 @@ async function submit() {
     }
     if (task.status !== "completed") task = await c.wait(task, () => disposed);
     if (disposed) return;
-    if (task.status === "failed") {
-      const code = task.code;
-      task = null;
-      pending.value = false;
-      failure.value = code === "content_policy_violation" ? "policy" : "failed";
-      return;
-    }
-    results.value = task.urls;
-    phase.value = "saving";
-    const ids = await c.save(task.id, savedTo!.target);
-    // 查網址失敗就跟存檔失敗一樣重試：save 是冪等的，回同一批檔案
-    const urls = props.select ? await c.savedUrls(task.id, ids) : [];
-    const n = task.urls.length || count.value;
-    task = null;
     pending.value = false;
-    results.value = [];
-    prompt.value = "";
-    if (urls.length > 1) {
-      choices.value = urls;
-      chosenFor = { n, folder: savedTo!.folder };
+    if (task.status === "failed") {
+      failure.value = task.code === "content_policy_violation" ? "policy" : "failed";
+      task = null;
       return;
     }
-    emit("saved", n, savedTo!.folder, urls);
+    choices.value = task.urls;
   } catch (e) {
     failure.value = failureOf(e);
-    if (failure.value === "failed") {
+    if (failure.value !== "interrupted") {
       task = null;
       pending.value = false;
-    } else if (failure.value === "interrupted") pending.value = true;
+    }
   } finally {
     phase.value = "idle";
   }
 }
 
-// 好幾張存好了：挑一張填進欄位，或都先不填（都已經在資料夾裡）
-const choices = ref<string[]>([]);
-let chosenFor: { n: number; folder: string } | null = null;
-function choose(url: string | null) {
-  const done = chosenFor!;
-  choices.value = [];
-  chosenFor = null;
-  emit("saved", done.n, done.folder, url ? [url] : []);
+/** 挑中一張：只存這一張進卡片資料夾，拿回資源庫網址填進欄位；其餘留在快取區。 */
+async function choose(index: number) {
+  if (!task || running.value) return;
+  failure.value = null;
+  phase.value = "saving";
+  try {
+    const [saved] = await (await props.client()).save(task.id, props.target, [{ index }]);
+    track("studio_pick_into_field");
+    task = null;
+    choices.value = [];
+    prompt.value = "";
+    emit("saved", saved?.url ?? "", props.folder);
+  } catch (e) {
+    failure.value = failureOf(e) === "interrupted" ? "save" : failureOf(e);
+  } finally {
+    phase.value = "idle";
+  }
 }
-/** 關掉框：在挑圖時等於「先不填」，不然挑圖的機會就跟著元件一起沒了。 */
+/** 先不填：結果留在生圖頁。關掉框在挑圖時也是這個意思。 */
+function keep() {
+  task = null;
+  choices.value = [];
+  emit("kept");
+}
 function dismiss() {
-  if (choices.value.length) choose(null);
+  if (running.value && phase.value === "saving") return;
+  if (choices.value.length) keep();
   else emit("close");
 }
 watch(choices, async (list) => {
@@ -166,14 +138,6 @@ watch(choices, async (list) => {
   await nextTick();
   box.value?.querySelector<HTMLElement>(".gen__choice")?.focus();
 });
-
-// 結果還沒進資料夾（生成中、存檔失敗、連線中斷）時離開，任務照跑、點數照扣，畫面卻再也接不回來。
-const unsaved = computed(() => running.value || pending.value);
-const onUnload = (e: BeforeUnloadEvent) => {
-  if (unsaved.value) e.preventDefault();
-};
-window.addEventListener("beforeunload", onUnload);
-onBeforeRouteLeave(() => !unsaved.value || confirmDialog({ message: t("resource.gen.leave"), confirmText: t("dialog.leave"), danger: true }));
 
 const box = ref<HTMLElement | null>(null);
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -199,16 +163,9 @@ watch(
 );
 onBeforeUnmount(() => {
   disposed = true;
-  window.removeEventListener("beforeunload", onUnload);
   document.removeEventListener("keydown", onKey);
 });
-const action = computed(() =>
-  failure.value === "storage" || failure.value === "save"
-    ? t("resource.gen.retrySave")
-    : failure.value === "interrupted"
-      ? t("resource.gen.resume")
-      : t("resource.gen.submit"),
-);
+const action = computed(() => (failure.value === "interrupted" ? "resource.gen.resume" : "resource.gen.submit"));
 </script>
 
 <template>
@@ -232,28 +189,28 @@ const action = computed(() =>
             </button>
           </div>
         </template>
-        <p v-else-if="!usable.length" class="subtle">{{ $t("resource.gen.noModels") }}</p>
+        <p v-else-if="!models.length" class="subtle">{{ $t("resource.gen.noModels") }}</p>
         <template v-else-if="choices.length">
-          <p class="subtle gen__note">{{ $t("resource.gen.choose", { folder: chosenFor?.folder ?? folder }) }}</p>
+          <p class="subtle gen__note">{{ $t("resource.gen.choose", { folder }) }}</p>
           <ul class="gen__choices">
             <li v-for="(u, i) in choices" :key="u">
-              <button type="button" class="gen__choice" :aria-label="$t('resource.gen.chooseOne', { n: i + 1 })" @click="choose(u)">
+              <button type="button" class="gen__choice" :disabled="running" :aria-label="$t('resource.gen.chooseOne', { n: i + 1 })" @click="choose(i)">
                 <img :src="u" alt="" />
               </button>
             </li>
           </ul>
+          <p v-if="phase === 'saving'" class="notice gen__progress" role="status">
+            <span class="gen__spinner" aria-hidden="true" />{{ $t("resource.gen.saving", { folder }) }}
+          </p>
+          <div v-if="failure" class="notice notice--error gen__error" role="alert">
+            <p>{{ $t("resource.gen.error." + failure) }}</p>
+            <button v-if="failure === 'reauth'" type="button" class="btn btn--sm" @click="emit('reauth')">{{ $t("resource.gen.reauthAction") }}</button>
+          </div>
           <div class="modal__actions">
-            <button type="button" class="btn" @click="choose(null)">{{ $t("resource.gen.chooseNone") }}</button>
+            <button type="button" class="btn" :disabled="running" @click="keep">{{ $t("resource.gen.chooseNone") }}</button>
           </div>
         </template>
         <template v-else>
-          <div v-if="reference" class="gen__reference">
-            <img :src="reference" alt="" />
-            <p class="subtle">{{ $t("resource.gen.reference") }}</p>
-            <button type="button" class="btn btn--sm btn--ghost" :disabled="running || pending" @click="reference = ''">
-              {{ $t("resource.gen.dropReference") }}
-            </button>
-          </div>
           <label class="gen__field">
             <span>{{ $t("resource.gen.prompt") }}</span>
             <textarea
@@ -270,7 +227,7 @@ const action = computed(() =>
           <label class="gen__field">
             <span>{{ $t("resource.gen.model") }}</span>
             <select v-model="modelId" class="input" :disabled="running || pending">
-              <option v-for="m in usable" :key="m.id" :value="m.id">
+              <option v-for="m in models" :key="m.id" :value="m.id">
                 {{ $t(m.laneName ? (m.priced > 1 ? "resource.gen.modelLaneFrom" : "resource.gen.modelLanePrice") : m.priced > 1 ? "resource.gen.modelFrom" : "resource.gen.modelPrice", { name: m.name, lane: m.laneName, n: m.credits }) }}
               </option>
             </select>
@@ -290,13 +247,10 @@ const action = computed(() =>
             </label>
           </div>
           <p class="subtle gen__note">
-            {{ $t(model && model.priced > 1 ? "resource.gen.costFrom" : "resource.gen.cost", { n: cost, folder }) }}
+            {{ $t(model && model.priced > 1 ? "resource.gen.costFrom" : "resource.gen.cost", { n: cost }) }}
           </p>
           <p v-if="phase === 'running'" class="notice gen__progress" role="status">
             <span class="gen__spinner" aria-hidden="true" />{{ $t("resource.gen.running") }}
-          </p>
-          <p v-else-if="phase === 'saving'" class="notice gen__progress" role="status">
-            <span class="gen__spinner" aria-hidden="true" />{{ $t("resource.gen.saving", { folder: savedTo?.folder ?? folder }) }}
           </p>
           <div v-if="failure" class="notice notice--error gen__error" role="alert">
             <p>{{ $t("resource.gen.error." + failure) }}</p>
@@ -306,16 +260,13 @@ const action = computed(() =>
             <button v-else-if="failure === 'reauth'" type="button" class="btn btn--sm" @click="emit('reauth')">
               {{ $t("resource.gen.reauthAction") }}
             </button>
-            <span v-if="failure === 'storage' && results.length" class="gen__links">
-              <a v-for="(u, i) in results" :key="u" :href="u" target="_blank" rel="noopener">{{ $t("resource.gen.download", { n: i + 1 }) }}</a>
-            </span>
           </div>
           <div class="modal__actions">
             <button type="button" class="btn" @click="dismiss">
               {{ $t(running ? "resource.gen.background" : "dialog.cancel") }}
             </button>
             <button type="submit" class="btn btn--primary" :disabled="running || (!pending && !prompt.trim())">
-              {{ action }}
+              {{ $t(action) }}
             </button>
           </div>
         </template>
@@ -330,10 +281,6 @@ const action = computed(() =>
 .gen__field .input { font-weight: 400; }
 .gen__row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--s-3); }
 .gen__note { margin: 0; font-size: 13px; }
-.gen__reference { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: var(--s-2) var(--s-3); }
-.gen__reference img { grid-row: span 2; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
-.gen__reference p { margin: 0; font-size: 13px; }
-.gen__reference .btn { justify-self: start; }
 .gen__progress { display: flex; align-items: center; gap: var(--s-2); margin: 0; }
 .gen__spinner {
   width: 16px; height: 16px; flex: none; border-radius: 50%;
@@ -343,13 +290,12 @@ const action = computed(() =>
 @keyframes gen-spin { to { transform: rotate(360deg); } }
 .gen__error { display: grid; gap: var(--s-2); justify-items: start; margin: 0; }
 .gen__error p { margin: 0; }
-.gen__links { display: flex; flex-wrap: wrap; gap: var(--s-3); }
 .gen__choices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 .gen__choice {
   display: block; width: 100%; padding: 0; border: 0; border-radius: var(--r-md); overflow: hidden;
   background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); cursor: pointer;
   transition: box-shadow var(--dur) var(--ease);
 }
-.gen__choice:hover, .gen__choice:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
+.gen__choice:hover:not(:disabled), .gen__choice:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
 .gen__choice img { display: block; width: 100%; height: auto; max-height: 40vh; object-fit: contain; }
 </style>

@@ -3,7 +3,7 @@ import { apiBaseOf, type ProviderId } from "./provider";
 
 /**
  * 以登入身分生成圖片（Harbor /open/v1/generations），只扣購買點數，要 media.generate 授權；
- * 存進資源庫另外要 role.write。錯誤是 OpenAI 信封 {error:{type,code,message}}，
+ * 結果先留在 Harbor 7 天（快取區），作者挑了才存進資源庫，存檔另外要 role.write。錯誤是 OpenAI 信封 {error:{type,code,message}}，
  * 丟出的 ApiError.code 取 error.code，沒有就取 error.type，畫面按 status 與 code 說話。
  */
 export interface GenerationModel {
@@ -24,6 +24,21 @@ export interface GenerationTask {
   status: "queued" | "in_progress" | "completed" | "failed";
   urls: string[];
   code?: string;
+  model?: string;
+  /** 價目檔：圖片是尺寸（例如 1024x1536）。 */
+  size?: string;
+  credits?: number;
+  /** 秒（Unix）。 */
+  createdAt?: number;
+  expiresAt?: number;
+  /** 照 urls 對齊：第幾張已經存進資源庫（資源庫檔案 id），沒存的是空字串。 */
+  saved: string[];
+}
+/** 存好的一張：結果裡的第幾張、資源庫檔案與網址。 */
+export interface SavedImage {
+  index: number;
+  assetId: string;
+  url: string;
 }
 /** 存到哪裡：真的資料夾給 folderIds，只以路徑存在的夾給 directory，根目錄不給。 */
 export type SaveTarget = { folderIds?: string[]; directory?: string };
@@ -31,11 +46,18 @@ export type SaveTarget = { folderIds?: string[]; directory?: string };
 const POLL_MS = 3000;
 
 function task(raw: Record<string, any>): GenerationTask {
+  const data: { url?: string; asset_id?: string }[] = raw.data ?? [];
   return {
     id: String(raw.id ?? ""),
     status: raw.status ?? "in_progress",
-    urls: (raw.data ?? []).map((d: { url: string }) => d.url).filter(Boolean),
+    urls: data.map((d) => d.url ?? "").filter(Boolean),
+    saved: data.filter((d) => d.url).map((d) => (d.asset_id ? String(d.asset_id) : "")),
     ...(raw.error?.code ? { code: String(raw.error.code) } : {}),
+    ...(raw.model ? { model: String(raw.model) } : {}),
+    ...(raw.price_tier ? { size: String(raw.price_tier) } : {}),
+    ...(raw.created_at ? { createdAt: Number(raw.created_at) } : {}),
+    ...(raw.expires_at ? { expiresAt: Number(raw.expires_at) } : {}),
+    ...(typeof raw.credits === "number" ? { credits: raw.credits } : {}),
   };
 }
 
@@ -85,7 +107,7 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
     async create(input: { model: string; prompt: string; size: string; n: number; images?: string[] }, idempotencyKey: string): Promise<GenerationTask> {
       const { status, body } = await post("/images", input, { "Idempotency-Key": idempotencyKey });
       // 200 是等到了結果（任務在 harbor 底下）；202 回的就是任務本身，要接著查。
-      return status === 200 ? { ...task(body.harbor ?? {}), status: "completed", urls: task(body).urls } : task(body);
+      return status === 200 ? { ...task(body.harbor ?? {}), status: "completed", urls: task(body).urls, saved: task(body).saved } : task(body);
     },
     async get(id: string): Promise<GenerationTask> {
       return task((await call(`/${encodeURIComponent(id)}`)).body);
@@ -100,20 +122,18 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
       }
       return t;
     },
-    /** 冪等：存過的任務回同一批檔案。 */
-    async save(id: string, target: SaveTarget): Promise<string[]> {
-      const { body } = await post(`/${encodeURIComponent(id)}/save`, target);
-      return (body.asset_ids ?? []).map(String);
+    /** 本人最近 7 天的生成（生圖頁的快取區），新的在前。 */
+    async list(limit = 60): Promise<GenerationTask[]> {
+      const { body } = await call(`?${new URLSearchParams({ type: "image", limit: String(limit) })}`);
+      return (body.data ?? []).map(task);
     },
     /**
-     * 存好的檔案在資源庫的網址（編輯器要直接填進欄位）。Harbor 存檔時檔名帶任務 id 前八碼，
-     * 用它搜尋，再按 asset id 對上；找不到的就少一個，畫面請作者去資源庫挑。
+     * 只存挑中的幾張、各自取名（空的照預設取名）。同一張重送回同一個檔案；
+     * 名字跟資源庫裡已有的撞了丟 409 name_taken，原本的檔案不會被換掉。
      */
-    async savedUrls(id: string, assetIds: string[]): Promise<string[]> {
-      const q = new URLSearchParams({ scope: "all", kind: "image", q: id.slice(0, 8), pageSize: "20" });
-      const { body } = await call(`/list?${q}`, {}, `${apiBaseOf(provider)}/open/v1/image`);
-      const list: { id: unknown; imageUrl?: string }[] = body.data?.imageList ?? [];
-      return assetIds.map((a) => list.find((i) => String(i.id) === a)?.imageUrl ?? "").filter(Boolean);
+    async save(id: string, target: SaveTarget, items: { index: number; name?: string }[]): Promise<SavedImage[]> {
+      const { body } = await post(`/${encodeURIComponent(id)}/save`, { ...target, items });
+      return (body.assets ?? []).map((a: any) => ({ index: Number(a.index), assetId: String(a.asset_id), url: String(a.url ?? "") }));
     },
   };
 }

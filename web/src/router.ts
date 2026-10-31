@@ -75,6 +75,8 @@ const pages: RouteRecordRaw[] = [
   { path: "go/plan", component: () => import("./pages/GoPlanPage.vue"), meta: { bare: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
+  // 生圖：首頁導覽的第四頁（owner 2026-10-31）。結果先進快取區，挑了才存。
+  { path: "studio", component: () => import("./pages/StudioPage.vue"), meta: { auth: true } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "download", component: () => import("./pages/DownloadPage.vue") },

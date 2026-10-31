@@ -140,10 +140,10 @@ const q = ref((route.query.q as string) ?? "");
 const box = ref<InstanceType<typeof SearchSuggest> | null>(null);
 const onSearchPage = computed(() => route.path === lp("/search"));
 /**
- * 手機的第二排分頁（榜單／對話與收藏／我的卡片）只在這三頁出現：它是這三個頂層頁之間的切換，
+ * 手機的第二排分頁（榜單／對話與收藏／我的卡片／生圖）只在這四頁出現：它是這幾個頂層頁之間的切換，
  * 進到卡片頁、編輯頁這類內頁就不該還掛著（owner 2026-10-11），想回去走返回或品牌鍵，跟桌機一樣。
  */
-const onTabPage = computed(() => [lp("/"), lp("/library"), lp("/mine")].map((p) => p.replace(/\/+$/, "")).includes(route.path.replace(/\/+$/, "")));
+const onTabPage = computed(() => [lp("/"), lp("/library"), lp("/mine"), lp("/studio")].map((p) => p.replace(/\/+$/, "")).includes(route.path.replace(/\/+$/, "")));
 watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 
 function search() {
@@ -180,6 +180,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <RouterLink :to="lp('/')" class="nav__item" :class="{ 'nav__item--on': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
         <RouterLink :to="lp('/library')" data-tour="library" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
+        <RouterLink v-if="session.me" :to="lp('/studio')" class="nav__item" active-class="nav__item--on">{{ $t("nav.studio") }}</RouterLink>
         <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
         <RouterLink v-if="reviewerStore.likely || reviewerStore.blogWriter" :to="lp(reviewerStore.likely ? '/review' : '/review/blog')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </nav>
@@ -229,6 +230,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/')" :aria-current="route.path === lp('/') ? 'page' : undefined">{{ $t('nav.board') }}</RouterLink>
     <RouterLink :to="lp('/library')" data-tour="library" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
+    <RouterLink :to="lp('/studio')" :aria-current="route.path === lp('/studio') ? 'page' : undefined">{{ $t('nav.studio') }}</RouterLink>
   </nav>
   <CheckinHint v-if="onBoardPage && session.me && !route.meta.bare" />
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
@@ -404,7 +406,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 }
 .mobile-library-nav { display:none; }
 @media(max-width:700px) {
-  .mobile-library-nav { display:flex; justify-content:center; gap:var(--s-3); padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border); }
+  .mobile-library-nav { display:flex; justify-content:center; gap:var(--s-2); padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border); }
   .mobile-library-nav a { display:flex; align-items:center; justify-content:center; min-height:44px; flex:1; border-radius:var(--r-pill); font-size:.875rem; text-align:center; }
   .mobile-library-nav a[aria-current=page] { color:var(--accent-text); background:var(--accent-tint); font-weight:600; }
 }
