@@ -909,3 +909,43 @@ describe("採樣值不合法時存檔列說明原因（QA Q1，2026-10-30）", (
     vi.restoreAllMocks();
   });
 });
+
+describe("編輯用途", () => {
+  it.each(["private", "public"])("%s 預設可切換用途並保留模型，單改用途也能存", async (visibility) => {
+    const d = { schemaVersion: "hearthroom.st-preset.v1", st: {prompts: []}, selection: {profileId: 1, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: []} };
+    mocks.detail.mockResolvedValue(detail({purpose: "general", visibility: visibility as "private" | "public", version: 5}));
+    mocks.revision.mockResolvedValue({revision: {document:d, recommendedModels:["Opus"], version: 2}, compatibility:{entries:[], fields:[]}});
+    mocks.revise.mockResolvedValue({presetId:"p1",version:6});
+    await mount(PresetEditorPage, "/me/presets/p1");
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    const specific = $<HTMLInputElement>("[data-testid=editor-purpose-specific]");
+    expect(specific).not.toBeNull();
+    specific.click(); await flush();
+    expect(root.textContent).toContain(t("preset.purpose.models.specific"));
+    expect($<HTMLButtonElement>("[data-testid=preset-save]").disabled).toBe(false);
+    $("[data-testid=preset-save]").click(); await flush();
+    expect(mocks.revise.mock.calls[0]![2]).toMatchObject({purpose:"specific",recommendedModels:["Opus"],expectedVersion:5});
+    $("[data-testid=editor-purpose-general]").click(); await flush();
+    expect(root.textContent).toContain(t("preset.purpose.models.general"));
+    $("[data-testid=preset-save]").click(); await flush();
+    expect(mocks.revise.mock.calls[1]![2]).toMatchObject({purpose:"general",recommendedModels:["Opus"]});
+  });
+});
+
+
+it("特定模型不可留空，切通用後可以直接存空清單", async () => {
+ const d = {schemaVersion:"hearthroom.st-preset.v1",st:{prompts:[]},selection:{profileId:1}};
+ mocks.detail.mockResolvedValue(detail({purpose:"general"}));
+ mocks.revision.mockResolvedValue({revision:{document:d,recommendedModels:[]},compatibility:{entries:[],fields:[]}});
+ mocks.revise.mockResolvedValue({presetId:"p1",version:3});
+ await mount(PresetEditorPage,"/me/presets/p1");
+ await new Promise(r=>setTimeout(r,600)); await flush();
+ $("[data-testid=editor-purpose-specific]").click(); await flush();
+ $("[data-testid=preset-save]").click(); await flush();
+ expect(mocks.revise).not.toHaveBeenCalled();
+ expect(root.textContent).toContain(t("preset.purpose.models.required"));
+ $("[data-testid=editor-purpose-general]").click(); await flush();
+ const title=$<HTMLInputElement>("[data-testid=preset-title]"); title.value="General";title.dispatchEvent(new Event("input"));await flush();
+ $("[data-testid=preset-save]").click(); await flush();
+ expect(mocks.revise.mock.calls[0]![2]).toMatchObject({purpose:"general",recommendedModels:[]});
+});

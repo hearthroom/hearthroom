@@ -18,7 +18,7 @@ import { dateTime, whole } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import {
   analyzePreset, createPreset, fetchModelCatalog, fetchContent, fetchPreset, resultUnknown, revisePreset,
-  type Compatibility, type ModelCatalogGroup, type PresetDetail, type WriteReceipt,
+  type PresetPurpose, type Compatibility, type ModelCatalogGroup, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
   adaptationId, inspectRows, withSelectionDefaults, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
@@ -50,6 +50,7 @@ const doc = ref<PresetDocument | null>(null);
 const savedDoc = ref<PresetDocument | null>(null);
 const title = ref("");
 const models = ref<string[]>([]);
+const purpose = ref<PresetPurpose | "">("");
 const modelCatalog = ref<ModelCatalogGroup[]>([]);
 const saved = ref("");
 /** 這份草稿是以哪個版本為基準改的；存檔時拿它跟上游比，別處先存了就會知道 */
@@ -70,7 +71,7 @@ const savedVersion = ref(0);
 const exporting = ref(false);
 const inspecting = ref<{ rows: InspectRow[]; name: string } | null>(null);
 
-const snapshot = () => JSON.stringify({ title: title.value, models: models.value, doc: doc.value });
+const snapshot = () => JSON.stringify({ title: title.value, models: models.value, purpose: purpose.value, doc: doc.value });
 const dirty = computed(() => !!doc.value && snapshot() !== saved.value);
 const rows = computed(() => (doc.value ? entryRows(doc.value) : []));
 const custom = computed(() => rows.value.filter((r) => r.slot !== "F"));
@@ -173,12 +174,14 @@ async function load() {
     void fetchModelCatalog(tk).then((o) => { modelCatalog.value = o; }).catch(() => {});
     if (!presetId.value) {
       detail.value = null;
+      purpose.value = "";
       savedVersion.value = 0;
       adopt(newDocument(t("preset.entries.newName")), "", [], 0);
       compat.value = null;
       return;
     }
     detail.value = await fetchPreset(tk, presetId.value);
+    purpose.value = detail.value.purpose || "";
     const { revision, compatibility } = await fetchContent(tk, presetId.value);
     // 存檔比對的是預設本身的版本（公開、改回私人也會讓它往上跳），不是內容的版本
     adopt(revision.document, detail.value.title, revision.recommendedModels, detail.value.version);
@@ -231,14 +234,14 @@ async function send(action: string, call: (key: string) => Promise<WriteReceipt>
 
 async function save() {
   if (!doc.value || !canSave.value) return;
-  if (detail.value?.purpose === "specific" && !models.value.length) { saveError.value = t("preset.purpose.models.required"); return; }
+  if (purpose.value === "specific" && !models.value.length) { saveError.value = t("preset.purpose.models.required"); return; }
   saving.value = true;
   saveError.value = "";
   status.value = "";
   const action = presetId.value ? `revise:${presetId.value}:${baseVersion.value}:${snapshot()}` : `create:${snapshot()}`;
   try {
     // 同一把冪等鍵重送的必須是同一份內容：先凍住，重試期間玩家再改也不會混進去
-    const input = structuredClone({ title: title.value.trim(), document: toRaw(doc.value), recommendedModels: [...models.value] });
+    const input = structuredClone({ ...(purpose.value ? { purpose: purpose.value } : {}), title: title.value.trim(), document: toRaw(doc.value), recommendedModels: [...models.value] });
     const sent = snapshot();
     const id = presetId.value;
     const tk = await token();
@@ -523,10 +526,17 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 
       <div v-show="tab === 'settings'" id="editor-panel-settings" class="preset-editor__settings" role="tabpanel">
       <section class="panel preset-editor__section">
+        <fieldset class="preset-editor__purpose">
+          <legend>{{ $t("preset.purpose.label") }}</legend>
+          <label v-for="value in (['general', 'specific'] as const)" :key="value" class="preset-editor__purposeChoice">
+            <input v-model="purpose" type="radio" name="editor-purpose" :value="value" :data-testid="`editor-purpose-${value}`" />
+            <span><strong>{{ $t(`preset.purpose.${value}`) }}</strong><span class="subtle">{{ $t(`preset.purpose.${value}.hint`) }}</span></span>
+          </label>
+        </fieldset>
         <div class="field">
-          <label for="preset-models">{{ $t(detail?.purpose === "specific" ? "preset.purpose.models.specific" : "preset.purpose.models.general") }}</label>
+          <label for="preset-models">{{ $t(purpose === "specific" ? "preset.purpose.models.specific" : "preset.purpose.models.general") }}</label>
           <PresetModelPicker v-model="models" :groups="modelCatalog" input-id="preset-models" />
-          <p v-if="detail?.purpose !== 'specific'" class="subtle">{{ $t("preset.editor.models.hint") }}</p>
+          <p v-if="purpose !== 'specific'" class="subtle">{{ $t("preset.editor.models.hint") }}</p>
         </div>
       </section>
       <section class="panel preset-editor__section">
@@ -587,6 +597,13 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__tabs { flex-shrink: 0; }
 .preset-editor__tabs .seg__item { position: relative; min-height: var(--h-lg); padding-inline: var(--s-4); }
 .editor-tab__dot { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.preset-editor__purpose { border: 0; margin: 0; padding: 0; }
+.preset-editor__purpose legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
+.preset-editor__purposeChoice { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-lg); cursor: pointer; }
+.preset-editor__purposeChoice > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--s-2); }
+.preset-editor__purposeChoice strong { font-size: 13px; font-weight: 600; }
+.preset-editor__purposeChoice input { accent-color: var(--accent-btn); }
+:lang(ko) .preset-editor__purposeChoice { word-break: keep-all; }
 .preset-editor__settings { display: grid; gap: var(--s-4); align-content: start; max-width: 760px; width: 100%; }
 .preset-editor__head .field { margin-bottom: 0; }
 .preset-editor__head .field > p { margin: 0; }

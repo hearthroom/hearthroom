@@ -177,7 +177,7 @@ export async function analyzePreset(token: string, document: PresetDocument): Pr
   return out.compatibility ?? (out as Compatibility);
 }
 
-export interface PresetWrite { title: string; document: PresetDocument; recommendedModels: string[] }
+export interface PresetWrite { purpose?: PresetPurpose; title: string; document: PresetDocument; recommendedModels: string[] }
 
 export async function createPreset(token: string, input: PresetWrite, key: string): Promise<WriteReceipt> {
   return json<WriteReceipt>(await send("/presets", token, input, key));

@@ -32246,6 +32246,14 @@
               "type": "string"
             },
             "description": "Up to 50 series:<series> or model:<model> labels from GET /open/v1/models. Lane codes are normalized to their model. For purpose=general these are author-tested models (optional); for purpose=specific these are the author-recommended models (at least one). Recommendations do not restrict applying a preset. An empty list does not determine purpose."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific"
+            ],
+            "description": "Author-selected use, editable for private and published presets. Specific requires at least one recommended model. Omit to preserve the current use when revising; new private presets may remain unset."
           }
         },
         "type": "object",
@@ -32507,6 +32515,14 @@
           },
           "document": {
             "$ref": "#/components/schemas/PresetDocument"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "general",
+              "specific"
+            ],
+            "description": "Author-selected use, editable for private and published presets. Specific requires at least one recommended model. Omit to preserve the current use when revising; new private presets may remain unset."
           }
         },
         "type": "object",

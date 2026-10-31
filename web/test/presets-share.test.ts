@@ -721,3 +721,13 @@ describe("用途與模型清單", () => {
   expect(mocks.publish.mock.calls[0]![2]).toMatchObject({purpose:'general',recommendedModels:[]});
  });
 });
+
+
+it("公開彈層沿用編輯器已設的用途，不必重新選", async () => {
+ mocks.list.mockResolvedValue(mineList([summary({purpose:"general"})]));
+ mocks.publish.mockResolvedValue({presetId:"p1",version:3});
+ await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush();
+ expect(body$<HTMLInputElement>("[data-testid=publish-purpose-general]").checked).toBe(true);
+ body$<HTMLButtonElement>("[data-testid=publish-confirm]").click(); await flush();
+ expect(mocks.publish.mock.calls[0]![2]).toMatchObject({purpose:"general"});
+});

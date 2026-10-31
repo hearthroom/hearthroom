@@ -41,3 +41,20 @@ test("current content remains editable after publishing and enforces specific mo
   const rejected = await request(`/open/v1/presets/${id}/revisions`, "POST", {expectedVersion:published.body.version,title:"specific",document:current.body.revision.document,recommendedModels:[]});
   assert.equal(rejected.status,422);
 });
+
+
+test("editor purpose persists for private and public assets, retaining model evidence", async () => {
+  await request("/__presets/reset");
+  const document = {schemaVersion:"hearthroom.st-preset.v1",st:{prompts:[]},selection:{profileId:1}};
+  const made = await request("/open/v1/presets","POST",{title:"Editor",document,purpose:"general",recommendedModels:["Opus"]});
+  const id=made.body.presetId;
+  assert.equal((await request(`/open/v1/presets/${id}`)).body.purpose,"general");
+  const pub = await request(`/open/v1/presets/${id}/publish`,"POST",{expectedVersion:1,purpose:"general",declaration:"preset-publish-2026-10-30"});
+  const saved = await request(`/open/v1/presets/${id}/revisions`,"POST",{expectedVersion:pub.body.version,title:"Editor",document,purpose:"specific",recommendedModels:["Opus"]});
+  assert.equal(saved.status,201);
+  assert.equal((await request(`/open/v1/presets/${id}`)).body.purpose,"specific");
+  assert.ok(!(await request("/open/v1/preset-library?model=general")).body.items.some(p=>p.presetId===id));
+  const general = await request(`/open/v1/presets/${id}/revisions`,"POST",{expectedVersion:saved.body.version,title:"Editor",document,purpose:"general",recommendedModels:[]});
+  assert.equal(general.status,201);
+  assert.ok((await request("/open/v1/preset-library?model=general")).body.items.some(p=>p.presetId===id));
+});

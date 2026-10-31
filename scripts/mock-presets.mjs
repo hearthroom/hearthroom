@@ -162,7 +162,7 @@ const library = new Map();
 const shelf = new Map(); // presetId → { favoritedAt, lastAppliedAt }
 const reports = new Set();
 const daysAgo = (d) => new Date(Date.now() - d * 864e5).toISOString();
-function seedLibrary() {
+function seedLibraryFixtures() {
   if (library.size || scenario === "libraryEmpty") return;
   const doc = (lines) => ({ schemaVersion: "hearthroom.st-preset.v1", st: { temperature: 0.9, top_p: 0.95,
     prompts: [...lines.map(([identifier, name, content]) => ({ identifier, name, role: "system", content })), { identifier: "chatHistory", name: "Chat History", marker: true }],
@@ -185,6 +185,17 @@ function seedLibrary() {
   });
 }
 const heatOf = (x) => 3 * x.usesLast7d + x.favoriteCount;
+// Project owned published presets through the same live metadata as the editor.
+function seedLibrary() {
+  seedLibraryFixtures();
+  for (const p of presets.values()) {
+    if (!p.publishedAt) continue;
+    const head = revisions.get(p.headRevisionId);
+    library.set(p.id, {presetId:p.id,title:p.title,purpose:p.purpose, recommendedModels:head.recommendedModels,
+      authorName:"測試作者",authorNumId:7,authorAvatar:"",attribution:p.attribution ?? "",usesLast7d:0,favoriteCount:0,
+      publishedAt:p.publishedAt,updatedAt:p.updatedAt,listed:p.visibility === "public",mine:true,document:head.document});
+  }
+}
 function libraryItem(x, extra = {}) {
   const { document: _d, ...rest } = x;
   const mark = shelf.get(x.presetId);
@@ -248,7 +259,8 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
   if (m === "POST" && path === "/open/v1/presets") {
     const bad = validateNative(body.document);
     if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
-    return json(res, 201, idempotent(req, null, () => create(body.title, body.document, body.recommendedModels))), true;
+    if (body.purpose != null && (!["general", "specific"].includes(body.purpose) || (body.purpose === "specific" && !body.recommendedModels?.length))) return json(res, 422, {error:"preset_invalid",reason:"preset_invalid_input"}), true;
+    return json(res, 201, idempotent(req, null, () => { const out = create(body.title, body.document, body.recommendedModels); if (body.purpose != null) presets.get(out.presetId).purpose = body.purpose; return out; })), true;
   }
   // ── 分享：公開／改回私人（自己的預設）──
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)\/(publish|unpublish)$/))) {
@@ -328,11 +340,12 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     if (scenario === "conflict" && mm[2] === "revisions") { scenario = ""; p.version++; return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true; }
     if (body.expectedVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     if (mm[2] === "revisions") {
-      if (p.purpose === "specific" && !body.recommendedModels?.length) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
+      const purpose = body.purpose ?? p.purpose;
+      if ((purpose && !["general", "specific"].includes(purpose)) || (body.purpose === "") || (purpose === "specific" && !body.recommendedModels?.length)) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
       const bad = p.sourceKind === "native" ? validateNative(body.document) : "";
       if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
       if (analyze(body.document).entries.some((e) => e.enabled && e.uiStatus === "unsupported")) return json(res, 422, { error: "preset_invalid", reason: "preset_adjustment_required" }), true;
-      return json(res, 201, idempotent(req, null, () => addRevision(p, body.title, body.document, body.recommendedModels))), true;
+      return json(res, 201, idempotent(req, null, () => { const out = addRevision(p, body.title, body.document, body.recommendedModels); p.purpose = purpose; return out; })), true;
     }
     if (mm[2] === "delete" && p.bindingCount === 0) { presets.delete(p.id); return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version, disposition: "deleted" }), true; }
     p.archived = true;
