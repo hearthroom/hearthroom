@@ -177,6 +177,29 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     if (initialRoleId) void sandbox.prefetch(initialRoleId);
     // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
     const stage = await preloadStage();
+    // 一般畫布與 sandbox 頁首經 uni.reLaunch 走 toEntry；navigateBack 則走 back。
+    // 兩條都要回站內上一頁。history.length 也包含站外頁，不能單靠它決定。
+    const backToPreviousOrCard = () => {
+      const back = window.history.state?.back;
+      let previousIsInternal = typeof back === 'string' && back.startsWith('/') && !back.startsWith('//');
+      // 卡片頁的開始對話是整頁導航，新的 router 沒有 back，這時用 referrer 辨識來源。
+      if (back == null && document.referrer) {
+        try {
+          const referrer = new URL(document.referrer);
+          const root = siteRootOf(location.hostname);
+          previousIsInternal = referrer.origin === location.origin
+            || (referrer.protocol === 'https:' && !!root && siteRootOf(referrer.hostname) === root);
+        } catch { /* 無法辨識來源就回卡片頁。 */ }
+      }
+      if (window.history.length > 1 && previousIsInternal) { deps.router.back(); return; }
+      // PlayPage 在掛舞台前已將 roleId 正規化成卡號；讀即時路徑也涵蓋站內換卡。
+      const path = deps.currentPath().split(/[?#]/)[0];
+      const card = path.split('/').filter(Boolean).at(-1) ?? '';
+      const links = mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp });
+      const target = links.lp(`/cards/${card}`);
+      if (isPlayHost()) window.location.assign(`${links.origin}${target}`);
+      else void deps.router.push(target);
+    };
     const host = stage.browserHost({
       ui: {
         toast: (text, kind, durationMs) => pushStageToast(text, kind, durationMs),
@@ -216,12 +239,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           if (isPlayHost()) window.location.assign(`https://${communityHostForHistory()}${deps.lp('/library?tab=conversations')}`);
           else void deps.router.push(deps.lp('/library?tab=conversations'));
         },
-        // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」
-        back: () => {
-          if (window.history.length > 1) { deps.router.back(); return; }
-          deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/"));
-        },
-        toEntry: () => { deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/")); },
+        back: backToPreviousOrCard,
+        toEntry: backToPreviousOrCard,
         // 從主畫面圖示開進來的獨立卡片 App：沒有上一頁，舞台（頁首與沙箱殼的頁首）都不畫返回鍵
         canBack: () => !(isPlayHost() && isStandalone()),
         toLogin: (returnTo) => { void deps.router.push(deps.lp(loginPath(returnTo || deps.currentPath()))); },
