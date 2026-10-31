@@ -4019,6 +4019,11 @@
                       "type": "string",
                       "format": "date-time"
                     },
+                    "authorCredits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Present only when selfState is author: the author’s own spend on this card, measured like player totals. It is not ranked and does not change ranks or the count."
+                    },
                     "privacy": {
                       "type": "object",
                       "required": [
