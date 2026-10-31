@@ -126,15 +126,27 @@ describe("generating and saving", () => {
     expect(error).toMatchObject({ status: 409, code: "name_taken" });
   });
 
-  it("lists recent generations with which images are already in the library", async () => {
-    const fetcher = stub(() => json({ object: "list", data: [
+  it("pages one view of the generations, keeping each image in its place", async () => {
+    const fetcher = stub(() => json({ object: "list", next_before: 1700000000123456, data: [
       { id: "t2", status: "in_progress", model: "gpt-image-2", price_tier: "1024x1536", created_at: 1700000100 },
       { id: "t1", status: "completed", model: "gpt-image-2", price_tier: "1024x1024", credits: 104, created_at: 1700000000, expires_at: 1700604800,
-        data: [{ url: "https://assets.test/media-gen/t1/0.png" }, { url: "https://assets.test/media-gen/t1/1.png", asset_id: "a2" }] },
+        data: [{ url: "", deleted: true }, { url: "https://assets.test/media-gen/t1/1.png", asset_id: "a2", saved_url: "https://assets.test/u/7/x/keep.png" }] },
     ] }));
-    const list = await client().list();
-    expect(new URL(fetcher.mock.calls[0]![0]).search).toBe("?type=image&limit=60");
-    expect(list[0]).toMatchObject({ id: "t2", status: "in_progress", urls: [], saved: [], size: "1024x1536" });
-    expect(list[1]).toMatchObject({ id: "t1", urls: ["https://assets.test/media-gen/t1/0.png", "https://assets.test/media-gen/t1/1.png"], saved: ["", "a2"], credits: 104, expiresAt: 1700604800 });
+    const { tasks, next } = await client().list("unsaved", 1700000000999999);
+    expect(new URL(fetcher.mock.calls[0]![0]).search).toBe("?type=image&view=unsaved&limit=20&before=1700000000999999");
+    expect(next).toBe(1700000000123456);
+    expect(tasks[0]).toMatchObject({ id: "t2", status: "in_progress", urls: [], saved: [], size: "1024x1536" });
+    // 刪掉的那張留空字串，第二張還是第二張
+    expect(tasks[1]).toMatchObject({ id: "t1", urls: ["", "https://assets.test/media-gen/t1/1.png"], saved: ["", "a2"], savedUrls: ["", "https://assets.test/u/7/x/keep.png"], credits: 104 });
+  });
+
+  it("deletes one unsaved image or the whole batch", async () => {
+    const fetcher = stub(() => json({ id: "t1", object: "media.deleted", deleted: 2 }));
+    expect(await client().remove("t1")).toBe(2);
+    expect(await client().remove("t1", 1)).toBe(2);
+    expect(fetcher.mock.calls.map(([u, init]) => [u, init.method])).toEqual([
+      ["https://api.harperharbor.com/open/v1/generations/t1", "DELETE"],
+      ["https://api.harperharbor.com/open/v1/generations/t1?index=1", "DELETE"],
+    ]);
   });
 });

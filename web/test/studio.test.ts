@@ -7,6 +7,7 @@ import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
 import { ApiError } from "../src/lib/api";
 import { rememberRecipe, splitCount, usesFor } from "../src/lib/studio";
+import { confirmState, settleConfirm } from "../src/lib/confirm";
 import StudioPage from "../src/pages/StudioPage.vue";
 
 // 生圖頁：生成的圖先進快取區（Harbor 的生成紀錄），挑了、取了名字才存進資源庫或下載；技能、參數、參考圖都在輸入框。
@@ -22,10 +23,11 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   plan: vi.fn(),
   canPlan: vi.fn(),
+  remove: vi.fn(),
 }));
 vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token, connectAccount: mocks.connect }));
 vi.mock("../src/lib/media-generation", () => ({
-  generationClient: () => ({ models: mocks.models, list: mocks.list, create: mocks.create, wait: mocks.wait, save: mocks.save, plan: mocks.plan, canPlan: mocks.canPlan }),
+  generationClient: () => ({ models: mocks.models, list: mocks.list, create: mocks.create, wait: mocks.wait, save: mocks.save, plan: mocks.plan, canPlan: mocks.canPlan, remove: mocks.remove }),
 }));
 vi.mock("../src/lib/api", async (actual) => ({ ...(await actual<object>()), fetchLibraryFolders: mocks.folders, uploadImage: mocks.upload }));
 vi.mock("../src/lib/track", () => ({ track: () => {} }));
@@ -91,24 +93,26 @@ async function generate() {
 
 it("shows recent generations newest first, with the description this device remembers", async () => {
   rememberRecipe("t1", { prompt: "a girl under a red umbrella" });
-  mocks.list.mockResolvedValue([done("t2", 2), done("t1")]);
+  mocks.list.mockResolvedValue({ tasks: [done("t2", 2), done("t1")], next: null });
   await mount();
   const runs = [...root.querySelectorAll(".run")];
+  // 像聊天紀錄：舊的在上、最新的在最下面，同一批排成一行
   expect(runs).toHaveLength(2);
-  expect(runs[0]!.querySelectorAll(".shot img")).toHaveLength(2);
-  expect(runs[1]!.textContent).toContain("a girl under a red umbrella");
-  expect(runs[1]!.textContent).toContain("Cleared in 6 day(s)");
+  expect(runs[1]!.querySelectorAll(".strip .shot img")).toHaveLength(2);
+  expect(runs[0]!.textContent).toContain("a girl under a red umbrella");
+  expect(runs[0]!.textContent).toContain("Cleared in 6 day(s)");
+  expect(mocks.list).toHaveBeenCalledWith("unsaved", undefined);
   expect(mocks.save).not.toHaveBeenCalled();
 });
 
 it("explains the empty cache instead of showing nothing", async () => {
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   await mount();
   expect(root.textContent).toContain("No images yet");
 });
 
 it("generates with a skill and the chosen ratio, and leaves the result in the cache unsaved", async () => {
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   mocks.create.mockResolvedValue({ id: "t9", status: "queued", urls: [], saved: [] });
   mocks.wait.mockImplementation(async (t: { id: string }) => done(t.id));
   await mount();
@@ -133,7 +137,7 @@ it("generates with a skill and the chosen ratio, and leaves the result in the ca
 
 it("saves a picked image into a library folder under the author's name, and asks again when the name is taken", async () => {
   rememberRecipe("t1", { prompt: "Mira on the cliff" });
-  mocks.list.mockResolvedValue([done("t1", 2)]);
+  mocks.list.mockResolvedValue({ tasks: [done("t1", 2)], next: null });
   mocks.save.mockRejectedValueOnce(new ApiError(409, "taken", "name_taken")).mockResolvedValueOnce([{ index: 1, assetId: "a2", url: "https://assets.test/Mira/hero-2.png" }]);
   await mount("/studio?dir=Mira");
   const second = root.querySelectorAll(".shot")[1]!;
@@ -154,13 +158,13 @@ it("saves a picked image into a library folder under the author's name, and asks
   dialog.dispatchEvent(new Event("submit", { cancelable: true }));
   await settle();
   expect(document.querySelector('[aria-labelledby="studio-save-title"]')).toBeNull();
-  expect(root.querySelectorAll(".shot")[1]!.querySelector(".shot__badge")?.textContent).toBe("In your library");
-  expect(root.querySelectorAll(".shot")[0]!.querySelector(".shot__badge")).toBeNull();
+  // 存好的那張移到「已保存」：未處理這一行只剩沒存的那張
+  expect([...root.querySelectorAll(".shot img")].map((i) => i.getAttribute("src"))).toEqual(["https://assets.test/media-gen/t1/0.png"]);
   expect(root.textContent).toContain("hero-2.png is now in “Mira”");
 });
 
 it("downloads a picked image under the name the author typed", async () => {
-  mocks.list.mockResolvedValue([done("t1")]);
+  mocks.list.mockResolvedValue({ tasks: [done("t1")], next: null });
   const fetcher = vi.fn(async () => new Response(new Blob(["png"]), { status: 200 }));
   vi.stubGlobal("fetch", fetcher);
   URL.createObjectURL = vi.fn(() => "blob:x");
@@ -190,7 +194,7 @@ it("downloads a picked image under the name the author typed", async () => {
 });
 
 it("uses a cached result as the reference, switching to a model that takes references", async () => {
-  mocks.list.mockResolvedValue([done("t1")]);
+  mocks.list.mockResolvedValue({ tasks: [done("t1")], next: null });
   mocks.create.mockResolvedValue(done("t2"));
   await mount();
   button(root.querySelector(".shot")!, "Use as reference")!.click();
@@ -202,13 +206,13 @@ it("uses a cached result as the reference, switching to a model that takes refer
 });
 
 it("starts with the library image the resources page handed over as the reference", async () => {
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   await mount("/studio?ref=https%3A%2F%2Fassets.test%2Fu%2F7%2Fportrait.png");
   expect(root.querySelector<HTMLImageElement>(".composer__ref img")!.getAttribute("src")).toBe("https://assets.test/u/7/portrait.png");
 });
 
 it("explains a credit shortfall with a way to top up, and keeps the order key only for a dropped connection", async () => {
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   mocks.create.mockRejectedValueOnce(new ApiError(402, "no credits")).mockRejectedValueOnce(new TypeError("network")).mockResolvedValueOnce(done("t3"));
   await mount();
   await type("a lighthouse");
@@ -216,14 +220,14 @@ it("explains a credit shortfall with a way to top up, and keeps the order key on
   expect(root.querySelector(".run__error")?.textContent).toContain("don’t have enough purchased credits");
   expect(root.querySelector(".run__error a")?.textContent).toContain("Top up");
   await generate();
-  const dropped = root.querySelectorAll(".run")[0]!;
+  const dropped = [...root.querySelectorAll(".run")].at(-1)!;
   expect(dropped.textContent).toContain("connection dropped");
   const firstKey = mocks.create.mock.calls[1]![1];
   button(dropped, "Continue")!.click();
   await settle();
   expect(mocks.create.mock.calls[2]![1]).toBe(firstKey);
   expect(mocks.create.mock.calls[0]![1]).not.toBe(firstKey);
-  expect(root.querySelectorAll(".run")[0]!.querySelector(".shot img")).not.toBeNull();
+  expect([...root.querySelectorAll(".run")].at(-1)!.querySelector(".shot img")).not.toBeNull();
 });
 
 it("asks for a fresh sign-in when this sign-in lacks the generation permission", async () => {
@@ -238,7 +242,7 @@ it("asks for a fresh sign-in when this sign-in lacks the generation permission",
 // Agent 模式：想法排成計畫、作者改過才生成；第一組先畫，「同一個角色」的幾組拿它的第一張當參考圖。
 it("plans a set from one idea, lets the author edit it, and draws the followers from the first result", async () => {
   mocks.canPlan.mockResolvedValue(true);
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   mocks.plan.mockResolvedValue({ summary: "A card kit for Mira", credits: 3, shots: [
     { title: "Portrait", skill: "portrait", prompt: "Mira, silver hair, navy coat, full body", shape: "tall", count: 1, reference: "none" },
     { title: "Lighthouse", skill: "scene", prompt: "a lighthouse at dusk, no people", shape: "wide", count: 1, reference: "none" },
@@ -285,7 +289,7 @@ it("plans a set from one idea, lets the author edit it, and draws the followers 
 
 it("says so when the plan comes back unusable, and hides agent mode where the server has none", async () => {
   mocks.canPlan.mockResolvedValue(true);
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   mocks.plan.mockRejectedValue(new ApiError(502, "unusable", "plan_unreadable"));
   await mount();
   [...root.querySelectorAll<HTMLButtonElement>(".pill")].find((b) => b.textContent?.trim() === "Generate")!.click();
@@ -314,7 +318,7 @@ it("labels each size with the card image it suits best, and splits counts above 
 });
 
 it("offers 1 to 4 images on any model, names each ratio's card use, and splits a run above the model's limit", async () => {
-  mocks.list.mockResolvedValue([]);
+  mocks.list.mockResolvedValue({ tasks: [], next: null });
   mocks.create.mockImplementation(async (input: { n: number }) => done(`t${mocks.create.mock.calls.length}`, input.n));
   await mount();
   [...root.querySelectorAll<HTMLButtonElement>(".pill")].find((b) => b.textContent?.includes("1:1"))!.click();
@@ -334,4 +338,62 @@ it("offers 1 to 4 images on any model, names each ratio's card use, and splits a
   expect(mocks.create.mock.calls.map((c) => c[0].n)).toEqual([2, 2]);
   expect(mocks.create.mock.calls[0]![1]).not.toBe(mocks.create.mock.calls[1]![1]);
   expect(root.querySelectorAll(".run")).toHaveLength(2);
+});
+
+// 「已保存」分頁讀 saved view，顯示資源庫網址、不能再存也不能刪；往上捲載入更早的一頁接在上面。
+it("switches to saved images and loads older pages when scrolled to the top", async () => {
+  let seen: ((entries: { isIntersecting: boolean }[]) => void) | undefined;
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(cb: typeof seen) { seen = cb; }
+    observe() {}
+    disconnect() {}
+  });
+  try {
+    mocks.list.mockImplementation(async (view: string, before?: number) =>
+      view === "saved"
+        ? { tasks: [{ ...done("s1"), urls: [""], savedUrls: ["https://assets.test/u/7/Mira/keep.png"], saved: ["a1"] }], next: null }
+        : before ? { tasks: [done("t0")], next: null } : { tasks: [done("t2"), done("t1")], next: 1700 });
+    await mount();
+    seen!([{ isIntersecting: true }]);
+    await settle();
+    expect(mocks.list).toHaveBeenCalledWith("unsaved", 1700);
+    expect([...root.querySelectorAll(".run .shot img")].map((i) => i.getAttribute("src"))).toEqual([
+      "https://assets.test/media-gen/t0/0.png", "https://assets.test/media-gen/t1/0.png", "https://assets.test/media-gen/t2/0.png",
+    ]);
+    [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent?.trim() === "Saved")!.click();
+    await settle();
+    expect(mocks.list).toHaveBeenCalledWith("saved", undefined);
+    const shot = root.querySelector(".run .shot")!;
+    expect(shot.querySelector("img")?.getAttribute("src")).toBe("https://assets.test/u/7/Mira/keep.png");
+    expect(button(shot, "Save to library")).toBeUndefined();
+    expect(button(shot, "Delete")).toBeUndefined();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+// 手動刪除只刪沒存的：先確認，取消就不動；確認後那張從這一行消失。
+it("deletes an unsaved image only after the author confirms", async () => {
+  mocks.list.mockResolvedValue({ tasks: [done("t1", 2)], next: null });
+  mocks.remove.mockResolvedValue(1);
+  await mount();
+  const second = () => root.querySelectorAll(".run .shot")[1]!;
+  button(second(), "Delete")!.click();
+  await settle();
+  expect(confirmState.current?.message).toBe("Delete this image? It can’t be recovered.");
+  settleConfirm(false);
+  await settle();
+  expect(mocks.remove).not.toHaveBeenCalled();
+  button(second(), "Delete")!.click();
+  await settle();
+  settleConfirm(true);
+  await settle();
+  expect(mocks.remove).toHaveBeenCalledWith("t1", 1);
+  expect([...root.querySelectorAll(".run .shot img")].map((i) => i.getAttribute("src"))).toEqual(["https://assets.test/media-gen/t1/0.png"]);
+  button(root.querySelector(".run")!, "Delete")!.click();
+  await settle();
+  settleConfirm(true);
+  await settle();
+  expect(mocks.remove).toHaveBeenLastCalledWith("t1", 0);
+  expect(root.querySelectorAll(".run")).toHaveLength(0);
 });

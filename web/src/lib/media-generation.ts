@@ -33,7 +33,11 @@ export interface GenerationTask {
   expiresAt?: number;
   /** 照 urls 對齊：第幾張已經存進資源庫（資源庫檔案 id），沒存的是空字串。 */
   saved: string[];
+  /** 照 urls 對齊：存進資源庫的網址（只有「已保存」那頁有；結果過期後只剩它）。 */
+  savedUrls?: string[];
 }
+/** 生成紀錄的分頁：unsaved 未處理、saved 已保存、all 全部。 */
+export type GenerationView = "unsaved" | "saved" | "all";
 /** 存好的一張：結果裡的第幾張、資源庫檔案與網址。 */
 export interface SavedImage {
   index: number;
@@ -61,12 +65,15 @@ export type SaveTarget = { folderIds?: string[]; directory?: string };
 const POLL_MS = 3000;
 
 function task(raw: Record<string, any>): GenerationTask {
-  const data: { url?: string; asset_id?: string }[] = raw.data ?? [];
+  // urls 跟結果的第幾張對齊：刪掉或過期的那張是空字串，存檔、刪除都用這個位置
+  const data: { url?: string; asset_id?: string; saved_url?: string }[] = raw.data ?? [];
+  const savedUrls = data.map((d) => d.saved_url ?? "");
   return {
     id: String(raw.id ?? ""),
     status: raw.status ?? "in_progress",
-    urls: data.map((d) => d.url ?? "").filter(Boolean),
-    saved: data.filter((d) => d.url).map((d) => (d.asset_id ? String(d.asset_id) : "")),
+    urls: data.map((d) => d.url ?? ""),
+    saved: data.map((d) => (d.asset_id ? String(d.asset_id) : "")),
+    ...(savedUrls.some(Boolean) ? { savedUrls } : {}),
     ...(raw.error?.code ? { code: String(raw.error.code) } : {}),
     ...(raw.model ? { model: String(raw.model) } : {}),
     ...(raw.price_tier ? { size: String(raw.price_tier) } : {}),
@@ -154,10 +161,17 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
         return e instanceof ApiError && e.status === 400;
       }
     },
-    /** 本人最近 7 天的生成（生圖頁的快取區），新的在前。 */
-    async list(limit = 60): Promise<GenerationTask[]> {
-      const { body } = await call(`?${new URLSearchParams({ type: "image", limit: String(limit) })}`);
-      return (body.data ?? []).map(task);
+    /** 本人的生成紀錄，新的在前；before 是上一頁回來的 next（沒有下一頁時 next 是 null）。 */
+    async list(view: GenerationView = "all", before?: number, limit = 20): Promise<{ tasks: GenerationTask[]; next: number | null }> {
+      const q = new URLSearchParams({ type: "image", view, limit: String(limit), ...(before ? { before: String(before) } : {}) });
+      const { body } = await call(`?${q}`);
+      return { tasks: (body.data ?? []).map(task), next: typeof body.next_before === "number" ? body.next_before : null };
+    },
+    /** 刪掉還沒存的結果；index（從 0 起）只刪那一張，不給就是這一批所有沒存的。回刪了幾張。 */
+    async remove(id: string, index?: number): Promise<number> {
+      const q = index === undefined ? "" : `?index=${index}`;
+      const { body } = await call(`/${encodeURIComponent(id)}${q}`, { method: "DELETE" });
+      return Number(body.deleted) || 0;
     },
     /**
      * 只存挑中的幾張、各自取名（空的照預設取名）。同一張重送回同一個檔案；

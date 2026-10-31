@@ -322,12 +322,13 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 .pill:disabled { opacity: 0.5; cursor: not-allowed; }
 .pill--on { border-color: var(--accent); color: var(--accent-text); }
 .pill svg { width: 16px; height: 16px; flex: none; }
+/* 輸入框固定在頁面底部：下拉一律往上開 */
 .pop {
-  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 220px; padding: var(--s-2);
+  position: absolute; z-index: 20; bottom: calc(100% + 6px); left: 0; min-width: 220px; padding: var(--s-2);
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-md);
   display: grid; gap: 2px;
 }
-.pop--add { top: 0; left: calc(100% + 8px); }
+.pop--add { bottom: 0; left: calc(100% + 8px); }
 .pop--wide { width: min(360px, calc(100vw - 32px)); max-height: 360px; overflow-y: auto; }
 .pop--params { width: min(440px, calc(100vw - 32px)); gap: var(--s-2); padding: var(--s-3); }
 .pop__item, .pop__row {
@@ -366,7 +367,7 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
   .composer { padding: var(--s-3); }
   .composer__add, .composer__ref { width: 52px; height: 52px; }
   .composer__go { flex: 1 1 100%; }
-  .pop--add { left: 0; top: calc(100% + 6px); }
+  .pop--add { left: 0; bottom: calc(100% + 6px); }
   .pop--wide, .pop--params { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

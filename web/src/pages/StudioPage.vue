@@ -1,12 +1,14 @@
 <script setup lang="ts">
 /**
- * 生圖：頂層第四頁。上面是輸入框（技能、模型、參數），下面是快取區。
+ * 生圖：頂層第四頁，像聊天紀錄一樣用。輸入框固定在下面，上面整塊是生成紀錄兼預覽區，最新的在最下面，
+ * 往上捲自動載入更早的（Harbor 分頁，一頁 20 批）。同一批的圖排成一行。
  *
- * 生成的圖先留在 Harbor 7 天（快取區），不直接進資源庫：作者看過、挑中了，取個名字再存進資源庫或下載到這台裝置。
- * 快取區讀 Harbor 的生成紀錄，所以換頁、重新整理、在 CLI 生的都看得到；描述只記在這台裝置（studio.ts）。
+ * 兩個分頁：「未處理」（預設）是還沒存的圖，7 天後自動刪除，也能手動刪（先確認）；
+ * 「已保存」是存進資源庫的圖，不限 7 天。生成的圖不直接進資源庫：作者挑中、取個名字才存或下載。
  * 一次可以送好幾個：每個生成各自輪詢，互不擋。同一次送出沿用同一把 Idempotency-Key，連線斷掉重送不多扣。
+ * 描述只記在這台裝置（studio.ts）；紀錄讀 Harbor，換頁、重新整理、在 CLI 生的都看得到。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import LibraryPicker from "@/components/editor/LibraryPicker.vue";
@@ -14,6 +16,7 @@ import StudioComposer from "@/components/studio/StudioComposer.vue";
 import StudioSaveDialog from "@/components/studio/StudioSaveDialog.vue";
 import StudioAgentPlan, { type AgentShot } from "@/components/studio/StudioAgentPlan.vue";
 import { ApiError, fetchLibraryFolders, uploadImage, type LibraryFolder } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import { connectAccount } from "@/lib/connections";
 import type { GenerationModel, GenerationTask } from "@/lib/media-generation";
 import { useSession } from "@/lib/session";
@@ -37,13 +40,20 @@ interface Entry {
   input?: { model: string; prompt: string; size: string; n: number; images: string[] };
   failure?: Failure;
 }
-const entries = ref<Entry[]>([]);
+type Tab = "unsaved" | "saved";
+const tab = ref<Tab>("unsaved");
+/** 兩個分頁各自的紀錄（新的在前）與下一頁的游標。 */
+const lists = reactive<Record<Tab, { entries: Entry[]; next: number | null; loading: boolean; error: boolean; loaded: boolean }>>({
+  unsaved: { entries: [], next: null, loading: false, error: false, loaded: false },
+  saved: { entries: [], next: null, loading: false, error: false, loaded: false },
+});
 const probed = ref(false);
-const loading = ref(false);
-const listError = ref(false);
 const notice = ref("");
 let disposed = false;
-onBeforeUnmount(() => (disposed = true));
+onBeforeUnmount(() => {
+  disposed = true;
+  observer?.disconnect();
+});
 
 const modelName = (id?: string) => {
   const m = imageGen.value?.models.find((x) => x.id === id);
@@ -53,6 +63,8 @@ const when = (s?: number) =>
   s ? new Intl.DateTimeFormat(String(locale.value), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(s * 1000) : "";
 const daysLeft = (e?: number) => (e ? Math.max(1, Math.ceil((e * 1000 - Date.now()) / 86_400_000)) : 0);
 const running = (task: GenerationTask) => task.status === "queued" || task.status === "in_progress";
+/** 圖框的寬高比：尺寸是「寬x高」就照它，不然當正方形（還沒出圖時先占好位置，載入不跳）。 */
+const aspect = (size?: string) => (/^\d+x\d+$/.test(size ?? "") ? size!.replace("x", " / ") : "1 / 1");
 
 function failureOf(e: unknown, created: boolean): Failure {
   if (!(e instanceof ApiError)) return "interrupted";
@@ -72,27 +84,64 @@ async function follow(entry: Entry) {
   }
 }
 
-async function load() {
-  loading.value = true;
-  listError.value = false;
+// ── 紀錄、分頁、往上捲載入更早的 ───────────────────────
+const scrollToBottom = (smooth = false) =>
+  nextTick(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: smooth ? "smooth" : "auto" }));
+
+async function load(view: Tab, older = false) {
+  const page = lists[view];
+  if (page.loading || (older && page.next === null)) return;
+  page.loading = true;
+  page.error = false;
+  // 往前翻時新內容插在上面：記下原本的高度，載完把多出來的補回去，畫面才不會跳
+  const height = document.documentElement.scrollHeight;
   try {
-    const tasks = await (await generator()).list();
-    const local = entries.value.filter((e) => !tasks.some((t) => t.id === e.task.id));
-    entries.value = [...local, ...tasks.map((task) => reactive<Entry>({ key: task.id, task, recipe: recipeOf(task.id) }))];
-    for (const e of entries.value) if (running(e.task) && !e.failure) void follow(e);
+    const { tasks, next } = await (await generator()).list(view, older ? page.next! : undefined);
+    const fresh = tasks.map((task) => reactive<Entry>({ key: task.id, task, recipe: recipeOf(task.id) }));
+    if (older) {
+      page.entries = [...page.entries, ...fresh.filter((f) => !page.entries.some((e) => e.task.id === f.task.id))];
+    } else {
+      // 這次送出、還沒排進伺服器紀錄的（失敗或還沒拿到 id）留在最新那頭
+      const local = page.entries.filter((e) => !e.task.id || !tasks.some((x) => x.id === e.task.id));
+      page.entries = [...local, ...fresh];
+    }
+    page.next = next;
+    page.loaded = true;
+    if (view === "unsaved") for (const e of fresh) if (running(e.task)) void follow(e);
+    await nextTick();
+    if (older) window.scrollBy(0, document.documentElement.scrollHeight - height);
+    else await scrollToBottom();
   } catch {
-    listError.value = true;
+    page.error = true;
   } finally {
-    loading.value = false;
+    page.loading = false;
   }
 }
+function switchTab(next: Tab) {
+  tab.value = next;
+  lightbox.value = null;
+  if (!lists[next].loaded) void load(next);
+  else void scrollToBottom();
+}
+
+// 紀錄最上面放一個哨兵：捲到它附近就載入更早的一頁
+const sentinel = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
+watch(sentinel, (el) => {
+  observer?.disconnect();
+  if (!el || typeof IntersectionObserver === "undefined") return;
+  observer = new IntersectionObserver((seen) => {
+    if (seen.some((s) => s.isIntersecting) && lists[tab.value].loaded) void load(tab.value, true);
+  }, { rootMargin: "400px 0px 0px 0px" });
+  observer.observe(el);
+});
 
 onMounted(async () => {
   await probeGeneration();
   probed.value = true;
   if (imageGen.value?.access === "ready") {
     void generator().then((c) => c.canPlan()).then((ok) => (canPlan.value = ok), () => {});
-    await load();
+    await load("unsaved");
   }
   const ref = typeof route.query.ref === "string" ? route.query.ref : "";
   if (ref) {
@@ -101,14 +150,24 @@ onMounted(async () => {
   }
 });
 
+/** 這一批在目前分頁要顯示的圖：未處理是沒存、沒刪的；已保存是存進資源庫的那幾張。index 是它在這一批的第幾張。 */
+function shotsOf(entry: Entry, view: Tab = tab.value) {
+  if (view === "saved") return (entry.task.savedUrls ?? []).map((url, index) => ({ url, index })).filter((s) => s.url);
+  return entry.task.urls.map((url, index) => ({ url, index })).filter((s) => s.url && !entry.task.saved[s.index]);
+}
+/** 由舊到新排（最新的在最下面）；未處理分頁裡已經沒有圖、也不在跑、沒出錯的那批就不列了。 */
+const rows = computed(() =>
+  [...lists[tab.value].entries].reverse().filter((e) => shotsOf(e).length || (tab.value === "unsaved" && (running(e.task) || e.failure))),
+);
+
 /**
  * 送出一次生成。張數超過模型一次的上限就拆成幾次（各自一筆紀錄、各自一把 key），點數照張數算；
  * 回第一筆有結果的紀錄（Agent 模式拿它當後面幾組的參考圖）。
  */
 async function submit(input: Entry["input"] & {}, recipe: Recipe) {
   const max = imageGen.value?.models.find((m) => m.id === input.model)?.maxImages ?? input.n;
-  const entries = await Promise.all(splitCount(input.n, max).map((n) => submitOne({ ...input, n }, recipe)));
-  return entries.find((e) => e.task.urls.length) ?? entries[0]!;
+  const sent = await Promise.all(splitCount(input.n, max).map((n) => submitOne({ ...input, n }, recipe)));
+  return sent.find((e) => e.task.urls.some(Boolean)) ?? sent[0]!;
 }
 async function submitOne(input: Entry["input"] & {}, recipe: Recipe) {
   notice.value = "";
@@ -118,7 +177,9 @@ async function submitOne(input: Entry["input"] & {}, recipe: Recipe) {
     recipe,
     input,
   });
-  entries.value = [entry, ...entries.value];
+  lists.unsaved.entries = [entry, ...lists.unsaved.entries];
+  if (tab.value !== "unsaved") switchTab("unsaved");
+  void scrollToBottom(true);
   track("studio_generate");
   await create(entry);
   return entry;
@@ -145,11 +206,32 @@ function retry(entry: Entry) {
   } else void create(entry);
 }
 function dismiss(entry: Entry) {
-  entries.value = entries.value.filter((e) => e !== entry);
+  lists.unsaved.entries = lists.unsaved.entries.filter((e) => e !== entry);
 }
 function reauthorize() {
   markReauthorizing();
   void connectAccount("harbor", route.fullPath).catch(() => {});
+}
+
+// ── 手動刪除（只刪沒存的，先確認） ─────────────────────
+async function removeImages(entry: Entry, index?: number) {
+  const count = index === undefined ? shotsOf(entry, "unsaved").length : 1;
+  const ok = await confirmDialog({
+    message: index === undefined ? t("studio.delete.batchConfirm", { n: count }) : t("studio.delete.oneConfirm"),
+    confirmText: t("studio.delete.confirm"),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const n = await (await generator()).remove(entry.task.id, index);
+    const urls = entry.task.urls.map((u, i) => (entry.task.saved[i] || (index !== undefined && i !== index) ? u : ""));
+    entry.task = { ...entry.task, urls };
+    lightbox.value = null;
+    notice.value = t("studio.delete.done", { n });
+    track("studio_delete");
+  } catch {
+    notice.value = t("studio.delete.failed");
+  }
 }
 
 // ── Agent 模式 ─────────────────────────────────────────
@@ -179,6 +261,8 @@ async function plan(input: { idea: string; references: string[]; model: string }
     const p = await (await generator()).plan({ idea: input.idea, language: String(locale.value), hasReference: input.references.length > 0, maxImages: 4 });
     agent.value = reactive({ ...p, shots: p.shots.map((s) => ({ ...s })), references: input.references, model: input.model, state: "editing" as const });
     composer.value?.clear();
+    if (tab.value !== "unsaved") switchTab("unsaved");
+    void scrollToBottom(true);
     track("studio_plan");
   } catch (e) {
     planError.value =
@@ -211,7 +295,7 @@ async function runPlan() {
       { model: m.id, prompt: shot.prompt.trim(), size: fitSize(m.sizes, shot.shape), n: shot.count, images },
       { prompt: shot.prompt.trim(), ...(shot.skill ? { skill: shot.skill } : {}), ...(images.length ? { references: images } : {}) },
     );
-    shot.status = entry.task.urls.length ? "done" : "failed";
+    shot.status = entry.task.urls.some(Boolean) ? "done" : "failed";
     return entry;
   };
   for (const shot of a.shots) shot.status = "waiting";
@@ -219,7 +303,7 @@ async function runPlan() {
   const [first, ...rest] = a.shots;
   const firstRun = start(first!, given(first!));
   const others = rest.filter((s) => s.reference !== "anchor").map((s) => start(s, given(s)));
-  const anchor = (await firstRun)?.task.urls[0];
+  const anchor = (await firstRun)?.task.urls.find(Boolean);
   const followers = rest
     .filter((s) => s.reference === "anchor")
     .map((s) => {
@@ -250,12 +334,10 @@ async function uploadReference(file: File) {
 function useAsReference(url: string) {
   composer.value?.addReference(url);
   lightbox.value = null;
-  window.scrollTo({ top: 0, behavior: "smooth" });
   composer.value?.focus();
 }
 function again(entry: Entry) {
   composer.value?.fill(entry.recipe ?? { prompt: "" }, { model: entry.task.model, size: entry.task.size, n: entry.task.urls.length || entry.input?.n });
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 async function copyPrompt(entry: Entry) {
   try {
@@ -274,10 +356,10 @@ const lastFolder = () => {
   }
 };
 const folders = ref<LibraryFolder[]>([]);
-const saving = ref<{ entry: Entry; index: number; mode: "library" | "local"; busy: boolean; error: string } | null>(null);
-async function openSave(entry: Entry, index: number, mode: "library" | "local") {
+const saving = ref<{ entry: Entry; index: number; url: string; mode: "library" | "local"; busy: boolean; error: string } | null>(null);
+async function openSave(entry: Entry, index: number, url: string, mode: "library" | "local") {
   lightbox.value = null;
-  saving.value = { entry, index, mode, busy: false, error: "" };
+  saving.value = { entry, index, url, mode, busy: false, error: "" };
   if (mode === "library" && !folders.value.length) {
     try {
       const token = await session.accessToken();
@@ -289,13 +371,12 @@ const saveFolder = computed(() => (typeof route.query.dir === "string" ? route.q
 async function confirmSave(name: string, folder: string) {
   const s = saving.value;
   if (!s) return;
-  const url = s.entry.task.urls[s.index]!;
-  const file = `${name}.${extensionOf(url)}`;
+  const file = `${name}.${extensionOf(s.url)}`;
   s.busy = true;
   s.error = "";
   try {
     if (s.mode === "local") {
-      await download(url, file);
+      await download(s.url, file);
       notice.value = t("studio.save.downloaded", { name: file });
     } else {
       const c = await generator();
@@ -303,6 +384,8 @@ async function confirmSave(name: string, folder: string) {
       const next = [...s.entry.task.saved];
       next[s.index] = saved?.assetId ?? "saved";
       s.entry.task = { ...s.entry.task, saved: next };
+      // 存好的圖移到「已保存」：下次切過去重新載入
+      Object.assign(lists.saved, { entries: [], next: null, loaded: false });
       try {
         localStorage.setItem(FOLDER_KEY, folder);
       } catch {}
@@ -339,8 +422,8 @@ async function download(url: string, file: string) {
   }
 }
 
-// ── 大圖預覽 ───────────────────────────────────────────
-const images = computed(() => entries.value.flatMap((entry) => entry.task.urls.map((url, index) => ({ entry, index, url }))));
+// ── 大圖預覽（照畫面上的順序左右切換） ─────────────────
+const images = computed(() => rows.value.flatMap((entry) => shotsOf(entry).map((s) => ({ entry, ...s }))));
 const lightbox = ref<number | null>(null);
 const shown = computed(() => (lightbox.value === null ? null : images.value[lightbox.value] ?? null));
 function openImage(entry: Entry, index: number) {
@@ -363,8 +446,15 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 <template>
   <div class="studio">
     <header class="studio__head">
-      <h1>{{ $t("studio.title") }}</h1>
-      <p class="subtle">{{ $t("studio.lead") }}</p>
+      <div>
+        <h1>{{ $t("studio.title") }}</h1>
+        <p class="subtle">{{ $t("studio.lead") }}</p>
+      </div>
+      <div v-if="imageGen?.access === 'ready'" class="tabs" role="tablist" :aria-label="$t('studio.results.title')">
+        <button v-for="v in ['unsaved', 'saved'] as const" :key="v" type="button" role="tab" class="tabs__item" :aria-selected="tab === v" @click="switchTab(v)">
+          {{ $t(`studio.tabs.${v}`) }}
+        </button>
+      </div>
     </header>
 
     <p v-if="!probed" class="subtle">{{ $t("state.loading") }}</p>
@@ -375,50 +465,33 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
     </div>
     <p v-else-if="!imageGen.models.length" class="notice">{{ $t("resource.gen.noModels") }}</p>
     <template v-else>
-      <StudioComposer ref="composer" :models="imageGen.models" :uploading="uploading" :agent="canPlan" :planning="planning" @submit="submit" @plan="plan" @pick-library="picking = true" @upload="uploadReference" />
-      <p v-if="planError" class="notice notice--error studio__notice" role="alert">{{ planError }}</p>
-      <StudioAgentPlan
-        v-if="agent"
-        :summary="agent.summary"
-        :credits="agent.credits"
-        :shots="agent.shots"
-        :estimate="estimate"
-        :has-reference="agent.references.length > 0"
-        :state="agent.state"
-        @remove="agent.shots.splice($event, 1)"
-        @run="runPlan"
-        @discard="agent = null"
-      />
-      <p v-if="notice" class="notice studio__notice" role="status">{{ notice }}</p>
-
-      <section class="studio__results" :aria-label="$t('studio.results.title')">
-        <div class="studio__results-head">
-          <h2>{{ $t("studio.results.title") }}</h2>
-          <span class="subtle">{{ $t("studio.results.keep") }}</span>
-        </div>
-        <p v-if="listError" class="notice notice--error">
+      <section class="feed" role="tabpanel" :aria-label="$t(`studio.tabs.${tab}`)">
+        <div ref="sentinel" class="feed__sentinel" aria-hidden="true" />
+        <p v-if="lists[tab].loading && lists[tab].loaded" class="feed__hint subtle">{{ $t("studio.results.loadingOlder") }}</p>
+        <p v-if="lists[tab].error" class="notice notice--error">
           {{ $t("studio.results.loadFailed") }}
-          <button type="button" class="btn btn--sm" @click="load">{{ $t("linked.retry") }}</button>
+          <button type="button" class="btn btn--sm" @click="load(tab, lists[tab].loaded)">{{ $t("linked.retry") }}</button>
         </p>
-        <div v-else-if="!entries.length && !loading" class="studio__empty">
-          <p class="studio__empty-title">{{ $t("studio.results.emptyTitle") }}</p>
-          <p class="subtle">{{ $t("studio.results.emptyBody") }}</p>
+        <p v-else-if="!lists[tab].loaded" class="feed__hint subtle">{{ $t("state.loading") }}</p>
+        <div v-else-if="!rows.length && !(tab === 'unsaved' && agent)" class="feed__empty">
+          <p class="feed__empty-title">{{ $t(tab === "unsaved" ? "studio.results.emptyTitle" : "studio.results.savedEmptyTitle") }}</p>
+          <p class="subtle">{{ $t(tab === "unsaved" ? "studio.results.emptyBody" : "studio.results.savedEmptyBody") }}</p>
         </div>
 
-        <article v-for="entry in entries" :key="entry.key" class="run">
+        <article v-for="entry in rows" :key="entry.key" class="run">
           <header class="run__meta">
             <span>{{ when(entry.task.createdAt) }}</span>
             <span>{{ modelName(entry.task.model) }}</span>
             <span v-if="/^\d+x\d+$/.test(entry.task.size ?? '')">{{ entry.task.size!.replace("x", "×") }}</span>
             <span v-if="entry.task.status === 'completed' && entry.task.credits">{{ $t("studio.results.credits", { n: entry.task.credits }) }}</span>
-            <span v-if="entry.task.status === 'completed' && entry.task.expiresAt" class="run__expiry">{{ $t("studio.results.expires", { n: daysLeft(entry.task.expiresAt) }) }}</span>
+            <span v-if="tab === 'unsaved' && entry.task.status === 'completed' && entry.task.expiresAt" class="run__expiry">{{ $t("studio.results.expires", { n: daysLeft(entry.task.expiresAt) }) }}</span>
           </header>
           <p v-if="entry.recipe?.prompt || entry.recipe?.skill" class="run__prompt">
             <span v-if="entry.recipe.skill" class="run__skill">/ {{ $t(`studio.skill.${entry.recipe.skill}.name`) }}</span>
             {{ entry.recipe.prompt }}
           </p>
 
-          <div v-if="entry.failure" class="notice notice--error run__error" role="alert">
+          <div v-if="tab === 'unsaved' && entry.failure" class="notice notice--error run__error" role="alert">
             <p>{{ $t("resource.gen.error." + entry.failure) }}</p>
             <div class="run__actions">
               <a v-if="entry.failure === 'credits'" class="btn btn--sm" :href="TOP_UP" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
@@ -428,43 +501,67 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
               <button v-if="!entry.task.id" type="button" class="btn btn--sm btn--ghost" @click="dismiss(entry)">{{ $t("studio.results.dismiss") }}</button>
             </div>
           </div>
-          <ul v-else-if="running(entry.task)" class="run__grid" :aria-busy="true">
-            <li v-for="n in entry.input?.n ?? 1" :key="n" class="shot shot--pending">
+          <ul v-else-if="tab === 'unsaved' && running(entry.task)" class="strip" :aria-busy="true">
+            <li v-for="n in entry.input?.n ?? 1" :key="n" class="shot shot--pending" :style="{ aspectRatio: aspect(entry.task.size) }">
               <span class="shot__spinner" aria-hidden="true" />
               <span class="subtle">{{ $t("studio.results.running") }}</span>
             </li>
           </ul>
-          <p v-else-if="!entry.task.urls.length" class="subtle">{{ $t("studio.results.gone") }}</p>
-          <ul v-else class="run__grid">
-            <li v-for="(url, i) in entry.task.urls" :key="url" class="shot">
-              <button type="button" class="shot__open" :aria-label="$t('studio.image.open', { n: i + 1 })" @click="openImage(entry, i)">
-                <img :src="url" alt="" loading="lazy" />
+          <ul v-else class="strip">
+            <li v-for="s in shotsOf(entry)" :key="s.url" class="shot">
+              <button type="button" class="shot__open" :style="{ aspectRatio: aspect(entry.task.size) }" :aria-label="$t('studio.image.open', { n: s.index + 1 })" @click="openImage(entry, s.index)">
+                <img :src="s.url" alt="" loading="lazy" decoding="async" />
               </button>
-              <span v-if="entry.task.saved[i]" class="shot__badge">{{ $t("studio.image.saved") }}</span>
               <div class="shot__bar">
-                <button type="button" class="btn btn--sm" :disabled="!!entry.task.saved[i]" @click="openSave(entry, i, 'library')">{{ $t("studio.image.toLibrary") }}</button>
-                <button type="button" class="btn btn--sm" @click="openSave(entry, i, 'local')">{{ $t("studio.image.download") }}</button>
-                <button type="button" class="btn btn--sm btn--ghost" @click="useAsReference(url)">{{ $t("studio.image.reference") }}</button>
+                <template v-if="tab === 'unsaved'">
+                  <button type="button" class="btn btn--sm" @click="openSave(entry, s.index, s.url, 'library')">{{ $t("studio.image.toLibrary") }}</button>
+                  <button type="button" class="btn btn--sm" @click="openSave(entry, s.index, s.url, 'local')">{{ $t("studio.image.download") }}</button>
+                  <button type="button" class="btn btn--sm btn--ghost" @click="useAsReference(s.url)">{{ $t("studio.image.reference") }}</button>
+                  <button type="button" class="btn btn--sm btn--ghost shot__delete" :aria-label="$t('studio.delete.oneLabel', { n: s.index + 1 })" @click="removeImages(entry, s.index)">{{ $t("studio.delete.one") }}</button>
+                </template>
+                <template v-else>
+                  <button type="button" class="btn btn--sm" @click="openSave(entry, s.index, s.url, 'local')">{{ $t("studio.image.download") }}</button>
+                  <button type="button" class="btn btn--sm btn--ghost" @click="useAsReference(s.url)">{{ $t("studio.image.reference") }}</button>
+                </template>
               </div>
             </li>
           </ul>
 
-          <div v-if="entry.task.urls.length && entry.recipe" class="run__actions">
-            <button type="button" class="btn btn--sm btn--ghost" @click="again(entry)">{{ $t("studio.results.again") }}</button>
-            <button v-if="entry.recipe.prompt" type="button" class="btn btn--sm btn--ghost" @click="copyPrompt(entry)">{{ $t("studio.results.copy") }}</button>
+          <div v-if="shotsOf(entry).length" class="run__actions">
+            <button v-if="entry.recipe" type="button" class="btn btn--sm btn--ghost" @click="again(entry)">{{ $t("studio.results.again") }}</button>
+            <button v-if="entry.recipe?.prompt" type="button" class="btn btn--sm btn--ghost" @click="copyPrompt(entry)">{{ $t("studio.results.copy") }}</button>
+            <button v-if="tab === 'unsaved' && shotsOf(entry).length > 1" type="button" class="btn btn--sm btn--ghost shot__delete" @click="removeImages(entry)">{{ $t("studio.delete.batch") }}</button>
           </div>
         </article>
-        <p v-if="loading" class="subtle">{{ $t("state.loading") }}</p>
+
+        <StudioAgentPlan
+          v-if="agent && tab === 'unsaved'"
+          :summary="agent.summary"
+          :credits="agent.credits"
+          :shots="agent.shots"
+          :estimate="estimate"
+          :has-reference="agent.references.length > 0"
+          :state="agent.state"
+          @remove="agent.shots.splice($event, 1)"
+          @run="runPlan"
+          @discard="agent = null"
+        />
       </section>
+
+      <div class="dock">
+        <p v-if="planError" class="notice notice--error dock__notice" role="alert">{{ planError }}</p>
+        <p v-else-if="notice" class="notice dock__notice" role="status">{{ notice }}</p>
+        <StudioComposer ref="composer" :models="imageGen.models" :uploading="uploading" :agent="canPlan" :planning="planning" @submit="submit" @plan="plan" @pick-library="picking = true" @upload="uploadReference" />
+      </div>
     </template>
 
     <LibraryPicker v-if="picking" @pick="useAsReference" @close="picking = false" />
     <StudioSaveDialog
       v-if="saving"
       :mode="saving.mode"
-      :image="saving.entry.task.urls[saving.index]!"
+      :image="saving.url"
       :name="nameFor(saving.entry, saving.index)"
-      :ext="extensionOf(saving.entry.task.urls[saving.index]!)"
+      :ext="extensionOf(saving.url)"
       :folders="folders"
       :folder="saveFolder"
       :busy="saving.busy"
@@ -478,9 +575,10 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
         <button v-if="images.length > 1" type="button" class="lightbox__nav lightbox__nav--prev" :aria-label="$t('studio.image.previous')" @click="step(-1)">‹</button>
         <button v-if="images.length > 1" type="button" class="lightbox__nav lightbox__nav--next" :aria-label="$t('studio.image.next')" @click="step(1)">›</button>
         <div class="lightbox__bar">
-          <button type="button" class="btn btn--sm" :disabled="!!shown.entry.task.saved[shown.index]" @click="openSave(shown.entry, shown.index, 'library')">{{ $t("studio.image.toLibrary") }}</button>
-          <button type="button" class="btn btn--sm" @click="openSave(shown.entry, shown.index, 'local')">{{ $t("studio.image.download") }}</button>
+          <button v-if="tab === 'unsaved'" type="button" class="btn btn--sm" @click="openSave(shown.entry, shown.index, shown.url, 'library')">{{ $t("studio.image.toLibrary") }}</button>
+          <button type="button" class="btn btn--sm" @click="openSave(shown.entry, shown.index, shown.url, 'local')">{{ $t("studio.image.download") }}</button>
           <button type="button" class="btn btn--sm" @click="useAsReference(shown.url)">{{ $t("studio.image.reference") }}</button>
+          <button v-if="tab === 'unsaved'" type="button" class="btn btn--sm" @click="removeImages(shown.entry, shown.index)">{{ $t("studio.delete.one") }}</button>
           <button type="button" class="btn btn--sm btn--ghost" @click="lightbox = null">{{ $t("dialog.close") }}</button>
         </div>
       </div>
@@ -489,18 +587,25 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 </template>
 
 <style scoped>
-.studio { display: grid; gap: var(--s-5); max-width: 1080px; margin: 0 auto; padding: var(--s-5) var(--s-4) var(--s-7); }
-.studio__head h1 { margin: 0 0 var(--s-1); font-size: 22px; }
-.studio__head p { margin: 0; font-size: 14px; }
+/* 整頁像聊天：紀錄撐滿視窗、內容貼著底部的輸入框，少的時候也從下往上排 */
+.studio {
+  display: flex; flex-direction: column; gap: var(--s-4); max-width: 1080px; margin: 0 auto;
+  min-height: calc(100dvh - var(--header-h)); padding: var(--s-4) var(--s-4) 0;
+}
+.studio__head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.studio__head h1 { margin: 0 0 var(--s-1); font-size: 20px; }
+.studio__head p { margin: 0; font-size: 13.5px; }
+.tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--surface-2); }
+.tabs__item { height: var(--h-sm); padding: 0 var(--s-4); border: 0; border-radius: var(--r-pill); background: none; color: var(--text-2); font: inherit; font-size: 13.5px; cursor: pointer; }
+.tabs__item[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow-sm); }
 .studio__reauth { display: grid; gap: var(--s-2); justify-items: start; }
 .studio__reauth p { margin: 0; }
-.studio__notice { margin: 0; }
-.studio__results { display: grid; gap: var(--s-4); }
-.studio__results-head { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }
-.studio__results-head h2 { margin: 0; font-size: 17px; }
-.studio__empty { padding: var(--s-6) var(--s-4); text-align: center; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); }
-.studio__empty p { margin: 0; }
-.studio__empty-title { font-weight: 600; margin-bottom: var(--s-1) !important; }
+.feed { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s-4); min-height: 0; }
+.feed__sentinel { height: 1px; }
+.feed__hint { margin: 0; text-align: center; }
+.feed__empty { padding: var(--s-6) var(--s-4); text-align: center; border: 1px dashed var(--line-strong); border-radius: var(--r-lg); }
+.feed__empty p { margin: 0; }
+.feed__empty-title { font-weight: 600; margin-bottom: var(--s-1) !important; }
 .run { display: grid; gap: var(--s-2); padding-bottom: var(--s-4); border-bottom: 1px solid var(--line); }
 .run__meta { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: 12.5px; color: var(--text-3); }
 .run__expiry { color: var(--warning-text); }
@@ -509,16 +614,23 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 .run__error { display: grid; gap: var(--s-2); margin: 0; }
 .run__error p { margin: 0; }
 .run__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.run__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-3); }
-.shot { position: relative; display: grid; gap: var(--s-2); align-content: start; }
-.shot__open { display: block; width: 100%; padding: 0; border: 0; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); cursor: zoom-in; }
+/* 同一批排成一行：放不下就橫向捲，不換行 */
+.strip { list-style: none; margin: 0; padding: 0 0 var(--s-1); display: flex; gap: var(--s-3); overflow-x: auto; scroll-snap-type: x proximity; }
+.shot { flex: none; display: grid; gap: var(--s-2); align-content: start; scroll-snap-align: start; }
+.shot__open { display: block; height: 240px; padding: 0; border: 0; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); cursor: zoom-in; }
 .shot__open:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
-.shot__open img { display: block; width: 100%; height: 280px; object-fit: contain; }
-.shot--pending { place-items: center; align-content: center; height: 280px; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); text-align: center; padding: var(--s-3); }
+.shot__open img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shot--pending { display: grid; place-items: center; align-content: center; gap: var(--s-2); height: 240px; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); text-align: center; padding: var(--s-3); }
 .shot__spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
-.shot__badge { position: absolute; top: var(--s-2); left: var(--s-2); padding: 2px var(--s-2); border-radius: var(--r-pill); background: var(--success); color: #fff; font-size: 12px; font-weight: 600; }
-.shot__bar { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.shot__bar { display: flex; flex-wrap: wrap; gap: var(--s-1); max-width: 360px; }
+.shot__delete { color: var(--danger); }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* 輸入框固定在底下；上緣淡出，捲動的紀錄從它後面經過 */
+.dock {
+  position: sticky; bottom: 0; z-index: 5; display: grid; gap: var(--s-2);
+  padding: var(--s-4) 0 var(--s-3); background: linear-gradient(to bottom, transparent, var(--bg) var(--s-4));
+}
+.dock__notice { margin: 0; }
 .lightbox { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: var(--s-6) var(--s-7) 96px; background: rgba(8, 8, 12, 0.88); outline: none; }
 .lightbox__img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--r-md); }
 .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 26px; cursor: pointer; }
@@ -526,10 +638,9 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 .lightbox__nav--next { right: var(--s-4); }
 .lightbox__bar { position: absolute; bottom: var(--s-5); left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); width: max-content; max-width: calc(100vw - 32px); }
 @media (max-width: 640px) {
-  .studio { padding: var(--s-4) var(--s-4) var(--s-7); gap: var(--s-4); }
-  .run__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
-  .shot__open img, .shot--pending { height: 200px; }
-  .shot__bar .btn { flex: 1 1 auto; padding: 0 var(--s-2); }
+  .studio { padding: var(--s-3) var(--s-4) 0; gap: var(--s-3); }
+  .shot__open, .shot--pending { height: 170px; }
+  .shot__bar { max-width: 260px; }
   .lightbox { padding: var(--s-5) var(--s-3) 140px; }
   .lightbox__nav { display: none; }
 }
