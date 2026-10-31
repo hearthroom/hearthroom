@@ -218,9 +218,9 @@ defineExpose({ focus: () => input.value?.focus() });
 .model-pick { display: grid; gap: var(--s-2); min-width: 0; }
 .model-pick__chips { display: flex; flex-wrap: wrap; gap: var(--s-1); margin: 0; padding: 0; list-style: none; min-width: 0; }
 .model-pick__chip { max-width: 100%; height: auto; min-height: 26px; padding-block: 2px; padding-inline-end: 2px; gap: 2px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; cursor: default; }
-.model-pick__remove { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 999px; background: none; color: inherit; cursor: pointer; position: relative; }
-/* 圓鈕畫 24，可點範圍放到 44（手指也點得準），不把標籤撐高 */
-.model-pick__remove::after { content: ""; position: absolute; inset: -10px; }
+.model-pick__remove { display: inline-grid; place-items: center; flex: none; width: var(--h-sm); height: var(--h-sm); margin: 0; padding: 0; border: 0; border-radius: 999px; background: none; color: inherit; cursor: pointer; position: relative; }
+/* 控件本體至少 30，可點範圍擴到 44；相鄰標籤與輸入框仍保留間距。 */
+.model-pick__remove::after { content: ""; position: absolute; inset: calc((var(--h-sm) - var(--h-lg)) / 2); }
 .model-pick__remove:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 .model-pick__remove svg { width: 14px; height: 14px; }
 .model-pick__box { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
