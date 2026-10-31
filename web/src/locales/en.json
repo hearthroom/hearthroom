@@ -3778,7 +3778,7 @@
   "preset.editor.emptyEntries.body": "Add the first entry to start writing your preset.",
   "preset.entries.title": "Entries",
   "preset.entries.add": "Add entry",
-  "preset.entries.hint": "You can reorder entries, and move them before or after \"Character and user details\". Content provided by {site} stays where it is.",
+  "preset.entries.hint": "You can reorder entries and move them before or after the fixed rows \"Character definition\", \"Player persona\" and \"Example dialogue\".",
   "preset.entries.search": "Search entries",
   "preset.entries.searchResult": "{n} entry found | {n} entries found",
   "preset.entries.searchEmpty": "No entries match \"{q}\".",

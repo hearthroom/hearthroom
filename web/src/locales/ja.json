@@ -3778,7 +3778,7 @@
   "preset.editor.emptyEntries.body": "最初のエントリーを追加して、プリセットを書き始めましょう。",
   "preset.entries.title": "エントリー",
   "preset.entries.add": "エントリーを追加",
-  "preset.entries.hint": "エントリーの順番は入れ替えられ、「キャラクターとユーザーの設定」の前にも後にも移せます。{site}が用意する内容は位置が固定です。",
+  "preset.entries.hint": "エントリーは順番を入れ替えたり、位置が固定された「キャラクター設定」「プレイヤー設定」「会話例」の前後に移したりできます。",
   "preset.entries.search": "エントリーを検索",
   "preset.entries.searchResult": "{n} 件見つかりました",
   "preset.entries.searchEmpty": "「{q}」に一致するエントリーはありません。",

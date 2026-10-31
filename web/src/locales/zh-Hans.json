@@ -3778,7 +3778,7 @@
   "preset.editor.emptyEntries.body": "添加第一个条目，开始写预设。",
   "preset.entries.title": "条目",
   "preset.entries.add": "添加条目",
-  "preset.entries.hint": "条目可以调整顺序，也可以移到「角色与玩家设定」之前或之后。由绮梦社提供的内容固定在原位。",
+  "preset.entries.hint": "条目可以调整顺序，也能移到位置固定的「角色设定」「玩家人设」「对话示例」前后。",
   "preset.entries.search": "搜索条目",
   "preset.entries.searchResult": "找到 {n} 条",
   "preset.entries.searchEmpty": "没有符合「{q}」的条目。",

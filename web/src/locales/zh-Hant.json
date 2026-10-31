@@ -3778,7 +3778,7 @@
   "preset.editor.emptyEntries.body": "新增第一個條目，開始寫預設。",
   "preset.entries.title": "條目",
   "preset.entries.add": "新增條目",
-  "preset.entries.hint": "條目可以調整順序，也可以移到「角色與玩家設定」之前或之後。由綺夢社提供的內容固定在原位。",
+  "preset.entries.hint": "條目可以調整順序，也能移到位置固定的「角色設定」「玩家人設」「對話示例」前後。",
   "preset.entries.search": "搜尋條目",
   "preset.entries.searchResult": "找到 {n} 條",
   "preset.entries.searchEmpty": "沒有符合「{q}」的條目。",

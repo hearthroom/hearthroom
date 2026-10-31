@@ -3778,7 +3778,7 @@
   "preset.editor.emptyEntries.body": "첫 항목을 추가해 프리셋을 쓰기 시작하세요.",
   "preset.entries.title": "항목",
   "preset.entries.add": "항목 추가",
-  "preset.entries.hint": "항목은 순서를 바꿀 수 있고, '캐릭터와 사용자 설정'의 앞이나 뒤로 옮길 수도 있습니다. {site}에서 제공하는 내용은 제자리에 고정됩니다.",
+  "preset.entries.hint": "항목은 순서를 바꾸거나, 위치가 고정된 '캐릭터 설정', '플레이어 설정', '대화 예시'의 앞뒤로 옮길 수 있습니다.",
   "preset.entries.search": "항목 검색",
   "preset.entries.searchResult": "{n}개 찾았습니다",
   "preset.entries.searchEmpty": "'{q}' 검색 결과가 없습니다.",
