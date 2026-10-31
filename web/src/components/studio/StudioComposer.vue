@@ -8,15 +8,25 @@ import { useI18n } from "vue-i18n";
 import type { GenerationModel } from "@/lib/media-generation";
 import { SKILLS, fitSize, ratioBox, ratioLabel, type Recipe, type Skill } from "@/lib/studio";
 
-const props = defineProps<{ models: GenerationModel[]; uploading?: boolean }>();
+const props = defineProps<{
+  models: GenerationModel[];
+  uploading?: boolean;
+  /** 伺服器開了 Agent 模式（寫計畫的對話模型）才出現模式切換。 */
+  agent?: boolean;
+  /** 正在排計畫：送出鍵先停住。 */
+  planning?: boolean;
+}>();
 const emit = defineEmits<{
   submit: [input: { model: string; prompt: string; size: string; n: number; images: string[] }, recipe: Recipe];
+  /** Agent 模式：一句想法交給頁面去排計畫；model 是目前選的生圖模型（計畫照它的張數上限排）。 */
+  plan: [input: { idea: string; references: string[]; model: string }];
   pickLibrary: [];
   upload: [File];
 }>();
 const { t } = useI18n();
 
 const PROMPT_MAX = 3600;
+const mode = ref<"generate" | "agent">("generate");
 const text = ref("");
 const skill = ref<Skill | null>(null);
 const references = ref<string[]>([]);
@@ -32,13 +42,17 @@ watch(model, (m, old) => {
   if (references.value.length > m.maxReferences && old) references.value = references.value.slice(0, m.maxReferences);
 }, { immediate: true });
 const cost = computed(() => (model.value ? model.value.credits * count.value : 0));
-const canSubmit = computed(() => !!model.value && !!size.value && (!!text.value.trim() || !!skill.value) && !text.value.startsWith("/"));
+const canSubmit = computed(() =>
+  mode.value === "agent"
+    ? !!model.value && !!text.value.trim() && !props.planning
+    : !!model.value && !!size.value && (!!text.value.trim() || !!skill.value) && !text.value.startsWith("/"),
+);
 
 const modelLabel = (m: GenerationModel) => (m.laneName ? `${m.name} · ${m.laneName}` : m.name);
 const priceLabel = (m: GenerationModel) => t(m.priced > 1 ? "studio.model.priceFrom" : "studio.model.price", { n: m.credits });
 
 // 下拉：同一時間只開一個；點外面或按 Esc 收起
-type Menu = "add" | "skill" | "model" | "params";
+type Menu = "add" | "mode" | "skill" | "model" | "params";
 const menu = ref<Menu | null>(null);
 const root = ref<HTMLElement | null>(null);
 const field = ref<HTMLTextAreaElement | null>(null);
@@ -63,7 +77,7 @@ onBeforeUnmount(() => {
 });
 
 // 描述開頭打「/」：列出技能，後面的字拿來篩
-const slash = computed(() => (text.value.startsWith("/") ? text.value.slice(1).trim().toLowerCase() : null));
+const slash = computed(() => (mode.value === "generate" && text.value.startsWith("/") ? text.value.slice(1).trim().toLowerCase() : null));
 const skills = computed(() => {
   const q = slash.value ?? "";
   return SKILLS.filter((s) => !q || t(`studio.skill.${s.id}.name`).toLowerCase().includes(q));
@@ -108,6 +122,10 @@ function chooseFile(e: Event) {
 
 function submit() {
   if (!canSubmit.value || !model.value) return;
+  if (mode.value === "agent") {
+    emit("plan", { idea: text.value.trim(), references: [...references.value], model: model.value.id });
+    return;
+  }
   const words = text.value.trim();
   const scaffold = skill.value ? t(`studio.skill.${skill.value.id}.prompt`) : "";
   const prompt = [scaffold, words].filter(Boolean).join("\n").slice(0, 4000);
@@ -127,6 +145,7 @@ function onEnter(e: KeyboardEvent) {
 
 /** 「再生成一次」：照上一次的描述、技能、參考圖、模型與尺寸回填。 */
 function fill(recipe: Recipe, task: { model?: string; size?: string; n?: number }) {
+  mode.value = "generate";
   text.value = recipe.prompt;
   skill.value = SKILLS.find((s) => s.id === recipe.skill) ?? null;
   references.value = recipe.references ?? [];
@@ -137,7 +156,11 @@ function fill(recipe: Recipe, task: { model?: string; size?: string; n?: number 
     field.value?.focus();
   });
 }
-defineExpose({ fill, addReference, focus: () => field.value?.focus() });
+/** 計畫送出去了：清掉輸入框，下一次從空白開始。 */
+function clear() {
+  text.value = "";
+}
+defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 </script>
 
 <template>
@@ -160,7 +183,7 @@ defineExpose({ fill, addReference, focus: () => field.value?.focus() });
         </span>
       </div>
       <div class="composer__text">
-        <span v-if="skill" class="composer__skill">
+        <span v-if="skill && mode === 'generate'" class="composer__skill">
           / {{ $t(`studio.skill.${skill.id}.name`) }}
           <button type="button" :aria-label="$t('studio.skill.clear')" @click="skill = null">×</button>
         </span>
@@ -172,16 +195,29 @@ defineExpose({ fill, addReference, focus: () => field.value?.focus() });
           rows="3"
           :maxlength="PROMPT_MAX"
           :aria-label="$t('studio.prompt.label')"
-          :placeholder="skill ? $t(`studio.skill.${skill.id}.hint`) : $t('studio.prompt.hint')"
+          :placeholder="mode === 'agent' ? $t('studio.agent.hint') : skill ? $t(`studio.skill.${skill.id}.hint`) : $t('studio.prompt.hint')"
           @keydown.enter="onEnter"
         />
-        <p v-if="skill?.wantsReference && !references.length" class="composer__tip subtle">{{ $t("studio.skill.wantsReference") }}</p>
+        <p v-if="mode === 'agent'" class="composer__tip subtle">{{ $t("studio.agent.note") }}</p>
+        <p v-else-if="skill?.wantsReference && !references.length" class="composer__tip subtle">{{ $t("studio.skill.wantsReference") }}</p>
       </div>
     </div>
 
     <div class="composer__bar">
       <div class="composer__chips">
-        <div class="anchor">
+        <div v-if="agent" class="anchor">
+          <button type="button" class="pill" :class="{ 'pill--on': mode === 'agent' }" :aria-expanded="menu === 'mode'" @click="toggle('mode')">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.5 5.5l1.4 1.4M13.1 13.1l1.4 1.4M5.5 14.5l1.4-1.4M13.1 6.9l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="10" cy="10" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+            {{ $t(mode === "agent" ? "studio.mode.agent" : "studio.mode.generate") }}
+          </button>
+          <div v-if="menu === 'mode'" class="pop pop--wide" role="listbox" :aria-label="$t('studio.mode.label')">
+            <button v-for="m in ['generate', 'agent'] as const" :key="m" type="button" role="option" class="pop__row" :aria-selected="mode === m" @click="mode = m; menu = null">
+              <strong>{{ $t(`studio.mode.${m}`) }}</strong>
+              <span class="subtle">{{ $t(`studio.mode.${m}Desc`) }}</span>
+            </button>
+          </div>
+        </div>
+        <div v-if="mode === 'generate'" class="anchor">
           <button type="button" class="pill" :class="{ 'pill--on': skill }" :aria-expanded="menu === 'skill'" @click="openSkills">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 15 8-10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
             {{ skill ? $t(`studio.skill.${skill.id}.name`) : $t("studio.skill.label") }}
@@ -208,7 +244,7 @@ defineExpose({ fill, addReference, focus: () => field.value?.focus() });
             </button>
           </div>
         </div>
-        <div class="anchor">
+        <div v-if="mode === 'generate'" class="anchor">
           <button type="button" class="pill" :aria-expanded="menu === 'params'" :disabled="!model" @click="toggle('params')">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h7m4 0h1M4 14h1m4 0h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="13" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.5" /><circle cx="7" cy="14" r="2" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
             {{ ratioLabel(size) }} · {{ $t("studio.params.countShort", { n: count }) }}
@@ -230,7 +266,7 @@ defineExpose({ fill, addReference, focus: () => field.value?.focus() });
         </div>
       </div>
       <button type="submit" class="btn btn--primary composer__go" :disabled="!canSubmit">
-        {{ $t(model && model.priced > 1 ? "studio.submitFrom" : "studio.submit", { n: cost }) }}
+        {{ mode === "agent" ? $t(planning ? "studio.agent.planning" : "studio.agent.submit") : $t(model && model.priced > 1 ? "studio.submitFrom" : "studio.submit", { n: cost }) }}
       </button>
     </div>
   </form>

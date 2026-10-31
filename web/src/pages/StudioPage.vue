@@ -12,11 +12,12 @@ import { useRoute } from "vue-router";
 import LibraryPicker from "@/components/editor/LibraryPicker.vue";
 import StudioComposer from "@/components/studio/StudioComposer.vue";
 import StudioSaveDialog from "@/components/studio/StudioSaveDialog.vue";
+import StudioAgentPlan, { type AgentShot } from "@/components/studio/StudioAgentPlan.vue";
 import { ApiError, fetchLibraryFolders, uploadImage, type LibraryFolder } from "@/lib/api";
 import { connectAccount } from "@/lib/connections";
-import type { GenerationTask } from "@/lib/media-generation";
+import type { GenerationModel, GenerationTask } from "@/lib/media-generation";
 import { useSession } from "@/lib/session";
-import { defaultName, extensionOf, recipeOf, rememberRecipe, type Recipe } from "@/lib/studio";
+import { defaultName, extensionOf, fitSize, recipeOf, rememberRecipe, type Recipe } from "@/lib/studio";
 import { track } from "@/lib/track";
 import { useImageGeneration } from "@/lib/use-image-generation";
 
@@ -89,7 +90,10 @@ async function load() {
 onMounted(async () => {
   await probeGeneration();
   probed.value = true;
-  if (imageGen.value?.access === "ready") await load();
+  if (imageGen.value?.access === "ready") {
+    void generator().then((c) => c.canPlan()).then((ok) => (canPlan.value = ok), () => {});
+    await load();
+  }
   const ref = typeof route.query.ref === "string" ? route.query.ref : "";
   if (ref) {
     await nextTick();
@@ -108,6 +112,7 @@ async function submit(input: Entry["input"] & {}, recipe: Recipe) {
   entries.value = [entry, ...entries.value];
   track("studio_generate");
   await create(entry);
+  return entry;
 }
 async function create(entry: Entry) {
   entry.failure = undefined;
@@ -136,6 +141,85 @@ function dismiss(entry: Entry) {
 function reauthorize() {
   markReauthorizing();
   void connectAccount("harbor", route.fullPath).catch(() => {});
+}
+
+// ── Agent 模式 ─────────────────────────────────────────
+// 一句想法交給伺服器排成幾組（照一般對話計價），作者改過再全部生成：第一組先畫，
+// 標了「跟第一組同一個角色」的幾組等它出圖，拿它的第一張當參考圖；其餘的同時送出。
+const canPlan = ref(false);
+const planning = ref(false);
+const planError = ref("");
+const agent = ref<{ summary: string; credits: number; shots: AgentShot[]; references: string[]; model: string; state: "editing" | "running" | "done" } | null>(null);
+const modelOf = (id: string) => imageGen.value?.models.find((m) => m.id === id);
+/** 這一組用哪個模型：要參考圖時，目前的模型收不了就換最便宜、收得了的那個。 */
+function modelFor(shot: AgentShot, withReference: boolean): GenerationModel | undefined {
+  const base = modelOf(agent.value!.model) ?? imageGen.value?.models[0];
+  if (!withReference || (base && base.maxReferences > 0)) return base;
+  return imageGen.value?.models.find((m) => m.maxReferences > 0) ?? base;
+}
+const estimate = computed(() =>
+  (agent.value?.shots ?? []).reduce((sum, shot) => {
+    const m = modelFor(shot, shot.reference !== "none");
+    return sum + (m ? m.credits * Math.min(shot.count, m.maxImages) : 0);
+  }, 0),
+);
+async function plan(input: { idea: string; references: string[]; model: string }) {
+  planning.value = true;
+  planError.value = "";
+  try {
+    const p = await (await generator()).plan({ idea: input.idea, language: String(locale.value), hasReference: input.references.length > 0, maxImages: modelOf(input.model)?.maxImages ?? 1 });
+    agent.value = reactive({ ...p, shots: p.shots.map((s) => ({ ...s })), references: input.references, model: input.model, state: "editing" as const });
+    composer.value?.clear();
+    track("studio_plan");
+  } catch (e) {
+    planError.value =
+      e instanceof ApiError && e.code === "plan_unreadable"
+        ? t("studio.agent.error.unreadable")
+        : e instanceof ApiError && e.status === 402
+          ? t("studio.agent.error.credits")
+          : e instanceof ApiError && (e.status === 401 || e.status === 403)
+            ? t("resource.gen.error.reauth")
+            : t("studio.agent.error.failed");
+  } finally {
+    planning.value = false;
+  }
+}
+async function runPlan() {
+  const a = agent.value;
+  if (!a || a.state !== "editing") return;
+  a.shots = a.shots.filter((s) => s.prompt.trim());
+  a.state = "running";
+  track("studio_plan_run");
+  const start = async (shot: AgentShot, refs: string[]) => {
+    const m = modelFor(shot, refs.length > 0);
+    if (!m) {
+      shot.status = "failed";
+      return undefined;
+    }
+    const images = m.maxReferences > 0 ? refs.slice(0, m.maxReferences) : [];
+    shot.status = "running";
+    const entry = await submit(
+      { model: m.id, prompt: shot.prompt.trim(), size: fitSize(m.sizes, shot.shape), n: Math.min(shot.count, m.maxImages), images },
+      { prompt: shot.prompt.trim(), ...(shot.skill ? { skill: shot.skill } : {}), ...(images.length ? { references: images } : {}) },
+    );
+    shot.status = entry.task.urls.length ? "done" : "failed";
+    return entry;
+  };
+  for (const shot of a.shots) shot.status = "waiting";
+  const given = (shot: AgentShot) => (shot.reference === "given" ? a.references : []);
+  const [first, ...rest] = a.shots;
+  const firstRun = start(first!, given(first!));
+  const others = rest.filter((s) => s.reference !== "anchor").map((s) => start(s, given(s)));
+  const anchor = (await firstRun)?.task.urls[0];
+  const followers = rest
+    .filter((s) => s.reference === "anchor")
+    .map((s) => {
+      if (anchor) return start(s, [anchor]);
+      s.status = "skipped";
+      return undefined;
+    });
+  await Promise.all([...others, ...followers]);
+  a.state = "done";
 }
 
 // ── 參考圖 ─────────────────────────────────────────────
@@ -282,7 +366,20 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
     </div>
     <p v-else-if="!imageGen.models.length" class="notice">{{ $t("resource.gen.noModels") }}</p>
     <template v-else>
-      <StudioComposer ref="composer" :models="imageGen.models" :uploading="uploading" @submit="submit" @pick-library="picking = true" @upload="uploadReference" />
+      <StudioComposer ref="composer" :models="imageGen.models" :uploading="uploading" :agent="canPlan" :planning="planning" @submit="submit" @plan="plan" @pick-library="picking = true" @upload="uploadReference" />
+      <p v-if="planError" class="notice notice--error studio__notice" role="alert">{{ planError }}</p>
+      <StudioAgentPlan
+        v-if="agent"
+        :summary="agent.summary"
+        :credits="agent.credits"
+        :shots="agent.shots"
+        :estimate="estimate"
+        :has-reference="agent.references.length > 0"
+        :state="agent.state"
+        @remove="agent.shots.splice($event, 1)"
+        @run="runPlan"
+        @discard="agent = null"
+      />
       <p v-if="notice" class="notice studio__notice" role="status">{{ notice }}</p>
 
       <section class="studio__results" :aria-label="$t('studio.results.title')">

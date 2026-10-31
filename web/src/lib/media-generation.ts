@@ -40,6 +40,21 @@ export interface SavedImage {
   assetId: string;
   url: string;
 }
+/** Agent 模式的一組：ref 是 none（不用參考圖）、given（作者附的參考圖）、anchor（跟計畫第一組畫出來的角色走）。 */
+export interface PlanShot {
+  title: string;
+  skill: string;
+  prompt: string;
+  shape: "tall" | "wide" | "square";
+  count: number;
+  reference: "none" | "given" | "anchor";
+}
+export interface GenerationPlan {
+  summary: string;
+  shots: PlanShot[];
+  /** 寫這份計畫的對話扣了多少點。 */
+  credits: number;
+}
 /** 存到哪裡：真的資料夾給 folderIds，只以路徑存在的夾給 directory，根目錄不給。 */
 export type SaveTarget = { folderIds?: string[]; directory?: string };
 
@@ -121,6 +136,23 @@ export function generationClient(provider: ProviderId, credentials: (rejectedTok
         t = await this.get(t.id);
       }
       return t;
+    },
+    /**
+     * Agent 模式：把一句想法排成幾組生圖（只寫計畫、不生圖），照一般對話計價。
+     * 伺服器沒開 Agent 模式時是 404；排不出能用的計畫是 502 plan_unreadable（對話照扣）。
+     */
+    async plan(input: { idea: string; language: string; hasReference: boolean; maxImages: number }): Promise<GenerationPlan> {
+      const { body } = await post("/plan", { idea: input.idea, language: input.language, has_reference: input.hasReference, max_images: input.maxImages });
+      return { summary: String(body.summary ?? ""), shots: body.shots ?? [], credits: Number(body.credits) || 0 };
+    },
+    /** Agent 模式開了沒有：空的想法在伺服器是 400（端點在）、沒開是 404。不扣點。 */
+    async canPlan(): Promise<boolean> {
+      try {
+        await post("/plan", {});
+        return true;
+      } catch (e) {
+        return e instanceof ApiError && e.status === 400;
+      }
     },
     /** 本人最近 7 天的生成（生圖頁的快取區），新的在前。 */
     async list(limit = 60): Promise<GenerationTask[]> {

@@ -20,10 +20,12 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   folders: vi.fn(),
   upload: vi.fn(),
+  plan: vi.fn(),
+  canPlan: vi.fn(),
 }));
 vi.mock("../src/lib/connections", () => ({ accountToken: mocks.token, connectAccount: mocks.connect }));
 vi.mock("../src/lib/media-generation", () => ({
-  generationClient: () => ({ models: mocks.models, list: mocks.list, create: mocks.create, wait: mocks.wait, save: mocks.save }),
+  generationClient: () => ({ models: mocks.models, list: mocks.list, create: mocks.create, wait: mocks.wait, save: mocks.save, plan: mocks.plan, canPlan: mocks.canPlan }),
 }));
 vi.mock("../src/lib/api", async (actual) => ({ ...(await actual<object>()), fetchLibraryFolders: mocks.folders, uploadImage: mocks.upload }));
 vi.mock("../src/lib/track", () => ({ track: () => {} }));
@@ -58,6 +60,7 @@ async function mount(path = "/studio", withModels = true) {
   mocks.token.mockResolvedValue("token-harbor");
   mocks.connect.mockResolvedValue(undefined);
   if (withModels) mocks.models.mockResolvedValue(models);
+  if (!mocks.canPlan.getMockImplementation()) mocks.canPlan.mockResolvedValue(false);
   mocks.folders.mockResolvedValue([{ folderId: "f1", name: "Mira", imageCount: 2 }]);
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -230,4 +233,72 @@ it("asks for a fresh sign-in when this sign-in lacks the generation permission",
   button(root, "Sign in and allow")!.click();
   await settle();
   expect(mocks.connect).toHaveBeenCalledWith("harbor", "/studio");
+});
+
+// Agent 模式：想法排成計畫、作者改過才生成；第一組先畫，「同一個角色」的幾組拿它的第一張當參考圖。
+it("plans a set from one idea, lets the author edit it, and draws the followers from the first result", async () => {
+  mocks.canPlan.mockResolvedValue(true);
+  mocks.list.mockResolvedValue([]);
+  mocks.plan.mockResolvedValue({ summary: "A card kit for Mira", credits: 3, shots: [
+    { title: "Portrait", skill: "portrait", prompt: "Mira, silver hair, navy coat, full body", shape: "tall", count: 1, reference: "none" },
+    { title: "Lighthouse", skill: "scene", prompt: "a lighthouse at dusk, no people", shape: "wide", count: 1, reference: "none" },
+    { title: "Faces", skill: "expressions", prompt: "Mira, four expressions", shape: "square", count: 4, reference: "anchor" },
+    { title: "Extra", skill: "", prompt: "something unwanted", shape: "square", count: 1, reference: "none" },
+  ] });
+  const order: string[] = [];
+  mocks.create.mockImplementation(async (input: { prompt: string }) => {
+    order.push(input.prompt);
+    return done(`t${order.length}`);
+  });
+  await mount();
+  const mode = [...root.querySelectorAll<HTMLButtonElement>(".pill")].find((b) => b.textContent?.trim() === "Generate")!;
+  mode.click();
+  await settle();
+  [...root.querySelectorAll<HTMLButtonElement>(".pop__row")].find((b) => b.textContent?.includes("Agent mode"))!.click();
+  await settle();
+  await type("a card kit for Mira");
+  expect(button(root, "Make a plan")).toBeTruthy();
+  await generate();
+  expect(mocks.plan).toHaveBeenCalledWith({ idea: "a card kit for Mira", language: "en", hasReference: false, maxImages: 2 });
+  expect(mocks.create).not.toHaveBeenCalled();
+  const plan = root.querySelector(".plan")!;
+  expect(plan.textContent).toContain("A card kit for Mira");
+  expect(plan.textContent).toContain("This plan cost 3 credits to write.");
+  // 刪掉不要的一組，改第一組的描述
+  plan.querySelector<HTMLButtonElement>('button[aria-label="Remove shot 4"]')!.click();
+  await settle();
+  const prompt = plan.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description of shot 1"]')!;
+  prompt.value = "Mira, silver hair, red scarf, full body";
+  prompt.dispatchEvent(new Event("input"));
+  await settle();
+  // dawn 35 × 1 + 35 × 1；表情要參考圖，換成收參考圖的 refs，52 × 4
+  button(plan, "Generate all · about 278 credits")!.click();
+  await settle();
+  await settle();
+  expect(mocks.create).toHaveBeenCalledTimes(3);
+  expect(mocks.create.mock.calls[0]![0]).toEqual({ model: "dawn", prompt: "Mira, silver hair, red scarf, full body", size: "1024x1536", n: 1, images: [] });
+  expect(mocks.create.mock.calls[1]![0]).toEqual({ model: "dawn", prompt: "a lighthouse at dusk, no people", size: "1536x1024", n: 1, images: [] });
+  expect(mocks.create.mock.calls[2]![0]).toEqual({ model: "refs", prompt: "Mira, four expressions", size: "1024x1024", n: 4, images: ["https://assets.test/media-gen/t1/0.png"] });
+  expect(root.querySelector(".plan")!.textContent).toContain("Every shot is sent");
+  expect(root.querySelectorAll(".run")).toHaveLength(3);
+});
+
+it("says so when the plan comes back unusable, and hides agent mode where the server has none", async () => {
+  mocks.canPlan.mockResolvedValue(true);
+  mocks.list.mockResolvedValue([]);
+  mocks.plan.mockRejectedValue(new ApiError(502, "unusable", "plan_unreadable"));
+  await mount();
+  [...root.querySelectorAll<HTMLButtonElement>(".pill")].find((b) => b.textContent?.trim() === "Generate")!.click();
+  await settle();
+  [...root.querySelectorAll<HTMLButtonElement>(".pop__row")].find((b) => b.textContent?.includes("Agent mode"))!.click();
+  await settle();
+  await type("something");
+  await generate();
+  expect(root.textContent).toContain("The plan came back unusable");
+  expect(root.querySelector(".plan")).toBeNull();
+  app.unmount();
+  root.remove();
+  mocks.canPlan.mockResolvedValue(false);
+  await mount();
+  expect([...root.querySelectorAll(".pill")].some((b) => b.textContent?.trim() === "Generate")).toBe(false);
 });
