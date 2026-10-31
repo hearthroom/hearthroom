@@ -312,6 +312,10 @@ it("labels each size with the card image it suits best, and splits counts above 
   expect(usesFor(["1024x1024", "1536x1024", "1024x1536", "1152x2048", "2048x1152", "1200x630"])).toEqual({
     "1024x1024": ["avatar"], "1536x1024": ["wideArt"], "1024x1536": ["tallArt"], "1152x2048": ["tallBg"], "2048x1152": ["wideBg"], "1200x630": ["share"],
   });
+  // 一樣接近時標在解析度高的那張
+  expect(usesFor(["720x1280", "1152x2048", "1280x720", "2048x1152"])).toEqual({
+    "720x1280": ["tallArt"], "1152x2048": ["tallBg", "avatar"], "1280x720": ["wideArt"], "2048x1152": ["wideBg", "share"],
+  });
   expect(splitCount(4, 2)).toEqual([2, 2]);
   expect(splitCount(3, 2)).toEqual([2, 1]);
   expect(splitCount(4, 4)).toEqual([4]);

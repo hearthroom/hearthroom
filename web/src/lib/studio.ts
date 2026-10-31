@@ -98,7 +98,9 @@ export function usesFor(sizes: string[]): Record<string, ImageUse[]> {
   if (!sizes.length) return out;
   for (const [use, target] of CARD_USES) {
     const off = (s: string) => Math.abs(Math.log(ratioOf(s) / target));
-    const best = sizes.reduce((a, b) => (off(b) < off(a) ? b : a));
+    // 一樣接近時挑解析度高的（9:16 有 720×1280 也有 1152×2048，背景要清楚的那張）
+    const area = (s: string) => s.split("x").map(Number).reduce((a, b) => a * b, 1);
+    const best = sizes.reduce((a, b) => (off(b) < off(a) - 1e-9 || (Math.abs(off(b) - off(a)) <= 1e-9 && area(b) > area(a)) ? b : a));
     out[best]!.push(use);
   }
   for (const s of sizes) if (!out[s]!.length) out[s]!.push(ratioOf(s) < 1 ? "tallArt" : ratioOf(s) > 1 ? "wideArt" : "avatar");

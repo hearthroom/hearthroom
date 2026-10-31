@@ -330,7 +330,8 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 }
 .pop--add { bottom: 0; left: calc(100% + 8px); }
 .pop--wide { width: min(360px, calc(100vw - 32px)); max-height: 360px; overflow-y: auto; }
-.pop--params { width: min(440px, calc(100vw - 32px)); gap: var(--s-2); padding: var(--s-3); }
+/* 往上開：尺寸多的模型（十幾種）會比視窗高，自己捲，不要頂到頁首底下 */
+.pop--params { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - var(--header-h) - 160px); overflow-y: auto; gap: var(--s-2); padding: var(--s-3); }
 .pop__item, .pop__row {
   display: grid; gap: 2px; text-align: left; padding: var(--s-2) var(--s-3); border: 0; border-radius: var(--r-sm);
   background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
