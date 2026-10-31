@@ -32,6 +32,16 @@ export interface PresetSelection {
 }
 export interface PresetDocument { schemaVersion: string; st: StDocument; selection: PresetSelection }
 
+/**
+ * 上游存的文件 selection 裡的清單是選填的（API 建立的預設可能只有 profileId）；
+ * 編輯器各處把它們當陣列讀，進來時補成空的，存檔就會帶齊。
+ */
+export function withSelectionDefaults(doc: PresetDocument): PresetDocument {
+  const s = (doc.selection ?? {}) as Partial<PresetSelection>;
+  doc.selection = { ...s, profileId: s.profileId ?? 0, excludedEntryIds: s.excludedEntryIds ?? [], acceptedAdaptationIds: s.acceptedAdaptationIds ?? [], excludedFields: s.excludedFields ?? [] };
+  return doc;
+}
+
 /** P 固定區（歷史之前）、F 由框架提供、S 生成前（歷史之後）、D 插在歷史中間（不執行）。 */
 export type Slot = "P" | "F" | "S" | "D";
 /** side：在排序裡位於聊天歷史之前或之後（插在歷史中間的條目也照這個歸區顯示） */

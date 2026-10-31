@@ -21,7 +21,7 @@ import {
   type Compatibility, type ModelOption, type PresetDetail, type WriteReceipt,
 } from "@/lib/presets";
 import {
-  adaptationId, inspectRows, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
+  adaptationId, inspectRows, withSelectionDefaults, isPromptPack, nativeProblems, addEntry, canDeleteEntry, deleteEntry, detachedPrompts, entryRows, insertEntry, moveEntryTo, newDocument, prefixLayout, restoreOrder, setEnabled,
   type EntryRow, type InspectRow, type PresetDocument, type ProvidedKind,
 } from "@/lib/st-preset";
 import { operationKeys, usePresetAccess } from "@/lib/use-preset-access";
@@ -158,7 +158,7 @@ const nativeBlocked = computed(() => {
 const canSave = computed(() => !readOnly.value && !nativeBlocked.value.length && dirty.value && !saving.value && !analyzing.value && !blocked.value.length && !!title.value.trim() && !!doc.value && !anyParamInvalid(doc.value));
 
 function adopt(next: PresetDocument, nextTitle: string, nextModels: string[], version: number, clean = true) {
-  doc.value = next;
+  doc.value = withSelectionDefaults(next);
   title.value = nextTitle;
   models.value = [...nextModels];
   baseVersion.value = version;

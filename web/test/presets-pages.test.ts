@@ -265,6 +265,24 @@ describe("預設編輯器：英文版本紀錄", () => {
   });
 });
 
+describe("預設編輯器：API 建立的預設（選擇欄位可省略）", () => {
+  it("selection 只有 profileId 也能打開：缺的清單當空的，存檔補齊送出", async () => {
+    const d = doc(); (d as { selection: unknown }).selection = { profileId: 100001 };
+    mocks.detail.mockResolvedValue(detail());
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "native", compilerVersion: "", contentHash: "", recommendedModels: [], createdAt: "" }, compatibility: { ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn") } });
+    mocks.analyze.mockImplementation(async () => ({ ...compat(), entries: compat().entries.filter((e) => e.identifier !== "script" && e.identifier !== "turn") }));
+    await mount(PresetEditorPage, "/me/presets/p1");
+    expect($("[data-testid=preset-title]")).not.toBeNull();
+    expect($$("[data-testid=entry-row]").length).toBeGreaterThan(0);
+    $<HTMLInputElement>("[data-testid=preset-title]").value = "改名";
+    $("[data-testid=preset-title]").dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush(); await flush();
+    expect(mocks.revise.mock.calls[0]![2].document.selection).toMatchObject({ profileId: 100001, excludedEntryIds: [], acceptedAdaptationIds: [], excludedFields: [] });
+  });
+});
+
 describe("預設編輯器：封存與匯入確認（QA N03／N04）", () => {
   it("封存的預設只能看：欄位、開關與存檔都停用，並說明已封存；列表不給編輯鈕", async () => {
     mocks.detail.mockResolvedValue(detail({ archived: true, allowedActions: ["archive"] }));
