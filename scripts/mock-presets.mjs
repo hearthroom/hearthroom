@@ -129,7 +129,7 @@ export function validateNative(doc) {
 
 function summary(p) {
   const head = revisions.get(p.headRevisionId);
-  return { visibility: "private", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
+  return { purpose: "", visibility: "private", publishedAt: null, attribution: "", removed: false, ...p, allowedActions: p.bindingCount > 0 ? ["archive"] : ["delete"], recommendedModels: head?.recommendedModels ?? [] };
 }
 function addRevision(preset, title, document, recommendedModels) {
   const revisionId = uuid();
@@ -177,7 +177,7 @@ function seedLibrary() {
   ];
   rows.forEach(([title, authorName, recommendedModels, usesLast7d, favoriteCount, age], i) => {
     const presetId = `10000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`;
-    library.set(presetId, { presetId, title, authorName, authorNumId: 4000 + i, authorAvatar: "", attribution: i === 1 ? "改寫自 Aster 的酒館預設" : "", recommendedModels, usesLast7d, favoriteCount,
+    library.set(presetId, { purpose: i === 0 || !recommendedModels.length ? "general" : "specific", presetId, title, authorName, authorNumId: 4000 + i, authorAvatar: "", attribution: i === 1 ? "改寫自 Aster 的酒館預設" : "", recommendedModels, usesLast7d, favoriteCount,
       publishedAt: daysAgo(age), updatedAt: daysAgo(Math.max(0, age - 1)), listed: true, mine: false,
       document: doc([["main", "主敘事規則", "用鏡頭的方式寫場景：先交代整體環境，再帶到人物與細節。"], ["style", "文風細節", "旁白用第三人稱，台詞自然口語。"], ["end", "收尾處理", "每次回覆結尾留一個可以接話的地方。"]]) });
   });
@@ -191,7 +191,7 @@ function libraryItem(x, extra = {}) {
 }
 function modelHit(x, model) {
   if (!model || model === "all") return true;
-  if (model === "general") return !x.recommendedModels.length;
+  if (model === "general") return x.purpose === "general";
   if (x.recommendedModels.includes(model)) return true;
   if (model.startsWith("series:")) return x.recommendedModels.some((v) => v.startsWith("model:") && SERIES[v.slice(6)] === model.slice(7));
   if (model.startsWith("model:")) return x.recommendedModels.includes(`series:${SERIES[model.slice(6)]}`);
@@ -242,9 +242,12 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     if (mm[2] === "publish") {
       if (p.removed) return json(res, 409, { error: "preset_conflict", reason: "preset_removed" }), true;
       if (body.declaration !== DECLARATION) return json(res, 409, { error: "preset_conflict", reason: "preset_declaration_changed" }), true;
-      Object.assign(p, { visibility: "public", publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
+      const models = body.recommendedModels ?? revisions.get(p.headRevisionId).recommendedModels;
+      if (!["general", "specific"].includes(body.purpose) || (body.purpose === "specific" && !models.length)) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
+      Object.assign(p, { purpose: body.purpose, visibility: "public", publishedAt: p.publishedAt ?? now(), attribution: body.attribution ?? "" });
       if (body.recommendedModels) revisions.get(p.headRevisionId).recommendedModels = body.recommendedModels;
     } else p.visibility = "private";
+    p.version++;
     return json(res, 200, { presetId: p.id, revisionId: p.headRevisionId, version: p.version }), true;
   }
   // ── 分享：預設庫、熱門、詳情、喜愛、檢舉、喜愛與用過 ──
@@ -304,6 +307,7 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     if (scenario === "conflict" && mm[2] === "revisions") { scenario = ""; p.version++; return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true; }
     if (body.expectedVersion !== p.version) return json(res, 409, { error: "preset_conflict", reason: "preset_revision_conflict" }), true;
     if (mm[2] === "revisions") {
+      if (p.purpose === "specific" && !body.recommendedModels?.length) return json(res, 422, { error: "preset_invalid", reason: "preset_invalid_input" }), true;
       const bad = p.sourceKind === "native" ? validateNative(body.document) : "";
       if (bad) return json(res, 422, { error: "preset_invalid", reason: bad }), true;
       if (analyze(body.document).entries.some((e) => e.enabled && e.uiStatus === "unsupported")) return json(res, 422, { error: "preset_invalid", reason: "preset_adjustment_required" }), true;

@@ -4143,5 +4143,16 @@
   "preset.share.cardPick.applied": "\"{name}\" is applied to \"{card}\", starting from the next reply.",
   "preset.share.delete.body": "After deleting, you won't see this preset anymore, and it can't be restored.",
   "preset.share.delete.inUse": "{n} card of yours uses it; after deleting, it goes back to your own choices. | {n} cards of yours use it; after deleting, they go back to your own choices.",
-  "preset.share.delete.public": "This preset is public: other users who used it or added it to favorites can keep using it."
+  "preset.share.delete.public": "This preset is public: other users who used it or added it to favorites can keep using it.",
+  "preset.purpose.label": "Use",
+  "preset.purpose.general": "General",
+  "preset.purpose.general.hint": "Works with any model",
+  "preset.purpose.specific": "Model-specific",
+  "preset.purpose.specific.hint": "Recommended only for the models you pick",
+  "preset.purpose.models.general": "Tested on (optional)",
+  "preset.purpose.models.specific": "Recommended models",
+  "preset.purpose.required": "Choose a use",
+  "preset.purpose.models.required": "Pick at least one model",
+  "preset.purpose.tested": "Tested",
+  "preset.purpose.recommendation": "Author recommends: {models}"
 }

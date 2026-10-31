@@ -20,7 +20,7 @@ import PresetLibraryRow from "@/components/preset/PresetLibraryRow.vue";
 import PresetModelPicker from "@/components/preset/PresetModelPicker.vue";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetTabs from "@/components/preset/PresetTabs.vue";
-import { authorLabel, useModelCatalog } from "@/components/preset/preset-share";
+import { presetPurpose, presetModelMatches, authorLabel, useModelCatalog } from "@/components/preset/preset-share";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -157,9 +157,10 @@ onBeforeUnmount(() => { clearTimeout(timer); clearTimeout(toastTimer); });
               <li v-for="n in 3" :key="n" class="panel library__hotCard ghost" />
             </template>
             <li v-for="item in hot" :key="item.presetId" class="library__hotItem">
-              <RouterLink :to="lp(`/presets/${item.presetId}`)" class="panel library__hotCard" data-testid="library-hot-card">
+              <RouterLink :to="{ path: lp(`/presets/${item.presetId}`), query: model !== 'all' && model !== 'general' ? { model } : {} }" class="panel library__hotCard" data-testid="library-hot-card">
                 <strong class="library__hotName">{{ item.title }}</strong>
                 <span class="library__hotAuthor">{{ authorLabel(item) }}</span>
+                <span class="library__hotAuthor">{{ $t(`preset.purpose.${presetPurpose(item)}`) }}<template v-if="presetPurpose(item) === 'general' && presetModelMatches(item.recommendedModels, model, catalog)"> · {{ $t('preset.purpose.tested') }}</template></span>
                 <span v-if="item.fresh" class="chip library__fresh" data-testid="library-fresh">{{ $t("preset.share.new") }}</span>
                 <span v-else class="library__hotStats">{{ hotStats(item) }}</span>
               </RouterLink>
@@ -195,7 +196,7 @@ onBeforeUnmount(() => { clearTimeout(timer); clearTimeout(toastTimer); });
           <p class="muted">{{ $t("preset.share.empty.public") }}</p>
         </section>
         <ul v-else class="library__list" :aria-busy="loading || undefined" data-testid="library-list">
-          <PresetLibraryRow v-for="item in items" :key="item.presetId" :item="item" :busy="busy === item.presetId" @favorite="toggle" />
+          <PresetLibraryRow v-for="item in items" :key="item.presetId" :item="item" :model="model" :groups="catalog" :busy="busy === item.presetId" @favorite="toggle" />
         </ul>
         <button v-if="hasMore && !loading && !failed" type="button" class="btn btn--lg library__more" :disabled="loadingMore" data-testid="share-more" @click="load(true)">{{ $t("preset.list.more") }}</button>
       </section>

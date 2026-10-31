@@ -4143,5 +4143,16 @@
   "preset.share.cardPick.applied": "'{name}' 프리셋을 '{card}'에 적용했습니다. 다음 답변부터 반영됩니다.",
   "preset.share.delete.body": "삭제하면 이 프리셋이 보이지 않게 되며 되돌릴 수 없습니다.",
   "preset.share.delete.inUse": "내 카드 {n}장이 사용 중입니다. 삭제하면 원래 고른 설정으로 돌아갑니다.",
-  "preset.share.delete.public": "이 프리셋은 공개 상태입니다. 사용했거나 즐겨찾기한 다른 사용자는 삭제 후에도 계속 쓸 수 있습니다."
+  "preset.share.delete.public": "이 프리셋은 공개 상태입니다. 사용했거나 즐겨찾기한 다른 사용자는 삭제 후에도 계속 쓸 수 있습니다.",
+  "preset.purpose.label": "용도",
+  "preset.purpose.general": "범용",
+  "preset.purpose.general.hint": "모든 모델에서 사용",
+  "preset.purpose.specific": "특정 모델 전용",
+  "preset.purpose.specific.hint": "선택한 모델에만 추천",
+  "preset.purpose.models.general": "테스트한 모델(선택)",
+  "preset.purpose.models.specific": "추천 모델",
+  "preset.purpose.required": "용도 선택",
+  "preset.purpose.models.required": "모델을 하나 이상 선택",
+  "preset.purpose.tested": "테스트됨",
+  "preset.purpose.recommendation": "작성자 추천: {models}"
 }

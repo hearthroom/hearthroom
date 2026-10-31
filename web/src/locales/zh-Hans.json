@@ -4143,5 +4143,16 @@
   "preset.share.cardPick.applied": "已应用「{name}」到「{card}」，下一次回复开始生效。",
   "preset.share.delete.body": "删除后你就看不到这份预设，也无法恢复。",
   "preset.share.delete.inUse": "你有 {n} 张卡正在使用它，删除后这些卡会恢复成你原本的选择。",
-  "preset.share.delete.public": "这份预设已公开：其他用户用过或加入喜爱的，仍可继续使用。"
+  "preset.share.delete.public": "这份预设已公开：其他用户用过或加入喜爱的，仍可继续使用。",
+  "preset.purpose.label": "用途",
+  "preset.purpose.general": "通用",
+  "preset.purpose.general.hint": "各模型都能用",
+  "preset.purpose.specific": "特定模型",
+  "preset.purpose.specific.hint": "只推荐用在选定的模型",
+  "preset.purpose.models.general": "测试过的模型（选填）",
+  "preset.purpose.models.specific": "适用模型",
+  "preset.purpose.required": "选择用途",
+  "preset.purpose.models.required": "至少选一个模型",
+  "preset.purpose.tested": "已测试",
+  "preset.purpose.recommendation": "作者推荐用于：{models}"
 }

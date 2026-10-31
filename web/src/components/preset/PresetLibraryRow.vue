@@ -7,9 +7,9 @@ import { computed } from "vue";
 import { whole, monthDayOf } from "@/lib/format";
 import { modelValueLabel, type PresetLibraryItem } from "@/lib/presets";
 import { useLocalePath } from "@/lib/use-locale";
-import { authorLabel, isNew } from "./preset-share";
+import { authorLabel, isNew, presetPurpose, presetModelMatches } from "./preset-share";
 
-const props = defineProps<{ item: PresetLibraryItem; busy?: boolean; showUsedOn?: boolean }>();
+const props = defineProps<{ item: PresetLibraryItem; busy?: boolean; showUsedOn?: boolean; model?: string; groups?: import("@/lib/presets").ModelCatalogGroup[] }>();
 const emit = defineEmits<{ favorite: [item: PresetLibraryItem] }>();
 const { lp } = useLocalePath();
 
@@ -21,7 +21,7 @@ const fresh = computed(() => isNew(props.item));
 
 <template>
   <li class="panel share-row" data-testid="share-row">
-    <RouterLink :to="lp(`/presets/${item.presetId}`)" class="share-row__main">
+    <RouterLink :to="{ path: lp(`/presets/${item.presetId}`), query: model && model !== 'all' && model !== 'general' ? { model } : {} }" class="share-row__main">
       <strong class="share-row__name">{{ item.title }}</strong>
       <span class="share-row__author">{{ authorLabel(item) }}</span>
       <span class="share-row__facts">
@@ -30,11 +30,10 @@ const fresh = computed(() => isNew(props.item));
           <span class="share-row__note">{{ $t("preset.share.unlisted.short") }}</span>
         </template>
         <span v-if="item.mine" class="chip share-row__chip">{{ $t("preset.share.tabs.mine") }}</span>
-        <template v-if="item.recommendedModels.length">
-          <span v-for="m in models" :key="m" class="chip share-row__chip">{{ $t("preset.share.tested", { model: m }) }}</span>
-          <span v-if="moreModels" class="chip share-row__chip">+{{ whole(moreModels) }}</span>
-        </template>
-        <span v-else class="share-row__note">{{ $t("preset.share.untested") }}</span>
+        <span class="chip share-row__chip" data-testid="share-purpose">{{ $t(`preset.purpose.${presetPurpose(item)}`) }}</span>
+        <span v-if="presetPurpose(item) === 'general' && presetModelMatches(item.recommendedModels, model || '', groups || [])" class="chip share-row__chip" data-testid="share-tested">{{ $t('preset.purpose.tested') }}</span>
+        <span v-for="m in models" :key="m" class="chip share-row__chip">{{ m }}</span>
+        <span v-if="moreModels" class="chip share-row__chip">+{{ whole(moreModels) }}</span>
         <span v-if="fresh" class="chip share-row__chip share-row__chip--new">{{ $t("preset.share.new") }}</span>
         <span v-else-if="item.listed" class="share-row__note">{{ $t("preset.share.users7d", { n: whole(item.usesLast7d) }, item.usesLast7d) }}</span>
         <span v-if="showUsedOn && item.lastAppliedAt" class="share-row__note">{{ $t("preset.share.used.on", { date: monthDayOf(item.lastAppliedAt) }) }}</span>

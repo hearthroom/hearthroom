@@ -20,7 +20,7 @@ import { entryRows, type ParamKey } from "@/lib/st-preset";
 import { usePresetAccess } from "@/lib/use-preset-access";
 import { useLocalePath } from "@/lib/use-locale";
 import { paramLabelKey } from "@/components/preset/preset-params";
-import { authorLabel } from "@/components/preset/preset-share";
+import { authorLabel, presetPurpose, presetModelMatches, useModelCatalog } from "@/components/preset/preset-share";
 import PresetReauth from "@/components/preset/PresetReauth.vue";
 import PresetReportDialog from "@/components/preset/PresetReportDialog.vue";
 import PresetCardPickSheet from "@/components/preset/PresetCardPickSheet.vue";
@@ -31,6 +31,8 @@ const router = useRouter();
 const { lp } = useLocalePath();
 const { token, needsConsent, consentNeeded, reauthorize } = usePresetAccess();
 
+const catalog = useModelCatalog(token);
+const viewingModel = computed(() => typeof route.query.model === "string" ? route.query.model : "");
 const presetId = computed(() => String(route.params.presetId ?? ""));
 const data = ref<PresetLibraryDetail | null>(null);
 const loading = ref(true);
@@ -203,10 +205,14 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             <dd>{{ $t("preset.share.detail.users7d.value", { n: whole(item.usesLast7d) }, item.usesLast7d) }}</dd>
           </div>
           <div>
-            <dt>{{ $t("preset.share.detail.tested.label") }}</dt>
+            <dt>{{ $t("preset.purpose.label") }}</dt>
+            <dd>{{ $t(`preset.purpose.${presetPurpose(item)}`) }}</dd>
+          </div>
+          <div>
+            <dt>{{ $t(presetPurpose(item) === 'specific' ? 'preset.purpose.models.specific' : 'preset.purpose.models.general') }}</dt>
             <dd v-if="item.recommendedModels.length">
               <span class="shared__models"><span v-for="m in item.recommendedModels" :key="m" class="chip shared__chip">{{ modelValueLabel(m) }}</span></span>
-              <span class="subtle">{{ $t("preset.share.detail.tested.note") }}</span>
+              <span v-if="presetPurpose(item) === 'specific' && (!viewingModel || !presetModelMatches(item.recommendedModels, viewingModel, catalog))" class="subtle" data-testid="shared-recommendation">{{ $t('preset.purpose.recommendation', { models: item.recommendedModels.map(modelValueLabel).join('、') }) }}</span>
             </dd>
             <dd v-else>{{ $t("preset.share.untested") }}</dd>
           </div>

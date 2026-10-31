@@ -4143,5 +4143,16 @@
   "preset.share.cardPick.applied": "「{name}」を「{card}」に適用しました。次の返信から反映されます。",
   "preset.share.delete.body": "削除するとこのプリセットは表示されなくなり、元に戻せません。",
   "preset.share.delete.inUse": "使用中のあなたのカードが {n} 枚あります。削除すると、元の選択に戻ります。",
-  "preset.share.delete.public": "このプリセットは公開中です。使用したことがある人やお気に入りに入れた人は、削除後も使い続けられます。"
+  "preset.share.delete.public": "このプリセットは公開中です。使用したことがある人やお気に入りに入れた人は、削除後も使い続けられます。",
+  "preset.purpose.label": "用途",
+  "preset.purpose.general": "汎用",
+  "preset.purpose.general.hint": "どのモデルでも使える",
+  "preset.purpose.specific": "特定モデル向け",
+  "preset.purpose.specific.hint": "選んだモデルにだけおすすめ",
+  "preset.purpose.models.general": "テスト済みモデル（任意）",
+  "preset.purpose.models.specific": "おすすめモデル",
+  "preset.purpose.required": "用途を選択",
+  "preset.purpose.models.required": "モデルを1つ以上選択",
+  "preset.purpose.tested": "テスト済み",
+  "preset.purpose.recommendation": "作者のおすすめ：{models}"
 }

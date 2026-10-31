@@ -231,6 +231,7 @@ async function send(action: string, call: (key: string) => Promise<WriteReceipt>
 
 async function save() {
   if (!doc.value || !canSave.value) return;
+  if (detail.value?.purpose === "specific" && !models.value.length) { saveError.value = t("preset.purpose.models.required"); return; }
   saving.value = true;
   saveError.value = "";
   status.value = "";
@@ -523,9 +524,9 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
       <div v-show="tab === 'settings'" id="editor-panel-settings" class="preset-editor__settings" role="tabpanel">
       <section class="panel preset-editor__section">
         <div class="field">
-          <label for="preset-models">{{ $t("preset.editor.models") }}</label>
+          <label for="preset-models">{{ $t(detail?.purpose === "specific" ? "preset.purpose.models.specific" : "preset.purpose.models.general") }}</label>
           <PresetModelPicker v-model="models" :groups="modelCatalog" input-id="preset-models" />
-          <p class="subtle">{{ $t("preset.editor.models.hint") }}</p>
+          <p v-if="detail?.purpose !== 'specific'" class="subtle">{{ $t("preset.editor.models.hint") }}</p>
         </div>
       </section>
       <section class="panel preset-editor__section">

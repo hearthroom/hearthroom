@@ -13,7 +13,10 @@ import { entryRows, isPromptPack, profilesOf, type PresetDocument, type PresetSe
 /** relocated：上游自動把位置調到最近的穩定位置，照常使用、不擋存檔；needs_adjustment 只剩舊版本會出現 */
 export type UiStatus = "needs_adjustment" | "relocated" | "unsupported";
 
+export type PresetPurpose = "general" | "specific";
+
 export interface PresetSummary {
+  purpose?: PresetPurpose | "";
   id: string;
   title: string;
   /** 防兩處同時編輯的計數：存檔時當 expectedVersion 送回，不顯示（預設不留版本，owner 2026-10-30） */
@@ -271,13 +274,14 @@ export async function fetchModelCatalog(token: string): Promise<ModelCatalogGrou
 
 /** 公開列表與「喜愛與用過」共用的一列。作者用公開身分（authorNumId），不回帳號 UUID。 */
 export interface PresetLibraryItem {
+  purpose?: PresetPurpose;
   presetId: string;
   title: string;
   authorName: string;
   authorNumId: number;
   authorAvatar: string;
   attribution: string;
-  /** 作者測試過的模型代碼；空＝通用 */
+  /** 通用用途的測試紀錄，或特定模型用途的推薦清單。 */
   recommendedModels: string[];
   enabledEntryCount: number;
   /** 近 7 天作者以外實際玩過的不同玩家數 */
@@ -310,9 +314,9 @@ export type PresetReportReason = (typeof REPORT_REASONS)[number];
 /** 公開列表一頁幾筆；回來的筆數等於它，就還有下一頁 */
 export const LIBRARY_PAGE = 20;
 
-export interface PublishInput { expectedVersion: number; declaration: string; attribution: string; recommendedModels?: string[] }
+export interface PublishInput { purpose: PresetPurpose; expectedVersion: number; declaration: string; attribution: string; recommendedModels?: string[] }
 
-/** 公開：不改內容。recommendedModels 不送就沿用原本的；送空陣列＝通用。 */
+/** 公開：不改內容。recommendedModels 不送就沿用原本的；用途必選，特定模型至少一項。 */
 export async function publishPreset(token: string, presetId: string, input: PublishInput, key: string): Promise<WriteReceipt> {
   return json<WriteReceipt>(await send(`/presets/${id(presetId)}/publish`, token, input, key));
 }

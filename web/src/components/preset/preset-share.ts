@@ -28,3 +28,14 @@ export function isNew(item: Pick<PresetLibraryItem, "usesLast7d" | "publishedAt"
 
 /** 作者沒設暱稱時用公開編號，不留白。 */
 export const authorLabel = (item: Pick<PresetLibraryItem, "authorName" | "authorNumId">) => item.authorName.trim() || `#${item.authorNumId}`;
+
+export function presetPurpose(item: Pick<PresetLibraryItem, "purpose" | "recommendedModels">): "general" | "specific" {
+  return item.purpose || (item.recommendedModels.length ? "specific" : "general");
+}
+
+export function presetModelMatches(models: string[], selected: string, groups: ModelCatalogGroup[]): boolean {
+  if (!selected || selected === "all" || selected === "general") return false;
+  const family = (value: string) => value.startsWith("model:") ? value.slice(6) : value;
+  const series = (value: string) => value.startsWith("series:") ? value.slice(7) : groups.find(g => g.families.includes(family(value)))?.group;
+  return models.some(m => m === selected || ((m.startsWith("series:") || selected.startsWith("series:")) && !!series(m) && series(m) === series(selected)));
+}

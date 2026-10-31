@@ -198,11 +198,11 @@ describe("預設庫首頁：全部預設", () => {
     const rows = $$("[data-testid=share-row]");
     expect(rows).toHaveLength(3);
     expect(rows[0]!.textContent).toContain("Aster");
-    expect(rows[0]!.textContent).toContain(t("preset.share.tested", { model: "DeepSeek V4" }));
+    expect(rows[0]!.textContent).toContain("DeepSeek V4");
     expect(rows[0]!.textContent).not.toContain("model:");
     expect(rows[0]!.textContent).toContain(t("preset.share.users7d", { n: "215" }, 215));
     expect(rows[1]!.textContent).toContain(t("preset.share.new"));
-    expect(rows[1]!.textContent).toContain(t("preset.share.untested"));
+    expect(rows[1]!.textContent).toContain(t("preset.purpose.general"));
     expect(rows[1]!.textContent).not.toContain(t("preset.share.users7d", { n: "0" }, 0));
     expect(rows[2]!.textContent).toContain(t("preset.share.users7d", { n: "0" }, 0));
     expect(rows[2]!.textContent).not.toContain(t("preset.share.new"));
@@ -372,15 +372,16 @@ describe("我的：公開與改回私人", () => {
     const source = sheet.querySelector<HTMLInputElement>("[data-testid=publish-source]")!;
     source.value = "  原作者 A  ";
     source.dispatchEvent(new Event("input"));
+    body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     sheet.querySelector<HTMLButtonElement>("[data-testid=publish-confirm]")!.click();
     await flush();
     // 模型沒動就不送，免得無謂地加一個版本
-    expect(mocks.publish).toHaveBeenCalledWith("tok", "p1", { expectedVersion: 2, declaration: "preset-publish-2026-10-30", attribution: "原作者 A" }, expect.any(String));
+    expect(mocks.publish).toHaveBeenCalledWith("tok", "p1", { purpose: "general", expectedVersion: 2, declaration: "preset-publish-2026-10-30", attribution: "原作者 A" }, expect.any(String));
     expect(body$("[data-testid=publish-sheet]")).toBeNull();
     expect($("[data-testid=preset-toast]").textContent).toBe(t("preset.share.published.toast", { name: "細膩第三人稱" }));
   });
 
-  it("改了測試過的模型才送；留空就是通用", async () => {
+  it("改了模型才送；明選通用可留空", async () => {
     mocks.list.mockResolvedValue(mineList([summary()]));
     mocks.publish.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
     await mount("/me/presets");
@@ -389,6 +390,7 @@ describe("我的：公開與改回私人", () => {
     await flush();
     body$<HTMLButtonElement>("[data-testid=model-chip] button").click();
     await flush();
+    body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ recommendedModels: [] });
@@ -407,6 +409,7 @@ describe("我的：公開與改回私人", () => {
     options().find((o) => o.textContent?.includes("Gemini") && o.textContent.includes(t("preset.models.seriesAll")))!.click(); await flush();
     options().find((o) => o.textContent?.trim() === "DeepSeek V4")!.click(); await flush();
     expect([...document.body.querySelectorAll("[data-testid=model-chip]")].map((c) => c.textContent?.trim())).toEqual([t("preset.models.series", { name: "Gemini" }), "DeepSeek V4"]);
+    body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
     expect(mocks.publish.mock.calls[0]![2]).toMatchObject({ recommendedModels: ["series:Gemini", "model:DeepSeek V4"] });
@@ -419,6 +422,7 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
+    body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
     expect(body$("[data-testid=publish-error]").textContent).toBe(t("preset.share.error.conflict"));
@@ -432,6 +436,7 @@ describe("我的：公開與改回私人", () => {
     await openMenu();
     $("[data-testid=preset-publish]").click();
     await flush();
+    body$<HTMLInputElement>("[data-testid=publish-purpose-general]").click(); await flush();
     body$<HTMLButtonElement>("[data-testid=publish-confirm]").click();
     await flush();
     expect(body$("[data-testid=publish-error]").textContent).toBe(t("preset.share.error.declarationChanged"));
@@ -690,4 +695,29 @@ describe("分享的上游請求", () => {
       vi.unstubAllGlobals();
     }
   });
+});
+
+
+describe("用途與模型清單", () => {
+ it("公開時必選用途，切換用途保留清單，特定模型不可留空", async () => {
+  mocks.list.mockResolvedValue(mineList([summary()]));
+  mocks.publish.mockResolvedValue({presetId:"p1", revisionId:"r3", version:3});
+  await mount("/me/presets"); $("[data-testid=preset-more]").click(); await flush(); $("[data-testid=preset-publish]").click(); await flush();
+  expect(document.querySelector('[name=publish-purpose]:checked')).toBeNull();
+  body$<HTMLButtonElement>('[data-testid=publish-confirm]').click(); await flush();
+  expect(mocks.publish).not.toHaveBeenCalled();
+  expect(body$('[data-testid=publish-error]').textContent).toBe(t('preset.purpose.required'));
+  body$<HTMLInputElement>('[data-testid=publish-purpose-specific]').click(); await flush();
+  expect(body$('[for=publish-models]').textContent).toBe(t('preset.purpose.models.specific'));
+  body$<HTMLInputElement>('[data-testid=publish-purpose-general]').click(); await flush();
+  expect(body$('[data-testid=model-chip]').textContent).toContain('Gemini 4');
+  body$<HTMLButtonElement>('[data-testid=model-chip] button').click(); await flush();
+  body$<HTMLInputElement>('[data-testid=publish-purpose-specific]').click(); await flush();
+  body$<HTMLButtonElement>('[data-testid=publish-confirm]').click(); await flush();
+  expect(mocks.publish).not.toHaveBeenCalled();
+  expect(body$('[data-testid=publish-error]').textContent).toBe(t('preset.purpose.models.required'));
+  body$<HTMLInputElement>('[data-testid=publish-purpose-general]').click(); await flush();
+  body$<HTMLButtonElement>('[data-testid=publish-confirm]').click(); await flush();
+  expect(mocks.publish.mock.calls[0]![2]).toMatchObject({purpose:'general',recommendedModels:[]});
+ });
 });
