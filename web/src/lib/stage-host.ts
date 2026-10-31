@@ -231,6 +231,11 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
             if (isPlayHost()) window.location.assign(`https://${communityHostForHistory()}${deps.lp('/me/presets')}`);
             else void deps.router.push(deps.lp('/me/presets'));
           },
+          // 選擇器「在網站查看內容」：開新分頁看預設詳情，玩家留在對話裡
+          toPreset: (presetId: string) => {
+            const path = deps.lp(`/presets/${encodeURIComponent(presetId)}`);
+            window.open(isPlayHost() ? `https://${communityHostForHistory()}${path}` : path, "_blank", "noopener");
+          },
         } : {}),
         // 長期指令面板裡「管理指令組」：站台有「長期指令」頁才給
         ...(can('instructions') ? {
