@@ -94,7 +94,9 @@ watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediat
 // 主站的對話頁不換：卡片只該有一個 App 身分，就是卡片 App 網域上那個。
 const playApp = isPlayHost();
 const cardNumber = shallowRef<string>("");
-const cardPageUrl = computed(() => `https://${communityHost()}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}${cardNumber.value ? `cards/${cardNumber.value}` : ""}`);
+// 讀卡失敗時還沒有解析結果；卡片頁也接受網址上的卡號／舊 roleId。
+const cardPagePath = computed(() => `/cards/${encodeURIComponent(cardNumber.value || routeId.value)}`);
+const cardPageUrl = computed(() => `https://${communityHost()}${locale.value === "zh-Hant" ? "" : `/${locale.value}`}${cardPagePath.value}`);
 const reviewPath = computed(() => `/review/${encodeURIComponent(String(route.query.review ?? ""))}`);
 if (playApp) {
   onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
@@ -267,7 +269,7 @@ watch(locale, () => { void remergeStageMessages(); });
       <a v-if="backToReview && playApp" class="btn" :href="`https://${communityHost()}${lp(reviewPath)}`">{{ $t("play.backToReview") }}</a>
       <RouterLink v-else-if="backToReview" class="btn" :to="lp(reviewPath)">{{ $t("play.backToReview") }}</RouterLink>
       <a v-else-if="playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
-      <RouterLink v-else class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
+      <RouterLink v-else class="btn" :to="lp(cardPagePath)">{{ $t("play.backToCard") }}</RouterLink>
     </div>
     <Transition name="play-cover">
       <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
