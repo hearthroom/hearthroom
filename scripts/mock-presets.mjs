@@ -25,6 +25,8 @@
  * 「套用到某張卡」（mode=preset）會把那份記進「喜愛與用過」的用過。
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
+import pathMod from "node:path";
 
 const MARKERS = new Set(["charDescription", "charPersonality", "scenario", "personaDescription", "dialogueExamples", "worldInfoBefore", "worldInfoAfter", "chatHistory"]);
 const KNOWN_FIELDS = new Set(["prompts", "prompt_order", "temperature", "top_p", "top_k", "top_a", "min_p", "frequency_penalty", "presence_penalty", "repetition_penalty", "seed", "openai_max_tokens", "reasoning_effort", "verbosity", "version", "type", "data"]);
@@ -189,7 +191,20 @@ function libraryItem(x, extra = {}) {
   return { ...rest, enabledEntryCount: orderOf(x.document).filter((o) => o.enabled !== false && o.identifier !== "chatHistory").length, heat: heatOf(x), fresh: false,
     favorited: !!mark?.favoritedAt, lastAppliedAt: mark?.lastAppliedAt ?? null, ...extra };
 }
+function modelFilterValue(value) {
+  if (!value || value === "all" || value === "general" || value.startsWith("model:") || value.startsWith("series:")) return value;
+  // Use the same local fixture as /models; old lane URLs must exercise the
+  // same model evidence as the model picker without contacting an upstream.
+  try {
+    const file = pathMod.join(process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname, "models.json");
+    for (const group of JSON.parse(fs.readFileSync(file, "utf8"))) for (const family of group.families ?? []) {
+      if ((family.variants ?? []).some(lane => lane.value === value)) return `model:${family.family}`;
+    }
+  } catch { /* A missing fixture has no lane aliases. */ }
+  return value;
+}
 function modelHit(x, model) {
+  model = modelFilterValue(model);
   if (!model || model === "all") return true;
   if (model === "general") return x.purpose === "general";
   if (x.recommendedModels.includes(model)) return true;
@@ -294,6 +309,12 @@ export async function handlePresets({ m, path, url, body, raw, req, json, res })
     const revs = [...revisions.values()].filter((r) => r.presetId === p.id).sort((a, b) => b.version - a.version)
       .map((r) => ({ revisionId: r.revisionId, version: r.version, title: r.title, createdAt: r.createdAt, enabledEntryCount: orderOf(r.document).filter((o) => o.enabled !== false).length }));
     return json(res, 200, { ...summary(p), revisions: revs }), true;
+  }
+  if (m === "GET" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)\/content$/))) {
+    const p = presets.get(mm[1]);
+    const revision = p && revisions.get(p.headRevisionId);
+    if (!revision) return json(res, 404, { error: "not_found" }), true;
+    return json(res, 200, { revision, compatibility: analyze(revision.document) }), true;
   }
   if (m === "GET" && (mm = path.match(/^\/open\/v1\/presets\/([^/]+)\/revisions\/([^/]+)(\/export)?$/))) {
     const r = revisions.get(mm[2]); if (!r || r.presetId !== mm[1]) return json(res, 404, { error: "not_found" }), true;

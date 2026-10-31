@@ -223,9 +223,11 @@ defineExpose({ focus: () => input.value?.focus() });
 .model-pick__remove::after { content: ""; position: absolute; inset: -10px; }
 .model-pick__remove:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 .model-pick__remove svg { width: 14px; height: 14px; }
-.model-pick__box { position: relative; min-width: 0; }
-.model-pick__box--clearable .input { padding-inline-end: 40px; }
-.model-pick__clear { position: absolute; inset-inline-end: 8px; top: 50%; transform: translateY(-50%); color: var(--text-2); }
+.model-pick__box { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.model-pick__box .input { flex: 1; min-width: 0; }
+/* 輸入與清除各有自己的點擊區，44px 擴展也留在兩者的間距內。 */
+.model-pick__clear { width: var(--h-md); height: var(--h-md); color: var(--text-2); }
+.model-pick__clear::after { inset: -4px; }
 /* 比彈層（modal-backdrop 105）高，才不會被它蓋住 */
 .model-pick__pop { position: fixed; z-index: 120; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-1) 0; }
 .model-pick__list { margin: 0; padding: 0; list-style: none; }
