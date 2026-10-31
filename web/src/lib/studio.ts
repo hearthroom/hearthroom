@@ -86,3 +86,27 @@ export function cleanName(name: string) {
   return name.replace(UNSAFE, " ").replace(/\s+/g, " ").trim().slice(0, 120);
 }
 export const extensionOf = (url: string) => /\.(png|jpe?g|webp)(?:$|\?)/i.exec(url)?.[1]?.toLowerCase() ?? "png";
+
+/**
+ * 每個尺寸適合角色卡的哪種圖：卡片的四種圖（直式背景 9:16、橫式背景 16:9、分享圖 1200×630、頭像 1:1）
+ * 各找模型裡比例最接近的那個尺寸（同一個尺寸可以掛好幾種）；沒被挑中的直圖、橫圖標成插圖。填進欄位時照欄位比例裁切。
+ */
+export type ImageUse = "tallBg" | "wideBg" | "share" | "avatar" | "tallArt" | "wideArt";
+const CARD_USES: [ImageUse, number][] = [["tallBg", 9 / 16], ["wideBg", 16 / 9], ["share", 1200 / 630], ["avatar", 1]];
+export function usesFor(sizes: string[]): Record<string, ImageUse[]> {
+  const out: Record<string, ImageUse[]> = Object.fromEntries(sizes.map((s) => [s, [] as ImageUse[]]));
+  if (!sizes.length) return out;
+  for (const [use, target] of CARD_USES) {
+    const off = (s: string) => Math.abs(Math.log(ratioOf(s) / target));
+    const best = sizes.reduce((a, b) => (off(b) < off(a) ? b : a));
+    out[best]!.push(use);
+  }
+  for (const s of sizes) if (!out[s]!.length) out[s]!.push(ratioOf(s) < 1 ? "tallArt" : ratioOf(s) > 1 ? "wideArt" : "avatar");
+  return out;
+}
+
+/** 一次要的張數超過模型上限時拆成幾次送：4 張、上限 2 → [2, 2]；3 張 → [2, 1]。 */
+export function splitCount(n: number, max: number) {
+  const per = Math.max(1, max);
+  return Array.from({ length: Math.ceil(n / per) }, (_, i) => Math.min(per, n - i * per));
+}

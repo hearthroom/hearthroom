@@ -4265,5 +4265,13 @@
   "studio.agent.running": "Generating…",
   "studio.agent.error.unreadable": "The plan came back unusable and the chat was still charged, so try rewording the idea.",
   "studio.agent.error.credits": "You don’t have enough credits to write this plan.",
-  "studio.agent.error.failed": "The plan didn’t come through, so please try again."
+  "studio.agent.error.failed": "The plan didn’t come through, so please try again.",
+  "studio.params.uses.tallBg": "Portrait background",
+  "studio.params.uses.wideBg": "Landscape background",
+  "studio.params.uses.share": "Share image",
+  "studio.params.uses.avatar": "Avatar",
+  "studio.params.uses.tallArt": "Tall illustration",
+  "studio.params.uses.wideArt": "Wide illustration",
+  "studio.params.useNote": "Each ratio names the card image it suits best, and the card crops it to that field's ratio.",
+  "studio.params.split": "This model makes up to {max} at a time, so {n} images are generated in {times} runs and charged per image."
 }

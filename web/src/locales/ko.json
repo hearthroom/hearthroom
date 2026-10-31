@@ -4265,5 +4265,13 @@
   "studio.agent.running": "생성 중…",
   "studio.agent.error.unreadable": "쓸 수 있는 계획이 나오지 않았고 대화 요금은 들었으니, 말을 바꿔 다시 시도해 주세요.",
   "studio.agent.error.credits": "이 계획을 짜기에 포인트가 부족해요.",
-  "studio.agent.error.failed": "계획을 만들지 못했으니 다시 시도해 주세요."
+  "studio.agent.error.failed": "계획을 만들지 못했으니 다시 시도해 주세요.",
+  "studio.params.uses.tallBg": "세로 배경",
+  "studio.params.uses.wideBg": "가로 배경",
+  "studio.params.uses.share": "공유 이미지",
+  "studio.params.uses.avatar": "프로필 이미지",
+  "studio.params.uses.tallArt": "세로 일러스트",
+  "studio.params.uses.wideArt": "가로 일러스트",
+  "studio.params.useNote": "비율 아래에는 가장 잘 맞는 카드 이미지를 적어 두었고, 카드에 넣으면 그 칸의 비율대로 잘려요.",
+  "studio.params.split": "이 모델은 한 번에 최대 {max}장이라 {n}장은 {times}번에 나눠 생성하고, 포인트는 장수대로 들어요."
 }

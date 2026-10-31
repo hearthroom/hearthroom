@@ -6,7 +6,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { GenerationModel } from "@/lib/media-generation";
-import { SKILLS, fitSize, ratioBox, ratioLabel, type Recipe, type Skill } from "@/lib/studio";
+import { SKILLS, fitSize, ratioBox, ratioLabel, splitCount, usesFor, type Recipe, type Skill } from "@/lib/studio";
 
 const props = defineProps<{
   models: GenerationModel[];
@@ -26,6 +26,8 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const PROMPT_MAX = 3600;
+/** 一次最多要幾張；超過模型上限的由頁面拆成幾次送。 */
+const MAX_COUNT = 4;
 const mode = ref<"generate" | "agent">("generate");
 const text = ref("");
 const skill = ref<Skill | null>(null);
@@ -38,10 +40,12 @@ const count = ref(1);
 watch(model, (m, old) => {
   if (!m) return;
   if (!m.sizes.includes(size.value)) size.value = fitSize(m.sizes, skill.value?.shape ?? "square");
-  count.value = Math.min(count.value, m.maxImages);
   if (references.value.length > m.maxReferences && old) references.value = references.value.slice(0, m.maxReferences);
 }, { immediate: true });
 const cost = computed(() => (model.value ? model.value.credits * count.value : 0));
+const uses = computed(() => usesFor(model.value?.sizes ?? []));
+/** 超過模型一次的上限時要分幾次送（點數照張數算，不因拆開多收）。 */
+const rounds = computed(() => (model.value ? splitCount(count.value, model.value.maxImages).length : 1));
 const canSubmit = computed(() =>
   mode.value === "agent"
     ? !!model.value && !!text.value.trim() && !props.planning
@@ -98,7 +102,7 @@ function useSkill(s: Skill) {
   skillFromButton = false;
   if (model.value) {
     size.value = fitSize(model.value.sizes, s.shape);
-    count.value = s.count === "max" ? model.value.maxImages : 1;
+    count.value = s.count === "max" ? MAX_COUNT : 1;
   }
   void nextTick(() => field.value?.focus());
 }
@@ -152,7 +156,7 @@ function fill(recipe: Recipe, task: { model?: string; size?: string; n?: number 
   if (task.model && props.models.some((m) => m.id === task.model)) modelId.value = task.model;
   void nextTick(() => {
     if (task.size && model.value?.sizes.includes(task.size)) size.value = task.size;
-    if (task.n && model.value) count.value = Math.min(task.n, model.value.maxImages);
+    if (task.n) count.value = Math.min(task.n, MAX_COUNT);
     field.value?.focus();
   });
 }
@@ -255,13 +259,16 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
               <button v-for="s in model.sizes" :key="s" type="button" role="radio" class="ratio" :aria-checked="s === size" @click="size = s">
                 <span class="ratio__box" :style="{ width: ratioBox(s).w + 'px', height: ratioBox(s).h + 'px' }" aria-hidden="true" />
                 <span>{{ ratioLabel(s) }}</span>
+                <span v-for="u in uses[s]" :key="u" class="ratio__use">{{ $t(`studio.params.uses.${u}`) }}</span>
                 <span class="ratio__px">{{ s.replace("x", "×") }}</span>
               </button>
             </div>
+            <p class="pop__note subtle">{{ $t("studio.params.useNote") }}</p>
             <p class="pop__title">{{ $t("studio.params.count") }}</p>
             <div class="seg-row" role="radiogroup" :aria-label="$t('studio.params.count')">
-              <button v-for="n in model.maxImages" :key="n" type="button" role="radio" class="seg-btn" :aria-checked="n === count" @click="count = n">{{ n }}</button>
+              <button v-for="n in MAX_COUNT" :key="n" type="button" role="radio" class="seg-btn" :aria-checked="n === count" @click="count = n">{{ n }}</button>
             </div>
+            <p v-if="rounds > 1" class="pop__note subtle">{{ $t("studio.params.split", { max: model.maxImages, n: count, times: rounds }) }}</p>
           </div>
         </div>
       </div>
@@ -322,7 +329,7 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 }
 .pop--add { top: 0; left: calc(100% + 8px); }
 .pop--wide { width: min(360px, calc(100vw - 32px)); max-height: 360px; overflow-y: auto; }
-.pop--params { width: min(380px, calc(100vw - 32px)); gap: var(--s-2); padding: var(--s-3); }
+.pop--params { width: min(440px, calc(100vw - 32px)); gap: var(--s-2); padding: var(--s-3); }
 .pop__item, .pop__row {
   display: grid; gap: 2px; text-align: left; padding: var(--s-2) var(--s-3); border: 0; border-radius: var(--r-sm);
   background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
@@ -332,8 +339,9 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 .pop__item:hover, .pop__row:hover, .pop__row:focus-visible, .pop__item:focus-visible { background: var(--surface-2); outline: none; }
 .pop__row[aria-selected="true"] { background: var(--accent-soft); }
 .pop__note { margin: var(--s-1) var(--s-3); }
+.pop--params .pop__note { margin: 0; font-size: 12px; }
 .pop__title { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
-.ratios { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: var(--s-2); }
+.ratios { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: var(--s-2); }
 .ratio {
   display: grid; justify-items: center; gap: 4px; padding: var(--s-2) var(--s-1); border-radius: var(--r-sm);
   border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-size: 13px; cursor: pointer;
@@ -341,6 +349,8 @@ defineExpose({ fill, addReference, clear, focus: () => field.value?.focus() });
 .ratio[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 .ratio__box { display: block; border: 1.5px solid currentColor; border-radius: 3px; margin: 3px 0; }
 .ratio__px { font-size: 11px; color: var(--text-3); }
+.ratio__use { font-size: 11.5px; line-height: 1.35; text-align: center; color: var(--text-2); }
+.ratio[aria-checked="true"] .ratio__use { color: inherit; }
 .seg-row { display: flex; gap: var(--s-2); }
 .seg-btn {
   flex: 1; height: var(--h-sm); border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2);

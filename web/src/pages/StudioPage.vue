@@ -17,7 +17,7 @@ import { ApiError, fetchLibraryFolders, uploadImage, type LibraryFolder } from "
 import { connectAccount } from "@/lib/connections";
 import type { GenerationModel, GenerationTask } from "@/lib/media-generation";
 import { useSession } from "@/lib/session";
-import { defaultName, extensionOf, fitSize, recipeOf, rememberRecipe, type Recipe } from "@/lib/studio";
+import { defaultName, extensionOf, fitSize, recipeOf, rememberRecipe, splitCount, type Recipe } from "@/lib/studio";
 import { track } from "@/lib/track";
 import { useImageGeneration } from "@/lib/use-image-generation";
 
@@ -101,7 +101,16 @@ onMounted(async () => {
   }
 });
 
+/**
+ * 送出一次生成。張數超過模型一次的上限就拆成幾次（各自一筆紀錄、各自一把 key），點數照張數算；
+ * 回第一筆有結果的紀錄（Agent 模式拿它當後面幾組的參考圖）。
+ */
 async function submit(input: Entry["input"] & {}, recipe: Recipe) {
+  const max = imageGen.value?.models.find((m) => m.id === input.model)?.maxImages ?? input.n;
+  const entries = await Promise.all(splitCount(input.n, max).map((n) => submitOne({ ...input, n }, recipe)));
+  return entries.find((e) => e.task.urls.length) ?? entries[0]!;
+}
+async function submitOne(input: Entry["input"] & {}, recipe: Recipe) {
   notice.value = "";
   const entry = reactive<Entry>({
     key: crypto.randomUUID(),
@@ -160,14 +169,14 @@ function modelFor(shot: AgentShot, withReference: boolean): GenerationModel | un
 const estimate = computed(() =>
   (agent.value?.shots ?? []).reduce((sum, shot) => {
     const m = modelFor(shot, shot.reference !== "none");
-    return sum + (m ? m.credits * Math.min(shot.count, m.maxImages) : 0);
+    return sum + (m ? m.credits * shot.count : 0);
   }, 0),
 );
 async function plan(input: { idea: string; references: string[]; model: string }) {
   planning.value = true;
   planError.value = "";
   try {
-    const p = await (await generator()).plan({ idea: input.idea, language: String(locale.value), hasReference: input.references.length > 0, maxImages: modelOf(input.model)?.maxImages ?? 1 });
+    const p = await (await generator()).plan({ idea: input.idea, language: String(locale.value), hasReference: input.references.length > 0, maxImages: 4 });
     agent.value = reactive({ ...p, shots: p.shots.map((s) => ({ ...s })), references: input.references, model: input.model, state: "editing" as const });
     composer.value?.clear();
     track("studio_plan");
@@ -199,7 +208,7 @@ async function runPlan() {
     const images = m.maxReferences > 0 ? refs.slice(0, m.maxReferences) : [];
     shot.status = "running";
     const entry = await submit(
-      { model: m.id, prompt: shot.prompt.trim(), size: fitSize(m.sizes, shot.shape), n: Math.min(shot.count, m.maxImages), images },
+      { model: m.id, prompt: shot.prompt.trim(), size: fitSize(m.sizes, shot.shape), n: shot.count, images },
       { prompt: shot.prompt.trim(), ...(shot.skill ? { skill: shot.skill } : {}), ...(images.length ? { references: images } : {}) },
     );
     shot.status = entry.task.urls.length ? "done" : "failed";
@@ -400,7 +409,7 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
           <header class="run__meta">
             <span>{{ when(entry.task.createdAt) }}</span>
             <span>{{ modelName(entry.task.model) }}</span>
-            <span v-if="entry.task.size">{{ entry.task.size.replace("x", "×") }}</span>
+            <span v-if="/^\d+x\d+$/.test(entry.task.size ?? '')">{{ entry.task.size!.replace("x", "×") }}</span>
             <span v-if="entry.task.status === 'completed' && entry.task.credits">{{ $t("studio.results.credits", { n: entry.task.credits }) }}</span>
             <span v-if="entry.task.status === 'completed' && entry.task.expiresAt" class="run__expiry">{{ $t("studio.results.expires", { n: daysLeft(entry.task.expiresAt) }) }}</span>
           </header>

@@ -4265,5 +4265,13 @@
   "studio.agent.running": "生成中…",
   "studio.agent.error.unreadable": "这次没排出能用的计划，写计划的对话已经扣点，换个说法再试。",
   "studio.agent.error.credits": "点数不够写这份计划。",
-  "studio.agent.error.failed": "这次没排出计划，请再试一次。"
+  "studio.agent.error.failed": "这次没排出计划，请再试一次。",
+  "studio.params.uses.tallBg": "竖版背景图",
+  "studio.params.uses.wideBg": "横版背景",
+  "studio.params.uses.share": "分享图",
+  "studio.params.uses.avatar": "头像",
+  "studio.params.uses.tallArt": "竖版插图",
+  "studio.params.uses.wideArt": "横版插图",
+  "studio.params.useNote": "比例下标的是最适合的卡片图片，填进卡片时会按那一栏的比例裁切。",
+  "studio.params.split": "这个模型一次最多 {max} 张，{n} 张会分 {times} 次生成，点数照张数算。"
 }

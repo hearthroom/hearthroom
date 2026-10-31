@@ -6,7 +6,7 @@ import { i18n, loadLocale } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
 import { ApiError } from "../src/lib/api";
-import { rememberRecipe } from "../src/lib/studio";
+import { rememberRecipe, splitCount, usesFor } from "../src/lib/studio";
 import StudioPage from "../src/pages/StudioPage.vue";
 
 // 生圖頁：生成的圖先進快取區（Harbor 的生成紀錄），挑了、取了名字才存進資源庫或下載；技能、參數、參考圖都在輸入框。
@@ -259,7 +259,7 @@ it("plans a set from one idea, lets the author edit it, and draws the followers 
   await type("a card kit for Mira");
   expect(button(root, "Make a plan")).toBeTruthy();
   await generate();
-  expect(mocks.plan).toHaveBeenCalledWith({ idea: "a card kit for Mira", language: "en", hasReference: false, maxImages: 2 });
+  expect(mocks.plan).toHaveBeenCalledWith({ idea: "a card kit for Mira", language: "en", hasReference: false, maxImages: 4 });
   expect(mocks.create).not.toHaveBeenCalled();
   const plan = root.querySelector(".plan")!;
   expect(plan.textContent).toContain("A card kit for Mira");
@@ -301,4 +301,37 @@ it("says so when the plan comes back unusable, and hides agent mode where the se
   mocks.canPlan.mockResolvedValue(false);
   await mount();
   expect([...root.querySelectorAll(".pill")].some((b) => b.textContent?.trim() === "Generate")).toBe(false);
+});
+
+it("labels each size with the card image it suits best, and splits counts above the model's limit", () => {
+  expect(usesFor(["1024x1024", "1536x1024", "1024x1536"])).toEqual({ "1024x1024": ["avatar"], "1536x1024": ["wideBg", "share"], "1024x1536": ["tallBg"] });
+  expect(usesFor(["1024x1024", "1536x1024", "1024x1536", "1152x2048", "2048x1152", "1200x630"])).toEqual({
+    "1024x1024": ["avatar"], "1536x1024": ["wideArt"], "1024x1536": ["tallArt"], "1152x2048": ["tallBg"], "2048x1152": ["wideBg"], "1200x630": ["share"],
+  });
+  expect(splitCount(4, 2)).toEqual([2, 2]);
+  expect(splitCount(3, 2)).toEqual([2, 1]);
+  expect(splitCount(4, 4)).toEqual([4]);
+});
+
+it("offers 1 to 4 images on any model, names each ratio's card use, and splits a run above the model's limit", async () => {
+  mocks.list.mockResolvedValue([]);
+  mocks.create.mockImplementation(async (input: { n: number }) => done(`t${mocks.create.mock.calls.length}`, input.n));
+  await mount();
+  [...root.querySelectorAll<HTMLButtonElement>(".pill")].find((b) => b.textContent?.includes("1:1"))!.click();
+  await settle();
+  const pop = root.querySelector(".pop--params")!;
+  const ratios = [...pop.querySelectorAll(".ratio")].map((r) => [...r.querySelectorAll(".ratio__use")].map((u) => u.textContent));
+  expect(ratios).toEqual([["Avatar"], ["Portrait background"], ["Landscape background", "Share image"]]);
+  const counts = [...pop.querySelectorAll<HTMLButtonElement>(".seg-btn")];
+  expect(counts.map((b) => b.textContent?.trim())).toEqual(["1", "2", "3", "4"]);
+  counts[3]!.click();
+  await settle();
+  expect(pop.textContent).toContain("up to 2 at a time, so 4 images are generated in 2 runs");
+  await type("a lighthouse keeper");
+  expect(button(root, "Generate · 140 credits")).toBeTruthy();
+  await generate();
+  expect(mocks.create).toHaveBeenCalledTimes(2);
+  expect(mocks.create.mock.calls.map((c) => c[0].n)).toEqual([2, 2]);
+  expect(mocks.create.mock.calls[0]![1]).not.toBe(mocks.create.mock.calls[1]![1]);
+  expect(root.querySelectorAll(".run")).toHaveLength(2);
 });

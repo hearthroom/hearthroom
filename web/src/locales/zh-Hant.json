@@ -4265,5 +4265,13 @@
   "studio.agent.running": "生成中…",
   "studio.agent.error.unreadable": "這次沒排出能用的計畫，寫計畫的對話已經扣點，換個說法再試。",
   "studio.agent.error.credits": "點數不夠寫這份計畫。",
-  "studio.agent.error.failed": "這次沒排出計畫，請再試一次。"
+  "studio.agent.error.failed": "這次沒排出計畫，請再試一次。",
+  "studio.params.uses.tallBg": "直式背景圖",
+  "studio.params.uses.wideBg": "橫式背景",
+  "studio.params.uses.share": "分享圖",
+  "studio.params.uses.avatar": "頭像",
+  "studio.params.uses.tallArt": "直式插圖",
+  "studio.params.uses.wideArt": "橫式插圖",
+  "studio.params.useNote": "比例下標的是最適合的卡片圖片，填進卡片時會照那一欄的比例裁切。",
+  "studio.params.split": "這個模型一次最多 {max} 張，{n} 張會分 {times} 次生成，點數照張數算。"
 }

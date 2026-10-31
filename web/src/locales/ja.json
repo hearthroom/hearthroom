@@ -4265,5 +4265,13 @@
   "studio.agent.running": "生成中…",
   "studio.agent.error.unreadable": "使える構成になりませんでしたが会話の料金はかかったので、言い方を変えてもう一度お試しください。",
   "studio.agent.error.credits": "構成づくりに必要なポイントが足りません。",
-  "studio.agent.error.failed": "構成を作れませんでした。もう一度お試しください。"
+  "studio.agent.error.failed": "構成を作れませんでした。もう一度お試しください。",
+  "studio.params.uses.tallBg": "縦長の背景",
+  "studio.params.uses.wideBg": "横長の背景",
+  "studio.params.uses.share": "共有画像",
+  "studio.params.uses.avatar": "アイコン",
+  "studio.params.uses.tallArt": "縦長のイラスト",
+  "studio.params.uses.wideArt": "横長のイラスト",
+  "studio.params.useNote": "比率の下にはいちばん合うカード画像を示しており、カードに入れるとその欄の比率に合わせて切り抜かれます。",
+  "studio.params.split": "このモデルは一度に最大 {max} 枚なので、{n} 枚は {times} 回に分けて生成し、料金は枚数どおりです。"
 }
