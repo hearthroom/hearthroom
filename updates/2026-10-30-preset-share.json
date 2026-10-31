@@ -1,5 +1,4 @@
 {
-  "draft": true,
   "tier": "feature",
   "audience": "everyone",
   "try": "/presets/library",
@@ -11,10 +10,10 @@
     "ko": "프리셋을 공개하고 다른 사람이 공개한 프리셋도 둘러볼 수 있습니다"
   },
   "body": {
-    "zh-Hant": "在「預設」頁把自己的預設公開，或到「公開」依模型找別人的預設，按 ♥ 加入喜愛，再到回覆偏好的「自訂預設」套用到這張卡。",
-    "zh-Hans": "在「预设」页把自己的预设公开，或到「公开」按模型找别人的预设，点 ♥ 加入喜爱，再到回复偏好的「自定义预设」应用到这张卡。",
-    "en": "Make your presets public from the Presets page, or find other people's by model under Public, tap ♥ to favorite them, then apply one to a card under Custom preset in Response preferences.",
-    "ja": "「プリセット」ページで公開したり、「公開」でモデル別に探して ♥ でお気に入りに追加し、返信の好みの「カスタムプリセット」でカードに適用できます。",
-    "ko": "'프리셋' 페이지에서 내 프리셋을 공개하거나 '공개'에서 모델별로 찾아 ♥로 즐겨찾기에 추가한 뒤, 답변 취향의 '사용자 지정 프리셋'에서 카드에 적용할 수 있습니다."
+    "zh-Hant": "在「預設」頁把自己的預設公開，或到「預設庫」依模型找別人的預設，按 ♥ 加入喜愛，再到回覆偏好的「自訂預設」套用到這張卡。",
+    "zh-Hans": "在「预设」页把自己的预设公开，或到「预设库」按模型找别人的预设，点 ♥ 加入喜爱，再到回复偏好的「自定义预设」应用到这张卡。",
+    "en": "Make your presets public from the Presets page, or find other people's by model in the Library, tap ♥ to favorite them, then apply one to a card under Custom preset in Response preferences.",
+    "ja": "「プリセット」ページで公開したり、「ライブラリ」でモデル別に探して ♥ でお気に入りに追加し、返信の好みの「カスタムプリセット」でカードに適用できます。",
+    "ko": "'프리셋' 페이지에서 내 프리셋을 공개하거나 '라이브러리'에서 모델별로 찾아 ♥로 즐겨찾기에 추가한 뒤, 답변 취향의 '사용자 지정 프리셋'에서 카드에 적용할 수 있습니다."
   }
 }
