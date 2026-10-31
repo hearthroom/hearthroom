@@ -2,7 +2,7 @@
  * 預設分享（P2）共用的小工具：模型目錄（系列／模型兩層）整頁共用一份、判斷「新公開」。
  */
 import { shallowRef } from "vue";
-import { fetchModelCatalog, type ModelCatalogGroup, type PresetLibraryItem } from "@/lib/presets";
+import { fetchModelCatalog, presetModelValue, type ModelCatalogGroup, type PresetLibraryItem } from "@/lib/presets";
 
 const catalog = shallowRef<ModelCatalogGroup[]>([]);
 let pending: Promise<void> | null = null;
@@ -35,7 +35,8 @@ export function presetPurpose(item: Pick<PresetLibraryItem, "purpose" | "recomme
 
 export function presetModelMatches(models: string[], selected: string, groups: ModelCatalogGroup[]): boolean {
   if (!selected || selected === "all" || selected === "general") return false;
+  selected = presetModelValue(selected);
   const family = (value: string) => value.startsWith("model:") ? value.slice(6) : value;
   const series = (value: string) => value.startsWith("series:") ? value.slice(7) : groups.find(g => g.families.includes(family(value)))?.group;
-  return models.some(m => m === selected || ((m.startsWith("series:") || selected.startsWith("series:")) && !!series(m) && series(m) === series(selected)));
+  return models.map(presetModelValue).some(m => m === selected || ((m.startsWith("series:") || selected.startsWith("series:")) && !!series(m) && series(m) === series(selected)));
 }

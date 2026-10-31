@@ -253,18 +253,25 @@ export async function copyPreset(token: string, presetId: string, title: string,
 
 /** 模型目錄的兩層：系列（catalog 的 group）與它底下的模型（family）。線路（variants）不進「測試過的模型」。 */
 export interface ModelCatalogGroup { group: string; families: string[] }
+const presetLaneModels = new Map<string, string>();
+/** Old saved filter URLs still use lane codes; metadata is expressed per model. */
+export const presetModelValue = (value: string): string => presetLaneModels.get(value) ?? value;
 
 /**
  * 「測試過的模型」選單的資料：存 `series:<系列>` 或 `model:<模型>`，名稱照目錄原字。
  * 只是標示，不限制能用在哪個模型；目錄裡已經沒有的舊值照樣留著。
  */
 export async function fetchModelCatalog(token: string): Promise<ModelCatalogGroup[]> {
-  const raw = await json<{ group?: string; families?: { family?: string }[] }[]>(await get("/models", token));
+  const raw = await json<{ group?: string; families?: { family?: string; variants?: { value?: string }[] }[] }[]>(await get("/models", token));
   const out = new Map<string, Set<string>>();
+  presetLaneModels.clear();
   for (const g of raw) {
     if (!g.group) continue;
     const families = out.get(g.group) ?? new Set<string>();
-    for (const f of g.families ?? []) if (f.family) families.add(f.family);
+    for (const f of g.families ?? []) if (f.family) {
+      families.add(f.family);
+      for (const lane of f.variants ?? []) if (lane.value) presetLaneModels.set(lane.value, `model:${f.family}`);
+    }
     out.set(g.group, families);
   }
   return [...out].map(([group, families]) => ({ group, families: [...families] }));
