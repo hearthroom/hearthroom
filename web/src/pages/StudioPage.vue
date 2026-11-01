@@ -592,7 +592,13 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
   display: flex; flex-direction: column; gap: var(--s-4); max-width: 1080px; margin: 0 auto;
   min-height: calc(100dvh - var(--header-h)); padding: var(--s-4) var(--s-4) 0;
 }
-.studio__head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+/* 標題與分頁吸在頁首下；下緣淡出，紀錄從它後面捲過。z-index 低於輸入框，彈層才蓋得過它 */
+.studio__head {
+  position: sticky; top: var(--site-header-h, var(--header-h)); z-index: 4;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap;
+  margin-top: calc(-1 * var(--s-2)); padding: var(--s-2) 0 var(--s-3);
+  background: linear-gradient(to top, transparent, var(--bg) var(--s-3));
+}
 .studio__head h1 { margin: 0 0 var(--s-1); font-size: 20px; }
 .studio__head p { margin: 0; font-size: 13.5px; }
 .tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--surface-2); }
@@ -639,6 +645,12 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 .lightbox__bar { position: absolute; bottom: var(--s-5); left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); width: max-content; max-width: calc(100vw - 32px); }
 @media (max-width: 640px) {
   .studio { padding: var(--s-3) var(--s-4) 0; gap: var(--s-3); }
+  /* 手機上標題加說明要佔一百多 px：只讓分頁吸頂，標題照常捲走 */
+  .studio__head { display: contents; }
+  .tabs {
+    position: sticky; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); z-index: 4; align-self: flex-start;
+    background: color-mix(in srgb, var(--surface-2) 84%, transparent); backdrop-filter: saturate(180%) blur(16px); box-shadow: 0 0 0 1px var(--line);
+  }
   .shot__open, .shot--pending { height: 170px; }
   .shot__bar { max-width: 260px; }
   .lightbox { padding: var(--s-5) var(--s-3) 140px; }
