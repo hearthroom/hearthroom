@@ -1,5 +1,5 @@
 import { auditStmt } from './audit';
-import { DUE, requestReward, retryReward, type Payer, type RewardView } from './card-reward';
+import { DUE, REWARD_ELIGIBLE, requestReward, retryReward, type Payer, type RewardView } from './card-reward';
 import { bumpOp } from './ops-metrics';
 import type { Env } from './types';
 
@@ -24,9 +24,9 @@ export const cardRewardTransport = {
 type Path = 'stamp' | 'recovery' | 'maintenance';
 type Result = { reward: RewardView | null; rewardError?: string };
 const RETRY_BASE = 60_000;
-const priorReward = (db: D1Database, cardId: number) => db.prepare(`SELECT id,status,attempts,updated_at FROM card_rewards
+const priorReward = (db: D1Database, cardId: number) => db.prepare(`SELECT id,status,attempts,updated_at,campaign_id,work_key,member_id,recipient_account_no FROM card_rewards
   WHERE card_id=? AND status<>'cancelled' ORDER BY status='paid' DESC,created_at DESC,id LIMIT 1`)
-  .bind(cardId).first<{ id: string; status: string; attempts: number; updated_at: number }>();
+  .bind(cardId).first<{ id: string; status: string; attempts: number; updated_at: number; campaign_id:string;work_key:string;member_id:string;recipient_account_no:number }>();
 const readReward = async (db: D1Database, id: string) => db.prepare(`SELECT id,card_id AS cardId,amount,status,error,attempts,
   provider_entry_id AS providerEntryId,checked_absent_at AS checkedAbsentAt,created_at AS createdAt,updated_at AS updatedAt,settled_at AS settledAt
   FROM card_rewards WHERE id=?`).bind(id).first<RewardView>();
@@ -52,6 +52,8 @@ export async function serviceRewardOnApproval(env: Env, cardId: number, path: Pa
     const prior = await priorReward(db, cardId);
     if (prior?.status === 'paid') return { reward: await readReward(db, prior.id) };
     if (!prior && !await db.prepare(DUE).bind(now, cardId).first()) return { reward: null };
+    if (prior && !await db.prepare(`SELECT 1 FROM (${REWARD_ELIGIBLE}) WHERE campaign_id=?3 AND work_key=?4 AND member_id=?5 AND author_num_id=?6`)
+      .bind(now,cardId,prior.campaign_id,prior.work_key,prior.member_id,prior.recipient_account_no).first()) return {reward:await readReward(db,prior.id)};
     // Persist the start before any network request: a killed invocation remains
     // distinguishable from an ineligible card or a finished payment attempt.
     if (prior && now - prior.updated_at < Math.min(3_600_000, RETRY_BASE * 2 ** Math.min(prior.attempts - 1, 6))) {
@@ -73,13 +75,15 @@ export async function serviceRewardOnApproval(env: Env, cardId: number, path: Pa
   }
 }
 
-// Include in-flight/failed grants as well as cards that never got a grant row.
+// Include eligible in-flight/failed grants and cards that never got a grant row.
 // Reuse the persisted grant key even after a terminal rejection; never generate
 // a fresh payment key on every scheduled retry.
 export const REWARD_BACKLOG = `SELECT card_id,MIN(since) AS since FROM (
  SELECT card_id,listed_at AS since FROM (${DUE})
- UNION ALL SELECT card_id,created_at AS since FROM card_rewards WHERE status IN ('pending','blocked_insufficient','failed')
- AND NOT EXISTS(SELECT 1 FROM card_rewards paid WHERE paid.work_key=card_rewards.work_key AND paid.status='paid')
+ UNION ALL SELECT r.card_id,r.created_at AS since FROM card_rewards r JOIN (${REWARD_ELIGIBLE}) e
+ ON e.card_id=r.card_id AND e.campaign_id=r.campaign_id AND e.work_key=r.work_key AND e.member_id=r.member_id AND e.author_num_id=r.recipient_account_no
+ WHERE r.status IN ('pending','blocked_insufficient','failed')
+ AND NOT EXISTS(SELECT 1 FROM card_rewards paid WHERE paid.work_key=r.work_key AND paid.status='paid')
 ) GROUP BY card_id`;
 
 export async function cardRewardMaintenance(env: Env, now = Date.now(), limit = 10) {

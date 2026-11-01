@@ -94,12 +94,13 @@ const LIVE = "('pending', 'blocked_insufficient', 'paid')";
  * ?1 現在時間，?2 限定一張卡（NULL＝全部）。
  * 卡的 registered_at 是這張卡列第一次過審的時間，不早於第一次上架，所以先用最早的活動開始時間篩掉舊卡。
  */
-export const DUE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
+export const REWARD_ELIGIBLE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
   FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted FROM (${CARD_BASE}
     AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
     AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
   JOIN card_reward_campaigns k ON k.status = 'active' AND k.starts_at <= x.listed_at AND k.ends_at > x.listed_submitted AND (k.payout_deadline IS NULL OR k.payout_deadline > ?1)
-  WHERE x.member_id IS NOT NULL
+  WHERE x.member_id IS NOT NULL`;
+export const DUE = `${REWARD_ELIGIBLE}
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE})
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.card_id = x.card_id AND r.status IN ${LIVE})`;
 

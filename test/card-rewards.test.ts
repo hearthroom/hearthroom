@@ -487,3 +487,31 @@ it('the dedicated retry cron pays backlog without running unrelated card synchro
   expect((await rewards())[0].status).toBe('paid');
   expect(await env.DB.prepare('SELECT last_synced_at FROM cards').first()).toEqual({last_synced_at:0});
 });
+
+it.each(['blocked','deadline','draft','unapproved'] as const)('does not retry a failed grant after it becomes ineligible: %s', async reason => {
+  let sends=0; upstream.payCampaign=async()=>{sends++;return {kind:'rejected',code:'invalid_request'};};
+  await submit('r1'); const first=await approve('r1','mod-token');
+  expect(first.reward.status).toBe('failed'); sends=0;
+  let now=first.reward.updatedAt+60_000;
+  if(reason==='blocked') await env.DB.prepare('UPDATE cards SET public_blocked=1').run();
+  if(reason==='draft') await env.DB.prepare("UPDATE card_reward_campaigns SET status='draft'").run();
+  if(reason==='unapproved') await env.DB.prepare("UPDATE cards SET status='rejected',approved_version_id=NULL").run();
+  if(reason==='deadline') {
+    await env.DB.prepare('UPDATE card_reward_campaigns SET payout_deadline=ends_at+1').run(); now+=2*DAY;
+  }
+  await serviceRewardOnApproval(env,await cardIdOf('r1'),'maintenance',now);
+  await cardRewardMaintenance(env,now);
+  expect(sends).toBe(0);
+  expect(await env.DB.prepare('SELECT id,status,attempts FROM card_rewards').first()).toEqual({id:first.reward.id,status:'failed',attempts:1});
+  expect(await cardRewardBacklog(env.DB,now)).toEqual({total:0,overdue:0});
+});
+
+it('does not reissue a pending unknown payment after a moderation block', async () => {
+  let sends=0; upstream.payCampaign=async()=>{sends++;return {kind:'unknown'};};
+  await submit('r1');const first=await approve('r1','mod-token');
+  expect(first.reward.status).toBe('pending');sends=0;
+  await env.DB.prepare('UPDATE cards SET public_blocked=1').run();
+  await cardRewardMaintenance(env,first.reward.updatedAt+60_000);
+  expect(sends).toBe(0);
+  expect((await rewards())[0].status).toBe('pending');
+});

@@ -26,7 +26,9 @@ Historical approvals predating these records cannot be reconstructed from counte
 
 The dedicated `*/5 * * * *` schedule processes at most ten outstanding cards. It includes
 eligible approvals without a payment row and existing pending, insufficient-pool or
-failed grants. Each retry uses the original persisted amount, recipient and Provider
+failed grants that still meet the current eligibility rules for their original campaign,
+work and recipient. Blocked, expired or otherwise ineligible records remain untouched
+for diagnosis and are excluded from the payable-backlog gauges. Each retry uses the original persisted amount, recipient and Provider
 idempotency key. Attempts back off from one minute to one hour; the five-minute schedule
 sets the minimum effective polling interval. A failed card does not stop the batch.
 The queue orders least-recently-attempted cards first so persistent failures do not
