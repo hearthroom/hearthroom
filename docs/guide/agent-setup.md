@@ -6,7 +6,7 @@ These exact hosts belong to the same Hearthroom community and its connected serv
 
 - `sukisuki.ai` is the primary community site. `hearthroom.club`, `sukisuki.chat`, and `sukisuki.pro` serve the same community directly, without redirecting to the primary site; each `www` redirects to its own root. Sign-in sessions are separate by origin.
 - `play.sukisuki.ai`, `play.hearthroom.club`, `play.sukisuki.chat`, and `play.sukisuki.pro` host card apps; they do not redirect to the primary site.
-- `cli.hearthroom.club`, `cli.sukisuki.ai`, and `cli.sukisuki.chat` serve the CLI documentation directly; they do not redirect to the primary community site.
+- `cli.hearthroom.club`, `cli.sukisuki.ai`, `cli.sukisuki.chat`, and `cli.sukisuki.pro` serve the CLI documentation directly; they do not redirect to the primary community site.
 - The `downloads` subdomain of each of the four community roots serves app downloads; `playground` serves the playground; `c<card-id>` hosts an isolated card sandbox. These hosts do not redirect to the primary site. Sandbox content is authored by card creators.
 - `api.harperharbor.com` is the connected service API, `console.harperharbor.com` its account and billing console, and `assets.harperharbor.com` its media host. They do not redirect to the community site.
 
