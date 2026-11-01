@@ -2498,5 +2498,6 @@
   "dc0c142c3aad9": "重置已提交，或相同 clientOperationID 已重播。回傳 success、status、operationID、canonicalTimelineCommitted、repairPending、historyEpoch、nextSeq、startHistoryEpoch 與 startNextSeq。",
   "d0e3fb2643c24": "請求無效，或使用者無法存取此對話。",
   "d95bc38c2172b": "歷史版本過期、既有 clientOperationID 的意圖不同，或進行中的操作無法停止。",
-  "de8c5bc271d08": "交易失敗，沒有提交任何重置變更。請沿用相同 clientOperationID 重試。"
+  "de8c5bc271d08": "交易失敗，沒有提交任何重置變更。請沿用相同 clientOperationID 重試。",
+  "d577b5294160b": "新條目預設開啟語意召回。設為 false 時只會由關鍵詞或正規表示式觸發；常駐條目、先前保留的內容，以及 agent 明確列出或讀取條目的功能照舊。更新時省略這個欄位會保留目前設定。"
 }

@@ -1,0 +1,23 @@
+import { afterEach, expect, it } from "vitest";
+import { createApp, h, nextTick, ref, type App } from "vue";
+import { i18n, loadLocale } from "../src/lib/i18n";
+import WorldbookEntriesDialog from "../src/components/editor/WorldbookEntriesDialog.vue";
+import type { WorldbookEntryDraft } from "../src/lib/role-draft";
+let app: App;
+afterEach(() => { app?.unmount(); document.body.innerHTML = ""; });
+it("defaults on, changes the state explanation, and remains editable for constants", async () => {
+  await loadLocale("en");
+  i18n.global.locale.value = "en";
+  const entries = ref<WorldbookEntryDraft[]>([{ name:"Secret", content:"Reveal later", keywords:["reveal"], secondaryKeywords:[], isEnabled:true, isConstant:false }]);
+  app = createApp({ render: () => h(WorldbookEntriesDialog, { modelValue:entries.value, language:"en", "onUpdate:modelValue":v=>entries.value=v }) });
+  const root=document.createElement("div");document.body.append(root);app.use(i18n).mount(root);await nextTick();
+  const toggle = () => [...document.querySelectorAll<HTMLLabelElement>("label.toggle")].find(e => e.textContent?.includes("Semantic recall"))!.querySelector<HTMLInputElement>("input")!;
+  expect(toggle().checked).toBe(true);
+  toggle().click();await nextTick();
+  expect(entries.value[0].semanticRecall).toBe(false);
+  expect(document.querySelector("#wbd-semantic-hint")?.textContent).toContain("only when a keyword or regular expression matches");
+  entries.value[0].isConstant=true;await nextTick();
+  expect(toggle().disabled).toBe(false);
+  expect(document.querySelector("#wbd-semantic-hint")?.textContent).toContain("Always-on entries are sent every turn");
+  toggle().click();await nextTick();expect(entries.value[0].semanticRecall).toBe(true);
+});

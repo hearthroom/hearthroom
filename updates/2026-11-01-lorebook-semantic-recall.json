@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "世界書條目可以切換語意召回了。",
+    "zh-Hans": "世界书条目可以切换语义召回了。",
+    "en": "Lorebook entries now have a semantic recall switch.",
+    "ja": "世界書の各項目で意味ベースの呼び出しを切り替えられます。",
+    "ko": "세계서 항목마다 의미 기반 회상을 켜거나 끌 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "關閉後只在關鍵詞或正規表示式命中時帶進對話，常駐條目照舊。",
+    "zh-Hans": "关闭后只在关键词或正则表达式命中时带进对话，常驻条目照旧。",
+    "en": "Turn it off to trigger an entry only with keywords or regular expressions; always-on entries stay as they are.",
+    "ja": "オフにするとキーワードまたは正規表現に一致したときだけ会話に入り、常時オンの項目は従来どおりです。",
+    "ko": "끄면 키워드나 정규식이 일치할 때만 대화에 들어가며 상시 항목은 그대로입니다."
+  }
+}

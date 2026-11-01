@@ -2498,5 +2498,6 @@
   "dc0c142c3aad9": "リセットが確定したか、同じ clientOperationID が再実行されました。success、status、operationID、canonicalTimelineCommitted、repairPending、historyEpoch、nextSeq、startHistoryEpoch、startNextSeq を返します。",
   "d0e3fb2643c24": "リクエストが無効、またはユーザーがこの会話にアクセスできません。",
   "d95bc38c2172b": "履歴のバージョンが古い、既存の clientOperationID の意図が異なる、または実行中の操作を停止できません。",
-  "de8c5bc271d08": "トランザクションが失敗し、リセットの変更は確定していません。同じ clientOperationID で再試行してください。"
+  "de8c5bc271d08": "トランザクションが失敗し、リセットの変更は確定していません。同じ clientOperationID で再試行してください。",
+  "d577b5294160b": "新しい項目では意味ベースの呼び出しが既定でオンです。false にするとキーワードまたは正規表現の一致でのみ呼び出されます。常時オンの項目、保持済みの内容、agent による明示的な一覧表示と読み取りは変わりません。更新時に省略すると現在の設定を保持します。"
 }

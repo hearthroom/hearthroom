@@ -434,6 +434,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: numb
         secondaryKeywords: entryKeywords(entry, keyList(entry.secondary_keys)),
         isEnabled: entry.enabled !== false && !decorated.dontActivate,
         isConstant: entry.constant === true || decorated.activate,
+        ...(typeof (entry.extensions?.harperharbor as Record<string, unknown> | undefined)?.semanticRecall === "boolean" ? { semanticRecall: (entry.extensions!.harperharbor as Record<string, unknown>).semanticRecall as boolean } : {}),
         matchOptions: { ...options, ...(groupId ? { groupId, groupOrder: parts.length > 1 ? i : options.groupOrder ?? 0 } : {}) },
       });
     });
@@ -821,5 +822,7 @@ export function embedIntoPng(imageBytes: Uint8Array, card: TavernCard): Uint8Arr
 
 function matchExtensions(entry: WorldbookEntryDraft): Record<string, unknown> {
  const options=entry.matchOptions;
- return { ...(options?.extensions ?? {}), ...(options?.groupId ? {harperharbor:{groupId:options.groupId,groupOrder:options.groupOrder ?? 0}} : {}) };
+ const prior = options?.extensions?.harperharbor;
+ const harbor = prior && typeof prior === "object" ? prior as Record<string, unknown> : {};
+ return { ...(options?.extensions ?? {}), ...((options?.groupId || entry.semanticRecall !== undefined) ? {harperharbor:{...harbor, ...(options?.groupId ? {groupId:options.groupId,groupOrder:options.groupOrder ?? 0} : {}), ...(entry.semanticRecall !== undefined ? {semanticRecall:entry.semanticRecall} : {})}} : {}) };
 }

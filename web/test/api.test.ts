@@ -15,7 +15,7 @@ describe("fetchWorldbookEntries", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ list: [UPSTREAM_ROW] }), { status: 200 })));
     const entries = await fetchWorldbookEntries("wb-1", "tok");
     expect(entries).toEqual([
-      { entryId: "e-1", name: "eldoria", content: "A forest.", keywords: ["eldoria", "wood", "forest"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom", triggerRegion: "both", activationCount: 0 },
+      { entryId: "e-1", name: "eldoria", content: "A forest.", keywords: ["eldoria", "wood", "forest"], secondaryKeywords: [], isEnabled: true, isConstant: false, semanticRecall: true, category: "custom", triggerRegion: "both", activationCount: 0 },
     ]);
   });
 
@@ -310,4 +310,11 @@ it.each(['complete','conflict','ordinary404','offline','changed'])('does not POS
   await registerCard(id,'proof',false,[],'harbor',undefined,undefined,{...expected,policyRevision:'new-explicit-consent'});
   expect(bodies[1].operationId).not.toBe(bodies[0].operationId);expect(bodies[1].expectedPolicyRevision).toBe('new-explicit-consent');
  }
+});
+
+describe("semantic recall readback", () => {
+  it("reads explicit off and defaults old entries to on", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ entries: [{ ...UPSTREAM_ROW, semanticRecall: false }, UPSTREAM_ROW] }), { status: 200 })));
+    expect((await fetchWorldbookEntries("wb-1", "tok")).map(e => e.semanticRecall)).toEqual([false, true]);
+  });
 });

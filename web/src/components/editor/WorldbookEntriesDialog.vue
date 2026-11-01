@@ -80,7 +80,7 @@ function setEnabled(index: number, isEnabled: boolean) {
 function add() {
   commit([
     ...props.modelValue,
-    { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" },
+    { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, semanticRecall: true, category: "custom" },
   ]);
   selected.value = props.modelValue.length;
   query.value = "";
@@ -266,11 +266,21 @@ function onKeydown(event: KeyboardEvent) {
               <span class="subtle">{{ $t("wb.entry.trigger.hint") }}</span>
             </div>
 
-            <label class="toggle">
-              <input type="checkbox" :checked="entry.isConstant"
-                     @change="patch({ isConstant: ($event.target as HTMLInputElement).checked })" />
-              <span>{{ $t("wb.entry.constant") }}</span>
-            </label>
+            <div class="field">
+              <div class="wbd__toggles">
+                <label class="toggle">
+                  <input type="checkbox" :checked="entry.isConstant"
+                         @change="patch({ isConstant: ($event.target as HTMLInputElement).checked })" />
+                  <span>{{ $t("wb.entry.constant") }}</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" :checked="entry.semanticRecall !== false" aria-describedby="wbd-semantic-hint"
+                         @change="patch({ semanticRecall: ($event.target as HTMLInputElement).checked })" />
+                  <span>{{ $t("wb.entry.semantic") }}</span>
+                </label>
+              </div>
+              <span id="wbd-semantic-hint" class="subtle">{{ $t(entry.isConstant ? "wb.entry.semantic.constant" : entry.semanticRecall === false ? "wb.entry.semantic.off" : "wb.entry.semantic.on") }}</span>
+            </div>
 
             <!-- 酒館格式的條目才有：上游照這幾個值做字面比對 -->
             <div v-if="entry.matchOptions" class="field">

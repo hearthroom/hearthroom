@@ -2498,5 +2498,6 @@
   "dc0c142c3aad9": "重置已提交，或相同 clientOperationID 已重放。返回 success、status、operationID、canonicalTimelineCommitted、repairPending、historyEpoch、nextSeq、startHistoryEpoch 和 startNextSeq。",
   "d0e3fb2643c24": "请求无效，或用户无法访问此对话。",
   "d95bc38c2172b": "历史版本过期、现有 clientOperationID 的意图不同，或进行中的操作无法停止。",
-  "de8c5bc271d08": "事务失败，没有提交任何重置变更。请沿用相同 clientOperationID 重试。"
+  "de8c5bc271d08": "事务失败，没有提交任何重置变更。请沿用相同 clientOperationID 重试。",
+  "d577b5294160b": "新条目默认开启语义召回。设为 false 时只会由关键词或正则表达式触发；常驻条目、先前保留的内容，以及 agent 明确列出或读取条目的功能照旧。更新时省略这个字段会保留当前设置。"
 }

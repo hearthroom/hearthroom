@@ -21083,6 +21083,10 @@
               "type": "string"
             }
           },
+          "semanticRecall": {
+            "type": "boolean",
+            "description": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting."
+          },
           "isConstant": {
             "type": "boolean",
             "default": false
@@ -22017,6 +22021,10 @@
           "isEnabled": {
             "type": "boolean"
           },
+          "semanticRecall": {
+            "type": "boolean",
+            "description": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting."
+          },
           "isConstant": {
             "type": "boolean",
             "description": "Always injected (subject to the constant budget and `sortOrder`)."
@@ -22210,6 +22218,10 @@
           "isEnabled": {
             "type": "boolean",
             "description": "Update only."
+          },
+          "semanticRecall": {
+            "type": "boolean",
+            "description": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting."
           },
           "isConstant": {
             "type": "boolean"

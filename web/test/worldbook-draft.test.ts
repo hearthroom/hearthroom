@@ -69,3 +69,15 @@ describe("useWorldbookDraft", () => {
     expect(b.metadataPatch()).toMatchObject({ name: "renamed", visibility: "private", tags: [] });
   });
 });
+
+describe("semantic recall", () => {
+  it("persists an explicit off through stored drafts", () => {
+    const b = useWorldbookDraft(deps);
+    b.createDraft();
+    b.entries[0] = { ...b.entries[0], content: "Later reveal", semanticRecall: false };
+    expect(b.ops()[0].op).toMatchObject({ semanticRecall: false });
+    const restored = useWorldbookDraft(deps);
+    restored.restore(b.stored()!);
+    expect(restored.ops()[0].op).toMatchObject({ semanticRecall: false });
+  });
+});

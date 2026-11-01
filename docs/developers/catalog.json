@@ -2498,5 +2498,6 @@
   "dc0c142c3aad9": "Reset committed, or the identical clientOperationID replayed. Returns success, status, operationID, canonicalTimelineCommitted, repairPending, historyEpoch, nextSeq, startHistoryEpoch and startNextSeq.",
   "d0e3fb2643c24": "Invalid request or conversation unavailable to this user.",
   "d95bc38c2172b": "Stale history snapshot, changed intent for an existing clientOperationID, or active operation could not be stopped.",
-  "de8c5bc271d08": "Transaction failed; no reset changes committed. Retry with the same clientOperationID."
+  "de8c5bc271d08": "Transaction failed; no reset changes committed. Retry with the same clientOperationID.",
+  "d577b5294160b": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting."
 }

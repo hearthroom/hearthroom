@@ -1457,6 +1457,7 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
       : {}),
     isEnabled: entry.isEnabled !== false,
     isConstant: entry.isConstant === true,
+    semanticRecall: entry.semanticRecall !== false,
     category: typeof entry.category === "string" ? entry.category : "",
     triggerRegion: typeof entry.triggerRegion === "string" ? entry.triggerRegion : "",
     ...(typeof entry.activationCount === "number" ? { activationCount: entry.activationCount } : {}),
@@ -1536,6 +1537,7 @@ export interface WorldbookDocumentEntry {
   matchOptions?: WorldbookEntryDraft["matchOptions"];
   isEnabled?: boolean;
   isConstant?: boolean;
+  semanticRecall?: boolean;
   category?: string;
   triggerRegion?: string;
 }

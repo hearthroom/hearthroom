@@ -100,7 +100,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       book.pending = true;
       book.name = book.name || deps.fallbackName();
       if (!book.entries.length) {
-        book.entries = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" }];
+        book.entries = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, semanticRecall: true, category: "custom" }];
       }
     },
     /**
@@ -216,6 +216,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
           ...(entry.matchOptions ? { matchOptions: entry.matchOptions } : {}),
           isEnabled: entry.isEnabled,
           isConstant: entry.isConstant,
+          ...(entry.semanticRecall !== undefined ? { semanticRecall: entry.semanticRecall } : {}),
           ...(entry.category ? { category: entry.category } : {}),
           ...(entry.triggerRegion ? { triggerRegion: entry.triggerRegion } : {}),
         };
