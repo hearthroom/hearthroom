@@ -499,6 +499,8 @@ export interface ReviewQueueItem {
   id: string;
   kind: "first" | "re";
   submittedAt: number;
+  /** 同一張卡第幾次送審（1＝首送）；舊版伺服器不帶 */
+  attempt?: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: Zone | "all"; tags: string[] };
   stamps: { approve: number; required: number };
   /** 作者問卷算出的級別；問卷上線前送的單是 null */
@@ -523,6 +525,9 @@ export interface ReviewDetail {
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
+    /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */
+    attempt?: number;
+    previous?: { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null } | null;
   };
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };

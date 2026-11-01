@@ -50,6 +50,36 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
     .first<SubmissionRow>();
 }
 
+/**
+ * 同一張卡在這張單之前、審核人真的看過（定案）的單。作者在排隊中重送而被取代的單（superseded）
+ * 沒人看過，不算一次送審。用送審時間排，同一毫秒再看 rowid。
+ */
+const EARLIER_DECIDED = (p: string, s: string) =>
+  `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected')
+   AND (${p}.submitted_at < ${s}.submitted_at OR (${p}.submitted_at = ${s}.submitted_at AND ${p}.rowid < ${s}.rowid))`;
+
+export interface PreviousSubmission { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null }
+
+/** 這張單是同一張卡第幾次送審，以及上一次的結果（給審核頁）。 */
+export async function submissionHistory(db: D1Database, submissionId: string): Promise<{ attempt: number; previous: PreviousSubmission | null }> {
+  const row = await db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
+              p.status, p.note, p.submitted_at, p.decided_at
+       FROM review_submissions s
+       LEFT JOIN review_submissions p ON p.id = (SELECT p.id FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}
+                                                 ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1)
+       WHERE s.id = ?`,
+    )
+    .bind(submissionId)
+    .first<{ earlier: number; status: "approved" | "rejected" | null; note: string | null; submitted_at: number | null; decided_at: number | null }>();
+  if (!row) throw new HttpError(404, "submission not found");
+  return {
+    attempt: row.earlier + 1,
+    previous: row.status ? { status: row.status, note: row.note ?? "", submittedAt: row.submitted_at!, decidedAt: row.decided_at } : null,
+  };
+}
+
 const claimIsLive = (row: { claimed_by: string | null; claimed_at: number | null }, now: number) =>
   !!row.claimed_by && row.claimed_at !== null && now - row.claimed_at < CLAIM_TTL_MS;
 
@@ -57,6 +87,8 @@ export interface QueueItem {
   id: string;
   kind: SubmissionKind;
   submittedAt: number;
+  /** 同一張卡第幾次送審（1＝首送）；只算審核人定案過的單 */
+  attempt: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: string; tags: string[] };
   stamps: { approve: number; required: number };
   /** 作者問卷算出的級別；null＝問卷上線前送的一般卡 */
@@ -78,7 +110,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
               COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
-              (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine
+              (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
+              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier
        FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id
        WHERE s.status = 'pending' ORDER BY s.submitted_at ASC LIMIT 200`,
     )
@@ -86,12 +119,13 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number; rating: string | null;
+      approvals: number; mine: number; rating: string | null; earlier: number;
     }>();
   return rows.results.map((r) => ({
     id: r.id,
     kind: r.kind,
     submittedAt: r.submitted_at,
+    attempt: r.earlier + 1,
     card: {
       id: String(r.card_id),
       roleId: r.source_role_id,

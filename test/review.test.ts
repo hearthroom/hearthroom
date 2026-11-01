@@ -384,3 +384,73 @@ describe("內容版本", () => {
     expect(await board()).toHaveLength(1);
   });
 });
+
+describe("第幾次送審", () => {
+  // 審核人回報：卡被退後重送，審的人只能靠記。佇列與審核頁標出這是同一張卡第幾次送審，
+  // 以及上一次的結果。作者撤回、沒人看過的單（superseded）不算一次送審。
+  const pendingId = async () => (await queue("rev-a")).body.items[0].id as string;
+  const detail = async (id: string) =>
+    (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
+  const decide = async (verdict: "approve" | "reject", note = "") => {
+    const id = await pendingId();
+    await act(id, "claim", "rev-a");
+    expect((await act(id, "stamp", "rev-a", { verdict, ...(note ? { note } : {}) })).status).toBe(200);
+    return id;
+  };
+
+  it("首送是第 1 次、沒有上次；被退後重送是第 2 次、帶上次退件原因；再退再送是第 3 次", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    expect((await queue("rev-a")).body.items[0].attempt).toBe(1);
+    const firstId = await pendingId();
+    await act(firstId, "claim", "rev-a");
+    expect((await detail(firstId)).submission).toMatchObject({ attempt: 1, previous: null });
+    await act(firstId, "stamp", "rev-a", { verdict: "reject", note: "世界書會把點數燒光" });
+    const first = (await env.DB.prepare("SELECT submitted_at, decided_at FROM review_submissions WHERE id = ?").bind(firstId).first<any>())!;
+
+    await submit("role-1");
+    const second = (await queue("rev-a")).body.items[0];
+    expect(second.attempt).toBe(2);
+    await act(second.id, "claim", "rev-a");
+    expect((await detail(second.id)).submission).toMatchObject({
+      attempt: 2,
+      previous: { status: "rejected", note: "世界書會把點數燒光", submittedAt: first.submitted_at, decidedAt: first.decided_at },
+    });
+    await act(second.id, "stamp", "rev-a", { verdict: "reject", note: "開場白還是空的" });
+
+    await submit("role-1");
+    const third = (await queue("rev-a")).body.items[0];
+    expect(third.attempt).toBe(3);
+    await act(third.id, "claim", "rev-a");
+    expect((await detail(third.id)).submission).toMatchObject({ attempt: 3, previous: { status: "rejected", note: "開場白還是空的" } });
+
+    // 回頭看第二張（已定案）：算的是它自己之前的，不是最新的
+    expect((await detail(second.id)).submission).toMatchObject({ attempt: 2, previous: { status: "rejected", note: "世界書會把點數燒光" } });
+  });
+
+  it("過審後改內容再送審：第 2 次，上次結果是通過", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    await decide("approve");
+    authorEditsPublicly("role-1", "改名了");
+    await submit("role-1");
+    const item = (await queue("rev-a")).body.items[0];
+    expect(item).toMatchObject({ kind: "re", attempt: 2 });
+    await act(item.id, "claim", "rev-a");
+    expect((await detail(item.id)).submission).toMatchObject({ attempt: 2, previous: { status: "approved", note: "" } });
+  });
+
+  it("沒人看過就被取代的單不算一次送審；別張卡的歷史不算進來", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-2");
+    await decide("reject", "別張卡的退件");
+    await submit("role-1");
+    await env.DB.prepare("UPDATE review_submissions SET status = 'superseded' WHERE source_role_id <> 'role-2' AND status = 'pending'").run();
+    // 被取代的那張留在歷史裡；作者再送一次
+    await env.DB.prepare(
+      "INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at) SELECT 'again', card_id, provider, source_role_id, kind, 'pending', content_hash, submitted_at + 1 FROM review_submissions WHERE status = 'superseded'",
+    ).run();
+    const items = (await queue("rev-a")).body.items;
+    expect(items.find((i: any) => i.id === "again").attempt).toBe(1);
+  });
+});

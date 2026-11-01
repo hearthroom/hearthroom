@@ -223,3 +223,24 @@ it('shows unknown counts for older or closed reviews without classifying them as
  expect(text).toContain(i18n.global.t('reviewLength.unavailable'));
  expect(text).not.toContain(i18n.global.t('reviewLength.ineligible'));
 });
+
+it('a resubmitted card shows which submission it is and the previous rejection; first submissions show neither',async()=>{
+ const base=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,attempt:3,previous:{status:'rejected',note:'開場白還是空的\n世界書太長',submittedAt:Date.UTC(2026,10,1,8),decidedAt:Date.UTC(2026,10,1,9)}}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-attempt]')?.textContent?.trim()).toBe(i18n.global.t('review.attempt',{n:3})));
+ const previous=el.querySelector('[data-previous-submission]')!;
+ expect(previous.querySelector('summary')?.textContent?.trim()).toBe(i18n.global.t('review.previous.rejected',{reason:'開場白還是空的\n世界書太長'}));
+ expect(previous.textContent).toContain(i18n.global.t('review.previous.submittedAt',{time:''}).trim());
+
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,attempt:2,previous:{status:'approved',note:'',submittedAt:1,decidedAt:2}}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-previous-submission]')?.textContent).toContain(i18n.global.t('review.previous.approved')));
+ expect(el.querySelector('[data-previous-submission] summary')).toBeNull();
+
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,attempt:1,previous:null}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ expect(el.querySelector('[data-attempt]')).toBeNull();
+ expect(el.querySelector('[data-previous-submission]')).toBeNull();
+});

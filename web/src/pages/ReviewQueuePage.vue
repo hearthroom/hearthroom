@@ -28,8 +28,11 @@ const error = ref("");
 const busy = ref<string | null>(null);
 const forbidden = ref(false);
 
-const mine = computed(() => items.value.filter((i) => i.claim === "mine"));
-const others = computed(() => items.value.filter((i) => i.claim !== "mine"));
+/** 重送＝同一張卡之前審過至少一次（被駁回後再送，或過審後改內容再送） */
+const resubmittedOnly = ref(false);
+const shown = computed(() => (resubmittedOnly.value ? items.value.filter((i) => (i.attempt ?? 1) >= 2) : items.value));
+const mine = computed(() => shown.value.filter((i) => i.claim === "mine"));
+const others = computed(() => shown.value.filter((i) => i.claim !== "mine"));
 
 async function load() {
   error.value = "";
@@ -102,6 +105,11 @@ onMounted(() => {
     <div v-else-if="!items.length" class="empty panel"><p class="empty__title">{{ $t("review.empty") }}</p></div>
 
     <template v-else>
+      <div class="seg filter" role="group" :aria-label="$t('review.filter.label')">
+        <button class="seg__item" :class="{ 'seg__item--on': !resubmittedOnly }" :aria-pressed="!resubmittedOnly" @click="resubmittedOnly = false">{{ $t("review.filter.all") }}</button>
+        <button class="seg__item" :class="{ 'seg__item--on': resubmittedOnly }" :aria-pressed="resubmittedOnly" @click="resubmittedOnly = true">{{ $t("review.filter.resubmitted") }}</button>
+      </div>
+      <div v-if="!shown.length" class="empty panel"><p class="empty__title">{{ $t("review.filter.empty") }}</p></div>
       <ul v-for="(group, gi) in [mine, others]" :key="gi" class="list">
         <li v-for="item in group" :key="item.id" class="row panel" :class="{ 'row--mine': item.claim === 'mine' }">
           <RouterLink :to="lp(`/review/${item.id}`)" class="row__art">
@@ -112,6 +120,7 @@ onMounted(() => {
             <div class="row__top">
               <RouterLink :to="lp(`/review/${item.id}`)" class="row__name">{{ item.card.name }}</RouterLink>
               <span class="chip" :class="{ 'chip--re': item.kind === 're' }">{{ $t(`review.kind.${item.kind}`) }}</span>
+              <span v-if="(item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
               <span class="chip">{{ $t("review.stamps", { n: item.stamps.approve, required: item.stamps.required }) }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
             </div>
@@ -160,6 +169,8 @@ onMounted(() => {
 .row__meta { font-size: 12px; color: var(--text-3); }
 .row__acts { display: grid; gap: var(--s-2); }
 .chip--re { background: var(--accent-tint); color: var(--accent-text); }
+.chip--attempt { color: var(--warning-text); }
+.filter { margin-bottom: var(--s-3); }
 .row-ghost { height: 96px; border-radius: var(--r-md); }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }
 .empty__title { font-size: 16px; font-weight: 600; }

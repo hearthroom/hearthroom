@@ -341,8 +341,19 @@ onMounted(() => { void load(); });
             · {{ $t(`review.kind.${data.submission.kind}`) }}
             · {{ $t("review.stamps", { n: data.submission.stamps.filter((s) => s.verdict === 'approve').length, required: data.submission.required }) }}
           </p>
-          <h2 class="head__title display">{{ doc.roleName }}</h2>
+          <div class="head__name">
+            <h2 class="head__title display">{{ doc.roleName }}</h2>
+            <span v-if="(data.submission.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: data.submission.attempt }) }}</span>
+          </div>
           <p class="subtle">{{ doc.roleDesc }}</p>
+          <!-- 重送的卡：上一次的結果與說明。駁回說明預設一行，點開看全文 -->
+          <div v-if="data.submission.previous" class="previous" data-previous-submission>
+            <details v-if="data.submission.previous.status === 'rejected'" class="previous__note">
+              <summary>{{ $t("review.previous.rejected", { reason: data.submission.previous.note || $t("review.confirm.noNote") }) }}</summary>
+            </details>
+            <p v-else class="previous__note">{{ $t("review.previous.approved") }}</p>
+            <p class="subtle previous__time">{{ $t("review.previous.submittedAt", { time: dateTime(data.submission.previous.submittedAt) }) }}</p>
+          </div>
           <!-- 作者的分級放最上面：審核人第一件事就是對照內容跟它符不符；問卷在「分級問卷」分頁 -->
           <p class="rating">
             {{ $t("review.rating.declared") }}
@@ -613,6 +624,13 @@ onMounted(() => { void load(); });
 .correction-error { scroll-margin-block-start: calc(var(--header-h) + var(--s-4)); }
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-4); }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 2px 0; }
+.head__name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.chip--attempt { color: var(--warning-text); }
+.previous { display: grid; gap: 2px; margin-top: var(--s-2); padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; min-width: 0; }
+.previous__note { margin: 0; min-width: 0; }
+.previous__note > summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.previous__note[open] > summary { white-space: pre-wrap; overflow-wrap: anywhere; }
+.previous__time { font-size: 12px; }
 .head__acts { display: flex; gap: var(--s-2); }
 /* 分段控制預設是 inline-flex，會照內容撐寬、自己永遠不捲；外層又把超出的部分裁掉，窄螢幕右邊的分頁就點不到。
    這裡改成跟容器同寬、可以橫向滑動，每格不壓縮 */

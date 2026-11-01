@@ -89,7 +89,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
-  release as releaseSubmission, stamp as stampSubmission,
+  release as releaseSubmission, stamp as stampSubmission, submissionHistory,
 } from "./review";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
@@ -1732,6 +1732,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         // 作者問卷：級別、情節名稱、每題答案。審核人對照內容看是不是他說的那樣；問卷上線前送的單是 null
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
+        // 同一張卡第幾次送審、上一次的結果與說明：審核人不必靠記憶認出「被退後重送」的卡
+        ...(await submissionHistory(c.env.DB, s.id)),
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
         correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
         ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),

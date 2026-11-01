@@ -19,7 +19,7 @@ const api = vi.hoisted(() => ({
       {
         id: "s2", kind: "re", submittedAt: Date.now() - 120_000,
         card: { id: "c2", roleId: "r2", name: "雨城", summary: "", avatarUrl: null, zone: "zh", tags: [] },
-        stamps: { approve: 0, required: 1 }, claim: "other", stampedByMe: false,
+        stamps: { approve: 0, required: 1 }, claim: "other", stampedByMe: false, attempt: 2,
       },
     ],
     claimTtlMs: 2_700_000,
@@ -69,6 +69,20 @@ describe("審核佇列頁", () => {
     // 別人領著的那張不能領
     expect(buttons[1]!.disabled).toBe(true);
     expect(buttons[0]!.disabled).toBe(false);
+  });
+
+  it("重送的卡標出第幾次送審；首送不標；可以只看重送", async () => {
+    const rows = [...host.querySelectorAll(".row")];
+    const attemptOf = (name: string) => rows.find((r) => r.textContent?.includes(name))!.querySelector("[data-attempt]")?.textContent?.trim();
+    expect(attemptOf("雨城")).toBe(i18n.global.t("review.attempt", { n: 2 }));
+    expect(attemptOf("夜行偵探")).toBeUndefined();
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.filter.resubmitted"))!.click();
+    await nextTick();
+    expect(host.textContent).toContain("雨城");
+    expect(host.textContent).not.toContain("夜行偵探");
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.filter.all"))!.click();
+    await nextTick();
+    expect(host.textContent).toContain("夜行偵探");
   });
 
   it("領取後放回使用該次認領的 generation", async () => {
