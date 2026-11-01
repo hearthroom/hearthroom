@@ -22,7 +22,7 @@ import { HttpError, type Env } from "./types";
  *
  * 呼叫端（路由）已經確認：真人審核員、Provider 回報是本站應用管理員。令牌只用來呼叫 Provider，不落地、不進日誌。
  */
-export type Payer = { env: Env; bearer: string; provider: ProviderId; memberId: string; now: () => number };
+export type Payer = { env: Env; bearer: string; provider: ProviderId; memberId: string; now: () => number; service?: true };
 
 const TEN_MIN = 600_000;
 const PAGE = 20;
@@ -94,7 +94,7 @@ const LIVE = "('pending', 'blocked_insufficient', 'paid')";
  * ?1 現在時間，?2 限定一張卡（NULL＝全部）。
  * 卡的 registered_at 是這張卡列第一次過審的時間，不早於第一次上架，所以先用最早的活動開始時間篩掉舊卡。
  */
-const DUE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
+export const DUE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
   FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted FROM (${CARD_BASE}
     AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
     AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
@@ -122,8 +122,8 @@ const load = (db: D1Database, id: string) => db.prepare("SELECT * FROM card_rewa
 const current = async (db: D1Database, id: string) => view((await load(db, id))!);
 
 /** 這個操作編號這個人用過沒有：用過且是同一種動作 → 回那筆的 id；用在別的事上 → 409。衍生編號帶冒號，用戶端送不出來。 */
-async function replayed(db: D1Database, actor: string, op: string, action: string): Promise<string | null> {
-  const r = await db.prepare("SELECT subject_kind, subject_id, action FROM audit_log WHERE actor_member_id = ? AND operation_id = ?").bind(actor, op)
+async function replayed(db: D1Database, actor: string | null, op: string, action: string): Promise<string | null> {
+  const r = await db.prepare("SELECT subject_kind, subject_id, action FROM audit_log WHERE actor_member_id IS ? AND operation_id = ? AND (actor_member_id IS NOT NULL OR actor_kind='system')").bind(actor, op)
     .first<{ subject_kind: string; subject_id: string; action: string }>();
   if (!r) return null;
   if (r.subject_kind !== "card_reward" || r.action !== action) throw new HttpError(409, "card_reward_operation_repeated");
@@ -146,7 +146,7 @@ const send = (x: Payer, r: Row): Promise<PayResult> =>
 async function settle(x: Payer, r: Row, res: PayResult, op: string, rejectFails: boolean, metric: "payout" | "reconcile") {
   const db = x.env.DB, now = x.now();
   const audit = (action: string, extra: { reason?: string; after?: unknown } = {}) =>
-    ({ subjectKind: "card_reward", subjectId: r.id, actorMemberId: x.memberId, actorKind: "human", action, before: { status: r.status }, operationId: `${op}:settle`, now, ...extra }) as const;
+    ({ subjectKind: "card_reward", subjectId: r.id, actorMemberId: x.service ? null : x.memberId, actorKind: x.service ? "system" : "human", action, before: { status: r.status }, operationId: `${op}:settle`, now, ...extra }) as const;
   let writes: D1PreparedStatement[];
   if (res.kind === "paid") {
     writes = [
@@ -182,7 +182,7 @@ const isUnique = (e: unknown) => /UNIQUE constraint failed: card_rewards\./.test
 export async function requestReward(x: Payer, cardId: number, op: string): Promise<RewardView> {
   const db = x.env.DB, now = x.now();
   const replay = async () => {
-    const prior = await replayed(db, x.memberId, op, "request");
+    const prior = await replayed(db, x.service ? null : x.memberId, op, "request");
     if (!prior) return null;
     const r = await load(db, prior);
     if (!r || r.card_id !== cardId) throw new HttpError(409, "card_reward_operation_repeated");
@@ -193,7 +193,7 @@ export async function requestReward(x: Payer, cardId: number, op: string): Promi
 
   const due = await db.prepare(DUE).bind(now, cardId).first<Due>();
   if (!due) throw new HttpError(409, "card_reward_not_due");
-  await notSelf(db, x.memberId, due.member_id, due.author_num_id);
+  if (!x.service) await notSelf(db, x.memberId, due.member_id, due.author_num_id);
 
   const id = crypto.randomUUID();
   let inserted = 0;
@@ -202,7 +202,7 @@ export async function requestReward(x: Payer, cardId: number, op: string): Promi
       db.prepare(`INSERT INTO card_rewards (id, campaign_id, work_key, card_id, member_id, recipient_account_no, amount, status, requested_by, attempts, created_at, updated_at,retention_role_id,public_days)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 1, ?, ?,?,?)`)
         .bind(id, due.campaign_id, due.work_key, due.card_id, due.member_id, due.author_num_id, due.reward, x.memberId, now, now,due.source_role_id,due.public_days),
-      auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "request", after: { cardId, amount: due.reward }, operationId: op, now }),
+      auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.service ? null : x.memberId, actorKind: x.service ? "system" : "human", action: "request", after: { cardId, amount: due.reward }, operationId: op, now }),
     ]);
     inserted = ins!.meta.changes;
   } catch (e) {
@@ -253,18 +253,18 @@ export async function batchReward(x: Payer, cardIds: number[], op: string) {
 /** 重試：只限 pending 或池不足；同一把 key、同一個金額與帳號（不重算）。規則同分享季的 retryPayout。 */
 export async function retryReward(x: Payer, id: string, op: string): Promise<RewardView> {
   const db = x.env.DB, now = x.now();
-  const prior = await replayed(db, x.memberId, op, "retry");
+  const prior = await replayed(db, x.service ? null : x.memberId, op, "retry");
   if (prior) {
     if (prior !== id) throw new HttpError(409, "card_reward_operation_repeated");
     return current(db, id);
   }
   const r = await load(db, id);
   if (!r) throw new HttpError(404, "card_reward_not_found");
-  if (!OPEN.includes(r.status)) throw new HttpError(409, "card_reward_not_retryable");
-  await notSelf(db, x.memberId, r.member_id, r.recipient_account_no);
+  if (!OPEN.includes(r.status) && !(x.service && r.status === "failed")) throw new HttpError(409, "card_reward_not_retryable");
+  if (!x.service) await notSelf(db, x.memberId, r.member_id, r.recipient_account_no);
   const [upd] = await db.batch([
     db.prepare("UPDATE card_rewards SET status = 'pending', error = NULL, attempts = attempts + 1, checked_absent_at = NULL, updated_at = ? WHERE id = ? AND status = ? AND attempts = ?").bind(now, id, r.status, r.attempts),
-    auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "retry", before: { status: r.status, attempts: r.attempts }, after: { status: "pending", attempts: r.attempts + 1 }, operationId: op, now }),
+    auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.service ? null : x.memberId, actorKind: x.service ? "system" : "human", action: "retry", before: { status: r.status, attempts: r.attempts }, after: { status: "pending", attempts: r.attempts + 1 }, operationId: op, now }),
   ]);
   if (!upd!.meta.changes) throw new HttpError(409, "card_reward_not_retryable");
   const row = (await load(db, id))!;
@@ -287,7 +287,7 @@ export async function cancelReward(x: Payer, id: string, reason: string, op: str
   const [upd] = await db.batch([
     db.prepare(`UPDATE card_rewards SET status = 'cancelled', settled_at = ?, updated_at = ? WHERE id = ? AND status = ?
       AND (status = 'blocked_insufficient' OR checked_absent_at IS NOT NULL)`).bind(now, now, id, r.status),
-    auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "cancel", reason, before: { status: r.status }, after: { status: "cancelled" }, operationId: op, now }),
+    auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: id, actorMemberId: x.service ? null : x.memberId, actorKind: x.service ? "system" : "human", action: "cancel", reason, before: { status: r.status }, after: { status: "cancelled" }, operationId: op, now }),
   ]);
   if (!upd!.meta.changes) throw new HttpError(409, "card_reward_not_cancellable");
   return current(db, id);
@@ -307,7 +307,7 @@ async function checkRow(x: Payer, r: Row, op: string): Promise<CheckResult> {
     const now = x.now();
     await db.batch([
       db.prepare("UPDATE card_rewards SET checked_absent_at = ? WHERE id = ? AND status = 'pending' AND checked_absent_at IS NULL AND updated_at <= ?").bind(now, r.id, now - TEN_MIN),
-      auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: r.id, actorMemberId: x.memberId, actorKind: "human", action: "absent", after: { checkedAbsentAt: now }, operationId: op, now }),
+      auditStmtIfChanged(db, { subjectKind: "card_reward", subjectId: r.id, actorMemberId: x.service ? null : x.memberId, actorKind: x.service ? "system" : "human", action: "absent", after: { checkedAbsentAt: now }, operationId: op, now }),
     ]);
   }
   await bumpOp(db, "card_reward", "reconcile", got.kind === "unknown" ? "error" : "success");

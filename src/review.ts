@@ -1,3 +1,5 @@
+import { auditStmtIfChanged } from './audit';
+import { serviceRewardOnApproval } from './card-reward-service';
 import { reserveUpdateNotification } from './card-update';
 import {finalizeManagedReview} from './work-publication';
 import { dropSnapshotStatement } from "./review-snapshot";
@@ -201,7 +203,7 @@ export async function stamp(
   if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
    if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');
    if(!env)throw new HttpError(503,'visibility_sync_pending');
-   await finalizeManagedReview(env,row.id);
+   await finalizeManagedReview(env,row.id,'stamp');
    const count=await db.prepare("SELECT count(*) n FROM review_stamps WHERE submission_id=? AND verdict='approve'").bind(row.id).first<{n:number}>();
    return {submission:await getSubmission(db,row.id),cardStatus:'approved',approvals:count?.n??0,required:STAMPS_REQUIRED[row.kind]};
   }
@@ -240,6 +242,7 @@ export async function stamp(
     await reserveUpdateNotification(db,row.id,input.now);
     cardStatus = "approved";
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
+    writes.push(auditStmtIfChanged(db, { subjectKind:'card_reward', subjectId:row.id, actorMemberId:null, actorKind:'system', action:'approval', after:{path:'stamp',cardId:Number(row.card_id)}, operationId:crypto.randomUUID(), now:input.now }));
     // 定案就刪快照：本站不留任何卡片的私有設定
     writes.push(dropSnapshotStatement(db, row.id));
     if (row.kind === "first") {
@@ -259,9 +262,10 @@ export async function stamp(
   }
   if(managed&&input.verdict==='approve'&&approvals>=required){
    if(!env)throw new HttpError(503,'visibility_sync_pending');
-   await finalizeManagedReview(env,row.id);
+   await finalizeManagedReview(env,row.id,'stamp');
   }
   const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
+  if(!managed&&env&&input.verdict==='approve'&&approvals>=required&&finalCard?.status==='approved') await serviceRewardOnApproval(env,Number(row.card_id),'stamp');
   return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
 }
 

@@ -1,3 +1,4 @@
+import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
@@ -1579,8 +1580,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation },c.env);
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
-  // 創作季：真人應用管理員審過就當場發（見 card-reward.ts）；不在活動裡的卡、已經發過的卡不動，沒發成的留在待發放清單。
-  // 審核人一律是真人（requireReviewer 擋掉 AI 帳號），還要 Provider 說是應用管理員，點數池才收他的令牌。
+  // 過審操作已透過服務身分發放；這裡只讀結果，失敗由專用排程重試。
   const paid = result.submission.status === "approved" ? await rewardOnApproval(c, member.id, Number(result.submission.card_id)) : { reward: null };
   queuePush(c);
   return c.json({
@@ -2282,6 +2282,10 @@ export default {
     try { if ((await readMaintenance(env.DB)).enabled) return; }
     catch { console.warn("Maintenance status unavailable; scheduled work held"); return; }
     if (!(await numericSchemaReady(env.DB))) return;
+    if (event.cron === '*/5 * * * *') {
+      ctx.waitUntil(cardRewardMaintenance(env).catch(() => { console.warn('Card reward recovery unavailable'); }));
+      return;
+    }
     // 熱度有自己的排程（wrangler.toml）：一次執行的子請求額度全給 Harbor 的批次讀。
     if (event.cron === HEAT_CRON) {
       ctx.waitUntil(

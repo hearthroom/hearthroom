@@ -1,3 +1,4 @@
+import { cardRewardBacklog } from "./card-reward-service";
 import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-api-proxy';
 
 /**
@@ -5,6 +6,7 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  card_reward_auto: {name:"hearthroom_card_reward_auto_total",help:"Automatic service payment attempts after approval and scheduled retry.",label:"operation",operations:["approval","retry"],outcomes:["paid","pending","unavailable"]},
   spend_leaderboard:{name:'hearthroom_spend_leaderboard_total',help:'Card spend ranking reads and atomic privacy saves.',label:'operation',operations:['read','save'],outcomes:['success','conflict','error']},
   review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight and sealed revision.',label:'phase',operations:['draft','sealed'],outcomes:['eligible','insufficient']},
   review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
@@ -141,6 +143,9 @@ export async function opsMetrics(db: D1Database): Promise<string> {
       out.push(`hearthroom_harbor_proxy_requests_total{route="${route}",status_class="${r.outcome}",websocket="${ws}"} ${r.value}`);
     }
   }
+  const rewards = await cardRewardBacklog(db);
+  out.push("# HELP hearthroom_card_reward_due_cards Unpaid eligible or in-flight card grants.", "# TYPE hearthroom_card_reward_due_cards gauge", `hearthroom_card_reward_due_cards ${rewards.total}`,
+    "# HELP hearthroom_card_reward_due_overdue_cards Unpaid card grants outstanding for at least one hour.", "# TYPE hearthroom_card_reward_due_overdue_cards gauge", `hearthroom_card_reward_due_overdue_cards ${rewards.overdue}`);
   return out.join("\n") + "\n";
 }
 

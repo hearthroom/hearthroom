@@ -160,8 +160,9 @@ id = "cf47eb790d1f4f4a9d563a596b268c5a"
 
 # 17 分：每小時同步一批卡片的名稱、封面與對話數，以及其他維護。
 # 47 分：整批讀所有卡片的熱度（src/heat.ts），獨立一次執行，不跟上面搶子請求額度。
+# 每 5 分鐘：只重試創作季發獎，不執行其他同步。
 [triggers]
-crons = ["17 * * * *", "47 * * * *"]
+crons = ["17 * * * *", "47 * * * *", "*/5 * * * *"]
 
 # Community-owned avatars; provision this bucket before deploying this revision.
 [[r2_buckets]]

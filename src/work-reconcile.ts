@@ -53,7 +53,7 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
    }
    const saved=row.command?JSON.parse(row.command) as WorkPolicyCommand:null;
    if(row.moderation_revision>row.confirmed_moderation_revision||!saved||saved.action==='restrict'){await syncManagedRestriction(env,row.provider,row.source_role_id,'reconcile');}
-   else if(decision){await finalizeManagedReview(env,decision.submission_id);}else{
+   else if(decision){await finalizeManagedReview(env,decision.submission_id,'recovery');}else{
     if(!row.command||!row.root_operation_id)throw new HttpError(503,'visibility_sync_pending');
     const command=JSON.parse(row.command) as WorkPolicyCommand;
     if(command.action==='bind'){

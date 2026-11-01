@@ -1,8 +1,10 @@
 import {legacyPolicyFixture} from './work-policy-fixture';
-import { SELF, env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SELF, env, createScheduledController, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import worker from '../src/index';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { upstream, type PayResult } from "../src/upstream";
-import { appAdmins, bearer, identities, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
+import { cardRewardTransport, cardRewardMaintenance, cardRewardBacklog, serviceRewardOnApproval } from '../src/card-reward-service';
+import { appAdmins, bearer, identities, makeMember, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
 
 // 創作季發放：審核通過就發、待發放清單（補發與沒發成的）、同一張卡只給一次、作者自己的進度。
 // Provider 用記憶體裡的點數池模擬：同一把 key 再送回 replayed:true。
@@ -72,8 +74,10 @@ beforeEach(async () => {
   await makeReviewer(ADMIN_AUTHOR);
   providerPool(1_000_000);
   await campaign();
+  vi.spyOn(cardRewardTransport, 'token').mockResolvedValue('service-token');
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   restoreUpstream();
   reviewOff();
 });
@@ -85,9 +89,9 @@ describe("審核通過就發", () => {
     expect(stamped.reward).toMatchObject({ status: "paid", amount: 10000, cardId: await cardIdOf("r1") });
     expect(pool.sent).toHaveLength(1);
     // 發放不帶有效期：點數池只是額度，不帶就是永久
-    expect(pool.sent[0]).toEqual({ token: "admin-token", key: expect.any(String), accountNo: AUTHOR, amount: 10000, campaignRef: campaignId, contentRef: "harbor:r1", retentionRoleId:"r1", publicRetentionDays:30 });
+    expect(pool.sent[0]).toEqual({ token: "service-token", key: expect.any(String), accountNo: AUTHOR, amount: 10000, campaignRef: campaignId, contentRef: "harbor:r1", retentionRoleId:"r1", publicRetentionDays:30 });
     expect(await rewards()).toEqual([{ card_id: await cardIdOf("r1"), status: "paid", amount: 10000, recipient_account_no: AUTHOR, campaign_id: campaignId }]);
-    const audit = await env.DB.prepare("SELECT action FROM audit_log WHERE subject_kind = 'card_reward' ORDER BY created_at, action").all<{ action: string }>();
+    const audit = await env.DB.prepare("SELECT action FROM audit_log WHERE subject_kind = 'card_reward' AND action IN ('paid','request') ORDER BY created_at, action").all<{ action: string }>();
     expect(audit.results.map((r) => r.action).sort()).toEqual(["paid", "request"]);
   });
 
@@ -97,16 +101,15 @@ describe("審核通過就發", () => {
     expect((await approve("r1", "admin-token")).reward).toMatchObject({ amount: 8000 });
   });
 
-  it("不是應用管理員的審核員審過：不發，卡出現在待發放；管理員從清單發", async () => {
+  it("不是應用管理員的審核員審過：仍由服務身分發放", async () => {
     await submit("r1");
-    expect((await approve("r1", "mod-token")).reward).toBeNull();
-    expect(pool.sent).toHaveLength(0);
+    expect((await approve("r1", "mod-token")).reward).toMatchObject({status:'paid'});
+    expect(pool.sent).toHaveLength(1);
     const due = (await (await get("/v1/moderation/card-rewards/due", "admin-token")).json()) as any;
-    expect(due.items).toEqual([expect.objectContaining({ cardId: await cardIdOf("r1"), amount: 10000, campaignSlug: "creator-season" })]);
+    expect(due.items).toEqual([]);
     expect(JSON.stringify(due)).not.toContain(String(AUTHOR));
     const paid = await post(`/v1/moderation/card-rewards/cards/${await cardIdOf("r1")}/pay`, "admin-token", { operationId: op() });
-    expect(paid.status).toBe(200);
-    expect(await paid.json()).toMatchObject({ status: "paid", amount: 10000 });
+    expect(paid.status).toBe(409);
     expect(((await (await get("/v1/moderation/card-rewards/due", "admin-token")).json()) as any).items).toEqual([]);
   });
 
@@ -131,6 +134,7 @@ describe("審核通過就發", () => {
   });
 
   it("活動開始前就已經過審上架過的卡，下架重發再過審：不發", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error("historical fixture without automatic payout"));
     await submit("r1");
     await approve("r1", "mod-token");
     // 第一次過審上架在活動開始之前
@@ -143,6 +147,7 @@ describe("審核通過就發", () => {
   });
 
   it("舊制上架的卡（沒有託管版本紀錄）活動前就過審過，下架重發再過審：不發", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error("historical fixture without automatic payout"));
     await submit("r1");
     await approve("r1", "mod-token");
     const cardId = await cardIdOf("r1");
@@ -178,11 +183,13 @@ describe("審核通過就發", () => {
   });
 
   it("管理員不能發給自己：自己的卡停在待發放，由另一位管理員發", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await submit("own", "admin-author-token");
     const stamped = await approve("own", "admin-author-token");
     expect(stamped.reward).toBeNull();
-    expect(stamped.rewardError).toBe("card_reward_self");
+    expect(stamped.rewardError).toBe("card_reward_service_unavailable");
     expect(pool.sent).toHaveLength(0);
+    expect((await post(`/v1/moderation/card-rewards/cards/${await cardIdOf('own')}/pay`, 'admin-author-token', {operationId:op()})).status).toBe(403);
     expect((await post(`/v1/moderation/card-rewards/cards/${await cardIdOf("own")}/pay`, "admin-token", { operationId: op() })).status).toBe(200);
   });
 });
@@ -193,7 +200,7 @@ describe("發放出錯不推翻過審", () => {
     await env.DB.prepare("ALTER TABLE card_rewards RENAME TO card_rewards_gone").run();
     try {
       const stamped = await approve("r1", "admin-token");
-      expect(stamped).toMatchObject({ status: "approved", reward: null, rewardError: "internal_error" });
+      expect(stamped).toMatchObject({ status: "approved", reward: null, rewardError: "card_reward_service_unavailable" });
     } finally {
       await env.DB.prepare("ALTER TABLE card_rewards_gone RENAME TO card_rewards").run();
     }
@@ -203,6 +210,7 @@ describe("發放出錯不推翻過審", () => {
 
 describe("被下架的卡不發", () => {
   it("站方封鎖公開的卡不在待發放，也不能發", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await submit("r1");
     await approve("r1", "mod-token");
     await env.DB.prepare("UPDATE cards SET public_blocked = 1 WHERE source_role_id = 'r1'").run();
@@ -219,12 +227,13 @@ describe("同一張卡只給一次", () => {
     expect((await post(`/v1/moderation/card-rewards/cards/${cardId}/pay`, "admin-token", { operationId: op() })).status).toBe(409);
     expect((await SELF.fetch(`https://c.test/v1/cards/${cardId}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
     await submit("r1");
-    expect((await approve("r1", "admin-token")).reward).toBeNull();
+    expect((await approve("r1", "admin-token")).reward).toMatchObject({status:'paid'});
     expect(pool.sent).toHaveLength(1);
     expect(await rewards()).toHaveLength(1);
   });
 
   it("同一個操作編號重送拿回同一筆，不再送 Provider", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await submit("r1");
     await approve("r1", "mod-token");
     const cardId = await cardIdOf("r1"), o = op();
@@ -254,6 +263,7 @@ describe("點數池不足與重試", () => {
 
 describe("上線前已過審的卡補發", () => {
   it("活動期間送審、已經過審但沒有發放紀錄的卡都在待發放；批次一次發完", async () => {
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await submit("r1");
     await submit("r2");
     await approve("r1", "mod-token");
@@ -281,7 +291,7 @@ describe("活動資料與作者進度", () => {
     await env.DB.prepare(`INSERT INTO card_reward_topups
       (id, reward_id, target_amount, amount, status, requested_by, created_at)
       VALUES ('topup-fixture', ?, 20000, 10000, 'pending', ?, ?)`)
-      .bind(original.id, original.requested_by, Date.now()).run();
+      .bind(original.id, await makeMember(ADMIN), Date.now()).run();
     const progress = async () => (await (await get("/v1/card-rewards/creator-season/me", "author-token")).json()) as any;
     expect((await progress()).creditsPaid).toBe(10000);
     await expect(env.DB.prepare("UPDATE card_reward_topups SET amount=9000 WHERE id='topup-fixture'").run()).rejects.toThrow('card_reward_topup_immutable');
@@ -310,6 +320,7 @@ describe("活動資料與作者進度", () => {
     await submit("r2");
     await submit("r3");
     await approve("r1", "admin-token");
+    vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await approve("r2", "mod-token");
     const me = (await (await get("/v1/card-rewards/creator-season/me", "author-token")).json()) as any;
     expect(me).toMatchObject({ approvedCount: 2, pendingCount: 1, creditsPaid: 10000, quota: { limit: 6, used: 3 } });
@@ -365,4 +376,114 @@ describe("活動資料與作者進度", () => {
   it("沒登入不能看進度", async () => {
     expect((await get("/v1/card-rewards/creator-season/me")).status).toBe(401);
   });
+});
+
+// Regression: approval must not depend on the reviewing human's application-admin bearer.
+it("service pays immediately after a non-admin reviewer approves", async () => {
+  const e = env as import("../src/types").Env;
+  e.HARBOR_CARD_REWARDS_CLIENT_ID = "payout-client";
+  e.HARBOR_CARD_REWARDS_CLIENT_SECRET = "synthetic-secret";
+  const {cardRewardTransport} = await import("../src/card-reward-service");
+  const token = vi.spyOn(cardRewardTransport, "token").mockResolvedValue("service-token");
+  try {
+    await submit("r1");
+    const result = await approve("r1", "mod-token");
+
+    expect(result.reward).toMatchObject({ status: "paid", amount: 10000 });
+    expect(pool.sent[0].token).toBe("service-token");
+    expect(token).toHaveBeenCalled();
+  } finally {
+    delete e.HARBOR_CARD_REWARDS_CLIENT_ID; delete e.HARBOR_CARD_REWARDS_CLIENT_SECRET; token.mockRestore();
+  }
+});
+
+it('service pays an eligible author even when that author performed the review', async () => {
+  await submit('own', 'admin-author-token');
+  expect((await approve('own', 'admin-author-token')).reward).toMatchObject({status:'paid'});
+  expect(pool.sent[0]).toMatchObject({token:'service-token',accountNo:ADMIN_AUTHOR});
+  expect(await env.DB.prepare("SELECT actor_kind,actor_member_id FROM audit_log WHERE action='request'").first())
+    .toEqual({actor_kind:'system',actor_member_id:null});
+});
+
+it('automatically retries a lost payment response with the same key after bounded backoff', async () => {
+  const pay = upstream.payCampaign;
+  upstream.payCampaign = async (...args) => { await pay(...args); return {kind:'unknown'}; };
+  await submit('r1');
+  const first = await approve('r1','mod-token');
+  expect(first.reward).toMatchObject({status:'pending',attempts:1});
+  const now = first.reward.updatedAt;
+  await cardRewardMaintenance(env, now + 59_999);
+  expect(pool.sent).toHaveLength(1);
+  upstream.payCampaign = pay;
+  await cardRewardMaintenance(env, now + 60_000);
+  expect(pool.sent).toHaveLength(2);
+  expect(new Set(pool.sent.map(s=>s.key)).size).toBe(1);
+  expect(pool.balance).toBe(990_000);
+  expect(await rewards()).toEqual([expect.objectContaining({status:'paid',amount:10000})]);
+  await cardRewardMaintenance(env, now + 3_600_000);
+  expect(pool.sent).toHaveLength(2);
+});
+
+it('retries a persisted failed grant without creating a fresh idempotency key every time', async () => {
+  const pay = upstream.payCampaign;
+  upstream.payCampaign = async () => ({kind:'rejected',code:'invalid_request'});
+  await submit('r1');
+  const first = await approve('r1','mod-token');
+  expect(first.reward.status).toBe('failed');
+  upstream.payCampaign = pay;
+  await cardRewardMaintenance(env, first.reward.updatedAt + 60_000);
+  expect(await rewards()).toHaveLength(1);
+  expect(pool.sent[0].key).toBe(first.reward.id);
+  expect((await rewards())[0].status).toBe('paid');
+});
+
+it('recovers eligible backlog with no payment rows, exposes overdue gauges and records unavailable service', async () => {
+  vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('synthetic outage'));
+  await submit('r1'); await approve('r1','mod-token');
+  const now=Date.now();
+  await env.DB.prepare("UPDATE review_submissions SET decided_at=? WHERE status='approved'").bind(now-3_600_000).run();
+  expect(await cardRewardBacklog(env.DB,now)).toEqual({total:1,overdue:1});
+  const metrics = await (await get('/metrics')).text();
+  expect(metrics).toContain('hearthroom_card_reward_due_cards 1');
+  expect(metrics).toContain('hearthroom_card_reward_due_overdue_cards 1');
+  expect(metrics).toContain('hearthroom_card_reward_auto_total{operation="approval",outcome="unavailable"}');
+  const audit = await env.DB.prepare("SELECT after_json FROM audit_log WHERE action='automatic' ORDER BY created_at").all<{after_json:string}>();
+  expect(audit.results.map(r=>JSON.parse(r.after_json))).toContainEqual({path:'stamp',outcome:'unavailable'});
+  vi.mocked(cardRewardTransport.token).mockResolvedValue('service-token');
+  await cardRewardMaintenance(env,now);
+  expect(await cardRewardBacklog(env.DB,now)).toEqual({total:0,overdue:0});
+  expect((await rewards())[0].status).toBe('paid');
+});
+
+it('concurrent automatic requests keep one grant and one provider credit', async () => {
+  vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('defer'));
+  await submit('r1'); await approve('r1','mod-token');
+  vi.mocked(cardRewardTransport.token).mockResolvedValue('service-token');
+  await Promise.all([serviceRewardOnApproval(env,await cardIdOf('r1'),'maintenance'),serviceRewardOnApproval(env,await cardIdOf('r1'),'maintenance')]);
+  expect(await rewards()).toHaveLength(1);
+  expect(pool.balance).toBe(990_000);
+});
+
+it('service token exchange requests only campaign.payout and refuses missing credentials', async () => {
+  vi.mocked(cardRewardTransport.token).mockRestore();
+  const e={...env,HARBOR_CARD_REWARDS_CLIENT_ID:'synthetic-client',HARBOR_CARD_REWARDS_CLIENT_SECRET:'synthetic-secret'};
+  const exchange=vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({access_token:'service-access'}));
+  expect(await cardRewardTransport.token(e)).toBe('service-access');
+  const request=exchange.mock.calls[0];
+  expect(String(request[0])).toBe(`${env.PROVIDER_API_BASE_HARBOR}/oauth/token`);
+  expect(new URLSearchParams(request[1]!.body as URLSearchParams).get('scope')).toBe('campaign.payout');
+  await expect(cardRewardTransport.token({...env,HARBOR_CARD_REWARDS_CLIENT_ID:''})).rejects.toThrow('service_unconfigured');
+  expect(exchange).toHaveBeenCalledTimes(1);
+});
+
+it('the dedicated retry cron pays backlog without running unrelated card synchronization', async () => {
+  vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('defer'));
+  await submit('r1'); await approve('r1','mod-token');
+  vi.mocked(cardRewardTransport.token).mockResolvedValue('service-token');
+  await env.DB.prepare("UPDATE cards SET last_synced_at=0").run();
+  const ctx=createExecutionContext();
+  await worker.scheduled(createScheduledController({cron:'*/5 * * * *'}),env,ctx);
+  await waitOnExecutionContext(ctx);
+  expect((await rewards())[0].status).toBe('paid');
+  expect(await env.DB.prepare('SELECT last_synced_at FROM cards').first()).toEqual({last_synced_at:0});
 });

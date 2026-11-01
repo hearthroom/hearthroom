@@ -13377,10 +13377,13 @@
           "Campaign pool"
         ],
         "summary": "Pay a reward from the campaign pool",
-        "description": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Only the app's owners and admins can pay. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef`, `contentRef` or `validityDays` returns `idempotency_conflict`. Usage scope comes from the platform's settings for this app; expiry is chosen per payout with `validityDays`, and leaving it out means the credits never expire.",
+        "description": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Human callers must be owners or admins of the app. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef`, `contentRef` or `validityDays` returns `idempotency_conflict`. Usage scope comes from the platform's settings for this app; expiry is chosen per payout with `validityDays`, and leaving it out means the credits never expire. A confidential application client with the explicit app-only `campaign.payout` scope may also call this endpoint. Its billing tenant fixes the campaign pool; the client data tenant fixes agent configuration ownership for retention. `rewards.report` alone does not authorize payment or payout lookup. Service payments debit the same pool, credit the recipient and preserve the same limits, retention checks, audit and idempotency rules as administrator payments.",
         "security": [
           {
             "userToken": []
+          },
+          {
+            "appToken": ["campaign.payout"]
           }
         ],
         "requestBody": {
@@ -13474,10 +13477,13 @@
           "Campaign pool"
         ],
         "summary": "Look up a campaign payout",
-        "description": "Returns the payout recorded for `key` in this app, with `replayed` false. Use it to settle a request whose outcome you did not see. Available to the app's owners, admins and viewers.",
+        "description": "Returns the payout recorded for `key` in this app, with `replayed` false. Use it to settle a request whose outcome you did not see. This lookup does not debit the pool or credit a recipient. Available to the app's owners, admins and viewers. A confidential application client with the explicit app-only `campaign.payout` scope may also call this endpoint. Its billing tenant fixes the campaign pool; the client data tenant fixes agent configuration ownership for retention. `rewards.report` alone does not authorize payment or payout lookup. Service payments debit the same pool, credit the recipient and preserve the same limits, retention checks, audit and idempotency rules as administrator payments.",
         "security": [
           {
             "userToken": []
+          },
+          {
+            "appToken": ["campaign.payout"]
           }
         ],
         "parameters": [
@@ -18815,12 +18821,13 @@
       },
       "appToken": {
         "type": "oauth2",
-        "description": "Application access token issued by `/oauth/token` with `grant_type=client_credentials` and the `rewards.report` scope; user access tokens and personal API keys are refused.",
+        "description": "Application access token issued by `/oauth/token` with `grant_type=client_credentials`. Each endpoint requires an explicitly granted application scope; these scopes cannot be acquired by user tokens or personal API keys.",
         "flows": {
           "clientCredentials": {
             "tokenUrl": "/oauth/token",
             "scopes": {
-              "rewards.report": "Report application reward events"
+              "rewards.report": "Report application reward events",
+              "campaign.payout": "Pay campaign rewards and read their receipts within the application billing tenant; debits the campaign pool and credits the recipient."
             }
           }
         }

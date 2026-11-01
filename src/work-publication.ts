@@ -1,3 +1,5 @@
+import { auditStmtIfChanged } from './audit';
+import { serviceRewardOnApproval } from './card-reward-service';
 import { reserveUpdateNotification } from './card-update';
 import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
@@ -26,7 +28,7 @@ interface Publication {
  version_id:string;work_id:string;provider:ProviderId;source_role_id:string;hosted_revision_id:string;
  operation_id:string;state:string;card_id:string;status:string;content_hash:string;kind:string;decided_at:number;
 }
-export async function finalizeManagedReview(env:Env,submission:string):Promise<void>{
+export async function finalizeManagedReview(env:Env,submission:string,path:'stamp'|'recovery'='recovery'):Promise<void>{
  const db=env.DB;
  const row=await db.prepare(`SELECT v.version_id,v.work_id,v.provider,v.source_role_id,v.hosted_revision_id,
  g.operation_id,g.state,s.card_id,s.status,s.content_hash,s.kind,d.decided_at
@@ -71,6 +73,7 @@ export async function finalizeManagedReview(env:Env,submission:string):Promise<v
    .bind(receipt.epoch,row.version_id,row.work_id,receipt.epoch,row.hosted_revision_id),
   db.prepare(`UPDATE review_submissions SET status='approved',decided_at=? WHERE id=? AND status='pending'
    AND EXISTS(SELECT 1 FROM work_publication_permits WHERE version_id=? AND state='published')`).bind(row.decided_at,submission,row.version_id),
+  auditStmtIfChanged(db, {subjectKind:'card_reward',subjectId:submission,actorMemberId:null,actorKind:'system',action:'approval',after:{path,cardId:Number(row.card_id)},operationId:crypto.randomUUID(),now:Date.now()}),
   db.prepare(`UPDATE cards SET status='approved',reviewed_hash=?,registered_at=CASE WHEN ?='first' THEN ? ELSE registered_at END
    WHERE id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')`).bind(row.content_hash,row.kind,row.decided_at,row.card_id,submission),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')").bind(submission,submission),
@@ -78,4 +81,5 @@ export async function finalizeManagedReview(env:Env,submission:string):Promise<v
  ]);
  if(!final[2].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  await bumpOp(db,'work_access','publish','success');
+ await serviceRewardOnApproval(env,Number(row.card_id),path);
 }

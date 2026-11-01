@@ -61,6 +61,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   /** 應用獎勵上報用的機密客戶端（client_credentials，只有 rewards.report）；沒設就不送，事件留在待送清單 */
   HARBOR_REWARDS_CLIENT_ID?: string;
   HARBOR_REWARDS_CLIENT_SECRET?: string;
+  HARBOR_CARD_REWARDS_CLIENT_ID?: string;
+  HARBOR_CARD_REWARDS_CLIENT_SECRET?: string;
   /** 分享連結訪客雜湊的鑰匙（每週由它衍生一把）；沒設就用 isolate 內的隨機鑰匙 */
   SHARE_VISITOR_SECRET?: string;
   ANALYTICS_ENABLED?: string;
