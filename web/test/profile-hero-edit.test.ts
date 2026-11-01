@@ -4,24 +4,27 @@
  * 再加上：靜態圖先進原地裁切、封面只送目錄裡的場景。
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createApp, nextTick, toRaw, type App } from 'vue';
-import { createMemoryHistory, createRouter } from 'vue-router';
+import { createApp, h, nextTick, toRaw, type App } from 'vue';
+import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
-const fixture = vi.hoisted(() => ({ save: vi.fn(), session: { me: {}, displayName: 'Author', avatarUrl: '', wallet: null, profile: { handle: 'author01', memberSince: 0, displayName: 'Author', bio: 'Existing bio', avatarUrl: '', cover: '', tipLinks: [] as string[], identities: [] }, accessToken: async () => 'test' } as any }));
+const fixture = vi.hoisted(() => ({ save: vi.fn(), confirm: vi.fn(), session: { me: {}, displayName: 'Author', avatarUrl: '', wallet: null, profile: { handle: 'author01', memberSince: 0, displayName: 'Author', bio: 'Existing bio', avatarUrl: '', cover: '', tipLinks: [] as string[], identities: [] }, accessToken: async () => 'test' } as any }));
 vi.mock('../src/lib/session', () => ({ useSession: () => fixture.session }));
 vi.mock('../src/lib/api', async (original) => ({ ...(await original<object>()), updateSiteProfile: fixture.save }));
+vi.mock('../src/lib/confirm', () => ({ confirmDialog: fixture.confirm }));
 import ProfileHero from '../src/components/profile/ProfileHero.vue';
 
+let router: Router;
 let app: App, el: HTMLDivElement;
 const settle = async () => { for (let i = 0; i < 4; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); } };
-const buttons = (text: string) => [...el.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent?.trim() === text);
+const buttons = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent?.trim() === text);
 const saveButton = () => buttons(i18n.global.t('profile.save'))[0]!;
 beforeEach(async () => {
   vi.clearAllMocks();
   fixture.session.profile = { ...fixture.session.profile, bio: 'Existing bio', cover: '', tipLinks: [] };
   el = document.createElement('div'); document.body.append(el);
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div/>' } }] });
-  app = createApp(ProfileHero, { community: null, badges: null, author: null }).use(i18n).use(router);
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/me', component: ProfileHero, props: { community: null, badges: null, author: null } }, { path: '/elsewhere', component: { template: '<div/>' } }] });
+  await router.push('/me');
+  app = createApp({ render: () => h(RouterView) }).use(i18n).use(router);
   app.mount(el); await settle();
   buttons(i18n.global.t('profile.editProfile'))[0]!.click(); await settle();
 });
@@ -32,13 +35,13 @@ it('edits in place: name and bio fields, a file picker, the cover scenes, and a 
   expect(el.querySelector('input[type=file]')).not.toBeNull();
   expect(el.querySelector('textarea')?.value).toBe('Existing bio');
   expect(el.querySelectorAll('[role=radiogroup] [role=radio]').length).toBeGreaterThan(3);
-  expect(el.querySelector('.savebar')).not.toBeNull();
+  expect(document.querySelector('.savebar')).not.toBeNull();
 });
 
 it('discard does not upload or save a profile', async () => {
   buttons(i18n.global.t('profile.discard'))[0]!.click(); await settle();
   expect(fixture.save).not.toHaveBeenCalled();
-  expect(el.querySelector('.savebar')).toBeNull();
+  expect(document.querySelector('.savebar')).toBeNull();
 });
 
 it('keeps edits visible after a failed save', async () => {
@@ -79,7 +82,7 @@ it('opens the in-place cropper for a still image and does not save until it is a
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
   await pick(new File([new Uint8Array(64)], 'avatar.jpg', { type: 'image/jpeg' }));
   expect(el.querySelector('.cropper')).not.toBeNull();
-  expect(saveButton().disabled).toBe(true);
+  expect(buttons(i18n.global.t('profile.save')).every((b) => b.disabled)).toBe(true);
   expect(fixture.save).not.toHaveBeenCalled();
 });
 
@@ -115,4 +118,57 @@ it('blocks saving while a tip link is unrecognized', async () => {
   saveButton().click(); await settle();
   expect(fixture.save).not.toHaveBeenCalled();
   expect(el.querySelector('[role=alert]')).not.toBeNull();
+});
+
+
+it('keeps save and cancel beside the editing fields, with the bottom bar outside page containers', () => {
+  expect(el.querySelector('.hero__actions--editing .btn--primary')?.textContent).toBe(i18n.global.t('profile.save'));
+  expect(el.querySelector('.hero__actions--editing')?.textContent).toContain(i18n.global.t('dialog.cancel'));
+  expect(document.body.querySelector(':scope > .savebar')).not.toBeNull();
+});
+it('shares pending and blank-name disabled states across both save controls', async () => {
+  await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, '');
+  expect(buttons(i18n.global.t('profile.save'))).toHaveLength(2);
+  expect(buttons(i18n.global.t('profile.save')).every((b) => b.disabled)).toBe(true);
+  await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, 'Edited');
+  fixture.save.mockImplementation(() => new Promise(() => {}));
+  saveButton().click(); await settle();
+  expect(buttons(i18n.global.t('community.saving'))).toHaveLength(2);
+  expect(buttons(i18n.global.t('community.saving')).every((b) => b.disabled)).toBe(true);
+  expect(buttons(i18n.global.t('dialog.cancel'))[0]!.disabled).toBe(true);
+});
+it('warns before closing a page with a changed cover, and stops warning after cancellation', async () => {
+  el.querySelector<HTMLButtonElement>('[data-cover=sakura]')!.click(); await settle();
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  buttons(i18n.global.t('dialog.cancel'))[0]!.click(); await settle();
+  const clean = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(clean);
+  expect(clean.defaultPrevented).toBe(false);
+  expect(fixture.save).not.toHaveBeenCalled();
+});
+
+it('asks before a dirty profile tab change or leaving, preserving edits when declined', async () => {
+  await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, 'Edited');
+  fixture.confirm.mockResolvedValue(false);
+  await router.push('/me?tab=saved');
+  expect(router.currentRoute.value.fullPath).toBe('/me');
+  expect(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!.value).toBe('Edited');
+  await router.push('/elsewhere');
+  expect(router.currentRoute.value.path).toBe('/me');
+  fixture.confirm.mockResolvedValue(true);
+  await router.push('/me?tab=saved'); await settle();
+  expect(router.currentRoute.value.query.tab).toBe('saved');
+  expect(document.querySelector('.savebar')).toBeNull();
+});
+
+it('saves all changes from the bottom save control too', async () => {
+  fixture.save.mockResolvedValue(fixture.session.profile);
+  await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, 'Edited');
+  el.querySelector<HTMLButtonElement>('[data-cover=sakura]')!.click(); await settle();
+  document.querySelector<HTMLButtonElement>('.savebar .btn--primary')!.click(); await settle();
+  expect(fixture.save).toHaveBeenCalledTimes(1);
+  expect(fixture.save.mock.calls[0][1]).toMatchObject({ displayName: 'Edited', cover: 'sakura' });
+  expect(document.querySelector('.savebar')).toBeNull();
 });
