@@ -81,24 +81,27 @@ it("keeps member creation primary without a duplicate check-in block",async()=>{
  expect(root.querySelector('a[href="/checkin"]')).toBeNull();
 });
 
-it("keeps the pinned rail in place in the scroll event, before the next animation frame", async () => {
+it("leaves same-direction scrolling to CSS sticky and only re-anchors on reversal", async () => {
   const frames = new Map<number, FrameRequestCallback>(); let frameId = 0;
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frames.set(++frameId, callback); return frameId; });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+  vi.stubGlobal("innerHeight", 600);
   vi.stubGlobal("scrollY", 0);
   await mount();
   const host = root.querySelector<HTMLElement>(".home-sidebar-host")!;
   const rail = root.querySelector<HTMLElement>(".home-sidebar")!;
   Object.defineProperty(host, "offsetHeight", { configurable: true, value: 5000 });
-  Object.defineProperty(rail, "offsetHeight", { configurable: true, value: 300 });
+  Object.defineProperty(rail, "offsetHeight", { configurable: true, value: 800 });
   vi.spyOn(host, "getBoundingClientRect").mockImplementation(() => ({ top: 500 - scrollY }) as DOMRect);
+  vi.spyOn(rail, "getBoundingClientRect").mockImplementation(() => ({ top: -280 }) as DOMRect);
   const flush = () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn(0)); };
   flush();
-  vi.stubGlobal("scrollY", 800);
-  window.dispatchEvent(new Event("scroll")); flush();
-  const before = rail.style.transform;
-  vi.stubGlobal("scrollY", 720);
+  expect(rail.style.bottom).toBe("auto");
+  const pinned = rail.getAttribute("style");
+  for (const y of [400, 800, 1600]) { vi.stubGlobal("scrollY", y); window.dispatchEvent(new Event("scroll")); }
+  expect(rail.getAttribute("style"), "a style write per scroll event trails the compositor and shakes").toBe(pinned);
+  vi.stubGlobal("scrollY", 1500);
   window.dispatchEvent(new Event("scroll"));
-  expect(rail.style.transform, "scroll compensation must be applied before the next paint").not.toBe(before);
-  expect(Number(rail.style.transform.match(/[-\d.]+/)?.[0]) - 220).toBe(84);
+  expect(rail.style.top).toBe("auto");
+  expect(host.style.getPropertyValue("--rail-shift")).toBe(`${-280 - (500 - 1500)}px`);
 });

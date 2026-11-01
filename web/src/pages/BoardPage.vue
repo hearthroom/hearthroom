@@ -406,7 +406,7 @@ const ratingOptions = computed(() => {
 /* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
 .board-main--restored :deep(.settle) { animation: none; }
 .board-sidebar { display: none; }
-@media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: grid; } }
+@media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: block; } }
 .sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }
 .sorts__item {
   height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);

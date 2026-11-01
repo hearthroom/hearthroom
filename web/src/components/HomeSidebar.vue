@@ -9,7 +9,7 @@ import { fetchUpdates } from "@/lib/updates";
 import { fetchPosts, postPath } from "@/lib/blog";
 import { withLocale } from "@/router";
 import { useSiteLinks } from "@/lib/site-links";
-import { sidebarPosition, type SidebarPosition } from "@/lib/sidebar-position";
+import { stickyRail, type Direction } from "@/lib/sidebar-position";
 import SiteLink from "./SiteLink.vue";
 
 const session = useSession();
@@ -53,11 +53,15 @@ const host = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
 let clearanceFrame = 0;
 let sizeObserver: ResizeObserver | undefined;
-let position: SidebarPosition | undefined;
+let direction: Direction = "down";
+let lastScrollY = 0;
 function scheduleClearance() { if (!clearanceFrame) clearanceFrame = requestAnimationFrame(measureClearance); }
-// Scroll already runs before paint. Deferring its transform to another RAF exposes
-// the natural document movement for a frame, then snaps the pinned rail back.
-function scrollClearance() { cancelAnimationFrame(clearanceFrame); measureClearance(); }
+// Same-direction scrolling is left to CSS sticky; a style write per scroll event shakes the rail.
+function scrollClearance() {
+  const y = window.scrollY, next: Direction = y > lastScrollY ? "down" : y < lastScrollY ? "up" : direction;
+  lastScrollY = y;
+  if (next !== direction) { direction = next; cancelAnimationFrame(clearanceFrame); measureClearance(); }
+}
 function measureClearance() {
   clearanceFrame = 0;
   const outer = host.value, inner = sidebar.value;
@@ -65,11 +69,10 @@ function measureClearance() {
   const tokens = getComputedStyle(document.documentElement);
   const header = parseFloat(tokens.getPropertyValue('--site-header-h')) || parseFloat(tokens.getPropertyValue('--header-h')) || 60;
   const bottomLimit = window.innerHeight - (parseFloat(getComputedStyle(inner).scrollMarginBottom) || 80);
-  const natural = outer.getBoundingClientRect();
-  const height = inner.offsetHeight;
-  position = sidebarPosition({ scrollY: window.scrollY, naturalTop: natural.top, height,
-    parentHeight: outer.offsetHeight, top: header + 24, bottom: bottomLimit }, position);
-  inner.style.transform = `translateY(${position.offset}px)`;
+  const rail = stickyRail({ railTop: inner.getBoundingClientRect().top, hostTop: outer.getBoundingClientRect().top,
+    height: inner.offsetHeight, parentHeight: outer.offsetHeight, top: header + 24, bottom: bottomLimit, viewport: window.innerHeight }, direction);
+  outer.style.setProperty('--rail-shift', `${rail.shift}px`);
+  inner.style.top = rail.top; inner.style.bottom = rail.bottom;
 }
 function revealFocus(event: FocusEvent) {
   const target = event.target as HTMLElement;
@@ -84,6 +87,7 @@ onMounted(() => {
   if (typeof ResizeObserver !== 'undefined' && host.value && sidebar.value) {
     sizeObserver = new ResizeObserver(scheduleClearance); sizeObserver.observe(host.value); sizeObserver.observe(sidebar.value);
   }
+  lastScrollY = window.scrollY;
   window.addEventListener('scroll', scrollClearance, { passive: true });
   window.addEventListener('resize', scheduleClearance);
   scheduleClearance();
@@ -126,8 +130,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .home-sidebar-host { align-self: stretch; min-width: 0; }
+.home-sidebar-host::before { content: ""; display: block; height: var(--rail-shift, 0px); }
 .home-sidebar :deep(a), .home-sidebar button { scroll-margin-top: calc(var(--site-header-h, var(--header-h)) + var(--s-5)); }
-.home-sidebar { align-self: start; scroll-margin-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--s-4); align-content: start; overflow: visible; padding-block: var(--s-1); }
+.home-sidebar { position: sticky; align-self: start;scroll-margin-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--s-4); align-content: start; overflow: visible; padding-block: var(--s-1); }
 .sidebar-block { padding: var(--s-4); min-width: 0; display: grid; gap: var(--s-2); }
 .sidebar-block h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .sidebar-label { display: flex; align-items: center; gap: var(--s-2); }
