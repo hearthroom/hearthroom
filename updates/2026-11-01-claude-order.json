@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "Claude 預設選單依 Opus、Sonnet、Haiku 排列",
+    "zh-Hans": "Claude 默认菜单按 Opus、Sonnet、Haiku 排列",
+    "en": "The Claude menu lists Opus, Sonnet, then Haiku by default",
+    "ja": "Claude の初期表示が Opus、Sonnet、Haiku の順になりました",
+    "ko": "Claude 메뉴가 기본으로 Opus, Sonnet, Haiku 순으로 표시돼요"
+  },
+  "body": {
+    "zh-Hant": "同系列的新版本會排在前面，這次白露新線的名稱也統一為白露。",
+    "zh-Hans": "同系列的新版本会排在前面，这次白露新线路的名称也统一为白露。",
+    "en": "Newer versions appear first within each series, and the new Dew lanes are simply named Dew.",
+    "ja": "同じシリーズでは新しいバージョンが先に並び、今回の白露の新回線は白露という名前に統一されました。",
+    "ko": "각 시리즈에서 새 버전이 먼저 표시되며 이번에 추가된 이슬 경로의 이름도 이슬로 통일됐어요"
+  }
+}

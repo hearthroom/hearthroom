@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "Claude 白露新線上架，對話七折起",
+    "zh-Hans": "Claude 白露新线路上线，对话七折起",
+    "en": "New Dew lanes for Claude, with chats up to 30% off",
+    "ja": "Claude に白露の新回線が登場、対話は最大30％オフ",
+    "ko": "Claude에 새 이슬 경로가 추가되고 대화가 최대 30% 할인돼요"
+  },
+  "body": {
+    "zh-Hant": "Opus 5.5、Opus 4.6、Sonnet 5 七折，Sonnet 5.5 與 Haiku 5.5 八五折，皆提供64K至168K五檔容量。",
+    "zh-Hans": "Opus 5.5、Opus 4.6、Sonnet 5 七折，Sonnet 5.5 与 Haiku 5.5 八五折，均提供64K至168K五档容量。",
+    "en": "Opus 5.5, Opus 4.6 and Sonnet 5 are 30% off, while Sonnet 5.5 and Haiku 5.5 are 15% off, all with five context tiers from 64K to 168K.",
+    "ja": "Opus 5.5、Opus 4.6、Sonnet 5 は30％オフ、Sonnet 5.5 と Haiku 5.5 は15％オフで、全5モデルで64Kから168Kの5段階の容量を選べます。",
+    "ko": "Opus 5.5, Opus 4.6, Sonnet 5는 30%, Sonnet 5.5와 Haiku 5.5는 15% 할인되며 모두 64K부터 168K까지 다섯 용량을 선택할 수 있어요"
+  }
+}

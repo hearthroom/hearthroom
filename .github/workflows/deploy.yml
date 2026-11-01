@@ -12,6 +12,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      test_scope:
+        description: Test coverage (no-accounts reports every excluded suite)
+        type: choice
+        default: full
+        options: [full, no-accounts]
 
 permissions:
   contents: read
@@ -31,6 +37,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          # PR scope is taken from the head commit, not the synthetic merge message.
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -38,11 +46,39 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Select explicit test scope
+        id: test-scope
+        env:
+          SCOPE_EVENT_NAME: ${{ github.event_name }}
+          SCOPE_DISPATCH_INPUT: ${{ inputs.test_scope }}
+          SCOPE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/test-scope.mjs --resolve-event
+      - name: Validate restricted inventory before collecting tests
+        if: steps.test-scope.outputs.scope == 'no-accounts'
+        run: node scripts/test-scope.mjs --check-no-accounts
+      - name: Restrict automatic npm lifecycles
+        if: steps.test-scope.outputs.scope == 'no-accounts'
+        # Applies to nested stage npm ci too. Explicit npm run scripts still run;
+        # dependency install and implicit pre/post scripts do not.
+        run: echo "npm_config_ignore_scripts=true" >> "$GITHUB_ENV"
+      - name: Verify test scope planner
+        run: node --test scripts/test-scope.test.mjs
+      - name: Verify restricted stage audit
+        if: steps.test-scope.outputs.scope == 'no-accounts'
+        run: node scripts/test-scope.mjs --verify-stage
+
       - run: npm ci
+      - name: Preserve audited project hooks
+        if: steps.test-scope.outputs.scope == 'no-accounts'
+        run: npm run prepare
       - run: npm run typecheck
       # 先建置再測：前端測試的 moonstage/stage 別名指向 stage/ 的建置產物，沒建過會解析失敗
       - run: npm run build
       - run: npm test
+        if: steps.test-scope.outputs.scope == 'full'
+      - name: Run audited tests without account fixtures
+        if: steps.test-scope.outputs.scope == 'no-accounts'
+        run: npm run test:no-accounts
       - name: Verify and build the pinned playground
         working-directory: stage
         env:

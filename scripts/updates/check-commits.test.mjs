@@ -38,14 +38,17 @@ test("a commit passes by touching updates/, pointing at a known entry, or saying
 
 function repo() {
   const dir = mkdtempSync(join(tmpdir(), "update-notes-"));
-  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } }).trim();
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "Hearth Room", GIT_AUTHOR_EMAIL: "contact@hearthroom.club", GIT_COMMITTER_NAME: "Hearth Room", GIT_COMMITTER_EMAIL: "contact@hearthroom.club" } }).trim();
   git("init", "-q", "-b", "main");
+  git("config", "user.name", "Hearth Room");
+  git("config", "user.email", "contact@hearthroom.club");
+  git("config", "commit.gpgsign", "false");
   mkdirSync(join(dir, "updates"));
   writeFileSync(join(dir, "README.md"), "x");
-  git("add", "."); git("commit", "-q", "-m", "chore: init");
+  git("add", "."); git("commit", "-q", "--signoff", "-m", "chore: init");
   const commit = (files, message) => {
     for (const [path, content] of Object.entries(files)) { mkdirSync(join(dir, path, ".."), { recursive: true }); writeFileSync(join(dir, path), content); }
-    git("add", "."); git("commit", "-q", "-m", message);
+    git("add", "."); git("commit", "-q", "--signoff", "-m", message);
     return git("rev-parse", "HEAD");
   };
   return { dir, git, commit };
@@ -80,7 +83,7 @@ test("merge commits are skipped", () => {
   r.commit({ "web/a.ts": "1" }, "fix: on the side\n\nUpdate: none");
   r.git("checkout", "-q", "main");
   r.commit({ "web/b.ts": "1" }, "docs: main moves");
-  r.git("merge", "-q", "--no-ff", "side", "-m", "Merge branch side");
+  r.git("merge", "-q", "--no-ff", "--signoff", "side", "-m", "Merge branch side");
   assert.deepEqual(checkRange(r.dir, `${start}..HEAD`), []);
 });
 
