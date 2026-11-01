@@ -381,6 +381,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .header__inner--reviewer .nav__item { white-space: nowrap; }
 .header__inner--reviewer .search { display: none; }
 .header__inner--reviewer .search-go { display: inline-flex; }
+/* 線路訊號出現時先讓社群連結讓位；帳號選單仍有同一入口。 */
+.header__inner--reviewer.header__inner--signal [data-header-discord] { display: none; }
 @media (min-width: 1080px) {
   .header__inner--reviewer { grid-template-columns: auto minmax(0, 1fr) auto; }
 }
