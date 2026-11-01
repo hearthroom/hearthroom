@@ -90,8 +90,10 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
-      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
       <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
+      <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷 -->
+      <div v-if="card.featured || shownAt" class="card__corner">
+      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
       <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
          底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
       <span v-if="shownAt" class="card__updated" :title="timeLabel">
@@ -102,6 +104,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
         </svg>
         <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
       </span>
+      </div>
       <!-- 關注動態不排名，左上空著，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
       <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
@@ -170,11 +173,15 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 .card__rank { position: absolute; top: 8px; left: 8px; z-index: 1; }
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
+.card__corner {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; pointer-events: none;
+  display: flex; align-items: center; gap: 4px;
+}
+/* block 而不是 inline-flex：文字直接當 flex 項目時省略號不會出現 */
 .card__featured {
-  position: absolute; left: 8px; bottom: 8px; z-index: 1; pointer-events: none;
-  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; max-width: calc(100% - 16px);
+  display: block; min-width: 0; height: 20px; line-height: 20px; padding: 0 7px;
   border-radius: 4px; background: var(--accent); color: #fff;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* 關注動態的事件類別：跟精選標同一家族。封面上的疊色不跟主題走，兩個底色是封面上的例外 */
@@ -252,7 +259,7 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .card__author > :deep(span:first-child) { overflow: hidden; text-overflow: ellipsis; }
 /* 立繪右下角的更新時間：半透明深底白字，任何立繪上都讀得到 */
 .card__updated {
-  position: absolute; right: 8px; bottom: 8px;
+  flex: none; margin-left: auto;
   display: inline-flex; align-items: center; gap: 3px;
   padding: 2px 7px; border-radius: var(--r-pill);
   background: rgba(16, 16, 19, 0.62); color: #fff;
