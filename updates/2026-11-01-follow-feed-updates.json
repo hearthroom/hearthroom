@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "首頁的「關注」分頁會列出關注作者的新卡和他們通知的更新。",
+    "zh-Hans": "首页的「关注」分页会列出关注作者的新卡和他们通知的更新。",
+    "en": "The Following tab on the home page now shows new cards and announced updates from creators you follow.",
+    "ja": "ホームの「フォロー」タブに、フォロー中の作者の新しいカードと通知された更新が並びます。",
+    "ko": "홈의 '팔로잉' 탭에 팔로우한 작가의 새 카드와 알림을 보낸 업데이트가 표시돼요."
+  }
+}

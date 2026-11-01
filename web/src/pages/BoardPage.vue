@@ -68,7 +68,13 @@ const continuations = computed(() => {
   });
 });
 const loading = computed(() => feed.loading);
-const SORTS: Sort[] = ["day", "hot", "score", "favorites", "week", "month", "new", "updated", "random"];
+/**
+ * 分頁列的順序（玩家回報、PM 2026-11-01）：日榜、週榜、月榜、最熱、評分、最新、關注、更新、推薦。
+ * 「關注」是另一種清單（關注作者的動態），不是排法，但跟排序排在同一列、同一個樣式。
+ * 全站收藏數排行不在分頁列：舊網址 ?sort=favorites 不在 SORTS 裡，照沒帶 sort 退回日榜。
+ */
+const SORTS: Sort[] = ["day", "week", "month", "hot", "score", "new", "updated", "random"];
+const TABS: Array<Sort | "following"> = ["day", "week", "month", "hot", "score", "new", "following", "updated", "random"];
 const restoring = ref(false);
 const wide = ref(window.innerWidth >= 1080);
 const sentinel = ref<HTMLElement | null>(null);
@@ -230,7 +236,7 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
   router.push({ query });
 }
 /** 換榜的時候排序鍵不通用，一起清掉。 */
-const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag: undefined });
+const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag: undefined, rating: undefined });
 
 /** 已登入的人頂端放蘇綺面板；新訪客的歡迎橫幅還在時先放橫幅，一次只放一塊。翻到後面幾頁不放。 */
 const welcome = useMascotWelcome();
@@ -321,16 +327,17 @@ const ratingOptions = computed(() => {
     <UpdateStrip />
 
     <!--
-      一列解決「看哪個榜」與「怎麼排」：六個排序在左，最右一顆「關注」是另一個榜（關注作者的新卡），
-      不是排法——選中它時六個排序全部不亮。原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；
-      R18 開關搬進頁首（App.vue）。
+      一列解決「看哪個榜」與「怎麼排」：「關注」（關注作者的動態）跟排序同一列、同一個樣式，選中它時其他分頁全部不亮。
+      原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；R18 開關搬進頁首（App.vue）。
     -->
     <div class="board-layout"><div class="board-main" :class="{ 'board-main--restored': restoring }">
     <div ref="sortsEl" class="sorts" role="group" :aria-label="$t('board.sorts')">
-      <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
-        {{ $t(`board.sort.${s}`) }}
-      </button>
-      <button class="sorts__item sorts__mode" :class="{ 'sorts__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("board.mode.following") }}</button>
+      <template v-for="s in TABS" :key="s">
+        <button v-if="s === 'following'" class="sorts__item" :class="{ 'sorts__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("board.mode.following") }}</button>
+        <button v-else class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
+          {{ $t(`board.sort.${s}`) }}
+        </button>
+      </template>
     </div>
 
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
@@ -386,7 +393,7 @@ const ratingOptions = computed(() => {
       </div>
     </template>
 
-    <FollowFeed v-else />
+    <FollowFeed v-else @discover="toNewCards" @top="sortsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })" />
     </div><HomeSidebar v-if="wide" class="board-sidebar" /></div>
   </div>
 </template>
@@ -401,7 +408,7 @@ const ratingOptions = computed(() => {
 @media(min-width:1440px) { .board-page { --board-columns: 5; } }
 @media(min-width:1920px) { .board-page { --board-columns: 6; } .board-page .board-layout { grid-template-columns: minmax(0,1fr) 288px; } }
 @media(min-width:2400px) { .board-page { --board-columns: 8; } }
-/* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
+/* 分頁做成細字頁籤，擠不下就換行、不裁字：橫捲會把第七位的「關注」藏到畫面外 */
 .board-main { min-width: 0; }
 /* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
 .board-main--restored :deep(.settle) { animation: none; }
@@ -415,9 +422,7 @@ const ratingOptions = computed(() => {
 }
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
-.sorts__mode { margin-left: auto; font-weight: 600; color: var(--text-2); }
-.sorts__mode.sorts__item--on { color: var(--accent-text); }
-/* 窄螢幕把每顆的左右內距收 2px：八個排序加「關注」在手機上會換成兩行，少一點內距第二行就短一些 */
+/* 窄螢幕把每顆的左右內距收 2px：九個分頁在手機上會換成兩行，少一點內距第二行就短一些 */
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin: 0; font-variant-numeric: tabular-nums; }

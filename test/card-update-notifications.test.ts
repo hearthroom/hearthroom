@@ -204,3 +204,32 @@ it('uses the exact three-day boundary in admission, reservation and source eligi
   await expect(reserveUpdateNotification(env.DB,version!.submission_id,next)).resolves.toBeUndefined();
   expect(await env.DB.prepare('SELECT state,reserved_at FROM card_update_events WHERE version_id=?').bind(versionId).first()).toEqual({state:'reserved',reserved_at:next});
 });
+
+it('orders the follow feed by each card\'s latest announced event and leaves silent updates out', async () => {
+  const feed = async () => (await (await SELF.fetch('https://c.test/v1/me/feed', { headers: bearer('follower') })).json() as { items: { id: string; feedEvent: { kind: string; at: number; note?: string } }[] }).items;
+  rolesOnMainSite({ roleId: 'draft', authorNumId: 10001, name: '合成測試' }, { roleId: 'later', authorNumId: 10001, name: '後來的卡' });
+  const later = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ roleId: 'later', ...ratingBody(false), operationId: crypto.randomUUID() }) }));
+  const laterCard = String((await later.json() as { id: string }).id);
+  const now = Date.now();
+  await env.DB.prepare('UPDATE cards SET registered_at=? WHERE id=?').bind(now - 5 * day, Number(card)).run();
+  await env.DB.prepare('UPDATE cards SET registered_at=? WHERE id=?').bind(now - 2 * day, Number(laterCard)).run();
+  expect((await feed()).map(c => [c.id, c.feedEvent.kind])).toEqual([[laterCard, 'new'], [card, 'new']]);
+  expect((await feed())[1]!.feedEvent).toEqual({ kind: 'new', at: now - 5 * day });
+
+  await approve(await submit());
+  expect((await feed()).map(c => [c.id, c.feedEvent.kind])).toEqual([[laterCard, 'new'], [card, 'new']]);
+
+  await approve(await submit({ updateKind: 'major', updateNote: log }));
+  const published = (await env.DB.prepare("SELECT published_at AS at FROM card_update_events WHERE state='published'").first<{ at: number }>())!.at;
+  const items = await feed();
+  expect(items.map(c => c.id)).toEqual([card, laterCard]);
+  expect(items[0]!.feedEvent).toEqual({ kind: 'update', at: published, note: log });
+
+  // A later silent revision keeps the announced update as the card's latest feed event.
+  await approve(await submit());
+  expect((await feed())[0]!.feedEvent).toEqual({ kind: 'update', at: published, note: log });
+  // The log follows its own version's adult gate, like the public version history.
+  await env.DB.prepare("UPDATE hosting_versions SET rating='R' WHERE version_id=(SELECT version_id FROM card_update_events)").run();
+  expect((await feed())[0]!.feedEvent).toEqual({ kind: 'update', at: published, note: '' });
+  expect((await SELF.fetch('https://c.test/v1/me/feed', { headers: bearer('collector') }).then(r => r.json()) as { items: unknown[] }).items).toEqual([]);
+});

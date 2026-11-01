@@ -57,7 +57,7 @@
   "dd57e8d60db2b": "Add a follow",
   "df11f292e229c": "Remove a follow",
   "de3ef044c21a0": "List your favorite cards",
-  "d59c92ade0b9f": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
+  "d59c92ade0b9f": "Returns up to 24 public cards from creators you follow, ordered by each card's latest event, newest first: publication, or an update its creator chose to announce. Silent updates are not events. Filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
   "d4cd7cd3d6f1c": "Pagination offset; page size is 24.",
   "d10e0014d93fc": "Display language; defaults to zh-Hant.",
   "d6cb79df61ff0": "Read your followed-author feed",
@@ -2499,5 +2499,6 @@
   "d0e3fb2643c24": "Invalid request or conversation unavailable to this user.",
   "d95bc38c2172b": "Stale history snapshot, changed intent for an existing clientOperationID, or active operation could not be stopped.",
   "de8c5bc271d08": "Transaction failed; no reset changes committed. Retry with the same clientOperationID.",
-  "d577b5294160b": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting."
+  "d577b5294160b": "Semantic recall is on by default for new entries. False permits keyword or regular-expression activation only; constant entries, retained content, and explicit agent list/read remain available. Omitted on update keeps the current setting.",
+  "d7f3a91c0e5b2": "The card's latest event. kind is new (at = when it was listed) or update (at = when the announced update went public; note is its changelog, empty when that version is adult content you have not enabled)."
 }

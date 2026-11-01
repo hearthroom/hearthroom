@@ -42,8 +42,8 @@ async function mount(path: string, hiddenTags: string[] = []) {
 }
 const buttons = () => [...root.querySelectorAll<HTMLButtonElement>("button")];
 const button = (label: string) => buttons().find((x) => x.textContent?.trim() === label);
-const sortButtons = () => [...root.querySelectorAll<HTMLButtonElement>(".sorts__item:not(.sorts__mode)")];
-const modeButton = () => root.querySelector<HTMLButtonElement>(".sorts__mode");
+const sortButtons = () => [...root.querySelectorAll<HTMLButtonElement>(".sorts__item")];
+const modeButton = () => sortButtons().find((b) => b.textContent?.trim() === i18n.global.t("board.mode.following"));
 const tagsNav = () => root.querySelector<HTMLElement>(".discovery-tags");
 const expander = () => root.querySelector<HTMLButtonElement>(".discovery-tags__toggle");
 
@@ -54,30 +54,36 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("首頁：關注併進排序列", () => {
-  it("排序列最右邊一顆「關注」；榜單頁自己不畫 R18 開關，也沒有分段控制", async () => {
+  const TABS = ["day", "week", "month", "hot", "score", "new", "following", "updated", "random"];
+  const label = (s: string) => i18n.global.t(s === "following" ? "board.mode.following" : `board.sort.${s}`);
+  it("九個分頁照玩家要的順序排，「關注」在第七位、跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
     await mount("/");
-    expect(modeButton()?.textContent?.trim()).toBe(i18n.global.t("board.mode.following"));
+    expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(TABS.map(label));
+    expect(root.querySelector(".sorts__mode")).toBeNull();
     expect(modeButton()?.getAttribute("aria-pressed")).toBe("false");
-    // 最熱、評分、收藏、日榜、週榜、月榜、最新、更新、推薦（2026-10-11 加了評分、收藏與最近更新）
-    expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(["day", "hot", "score", "favorites", "week", "month", "new", "updated", "random"].map((s) => i18n.global.t(`board.sort.${s}`)));
-    // 預設日榜、排最左，載完接最熱
+    // 預設日榜、排最左
     expect(sortButtons()[0].classList.contains("sorts__item--on"), "日榜亮著").toBe(true);
     expect(root.querySelector(".r18")).toBeNull();
     expect(root.querySelector(".seg")).toBeNull();
   });
 
-  it("點「關注」進關注動態：網址帶 mode=following，六個排序全部不亮，類型列與張數不畫", async () => {
-    await mount("/?sort=hot&tag=roleplay");
+  it("舊的「收藏」排行網址退回日榜", async () => {
+    await mount("/?sort=favorites");
+    expect(sortButtons().filter((b) => b.classList.contains("sorts__item--on")).map((b) => b.textContent?.trim())).toEqual([label("day")]);
+  });
+
+  it("點「關注」進關注動態：網址只剩 mode=following，其他分頁全部不亮，類型列與張數不畫", async () => {
+    await mount("/?sort=hot&tag=roleplay&rating=PG15");
     modeButton()!.click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ mode: "following" });
     expect(modeButton()?.getAttribute("aria-pressed")).toBe("true");
-    expect(sortButtons().every((b) => !b.classList.contains("sorts__item--on") && b.getAttribute("aria-pressed") === "false")).toBe(true);
+    expect(sortButtons().filter((b) => b !== modeButton()).every((b) => !b.classList.contains("sorts__item--on") && b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect(tagsNav()).toBeNull();
     expect(root.querySelector(".feed")).not.toBeNull();
     // 點任一個排序就回到角色卡榜
-    sortButtons()[4].click(); await settle();
+    sortButtons()[1].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "week" });
-    sortButtons()[2].click(); await settle();
+    sortButtons()[4].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "score" });
     expect(tagsNav()).not.toBeNull();
   });

@@ -57,6 +57,8 @@ export interface CommunityCard {
   updateKind?: 'minor'|'major';
   updateNote?: string;
   updatedAt?: number;
+  /** 只有關注動態回這欄：這張卡最近一次事件（新卡＝上榜；更新＝作者選擇通知的那次更新公開，note 是那次的更新日誌） */
+  feedEvent?: { kind: "new" | "update"; at: number; note?: string };
   syncedAt: number;
   /** 本站永久數字卡號，私有卡與公開卡共用同一套編號。 */
   num?: number;

@@ -2,6 +2,7 @@
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { compact, compactTile, hueFrom, relativeTime } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
@@ -22,6 +23,7 @@ const props = defineProps<{
 
 // 沒封面的卡用角色名決定色相：同一張卡永遠同一個顏色，一排佔位卡也彼此可辨。
 const { lp, locale } = useLocalePath();
+const { t } = useI18n();
 const hue = computed(() => hueFrom(props.card.name));
 // 標題照介面字形顯示；佔位色照原標題算，同一張卡換語言也是同一個顏色。
 const name = computed(() => displayName(props.card.name, locale.value));
@@ -50,6 +52,17 @@ function onArtError() {
 const TAGS_SHOWN = 2;
 const tags = computed(() => props.card.tags.slice(0, TAGS_SHOWN));
 const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN));
+
+/**
+ * 關注動態的卡（API 帶 feedEvent）：左上標「新卡／更新」，右下時間換成事件時間；
+ * 更新項的簡介位置放那次的更新日誌（同樣兩行，卡片高度不變）。其他清單沒有這欄，照舊。
+ */
+const event = computed(() => props.card.feedEvent);
+const shownAt = computed(() => event.value?.at ?? props.card.updatedAt);
+const timeLabel = computed(() => shownAt.value === undefined ? "" : event.value?.kind === "new"
+  ? t("library.feedPublishedAgo", { time: relativeTime(shownAt.value) })
+  : t("card.updatedAgo", { time: relativeTime(shownAt.value) }));
+const note = computed(() => event.value?.kind === "update" ? event.value.note ?? "" : "");
 </script>
 
 <template>
@@ -81,14 +94,16 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
       <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
          底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
-      <span v-if="card.updatedAt" class="card__updated" :title="$t('card.updatedAgo', { time: relativeTime(card.updatedAt) })">
-        <span class="sr-only">{{ $t("card.updatedAgo", { time: relativeTime(card.updatedAt) }) }}</span>
+      <span v-if="shownAt" class="card__updated" :title="timeLabel">
+        <span class="sr-only">{{ timeLabel }}</span>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" />
           <path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <time :datetime="new Date(card.updatedAt).toISOString()" aria-hidden="true">{{ relativeTime(card.updatedAt) }}</time>
+        <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
       </span>
+      <!-- 關注動態不排名，左上空著，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
+      <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
@@ -96,7 +111,8 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       <h2 class="card__name" :class="{ 'card__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
         <RouterLink :to="href" class="card__link">{{ title.text }}</RouterLink>
       </h2>
-      <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
+      <p v-if="note" class="card__hook card__hook--note"><b>{{ $t("cardUpdate.card.updateNote") }}</b>{{ note }}</p>
+      <p v-else class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
 
       <ul v-if="tags.length" class="card__tags">
         <li v-for="tag in tags" :key="tag">
@@ -161,6 +177,15 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* 關注動態的事件類別：跟精選標同一家族。封面上的疊色不跟主題走，兩個底色是封面上的例外 */
+.card__kind {
+  position: absolute; top: 8px; left: 8px; z-index: 1; pointer-events: none;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; max-width: calc(100% - 16px);
+  border-radius: 4px; background: rgba(16, 16, 19, 0.62); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.card__kind--new { background: var(--accent); }
 .card__flag { position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none; }
 
 /* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡。
@@ -189,6 +214,10 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   /* 固定兩行高：一張沒簡介的卡不該讓整排的底線參差 */
   min-height: calc(12.5px * 1.5 * 2);
 }
+
+.card__hook--note { color: var(--text); }
+.card__hook--note b { margin-right: 4px; font-size: 11px; font-weight: 600; color: var(--text-3); }
+.card__hook--note:lang(ko) { word-break: keep-all; }
 
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
 /* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */

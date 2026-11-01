@@ -102,9 +102,37 @@ for (const kind of ["favorites", "feed"] as const) {
     }
     const allowNsfw=access.showNsfw&&!!access.ageVerifiedAt;
     const position=await publicPosition(c.env,c.req.url,offset,allowNsfw,member.id);
-    const candidates=await publicCandidates(c.env,{followedBy:member.id,sort:'new',limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])},position.raw);
-    return c.json(await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'}));
+    const candidates=await publicCandidates(c.env,{followedBy:member.id,sort:'feed',limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])},position.raw);
+    const result=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'});
+    const events=await feedEvents(c.env.DB,result.items.map(card=>card.id),allowNsfw);
+    return c.json({...result,items:result.items.map(card=>({...card,feedEvent:events.get(card.id)}))});
   });
+}
+
+type FeedEvent = { kind: 'new' | 'update'; at: number; note?: string };
+/**
+ * 關注動態每張卡的事件，口徑跟排序（cards.ts FEED_EVENT_AT）一致：上榜算「新卡」，
+ * 之後作者選擇通知的更新算「更新」，只取最近一次。更新日誌跟版本歷史一樣照那一版的分級擋。
+ */
+async function feedEvents(db: D1Database, ids: string[], allowAdult: boolean): Promise<Map<string, FeedEvent>> {
+  if (!ids.length) return new Map();
+  const rows = await db.prepare(`SELECT CAST(c.id AS TEXT) AS id, c.registered_at AS registeredAt, e.published_at AS updatedAt, v.update_note AS note, v.rating AS rating
+    FROM cards c
+    LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
+    LEFT JOIN card_update_events e ON e.work_id=w.id AND e.state='published'
+      AND e.published_at=(SELECT MAX(x.published_at) FROM card_update_events x WHERE x.work_id=w.id AND x.state='published')
+    LEFT JOIN hosting_versions v ON v.version_id=e.version_id
+    WHERE c.id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(ids))
+    .all<{ id: string; registeredAt: number; updatedAt: number | null; note: string | null; rating: string | null }>();
+  const events = new Map<string, FeedEvent>();
+  for (const row of rows.results) {
+    if (events.has(row.id)) continue;
+    const update = row.updatedAt !== null && row.updatedAt > row.registeredAt;
+    events.set(row.id, update
+      ? { kind: 'update', at: row.updatedAt!, note: row.rating === 'R' && !allowAdult ? '' : row.note ?? '' }
+      : { kind: 'new', at: row.registeredAt });
+  }
+  return events;
 }
 
 libraryRoutes.get("/v1/me/following", async c => {

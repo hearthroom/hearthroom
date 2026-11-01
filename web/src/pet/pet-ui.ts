@@ -1176,7 +1176,7 @@ export class SukiPet {
     const choice = this.desktopStand ? { x: this.desktopStand.x * innerWidth, y: this.desktopStand.y * innerHeight } : this.deskHome();
     const pos = clampStand(this.viewport(), this.size(), choice), body = this.box();
     if (pos.x < 0 || pos.y < 0 || pos.x + body.width > innerWidth || pos.y + body.height > innerHeight) return null;
-    const blockers = [...document.querySelectorAll<HTMLElement>('.header, .sorts__item, .sorts__mode, .home-sidebar')].map(el => el.getBoundingClientRect());
+    const blockers = [...document.querySelectorAll<HTMLElement>('.header, .sorts__item, .home-sidebar')].map(el => el.getBoundingClientRect());
     if (blockers.some(r => r.width > 0 && r.height > 0 && pos.x < r.right && pos.x + body.width > r.left && pos.y < r.bottom && pos.y + body.height > r.top)) return null;
     return pos;
   }

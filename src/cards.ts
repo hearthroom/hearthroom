@@ -85,6 +85,13 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
  */
 const UPDATED_AT = `COALESCE((SELECT COALESCE(v.published_at, r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
 
+/**
+ * 關注動態的事件時間：上榜時間，或作者選擇「更新並通知」的那一版公開的時刻，取較晚的。
+ * 靜默更新不寫 card_update_events，所以不會把卡推上來——作者說不通知，動態就不列。
+ */
+const LATEST_ANNOUNCED_UPDATE = `(SELECT MAX(e.published_at) FROM works w JOIN card_update_events e ON e.work_id=w.id AND e.state='published' WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id)`;
+const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE}, 0))`;
+
 const CARD_COLUMNS = "c.*, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** Presentation rows only; callers must apply current access before returning. */
@@ -235,7 +242,8 @@ export interface ListOptions {
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
   boardWindow?: string;
-  sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated";
+  /** feed＝關注動態：依每張卡最近一次事件（新卡或通知過的更新）排，見 FEED_EVENT_AT。 */
+  sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated" | "feed";
   /** 分級最高到這一級（見 ratingClause）；不給就不篩 */
   maxRating?: Rating;
   limit: number;
@@ -448,6 +456,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     let orderBy: string;
     if (opts.sort === "new") orderBy = "c.registered_at DESC, c.id DESC";
     else if (opts.sort === "score") orderBy = `${BAYES_SCORE} DESC, c.talk_num DESC, c.registered_at DESC`;
+    else if (opts.sort === "feed") orderBy = `${FEED_EVENT_AT} DESC, c.id DESC`;
     else if (opts.sort === "updated") orderBy = `${UPDATED_AT} DESC, c.id DESC`;
     else if (opts.sort === "favorites") orderBy = "(SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) DESC, c.talk_num DESC, c.registered_at DESC";
     else if (opts.sort === "random") orderBy = "RANDOM()";

@@ -47,7 +47,7 @@ it('keeps the visible peek and opens its existing menu when old data has no safe
 });
 it('does not restore a resized choice over the actual following control',()=>{
  const p=setup();startAt(p,{x:576,y:405});dragToEdge(p,'right');
- const following=document.createElement('button');following.className='sorts__mode';following.dataset.qa04='';vi.spyOn(following,'getBoundingClientRect').mockReturnValue(new DOMRect(600,428,46,30));document.body.append(following);
+ const following=document.createElement('button');following.className='sorts__item';following.dataset.qa04='';vi.spyOn(following,'getBoundingClientRect').mockReturnValue(new DOMRect(600,428,46,30));document.body.append(following);
  p.poke({clientX:1420,clientY:445} as PointerEvent);expect(p.tucked).toBe(true);expect(p.menuEl.hidden).toBe(false);
 });
 

@@ -2099,7 +2099,42 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/Card"
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/Card"
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "feedEvent"
+                            ],
+                            "properties": {
+                              "feedEvent": {
+                                "type": "object",
+                                "description": "The card's latest event. kind is new (at = when it was listed) or update (at = when the announced update went public; note is its changelog, empty when that version is adult content you have not enabled).",
+                                "required": [
+                                  "kind",
+                                  "at"
+                                ],
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "new",
+                                      "update"
+                                    ]
+                                  },
+                                  "at": {
+                                    "type": "integer"
+                                  },
+                                  "note": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
                       }
                     },
                     "hasNext": {
@@ -2142,7 +2177,7 @@
             "description": "Current access unavailable or bounded candidate budget insufficient to prove a complete page."
           }
         },
-        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
+        "description": "Returns up to 24 public cards from creators you follow, ordered by each card's latest event, newest first: publication, or an update its creator chose to announce. Silent updates are not events. Filtered by your visibility and hidden-category settings. lang defaults to zh-Hant. Current policy is revalidated on cache hits. total may be null to avoid leaking filtered counts. Only verified visible results establish hasNext. Opaque cursors expire after one hour.",
         "parameters": [
           {
             "name": "offset",
