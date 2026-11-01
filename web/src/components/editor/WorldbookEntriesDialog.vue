@@ -267,7 +267,7 @@ function onKeydown(event: KeyboardEvent) {
             </div>
 
             <div class="field">
-              <div class="wbd__toggles">
+              <div class="wbd__toggles wbd__recall">
                 <label class="toggle">
                   <input type="checkbox" :checked="entry.isConstant"
                          @change="patch({ isConstant: ($event.target as HTMLInputElement).checked })" />
@@ -353,11 +353,13 @@ function onKeydown(event: KeyboardEvent) {
 .wbd__content textarea { min-height: 220px; resize: vertical; }
 .wbd__toggles { display: flex; gap: var(--s-4); flex-wrap: wrap; }
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
+.wbd__recall .toggle { min-height: var(--h-md); }
 .count { font-variant-numeric: tabular-nums; }
 .over { color: var(--danger); }
 
 /* 窄螢幕：左右兩欄疊成上下，清單壓成一小段可捲的高度 */
 @media (max-width: 860px) {
+  .wbd__recall .toggle { min-height: var(--h-lg); }
   .wbd { padding: 0; }
   .wbd__panel { width: 100%; height: 100%; border-radius: 0; }
   .wbd__body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 40%) minmax(0, 1fr); }
