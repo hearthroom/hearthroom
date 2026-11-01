@@ -222,6 +222,7 @@ async function retryBook(book: WorldbookDraft) {
   const token = await session.accessToken().catch(() => null);
   if (!token) { error.value = t("auth.expired"); return; }
   await book.retryLoad(token);
+  if (!booksUnavailable.value && error.value === t("state.loadFailed")) error.value = "";
 }
 /** 頁面層的三個動作要用到登入、確認框與下載，composable 不碰這些。 */
 async function pickBook(book: WorldbookDraft, summary: WorldbookSummary) {

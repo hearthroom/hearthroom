@@ -165,6 +165,7 @@ it.each(['entries', 'bindings'] as const)('blocks writes and offers a retry when
   expect($<HTMLInputElement>('#f-name').value).toBe('Keep this unsaved name');
   expect(root.querySelector('.wb [role="alert"]')).toBeNull();
   expect(root.querySelector('.wb')?.textContent).toContain('黑麥鎮');
+  expect(root.querySelector('.body__scroll > .notice--error')).toBeNull();
   await submit();
   expect(api.beginCardEdit).toHaveBeenCalledTimes(1);
   expect(api.patchRoleDocument).toHaveBeenCalledWith('r1', expect.objectContaining({roleName:'Keep this unsaved name'}), 'tok');
