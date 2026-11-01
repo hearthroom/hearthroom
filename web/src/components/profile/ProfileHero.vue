@@ -3,10 +3,11 @@
  * 主頁資料頭：封面、頭像、名字、徽章、簡介，右邊放積分卡（slot）。
  *
  * 編輯不開彈窗：按「編輯資料」就在原位把名字、簡介換成輸入框，封面上出現場景選擇，
- * 選了頭像就在資料區原地裁切；編輯區旁與視窗底部共用同一組取消／保存狀態。
+ * 選了頭像就在資料區原地裁切。取消／保存就放在原本「編輯資料」那一排，保存要有修改才能按；
+ * 頂部那組捲出視窗而且有修改時，視窗底部才浮出同一組（玩家回報 2026-11-01：大螢幕上只有底部那組，離表單太遠看不到）。
  * 封面往下淡出成封面同色系的淺色（白天）或深色（深色模式），不往白底淡——那樣中段會是髒灰色。
  */
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import AccountIcon from '@/components/AccountIcon.vue';
@@ -93,13 +94,25 @@ function setPreview(next: File | null) {
 onBeforeUnmount(() => setPreview(null));
 
 const tipsOf = (links: string[] | undefined) => (links ?? []).flatMap((url) => { const p = parseTipLink(url); return p.ok ? [{ platform: p.link.platform, value: url }] : []; });
-function begin() {
+const nameField = ref<HTMLInputElement | null>(null), bioField = ref<HTMLTextAreaElement | null>(null);
+/**
+ * 進入編輯。點下去的那顆鈕會被取消／保存換掉，焦點要有落點：預設落在昵称；
+ * 從「寫一句簡介」進來落在簡介；從相機進來不搶焦點（接著要開選檔，手機上不該先彈鍵盤）。
+ */
+function begin(focus: 'name' | 'bio' | 'none' = 'name') {
   if (editing.value || busy.value) return;
   name.value = session.displayName; bio.value = profile.value?.bio ?? ''; tips.value = tipsOf(profile.value?.tipLinks);
   draftCover.value = profile.value?.cover ?? ''; file.value = null; removeAvatar.value = false; cropping.value = null; animatedNote.value = false;
   setPreview(null); error.value = ''; editing.value = true;
+  if (focus !== 'none') void nextTick(() => (focus === 'bio' ? bioField : nameField).value?.focus());
 }
 function discard() { if (busy.value) return; setPreview(null); cropping.value = null; editing.value = false; error.value = ''; }
+/** 頂部與底部的「取消」：有修改先問一次，沒修改直接退出 */
+async function cancel() {
+  if (busy.value) return;
+  if (pending.value && !(await confirmDialog({ message: t('profile.discardAsk'), confirmText: t('profile.discardConfirm'), cancelText: t('profile.keepEditing'), danger: true }))) return;
+  discard();
+}
 watch(() => props.startEditing, (on) => { if (on && !editing.value && profile.value) begin(); }, { immediate: true });
 watch(profile, (p) => { if (p && props.startEditing && !editing.value) begin(); });
 
@@ -107,19 +120,41 @@ const dirty = computed(() => editing.value && (
   name.value !== session.displayName || bio.value !== (profile.value?.bio ?? '') || draftCover.value !== (profile.value?.cover ?? '') ||
   !!file.value || removeAvatar.value || JSON.stringify(tips.value.map((r) => r.value)) !== JSON.stringify(tipsOf(profile.value?.tipLinks).map((r) => r.value))
 ));
+/** 選了圖還在裁切也算有東西沒存：離開、取消都要問 */
+const pending = computed(() => dirty.value || !!cropping.value);
+const canSave = computed(() => dirty.value && !busy.value && !!name.value.trim() && !cropping.value);
+
+// ---- 底部浮條：頂部那組看得到就不出現，免得畫面上同時有兩顆保存 ----------------------
+const editActions = ref<HTMLElement | null>(null);
+const actionsInView = ref(true);
+let observer: IntersectionObserver | null = null;
+watch(editActions, (node) => {
+  observer?.disconnect(); observer = null; actionsInView.value = true;
+  if (!node || typeof IntersectionObserver === 'undefined') return;
+  // 頁首是 sticky 的，被它蓋住也算看不到
+  const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 0;
+  observer = new IntersectionObserver(([entry]) => { actionsInView.value = !!entry?.isIntersecting && entry.intersectionRatio > 0.95; }, { rootMargin: `-${header}px 0px 0px 0px`, threshold: [0, 1] });
+  observer.observe(node);
+});
+onBeforeUnmount(() => observer?.disconnect());
+const showBar = computed(() => editing.value && pending.value && !actionsInView.value);
+
+const errorBox = ref<HTMLElement | null>(null);
+watch(error, (message) => { if (message) void nextTick(() => errorBox.value?.scrollIntoView?.({ block: 'nearest' })); });
 
 // 與站內編輯頁一致：切分區／離開先確認，重新整理與關閉分頁用瀏覽器提示。
 async function mayLeave() {
   if (busy.value) return false;
-  if (!dirty.value && !cropping.value) return true;
+  if (!pending.value) return true;
   if (!(await confirmDialog({ message: t('blog.admin.unsaved'), confirmText: t('dialog.leave'), danger: true }))) return false;
   discard();
   return true;
 }
 onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
+// 同頁換分區、翻頁只改網址參數，編輯區還在，不用問
+onBeforeRouteUpdate((to, from) => (to.path === from.path ? true : mayLeave()));
 function guardClose(event: BeforeUnloadEvent) {
-  if (dirty.value || cropping.value || busy.value) { event.preventDefault(); event.returnValue = ''; }
+  if (pending.value || busy.value) { event.preventDefault(); event.returnValue = ''; }
 }
 onMounted(() => window.addEventListener('beforeunload', guardClose));
 onBeforeUnmount(() => window.removeEventListener('beforeunload', guardClose));
@@ -144,7 +179,7 @@ const avatarSrc = computed(() => (editing.value ? (preview.value || (removeAvata
 const hasAvatar = computed(() => !!avatarSrc.value);
 
 async function save() {
-  if (busy.value || !name.value.trim() || cropping.value) return;
+  if (!canSave.value) return;
   // 認不得的打賞連結先在這裡擋：伺服器整包拒收，作者只會看到一句籠統的失敗
   const resolved = tips.value.filter((r) => r.value.trim()).map((r) => resolveTipInput(r.platform, r.value));
   if (resolved.some((r) => !r.ok)) { error.value = t('tips.field.fix'); return; }
@@ -173,7 +208,7 @@ defineExpose({ begin });
       <div v-if="editing" class="hero__covers" role="radiogroup" :aria-label="$t('profile.coverLabel')">
         <button v-for="(c, i) in PROFILE_COVERS" :key="c.id" type="button" role="radio" class="hero__cover-pick" :class="{ 'hero__cover-pick--on': cover.id === c.id }" :data-cover="c.id" :aria-checked="cover.id === c.id" :aria-label="`${$t('profile.coverLabel')} ${i + 1}`" @click="draftCover = c.id"><img :src="profileCoverUrl(c.id)" alt="" /></button>
       </div>
-      <button v-else type="button" class="hero__cover-edit" @click="begin"><AccountIcon name="camera" />{{ $t('profile.changeCover') }}</button>
+      <button v-else type="button" class="hero__cover-edit" @click="begin()"><AccountIcon name="camera" />{{ $t('profile.changeCover') }}</button>
     </div>
 
     <div class="hero__body">
@@ -182,15 +217,16 @@ defineExpose({ begin });
           <img v-if="editing && preview" :src="preview" alt="" class="hero__face" />
           <span v-else-if="editing && !hasAvatar" class="hero__face hero__face--empty" aria-hidden="true">{{ [...(name || session.displayName || '?')][0] }}</span>
           <CommunityAvatar v-else :src="session.avatarUrl" :name="session.displayName" :appearance="appearance" class="hero__face" />
-          <button type="button" class="hero__camera" :aria-label="$t('profile.changeAvatar')" @click="editing ? picker?.click() : (begin(), picker?.click())"><AccountIcon name="camera" /></button>
+          <button type="button" class="hero__camera" :aria-label="$t('profile.changeAvatar')" @click="editing ? picker?.click() : (begin('none'), picker?.click())"><AccountIcon name="camera" /></button>
           <input ref="picker" type="file" class="sr-only" accept="image/jpeg,image/png,image/webp,image/gif,image/apng,.apng" :aria-label="$t('community.chooseAvatar')" @change="selectAvatar" />
         </div>
-        <div v-if="editing" class="hero__actions hero__actions--editing">
-          <button type="button" class="btn" :disabled="busy" @click="discard">{{ $t('dialog.cancel') }}</button>
-          <button type="button" class="btn btn--primary" :disabled="busy || !name.trim() || !!cropping" @click="save">{{ busy ? $t('community.saving') : $t('profile.save') }}</button>
+        <div v-if="editing" ref="editActions" class="hero__actions hero__actions--editing">
+          <span v-if="pending" class="hero__unsaved"><span class="savebar__dot" aria-hidden="true" />{{ $t('profile.unsaved') }}</span>
+          <button type="button" class="btn" :disabled="busy" @click="cancel">{{ $t('dialog.cancel') }}</button>
+          <button type="button" class="btn btn--primary" :disabled="!canSave" @click="save">{{ busy ? $t('community.saving') : $t('profile.save') }}</button>
         </div>
         <div v-else class="hero__actions">
-          <button type="button" class="btn" @click="begin"><AccountIcon name="edit" />{{ $t('profile.editProfile') }}</button>
+          <button type="button" class="btn" @click="begin()"><AccountIcon name="edit" />{{ $t('profile.editProfile') }}</button>
           <button type="button" class="btn hero__share" :aria-label="shared ? $t('profile.shareCopied') : $t('profile.share')" @click="share"><AccountIcon :name="shared ? 'check' : 'share'" /><span class="hero__btn-text">{{ shared ? $t('profile.shareCopied') : $t('profile.share') }}</span></button>
           <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="btn btn--icon" :aria-label="$t('profile.preview')" :title="$t('profile.preview')"><AccountIcon name="eye" /></RouterLink>
           <RouterLink :to="lp('/settings')" class="btn btn--icon" :aria-label="$t('nav.settings')" :title="$t('nav.settings')"><AccountIcon name="settings" /></RouterLink>
@@ -201,9 +237,9 @@ defineExpose({ begin });
         <AvatarCropper v-if="cropping" :file="cropping" class="hero__info" @apply="applyCrop" @cancel="cropping = null" @repick="picker?.click()" />
 
         <div v-else-if="editing" class="hero__info hero__form">
-          <label class="field"><span class="field__label">{{ $t('community.name') }} · {{ [...name].length }}/60</span><input v-model="name" class="field__input field__input--name" maxlength="60" required autocomplete="nickname" :disabled="busy" /></label>
+          <label class="field"><span class="field__label">{{ $t('community.name') }} · {{ [...name].length }}/60</span><input ref="nameField" v-model="name" class="field__input field__input--name" maxlength="60" required autocomplete="nickname" :disabled="busy" /></label>
           <p class="hero__locked"><AccountIcon name="lock" />@{{ handle }} · {{ $t('profile.idLocked') }}</p>
-          <label class="field"><span class="field__label">{{ $t('community.bio') }} · {{ [...bio].length }}/500</span><textarea v-model="bio" class="field__input" rows="3" maxlength="500" :placeholder="$t('community.bioHint')" :disabled="busy" /></label>
+          <label class="field"><span class="field__label">{{ $t('community.bio') }} · {{ [...bio].length }}/500</span><textarea ref="bioField" v-model="bio" class="field__input" rows="3" maxlength="500" :placeholder="$t('community.bioHint')" :disabled="busy" /></label>
           <TipLinksField v-model="tips" :disabled="busy" compact />
           <div class="hero__edit-links">
             <button v-if="hasAvatar" type="button" class="btn btn--ghost btn--sm" :disabled="busy" @click="remove">{{ $t('community.removeAvatar') }}</button>
@@ -224,7 +260,7 @@ defineExpose({ begin });
             <RouterLink v-if="linked" :to="lp('/me/community')" class="hero__discord"><CommunityIcon name="discord" />{{ $t('profile.discordLinked') }}</RouterLink>
           </div>
           <p v-if="profile?.bio" class="hero__bio">{{ profile.bio }}</p>
-          <button v-else type="button" class="hero__add-bio" @click="begin"><AccountIcon name="plus" />{{ $t('profile.addBio') }}</button>
+          <button v-else type="button" class="hero__add-bio" @click="begin('bio')"><AccountIcon name="plus" />{{ $t('profile.addBio') }}</button>
           <div class="hero__badges">
             <ul v-if="featured.length" class="hero__featured" :aria-label="$t('badgeWall.title')">
               <li v-for="b in featured" :key="b.key" class="hero__badge"><span class="med" :class="`med--${b.category}`" aria-hidden="true"><CommunityIcon :name="b.icon" /></span><span class="hero__badge-text"><strong :title="badgeText(b.titles, locale)">{{ badgeText(b.titles, locale) }}</strong><small>{{ $t('profile.badgeMeta', { category: $t('badgeWall.category.' + b.category), date: month(b.earnedAt) }) }}</small></span></li>
@@ -242,15 +278,17 @@ defineExpose({ begin });
           <strong>{{ compact(s.value) }}</strong>
         </component>
       </div>
-      <p v-if="error" class="notice notice--error hero__error" role="alert">{{ error }}</p>
+      <p v-if="error" ref="errorBox" class="notice notice--error hero__error" role="alert">{{ error }}</p>
     </div>
 
     <Teleport to="body">
-    <div v-if="editing" class="savebar" :inert="(headerOverlays?.size ?? 0) > 0" role="region" :aria-label="$t('profile.editing')">
-      <span class="savebar__state"><span class="savebar__dot" :class="{ 'savebar__dot--dirty': dirty }" />{{ dirty ? $t('profile.unsaved') : $t('profile.editing') }}</span>
-      <button type="button" class="btn savebar__discard" :disabled="busy" @click="discard">{{ $t('profile.discard') }}</button>
-      <button type="button" class="btn btn--primary" :disabled="busy || !name.trim() || !!cropping" @click="save">{{ busy ? $t('community.saving') : $t('profile.save') }}</button>
-    </div>
+      <Transition name="savebar">
+        <div v-if="showBar" class="savebar" :inert="(headerOverlays?.size ?? 0) > 0" role="region" :aria-label="$t('profile.editing')">
+          <span class="savebar__state"><span class="savebar__dot" aria-hidden="true" />{{ $t('profile.unsaved') }}</span>
+          <button type="button" class="btn savebar__discard" :disabled="busy" @click="cancel">{{ $t('dialog.cancel') }}</button>
+          <button type="button" class="btn btn--primary" :disabled="!canSave" @click="save">{{ busy ? $t('community.saving') : $t('profile.save') }}</button>
+        </div>
+      </Transition>
     </Teleport>
   </section>
 </template>
@@ -288,7 +326,9 @@ defineExpose({ begin });
 .hero__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s-2); padding-bottom: 6px; }
 .hero__actions .btn:not(.btn--primary) { background: color-mix(in srgb, var(--surface) 72%, transparent); }
 
+.hero__actions--editing { align-items: center; }
 .hero__actions--editing .btn { min-height: var(--h-lg); }
+.hero__unsaved { display: inline-flex; align-items: center; gap: 8px; margin-right: var(--s-1); font-size: 13px; color: var(--text-3); white-space: nowrap; }
 
 .hero__main { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-5) var(--s-6); margin-top: var(--s-4); }
 .hero__info { flex: 1 1 440px; min-width: 0; display: grid; gap: 10px; }
@@ -354,8 +394,10 @@ button.hero__stat:hover { background: var(--surface-2); }
 .savebar { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 20; display: flex; align-items: center; gap: var(--s-3); max-width: calc(100vw - 32px); padding: 8px 8px 8px 18px; border-radius: var(--r-pill); background: var(--text); color: var(--surface); box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.5); transform: translateX(-50%); }
 .savebar .btn { min-height: var(--h-lg); flex: none; }
 .savebar__state { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.savebar__dot { width: 8px; height: 8px; flex: none; border-radius: var(--r-pill); background: #8c8c97; }
-.savebar__dot--dirty { background: var(--accent); }
+.savebar__dot { width: 8px; height: 8px; flex: none; border-radius: var(--r-pill); background: var(--accent); }
+.savebar-enter-active, .savebar-leave-active { transition: opacity var(--dur) var(--ease), translate var(--dur) var(--ease); }
+.savebar-enter-from, .savebar-leave-to { opacity: 0; translate: 0 8px; }
+@media (prefers-reduced-motion: reduce) { .savebar-enter-from, .savebar-leave-to { translate: none; } }
 .savebar__discard { background: transparent; color: var(--surface); border-color: color-mix(in srgb, var(--surface) 30%, transparent); }
 .savebar__discard:hover { background: color-mix(in srgb, var(--surface) 12%, transparent); }
 
@@ -382,6 +424,7 @@ button.hero__stat:hover { background: var(--surface-2); }
   .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero__stat:nth-child(3) { box-shadow: inset 0 1px 0 var(--line); }
   .hero__stat:nth-child(4) { box-shadow: inset 1px 1px 0 var(--line); }
+  .hero__unsaved { display: none; }
   .savebar { left: 16px; right: 16px; transform: none; max-width: none; }
   .savebar__state { flex: 1; min-width: 0; font-size: 12px; white-space: normal; }
 }

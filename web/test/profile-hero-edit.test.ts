@@ -13,6 +13,11 @@ vi.mock('../src/lib/api', async (original) => ({ ...(await original<object>()), 
 vi.mock('../src/lib/confirm', () => ({ confirmDialog: fixture.confirm }));
 import ProfileHero from '../src/components/profile/ProfileHero.vue';
 
+// 頂部取消／保存在不在視窗內：happy-dom 沒有版面，用替身決定，預設在視窗內
+const observed = vi.hoisted(() => ({ callbacks: [] as ((entries: { isIntersecting: boolean; intersectionRatio: number }[]) => void)[] }));
+class FakeObserver { constructor(cb: (entries: { isIntersecting: boolean; intersectionRatio: number }[]) => void) { observed.callbacks.push(cb); } observe() {} disconnect() {} unobserve() {} }
+const topActionsInView = async (inView: boolean) => { observed.callbacks.forEach((cb) => cb([{ isIntersecting: inView, intersectionRatio: inView ? 1 : 0 }])); await settle(); };
+
 let router: Router;
 let app: App, el: HTMLDivElement;
 const settle = async () => { for (let i = 0; i < 4; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); } };
@@ -20,6 +25,8 @@ const buttons = (text: string) => [...document.querySelectorAll<HTMLButtonElemen
 const saveButton = () => buttons(i18n.global.t('profile.save'))[0]!;
 beforeEach(async () => {
   vi.clearAllMocks();
+  observed.callbacks.length = 0;
+  vi.stubGlobal('IntersectionObserver', FakeObserver);
   fixture.session.profile = { ...fixture.session.profile, bio: 'Existing bio', cover: '', tipLinks: [] };
   el = document.createElement('div'); document.body.append(el);
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/me', component: ProfileHero, props: { community: null, badges: null, author: null } }, { path: '/elsewhere', component: { template: '<div/>' } }] });
@@ -28,27 +35,71 @@ beforeEach(async () => {
   app.mount(el); await settle();
   buttons(i18n.global.t('profile.editProfile'))[0]!.click(); await settle();
 });
-afterEach(() => { app.unmount(); el.remove(); vi.restoreAllMocks(); });
+afterEach(() => { app.unmount(); el.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+const nameInput = () => el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!;
+const topCancel = () => el.querySelector<HTMLButtonElement>('.hero__actions--editing .btn:not(.btn--primary)')!;
+const topSave = () => el.querySelector<HTMLButtonElement>('.hero__actions--editing .btn--primary')!;
 
-it('edits in place: name and bio fields, a file picker, the cover scenes, and a floating save bar', () => {
+it('edits in place: name and bio fields, a file picker, the cover scenes, and no bottom bar before any change', () => {
   expect(el.querySelector('input[type=url]')).toBeNull();
   expect(el.querySelector('input[type=file]')).not.toBeNull();
   expect(el.querySelector('textarea')?.value).toBe('Existing bio');
   expect(el.querySelectorAll('[role=radiogroup] [role=radio]').length).toBeGreaterThan(3);
-  expect(document.querySelector('.savebar')).not.toBeNull();
-});
-
-it('discard does not upload or save a profile', async () => {
-  buttons(i18n.global.t('profile.discard'))[0]!.click(); await settle();
-  expect(fixture.save).not.toHaveBeenCalled();
   expect(document.querySelector('.savebar')).toBeNull();
 });
 
-it('keeps edits visible after a failed save', async () => {
-  fixture.save.mockRejectedValue(new Error('unavailable'));
-  saveButton().click(); await settle();
-  expect(el.querySelector('[role=alert]')).not.toBeNull();
-  expect(el.querySelector('textarea')?.value).toBe('Existing bio');
+it('moves keyboard focus to the name field when editing starts', () => {
+  expect(document.activeElement).toBe(nameInput());
+});
+
+it('cancel without changes leaves editing at once, without asking or saving', async () => {
+  topCancel().click(); await settle();
+  expect(fixture.confirm).not.toHaveBeenCalled();
+  expect(fixture.save).not.toHaveBeenCalled();
+  expect(el.querySelector('.hero__actions--editing')).toBeNull();
+});
+
+it('keeps save disabled until something changes, and marks unsaved changes beside the buttons', async () => {
+  expect(topSave().disabled).toBe(true);
+  expect(el.querySelector('.hero__unsaved')).toBeNull();
+  await type(nameInput(), 'Edited');
+  expect(topSave().disabled).toBe(false);
+  expect(el.querySelector('.hero__actions--editing .hero__unsaved')?.textContent).toContain(i18n.global.t('profile.unsaved'));
+});
+
+it('asks before cancelling changes; declining keeps them, confirming drops them without saving', async () => {
+  await type(nameInput(), 'Edited');
+  fixture.confirm.mockResolvedValue(false);
+  topCancel().click(); await settle();
+  expect(fixture.confirm).toHaveBeenCalledTimes(1);
+  expect(fixture.confirm.mock.calls[0][0]).toMatchObject({ danger: true, confirmText: i18n.global.t('profile.discardConfirm'), cancelText: i18n.global.t('profile.keepEditing') });
+  expect(nameInput().value).toBe('Edited');
+  fixture.confirm.mockResolvedValue(true);
+  topCancel().click(); await settle();
+  expect(el.querySelector('.hero__actions--editing')).toBeNull();
+  expect(fixture.save).not.toHaveBeenCalled();
+});
+
+it('shows the bottom bar only with changes while the top buttons are out of view', async () => {
+  await topActionsInView(false);
+  expect(document.querySelector('.savebar')).toBeNull();
+  await type(nameInput(), 'Edited');
+  expect(document.body.querySelector(':scope > .savebar')).not.toBeNull();
+  await topActionsInView(true);
+  expect(document.querySelector('.savebar')).toBeNull();
+});
+
+it('keeps edits visible after a failed save and brings the error into view', async () => {
+  const scrolled = vi.fn(), original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scrolled;
+  try {
+    fixture.save.mockRejectedValue(new Error('unavailable'));
+    await type(el.querySelector<HTMLTextAreaElement>('textarea')! as unknown as HTMLInputElement, 'New bio');
+    saveButton().click(); await settle();
+    expect(el.querySelector('[role=alert]')).not.toBeNull();
+    expect(el.querySelector('textarea')?.value).toBe('New bio');
+    expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
+  } finally { Element.prototype.scrollIntoView = original; }
 });
 
 it('sends the chosen scene as the cover', async () => {
@@ -84,6 +135,11 @@ it('opens the in-place cropper for a still image and does not save until it is a
   expect(el.querySelector('.cropper')).not.toBeNull();
   expect(buttons(i18n.global.t('profile.save')).every((b) => b.disabled)).toBe(true);
   expect(fixture.save).not.toHaveBeenCalled();
+  // 裁切區的退出只放棄這張圖，和頂部「取消」（放棄整次編輯）分開命名
+  expect(el.querySelector('.cropper')?.textContent).toContain(i18n.global.t('profile.crop.cancel'));
+  buttons(i18n.global.t('profile.crop.cancel'))[0]!.click(); await settle();
+  expect(el.querySelector('.cropper')).toBeNull();
+  expect(el.querySelector('.hero__actions--editing')).not.toBeNull();
 });
 
 it.each([['image/gif', 10 * 1024 * 1024 + 1], ['image/svg+xml', 32]])('rejects invalid avatar %s (%i bytes) without submitting it', async (type, size) => {
@@ -121,12 +177,12 @@ it('blocks saving while a tip link is unrecognized', async () => {
 });
 
 
-it('keeps save and cancel beside the editing fields, with the bottom bar outside page containers', () => {
-  expect(el.querySelector('.hero__actions--editing .btn--primary')?.textContent).toBe(i18n.global.t('profile.save'));
-  expect(el.querySelector('.hero__actions--editing')?.textContent).toContain(i18n.global.t('dialog.cancel'));
-  expect(document.body.querySelector(':scope > .savebar')).not.toBeNull();
+it('keeps save and cancel beside the editing fields', () => {
+  expect(topSave().textContent).toBe(i18n.global.t('profile.save'));
+  expect(topCancel().textContent).toBe(i18n.global.t('dialog.cancel'));
 });
 it('shares pending and blank-name disabled states across both save controls', async () => {
+  await topActionsInView(false);
   await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, '');
   expect(buttons(i18n.global.t('profile.save'))).toHaveLength(2);
   expect(buttons(i18n.global.t('profile.save')).every((b) => b.disabled)).toBe(true);
@@ -142,29 +198,32 @@ it('warns before closing a page with a changed cover, and stops warning after ca
   const event = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
-  buttons(i18n.global.t('dialog.cancel'))[0]!.click(); await settle();
+  fixture.confirm.mockResolvedValue(true);
+  topCancel().click(); await settle();
   const clean = new Event('beforeunload', { cancelable: true });
   window.dispatchEvent(clean);
   expect(clean.defaultPrevented).toBe(false);
   expect(fixture.save).not.toHaveBeenCalled();
 });
 
-it('asks before a dirty profile tab change or leaving, preserving edits when declined', async () => {
+it('keeps edits through a same-page tab change, and asks before leaving the page', async () => {
   await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, 'Edited');
-  fixture.confirm.mockResolvedValue(false);
-  await router.push('/me?tab=saved');
-  expect(router.currentRoute.value.fullPath).toBe('/me');
+  await router.push('/me?tab=saved'); await settle();
+  expect(fixture.confirm).not.toHaveBeenCalled();
+  expect(router.currentRoute.value.query.tab).toBe('saved');
   expect(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!.value).toBe('Edited');
+  fixture.confirm.mockResolvedValue(false);
   await router.push('/elsewhere');
   expect(router.currentRoute.value.path).toBe('/me');
+  expect(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!.value).toBe('Edited');
   fixture.confirm.mockResolvedValue(true);
-  await router.push('/me?tab=saved'); await settle();
-  expect(router.currentRoute.value.query.tab).toBe('saved');
-  expect(document.querySelector('.savebar')).toBeNull();
+  await router.push('/elsewhere'); await settle();
+  expect(router.currentRoute.value.path).toBe('/elsewhere');
 });
 
 it('saves all changes from the bottom save control too', async () => {
   fixture.save.mockResolvedValue(fixture.session.profile);
+  await topActionsInView(false);
   await type(el.querySelector<HTMLInputElement>('input[autocomplete=nickname]')!, 'Edited');
   el.querySelector<HTMLButtonElement>('[data-cover=sakura]')!.click(); await settle();
   document.querySelector<HTMLButtonElement>('.savebar .btn--primary')!.click(); await settle();

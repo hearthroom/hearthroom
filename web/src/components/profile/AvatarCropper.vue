@@ -75,7 +75,7 @@ async function apply() {
         <button type="button" class="btn btn--primary" :disabled="!frame || busy" @click="apply"><AccountIcon name="check" />{{ $t('profile.crop.apply') }}</button>
         <button type="button" class="btn" @click="reset">{{ $t('profile.crop.reset') }}</button>
         <button type="button" class="btn btn--ghost" @click="emit('repick')">{{ $t('profile.crop.repick') }}</button>
-        <button type="button" class="btn btn--ghost" @click="emit('cancel')">{{ $t('linked.cancel') }}</button>
+        <button type="button" class="btn btn--ghost" @click="emit('cancel')">{{ $t('profile.crop.cancel') }}</button>
       </div>
     </div>
   </div>
