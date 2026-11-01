@@ -627,6 +627,120 @@
         }
       }
     },
+    "/open/v1/conversation/reset": {
+      "post": {
+        "operationId": "resetConversation",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Reset this conversation and optionally clear selected user data",
+        "description": "Keeps the earliest assistant opening, when present, and removes later messages with the existing derived-memory rollback rules. Without an assistant opening, removes all messages while retaining the same conversation. Clear flags default to false; unchecked data, manually added memory, persona and agent configuration settings are retained. clearResponseSettings removes conversation overrides and restores current agent configuration/platform defaults. All changes and the durable receipt commit in one transaction. Reuse the same clientOperationID and choices after a lost response; replay never clears later edits. Optionally supply both historyEpoch and nextSeq from the displayed history to reject an unseen timeline change. No AI call or credit charge. Requires the existing authenticated conversation owner.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "clientOperationID"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "clientOperationID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "clearNotepad": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "clearDirectives": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "clearResponseSettings": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "historyEpoch": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0
+                  },
+                  "nextSeq": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset committed, or the identical clientOperationID replayed. Returns success, status, operationID, canonicalTimelineCommitted, repairPending, historyEpoch, nextSeq, startHistoryEpoch and startNextSeq.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or conversation unavailable to this user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale history snapshot, changed intent for an existing clientOperationID, or active operation could not be stopped.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transaction failed; no reset changes committed. Retry with the same clientOperationID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/conversation/backward": {
       "post": {
         "operationId": "loadOrRollbackConversation",

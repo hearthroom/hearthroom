@@ -2492,5 +2492,11 @@
   "d318508d1c11b": "`error` = `DIRECTIVE_PRESET_NOT_FOUND` (`presetId` unknown, not owned by the caller or not a UUID) or `invalid_request` (malformed body or `roleId` not a UUID).",
   "dbf9fd37cf69b": "`invalid_request` — `roleId` is not a UUID.",
   "d13e797c777e3": "`not_found` — the card is unknown or the caller cannot play it.",
-  "d3094ff9f18d9": "`temporarily_unavailable` — storage failure; retry later."
+  "d3094ff9f18d9": "`temporarily_unavailable` — storage failure; retry later.",
+  "dc1ece5ba698c": "Reset this conversation and optionally clear selected user data",
+  "d3e090146e86f": "Keeps the earliest assistant opening, when present, and removes later messages with the existing derived-memory rollback rules. Without an assistant opening, removes all messages while retaining the same conversation. Clear flags default to false; unchecked data, manually added memory, persona and agent configuration settings are retained. clearResponseSettings removes conversation overrides and restores current agent configuration/platform defaults. All changes and the durable receipt commit in one transaction. Reuse the same clientOperationID and choices after a lost response; replay never clears later edits. Optionally supply both historyEpoch and nextSeq from the displayed history to reject an unseen timeline change. No AI call or credit charge. Requires the existing authenticated conversation owner.",
+  "dc0c142c3aad9": "Reset committed, or the identical clientOperationID replayed. Returns success, status, operationID, canonicalTimelineCommitted, repairPending, historyEpoch, nextSeq, startHistoryEpoch and startNextSeq.",
+  "d0e3fb2643c24": "Invalid request or conversation unavailable to this user.",
+  "d95bc38c2172b": "Stale history snapshot, changed intent for an existing clientOperationID, or active operation could not be stopped.",
+  "de8c5bc271d08": "Transaction failed; no reset changes committed. Retry with the same clientOperationID."
 }

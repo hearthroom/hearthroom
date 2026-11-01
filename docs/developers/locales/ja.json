@@ -2492,5 +2492,11 @@
   "d318508d1c11b": "`error` は `DIRECTIVE_PRESET_NOT_FOUND`（`presetId` が存在しない、呼び出し元の所有でない、または UUID でない）か `invalid_request`（不正な本文、または `roleId` が UUID でない）です。",
   "dbf9fd37cf69b": "`invalid_request`：`roleId` が UUID ではありません。",
   "d13e797c777e3": "`not_found`：カードが存在しないか、呼び出し元がプレイできません。",
-  "d3094ff9f18d9": "`temporarily_unavailable`：ストレージの障害です。しばらくしてから再試行してください。"
+  "d3094ff9f18d9": "`temporarily_unavailable`：ストレージの障害です。しばらくしてから再試行してください。",
+  "dc1ece5ba698c": "会話をリセットし、消去するユーザーデータを選択する",
+  "d3e090146e86f": "最初のアシスタントの開始メッセージがある場合はそれを残し、既存の派生記憶の巻き戻し規則に従って後続メッセージを削除します。開始メッセージがない場合は全メッセージを削除し、同じ会話を維持します。消去フラグの既定値は false です。未選択のデータ、手動で追加した記憶、ペルソナ、エージェント設定は維持されます。clearResponseSettings は会話の上書きを消去し、現在のエージェント設定／プラットフォームの既定値に戻します。変更と永続的な操作受領記録は同じトランザクションで確定します。応答を失った場合は同じ clientOperationID と選択内容で再試行してください。再実行はその後の編集を消去しません。表示済み履歴の historyEpoch と nextSeq を両方指定すると、未表示の履歴変更を拒否できます。AI 呼び出しやクレジット消費はありません。認証済みの会話所有者が必要です。",
+  "dc0c142c3aad9": "リセットが確定したか、同じ clientOperationID が再実行されました。success、status、operationID、canonicalTimelineCommitted、repairPending、historyEpoch、nextSeq、startHistoryEpoch、startNextSeq を返します。",
+  "d0e3fb2643c24": "リクエストが無効、またはユーザーがこの会話にアクセスできません。",
+  "d95bc38c2172b": "履歴のバージョンが古い、既存の clientOperationID の意図が異なる、または実行中の操作を停止できません。",
+  "de8c5bc271d08": "トランザクションが失敗し、リセットの変更は確定していません。同じ clientOperationID で再試行してください。"
 }

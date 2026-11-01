@@ -2492,5 +2492,11 @@
   "d318508d1c11b": "`error` = `DIRECTIVE_PRESET_NOT_FOUND`(`presetId`가 없거나 호출자 소유가 아니거나 UUID가 아님) 또는 `invalid_request`(본문이 잘못되었거나 `roleId`가 UUID가 아님)입니다.",
   "dbf9fd37cf69b": "`invalid_request` — `roleId`가 UUID가 아닙니다.",
   "d13e797c777e3": "`not_found` — 카드가 없거나 호출자가 플레이할 수 없습니다.",
-  "d3094ff9f18d9": "`temporarily_unavailable` — 저장소 장애입니다. 잠시 후 다시 시도하세요."
+  "d3094ff9f18d9": "`temporarily_unavailable` — 저장소 장애입니다. 잠시 후 다시 시도하세요.",
+  "dc1ece5ba698c": "대화를 초기화하고 지울 사용자 데이터를 선택합니다",
+  "d3e090146e86f": "첫 어시스턴트 시작 메시지가 있으면 유지하고 기존 파생 기억 되돌리기 규칙에 따라 이후 메시지를 삭제합니다. 시작 메시지가 없으면 모든 메시지를 삭제하되 같은 대화를 유지합니다. 지우기 플래그의 기본값은 false입니다. 선택하지 않은 데이터, 직접 추가한 기억, 페르소나 및 에이전트 설정은 유지됩니다. clearResponseSettings는 대화 재정의를 지우고 현재 에이전트 설정／플랫폼 기본값으로 복원합니다. 모든 변경 사항과 영구 작업 영수증은 같은 트랜잭션에서 확정됩니다. 응답을 받지 못했으면 같은 clientOperationID와 선택 내용으로 재시도하세요. 재실행은 이후 편집 내용을 지우지 않습니다. 표시된 기록의 historyEpoch와 nextSeq를 함께 보내면 아직 표시되지 않은 기록 변경을 거부할 수 있습니다. AI 호출이나 크레딧 차감이 없습니다. 인증된 대화 소유자여야 합니다.",
+  "dc0c142c3aad9": "초기화가 확정되었거나 같은 clientOperationID가 재실행되었습니다. success, status, operationID, canonicalTimelineCommitted, repairPending, historyEpoch, nextSeq, startHistoryEpoch, startNextSeq를 반환합니다.",
+  "d0e3fb2643c24": "잘못된 요청이거나 사용자가 이 대화에 접근할 수 없습니다.",
+  "d95bc38c2172b": "기록 버전이 오래되었거나 기존 clientOperationID의 의도가 다르거나 진행 중인 작업을 중지할 수 없습니다.",
+  "de8c5bc271d08": "트랜잭션이 실패하여 초기화 변경 사항이 확정되지 않았습니다. 같은 clientOperationID로 재시도하세요."
 }

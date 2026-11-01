@@ -2492,5 +2492,11 @@
   "d318508d1c11b": "`error` = `DIRECTIVE_PRESET_NOT_FOUND`（`presetId` 不存在、非呼叫端擁有或不是 UUID）或 `invalid_request`（本文格式錯誤或 `roleId` 不是 UUID）。",
   "dbf9fd37cf69b": "`invalid_request` — `roleId` 不是 UUID。",
   "d13e797c777e3": "`not_found` — 角色卡不存在或呼叫端無法遊玩。",
-  "d3094ff9f18d9": "`temporarily_unavailable` — 儲存失敗；請稍後重試。"
+  "d3094ff9f18d9": "`temporarily_unavailable` — 儲存失敗；請稍後重試。",
+  "dc1ece5ba698c": "重置此對話，並選擇要清除的使用者資料",
+  "d3e090146e86f": "若有開場訊息，保留最早的智慧體開場，並依既有衍生記憶回溯規則移除後續訊息。沒有智慧體開場時，清除所有訊息但保留同一對話。清除選項預設為 false；未勾選資料、手動新增的記憶、使用者身分與智慧體設定維持原狀。clearResponseSettings 清除對話覆寫，恢復目前智慧體設定／平台預設。全部變更與持久操作收據在同一交易提交。回應遺失後，沿用相同 clientOperationID 與選項重試；重播不清除後續編輯。可同時傳入已顯示歷史的 historyEpoch 與 nextSeq，拒絕尚未顯示的歷史變更。不呼叫 AI、不扣點；需要已驗證的對話擁有者身分。",
+  "dc0c142c3aad9": "重置已提交，或相同 clientOperationID 已重播。回傳 success、status、operationID、canonicalTimelineCommitted、repairPending、historyEpoch、nextSeq、startHistoryEpoch 與 startNextSeq。",
+  "d0e3fb2643c24": "請求無效，或使用者無法存取此對話。",
+  "d95bc38c2172b": "歷史版本過期、既有 clientOperationID 的意圖不同，或進行中的操作無法停止。",
+  "de8c5bc271d08": "交易失敗，沒有提交任何重置變更。請沿用相同 clientOperationID 重試。"
 }

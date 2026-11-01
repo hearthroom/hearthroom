@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "重置聊天時，可以勾選一併清除手帳、長期指令與回覆偏好。",
+    "zh-Hans": "重置聊天时，可以勾选同时清除手帐、长期指令与回复偏好。",
+    "en": "Resetting a chat lets you also clear your Notebook, Standing Instructions and Response preferences.",
+    "ja": "チャットのリセット時に、手帳・定常指示・返信の好みも消去するか選べます。",
+    "ko": "채팅을 초기화할 때 메모장, 상시 지시, 답변 취향도 지울지 선택할 수 있어요."
+  }
+}
