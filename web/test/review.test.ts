@@ -106,6 +106,19 @@ describe("審核佇列頁", () => {
     expect(host.textContent).toContain(i18n.global.t("review.filter.empty"));
   });
 
+  it("佇列讀取失敗：只說讀不到，不說佇列是空的；重新整理成功後清單回來", async () => {
+    app.unmount();
+    host.innerHTML = "";
+    api.fetchReviewQueue.mockRejectedValueOnce(new api.ApiError(500, "服務暫時無法回應，請稍後再試"));
+    app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
+    app.mount(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("服務暫時無法回應"));
+    expect(host.textContent).not.toContain(i18n.global.t("review.empty"));
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.refresh"))!.click();
+    await vi.waitFor(() => expect(host.textContent).toContain("夜行偵探"));
+    expect(host.textContent).not.toContain("服務暫時無法回應");
+  });
+
   it("領取後放回使用該次認領的 generation", async () => {
     const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim") && !b.disabled)!;
     claimBtn.click();

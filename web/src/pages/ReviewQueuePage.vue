@@ -102,7 +102,8 @@ onMounted(() => {
 
     <div v-if="forbidden" class="empty panel"><p class="empty__title">{{ $t("review.notReviewer") }}</p></div>
     <div v-else-if="loading" class="list" aria-hidden="true"><div v-for="i in 4" :key="i" class="ghost row-ghost" /></div>
-    <div v-else-if="!items.length" class="empty panel"><p class="empty__title">{{ $t("review.empty") }}</p></div>
+    <!-- 讀不到就只說讀不到：沒載入成功的清單不能說成「沒有待審的卡」 -->
+    <template v-else-if="!items.length"><div v-if="!error" class="empty panel"><p class="empty__title">{{ $t("review.empty") }}</p></div></template>
 
     <template v-else>
       <div class="seg filter" role="group" :aria-label="$t('review.filter.label')">
