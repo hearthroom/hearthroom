@@ -88,12 +88,14 @@ provide(boardEndKey, boardEnded);
 const boardListEnd = ref(false);
 provide(boardListEndKey, boardListEnd);
 const onBoardPage = computed(() => route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, ''));
-const compactHeader = ref(typeof window.matchMedia === "function" ? window.matchMedia('(max-width: 1079px)').matches : false);
+const headerWidth = ref(window.innerWidth);
+// 站務導覽多一個長入口；窄桌機沿用帳號選單內的外觀、語言與社群入口。
+const compactHeader = computed(() => headerWidth.value < 1080 || headerWidth.value < 1280 && (reviewerStore.likely || reviewerStore.blogWriter));
 provide(petMenuKey, computed(() => !route.meta.bare && !route.meta.readingNotice && !route.meta.petAway && !isPlayHost()));
 const headerElement = ref<HTMLElement | null>(null);
 let headerObserver: ResizeObserver | undefined;
 function measureHeader() {
-  compactHeader.value = window.innerWidth < 1080;
+  headerWidth.value = window.innerWidth;
   const h = headerElement.value?.getBoundingClientRect().height;
   if (h) document.documentElement.style.setProperty('--site-header-h', `${h}px`);
 }
@@ -374,14 +376,19 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 }
 .account :deep(.acct__credits) { white-space: nowrap; }
 
-/* 站務入口較長；窄桌面將導覽放第二列，避免擠壓搜尋與帳號控制項。 */
+/* 站務導覽較長：搜尋沿用精簡入口，桌機把空間留給同一列的導覽與帳號。
+   頁首仍受 --page 限寬；英文、日文在寬螢幕也放不下完整搜尋框。 */
 .header__inner--reviewer .nav__item { white-space: nowrap; }
-@media (min-width: 701px) and (max-width: 1280px) {
+.header__inner--reviewer .search { display: none; }
+.header__inner--reviewer .search-go { display: inline-flex; }
+@media (min-width: 1080px) {
+  .header__inner--reviewer { grid-template-columns: auto minmax(0, 1fr) auto; }
+}
+/* 平板保留既有站務雙列。 */
+@media (min-width: 701px) and (max-width: 1079px) {
   .header__inner--reviewer { grid-template-columns: minmax(0, 1fr) auto; row-gap: 0; }
   .header__inner--reviewer .brand, .header__inner--reviewer .account { min-height: var(--header-h); }
   .header__inner--reviewer .nav { grid-column: 1 / -1; grid-row: 2; justify-content: center; padding-bottom: var(--s-2); }
-  .header__inner--reviewer .search { display: none; }
-  .header__inner--reviewer .search-go { display: inline-flex; }
 }
 
 /* 手機：一排收完。品牌與榜單同一個目的地，榜單那顆省掉；搜尋收成圖示。
