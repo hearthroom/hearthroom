@@ -147,6 +147,50 @@ async function mount(path: string) {
 
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
 
+it.each(['entries', 'bindings'] as const)('blocks writes and offers a retry when Lorebook %s cannot load', async (part) => {
+  api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Before', roleWelcome: 'Opening' });
+  (part === 'entries' ? api.fetchWorldbookEntries : api.fetchRoleWorldbooks).mockRejectedValueOnce(new Error('unavailable'));
+  await mount('/cards/r1/edit');
+  await type($("#f-name"), 'Keep this unsaved name');
+  expect(root.querySelector('.wb [role="alert"]')?.textContent).toContain(i18n.global.t('state.loadFailed'));
+  expect(root.querySelector('.wb')?.textContent).not.toContain(i18n.global.t('wb.entries.empty'));
+  expect(btnIn(root, i18n.global.t('wb.entries.manage'))).toBeUndefined();
+  expect($<HTMLButtonElement>('.bar button[type="submit"]').disabled).toBe(true);
+  await submit(); // Keyboard/programmatic submission must not bypass the disabled button.
+  expect(api.beginCardEdit).not.toHaveBeenCalled();
+  expect(api.patchRoleDocument).not.toHaveBeenCalled();
+  expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
+  btnIn(root, i18n.global.t('resource.retry')).click();
+  await flush();
+  expect($<HTMLInputElement>('#f-name').value).toBe('Keep this unsaved name');
+  expect(root.querySelector('.wb [role="alert"]')).toBeNull();
+  expect(root.querySelector('.wb')?.textContent).toContain('黑麥鎮');
+  await submit();
+  expect(api.beginCardEdit).toHaveBeenCalledTimes(1);
+  expect(api.patchRoleDocument).toHaveBeenCalledWith('r1', expect.objectContaining({roleName:'Keep this unsaved name'}), 'tok');
+});
+
+it('keeps a successfully loaded empty Lorebook editable', async () => {
+  api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Empty', roleWelcome: 'Opening' });
+  api.fetchWorldbookEntries.mockResolvedValueOnce([]);
+  await mount('/cards/r1/edit');
+  expect(root.querySelector('.wb [role="alert"]')).toBeNull();
+  expect(root.querySelector('.wb')?.textContent).toContain(i18n.global.t('wb.entries.empty'));
+  expect(btnIn(root, i18n.global.t('wb.entries.manage'))).toBeTruthy();
+});
+
+it('blocks all draft writes when a world character Lorebook failed to load', async () => {
+  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'World',world:{version:1,maxSpeakers:2,strictness:'balanced',characters:[{id:'ren',name:'Ren',profile:'',description:'A synthetic character',lorebookId:'member-book'}]}});
+  api.fetchWorldbookEntries.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('unavailable'));
+  await mount('/cards/r1/edit');
+  await type($("#f-name"), 'Changed world');
+  await submit();
+  expect(api.beginCardEdit).not.toHaveBeenCalled();
+  expect(api.patchRoleDocument).not.toHaveBeenCalled();
+  expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
+  expect(root.querySelector('.world-char__book [role="alert"]')?.textContent).toContain(i18n.global.t('state.loadFailed'));
+});
+
 it('lets the author save an unchanged draft to retire an unfinished publication',async()=>{
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'合成草稿',roleDetailDesc:'合成設定',roleWelcome:'合成開場',language:'zh-Hant'});
  localStorage.setItem('hearthroom:publication:harbor:r1','fixture-unfinished-operation');

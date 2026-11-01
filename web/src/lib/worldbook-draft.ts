@@ -48,6 +48,16 @@ const OPS_PER_REQUEST = 100;
 export interface StoredWorldbookDraft { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] }
 
 export function useWorldbookDraft(deps: WorldbookDraftDeps) {
+  let loadTarget: { roleId: string } | { bookId: string; name: string } | null = null;
+  async function readBook(token: string, bookId: string, name: string) {
+    const entries = await fetchWorldbookEntries(bookId, token);
+    const meta = await fetchMyWorldbooks(token).then((mine) => mine.find((b) => b.worldbookId === bookId) ?? null).catch(() => null);
+    // Commit a complete entry baseline only after the read succeeds. Metadata
+    // may still be unavailable; that locks renaming without hiding the entries.
+    book.id = bookId; book.name = meta?.name ?? name; book.desc = meta?.description ?? ""; book.meta = meta;
+    book.entries = entries;
+    book.original = JSON.parse(JSON.stringify(entries));
+  }
   const book = reactive({
     id: "",
     name: "",
@@ -71,8 +81,11 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
      * 讀到的還是舊書，對話也兩本一起用（2026-09-27 作者回報）。放掉手上那本時這個值留著，存檔時才解。
      */
     boundId: "",
+    loading: false,
+    loadFailed: false,
 
     reset() {
+      loadTarget = null; book.loading = false; book.loadFailed = false;
       book.id = ""; book.name = ""; book.desc = ""; book.meta = null; book.format = undefined;
       book.entries = []; book.original = []; book.pending = false; book.bindPending = false; book.boundId = "";
     },
@@ -118,6 +131,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       book.format = undefined;
       book.meta = bookSummary;
       book.desc = bookSummary.description ?? "";
+      loadTarget = { bookId: bookSummary.worldbookId, name: bookSummary.name };
     },
     /**
      * 放掉手上這本，回到空狀態重挑。original 一定要一起清空：留著的話，下一本書的差分會拿舊書的
@@ -156,29 +170,40 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
      * 那是作者最近一次選的（清單照綁定時間排）。
      */
     async loadBound(token: string, roleId: string) {
-      const bound = await fetchRoleWorldbooks(roleId, token).catch(() => []);
-      const latest = bound[bound.length - 1];
-      if (!latest) return;
-      await book.load(token, latest.worldbookId, latest.name);
-      book.boundId = latest.worldbookId;
-    },
-    /** 用 id 讀一本（角色的私有書）。讀不到條目就當空書，讀不到元資訊就鎖住書名。 */
-    async load(token: string, bookId: string, name = "") {
-      book.id = bookId;
-      book.name = name;
-      book.entries = await fetchWorldbookEntries(bookId, token).catch(() => []);
-      book.original = JSON.parse(JSON.stringify(book.entries));
+      loadTarget = { roleId };
+      book.loading = true; book.loadFailed = false;
       try {
-        const mine = await fetchMyWorldbooks(token);
-        const meta = mine.find((b) => b.worldbookId === bookId) ?? null;
-        book.meta = meta;
-        if (meta) {
-          book.name = meta.name;
-          book.desc = meta.description ?? "";
+        const bound = await fetchRoleWorldbooks(roleId, token);
+        const latest = bound[bound.length - 1];
+        if (latest) {
+          await readBook(token, latest.worldbookId, latest.name);
+          book.boundId = latest.worldbookId;
+        } else {
+          book.reset();
+          loadTarget = { roleId };
         }
       } catch {
-        book.meta = null;
+        book.loadFailed = true;
+      } finally {
+        book.loading = false;
       }
+    },
+    /** 用 id 讀一本。條目未知時保留上次基準並禁止保存；元資訊未知只鎖書名。 */
+    async load(token: string, bookId: string, name = "") {
+      loadTarget = { bookId, name };
+      book.loading = true; book.loadFailed = false;
+      try {
+        await readBook(token, bookId, name);
+      } catch {
+        book.loadFailed = true;
+      } finally {
+        book.loading = false;
+      }
+    },
+    async retryLoad(token: string) {
+      if (book.loading || !loadTarget) return;
+      if ("roleId" in loadTarget) await book.loadBound(token, loadTarget.roleId);
+      else await book.load(token, loadTarget.bookId, loadTarget.name);
     },
 
     /** 書名不重複：作者另一本已經叫這個名字就不建、不改名，請作者換名或直接用那一本。查不到就放行。 */
@@ -243,6 +268,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       return id;
     },
     async saveBook(token: string, options: { bindRoleId?: string }): Promise<string> {
+      if (book.loading || book.loadFailed) throw new Error("worldbook_not_loaded");
       const ops = book.ops();
       const needsBook = book.pending || Boolean(book.id);
       const metaDirty = book.metadataChanged();

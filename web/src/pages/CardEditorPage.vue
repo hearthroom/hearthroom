@@ -214,6 +214,15 @@ function memberBook(c: WorldCharacterDraft): WorldbookDraft {
 function memberBooksDirty(): boolean {
   return Boolean(draft.value.world?.characters.some((c) => memberBook(c).dirty()));
 }
+const booksUnavailable = computed(() => wb.loading || wb.loadFailed || Boolean(draft.value.world?.characters.some((c) => {
+  const book = memberBook(c);
+  return book.loading || book.loadFailed;
+})));
+async function retryBook(book: WorldbookDraft) {
+  const token = await session.accessToken().catch(() => null);
+  if (!token) { error.value = t("auth.expired"); return; }
+  await book.retryLoad(token);
+}
 /** 頁面層的三個動作要用到登入、確認框與下載，composable 不碰這些。 */
 async function pickBook(book: WorldbookDraft, summary: WorldbookSummary) {
   try {
@@ -850,6 +859,7 @@ function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':mis
 
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
+  if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
   regexSaveIssues.value = [];
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
@@ -1396,6 +1406,7 @@ async function exportCard(format: "png" | "json") {
                 <p class="hint">{{ $t("editor.world.char.lorebook.hint") }}</p>
                 <WorldbookEditor v-model="memberBook(c).entries" v-model:book-name="memberBook(c).name"
                                  v-model:book-desc="memberBook(c).desc"
+                                 :loading="memberBook(c).loading" :load-failed="memberBook(c).loadFailed" @retry="retryBook(memberBook(c))"
                                  :meta-locked="Boolean(memberBook(c).id) && !memberBook(c).meta?.visibility" :language="draft.language"
                                  :bound="Boolean(memberBook(c).id) || memberBook(c).pending" @create="memberBook(c).createDraft()"
                                  @imported="importBook(memberBook(c), $event)" @pick="pickBook(memberBook(c), $event)"
@@ -1483,6 +1494,7 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="wb.entries" v-model:book-name="wb.name"
                            v-model:book-desc="wb.desc"
+                           :loading="wb.loading" :load-failed="wb.loadFailed" @retry="retryBook(wb)"
                            :meta-locked="Boolean(wb.id) && !wb.meta?.visibility" :language="draft.language"
                            :bound="Boolean(wb.id) || wb.pending" @create="wb.createDraft()"
                            @imported="importBook(wb, $event)" @pick="pickBook(wb, $event)"
@@ -1565,7 +1577,7 @@ async function exportCard(format: "png" | "json") {
           @kept="generationKept"
         />
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
+          <button class="btn btn--primary" type="submit" :disabled="loading || booksUnavailable || saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">

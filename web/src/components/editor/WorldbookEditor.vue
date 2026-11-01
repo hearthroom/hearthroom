@@ -34,6 +34,8 @@ const props = defineProps<{
   bound: boolean;
   /** 上游那份元資訊讀不到：書名與描述看得到、改不動。改了也送不出去，不讓人白填。 */
   metaLocked: boolean;
+  loading?: boolean;
+  loadFailed?: boolean;
   /** 這張卡的語區：條目內容上限與匯入時長條目怎麼拆都跟著它走。 */
   language: string;
 }>();
@@ -51,6 +53,7 @@ const emit = defineEmits<{
   release: [];
   /** 把這本存成檔案。下載那一步在頁面上，跟角色卡與正則規則共用同一支。 */
   exportBook: [];
+  retry: [];
 }>();
 
 const { t } = useI18n();
@@ -153,6 +156,14 @@ const preview = computed(() =>
 
 <template>
   <section class="wb">
+    <div v-if="loading || loadFailed" class="panel wb__load" :aria-busy="loading">
+      <p v-if="loading" class="subtle" role="status">{{ $t("state.loading") }}</p>
+      <template v-else>
+        <p class="notice notice--error" role="alert">{{ $t("state.loadFailed") }}</p>
+        <button type="button" class="btn" @click="emit('retry')">{{ $t("resource.retry") }}</button>
+      </template>
+    </div>
+    <template v-else>
     <div v-if="!bound" class="empty panel">
       <p class="muted">{{ $t("wb.empty") }}</p>
       <div class="empty__acts">
@@ -231,10 +242,14 @@ const preview = computed(() =>
 
     <WorldbookEntriesDialog v-if="open" :model-value="modelValue" :language="language"
                             @update:model-value="emit('update:modelValue', $event)" @close="open = false" />
+    </template>
   </section>
 </template>
 
 <style scoped>
+.wb__load { padding: var(--s-4); display: grid; gap: var(--s-3); justify-items: start; }
+.wb__load p { margin: 0; }
+.wb__load .btn { min-height: var(--h-lg); }
 .empty { display: flex; gap: var(--s-3); align-items: center; justify-content: space-between; padding: var(--s-4); }
 .empty .muted { margin: 0; }
 .empty__acts, .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
