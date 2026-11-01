@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "積分頁的圖表改成積分帳單，每天的收入和支出能一起看，日期也標得更密。",
+    "zh-Hans": "积分页的图表改成积分账单，每天的收入和支出能一起看，日期也标得更密。",
+    "en": "The credits chart is now a credit history that shows each day's earned and spent credits, with more dates marked.",
+    "ja": "ポイントページのグラフが収支表示になり、毎日の獲得と消費を一緒に見られ、日付も細かく表示されます。",
+    "ko": "포인트 페이지 차트가 포인트 내역으로 바뀌어 매일 적립과 사용을 함께 보고, 날짜도 더 촘촘히 표시돼요."
+  }
+}
