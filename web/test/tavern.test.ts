@@ -380,3 +380,12 @@ it("preserves a split entry as one logical group and round trips author matching
  expect(restored[0].matchOptions).toMatchObject({selective:false,scanDepth:6,order:42,extensions:{source_flag:"kept"}});
  expect(restored[0].matchOptions?.groupId).toBe(rows[0].matchOptions?.groupId);
 });
+
+it("keeps semantic recall off in first-party Lorebook extensions through export and import", () => {
+ const rows=bookEntriesToDrafts([{name:"Secret",content:"Synthetic reveal",keys:["reveal"],extensions:{harperharbor:{groupId:"whole",groupOrder:0,semanticRecall:false}}}]);
+ expect(rows[0].semanticRecall).toBe(false);
+ const exported=worldbookToExport("Synthetic",rows);
+ const restored=bookEntriesToDrafts(worldInfoToBook(exported)!.entries!);
+ expect(restored[0].semanticRecall).toBe(false);
+ expect(restored[0].matchOptions?.groupId).toBe("whole");
+});
