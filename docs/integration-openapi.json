@@ -2909,7 +2909,7 @@
           "Conversation archives"
         ],
         "summary": "Archive the given conversation and start a fresh one for the same card",
-        "description": "Ends the given conversation and creates a new current conversation for the same role card, seeded with the card's welcome message. Whether the old conversation is kept as history or discarded is decided by the server: if it contains at least one user message it is kept as history, otherwise it is marked deleted. The `save` field is required but only labels the request in server metrics; it does not change that decision. If the old conversation is no longer current (for example a concurrent duplicate request already archived it) the existing current conversation of the card is returned instead of creating another one. A generation still streaming into the old conversation is asked to stop. Subject to the per-card archive limit: if the card already has 20 non-deleted conversations the request is rejected with 409 before anything changes. Role fields in `roleInfo` and the welcome text are returned verbatim (no per-language conversion on this API); the optional `language` header only chooses the generic fallback player name substituted into `defaultRelay` when neither a persona name, the card's player name nor the account nickname is available.",
+        "description": "Ends the given conversation and creates a new current conversation for the same role card, seeded with the card's welcome message. Whether the old conversation is kept as history or discarded is decided by the server: if it contains at least one user message it is kept as history, otherwise it is marked deleted. The `save` field is required but only labels the request in server metrics; it does not change that decision. If the old conversation is no longer current (for example a concurrent duplicate request already archived it) the existing current conversation of the card is returned instead of creating another one. A generation still streaming into the old conversation is asked to stop. Subject to the per-card archive limit: if the card already has 20 non-deleted conversations the request is rejected with 409 before anything changes. Role fields in `roleInfo` and the welcome text are returned verbatim (no per-language conversion on this API); the optional `language` header only chooses the generic fallback player name substituted into `defaultRelay` when neither a persona name, the account persona's name, the card's player name nor the account nickname is available.",
         "security": [
           {
             "userToken": []
@@ -6013,7 +6013,7 @@
           "Player settings"
         ],
         "summary": "Global player persona",
-        "description": "Account-level persona (name the AI calls the player, gender, self-introduction) shared across cards. Which persona a card uses is chosen per card by `personaMode` in role-settings. Also returns the account nickname so the UI can show what name `name_only` mode falls back to.",
+        "description": "Account-level persona (name the AI calls the player, gender, self-introduction) shared across cards. Which persona a card uses is chosen per card by `personaMode` in role-settings. A card whose own persona leaves the name empty still uses this `userName`. Also returns the account nickname, used when no persona name or card player name applies.",
         "security": [
           {
             "userToken": []
@@ -15271,7 +15271,7 @@
           },
           "defaultRelay": {
             "type": "string",
-            "description": "The card's welcome message with `{{user}}`/`{{char}}` placeholders substituted (player name resolved from persona, card player name, account nickname, then a language-specific fallback); it has been inserted as the first AI message of the new conversation."
+            "description": "The card's welcome message with `{{user}}`/`{{char}}` placeholders substituted (player name resolved from persona, account persona name, card player name, account nickname, then a language-specific fallback); it has been inserted as the first AI message of the new conversation."
           },
           "roleInfo": {
             "$ref": "#/components/schemas/RoleInfo"

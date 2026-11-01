@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "沒有單獨設定人設的卡片，現在會直接用你的全局人設。",
+    "zh-Hans": "没有单独设置人设的卡片，现在会直接用你的全局人设。",
+    "en": "Cards you haven't given their own persona now use your global persona.",
+    "ja": "個別に人物設定をしていないカードでは、共通の人物設定がそのまま使われます。",
+    "ko": "따로 페르소나를 정하지 않은 카드는 이제 공통 페르소나를 그대로 사용해요."
+  },
+  "body": {
+    "zh-Hant": "卡片裡的稱呼沒填時，會先用全局人設的稱呼，不再直接用帳號暱稱。",
+    "zh-Hans": "卡片里的称呼没填时，会先用全局人设的称呼，不再直接用账号昵称。",
+    "en": "When a card leaves your name blank, the AI uses your global persona name instead of your account nickname.",
+    "ja": "カード側の呼び名が空欄なら、アカウントのニックネームではなく共通の人物設定の呼び名を使います。",
+    "ko": "카드의 호칭이 비어 있으면 계정 별명 대신 공통 페르소나의 호칭을 사용해요."
+  }
+}
