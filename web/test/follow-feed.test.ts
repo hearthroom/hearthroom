@@ -85,6 +85,14 @@ describe("關注動態", () => {
     expect(events).toEqual(["top"]);
   });
 
+  it("排序在捲動中途變了，下一批重複的卡不再出現第二次", async () => {
+    request.mockResolvedValueOnce(page([card("3", { kind: "new", at: 3 }), card("2", { kind: "new", at: 2 })], true, "next-1"));
+    request.mockResolvedValueOnce(page([card("2", { kind: "new", at: 2 }), card("1", { kind: "new", at: 1 })]));
+    await mount();
+    window.dispatchEvent(new Event("scroll")); await settle();
+    expect([...root.querySelectorAll(".card__name")].map((el) => el.textContent?.trim())).toEqual(["卡3", "卡2", "卡1"]);
+  });
+
   it("沒關注任何作者：說明加瀏覽日榜，不顯示管理關注", async () => {
     request.mockResolvedValueOnce(page([]));
     await mount({ following: 0 });

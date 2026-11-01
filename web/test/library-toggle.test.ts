@@ -31,3 +31,12 @@ it('uses the known followed state without a redundant status read',async()=>{
  expect(f.request).not.toHaveBeenCalled();const button=el.querySelector('button')!;expect(button.getAttribute('aria-pressed')).toBe('true');
  button.click();await settle();expect(f.request.mock.calls[0][2]).toBe('DELETE');expect(button.getAttribute('aria-pressed')).toBe('false');
 });
+it('keeps the signed-in following count in step so the follow feed picks the right empty state',async()=>{
+ const session=f.session as typeof f.session&{profile?:{following:number}};session.profile={following:0};
+ f.request.mockResolvedValueOnce({active:false}).mockResolvedValueOnce({active:true}).mockResolvedValueOnce({active:false});
+ app=createApp(LibraryToggle,{kind:'following',target:'qaauthor'}).use(i18n);app.mount(el);await settle();
+ const button=el.querySelector('button')!;
+ button.click();await settle();expect(session.profile.following).toBe(1);
+ button.click();await settle();expect(session.profile.following).toBe(0);
+ delete session.profile;
+});

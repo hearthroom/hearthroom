@@ -35,7 +35,9 @@ async function next() {
     if (!token) throw new Error('auth');
     const page = await libraryRequest<CardPage>(`feed?offset=${offset}&lang=${contentLang(locale.value)}${cursor ? '&cursor=' + encodeURIComponent(cursor) : ''}`, token);
     if (seq !== sequence) return;
-    items.value = [...items.value, ...page.items];
+    // 依偏移翻頁，捲動途中關注的作者發了新卡或更新，整列往後推一格，下一批會再帶到上一批最後那張：已經列過的不再列
+    const seen = new Set(items.value.map((card) => card.id));
+    items.value = [...items.value, ...page.items.filter((card) => !seen.has(card.id))];
     offset += page.limit || 24;
     cursor = page.nextCursor;
     done.value = !page.hasNext;

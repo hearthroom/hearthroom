@@ -32,11 +32,13 @@ async function toggle() {
   if (!session.me) { await router.push(lp(loginPath(route.fullPath))); return; }
   if (!ready.value) { await load(); return; }
   busy.value = true; error.value = '';
-  const seq = sequence;
+  const seq = sequence, was = active.value;
   try {
     const token = await session.accessToken();
     if (!token) { await router.push(lp(loginPath(route.fullPath))); return; }
     const result = await libraryRequest<{ active: boolean; count?: number }>(`${props.kind}/${encodeURIComponent(props.target)}`, token, active.value ? 'DELETE' : 'PUT');
+    // 關注數記在登入者的資料上，首頁「關注」分頁靠它分辨「還沒關注」與「關注了但沒動態」；資料只在登入時讀一次，這裡跟著加減
+    if (props.kind === 'following' && session.profile?.following !== undefined && result.active !== was) session.profile.following = Math.max(0, session.profile.following + (result.active ? 1 : -1));
     if (seq === sequence) { active.value = result.active; if (result.count !== undefined) emit('count', result.count); }
     if (result.active && props.kind === 'favorites') suki({ type: 'favorite' });
   } catch { if (seq === sequence) error.value = t('library.saveFailed'); }
