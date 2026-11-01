@@ -1,5 +1,16 @@
 # Hearthroom agent setup
 
+## Official domains
+
+These exact hosts belong to the same Hearthroom community and its connected services; a different host is not automatically official.
+
+- `sukisuki.ai` is the primary community site. `hearthroom.club`, `sukisuki.chat`, and `sukisuki.pro` serve the same community directly, without redirecting to the primary site; each `www` redirects to its own root. Sign-in sessions are separate by origin.
+- `play.sukisuki.ai`, `play.hearthroom.club`, `play.sukisuki.chat`, and `play.sukisuki.pro` host card apps; they do not redirect to the primary site.
+- `cli.hearthroom.club`, `cli.sukisuki.ai`, and `cli.sukisuki.chat` serve the CLI documentation directly; they do not redirect to the primary community site.
+- The `downloads` subdomain of each of the four community roots serves app downloads; `playground` serves the playground; `c<card-id>` hosts an isolated card sandbox. These hosts do not redirect to the primary site. Sandbox content is authored by card creators.
+- `api.harperharbor.com` is the connected service API, `console.harperharbor.com` its account and billing console, and `assets.harperharbor.com` its media host. They do not redirect to the community site.
+
+
 These are Hearthroom's official instructions for setting up an AI agent to write, test and publish character cards on Hearthroom. Run every command yourself; the user only signs in through a browser with the code you give them and answers one optional question. Talk to the user in the language they wrote to you in.
 
 Setup needs a shell. If you cannot run commands, tell the user to use an agent with a terminal, such as Claude Code or Codex, and stop.

@@ -45,9 +45,8 @@ function stubClipboard(writeText: (text: string) => Promise<void>) {
 afterEach(() => { app?.unmount(); app = undefined; root?.remove(); });
 
 describe('where the setup prompt and the tools live', () => {
-  it('points the agent at /agent-setup.md on the domain the reader is on', () => {
-    expect(agentSetupUrl('https://sukisuki.chat')).toBe('https://sukisuki.chat/agent-setup.md');
-    expect(agentSetupUrl()).toBe(`${location.origin}/agent-setup.md`);
+  it('points the agent at the primary setup document', () => {
+    expect(agentSetupUrl()).toBe('https://sukisuki.ai/agent-setup.md');
   });
 
   it('links the CLI site of the same domain family, falling back to the primary one', () => {
@@ -64,7 +63,7 @@ describe('the agent button', () => {
     root.querySelector<HTMLButtonElement>('.onboard__pill')!.click();
     await settle();
     const copied = write.mock.calls[0]![0] as string;
-    expect(copied).toContain(`${location.origin}/agent-setup.md`);
+    expect(copied).toContain('https://sukisuki.ai/agent-setup.md');
     expect(copied).toContain('酒館角色卡');
     const pop = document.querySelector('.onboard__pop')!;
     expect(pop.textContent).toContain(zhHant['onboard.copied']);
@@ -80,7 +79,7 @@ describe('the agent button', () => {
     const pop = document.querySelector('.onboard__pop')!;
     expect(pop.textContent).toContain(en['onboard.copyFailed']);
     expect(tracked).toHaveBeenLastCalledWith('agent_onboard', expect.objectContaining({ detail: 'onboard_manual', subject: 'guide', ok: false }));
-    expect(pop.textContent).toContain(`${location.origin}/agent-setup.md`);
+    expect(pop.textContent).toContain('https://sukisuki.ai/agent-setup.md');
   });
 
   it('closes with Escape and links to the full steps unless it sits inside them', async () => {

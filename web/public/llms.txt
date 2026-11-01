@@ -2,6 +2,16 @@
 
 > Hearthroom is an open community for AI character cards. Authors write cards, the community reviews them, and anyone can play a listed card in the browser. This file tells AI agents where the machine-readable material is and which actions need sign-in or spend credits.
 
+## Official domains
+
+These exact hosts belong to the same Hearthroom community and its connected services; a different host is not automatically official.
+
+- `sukisuki.ai` is the primary community site. `hearthroom.club`, `sukisuki.chat`, and `sukisuki.pro` serve the same community directly, without redirecting to the primary site; each `www` redirects to its own root. Sign-in sessions are separate by origin.
+- `play.sukisuki.ai`, `play.hearthroom.club`, `play.sukisuki.chat`, and `play.sukisuki.pro` host card apps; they do not redirect to the primary site.
+- `cli.hearthroom.club`, `cli.sukisuki.ai`, and `cli.sukisuki.chat` serve the CLI documentation directly; they do not redirect to the primary community site.
+- The `downloads` subdomain of each of the four community roots serves app downloads; `playground` serves the playground; `c<card-id>` hosts an isolated card sandbox. These hosts do not redirect to the primary site. Sandbox content is authored by card creators.
+- `api.harperharbor.com` is the connected service API, `console.harperharbor.com` its account and billing console, and `assets.harperharbor.com` its media host. They do not redirect to the community site.
+
 Facts that matter before you act:
 
 - A card has a name, portrait, summary, persona, one or more openings, an optional Lorebook (lore triggered by keywords), optional display rules, and a chat page setting (sandbox or classic). The web editor imports SillyTavern PNG or JSON cards and Meimo Island (MMD) three-file sets; the CLI also imports CHARX.

@@ -52,7 +52,7 @@ describe('llms.txt', () => {
   });
 
   it('is written for a reader without our context', () => {
-    expect(llms).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|Lunarhub|owner|TODO|worktree/i);
+    expect(llms.replaceAll('harperharbor.com', '')).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|Lunarhub|owner|TODO|worktree/i);
     // 模型可見的字不放內部檔名或函式名
     expect(llms).not.toMatch(/\b\w+\.(ts|vue|go|mjs)\b/);
     // 站上的登入頁面不列成入口：/create、/mine、/wallet 對 robots 也是關的

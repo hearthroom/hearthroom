@@ -37,6 +37,8 @@ describe('llms docs emitted at build', () => {
 
   it('assembles llms-full.txt from llms.txt and the English documentation', () => {
     const full = docs.get('llms-full.txt')!;
+    expect(full.content).not.toContain('https://hearthroom.club/v1');
+    expect(full.content).not.toContain('Base URL | `https://hearthroom.club`');
     expect(full.contentType).toBe('text/plain; charset=utf-8');
     expect(full.content.startsWith(llms.trimEnd())).toBe(true);
     expect(full.content).toContain(developersEn.trimEnd());
@@ -61,7 +63,8 @@ describe('llms docs emitted at build', () => {
     for (const step of ['claude plugin install hearthroom@hearthroom-skills', 'codex plugin add hearthroom@hearthroom-skills', 'hearthroom auth login', 'hearthroom version']) {
       expect(setup.content, step).toContain(step);
     }
-    expect(setup.content).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|owner/i);
+    expect(setup.content).toContain('api.harperharbor.com');
+    expect(setup.content.replaceAll('harperharbor.com', '')).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|owner/i);
     expect(llms).toContain('(https://sukisuki.ai/agent-setup.md)');
   });
 

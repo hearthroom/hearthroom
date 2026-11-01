@@ -14,8 +14,8 @@ Hearthroom API 可讓你瀏覽社群角色卡、尋找作者、讀寫留言，�
 公開瀏覽不需要登入：
 
 ```sh
-curl 'https://hearthroom.club/v1/cards?zone=en&sort=new&limit=12'
-curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
+curl 'https://sukisuki.ai/v1/cards?zone=en&sort=new&limit=12'
+curl 'https://sukisuki.ai/v1/tags?zone=en&limit=12'
 ```
 
 角色卡清單回傳 `items`、`hasNext`、`limit`、`offset`。使用角色卡的 `id` 讀取詳情與留言。作者連結使用作者的公開 `handle`。
@@ -24,7 +24,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 | 主題 | 慣例 |
 |---|---|
-| 基底 URL | `https://hearthroom.club`；文件中的路徑以 `/v1` 開頭。自行架設的站點使用自己的來源網址。 |
+| 基底 URL | `https://sukisuki.ai`；文件中的路徑以 `/v1` 開頭。自行架設的站點使用自己的來源網址。 |
 | 公開讀取 | 標示為**無須驗證**的端點接受匿名請求。選擇性身分驗證可能影響可見內容與檢視者專屬欄位。 |
 | 會員請求 | 使用經授權登入 Hearthroom 後取得的目前存取權杖，傳送 `Authorization: Bearer <access_token>`。僅有瀏覽器 Cookie 無法驗證這些端點。本 API 不核發獨立的開發者金鑰。 |
 | 請求本文 | 端點定義本文時，請以 `Content-Type: application/json` 傳送 JSON。 |

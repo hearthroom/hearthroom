@@ -14,8 +14,8 @@ Hearthroom API를 사용하면 커뮤니티 카드를 탐색하고, 작가를 �
 공개 콘텐츠 탐색에는 로그인이 필요하지 않습니다.
 
 ```sh
-curl 'https://hearthroom.club/v1/cards?zone=en&sort=new&limit=12'
-curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
+curl 'https://sukisuki.ai/v1/cards?zone=en&sort=new&limit=12'
+curl 'https://sukisuki.ai/v1/tags?zone=en&limit=12'
 ```
 
 카드 목록은 `items`, `hasNext`, `limit`, `offset`을 반환합니다. 카드의 `id`로 상세 정보와 댓글을 조회하세요. 작가 링크에는 작가의 공개 `handle`을 사용합니다.
@@ -24,7 +24,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 | 항목 | 규칙 |
 |---|---|
-| 기본 URL | `https://hearthroom.club`입니다. 문서의 경로는 `/v1`로 시작합니다. 자체 호스팅 인스턴스는 자체 출처를 사용합니다. |
+| 기본 URL | `https://sukisuki.ai`입니다. 문서의 경로는 `/v1`로 시작합니다. 자체 호스팅 인스턴스는 자체 출처를 사용합니다. |
 | 공개 조회 | **인증 불필요**로 표시된 엔드포인트는 익명 요청을 허용합니다. 선택적으로 인증하면 표시되는 콘텐츠 및 조회자별 필드가 달라질 수 있습니다. |
 | 회원 요청 | 승인된 Hearthroom 로그인에서 받은 현재 액세스 토큰을 `Authorization: Bearer <access_token>`으로 보내세요. 브라우저 쿠키만으로는 이 엔드포인트를 인증할 수 없습니다. 이 API는 별도의 개발자 키를 발급하지 않습니다. |
 | 요청 본문 | 엔드포인트에 본문이 정의되어 있으면 `Content-Type: application/json`으로 JSON을 보내세요. |

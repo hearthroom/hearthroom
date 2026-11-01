@@ -14,8 +14,8 @@ Paths, field names, scopes and operation identifiers remain compatible with the 
 Public browsing does not require sign-in:
 
 ```sh
-curl 'https://hearthroom.club/v1/cards?zone=en&sort=new&limit=12'
-curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
+curl 'https://sukisuki.ai/v1/cards?zone=en&sort=new&limit=12'
+curl 'https://sukisuki.ai/v1/tags?zone=en&limit=12'
 ```
 
 The card list returns `items`, `hasNext`, `limit` and `offset`. Use a card's `id` to read its detail and comments. Author links use the author's public `handle`.
@@ -24,7 +24,7 @@ The card list returns `items`, `hasNext`, `limit` and `offset`. Use a card's `id
 
 | Topic | Convention |
 |---|---|
-| Base URL | `https://hearthroom.club`; documented paths begin with `/v1`. A self-hosted instance uses its own origin. |
+| Base URL | `https://sukisuki.ai`; documented paths begin with `/v1`. A self-hosted instance uses its own origin. |
 | Public reads | Endpoints marked **no auth** accept anonymous requests. Optional authentication can affect visible content and viewer-specific fields. |
 | Member requests | Send `Authorization: Bearer <access_token>` using the current access token from your authorized Hearthroom sign-in. A browser cookie alone does not authenticate these endpoints. This API does not issue standalone developer keys. |
 | Request body | Send JSON with `Content-Type: application/json` when the endpoint defines a body. |

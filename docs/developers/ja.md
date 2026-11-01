@@ -14,8 +14,8 @@ Hearthroom の API では、コミュニティのカード閲覧、作者の検�
 公開コンテンツの閲覧にログインは不要です。
 
 ```sh
-curl 'https://hearthroom.club/v1/cards?zone=en&sort=new&limit=12'
-curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
+curl 'https://sukisuki.ai/v1/cards?zone=en&sort=new&limit=12'
+curl 'https://sukisuki.ai/v1/tags?zone=en&limit=12'
 ```
 
 カード一覧は `items`、`hasNext`、`limit`、`offset` を返します。カードの `id` で詳細とコメントを取得できます。作者へのリンクには、作者の公開 `handle` を使用します。
@@ -24,7 +24,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 | 項目 | 規則 |
 |---|---|
-| ベース URL | `https://hearthroom.club` です。記載するパスは `/v1` で始まります。セルフホスト環境では、その環境のオリジンを使用します。 |
+| ベース URL | `https://sukisuki.ai` です。記載するパスは `/v1` で始まります。セルフホスト環境では、その環境のオリジンを使用します。 |
 | 公開情報の取得 | **認証不要**のエンドポイントは匿名リクエストを受け付けます。任意で認証すると、表示される内容や閲覧者固有のフィールドが変わる場合があります。 |
 | メンバーのリクエスト | 認可済みの Hearthroom ログインで取得した現在のアクセストークンを使い、`Authorization: Bearer <access_token>` を送信します。ブラウザーの Cookie だけでは、これらのエンドポイントを認証できません。この API は独立した開発者キーを発行しません。 |
 | リクエスト本文 | 本文を定義するエンドポイントでは、`Content-Type: application/json` を付けて JSON を送信します。 |
