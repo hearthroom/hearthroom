@@ -28,11 +28,11 @@ const error = ref("");
 const busy = ref<string | null>(null);
 const forbidden = ref(false);
 
-/** 重送＝同一張卡之前審過至少一次（被駁回後再送，或過審後改內容再送） */
+/** 重送＝同一張卡之前審過至少一次（被駁回後再送，或過審後改內容再送）。
+ *  篩選只收窄還沒領的；自己領著的永遠列著，免得忘了手上還有一張。 */
 const resubmittedOnly = ref(false);
-const shown = computed(() => (resubmittedOnly.value ? items.value.filter((i) => (i.attempt ?? 1) >= 2) : items.value));
-const mine = computed(() => shown.value.filter((i) => i.claim === "mine"));
-const others = computed(() => shown.value.filter((i) => i.claim !== "mine"));
+const mine = computed(() => items.value.filter((i) => i.claim === "mine"));
+const others = computed(() => items.value.filter((i) => i.claim !== "mine" && (!resubmittedOnly.value || (i.attempt ?? 1) >= 2)));
 
 async function load() {
   error.value = "";
@@ -109,7 +109,6 @@ onMounted(() => {
         <button class="seg__item" :class="{ 'seg__item--on': !resubmittedOnly }" :aria-pressed="!resubmittedOnly" @click="resubmittedOnly = false">{{ $t("review.filter.all") }}</button>
         <button class="seg__item" :class="{ 'seg__item--on': resubmittedOnly }" :aria-pressed="resubmittedOnly" @click="resubmittedOnly = true">{{ $t("review.filter.resubmitted") }}</button>
       </div>
-      <div v-if="!shown.length" class="empty panel"><p class="empty__title">{{ $t("review.filter.empty") }}</p></div>
       <ul v-for="(group, gi) in [mine, others]" :key="gi" class="list">
         <li v-for="item in group" :key="item.id" class="row panel" :class="{ 'row--mine': item.claim === 'mine' }">
           <RouterLink :to="lp(`/review/${item.id}`)" class="row__art">
@@ -147,6 +146,7 @@ onMounted(() => {
           </div>
         </li>
       </ul>
+      <div v-if="resubmittedOnly && !others.length" class="empty panel"><p class="empty__title">{{ $t("review.filter.empty") }}</p></div>
     </template>
   </section>
 </template>

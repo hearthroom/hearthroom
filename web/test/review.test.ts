@@ -85,6 +85,27 @@ describe("審核佇列頁", () => {
     expect(host.textContent).toContain("夜行偵探");
   });
 
+  it("只看重送時，自己領著的首送卡仍然留著；沒有別的重送卡時說明沒有", async () => {
+    api.fetchReviewQueue.mockResolvedValueOnce({
+      items: [
+        { id: "m1", kind: "first", submittedAt: Date.now(), attempt: 1,
+          card: { id: "c3", roleId: "r3", name: "我領的首送", summary: "", avatarUrl: null, zone: "zh", tags: [] },
+          stamps: { approve: 0, required: 1 }, claim: "mine", stampedByMe: false },
+        { id: "f1", kind: "first", submittedAt: Date.now(), attempt: 1,
+          card: { id: "c4", roleId: "r4", name: "別人的首送", summary: "", avatarUrl: null, zone: "zh", tags: [] },
+          stamps: { approve: 0, required: 1 }, claim: "free", stampedByMe: false },
+      ],
+      claimTtlMs: 2_700_000,
+    } as any);
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.refresh"))!.click();
+    await vi.waitFor(() => expect(host.textContent).toContain("我領的首送"));
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.filter.resubmitted"))!.click();
+    await nextTick();
+    expect(host.textContent).toContain("我領的首送");
+    expect(host.textContent).not.toContain("別人的首送");
+    expect(host.textContent).toContain(i18n.global.t("review.filter.empty"));
+  });
+
   it("領取後放回使用該次認領的 generation", async () => {
     const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim") && !b.disabled)!;
     claimBtn.click();
