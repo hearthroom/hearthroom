@@ -8,7 +8,8 @@ import { createApp, h, nextTick, toRaw, type App } from 'vue';
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 const fixture = vi.hoisted(() => ({ save: vi.fn(), confirm: vi.fn(), session: { me: {}, displayName: 'Author', avatarUrl: '', wallet: null, profile: { handle: 'author01', memberSince: 0, displayName: 'Author', bio: 'Existing bio', avatarUrl: '', cover: '', tipLinks: [] as string[], identities: [] }, accessToken: async () => 'test' } as any }));
-vi.mock('../src/lib/session', () => ({ useSession: () => fixture.session }));
+// 響應式的 session：保存後換掉 profile 時，元件裡看著它的 watch 要真的會觸發
+vi.mock('../src/lib/session', async () => { const { reactive } = await import('vue'); const session = reactive(fixture.session); return { useSession: () => session }; });
 vi.mock('../src/lib/api', async (original) => ({ ...(await original<object>()), updateSiteProfile: fixture.save }));
 vi.mock('../src/lib/confirm', () => ({ confirmDialog: fixture.confirm }));
 import ProfileHero from '../src/components/profile/ProfileHero.vue';
@@ -29,7 +30,7 @@ beforeEach(async () => {
   vi.stubGlobal('IntersectionObserver', FakeObserver);
   fixture.session.profile = { ...fixture.session.profile, bio: 'Existing bio', cover: '', tipLinks: [] };
   el = document.createElement('div'); document.body.append(el);
-  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/me', component: ProfileHero, props: { community: null, badges: null, author: null } }, { path: '/elsewhere', component: { template: '<div/>' } }] });
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/me', component: ProfileHero, props: { community: null, badges: null, author: null } }, { path: '/me-from-settings', component: ProfileHero, props: { community: null, badges: null, author: null, startEditing: true } }, { path: '/elsewhere', component: { template: '<div/>' } }] });
   await router.push('/me');
   app = createApp({ render: () => h(RouterView) }).use(i18n).use(router);
   app.mount(el); await settle();
@@ -230,4 +231,14 @@ it('saves all changes from the bottom save control too', async () => {
   expect(fixture.save).toHaveBeenCalledTimes(1);
   expect(fixture.save.mock.calls[0][1]).toMatchObject({ displayName: 'Edited', cover: 'sakura' });
   expect(document.querySelector('.savebar')).toBeNull();
+});
+
+it('stays out of editing after saving when it was opened for editing from a link', async () => {
+  await router.push('/me-from-settings'); await settle();
+  expect(el.querySelector('.hero__actions--editing')).not.toBeNull();
+  fixture.save.mockImplementation(async (_token: string, body: { displayName: string }) => ({ ...fixture.session.profile, displayName: body.displayName }));
+  await type(nameInput(), 'Edited');
+  topSave().click(); await settle();
+  expect(fixture.save).toHaveBeenCalledTimes(1);
+  expect(el.querySelector('.hero__actions--editing')).toBeNull();
 });

@@ -114,7 +114,9 @@ async function cancel() {
   discard();
 }
 watch(() => props.startEditing, (on) => { if (on && !editing.value && profile.value) begin(); }, { immediate: true });
-watch(profile, (p) => { if (p && props.startEditing && !editing.value) begin(); });
+// 只在資料第一次讀到時自動進入編輯（從設定頁 ?edit=1 進來）。保存也會換掉 profile，
+// 那時網址參數還沒清掉，若照樣進入就會存完又跳回編輯。
+watch(profile, (p, old) => { if (p && !old && props.startEditing && !editing.value) begin(); });
 
 const dirty = computed(() => editing.value && (
   name.value !== session.displayName || bio.value !== (profile.value?.bio ?? '') || draftCover.value !== (profile.value?.cover ?? '') ||
@@ -133,7 +135,7 @@ watch(editActions, (node) => {
   if (!node || typeof IntersectionObserver === 'undefined') return;
   // 頁首是 sticky 的，被它蓋住也算看不到
   const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 0;
-  observer = new IntersectionObserver(([entry]) => { actionsInView.value = !!entry?.isIntersecting && entry.intersectionRatio > 0.95; }, { rootMargin: `-${header}px 0px 0px 0px`, threshold: [0, 1] });
+  observer = new IntersectionObserver(([entry]) => { actionsInView.value = !!entry?.isIntersecting && entry.intersectionRatio > 0.95; }, { rootMargin: `-${header}px 0px 0px 0px`, threshold: [0, 0.95, 1] });
   observer.observe(node);
 });
 onBeforeUnmount(() => observer?.disconnect());
