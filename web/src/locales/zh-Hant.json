@@ -1111,6 +1111,7 @@
   "author.supports": "支援 {providers}",
   "card.supports": "支援 {provider}",
   "card.featured": "{site}精選卡",
+  "card.featuredShort": "精選",
   "card.featuredHint": "社群精選：作者可獲得較高的返點",
   "card.featureAction": "標為精選",
   "card.unfeatureAction": "取消精選",

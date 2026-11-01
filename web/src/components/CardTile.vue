@@ -93,7 +93,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
       <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
       <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷 -->
       <div v-if="card.featured || shownAt" class="card__corner">
-      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
+      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featuredShort") }}</span>
       <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
          底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
       <span v-if="shownAt" class="card__updated" :title="timeLabel">
@@ -179,7 +179,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 }
 /* block 而不是 inline-flex：文字直接當 flex 項目時省略號不會出現 */
 .card__featured {
-  display: block; min-width: 0; height: 20px; line-height: 20px; padding: 0 7px;
+  display: block; min-width: 0; height: 20px; line-height: 20px; padding: 0 5px;
   /* 深一階強調色：--accent 配白字只有 3.49:1，11px 粗體壓不住；--accent-deep 配 --on-accent 七套主題深淺色都過 4.5:1 */
   border-radius: 4px; background: var(--accent-deep); color: var(--on-accent);
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
@@ -262,7 +262,7 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .card__updated {
   flex: none; margin-left: auto;
   display: inline-flex; align-items: center; gap: 3px;
-  padding: 2px 7px; border-radius: var(--r-pill);
+  padding: 2px 5px; border-radius: var(--r-pill);
   background: rgba(16, 16, 19, 0.62); color: #fff;
   font-size: 11px; line-height: 16px; white-space: nowrap; pointer-events: none;
 }

@@ -1111,6 +1111,7 @@
   "author.supports": "{providers} 対応",
   "card.supports": "{provider} 対応",
   "card.featured": "{site} 注目カード",
+  "card.featuredShort": "注目",
   "card.featuredHint": "コミュニティ選定：作者への還元率が上がります",
   "card.featureAction": "注目に指定",
   "card.unfeatureAction": "注目を解除",

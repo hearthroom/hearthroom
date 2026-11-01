@@ -1111,6 +1111,7 @@
   "author.supports": "{providers} 지원",
   "card.supports": "{provider} 지원",
   "card.featured": "{site} 추천 카드",
+  "card.featuredShort": "추천",
   "card.featuredHint": "커뮤니티 추천: 작가에게 더 높은 리베이트",
   "card.featureAction": "추천으로 표시",
   "card.unfeatureAction": "추천 해제",

@@ -1111,6 +1111,7 @@
   "author.supports": "支持 {providers}",
   "card.supports": "支持 {provider}",
   "card.featured": "{site}精选卡",
+  "card.featuredShort": "精选",
   "card.featuredHint": "社区精选：作者可获得较高的返点",
   "card.featureAction": "标为精选",
   "card.unfeatureAction": "取消精选",

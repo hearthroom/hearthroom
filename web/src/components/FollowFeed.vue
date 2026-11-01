@@ -134,6 +134,8 @@ onBeforeUnmount(() => {
 .empty__title { margin: 0; font-size: 16px; font-weight: 600; }
 .empty__hint { margin: 0; font-size: 13.5px; max-width: 34ch; }
 .empty .btn { margin-top: var(--s-3); }
+/* 韓文照詞換行，不斷在詞中間（DESIGN §8） */
+.empty:lang(ko), .feed__error:lang(ko) { word-break: keep-all; }
 .stream-tail { min-height: 1px; }
 .stream-end { text-align: center; padding: var(--s-6); color: var(--text-2); }
 </style>
