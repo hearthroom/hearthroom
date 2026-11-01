@@ -123,6 +123,8 @@ onBeforeUnmount(() => {
 .feed__intro a { min-height: var(--h-sm); display: inline-flex; align-items: center; font-size: 13.5px; font-weight: 500; }
 .feed__error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .feed__error p { margin: 0; }
+/* 觸控裝置上「重試」用 44 高，手指按得到 */
+@media (pointer: coarse) { .feed__error .btn { height: var(--h-lg); } }
 /* 欄數由首頁的 .board-page :deep(.grid) 給，跟卡片格對齊 */
 .feed__ghosts { display: grid; gap: var(--s-5) var(--s-4); }
 .feed__ghosts .ghost { aspect-ratio: 3 / 5.3; }

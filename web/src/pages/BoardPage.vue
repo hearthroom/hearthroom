@@ -435,6 +435,8 @@ const ratingOptions = computed(() => {
 .more { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
 .more__title { margin: 0 0 var(--s-3); font-size: 15px; font-weight: 600; color: var(--text-2); }
 .stream-tail { min-height: 1px; margin-top: var(--s-5); }
+/* 觸控裝置上「重試」用 44 高，手指按得到 */
+@media (pointer: coarse) { .stream-tail .notice .btn { height: var(--h-lg); } }
 .stream-end { text-align: center; padding: var(--s-6); color: var(--text-2); }
 .tail-skeleton { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
 .tail-skeleton .ghost { aspect-ratio: 3 / 5.3; }

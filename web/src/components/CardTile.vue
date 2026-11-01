@@ -180,7 +180,8 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 /* block 而不是 inline-flex：文字直接當 flex 項目時省略號不會出現 */
 .card__featured {
   display: block; min-width: 0; height: 20px; line-height: 20px; padding: 0 7px;
-  border-radius: 4px; background: var(--accent); color: #fff;
+  /* 深一階強調色：--accent 配白字只有 3.49:1，11px 粗體壓不住；--accent-deep 配 --on-accent 七套主題深淺色都過 4.5:1 */
+  border-radius: 4px; background: var(--accent-deep); color: var(--on-accent);
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -192,7 +193,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.card__kind--new { background: var(--accent); }
+.card__kind--new { background: var(--accent-deep); color: var(--on-accent); }
 .card__flag { position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none; }
 
 /* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡。

@@ -1110,7 +1110,7 @@
   "me.publicPage": "View public profile",
   "author.supports": "Supports {providers}",
   "card.supports": "Supports {provider}",
-  "card.featured": "{site} Featured",
+  "card.featured": "Featured",
   "card.featuredHint": "Community pick: the author earns a higher rebate",
   "card.featureAction": "Mark as featured",
   "card.unfeatureAction": "Remove featured",
