@@ -28,7 +28,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   observed.callbacks.length = 0;
   vi.stubGlobal('IntersectionObserver', FakeObserver);
-  fixture.session.profile = { ...fixture.session.profile, bio: 'Existing bio', cover: '', tipLinks: [] };
+  fixture.session.profile = { ...fixture.session.profile, displayName: 'Author', bio: 'Existing bio', cover: '', tipLinks: [] };
   el = document.createElement('div'); document.body.append(el);
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/me', component: ProfileHero, props: { community: null, badges: null, author: null } }, { path: '/me-from-settings', component: ProfileHero, props: { community: null, badges: null, author: null, startEditing: true } }, { path: '/elsewhere', component: { template: '<div/>' } }] });
   await router.push('/me');
