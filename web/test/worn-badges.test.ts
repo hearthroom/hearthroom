@@ -99,3 +99,12 @@ it("closes the desktop popover when focus moves out of it", async () => {
   await settle();
   expect(document.querySelector(".worn-detail")).toBeNull();
 });
+
+it("stays open when a click inside the popover blurs its link to nowhere", async () => {
+  await mount({ items: [badge("a")], featured: ["a"] });
+  el.querySelector<HTMLButtonElement>(".worn__row button")!.click(); await settle();
+  const layer = document.querySelector<HTMLElement>(".worn-detail")!;
+  layer.dispatchEvent(new FocusEvent("focusout", { relatedTarget: null, bubbles: true }));
+  await settle();
+  expect(document.querySelector(".worn-detail")).not.toBeNull();
+});

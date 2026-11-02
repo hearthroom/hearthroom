@@ -116,7 +116,8 @@ function onKey(e: KeyboardEvent) {
 function onFocusOut(e: FocusEvent) {
   if (!detail.value || detail.value.sheet) return;
   const next = e.relatedTarget as Node | null;
-  if (next && layer.value?.contains(next)) return;
+  // relatedTarget 是 null（點了浮層裡的字、切到別的視窗）不算離開；點外面由擋點擊的那層關
+  if (!next || layer.value?.contains(next)) return;
   detail.value = null; document.removeEventListener("keydown", onKey); opener = null;
 }
 function onScroll() { if (detail.value && !detail.value.sheet) closeDetail(); }
