@@ -24033,7 +24033,7 @@
                 "type": "integer",
                 "format": "int64",
                 "minimum": 0,
-                "description": "Credits spent on this card by everyone except its author, summed across all published versions of the work. Staging versions are not counted."
+                "description": "Popularity of this card, summed across all published versions of the work. Each paid use by someone other than the author adds heat, weighted by the model's price and never less than the credits charged. Heat only increases. Staging versions are not counted."
               }
             }
           }

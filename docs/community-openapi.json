@@ -4444,7 +4444,7 @@
           },
           "heat": {
             "type": "integer",
-            "description": "Credits spent on this card by everyone except its author, summed across all published versions. Refreshed about every 10 minutes."
+            "description": "Popularity of this card, summed across all published versions. Each paid use by someone other than the author adds heat, weighted by the model's price and never less than the credits charged. Heat only increases. Refreshed about every 10 minutes."
           },
           "favoriteCount": {
             "type": "integer"
