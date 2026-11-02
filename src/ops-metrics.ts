@@ -9,7 +9,7 @@ const METRICS = {
   card_reward_publication:{name:'hearthroom_card_reward_publication_checks_total',help:'Fresh legacy community publication checks for retained reward payments.',label:'operation',operations:['admission'],outcomes:['allow','denied','unavailable']},
   card_reward_auto: {name:"hearthroom_card_reward_auto_total",help:"Automatic service payment attempts after approval and scheduled retry.",label:"operation",operations:["approval","retry"],outcomes:["paid","pending","unavailable"]},
   spend_leaderboard:{name:'hearthroom_spend_leaderboard_total',help:'Card spend ranking reads and atomic privacy saves.',label:'operation',operations:['read','save'],outcomes:['success','conflict','error']},
-  review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight and sealed revision.',label:'phase',operations:['draft','sealed'],outcomes:['eligible','insufficient']},
+  review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight, sealed revision, and reviewer approval (unknown: no recorded length).',label:'phase',operations:['draft','sealed','stamp'],outcomes:['eligible','insufficient','unknown']},
   review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',

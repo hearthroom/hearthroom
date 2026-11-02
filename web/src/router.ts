@@ -112,11 +112,12 @@ const pages: RouteRecordRaw[] = [
   {
     path: "review", component: () => import("./pages/CommunityManagementLayout.vue"), meta: { auth: true },
     children: [
-      { path: "", component: () => import("./pages/ReviewQueuePage.vue"), meta: { managementTab: "reviews" } },
+      // petQuietOnPhone：手機上桌寵進來不說招呼，泡泡才不會蓋住第一列的按鈕（2026-11-02 體檢 R8）
+      { path: "", component: () => import("./pages/ReviewQueuePage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
       { path: "cases", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cases" } },
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },
-      {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews'}},
+      {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews',petQuietOnPhone:true}},
       // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判
       { path: "members", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },

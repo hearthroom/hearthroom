@@ -47,7 +47,8 @@ const { locale } = useI18n();
 const brand = computed(() => siteName(String(locale.value)));
 </script>
 <template>
-  <div class="page community-management">
+  <!-- 卡片審核每天要進出很多次：手機上收起站名、大標與說明，只留分頁條，第一張卡不必捲（2026-11-02 體檢 R6） -->
+  <div class="page community-management" :class="{ 'community-management--compact': route.meta.managementTab === 'reviews' }">
     <header class="management-head">
       <p class="eyebrow">{{ brand }}</p>
       <h1 class="display">{{ $t('moderation.title') }}</h1>
@@ -73,6 +74,7 @@ const brand = computed(() => siteName(String(locale.value)));
 .management-nav__item { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: var(--s-2) var(--s-4); border-radius: var(--r-sm); color: var(--text-2); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; }
 .management-nav__item:hover { color: var(--text); background: var(--surface); }
 .management-nav__item--active { color: var(--accent-text); background: var(--surface); box-shadow: 0 1px 3px var(--line); }
+@media (max-width: 600px) { .community-management--compact .management-head { display: none; } .community-management--compact .management-nav { margin-bottom: var(--s-4); } }
 /* 窄螢幕：分頁橫向捲動，分頁不會落單一格；內容捲到容器邊緣才消失 */
 @media (max-width: 600px) { .management-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .management-nav::-webkit-scrollbar { display: none; } .management-nav__item { flex: 0 0 auto; padding-inline: var(--s-3); } }
 </style>

@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code=''){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -15,12 +15,22 @@ beforeEach(async()=>{
  el=document.createElement('div');document.body.append(el);const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
 });
 afterEach(()=>{app.unmount();el.remove();vi.resetAllMocks();});
-it('offers a claim action after opening an unclaimed submission, then retries its detail',async()=>{
- await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.claimFirst')));
- expect(el.textContent).not.toContain(i18n.global.t('review.revoked'));
- const button=[...el.querySelectorAll('button')].find(b=>b.textContent===i18n.global.t('review.action.claim'))!;expect(button).toBeDefined();button.click();
+// 2026-11-02：直接開連結撞到「請先領取」時自動再領一次，不再停在一顆領取鈕前
+it('claims automatically after opening an unclaimed submission, then retries its detail',async()=>{
  await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s1','local-reviewer'));
  await vi.waitFor(()=>expect(api.fetchReviewDetail).toHaveBeenCalledTimes(2));
+ expect(api.claimReview).toHaveBeenCalledTimes(1);
+});
+
+it('explains a submission another reviewer holds and only offers the way back to the queue',async()=>{
+ app.unmount();api.claimReview.mockClear();
+ api.fetchReviewDetail.mockReset().mockRejectedValue(new api.ApiError(409,'x','claim this submission first'));
+ api.claimReview.mockRejectedValueOnce(new api.ApiError(409,'x','claimed by another reviewer'));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page},{path:'/review',component:{template:'<p>Queue</p>'}}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(el.querySelector('[data-claim-taken]')?.textContent).toContain(i18n.global.t('review.claim.otherNote')));
+ expect(el.querySelector('[data-claim-taken] a')?.getAttribute('href')).toBe('/review');
+ expect([...el.querySelectorAll('button')].some(b=>b.textContent?.trim()===i18n.global.t('review.action.claim'))).toBe(false);
+ expect(api.claimReview).toHaveBeenCalledTimes(1);
 });
 
 it('terminal review link explains expiry and returns to the queue',async()=>{
@@ -43,7 +53,10 @@ it('a reviewer reopening a card they already decided sees it read-only, without 
  });
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
  await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.closedPartial')));
- expect(el.textContent).toContain(i18n.global.t('review.stampedByMe'));
+ // 回頭看自己審過的單：結果卡，不是可以再填的決定區
+ expect(el.querySelector('[data-result-card]')).toBeTruthy();
+ expect(el.textContent).toContain(i18n.global.t('review.result.now.approved'));
+ expect(el.querySelector('#review-note')).toBeNull();
  expect(el.textContent).not.toContain(i18n.global.t('review.claimFirst'));
  expect([...el.querySelectorAll('button')].some(b=>b.textContent===i18n.global.t('review.action.claim'))).toBe(false);
 });
@@ -65,7 +78,8 @@ const remount=async()=>{
 it('reveals a focused review tab before activation without changing the selected section', async () => {
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  await remount();
- await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(8));
+ // 六格常駐加「更多」；「正則與版面」「成本側寫」收在更多裡
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(7));
  const tabs=el.querySelectorAll<HTMLButtonElement>('.tabs button');
  const reveal=vi.fn();
  tabs[4].scrollIntoView=reveal;
@@ -172,10 +186,11 @@ it('the reviewer holding the claim fixes a missing tag and the page shows the sa
 
 it('a long rejection note sits in its own block instead of a fixed-height chip',async()=>{
  const long='第一點：數值要整數化。\n'.repeat(40);
- api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail([{verdict:'reject',note:long,at:2}]));
+ const detail=pendingDetail([{verdict:'approve',note:'',at:1,mine:true} as any,{verdict:'reject',note:long,at:2}]);
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...detail,submission:{...detail.submission,claimedByMe:false,stampedByMe:true}});
  await remount();
- await vi.waitFor(()=>expect(el.querySelector('.record__note')).toBeTruthy());
- expect(el.querySelector('.record__note')!.textContent).toBe(long);
+ await vi.waitFor(()=>expect(el.querySelector('[data-other-stamps] .record__note')).toBeTruthy());
+ expect(el.querySelector('[data-other-stamps] .record__note')!.textContent).toBe(long);
  expect([...el.querySelectorAll('.chip')].some(c=>c.textContent?.includes('第一點'))).toBe(false);
 });
 
@@ -243,4 +258,100 @@ it('a resubmitted card shows which submission it is and the previous rejection; 
  await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
  expect(el.querySelector('[data-attempt]')).toBeNull();
  expect(el.querySelector('[data-previous-submission]')).toBeNull();
+});
+
+// 審核工具第一批（2026-11-02）：字數門檻、常用理由、盲審、結果卡、讀卡分頁
+const withLength=(total:number,extra:Record<string,unknown>={})=>{
+ const d=pendingDetail();
+ return {...d,submission:{...d.submission,...extra},detail:{...d.detail,reviewLength:{persona:total,constantWorldbook:0,total,required:3001,remaining:Math.max(0,3001-total),eligible:total>=3001,welcome:0}}};
+};
+const button=(text:string)=>[...el.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===text);
+
+it('3,000 counted characters: approve is disabled with the gap explained; reject stays available',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-approve-blocked]')).toBeTruthy());
+ const approve=button(i18n.global.t('review.action.approve'))!;
+ expect(approve.disabled).toBe(true);
+ expect(approve.getAttribute('aria-describedby')).toBe('approve-blocked');
+ expect(el.querySelector('#approve-blocked')!.textContent).toBe(i18n.global.t('review.decide.approveBlocked',{total:'3,000',gap:'1'}));
+ const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;
+ note.value='開場也再補一點。';note.dispatchEvent(new Event('input'));
+ // 「有效字數不足」只在未達標時出現；點了接在已打的字後面，另起一行
+ el.querySelector<HTMLButtonElement>('[data-reason="count"]')!.click();
+ await vi.waitFor(()=>expect(note.value).toBe('開場也再補一點。\n'+i18n.global.t('review.reason.count.text',{total:'3,000',gap:'1',required:'3,001'})));
+ expect(button(i18n.global.t('review.action.reject'))!.disabled).toBe(false);
+});
+
+it('3,001 counted characters: approve is enabled and the count reason is not offered',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3001));
+ await remount();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
+ expect(button(i18n.global.t('review.action.approve'))!.disabled).toBe(false);
+ expect(el.querySelector('[data-approve-blocked]')).toBeNull();
+ expect(el.querySelector('[data-reason="count"]')).toBeNull();
+ el.querySelector<HTMLButtonElement>('[data-reason="rating"]')!.click();
+ await vi.waitFor(()=>expect(el.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(i18n.global.t('review.reason.rating.text')));
+});
+
+it('an unknown count does not block approval and says so',async()=>{
+ const d=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...d,detail:{...d.detail,partial:true}});
+ await remount();
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.decide.lengthUnknown')));
+ expect(button(i18n.global.t('review.action.approve'))!.disabled).toBe(false);
+});
+
+it('the server refusing a short approval shows the count where the decision is made',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ api.stampReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
+ await remount();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
+ button(i18n.global.t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t('review.decide.errorLength',{total:'3,000',required:'3,001'})));
+ expect(el.querySelector('[data-result-card]')).toBeNull();
+});
+
+it('after deciding, the decision area becomes a result card with my decision, the current result and the next card',async()=>{
+ const before=withLength(3600);
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(before)
+  .mockResolvedValue({...before,submission:{...before.submission,claimedByMe:false,stampedByMe:true,status:'approved',stamps:[{verdict:'approve',note:'',at:2,mine:true}]}});
+ api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
+ api.fetchReviewQueue.mockResolvedValue({items:[{id:'s9',kind:'first',submittedAt:1,card:{id:'9',roleId:'r9',name:'下一張',summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false}],claimTtlMs:1});
+ await remount();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
+ button(i18n.global.t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(el.querySelector('[data-result-card]')).toBeTruthy());
+ expect(el.textContent).toContain(i18n.global.t('review.result.mine.approve'));
+ expect(el.textContent).toContain(i18n.global.t('review.result.now.approved'));
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.result.next',{n:1}))).toBeTruthy());
+ expect(el.querySelector('#review-note')).toBeNull();
+ api.claimReview.mockClear();
+ button(i18n.global.t('review.result.next',{n:1}))!.click();
+ await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s9','local-reviewer'));
+});
+
+it('an empty queue after deciding offers only the way back',async()=>{
+ const d=withLength(3600);
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,claimedByMe:false,stampedByMe:true,status:'rejected',stamps:[{verdict:'reject',note:'設定太少',at:2,mine:true}]}});
+ await remount();
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.result.queueEmpty')));
+ expect(el.textContent).toContain(i18n.global.t('review.result.now.rejected'));
+ expect(el.textContent).toContain('設定太少');
+ expect([...el.querySelectorAll('button')].some(b=>b.textContent?.includes(i18n.global.t('review.result.next',{n:0}).slice(0,3)))).toBe(false);
+});
+
+it('the two rarely used sections sit under More',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-more]')).toBeTruthy());
+ expect(button(i18n.global.t('review.section.cost'))).toBeUndefined();
+ el.querySelector<HTMLButtonElement>('[data-more]')!.click();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.section.cost'))).toBeTruthy());
+ button(i18n.global.t('review.section.cost'))!.click();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.section.cost'))!.getAttribute('aria-pressed')).toBe('true'));
+ // 內容雜湊是內部識別碼，不給審核員看
+ expect(el.textContent).not.toContain('version:v2');
 });

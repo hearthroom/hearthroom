@@ -90,7 +90,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
-  release as releaseSubmission, stamp as stampSubmission, submissionHistory,
+  release as releaseSubmission, stamp as stampSubmission, submissionHistory, recordReviewLengthStatement,
 } from "./review";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
@@ -1514,7 +1514,8 @@ app.get('/v1/review/decisions',async(c)=>{
  const raw=c.req.query('before');
  const before=raw===undefined?undefined:Number(raw);
  if(before!==undefined&&(!Number.isSafeInteger(before)||before<=0))throw new HttpError(400,'invalid cursor');
- return c.json(await listReviewDecisions(c.env.DB,member.id,Date.now(),lang(c),before),200,{'Cache-Control':'private, no-store'});
+ const q=(c.req.query('q')??'').trim().slice(0,100);
+ return c.json(await listReviewDecisions(c.env.DB,member.id,Date.now(),lang(c),before,q||undefined),200,{'Cache-Control':'private, no-store'});
 });
 
 app.get('/v1/mine/reviews/:id',async(c)=>{
@@ -1720,12 +1721,16 @@ app.get("/v1/review/:id/detail", async (c) => {
     };
   }
   // 盲審：作者的公開 ID 不進審核頁。快照本來就不含，這裡再擋一次——組快照的那一層換了實作也不會漏。
-  if(!detail.partial)detail.reviewLength=reviewLength(detail);
+  if(!detail.partial){
+    const length=reviewLength(detail);
+    detail.reviewLength=length;
+    if(s.review_length_total===null&&s.status==='pending')await recordReviewLengthStatement(c.env.DB,s.id,length.total).run();
+  }
   delete detail.authorNumId;
   const stamps = await c.env.DB
-    .prepare("SELECT verdict, note, created_at FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")
+    .prepare("SELECT verdict, note, created_at, member_id FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")
     .bind(s.id)
-    .all<{ verdict: string; note: string; created_at: number }>();
+    .all<{ verdict: string; note: string; created_at: number; member_id: string }>();
   note(c, { event: "review_detail", subject: s.source_role_id, detail: s.kind });
   return c.json(
     {
@@ -1736,7 +1741,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         // 同一張卡第幾次送審、上一次的結果與說明：審核人不必靠記憶認出「被退後重送」的卡
         ...(await submissionHistory(c.env.DB, s.id)),
-        stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
+        // mine：哪一章是我蓋的（結果卡顯示「你的決定」）；不帶審核員身分
+        stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at, mine: st.member_id === member.id })),
         correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
         ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),
       },

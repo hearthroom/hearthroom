@@ -45,6 +45,8 @@ const { t, te, locale } = useI18n();
 const { lp } = useLocalePath();
 const pet = shallowRef<Pet | null>(null);
 const reviewingDetail = computed(()=>route.meta.managementTab==="reviews" && typeof route.params.id==="string");
+/** 人已經在卡片審核的頁面上：不用再提醒「佇列有 N 張在等」 */
+const onReviewPages = computed(()=>route.meta.managementTab==="reviews");
 
 /** 一句台詞：mascot.pet.<key>，有 _2 _3… 就隨機挑一句 */
 function line(key: string, params: Record<string, string | number> = {}): string {
@@ -279,8 +281,8 @@ watch(() => notifications.unread, (n) => {
 document.addEventListener("visibilitychange", () => { if (!document.hidden && baseTitle.value) { document.title = document.title.replace(/^\(\d+\) /, ""); baseTitle.value = ""; } });
 
 // 審核員：佇列有卡在等，一天說一次
-watch(() => [reviewer.pending, pet.value, reviewingDetail.value] as const, ([n, p, reading]) => {
-  if (p && n > 0 && !reading) p.on({ type: "daily", key: "review", text: line("reviewQueue", { n }), showIf:()=>!reviewingDetail.value, action: { label: line("go.look"), run: () => router.push(lp("/review")) } });
+watch(() => [reviewer.pending, pet.value, onReviewPages.value] as const, ([n, p, reading]) => {
+  if (p && n > 0 && !reading) p.on({ type: "daily", key: "review", text: line("reviewQueue", { n }), showIf:()=>!onReviewPages.value, action: { label: line("go.look"), run: () => router.push(lp("/review")) } });
 }, { immediate: true });
 
 // 方案三天內到期：提醒一次

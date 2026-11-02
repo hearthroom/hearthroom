@@ -2,7 +2,9 @@ import { auditStmtIfChanged } from './audit';
 import { serviceRewardOnApproval } from './card-reward-service';
 import { reserveUpdateNotification } from './card-update';
 import {finalizeManagedReview} from './work-publication';
-import { dropSnapshotStatement } from "./review-snapshot";
+import { dropSnapshotStatement, loadSnapshot } from "./review-snapshot";
+import { bumpOp } from "./ops-metrics";
+import { reviewLengthStatus, type ReviewLengthStatus } from "../shared/review-length";
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 
 /**
@@ -42,6 +44,8 @@ export interface SubmissionRow {
   rating: string | null;
   rating_descriptors: string | null;
   rating_answers: string | null;
+  /** 送審當下的有效字數合計（0099 起）；NULL＝不知道（見 migration） */
+  review_length_total: number | null;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
@@ -100,13 +104,15 @@ export interface QueueItem {
   /** 我已經蓋過章：不能再領、也不能再蓋 */
   stampedByMe: boolean;
   claimGeneration?: string;
+  /** 送審當下的有效字數與現行門檻；null＝不知道，清單上就不標 */
+  reviewLength: ReviewLengthStatus | null;
 }
 
 /** 佇列：所有待審的單，最舊的在前。不帶作者。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating,
+      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
@@ -121,7 +127,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number; rating: string | null; earlier: number;
+      approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null;
     }>();
   return rows.results.map((r) => ({
     id: r.id,
@@ -142,6 +148,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     claim: claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free",
     stampedByMe: r.mine > 0,
     ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
+    reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
   }));
 }
 
@@ -212,6 +219,7 @@ export async function stamp(
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
+  if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim().slice(0, 2000);
 
   const required = STAMPS_REQUIRED[row.kind];
@@ -267,6 +275,29 @@ export async function stamp(
   const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
   if(!managed&&env&&input.verdict==='approve'&&approvals>=required&&finalCard?.status==='approved') await serviceRewardOnApproval(env,Number(row.card_id),'stamp');
   return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
+}
+
+/**
+ * 有效字數是唯一的硬性標準（owner 2026-11-02）：未達標的版本不能通過，只能駁回。
+ * 送審時已經擋過；這裡擋的是門檻上線前就在排隊的單，以及舊頁面、直接打 API。
+ * 字數優先用審核單上記的，沒記的舊單看審核副本裡的統計；兩邊都沒有（同步開的重審單）就算不出來，
+ * 不擋——審核頁也會顯示「無法計算」，由審核員自己判斷。
+ */
+async function assertApprovableLength(db: D1Database, row: SubmissionRow): Promise<void> {
+  let total = row.review_length_total;
+  if (total === null) {
+    const recorded = (await loadSnapshot(db, row.id))?.reviewLength as { total?: unknown } | undefined;
+    total = typeof recorded?.total === "number" ? recorded.total : null;
+  }
+  if (total === null) { await bumpOp(db, "review_length", "stamp", "unknown"); return; }
+  const length = reviewLengthStatus(total);
+  await bumpOp(db, "review_length", "stamp", length.eligible ? "eligible" : "insufficient");
+  if (!length.eligible) throw new HttpError(400, "review_length_insufficient", undefined, { detail: { reviewLength: length } });
+}
+
+/** 審核頁讀到完整設定、算出字數時補記到還在排隊的單上（只補沒記的，不改送審時記下的）。 */
+export function recordReviewLengthStatement(db: D1Database, submissionId: string, total: number): D1PreparedStatement {
+  return db.prepare("UPDATE review_submissions SET review_length_total = ? WHERE id = ? AND status = 'pending' AND review_length_total IS NULL").bind(total, submissionId);
 }
 
 /** 作者這幾張卡的審核狀態與最近一次駁回說明（給「我的卡片」）。 */

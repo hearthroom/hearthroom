@@ -158,15 +158,24 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
  return outcome(completed,false);
 }
 
-/** Metadata of versions this reviewer handled; never author identities or private snapshots. */
-export async function listReviewDecisions(db:D1Database, member:string, now:number, lang:string, before?:number) {
+/**
+ * Metadata of versions this reviewer handled; never author identities or private snapshots.
+ * 我處理過的審核，新的在前，游標分頁。q：純數字＝卡號精確比對；其他＝卡名（任一語系）包含，
+ * 英文不分大小寫，% 與 _ 照字面比。搜尋打的是全部紀錄，不是已載入的那一頁。
+ */
+export async function listReviewDecisions(db:D1Database, member:string, now:number, lang:string, before?:number, q?:string) {
+  const byNumber=q!==undefined&&/^\d+$/.test(q);
+  const filter=q===undefined?'':byNumber?' AND c.id=?':
+    " AND EXISTS(SELECT 1 FROM json_each(coalesce(json_extract(v.public_role,'$.names'),c.names)) n WHERE n.value LIKE ? ESCAPE '\\')";
+  const params:unknown[]=[member,before??Number.MAX_SAFE_INTEGER];
+  if(q!==undefined)params.push(byNumber?Number(q):`%${q.replace(/[\\%_]/g,ch=>'\\'+ch)}%`);
   const rows=await db.prepare(`SELECT st.rowid cursor,s.id,s.status,s.kind,s.decided_at,s.submitted_at,st.verdict,st.note,st.created_at,
     EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete') corrected,
     v.version_id,c.id card_id,coalesce(json_extract(v.public_role,'$.names'),c.names) names
     FROM review_stamps st JOIN review_submissions s ON s.id=st.submission_id JOIN cards c ON c.id=s.card_id
     LEFT JOIN hosting_versions v ON v.submission_id=s.id
-    WHERE st.member_id=? AND st.rowid<? ORDER BY st.rowid DESC LIMIT 51`)
-    .bind(member,before??Number.MAX_SAFE_INTEGER).all<{
+    WHERE st.member_id=? AND st.rowid<?${filter} ORDER BY st.rowid DESC LIMIT 51`)
+    .bind(...params).all<{
       cursor:number;id:string;status:string;kind:string;decided_at:number|null;submitted_at:number;corrected:number;verdict:string;note:string;created_at:number;
       version_id:string|null;card_id:string;names:string;
     }>();

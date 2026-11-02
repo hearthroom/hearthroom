@@ -65,10 +65,12 @@ describe("審核佇列頁", () => {
     expect(text).toContain(i18n.global.t("review.kind.re"));
     expect(text).not.toContain("author");
     const buttons = [...host.querySelectorAll("button")].filter((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"));
-    expect(buttons).toHaveLength(2);
-    // 別人領著的那張不能領
-    expect(buttons[1]!.disabled).toBe(true);
+    expect(buttons).toHaveLength(1);
     expect(buttons[0]!.disabled).toBe(false);
+    // 別人領著的那張：不能領，也不給「查看」（2026-11-02：以前點進去會撞到「請先領取」）
+    const taken = host.querySelector('[data-review-row="s2"]')!;
+    expect([...taken.querySelectorAll("button")].map((b) => [b.textContent?.trim(), b.disabled])).toEqual([[i18n.global.t("review.claim.other"), true]]);
+    expect(taken.querySelector("a")).toBeNull();
   });
 
   it("重送的卡標出第幾次送審；首送不標；可以只看重送", async () => {
@@ -119,13 +121,69 @@ describe("審核佇列頁", () => {
     expect(host.textContent).not.toContain("服務暫時無法回應");
   });
 
-  it("領取後放回使用該次認領的 generation", async () => {
-    const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim") && !b.disabled)!;
+  it("領取並開始審：送出中整排按鈕都不能按，領到才進詳情", async () => {
+    let finish!: (v: { id: string; claimedAt: number; generation: string }) => void;
+    api.claimReview.mockImplementationOnce(() => new Promise((r) => { finish = r; }));
+    const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"))!;
     claimBtn.click();
-    await vi.waitFor(() => expect(api.claimReview).toHaveBeenCalledWith("s1", "tok"));
-    await vi.waitFor(() => expect(host.textContent).toContain(i18n.global.t("review.action.release")));
-    [...host.querySelectorAll("button")].find(b=>b.textContent?.trim()===i18n.global.t("review.action.release"))!.click();
-    await vi.waitFor(()=>expect(api.releaseReview).toHaveBeenCalledWith("s1","tok","claim-v2"));
+    await vi.waitFor(() => expect(claimBtn.textContent?.trim()).toBe(i18n.global.t("review.action.claiming")));
+    expect(claimBtn.disabled).toBe(true);
+    expect(router.currentRoute.value.path).toBe("/review");
+    finish({ id: "s1", claimedAt: Date.now(), generation: "claim-v2" });
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/review/s1"));
+    expect(api.claimReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("被別人先領走：留在清單，那一列改成有人在看並說明", async () => {
+    api.claimReview.mockRejectedValueOnce(new api.ApiError(409, "x", "claimed by another reviewer"));
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"))!.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-review-row="s1"]')?.textContent).toContain(i18n.global.t("review.claim.taken")));
+    expect(router.currentRoute.value.path).toBe("/review");
+  });
+
+  it("沒領成（其他錯誤）：留在清單說明，按鈕可以再按", async () => {
+    api.claimReview.mockRejectedValueOnce(new api.ApiError(500, "x"));
+    const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"))!;
+    claimBtn.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-review-row="s1"]')?.textContent).toContain(i18n.global.t("review.claim.failed")));
+    expect(claimBtn.disabled).toBe(false);
+    expect(router.currentRoute.value.path).toBe("/review");
+  });
+
+  it("我領著的卡：繼續審進詳情；放回使用該次認領的 generation", async () => {
+    app.unmount();
+    host.innerHTML = "";
+    api.fetchReviewQueue.mockResolvedValueOnce({ items: [{
+      id: "s3", kind: "first", submittedAt: Date.now(), card: { id: "c3", roleId: "r3", name: "海港", summary: "", avatarUrl: null, zone: "zh", tags: [] },
+      stamps: { approve: 0, required: 1 }, claim: "mine", stampedByMe: false, claimGeneration: "claim-v3",
+    }], claimTtlMs: 1 } as any);
+    app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
+    app.mount(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("海港"));
+    const row = host.querySelector('[data-review-row="s3"]')!;
+    expect(row.querySelector("a")?.textContent?.trim()).toBe(i18n.global.t("review.action.continue"));
+    [...row.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.release"))!.click();
+    await vi.waitFor(() => expect(api.releaseReview).toHaveBeenCalledWith("s3", "tok", "claim-v3"));
+  });
+
+  it("字數 chip：未達標標出差額，達標只標字數，算不出來不標", async () => {
+    app.unmount();
+    host.innerHTML = "";
+    const base = { kind: "first", submittedAt: Date.now(), stamps: { approve: 0, required: 1 }, claim: "free", stampedByMe: false };
+    const card = (id: string) => ({ id, roleId: id, name: `卡${id}`, summary: "", avatarUrl: null, zone: "zh", tags: [] });
+    api.fetchReviewQueue.mockResolvedValueOnce({ items: [
+      { ...base, id: "a", card: card("a"), reviewLength: { total: 3000, required: 3001, remaining: 1, eligible: false } },
+      { ...base, id: "b", card: card("b"), reviewLength: { total: 4120, required: 3001, remaining: 0, eligible: true } },
+      { ...base, id: "c", card: card("c"), reviewLength: null },
+    ], claimTtlMs: 1 } as any);
+    app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
+    app.mount(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("卡a"));
+    const chip = (id: string) => host.querySelector(`[data-review-row="${id}"] [data-length-chip]`);
+    expect(chip("a")?.textContent?.trim()).toBe(i18n.global.t("review.queue.length.short", { total: "3,000", gap: "1" }));
+    expect(chip("a")?.classList.contains("chip--short")).toBe(true);
+    expect(chip("b")?.textContent?.trim()).toBe(i18n.global.t("review.queue.length.ok", { total: "4,120" }));
+    expect(chip("c")).toBeNull();
   });
 });
 

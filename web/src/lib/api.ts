@@ -1,5 +1,5 @@
 import {formatReviewLength} from './review-length';
-import type {ReviewLength} from '../../../shared/review-length';
+import type {ReviewLength, ReviewLengthStatus} from '../../../shared/review-length';
 import {parseUpdateIntent,type UpdateIntent} from '../../../shared/card-update';
 import {publicationOperationKey as publicationKey,notePublicationOperation} from './publication-operation';
 import {retentionParams} from './reward-retention';
@@ -508,6 +508,8 @@ export interface ReviewQueueItem {
   claim: "free" | "mine" | "other";
   stampedByMe: boolean;
   claimGeneration?: string;
+  /** 送審當下的有效字數與現行門檻；null 或沒有＝算不出來，清單上不標 */
+  reviewLength?: ReviewLengthStatus | null;
 }
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
@@ -522,7 +524,8 @@ export interface ReviewDetail {
     /** 我在這張單上蓋過章：可以回頭唯讀查看，不必再領 */
     stampedByMe?: boolean;
     claimGeneration?: string; required: number;
-    stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
+    /** mine＝我蓋的那一章；舊版伺服器不帶 */
+    stamps: { verdict: "approve" | "reject"; note: string; at: number; mine?: boolean }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
     /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */
@@ -602,8 +605,9 @@ export const stampReview = (id: string, token: string, body: { verdict: "approve
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
 export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean}
-export async function fetchReviewDecisions(token:string,lang:string,before?:number):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
- const query=new URLSearchParams({lang});if(before)query.set('before',String(before));
+/** q：純數字＝卡號精確比對，其他＝卡名包含；伺服器搜全部紀錄 */
+export async function fetchReviewDecisions(token:string,lang:string,before?:number,q?:string):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
+ const query=new URLSearchParams({lang});if(before)query.set('before',String(before));if(q)query.set('q',q);
  return json(await fetch(`${COMMUNITY_API}/review/decisions?${query}`,{headers:{...from(),...authHeaders(token)}}));
 }
 export const correctReviewDecision=(id:string,token:string,body:{operationId:string;note:string})=>reviewAction<{status:'rejected';publicVersionId:string|null;publicState:'previous_version'|'unpublished'|'unchanged';operationId:string;replayed:boolean}>(id,'correction',token,body);

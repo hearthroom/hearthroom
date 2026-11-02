@@ -454,3 +454,119 @@ describe("第幾次送審", () => {
     expect(items.find((i: any) => i.id === "again").attempt).toBe(1);
   });
 });
+
+describe("審核工具第一批：字數門檻、結果、搜尋", () => {
+  // 唯一的硬性標準是有效字數（shared/review-length.ts，超過 3,000 字＝至少 3,001）。送審時已擋，
+  // 審核端再擋一次：門檻上線前就在排隊的單、舊頁面或直接打 API 都不能讓未達標的版本過審。
+  const exactly = (n: number) => () => ({ document: { roleName: "夜行偵探", roleDetailDesc: "字".repeat(n) }, worldbooks: [] });
+  const detail = async (id: string, who = "rev-a") =>
+    (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer(who) })).json()) as any;
+  const decisions = async (q?: string, who = "rev-a") => {
+    const res = await SELF.fetch(`https://c.test/v1/review/decisions${q === undefined ? "" : `?q=${encodeURIComponent(q)}`}`, { headers: bearer(who) });
+    return { status: res.status, body: (await res.json()) as { items: any[]; nextCursor: number | null } };
+  };
+  const metric = async (outcome: string) =>
+    (await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_length' AND operation='stamp' AND outcome=?").bind(outcome).first<{ value: number }>())?.value ?? 0;
+
+  it("佇列帶送審當下的有效字數；3,001 可以通過", async () => {
+    reviewUpstream(exactly(3001));
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const item = (await queue("rev-a")).body.items[0];
+    expect(item.reviewLength).toEqual({ total: 3001, required: 3001, remaining: 0, eligible: true });
+    await act(item.id, "claim", "rev-a");
+    expect((await act(item.id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(200);
+    expect(await metric("eligible")).toBe(1);
+  });
+
+  it("3,000 字（差 1）不能通過，可以駁回；伺服器回字數與差額", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    // 門檻上線前送審、還在排隊的單：記下的是當時的字數
+    await env.DB.prepare("UPDATE review_submissions SET review_length_total = 3000 WHERE id = ?").bind(id).run();
+    expect((await queue("rev-a")).body.items[0].reviewLength).toEqual({ total: 3000, required: 3001, remaining: 1, eligible: false });
+    await act(id, "claim", "rev-a");
+    const refused = await act(id, "stamp", "rev-a", { verdict: "approve" });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ error: "review_length_insufficient", detail: { reviewLength: { total: 3000, required: 3001, remaining: 1, eligible: false } } });
+    expect(await metric("insufficient")).toBe(1);
+    expect((await env.DB.prepare("SELECT status, claimed_by FROM review_submissions WHERE id = ?").bind(id).first<any>())).toMatchObject({ status: "pending", claimed_by: `member-${REVIEWER_A}` });
+    expect((await act(id, "stamp", "rev-a", { verdict: "reject", note: "有效字數不足" })).status).toBe(200);
+  });
+
+  it("沒記字數的舊單：用快照裡的統計擋；快照也沒有就不擋（算不出來交給審核員判斷）", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await env.DB.prepare("UPDATE review_submissions SET review_length_total = NULL WHERE id = ?").bind(id).run();
+    const { encodeSnapshot } = await import("../src/review-snapshot");
+    const replace = async (record: Record<string, unknown>) => {
+      await env.DB.prepare("DELETE FROM review_snapshots WHERE submission_id = ?").bind(id).run();
+      await env.DB.prepare("INSERT INTO review_snapshots (submission_id, detail, created_at) VALUES (?, ?, ?)").bind(id, await encodeSnapshot(record as any), Date.now()).run();
+    };
+    await replace({ slim: true, document: { roleDetailDesc: "" }, reviewLength: { persona: 3000, constantWorldbook: 0, total: 3000, required: 3001, remaining: 1, eligible: false, welcome: 0 }, hashes: {} });
+    expect((await queue("rev-a")).body.items[0].reviewLength).toBeNull();
+    await act(id, "claim", "rev-a");
+    expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(400);
+    await replace({ slim: true, document: { roleDetailDesc: "" }, hashes: {} });
+    expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(200);
+    expect(await metric("unknown")).toBe(1);
+  });
+
+  it("審核頁算出字數時補記到審核單，佇列下次就看得到", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await env.DB.prepare("UPDATE review_submissions SET review_length_total = NULL WHERE id = ?").bind(id).run();
+    await act(id, "claim", "rev-a");
+    const total = (await detail(id)).detail.reviewLength.total as number;
+    expect((await queue("rev-a")).body.items[0].reviewLength).toMatchObject({ total });
+  });
+
+  it("審核頁的每一章標出是不是我蓋的（結果卡用），不帶審核員身分", async () => {
+    await makeReviewer(REVIEWER_A);
+    await makeReviewer(REVIEWER_B);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await env.DB.prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at) VALUES (?, ?, 'approve', '開場很好', ?)")
+      .bind(id, `member-${REVIEWER_B}`, Date.now()).run();
+    await act(id, "claim", "rev-a");
+    expect((await detail(id)).submission.stamps).toEqual([expect.objectContaining({ verdict: "approve", note: "開場很好", mine: false })]);
+    await act(id, "stamp", "rev-a", { verdict: "reject", note: "設定太少" });
+    const decided = await detail(id);
+    expect(decided.submission.stamps.map((s: any) => [s.note, s.mine])).toEqual([["開場很好", false], ["設定太少", true]]);
+    expect(JSON.stringify(decided)).not.toContain(`member-${REVIEWER_B}`);
+  });
+
+  describe("我處理過的：搜尋", () => {
+    const decide = async (roleId: string, name: string) => {
+      authorEditsPublicly(roleId, name);
+      await submit(roleId);
+      const item = (await queue("rev-a")).body.items[0];
+      await act(item.id, "claim", "rev-a");
+      expect((await act(item.id, "stamp", "rev-a", { verdict: "reject", note: "x" })).status).toBe(200);
+      return item;
+    };
+
+    it("卡名部分比對、不分大小寫；純數字是卡號精確比對；沒有符合就是空清單", async () => {
+      await makeReviewer(REVIEWER_A);
+      await makeReviewer(REVIEWER_B);
+      const night = await decide("role-1", "Night Detective");
+      const moon = await decide("role-2", "月下100%");
+      expect((await decisions()).body.items).toHaveLength(2);
+      expect((await decisions("detect")).body.items.map((i: any) => i.id)).toEqual([night.id]);
+      expect((await decisions("月下")).body.items.map((i: any) => i.id)).toEqual([moon.id]);
+      // % 與 _ 是字面字元，不是萬用字元
+      expect((await decisions("100%")).body.items.map((i: any) => i.id)).toEqual([moon.id]);
+      expect((await decisions("_")).body.items).toEqual([]);
+      expect((await decisions(String(night.card.id))).body.items.map((i: any) => i.id)).toEqual([night.id]);
+      expect((await decisions(String(night.card.id).slice(0, -1) || "0")).body.items).toEqual([]);
+      expect((await decisions("沒有這張")).body).toEqual({ items: [], nextCursor: null });
+      // 只搜自己的紀錄
+      expect((await decisions("detect", "rev-b")).body.items).toEqual([]);
+      // 空白當沒有條件
+      expect((await decisions("  ")).body.items).toHaveLength(2);
+    });
+  });
+});

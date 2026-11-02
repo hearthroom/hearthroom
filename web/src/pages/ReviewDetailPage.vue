@@ -5,12 +5,18 @@
  * 看的是原始碼，不是渲染後的卡（owner 2026-09-07）：人設、開場白、世界書條目（含停用的）、
  * 正規表示式規則與常駐區塊的原文，外加成本側寫。要看效果按「試玩」開遊玩頁。
  * 分區沿用編輯頁的分法（基本／人設／對話／世界書），只是每一格都是唯讀。不顯示作者。
+ *
+ * 審核工具第一批（2026-11-02 體檢 R1–R5、R2）：
+ *   - 直接開連結撞到「請先領取」時自動再領一次，真的被別人領走才說明。
+ *   - 分頁條黏在頁首下方，低頻的兩格收進「更多」；手機底部固定「前往決定」，桌機右側欄放字數與入口。
+ *   - 字數未達標時「通過」不能按（伺服器同樣拒絕）；常用理由一點就接到說明後面，不蓋掉已打的字。
+ *   - 送出後決定區換成結果卡（我的決定、目前結果、下一張），重新整理或回頭看也是同一張。
  */
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
 import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
@@ -25,6 +31,7 @@ import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
 
 const route = useRoute();
+const router = useRouter();
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
@@ -35,6 +42,9 @@ const lengthParams = computed(()=>data.value?.detail.reviewLength?formatReviewLe
 const loading = ref(true);
 const error = ref("");
 const needsClaim = ref(false);
+/** 自動再領沒成功、被別人領著時的說明（這時不給領取鈕，只給回清單） */
+const claimNote = ref("");
+let autoClaimed = false;
 const done = ref("");
 const busy = ref(false);
 const note = ref("");
@@ -47,7 +57,7 @@ let loadSequence=0;
 let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';correctionOpen.value=false;correctionNote.value='';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -57,6 +67,11 @@ function summary(name:string,submittedAt:number,verdict:string,reason:string,rea
 }
 const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
+/** 分頁條常駐的六格；「正則與版面」「成本側寫」少用，收進「更多」 */
+const PRIMARY_SECTIONS = SECTIONS.slice(0, 6);
+const MORE_SECTIONS = SECTIONS.slice(6);
+const moreOpen = ref(false);
+const showMore = computed(() => moreOpen.value || (MORE_SECTIONS as readonly string[]).includes(section.value));
 const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
 
 function revealFocusedTab(event: FocusEvent) {
@@ -171,6 +186,71 @@ async function saveTags() {
 }
 const decided = computed(() => !!data.value && data.value.submission.status !== "pending");
 
+/** 字數：伺服器算的那一份；partial（同步開的重審單）沒有，就是「無法計算」，不當成達標也不當成未達標 */
+const length = computed(() => (data.value?.detail.partial ? null : data.value?.detail.reviewLength ?? null));
+const approveBlocked = computed(() => !!length.value && !length.value.eligible);
+const approvals = computed(() => data.value?.submission.stamps.filter((s) => s.verdict === "approve").length ?? 0);
+const canDecide = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value);
+const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine) ?? null);
+/** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
+const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
+
+const REASONS = ["count", "setting", "opening", "rating", "other"] as const;
+type Reason = (typeof REASONS)[number];
+/** 「有效字數不足」只在真的未達標時出現 */
+const reasons = computed(() => REASONS.filter((r) => r !== "count" || approveBlocked.value));
+const noteField = ref<HTMLTextAreaElement | null>(null);
+const noteFocused = ref(false);
+function pickReason(reason: Reason) {
+  if (reason !== "other") {
+    const text = reason === "count"
+      ? t("review.reason.count.text", { total: lengthParams.value.total, gap: lengthParams.value.remaining, required: lengthParams.value.required })
+      : t(`review.reason.${reason}.text`);
+    // 已經打了字就另起一行接在後面，不覆蓋、不詢問
+    const typed = note.value.replace(/\s+$/, "");
+    note.value = typed ? `${typed}\n${text}` : text;
+  }
+  noteField.value?.focus();
+}
+
+const decideError = ref("");
+/** 送出後不知道有沒有成功（連線中斷）：不叫人直接重按，先去「我處理過的」看 */
+const decideUnknown = ref(false);
+const decideErrorEl = ref<HTMLElement | null>(null);
+const decideSection = ref<HTMLElement | null>(null);
+const tabsBar = ref<HTMLElement | null>(null);
+function goDecide() {
+  decideSection.value?.scrollIntoView({ block: "start" });
+  decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
+}
+/** 回到讀卡：捲到內容區開頭（分頁條是黏著的，對它本身捲動沒有作用）；已打的說明留著 */
+function backToRead() { tabsBar.value?.parentElement?.scrollIntoView({ block: "start" }); }
+
+/** 結果卡的「下一張待審」：跟清單同樣的順序，我領著的在前，再來是沒人領的 */
+const nextItems = ref<ReviewQueueItem[] | null>(null);
+const nextError = ref("");
+const nextBusy = ref(false);
+async function loadNext() {
+  try {
+    const q = await fetchReviewQueue(await token(), String(locale.value));
+    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe);
+    nextItems.value = [...open.filter((i) => i.claim === "mine"), ...open.filter((i) => i.claim === "free")];
+  } catch { nextItems.value = null; }
+}
+async function goNext() {
+  const item = nextItems.value?.[0];
+  if (!item || nextBusy.value) return;
+  nextBusy.value = true; nextError.value = "";
+  try {
+    if (item.claim !== "mine") await claimReview(item.id, await token());
+    await router.push(lp(`/review/${item.id}`));
+  } catch (err) {
+    nextError.value = err instanceof ApiError && err.status === 409 ? t("review.claim.taken") : t("review.claim.failed");
+    await loadNext();
+  } finally { nextBusy.value = false; }
+}
+watch(() => !!data.value && (stampedByMe.value || decided.value), (shown) => { if (shown && nextItems.value === null) void loadNext(); });
+
 async function token() {
   const tok = await session.accessToken();
   if (!tok) throw new Error(t("auth.expired"));
@@ -192,7 +272,22 @@ async function load() {
   } catch (err) {
     if(!active||seq!==loadSequence||target!==id.value)return;
     // 伺服器原文在 code；message 是給人看的「請求失敗」
-    needsClaim.value=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
+    const unclaimed=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
+    // 直接開連結、或讀到一半領取逾時：自動再領一次，只在真的被別人領走時才停下來說明。
+    // 畫面上是已定案或我審過的單（例如改判後重讀）就不領：那不是要審的單。
+    const reviewable=!data.value||(data.value.submission.status==='pending'&&!data.value.submission.stampedByMe);
+    if(unclaimed&&!autoClaimed&&reviewable){
+      autoClaimed=true;
+      try{ await claimReview(target, await token()); }
+      catch(claimErr){
+        if(!active||seq!==loadSequence||target!==id.value)return;
+        if(claimErr instanceof ApiError&&claimErr.status===409){ claimNote.value=t("review.claim.otherNote"); return claimErr; }
+        needsClaim.value=true;error.value=t("review.claim.failed");return claimErr;
+      }
+      if(!active||seq!==loadSequence||target!==id.value)return;
+      return load();
+    }
+    needsClaim.value=unclaimed;
     error.value = needsClaim.value ? t("review.claimFirst") : err instanceof ApiError && err.status===410 ? t("review.inactive") : err instanceof Error ? err.message : t("state.loadFailed");
     return err;
   } finally {
@@ -268,28 +363,44 @@ async function stamp(verdict: "approve" | "reject") {
     error.value = t("review.claimFirst");
     return;
   }
+  if (verdict === "approve" && approveBlocked.value) return;
   busy.value = true;
   error.value = "";
+  decideError.value = "";
+  decideUnknown.value = false;
   const target=id.value,review=data.value,reason=note.value,generation=review.submission.claimGeneration;
   try {
     const confirmedToken=await token();
-    const approved=review.submission.stamps.filter(s=>s.verdict==='approve').length+1>=review.submission.required;
+    const approved=approvals.value+1>=review.submission.required;
     if(!await decisionConfirm({scrollMessage:true,title:t(verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(`review.action.${verdict}`),reason)+'\n\n'+t(verdict==='reject'?'review.confirm.rejectBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending'),confirmText:t(verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
     const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation });
     if(!active||id.value!==target)return;
-    done.value = verdict === "reject" ? t("review.done.rejected") : res.cardStatus === "approved" ? t("review.done.approved") : t("review.done.approve");
     if (data.value) {
       data.value.submission.status = res.status;
       data.value.submission.claimedByMe = false;
       data.value.submission.stampedByMe = true;
-      data.value.submission.stamps.push({ verdict, note:reason, at: Date.now() });
+      data.value.submission.stamps.push({ verdict, note:reason, at: Date.now(), mine: true });
+      // 重讀一次：結果卡要的是伺服器上的案件狀態，不是前端推算的
       await load();
+      if(!active||id.value!==target)return;
+      await nextTick();
+      decideSection.value?.scrollIntoView({ block: "start" });
+      decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
     }
   } catch (err) {
     if(!active||id.value!==target)return;
-    error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
+    if (err instanceof ApiError && err.code === "review_length_insufficient") {
+      const l = err.reviewLength ? formatReviewLength(err.reviewLength, String(locale.value)) : lengthParams.value;
+      decideError.value = t("review.decide.errorLength", { total: l.total, required: l.required });
+    } else if (err instanceof ApiError && err.status === 409) decideError.value = t("review.claimChanged");
+    else if (err instanceof ApiError) decideError.value = t("review.decide.failed");
+    else if (err instanceof Error && err.message === t("auth.expired")) decideError.value = err.message;
+    else decideUnknown.value = true;
+    await nextTick();
+    decideErrorEl.value?.focus({ preventScroll: true });
+    decideErrorEl.value?.scrollIntoView({ block: "nearest" });
   } finally {
     busy.value = false;
   }
@@ -325,6 +436,10 @@ onMounted(() => { void load(); });
 <template>
   <section class="review-detail">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button v-if="data" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
+    <div v-if="claimNote" class="notice" role="status" data-claim-taken>
+      <p>{{ claimNote }}</p>
+      <RouterLink class="btn btn--primary" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
+    </div>
     <RouterLink v-if="error && !data" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
     <p v-if="data?.detail.closed" class="notice" role="status">{{ $t("review.closedPartial") }}</p>
@@ -333,13 +448,13 @@ onMounted(() => { void load(); });
 
     <div v-if="loading" class="ghost detail-ghost" aria-hidden="true" />
 
-    <template v-else-if="data && doc">
-      <header class="head">
+    <div v-else-if="data && doc" class="layout">
+      <header class="head layout__head">
         <div class="head__text">
           <p class="eyebrow">
             <RouterLink :to="lp('/review')">{{ $t("review.eyebrow") }}</RouterLink>
             · {{ $t(`review.kind.${data.submission.kind}`) }}
-            · {{ $t("review.stamps", { n: data.submission.stamps.filter((s) => s.verdict === 'approve').length, required: data.submission.required }) }}
+            · {{ $t("review.stamps", { n: approvals, required: data.submission.required }) }}
           </p>
           <div class="head__name">
             <h2 class="head__title display">{{ doc.roleName }}</h2>
@@ -363,31 +478,46 @@ onMounted(() => { void load(); });
           </p>
         </div>
         <div class="head__acts">
-          <RouterLink class="btn btn--sm" :to="lp(`/play/${data.card.id}?review=${encodeURIComponent(id)}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
           <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
         </div>
       </header>
 
-      <section class="pane panel" data-review-length>
-        <h3>{{ $t('reviewLength.title') }}</h3>
-        <template v-if="data.detail.reviewLength">
-          <p class="length-values">
-            <span>{{ $t('reviewLength.persona', lengthParams) }}</span>
-            <span>{{ $t('reviewLength.constantWorldbook', lengthParams) }}</span>
-            <span>{{ $t('reviewLength.total', lengthParams) }}</span>
-            <strong>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
-          </p>
-          <p class="subtle">{{ $t('reviewLength.welcome', lengthParams) }}</p>
-        </template>
-        <p v-else class="subtle">{{ $t('reviewLength.unavailable') }}</p>
-      </section>
+      <!-- 桌機右側欄（≥1080，黏著）：字數與決定入口。窄螢幕排在卡名下面，入口改由底部固定列給 -->
+      <aside class="side layout__side">
+        <section class="pane panel side__length" data-review-length>
+          <h3>{{ $t('reviewLength.title') }}</h3>
+          <template v-if="data.detail.reviewLength">
+            <p class="length-values">
+                <span>{{ $t('reviewLength.persona', lengthParams) }}</span>
+                <span>{{ $t('reviewLength.constantWorldbook', lengthParams) }}</span>
+                <span>{{ $t('reviewLength.total', lengthParams) }}</span>
+                <strong>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
+            </p>
+            <p class="subtle">{{ $t('reviewLength.welcome', lengthParams) }}</p>
+          </template>
+          <p v-else class="subtle">{{ $t('reviewLength.unavailable') }}</p>
+        </section>
+        <div class="side__acts">
+          <button v-if="canDecide" type="button" class="btn btn--primary btn--lg" @click="goDecide">{{ $t("review.action.toDecide") }}</button>
+          <RouterLink class="btn btn--lg" :to="lp(`/play/${data.card.id}?review=${encodeURIComponent(id)}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
+        </div>
+      </aside>
 
-      <div class="seg tabs">
-        <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @focus="revealFocusedTab" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
-          {{ sectionLabel(s) }}
-        </button>
-      </div>
+      <div class="layout__body">
+      <nav ref="tabsBar" class="tabs-bar" :aria-label="$t('review.read.tabs')">
+        <div class="seg tabs">
+          <button v-for="s in PRIMARY_SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @focus="revealFocusedTab" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
+            {{ sectionLabel(s) }}
+          </button>
+          <button type="button" class="seg__item" :class="{ 'seg__item--on': showMore }" :aria-expanded="showMore" data-more @focus="revealFocusedTab" @click="moreOpen = !showMore">{{ $t("review.read.more") }}</button>
+        </div>
+        <div v-if="showMore" class="seg tabs tabs--more">
+          <button v-for="s in MORE_SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s">
+            {{ sectionLabel(s) }}
+          </button>
+        </div>
+      </nav>
 
       <section v-show="section === 'basic'" class="pane panel">
         <div class="field"><label>{{ $t("editor.name") }}</label><input class="input" :value="doc.roleName" readonly /></div>
@@ -559,62 +689,111 @@ onMounted(() => { void load(); });
           <dt>{{ $t("review.cost.persona") }}</dt><dd>{{ data.detail.costProfile.personaChars }}</dd>
           <dt>{{ $t("review.cost.entries") }}</dt>
           <dd>{{ data.detail.costProfile.worldbookEntryCount }}（{{ data.detail.costProfile.worldbookEnabledCount }} / {{ data.detail.costProfile.worldbookConstantCount }}）</dd>
-          <dt>{{ $t("review.contentHash") }}</dt><dd class="mono small">{{ data.submission.contentHash }}</dd>
         </dl>
         <p class="notice">{{ $t("review.cost.constantTokens", { n: data.detail.costProfile.estimatedConstantTokens }) }}</p>
         <p class="notice">{{ $t("review.cost.maxTokens", { n: data.detail.costProfile.estimatedMaxTokens }) }}</p>
       </section>
 
-      <section class="verdict panel">
-        <RouterLink class="link" :to="lp('/review/decisions')">{{t('review.history.title')}}</RouterLink>
-        <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button></p>
-        <div v-if="data.submission.correction" class="records">
-          <h3>{{t('review.correction.recordTitle')}}</h3>
-          <p>{{dateTime(data.submission.correction.at)}}</p>
-          <p class="text record__note">{{data.submission.correction.note}}</p>
-          <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
-          <p v-if="data.submission.correction.state==='conflict'" class="notice">{{t('review.correction.changed')}}</p>
-          <button v-if="data.submission.correction.state==='pending'" class="btn" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button>
-          <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.action')}}</button>
-        </div>
-        <template v-if="data.submission.canCorrect&&(!data.submission.correction||data.submission.correction.state==='conflict')">
-          <button class="btn" :disabled="busy" @click="correctionOpen=!correctionOpen">{{t('review.correction.action')}}</button>
-          <div v-if="correctionOpen" class="field">
-            <p v-if="!data.submission.manager">{{t('review.correction.window',{hours:24})}}</p>
-            <p v-if="!data.submission.manager&&data.submission.deadline">{{t('review.correction.deadline',{deadline:dateTime(data.submission.deadline)})}}</p>
-            <label for="correction-note">{{t('review.correction.reason')}}</label>
-            <textarea autocomplete="off" id="correction-note" v-model="correctionNote" class="input" rows="5" maxlength="2000" :disabled="busy" />
-            <p class="subtle">{{t('review.correction.reasonHint')}}</p>
-            <button class="btn btn--lg" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
+      <section ref="decideSection" id="decide" class="verdict panel">
+        <!-- 送出後（或回頭看審過、已定案的單）：決定區換成結果卡 -->
+        <template v-if="stampedByMe || decided">
+          <h3 class="verdict__title" tabindex="-1" data-decide-title data-result-card>{{ doc.roleName }}</h3>
+          <p v-if="myStamp" class="result__mine"><span class="chip" :class="{ 'chip--reject': myStamp.verdict === 'reject' }">{{ $t(myStamp.verdict === 'approve' ? 'review.result.mine.approve' : 'review.result.mine.reject') }}</span></p>
+          <!-- 一張單一章就定案：送出後只會是已上榜或已駁回 -->
+          <p v-if="data.submission.status === 'approved' || data.submission.status === 'rejected'" class="result__now">{{ $t(data.submission.status === 'approved' ? 'review.result.now.approved' : 'review.result.now.rejected') }}</p>
+          <div v-if="myStamp" class="field">
+            <p class="subtle records__title">{{ $t("review.result.noteTitle") }}</p>
+            <p class="text record__note">{{ myStamp.note || $t("review.confirm.noNote") }}</p>
+          </div>
+          <div v-if="otherStamps.length" class="records" data-other-stamps>
+            <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
+            <ul class="records__list">
+              <li v-for="(s, i) in otherStamps" :key="i" class="record">
+                <span class="record__head">
+                  <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
+                  <span class="subtle">{{ dateTime(s.at) }}</span>
+                </span>
+                <p v-if="s.note" class="text record__note">{{ s.note }}</p>
+              </li>
+            </ul>
+          </div>
+          <p v-if="myStamp?.verdict === 'approve' && data.submission.canCorrect" class="subtle">{{ $t("review.correction.window", { hours: 24 }) }}</p>
+            <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button></p>
+            <div v-if="data.submission.correction" class="records">
+              <h3>{{t('review.correction.recordTitle')}}</h3>
+              <p>{{dateTime(data.submission.correction.at)}}</p>
+              <p class="text record__note">{{data.submission.correction.note}}</p>
+              <p v-if="data.submission.correction.state==='pending'" class="notice">{{t('review.correction.unknown')}}</p>
+              <p v-if="data.submission.correction.state==='conflict'" class="notice">{{t('review.correction.changed')}}</p>
+              <button v-if="data.submission.correction.state==='pending'" class="btn" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button>
+              <button v-if="data.submission.correction.state==='pending'&&data.submission.correction.canResume" class="btn" :disabled="busy" @click="correct">{{t('review.correction.action')}}</button>
+            </div>
+            <template v-if="data.submission.canCorrect&&(!data.submission.correction||data.submission.correction.state==='conflict')">
+              <button class="btn" :disabled="busy" @click="correctionOpen=!correctionOpen">{{t('review.correction.action')}}</button>
+              <div v-if="correctionOpen" class="field">
+                <p v-if="!data.submission.manager">{{t('review.correction.window',{hours:24})}}</p>
+                <p v-if="!data.submission.manager&&data.submission.deadline">{{t('review.correction.deadline',{deadline:dateTime(data.submission.deadline)})}}</p>
+                <label for="correction-note">{{t('review.correction.reason')}}</label>
+                <textarea autocomplete="off" id="correction-note" v-model="correctionNote" class="input" rows="5" maxlength="2000" :disabled="busy" />
+                <p class="subtle">{{t('review.correction.reasonHint')}}</p>
+                <button class="btn btn--lg" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
+              </div>
+            </template>
+          <p v-if="nextError" class="notice notice--error" role="alert">{{ nextError }}</p>
+          <p v-if="nextItems && !nextItems.length" class="subtle">{{ $t("review.result.queueEmpty") }}</p>
+          <div class="verdict__acts">
+            <RouterLink class="btn btn--lg" :to="lp('/review')">{{ $t("review.result.toQueue") }}</RouterLink>
+            <button v-if="nextItems && nextItems.length" type="button" class="btn btn--primary btn--lg" :disabled="nextBusy" @click="goNext">{{ $t("review.result.next", { n: nextItems.length }) }}</button>
           </div>
         </template>
-        <!-- 駁回說明可能很長（逐條列問題）：不能塞進固定高度的 chip，會溢出去壓到下面的輸入框 -->
-        <div v-if="data.submission.stamps.length" class="records">
-          <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
-          <ul class="records__list">
-            <li v-for="(s, i) in data.submission.stamps" :key="i" class="record">
-              <span class="record__head">
-                <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
-                <span class="subtle">{{ dateTime(s.at) }}</span>
-              </span>
-              <p v-if="s.note" class="text record__note">{{ s.note }}</p>
-            </li>
-          </ul>
-        </div>
-        <div class="field">
-          <label for="review-note">{{ $t("review.note.label") }}</label>
-          <textarea autocomplete="off" id="review-note" v-model="note" class="input" rows="3" maxlength="2000" :disabled="decided||busy" />
-          <!-- 常見的駁回理由一鍵填入；審核人不改作者的宣告，只駁回 -->
-          <button type="button" class="btn btn--sm btn--ghost" :disabled="decided" @click="note = $t('review.rating.mismatch')">{{ $t("review.rating.mismatchFill") }}</button>
-        </div>
-        <p v-if="stampedByMe" class="subtle">{{ $t("review.stampedByMe") }}</p>
-        <p v-else-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
-        <div class="verdict__acts">
-          <button class="btn btn--danger" :disabled="busy || decided || !claimedByMe || !note.trim()" @click="stamp('reject')">{{ $t("review.action.reject") }}</button>
-          <button class="btn btn--primary" :disabled="busy || decided || !claimedByMe" @click="stamp('approve')">{{ $t("review.action.approve") }}</button>
-        </div>
+        <template v-else>
+          <h3 class="verdict__title" tabindex="-1" data-decide-title>{{ $t("review.decide.title") }}</h3>
+          <div v-if="decideError || decideUnknown" ref="decideErrorEl" class="notice notice--error" role="alert" tabindex="-1">
+            <p>{{ decideUnknown ? $t("review.decide.unknown") : decideError }}</p>
+            <RouterLink v-if="decideUnknown" class="btn btn--sm" :to="lp('/review/decisions')">{{ $t("review.history.title") }}</RouterLink>
+          </div>
+          <p v-if="approveBlocked" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
+          <p v-else-if="!length && !decided" id="approve-blocked" class="subtle">{{ $t("review.decide.lengthUnknown") }}</p>
+          <!-- 已經有人蓋過的章（舊單或需要兩章時）。駁回說明可能很長：不能塞進固定高度的 chip -->
+          <div v-if="otherStamps.length" class="records" data-other-stamps>
+            <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
+            <ul class="records__list">
+              <li v-for="(s, i) in otherStamps" :key="i" class="record">
+                <span class="record__head">
+                  <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
+                  <span class="subtle">{{ dateTime(s.at) }}</span>
+                </span>
+                <p v-if="s.note" class="text record__note">{{ s.note }}</p>
+              </li>
+            </ul>
+          </div>
+          <div class="field">
+            <p class="reasons__label">{{ $t("review.decide.reasons") }}</p>
+            <div class="reasons" role="group" :aria-label="$t('review.decide.reasons')">
+              <button v-for="r in reasons" :key="r" type="button" class="chip reason" :disabled="!canDecide" :data-reason="r" @click="pickReason(r)">{{ $t(`review.reason.${r}.label`) }}</button>
+            </div>
+            <p class="subtle small-note">{{ $t("review.decide.reasonsHint") }}</p>
+          </div>
+          <div class="field">
+            <label for="review-note">{{ $t("review.note.label") }}</label>
+            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" maxlength="2000" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy" @focus="noteFocused = true" @blur="noteFocused = false" />
+          </div>
+          <p v-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
+          <div class="verdict__acts">
+            <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
+            <button class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !note.trim()" @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
+            <button class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || approveBlocked" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t("review.action.approve") }}</button>
+          </div>
+        </template>
       </section>
-    </template>
+      </div>
+    </div>
+
+    <!-- 手機底部固定列：試玩與前往決定。打字時收起，免得蓋住說明欄 -->
+    <div v-if="data && doc && !loading && !noteFocused" class="dock">
+      <RouterLink class="btn btn--lg dock__play" :to="lp(`/play/${data.card.id}?review=${encodeURIComponent(id)}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
+      <button v-if="canDecide" type="button" class="btn btn--primary btn--lg dock__main" @click="goDecide">{{ $t("review.action.toDecide") }}</button>
+    </div>
   </section>
 </template>
 
@@ -632,9 +811,35 @@ onMounted(() => { void load(); });
 .previous__note[open] > summary { white-space: pre-wrap; overflow-wrap: anywhere; }
 .previous__time { font-size: 12px; }
 .head__acts { display: flex; gap: var(--s-2); }
+/* 版面：窄螢幕一欄（卡名 → 字數 → 分頁與內容 → 決定）；≥1080 右側 300 寬黏著欄放字數與決定入口 */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "side" "body"; column-gap: var(--s-5); }
+.layout__head { grid-area: head; }
+.layout__side { grid-area: side; }
+.layout__body { grid-area: body; min-width: 0; scroll-margin-top: var(--header-h); --tabs-bar-h: calc(var(--h-sm) + var(--s-1) * 2 + var(--s-2) * 3); }
+.layout__body:has(.tabs--more) { --tabs-bar-h: calc((var(--h-sm) + var(--s-1) * 2) * 2 + var(--s-2) * 4); }
+.side__acts { display: none; }
+/* 分頁條黏在頁首下方（z 15，不透明底，內容不會從底下透出來）；讀到很長的人設也換得了分頁 */
+.tabs-bar { position: sticky; top: var(--header-h); z-index: 15; background: var(--bg); padding-block: var(--s-2); margin-bottom: var(--s-2); }
+.tabs--more { margin-top: var(--s-2); }
+/* 手機底部固定列：試玩與前往決定（DESIGN：底部動作列 z 15、玻璃、上緣一條線、safe-area）。
+   用 sticky 而不是 fixed：讀卡時黏在畫面底部，捲到頁尾時停在頁面內容的最後，不蓋住站台頁尾的連結 */
+.dock { position: sticky; bottom: 0; z-index: 15; display: flex; gap: var(--s-2); margin-top: var(--s-4); padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--bg) 84%, transparent); clip-path: inset(0 -100vmax); }
+.dock__play { flex: none; min-width: 88px; }
+.dock__main { flex: 1; }
+@media (max-width: 1079px) {
+  /* 右緣漸層：分頁比畫面寬時，提示還可以往右滑 */
+  .tabs-bar::after { content: ""; position: absolute; top: 0; right: 0; width: 36px; height: calc(var(--h-sm) + var(--s-2) * 2 + var(--s-1) * 2); pointer-events: none; background: linear-gradient(to right, transparent, var(--bg)); }
+}
+@media (min-width: 1080px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "body side"; }
+  .layout__side { position: sticky; top: calc(var(--header-h) + var(--s-4)); align-self: start; display: grid; gap: var(--s-3); }
+  .side__length { margin-bottom: 0; }
+  .side__acts { display: grid; gap: var(--s-2); }
+  .dock { display: none; }
+}
 /* 分段控制預設是 inline-flex，會照內容撐寬、自己永遠不捲；外層又把超出的部分裁掉，窄螢幕右邊的分頁就點不到。
    這裡改成跟容器同寬、可以橫向滑動，每格不壓縮 */
-.tabs { display: flex; max-width: 100%; margin-bottom: var(--s-4); padding: var(--s-1); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.tabs { display: flex; max-width: 100%; padding: var(--s-1); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs .seg__item { flex: none; scroll-margin-inline: var(--s-1); }
 .pane { padding: var(--s-4); margin-bottom: var(--s-4); }
@@ -664,8 +869,29 @@ onMounted(() => { void load(); });
 .cost { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
-.verdict { padding: var(--s-4); display: grid; gap: var(--s-3); }
-.verdict__acts { display: flex; justify-content: flex-end; gap: var(--s-2); }
+/* 捲到決定區時要避開黏著的頁首與分頁條（「更多」展開時分頁條是兩排） */
+.verdict { padding: var(--s-4); display: grid; gap: var(--s-3); scroll-margin-top: calc(var(--header-h) + var(--tabs-bar-h, 0px) + var(--s-3)); }
+.verdict__title { margin: 0; font-size: 16px; }
+.verdict__title:focus { outline: none; }
+.verdict__title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.verdict__acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--s-2); }
+.verdict__back { margin-right: auto; min-height: var(--h-md); }
+.verdict__btn { min-width: 112px; }
+/* 手機：「回去看內容」自己一行，兩個決定（或結果卡的兩個去處）並排平分；放不下時各佔一行，不截字 */
+@media (max-width: 600px) {
+  .verdict__back { flex: 1 1 100%; margin-right: 0; justify-content: flex-start; }
+  .verdict__acts > .btn--lg { flex: 1 1 0; min-width: max-content; }
+}
+.blocked { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 10%, var(--surface)); margin: 0; }
+.reasons__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; }
+.reasons { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2); }
+/* 可點的 chip：點擊區至少 30（DESIGN 點擊區分級），有 hover 與焦點樣式 */
+.reason { min-height: var(--h-sm); padding-inline: var(--s-3); border: 0; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
+.reason:hover:not(:disabled) { background: var(--border); }
+.reason:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reason:disabled { opacity: 0.55; cursor: default; }
+.result__mine, .result__now { margin: 0; }
+.result__now { font-weight: 600; }
 .tags-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .tags-acts { display: flex; justify-content: flex-end; gap: var(--s-2); }
 .chip__x { border: 0; background: none; color: inherit; font: inherit; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
