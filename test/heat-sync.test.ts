@@ -1,8 +1,9 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, createScheduledController, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetDb, restoreUpstream, role } from "./helpers";
 import { upsertCard } from "../src/cards";
-import { syncHeat } from "../src/heat";
+import { HEAT_CRON, syncHeat } from "../src/heat";
+import worker from "../src/index";
 import { opsMetrics } from "../src/ops-metrics";
 import { upstream } from "../src/upstream";
 import { HttpError } from "../src/types";
@@ -18,8 +19,27 @@ async function card(roleId: string, hosted: string | null, heat = 0) {
 const heatOf = async (roleId: string) =>
   (await env.DB.prepare("SELECT heat FROM cards WHERE source_role_id=?").bind(roleId).first<{ heat: number }>())!.heat;
 
-// 熱度每小時整批從 Harbor 讀：逐張讀詳情一小時只輪得完幾十張，榜單會落後一天以上。
+// 熱度每 10 分鐘整批從 Harbor 讀，逐張同步卡片詳情則維持原排程。
 describe("熱度同步", () => {
+  it("每 10 分鐘的專用排程只同步熱度，不執行其他卡片同步", async () => {
+    expect(HEAT_CRON).toBe("2-59/10 * * * *");
+    await card("scheduled", "h-scheduled", 1);
+    const asked: string[][] = [];
+    upstream.fetchHeats = async (_env, ids) => {
+      asked.push([...ids]);
+      return { "h-scheduled": 80 };
+    };
+    let detailReads = 0;
+    upstream.fetchRole = async () => { detailReads++; throw new Error("unrelated card sync"); };
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController({ cron: "2-59/10 * * * *" }), env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(asked).toEqual([["h-scheduled"]]);
+    expect(await heatOf("scheduled")).toBe(80);
+    expect(detailReads).toBe(0);
+    expect(await opsMetrics(env.DB)).toContain('hearthroom_card_heat_sync_total{operation="batch",outcome="success"} 1');
+  });
+
   it("用封存版的 id 批次讀，回寫熱度；Harbor 沒回的卡保留原值", async () => {
     await card("a", "h-a", 1);
     await card("b", "h-b", 2);

@@ -88,7 +88,7 @@ const METRICS = {
   },
   card_heat: {
     name: "hearthroom_card_heat_sync_total",
-    help: "Hourly card heat sync: batch reads from the provider.",
+    help: "Card heat sync every ten minutes: batch reads from the provider.",
     label: "operation",
     operations: ["batch"],
     outcomes: ["success", "error"],

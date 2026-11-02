@@ -3,7 +3,7 @@ import { upstream } from "./upstream";
 import type { Env } from "./types";
 
 /** 熱度同步的排程，跟 wrangler.toml 的 crons 對應。 */
-export const HEAT_CRON = "47 * * * *";
+export const HEAT_CRON = "2-59/10 * * * *";
 /** Harbor 一次最多回 200 張（/open/v1/role/heat）。 */
 export const HEAT_BATCH = 200;
 /**
@@ -13,10 +13,10 @@ export const HEAT_BATCH = 200;
 const HEAT_CALLS = 44;
 
 /**
- * 每小時把所有已過審卡片的熱度從 Harbor 整批讀回 D1。
+ * 每 10 分鐘把所有已過審卡片的熱度從 Harbor 整批讀回 D1。
  *
  * 跟逐張同步（syncBatch）分開跑在自己的排程裡：那邊每輪已經吃滿子請求額度，而且一輪只輪 45 張，
- * 熱度要的是「每張卡每小時都更新」，只有批次讀得到。一批失敗就保留那批的舊值，下一輪再讀。
+ * 熱度要的是「每張卡每 10 分鐘都更新」，只有批次讀得到。一批失敗就保留那批的舊值，下一輪再讀。
  */
 export async function syncHeat(env: Env, batchSize = HEAT_BATCH): Promise<{ batches: number; failed: number; updated: number; skipped: number; ms: number }> {
   const started = Date.now();

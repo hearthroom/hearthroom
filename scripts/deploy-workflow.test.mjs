@@ -14,6 +14,12 @@ const steps = job.split(/\n      - /).slice(1).map((text) => ({
 }));
 const index = (predicate) => steps.findIndex(predicate);
 
+test('deployed heat cron runs every ten minutes separately from existing maintenance', () => {
+  const config = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  const crons = /^crons\s*=\s*(\[[^\n]+\])/m.exec(config)?.[1];
+  assert.deepEqual(JSON.parse(crons ?? '[]'), ['17 * * * *', '2-59/10 * * * *', '*/5 * * * *']);
+});
+
 test('CI defaults to full tests and permits only an explicit audited no-accounts scope', () => {
   assert.match(workflow, /test_scope:[\s\S]*?default: full[\s\S]*?options:\s*\[full, no-accounts\]/);
   const select = index(s => s.name === 'Select explicit test scope');
