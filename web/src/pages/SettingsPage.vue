@@ -383,6 +383,8 @@ onMounted(() => {
 .content__nowrap { white-space: nowrap; flex-shrink: 0; }
 .content__verified { color: var(--accent-text); }
 .content__select { width: auto; min-width: 9em; max-width: 50%; flex: none; }
+/* 日文說明不在詞中間斷行（提／供）；不支援的瀏覽器照舊逐字斷 */
+.content__row--field .content__text:lang(ja) { word-break: auto-phrase; }
 @media (max-width: 480px) {
   .content__row--field { flex-direction: column; align-items: stretch; gap: var(--s-2); }
   .content__select { max-width: none; width: 100%; }

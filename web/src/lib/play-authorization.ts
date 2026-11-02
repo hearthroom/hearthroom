@@ -18,7 +18,13 @@ const RECONSENT_WINDOW_MS = 2 * 60 * 1000;
  */
 export async function ensurePlayAuthorization(token:string,returnTo:string, provider:ProviderId=currentProvider(),cardReady?:Promise<unknown>):Promise<boolean> {
  if(provider!=='harbor')return true;
- const response=await fetch(`${apiBaseOf(provider)}/open/v1/models`,{headers:{Authorization:`Bearer ${token}`},redirect:'error'});
+ let response:Response;
+ try{response=await fetch(`${apiBaseOf(provider)}/open/v1/models`,{headers:{Authorization:`Bearer ${token}`},redirect:'error'});}
+ catch(error){
+  // 連不上帳號那邊：卡被地區擋下的話先說「暫不提供」，不說「載不進來」
+  if(cardReady)await cardReady.catch(cardError=>{if(isRegionUnavailable(cardError))throw cardError;});
+  throw error;
+ }
  if(response.ok)return true;
  if(cardReady)await cardReady.catch(error=>{if(isRegionUnavailable(error))throw error;});
  let reconsent=response.status===401;

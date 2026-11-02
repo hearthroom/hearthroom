@@ -48,3 +48,11 @@ it('still authorizes again when the card read fails for any reason other than th
  expect(await ensurePlayAuthorization('revoked-token','/play/a?resume=c1&provider=harbor','harbor',Promise.reject(revoked))).toBe(false);
  expect(beginLogin).toHaveBeenCalledWith('/play/a?resume=c1&provider=harbor',{provider:'harbor'});
 });
+// 連不上帳號那邊（預檢失敗、斷網）：卡被地區擋下時丟的是地區那個錯，遊玩頁才畫「暫不提供」
+it('reports the region denial instead of a network failure when the account check cannot connect',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>{throw new TypeError('Failed to fetch');}));
+ const denied=Object.assign(new Error('forbidden'),{status:403,code:'region_unavailable'});
+ await expect(ensurePlayAuthorization('t','/play/a','harbor',Promise.reject(denied))).rejects.toBe(denied);
+ await expect(ensurePlayAuthorization('t','/play/a','harbor',Promise.resolve({}))).rejects.toThrow('Failed to fetch');
+ expect(beginLogin).not.toHaveBeenCalled();
+});
