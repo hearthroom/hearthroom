@@ -18878,11 +18878,8 @@
           "Campaign pool"
         ],
         "summary": "Pay a reward from the campaign pool (dedicated pool)",
-        "description": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Human callers must be owners or admins of the app. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef`, `contentRef` or `validityDays` returns `idempotency_conflict`. Usage scope comes from the platform's settings for this app; expiry is chosen per payout with `validityDays`, and leaving it out means the credits never expire. A confidential application client with the explicit app-only `campaign.payout` scope may also call this endpoint. Its billing tenant fixes the campaign pool; the client data tenant fixes agent configuration ownership for retention. `rewards.report` alone does not authorize payment or payout lookup. Service payments debit the same pool, credit the recipient and preserve the same limits, retention checks, audit and idempotency rules as administrator payments. Select the dedicated leaderboard pool using this distinct path. Older Providers reject it instead of silently paying from the legacy pool. The legacy singular /campaign-pool paths always select default. Balances, settings, payment keys and receipts are isolated by pool; authentication, atomic wallet credit, audit and retry rules are shared.",
+        "description": "Only the deployment-pinned card-reward service client with campaign.payout may pay from the leaderboard pool. Human tokens and other application clients are rejected. Grants are permanent; validityDays must be omitted or null, with no public-retention obligation. Pool rules, wallet credit, audit, immutable receipts and same-key replay remain atomic. Older Providers reject this path instead of using the default pool.",
         "security": [
-          {
-            "userToken": []
-          },
           {
             "appToken": [
               "campaign.payout"
@@ -18894,7 +18891,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CampaignPayoutRequest"
+                "$ref": "#/components/schemas/LeaderboardPayoutRequest"
               }
             }
           }
@@ -34164,6 +34161,55 @@
           "reportedByMe": {
             "description": "The caller has an open report on it.",
             "type": "boolean"
+          }
+        }
+      },
+      "LeaderboardPayoutRequest": {
+        "type": "object",
+        "example": {
+          "key": "creator-season-1-card-100001",
+          "accountNo": 10001,
+          "amount": 10000,
+          "campaignRef": "creator-season-1",
+          "contentRef": "card-123"
+        },
+        "required": [
+          "key",
+          "accountNo",
+          "amount"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "description": "Your own payout identifier: 1 to 128 letters, digits, `_` or `-`. A key pays at most once."
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the player to credit."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Credits to pay. A positive integer not above `maxPayout`."
+          },
+          "campaignRef": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional campaign label for your own records, up to 128 characters."
+          },
+          "contentRef": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional reference to the content the reward is for, up to 128 characters."
+          },
+          "validityDays": {
+            "type": "null"
           }
         }
       }
