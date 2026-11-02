@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "消費",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "尚未取得的榜單榮譽（{n}）",
-  "badgeWall.rank.hint": "榜單榮譽在同期發布的卡片都比完後頒發：日榜隔天，週榜在該週結束 {weekDays} 天後，月榜在該月結束 {monthDays} 天後。同期發布的卡片不足 {minCards} 張時，只頒發第一名。",
+  "badgeWall.rank.hint": "榜單榮譽在同期發布的卡片都比完後頒發：日榜在當天結束 {dayHours} 小時後，週榜在該週結束 {weekDays} 天後，月榜在該月結束 {monthDays} 天後。同期發布的卡片不足 {minCards} 張時，只頒發第一名。",
   "badgeWall.spend.hint": "儲值與使用積分都達標才會取得，退款後低於標準會收回。消費徽章設為展示後，才會出現在公開頁。",
   "badgeWall.public.empty": "作者沒有公開徽章",
   "badgeWall.public.back": "回到作者頁",

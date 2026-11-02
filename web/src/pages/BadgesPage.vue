@@ -17,8 +17,8 @@ import { BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeCollection, type CollectedB
 import BadgeWall from '@/components/BadgeWall.vue';
 import CommunityIcon from '@/components/CommunityIcon.vue';
 
-/** 榜單榮譽說明句裡的結構常數：週榜在該週結束後 7 天、月榜在該月結束後 30 天頒發；同期不足 10 張只發第一名 */
-const RANK_RULE = { weekDays: 7, monthDays: 30, minCards: 10 };
+/** 榜單榮譽說明句裡的結構常數（和後端結算一致）：日榜在當天結束後 24 小時、週榜在該週結束後 7 天、月榜在該月結束後 30 天頒發；同期不足 10 張只發第一名 */
+const RANK_RULE = { dayHours: 24, weekDays: 7, monthDays: 30, minCards: 10 };
 
 const {t}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute();
 const author=computed(()=>typeof route.params.handle==='string'?route.params.handle:'');
