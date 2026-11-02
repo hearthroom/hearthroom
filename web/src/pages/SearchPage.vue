@@ -213,10 +213,10 @@ watch(q, (v) => { draft.value = v; });
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       <p v-if="kind === 'cards' && cards?.partial" class="muted search__hidden search__partial">{{ $t("search.partial") }}</p>
       <p v-if="kind === 'cards' && hidden.length" class="muted search__hidden">
-        <RouterLink :to="lp('/settings') + '#hidden'">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
+        <RouterLink :to="lp('/settings/content') + '#hidden'">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
       </p>
       <p v-if="kind === 'cards' && adultOff && cards && cards.items.length < 4 && !loading" class="muted search__hidden search__adult">
-        {{ $t("search.adultHidden") }} <RouterLink :to="lp('/settings')">{{ $t("search.adultHidden.link") }}</RouterLink>
+        {{ $t("search.adultHidden") }} <RouterLink :to="lp('/settings/content')">{{ $t("search.adultHidden.link") }}</RouterLink>
       </p>
 
       <template v-if="kind === 'cards'">

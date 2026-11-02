@@ -4347,5 +4347,20 @@
   "review.queue.tab.pendingNoCount": "待审",
   "review.decide.noteFull": "说明栏最多 {max} 字，这段理由放不下，请先删减内容再添加。",
   "review.queue.worldbook": "世界书 {n} 条",
-  "review.queue.regex": "正则 {n} 条"
+  "review.queue.regex": "正则 {n} 条",
+  "settings.section.profile": "个人资料",
+  "settings.section.profileHint": "昵称、主页、榜单隐私",
+  "settings.section.notificationsHint": "提醒与推送",
+  "settings.section.links": "连接与授权",
+  "settings.section.linksHint": "Discord、登录与授权",
+  "settings.section.contentHint": "成人内容、不想看的类型",
+  "settings.section.appearance": "外观与语言",
+  "settings.section.appearanceHint": "主题、语言、苏绮",
+  "settings.section.help": "疑难解答",
+  "settings.section.helpHint": "找不到苏绮、连接很慢",
+  "settings.thisDevice": "此设备",
+  "settings.routes.current": "当前线路",
+  "settings.routes.desc": "网站很慢或连不上时，可以换一条线路连接。",
+  "settings.routes.open": "查看线路",
+  "settings.section.play": "游玩"
 }

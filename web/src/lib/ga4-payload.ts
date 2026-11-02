@@ -20,6 +20,8 @@ function route(url: URL): { path: string; type: string } | null {
     [/^\/play\/[^/]+$/, "/play/_", "play"],
     [/^\/campaign\/[^/]+$/, "/campaign/_", "campaign"],
     [/^\/blog(?:\/[^/]+){0,2}$/, "/blog", "blog"],
+    // 設定的各區算同一頁，報表上的頁面數不因改版變多
+    [/^\/settings\/[^/]+$/, "/settings", "settings"],
   ];
   for (const [pattern, path, type] of masked) if (pattern.test(bare)) return { path: prefix + path, type };
   const fixed: Record<string, string> = {

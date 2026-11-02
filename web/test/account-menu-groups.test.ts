@@ -5,7 +5,7 @@
  *   - 其餘分成帳號、創作、設定三組，登出永遠在最底、跟其他項目隔開。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick, type App } from "vue";
+import { computed, createApp, nextTick, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
@@ -21,6 +21,7 @@ vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "boa
 
 import AccountMenu from "../src/components/AccountMenu.vue";
 import { useSession } from "../src/lib/session";
+import { petMenuKey } from "../src/lib/site-links";
 
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -48,6 +49,8 @@ async function openMenu(compact = false) {
   await useSession().restore();
   app = createApp(AccountMenu, { compact });
   app.use(pinia).use(router).use(i18n);
+  // 跟正式站一樣：一般頁面上桌寵的選單入口是開著的（App.vue 的 petMenuKey）
+  app.provide(petMenuKey, computed(() => true));
   await router.push("/");
   await router.isReady();
   app.mount(el);
@@ -94,6 +97,12 @@ describe("頭像選單分組", () => {
     expect(last.querySelectorAll("a")).toHaveLength(0);
     expect(last.textContent).toContain(i18n.global.t("nav.logout"));
     expect(menu.lastElementChild).toBe(last);
+  });
+
+  it("蘇綺的救援入口在使用者設定的疑難排解，不在帳號選單的偏好設定（settings-ia）", async () => {
+    const menu = await openMenu();
+    expect(menu.querySelector("[data-pet-menu]")).toBeNull();
+    expect(hrefs(menu.querySelector('[data-menu-section="preferences"]')!)).toContain("/settings");
   });
 
   it("寬版沿用公開網站導覽，指南與完整更新不依賴頁尾", async () => {

@@ -4347,5 +4347,20 @@
   "review.queue.tab.pendingNoCount": "待審",
   "review.decide.noteFull": "說明欄最多 {max} 字，這段理由放不下，請先刪減內容再加入。",
   "review.queue.worldbook": "世界書 {n} 條",
-  "review.queue.regex": "正則 {n} 條"
+  "review.queue.regex": "正則 {n} 條",
+  "settings.section.profile": "個人資料",
+  "settings.section.profileHint": "暱稱、主頁、榜單隱私",
+  "settings.section.notificationsHint": "提醒與推播",
+  "settings.section.links": "連結與授權",
+  "settings.section.linksHint": "Discord、登入與授權",
+  "settings.section.contentHint": "成人內容、不想看的類型",
+  "settings.section.appearance": "外觀與語言",
+  "settings.section.appearanceHint": "主題、語言、蘇綺",
+  "settings.section.help": "疑難排解",
+  "settings.section.helpHint": "找不到蘇綺、連線很慢",
+  "settings.thisDevice": "此裝置",
+  "settings.routes.current": "目前線路",
+  "settings.routes.desc": "網站很慢或連不上時，可以換一條線路連線。",
+  "settings.routes.open": "查看線路",
+  "settings.section.play": "遊玩"
 }

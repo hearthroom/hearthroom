@@ -4347,5 +4347,20 @@
   "review.queue.tab.pendingNoCount": "Pending",
   "review.decide.noteFull": "The note holds up to {max} characters and this reason won't fit. Shorten the note, then add it again.",
   "review.queue.worldbook": "Lorebook {n}",
-  "review.queue.regex": "Regex {n}"
+  "review.queue.regex": "Regex {n}",
+  "settings.section.profile": "Profile",
+  "settings.section.profileHint": "Nickname, profile page, leaderboard privacy",
+  "settings.section.notificationsHint": "Reminders and push notifications",
+  "settings.section.links": "Connections",
+  "settings.section.linksHint": "Discord, sign-in and authorization",
+  "settings.section.contentHint": "Adult content, types you don’t want to see",
+  "settings.section.appearance": "Appearance and language",
+  "settings.section.appearanceHint": "Theme, language, Suki",
+  "settings.section.help": "Troubleshooting",
+  "settings.section.helpHint": "Can’t find Suki, slow connection",
+  "settings.thisDevice": "This device",
+  "settings.routes.current": "Current route",
+  "settings.routes.desc": "When the site is slow or won’t load, you can connect through another route.",
+  "settings.routes.open": "View routes",
+  "settings.section.play": "Play"
 }
