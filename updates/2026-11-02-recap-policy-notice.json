@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "整理劇情被線路擋下時，提示會說明原因，並提供切換線路或模型。",
+    "zh-Hans": "整理剧情被线路拦下时，提示会说明原因，并提供切换线路或模型。",
+    "en": "When a lane blocks a recap, the notice explains why and offers a lane or model change.",
+    "ja": "ストーリー要約が回線で拒否されたとき、理由と回線やモデルの変更を案内します。",
+    "ko": "스토리 요약이 회선에서 차단되면 이유와 회선 또는 모델 변경을 안내해요."
+  }
+}
