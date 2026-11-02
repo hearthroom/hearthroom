@@ -81,7 +81,7 @@ docs/         Developer docs, OpenAPI description, card authoring guide, archite
 scripts/      Deploy preflight, asset archive, reviewer grants, mock provider for local development
 ```
 
-The API and the web app are served by one Worker: `/v1/*` is handled by Hono, other paths fall through to the built SPA. Storage: D1 for registrations, members and review; KV for the response cache and for previous asset builds, so tabs opened before a deploy can still load their chunks; Analytics Engine (optional) for usage events. A cron trigger syncs card names, covers and popularity counters from the provider every hour.
+The API and the web app are served by one Worker: `/v1/*` is handled by Hono, other paths fall through to the built SPA. Storage: D1 for registrations, members and review; KV for the response cache and for previous asset builds, so tabs opened before a deploy can still load their chunks; Analytics Engine (optional) for usage events. Cron triggers sync card names and covers from the provider every hour, and heat about every 10 minutes.
 
 The chat stage is built into the SPA at build time. Changes to the stage go to its own repository; this repository only updates the pinned commit.
 

@@ -4444,7 +4444,7 @@
           },
           "heat": {
             "type": "integer",
-            "description": "Credits spent on this card by everyone except its author, summed across all published versions. Refreshed about hourly."
+            "description": "Credits spent on this card by everyone except its author, summed across all published versions. Refreshed about every 10 minutes."
           },
           "favoriteCount": {
             "type": "integer"
