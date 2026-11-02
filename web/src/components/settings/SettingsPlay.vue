@@ -126,7 +126,11 @@ onBeforeRouteLeave(() => keepDraft());
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       <div class="persona__acts">
         <span v-if="saved" class="subtle" role="status">{{ $t("settings.saved") }}</span>
-        <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? $t("state.loading") : $t("settings.save") }}</button>
+        <!-- 兩個字疊在同一格、只顯示一個：按鈕永遠是較長那個的寬度，儲存中不跳寬（ui.md §4.2） -->
+        <button type="submit" class="btn btn--primary persona__save" :disabled="saving">
+          <span class="persona__label" :class="{ 'is-hidden': saving }">{{ $t("settings.save") }}</span>
+          <span class="persona__label" :class="{ 'is-hidden': !saving }">{{ $t("edit.saving") }}</span>
+        </button>
       </div>
     </form>
   </section>
@@ -141,4 +145,7 @@ onBeforeRouteLeave(() => keepDraft());
 .field__foot { display: flex; gap: var(--s-2); justify-content: space-between; }
 .persona__priority { margin: 0; }
 .persona__acts { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
+.persona__save { display: inline-grid; place-items: center; }
+.persona__label { grid-area: 1 / 1; }
+.persona__label.is-hidden { visibility: hidden; }
 </style>
