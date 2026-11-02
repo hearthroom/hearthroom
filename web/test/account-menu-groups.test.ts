@@ -21,7 +21,7 @@ vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "boa
 
 import AccountMenu from "../src/components/AccountMenu.vue";
 import { useSession } from "../src/lib/session";
-import { petMenuKey } from "../src/lib/site-links";
+import { petMenuKey, siteLinksKey } from "../src/lib/site-links";
 
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -33,6 +33,7 @@ function fakeFetch(input: RequestInfo | URL): Promise<Response> {
 }
 
 let rewards: unknown = null;
+let routeLine: { name: string; host: string } | null = null;
 const panel = (todayClaimed: boolean) => ({ serverNow: "2026-10-20T10:00:00+08:00", businessDay: "2026-10-20", nextResetAt: "2026-10-21T04:00:00+08:00", weekResetAt: "2026-10-26T04:00:00+08:00", planVersion: 1,
   checkin: { streak: 3, todayClaimed, todayChests: todayClaimed ? [] : ["daily"], fallback: null, track: [], nextMilestone: null, makeup: { left: 0, repairableDays: [] } },
   today: { claims: [] }, tasks: { daily: [], weekly: [] }, newcomer: null, hints: [] });
@@ -51,6 +52,7 @@ async function openMenu(compact = false) {
   app.use(pinia).use(router).use(i18n);
   // 跟正式站一樣：一般頁面上桌寵的選單入口是開著的（App.vue 的 petMenuKey）
   app.provide(petMenuKey, computed(() => true));
+  app.provide(siteLinksKey, computed(() => ({ repoUrl: "", license: "", discordInvite: null, showDownloadEntry: false, canInstallSite: false, routeLine })));
   await router.push("/");
   await router.isReady();
   app.mount(el);
@@ -63,7 +65,7 @@ async function openMenu(compact = false) {
 const hrefs = (root: Element) => [...root.querySelectorAll<HTMLAnchorElement>("a")].map((a) => a.getAttribute("href"));
 
 beforeEach(() => { vi.stubGlobal("fetch", fakeFetch); setActivePinia(createPinia()); });
-afterEach(() => { rewards = null; app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
+afterEach(() => { rewards = null; routeLine = null; app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
 
 describe("頭像選單分組", () => {
   it("名字那一塊就是「我的」的入口，不再另列一行", async () => {
@@ -103,6 +105,13 @@ describe("頭像選單分組", () => {
     const menu = await openMenu();
     expect(menu.querySelector("[data-pet-menu]")).toBeNull();
     expect(hrefs(menu.querySelector('[data-menu-section="preferences"]')!)).toContain("/settings");
+  });
+
+  it("官方網域上帳號選單的「線路」照舊在（owner 2026-11-03：點頭像切換線路的入口不能刪）", async () => {
+    routeLine = { name: "routes.name.1", host: "sukisuki.ai" };
+    const menu = await openMenu();
+    expect(menu.querySelector('[data-menu-section="preferences"] [data-site-link="routes"]')).not.toBeNull();
+    expect(menu.querySelector("[data-pet-menu]")).toBeNull();
   });
 
   it("寬版沿用公開網站導覽，指南與完整更新不依賴頁尾", async () => {
