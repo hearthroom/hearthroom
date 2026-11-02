@@ -63,3 +63,23 @@ it('resumes a large cohort across bounded heat batches and never awards a partia
  await rankMaintenance(env,at+3*86400000,1);expect(calls).toBe(1);expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(0);
  await rankMaintenance(env,at+3*86400000+60000,1);expect(calls).toBe(2);expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(20);
 });
+
+it('uses the latest actual entrant maturity without settling an early prefix',async()=>{
+ await card();
+ const late=at+1*86400000+1000;
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider) VALUES(100002,'late',11,'{}','{}',?,1,'approved','harbor')").bind(late).run();
+ await env.DB.prepare('INSERT INTO rank_publications VALUES(100002,?,?)').bind(late,at).run();
+ rankTransport.heats=async(_env,windows)=>windows.map(w=>({...w,heat:100,complete:true}));
+ await rankMaintenance(env,at+8*86400000);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_settlements WHERE window='week'").first('n')).toBe(0);
+ await rankMaintenance(env,at+9*86400000);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_settlements WHERE window='week'").first('n')).toBe(2);
+});
+
+it('does not let an excluded test author with unknown publication hold other cohorts',async()=>{
+ await card();const tester=await makeMember(22);await env.DB.prepare("UPDATE members SET account_class='test' WHERE id=?").bind(tester).run();
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider) VALUES(100002,'test-unknown',22,'{}','{}',?,1,'approved','harbor')").bind(at+2000).run();
+ rankTransport.heats=async(_env,windows)=>windows.map(w=>({...w,heat:100,complete:true}));
+ await rankMaintenance(env,at+3*86400000);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(2);
+});

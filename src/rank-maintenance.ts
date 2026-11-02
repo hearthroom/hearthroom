@@ -36,7 +36,11 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  // Hold rather than silently dropping an otherwise eligible entrant.
  const unknown=await env.DB.prepare(`SELECT 1 FROM cards c LEFT JOIN rank_publications p ON p.card_id=c.id
   WHERE c.provider='harbor' AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0 AND c.registered_at>=? AND p.card_id IS NULL
-  AND NOT EXISTS(SELECT 1 FROM work_copies cp WHERE cp.provider=c.provider AND cp.role_id=c.source_role_id) LIMIT 1`).bind(RANK_START).first();
+  AND NOT EXISTS(SELECT 1 FROM work_copies cp WHERE cp.provider=c.provider AND cp.role_id=c.source_role_id)
+  AND NOT EXISTS(SELECT 1 FROM members m WHERE m.id=COALESCE(
+   (SELECT owner_member_id FROM member_connections WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)),
+   (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)))
+   AND (m.account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id))) LIMIT 1`).bind(RANK_START).first();
  if(unknown){await bumpOp(env.DB,'rank_settlement','day','pending');return;}
  const rows=(await env.DB.prepare(`SELECT c.id,COALESCE(c.approved_hosted_role_id,c.source_role_id) AS hosted,p.published_at,c.talk_num,c.rating,
  c.author_num_id,COALESCE(ac.owner_member_id,ai.member_id) AS member_id
@@ -52,8 +56,8 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  const dueJobs:{window:typeof RANK_WINDOWS[number];period:string;entries:typeof rows}[]=[];
  for(const window of RANK_WINDOWS){
   const groups=new Map<string,typeof rows>();
-  for(const row of rows){const cohort=cohortOf(row.published_at,window);if(now<cohort.due)continue;const period=periodOf(cohort.at);if(['clean','all'].every(z=>settled.has(`${z}:${window}:${period}`)))continue;const group=groups.get(period);if(group)group.push(row);else groups.set(period,[row]);}
-  for(const [period,entries]of groups)dueJobs.push({window,period,entries});
+  for(const row of rows){const cohort=cohortOf(row.published_at,window);const period=periodOf(cohort.at);if(['clean','all'].every(z=>settled.has(`${z}:${window}:${period}`)))continue;const group=groups.get(period);if(group)group.push(row);else groups.set(period,[row]);}
+  for(const [period,entries]of groups)if(entries.every(r=>now>=cohortOf(r.published_at,window).due))dueJobs.push({window,period,entries});
  }
  for(const {window,period,entries}of dueJobs.sort((a,b)=>(attempts.get(`${a.window}:${a.period}`)??0)-(attempts.get(`${b.window}:${b.period}`)??0)).slice(0,3)){
    await env.DB.prepare('INSERT INTO rank_attempts(window,period,attempted_at) VALUES(?,?,?) ON CONFLICT(window,period) DO UPDATE SET attempted_at=excluded.attempted_at').bind(window,period,now).run();

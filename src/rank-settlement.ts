@@ -11,11 +11,12 @@ export function cohortOf(at:number,window:RankWindow) {
  const start=d.getTime()-TAIPEI;
  if(window==='month')d.setUTCMonth(d.getUTCMonth()+1);else d.setUTCDate(d.getUTCDate()+(window==='week'?7:1));
  const end=d.getTime()-TAIPEI;
- return {at:start,end,due:end+RANK_DURATION[window]};
+ const maturityDay=new Date(at+RANK_DURATION[window]+TAIPEI);maturityDay.setUTCHours(0,0,0,0);maturityDay.setUTCDate(maturityDay.getUTCDate()+1);
+ return {at:start,end,due:maturityDay.getTime()-TAIPEI};
 }
 export interface RankEntrant {id:number;heat:number;talkNum:number;registeredAt:number;adult:boolean}
 export function rankCohort<T extends RankEntrant>(cards:T[],zone:RankZone):(T&{rank:number;band:RankBand})[] {
- const entrants=cards.filter(c=>zone==='all'||!c.adult);
+ const entrants=cards.filter(c=>c.heat>0&&(zone==='all'||!c.adult));
  const limit=entrants.length<10?1:10;
  return entrants.filter(c=>c.heat>0).sort((a,b)=>b.heat-a.heat||b.talkNum-a.talkNum||b.registeredAt-a.registeredAt||b.id-a.id)
   .slice(0,limit).map((c,i)=>({...c,rank:i+1,band:i===0?1:i<3?3:10}));

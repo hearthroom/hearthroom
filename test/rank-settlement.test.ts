@@ -16,11 +16,16 @@ it('settles clean and all independently without weighting clean works',()=>{
 it('requires positive heat and awards only first when the board has fewer than ten entrants',()=>{
  expect(rankCohort(cards.slice(0,9),'all')).toHaveLength(1);
  expect(rankCohort(cards.map(x=>({...x,heat:0})),'all')).toEqual([]);
- // The ten-card threshold counts entrants, including zero-heat entrants.
- expect(rankCohort(cards.slice(0,10).map((x,i)=>({...x,heat:i<3?50-i:0})),'all')).toHaveLength(3);
+ // Only positive-heat cards count toward the ten-card threshold.
+ expect(rankCohort(cards.slice(0,10).map((x,i)=>({...x,heat:i<3?50-i:0})),'all')).toHaveLength(1);
 });
 it('breaks heat ties deterministically by conversations, original publication time, then card number',()=>{
  const tied=cards.map(x=>({...x,heat:50,talkNum:1,registeredAt:100}));
  tied[0].talkNum=2;tied[1].registeredAt=101;
  expect(rankCohort(tied,'all').slice(0,3).map(x=>x.id)).toEqual([100001,100002,100012]);
+});
+
+it('uses the next Taipei day after the actual last entrant matures, including exact midnight',()=>{
+ expect(cohortOf(at('2026-10-12T12:00:00'),'week').due).toBe(at('2026-10-20T00:00:00'));
+ expect(cohortOf(at('2026-10-01T00:00:00'),'month').due).toBe(at('2026-11-01T00:00:00'));
 });
