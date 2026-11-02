@@ -168,6 +168,8 @@ watch(() => route.fullPath, () => {
 .srow__label { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 /* 左欄窄（761 起只有 220）時副標容易剩一個字掛在下一行 */
 .srow__hint { font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; text-wrap: pretty; }
+/* 日文提示不在詞中間斷行（コンテン／ツ）；不支援的瀏覽器照舊逐字斷 */
+.srow__hint:lang(ja) { word-break: auto-phrase; }
 .srow__go { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--text-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 .settings__back {

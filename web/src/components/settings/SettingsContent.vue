@@ -157,7 +157,8 @@ async function toggleHidden(key: string) {
 /* 日文說明不在詞中間斷行（提／供）；不支援的瀏覽器照舊逐字斷 */
 .content__row--field .content__text:lang(ja) { word-break: auto-phrase; }
 @media (max-width: 480px) {
-  .content__row--field { flex-direction: column; align-items: stretch; gap: var(--s-2); }
+  /* 共用的 .settings .content__row 置中對齊；這裡要多一層才蓋得過，文字才會跟下面的選單、成人列一起靠左 */
+  .set-card .content__row--field { flex-direction: column; align-items: stretch; gap: var(--s-2); }
   .content__select { max-width: none; width: 100%; }
 }
 .hidden__desc { margin: 0; }

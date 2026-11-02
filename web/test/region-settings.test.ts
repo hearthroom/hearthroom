@@ -136,6 +136,8 @@ describe("國家／地區", () => {
     expect(card).not.toBeNull();
     expect(card!.contains(adultRow()!)).toBe(true);
     expect(card!.querySelector(".set-card__head")).toBeNull();
+    expect(regionSelect()!.compareDocumentPosition(adultRow()!) & Node.DOCUMENT_POSITION_FOLLOWING, "地區列在成人列上面").toBeTruthy();
+    expect(card!.nextElementSibling?.id, "第二張卡是不想看的類型").toBe("hidden");
 
     await choose("CN");
     expect(regionSelect()!.closest("section.set-card")).toBe(card);
