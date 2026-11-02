@@ -34,7 +34,8 @@ afterEach(()=>{app?.unmount();el.remove();});
 it('keeps details off the profile while showing level, link state and featured badges in the header',()=>{
  const header=el.querySelector('.hero')!;
  expect(header.textContent).toContain('Level 0');
- expect(header.querySelectorAll('.hero__featured .med')).toHaveLength(1);
+ // 徽章第一期（2026-11-03）：大藥丸與漸層圓章換成和作者頁同一個展示列
+ expect(header.querySelectorAll('.worn__row .badge-label')).toHaveLength(1);
  expect(header.textContent).toContain('First approved work');
  expect(header.querySelector('a[href="/me/community"]')).not.toBeNull();
  expect(el.querySelector('.community')).toBeNull();expect(el.querySelector('progress')).toBeNull();
