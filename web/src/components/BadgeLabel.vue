@@ -42,7 +42,7 @@ button.badge-label:hover { background: var(--surface); }
 .badge-label--lg { height: 34px; gap: 6px; padding: 0 13px 0 9px; font-size: 14px; --rank-badge-h: 30px; }
 .badge-label--lg.badge-label--honor { padding-left: 6px; }
 .badge-label--lg > svg:not(.rank-badge) { width: 19px; height: 19px; }
-/* 疊層畫在本體後面：外陰影往右上偏，只露出右上一小段邊 */
-.badge-label[data-layers="1"] { box-shadow: inset 0 0 0 1px var(--line-strong), 4px -4px 0 0 var(--surface-2), 4px -4px 0 1px var(--line-strong); }
-.badge-label[data-layers="2"] { box-shadow: inset 0 0 0 1px var(--line-strong), 4px -4px 0 0 var(--surface-2), 4px -4px 0 1px var(--line-strong), 8px -8px 0 0 var(--surface-2), 8px -8px 0 1px var(--line); }
+/* 疊層畫在本體後面：外陰影往右上偏，只露出右上一小段邊；右邊多留同樣的距離，才不會碰到下一枚 */
+.badge-label[data-layers="1"] { margin-right: 4px; box-shadow: inset 0 0 0 1px var(--line-strong), 4px -4px 0 0 var(--surface-2), 4px -4px 0 1px var(--line-strong); }
+.badge-label[data-layers="2"] { margin-right: 8px; box-shadow: inset 0 0 0 1px var(--line-strong), 4px -4px 0 0 var(--surface-2), 4px -4px 0 1px var(--line-strong), 8px -8px 0 0 var(--surface-2), 8px -8px 0 1px var(--line); }
 </style>

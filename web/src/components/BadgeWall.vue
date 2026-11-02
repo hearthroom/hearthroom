@@ -21,7 +21,14 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
  <div class="badge-wall" role="list" :aria-label="t('badgeWall.title')">
   <article v-for="badge in items" :key="badge.key" class="badge-tile" :class="{'badge-tile--earned':badge.state==='earned','badge-tile--featured':selected.includes(badge.key)}" role="listitem">
    <div class="badge-tile__top">
-    <span v-if="honorOf(badge)" class="badge-tile__honor" :data-layers="Math.min(badge.count??1,3)-1||undefined"><RankBadge :honor="honorOf(badge)!" decorative /><span v-if="timesLabel(badge.count)" class="badge-tile__times">{{ timesLabel(badge.count) }}</span></span>
+    <span v-if="honorOf(badge)" class="badge-tile__honor">
+     <span class="badge-tile__stack">
+      <!-- 拿過多次：後面疊一到兩枚同形的灰色徽章，往右上各偏 4px；次數寫在旁邊，不蓋住徽章裡的名次 -->
+      <RankBadge v-for="n in Math.min(badge.count??1,3)-1" :key="n" :honor="honorOf(badge)!" decorative class="badge-tile__ghost" :style="{transform:`translate(${n*4}px,${-n*4}px)`,zIndex:-n}" />
+      <RankBadge :honor="honorOf(badge)!" decorative />
+     </span>
+     <span v-if="timesLabel(badge.count)" class="badge-tile__times">{{ timesLabel(badge.count) }}</span>
+    </span>
     <span v-else class="badge-tile__icon"><CommunityIcon :name="badge.icon" /></span>
     <span class="badge-tile__state">{{ t('badgeWall.state.'+badge.state) }}</span>
    </div>
@@ -43,11 +50,10 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile__icon{display:flex;align-items:center;justify-content:center;width:3rem;height:3rem;border-radius:var(--r-sm);background:var(--surface);color:var(--text-3)}
 .badge-tile__icon svg{width:1.75rem;height:1.75rem}
 /* 榜單榮譽磚：大徽章（38×43）；拿過多次時後面疊一到兩枚灰色同形輪廓往右上偏 4px，次數膠囊在右下 */
-.badge-tile__honor{position:relative;display:flex;--rank-badge-h:43px;margin:6px 8px 0 0}.badge-tile__honor>svg{position:relative;z-index:1}
-.badge-tile__honor[data-layers]::before,.badge-tile__honor[data-layers="2"]::after{content:"";position:absolute;inset:0;border-radius:var(--r-sm);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong)}
-.badge-tile__honor[data-layers]::before{transform:translate(4px,-4px)}.badge-tile__honor[data-layers="2"]::after{transform:translate(8px,-8px);box-shadow:inset 0 0 0 1px var(--line)}
-.badge-tile__times{position:absolute;right:-8px;bottom:-4px;z-index:2;min-width:20px;height:20px;padding:0 5px;border-radius:var(--r-pill);background:var(--text);color:var(--bg);font-size:12px;font-weight:700;line-height:20px;text-align:center;font-variant-numeric:tabular-nums;box-shadow:0 0 0 2px var(--surface-2)}
-.badge-tile:not(.badge-tile--earned) .badge-tile__honor>svg{filter:grayscale(1);opacity:.4}.badge-tile--earned .badge-tile__icon{color:var(--accent-text);background:var(--accent-tint)}
+.badge-tile__honor{display:flex;align-items:flex-end;gap:10px;--rank-badge-h:43px;padding:8px 8px 0 0}
+.badge-tile__stack{position:relative;display:flex;isolation:isolate}.badge-tile__ghost{position:absolute;left:0;top:0;filter:grayscale(1);opacity:.35}
+.badge-tile__times{min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--text);color:var(--bg);font-size:12px;font-weight:700;line-height:20px;text-align:center;font-variant-numeric:tabular-nums}
+.badge-tile:not(.badge-tile--earned) .badge-tile__stack>svg{filter:grayscale(1);opacity:.4}.badge-tile--earned .badge-tile__icon{color:var(--accent-text);background:var(--accent-tint)}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}
 .badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}
 .badge-tile__details{margin-top:auto}.badge-tile__details label{display:grid;gap:var(--s-2)}progress{width:100%;height:.5rem;accent-color:var(--accent)}.badge-tile .btn{width:100%;min-height:2.75rem;white-space:normal;line-height:1.5}.badge-tile .btn[aria-pressed=true]{color:var(--accent-text);border-color:var(--accent)}

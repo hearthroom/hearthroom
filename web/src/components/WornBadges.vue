@@ -23,6 +23,8 @@ import RankBadge from "./RankBadge.vue";
 
 /** collection：呼叫端已經讀好的徽章（「我的」頁）就直接用，不再讀一次 */
 const props = defineProps<{ handle: string; own?: boolean; collection?: BadgeCollection | null }>();
+// 根節點有兩個（列本身＋傳送到 body 的詳情層），呼叫端給的 class 要明確綁在列上，不然會被丟掉
+defineOptions({ inheritAttrs: false });
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
@@ -113,7 +115,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
 
 <template>
   <!-- 自己的頁面永遠留著入口（展示管理在那一頁）；看別人時沒有對外可見的徽章就整列不出現 -->
-  <div v-if="own || earned.length" class="worn">
+  <div v-if="own || earned.length" class="worn" v-bind="$attrs">
     <ul v-if="worn.length" ref="row" class="worn__row" :aria-label="t('community.badgeLabel')">
       <li v-for="(badge, i) in worn" :key="badge.key" v-show="i < shown">
         <BadgeLabel as="button" :honor="honorOf(badge)" :icon="badge.icon" :text="nameOf(badge)" :count="badge.count" aria-haspopup="dialog" @click="openDetail([badge], $event)" />
@@ -166,7 +168,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
 .worn:not(:has(.worn__row)) { grid-template-columns: auto; }
 @media (max-width: 640px) { .worn { grid-template-columns: minmax(0, 1fr); } }
 /* 疊層往右上露出 8px，列的上方與右邊要留出這段，不然被裁掉 */
-.worn__row { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 8px 8px 2px 0; list-style: none; overflow: hidden; }
+.worn__row { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 9px 8px 2px 0; list-style: none; overflow: hidden; }
 .worn__row > li { flex: none; display: flex; min-width: 0; }
 .worn__more {
   display: inline-flex; align-items: center; height: 28px; padding: 0 10px; flex: none;

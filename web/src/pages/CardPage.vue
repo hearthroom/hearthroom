@@ -394,11 +394,12 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
             <span>{{ [...shownName][0] }}</span>
           </div>
-          <!-- 左上一列：精選標在最前，接著榜單榮譽的放大版（每期別最高一枚，日→週→月） -->
-          <div v-if="card.featured || coverHonors(card.honors ?? []).length" class="role__marks">
-            <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
+          <!-- 左上：榜單榮譽的放大版（每期別最高一枚，日→週→月）。精選標移到左下，和卡片格的封面同一個位置：
+               手機上這張圖只有約 92px 寬，精選標和三枚徽章放不進同一列 -->
+          <div v-if="coverHonors(card.honors ?? []).length" class="role__marks">
             <RankBadge v-for="honor in coverHonors(card.honors ?? [])" :key="honor.window" :honor="honor" class="role__honor" />
           </div>
+          <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
         </div>
 
         <div class="role__id">
@@ -581,10 +582,13 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
 .role__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line), var(--shadow-md); }
 .role__art img { width: 100%; height: 100%; object-fit: cover; }
-.role__marks { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; align-items: center; gap: 3px; pointer-events: none; }
-.role__honor { --rank-badge-h: 43px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+/* 大圖寬時用放大版（43 高）；手機上大圖縮成小圖（約 92 寬），徽章跟卡片格的封面一樣用 24 高，三枚才放得下 */
+.role__art { container-type: inline-size; }
+.role__marks { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; align-items: center; gap: 3px; pointer-events: none; --rank-badge-h: 43px; }
+@container (max-width: 200px) { .role__marks { left: 5px; top: 5px; gap: 1px; --rank-badge-h: 24px; } }
+.role__honor { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
 .role__featured {
-  flex: 0 1 auto; min-width: 0; margin-right: 3px; pointer-events: auto;
+  position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
   border-radius: 4px; background: var(--accent-deep); color: var(--on-accent);
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
