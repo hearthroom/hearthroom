@@ -78,8 +78,8 @@ const remount=async()=>{
 it('reveals a focused review tab before activation without changing the selected section', async () => {
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  await remount();
- // 六格常駐加「更多」；「正則與版面」「成本側寫」收在更多裡
- await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(7));
+ // 八格都在分頁條上（owner 2026-11-02：不收進「更多」）
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(8));
  const tabs=el.querySelectorAll<HTMLButtonElement>('.tabs button');
  const reveal=vi.fn();
  tabs[4].scrollIntoView=reveal;
@@ -343,13 +343,12 @@ it('an empty queue after deciding offers only the way back',async()=>{
  expect([...el.querySelectorAll('button')].some(b=>b.textContent?.includes(i18n.global.t('review.result.next',{n:0}).slice(0,3)))).toBe(false);
 });
 
-it('the two rarely used sections sit under More',async()=>{
+it('every section, including regex/layout and cost, sits directly in the tab bar',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
  await remount();
- await vi.waitFor(()=>expect(el.querySelector('[data-more]')).toBeTruthy());
- expect(button(i18n.global.t('review.section.cost'))).toBeUndefined();
- el.querySelector<HTMLButtonElement>('[data-more]')!.click();
  await vi.waitFor(()=>expect(button(i18n.global.t('review.section.cost'))).toBeTruthy());
+ expect(el.querySelector('[data-more]')).toBeNull();
+ expect(button(i18n.global.t('review.section.display'))).toBeTruthy();
  button(i18n.global.t('review.section.cost'))!.click();
  await vi.waitFor(()=>expect(button(i18n.global.t('review.section.cost'))!.getAttribute('aria-pressed')).toBe('true'));
  // 內容雜湊是內部識別碼，不給審核員看

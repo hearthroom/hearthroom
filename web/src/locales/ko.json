@@ -4311,7 +4311,6 @@
   "review.history.search.emptyTitle": "일치하는 카드가 없어요",
   "review.history.search.emptyHint": "카드 이름은 일부만 입력해도 되지만, 카드 번호는 전체를 입력해야 해요.",
   "review.history.search.clear": "검색 지우기",
-  "review.read.more": "더보기",
   "review.read.tabs": "심사 내용 탭",
   "review.action.toDecide": "결정하러 가기",
   "review.decide.title": "내 결정",

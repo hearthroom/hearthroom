@@ -58,7 +58,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -69,11 +69,6 @@ function summary(name:string,submittedAt:number,verdict:string,reason:string,rea
 }
 const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
-/** 分頁條常駐的六格；「正則與版面」「成本側寫」少用，收進「更多」 */
-const PRIMARY_SECTIONS = SECTIONS.slice(0, 6);
-const MORE_SECTIONS = SECTIONS.slice(6);
-const moreOpen = ref(false);
-const showMore = computed(() => moreOpen.value || (MORE_SECTIONS as readonly string[]).includes(section.value));
 const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
 
 function revealFocusedTab(event: FocusEvent) {
@@ -535,13 +530,8 @@ onMounted(() => { void load(); });
       <div class="layout__body">
       <nav ref="tabsBar" class="tabs-bar" :aria-label="$t('review.read.tabs')">
         <div class="seg tabs">
-          <button v-for="s in PRIMARY_SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @focus="revealFocusedTab" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
-            {{ sectionLabel(s) }}
-          </button>
-          <button type="button" class="seg__item" :class="{ 'seg__item--on': showMore }" :aria-expanded="showMore" data-more @focus="revealFocusedTab" @click="moreOpen = !showMore">{{ $t("review.read.more") }}</button>
-        </div>
-        <div v-if="showMore" class="seg tabs tabs--more">
-          <button v-for="s in MORE_SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s">
+          <!-- 八格都排在分頁條上、橫滑可達：審核員每張卡都會看「正則與版面」「成本側寫」（owner 2026-11-02），不收進「更多」 -->
+          <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @focus="revealFocusedTab" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
             {{ sectionLabel(s) }}
           </button>
         </div>
@@ -845,11 +835,9 @@ onMounted(() => { void load(); });
 .layout__head { grid-area: head; }
 .layout__side { grid-area: side; }
 .layout__body { grid-area: body; min-width: 0; scroll-margin-top: var(--header-h); --tabs-bar-h: calc(var(--h-sm) + var(--s-1) * 2 + var(--s-2) * 3); }
-.layout__body:has(.tabs--more) { --tabs-bar-h: calc((var(--h-sm) + var(--s-1) * 2) * 2 + var(--s-2) * 4); }
 .side__acts { display: none; }
 /* 分頁條黏在頁首下方（z 15，不透明底，內容不會從底下透出來）；讀到很長的人設也換得了分頁 */
 .tabs-bar { position: sticky; top: var(--header-h); z-index: 15; background: var(--bg); padding-block: var(--s-2); margin-bottom: var(--s-2); }
-.tabs--more { margin-top: var(--s-2); }
 /* 手機底部固定列：試玩與前往決定（DESIGN：底部動作列 z 15、玻璃、上緣一條線、safe-area）。
    用 sticky 而不是 fixed：讀卡時黏在畫面底部，捲到頁尾時停在頁面內容的最後，不蓋住站台頁尾的連結 */
 .dock { position: sticky; bottom: 0; z-index: 15; display: flex; gap: var(--s-2); margin-top: var(--s-4); padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--bg) 84%, transparent); clip-path: inset(0 -100vmax); }
@@ -902,7 +890,7 @@ onMounted(() => { void load(); });
 .cost { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
-/* 捲到決定區時要避開黏著的頁首與分頁條（「更多」展開時分頁條是兩排） */
+/* 捲到決定區時要避開黏著的頁首與分頁條 */
 .verdict { padding: var(--s-4); display: grid; gap: var(--s-3); scroll-margin-top: calc(var(--header-h) + var(--tabs-bar-h, 0px) + var(--s-3)); }
 .verdict__title { margin: 0; font-size: 16px; }
 /* 標題只在送出後被程式聚焦（讓讀屏器知道結果出來了），不在 Tab 順序裡：不畫鍵盤焦點環 */

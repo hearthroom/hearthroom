@@ -4311,7 +4311,6 @@
   "review.history.search.emptyTitle": "一致するカードはありません",
   "review.history.search.emptyHint": "カード名は一部だけでも検索できます。カード番号は全桁を入力してください。",
   "review.history.search.clear": "検索をクリア",
-  "review.read.more": "その他",
   "review.read.tabs": "審査内容のタブ",
   "review.action.toDecide": "判断へ進む",
   "review.decide.title": "あなたの判断",
