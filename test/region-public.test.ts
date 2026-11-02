@@ -51,12 +51,12 @@ beforeEach(async () => {
 afterEach(restoreUpstream);
 
 it('switching to CN filters warm board and search caches; switching back restores R cards', async () => {
-  const paths = ['/v1/cards?zone=zh&sort=day&nsfw=1', '/v1/cards?zone=zh&q=Region&nsfw=1'];
-  for (const path of paths) expect(await items(path)).toContain(adultId);
+  const paths = ['/v1/cards?zone=zh&sort=day&nsfw=1', '/v1/cards?zone=zh&q=Region&nsfw=1', '/v1/cards?zone=zh&sort=random&nsfw=1'];
+  for (const path of paths) expect(await items(path)).toEqual(expect.arrayContaining([adultId,generalId]));
   await region('CN');
   for (const path of paths) expect(await items(path)).toEqual([generalId]);
   await region('TW');
-  for (const path of paths) expect(await items(path)).toContain(adultId);
+  for (const path of paths) expect(await items(path)).toEqual(expect.arrayContaining([adultId,generalId]));
 });
 
 it('CN filters author cards and author statistics, then restores them outside CN', async () => {
@@ -106,13 +106,24 @@ it('a previously issued adult shortcut key cannot bypass current CN region', asy
   expect((await request(manifest)).status).toBe(200);
 });
 
-it('CN recommendations never return R cards, while general recommendations remain available', async () => {
+it('search suggestions stay general-only through TW, CN and TW while public R access restores', async () => {
+  const suggestions=async()=>{
+    const res=await request('/v1/suggest?q=Region&zone=zh&nsfw=1');
+    expect(res.status).toBe(200);
+    const body=await res.json() as {cards:{num:number}[]};
+    return body.cards.map(c=>String(c.num));
+  };
+  await region('TW');
+  expect((await request(`/v1/cards/${adultId}?view=0`)).status).toBe(200);
+  const baseline=await suggestions();
+  expect(baseline).toEqual([generalId]);
+  expect(baseline).not.toContain(adultId);
   await region('CN');
-  const res = await request('/v1/suggest?q=Region&zone=zh&nsfw=1');
-  expect(res.status).toBe(200);
-  const body = await res.json() as { cards: { num: number }[] };
-  expect(body.cards.map(c => String(c.num))).toEqual([generalId]);
+  expect(await suggestions()).toEqual(baseline);
   await unavailable(`/v1/cards/${adultId}?view=0`);
+  await region('TW');
+  expect(await suggestions()).toEqual(baseline);
+  expect((await request(`/v1/cards/${adultId}?view=0`)).status).toBe(200);
 });
 
 it('CN tag counts omit R and consent cannot enable R content while restricted', async () => {
