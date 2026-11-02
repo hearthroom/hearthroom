@@ -13,6 +13,7 @@ import { guestAdult, loadGuestAdult, viewerAdult } from "@/lib/adult-consent";
 import { PAGE_OF, TARGET_OF, isFirst, isLast, loadProgress, nextStep, prevStep, saveProgress, stepsOf, tourState, type TourPage, type TourStep } from "@/lib/coach-tour";
 import { finishTour, hasAdultStarter, isNewMember, starterFor, tourDone } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
+import { adultUnavailable } from "@/lib/country-region";
 import { useLocalePath } from "@/lib/use-locale";
 import CoachSpot from "@/components/CoachSpot.vue";
 import { track } from "@/lib/track";
@@ -50,7 +51,8 @@ watch(eligible, async (now) => {
   if (!now) return;
   if (!session.me) await loadGuestAdult();
   const adult = viewerAdult(session);
-  shape.adult = hasAdultStarter(locale.value) && (!!session.me || guestAdult.available) && !!adult && !adult.showNsfw;
+  // 地區選了中國大陸：頁首沒有 R18 鈕，這一步就跳過
+  shape.adult = hasAdultStarter(locale.value) && (!!session.me || guestAdult.available) && !!adult && !adult.showNsfw && !(session.me && adultUnavailable(session.profile));
   if (!eligible.value) return;
   track("tour_begin");
   go("card");

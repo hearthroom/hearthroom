@@ -41,3 +41,8 @@ export function rememberCard(card: CommunityCard): void {
 export function recallCard(id: string): CommunityCard | null {
   return seen.get(id) ?? null;
 }
+
+/** 看的人換了國家／地區：上一屏記住的卡可能這個地區不提供，整份丟掉，免得點進去先畫出來。 */
+export function forgetCards(): void {
+  seen.clear();
+}

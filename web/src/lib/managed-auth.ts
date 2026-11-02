@@ -1,6 +1,7 @@
 import { PROVIDERS, type ProviderId } from './provider';
 import type { TokenPair } from './oauth';
 import { clearStageStorage } from './stage-storage';
+import { i18n } from './i18n';
 
 let mode: boolean | undefined;
 let loading: Promise<boolean> | undefined;
@@ -67,7 +68,8 @@ export async function managedAuth():Promise<boolean>{
   return loading;
 }
 export async function authRequest<T>(path:string,body:unknown):Promise<T>{
-  const response=await fetch('/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Hearthroom-Request':'1'},body:JSON.stringify(body)});
+  // language：目前的介面語言。新成員的國家／地區預設在第一次讀個人資料時決定，照介面語言而不是瀏覽器語言。
+  const response=await fetch('/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Hearthroom-Request':'1',language:String(i18n.global.locale.value)},body:JSON.stringify(body)});
   // 先看狀態再讀內容：邊緣或部署中的 5xx 常是 HTML，先 parse 會丟 SyntaxError，被當成「授權不對」。
   if(response.status>=500||response.status===429)throw new ManagedAuthUnavailable('auth_provider_unavailable');
   const data=await response.json().catch(()=>null) as {error?:string}|null;

@@ -23,6 +23,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
+import RegionUnavailable from "@/components/RegionUnavailable.vue";
+import { isRegionUnavailable } from "@/lib/country-region";
 import CardScore from "@/components/CardScore.vue";
 import CardSpendLeaderboard from '@/components/CardSpendLeaderboard.vue';
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -73,6 +75,8 @@ const revalidating = ref(false);
 const missing = ref(false);
 /** 成人內容、而看的人沒登入或沒開：畫門，不畫 404 */
 const gated = ref(false);
+/** 看的人選的國家／地區不提供這張卡（403 region_unavailable）：畫「暫不提供」，不畫成人內容的門 */
+const regionBlocked = ref(false);
 const error = ref("");
 
 /** 作者寫的介紹（Markdown 原文）；來源端的詳情約一秒才到 */
@@ -245,6 +249,7 @@ async function load(afterIdentity = false) {
   loading.value = !card.value;
   missing.value = false;
   gated.value = false;
+  regionBlocked.value = false;
   error.value = "";
   const shown = card.value;
   if (shown) {
@@ -264,6 +269,8 @@ async function load(afterIdentity = false) {
   } catch (err) {
     if (request !== loadGeneration) return;
     if (err instanceof ApiError && err.status === 404) missing.value = true;
+    // 先畫出來的那份（剛才那一屏記住的）也一起拿掉：這個地區不提供它
+    else if (isRegionUnavailable(err)) { regionBlocked.value = true; card.value = null; confirmed.value = false; }
     else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") {
       // 被擋時身分可能還在路上：先留在骨架等它，開著就帶權限再讀一次，確定沒開才畫門。
       // 直接畫門的話，開了成人內容的人每次重新整理都會先看到門閃一下（玩家回報 2026-09-26）。
@@ -356,6 +363,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
 <template>
   <NotFoundPage v-if="missing" :title="$t('card.notFound.title')" :hint="$t('card.notFound.hint')" />
+  <RegionUnavailable v-else-if="regionBlocked" />
   <div v-else-if="gated" class="page"><AdultGate @enabled="load()" /></div>
 
   <div v-else class="page role">

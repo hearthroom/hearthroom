@@ -7,7 +7,12 @@ export type LibraryFavorite=CommunityCard|UnavailableFavorite;
 export const isUnavailableFavorite=(value:LibraryFavorite):value is UnavailableFavorite=>'unavailable' in value&&value.unavailable===true;
 
 async function read<T>(response: Response): Promise<T> {
-  if (!response.ok) throw new ApiError(response.status, describeApiError(response.status, ''));
+  if (!response.ok) {
+    // 錯誤碼要留著：舊聊天連結被地區擋下（region_unavailable）時，遊玩頁要畫「暫不提供」那一頁
+    const code = ((await response.json().catch(() => null)) as { error?: unknown } | null)?.error;
+    const raw = typeof code === 'string' ? code : '';
+    throw new ApiError(response.status, describeApiError(response.status, ''), raw);
+  }
   return response.json() as Promise<T>;
 }
 // Per-tab, per-credential memory only. No private response enters a shared/persistent cache.
