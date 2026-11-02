@@ -146,3 +146,11 @@ it('invalid credentials still receive the existing adult gate without card conte
  const res=await request(`/v1/cards/${adultId}`,'invalid');
  expect(res.status).toBe(403);expect(await res.json()).toMatchObject({error:'adult_content'});
 });
+it('counts region entry denials separately from rejected setting changes',async()=>{
+ await region('CN');
+ await unavailable(`/v1/cards/${adultId}`);
+ expect((await setting({showNsfw:true})).status).toBe(403);
+ const metrics=await(await request('/metrics')).text();
+ expect(metrics).toContain('hearthroom_country_region_operations_total{operation="admission",outcome="denied"} 1');
+ expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="denied"} 1');
+});

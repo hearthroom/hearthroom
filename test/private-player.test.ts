@@ -243,3 +243,25 @@ it('retains the original sharing registration fence for an unregistered link ran
  const context=createExecutionContext();const response=await worker.fetch(new Request(`https://c.test/v1/cards/${id}/leaderboard`),{...env,WORK_SHARING_ENABLED:'true',HOSTING_SERVICE_KEY:'fixture'},context);await waitOnExecutionContext(context);
  expect(response.status).toBe(404);expect(ranking).not.toHaveBeenCalled();
 });
+
+it('keeps an unrelated CN viewer at 404 for every private R metadata entry',async()=>{
+ const {source}=await fixture();
+ const stranger=await makeMember(43);
+ await env.DB.prepare("UPDATE members SET country_region='CN' WHERE id=?").bind(stranger).run();
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id=?").bind(source).run();
+ for(const suffix of ['', '/platforms','/manifest.webmanifest','/icon-192.png','/leaderboard']){
+  const response=await request('/v1/cards/'+source+suffix,'stranger');
+  expect(response.status).toBe(404);
+  expect(await response.text()).not.toMatch(/region_unavailable|Stale card|Retained approved/);
+ }
+});
+it('uses the region error for an authorized CN private source that has no reviewed rating',async()=>{
+ const {source}=await fixture(false);
+ const player=await makeMember(42);
+ await env.DB.prepare("UPDATE members SET country_region='CN' WHERE id=?").bind(player).run();
+ for(const suffix of ['', '/platforms','/leaderboard']){
+  const response=await request('/v1/cards/'+source+suffix,'player');
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({error:'region_unavailable'});
+ }
+});

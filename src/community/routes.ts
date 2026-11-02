@@ -295,13 +295,14 @@ app.get("/v1/me/community/notifications", async (c) => {
 });
 app.get("/v1/me/community/notifications/summary", async (c) => {
   const m = await requireMember(c);
+  const adult = await memberNsfw(c.env.DB,m.id);
   const locale = c.req.query("lang");
   // The header bell polls this; it is also where the website learns which language the member
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
     await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
-  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL`)
-    .bind(m.id)
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND (? IS NOT 'CN' OR c.rating IS NOT 'R')`)
+    .bind(m.id,adult.countryRegion)
     .first<{ unread: number }>();
   return c.json({ unread: row?.unread ?? 0 });
 });

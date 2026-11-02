@@ -94,13 +94,16 @@ it('CN notifications omit whole R rows including old card paths and extra, witho
       .bind(id, id, viewer, kind, Number(card), `/cards/${card}`, JSON.stringify(extra), Date.now()).run();
   }
   expect((await api('/v1/me/community/notifications')).body.items).toHaveLength(3);
+  expect((await api('/v1/me/community/notifications/summary')).body).toEqual({ unread: 3 });
   await region('CN');
   const hidden = await api('/v1/me/community/notifications');
   expect(hidden.status).toBe(200);
   expect(hidden.body.items.map((n: any) => n.id)).toEqual(['safe-note']);
   expect(JSON.stringify(hidden.body)).not.toContain(`/cards/${adultId}`);
   expect(JSON.stringify(hidden.body)).not.toContain('adult-secret');
+  expect((await api('/v1/me/community/notifications/summary')).body).toEqual({ unread: 1 });
   await region('OTHER');
   expect((await api('/v1/me/community/notifications')).body.items).toHaveLength(3);
+  expect((await api('/v1/me/community/notifications/summary')).body).toEqual({ unread: 3 });
   expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_notifications').first()).toEqual({ n: 3 });
 });

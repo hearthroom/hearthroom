@@ -7,7 +7,7 @@ import {privatePlayerCard} from './private-player';
 import {registerLegacyShare} from './work-share-registration';
 import {bearerOf} from './staff';
 import {currentCardAccess} from './work-read';
-import {requireMember,viewerAllowsNsfw,providerOf,assertRegionCard,type Member} from './members';
+import {requireMember,viewerAllowsNsfw,providerOf,assertRegionCard,viewerAllowsAdultContent,type Member} from './members';
 import {type Env,HttpError} from './types';
 import {apiBaseOf} from './providers';
 import {hostingKey} from './hosting';
@@ -35,7 +35,7 @@ async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
  const link=await cardLink(c.env,id,providerOf(c));let row=link.row;
  const source=link.source?.roleId??id;
  if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
-  row=await registerLegacyShare(c.env,source,()=>viewerAllowsNsfw(c,{card:true}));
+  row=await registerLegacyShare(c.env,source,()=>viewerAllowsAdultContent(c));
   if(!row){
    const own=await readOwnCardView(c.env,source,null,'en',bearerOf(c),providerOf(c));
    if(!own||own.provider!=='harbor')throw new HttpError(404,'card not found');
@@ -45,24 +45,25 @@ async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
  }
  if(row){
   if(row.provider!=='harbor'||row.public_blocked)throw new HttpError(404,'card not found');
-  await assertRegionCard(c,row);
   const access=await currentCardAccess(c.env,row,'aggregate');
   if(access.reachable){
-   if((row.rating==='R'||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+   await assertRegionCard(c,row);
+   if((row.rating==='R'||access.access==='unlisted')&&!await viewerAllowsAdultContent(c))throw new HttpError(403,'adult_content');
    return {...row,rankRoleId:access.shareRoleId||row.approved_hosted_role_id||row.source_role_id};
   }
 
   // Legacy review status is a discovery state, not a link-access denial.
   // Managed private/suspended works keep the stricter branches below.
   if(!access.managed&&row.status!=='unlisted'){
+   await assertRegionCard(c,row);
    if(row.rating==='R'&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
    const preview=await linkPreview(c.env,id,link,'en');
    if(preview)return {...row,rankRoleId:preview.roleId};
   }
   const own=await readOwnCardView(c.env,source,row,'en',bearerOf(c),providerOf(c));
-  if(own)return {...row,rankRoleId:row.source_role_id};
+  if(own){await assertRegionCard(c,row);return {...row,rankRoleId:row.source_role_id};}
   if(access.access==='private'){
-   const played=await privatePlayerCard(c.env,row,bearerOf(c),'en','detail',()=>viewerAllowsNsfw(c,{card:true}));
+   const played=await privatePlayerCard(c.env,row,bearerOf(c),'en','detail',()=>viewerAllowsAdultContent(c));
    if(played)return {...row,rankRoleId:played.roleId};
   }
   throw new HttpError(404,'card not found');

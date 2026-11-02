@@ -414,7 +414,7 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
    if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score)|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
   }
   const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now(),me);
-  if(member.country_region == null)await initializeCountryRegion(c.env.DB,member.id,String(c.req.raw?.cf?.country || c.req.header('CF-IPCountry') || ''),c.req.header('language') || c.req.header('Accept-Language')?.split(',')[0] || 'zh');
+  if(member.country_region == null)await initializeCountryRegion(c.env.DB,member.id,String(c.req.raw?.cf?.country || c.req.header('CF-IPCountry') || ''),c.req.header('language') || (c.req.url?new URL(c.req.url).searchParams.get('lang'):null) || c.req.header('Accept-Language')?.split(',')[0] || 'zh');
   // 由本站 session 認出來的沒有供應商暱稱；顯示名稱留給下一個走供應商驗證的請求補上。
   if (member.display_name === null && !sessionIdentities.has(me)) {
     // Keep the SQL guard: another request or the member may initialize it after our read.
@@ -486,4 +486,10 @@ export async function viewerCountryRegion(c:Ctx):Promise<string|null>{
 }
 export async function assertRegionCard(c:Ctx,row:{rating?:string|null}):Promise<void>{
  if(row.rating==='R'&&await viewerCountryRegion(c)==='CN')throw new HttpError(403,'region_unavailable');
+}
+
+/** Conservative adult/source gates classify the region only after resource authorization. */
+export async function viewerAllowsAdultContent(c:Parameters<typeof viewerAllowsNsfw>[0]):Promise<boolean>{
+ await assertRegionCard(c,{rating:'R'});
+ return viewerAllowsNsfw(c,{card:true});
 }

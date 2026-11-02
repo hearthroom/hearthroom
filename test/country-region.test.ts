@@ -21,14 +21,14 @@ it('persists the first default and accepts only listed region codes',async()=>{
  const row=await env.DB.prepare('SELECT country_region FROM members').first();
  expect(row?.country_region).toBe('CN');
 });
-it('emits bounded save and denial counters without member or card labels',async()=>{
+it('emits bounded setting save and denial counters without member or card labels',async()=>{
  const save=await SELF.fetch('https://c.test/v1/me/settings',{method:'POST',headers:{...bearer('viewer'),'Content-Type':'application/json'},body:JSON.stringify({countryRegion:'CN'})});
  expect(save.status).toBe(200);
  const denied=await SELF.fetch('https://c.test/v1/me/settings',{method:'POST',headers:{...bearer('viewer'),'Content-Type':'application/json'},body:JSON.stringify({showNsfw:true})});
  expect(denied.status).toBe(403);
  const metrics=await (await SELF.fetch('https://c.test/metrics')).text();
  expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="success"} 1');
- expect(metrics).toContain('hearthroom_country_region_operations_total{operation="admission",outcome="denied"} 1');
+ expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="denied"} 1');
  expect(metrics).not.toContain('countryRegion=');
 });
 it('accepts every supported region, rejects invalid input without mutation, and never grants adult consent',async()=>{
@@ -47,4 +47,21 @@ it('accepts every supported region, rejects invalid input without mutation, and 
  expect(await profile()).toMatchObject({countryRegion:'OTHER'});
  for(const region of ['CN','TW','CN','JP'])expect((await setting(region)).status).toBe(200);
  expect(await profile()).toMatchObject({countryRegion:'JP',showNsfw:false,adultConsent:false});
+});
+it('uses the interface query locale for the first region default',async()=>{
+ const response=await SELF.fetch('https://c.test/v1/me?lang=en',{headers:{...bearer('viewer'),'CF-IPCountry':'CN','Accept-Language':'zh-Hant'}});
+ expect((await response.json() as any).countryRegion).toBe('OTHER');
+});
+it('does not partially save a region or preferences when enabling adult content is rejected',async()=>{
+ const setting=(body:unknown)=>SELF.fetch('https://c.test/v1/me/settings',{method:'POST',headers:{...bearer('viewer'),'Content-Type':'application/json'},body:JSON.stringify(body)});
+ expect((await setting({countryRegion:'TW'})).status).toBe(200);
+ const invalid=await setting({countryRegion:'CN',hiddenTags:['unknown-region-fixture-tag'],showStats:true});
+ expect(invalid.status).toBe(400);
+ const rejected=await setting({countryRegion:'CN',showNsfw:true,showStats:true});
+ expect(rejected.status).toBe(403);
+ const me=await (await SELF.fetch('https://c.test/v1/me',{headers:bearer('viewer')})).json() as any;
+ expect(me).toMatchObject({countryRegion:'TW',showStats:false,showNsfw:false});
+ const metrics=await(await SELF.fetch('https://c.test/metrics')).text();
+ expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="denied"} 1');
+ expect(metrics).not.toContain('hearthroom_country_region_operations_total{operation="admission",outcome="denied"}');
 });

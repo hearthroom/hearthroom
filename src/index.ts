@@ -1,5 +1,5 @@
 import {parseCountryRegion, updateCountryRegion} from './country-region';
-import {viewerCountryRegion, assertRegionCard} from './members';
+import {viewerCountryRegion, assertRegionCard, viewerAllowsAdultContent, normalizeHiddenTags, confirmAdult} from './members';
 import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
@@ -256,7 +256,7 @@ app.onError(async (err, c) => {
   }
   const ev = c.get("ev") as Pending | undefined;
   if (err instanceof HttpError) {
-    if(err.message==='region_unavailable'){c.header('Cache-Control','private, no-store');await bumpOp(c.env.DB,'country_region','admission','denied');}
+    if(err.message==='region_unavailable'){c.header('Cache-Control','private, no-store');await bumpOp(c.env.DB,'country_region',c.req.path==='/v1/me/settings'?'save':'admission','denied');}
     if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});
     if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
     return c.json({ error: err.message, ...err.extra, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
@@ -611,17 +611,17 @@ async function checkedCardAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}
 
 
 async function ownCardView(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:string,row:Awaited<ReturnType<typeof getCard>>){
- if(row)await assertRegionCard(c,row);
- return readOwnCardView(c.env,id,row,lang(c),bearerOf(c),providerOf(c));
+ const own=await readOwnCardView(c.env,id,row,lang(c),bearerOf(c),providerOf(c));
+ if(own)await assertRegionCard(c,row??own);
+ return own;
 }
 
 app.get("/v1/cards/:id", async (c) => {
   const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
   let row = link.row;
-  if(row)await assertRegionCard(c,row);
   if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
     c.header('Cache-Control','private, no-store');c.header('X-Robots-Tag','noindex, nofollow');
-    row=await registerLegacyShare(c.env,link.source?.roleId??c.req.param('id'),()=>viewerAllowsNsfw(c,{card:true}));
+    row=await registerLegacyShare(c.env,link.source?.roleId??c.req.param('id'),()=>viewerAllowsAdultContent(c));
     if(!row){
       const own=await ownCardView(c,link.source?.roleId??c.req.param('id'),row);
       await bumpOp(c.env.DB,'visibility_read','detail',own?'allow':'denied');
@@ -639,11 +639,12 @@ app.get("/v1/cards/:id", async (c) => {
     if (own) return c.json({...own,...shareFields(c,'author')},200,{'Cache-Control':'private, no-store'});
     if(row&&access.access==='private'){
       // 玩過這張私卡的人照樣打得開，但新朋友打不開：分享鈕要看的是後者，所以一樣是 author
-      const played=await privatePlayerCard(c.env,row,bearerOf(c),lang(c),'detail',()=>viewerAllowsNsfw(c,{card:true}));
+      const played=await privatePlayerCard(c.env,row,bearerOf(c),lang(c),'detail',()=>viewerAllowsAdultContent(c));
       if(played)return c.json({...played,...shareFields(c,'author')});
     }
     throw new HttpError(404,'card not found');
   }
+  if(row)await assertRegionCard(c,row);
   if (row && access?.reachable && access.access==='unlisted') {
     c.header('Cache-Control','private, no-store');
     c.header('X-Robots-Tag','noindex');
@@ -697,12 +698,12 @@ function shareFields(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, 
 async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   let row = await getCard(c.env.DB, c.req.param("id") ?? "");
   if (!row || row.provider !== "harbor" || row.public_blocked) throw new HttpError(404, "card not found");
-  await assertRegionCard(c,row);
   const access=await checkedCardAccess(c,row,'metadata');
   if(access.managed||row.status==='unlisted'){
     c.header('Cache-Control','private, no-store');
     if(!access.reachable)throw new HttpError(404,'card not found');
   }else if(row.status!=='approved')throw new HttpError(404,'card not found');
+  await assertRegionCard(c,row);
   const key = c.req.query("k");
   const adult=isAdult(row)||access.access==='unlisted';
   if (adult && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
@@ -955,7 +956,6 @@ function animatedArea(b: Uint8Array): number {
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
- if(base)await assertRegionCard(c,base);
  if(base){
   const access=await checkedCardAccess(c,base,'metadata');
   if(access.managed||base.status==='unlisted'){
@@ -963,18 +963,20 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
    if(!access.reachable){
     if(access.access==='private'){
      c.header('X-Robots-Tag','noindex, nofollow');
-     const played=await privatePlayerCard(c.env,base,bearerOf(c),lang(c),'metadata',()=>viewerAllowsNsfw(c,{card:true}));
+     const played=await privatePlayerCard(c.env,base,bearerOf(c),lang(c),'metadata',()=>viewerAllowsAdultContent(c));
      if(played)return c.json({platforms:[{provider:'harbor',roleId:played.roleId,playable:hasChat('harbor')}]});
     }
     throw new HttpError(404,'card not found');
    }
-   if((isAdult(base)||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+   await assertRegionCard(c,base);
+   if((isAdult(base)||access.access==='unlisted')&&!await viewerAllowsAdultContent(c))throw new HttpError(403,'adult_content');
    if(access.access==='unlisted')c.header('X-Robots-Tag','noindex');
    // Current work authority already validated this exact target; no unrelated
    // copies or old approval pointers may be advertised as playable.
    return c.json({platforms:[{provider:'harbor',roleId:access.shareRoleId,playable:hasChat('harbor')}]});
   }
  }
+ if(base)await assertRegionCard(c,base);
  if(base?.approved_version_id && base.status!=='approved')throw new HttpError(404,'card not found');
  if(base && isAdult(base) && !await viewerAllowsNsfw(c, { card: true }))throw new HttpError(403,'nsfw_gated');
  let source=link.source;
@@ -1111,6 +1113,14 @@ app.post("/v1/me/settings", async (c) => {
   if(body.countryRegion !== undefined)parseCountryRegion(body.countryRegion);
   if (body.showStats !== undefined && typeof body.showStats !== "boolean") throw new HttpError(400, "showStats_invalid");
   if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && body.showStats === undefined && body.countryRegion === undefined) throw new HttpError(400, "showNsfw_required");
+  // Validate the combined request before saving any preferences. In particular,
+  // a rejected CN + adult-enable request must not silently switch the region.
+  if(body.hiddenTags!==undefined)normalizeHiddenTags(body.hiddenTags);
+  if(body.showNsfw===true){
+    const current=await memberNsfw(c.env.DB,member.id);
+    if((body.countryRegion??current.countryRegion)==='CN')throw new HttpError(403,'region_unavailable');
+    confirmAdult(current,{birthdate:typeof body.birthdate==='string'?body.birthdate:undefined,consentVersion:typeof body.consentVersion==='number'?body.consentVersion:undefined},Date.now());
+  }
   if(body.countryRegion!==undefined)await updateCountryRegion(c.env.DB,member.id,body.countryRegion);
   let showStats: boolean;
   if (typeof body.showStats === "boolean") {
