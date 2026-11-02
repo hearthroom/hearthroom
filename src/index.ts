@@ -90,7 +90,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
-  release as releaseSubmission, stamp as stampSubmission, submissionHistory, recordReviewLengthStatement,
+  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement,
 } from "./review";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
@@ -1580,6 +1580,8 @@ app.post("/v1/review/:id/stamp", async (c) => {
   if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
   if (verdict === "reject" && !noteText.trim()) throw new HttpError(400, "a rejection needs a note for the author");
+  // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
+  if (noteText.trim().length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation },c.env);
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });

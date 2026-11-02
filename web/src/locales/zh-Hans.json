@@ -4345,5 +4345,6 @@
   "review.history.status.approved": "已上榜",
   "review.history.status.rejected": "已驳回",
   "review.confirm.row": "{label}：{value}",
-  "review.queue.tab.pendingNoCount": "待审"
+  "review.queue.tab.pendingNoCount": "待审",
+  "review.decide.noteFull": "说明栏最多 {max} 字，这段理由放不下，请先删减内容再添加。"
 }

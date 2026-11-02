@@ -21,6 +21,8 @@ import { HttpError, type Env, type Localized, pickLocale } from "./types";
  *     主站雜湊變了就開重審單、卡片離榜。
  */
 export const CLAIM_TTL_MS = 45 * 60 * 1000;
+/** 給作者的說明上限（字元，與審核頁輸入框的 maxlength 同一個數） */
+export const REVIEW_NOTE_MAX = 2000;
 export const STAMPS_REQUIRED: Record<SubmissionKind, number> = { first: 1, re: 1 };
 
 export type SubmissionKind = "first" | "re";
@@ -221,7 +223,8 @@ export async function stamp(
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
   if (input.verdict === "approve") await assertApprovableLength(db, row);
-  const note = input.note.trim().slice(0, 2000);
+  const note = input.note.trim();
+  if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
 
   const required = STAMPS_REQUIRED[row.kind];
   const writes: D1PreparedStatement[] = [

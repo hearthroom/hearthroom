@@ -543,6 +543,19 @@ describe("審核工具第一批：字數門檻、結果、搜尋", () => {
     expect(await stored()).toBeNull();
   });
 
+  it("說明超過 2,000 字整個拒絕，不默默截斷；剛好 2,000 字照存", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await act(id, "claim", "rev-a");
+    const tooLong = await act(id, "stamp", "rev-a", { verdict: "reject", note: "字".repeat(2001) });
+    expect(tooLong.status).toBe(400);
+    expect(await tooLong.json()).toMatchObject({ error: "note_too_long" });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_stamps WHERE submission_id = ?").bind(id).first<{ n: number }>())!.n).toBe(0);
+    expect((await act(id, "stamp", "rev-a", { verdict: "reject", note: "字".repeat(2000) })).status).toBe(200);
+    expect((await env.DB.prepare("SELECT length(note) AS n FROM review_stamps WHERE submission_id = ?").bind(id).first<{ n: number }>())!.n).toBe(2000);
+  });
+
   it("審核頁算出字數時補記到審核單，佇列下次就看得到", async () => {
     await makeReviewer(REVIEWER_A);
     await submit("role-1");

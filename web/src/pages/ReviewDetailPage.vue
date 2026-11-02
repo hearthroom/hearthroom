@@ -58,7 +58,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -205,6 +205,11 @@ type Reason = (typeof REASONS)[number];
 const reasons = computed(() => REASONS.filter((r) => r !== "count" || approveBlocked.value));
 const noteField = ref<HTMLTextAreaElement | null>(null);
 const noteFocused = ref(false);
+/** 說明上限（與伺服器 REVIEW_NOTE_MAX 同一個數）。輸入框的 maxlength 只擋打字，理由 chip 是程式填入，要自己擋 */
+const NOTE_MAX = 2000;
+/** 點的理由放不下：不追加、不截斷，改說明一句；說明欄一改動（刪減後）就收起 */
+const blockedNote = ref<string | null>(null);
+const noteFull = computed(() => blockedNote.value !== null && blockedNote.value === note.value);
 function pickReason(reason: Reason) {
   if (reason !== "other") {
     const text = reason === "count"
@@ -212,7 +217,9 @@ function pickReason(reason: Reason) {
       : t(`review.reason.${reason}.text`);
     // 已經打了字就另起一行接在後面，不覆蓋、不詢問
     const typed = note.value.replace(/\s+$/, "");
-    note.value = typed ? `${typed}\n${text}` : text;
+    const next = typed ? `${typed}\n${text}` : text;
+    if (next.trim().length > NOTE_MAX) { blockedNote.value = note.value; noteField.value?.focus(); return; }
+    note.value = next;
   }
   noteField.value?.focus();
 }
@@ -793,11 +800,12 @@ onMounted(() => { void load(); });
             <div class="reasons" role="group" :aria-label="$t('review.decide.reasons')">
               <button v-for="r in reasons" :key="r" type="button" class="chip reason" :disabled="!canDecide" :data-reason="r" @click="pickReason(r)">{{ $t(`review.reason.${r}.label`) }}</button>
             </div>
-            <p class="subtle small-note">{{ $t("review.decide.reasonsHint") }}</p>
+            <p v-if="noteFull" class="small-note blocked-note" role="status" data-note-full>{{ $t("review.decide.noteFull", { max: new Intl.NumberFormat(String(locale)).format(NOTE_MAX) }) }}</p>
+            <p v-else class="subtle small-note">{{ $t("review.decide.reasonsHint") }}</p>
           </div>
           <div class="field">
             <label for="review-note">{{ $t("review.note.label") }}</label>
-            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" maxlength="2000" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy" @focus="noteFocused = true" @blur="noteFocused = false" />
+            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy" @focus="noteFocused = true" @blur="noteFocused = false" />
           </div>
           <p v-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
           <div class="verdict__acts">
@@ -919,6 +927,7 @@ onMounted(() => { void load(); });
 .reason:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .reason:disabled { opacity: 0.55; cursor: default; }
 .result__mine, .result__now { margin: 0; }
+.blocked-note { color: var(--warning-text); }
 .result__now { font-weight: 600; }
 .tags-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .tags-acts { display: flex; justify-content: flex-end; gap: var(--s-2); }

@@ -403,3 +403,21 @@ it('marks the count status so short and eligible look different, and writes conf
  expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
  settleConfirm(false);
 });
+
+it('a reason that would push the note past 2,000 characters is not added, and the page says why',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;
+ expect(note.maxLength).toBe(2000);
+ note.value='x'.repeat(1990);note.dispatchEvent(new Event('input'));
+ el.querySelector<HTMLButtonElement>('[data-reason="setting"]')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-note-full]')).toBeTruthy());
+ expect(note.value).toBe('x'.repeat(1990));
+ expect(el.querySelector('[data-note-full]')!.textContent).toBe(i18n.global.t('review.decide.noteFull',{max:'2,000'}));
+ // 刪掉一些再點：放得下就照常接上，說明也收起
+ note.value='x'.repeat(10);note.dispatchEvent(new Event('input'));
+ el.querySelector<HTMLButtonElement>('[data-reason="setting"]')!.click();
+ await vi.waitFor(()=>expect(note.value).toBe('x'.repeat(10)+'\n'+i18n.global.t('review.reason.setting.text')));
+ expect(el.querySelector('[data-note-full]')).toBeNull();
+});

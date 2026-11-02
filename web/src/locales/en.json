@@ -4345,5 +4345,6 @@
   "review.history.status.approved": "On the board",
   "review.history.status.rejected": "Rejected",
   "review.confirm.row": "{label}: {value}",
-  "review.queue.tab.pendingNoCount": "Pending"
+  "review.queue.tab.pendingNoCount": "Pending",
+  "review.decide.noteFull": "The note holds up to {max} characters and this reason won't fit. Shorten the note, then add it again."
 }
