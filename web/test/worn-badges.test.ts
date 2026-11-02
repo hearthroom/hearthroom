@@ -108,3 +108,13 @@ it("stays open when a click inside the popover blurs its link to nowhere", async
   await settle();
   expect(document.querySelector(".worn-detail")).not.toBeNull();
 });
+
+it("closes the desktop popover on Tab and puts focus back on its label", async () => {
+  await mount({ items: [badge("a")], featured: ["a"] });
+  const opener = el.querySelector<HTMLButtonElement>(".worn__row button")!;
+  opener.click(); await settle();
+  const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+  document.dispatchEvent(tab); await settle();
+  expect(document.querySelector(".worn-detail")).toBeNull();
+  expect(document.activeElement).toBe(opener);
+});

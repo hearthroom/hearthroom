@@ -110,7 +110,9 @@ function closeDetail() {
 const STOPS = "a[href], button:not(:disabled)";
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") return void closeDetail();
-  if (detail.value?.sheet) wrapTab(e, layer.value, STOPS);
+  if (detail.value?.sheet) return void wrapTab(e, layer.value, STOPS);
+  // 桌機浮層不是模態：Tab 就收起來，焦點回到點開它的標籤，再從那裡往下走
+  if (e.key === "Tab" && detail.value) { e.preventDefault(); closeDetail(); }
 }
 /** 桌機浮層不是模態：焦點離開它就收起來，不然它和擋點擊的那層會留在原地 */
 function onFocusOut(e: FocusEvent) {
