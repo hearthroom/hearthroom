@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "消费",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "尚未获得的榜单荣誉（{n}）",
-  "badgeWall.rank.hint": "榜单荣誉在同期发布的卡片都比完后颁发：日榜在当天结束 {dayHours} 小时后，周榜在该周结束 {weekDays} 天后，月榜在该月结束 {monthDays} 天后。同期发布的卡片不足 {minCards} 张时，只颁发第一名。",
+  "badgeWall.rank.hint": "榜单荣誉在同期发布的卡片都比满热度期后颁发，约在最后一张卡比满的次日。热度期是日榜 {dayHours} 小时、周榜 {weekDays} 天、月榜 {monthDays} 天。同期有热度的卡片不足 {minCards} 张时，只颁发第一名。",
   "badgeWall.spend.hint": "充值与使用积分都达标才会获得，退款后低于标准会收回。消费徽章设为展示后，才会出现在公开页。",
   "badgeWall.public.empty": "作者没有公开徽章",
   "badgeWall.public.back": "回到作者页",

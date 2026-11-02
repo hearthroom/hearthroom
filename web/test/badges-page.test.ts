@@ -64,8 +64,10 @@ it('folds board honors the member has not earned instead of listing all eighteen
  expect([...section.querySelectorAll(':scope > .badge-wall .badge-tile h3')].map(h=>h.textContent)).toEqual(['SFW Daily #1','Overall Daily #1']);
  expect(section.querySelector('details summary')?.textContent).toBe('Board honors not yet earned (2)');
  expect(section.querySelectorAll('details .badge-tile')).toHaveLength(2);
- expect(section.querySelector('.badge-section__hint')?.textContent).toContain('24 hours after the day ends');
- expect(section.querySelector('.badge-section__hint')?.textContent).toContain('7 days after the week ends');
+ // 說明句的四個數字都由程式帶入，沒有漏掉的佔位符
+ const hint=section.querySelector('.badge-section__hint')?.textContent??'';
+ for(const n of ['24','7','30','10'])expect(hint).toContain(n);
+ expect(hint).not.toMatch(/[{}]/);
 });
 it('treats an author without a member profile as having no public badges',async()=>{
  await open('/authors/ghost/badges',{items:[],featured:[]});
