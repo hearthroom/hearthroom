@@ -29,6 +29,8 @@ vi.mock("../src/lib/api", async (original) => ({
   fetchPlayerPersona: async () => ({ nickName: "月光", userName: "", userSex: "", userDefine: "" }),
   updateSiteSettings: async (patch: Record<string, unknown>) => { settingsCalls.push(patch); return { ...session.profile, ...patch }; },
 }));
+const confirmAnswer = vi.hoisted(() => ({ value: false, asked: 0 }));
+vi.mock("../src/lib/confirm", async (original) => ({ ...(await original<object>()), confirmDialog: async () => { confirmAnswer.asked++; return confirmAnswer.value; } }));
 vi.mock("../src/lib/community", async (original) => ({ ...(await original<object>()), communityRequest: async () => ({ recall: false }) }));
 
 import SettingsPage from "../src/pages/SettingsPage.vue";
@@ -38,6 +40,11 @@ import { gaPage } from "../src/lib/ga4-payload";
 import { siteLinksKey } from "../src/lib/site-links";
 import { petEnabled } from "../src/pet/enabled";
 import { useAppearance } from "../src/lib/appearance";
+
+/** jsdom 沒有版面：把設定頁的容器寬度假裝成桌機或手機 */
+function pretendWidth(px: number) {
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) { return this.classList.contains("settings") ? px : 0; });
+}
 
 let app: App | null = null;
 let el: HTMLElement | null = null;
@@ -62,7 +69,7 @@ async function mount(path: string, o: { routeLine?: boolean } = {}): Promise<{ e
   return { el, router };
 }
 beforeEach(() => { vi.stubGlobal("fetch", async () => new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } })); });
-afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; settingsCalls.length = 0; vi.unstubAllGlobals(); });
+afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; settingsCalls.length = 0; confirmAnswer.asked = 0; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const t = (k: string) => i18n.global.t(k);
 const at = (path: string, hash = "", params: Record<string, string> = {}, meta: Record<string, unknown> = { settings: true }) => ({ path, hash, query: {}, params, meta }) as never;
@@ -88,9 +95,14 @@ describe("網址", () => {
     expect(settingsRedirect(at("/wallet", "#hidden", {}, {}))).toBeNull();
   });
 
-  it("在設定裡換區不動捲動位置；離開設定照舊回頂端", () => {
+  it("桌機在設定裡換區不動捲動位置；手機進二級頁回頂端；離開設定照舊回頂端", () => {
+    const box = document.createElement("div"); box.className = "settings"; document.body.append(box);
+    pretendWidth(1200);
     expect(scrollFor(at("/settings/content", "", { section: "content" }), at("/settings/profile", "", { section: "profile" }), null)).toBe(false);
+    pretendWidth(390);
+    expect(scrollFor(at("/settings/content", "", { section: "content" }), at("/settings", "", {}), null)).toEqual({ top: 0 });
     expect(scrollFor(at("/wallet", "", {}, {}), at("/settings/profile", "", { section: "profile" }), null)).toEqual({ top: 0 });
+    box.remove();
   });
 
   it("桌寵導覽與 GA 頁面類型把子路徑當成同一頁", () => {
@@ -114,11 +126,38 @@ describe("第一層列表", () => {
     expect(el.querySelectorAll("[data-settings-nav] .panel")).toHaveLength(3);
   });
 
-  it("沒選區時桌機預設顯示個人資料，網址不改", async () => {
+  it("沒選區時桌機預設顯示個人資料、列表標出那一列，網址不改", async () => {
+    pretendWidth(1200);
     const { el, router } = await mount("/settings");
     expect(router.currentRoute.value.path).toBe("/settings");
     expect(el.querySelector("[data-settings-section]")?.getAttribute("data-settings-section")).toBe("profile");
+    expect(el.querySelector('[data-settings-nav] a[aria-current="page"]')?.getAttribute("href")).toBe("/settings/profile");
+    expect(el.querySelector(".settings__pane-title")?.tagName).toBe("H2");
     expect(el.querySelector(".settings")?.classList.contains("settings--root")).toBe(true);
+  });
+
+  it("手機的列表頁不掛載任何區（不替看不到的面板發請求）", async () => {
+    pretendWidth(390);
+    const { el } = await mount("/settings");
+    expect(el.querySelector("[data-settings-section]")).toBeNull();
+    expect(el.querySelector("#leaderboard-privacy")).toBeNull();
+  });
+
+  it("從列表點進來，返回鈕退回上一頁", async () => {
+    const { el, router } = await mount("/settings");
+    await router.push("/settings/help");
+    await flush();
+    const back = vi.spyOn(router, "back");
+    el.querySelector<HTMLButtonElement>(".settings__back")!.click();
+    expect(back).toHaveBeenCalled();
+  });
+
+  it("同一區的網址變了（換語言、帶 #）標題照樣寫回來：站台守衛每次導航都會先重設標題", async () => {
+    const { router } = await mount("/settings/appearance");
+    document.title = "";
+    await router.push("/settings/appearance#x");
+    await flush();
+    expect(document.title).toContain(i18n.global.t("settings.section.appearance"));
   });
 
   it("選了區：列表標出目前那列，二級頁有回到列表的返回鈕", async () => {
@@ -149,6 +188,21 @@ describe("各區的設定都還在", () => {
     const { el } = await mount("/settings/play");
     expect(el.querySelector("#persona-name")).not.toBeNull();
     expect(el.querySelector('button[type="submit"]')?.textContent).toContain(t("settings.save"));
+  });
+
+  it("遊玩：人設改了沒存就換區，先問一聲；選留下就留在原區", async () => {
+    pretendWidth(1200);
+    const { el, router } = await mount("/settings/play");
+    const name = el.querySelector<HTMLInputElement>("#persona-name")!;
+    name.value = "小月"; name.dispatchEvent(new Event("input"));
+    await nextTick();
+    confirmAnswer.value = false;
+    await router.push("/settings/content");
+    expect(confirmAnswer.asked).toBe(1);
+    expect(router.currentRoute.value.path).toBe("/settings/play");
+    confirmAnswer.value = true;
+    await router.push("/settings/content");
+    expect(router.currentRoute.value.path).toBe("/settings/content");
   });
 
   it("內容：成人內容開關與不想看的類型，點類型會存", async () => {
@@ -182,7 +236,7 @@ describe("各區的設定都還在", () => {
   it("連結與授權：Discord 社群與登入授權", async () => {
     const { el } = await mount("/settings/links");
     expect(el.querySelector('a[href="/me/community"]')).not.toBeNull();
-    expect(el.querySelector(".accounts, [data-connected-accounts]") ?? el.textContent?.includes("HarperHarbor")).toBeTruthy();
+    expect(el.querySelector("#account")?.textContent).toContain("HarperHarbor");
   });
 
   it("疑難排解：叫她出來會把關掉的蘇綺開回來；有線路時顯示目前線路", async () => {

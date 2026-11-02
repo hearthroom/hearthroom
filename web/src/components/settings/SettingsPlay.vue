@@ -9,6 +9,8 @@
  */
 import { onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from "vue-router";
+import { confirmDialog } from "@/lib/confirm";
 import { ApiError, fetchPlayerPersona, savePlayerPersona, type PlayerPersona } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -76,6 +78,18 @@ async function save() {
 }
 
 onMounted(() => { void load(); });
+
+/**
+ * 桌機在設定裡點另一區、或離開設定時，人設改了還沒存就先問一聲。
+ * 改版前整頁只有一個表單、頁內不能換區；拆成各區之後換區會把這個表單收掉，草稿不能悄悄丟掉。
+ */
+const dirty = () => (["userName", "userSex", "userDefine"] as const).some((k) => (draft[k] || "") !== (snapshot[k] || ""));
+async function keepDraft(): Promise<boolean> {
+  if (loading.value || !dirty()) return true;
+  return confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), focusCancel: true });
+}
+onBeforeRouteUpdate((to, from) => (to.path === from.path ? true : keepDraft()));
+onBeforeRouteLeave(() => keepDraft());
 </script>
 
 <template>

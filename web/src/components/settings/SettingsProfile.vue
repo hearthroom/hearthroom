@@ -52,7 +52,7 @@ async function setStats(on: boolean, input: HTMLInputElement) {
   </section>
 
   <section id="leaderboard-privacy" class="panel set-card">
-    <h3 class="eyebrow set-card__head">{{ $t("spendBoard.privacySettings") }}</h3>
+    <p class="eyebrow set-card__head">{{ $t("spendBoard.privacySettings") }}</p>
     <LeaderboardPrivacy />
   </section>
 </template>
