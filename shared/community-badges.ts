@@ -6,6 +6,6 @@ export const BADGE_CATEGORIES = ['rank','creation','invite','member','play','soc
 export const FEATURED_LIMIT = 5;
 export interface BadgeDefinition { key:string; icon:BadgeIcon; category:string; titles:Record<string,string>; descriptions:Record<string,string> }
 export interface BadgeProgress { value:number; target:number; unit?:'xp'|'days' }
-export interface CollectedBadge extends BadgeDefinition { state:'earned'|'locked'|'revoked'|'expired'; earnedAt:number|null; expiresAt:number|null; progress?:BadgeProgress; count?:number; firstAt?:number|null; lastAt?:number|null }
+export interface CollectedBadge extends BadgeDefinition { state:'earned'|'locked'|'revoked'|'expired'; earnedAt:number|null; expiresAt:number|null; progress?:BadgeProgress; count?:number; firstAt?:number|null; lastAt?:number|null; lastPeriod?:string }
 export interface BadgeCollection { items:CollectedBadge[]; featured:string[]; public?:boolean }
 export function badgeText(values:Record<string,string>,locale:string):string { return values[locale] || values.en || values['zh-Hant'] || Object.values(values)[0] || ''; }

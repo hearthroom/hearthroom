@@ -14,6 +14,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
+  await env.DB.batch(['badge_qualification_refresh','badge_qualifications','rank_window_scores','rank_attempts','rank_awards','rank_settlements','rank_publications'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
   await env.DB.prepare('DELETE FROM leaderboard_privacy_operations').run();
   await env.DB.prepare('DELETE FROM leaderboard_privacy').run();
   frozenFixtureRoles.clear();hostedFixture();

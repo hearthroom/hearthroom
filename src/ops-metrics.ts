@@ -6,6 +6,8 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  badge_stats:{name:'hearthroom_badge_stats_total',help:'Private badge qualification refresh outcomes.',label:'operation',operations:['refresh'],outcomes:['success','pending','error']},
+  rank_settlement:{name:'hearthroom_rank_settlements_total',help:'Durable rank cohort settlement and award payment outcomes.',label:'operation',operations:['day','week','month','payout','run'],outcomes:['success','pending','error']},
   card_reward_publication:{name:'hearthroom_card_reward_publication_checks_total',help:'Fresh legacy community publication checks for retained reward payments.',label:'operation',operations:['admission'],outcomes:['allow','denied','unavailable']},
   card_reward_auto: {name:"hearthroom_card_reward_auto_total",help:"Automatic service payment attempts after approval and scheduled retry.",label:"operation",operations:["approval","retry"],outcomes:["paid","pending","unavailable"]},
   spend_leaderboard:{name:'hearthroom_spend_leaderboard_total',help:'Card spend ranking reads and atomic privacy saves.',label:'operation',operations:['read','save'],outcomes:['success','conflict','error']},
