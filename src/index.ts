@@ -106,6 +106,7 @@ import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
 import { cardRewardRoutes, rewardOnApproval } from "./card-reward-routes";
+import {CARD_REWARD_PUBLICATION_PATH,cardRewardPublicationRoutes} from './card-reward-publication';
 import { campaignMaintenance } from "./campaign-evidence";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
@@ -231,6 +232,7 @@ app.use("*", async (c, next) => {
 
 app.route('/',reviewPlayAccessRoutes());
 app.route('/',enforcementNoticeRoutes());
+app.route('/',cardRewardPublicationRoutes);
 app.route("/", moderationRoutes);
 app.route("/", commentModerationRoutes);
 app.use('/v1/*',async(c,next)=>{
@@ -2272,7 +2274,7 @@ export default {
     });
     // The maintenance controller opens its own fail-closed primary session.
     // A generic request session has no withSession API and must not replace its binding.
-    if (new URL(request.url).pathname === "/internal/community/draft-transfer-gate") {
+    if (path === "/internal/community/draft-transfer-gate" || path === CARD_REWARD_PUBLICATION_PATH) {
       return app.fetch(request, env, ctx);
     }
     const d1 = withD1Session(request, env);

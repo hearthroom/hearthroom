@@ -96,7 +96,9 @@ const LIVE = "('pending', 'blocked_insufficient', 'paid')";
  */
 export const REWARD_ELIGIBLE = `SELECT x.card_id, x.source_role_id,x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward,k.public_days
   FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted FROM (${CARD_BASE}
-    AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
+    AND c.status = 'approved' AND c.board_hidden = 0 AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
+    AND NOT EXISTS(SELECT 1 FROM managed_work_access policy WHERE policy.provider=c.provider AND policy.source_role_id=c.source_role_id
+      AND (policy.access<>'public' OR policy.restriction<>'none' OR policy.sync_state<>'complete' OR policy.moderation_revision<>policy.confirmed_moderation_revision))
     AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
   JOIN card_reward_campaigns k ON k.status = 'active' AND k.starts_at <= x.listed_at AND k.ends_at > x.listed_submitted AND (k.payout_deadline IS NULL OR k.payout_deadline > ?1)
   WHERE x.member_id IS NOT NULL`;

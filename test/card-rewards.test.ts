@@ -515,3 +515,84 @@ it('does not reissue a pending unknown payment after a moderation block', async 
   expect(sends).toBe(0);
   expect((await rewards())[0].status).toBe('pending');
 });
+
+describe('legacy publication authority for retained rewards',()=>{
+ const secret='legacy-publication-fixture-key';
+ const clientId='legacy-card-reward-client';
+ const config=()=>({...env,HOSTING_SERVICE_KEY:secret,HARBOR_CARD_REWARDS_CLIENT_ID:clientId});
+ const confirm=(body:unknown,token=secret,options=config())=>worker.fetch(new Request('https://c.test/internal/community/card-reward-publication',{
+  method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),
+ }),options,createExecutionContext());
+ async function pending(){
+  upstream.payCampaign=async()=>({kind:'unknown'});
+  await submit('r1');const approved=await approve('r1','mod-token');
+  return {reward:approved.reward,body:{clientId,key:approved.reward.id,sourceRoleId:'r1',accountNo:AUTHOR,amount:10000,publicDays:30,campaignRef:campaignId,contentRef:'harbor:r1'}};
+ }
+ it('confirms only the current approved legacy snapshot for the exact persisted grant',async()=>{
+  const {body}=await pending();
+  const expected=await env.DB.prepare('SELECT approved_hosted_role_id FROM cards WHERE source_role_id=?').bind('r1').first<{approved_hosted_role_id:string}>();
+  const response=await confirm(body);expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({approvedRoleId:expected!.approved_hosted_role_id});
+  expect(response.headers.get('Cache-Control')).toContain('no-store');
+  expect((await rewards())[0].status).toBe('pending');
+ });
+ it.each(['clientId','key','sourceRoleId','accountNo','amount','publicDays','campaignRef','contentRef'] as const)('rejects a mismatched %s without revealing a snapshot',async field=>{
+  const {body}=await pending();const response=await confirm({...body,[field]:typeof body[field]==='number'?Number(body[field])+1:'different'});
+  expect(response.status).toBe(404);expect(await response.json()).toEqual({error:'card_reward_publication_not_found'});
+ });
+ it('denies ordinary credentials and missing service configuration',async()=>{
+  const {body}=await pending();expect((await confirm(body,'ordinary')).status).toBe(403);
+  expect((await confirm(body,secret,{...config(),HOSTING_SERVICE_KEY:''})).status).toBe(503);
+ });
+ it('fails closed when the dedicated payment client is unconfigured',async()=>{
+  const {body}=await pending();
+  expect((await confirm(body,secret,{...config(),HARBOR_CARD_REWARDS_CLIENT_ID:''})).status).toBe(503);
+ });
+ it('fails closed when the primary D1 session cannot be opened',async()=>{
+  const {body}=await pending();const DB={...env.DB,prepare:env.DB.prepare.bind(env.DB),withSession(){throw new Error('primary unavailable');}} as unknown as D1Database;
+  expect((await confirm(body,secret,{...config(),DB})).status).toBe(503);
+ });
+ it('records bounded allow, denial and unavailable counters through metrics',async()=>{
+  const {body}=await pending();
+  expect((await confirm(body)).status).toBe(200);
+  expect((await confirm(body,'ordinary')).status).toBe(403);
+  expect((await confirm(body,secret,{...config(),HOSTING_SERVICE_KEY:''})).status).toBe(503);
+  const metrics=await(await get('/metrics')).text();
+  for(const outcome of ['allow','denied','unavailable'])expect(metrics).toContain(`hearthroom_card_reward_publication_checks_total{operation="admission",outcome="${outcome}"} 1`);
+ });
+ it.each(['failed','paid','cancelled'] as const)('does not issue fresh publication authority for a %s grant',async status=>{
+  const {body}=await pending();await env.DB.prepare('UPDATE card_rewards SET status=? WHERE id=?').bind(status,body.key).run();
+  expect((await confirm(body)).status).toBe(404);
+ });
+ it('confirms a pool-blocked persisted grant and keeps its promised amount after campaign settings change',async()=>{
+  const {body}=await pending();
+  await env.DB.prepare("UPDATE card_rewards SET status='blocked_insufficient'").run();
+  await env.DB.prepare('UPDATE card_reward_campaigns SET reward=5000,public_days=20').run();
+  expect((await confirm(body)).status).toBe(200);
+ });
+ it('preserves managed public retry while denying the legacy-only publication fallback',async()=>{
+  const {body,reward}=await pending();const work=await env.DB.prepare("SELECT id FROM works WHERE source_role_id='r1'").first<{id:string}>();
+  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,sync_state) VALUES(?,'harbor','r1','public',1,'none','complete')").bind(work!.id).run();
+  expect((await confirm(body)).status).toBe(404);
+  expect(await cardRewardBacklog(env.DB,reward.updatedAt+3_600_000)).toEqual({total:1,overdue:1});
+  providerPool(1_000_000);await cardRewardMaintenance(env,reward.updatedAt+3_600_000);
+  expect(pool.sent).toHaveLength(1);expect(pool.sent[0].key).toBe(reward.id);expect((await rewards())[0].status).toBe('paid');
+ });
+ it.each(['hidden','blocked','private','unlisted','changing','restricted','moderation'] as const)('holds %s grants out of callback, retry and overdue gauges while preserving the key',async reason=>{
+  const {body,reward}=await pending();
+  if(reason==='hidden')await env.DB.prepare('UPDATE cards SET board_hidden=1').run();
+  if(reason==='blocked')await env.DB.prepare('UPDATE cards SET public_blocked=1').run();
+  if(!['hidden','blocked'].includes(reason)){
+   const work=await env.DB.prepare("SELECT id FROM works WHERE source_role_id='r1'").first<{id:string}>();
+   await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,sync_state,moderation_revision,confirmed_moderation_revision) VALUES(?,'harbor','r1',?,1,?,?,?,0)")
+    .bind(work!.id,['private','unlisted'].includes(reason)?reason:'public',reason==='restricted'?'delisted':'none',reason==='changing'?'changing':'complete',reason==='moderation'?1:0).run();
+   if(['private','unlisted'].includes(reason))await env.DB.prepare("UPDATE cards SET status='unshared'").run();
+  }
+  const now=reward.updatedAt+3_600_000;expect(await cardRewardBacklog(env.DB,now)).toEqual({total:0,overdue:0});
+  const response=await confirm(body);expect(response.status).toBe(404);
+  let sends=0;upstream.payCampaign=async()=>{sends++;return {kind:'unknown'};};
+  await cardRewardMaintenance(env,now);expect(sends).toBe(0);
+  expect(await env.DB.prepare('SELECT id,status,attempts FROM card_rewards').first()).toEqual({id:reward.id,status:'pending',attempts:1});
+  const metrics=await(await get('/metrics')).text();expect(metrics).toContain('hearthroom_card_reward_due_cards 0');expect(metrics).toContain('hearthroom_card_reward_due_overdue_cards 0');
+ });
+});
