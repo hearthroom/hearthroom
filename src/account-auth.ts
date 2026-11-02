@@ -141,7 +141,7 @@ export async function metric(env:Env,operation:string,provider:string,outcome:st
  * 分開問是三趟往返（每趟約 40 ms），而開頁的每支讀取都要先過這一關。
  * 只給讀取用（GET/HEAD）：寫入一律驗 Bearer，cookie 不開跨站寫入的路。
  */
-export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;memberId:string;showNsfw:number|null;ageVerifiedAt:number|null;adultConsentVersion:number|null;accountClass?:'test';testGeneration?:number}|null>{
+export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;memberId:string;countryRegion:string|null;showNsfw:number|null;ageVerifiedAt:number|null;adultConsentVersion:number|null;accountClass?:'test';testGeneration?:number}|null>{
   try{
     if(c.req.method!=='GET'&&c.req.method!=='HEAD')return null;
     if(c.env.AUTH_ENABLED!=='true')return null;
@@ -150,14 +150,14 @@ export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>strin
     const raw=(c.req.header('Cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION+'='))?.slice(SESSION.length+1);
     if(!raw)return null;
     // 歸屬的判斷跟 connectedMemberId 一樣：連結覆寫優先，沒有才用原始身分
-    const row=await c.env.DB.prepare(`SELECT s.token_hash,s.external_id,s.member_id,m.show_nsfw,m.age_verified_at,m.adult_consent_version,m.account_class,m.test_generation
+    const row=await c.env.DB.prepare(`SELECT s.token_hash,s.external_id,s.member_id,m.country_region,m.show_nsfw,m.age_verified_at,m.adult_consent_version,m.account_class,m.test_generation
       FROM account_sessions s LEFT JOIN members m ON m.id=s.member_id
       WHERE s.token_hash=? AND s.origin=? AND s.expires_at>? AND s.created_at>? AND s.provider=?
         AND s.member_id=COALESCE(
           (SELECT owner_member_id FROM member_connections WHERE provider=s.provider AND external_id=s.external_id),
           (SELECT member_id FROM member_identities WHERE provider=s.provider AND external_id=s.external_id))`)
       .bind(await hash(raw),origin,Date.now(),Date.now()-SESSION_MAX,provider)
-      .first<{token_hash:string;external_id:string;member_id:string;show_nsfw:number|null;age_verified_at:number|null;adult_consent_version:number|null;account_class:string;test_generation:number}>();
+      .first<{token_hash:string;external_id:string;member_id:string;country_region:string|null;show_nsfw:number|null;age_verified_at:number|null;adult_consent_version:number|null;account_class:string;test_generation:number}>();
     if(!row)return null;
     if(row.account_class==='test'){
       const proof=await c.env.DB.prepare('SELECT 1 FROM qa_session_generation WHERE token_hash=? AND test_generation=?').bind(row.token_hash,row.test_generation).first();
@@ -165,7 +165,7 @@ export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>strin
       await validateTestSession(c.env,provider,Number(row.external_id),row.member_id,row.test_generation);
       c.env=excludeQABrowser(c.env);
     }else if(isQABrowser(c.env))return null;
-    return {accountNumId:Number(row.external_id),memberId:row.member_id,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version,...(row.account_class==='test'?{accountClass:'test' as const,testGeneration:row.test_generation}:{})};
+    return {accountNumId:Number(row.external_id),memberId:row.member_id,countryRegion:row.country_region,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version,...(row.account_class==='test'?{accountClass:'test' as const,testGeneration:row.test_generation}:{})};
   }catch{return null;}
 }
 /**

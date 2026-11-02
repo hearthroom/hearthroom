@@ -1,3 +1,4 @@
+import {initializeCountryRegion} from './country-region';
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } from "./providers";
 import { tagNamesFor } from "../shared/tag-catalog";
@@ -43,7 +44,7 @@ export function newHandle(): string {
  * 兩個請求同時第一次登入：身分表的主鍵擋住第二個，重讀就拿到第一個建的。
  * handle 撞到唯一索引（機率極低）也會落到同一個 catch，所以重讀不到才換一個 handle 再試。
  */
-type ResolvedMember = { id: string; handle: string; display_name: string | null;account_class:string;test_generation:number;test_state?:string };
+type ResolvedMember = { country_region?:string|null; id: string; handle: string; display_name: string | null;account_class:string;test_generation:number;test_state?:string };
 
 async function resolveMemberRecord(db: D1Database, provider: ProviderId, externalId: number, now: number, classification?:ProviderIdentity): Promise<ResolvedMember> {
   if(provider==='harbor'&&externalId===279&&await db.prepare('SELECT 1 FROM legacy_account_fence WHERE public_no=279').first())throw new HttpError(403,'account_retired');
@@ -55,7 +56,7 @@ async function resolveMemberRecord(db: D1Database, provider: ProviderId, externa
   const ext = String(externalId);
   // Connections override the original identity, including during a concurrent first login.
   const lookup = () => db.prepare(`
-    SELECT id, handle, display_name,account_class,test_generation,test_state FROM members WHERE id = COALESCE(
+    SELECT id, handle, display_name,account_class,test_generation,test_state,country_region FROM members WHERE id = COALESCE(
       (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
       (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
     )`).bind(provider, ext, provider, ext).first<ResolvedMember>();
@@ -121,6 +122,7 @@ export async function memberByHandle(db: D1Database, handle: string): Promise<st
 }
 
 export interface MemberProfile {
+  countryRegion: string;
   displayName: string;
   avatarUrl: string;
   bio: string;
@@ -169,23 +171,24 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; show_stats: number; followers: number; following: number };
+  type ProfileRow = { country_region:string|null; handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; show_stats: number; followers: number; following: number };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
-    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links, cover, show_stats, (SELECT COUNT(*) FROM member_follows WHERE author_id = members.id) AS followers, (SELECT COUNT(*) FROM member_follows WHERE member_id = members.id) AS following FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT country_region, handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links, cover, show_stats, (SELECT COUNT(*) FROM member_follows WHERE author_id = members.id) AS followers, (SELECT COUNT(*) FROM member_follows WHERE member_id = members.id) AS following FROM members WHERE id = ?").bind(memberId),
     db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
     db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
   ]);
   const m = members.results[0] as ProfileRow | undefined;
   if (!m) return null;
   return {
+    countryRegion: m.country_region ?? 'OTHER',
     handle: m.handle,
     displayName: m.display_name ?? m.handle,
     avatarUrl: m.avatar_url,
     bio: m.bio,
     memberSince: m.created_at,
     identities: (ids.results as IdentityRow[]).filter(r=>r.provider==='harbor').map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: (founding.results as { provider: string }[]).some(i=>i.provider===r.provider) })),
-    showNsfw: m.show_nsfw === 1 && m.adult_consent_version === ADULT_CONSENT_VERSION,
+    showNsfw: m.country_region !== 'CN' && m.show_nsfw === 1 && m.adult_consent_version === ADULT_CONSENT_VERSION,
     ageVerified: m.age_verified_at !== null,
     adultConsent: m.adult_consent_version === ADULT_CONSENT_VERSION,
     hiddenTags: parseHiddenTags(m.hidden_tags),
@@ -214,13 +217,13 @@ export async function updateMemberHiddenTags(db: D1Database, memberId: string, i
  * 成人內容相關的設定：開關、年齡驗證時間、有沒有同意目前這一版聲明。
  * showNsfw 已經把聲明算進去：開關開著但同意的是舊版（或沒同意過），一律當沒開。
  */
-export async function memberNsfw(db: D1Database, memberId: string): Promise<{ showNsfw: boolean; ageVerifiedAt: number | null; adultConsent: boolean }> {
+export async function memberNsfw(db: D1Database, memberId: string): Promise<{ countryRegion:string|null; showNsfw: boolean; ageVerifiedAt: number | null; adultConsent: boolean }> {
   const m = await db
-    .prepare("SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = ?")
+    .prepare("SELECT country_region, show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = ?")
     .bind(memberId)
-    .first<{ show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
+    .first<{ country_region:string|null; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
   const adultConsent = m?.adult_consent_version === ADULT_CONSENT_VERSION;
-  return { showNsfw: m?.show_nsfw === 1 && adultConsent, ageVerifiedAt: m?.age_verified_at ?? null, adultConsent };
+  return { countryRegion:m?.country_region ?? null, showNsfw: m?.country_region !== 'CN' && m?.show_nsfw === 1 && adultConsent, ageVerifiedAt: m?.age_verified_at ?? null, adultConsent };
 }
 
 /**
@@ -228,8 +231,8 @@ export async function memberNsfw(db: D1Database, memberId: string): Promise<{ sh
  * 開關只管以後發現新卡（榜單、搜尋、關注動態）；關掉不該把已經聊過、收藏過的東西變成「未命名」
  * （owner 2026-09-30）。聲明改版後沒重新同意的人，跟從沒開過一樣看不到。
  */
-export function libraryAllowsNsfw(access: { ageVerifiedAt: number | null; adultConsent: boolean }): boolean {
-  return access.ageVerifiedAt !== null && access.adultConsent;
+export function libraryAllowsNsfw(access: { countryRegion?:string|null; ageVerifiedAt: number | null; adultConsent: boolean }): boolean {
+  return access.countryRegion !== 'CN' && access.ageVerifiedAt !== null && access.adultConsent;
 }
 
 const BIRTHDATE_RE =/^(\d{4})-(\d{2})-(\d{2})$/;
@@ -291,6 +294,7 @@ export async function updateMemberNsfw(
     await db.prepare("UPDATE members SET show_nsfw = 0 WHERE id = ?").bind(memberId).run();
     return { showNsfw: false, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
+  if(current.countryRegion==='CN')throw new HttpError(403,'region_unavailable');
   const verifiedAt = confirmAdult({ ageVerifiedAt: current.ageVerifiedAt, adultConsent: current.adultConsent }, input, now);
   if (!current.adultConsent) {
     await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ?, adult_consent_version = ?, adult_consented_at = ? WHERE id = ?")
@@ -326,7 +330,7 @@ export async function viewerAllowsNsfw(
     if (!bearer) {
       // 本站 session：讀者與他的設定一次查完。登入的人照帳號設定，不看遊客憑證。
       const reader = await siteSessionReader(c, provider);
-      if (reader) return reader.showNsfw === 1 && reader.ageVerifiedAt !== null && reader.adultConsentVersion === ADULT_CONSENT_VERSION;
+      if (reader) return reader.countryRegion !== 'CN' && reader.showNsfw === 1 && reader.ageVerifiedAt !== null && reader.adultConsentVersion === ADULT_CONSENT_VERSION;
       // 沒登入：看遊客自己確認過的成年憑證（加密 cookie，不查資料庫）
       return guestAllowsNsfw(await guestAdult(c));
     }
@@ -334,12 +338,12 @@ export async function viewerAllowsNsfw(
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
     // a member who has never signed in cannot already have opted into adult content.
     const member = await c.env.DB.prepare(`
-      SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = COALESCE(
+      SELECT country_region, show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = COALESCE(
         (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
         (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
       )`).bind(provider, String(me.accountNumId), provider, String(me.accountNumId))
-      .first<{ show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
-    return member?.show_nsfw === 1 && member.age_verified_at !== null && member.adult_consent_version === ADULT_CONSENT_VERSION;
+      .first<{ country_region:string|null; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
+    return member?.country_region !== 'CN' && member?.show_nsfw === 1 && member.age_verified_at !== null && member.adult_consent_version === ADULT_CONSENT_VERSION;
   } catch {
     return false;
   }
@@ -364,7 +368,7 @@ export async function externalIdOf(db: D1Database, memberId: string, provider: P
   return profile?.identities.find(i=>i.provider===provider)?.externalId ?? null;
 }
 
-type Ctx = { env: Env; req: { header: (k: string) => string | undefined; url?: string; method?: string } };
+type Ctx = { env: Env; req: { header: (k: string) => string | undefined; url?: string; method?: string; raw?:Request } };
 type Identity = Awaited<ReturnType<typeof upstream.fetchMe>>;
 
 // The context is unique to a request. Even rejected authentication is shared only here.
@@ -410,6 +414,7 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
    if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score)|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
   }
   const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now(),me);
+  if(member.country_region == null)await initializeCountryRegion(c.env.DB,member.id,String(c.req.raw?.cf?.country || c.req.header('CF-IPCountry') || ''),c.req.header('language') || c.req.header('Accept-Language')?.split(',')[0] || 'zh');
   // 由本站 session 認出來的沒有供應商暱稱；顯示名稱留給下一個走供應商驗證的請求補上。
   if (member.display_name === null && !sessionIdentities.has(me)) {
     // Keep the SQL guard: another request or the member may initialize it after our read.
@@ -458,4 +463,27 @@ export async function isReviewAgent(db: D1Database, memberId: string): Promise<b
 export async function updateMemberShowStats(db: D1Database, memberId: string, on: boolean): Promise<boolean> {
   await db.prepare("UPDATE members SET show_stats = ? WHERE id = ?").bind(on ? 1 : 0, memberId).run();
   return on;
+}
+
+/** Fresh persisted policy; never infer the chosen region from the request IP. */
+export async function viewerCountryRegion(c:Ctx):Promise<string|null>{
+ const provider=providerOf(c);
+ const bearer=c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1];
+ if(!bearer){
+  if(!c.req.url||!c.req.method)return null;
+  return (await siteSessionReader(c as Ctx&{req:{url:string;method:string}},provider))?.countryRegion??null;
+ }
+ const me=await requestIdentity(c,bearer,provider).catch(error=>{
+  if(error instanceof HttpError&&error.status===401)return null;
+  throw error;
+ });
+ if(!me)return null;
+ const row=await c.env.DB.prepare(`SELECT country_region FROM members WHERE id=COALESCE(
+  (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
+  (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?))`)
+  .bind(provider,String(me.accountNumId),provider,String(me.accountNumId)).first<{country_region:string|null}>();
+ return row?.country_region??null;
+}
+export async function assertRegionCard(c:Ctx,row:{rating?:string|null}):Promise<void>{
+ if(row.rating==='R'&&await viewerCountryRegion(c)==='CN')throw new HttpError(403,'region_unavailable');
 }

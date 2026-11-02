@@ -7,7 +7,7 @@ import {privatePlayerCard} from './private-player';
 import {registerLegacyShare} from './work-share-registration';
 import {bearerOf} from './staff';
 import {currentCardAccess} from './work-read';
-import {requireMember,viewerAllowsNsfw,providerOf,type Member} from './members';
+import {requireMember,viewerAllowsNsfw,providerOf,assertRegionCard,type Member} from './members';
 import {type Env,HttpError} from './types';
 import {apiBaseOf} from './providers';
 import {hostingKey} from './hosting';
@@ -39,11 +39,13 @@ async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
   if(!row){
    const own=await readOwnCardView(c.env,source,null,'en',bearerOf(c),providerOf(c));
    if(!own||own.provider!=='harbor')throw new HttpError(404,'card not found');
+   await assertRegionCard(c,own);
    return {id:own.id,provider:'harbor',source_role_id:source,author_num_id:own.author.accountNumId,rankRoleId:own.roleId};
   }
  }
  if(row){
   if(row.provider!=='harbor'||row.public_blocked)throw new HttpError(404,'card not found');
+  await assertRegionCard(c,row);
   const access=await currentCardAccess(c.env,row,'aggregate');
   if(access.reachable){
    if((row.rating==='R'||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
@@ -67,6 +69,7 @@ async function visibleCard(c:Ctx,id:string):Promise<RankCard>{
  }
  const preview=await linkPreview(c.env,id,link,'en')??await readOwnCardView(c.env,source,null,'en',bearerOf(c),providerOf(c));
  if(!preview||preview.provider!=='harbor')throw new HttpError(404,'card not found');
+ await assertRegionCard(c,preview);
  return {id:preview.id,provider:'harbor',source_role_id:source,author_num_id:preview.author.accountNumId,rankRoleId:preview.roleId};
 }
 

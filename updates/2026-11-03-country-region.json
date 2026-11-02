@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/settings",
+  "draft": true,
+  "title": {
+    "zh-Hant": "個人設定新增國家／地區選項。",
+    "zh-Hans": "个人设置新增国家／地区选项。",
+    "en": "Settings now include a country/region option.",
+    "ja": "設定に国・地域の選択を追加しました。",
+    "ko": "설정에 국가/지역 선택이 추가되었습니다."
+  }
+}

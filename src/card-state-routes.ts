@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { auditStmt } from "./audit";
 import { add, hasPlayed, leaderboard, readState, resetStmts, resolveCardState, vote, SHARED_KEY_RE, type CardState } from "./card-state";
-import { providerOf, requireMember, saveMemberId, type Member } from "./members";
+import { providerOf, requireMember, saveMemberId, assertRegionCard, type Member } from "./members";
 import { mintToken, ownerResults, tokenFor } from "./card-share-tokens";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, type Env } from "./types";
@@ -32,7 +32,9 @@ async function optionalMember(c: Ctx): Promise<Member | null> {
 }
 
 async function stateFor(c: Ctx, member: Member | null): Promise<CardState> {
-  return resolveCardState(c.env, c.req.param("roleId")!, { provider: providerOf(c), member, bearer: bearerOf(c), draft: c.req.query("draft") === "1" });
+  const state = await resolveCardState(c.env, c.req.param("roleId")!, { provider: providerOf(c), member, bearer: bearerOf(c), draft: c.req.query("draft") === "1" });
+  await assertRegionCard(c, state.card);
+  return state;
 }
 
 async function limited(binding: RateLimit | undefined, key: string): Promise<boolean> {

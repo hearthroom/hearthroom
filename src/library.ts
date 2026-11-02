@@ -8,7 +8,7 @@ import { Hono } from "hono";
 import { getCard,cardsByIds,listCards, toCard, type CardRow } from "./cards";
 import {currentCardAccess,currentCardsAccess,filterPublicRows,unlistedCardRow} from './work-read';
 import { upstream } from "./upstream";
-import { libraryAllowsNsfw, memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
+import { assertRegionCard, libraryAllowsNsfw, memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { HttpError, pickLocale, type Env, type Localized } from "./types";
 
@@ -42,6 +42,20 @@ libraryRoutes.get('/metrics', async c => {
 });
 const kinds = ["favorites", "following"] as const;
 const offsetOf = (raw?: string) => Math.min(100000, Math.max(0, Math.floor(Number(raw) || 0)));
+
+/** Current card rating and exact historical snapshot rating are independent fences. */
+async function knownRegionAdultRole(db:D1Database,roleId:string):Promise<boolean>{
+  return !!await db.prepare(`WITH target_work(work_id) AS (
+    SELECT id FROM works WHERE source_provider='harbor' AND source_role_id=?
+    UNION SELECT work_id FROM work_copies WHERE provider='harbor' AND role_id=?
+    UNION SELECT work_id FROM hosting_versions WHERE provider='harbor' AND hosted_revision_id=?
+    UNION SELECT v.work_id FROM hosting_replicas r JOIN hosting_versions v ON v.version_id=r.version_id WHERE r.provider='harbor' AND r.hosted_revision_id=?
+  ) SELECT 1 FROM cards c WHERE c.provider='harbor' AND c.rating='R' AND (
+    c.source_role_id=? OR c.approved_hosted_role_id=? OR EXISTS(SELECT 1 FROM works w WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id AND w.id IN (SELECT work_id FROM target_work)))
+    UNION SELECT 1 FROM hosting_versions WHERE provider='harbor' AND hosted_revision_id=? AND rating='R'
+    UNION SELECT 1 FROM hosting_replicas r JOIN hosting_versions v ON v.version_id=r.version_id WHERE r.provider='harbor' AND r.hosted_revision_id=? AND v.rating='R' LIMIT 1`)
+    .bind(roleId,roleId,roleId,roleId,roleId,roleId,roleId,roleId).first();
+}
 
 for (const kind of kinds) {
   const table = kind === "favorites" ? "member_favorites" : "member_follows";
@@ -81,7 +95,7 @@ for (const kind of ["favorites", "feed"] as const) {
     const offset = offsetOf(c.req.query("offset"));
     const limit = 24;
     if(kind==='favorites'){
-      const favorites=await c.env.DB.prepare('SELECT c.* FROM member_favorites f JOIN cards c ON c.id=f.card_id WHERE f.member_id=? ORDER BY f.created_at DESC,f.card_id DESC LIMIT 25 OFFSET ?').bind(member.id,offset).all<CardRow>();
+      const favorites=await c.env.DB.prepare("SELECT c.* FROM member_favorites f JOIN cards c ON c.id=f.card_id WHERE f.member_id=? AND (?=0 OR c.rating IS NOT 'R') ORDER BY f.created_at DESC,f.card_id DESC LIMIT 25 OFFSET ?").bind(member.id,access.countryRegion==='CN'?1:0,offset).all<CardRow>();
       const displayRows=await cardsByIds(c.env.DB,favorites.results.slice(0,limit).map(r=>String(r.id)));
       const displayMap=new Map(displayRows.map(r=>[String(r.id),r]));
       const rows=favorites.results.slice(0,limit).map(r=>displayMap.get(String(r.id))!).filter(Boolean),policies=await currentCardsAccess(c.env,rows,'library');
@@ -187,13 +201,15 @@ libraryRoutes.get('/v1/me/conversations', async c => {
       AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider)
       AND ms.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
-    WHERE r.member_id=? AND r.provider='harbor') WHERE cardRank=1 ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
-    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
+    WHERE r.member_id=? AND r.provider='harbor' AND (?=0 OR (c.rating IS NOT 'R' AND hv.rating IS NOT 'R'
+      AND NOT EXISTS(SELECT 1 FROM hosting_versions rv WHERE rv.provider=r.provider AND rv.hosted_revision_id=r.role_id AND rv.rating='R')))) WHERE cardRank=1 ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
+    .bind(member.id, access.countryRegion==='CN'?1:0, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
   const lang = c.req.query('lang') || 'zh-Hant';
-  return c.json({ conversations: await Promise.all(rows.results.slice(0,24).map(async row => {
+  const conversations=await Promise.all(rows.results.slice(0,24).map(async row => {
     const token = c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1] || '';
     const raw = await ownedHistory.read(c.env, token, row.conversationId);
     const capability = await bindOwnedHistory(c.env,row.conversationRoleId,row.conversationId,raw);
+    if(access.countryRegion==='CN'&&capability&&await knownRegionAdultRole(c.env.DB,capability.roleId))return null;
     const binding = capability!==null;
     const canGenerate = binding && capability?.canGenerate === true;
     const reason = canGenerate ? undefined : binding && ['author_private','restricted','unavailable'].includes(capability?.reason || '') ? capability!.reason : 'unavailable';
@@ -207,7 +223,8 @@ libraryRoutes.get('/v1/me/conversations', async c => {
       canGenerate, reason, conversationTitle: binding ? capability?.title || null : null,
       roleName: card?.name || (hosted ? pickLocale(hosted.names, lang) : historyVisible && (visible || (binding && reason === 'author_private')) ? capability?.roleName || '' : ''), roleAvatar: card?.avatarUrl || hosted?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
-  })), hasNextPage: rows.results.length > 24 });
+  }));
+  return c.json({conversations:conversations.filter(row=>row!==null),hasNextPage:rows.results.length>24});
 });
 
 /**
@@ -252,6 +269,10 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
     .bind(member.id,provider,c.req.param('conversationId')).all<{provider:string;roleId:string;cardNumber:number|null;rating:string|null;approvedRoleId:string|null;canResumeExact:number}>();
   if (!rows.results.length) throw new HttpError(404, 'not_found');
   if(rows.results.length>200)throw new HttpError(503,'conversation_read_budget_exceeded');
+  const access=await memberNsfw(c.env.DB,member.id);
+  if(access.countryRegion==='CN'){
+    for(const row of rows.results)if(row.rating==='R'||await knownRegionAdultRole(c.env.DB,row.roleId))await assertRegionCard(c,{rating:'R'});
+  }
   const token=c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1]||'';
   const capability=await ownedHistory.read(c.env,token,c.req.param('conversationId'));
   if(!capability&&rows.results.length>1)throw new HttpError(503,'conversation_binding_unavailable');
@@ -261,9 +282,10 @@ libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
   }
   const row=rows.results.find(row=>row.roleId===capability?.roleId)??rows.results[0];
   const roleId=capability?.roleId??row.roleId;
+  if(access.countryRegion==='CN'&&await knownRegionAdultRole(c.env.DB,roleId))await assertRegionCard(c,{rating:'R'});
   // This is a local fence, never proof of play. The client must additionally
   // verify actual Provider ownership and canGenerate for this exact revision.
   const needsAdult=row.rating==='R'||roleId!==row.approvedRoleId;
-  const adultAllowed=!needsAdult||libraryAllowsNsfw(await memberNsfw(c.env.DB,member.id));
+  const adultAllowed=!needsAdult||libraryAllowsNsfw(access);
   return c.json({provider:row.provider,roleId,cardNumber:row.cardNumber,canResumeExact:row.canResumeExact===1&&adultAllowed});
 });

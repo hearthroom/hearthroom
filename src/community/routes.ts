@@ -272,16 +272,16 @@ const langOf = (c: { req: { query: (k: string) => string | undefined; header: (k
 app.get("/v1/me/community/notifications", async (c) => {
   const m = await requireMember(c);
   const lang = langOf(c);
+  const adult = await memberNsfw(c.env.DB,m.id);
   // Unread platform account notices come first so a busy list never pushes them out of the 50.
   const rows = await c.env.DB.prepare(
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
      a.handle AS actor_handle,a.display_name AS actor_name,n.card_id,c.id AS card_num,c.names AS card_names
      FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
-     WHERE ${eligibleNotification()} AND n.member_id=? ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
+     WHERE ${eligibleNotification()} AND n.member_id=? AND (? IS NOT 'CN' OR c.rating IS NOT 'R') ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
   )
-    .bind(Date.now(),Date.now(),m.id)
+    .bind(Date.now(),Date.now(),m.id,adult.countryRegion)
     .all<{ card_id:string|number|null; id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
-  const adult=await memberNsfw(c.env.DB,m.id);
   const visibility=await updateNoticeVisibility(c.env,rows.results,adult.showNsfw&&!!adult.ageVerifiedAt&&adult.adultConsent);
   // Only public identity leaves here: the actor's handle and display name, the card's number and name.
   const items = rows.results.map(({ extra, actor_handle, actor_name, card_num, card_names, card_id:_cardId, ...n }) => ({

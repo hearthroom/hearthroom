@@ -20,7 +20,7 @@ function measuredDb() {
 }
 it('existing initialized identity needs one read and no write, even without an upstream nickname',async()=>{
  const id=await makeMember(11);
- await env.DB.prepare("UPDATE members SET display_name='Community name' WHERE id=?").bind(id).run();
+ await env.DB.prepare("UPDATE members SET display_name='Community name',country_region='TW' WHERE id=?").bind(id).run();
  const {db,trips}=measuredDb();
  const member=await requireMember({env:{...env,DB:db},req:{header:k=>k==='Authorization'?'Bearer fixture':undefined}});
  expect(member.id).toBe(id);expect(trips).toEqual(['first']);

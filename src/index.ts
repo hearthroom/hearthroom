@@ -1,3 +1,5 @@
+import {parseCountryRegion, updateCountryRegion} from './country-region';
+import {viewerCountryRegion, assertRegionCard} from './members';
 import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
@@ -254,6 +256,7 @@ app.onError(async (err, c) => {
   }
   const ev = c.get("ev") as Pending | undefined;
   if (err instanceof HttpError) {
+    if(err.message==='region_unavailable'){c.header('Cache-Control','private, no-store');await bumpOp(c.env.DB,'country_region','admission','denied');}
     if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});
     if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
     return c.json({ error: err.message, ...err.extra, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
@@ -608,12 +611,14 @@ async function checkedCardAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}
 
 
 async function ownCardView(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:string,row:Awaited<ReturnType<typeof getCard>>){
+ if(row)await assertRegionCard(c,row);
  return readOwnCardView(c.env,id,row,lang(c),bearerOf(c),providerOf(c));
 }
 
 app.get("/v1/cards/:id", async (c) => {
   const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
   let row = link.row;
+  if(row)await assertRegionCard(c,row);
   if(!row&&c.env.WORK_SHARING_ENABLED==='true'&&providerOf(c)==='harbor'){
     c.header('Cache-Control','private, no-store');c.header('X-Robots-Tag','noindex, nofollow');
     row=await registerLegacyShare(c.env,link.source?.roleId??c.req.param('id'),()=>viewerAllowsNsfw(c,{card:true}));
@@ -644,7 +649,7 @@ app.get("/v1/cards/:id", async (c) => {
     c.header('X-Robots-Tag','noindex');
     // Saved source content has not been classified by the approval snapshot.
     // Check the conservative adult gate before fetching any source fields.
-    if (!(await viewerAllowsNsfw(c,{card:true}))) throw new HttpError(403,'adult_content');
+    if (!(await viewerAllowsNsfw(c,{card:true}))) throw new HttpError(403,await viewerCountryRegion(c)==='CN'?'region_unavailable':'adult_content');
     row=await unlistedCardRow(c.env,row);
   }
   // 榜單審核與連結存取分開；公開資料仍由來源平台授權。
@@ -692,6 +697,7 @@ function shareFields(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, 
 async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   let row = await getCard(c.env.DB, c.req.param("id") ?? "");
   if (!row || row.provider !== "harbor" || row.public_blocked) throw new HttpError(404, "card not found");
+  await assertRegionCard(c,row);
   const access=await checkedCardAccess(c,row,'metadata');
   if(access.managed||row.status==='unlisted'){
     c.header('Cache-Control','private, no-store');
@@ -949,6 +955,7 @@ function animatedArea(b: Uint8Array): number {
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
+ if(base)await assertRegionCard(c,base);
  if(base){
   const access=await checkedCardAccess(c,base,'metadata');
   if(access.managed||base.status==='unlisted'){
@@ -1100,9 +1107,11 @@ app.get("/v1/me", async (c) => {
  */
 app.post("/v1/me/settings", async (c) => {
   const member = await requireMember(c);
-  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown; showStats?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown; showStats?: unknown; countryRegion?:unknown };
+  if(body.countryRegion !== undefined)parseCountryRegion(body.countryRegion);
   if (body.showStats !== undefined && typeof body.showStats !== "boolean") throw new HttpError(400, "showStats_invalid");
-  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && body.showStats === undefined) throw new HttpError(400, "showNsfw_required");
+  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && body.showStats === undefined && body.countryRegion === undefined) throw new HttpError(400, "showNsfw_required");
+  if(body.countryRegion!==undefined)await updateCountryRegion(c.env.DB,member.id,body.countryRegion);
   let showStats: boolean;
   if (typeof body.showStats === "boolean") {
     showStats = await updateMemberShowStats(c.env.DB, member.id, body.showStats);
@@ -1127,7 +1136,7 @@ app.post("/v1/me/settings", async (c) => {
     const current = await memberNsfw(c.env.DB, member.id);
     nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
-  return c.json({ ...nsfw, hiddenTags, showStats }, 200, { "Cache-Control": "no-store" });
+  return c.json({ ...nsfw, hiddenTags, showStats, countryRegion:await viewerCountryRegion(c) }, 200, { "Cache-Control": "no-store" });
 });
 
 /**
@@ -1194,6 +1203,7 @@ async function commentCardFor(c: Context<{ Bindings: Env; Variables: { ev: Pendi
 async function commentCardAt(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:string){
   c.header('Cache-Control','private, no-store');
   const card = await commentCard(c.env, id);
+  if(card.adult)await assertRegionCard(c,{rating:'R'});
   if (card.adult && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403, "adult_content");
   return card;
 }
