@@ -61,6 +61,7 @@ async function mountSearch(path: string) {
   await router.isReady();
   app.mount(el);
   await flush();
+  return router;
 }
 
 const hint = () => document.querySelector(".search__adult");
@@ -100,7 +101,37 @@ describe("搜尋頁", () => {
   it("有關鍵字就按相關度讀，排序列也多一個「最相關」", async () => {
     await mountSearch("/search?q=霧港");
     expect(cardCalls().find((c) => c.includes("q="))).toContain("sort=relevance");
-    expect([...document.querySelectorAll("#search-sort option")].map((o) => (o as HTMLOptionElement).value)).toEqual(["relevance", "hot", "new"]);
+    expect([...document.querySelectorAll("#search-sort option")].map((o) => (o as HTMLOptionElement).value)).toEqual(["relevance", "hot", "new", "score"]);
+  });
+
+  it("評分排序在搜尋的排序選單裡（首頁分頁列不放它，2026-11-03）：選了就照評分讀", async () => {
+    await mountSearch("/search?q=霧港&sort=score");
+    expect(cardCalls().find((c) => c.includes("q="))).toContain("sort=score");
+    expect((document.querySelector("#search-sort") as HTMLSelectElement).value).toBe("score");
+    expect(document.querySelector('#search-sort option[value="score"]')?.textContent?.trim()).toBe(i18n.global.t("board.sort.score"));
+  });
+
+  it("評分選項五語都有自己的字", async () => {
+    for (const lang of ["zh-Hant", "zh-Hans", "en", "ja", "ko"]) {
+      const messages = (await import(`../src/locales/${lang}.json`)).default as Record<string, string>;
+      expect(messages["board.sort.score"], lang).toMatch(/\S/);
+    }
+  });
+
+  it("沒有關鍵字也能照評分排：選單是最熱／最新／評分，請求帶 sort=score", async () => {
+    await mountSearch("/search?sort=score");
+    expect([...document.querySelectorAll("#search-sort option")].map((o) => (o as HTMLOptionElement).value)).toEqual(["hot", "new", "score"]);
+    expect(cardCalls().some((c) => c.includes("sort=score"))).toBe(true);
+  });
+
+  it("在排序選單選「評分」：網址換成 sort=score，照評分重讀", async () => {
+    const router = await mountSearch("/search?q=霧港");
+    const select = document.querySelector("#search-sort") as HTMLSelectElement;
+    select.value = "score";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    expect(router.currentRoute.value.query.sort).toBe("score");
+    expect(cardCalls().at(-1)).toContain("sort=score");
   });
 
   it("成人內容關著的成員：結果是空的就說一句，連到設定", async () => {

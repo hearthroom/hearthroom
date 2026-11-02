@@ -13,6 +13,7 @@ import { ga4PageView } from "./lib/ga4";
 import { captureGa4Source } from "./lib/ga4-attribution";
 import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
 import { rememberAndroidAppLaunch } from "./lib/route-lines";
+import { LEGACY_SETTINGS_HASH, isSettingsSection } from "./lib/settings-sections";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -79,7 +80,8 @@ const pages: RouteRecordRaw[] = [
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
   // 生圖：首頁導覽的第四頁（owner 2026-10-31）。結果先進快取區，挑了才存。
   { path: "studio", component: () => import("./pages/StudioPage.vue"), meta: { auth: true } },
-  { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
+  // 使用者設定：/settings 是列表（桌機右邊預設第一區），/settings/<區> 是各區。同一條記錄，換區不重新掛載頁面
+  { path: "settings/:section?", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true, settings: true } },
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
@@ -183,6 +185,8 @@ export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormal
   if (saved && to.meta.board) return nextTick().then(() => new Promise<{ left: number; top: number }>(resolve => requestAnimationFrame(() => resolve(boardScrollPosition(saved)))));
   if (saved) return saved;
   if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
+  // 桌機在設定裡換區只換右邊的面板，左邊列表與捲動位置不動；手機是換一整頁，照常回頂端。帶 # 的由設定頁自己捲到那一張卡
+  if (to.meta.settings && from.meta.settings && settingsTwoColumns()) return false;
   return { top: 0 };
 }
 
@@ -217,6 +221,27 @@ router.beforeEach((to) => {
   if (share) delete query.s;
   return { path: to.path, query, hash: to.hash, replace: true };
 });
+
+/** 設定頁現在是不是兩欄（跟 SettingsPage 的容器查詢同一個切換點）：換區時頁面還是同一個，量得到 */
+function settingsTwoColumns(): boolean {
+  return (document.querySelector<HTMLElement>(".settings")?.clientWidth ?? 0) > 760;
+}
+
+/**
+ * 設定的網址整理：不認得的區回列表；改版前的 /settings#hidden 這類深連結換到那張卡現在所在的區。
+ * 沒有遊玩人設的那一家沒有「遊玩」區（列表上也不畫那一列）。
+ */
+export function settingsRedirect(to: Pick<RouteLocationNormalized, "path" | "hash" | "query" | "params" | "meta">) {
+  if (!to.meta.settings) return null;
+  const locale = localeOf(to);
+  const section = to.params.section;
+  if (section && (!isSettingsSection(section) || (section === "play" && !can("persona")))) {
+    return { path: withLocale("/settings", locale), query: to.query, replace: true };
+  }
+  const moved = !section ? LEGACY_SETTINGS_HASH[to.hash] : undefined;
+  if (moved) return { path: withLocale(`/settings/${moved}`, locale), query: to.query, hash: to.hash, replace: true };
+  return null;
+}
 
 let firstNavigation = true;
 
@@ -321,6 +346,8 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/blog")) return "blog";
   return "404";
 }
+
+router.beforeEach((to) => settingsRedirect(to) ?? true);
 
 // 先於任何 API 請求設好：beforeEach 的下游就是頁面元件的 setup，那裡才開始 fetch
 router.beforeEach((to) => { setSurface(surfaceOf(to.path)); });

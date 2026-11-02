@@ -621,6 +621,15 @@ describe("審核工具第一批：字數門檻、結果、搜尋", () => {
       return item;
     };
 
+    it("超長 LIKE 樣式回空結果，保留審核者限制", async () => {
+      await makeReviewer(REVIEWER_A);
+      await decide("role-1", "Night Detective");
+      const result = await decisions("字".repeat(30));
+      expect(result.status).toBe(200);
+      expect(result.body).toEqual({ items: [], nextCursor: null });
+      expect((await decisions("字".repeat(30), "author-token")).status).toBe(403);
+    });
+
     it("卡名部分比對、不分大小寫；純數字是卡號精確比對；沒有符合就是空清單", async () => {
       await makeReviewer(REVIEWER_A);
       await makeReviewer(REVIEWER_B);

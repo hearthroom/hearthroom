@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { LOCALES, SOURCE_LOCALE } from "@/lib/i18n";
-import { localeOf, withLocale } from "@/router";
+import { LOCALES } from "@/lib/i18n";
+import { localeOf } from "@/router";
+import { localeSwitchTarget } from "@/lib/locale-switch";
 import { track } from "@/lib/track";
 
 const route = useRoute();
@@ -27,11 +28,7 @@ function switchTo(code: string) {
   externalOpener?.focus();
   if (code === current.value) return;
   track("locale_switch", { subject: code });
-  const bare = current.value === SOURCE_LOCALE ? route.path : route.path.replace(`/${current.value}`, "") || "/";
-  const query={...route.query};
-  if (/^\/blog\/(?!g\/|p\/)[^/]+\/[^/]+\/?$/.test(bare) && !query.preview) query.articleLang=code;
-  else delete query.articleLang;
-  router.push({ path: withLocale(bare, code), query });
+  router.push(localeSwitchTarget(route, code));
 }
 
 function onDocClick(e: MouseEvent) {

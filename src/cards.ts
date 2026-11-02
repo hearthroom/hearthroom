@@ -1,7 +1,7 @@
 import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
-import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
+import { boundedSearchPattern, expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
 import { fandomLabel } from "./wikidata";
 import { TAG_CATALOG } from "../shared/tag-catalog";
 import { RATINGS, type Rating } from "../shared/content-rating";
@@ -372,6 +372,9 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (opts.q && groups.length === 0) where.push("0");
   // trigram 要每個寫法都 >= 3 字元才有 token；有一個更短就整個走 LIKE
   const allLong = groups.every((g) => g.every((t) => [...t].length >= FTS_MIN_CHARS));
+  if (!allLong && groups.some((g) => g.some((t) => boundedSearchPattern(likeTerm(t)) === null))) {
+    return { rows: [], hasNext: false, total: 0, partial: false };
+  }
   /**
    * 搜尋條件與相關度鍵。and：每個詞都要命中；any：任一個詞命中（全部命中沒結果時退一步用）。
    * 相關度：FTS 是三欄加權的 bm25（越小越相關）；LIKE 是名字命中幾個詞乘 4 加簡介命中幾個詞，取負數同樣越小越前。
@@ -425,6 +428,9 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     } else {
       // 打的字：自由文字的鍵直接比；對到 Wikidata 的作品用它的名字與別名比（「星铁」「HSR」都落到同一個作品）
       const forms = expandTerm(searchForm(opts.fandom));
+      if (forms.some((f) => boundedSearchPattern(`% ${f} %`) === null)) {
+        return { rows: [], hasNext: false, total: 0, partial: false };
+      }
       where.push(`(c.fandom_key IN (SELECT value FROM json_each(?)) OR c.fandom_qid IN (SELECT qid FROM fandom_entities WHERE ${forms.map(() => "(' ' || search_text || ' ') LIKE ?").join(" OR ")}))`);
       binds.push(JSON.stringify(forms), ...forms.map((f) => `% ${f.replace(/[\\%_]/g, (ch) => `\\${ch}`)} %`));
     }
@@ -827,7 +833,11 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
     : `WHERE ${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")}`;
   const binds: unknown[] = zone ? [zone] : [];
   // 標籤名存的是作者寫的原文，沒有正規化欄位：用繁簡、大小寫展開的 GLOB 比，一樣互通
-  if (q) { where += " AND j.value GLOB ?"; binds.push(hanziGlob(q)); }
+  if (q) {
+    const pattern = hanziGlob(q);
+    if (pattern === null) return [];
+    where += " AND j.value GLOB ?"; binds.push(pattern);
+  }
   binds.push(limit, offset);
   const rows = await db
     .prepare(
@@ -848,7 +858,11 @@ export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: 
   const binds: unknown[] = [];
   if (zone) { where.push("c.zone IN (?, 'all')"); binds.push(zone); }
   // q 比的是索引字：對到 Wikidata 的作品是所有語言的名字與別名，自由文字是它的正規形
-  if (q) { where.push(`COALESCE(fe.search_text, c.fandom_key) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(searchForm(q))); }
+  if (q) {
+    const pattern = boundedSearchPattern(likeTerm(searchForm(q)));
+    if (pattern === null) return [];
+    where.push(`COALESCE(fe.search_text, c.fandom_key) LIKE ? ESCAPE '\\'`); binds.push(pattern);
+  }
   const rows = await db
     // 自由文字同一個鍵有幾種寫法時用最多人寫的那種，平手用最早上榜的那種——清單上的名字才不會隨機跳
     .prepare(`SELECT c.fandom_key AS key, c.fandom AS fandom, fe.labels AS labels, COUNT(*) AS n, MIN(c.registered_at) AS first FROM cards c LEFT JOIN fandom_entities fe ON fe.qid=c.fandom_qid WHERE ${where.join(" AND ")} GROUP BY c.fandom_key, c.fandom ORDER BY n DESC, first ASC`)
@@ -891,7 +905,11 @@ export async function listAuthors(
   const where: string[] = [listed(false), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
-  if (opts.q) { where.push("COALESCE(am.display_name,c.author_name) GLOB ?"); binds.push(hanziGlob(opts.q)); }
+  if (opts.q) {
+    const pattern = hanziGlob(opts.q);
+    if (pattern === null) return { rows: [], hasNext: false };
+    where.push("COALESCE(am.display_name,c.author_name) GLOB ?"); binds.push(pattern);
+  }
   const orderBy =
     opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
   const rows = await db

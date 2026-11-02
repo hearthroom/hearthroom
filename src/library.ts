@@ -169,15 +169,17 @@ libraryRoutes.put('/v1/me/conversations', bodyLimit({ maxSize: 2048 }), async c 
   // 一次往返：原本的 upsert，加上活動歸因的首玩時間與當天活躍日。沒有歸因的人兩條都不寫列
   // （UPDATE 比不到列；INSERT 的 EXISTS 為假）。日序 = UTC 日序，見 campaign_active_days。
   const db = c.env.DB;
+  // 測試帳號仍保存私人續玩指標，但不產生首玩分析或活動成效；資料庫護欄保持啟用。
+  const publicActivity = member.accountClass === 'test' ? 0 : 1;
   const results = await db.batch([
-    db.prepare("INSERT OR IGNORE INTO analytics_milestones(member_id,event,created_at) SELECT ?, 'first_chat', ? WHERE NOT EXISTS (SELECT 1 FROM member_conversations WHERE member_id=?)")
-      .bind(member.id, now, member.id),
+    db.prepare("INSERT OR IGNORE INTO analytics_milestones(member_id,event,created_at) SELECT ?, 'first_chat', ? WHERE ?=1 AND NOT EXISTS (SELECT 1 FROM member_conversations WHERE member_id=?)")
+      .bind(member.id, now, publicActivity, member.id),
     db.prepare(`INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at)
       VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,provider,role_id) DO UPDATE SET conversation_id=excluded.conversation_id,updated_at=excluded.updated_at`)
       .bind(member.id, member.provider, body.roleId, body.conversationId, now, now),
-    db.prepare("UPDATE campaign_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL").bind(now, member.id),
-    db.prepare("INSERT OR IGNORE INTO campaign_active_days (member_id, day) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM campaign_attributions WHERE member_id = ?)")
-      .bind(member.id, Math.floor(now / 86_400_000), member.id),
+    db.prepare("UPDATE campaign_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL AND ?=1").bind(now, member.id, publicActivity),
+    db.prepare("INSERT OR IGNORE INTO campaign_active_days (member_id, day) SELECT ?, ? WHERE ?=1 AND EXISTS (SELECT 1 FROM campaign_attributions WHERE member_id = ?)")
+      .bind(member.id, Math.floor(now / 86_400_000), publicActivity, member.id),
   ]);
   return c.json({ saved: true, first: results[0].meta.changes === 1 });
 });

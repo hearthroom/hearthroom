@@ -40,6 +40,11 @@ for (const group of ALIAS_GROUPS) {
 /** 一個詞的所有寫法：整個詞就是某個別名時展開成那一組，否則就是它自己。 */
 export const expandTerm = (term: string): string[] => aliasOf.get(term) ?? [term];
 
+/** D1 的 LIKE／GLOB 樣式上限是 50 UTF-8 bytes；超限回空結果，不截斷成另一個查詢。 */
+export function boundedSearchPattern(pattern: string): string | null {
+  return new TextEncoder().encode(pattern).length <= 50 ? pattern : null;
+}
+
 /** 同一組異體字：正規形與所有對到它的繁體、日文字。建一次就好。 */
 let variantGroups: Map<string, string[]> | null = null;
 function variantsOf(ch: string): string[] {
@@ -61,15 +66,17 @@ function variantsOf(ch: string): string[] {
 
 /**
  * 給沒有正規化欄位的地方（標籤名、作者名）用的 GLOB 樣式：每個字展開成它的異體類別、
- * 英文展開成大小寫類別，其餘照字面。例：`轻舟` → `*[轻輕][舟]*`、`Luna` → `*[lL][uU][nN][aA]*`。
+ * 英文展開成大小寫類別，其餘照字面。例：`轻舟` → `*[轻輕]舟*`、`Luna` → `*[lL][uU][nN][aA]*`。
  * GLOB 的特殊字元（* ? [）放進中括號就是字面值。
+ * 超過 D1 樣式上限時回 null，呼叫端回空結果。
  */
-export function hanziGlob(term: string): string {
+export function hanziGlob(term: string): string | null {
   const parts = [...term.normalize("NFKC")].map((ch) => {
     if (ch === "]" || ch === "-" || ch === "^") return ch;
     const set = new Set<string>([...variantsOf(ch), ch.toLowerCase(), ch.toUpperCase()]);
     for (const c of [...set]) if (c === "]" || c === "-" || c === "^") set.delete(c);
+    if (set.size === 1 && !"*?[".includes(ch)) return ch;
     return `[${[...set].join("")}]`;
   });
-  return `*${parts.join("")}*`;
+  return boundedSearchPattern(`*${parts.join("")}*`);
 }

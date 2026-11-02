@@ -85,7 +85,7 @@ async function mount(path: string, component: object, extra = "") {
   setActivePinia(pinia);
   const session = useSession();
   await session.restore();
-  await router.push(path.replace(":id", "100300"));
+  await router.push(path.replace(":id", "100300").replace(":section?", "content"));
   await router.isReady();
   app = createApp({ components: { AdultToggle }, template: `${extra}<RouterView />` }).use(pinia).use(router).use(i18n);
   app.mount(el);
@@ -105,7 +105,7 @@ async function choose(code: string) {
 describe("國家／地區", () => {
   it("託管登入的個人資料讀取、設定頁的補讀都帶目前的介面語言", async () => {
     i18n.global.locale.value = "en" as never;
-    await mount("/settings", SettingsPage);
+    await mount("/settings/:section?", SettingsPage);
     const session = requests.find((r) => r.url.endsWith("/v1/auth/session"));
     expect(session?.headers.get("language")).toBe("en");
     const me = requests.find((r) => r.method === "GET" && /^\/v1\/me$/.test(r.url));
@@ -114,7 +114,7 @@ describe("國家／地區", () => {
 
   it("設定頁：十個選項分兩組，現值照伺服器；個人資料還沒有地區（回其他地區）時以本站的補讀為準", async () => {
     server.sessionRegion = "OTHER";
-    const session = await mount("/settings", SettingsPage);
+    const session = await mount("/settings/:section?", SettingsPage);
     const select = regionSelect()!;
     expect(select).not.toBeNull();
     const groups = [...select.querySelectorAll("optgroup")];
@@ -128,11 +128,17 @@ describe("國家／地區", () => {
   });
 
   it("選中國大陸：存到伺服器，成人開關與頁首 R18 收起；切回台灣，原本開著的成人內容照舊", async () => {
-    const session = await mount("/settings", SettingsPage, "<AdultToggle />");
+    const session = await mount("/settings/:section?", SettingsPage, "<AdultToggle />");
     expect(adultRow()).toBeTruthy();
     expect(el!.querySelector("button.r18")).not.toBeNull();
+    // 合流版面：地區在上、成人在下，同一張卡（不放卡頭）；中國大陸時只收成人那一列，卡還在
+    const card = regionSelect()!.closest("section.set-card");
+    expect(card).not.toBeNull();
+    expect(card!.contains(adultRow()!)).toBe(true);
+    expect(card!.querySelector(".set-card__head")).toBeNull();
 
     await choose("CN");
+    expect(regionSelect()!.closest("section.set-card")).toBe(card);
     const saved = requests.filter((r) => r.method === "POST" && r.url.endsWith("/v1/me/settings"));
     expect(saved.map((r) => JSON.parse(r.body!))).toEqual([{ countryRegion: "CN" }]);
     expect(session.profile).toMatchObject({ countryRegion: "CN", showNsfw: false });
@@ -147,7 +153,7 @@ describe("國家／地區", () => {
   });
 
   it("換了地區：上一屏記住的卡整份丟掉，點進卡片頁不會先畫出來", async () => {
-    await mount("/settings", SettingsPage);
+    await mount("/settings/:section?", SettingsPage);
     rememberCard(CARD as never);
     expect(recallCard("100300")).not.toBeNull();
     await choose("CN");
@@ -157,7 +163,7 @@ describe("國家／地區", () => {
   it("補讀比使用者的選擇晚回來：不把剛存好的中國大陸蓋回舊值", async () => {
     let release!: () => void;
     holdMe = new Promise((done) => { release = done; });
-    const session = await mount("/settings", SettingsPage, "<AdultToggle />");
+    const session = await mount("/settings/:section?", SettingsPage, "<AdultToggle />");
     await choose("CN");
     expect(session.profile?.countryRegion).toBe("CN");
     release();
@@ -169,7 +175,7 @@ describe("國家／地區", () => {
   });
 
   it("存不進去：退回原本的地區並說明，成人開關不動", async () => {
-    const session = await mount("/settings", SettingsPage);
+    const session = await mount("/settings/:section?", SettingsPage);
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/v1/me/settings")
       ? Promise.resolve(new Response(JSON.stringify({ error: "countryRegion_invalid" }), { status: 400 }))
       : fakeFetch(input, init));

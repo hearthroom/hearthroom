@@ -49,7 +49,7 @@ async function mount(component: unknown, path: string): Promise<{ el: HTMLElemen
     routes: [
       { path: "/login", component: component as never },
       { path: "/me", component: component as never },
-      { path: "/settings", component: component as never },
+      { path: "/settings/:section?", component: component as never },
       { path: "/:pathMatch(.*)*", component: { template: "<div />" } },
     ],
   });
@@ -114,11 +114,12 @@ describe("「我的」頁", () => {
 describe("設定頁的登入與授權", () => {
   it("列出連結的供應商帳號；「重新授權」才會再向供應商走一次 OAuth，完成後回到設定頁", async () => {
     session.me = { accountNumId: 7, nickName: "月光", avatar: "" };
-    const { el } = await mount(SettingsPage, "/settings");
+    // 改版後登入與授權在「連結與授權」區（settings-ia 2026-11-03）
+    const { el } = await mount(SettingsPage, "/settings/links");
     expect(el.textContent).toContain("HarperHarbor");
     expect(el.textContent).toContain(i18n.global.t("services.emailUnavailable"));
     const btn = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === i18n.global.t("me.reauthorize"))!;
     btn.click();
-    expect(connect).toHaveBeenCalledWith("harbor","/settings");
+    expect(connect).toHaveBeenCalledWith("harbor","/settings/links");
   });
 });

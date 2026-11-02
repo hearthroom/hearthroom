@@ -5,6 +5,7 @@ import { managedWork, policyOperationId, runWorkPolicyOperation, projectWorkRece
 import type { ProviderId } from './providers';
 import { bumpOp } from './ops-metrics';
 import {readCurrentWorkPolicies} from './work-read';
+import { boundedSearchPattern } from './search-text';
 
 export const REVIEW_CORRECTION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -165,10 +166,12 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
  */
 export async function listReviewDecisions(db:D1Database, member:string, now:number, lang:string, before?:number, q?:string) {
   const byNumber=q!==undefined&&/^\d+$/.test(q);
+  const pattern=q===undefined||byNumber?null:boundedSearchPattern(`%${q.replace(/[\\%_]/g,ch=>'\\'+ch)}%`);
+  if(q!==undefined&&!byNumber&&pattern===null)return {items:[],nextCursor:null};
   const filter=q===undefined?'':byNumber?' AND c.id=?':
     " AND EXISTS(SELECT 1 FROM json_each(coalesce(json_extract(v.public_role,'$.names'),c.names)) n WHERE n.value LIKE ? ESCAPE '\\')";
   const params:unknown[]=[member,before??Number.MAX_SAFE_INTEGER];
-  if(q!==undefined)params.push(byNumber?q:`%${q.replace(/[\\%_]/g,ch=>'\\'+ch)}%`);
+  if(q!==undefined)params.push(byNumber?q:pattern);
   const rows=await db.prepare(`SELECT st.rowid cursor,s.id,s.status,s.kind,s.decided_at,s.submitted_at,st.verdict,st.note,st.created_at,
     EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete') corrected,
     v.version_id,c.id card_id,coalesce(json_extract(v.public_role,'$.names'),c.names) names

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { MODES, THEMES, useAppearance } from "@/lib/appearance";
-import { track } from "@/lib/track";
+import { useAppearance } from "@/lib/appearance";
+import AppearanceControls from "./AppearanceControls.vue";
 
-const { mode, theme, resolvedMode, setMode, setTheme } = useAppearance();
+const { resolvedMode } = useAppearance();
 const props = defineProps<{ external?: boolean }>();
 let externalOpener: HTMLElement | null = null;
 function openFrom(opener: HTMLElement | null) {
@@ -46,29 +46,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 
     <!-- 非模態的設定面板：Tab 走得出去、點外面就收，不裝成對話框 -->
     <div v-if="open" ref="panel" class="ap__panel panel" data-discovery-overlay role="group" :aria-label="$t('appearance.title')">
-      <p id="ap-mode-label" class="ap__label">{{ $t("appearance.title") }}</p>
-      <div class="seg ap__modes" role="radiogroup" aria-labelledby="ap-mode-label">
-        <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m); track('appearance', { detail: 'mode', subject: m })">
-          {{ $t(`appearance.mode.${m}`) }}
-        </button>
-      </div>
-
-      <p id="ap-theme-label" class="ap__label">{{ $t("appearance.theme") }}</p>
-      <div class="ap__themes" role="radiogroup" aria-labelledby="ap-theme-label">
-        <button
-          v-for="t in THEMES"
-          :key="t.id"
-          class="ap__swatch"
-          :class="{ 'is-on': theme === t.id }"
-          :style="{ '--sw': resolvedMode === 'dark' ? t.swatchDark : t.swatch }"
-          role="radio"
-          :aria-checked="theme === t.id"
-          @click="setTheme(t.id); track('appearance', { detail: 'theme', subject: t.id })"
-        >
-          <span class="ap__dot" aria-hidden="true" />
-          <span class="ap__name">{{ $t(`appearance.theme.${t.id}`) }}</span>
-        </button>
-      </div>
+      <AppearanceControls />
     </div>
   </div>
 </template>
@@ -91,44 +69,15 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
   animation: pop var(--dur) var(--ease);
 }
-.ap__label { margin: 0 0 6px; padding: 0 2px; font-size: 11.5px; font-weight: 600; color: var(--text-3); }
-.ap__label + .ap__label, .ap__modes + .ap__label { margin-top: 14px; }
-.ap__modes { display: flex; width: 100%; }
-.ap__modes .seg__item { flex: 1; padding: 0 6px; }
-
-.ap__themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.ap__swatch {
-  display: grid; justify-items: center; gap: 5px;
-  padding: 8px 4px 6px;
-  background: transparent; border: 0; border-radius: var(--r-sm);
-  font-size: 11px; color: var(--text-2); cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.ap__swatch:hover { background: var(--surface-2); color: var(--text); }
-.ap__swatch.is-on { color: var(--text); font-weight: 600; }
-.ap__dot {
-  width: 22px; height: 22px; border-radius: var(--r-pill);
-  background: var(--sw);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-.ap__swatch:hover .ap__dot { transform: scale(1.08); }
-/* 選中的那顆：外圈一道跟底色同色的縫，再一圈自己的顏色 */
-.ap__swatch.is-on .ap__dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
-.ap__name { max-width: 100%; text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
-
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
 
 /* 手機：錨在圖示右緣會被左邊切掉；改成貼著頁首橫跨整寬 */
 @media (max-width: 860px) {
   .ap__panel { position: fixed; top: 60px; right: 12px; left: 12px; width: auto; }
 }
-/* 觸控目標放大 */
+/* 觸控目標放大（選擇器本身的放大在 AppearanceControls） */
 @media (max-width: 480px) {
   .ap__panel { padding: 14px; }
-  .ap__modes .seg__item { height: 40px; }
-  .ap__swatch { padding: 10px 4px 8px; font-size: 12px; }
-  .ap__dot { width: 28px; height: 28px; }
 }
 .is-external { position: static; }
 .is-external .ap__panel { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); left: auto; width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); overflow-y: auto; }
