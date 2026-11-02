@@ -4360,7 +4360,7 @@
   "settings.section.helpHint": "找不到蘇綺、連線很慢",
   "settings.thisDevice": "此裝置",
   "settings.routes.current": "目前線路",
-  "settings.routes.desc": "網站很慢或連不上時，可以換一條線路連線。",
+  "settings.routes.desc": "連線很慢或連不上時，可以換一條線路。",
   "settings.routes.open": "查看線路",
   "settings.section.play": "遊玩"
 }
