@@ -4346,5 +4346,20 @@
   "review.queue.tab.pendingNoCount": "심사 대기",
   "review.decide.noteFull": "메모는 최대 {max}자까지라 이 사유를 넣을 수 없어요. 내용을 줄인 뒤 다시 추가해 주세요.",
   "review.queue.worldbook": "세계관 {n}개",
-  "review.queue.regex": "정규식 {n}개"
+  "review.queue.regex": "정규식 {n}개",
+  "settings.section.profile": "프로필",
+  "settings.section.profileHint": "닉네임, 프로필 페이지, 랭킹 공개 설정",
+  "settings.section.notificationsHint": "리마인더와 푸시 알림",
+  "settings.section.links": "연결과 권한",
+  "settings.section.linksHint": "Discord, 로그인과 권한",
+  "settings.section.contentHint": "성인 콘텐츠, 보고 싶지 않은 유형",
+  "settings.section.appearance": "모양과 언어",
+  "settings.section.appearanceHint": "테마, 언어, 스키",
+  "settings.section.help": "문제 해결",
+  "settings.section.helpHint": "스키가 안 보일 때, 연결이 느릴 때",
+  "settings.thisDevice": "이 기기",
+  "settings.routes.current": "현재 회선",
+  "settings.routes.desc": "사이트가 느리거나 열리지 않으면 다른 회선으로 접속할 수 있어요.",
+  "settings.routes.open": "회선 보기",
+  "settings.section.play": "플레이"
 }

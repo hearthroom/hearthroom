@@ -1,355 +1,207 @@
 <script setup lang="ts">
 /**
- * 使用者設定：遊玩任何卡片時，角色預設怎麼叫你、把你當成誰。
+ * 使用者設定：標準 App 的設定列表（owner 2026-11-03；規格 docs/studio/tasks/2026-11-03-settings-ia/ui.md）。
  *
- * 這份住在上游帳號層級（全局人設），所有卡片共用。卡片自己那份（試玩頁裡「用戶人設」
- * 選「單獨設置」）優先於這裡；稱呼留空時角色用你的暱稱（owner 2026-09-07）。
- * 建卡表單不再有「玩家稱呼」——那是卡片層級的舊欄位，酒館格式的卡不用它。
- *
- * 內容：成人內容開關（owner 2026-09-08）。這是本站自己的設定，住在成員上；第一次開要填出生日期，
- * 伺服器只用它算滿不滿 18、不保存；共用聲明窗用年、月、日三欄直接輸入。
- *
- * 不想看的類型（owner 2026-09-14）：勾起來的類型不會出現在榜單和搜尋裡。不分頁不分區——首頁還是一個池子，
- * 每個人自己拉窗簾。勾一下就存（跟成人開關一樣），存在成員上、換裝置跟著走；榜單排尾的「已隱藏 N 類」帶回這裡。
- *
- * 主頁顯示與登入授權（owner 2026-10-19 主頁改版）：「我的」頁只放名片與入口，開關類搬來這裡——
- * 主頁數據開關（預設關）、卡片與遊玩服務的授權（原本在「我的」頁右欄），以及 Discord 社區、通知設定的入口。
+ * 第一層是三群列表，點進去是 /settings/<區>。版面看這一頁自己的寬度（容器查詢），不看視窗：
+ *   - ≤760：/settings 只有列表；/settings/<區> 換成該區的二級頁，最上面一顆返回鈕回列表。
+ *   - ≥761：左邊列表、右邊面板；/settings 沒指定區時右邊預設第一區，網址不改寫。
+ * 同一條路由記錄，換區不重新掛載，捲動位置不動（router.ts 的 scrollFor）。
+ * 各區的內容在 components/settings/，行為與改版前一樣，只是從一整頁拆開。
+ * 「通知」是另一整頁，列在列表裡但點了直接離開設定。
+ * 舊的 /settings#hidden 這類深連結在 router.ts 的 settingsRedirect 換到新的區。
  */
-import { computed, onMounted, reactive, ref } from "vue";
-import LeaderboardPrivacy from '@/components/LeaderboardPrivacy.vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch, type Component } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
+import AccountIcon from "@/components/AccountIcon.vue";
 import { can } from "@/lib/provider";
 import { pageTitle } from "@/lib/i18n";
-import { applyAdultSettings, needsAdultConsent } from "@/lib/adult-consent";
-import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
-import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
-import { petEnabled, summonPet } from "@/pet/enabled";
-import { communityRequest } from "@/lib/community";
-import { RouterLink } from "vue-router";
-import AccountIcon from "@/components/AccountIcon.vue";
-import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
+import { isSettingsSection, type SettingsSection } from "@/lib/settings-sections";
+import SettingsProfile from "@/components/settings/SettingsProfile.vue";
+import SettingsPlay from "@/components/settings/SettingsPlay.vue";
+import SettingsContent from "@/components/settings/SettingsContent.vue";
+import SettingsAppearance from "@/components/settings/SettingsAppearance.vue";
+import SettingsLinks from "@/components/settings/SettingsLinks.vue";
+import SettingsHelp from "@/components/settings/SettingsHelp.vue";
 
-const session = useSession();
+type Icon = InstanceType<typeof AccountIcon>["$props"]["name"];
+type Row = { id: SettingsSection | "notifications"; icon: Icon; label: string; hint: string; to: string; external?: boolean };
 
-/** 蘇綺的召回：存在帳號裡，預設關閉（設定集「一個角色，三個存在」） */
-const recall = ref<boolean | null>(null);
-const recallBusy = ref(false);
-onMounted(async () => {
-  const token = await session.accessToken().catch(() => null);
-  if (!token) return;
-  const got = await communityRequest<{ recall: boolean }>("/me/suki", token).catch(() => null);
-  recall.value = got ? got.recall : null;
-});
-async function setRecall(on: boolean) {
-  const token = await session.accessToken().catch(() => null);
-  if (!token) return;
-  recallBusy.value = true;
-  const got = await communityRequest<{ recall: boolean }>("/me/suki", token, "PATCH", { recall: on }).catch(() => null);
-  if (got) recall.value = got.recall;
-  recallBusy.value = false;
-}
 const { t } = useI18n();
-const { locale, lp } = useLocalePath();
+const { lp } = useLocalePath();
+const route = useRoute();
+const router = useRouter();
 
-const NAME_MAX = 20;
-const DEFINE_MAX = 1000;
-const SEX_OPTIONS = ["", "man", "women", "other"] as const;
+const PANES: Record<SettingsSection, Component> = {
+  profile: SettingsProfile, play: SettingsPlay, content: SettingsContent,
+  appearance: SettingsAppearance, links: SettingsLinks, help: SettingsHelp,
+};
+const LABELS: Record<SettingsSection, string> = {
+  profile: "settings.section.profile", play: "settings.section.play", content: "settings.content.title",
+  appearance: "settings.section.appearance", links: "settings.section.links", help: "settings.section.help",
+};
+const label = (s: SettingsSection) => t(LABELS[s]);
 
-const loading = ref(true);
-const saving = ref(false);
-const error = ref("");
-const saved = ref(false);
-const nickName = ref("");
-const draft = reactive<PlayerPersona>({ userName: "", userSex: "", userDefine: "" });
-let snapshot: PlayerPersona = { userName: "", userSex: "", userDefine: "" };
+/** 網址上的區；沒有就是列表本身 */
+const section = computed<SettingsSection | null>(() => (isSettingsSection(route.params.section) ? route.params.section : null));
+/** 右邊（或二級頁）顯示的區：桌機沒指定時預設第一區 */
+const active = computed<SettingsSection>(() => section.value ?? "profile");
 
-async function token(): Promise<string> {
-  const value = await session.accessToken();
-  if (!value) throw new Error(t("auth.expired"));
-  return value;
-}
+const groups = computed<Row[][]>(() => [
+  [
+    { id: "profile", icon: "person", label: label("profile"), hint: t("settings.section.profileHint"), to: lp("/settings/profile") },
+    { id: "notifications", icon: "bell", label: t("nav.notifications"), hint: t("settings.section.notificationsHint"), to: lp("/me/notifications"), external: true },
+    { id: "links", icon: "link", label: label("links"), hint: t("settings.section.linksHint"), to: lp("/settings/links") },
+  ],
+  [
+    // 這一家沒有遊玩人設：整列不畫，不放一個空的區
+    ...(can("persona") ? [{ id: "play", icon: "chat", label: label("play"), hint: t("settings.persona.title"), to: lp("/settings/play") } as Row] : []),
+    { id: "content", icon: "eye", label: label("content"), hint: t("settings.section.contentHint"), to: lp("/settings/content") },
+    { id: "appearance", icon: "contrast", label: label("appearance"), hint: t("settings.section.appearanceHint"), to: lp("/settings/appearance") },
+  ],
+  [{ id: "help", icon: "lifebuoy", label: label("help"), hint: t("settings.section.helpHint"), to: lp("/settings/help") }],
+]);
 
-async function load() {
-  // 這一家沒有玩家人格就別去問：那條路徑在它那邊不存在，問了只會拿到 404。
-  if (!can("persona")) { loading.value = false; return; }
-  loading.value = true;
-  error.value = "";
-  try {
-    const p = await fetchPlayerPersona(await token());
-    nickName.value = p.nickName;
-    snapshot = { userName: p.userName, userSex: p.userSex, userDefine: p.userDefine };
-    Object.assign(draft, snapshot);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.loadFailed");
-  } finally {
-    loading.value = false;
-  }
-}
-
-/** 只送動到的欄位：上游每個欄位都是指標，沒送＝不動。 */
-async function save() {
-  if (saving.value) return;
-  const patch: Partial<PlayerPersona> = {};
-  for (const key of ["userName", "userSex", "userDefine"] as const) {
-    if ((draft[key] || "") !== (snapshot[key] || "")) patch[key] = draft[key] || "";
-  }
-  saved.value = false;
-  error.value = "";
-  if (!Object.keys(patch).length) {
-    saved.value = true;
-    return;
-  }
-  saving.value = true;
-  try {
-    const p = await savePlayerPersona(patch, await token());
-    snapshot = { userName: p.userName, userSex: p.userSex, userDefine: p.userDefine };
-    Object.assign(draft, snapshot);
-    saved.value = true;
-  } catch (err) {
-    // 稱呼與自我介紹會過內容審核，被擋下時上游講的是原因——原樣講。
-    error.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
-  } finally {
-    saving.value = false;
-  }
-}
-
-// ---- 成人內容開關 ----
-const showNsfw = computed(() => !!session.profile?.showNsfw);
-const ageVerified = computed(() => !!session.profile?.ageVerified);
-/** 年齡沒驗過或沒同意這一版聲明：打開前先走聲明窗（跟首頁、卡片頁同一個） */
-const askingConsent = ref(false);
-const nsfwBusy = ref(false);
-const nsfwError = ref("");
-
-async function setNsfw(on: boolean, input?: HTMLInputElement) {
-  nsfwError.value = "";
-  if (on && needsAdultConsent(session.profile)) {
-    // 開關還沒真的打開：勾選框退回關著，送出聲明窗才會變
-    if (input) input.checked = false;
-    askingConsent.value = true;
-    return;
-  }
-  if (nsfwBusy.value) return;
-  nsfwBusy.value = true;
-  try {
-    applyAdultSettings(session.profile, await updateSiteSettings({ showNsfw: on }, await token()));
-  } catch (err) {
-    if (input) input.checked = showNsfw.value;
-    nsfwError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
-  } finally {
-    nsfwBusy.value = false;
-  }
-}
-
-// ---- 主頁數據開關 ----
-const showStats = computed(() => !!session.profile?.showStats);
-const statsBusy = ref(false);
-const statsError = ref("");
-async function setStats(on: boolean, input: HTMLInputElement) {
-  if (statsBusy.value) return;
-  statsError.value = "";
-  statsBusy.value = true;
-  try {
-    const result = await updateSiteSettings({ showStats: on }, await token());
-    if (session.profile) session.profile.showStats = result.showStats ?? on;
-  } catch (err) {
-    input.checked = showStats.value;
-    statsError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
-  } finally {
-    statsBusy.value = false;
-  }
-}
-
-// ---- 不想看的類型 ----
-const hidden = computed(() => session.profile?.hiddenTags ?? []);
-const hiddenBusy = ref(false);
-const hiddenError = ref("");
-const isHidden = (key: string) => hidden.value.includes(key);
-async function toggleHidden(key: string) {
-  if (hiddenBusy.value) return;
-  hiddenError.value = "";
-  const next = isHidden(key) ? hidden.value.filter((k) => k !== key) : [...hidden.value, key];
-  hiddenBusy.value = true;
-  try {
-    const result = await updateSiteSettings({ hiddenTags: next }, await token());
-    if (session.profile) session.profile.hiddenTags = result.hiddenTags;
-  } catch (err) {
-    hiddenError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
-  } finally {
-    hiddenBusy.value = false;
-  }
-}
-
+/** 這一頁夠寬（兩欄）時才算「桌機」：只用來決定標題層級與預設選中的那列；顯示與否交給 CSS 容器查詢 */
+const root = ref<HTMLElement | null>(null);
+const wide = ref(false);
+let observer: ResizeObserver | null = null;
 onMounted(() => {
-  document.title = pageTitle(t("settings.title"));
-  void load();
-  // 從榜單「已隱藏 N 類」來的：捲到那一區
-  if (location.hash === "#hidden") requestAnimationFrame(() => document.getElementById("hidden")?.scrollIntoView({ block: "start" }));
-  if (location.hash === '#leaderboard-privacy') requestAnimationFrame(()=>document.getElementById('leaderboard-privacy')?.scrollIntoView({block:'start'}));
+  if (typeof ResizeObserver === "undefined" || !root.value) return;
+  observer = new ResizeObserver(([entry]) => { wide.value = (entry?.contentRect.width ?? 0) > 760; });
+  observer.observe(root.value);
 });
+onBeforeUnmount(() => observer?.disconnect());
+
+const isCurrent = (row: Row) => row.id === section.value || (wide.value && !section.value && row.id === "profile");
+const paneTitle = useId();
+
+/** 返回列表：從列表點進來的就退一步（瀏覽器的上一頁也是同一個結果），從深連結直接進來的換到列表 */
+function back() {
+  const list = lp("/settings");
+  const from = router.options.history.state.back;
+  if (typeof from === "string" && from.split(/[?#]/)[0] === list) router.back();
+  else void router.push(list);
+}
+
+/** 帶 # 進來（舊深連結轉過來的、榜單「已隱藏 N 類」）：捲到那張卡 */
+watch(() => [route.path, route.hash] as const, ([, hash]) => {
+  if (!hash) return;
+  void nextTick(() => requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" })));
+}, { immediate: true });
+
+watch(section, (s) => { document.title = pageTitle(s ? `${label(s)} · ${t("settings.title")}` : t("settings.title")); }, { immediate: true });
 </script>
 
 <template>
-  <div class="page page--narrow">
-    <header class="head">
-      <h1 class="head__title display">{{ $t("settings.title") }}</h1>
-    </header>
-
-    <section id="profile" class="panel content">
-      <p class="eyebrow">{{ $t("settings.profile.title") }}</p>
-      <RouterLink :to="{ path: lp('/me'), query: { edit: '1' } }" class="content__row content__link">
-        <span class="content__text"><strong>{{ $t("profile.editProfile") }}</strong><span class="subtle">{{ $t("settings.profile.edit") }}</span></span>
-        <AccountIcon name="arrow" />
-      </RouterLink>
-      <label class="content__row">
-        <span class="content__text"><strong>{{ $t("settings.profile.stats") }}</strong><span class="subtle">{{ $t("settings.profile.statsHint") }}</span></span>
-        <input type="checkbox" class="content__switch" :checked="showStats" :disabled="statsBusy" @change="setStats(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
-      </label>
-      <p v-if="statsError" class="notice notice--error" role="alert">{{ statsError }}</p>
-      <RouterLink :to="lp('/me/community')" class="content__row content__link">
-        <span class="content__text"><strong>{{ $t("community.title") }}</strong><span class="subtle">{{ $t("community.hint") }}</span></span>
-        <AccountIcon name="arrow" />
-      </RouterLink>
-      <RouterLink :to="lp('/me/notifications')" class="content__row content__link">
-        <span class="content__text"><strong>{{ $t("nav.notifications") }}</strong><span class="subtle">{{ $t("notifications.settings") }}</span></span>
-        <AccountIcon name="arrow" />
-      </RouterLink>
-    </section>
-
-    <section id="account" class="panel content" :aria-label="$t('settings.account.title')">
-      <p class="eyebrow">{{ $t("settings.account.title") }}</p>
-      <ConnectedAccounts />
-    </section>
-
-    <section v-if="can('persona')" class="panel persona">
-      <p class="eyebrow">{{ $t("settings.persona.title") }}</p>
-      <p class="subtle">{{ $t("settings.persona.desc") }}</p>
-
-      <div v-if="loading" class="ghost persona__ghost" aria-hidden="true" />
-      <form v-else class="persona__form" @submit.prevent="save">
-        <div class="field">
-          <label for="persona-name">{{ $t("settings.persona.name") }}</label>
-          <input id="persona-name" v-model="draft.userName" class="input" :maxlength="NAME_MAX" :placeholder="$t('settings.persona.namePlaceholder')" />
-          <p class="field__foot subtle">
-            <span v-if="!draft.userName && nickName">{{ $t("settings.persona.nickHint", { name: nickName }) }}</span>
-            <span class="persona__count">{{ draft.userName.length }} / {{ NAME_MAX }}</span>
-          </p>
+  <div ref="root" class="settings" :class="{ 'settings--root': !section }">
+    <div class="page settings__page">
+      <nav class="settings__nav" data-settings-nav :aria-label="$t('settings.title')">
+        <h1 class="settings__title display">{{ $t("settings.title") }}</h1>
+        <div v-for="(group, i) in groups" :key="i" class="panel settings__group">
+          <RouterLink
+            v-for="row in group"
+            :key="row.id"
+            :to="row.to"
+            class="srow"
+            :class="{ 'is-on': isCurrent(row), 'is-default': !section && row.id === 'profile' }"
+            :aria-current="isCurrent(row) ? 'page' : undefined"
+          >
+            <span class="srow__ic"><AccountIcon :name="row.icon" /></span>
+            <span class="srow__text"><strong class="srow__label">{{ row.label }}</strong><span class="srow__hint">{{ row.hint }}</span></span>
+            <svg v-if="row.external" class="srow__go" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11l6-6M6 5h5v5" /></svg>
+            <svg v-else class="srow__go" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" /></svg>
+          </RouterLink>
         </div>
+      </nav>
 
-        <div class="field">
-          <label for="persona-sex">{{ $t("settings.persona.sex") }}</label>
-          <select id="persona-sex" v-model="draft.userSex" class="input">
-            <option v-for="opt in SEX_OPTIONS" :key="opt" :value="opt">{{ $t(`settings.persona.sex.${opt || "unset"}`) }}</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="persona-define">{{ $t("settings.persona.define") }}</label>
-          <textarea autocomplete="off" id="persona-define" v-model="draft.userDefine" class="input" rows="6" :maxlength="DEFINE_MAX" :placeholder="$t('settings.persona.definePlaceholder')" />
-          <p class="field__foot subtle"><span class="persona__count">{{ draft.userDefine.length }} / {{ DEFINE_MAX }}</span></p>
-        </div>
-
-        <p class="subtle persona__priority">{{ $t("settings.persona.priority") }}</p>
-
-        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-        <div class="persona__acts">
-          <span v-if="saved" class="subtle" role="status">{{ $t("settings.saved") }}</span>
-          <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? $t("state.loading") : $t("settings.save") }}</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="leaderboard-privacy" class="panel content">
-      <h2 class="eyebrow">{{ $t('spendBoard.privacySettings') }}</h2>
-      <LeaderboardPrivacy />
-    </section>
-
-    <section class="panel content">
-      <p class="eyebrow">{{ $t("settings.content.title") }}</p>
-      <label class="content__row">
-        <span class="content__text">
-          <strong>{{ $t("settings.content.nsfw") }}</strong>
-          <span class="subtle">{{ $t("settings.content.nsfwDesc") }}</span>
-          <span v-if="ageVerified" class="subtle content__verified">{{ $t("settings.content.verified") }}</span>
-        </span>
-        <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
-      </label>
-      <AdultConsentDialog v-if="askingConsent" @close="askingConsent = false" @done="askingConsent = false" />
-      <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
-    </section>
-
-    <section class="panel content">
-      <p class="eyebrow">{{ $t("settings.pet.title") }}</p>
-      <label class="content__row">
-        <span class="content__text">
-          <strong>{{ $t("settings.pet.label") }}</strong>
-          <span class="subtle">{{ $t("settings.pet.desc") }}</span>
-        </span>
-        <input v-model="petEnabled" type="checkbox" class="content__switch" />
-      </label>
-      <label v-if="recall !== null" class="content__row">
-        <span class="content__text">
-          <strong>{{ $t("settings.pet.recall") }}</strong>
-          <span class="subtle">{{ $t("settings.pet.recallDesc") }}</span>
-        </span>
-        <input type="checkbox" class="content__switch" :checked="recall" :disabled="recallBusy" @change="setRecall(($event.target as HTMLInputElement).checked)" />
-      </label>
-      <div class="content__row content__row--plain">
-        <span class="content__text content__pretty subtle">{{ $t("settings.pet.summonDesc") }}</span>
-        <button type="button" class="btn btn--sm content__nowrap" @click="summonPet">{{ $t("settings.pet.summon") }}</button>
-      </div>
-    </section>
-
-    <section id="hidden" class="panel content hidden">
-      <p class="eyebrow">{{ $t("settings.hidden.title") }}</p>
-      <p class="subtle hidden__desc">{{ $t("settings.hidden.desc") }}</p>
-      <div class="hidden__chips" role="group" :aria-label="$t('settings.hidden.title')" :aria-busy="hiddenBusy">
-        <button v-for="x in TAG_CATALOG" :key="x.key" type="button" class="tagchip" :class="{ 'is-on': isHidden(x.key) }" :aria-pressed="isHidden(x.key)" :disabled="hiddenBusy" @click="toggleHidden(x.key)">
-          {{ tagLabel(x, locale) }}
+      <section class="settings__pane" :data-settings-section="active" :aria-labelledby="paneTitle">
+        <button type="button" class="settings__back" @click="back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          {{ $t("settings.title") }}
         </button>
-      </div>
-      <p class="subtle" role="status">{{ hidden.length ? $t("settings.hidden.count", { n: hidden.length }) : $t("settings.hidden.none") }}</p>
-      <p v-if="hiddenError" class="notice notice--error" role="alert">{{ hiddenError }}</p>
-    </section>
+        <component :is="wide ? 'h2' : 'h1'" :id="paneTitle" class="settings__pane-title display">{{ label(active) }}</component>
+        <component :is="PANES[active]" :key="active" />
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.head { margin-bottom: var(--s-4); }
-.head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 0; }
-.persona { padding: var(--s-4); display: grid; gap: var(--s-3); }
-.persona__form { display: grid; gap: var(--s-3); }
-.persona__ghost { height: 240px; border-radius: var(--r-md); }
-.persona__count { margin-left: auto; font-variant-numeric: tabular-nums; }
-.field__foot { display: flex; gap: var(--s-2); justify-content: space-between; }
-.persona__priority { margin: 0; }
-.persona__acts { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
-.content { padding: var(--s-4); display: grid; gap: var(--s-3); margin-top: var(--s-4); }
-.content__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); cursor: pointer; }
-.content__text { display: grid; gap: 2px; }
-.content__row--plain { cursor: default; }
-.content__pretty { text-wrap: pretty; }
-.content__nowrap { white-space: nowrap; flex-shrink: 0; }
-.content__verified { color: var(--accent-text); }
-.content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
-.content__link { color: inherit; }
-.content__link svg { width: 16px; height: 16px; flex: none; color: var(--text-3); }
-.hidden { scroll-margin-top: calc(var(--header-h, 56px) + var(--s-3)); }
-.hidden__desc { margin: 0; }
-.hidden__chips { display: flex; flex-wrap: wrap; gap: 6px; }
-/* 跟榜單那排長得一樣；勾起來＝反白 */
-.tagchip {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: var(--h-sm); padding: 0 12px; white-space: nowrap;
-  background: var(--surface); border: 0; border-radius: var(--r-pill);
-  box-shadow: 0 0 0 1px var(--line);
-  font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+/* 容器查詢的容器：整個主內容寬，手機／桌機的切換點 760／761 跟其他頁的手機版切換對齊 */
+.settings { container-type: inline-size; }
+.settings__page { display: grid; gap: var(--s-5); }
+.settings__title, .settings__pane-title { font-size: clamp(20px, 2.6vw, 24px); margin: 0; }
+.settings__title { margin-bottom: var(--s-4); }
+.settings__pane-title { margin-bottom: var(--s-4); }
+
+.settings__group { display: grid; padding: 4px; }
+.settings__group + .settings__group { margin-top: var(--s-4); }
+.srow {
+  display: flex; align-items: center; gap: var(--s-3);
+  min-height: 56px; padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md); color: var(--text);
+  transition: background var(--dur) var(--ease);
 }
-.tagchip:hover { color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
-.tagchip.is-on { background: var(--text); color: var(--surface); box-shadow: none; }
-.tagchip:disabled { cursor: progress; opacity: 0.7; }
+.srow:hover { background: var(--surface-2); }
+.srow__ic {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 32px; height: 32px; border-radius: var(--r-sm);
+  background: var(--accent-tint); color: var(--accent-text);
+}
+.srow__ic svg { width: 18px; height: 18px; stroke-width: 1.6; }
+.srow__text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.srow__label { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.srow__hint { font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; }
+.srow__go { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--text-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.settings__back {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 44px; margin-inline-start: -8px; padding: 0 var(--s-2) 0 0;
+  background: none; border: 0; border-radius: var(--r-sm);
+  font: inherit; font-size: 15px; font-weight: 500; color: var(--accent-text); cursor: pointer;
+}
+.settings__back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.settings__pane { min-width: 0; }
+
+/* 手機：列表與二級頁二選一 */
+@container (max-width: 760px) {
+  .settings--root .settings__pane { display: none; }
+  .settings:not(.settings--root) .settings__nav { display: none; }
+}
+/* 桌機：左列表（sticky）＋右面板 */
+@container (min-width: 761px) {
+  .settings__page { grid-template-columns: clamp(220px, 28%, 280px) minmax(0, 1fr); align-items: start; }
+  .settings__nav { position: sticky; top: calc(var(--header-h) + 16px); }
+  .settings__pane { max-width: 680px; }
+  .settings__back { display: none; }
+  .srow.is-on, .settings--root .srow.is-default { background: var(--accent-tint); }
+  .srow.is-on .srow__go, .settings--root .srow.is-default .srow__go { stroke: var(--accent-text); }
+}
+:lang(ko) .srow__text, :lang(ko) .settings__pane { word-break: keep-all; }
+</style>
+
+<!-- 各區共用的列、開關、卡：改版前整頁共用的那一套，拆成六個元件後放在這裡一份 -->
+<style>
+.settings .set-card { padding: var(--s-4); display: grid; gap: var(--s-3); }
+.settings .set-card + .set-card { margin-top: var(--s-4); }
+.settings .set-card__head { display: flex; align-items: center; gap: var(--s-2); margin: 0; }
+.settings .content__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); cursor: pointer; }
+.settings .content__text { display: grid; gap: 2px; min-width: 0; }
+.settings .content__row--plain { cursor: default; }
+.settings .content__pretty { text-wrap: pretty; }
+.settings .content__nowrap { white-space: nowrap; flex-shrink: 0; }
+.settings .content__verified { color: var(--accent-text); }
+.settings .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.settings .content__link { color: inherit; }
+.settings .content__link svg { width: 16px; height: 16px; flex: none; color: var(--text-3); }
+.settings .content__rule { margin: 0; border: 0; border-top: 1px solid var(--line); }
+.settings .set-chip {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; flex: none;
+  border-radius: var(--r-pill); background: var(--surface-2);
+  font-size: 11px; font-weight: 600; color: var(--text-3); white-space: nowrap;
+}
+.settings [id] { scroll-margin-top: calc(var(--header-h, 56px) + var(--s-3)); }
 </style>

@@ -92,7 +92,7 @@ onBeforeUnmount(() => observer?.disconnect());
     <div v-if="folding" class="discovery-tags__head">
       <span class="discovery-tags__label">
         {{ $t('board.tags') }}
-        <template v-if="hidden.length"> · <RouterLink :to="lp('/settings') + '#hidden'" class="discovery-tags__hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink></template>
+        <template v-if="hidden.length"> · <RouterLink :to="lp('/settings/content') + '#hidden'" class="discovery-tags__hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink></template>
       </span>
       <!-- 有選中的籤時清單被撐開，收合鈕沒有事可做，就不畫：一顆按不下去的灰鈕只會讓人猜 -->
       <button v-if="clearable" type="button" class="tagchip discovery-tags__clear" @click="emit('change', [])">{{ $t('board.tags.clear') }}</button>
@@ -122,7 +122,7 @@ onBeforeUnmount(() => observer?.disconnect());
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
         <button v-if="clearable" type="button" class="tagchip discovery-tags__clear" @click="emit('change', [])">{{ $t('board.tags.clear') }}</button>
-        <RouterLink v-if="hidden.length" :to="lp('/settings') + '#hidden'" class="tagchip tagchip--hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink>
+        <RouterLink v-if="hidden.length" :to="lp('/settings/content') + '#hidden'" class="tagchip tagchip--hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink>
       </div>
     </div>
   </nav>

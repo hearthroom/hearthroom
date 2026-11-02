@@ -2,10 +2,15 @@
 import { computed, inject, ref } from "vue";
 import { useSiteLinks, petMenuKey } from "@/lib/site-links";
 import SiteLink from "./SiteLink.vue";
-const props=defineProps<{ opener?: () => HTMLElement | null }>();
+/**
+ * noPetMenu：帳號選單用。登入的人找不到蘇綺時走「使用者設定 › 疑難排解」（settings-ia），偏好設定裡不再放救援鈕；
+ * 沒登入的訪客進不了設定頁，網站選單照舊留著這一項。
+ */
+const props=defineProps<{ opener?: () => HTMLElement | null; noPetMenu?: boolean }>();
 const emit = defineEmits<{ activate: []; appearance: []; language: [] }>();
 const { links } = useSiteLinks();
-const petMenu=inject(petMenuKey,computed(()=>false));
+const petPage=inject(petMenuKey,computed(()=>false));
+const petMenu=computed(()=>!props.noPetMenu&&petPage.value);
 const emitPet=()=>{emit("activate");setTimeout(()=>openPetMenu(props.opener?.()??null),0);};
 import {openPetMenu, petEnabled} from "@/pet/enabled";
 const pick = (ids: string[]) => computed(() => ids.flatMap(id => links.value.filter(link => link.id === id).map(link => link.id === "updates" && "to" in link ? { ...link, query: { ...link.query, from: "menu" } } : link)));

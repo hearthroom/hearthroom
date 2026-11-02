@@ -4346,5 +4346,20 @@
   "review.queue.tab.pendingNoCount": "審査待ち",
   "review.decide.noteFull": "コメントは最大 {max} 文字までで、この理由は入りきりません。内容を減らしてから追加してください。",
   "review.queue.worldbook": "世界設定 {n} 件",
-  "review.queue.regex": "正規表現 {n} 件"
+  "review.queue.regex": "正規表現 {n} 件",
+  "settings.section.profile": "プロフィール",
+  "settings.section.profileHint": "ニックネーム、プロフィールページ、ランキングの公開設定",
+  "settings.section.notificationsHint": "リマインダーとプッシュ通知",
+  "settings.section.links": "連携と認可",
+  "settings.section.linksHint": "Discord、ログインと認可",
+  "settings.section.contentHint": "成人向けコンテンツ、見たくないジャンル",
+  "settings.section.appearance": "外観と言語",
+  "settings.section.appearanceHint": "テーマ、言語、スキ",
+  "settings.section.help": "トラブルシューティング",
+  "settings.section.helpHint": "スキが見つからない、接続が遅い",
+  "settings.thisDevice": "この端末",
+  "settings.routes.current": "現在のルート",
+  "settings.routes.desc": "サイトが遅いときや開けないときは、別のルートで接続できます。",
+  "settings.routes.open": "ルートを見る",
+  "settings.section.play": "プレイ"
 }

@@ -26,7 +26,7 @@ export const GUIDES: GuideDef[] = [
   { id: "community", match: is(/^\/me\/community$/), topics: 2 },
   { id: "notifications", match: is(/^\/me\/notifications$/), topics: 2 },
   { id: "me", match: is(/^\/me$/), topics: 1 },
-  { id: "settings", match: is(/^\/settings$/), topics: 2 },
+  { id: "settings", match: is(/^\/settings(\/[^/]+)?$/), topics: 2 },
   { id: "resources", match: is(/^\/resources$/), topics: 1 },
   { id: "guide", match: is(/^\/guide$/), topics: 1 },
   { id: "developers", match: is(/^\/developers$/), topics: 1 },

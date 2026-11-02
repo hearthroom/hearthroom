@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/settings",
+  "title": {
+    "zh-Hant": "使用者設定改成分類列表，點進去就是那一類的設定。",
+    "zh-Hans": "用户设置改成分类列表，点进去就是那一类的设置。",
+    "en": "Settings is now a list of categories; open one to see its settings.",
+    "ja": "ユーザー設定がカテゴリの一覧になり、開くとそのカテゴリの設定が表示されます。",
+    "ko": "사용자 설정이 분류 목록으로 바뀌어서, 누르면 그 분류의 설정이 나와요."
+  },
+  "body": {
+    "zh-Hant": "蘇綺不見或連線很慢時，可以到「疑難排解」把她叫回來或換一條線路。",
+    "zh-Hans": "苏绮不见或连接很慢时，可以到「疑难解答」把她叫回来或换一条线路。",
+    "en": "If Suki goes missing or the site is slow, Troubleshooting can bring her back or switch you to another route.",
+    "ja": "スキが見当たらないときや接続が遅いときは、「トラブルシューティング」から呼び戻したり別のルートに切り替えたりできます。",
+    "ko": "스키가 안 보이거나 연결이 느릴 때는 '문제 해결'에서 다시 부르거나 다른 회선으로 바꿀 수 있어요."
+  }
+}
