@@ -45,9 +45,10 @@ it("keeps the link but no empty row when badges are earned but none are featured
 });
 
 it("hides labels from the end into +N so the row never wraps", async () => {
-  // 每枚 100 寬、「+N」36 寬、列寬 250：100+8+100 = 208，再加 8+36 = 252 > 250，所以只留一枚
+  // 每枚 100 寬、「+N」36 寬、「全部徽章」連結 100 寬緊接在列後面、外層 350：
+  // 扣掉連結與間距、疊層 padding 後約 230–250，兩枚要 100+8+100+8+36 = 252 放不下，所以只留一枚
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) { return this.hasAttribute("data-measure-plus") ? 36 : 100; });
-  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) { return this.classList.contains("worn__row") ? 250 : 1000; });
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) { return this.classList.contains("worn") ? 350 : 1000; });
   await mount({ items: ["a", "b", "c"].map((k) => badge(k)), featured: ["a", "b", "c"] });
   const visible = [...el.querySelectorAll<HTMLElement>(".worn__row > li")].filter((li) => li.style.display !== "none");
   expect(visible.map((li) => li.textContent?.trim())).toEqual(["Title a", "+2"]);

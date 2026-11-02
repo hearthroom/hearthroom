@@ -142,11 +142,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem;margin:var(--s-2) 0 0;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* 展示列是子元件的根節點（不帶這一頁的 scope），選擇器要用 :deep */
 .who__head { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-4); min-width: 0; }
-.who__head > .who__name { flex: 0 1 auto; min-width: min(9em, 100%); }
+.who__head > .who__name { flex: 0 1 auto; min-width: 0; }
 :deep(.who__worn) { flex: 1 1 16rem; min-width: 0; }
 /* 名字最多兩行，再長就省略：CommunityName 外層是 inline-flex，省略要加在名字文字那一層 */
 .who__name :deep(.community-name > span:first-child) { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .who__level { display: inline-flex; vertical-align: middle; margin-left: var(--s-2); }
+/* 社群等級在作者頁是次要資訊：和展示徽章同高同字級的中性標籤，不用強調色（美術總監 2026-11-03） */
+.who__level :deep(.community-badge--level) { height: 28px; min-height: 28px; padding: 0 10px 0 7px; gap: 5px; background: var(--surface-2); color: var(--text-2); border-color: var(--line-strong); font-size: 12.5px; font-weight: 600; line-height: 1; }
+.who__level :deep(.community-badge--level svg) { width: 16px; height: 16px; }
 .who__tips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .who__tip {
   display: inline-flex; align-items: center; gap: var(--s-2); height: var(--h-md); padding: 0 var(--s-3) 0 4px;
