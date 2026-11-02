@@ -1,7 +1,7 @@
 /**
  * 首頁手機版面（owner 2026-10-02，來自成員意見）：
  *   - 「角色卡／關注動態」那顆分段控制拿掉，「關注」併到排序列：它是看另一個榜，不是換排法，
- *     選中時其他分頁全部不亮、類型列與張數不畫（順序見 BoardPage 的 TABS，2026-11-03 起「關注」在第八位）；
+ *     選中時其他分頁全部不亮、類型列與張數不畫（順序見 BoardPage 的 TABS，2026-11-03 起「關注」在第六位）；
  *   - R18 開關搬到頁首（App.vue），榜單頁自己不再畫；
  *   - 類型列在窄螢幕不再橫滑，改收合：預設兩行，右上「全部 N 類」展開、「收合」收回；
  *     有選中的類型時自動展開（看得到自己開了什麼篩選、關得掉）；「已隱藏 N 類」放標題列，收合時也看得到。
@@ -54,9 +54,9 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("首頁：關注併進排序列", () => {
-  const TABS = ["day", "week", "month", "hot", "new", "favorites", "score", "following", "updated", "random"];
+  const TABS = ["day", "week", "month", "hot", "new", "following", "updated", "random"];
   const label = (s: string) => i18n.global.t(s === "following" ? "board.mode.following" : `board.sort.${s}`);
-  it("十個分頁照站方成員要的順序排（2026-11-03），「關注」在第八位、跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
+  it("八個分頁照站方要的順序排（2026-11-03），「關注」在第六位、跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
     await mount("/");
     expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(TABS.map(label));
     expect(root.querySelector(".sorts__mode")).toBeNull();
@@ -67,10 +67,11 @@ describe("首頁：關注併進排序列", () => {
     expect(root.querySelector(".seg")).toBeNull();
   });
 
-  it("「收藏」排行回到分頁列：?sort=favorites 亮收藏，不退回日榜", async () => {
-    await mount("/?sort=favorites");
-    expect(sortButtons().filter((b) => b.classList.contains("sorts__item--on")).map((b) => b.textContent?.trim())).toEqual([label("favorites")]);
-    expect(vi.mocked(api.fetchBoard)).toHaveBeenCalledWith(expect.objectContaining({ sort: "favorites" }));
+  it.each(["favorites", "score"])("拿掉的分頁（?sort=%s）舊網址退回日榜", async (old) => {
+    await mount(`/?sort=${old}`);
+    expect(sortButtons().filter((b) => b.classList.contains("sorts__item--on")).map((b) => b.textContent?.trim())).toEqual([label("day")]);
+    expect(vi.mocked(api.fetchBoard)).toHaveBeenCalled();
+    expect(vi.mocked(api.fetchBoard)).not.toHaveBeenCalledWith(expect.objectContaining({ sort: old }));
   });
 
   it("點「關注」進關注動態：網址只剩 mode=following，其他分頁全部不亮，類型列與張數不畫", async () => {
@@ -85,7 +86,7 @@ describe("首頁：關注併進排序列", () => {
     sortButtons()[1].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "week" });
     sortButtons()[6].click(); await settle();
-    expect(router.currentRoute.value.query).toEqual({ sort: "score" });
+    expect(router.currentRoute.value.query).toEqual({ sort: "updated" });
     expect(tagsNav()).not.toBeNull();
   });
 });

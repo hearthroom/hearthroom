@@ -69,12 +69,14 @@ const continuations = computed(() => {
 });
 const loading = computed(() => feed.loading);
 /**
- * 分頁列的順序（站方成員提、owner 2026-11-03 同意）：日榜、週榜、月榜、最熱、最新、收藏、評分、關注、更新、推薦。
- * 成員原話是「日榜 週榜 月榜 總榜 最新 收藏」：「總榜」指不開時間窗的最熱；「收藏」是全站收藏數排行，11-01 拿掉後這次放回來。
+ * 分頁列的順序（站方 2026-11-03，owner 同意照站方意思）：日榜、週榜、月榜、最熱、最新、關注、更新、推薦。
+ * 站方原話「日榜、周榜、月榜、最热、最新、关注（收藏）、更新、推荐」：「關注」照舊是關注作者的動態，不改名。
+ * 全站收藏數排行與評分排行不在分頁列：舊網址 ?sort=favorites／score 不在 SORTS 裡，照沒帶 sort 退回日榜。
+ * 伺服器的 favorites／score 排法仍在（開放 API 在用），只是網頁不放分頁。
  * 「關注」是另一種清單（關注作者的動態），不是排法，但跟排序排在同一列、同一個樣式。
  */
-const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "favorites", "score", "updated", "random"];
-const TABS: Array<Sort | "following"> = ["day", "week", "month", "hot", "new", "favorites", "score", "following", "updated", "random"];
+const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "updated", "random"];
+const TABS: Array<Sort | "following"> = ["day", "week", "month", "hot", "new", "following", "updated", "random"];
 const restoring = ref(false);
 const wide = ref(window.innerWidth >= 1080);
 const sentinel = ref<HTMLElement | null>(null);
@@ -408,7 +410,7 @@ const ratingOptions = computed(() => {
 @media(min-width:1440px) { .board-page { --board-columns: 5; } }
 @media(min-width:1920px) { .board-page { --board-columns: 6; } .board-page .board-layout { grid-template-columns: minmax(0,1fr) 288px; } }
 @media(min-width:2400px) { .board-page { --board-columns: 8; } }
-/* 分頁做成細字頁籤，擠不下就換行、不裁字：橫捲會把第八位的「關注」藏到畫面外 */
+/* 分頁做成細字頁籤，擠不下就換行、不裁字：橫捲會把第六位的「關注」藏到畫面外 */
 .board-main { min-width: 0; }
 /* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
 .board-main--restored :deep(.settle) { animation: none; }
@@ -422,7 +424,7 @@ const ratingOptions = computed(() => {
 }
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
-/* 窄螢幕把每顆的左右內距收 2px：十個分頁在手機上會換成兩行，少一點內距第二行就短一些 */
+/* 窄螢幕把每顆的左右內距收 2px：八個分頁在手機上會換成兩行，少一點內距第二行就短一些 */
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin: 0; font-variant-numeric: tabular-nums; }
