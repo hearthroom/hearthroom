@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "回覆裡框起來的文字不用再左右滑了",
+    "zh-Hans": "回复里框起来的文字不用再左右滑了",
+    "en": "Boxed text in replies now wraps instead of scrolling sideways",
+    "ja": "返信の枠内の文字が折り返されるようになりました",
+    "ko": "답장 속 상자 안 글이 자동으로 줄바꿈됩니다"
+  },
+  "body": {
+    "zh-Hant": "AI 回覆裡用框框包起來的文字，例如狀態欄，現在會自動換行，在畫面內就讀得完。",
+    "zh-Hans": "AI 回复里用框框包起来的文字，例如状态栏，现在会自动换行，在屏幕内就能读完。",
+    "en": "Text in a box inside an AI reply, such as a status bar, now wraps to fit the screen, so you can read it without scrolling left and right.",
+    "ja": "AIの返信で枠に囲まれた文字（ステータス欄など）が自動で折り返され、左右にスクロールしなくても読めます。",
+    "ko": "AI 답장에서 상자로 묶인 글(예: 상태창)이 자동으로 줄바꿈되어 좌우로 넘기지 않아도 읽을 수 있습니다."
+  }
+}
