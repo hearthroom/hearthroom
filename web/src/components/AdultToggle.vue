@@ -7,6 +7,7 @@
  *     站上沒開託管登入（自架站）時遊客憑證發不出來，照舊不畫。
  *   - 沒驗過年齡、或沒同意目前這一版聲明：先開聲明窗（AdultConsentDialog），送出才真的打開。
  *   - 兩樣都齊了：點一下就切換，不再跳窗。
+ *   - 登入的人地區選了中國大陸：不畫（那裡不提供限制級內容，owner 2026-11-03）。
  *
  * 樣子是一顆跟外觀、語言同尺寸的圓鈕，不是 switch：原本的膠囊（字＋軌道）約 84px，375px 手機的頁首剩不到 50px，
  * 放進去會把字標擠成省略號。關的時候字上畫一道斜線（跟靜音、隱藏眼睛同一個慣例），開的時候紅底白字——
@@ -17,12 +18,13 @@ import { useI18n } from "vue-i18n";
 import { ApiError } from "@/lib/api";
 import { loadGuestAdult, needsAdultConsent, saveAdult, viewerAdult } from "@/lib/adult-consent";
 import { useSession } from "@/lib/session";
+import { adultUnavailable } from "@/lib/country-region";
 import AdultConsentDialog from "./AdultConsentDialog.vue";
 
 const session = useSession();
 const { t } = useI18n();
 
-const state = computed(() => viewerAdult(session));
+const state = computed(() => session.me && adultUnavailable(session.profile) ? null : viewerAdult(session));
 const on = computed(() => !!state.value?.showNsfw && !!state.value?.ageVerified);
 // 確定是遊客了才問遊客憑證（登入的人看帳號設定，不必多問一趟）
 watch(() => session.ready && !session.me, (guest) => { if (guest) void loadGuestAdult(); }, { immediate: true });

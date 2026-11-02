@@ -34,6 +34,8 @@ import PlayComments from "@/components/PlayComments.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
 import AdultGate from "@/components/AdultGate.vue";
+import RegionUnavailable from "@/components/RegionUnavailable.vue";
+import { isRegionUnavailable } from "@/lib/country-region";
 import { readPlayIntro, type PlayIntro } from "@/lib/play-intro";
 import { stageContentSeq } from "@/lib/stage-ready";
 import { displayName } from "@/lib/display-name";
@@ -56,6 +58,8 @@ const backToReview = shallowRef(false);
  * 在門上打開了就把 retry 加一，整條開卡流程重跑一次。
  */
 const gated = shallowRef(false);
+/** 讀卡或續聊授權回 403 region_unavailable：畫「暫不提供」，舞台不掛、不建立對話連線 */
+const regionBlocked = shallowRef(false);
 // A shallow ref forces a multi-source watch to run even when its values are
 // unchanged. Overlay history pops must not restart this mounted player.
 const retry = ref(0);
@@ -72,7 +76,7 @@ const COVER_MAX_MS = 22_000;
 const intro = shallowRef<PlayIntro | null>(readPlayIntro(routeId.value));
 const readyBaseline = shallowRef(stageContentSeq.value);
 const coverExpired = shallowRef(false);
-const covering = computed(() => !error.value && !gated.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
+const covering = computed(() => !error.value && !gated.value && !regionBlocked.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
 let coverTimer: ReturnType<typeof setTimeout> | undefined;
 function resetCover() {
   readyBaseline.value = stageContentSeq.value;
@@ -97,6 +101,7 @@ const cardNumber = shallowRef<string>("");
 // 讀卡失敗時還沒有解析結果；卡片頁也接受網址上的卡號／舊 roleId。
 const cardPagePath = computed(() => `/cards/${encodeURIComponent(cardNumber.value || routeId.value)}`);
 const cardPageUrl = computed(() => `https://${communityHost()}${locale.value === "zh-Hant" ? "" : `/${locale.value}`}${cardPagePath.value}`);
+const homeUrl = computed(() => `https://${communityHost()}${locale.value === "zh-Hant" ? "" : `/${locale.value}`}/`);
 const reviewPath = computed(() => `/review/${encodeURIComponent(String(route.query.review ?? ""))}`);
 if (playApp) {
   onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
@@ -184,6 +189,7 @@ onMounted(() => {
     cardNumber.value = "";
     error.value = "";
     gated.value = false;
+    regionBlocked.value = false;
     backToReview.value = false;
     registerPlayCard(null);
     setPlayShare(null);
@@ -250,6 +256,7 @@ onMounted(() => {
       // lib/api 的 ApiError：伺服器原文在 code，message 已換成「請求失敗」
       const { status, code } = (err ?? {}) as { status?: number; code?: string };
       // 還沒解析出卡號：門下的「回到卡片」用網址上的 ID，卡片頁自己會換成卡號
+      if (isRegionUnavailable(err)) { regionBlocked.value = true; return; }
       if (status === 403 && code === "adult_content") { gated.value = true; cardNumber.value ||= routeId.value; return; }
       backToReview.value = typeof route.query.review === "string" && (code === "claim this submission first" || status === 410);
       error.value = !backToReview.value ? t("play.loadFailed") : status === 410 ? t("review.inactive") : t("play.claimFirst");
@@ -263,6 +270,7 @@ watch(locale, () => { void remergeStageMessages(); });
 <template>
   <div class="play">
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" />
+    <RegionUnavailable v-else-if="regionBlocked" :href="playApp ? homeUrl : undefined" />
     <div v-else-if="error || gated" class="play__state">
       <AdultGate v-if="gated" @enabled="retry++" />
       <p v-else class="play__error" role="alert">{{ error }}</p>

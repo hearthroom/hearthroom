@@ -1,6 +1,7 @@
 import {clearPublicationDrafts} from './confirm';
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
 import { clearLibraryCache } from './library';
+import { forgetCards } from './card-memory';
 import { clearStageStorage } from './stage-storage';
 import { rememberSignedIn, signedInHint } from './signin-hint';
 import { lastShown } from './mine-memory';
@@ -64,7 +65,9 @@ export const useSession = defineStore("session", () => {
    */
   const otherLines = ref<string[]>([]);
   const restoreError = ref(false);
-  watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(',')], clearLibraryCache, {flush:'sync'});
+  watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(','), () => profile.value?.countryRegion], clearLibraryCache, {flush:'sync'});
+  // 換了國家／地區：聊天、收藏與記住的卡都要照新地區重讀（中國大陸不提供限制級卡）
+  watch(() => profile.value?.countryRegion, (now, before) => { if (before !== undefined && now !== before) forgetCards(); }, {flush:'sync'});
   const displayName = computed(() => profile.value?.displayName || profile.value?.handle || siteName(String(i18n.global.locale.value)));
   const avatarUrl = computed(() => profile.value?.avatarUrl || "");
 

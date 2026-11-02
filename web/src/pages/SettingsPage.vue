@@ -12,13 +12,17 @@
  * 不想看的類型（owner 2026-09-14）：勾起來的類型不會出現在榜單和搜尋裡。不分頁不分區——首頁還是一個池子，
  * 每個人自己拉窗簾。勾一下就存（跟成人開關一樣），存在成員上、換裝置跟著走；榜單排尾的「已隱藏 N 類」帶回這裡。
  *
+ * 國家／地區（owner 2026-11-03）：放在「內容」這一區，選了就存。選中國大陸時伺服器不提供限制級內容，
+ * 成人內容開關跟著收起來；切回其他地區，原本的成人設定照舊（伺服器沒刪）。設定頁改版（2026-11-03-settings-ia）定案後跟著搬。
+ *
  * 主頁顯示與登入授權（owner 2026-10-19 主頁改版）：「我的」頁只放名片與入口，開關類搬來這裡——
  * 主頁數據開關（預設關）、卡片與遊玩服務的授權（原本在「我的」頁右欄），以及 Discord 社區、通知設定的入口。
  */
 import { computed, onMounted, reactive, ref } from "vue";
 import LeaderboardPrivacy from '@/components/LeaderboardPrivacy.vue';
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
+import { ApiError, fetchPlayerPersona, fetchSiteMe, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
+import { REGION_GROUPS, adultUnavailable } from "@/lib/country-region";
 import { can } from "@/lib/provider";
 import { pageTitle } from "@/lib/i18n";
 import { applyAdultSettings, needsAdultConsent } from "@/lib/adult-consent";
@@ -144,6 +148,33 @@ async function setNsfw(on: boolean, input?: HTMLInputElement) {
   }
 }
 
+// ---- 國家／地區 ----
+const region = computed(() => session.profile?.countryRegion ?? "");
+const regionLocked = computed(() => adultUnavailable(session.profile));
+const regionBusy = ref(false);
+const regionError = ref("");
+async function setRegion(next: string, select: HTMLSelectElement) {
+  if (regionBusy.value || next === region.value) return;
+  regionError.value = "";
+  regionBusy.value = true;
+  try {
+    const result = await updateSiteSettings({ countryRegion: next }, await token());
+    // 伺服器回的成人狀態跟著地區走（中國大陸一律關），寫回 session，清單頁會自己重讀
+    applyAdultSettings(session.profile, result);
+    if (session.profile) session.profile.countryRegion = result.countryRegion ?? next;
+  } catch (err) {
+    select.value = region.value;
+    regionError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
+  } finally {
+    regionBusy.value = false;
+  }
+}
+/** 第一次登入時個人資料可能還沒有地區（伺服器在第一次讀取時才決定預設）：進設定頁再問一次本站，以那份為準 */
+async function refreshRegion() {
+  const got = await fetchSiteMe(await token()).catch(() => null);
+  if (got?.countryRegion && session.profile && !regionBusy.value) session.profile.countryRegion = got.countryRegion;
+}
+
 // ---- 主頁數據開關 ----
 const showStats = computed(() => !!session.profile?.showStats);
 const statsBusy = ref(false);
@@ -186,6 +217,7 @@ async function toggleHidden(key: string) {
 onMounted(() => {
   document.title = pageTitle(t("settings.title"));
   void load();
+  void refreshRegion();
   // 從榜單「已隱藏 N 類」來的：捲到那一區
   if (location.hash === "#hidden") requestAnimationFrame(() => document.getElementById("hidden")?.scrollIntoView({ block: "start" }));
   if (location.hash === '#leaderboard-privacy') requestAnimationFrame(()=>document.getElementById('leaderboard-privacy')?.scrollIntoView({block:'start'}));
@@ -269,7 +301,19 @@ onMounted(() => {
 
     <section class="panel content">
       <p class="eyebrow">{{ $t("settings.content.title") }}</p>
-      <label class="content__row">
+      <label class="content__row content__row--field">
+        <span class="content__text">
+          <strong>{{ $t("settings.region.label") }}</strong>
+          <span class="subtle">{{ $t("settings.region.desc") }}</span>
+        </span>
+        <select class="input content__select" :value="region" :disabled="regionBusy || !region" @change="setRegion(($event.target as HTMLSelectElement).value, $event.target as HTMLSelectElement)">
+          <optgroup v-for="group in REGION_GROUPS" :key="group.key" :label="$t(`settings.region.group.${group.key}`)">
+            <option v-for="code in group.regions" :key="code" :value="code">{{ $t(`settings.region.option.${code}`) }}</option>
+          </optgroup>
+        </select>
+      </label>
+      <p v-if="regionError" class="notice notice--error" role="alert">{{ regionError }}</p>
+      <label v-if="!regionLocked" class="content__row">
         <span class="content__text">
           <strong>{{ $t("settings.content.nsfw") }}</strong>
           <span class="subtle">{{ $t("settings.content.nsfwDesc") }}</span>
@@ -277,7 +321,7 @@ onMounted(() => {
         </span>
         <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
       </label>
-      <AdultConsentDialog v-if="askingConsent" @close="askingConsent = false" @done="askingConsent = false" />
+      <AdultConsentDialog v-if="askingConsent && !regionLocked" @close="askingConsent = false" @done="askingConsent = false" />
       <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
     </section>
 
@@ -334,6 +378,11 @@ onMounted(() => {
 .content__pretty { text-wrap: pretty; }
 .content__nowrap { white-space: nowrap; flex-shrink: 0; }
 .content__verified { color: var(--accent-text); }
+.content__select { width: auto; min-width: 9em; max-width: 50%; flex: none; }
+@media (max-width: 480px) {
+  .content__row--field { flex-direction: column; align-items: stretch; gap: var(--s-2); }
+  .content__select { max-width: none; width: 100%; }
+}
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
 .content__link { color: inherit; }
 .content__link svg { width: 16px; height: 16px; flex: none; color: var(--text-3); }

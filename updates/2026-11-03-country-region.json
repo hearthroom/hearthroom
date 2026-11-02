@@ -2,12 +2,11 @@
   "tier": "feature",
   "audience": "everyone",
   "try": "/settings",
-  "draft": true,
   "title": {
-    "zh-Hant": "個人設定新增國家／地區選項。",
-    "zh-Hans": "个人设置新增国家／地区选项。",
-    "en": "Settings now include a country/region option.",
-    "ja": "設定に国・地域の選択を追加しました。",
-    "ko": "설정에 국가/지역 선택이 추가되었습니다."
+    "zh-Hant": "使用者設定新增「國家／地區」，部分內容依所選地區的法規提供。",
+    "zh-Hans": "用户设置新增“国家／地区”，部分内容依所选地区的法规提供。",
+    "en": "Settings now include Country/Region, and some content is offered according to the laws of the selected region.",
+    "ja": "ユーザー設定に「国・地域」が加わり、一部のコンテンツは選択した地域の法令に沿って提供されます。",
+    "ko": "사용자 설정에 ‘국가/지역’이 추가되어 일부 콘텐츠는 선택한 지역의 법령에 따라 제공됩니다."
   }
 }

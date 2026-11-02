@@ -152,6 +152,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   hosting_preparation_unfinished: "workspace.submitUnfinished",
   publication_use_original: "error.publicationUseOriginal",
   adult_content: "card.gate.title",
+  region_unavailable: "region.unavailable.title",
   rating_required: "error.ratingRequired",
   rating_answers_invalid: "error.ratingRequired",
   rating_version_outdated: "error.ratingOutdated",
@@ -666,6 +667,8 @@ export interface SiteMe {
   hiddenTags: string[];
   /** 打賞連結（標準網址） */
   tipLinks?: string[];
+  /** 國家／地區（lib/country-region 的代碼）；舊回應沒有這欄 */
+  countryRegion?: string;
   /** 主頁封面（shared/profile-covers.ts 的 id）；空字串＝用預設那張。舊回應沒有這欄 */
   cover?: string;
   /** 自己的主頁顯示作品數、被對話、粉絲、關注（預設關） */
@@ -674,14 +677,14 @@ export interface SiteMe {
   following?: number;
 }
 
-export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[]; showStats?: boolean }
+export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[]; showStats?: boolean; countryRegion?: string }
 
 /**
  * 本站的個人設定，可以只送其中一樣：成人內容開關（第一次開要帶生日 YYYY-MM-DD，伺服器只看一眼、不存；
  * 沒同意過目前這一版聲明要帶 consentVersion）、
  * 不想看的類型（完整清單，整份換掉）。回應永遠是三樣齊的現況。
  */
-export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number; hiddenTags?: string[]; showStats?: boolean }, token: string): Promise<SiteSettings> {
+export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number; hiddenTags?: string[]; showStats?: boolean; countryRegion?: string }, token: string): Promise<SiteSettings> {
   return json(
     await fetch(`${COMMUNITY_API}/me/settings`, {
       method: "POST",
@@ -737,8 +740,9 @@ export async function deleteCardSave(roleId: string, key: string, token: string,
   );
 }
 
+/** language：目前的介面語言。新成員的國家／地區預設在第一次讀取時決定，要照介面語言，不照瀏覽器語言。 */
 export async function fetchSiteMe(token: string): Promise<SiteMe> {
-  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), ...authHeaders(token) } }));
+  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), language: String(i18n.global.locale.value), ...authHeaders(token) } }));
 }
 
 export async function registerCardIdentity(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<{id:string;num:number;provider:ProviderId;sourceRoleId:string}> {
