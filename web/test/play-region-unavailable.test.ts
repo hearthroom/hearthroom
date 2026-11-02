@@ -72,6 +72,17 @@ it.each([
   expect(root!.querySelector('a.btn--primary')?.getAttribute('href')).toBe('/');
 });
 
+it('被擋下的讀卡不留下沒接住的錯誤（全站會把它記成錯誤事件）', async () => {
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  try {
+    await mount('/play/100300');
+    await new Promise(r => setTimeout(r, 20));
+    expect(root!.textContent).toContain(i18n.global.t('region.unavailable.title'));
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally { process.off('unhandledRejection', unhandled); }
+});
+
 it('提供的卡照常掛舞台（正控）', async () => {
   blocked.card = false; blocked.resume = false;
   await mount('/play/100300?resume=c1');
