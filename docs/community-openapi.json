@@ -4317,6 +4317,54 @@
           }
         }
       }
+    },
+    "/v1/cards/{id}/honors": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Read permanent card honors",
+        "description": "Uses the same card visibility and adult-content permissions as card detail. Returns complete settled history, newest award first; never provisional positions.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RankHonor"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Adult-content permission required."
+          },
+          "404": {
+            "description": "Card unavailable."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4489,6 +4537,14 @@
             "type": "string",
             "maxLength": 200,
             "description": "Current approved-version changelog; empty for a silent version."
+          },
+          "honors": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/RankHonorMark"
+            },
+            "description": "Settled honors only, one best band per day/week/month window. Clean wins equal-band ties."
           }
         }
       },
@@ -5350,6 +5406,70 @@
             "description": "Frozen public changelog for a major revision, empty for minor."
           }
         }
+      },
+      "RankHonorMark": {
+        "type": "object",
+        "required": [
+          "zone",
+          "window",
+          "band"
+        ],
+        "properties": {
+          "zone": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "all"
+            ]
+          },
+          "window": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "band": {
+            "type": "integer",
+            "enum": [
+              1,
+              3,
+              10
+            ]
+          }
+        }
+      },
+      "RankHonor": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RankHonorMark"
+          },
+          {
+            "type": "object",
+            "required": [
+              "period",
+              "at",
+              "rank"
+            ],
+            "properties": {
+              "period": {
+                "type": "string",
+                "format": "date",
+                "description": "Taipei cohort start date: day, Monday, or first day of the month; historical backfill preserves this date."
+              },
+              "at": {
+                "type": "integer",
+                "description": "Actual award time in Unix milliseconds."
+              },
+              "rank": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              }
+            }
+          }
+        ]
       }
     }
   }

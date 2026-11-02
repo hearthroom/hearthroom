@@ -14103,7 +14103,7 @@
           "Community"
         ],
         "summary": "Read private badge qualification totals for app members",
-        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD topups net of full/partial refunds (plans excluded); actual debit consumption for chat/API/image/speech/video. Missing currency conversion returns complete=false, never fabricated USD.",
+        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD payments net of full/partial refunds (including paid plans); actual debit consumption for chat/API/image/speech/video. Missing currency conversion returns complete=false, never fabricated USD.",
         "security": [
           {
             "appToken": [
