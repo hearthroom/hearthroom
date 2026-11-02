@@ -237,8 +237,11 @@ onMounted(() => {
       if (!token) { await connectAccount(provider, returnTo); return; }
       // 授權要重做時先等卡：卡被地區擋下就留在「暫不提供」，不先被帶去授權頁。
       // 授權檢查照舊最先出門，卡讀完才把結果交給它
+      // 授權檢查用不到它（探測通過）時沒人等這個 promise：先接住，讀卡失敗才不會變成沒接住的錯誤
       let cardSettled!: (read: Promise<unknown>) => void;
-      const authorization = ensurePlayAuthorization(token, returnTo, provider, new Promise<unknown>((done) => { cardSettled = done; }));
+      const cardGate = new Promise<unknown>((done) => { cardSettled = done; });
+      cardGate.catch(() => {});
+      const authorization = ensurePlayAuthorization(token, returnTo, provider, cardGate);
       authorization.catch(() => {});
       const cardRead = resolvePlayCard(routeId.value, provider, contentLang(locale.value), route.query.mode === "source", typeof route.query.review === "string" ? {id:route.query.review,token} : undefined,
         typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? "",providerToken:token} : undefined);
