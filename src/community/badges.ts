@@ -5,7 +5,8 @@ import { appearanceView } from './appearance';
 import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
 export const ACTIVE_AWARD = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)";
 /** Members who joined before this instant earned the founding-member badge. */
-export const FOUNDER_CUTOFF = Date.UTC(2026, 9, 1);
+export const FOUNDER_CUTOFF = Date.UTC(2026, 9, 16,16);
+export const VETERAN_END = Date.UTC(2026,10,17,16);
 const DAY = 86400000;
 /**
  * Cards a member owns for creator milestones: same ownership rule as the author page
@@ -30,6 +31,7 @@ type Metric = {
  * the two paths cannot disagree about who qualifies.
  */
 export const METRICS:Record<string,Metric>={
+ effective_invites:{one:'SELECT effective_invites FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,effective_invites AS value FROM badge_qualifications'},
  xp:{unit:'xp',one:"SELECT COALESCE(SUM(x.points),0) FROM discord_links l JOIN community_xp x ON x.discord_id=l.discord_id WHERE l.member_id=? AND l.state='active'",
   all:"SELECT l.member_id,SUM(x.points) AS value FROM discord_links l JOIN community_xp x ON x.discord_id=l.discord_id WHERE l.state='active' GROUP BY l.member_id"},
  works_listed:{one:`SELECT COUNT(*) FROM ${OWNED_LISTED} AND ${OWNER}=?`,all:`SELECT ${OWNER} AS member_id,COUNT(*) AS value FROM ${OWNED_LISTED} GROUP BY 1`},
@@ -44,7 +46,8 @@ export const METRICS:Record<string,Metric>={
  comments:{one:'SELECT COUNT(*) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,COUNT(*) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
  likes_received:{one:'SELECT COALESCE(SUM(like_count),0) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,SUM(like_count) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
  profile:{progress:false,one:'SELECT profile_edited_at IS NOT NULL FROM members WHERE id=?',all:'SELECT id AS member_id,1 AS value FROM members WHERE profile_edited_at IS NOT NULL'},
- founder:{progress:false,one:`SELECT created_at<${FOUNDER_CUTOFF} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${FOUNDER_CUTOFF}`},
+ beta_veteran:{progress:false,one:`SELECT created_at<${FOUNDER_CUTOFF} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${FOUNDER_CUTOFF}`},
+ opening_veteran:{progress:false,one:`SELECT created_at>=${FOUNDER_CUTOFF} AND created_at<${VETERAN_END} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at>=${FOUNDER_CUTOFF} AND created_at<${VETERAN_END}`},
  tenure_days:{unit:'days',timed:true,one:`SELECT (?-created_at)/${DAY} FROM members WHERE id=?`,all:`SELECT id AS member_id,(?-created_at)/${DAY} AS value FROM members`},
 };
 export async function activeAwardKeys(env:Env,member:string) {
@@ -82,10 +85,11 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
  const prefs=await env.DB.prepare('SELECT public_badges,featured_badges FROM community_preferences WHERE member_id=?').bind(member).first<{public_badges:number;featured_badges:string|null}>();
  if(publicOnly&&!prefs?.public_badges)return {items:[],featured:[]};
  const catalog=await definitions(env);
- const [awards,link,appearance,values]=await Promise.all([
+ const [awards,link,appearance,values,rankCounts]=await Promise.all([
   env.DB.prepare('SELECT badge,created_at,revoked_at,expires_at FROM community_awards WHERE member_id=?').bind(member).all<{badge:string;created_at:number;revoked_at:number|null;expires_at:number|null}>(),
   env.DB.prepare("SELECT created_at FROM discord_links WHERE member_id=? AND state='active'").bind(member).first<{created_at:number}>(),appearanceView(env,member),
   publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
+  env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
  const now=Date.now();
  const crossed:string[]=[];
@@ -98,18 +102,21 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   const metric=def.metric&&METRICS[def.metric]?METRICS[def.metric]:null;
   const {metric:_m,threshold:_t,...visible}=def;
   const item:CollectedBadge={...visible,state,earnedAt,expiresAt:award?.expires_at??null};
+  const counts=rankCounts.results.find(r=>r.badge===def.key);
+  if(counts){item.state='earned';item.earnedAt=counts.first_at;item.count=counts.count;item.firstAt=counts.first_at;item.lastAt=counts.last_at;item.lastPeriod=counts.last_period;}
   if(metric&&def.threshold!==null&&!publicOnly){
    const value=values[def.metric as string]??0;
    if(!award&&value>=def.threshold){item.state='earned';item.earnedAt=now;crossed.push(def.key);}
    if(metric.progress!==false)item.progress={value:item.state==='earned'?Math.max(value,def.threshold):Math.min(value,def.threshold),target:def.threshold,...(metric.unit?{unit:metric.unit}:{})};
   }
+  if(!counts){item.count=item.state==='earned'?1:0;item.firstAt=item.earnedAt;item.lastAt=item.earnedAt;}
   return item;
  });
  if(crossed.length)await env.DB.batch(crossed.map(key=>env.DB.prepare("INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at) VALUES (?,?,'metric-v1',?)").bind(member,key,now)));
  const active=items.filter(b=>b.state==='earned').map(b=>b.key);
- const chosen:string[]=prefs?.featured_badges===null||prefs?.featured_badges===undefined?active.slice(0,FEATURED_LIMIT):JSON.parse(prefs.featured_badges);
+ const chosen:string[]=prefs?.featured_badges===null||prefs?.featured_badges===undefined?items.filter(b=>b.state==='earned'&&b.category!=='spend').map(b=>b.key).slice(0,FEATURED_LIMIT):JSON.parse(prefs.featured_badges);
  const featured=chosen.filter(key=>active.includes(key)).slice(0,FEATURED_LIMIT);
- if(publicOnly){items=items.filter(b=>b.state==='earned');return {items,featured};}
+ if(publicOnly){items=items.filter(b=>b.state==='earned'&&(b.category!=='spend'||featured.includes(b.key)));return {items,featured};}
  return {items,featured,public:!!prefs?.public_badges};
 }
 export async function setFeaturedBadges(env:Env,member:string,input:unknown,visibility?:unknown) {

@@ -233,7 +233,7 @@ type PublicIdentity = {badges:string[];level?:number;appearance?:Awaited<ReturnT
 /** A cold page is one joined projection, rather than a chain of queries per author. */
 export async function publicCommunityViews(env:Env,members:string[]):Promise<Map<string,PublicIdentity>> {
  if(!members.length)return new Map();
- const rows=(await env.DB.prepare(`SELECT m.id,p.public_badges,p.public_level,l.member_id AS linked,
+ const rows=(await env.DB.prepare(`SELECT m.id,p.public_badges,p.public_level,p.featured_badges,l.member_id AS linked,
  a.verified_at,a.boosting_since,a.assets,ap.avatar_source,ap.name_style,ap.frame,ap.public_enabled,
  CASE WHEN p.public_badges=1 THEN (SELECT json_group_array(badge) FROM
   (SELECT badge FROM community_awards WHERE member_id=m.id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) ORDER BY badge)) ELSE '[]' END AS badges,
@@ -244,14 +244,15 @@ export async function publicCommunityViews(env:Env,members:string[]):Promise<Map
  LEFT JOIN community_discord_appearance a ON a.member_id=m.id AND a.link_version=l.version
  LEFT JOIN community_appearance_preferences ap ON ap.member_id=m.id
  WHERE m.account_class='normal' AND m.id IN (${members.map(()=>'?').join(',')})`).bind(Date.now(),...members).all<{
- id:string;public_badges:number|null;public_level:number|null;linked:string|null;verified_at:number|null;boosting_since:number|null;assets:string|null;
+ id:string;public_badges:number|null;public_level:number|null;featured_badges:string|null;linked:string|null;verified_at:number|null;boosting_since:number|null;assets:string|null;
  avatar_source:AppearancePreferences['avatarSource']|null;name_style:AppearancePreferences['nameStyle'];frame:AppearancePreferences['frame'];public_enabled:number;badges:string;xp:number|null;
  }>()).results;
  return new Map(rows.map(row=>{
   const appearance=projectAppearance(env,row.avatar_source?{...row,avatar_source:row.avatar_source}:null,row.verified_at===null?null:{verified_at:row.verified_at,boosting_since:row.boosting_since,assets:row.assets??'{}'},true);
   const badges:string[]=JSON.parse(row.badges);
   if(row.public_badges){if(row.linked)badges.unshift('discord_linked');if(appearance.supporter.active)badges.push('server_booster');}
-  const result:PublicIdentity={badges};
+  const chosen:string[]=row.featured_badges===null?badges.filter(k=>!k.startsWith('spend_')).slice(0,5):JSON.parse(row.featured_badges);
+  const result:PublicIdentity={badges:row.public_badges?chosen.filter(k=>badges.includes(k)).slice(0,5):[]};
   if(row.public_level&&row.xp!==null)result.level=level(row.xp);
   if(appearance.effective.avatarUrl||appearance.effective.nameStyle!=='none'||appearance.effective.frame!=='none')result.appearance=appearance.effective;
   return [row.id,result];

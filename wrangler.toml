@@ -162,7 +162,7 @@ id = "cf47eb790d1f4f4a9d563a596b268c5a"
 # 每 10 分鐘（:02 起）：整批讀所有卡片的熱度（src/heat.ts），避開 :17 與每 5 分鐘的排程。
 # 每 5 分鐘：只重試創作季發獎，不執行其他同步。
 [triggers]
-crons = ["17 * * * *", "2-59/10 * * * *", "*/5 * * * *"]
+crons = ["17 * * * *", "2-59/10 * * * *", "*/5 * * * *", "23 16 * * *", "* * * * *"]
 
 # Community-owned avatars; provision this bucket before deploying this revision.
 [[r2_buckets]]

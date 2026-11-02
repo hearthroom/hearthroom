@@ -8,8 +8,11 @@ import { RATINGS, type Rating } from "../shared/content-rating";
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
+import {COVER_HONORS} from './rank-honors';
+import type {RankHonor} from '../shared/rank-honors';
 
 export interface CardRow {
+  honors?:string;
   update_kind?: 'minor'|'major';
   update_note?: string;
   favorite_count?: number;
@@ -92,7 +95,7 @@ const UPDATED_AT = `COALESCE((SELECT COALESCE(v.published_at, r.decided_at, v.cr
 const LATEST_ANNOUNCED_UPDATE = `(SELECT MAX(e.published_at) FROM works w JOIN card_update_events e ON e.work_id=w.id AND e.state='published' WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id)`;
 const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE}, 0))`;
 
-const CARD_COLUMNS = "c.*, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = COVER_HONORS+" AS honors, c.*, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** Presentation rows only; callers must apply current access before returning. */
 export async function cardsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
@@ -169,6 +172,7 @@ export function toCard(row: CardRow, lang: string) {
     favoriteCount: row.favorite_count ?? 0,
     trending: Math.max(0, row.hot_score),
     heat: row.heat ?? 0,
+    honors:row.honors?(JSON.parse(row.honors) as RankHonor[]).sort((a,b)=>['day','week','month'].indexOf(a.window)-['day','week','month'].indexOf(b.window)):[],
     registeredAt: row.registered_at,
     updatedAt: row.updated_at ?? row.registered_at,
     updateKind: row.update_kind ?? 'minor',

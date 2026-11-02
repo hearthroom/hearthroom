@@ -11,7 +11,9 @@ import { useLocalePath } from "@/lib/use-locale";
 import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
-import RatingMark from "./RatingMark.vue";
+import RankBadge from "./RankBadge.vue";
+import { coverHonors } from "@/lib/honors";
+import { ratingName } from "@/lib/rating";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -63,6 +65,11 @@ const timeLabel = computed(() => shownAt.value === undefined ? "" : event.value?
   ? t("library.feedPublishedAgo", { time: relativeTime(shownAt.value) })
   : t("card.updatedAgo", { time: relativeTime(shownAt.value) }));
 const note = computed(() => event.value?.kind === "update" ? event.value.note ?? "" : "");
+
+/** 榜單榮譽：伺服器已挑好每期別最高一枚，這裡再整理一次，舊快取或多給的資料也不會讓封面多出第四枚 */
+const honors = computed(() => coverHonors(props.card.honors ?? []));
+/** 封面上的限制級縮成「R」方塊：文字藥丸約 52 寬，最窄的封面（135）放不下它和左上那一列 */
+const adultLabel = computed(() => ratingName("R", String(locale.value)));
 </script>
 
 <template>
@@ -90,7 +97,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
-      <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
+      <span v-if="card.rating === 'R'" class="card__flag" role="img" :aria-label="adultLabel" :title="adultLabel">R</span>
       <!-- 底下一列：精選標在左、時間在右，放同一個 flex 列裡。英日韓的精選標很長，各自絕對定位時會蓋掉時間；時間不縮，精選標截斷 -->
       <div v-if="card.featured || shownAt" class="card__corner">
       <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featuredShort") }}</span>
@@ -105,9 +112,16 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
         <time :datetime="new Date(shownAt).toISOString()" aria-hidden="true">{{ relativeTime(shownAt) }}</time>
       </span>
       </div>
-      <!-- 關注動態不排名，左上空著，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
-      <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
-      <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
+      <!--
+        左上一列：目前名次（只有榜單頁）或關注動態的事件類別在最前，接著榜單榮譽徽章（日→週→月）。
+        和右上的 R 方塊同高、同一個頂邊距，中心在同一條線上；不換行
+      -->
+      <div v-if="rank || (event && !rank) || honors.length" class="card__marks">
+        <!-- 關注動態不排名，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
+        <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
+        <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
+        <RankBadge v-for="honor in honors" :key="honor.window" :honor="honor" class="card__honor" />
+      </div>
     </div>
 
     <div class="card__body">
@@ -162,7 +176,7 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
  * 上抬則讓游標停在下緣時來回觸發（見 card-hover-no-repaint.test）
  */
 
-.card__art { position: relative; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
+.card__art { position: relative; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; container-type: inline-size; --mark-h: 26px; --mark-in: 6px; }
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
 .card:hover .card__art img { transform: scale(1.04); }
 /* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */
@@ -170,7 +184,19 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
-.card__rank { position: absolute; top: 8px; left: 8px; z-index: 1; }
+/*
+ * 左上一列與右上 R 方塊：同高（--mark-h）、同一個頂邊距（--mark-in），中心在同一條線上。
+ * 封面 ≤150 寬（320 手機的兩欄約 135）整列降到 24px，「目前名次＋三枚＋R」才排得進一列（美術總監 2026-11-03 確認）。
+ */
+@container (max-width: 150px) { .card__marks, .card__flag { --mark-h: 24px; --mark-in: 5px; } .card__marks { gap: 1px; } .card__rank { margin-right: 1px; } }
+.card__marks {
+  position: absolute; top: var(--mark-in); left: var(--mark-in); z-index: 1; pointer-events: none;
+  display: flex; align-items: center; gap: 1.5px; height: var(--mark-h); max-width: calc(100% - var(--mark-in) * 2);
+}
+/* 目前名次在封面上是和徽章同高的圓（兩位數以上撐成膠囊），和第一枚徽章之間多留一點，兩者長相不同 */
+.card__rank { flex: none; box-sizing: border-box; min-width: var(--mark-h); height: var(--mark-h); padding: 0 4px; margin-right: 2.5px; font-size: 11px; }
+/* 榜單徽章是固定彩色圖示（不隨主題），輕陰影讓它在任何封面圖上都看得見 */
+.card__honor { --rank-badge-h: var(--mark-h); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
 .card__corner {
@@ -187,14 +213,20 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 }
 /* 關注動態的事件類別：跟精選標同一家族。封面上的疊色不跟主題走，兩個底色是封面上的例外 */
 .card__kind {
-  position: absolute; top: 8px; left: 8px; z-index: 1; pointer-events: none;
-  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; max-width: calc(100% - 16px);
+  flex: 0 1 auto; min-width: 0; margin-right: 2.5px;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
   border-radius: 4px; background: rgba(16, 16, 19, 0.62); color: #fff;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .card__kind--new { background: var(--accent-deep); color: var(--on-accent); }
-.card__flag { position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none; }
+/* 限制級：R 圓角方塊，底色取官方標識的紅（和 RatingMark 的 chip 同色） */
+.card__flag {
+  position: absolute; top: var(--mark-in); right: var(--mark-in); z-index: 1; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; width: var(--mark-h); height: var(--mark-h);
+  border-radius: var(--r-sm); background: #e5141e; color: #fff; font-size: 13px; font-weight: 800; line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
 
 /* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡。
    pre-line：作者自己換的行要留著。break-word 而不是 anywhere：先在空格換行，一段比欄位寬才段內斷。 */

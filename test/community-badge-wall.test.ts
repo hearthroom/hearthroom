@@ -1,12 +1,12 @@
 import { SELF, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { resetDb, makeMember, bearer, whoAmI, restoreUpstream } from './helpers';
-import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, canManageBadges, FOUNDER_CUTOFF } from '../src/community/badges';
+import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, canManageBadges, FOUNDER_CUTOFF, VETERAN_END } from '../src/community/badges';
 import { projection, communityMaintenance } from '../src/community/service';
 let member:string, manager:string;
 beforeEach(async()=>{await resetDb();member=await makeMember(11);manager=await makeMember(22);await env.DB.prepare("INSERT INTO reviewers(member_id,granted_at,granted_by,role) VALUES (?,0,'test','manager')").bind(manager).run();
  // Fixtures join after the founding window; the founder milestone has its own test.
- await env.DB.prepare('UPDATE members SET created_at=?').bind(FOUNDER_CUTOFF+1).run();});
+ await env.DB.prepare('UPDATE members SET created_at=?').bind(VETERAN_END+1).run();});
 afterEach(restoreUpstream);
 const definition=()=>({key:'event_summer',icon:'star',titles:{'zh-Hant':'夏日旅人',en:'Summer traveler'},descriptions:{'zh-Hant':'參與夏日活動。',en:'Join the summer event.'}});
 async function grant(action='grant',requestId=crypto.randomUUID(),extra={}){return changeBadgeAward(env,manager,{handle:'aaaaaabb',badge:'event_summer',action,requestId,reason:'Event participation',...extra});}

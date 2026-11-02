@@ -4,6 +4,9 @@ import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
+import {allCardHonors} from './rank-honors';
+import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
+import {badgeStatsMaintenance} from './badge-stats';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import {enforcementNoticeRoutes} from './enforcement-notices';
 import { maintenanceResponse, readMaintenance } from './maintenance';
@@ -616,6 +619,15 @@ async function ownCardView(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:s
  return own;
 }
 
+app.get('/v1/cards/:id/honors',async c=>{
+ const row=await getCard(c.env.DB,c.req.param('id'),providerOf(c));
+ if(!row||row.public_blocked)throw new HttpError(404,'card not found');
+ const access=await checkedCardAccess(c,row);
+ if(!access.reachable||(!access.managed&&row.status!=='approved'&&row.status!=='unlisted'))throw new HttpError(404,'card not found');
+ if((isAdult(row)||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+ c.header('Cache-Control','private, no-store');
+ return c.json({items:await allCardHonors(c.env.DB,Number(row.id))});
+});
 app.get("/v1/cards/:id", async (c) => {
   const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
   let row = link.row;
@@ -2313,6 +2325,16 @@ export default {
     try { if ((await readMaintenance(env.DB)).enabled) return; }
     catch { console.warn("Maintenance status unavailable; scheduled work held"); return; }
     if (!(await numericSchemaReady(env.DB))) return;
+    if(event.cron===RANK_CRON){
+      ctx.waitUntil(rankMaintenance(env,event.scheduledTime).catch(async()=>{await bumpOp(env.DB,'rank_settlement','run','error');}));
+      return;
+    }
+    if(event.cron===RANK_RETRY_CRON){
+      const phase=Math.floor(event.scheduledTime/60000)%3;
+      const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
+      ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));
+      return;
+    }
     if (event.cron === '*/5 * * * *') {
       ctx.waitUntil(cardRewardMaintenance(env).catch(() => { console.warn('Card reward recovery unavailable'); }));
       return;

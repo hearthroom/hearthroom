@@ -14,6 +14,7 @@ import { dateTime } from "./format";
 import { canonicalType } from "./media-type";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
+import type { CardHonor } from "./honors";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
@@ -297,6 +298,13 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
   const card = await json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers, ...authHeaders(login ?? undefined) } }));
   rememberCard(card);
   return card;
+}
+
+/** 卡片頁「全部榮譽」：這張卡在兩條榜、各期別結算出的全部榮譽，新頒發的在前。看得到卡的人才看得到（成人卡同 fetchCard）。 */
+export async function fetchCardHonors(id: string): Promise<CardHonor[]> {
+  const viewer = await viewerAccess();
+  const q = viewer.param ? "?nsfw=1" : "";
+  return (await json<{ items: CardHonor[] }>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}/honors${q}`, { headers: { ...from(), ...viewer.headers } }))).items;
 }
 
 export interface CardVersion {

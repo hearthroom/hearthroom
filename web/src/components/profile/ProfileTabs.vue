@@ -9,7 +9,6 @@ import { useI18n } from 'vue-i18n';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AccountIcon from '@/components/AccountIcon.vue';
 import CardGrid from '@/components/CardGrid.vue';
-import BadgeWall from '@/components/BadgeWall.vue';
 import CoverImg from '@/components/CoverImg.vue';
 import LibraryToggle from '@/components/LibraryToggle.vue';
 import { useSession } from '@/lib/session';
@@ -22,15 +21,14 @@ import { displayName } from '@/lib/display-name';
 import { contentLang } from '@/lib/i18n';
 import { hueFrom, relativeTime } from '@/lib/format';
 import type { CommunityCard } from '@/lib/types';
-import type { BadgeCollection } from '../../../../shared/community-badges';
 
-const props = defineProps<{ badges: BadgeCollection | null; counts: { works: number | null; following: number | null } }>();
+const props = defineProps<{ counts: { works: number | null; following: number | null } }>();
 const session = useSession();
 const route = useRoute(), router = useRouter();
 const { lp, locale } = useLocalePath();
 const { t } = useI18n();
 
-const TABS = ['works', 'saved', 'recent', 'following', 'badges'] as const;
+const TABS = ['works', 'saved', 'recent', 'following'] as const;
 type Tab = (typeof TABS)[number];
 const PRIVATE: Tab[] = ['saved', 'recent', 'following'];
 const tab = computed<Tab>(() => (TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'works'));
@@ -38,7 +36,7 @@ const page = computed(() => Math.max(1, Math.floor(Number(route.query.page) || 1
 const sort = computed(() => (route.query.sort === 'hot' ? 'hot' : 'new'));
 /** 作品頁第一格放「建立新卡」，一頁 23 張卡＋它＝24 格，欄數 2／3／4／6 都排得滿 */
 const WORKS_PAGE = 23, LIST_PAGE = 24;
-const count = (k: Tab) => (k === 'works' ? props.counts.works : k === 'following' ? props.counts.following : k === 'badges' ? props.badges?.items.filter((b) => b.state === 'earned').length ?? null : null);
+const count = (k: Tab) => (k === 'works' ? props.counts.works : k === 'following' ? props.counts.following : null);
 function go(next: Partial<{ tab: Tab; page: number; sort: 'new' | 'hot' }>) {
   const nextTab = next.tab ?? tab.value;
   // 換分區就回第一頁、排序回預設；只在作品分區記排序
@@ -60,7 +58,6 @@ async function load() {
   loading.value = true; failed.value = false; hasNext.value = false;
   try {
     const handle = session.profile?.handle;
-    if (tab.value === 'badges') return;
     if (tab.value === 'works') {
       if (!handle) return;
       const result = await fetchBoard({ author: handle, sort: sort.value, limit: WORKS_PAGE, offset: (page.value - 1) * WORKS_PAGE });
@@ -92,7 +89,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
   <section ref="area" class="tabs-area" :aria-label="$t('profile.tabs.label')">
     <div role="tablist" class="tabbar" :aria-label="$t('profile.tabs.label')">
       <button v-for="k in TABS" :key="k" role="tab" type="button" class="tab" :class="{ 'tab--on': tab === k }" :aria-selected="tab === k" @click="go({ tab: k })">
-        <span class="tab__icon"><AccountIcon :name="k === 'works' ? 'cards' : k === 'saved' ? 'heart' : k === 'recent' ? 'chat' : k === 'following' ? 'users' : 'spark'" /></span>
+        <span class="tab__icon"><AccountIcon :name="k === 'works' ? 'cards' : k === 'saved' ? 'heart' : k === 'recent' ? 'chat' : 'users'" /></span>
         {{ $t('profile.tabs.' + k) }}
         <span v-if="count(k) !== null" class="tab__count">{{ count(k) }}</span>
         <AccountIcon v-if="PRIVATE.includes(k)" name="lock" class="tab__lock" :aria-label="$t('profile.onlyYou')" :title="$t('profile.onlyYou')" />
@@ -118,11 +115,6 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
       </div>
     </template>
 
-    <template v-else-if="tab === 'badges'">
-      <div class="toolbar"><span class="toolbar__hint">{{ $t('badgeWall.title') }}</span><RouterLink :to="lp('/me/badges')" class="btn btn--sm toolbar__manage">{{ $t('profile.manageBadges') }}<AccountIcon name="arrow" /></RouterLink></div>
-      <BadgeWall v-if="badges" :items="badges.items" :selected="badges.featured" />
-      <div v-else class="ghost rows-ghost" aria-hidden="true" />
-    </template>
 
     <template v-else>
       <p class="toolbar toolbar__hint"><AccountIcon name="lock" /><span>{{ $t('profile.onlyYou') }} · {{ $t(`library.${tab === 'saved' ? 'favorites' : tab === 'recent' ? 'conversations' : 'following'}Hint`) }}</span></p>
@@ -146,7 +138,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
       </div>
     </template>
 
-    <nav v-if="tab !== 'badges' && !loading && !failed && (page > 1 || hasNext)" class="pager" :aria-label="$t('profile.tabs.' + tab)">
+    <nav v-if="!loading && !failed && (page > 1 || hasNext)" class="pager" :aria-label="$t('profile.tabs.' + tab)">
       <button class="btn btn--sm" :disabled="page === 1" @click="go({ page: page - 1 })">← {{ $t('pager.prev') }}</button>
       <span class="subtle">{{ range }}</span>
       <button class="btn btn--sm" :disabled="!hasNext" @click="go({ page: page + 1 })">{{ $t('pager.next') }} →</button>

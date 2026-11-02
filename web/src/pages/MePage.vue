@@ -78,7 +78,7 @@ onMounted(() => { document.title = pageTitle(t('me.title')); });
     <CheckinCard />
     <ProfileCreatorBand />
     <div class="me__grid">
-      <ProfileTabs ref="tabs" class="me__main" :badges="badges" :counts="{ works: author?.cardCount ?? null, following: session.profile?.following ?? null }" />
+      <ProfileTabs ref="tabs" class="me__main" :counts="{ works: author?.cardCount ?? null, following: session.profile?.following ?? null }" />
       <ProfileRail class="me__rail" :community="community" :author="author" @edit="hero?.begin()" />
     </div>
   </div>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import BadgeShowcase from "@/components/BadgeShowcase.vue";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
-import CommunityBadges from "@/components/CommunityBadges.vue";
+import CommunityBadgeList from "@/components/CommunityBadgeList.vue";
+import WornBadges from "@/components/WornBadges.vue";
+import { usePublicAppearance } from "@/lib/community-appearance";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import TipPlatformIcon from "@/components/TipPlatformIcon.vue";
 import { tipPlatform } from "../../../shared/tip-links";
@@ -32,6 +33,9 @@ const missing = ref(false);
 const error = ref("");
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
 const LIMIT = 24;
+/** 社群等級（綁了 Discord 才有）：放在名字下面那一行，跟展示徽章分開 */
+const identity = usePublicAppearance(() => author.value?.handle ?? undefined);
+const level = computed(() => identity.value?.level ?? null);
 
 async function load() {
   loading.value = !page.value;
@@ -78,8 +82,16 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <CommunityAvatar :handle="author.handle ?? undefined" :src="author.avatar" :name="author.name" class="who__face" />
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
-        <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" :official="author.official" /></h1>
-        <CommunityBadges v-if="author.handle" :handle="author.handle" />
+        <!-- 桌機：名字和展示徽章同一行，放不下時整排落到名字下一行；手機上這層拆開（display: contents），各自排進格線 -->
+        <div class="who__head">
+          <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" :official="author.official" /></h1>
+          <!-- 名字旁只放作者選來展示的徽章；全部徽章在獨立的徽章頁，主頁主體是卡片 -->
+          <WornBadges v-if="author.handle" :key="author.handle" :handle="author.handle" class="who__worn" />
+        </div>
+        <p class="subtle who__id">
+          <span class="mono">@{{ author.handle }}</span>
+          <CommunityBadgeList v-if="level !== null" :badges="[]" :level="level" class="who__level" />
+        </p>
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <!-- 打賞連結：每一條直接連到那個平台，錢在那邊付 -->
         <ul v-if="author.tips?.length" class="who__tips" :aria-label="$t('tips.title')">
@@ -89,9 +101,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </a>
           </li>
         </ul>
-        <p class="subtle who__id">
-          <span class="mono">@{{ author.handle }}</span>
-        </p>
       </div>
       <LibraryToggle v-if="author.handle && author.handle !== session.profile?.handle" kind="following" :target="author.handle" />
       <dl class="who__stats">
@@ -102,7 +111,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
     </header>
     <div v-else-if="!error" class="ghost who--ghost" aria-hidden="true" />
 
-    <BadgeShowcase v-if="author?.handle" :key="author.handle" :handle="author.handle" wall />
     <CardGrid
       :cards="page?.items ?? []"
       :loading="loading && !page"
@@ -130,7 +138,18 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 }
 .who--ghost { height: 112px; border-radius: var(--r-lg); margin-bottom: var(--s-5); }
 .who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
-.who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem}
+/* 簡介兩行截斷：頭部再長，第一排卡片也要在手機首屏內（徽章第一期 ui.md §3.1） */
+.who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem;margin:var(--s-2) 0 0;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* 展示列是子元件的根節點（不帶這一頁的 scope），選擇器要用 :deep */
+.who__head { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-4); min-width: 0; }
+.who__head > .who__name { flex: 0 1 auto; min-width: 0; }
+:deep(.who__worn) { flex: 1 1 16rem; min-width: 0; }
+/* 名字最多兩行，再長就省略：CommunityName 外層是 inline-flex，省略要加在名字文字那一層 */
+.who__name :deep(.community-name > span:first-child) { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.who__level { display: inline-flex; vertical-align: middle; margin-left: var(--s-2); }
+/* 社群等級在作者頁是次要資訊：和展示徽章同高同字級的中性標籤，不用強調色（美術總監 2026-11-03） */
+.who__level :deep(.community-badge--level) { height: 28px; min-height: 28px; padding: 0 10px 0 7px; gap: 5px; background: var(--surface-2); color: var(--text-2); border-color: var(--line-strong); font-size: 12.5px; font-weight: 600; line-height: 1; }
+.who__level :deep(.community-badge--level svg) { width: 16px; height: 16px; }
 .who__tips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .who__tip {
   display: inline-flex; align-items: center; gap: var(--s-2); height: var(--h-md); padding: 0 var(--s-3) 0 4px;
@@ -139,7 +158,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 }
 .who__tip:hover { border-color: var(--accent); background: var(--accent-tint); }
 .who__tip-icon { width: 28px; height: 28px; }
-.who__text { min-width: 0; margin-right: auto; }
+.who__text { min-width: 0; margin-right: auto; flex: 1 1 20rem; }
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
 .who__id { margin: 4px 0 0; }
 .who__stats { display: flex; gap: var(--s-6); }
@@ -148,5 +167,21 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, hsl(var(--hue) 44% 89%) 85%, transparent) 90%, hsl(var(--hue) 44% 89%)); }
 :root[data-mode="dark"] .cover::after { background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, hsl(var(--hue) 24% 19%) 85%, transparent) 90%, hsl(var(--hue) 24% 19%)); }
 .cover + .who { position: relative; }
-@media (max-width: 640px) { .cover { height: 112px; } }
+@media (max-width: 640px) {
+  .cover { height: 96px; }
+  /* 手機：頭像｜名字＋@handle，其下展示列、簡介、關注、數字各佔滿一列；「作者」小標省掉 */
+  .who { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: var(--s-2) var(--s-3); padding: var(--s-4); }
+  .who > * { min-width: 0; }
+  .who__face { width: 56px; height: 56px; grid-row: 1 / 3; }
+  .who__text { display: contents; }
+  .who .eyebrow { display: none; }
+  .who__name { grid-column: 2; grid-row: 1; align-self: end; font-size: 22px; }
+  .who__id { grid-column: 2; grid-row: 2; margin: 0; }
+  .who__head { display: contents; }
+  .who > .who__text > .who__head > :deep(.who__worn), .who__bio, .who__tips { grid-column: 1 / -1; }
+  .who__bio { margin: 0; }
+  .who > .library-toggle { grid-column: 1 / -1; }
+  .who > .library-toggle :deep(.btn) { width: 100%; }
+  .who__stats { grid-column: 1 / -1; justify-content: space-between; gap: var(--s-3); }
+}
 </style>

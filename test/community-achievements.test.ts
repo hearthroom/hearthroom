@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { resetDb, makeMember, restoreUpstream } from './helpers';
-import { badgeCollection, setFeaturedBadges, FOUNDER_CUTOFF } from '../src/community/badges';
+import { badgeCollection, setFeaturedBadges, FOUNDER_CUTOFF, VETERAN_END } from '../src/community/badges';
 import { communityMaintenance } from '../src/community/service';
 import { BADGE_ICONS, BADGE_CATEGORIES } from '../shared/community-badges';
 const LOCALES=['zh-Hant','zh-Hans','en','ja','ko'];
@@ -9,7 +9,7 @@ let member:string, author:string;
 beforeEach(async()=>{
  await resetDb();member=await makeMember(11);author=await makeMember(22);
  // Fresh fixtures join after the founding window so the founder badge is tested deliberately below.
- await env.DB.prepare('UPDATE members SET created_at=?').bind(FOUNDER_CUTOFF+1).run();
+ await env.DB.prepare('UPDATE members SET created_at=?').bind(VETERAN_END+1).run();
 });
 afterEach(restoreUpstream);
 const find=async(who:string,key:string,publicOnly=false)=>(await badgeCollection(env,who,publicOnly)).items.find(b=>b.key===key);
@@ -76,9 +76,9 @@ it('reads social, profile and tenure milestones from their own tables',async()=>
  expect((await find(member,'member_profile'))!.progress).toBeUndefined();
  await env.DB.prepare('UPDATE members SET profile_edited_at=1 WHERE id=?').bind(member).run();
  expect(await find(member,'member_profile')).toMatchObject({state:'earned'});
- expect(await find(member,'member_founder')).toMatchObject({state:'locked'});
+ expect(await find(member,'beta_veteran')).toMatchObject({state:'locked'});
  await env.DB.prepare('UPDATE members SET created_at=? WHERE id=?').bind(FOUNDER_CUTOFF-1,member).run();
- expect(await find(member,'member_founder')).toMatchObject({state:'earned'});
+ expect(await find(member,'beta_veteran')).toMatchObject({state:'earned'});
  expect(await find(member,'member_anniversary')).toMatchObject({state:'locked',progress:{target:365,unit:'days'}});
  await env.DB.prepare('UPDATE members SET created_at=? WHERE id=?').bind(Date.now()-366*86400000,member).run();
  expect(await find(member,'member_anniversary')).toMatchObject({state:'earned'});
@@ -97,7 +97,7 @@ it('lets members feature up to five earned badges',async()=>{
 });
 it('the hourly sweep evaluates every metric and agrees with the owner read',async()=>{
  const fans:string[]=[];for(let i=0;i<10;i++)fans.push(await makeMember(100+i));
- await env.DB.prepare('UPDATE members SET created_at=?').bind(FOUNDER_CUTOFF+1).run();
+ await env.DB.prepare('UPDATE members SET created_at=?').bind(VETERAN_END+1).run();
  // creator side: three listed cards (one featured), ten followers, ten saves on those cards
  await listedCard(100001,22);await listedCard(100002,22);await listedCard(100003,22,{featuredAt:5});
  for(const fan of fans){await env.DB.prepare('INSERT INTO member_follows VALUES (?,?,1)').bind(fan,author).run();await env.DB.prepare('INSERT INTO member_favorites VALUES (?,100001,1)').bind(fan).run();}
@@ -115,7 +115,7 @@ it('the hourly sweep evaluates every metric and agrees with the owner read',asyn
  await communityMaintenance(env);
  const awarded=async(who:string)=>(await env.DB.prepare('SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge').bind(who).all<{badge:string}>()).results.map(r=>r.badge);
  expect(await awarded(author)).toEqual(['creator_favorited_10','creator_featured','creator_followers_10','creator_works_3']);
- expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','member_founder','member_profile','player_commenter_1','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
+ expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','beta_veteran','member_profile','player_commenter_1','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
  // The owner read measures the same tables, so it finds nothing new to award.
  const before=(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_awards').first<{n:number}>())!.n;
  // Live badges (Discord link, booster) are never awards, so they are left out of the comparison.

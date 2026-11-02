@@ -17,7 +17,7 @@ const index = (predicate) => steps.findIndex(predicate);
 test('deployed heat cron runs every ten minutes separately from existing maintenance', () => {
   const config = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
   const crons = /^crons\s*=\s*(\[[^\n]+\])/m.exec(config)?.[1];
-  assert.deepEqual(JSON.parse(crons ?? '[]'), ['17 * * * *', '2-59/10 * * * *', '*/5 * * * *']);
+  assert.deepEqual(JSON.parse(crons ?? '[]'), ['17 * * * *', '2-59/10 * * * *', '*/5 * * * *', '23 16 * * *', '* * * * *']);
 });
 
 test('CI defaults to full tests and permits only an explicit audited no-accounts scope', () => {

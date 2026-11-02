@@ -15,6 +15,7 @@ import CommunityAvatar from '@/components/CommunityAvatar.vue';
 import CommunityName from '@/components/CommunityName.vue';
 import CommunityIcon from '@/components/CommunityIcon.vue';
 import TipLinksField, { type TipRow } from '@/components/TipLinksField.vue';
+import WornBadges from '@/components/WornBadges.vue';
 import AvatarCropper from './AvatarCropper.vue';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
@@ -29,7 +30,7 @@ import type { Author } from '@/lib/types';
 import { PROFILE_COVERS, profileCover, profileCoverUrl } from '../../../../shared/profile-covers';
 import { AVATAR_MAX_BYTES, AVATAR_MAX_MB } from '../../../../shared/avatar';
 import { parseTipLink, resolveTipInput } from '../../../../shared/tip-links';
-import { badgeText, BADGE_ICONS, type BadgeCollection } from '../../../../shared/community-badges';
+import type { BadgeCollection } from '../../../../shared/community-badges';
 
 const props = defineProps<{ community: CommunityView | null; badges: BadgeCollection | null; author: Author | null; startEditing?: boolean }>();
 const emit = defineEmits<{ saved: []; tab: [name: string] }>();
@@ -49,12 +50,6 @@ const editing = ref(false);
 const draftCover = ref('');
 const coverId = computed(() => (editing.value ? draftCover.value : profile.value?.cover ?? '') || '');
 const cover = computed(() => profileCover(coverId.value));
-
-// ---- 徽章：展示中的最多三枚，按分類配色 ------------------------------------------
-const earned = computed(() => (props.badges?.items ?? []).filter((b) => b.state === 'earned' && BADGE_ICONS.includes(b.icon)));
-const featured = computed(() => (props.badges?.featured ?? []).map((k) => earned.value.find((b) => b.key === k)).filter((b): b is NonNullable<typeof b> => !!b).slice(0, 3));
-const others = computed(() => earned.value.filter((b) => !featured.value.includes(b)).slice(0, 3));
-const month = (ms: number | null) => (ms ? new Intl.DateTimeFormat(locale.value, { year: 'numeric', month: '2-digit' }).format(ms) : '');
 
 // ---- 數據（預設關，設定頁或這裡都能開） ------------------------------------------
 const stats = computed(() => [
@@ -263,12 +258,7 @@ defineExpose({ begin });
           </div>
           <p v-if="profile?.bio" class="hero__bio">{{ profile.bio }}</p>
           <button v-else type="button" class="hero__add-bio" @click="begin('bio')"><AccountIcon name="plus" />{{ $t('profile.addBio') }}</button>
-          <div class="hero__badges">
-            <ul v-if="featured.length" class="hero__featured" :aria-label="$t('badgeWall.title')">
-              <li v-for="b in featured" :key="b.key" class="hero__badge"><span class="med" :class="`med--${b.category}`" aria-hidden="true"><CommunityIcon :name="b.icon" /></span><span class="hero__badge-text"><strong :title="badgeText(b.titles, locale)">{{ badgeText(b.titles, locale) }}</strong><small>{{ $t('profile.badgeMeta', { category: $t('badgeWall.category.' + b.category), date: month(b.earnedAt) }) }}</small></span></li>
-            </ul>
-            <RouterLink :to="lp('/me/badges')" class="hero__wall"><span v-if="others.length" class="hero__wall-stack" aria-hidden="true"><span v-for="b in others" :key="b.key" class="med med--mini" :class="`med--${b.category}`"><CommunityIcon :name="b.icon" /></span></span>{{ $t('profile.badgeWall') }} <strong>{{ earned.length }}</strong>/{{ badges?.items.length ?? 0 }}<AccountIcon name="arrow" /></RouterLink>
-          </div>
+          <WornBadges v-if="handle" class="hero__badges" :handle="handle" own :collection="badges" />
         </div>
 
         <slot name="aside" />
@@ -347,29 +337,7 @@ defineExpose({ begin });
 .hero__bio { margin: 0; font-size: 15px; line-height: 1.75; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .hero__add-bio { display: inline-flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 8px 14px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); background: none; font: inherit; font-size: 14px; color: var(--text-3); cursor: pointer; text-align: start; }
 .hero__add-bio svg { width: 15px; height: 15px; flex: none; }
-.hero__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 52px; margin-top: 4px; }
-.hero__featured { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.hero__badge { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px 0 6px; border-radius: var(--r-pill); background: var(--surface); box-shadow: 0 0 0 1px var(--line-strong); }
-.hero__badge-text { display: grid; min-width: 0; line-height: 1.25; }
-.hero__badge-text strong { max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
-.hero__badge-text small { white-space: nowrap; font-size: 11.5px; color: var(--text-3); }
-.hero__wall { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 16px; border-radius: var(--r-pill); background: var(--surface-2); font-size: 13.5px; color: var(--text-2); white-space: nowrap; }
-.hero__wall strong { color: var(--text); }
-.hero__wall svg { width: 14px; height: 14px; }
-.hero__wall-stack { display: flex; }
-.hero__wall-stack .med + .med { margin-left: -8px; }
 
-.med { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--r-pill); color: #fff; background: linear-gradient(145deg, #c7b6ff, #7a58e6 55%, #5a35c9); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), inset 0 -4px 8px rgba(0, 0, 0, 0.18); }
-.med :deep(svg) { width: 19px; height: 19px; }
-.med--mini { width: 22px; height: 22px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px var(--surface-2); }
-.med--mini :deep(svg) { width: 12px; height: 12px; }
-.med--creation { background: linear-gradient(145deg, #ffe28a, #f2b01e 48%, #c98a08); }
-.med--connection { background: linear-gradient(145deg, #a7aeff, #5865f2 55%, #3a43c9); }
-.med--play { background: linear-gradient(145deg, #7fe0f0, #1f9db8 55%, #0f6a80); }
-.med--social { background: linear-gradient(145deg, #ff9fb3, #ef4f6f 55%, #c9224d); }
-.med--supporter { background: linear-gradient(145deg, #ffb58a, #f0782e 55%, #c2541a); }
-.med--event { background: linear-gradient(145deg, #ffc2d1, #e0577a 55%, #a8325a); }
-.med--member { background: linear-gradient(145deg, #c9d3e4, #7d8aa3 55%, #566179); }
 
 .hero__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: var(--s-5); border-radius: var(--r-md); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
 .hero__stat { display: grid; gap: 6px; padding: var(--s-4) var(--s-5); border: 0; background: none; font: inherit; color: inherit; text-align: start; }
@@ -419,10 +387,6 @@ button.hero__stat:hover { background: var(--surface-2); }
   .hero__name { font-size: 24px; }
   .hero__info { flex-basis: 100%; }
   /* 徽章整排橫向滑動：展示中的幾枚跟徽章牆入口排在同一條，不互相蓋住 */
-  .hero__badges { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(var(--s-4) * -1); padding: 2px var(--s-4); scrollbar-width: none; }
-  .hero__featured { flex-wrap: nowrap; flex: none; }
-  .hero__wall { flex: none; height: 44px; }
-  .hero__badge { flex: none; height: 44px; }
   .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero__stat:nth-child(3) { box-shadow: inset 0 1px 0 var(--line); }
   .hero__stat:nth-child(4) { box-shadow: inset 1px 1px 0 var(--line); }

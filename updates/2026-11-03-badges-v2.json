@@ -1,0 +1,20 @@
+{
+  "draft": true,
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片拿到榜單名次會留下榮譽，作者主頁先看到卡片。",
+    "zh-Hans": "卡片拿到榜单名次会留下荣誉，作者主页先看到卡片。",
+    "en": "Cards that place on the boards keep the honor, and author pages lead with cards.",
+    "ja": "ランキングで順位を取ったカードに実績が残り、作者ページはカードから表示されます。",
+    "ko": "랭킹 순위에 든 카드에 수상 기록이 남고, 작가 페이지는 카드부터 보여요."
+  },
+  "body": {
+    "zh-Hant": "卡片封面左上角會標出它拿過的日榜、週榜、月榜名次，作者主頁的名字旁只放作者選來展示的徽章，全部徽章另外放在一頁。",
+    "zh-Hans": "卡片封面左上角会标出它拿过的日榜、周榜、月榜名次，作者主页的名字旁只放作者选来展示的徽章，全部徽章另外放在一页。",
+    "en": "A card's cover now shows the daily, weekly and monthly placings it has earned, and author pages show only the badges the author chose to feature next to their name, with all badges on a page of their own.",
+    "ja": "カードの表紙の左上に日間・週間・月間ランキングの順位が表示され、作者ページの名前の横には作者が選んだバッジだけが並び、すべてのバッジは別ページにまとまりました。",
+    "ko": "카드 표지 왼쪽 위에 일간·주간·월간 랭킹 순위가 표시되고, 작가 페이지 이름 옆에는 작가가 고른 배지만 보이며, 전체 배지는 별도 페이지에 모였어요."
+  }
+}
