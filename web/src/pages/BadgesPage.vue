@@ -17,8 +17,8 @@ import { BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeCollection, type CollectedB
 import BadgeWall from '@/components/BadgeWall.vue';
 import CommunityIcon from '@/components/CommunityIcon.vue';
 
-/** 榜單榮譽說明句裡的結構常數：週榜在該週結束後 7 天、月榜在該月結束後 30 天頒發；同期不足 10 張只發第一名 */
-const RANK_RULE = { weekDays: 7, monthDays: 30, minCards: 10 };
+/** 榜單榮譽說明句裡的結構常數（和後端結算一致）：日榜在當天結束後 24 小時、週榜在該週結束後 7 天、月榜在該月結束後 30 天頒發；同期不足 10 張只發第一名 */
+const RANK_RULE = { dayHours: 24, weekDays: 7, monthDays: 30, minCards: 10 };
 
 const {t}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute();
 const author=computed(()=>typeof route.params.handle==='string'?route.params.handle:'');
@@ -30,10 +30,11 @@ const earnedItems=computed(()=>data.value?.items.filter(b=>b.state==='earned')??
 const items=computed(()=>(own.value?data.value?.items.filter(b=>filter.value==='all'||(filter.value==='earned'?b.state==='earned':b.state!=='earned')):earnedItems.value)??[]);
 const earned=computed(()=>earnedItems.value.length);
 const rankOrder=(list:CollectedBadge[])=>{const parsed=list.map(b=>({b,h:parseHonorKey(b.key)}));const honors=parsed.filter(p=>p.h);if(!honors.length)return list;const sorted=sortHonors(honors.map(p=>({...p.h!,b:p.b}))).map(x=>x.b);return [...sorted,...parsed.filter(p=>!p.h).map(p=>p.b)];};
-// 目錄已經依類別排好；切成區塊時不重排類別。榜單榮譽裡沒拿過的另外收起來
+// 切成區塊時類別照第一次出現的順序（伺服器照目錄排）。榜單榮譽裡沒拿過的另外收起來
 const sections=computed(()=>{
  const out:{category:string;items:CollectedBadge[];locked:CollectedBadge[];owned:number;total:number}[]=[];
- for(const b of items.value){let last=out[out.length-1];if(!last||last.category!==b.category){last={category:b.category,items:[],locked:[],owned:0,total:0};out.push(last);}(b.category==='rank'&&b.state!=='earned'?last.locked:last.items).push(b);}
+ // 依第一次出現的順序分組，同一類別只有一個區塊（不靠清單本身排好）
+ for(const b of items.value){let sec=out.find(x=>x.category===b.category);if(!sec){sec={category:b.category,items:[],locked:[],owned:0,total:0};out.push(sec);}(b.category==='rank'&&b.state!=='earned'?sec.locked:sec.items).push(b);}
  for(const s of out){s.items=rankOrder(s.items);s.locked=rankOrder(s.locked);const all=data.value?.items.filter(b=>b.category===s.category)??[];s.owned=all.filter(b=>b.state==='earned').length;s.total=all.length;}
  return out;
 });
@@ -44,7 +45,9 @@ async function request<T>(path='',method='GET',body?:unknown){
  const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));return communityRequest<T>('/me/community/badges'+path,token,method,body);
 }
 function apply(result:BadgeCollection){data.value=result;selected.value=[...result.featured];visible.value=!!result.public;}
-async function load(keepDraft=false){const n=++generation;loading.value=true;error.value='';try{const result=await request<BadgeCollection>();if(n===generation){if(keepDraft&&dirty.value){const valid=new Set(result.items.filter(b=>b.state==='earned').map(b=>b.key));selected.value=selected.value.filter(key=>valid.has(key));data.value=result;}else apply(result);}}catch{if(n===generation)error.value=t('badgeWall.loadFailed');}finally{if(n===generation)loading.value=false;}}
+/** 看別人時，沒有成員資料的作者（伺服器回 404）就是沒有公開徽章，顯示空態而不是錯誤 */
+async function fetchCollection():Promise<BadgeCollection>{try{return await request<BadgeCollection>();}catch(e){if(!own.value&&(e as {status?:number})?.status===404)return {items:[],featured:[]};throw e;}}
+async function load(keepDraft=false){const n=++generation;loading.value=true;error.value='';try{const result=await fetchCollection();if(n===generation){if(keepDraft&&dirty.value){const valid=new Set(result.items.filter(b=>b.state==='earned').map(b=>b.key));selected.value=selected.value.filter(key=>valid.has(key));data.value=result;}else apply(result);}}catch{if(n===generation)error.value=t('badgeWall.loadFailed');}finally{if(n===generation)loading.value=false;}}
 async function save(){if(busy.value||!own.value)return;busy.value=true;error.value='';saved.value=false;const n=generation;try{const result=await request<BadgeCollection>('/featured','PATCH',{featured:selected.value,public:visible.value});if(n===generation){apply(result);saved.value=true;}}catch{if(n===generation)error.value=t('badgeWall.saveFailed');}finally{busy.value=false;}}
 function reset(){if(data.value)apply(data.value);error.value='';saved.value=false;}
 watch(()=>[author.value,own.value?session.profile?.handle:''],()=>{generation++;data.value=null;selected.value=[];visible.value=false;filter.value='all';saved.value=false;void load();},{immediate:true});

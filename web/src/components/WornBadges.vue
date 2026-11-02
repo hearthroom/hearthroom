@@ -73,7 +73,9 @@ function fit() {
   if (!box || !mirror) return;
   const widths = [...mirror.querySelectorAll<HTMLElement>("[data-measure-item]")].map(el => el.offsetWidth + (Number(el.dataset.layers) || 0) * 4);
   const plus = mirror.querySelector<HTMLElement>("[data-measure-plus]")?.offsetWidth ?? 36;
-  shown.value = fitWorn(widths, box.clientWidth, GAP, () => plus);
+  // clientWidth 含右側留給疊層的 padding，量可用寬度時扣掉
+  const room = box.clientWidth - (parseFloat(getComputedStyle(box).paddingRight) || 0);
+  shown.value = fitWorn(widths, room, GAP, () => plus);
 }
 const hidden = computed(() => worn.value.slice(Math.min(shown.value, worn.value.length)));
 let observer: ResizeObserver | null = null;
@@ -104,9 +106,21 @@ function closeDetail() {
   if (opener?.isConnected) opener.focus({ preventScroll: true });
   opener = null;
 }
+/** 詳情層裡能停的只有連結與按鈕；共用的預設選擇器不含連結，要自己給 */
+const STOPS = "a[href], button:not(:disabled)";
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") return void closeDetail();
-  if (detail.value?.sheet) wrapTab(e, layer.value);
+  if (detail.value?.sheet) return void wrapTab(e, layer.value, STOPS);
+  // 桌機浮層不是模態：Tab 就收起來，焦點回到點開它的標籤，再從那裡往下走
+  if (e.key === "Tab" && detail.value) { e.preventDefault(); closeDetail(); }
+}
+/** 桌機浮層不是模態：焦點離開它就收起來，不然它和擋點擊的那層會留在原地 */
+function onFocusOut(e: FocusEvent) {
+  if (!detail.value || detail.value.sheet) return;
+  const next = e.relatedTarget as Node | null;
+  // relatedTarget 是 null（點了浮層裡的字、切到別的視窗）不算離開；點外面由擋點擊的那層關
+  if (!next || layer.value?.contains(next)) return;
+  detail.value = null; document.removeEventListener("keydown", onKey); opener = null;
 }
 function onScroll() { if (detail.value && !detail.value.sheet) closeDetail(); }
 onMounted(() => addEventListener("scroll", onScroll, { passive: true }));
@@ -142,6 +156,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
       :style="detail.sheet ? undefined : { top: detail.top + 'px', left: detail.left + 'px' }"
       role="dialog"
       :aria-modal="detail.sheet || undefined"
+      @focusout="onFocusOut"
       :aria-label="detail.items.length === 1 ? nameOf(detail.items[0]) : t('badges.viewAll', { n: earned.length })"
     >
       <div v-for="badge in detail.items" :key="badge.key" class="worn-detail__item">

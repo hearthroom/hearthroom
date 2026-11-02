@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "소비",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "아직 받지 못한 랭킹 수상({n})",
-  "badgeWall.rank.hint": "랭킹 수상은 같은 기간에 공개된 카드의 집계가 끝난 뒤에 주어져요. 일간은 다음 날, 주간은 그 주가 끝나고 {weekDays}일 뒤, 월간은 그 달이 끝나고 {monthDays}일 뒤예요. 같은 기간에 공개된 카드가 {minCards}장보다 적으면 1위만 받아요.",
+  "badgeWall.rank.hint": "랭킹 수상은 같은 기간에 공개된 카드의 집계가 끝난 뒤에 주어져요. 일간은 그날이 끝나고 {dayHours}시간 뒤, 주간은 그 주가 끝나고 {weekDays}일 뒤, 월간은 그 달이 끝나고 {monthDays}일 뒤예요. 같은 기간에 공개된 카드가 {minCards}장보다 적으면 1위만 받아요.",
   "badgeWall.spend.hint": "충전액과 포인트 사용량이 모두 기준에 도달해야 획득해요. 환불로 기준 아래로 내려가면 회수돼요. 소비 배지는 대표 배지로 설정했을 때만 공개 프로필에 보여요.",
   "badgeWall.public.empty": "공개된 배지가 없어요",
   "badgeWall.public.back": "작가 페이지로 돌아가기",
@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "보석(1단계)",
   "badgeWall.icon.spend-2": "보석(2단계)",
   "badgeWall.icon.spend-3": "보석(3단계)",
-  "badgeWall.icon.spend-4": "보석(4단계)"
+  "badgeWall.icon.spend-4": "보석(4단계)",
+  "badgeWall.category.contest": "대회"
 }

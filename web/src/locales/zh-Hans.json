@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "消费",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "尚未获得的榜单荣誉（{n}）",
-  "badgeWall.rank.hint": "榜单荣誉在同期发布的卡片都比完后颁发：日榜次日，周榜在该周结束 {weekDays} 天后，月榜在该月结束 {monthDays} 天后。同期发布的卡片不足 {minCards} 张时，只颁发第一名。",
+  "badgeWall.rank.hint": "榜单荣誉在同期发布的卡片都比完后颁发：日榜在当天结束 {dayHours} 小时后，周榜在该周结束 {weekDays} 天后，月榜在该月结束 {monthDays} 天后。同期发布的卡片不足 {minCards} 张时，只颁发第一名。",
   "badgeWall.spend.hint": "充值与使用积分都达标才会获得，退款后低于标准会收回。消费徽章设为展示后，才会出现在公开页。",
   "badgeWall.public.empty": "作者没有公开徽章",
   "badgeWall.public.back": "回到作者页",
@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "宝石（一级）",
   "badgeWall.icon.spend-2": "宝石（二级）",
   "badgeWall.icon.spend-3": "宝石（三级）",
-  "badgeWall.icon.spend-4": "宝石（四级）"
+  "badgeWall.icon.spend-4": "宝石（四级）",
+  "badgeWall.category.contest": "比赛"
 }

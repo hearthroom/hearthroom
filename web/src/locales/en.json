@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "Spending",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "Board honors not yet earned ({n})",
-  "badgeWall.rank.hint": "Board honors are awarded once every card published in the same period has been ranked: the day after for daily, {weekDays} days after the week ends for weekly, and {monthDays} days after the month ends for monthly. If fewer than {minCards} cards were published in a period, only #1 is awarded.",
+  "badgeWall.rank.hint": "Board honors are awarded once every card published in the same period has been ranked: {dayHours} hours after the day ends for daily, {weekDays} days after the week ends for weekly, and {monthDays} days after the month ends for monthly. If fewer than {minCards} cards were published in a period, only #1 is awarded.",
   "badgeWall.spend.hint": "Earned when both top-ups and credits used reach the level; the badge is taken back if a refund drops you below it. Spending badges appear on your public profile only when featured.",
   "badgeWall.public.empty": "No public badges",
   "badgeWall.public.back": "Back to author",
@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "Gem (level 1)",
   "badgeWall.icon.spend-2": "Gem (level 2)",
   "badgeWall.icon.spend-3": "Gem (level 3)",
-  "badgeWall.icon.spend-4": "Gem (level 4)"
+  "badgeWall.icon.spend-4": "Gem (level 4)",
+  "badgeWall.category.contest": "Contests"
 }

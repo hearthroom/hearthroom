@@ -4350,7 +4350,7 @@
   "badgeWall.category.spend": "消費",
   "badgeWall.categoryProgress": "{owned} / {total}",
   "badgeWall.rank.locked": "未獲得のランキング実績（{n}）",
-  "badgeWall.rank.hint": "ランキング実績は、同じ期間に公開されたカードの集計が終わってから付与されます。日間は翌日、週間は週の終了から {weekDays} 日後、月間は月の終了から {monthDays} 日後です。同じ期間に公開されたカードが {minCards} 枚に満たないときは、1位のみ付与されます。",
+  "badgeWall.rank.hint": "ランキング実績は、同じ期間に公開されたカードの集計が終わってから付与されます。日間は当日の終了から {dayHours} 時間後、週間は週の終了から {weekDays} 日後、月間は月の終了から {monthDays} 日後です。同じ期間に公開されたカードが {minCards} 枚に満たないときは、1位のみ付与されます。",
   "badgeWall.spend.hint": "チャージ額とポイントの使用額の両方が基準に達すると獲得できます。返金で基準を下回ると取り消されます。消費バッジは「プロフィールに飾る」に設定したときだけ公開ページに表示されます。",
   "badgeWall.public.empty": "公開されているバッジはありません",
   "badgeWall.public.back": "作者ページに戻る",
@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "宝石（レベル1）",
   "badgeWall.icon.spend-2": "宝石（レベル2）",
   "badgeWall.icon.spend-3": "宝石（レベル3）",
-  "badgeWall.icon.spend-4": "宝石（レベル4）"
+  "badgeWall.icon.spend-4": "宝石（レベル4）",
+  "badgeWall.category.contest": "コンテスト"
 }

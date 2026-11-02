@@ -22,3 +22,10 @@ it("omits unknown badges and invalid levels instead of displaying raw keys",asyn
  app=createApp(CommunityBadgeList,{badges:["unknown_future_badge"],level:NaN}).use(i18n);app.mount(el);await settle();
  expect(el.textContent).toBe("");expect(el.querySelector('svg')).toBeNull();
 });
+it("draws a featured board honor as the colored badge with its full name, the same as everywhere else",async()=>{
+ const items=[{key:"rank_clean_day_1",icon:"award",category:"rank",titles:{en:"server title"},descriptions:{en:""},state:"earned",earnedAt:1,expiresAt:null}];
+ app=createApp(CommunityBadgeList,{badges:["rank_clean_day_1"],items}).use(i18n);app.mount(el);await settle();
+ expect(el.querySelector(".rank-badge")).not.toBeNull();
+ expect(el.querySelector('[data-icon="award"]')).toBeNull();
+ expect(el.textContent).toContain("SFW Daily #1");
+});

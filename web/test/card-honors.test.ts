@@ -110,4 +110,20 @@ describe("card page honors", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(root.querySelector("li")).toBeNull();
   });
+
+  it("asks for the full list once when the page swaps in a fresh copy of the same card", async () => {
+    const { fetchMock } = await mountList([{ zone: "clean", window: "day", band: 1 }], [{ zone: "clean", window: "day", band: 1, period: "2026-11-03", at: 1 }]);
+    const root = el!;
+    app!.unmount(); root.remove();
+    // 同一個元件換一份新的 honors 陣列（卡片頁先顯示快取、再換成剛讀到的那份）
+    const { reactive, h } = await import("vue");
+    const props = reactive({ cardId: "abc", honors: [{ zone: "clean", window: "day", band: 1 }] });
+    el = document.createElement("ul"); document.body.append(el);
+    app = createApp({ render: () => h(CardHonors, props) }).use(createPinia()).use(i18n); app.mount(el); await flush();
+    const before = fetchMock.mock.calls.length;
+    props.honors = [{ zone: "clean", window: "day", band: 1 }]; await flush();
+    expect(fetchMock.mock.calls.length).toBe(before);
+    expect(el.querySelector(".card-honors__more")).not.toBeNull();
+  });
 });
+

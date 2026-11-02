@@ -64,5 +64,19 @@ it('folds board honors the member has not earned instead of listing all eighteen
  expect([...section.querySelectorAll(':scope > .badge-wall .badge-tile h3')].map(h=>h.textContent)).toEqual(['SFW Daily #1','Overall Daily #1']);
  expect(section.querySelector('details summary')?.textContent).toBe('Board honors not yet earned (2)');
  expect(section.querySelectorAll('details .badge-tile')).toHaveLength(2);
+ expect(section.querySelector('.badge-section__hint')?.textContent).toContain('24 hours after the day ends');
  expect(section.querySelector('.badge-section__hint')?.textContent).toContain('7 days after the week ends');
+});
+it('treats an author without a member profile as having no public badges',async()=>{
+ await open('/authors/ghost/badges',{items:[],featured:[]});
+ mock.request.mockReset();mock.request.mockRejectedValue(Object.assign(new Error('not found'),{status:404}));
+ app.unmount();const router=createRouter({history:createMemoryHistory(),routes:[{path:'/authors/:handle/badges',component:BadgesPage},{path:'/:p(.*)*',component:{template:'<div/>'}}]});
+ await router.push('/authors/ghost/badges');app=createApp(BadgesPage).use(router).use(i18n);app.mount(el);await settle();
+ expect(el.querySelector('[role=alert]')).toBeNull();
+ expect(el.querySelector('.badge-empty')?.textContent).toContain('No public badges');
+});
+it('keeps one section per category even when the list is not grouped',async()=>{
+ const other=(key:string,category:string)=>({key,icon:'star',category,titles:{en:key},descriptions:{en:'How'},state:'earned',earnedAt:1,expiresAt:null});
+ await open('/me/badges',{items:[rank('rank_clean_day_1'),other('invite_3','invite'),rank('rank_all_week_3','locked')],featured:[],public:true});
+ expect([...el.querySelectorAll('.badge-section__label')].map(h=>h.textContent)).toEqual(['Board honors','Invites']);
 });

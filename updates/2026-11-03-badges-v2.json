@@ -4,11 +4,11 @@
   "audience": "everyone",
   "try": "/",
   "title": {
-    "zh-Hant": "上榜的卡片會留下榜單榮譽，作者主頁先看到卡片。",
-    "zh-Hans": "上榜的卡片会留下榜单荣誉，作者主页先看到卡片。",
-    "en": "Cards that make the boards keep a board honor, and author pages lead with cards.",
-    "ja": "ランキングに入ったカードに実績が残り、作者ページはカードから表示されます。",
-    "ko": "랭킹에 오른 카드에 수상 기록이 남고, 작가 페이지는 카드부터 보여요."
+    "zh-Hant": "卡片拿到榜單名次會留下榮譽，作者主頁先看到卡片。",
+    "zh-Hans": "卡片拿到榜单名次会留下荣誉，作者主页先看到卡片。",
+    "en": "Cards that place on the boards keep the honor, and author pages lead with cards.",
+    "ja": "ランキングで順位を取ったカードに実績が残り、作者ページはカードから表示されます。",
+    "ko": "랭킹 순위에 든 카드에 수상 기록이 남고, 작가 페이지는 카드부터 보여요."
   },
   "body": {
     "zh-Hant": "卡片封面左上角會標出它拿過的日榜、週榜、月榜名次，作者主頁的名字旁只放作者選來展示的徽章，全部徽章另外放在一頁。",
