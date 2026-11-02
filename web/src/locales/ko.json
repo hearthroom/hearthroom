@@ -21,6 +21,7 @@
   "board.search.placeholder": "캐릭터 이름·소개·태그 검색",
   "board.search.submit": "검색",
   "board.sort.hot": "인기",
+  "board.sort.score": "평점순",
   "board.sort.updated": "업데이트순",
   "board.rating.label": "등급",
   "board.rating.all": "등급: 전체",

@@ -21,6 +21,7 @@
   "board.search.placeholder": "Search names, blurbs or tags",
   "board.search.submit": "Search",
   "board.sort.hot": "Top",
+  "board.sort.score": "Top rated",
   "board.sort.updated": "Updated",
   "board.rating.label": "Content rating",
   "board.rating.all": "Rating: all",

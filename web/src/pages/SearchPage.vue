@@ -41,10 +41,13 @@ const fandom = computed(() => (typeof route.query.fandom === "string" ? route.qu
 const filtersOpen = ref(false);
 const PERIODS = ["all", "week", "month", "quarter", "year"];
 const period = computed(() => typeof route.query.period === "string" && PERIODS.includes(route.query.period) ? route.query.period : "all");
-/** 有關鍵字時預設按相關度（名字命中的排前面）；只篩類型或時間時沒有相關度可言，退回最熱。 */
+/**
+ * 有關鍵字時預設按相關度（名字命中的排前面）；只篩類型或時間時沒有相關度可言，退回最熱。
+ * 評分排序住在這裡：首頁分頁列 2026-11-03 起不放它（站方：手機兩行已滿，「評分放篩選」）。
+ */
 const sort = computed(() => {
   const s = route.query.sort;
-  if (s === "new" || s === "hot") return s;
+  if (s === "new" || s === "hot" || s === "score") return s;
   // 清掉關鍵字後網址裡可能還留著 relevance：沒有關鍵字就當最熱，選單才不會指著一個不存在的選項
   return q.value ? "relevance" : "hot";
 });
@@ -183,7 +186,7 @@ watch(q, (v) => { draft.value = v; });
             <label class="sr-only" for="search-sort">{{ $t('board.sorts') }}</label>
             <span class="search__select-wrap">
               <select id="search-sort" name="sort" class="search__select" :value="sort" @change="navigate({ sort: ($event.target as HTMLSelectElement).value })">
-                <option v-if="q" value="relevance">{{ $t('board.sort.relevance') }}</option><option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
+                <option v-if="q" value="relevance">{{ $t('board.sort.relevance') }}</option><option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option><option value="score">{{ $t('board.sort.score') }}</option>
               </select>
             </span>
           </template>
