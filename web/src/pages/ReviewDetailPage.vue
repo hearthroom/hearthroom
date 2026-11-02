@@ -64,7 +64,8 @@ async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  try{return await answer;}finally{ownedConfirm=null;}
 }
 function summary(name:string,submittedAt:number,verdict:string,reason:string,reasonKey='review.confirm.note'){
- return `${t('review.confirm.card')}: ${name}\n${t('review.confirm.version')}: ${dateTime(submittedAt)}\n${t('review.confirm.decision')}: ${verdict}\n${t(reasonKey)}: ${reason||t('review.confirm.noNote')}`;
+ const row=(label:string,value:string)=>t('review.confirm.row',{label,value});
+ return [row(t('review.confirm.card'),name),row(t('review.confirm.version'),dateTime(submittedAt)),row(t('review.confirm.decision'),verdict),row(t(reasonKey),reason||t('review.confirm.noNote'))].join('\n');
 }
 const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
 const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
@@ -221,6 +222,17 @@ const decideError = ref("");
 const decideUnknown = ref(false);
 const decideErrorEl = ref<HTMLElement | null>(null);
 const decideSection = ref<HTMLElement | null>(null);
+/** 決定區已經在畫面裡：手機底部列收起，免得「前往決定」疊在「通過」下面 */
+const decideVisible = ref(false);
+let decideObserver: IntersectionObserver | null = null;
+watch(decideSection, (el) => {
+  decideObserver?.disconnect();
+  decideVisible.value = false;
+  if (!el || typeof IntersectionObserver === "undefined") return;
+  decideObserver = new IntersectionObserver((entries) => { decideVisible.value = entries.some((e) => e.isIntersecting); });
+  decideObserver.observe(el);
+});
+onBeforeUnmount(() => decideObserver?.disconnect());
 const tabsBar = ref<HTMLElement | null>(null);
 function goDecide() {
   decideSection.value?.scrollIntoView({ block: "start" });
@@ -501,7 +513,7 @@ onMounted(() => { void load(); });
                 <span>{{ $t('reviewLength.persona', lengthParams) }}</span>
                 <span>{{ $t('reviewLength.constantWorldbook', lengthParams) }}</span>
                 <span>{{ $t('reviewLength.total', lengthParams) }}</span>
-                <strong>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
+                <strong class="length-status" :class="data.detail.reviewLength.eligible ? 'length-status--ok' : 'length-status--short'" data-length-status>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
             </p>
             <p class="subtle">{{ $t('reviewLength.welcome', lengthParams) }}</p>
           </template>
@@ -798,10 +810,10 @@ onMounted(() => { void load(); });
       </div>
     </div>
 
-    <!-- 手機底部固定列：試玩與前往決定。打字時收起，免得蓋住說明欄 -->
-    <div v-if="data && doc && !loading && !noteFocused" class="dock">
+    <!-- 手機底部固定列：試玩與前往決定。只在還能決定、決定區還沒進畫面時出現；打字時也收起，免得蓋住說明欄 -->
+    <div v-if="data && doc && !loading && canDecide && !decideVisible && !noteFocused" class="dock">
       <RouterLink class="btn btn--lg dock__play" :to="lp(`/play/${data.card.id}?review=${encodeURIComponent(id)}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
-      <button v-if="canDecide" type="button" class="btn btn--primary btn--lg dock__main" @click="goDecide">{{ $t("review.action.toDecide") }}</button>
+      <button type="button" class="btn btn--primary btn--lg dock__main" @click="goDecide">{{ $t("review.action.toDecide") }}</button>
     </div>
   </section>
 </template>
@@ -875,16 +887,23 @@ onMounted(() => { void load(); });
 .entry__body { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
 .length-values { display:flex; flex-wrap:wrap; gap:var(--s-2) var(--s-4); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 :lang(ko) .length-values { word-break:keep-all; }
+/* 達標與否一眼分得出：未達標用跟清單字數 chip 同一個警示色，達標用成功色；狀態仍是文字 */
+.length-status { padding: 0 var(--s-2); border-radius: var(--r-sm); }
+.length-status--short { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); }
+.length-status--ok { color: var(--success); background: var(--success-soft); }
 .cost { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
 /* 捲到決定區時要避開黏著的頁首與分頁條（「更多」展開時分頁條是兩排） */
 .verdict { padding: var(--s-4); display: grid; gap: var(--s-3); scroll-margin-top: calc(var(--header-h) + var(--tabs-bar-h, 0px) + var(--s-3)); }
 .verdict__title { margin: 0; font-size: 16px; }
+/* 標題只在送出後被程式聚焦（讓讀屏器知道結果出來了），不在 Tab 順序裡：不畫鍵盤焦點環 */
 .verdict__title:focus { outline: none; }
-.verdict__title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .verdict__acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--s-2); }
-.verdict__back { margin-right: auto; min-height: var(--h-md); }
+.verdict > .field, .verdict .records { margin-bottom: 0; }
+.verdict .small-note { margin: var(--s-2) 0 0; }
+.verdict .reasons { margin-bottom: 0; }
+.verdict__back { margin-right: auto; min-height: var(--h-md); padding-inline-start: 0; }
 .verdict__btn { min-width: 112px; }
 /* 手機：「回去看內容」自己一行，兩個決定（或結果卡的兩個去處）並排平分；放不下時各佔一行，不截字 */
 @media (max-width: 600px) {

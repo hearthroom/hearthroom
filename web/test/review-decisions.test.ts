@@ -43,3 +43,18 @@ it('a search with no match explains how matching works and clears back to the fu
  expect(router.currentRoute.value.query.q).toBeUndefined();
  expect(el.querySelector<HTMLInputElement>('input[type=search]')!.value).toBe('');
 });
+
+it('the pending tab shows no number until the count is known, never a made-up 0',async()=>{
+ api.fetchReviewMe.mockImplementationOnce(()=>new Promise(()=>{}));
+ await mount('/review/decisions');
+ await vi.waitFor(()=>expect(el.textContent).toContain('夜行'));
+ const tab=el.querySelector('.review-tabs a')!;
+ expect(tab.textContent?.trim()).toBe(i18n.global.t('review.queue.tab.pendingNoCount'));
+});
+
+it('each row states the current result as a label, without a sentence ending',async()=>{
+ await mount('/review/decisions');
+ await vi.waitFor(()=>expect(el.textContent).toContain('夜行'));
+ expect(el.textContent).toContain(i18n.global.t('review.history.status.rejected'));
+ expect(el.textContent).not.toContain(i18n.global.t('review.done.rejected'));
+});

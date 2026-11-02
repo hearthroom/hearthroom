@@ -4341,5 +4341,9 @@
   "review.result.noteTitle": "Your note to the author",
   "review.result.next": "Next in queue ({n})",
   "review.result.toQueue": "Back to queue",
-  "review.result.queueEmpty": "The review queue is empty."
+  "review.result.queueEmpty": "The review queue is empty.",
+  "review.history.status.approved": "On the board",
+  "review.history.status.rejected": "Rejected",
+  "review.confirm.row": "{label}: {value}",
+  "review.queue.tab.pendingNoCount": "Pending"
 }

@@ -4341,5 +4341,9 @@
   "review.result.noteTitle": "작가에게 남긴 메모",
   "review.result.next": "다음 심사 대기 카드 ({n})",
   "review.result.toQueue": "목록으로 돌아가기",
-  "review.result.queueEmpty": "심사 대기 카드가 모두 끝났어요."
+  "review.result.queueEmpty": "심사 대기 카드가 모두 끝났어요.",
+  "review.history.status.approved": "보드에 올라감",
+  "review.history.status.rejected": "반려됨",
+  "review.confirm.row": "{label}: {value}",
+  "review.queue.tab.pendingNoCount": "심사 대기"
 }

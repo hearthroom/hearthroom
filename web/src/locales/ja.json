@@ -4341,5 +4341,9 @@
   "review.result.noteTitle": "作者へのコメント",
   "review.result.next": "次の審査待ちへ（{n}）",
   "review.result.toQueue": "審査一覧へ戻る",
-  "review.result.queueEmpty": "審査待ちのカードはなくなりました。"
+  "review.result.queueEmpty": "審査待ちのカードはなくなりました。",
+  "review.history.status.approved": "掲載済み",
+  "review.history.status.rejected": "却下済み",
+  "review.confirm.row": "{label}：{value}",
+  "review.queue.tab.pendingNoCount": "審査待ち"
 }

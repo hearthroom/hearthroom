@@ -150,7 +150,7 @@ it.each(correctionFailures.flatMap(([code,key])=>readFailures.map(([status,readC
  await vi.waitFor(()=>expect([...el.querySelectorAll('button')].filter(b=>b.textContent?.trim()===i18n.global.t('review.correction.action')).at(-1)?.disabled).toBe(false));
  [...el.querySelectorAll('button')].filter(b=>b.textContent?.trim()===i18n.global.t('review.correction.action')).at(-1)!.click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- expect(confirmState.current!.message).toContain(i18n.global.t('review.correction.reason')+': The setting needs more detail.');
+ expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.correction.reason'),value:'The setting needs more detail.'}));
  settleConfirm(true);
  await vi.waitFor(()=>expect(api.correctReviewDecision).toHaveBeenCalledTimes(1));
  await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t(key)));
@@ -377,4 +377,29 @@ it('opening the next card in the same page drops the previous card\'s similarity
  button(i18n.global.t('review.result.next',{n:1}))!.click();
  await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
  expect(el.querySelector('.tabs')!.textContent).not.toContain('42%');
+});
+
+it('the phone bottom bar is for reaching the decision: gone once the card is decided',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('.dock')).toBeTruthy());
+ app.unmount();
+ const d=withLength(3600,{claimedByMe:false,stampedByMe:true,status:'rejected',stamps:[{verdict:'reject',note:'x',at:2,mine:true}]});
+ api.fetchReviewDetail.mockReset().mockResolvedValue(d);
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-result-card]')).toBeTruthy());
+ expect(el.querySelector('.dock')).toBeNull();
+});
+
+it('marks the count status so short and eligible look different, and writes confirm rows with the localized separator',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-length-status]')).toBeTruthy());
+ expect(el.querySelector('[data-length-status]')!.classList.contains('length-status--short')).toBe(true);
+ const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;note.value='x';note.dispatchEvent(new Event('input'));
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.action.reject'))!.disabled).toBe(false));
+ button(i18n.global.t('review.action.reject'))!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
+ settleConfirm(false);
 });

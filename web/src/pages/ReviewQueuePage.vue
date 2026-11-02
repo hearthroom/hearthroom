@@ -75,6 +75,7 @@ async function claim(item: ReviewQueueItem) {
     const claimed = await claimReview(item.id, token);
     item.claimGeneration = claimed.generation;
     item.claim = "mine";
+    void reviewerStore.refresh();
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
     // 被別人先領走：這一列改成「有人在看」並說明；其他失敗只說沒領成，按鈕照樣可以再按
@@ -115,7 +116,7 @@ onMounted(() => {
 <template>
   <section class="review-queue">
     <header class="head">
-      <ReviewListTabs active="pending" :pending="loading && !items.length ? reviewerStore.pendingReviews : items.length" />
+      <ReviewListTabs active="pending" :pending="reviewerStore.reviewer ? reviewerStore.pendingReviews : null" />
       <button class="btn btn--sm" :disabled="loading" @click="load">{{ $t("review.refresh") }}</button>
     </header>
 
@@ -147,7 +148,6 @@ onMounted(() => {
               <span class="row__name">{{ item.card.name }}</span>
               <span class="chip" :class="{ 'chip--re': item.kind === 're' }">{{ $t(`review.kind.${item.kind}`) }}</span>
               <span v-if="(item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
-              <span class="chip">{{ $t("review.stamps", { n: item.stamps.approve, required: item.stamps.required }) }}</span>
               <span v-if="lengthChip(item)" class="chip chip--length" :class="{ 'chip--short': lengthChip(item)!.short }" data-length-chip>{{ lengthChip(item)!.text }}</span>
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />

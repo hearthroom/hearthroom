@@ -44,7 +44,7 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
 </script>
 <template>
  <section class="decisions">
-  <header class="head"><ReviewListTabs active="history" :pending="reviewer.pendingReviews" /></header>
+  <header class="head"><ReviewListTabs active="history" :pending="reviewer.reviewer ? reviewer.pendingReviews : null" /></header>
   <form class="history-search" role="search" @submit.prevent="submitSearch">
    <input v-model="typed" class="input history-search__input" type="search" enterkeyhint="search" autocomplete="off" :placeholder="t('review.history.search.placeholder')" :aria-label="t('review.history.search.placeholder')" @input="onInput" />
   </form>
@@ -62,7 +62,7 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
      <p class="row__title"><RouterLink class="row__name" :to="lp(`/review/${item.id}`)">{{item.card.name}}</RouterLink> <span class="subtle num">#{{item.card.id}}</span></p>
      <p>{{t('review.confirm.version')}} · {{dateTime(item.submittedAt)}}</p>
      <p>{{t('review.history.myDecision')}} · {{t(`review.action.${item.verdict}`)}}</p>
-     <p>{{t('review.history.currentResult')}} · {{item.corrected?t('review.history.corrected'):item.status==='pending'?t('review.history.pending'):t(`review.done.${item.status==='approved'?'approved':'rejected'}`)}}</p>
+     <p>{{t('review.history.currentResult')}} · {{item.corrected?t('review.history.corrected'):item.status==='pending'?t('review.history.pending'):t(`review.history.status.${item.status==='approved'?'approved':'rejected'}`)}}</p>
      <p class="subtle">{{t('review.history.reviewedAt')}} · {{dateTime(item.at)}}</p>
     </div>
     <RouterLink class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>

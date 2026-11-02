@@ -4341,5 +4341,9 @@
   "review.result.noteTitle": "你写给作者的说明",
   "review.result.next": "下一张待审（{n}）",
   "review.result.toQueue": "回待审列表",
-  "review.result.queueEmpty": "待审列表已经空了。"
+  "review.result.queueEmpty": "待审列表已经空了。",
+  "review.history.status.approved": "已上榜",
+  "review.history.status.rejected": "已驳回",
+  "review.confirm.row": "{label}：{value}",
+  "review.queue.tab.pendingNoCount": "待审"
 }

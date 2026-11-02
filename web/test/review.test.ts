@@ -60,8 +60,9 @@ afterEach(() => {
 describe("審核佇列頁", () => {
   it("列出待審的卡：章數、初審／重審、可不可領；不顯示作者", () => {
     const text = host.textContent ?? "";
-    expect(text).toContain("1 / 2");
-    expect(text).toContain("0 / 1");
+    // 一章即定案：每列不再放「n / 1 人通過」（沒有資訊量）
+    expect(text).not.toContain("1 / 2");
+    expect(text).not.toContain("0 / 1");
     expect(text).toContain(i18n.global.t("review.kind.re"));
     expect(text).not.toContain("author");
     const buttons = [...host.querySelectorAll("button")].filter((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"));

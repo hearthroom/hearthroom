@@ -6,14 +6,15 @@
 import { RouterLink } from "vue-router";
 import { useLocalePath } from "@/lib/use-locale";
 
-defineProps<{ active: "pending" | "history"; pending: number }>();
+/** pending：可領的待審數（跟管理分頁的徽章同一個來源）；還不知道就是 null，只寫「待審」不寫 0 */
+defineProps<{ active: "pending" | "history"; pending: number | null }>();
 const { lp } = useLocalePath();
 </script>
 
 <template>
   <nav class="seg review-tabs" :aria-label="$t('review.queue.tab.label')">
     <RouterLink class="seg__item" :class="{ 'seg__item--on': active === 'pending' }" :aria-current="active === 'pending' ? 'page' : undefined" :to="lp('/review')">
-      {{ $t("review.queue.tab.pending", { n: pending }) }}
+      {{ pending === null ? $t("review.queue.tab.pendingNoCount") : $t("review.queue.tab.pending", { n: pending }) }}
     </RouterLink>
     <RouterLink class="seg__item" :class="{ 'seg__item--on': active === 'history' }" :aria-current="active === 'history' ? 'page' : undefined" :to="lp('/review/decisions')">
       {{ $t("review.history.title") }}
