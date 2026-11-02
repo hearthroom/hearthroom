@@ -17,6 +17,11 @@ beforeEach(async () => {
   card = (await upsertCard(env.DB, role({roleId:'reviewed',authorNumId:10001}), Date.now())).id;
 });
 afterEach(() => { restoreUpstream(); vi.restoreAllMocks(); });
+it('returns an empty card search for an oversized LIKE pattern', async () => {
+ const response=await request('/cards?q='+encodeURIComponent('字'.repeat(30)));
+ expect(response.status).toBe(200);
+ expect(await response.json()).toEqual({items:[],hasNext:false});
+});
 it('two independent votes remove a work from discovery while retaining direct sharing', async () => {
   const before = await SELF.fetch('https://c.test/v1/cards?zone=all'); expect((await before.json() as any).items).toHaveLength(1);
   const res = await proposal('delist'); expect(res.status).toBe(201);

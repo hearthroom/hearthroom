@@ -1,6 +1,7 @@
 import { SELF, createScheduledController, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureCardNumber } from "../src/cards";
+import { hanziGlob } from "../src/search-text";
 const fixtureLabels = new Map<string,string>();
 import worker from "../src/index";
 import { buildSearchBody, buildSearchName, buildSearchText } from "../src/upstream";
@@ -71,6 +72,48 @@ beforeEach(async () => {
   rolesOnMainSite();
 });
 afterEach(restoreUpstream);
+
+describe("搜尋樣式上限", () => {
+  it("GLOB 保留字面特殊字元，50 bytes 可命中，超限不做前綴搜尋", async () => {
+    for (const q of ["a".repeat(12), "1234567890", "[*?]-^", "船".repeat(16)]) {
+      const pattern = hanziGlob(q);
+      expect(pattern).not.toBeNull();
+      expect(await env.DB.prepare("SELECT ? GLOB ? AS hit").bind(q, pattern).first()).toMatchObject({ hit: 1 });
+    }
+    expect(hanziGlob("a".repeat(13))).toBeNull();
+    expect(hanziGlob("船".repeat(17))).toBeNull();
+  });
+  it("D1 的 LIKE／GLOB 樣式上限是 50 UTF-8 bytes", async () => {
+    for (const operator of ["LIKE", "GLOB"]) {
+      const match = (pattern: string) => env.DB.prepare(`SELECT ? ${operator} ? AS hit`).bind(pattern, pattern).first();
+      expect(await match("x".repeat(50))).toMatchObject({ hit: 1 });
+      await expect(match("x".repeat(51))).rejects.toThrow("pattern too complex");
+      expect(await match("字".repeat(16))).toMatchObject({ hit: 1 });
+      await expect(match("字".repeat(17))).rejects.toThrow("pattern too complex");
+    }
+  });
+  it.each(["authors", "tags", "cards", "suggest"])("原重現詞在 /v1/%s 回 200", async (endpoint) => {
+    const q = "QA NO MATCH 7654321";
+    await seed({ id: "pattern", authorName: q, name: q, tags: [q] });
+    const res = await SELF.fetch(`https://c.test/v1/${endpoint}?zone=zh&limit=20&offset=0&q=${encodeURIComponent(q)}`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    expect(endpoint === "suggest" ? body.tags : body.items).toHaveLength(1);
+  });
+
+  it.each(["authors", "tags", "fandoms", "cards", "suggest"])("超長樣式在 /v1/%s 回空結果", async (endpoint) => {
+    // 短詞使卡片搜尋也走 LIKE；資料必須存在，才會實際求值樣式。
+    await seed({ id: "pattern", authorName: "Someone", tags: ["something"] });
+    await env.DB.prepare("UPDATE cards SET fandom='something',fandom_key='something'").run();
+    const q = "a " + "x".repeat(1000);
+    const res = await SELF.fetch(`https://c.test/v1/${endpoint}?q=${encodeURIComponent(q)}`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as any;
+    if (endpoint === "suggest") expect(body).toEqual({ tags: [], fandoms: [], cards: [] });
+    else expect(body.items).toEqual([]);
+    if ("hasNext" in body) expect(body.hasNext).toBe(false);
+  });
+});
 
 describe("搜尋", () => {
   beforeEach(async () => {

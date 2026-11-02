@@ -8,6 +8,7 @@ import { quotaForMember, PACK_MAX } from './quota';
 import { pickLocale, HttpError, type Env, type Localized } from './types';
 import { resolveFandom } from './fandom';
 import { buildSearchName } from './upstream';
+import { boundedSearchPattern } from './search-text';
 
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
@@ -85,7 +86,9 @@ moderationRoutes.get('/v1/moderation/cases',async c=>{
 });
 moderationRoutes.get('/v1/moderation/cards',async c=>{
  const member=await requireReviewer(c);const age=(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt!==null;const q=(c.req.query('q')??'').trim().slice(0,100);const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
- const rows=await c.env.DB.prepare(CARD+` WHERE c.status='approved' AND (c.rating IS NOT 'R' OR ?) AND (?='' OR c.names LIKE ? ESCAPE '\\' OR c.id=? OR EXISTS(SELECT 1 FROM card_numbers n WHERE n.provider=c.provider AND n.source_role_id=c.source_role_id AND CAST(n.num AS TEXT)=?)) ORDER BY c.registered_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),q,'%'+q.replace(/[\\%_]/g,'\\$&')+'%',q,q,offset).all<ManagedCard>();
+ const pattern=boundedSearchPattern('%'+q.replace(/[\\%_]/g,'\\$&')+'%');
+ if(pattern===null)return c.json({items:[],hasNext:false});
+ const rows=await c.env.DB.prepare(CARD+` WHERE c.status='approved' AND (c.rating IS NOT 'R' OR ?) AND (?='' OR c.names LIKE ? ESCAPE '\\' OR c.id=? OR EXISTS(SELECT 1 FROM card_numbers n WHERE n.provider=c.provider AND n.source_role_id=c.source_role_id AND CAST(n.num AS TEXT)=?)) ORDER BY c.registered_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),q,pattern,q,q,offset).all<ManagedCard>();
  return c.json({items:rows.results.slice(0,30).map(r=>projection(r,c.req.query('lang')||'zh-Hant')),hasNext:rows.results.length>30});
 });
 moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
