@@ -1,5 +1,6 @@
 import type { Rating, Topic } from "../../../shared/content-rating";
 import type { TipLink } from "../../../shared/tip-links";
+import type { Honor } from "./honors";
 export interface Localized { zh: string; en: string; ja: string; ko: string }
 
 /** 語區。榜單按這個分開列；all 是不分語言的卡，每區都出現。 */
@@ -22,6 +23,8 @@ export interface CommunityCard {
   shortcutKey?: string;
   /** HearthRoom 精選卡：社群代表標的；供應商那邊據此給作者較高的返點 */
   featured?: boolean;
+  /** 榜單榮譽：每個期別最高名次一枚，日→週→月，最多三枚；沒得過是空陣列或不帶（封面左上那一列） */
+  honors?: Honor[];
   name: string;
   summary: string;
   names: Localized;
