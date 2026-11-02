@@ -58,3 +58,20 @@ it('each row states the current result as a label, without a sentence ending',as
  expect(el.textContent).toContain(i18n.global.t('review.history.status.rejected'));
  expect(el.textContent).not.toContain(i18n.global.t('review.done.rejected'));
 });
+
+it('loading the next page keeps the button, disabled, and says it is loading',async()=>{
+ let release!:(v:unknown)=>void;
+ api.fetchReviewDecisions.mockReset()
+  .mockResolvedValueOnce({items:[row('1','夜行')],nextCursor:5})
+  .mockImplementationOnce(()=>new Promise((r)=>{release=r;}));
+ await mount('/review/decisions');
+ await vi.waitFor(()=>expect(el.querySelector('[data-load-more]')).toBeTruthy());
+ const more=el.querySelector<HTMLButtonElement>('[data-load-more]')!;
+ expect(more.textContent?.trim()).toBe(i18n.global.t('res.more'));
+ more.click();
+ await vi.waitFor(()=>expect(more.textContent?.trim()).toBe(i18n.global.t('state.loading')));
+ expect(more.disabled).toBe(true);
+ release({items:[row('2','月下')],nextCursor:null});
+ await vi.waitFor(()=>expect(el.textContent).toContain('月下'));
+ expect(el.querySelector('[data-load-more]')).toBeNull();
+});

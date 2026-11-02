@@ -68,7 +68,8 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
     <RouterLink class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>
    </li>
   </ul>
-  <button v-if="next" class="btn" :disabled="loading" @click="load(true)">{{t('res.more')}}</button>
+  <!-- 載入下一頁時按鈕留著、停用並寫「載入中…」：版面不跳、不會重複點，也看得出正在載（團隊負責人 2026-11-02 裁定） -->
+  <button v-if="next" class="btn" :disabled="loading" :aria-busy="loading" data-load-more @click="load(true)">{{loading?t('state.loading'):t('res.more')}}</button>
  </section>
 </template>
 <style scoped>
