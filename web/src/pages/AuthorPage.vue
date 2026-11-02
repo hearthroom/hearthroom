@@ -82,13 +82,16 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <CommunityAvatar :handle="author.handle ?? undefined" :src="author.avatar" :name="author.name" class="who__face" />
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
-        <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" :official="author.official" /></h1>
+        <!-- 桌機：名字和展示徽章同一行，放不下時整排落到名字下一行；手機上這層拆開（display: contents），各自排進格線 -->
+        <div class="who__head">
+          <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" :official="author.official" /></h1>
+          <!-- 名字旁只放作者選來展示的徽章；全部徽章在獨立的徽章頁，主頁主體是卡片 -->
+          <WornBadges v-if="author.handle" :key="author.handle" :handle="author.handle" class="who__worn" />
+        </div>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
           <CommunityBadgeList v-if="level !== null" :badges="[]" :level="level" class="who__level" />
         </p>
-        <!-- 名字旁只放作者選來展示的徽章；全部徽章在獨立的徽章頁，主頁主體是卡片 -->
-        <WornBadges v-if="author.handle" :key="author.handle" :handle="author.handle" class="who__worn" />
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <!-- 打賞連結：每一條直接連到那個平台，錢在那邊付 -->
         <ul v-if="author.tips?.length" class="who__tips" :aria-label="$t('tips.title')">
@@ -138,7 +141,11 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 /* 簡介兩行截斷：頭部再長，第一排卡片也要在手機首屏內（徽章第一期 ui.md §3.1） */
 .who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem;margin:var(--s-2) 0 0;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* 展示列是子元件的根節點（不帶這一頁的 scope），選擇器要用 :deep */
-:deep(.who__worn) { margin-top: 2px; }
+.who__head { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-4); min-width: 0; }
+.who__head > .who__name { flex: 0 1 auto; min-width: min(9em, 100%); }
+:deep(.who__worn) { flex: 1 1 16rem; min-width: 0; }
+/* 名字最多兩行，再長就省略：CommunityName 外層是 inline-flex，省略要加在名字文字那一層 */
+.who__name :deep(.community-name > span:first-child) { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .who__level { display: inline-flex; vertical-align: middle; margin-left: var(--s-2); }
 .who__tips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .who__tip {
@@ -167,7 +174,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .who .eyebrow { display: none; }
   .who__name { grid-column: 2; grid-row: 1; align-self: end; font-size: 22px; }
   .who__id { grid-column: 2; grid-row: 2; margin: 0; }
-  .who > .who__text > :deep(.who__worn), .who__bio, .who__tips { grid-column: 1 / -1; }
+  .who__head { display: contents; }
+  .who > .who__text > .who__head > :deep(.who__worn), .who__bio, .who__tips { grid-column: 1 / -1; }
   .who__bio { margin: 0; }
   .who > .library-toggle { grid-column: 1 / -1; }
   .who > .library-toggle :deep(.btn) { width: 100%; }

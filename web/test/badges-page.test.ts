@@ -75,3 +75,8 @@ it('treats an author without a member profile as having no public badges',async(
  expect(el.querySelector('[role=alert]')).toBeNull();
  expect(el.querySelector('.badge-empty')?.textContent).toContain('No public badges');
 });
+it('keeps one section per category even when the list is not grouped',async()=>{
+ const other=(key:string,category:string)=>({key,icon:'star',category,titles:{en:key},descriptions:{en:'How'},state:'earned',earnedAt:1,expiresAt:null});
+ await open('/me/badges',{items:[rank('rank_clean_day_1'),other('invite_3','invite'),rank('rank_all_week_3','locked')],featured:[],public:true});
+ expect([...el.querySelectorAll('.badge-section__label')].map(h=>h.textContent)).toEqual(['Board honors','Invites']);
+});

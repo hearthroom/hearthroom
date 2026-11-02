@@ -30,10 +30,11 @@ const earnedItems=computed(()=>data.value?.items.filter(b=>b.state==='earned')??
 const items=computed(()=>(own.value?data.value?.items.filter(b=>filter.value==='all'||(filter.value==='earned'?b.state==='earned':b.state!=='earned')):earnedItems.value)??[]);
 const earned=computed(()=>earnedItems.value.length);
 const rankOrder=(list:CollectedBadge[])=>{const parsed=list.map(b=>({b,h:parseHonorKey(b.key)}));const honors=parsed.filter(p=>p.h);if(!honors.length)return list;const sorted=sortHonors(honors.map(p=>({...p.h!,b:p.b}))).map(x=>x.b);return [...sorted,...parsed.filter(p=>!p.h).map(p=>p.b)];};
-// 目錄已經依類別排好；切成區塊時不重排類別。榜單榮譽裡沒拿過的另外收起來
+// 切成區塊時類別照第一次出現的順序（伺服器照目錄排）。榜單榮譽裡沒拿過的另外收起來
 const sections=computed(()=>{
  const out:{category:string;items:CollectedBadge[];locked:CollectedBadge[];owned:number;total:number}[]=[];
- for(const b of items.value){let last=out[out.length-1];if(!last||last.category!==b.category){last={category:b.category,items:[],locked:[],owned:0,total:0};out.push(last);}(b.category==='rank'&&b.state!=='earned'?last.locked:last.items).push(b);}
+ // 依第一次出現的順序分組，同一類別只有一個區塊（不靠清單本身排好）
+ for(const b of items.value){let sec=out.find(x=>x.category===b.category);if(!sec){sec={category:b.category,items:[],locked:[],owned:0,total:0};out.push(sec);}(b.category==='rank'&&b.state!=='earned'?sec.locked:sec.items).push(b);}
  for(const s of out){s.items=rankOrder(s.items);s.locked=rankOrder(s.locked);const all=data.value?.items.filter(b=>b.category===s.category)??[];s.owned=all.filter(b=>b.state==='earned').length;s.total=all.length;}
  return out;
 });
