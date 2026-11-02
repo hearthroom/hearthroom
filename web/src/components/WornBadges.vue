@@ -64,17 +64,24 @@ function whenOf(b: Worn): string {
 }
 
 // ---- 一排放幾枚 ----
+const root = ref<HTMLElement | null>(null);
 const row = ref<HTMLElement | null>(null);
+const link = ref<{ $el: HTMLElement } | null>(null);
 const measure = ref<HTMLElement | null>(null);
 const shown = ref(Infinity);
 const GAP = 8;
+/**
+ * 可用寬度量外層（列本身照內容縮放，量它會跟著藏幾枚來回跳）：
+ * 寬螢幕上「全部徽章」緊接在列後面，要扣掉它和間距；窄螢幕它自成一行，不扣。列右側留給疊層的 padding 也扣掉。
+ */
 function fit() {
-  const box = row.value, mirror = measure.value;
-  if (!box || !mirror) return;
+  const outer = root.value, box = row.value, mirror = measure.value;
+  if (!outer || !box || !mirror) return;
   const widths = [...mirror.querySelectorAll<HTMLElement>("[data-measure-item]")].map(el => el.offsetWidth + (Number(el.dataset.layers) || 0) * 4);
   const plus = mirror.querySelector<HTMLElement>("[data-measure-plus]")?.offsetWidth ?? 36;
-  // clientWidth 含右側留給疊層的 padding，量可用寬度時扣掉
-  const room = box.clientWidth - (parseFloat(getComputedStyle(box).paddingRight) || 0);
+  const anchor = link.value?.$el;
+  const sameLine = !!anchor && getComputedStyle(anchor).flexBasis !== "100%";
+  const room = outer.clientWidth - (sameLine ? anchor.offsetWidth + (parseFloat(getComputedStyle(outer).columnGap) || 0) : 0) - (parseFloat(getComputedStyle(box).paddingRight) || 0);
   shown.value = fitWorn(widths, room, GAP, () => plus);
 }
 const hidden = computed(() => worn.value.slice(Math.min(shown.value, worn.value.length)));
@@ -83,7 +90,7 @@ onMounted(() => {
   if (typeof ResizeObserver !== "undefined") { observer = new ResizeObserver(() => fit()); }
   void document.fonts?.ready.then(() => fit());
 });
-watch(row, (el, before) => { if (before) observer?.unobserve(before); if (el) observer?.observe(el); });
+watch(root, (el, before) => { if (before) observer?.unobserve(before); if (el) observer?.observe(el); });
 watch([worn, locale], async () => { shown.value = Infinity; await nextTick(); fit(); }, { flush: "post" });
 
 // ---- 詳情層 ----
@@ -129,7 +136,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
 
 <template>
   <!-- 自己的頁面永遠留著入口（展示管理在那一頁）；看別人時沒有對外可見的徽章就整列不出現 -->
-  <div v-if="own || earned.length" class="worn" v-bind="$attrs">
+  <div v-if="own || earned.length" ref="root" class="worn" v-bind="$attrs">
     <ul v-if="worn.length" ref="row" class="worn__row" :aria-label="t('community.badgeLabel')">
       <li v-for="(badge, i) in worn" :key="badge.key" v-show="i < shown">
         <BadgeLabel as="button" :honor="honorOf(badge)" :icon="badge.icon" :text="nameOf(badge)" :count="badge.count" aria-haspopup="dialog" @click="openDetail([badge], $event)" />
@@ -138,7 +145,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
         <button type="button" class="worn__more" aria-haspopup="dialog" :aria-label="t('badges.moreAria', { n: hidden.length }, hidden.length)" @click="openDetail(hidden, $event)">+{{ hidden.length }}</button>
       </li>
     </ul>
-    <RouterLink class="worn__all" :to="allPath">{{ t("badges.viewAll", { n: earned.length }) }}</RouterLink>
+    <RouterLink ref="link" class="worn__all" :to="allPath">{{ t("badges.viewAll", { n: earned.length }) }}</RouterLink>
     <!-- 量測列：和展示列同樣的標籤，看不見、不佔位，只拿來量寬度 -->
     <div ref="measure" class="worn__measure" aria-hidden="true">
       <BadgeLabel v-for="badge in worn" :key="badge.key" data-measure-item :honor="honorOf(badge)" :icon="badge.icon" :text="nameOf(badge)" :count="badge.count" />
@@ -178,12 +185,11 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
 </template>
 
 <style scoped>
-/* 列吃掉剩下的寬度（1fr 與內容無關，量出來的寬度才不會跟著藏幾枚來回跳）；窄螢幕連結自成一行 */
-.worn { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--s-3); min-width: 0; max-width: 100%; position: relative; }
-.worn:not(:has(.worn__row)) { grid-template-columns: auto; }
-@media (max-width: 640px) { .worn { grid-template-columns: minmax(0, 1fr); } }
+/* 「全部徽章」緊接在列（或「+N」）後面；窄螢幕自成一行 */
+/* 對齊列的底：列上方多留了疊層的 9px、下方 2px，置中會讓連結比標籤高半截 */
+.worn { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: var(--s-3); min-width: 0; max-width: 100%; position: relative; }
 /* 疊層往右上露出 8px，列的上方與右邊要留出這段，不然被裁掉 */
-.worn__row { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 9px 8px 2px 0; list-style: none; overflow: hidden; }
+.worn__row { display: flex; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 9px 8px 2px 0; list-style: none; overflow: hidden; }
 .worn__row > li { flex: none; display: flex; min-width: 0; }
 .worn__more {
   display: inline-flex; align-items: center; height: 28px; padding: 0 10px; flex: none;
@@ -191,8 +197,10 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
   box-shadow: inset 0 0 0 1px var(--line-strong); font: inherit; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
 }
 button.worn__more:hover { background: var(--surface); }
-.worn__all { display: inline-flex; align-items: center; min-height: 28px; font-size: 13px; font-weight: 600; color: var(--accent-text); white-space: nowrap; }
+.worn__all { display: inline-flex; flex: none; align-items: center; min-height: 28px; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: var(--accent-text); white-space: nowrap; }
 .worn__all:hover { text-decoration: underline; }
+/* 手機：連結自成一行（放在 .worn__all 之後，才不會被上面的 flex: none 蓋回去） */
+@media (max-width: 640px) { .worn__all { flex-basis: 100%; } }
 .worn__measure { position: absolute; left: 0; top: 0; display: flex; gap: 8px; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; white-space: nowrap; }
 .worn-catcher { position: fixed; inset: 0; z-index: 39; }
 .worn-scrim { position: fixed; inset: 0; z-index: 100; background: rgba(16, 16, 24, 0.45); }
