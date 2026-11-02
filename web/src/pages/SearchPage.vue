@@ -16,6 +16,7 @@ import { selectedTags, toggleTag } from "@/lib/discovery";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import type { TagPage, AuthorPage } from "@/lib/api";
 import MascotSay from "@/components/MascotSay.vue";
+import { adultUnavailable } from "@/lib/country-region";
 import type { CardPage, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -52,7 +53,8 @@ const sort = computed(() => {
 /** HarperHarbor 的點數兌換碼（HH 加 32 個 base32 字元，常見帶橫線）：有人拿到碼不知道去哪輸入就貼進搜尋框 */
 const voucher = computed(() => /^HH[A-Z2-7]{32}$/.test(q.value.toUpperCase().replace(/[-\s]/g, "")));
 const WALLET_URL = "https://console.harperharbor.com/me/wallet";
-const adultOff = computed(() => !!session.me && !!session.profile && !session.profile.showNsfw && cards.value?.adult === false);
+// 地區選了中國大陸：那裡不提供成人內容、設定頁也沒有開關，不提
+const adultOff = computed(() => !!session.me && !!session.profile && !session.profile.showNsfw && !adultUnavailable(session.profile) && cards.value?.adult === false);
 const hasQuery = computed(() => !!q.value || !!fandom.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
 const tagResults = ref<TagPage | null>(null);
 const selectedLabel = (tag: string) => { const entry = TAG_CATALOG.find(x => x.key === tag); return entry ? tagLabel(entry, locale.value) : tag; };

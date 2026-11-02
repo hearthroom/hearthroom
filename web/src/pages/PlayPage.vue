@@ -235,12 +235,15 @@ onMounted(() => {
       const token = await accessToken();
       if (stale()) return;
       if (!token) { await connectAccount(provider, returnTo); return; }
-      const [authorized, , resolved] = await Promise.all([
-        ensurePlayAuthorization(token, returnTo, provider),
-        profileReady,
-        resolvePlayCard(routeId.value, provider, contentLang(locale.value), route.query.mode === "source", typeof route.query.review === "string" ? {id:route.query.review,token} : undefined,
-          typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? "",providerToken:token} : undefined),
-      ]);
+      // 授權要重做時先等卡：卡被地區擋下就留在「暫不提供」，不先被帶去授權頁。
+      // 授權檢查照舊最先出門，卡讀完才把結果交給它
+      let cardSettled!: (read: Promise<unknown>) => void;
+      const authorization = ensurePlayAuthorization(token, returnTo, provider, new Promise<unknown>((done) => { cardSettled = done; }));
+      authorization.catch(() => {});
+      const cardRead = resolvePlayCard(routeId.value, provider, contentLang(locale.value), route.query.mode === "source", typeof route.query.review === "string" ? {id:route.query.review,token} : undefined,
+        typeof route.query.resume === "string" ? {id:route.query.resume,token:await session.accessToken() ?? "",providerToken:token} : undefined);
+      cardSettled(cardRead);
+      const [authorized, , resolved] = await Promise.all([authorization, profileReady, cardRead]);
       if (!authorized || stale()) return;
       if (!(await adopt(resolved, provider, stale, accessToken))) return;
       const player = sameProvider ? session.me : await fetchMeAt(apiBaseOf(provider), token);

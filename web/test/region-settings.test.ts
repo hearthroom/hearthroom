@@ -22,12 +22,14 @@ import CardPage from "../src/pages/CardPage.vue";
 import AdultToggle from "../src/components/AdultToggle.vue";
 import { useSession } from "../src/lib/session";
 import { resetManagedAuthForTest } from "../src/lib/managed-auth";
-import { rememberCard } from "../src/lib/card-memory";
+import { recallCard, rememberCard } from "../src/lib/card-memory";
 import { libraryRequest } from "../src/lib/library";
 import { ApiError } from "../src/lib/api";
 
 /** 伺服器那一份：地區＋成人偏好。中國大陸一律回 showNsfw:false，但原本的偏好不刪 */
 const server = { region: "TW", sessionRegion: "TW", wantsNsfw: true, cardRegionBlocked: false };
+/** 設定頁補讀 GET /v1/me 的回應：有值時先擋著，等測試放行（模擬網路慢） */
+let holdMe: Promise<void> | null = null;
 const view = () => ({ showNsfw: server.region !== "CN" && server.wantsNsfw, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false, countryRegion: server.region });
 const profile = (region: string) => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [{ provider: "harbor", externalId: 7, linkedAt: 0 }], ...view(), countryRegion: region });
 const requests: { method: string; url: string; headers: Headers; body?: string }[] = [];
@@ -46,7 +48,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.endsWith("/v1/auth/config")) return json({ managed: true });
   if (url.endsWith("/v1/auth/session")) return json({ provider: "harbor", me: { accountNumId: 7, nickName: "月光", avatar: "" }, profile: profile(server.sessionRegion), token: { accessToken: "tok", expiresAt: Date.now() + 3_600_000 } });
   if (url.endsWith("/v1/auth/token")) return json({ accessToken: "tok", expiresAt: Date.now() + 3_600_000 });
-  if (url.endsWith("/v1/me")) return json(profile(server.region));
+  if (url.endsWith("/v1/me")) { const snapshot = profile(server.region); return holdMe ? holdMe.then(() => json(snapshot)) : json(snapshot); }
   if (url.endsWith("/v1/me/settings")) {
     const body = JSON.parse(String(init?.body)) as { countryRegion?: string; showNsfw?: boolean };
     if (body.countryRegion !== undefined) server.region = body.countryRegion;
@@ -67,6 +69,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fakeFetch);
   requests.length = 0;
   Object.assign(server, { region: "TW", sessionRegion: "TW", wantsNsfw: true, cardRegionBlocked: false });
+  holdMe = null;
   setActivePinia(createPinia());
 });
 afterEach(() => {
@@ -141,6 +144,28 @@ describe("國家／地區", () => {
     expect(session.profile).toMatchObject({ countryRegion: "TW", showNsfw: true });
     expect(adultRow()?.querySelector<HTMLInputElement>("input")?.checked).toBe(true);
     expect(el!.querySelector("button.r18")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("換了地區：上一屏記住的卡整份丟掉，點進卡片頁不會先畫出來", async () => {
+    await mount("/settings", SettingsPage);
+    rememberCard(CARD as never);
+    expect(recallCard("100300")).not.toBeNull();
+    await choose("CN");
+    expect(recallCard("100300")).toBeNull();
+  });
+
+  it("補讀比使用者的選擇晚回來：不把剛存好的中國大陸蓋回舊值", async () => {
+    let release!: () => void;
+    holdMe = new Promise((done) => { release = done; });
+    const session = await mount("/settings", SettingsPage, "<AdultToggle />");
+    await choose("CN");
+    expect(session.profile?.countryRegion).toBe("CN");
+    release();
+    await flush();
+    expect(session.profile).toMatchObject({ countryRegion: "CN", showNsfw: false });
+    expect(regionSelect()!.value).toBe("CN");
+    expect(adultRow()).toBeUndefined();
+    expect(el!.querySelector("button.r18")).toBeNull();
   });
 
   it("存不進去：退回原本的地區並說明，成人開關不動", async () => {
