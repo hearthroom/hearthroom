@@ -399,7 +399,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <div v-if="coverHonors(card.honors ?? []).length" class="role__marks">
             <RankBadge v-for="honor in coverHonors(card.honors ?? [])" :key="honor.window" :honor="honor" class="role__honor" />
           </div>
-          <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
+          <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')"><span class="role__featured-long">{{ $t("card.featured") }}</span><span class="role__featured-short">{{ $t("card.featuredShort") }}</span></span>
         </div>
 
         <div class="role__id">
@@ -586,6 +586,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 .role__art { container-type: inline-size; }
 .role__marks { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; align-items: center; gap: 3px; pointer-events: none; --rank-badge-h: 43px; }
 @container (max-width: 200px) { .role__marks { left: 5px; top: 5px; gap: 1px; --rank-badge-h: 24px; } }
+/* 小圖上精選標用短字（和卡片格同一個字），長字放不下 */
+.role__featured-short { display: none; }
+@container (max-width: 200px) { .role__featured-long { display: none; } .role__featured-short { display: inline; } }
 .role__honor { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
 .role__featured {
   position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);

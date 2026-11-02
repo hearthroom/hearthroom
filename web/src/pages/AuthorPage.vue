@@ -137,7 +137,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
 /* 簡介兩行截斷：頭部再長，第一排卡片也要在手機首屏內（徽章第一期 ui.md §3.1） */
 .who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem;margin:var(--s-2) 0 0;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.who__worn { margin-top: 2px; }
+/* 展示列是子元件的根節點（不帶這一頁的 scope），選擇器要用 :deep */
+:deep(.who__worn) { margin-top: 2px; }
 .who__level { display: inline-flex; vertical-align: middle; margin-left: var(--s-2); }
 .who__tips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
 .who__tip {
@@ -166,7 +167,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .who .eyebrow { display: none; }
   .who__name { grid-column: 2; grid-row: 1; align-self: end; font-size: 22px; }
   .who__id { grid-column: 2; grid-row: 2; margin: 0; }
-  .who__worn, .who__bio, .who__tips { grid-column: 1 / -1; }
+  .who > .who__text > :deep(.who__worn), .who__bio, .who__tips { grid-column: 1 / -1; }
   .who__bio { margin: 0; }
   .who > .library-toggle { grid-column: 1 / -1; }
   .who > .library-toggle :deep(.btn) { width: 100%; }
