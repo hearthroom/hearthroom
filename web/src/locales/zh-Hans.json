@@ -4359,7 +4359,7 @@
   "settings.section.helpHint": "找不到苏绮、连接很慢",
   "settings.thisDevice": "此设备",
   "settings.routes.current": "当前线路",
-  "settings.routes.desc": "网站很慢或连不上时，可以换一条线路连接。",
+  "settings.routes.desc": "连接很慢或连不上时，可以换一条线路。",
   "settings.routes.open": "查看线路",
   "settings.section.play": "游玩"
 }
