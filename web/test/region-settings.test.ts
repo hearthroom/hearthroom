@@ -180,7 +180,7 @@ describe("國家／地區", () => {
     expect(adultRow()).toBeTruthy();
   });
 
-  it("卡片頁被地區擋下：畫「暫不提供」與回榜單，不是 404 或成人內容的門，記住的卡不先畫出來", async () => {
+  it("卡片頁被地區擋下：畫「暫不提供」與回榜單，不是 404 或成人內容的門，先畫出來的記住的卡也拿掉", async () => {
     server.region = server.sessionRegion = "CN";
     server.cardRegionBlocked = true;
     rememberCard(CARD as never);

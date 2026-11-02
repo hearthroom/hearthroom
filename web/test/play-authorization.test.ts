@@ -41,3 +41,10 @@ it('waits for the card before authorizing again, and stays put when the card is 
  expect(await ensurePlayAuthorization('revoked-token','/play/a?provider=harbor','harbor',Promise.resolve({}))).toBe(false);
  expect(beginLogin).toHaveBeenCalledTimes(1);
 });
+// 撤銷了授權的人開舊聊天：讀紀錄也被拒（401），那正是要重新授權的時候，不能因為讀卡失敗就停在「載不進來」
+it('still authorizes again when the card read fails for any reason other than the region',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error:'invalid_token'}),{status:401})));
+ const revoked=Object.assign(new Error('unauthorized'),{status:401,code:''});
+ expect(await ensurePlayAuthorization('revoked-token','/play/a?resume=c1&provider=harbor','harbor',Promise.reject(revoked))).toBe(false);
+ expect(beginLogin).toHaveBeenCalledWith('/play/a?resume=c1&provider=harbor',{provider:'harbor'});
+});
