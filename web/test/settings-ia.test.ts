@@ -24,9 +24,11 @@ vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "set
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ reviewer: false }) }));
 vi.mock("../src/lib/connections", () => ({ connectAccount: vi.fn(async () => undefined), accountToken: async () => null }));
 const settingsCalls = vi.hoisted(() => [] as unknown[]);
+const saveGate = vi.hoisted(() => ({ release: () => {} }));
 vi.mock("../src/lib/api", async (original) => ({
   ...(await original<object>()),
   fetchPlayerPersona: async () => ({ nickName: "月光", userName: "", userSex: "", userDefine: "" }),
+  savePlayerPersona: (patch: Record<string, string>) => new Promise((resolve) => { saveGate.release = () => resolve({ userName: "", userSex: "", userDefine: "", ...patch }); }),
   updateSiteSettings: async (patch: Record<string, unknown>) => { settingsCalls.push(patch); return { ...session.profile, ...patch }; },
 }));
 const confirmAnswer = vi.hoisted(() => ({ value: false, asked: 0 }));
@@ -188,6 +190,22 @@ describe("各區的設定都還在", () => {
     const { el } = await mount("/settings/play");
     expect(el.querySelector("#persona-name")).not.toBeNull();
     expect(el.querySelector('button[type="submit"]')?.textContent).toContain(t("settings.save"));
+  });
+
+  it("遊玩：儲存中按鈕換成「儲存中」，兩個字都佔著同一格，寬度不跳（ui.md §4.2）", async () => {
+    const { el } = await mount("/settings/play");
+    const name = el.querySelector<HTMLInputElement>("#persona-name")!;
+    name.value = "小月"; name.dispatchEvent(new Event("input"));
+    const btn = el.querySelector<HTMLButtonElement>('.persona__acts button[type="submit"]')!;
+    const labels = () => [...btn.querySelectorAll<HTMLElement>(".persona__label")].map((x) => [x.textContent?.trim(), x.classList.contains("is-hidden")]);
+    expect(labels()).toEqual([[t("settings.save"), false], [t("edit.saving"), true]]);
+    btn.click();
+    await flush();
+    expect(btn.disabled).toBe(true);
+    expect(labels()).toEqual([[t("settings.save"), true], [t("edit.saving"), false]]);
+    saveGate.release();
+    await flush();
+    expect(labels()).toEqual([[t("settings.save"), false], [t("edit.saving"), true]]);
   });
 
   it("遊玩：人設改了沒存就換區，先問一聲；選留下就留在原區", async () => {
