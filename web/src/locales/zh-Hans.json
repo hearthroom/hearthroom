@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "宝石（一级）",
   "badgeWall.icon.spend-2": "宝石（二级）",
   "badgeWall.icon.spend-3": "宝石（三级）",
-  "badgeWall.icon.spend-4": "宝石（四级）"
+  "badgeWall.icon.spend-4": "宝石（四级）",
+  "badgeWall.category.contest": "比赛"
 }

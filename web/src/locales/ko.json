@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "보석(1단계)",
   "badgeWall.icon.spend-2": "보석(2단계)",
   "badgeWall.icon.spend-3": "보석(3단계)",
-  "badgeWall.icon.spend-4": "보석(4단계)"
+  "badgeWall.icon.spend-4": "보석(4단계)",
+  "badgeWall.category.contest": "대회"
 }

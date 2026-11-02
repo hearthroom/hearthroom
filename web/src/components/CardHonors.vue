@@ -24,7 +24,8 @@ async function load() {
   try { const items = await fetchCardHonors(props.cardId); if (n === generation) all.value = items; }
   catch { if (n === generation) failed.value = true; }
 }
-watch(() => [props.cardId, top.value.map(honorKey).join()], load, { immediate: true });
+// 用字串當鍵：卡片頁會先顯示快取、再換成剛讀到的同一張卡，陣列換了但內容沒變時不重讀
+watch(() => `${props.cardId}|${top.value.map(honorKey).join()}`, load, { immediate: true });
 
 const issued = (at: number) => new Intl.DateTimeFormat(locale.value, { month: "short", day: "numeric" }).format(at);
 

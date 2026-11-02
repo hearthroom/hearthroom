@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "宝石（レベル1）",
   "badgeWall.icon.spend-2": "宝石（レベル2）",
   "badgeWall.icon.spend-3": "宝石（レベル3）",
-  "badgeWall.icon.spend-4": "宝石（レベル4）"
+  "badgeWall.icon.spend-4": "宝石（レベル4）",
+  "badgeWall.category.contest": "コンテスト"
 }

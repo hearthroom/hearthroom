@@ -4382,5 +4382,6 @@
   "badgeWall.icon.spend-1": "Gem (level 1)",
   "badgeWall.icon.spend-2": "Gem (level 2)",
   "badgeWall.icon.spend-3": "Gem (level 3)",
-  "badgeWall.icon.spend-4": "Gem (level 4)"
+  "badgeWall.icon.spend-4": "Gem (level 4)",
+  "badgeWall.category.contest": "Contests"
 }

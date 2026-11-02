@@ -66,3 +66,11 @@ it('folds board honors the member has not earned instead of listing all eighteen
  expect(section.querySelectorAll('details .badge-tile')).toHaveLength(2);
  expect(section.querySelector('.badge-section__hint')?.textContent).toContain('7 days after the week ends');
 });
+it('treats an author without a member profile as having no public badges',async()=>{
+ await open('/authors/ghost/badges',{items:[],featured:[]});
+ mock.request.mockReset();mock.request.mockRejectedValue(Object.assign(new Error('not found'),{status:404}));
+ app.unmount();const router=createRouter({history:createMemoryHistory(),routes:[{path:'/authors/:handle/badges',component:BadgesPage},{path:'/:p(.*)*',component:{template:'<div/>'}}]});
+ await router.push('/authors/ghost/badges');app=createApp(BadgesPage).use(router).use(i18n);app.mount(el);await settle();
+ expect(el.querySelector('[role=alert]')).toBeNull();
+ expect(el.querySelector('.badge-empty')?.textContent).toContain('No public badges');
+});

@@ -77,3 +77,25 @@ it("keeps the entry to the badges page on your own profile even before you earn 
   expect(el.querySelector(".worn__row")).toBeNull();
   expect(el.querySelector(".worn__all")?.getAttribute("href")).toBe("/me/badges");
 });
+
+it("keeps Tab inside the phone sheet even though its only stop is a link", async () => {
+  vi.spyOn(window, "matchMedia").mockImplementation((q: string) => ({ matches: q.includes("max-width"), media: q, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList);
+  await mount({ items: [badge("a")], featured: ["a"] });
+  el.querySelector<HTMLButtonElement>(".worn__row button")!.click(); await settle();
+  const link = document.querySelector<HTMLAnchorElement>(".worn-detail a")!;
+  link.focus();
+  const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+  document.dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(link);
+});
+
+it("closes the desktop popover when focus moves out of it", async () => {
+  await mount({ items: [badge("a")], featured: ["a"] });
+  el.querySelector<HTMLButtonElement>(".worn__row button")!.click(); await settle();
+  const layer = document.querySelector<HTMLElement>(".worn-detail")!;
+  const outside = document.createElement("button"); document.body.append(outside);
+  layer.dispatchEvent(new FocusEvent("focusout", { relatedTarget: outside, bubbles: true }));
+  await settle();
+  expect(document.querySelector(".worn-detail")).toBeNull();
+});
