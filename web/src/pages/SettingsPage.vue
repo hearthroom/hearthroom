@@ -166,7 +166,8 @@ watch(() => route.fullPath, () => {
 .srow__ic svg { width: 18px; height: 18px; stroke-width: 1.6; }
 .srow__text { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .srow__label { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.srow__hint { font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; }
+/* 左欄窄（761 起只有 220）時副標容易剩一個字掛在下一行 */
+.srow__hint { font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; text-wrap: pretty; }
 .srow__go { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--text-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 .settings__back {
@@ -192,6 +193,8 @@ watch(() => route.fullPath, () => {
   .settings__back { display: none; }
   .srow.is-on, .settings--root .srow.is-default { background: var(--accent-tint); }
   .srow.is-on .srow__go, .settings--root .srow.is-default .srow__go { stroke: var(--accent-text); }
+  /* 選中列的底色跟圖示磚同一個 tint，磚會被吃掉：選中時磚換成表面色（美術總監 2026-11-03） */
+  .srow.is-on .srow__ic, .settings--root .srow.is-default .srow__ic { background: var(--surface); }
 }
 :lang(ko) .srow__text, :lang(ko) .settings__pane { word-break: keep-all; }
 </style>
