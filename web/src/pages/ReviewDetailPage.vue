@@ -57,7 +57,8 @@ let loadSequence=0;
 let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
+// 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';moreOpen.value=false;section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -128,11 +129,13 @@ const sectionLabel = (s: (typeof SECTIONS)[number]) => {
 };
 
 async function loadOriginality() {
+  const target = id.value;
   originalityError.value = "";
   try {
-    originality.value = await fetchReviewOriginality(id.value, await token());
+    const report = await fetchReviewOriginality(target, await token());
+    if (target === id.value) originality.value = report;
   } catch (err) {
-    originalityError.value = err instanceof Error ? err.message : t("state.loadFailed");
+    if (target === id.value) originalityError.value = err instanceof Error ? err.message : t("state.loadFailed");
   }
 }
 
@@ -233,10 +236,12 @@ const nextBusy = ref(false);
 async function loadNext() {
   try {
     const q = await fetchReviewQueue(await token(), String(locale.value));
-    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe);
+    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe && !skipped.has(i.id));
     nextItems.value = [...open.filter((i) => i.claim === "mine"), ...open.filter((i) => i.claim === "free")];
   } catch { nextItems.value = null; }
 }
+/** 這次領不到、而且再試也領不到的卡（要先確認年齡）：「下一張」跳過它們 */
+const skipped = new Set<string>();
 async function goNext() {
   const item = nextItems.value?.[0];
   if (!item || nextBusy.value) return;
@@ -245,7 +250,9 @@ async function goNext() {
     if (item.claim !== "mine") await claimReview(item.id, await token());
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
-    nextError.value = err instanceof ApiError && err.status === 409 ? t("review.claim.taken") : t("review.claim.failed");
+    const ageGate = err instanceof ApiError && err.code === "age_verification_required";
+    if (ageGate) skipped.add(item.id);
+    nextError.value = ageGate ? t("error.ageVerificationRequired") : err instanceof ApiError && err.status === 409 ? t("review.claim.taken") : t("review.claim.failed");
     await loadNext();
   } finally { nextBusy.value = false; }
 }
@@ -282,6 +289,8 @@ async function load() {
       catch(claimErr){
         if(!active||seq!==loadSequence||target!==id.value)return;
         if(claimErr instanceof ApiError&&claimErr.status===409){ claimNote.value=t("review.claim.otherNote"); return claimErr; }
+        // 成人內容的單要先確認年齡：再按一次領取也不會成功，只說明怎麼辦
+        if(claimErr instanceof ApiError&&claimErr.code==="age_verification_required"){ error.value=t("error.ageVerificationRequired"); return claimErr; }
         needsClaim.value=true;error.value=t("review.claim.failed");return claimErr;
       }
       if(!active||seq!==loadSequence||target!==id.value)return;
@@ -717,7 +726,7 @@ onMounted(() => { void load(); });
               </li>
             </ul>
           </div>
-          <p v-if="myStamp?.verdict === 'approve' && data.submission.canCorrect" class="subtle">{{ $t("review.correction.window", { hours: 24 }) }}</p>
+          <p v-if="myStamp?.verdict === 'approve' && data.submission.canCorrect && !data.submission.manager && !correctionOpen" class="subtle">{{ $t("review.correction.window", { hours: 24 }) }}</p>
             <p v-if="correctionError" ref="correctionErrorNotice" class="notice notice--error correction-error" role="alert" tabindex="-1">{{correctionError}} <button class="btn btn--sm" :disabled="busy" @click="reloadCorrection">{{t('review.correction.reload')}}</button></p>
             <div v-if="data.submission.correction" class="records">
               <h3>{{t('review.correction.recordTitle')}}</h3>

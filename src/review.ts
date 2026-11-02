@@ -5,6 +5,7 @@ import {finalizeManagedReview} from './work-publication';
 import { dropSnapshotStatement, loadSnapshot } from "./review-snapshot";
 import { bumpOp } from "./ops-metrics";
 import { reviewLengthStatus, type ReviewLengthStatus } from "../shared/review-length";
+import { reviewLength } from "./review-length";
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 
 /**
@@ -280,14 +281,16 @@ export async function stamp(
 /**
  * 有效字數是唯一的硬性標準（owner 2026-11-02）：未達標的版本不能通過，只能駁回。
  * 送審時已經擋過；這裡擋的是門檻上線前就在排隊的單，以及舊頁面、直接打 API。
- * 字數優先用審核單上記的，沒記的舊單看審核副本裡的統計；兩邊都沒有（同步開的重審單）就算不出來，
+ * 字數優先用審核單上記的，沒記的舊單看審核副本裡的統計（完整副本就現算）；都沒有（同步開的重審單）就算不出來，
  * 不擋——審核頁也會顯示「無法計算」，由審核員自己判斷。
  */
 async function assertApprovableLength(db: D1Database, row: SubmissionRow): Promise<void> {
   let total = row.review_length_total;
   if (total === null) {
-    const recorded = (await loadSnapshot(db, row.id))?.reviewLength as { total?: unknown } | undefined;
-    total = typeof recorded?.total === "number" ? recorded.total : null;
+    const snapshot = await loadSnapshot(db, row.id);
+    const recorded = snapshot?.reviewLength as { total?: unknown } | undefined;
+    // 有統計就用統計；精簡副本（slim）只留人設、沒有世界書，自己算會少算，所以只有完整副本才現算
+    total = typeof recorded?.total === "number" ? recorded.total : snapshot && !snapshot.slim ? reviewLength(snapshot).total : null;
   }
   if (total === null) { await bumpOp(db, "review_length", "stamp", "unknown"); return; }
   const length = reviewLengthStatus(total);

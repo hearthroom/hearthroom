@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -354,4 +354,27 @@ it('the two rarely used sections sit under More',async()=>{
  await vi.waitFor(()=>expect(button(i18n.global.t('review.section.cost'))!.getAttribute('aria-pressed')).toBe('true'));
  // 內容雜湊是內部識別碼，不給審核員看
  expect(el.textContent).not.toContain('version:v2');
+});
+
+it('an adult card the reviewer has not age-verified explains what to do instead of offering a claim that cannot work',async()=>{
+ app.unmount();api.claimReview.mockClear();
+ api.fetchReviewDetail.mockReset().mockRejectedValue(new api.ApiError(409,'x','claim this submission first'));
+ api.claimReview.mockRejectedValueOnce(new api.ApiError(403,'x','age_verification_required'));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page},{path:'/review',component:{template:'<p>Queue</p>'}}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('error.ageVerificationRequired')));
+ expect(button(i18n.global.t('review.action.claim'))).toBeUndefined();
+});
+
+it('opening the next card in the same page drops the previous card\'s similarity result',async()=>{
+ const decided=withLength(3600,{claimedByMe:false,stampedByMe:true,status:'rejected',stamps:[{verdict:'reject',note:'x',at:2,mine:true}]});
+ const next={...withLength(3600),submission:{...withLength(3600).submission,id:'s9'}};
+ api.fetchReviewDetail.mockReset().mockImplementation(async(id:string)=>id==='s9'?next:decided);
+ api.fetchReviewOriginality.mockReset().mockImplementation((id:string)=>id==='s1'?Promise.resolve({available:true,similarity:0.42,units:1,comparedCards:1,segments:[],sources:[]}):new Promise(()=>{}));
+ api.fetchReviewQueue.mockResolvedValue({items:[{id:'s9',kind:'first',submittedAt:1,card:{id:'9',roleId:'r9',name:'下一張',summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false}],claimTtlMs:1});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('.tabs')?.textContent).toContain('42%'));
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.result.next',{n:1}))).toBeTruthy());
+ button(i18n.global.t('review.result.next',{n:1}))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ expect(el.querySelector('.tabs')!.textContent).not.toContain('42%');
 });
