@@ -29,7 +29,25 @@ async function capturePublications(env:Env,now:number){
   ${reviewEnabled(env)?'NULL':'c.registered_at'}) AS published_at
  FROM cards c WHERE c.provider='harbor' AND c.status='approved') WHERE published_at IS NOT NULL`).bind(now).run();
 }
+/** Late community linking never changes payment ownership or an already assigned honor. */
+async function linkUnassignedHonors(env:Env){
+ const owner=`(SELECT m.id FROM members m WHERE m.id=COALESCE(
+  (SELECT owner_member_id FROM member_connections WHERE provider='harbor' AND external_id=CAST(rank_awards.account_no AS TEXT)),
+  (SELECT member_id FROM member_identities WHERE provider='harbor' AND external_id=CAST(rank_awards.account_no AS TEXT)))
+  AND m.account_class='normal' AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id))`;
+ const linked=(await env.DB.prepare(`UPDATE rank_awards SET member_id=${owner} WHERE id IN
+  (SELECT id FROM rank_awards WHERE member_id IS NULL AND ${owner} IS NOT NULL LIMIT 200) RETURNING member_id`).all<{member_id:string}>()).results;
+ if(!linked.length)return;
+ const members=JSON.stringify([...new Set(linked.map(r=>r.member_id))]);
+ await env.DB.batch([
+  env.DB.prepare(`INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at)
+   SELECT member_id,'rank_'||zone||'_'||window||'_'||band,'rank-v1',MIN(awarded_at) FROM rank_awards
+   WHERE member_id IN(SELECT value FROM json_each(?)) GROUP BY member_id,zone,window,band`).bind(members),
+  env.DB.prepare('UPDATE members SET public_cache_revision=lower(hex(randomblob(16))) WHERE id IN(SELECT value FROM json_each(?))').bind(members),
+ ]);
+}
 export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10):Promise<void>{
+ await linkUnassignedHonors(env);
  let remaining=Math.max(1,Math.min(10,Math.trunc(heatBatchBudget)));
  await capturePublications(env,now);
  // Without the original date we cannot even know which cohort is incomplete.

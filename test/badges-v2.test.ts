@@ -27,3 +27,11 @@ it('counts permanent rank award events once and reveals spending badges only whe
  // Sweeping automatic milestones does not inflate rank counts.
  await sweepMilestones(env);expect((await badgeCollection(env,member)).items.find(b=>b.key==='rank_clean_day_1')?.count).toBe(2);
 });
+it('projects an existing permanent honor after its Harbor author links a community identity',async()=>{
+ await settleRankSnapshot(env,{zone:'clean',window:'day',period:'2026-10-17',now:end,cards:[{id:100001,heat:100,talkNum:1,registeredAt:launch,adult:false,memberId:null,accountNo:11}]});
+ const {rankMaintenance}=await import('../src/rank-maintenance');
+ await rankMaintenance(env,end);
+ expect((await badgeCollection(env,member)).items.find(b=>b.key==='rank_clean_day_1')).toMatchObject({state:'earned',count:1});
+ await env.DB.prepare('INSERT INTO community_preferences(member_id,public_badges) VALUES(?,1)').bind(member).run();
+ expect((await publicCommunityView(env,member)).badges).toContain('rank_clean_day_1');
+});

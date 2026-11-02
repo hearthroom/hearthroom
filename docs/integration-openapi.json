@@ -11337,7 +11337,9 @@
             "userToken": []
           },
           {
-            "appToken": ["campaign.payout"]
+            "appToken": [
+              "campaign.payout"
+            ]
           }
         ],
         "requestBody": {
@@ -11437,7 +11439,9 @@
             "userToken": []
           },
           {
-            "appToken": ["campaign.payout"]
+            "appToken": [
+              "campaign.payout"
+            ]
           }
         ],
         "parameters": [
@@ -13687,6 +13691,516 @@
           }
         }
       }
+    },
+    "/open/v1/campaign-pools/{pool}": {
+      "get": {
+        "operationId": "getCampaignPoolNamed",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Read the app's campaign pool (dedicated pool)",
+        "description": "Returns the credits left in the campaign pool of the app this token belongs to, the total paid out so far and the rules the platform set for it. Available to the app's owners, admins and viewers. `configured` is false until the platform has set a usage scope and a per-payout limit; payouts are refused until then. Select the dedicated leaderboard pool using this distinct path. Older Providers reject it instead of silently paying from the legacy pool. The legacy singular /campaign-pool paths always select default. Balances, settings, payment keys and receipts are isolated by pool; authentication, atomic wallet credit, audit and retry rules are shared.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign pool.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPool"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner, admin or viewer of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "leaderboard"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/open/v1/campaign-pools/{pool}/payouts": {
+      "post": {
+        "operationId": "createCampaignPayoutNamed",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Pay a reward from the campaign pool (dedicated pool)",
+        "description": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Human callers must be owners or admins of the app. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef`, `contentRef` or `validityDays` returns `idempotency_conflict`. Usage scope comes from the platform's settings for this app; expiry is chosen per payout with `validityDays`, and leaving it out means the credits never expire. A confidential application client with the explicit app-only `campaign.payout` scope may also call this endpoint. Its billing tenant fixes the campaign pool; the client data tenant fixes agent configuration ownership for retention. `rewards.report` alone does not authorize payment or payout lookup. Service payments debit the same pool, credit the recipient and preserve the same limits, retention checks, audit and idempotency rules as administrator payments. Select the dedicated leaderboard pool using this distinct path. Older Providers reject it instead of silently paying from the legacy pool. The legacy singular /campaign-pool paths always select default. Balances, settings, payment keys and receipts are isolated by pool; authentication, atomic wallet credit, audit and retry rules are shared.",
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "appToken": [
+              "campaign.payout"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPayoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The payout. `replayed` is true when `key` had already paid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`; `accountNo` or `amount` is not a positive integer; or a reference is longer than 128 characters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner or admin of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`account_not_found` — no active account has this `accountNo`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`pool_not_configured` — the platform has not set the rules for this app yet; `pool_disabled` — payouts are paused for this app; `payout_over_limit` — `amount` is above the per-payout limit `maxPayout`; `pool_insufficient` — the pool cannot cover this payout, so retry with the same `key` after it is topped up; `idempotency_conflict` — this `key` was already used for a different recipient, amount or reference, so use a new `key`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "leaderboard"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/open/v1/campaign-pools/{pool}/payouts/{key}": {
+      "get": {
+        "operationId": "getCampaignPayoutNamed",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Look up a campaign payout (dedicated pool)",
+        "description": "Returns the payout recorded for `key` in this app, with `replayed` false. Use it to settle a request whose outcome you did not see. This lookup does not debit the pool or credit a recipient. Available to the app's owners, admins and viewers. A confidential application client with the explicit app-only `campaign.payout` scope may also call this endpoint. Its billing tenant fixes the campaign pool; the client data tenant fixes agent configuration ownership for retention. `rewards.report` alone does not authorize payment or payout lookup. Service payments debit the same pool, credit the recipient and preserve the same limits, retention checks, audit and idempotency rules as administrator payments. Select the dedicated leaderboard pool using this distinct path. Older Providers reject it instead of silently paying from the legacy pool. The legacy singular /campaign-pool paths always select default. Balances, settings, payment keys and receipts are isolated by pool; authentication, atomic wallet credit, audit and retry rules are shared.",
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "appToken": [
+              "campaign.payout"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pool",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "leaderboard"
+              ]
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "description": "The payout `key` you sent when paying.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payout.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner, admin or viewer of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no payout was recorded for this `key` in this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/role/heat/windows": {
+      "post": {
+        "operationId": "getRoleWindowHeats",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Read completed popularity windows of agent configurations",
+        "description": "Anonymous work visibility and version-lineage rules match cumulative heat. Each interval is [from,to), at most 30 days, no earlier than 2026-09-17 UTC, with to no later than server time. Maximum 200 intervals; inaccessible configurations are omitted. event write time is never substituted for original settlement time.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "windows"
+                ],
+                "properties": {
+                  "windows": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "roleId",
+                        "from",
+                        "to"
+                      ],
+                      "properties": {
+                        "roleId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "from": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "to": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Original completed-window heat and completeness.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "heat"
+                  ],
+                  "properties": {
+                    "heat": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "roleId",
+                          "from",
+                          "to",
+                          "heat",
+                          "complete"
+                        ],
+                        "properties": {
+                          "roleId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "from": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "to": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "heat": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "complete": {
+                            "type": "boolean",
+                            "description": "False when retained historical events lack original settlement time or the weighted-heat rollout is not active. Never settle a cohort using incomplete scores."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body, an id that is not a UUID, or more than 200 ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/community/badges/metrics": {
+      "post": {
+        "operationId": "getCommunityBadgeMetrics",
+        "tags": [
+          "Community"
+        ],
+        "summary": "Read private badge qualification totals for app members",
+        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD topups net of full/partial refunds (plans excluded); actual debit consumption for chat/API/image/speech/video. Missing currency conversion returns complete=false, never fabricated USD.",
+        "security": [
+          {
+            "appToken": [
+              "community.badges.read"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accountNos"
+                ],
+                "properties": {
+                  "accountNos": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private qualification totals, no UUIDs, emails, order or ledger details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "accountNo",
+                          "effectiveInvites",
+                          "netTopupUsdMicros",
+                          "consumedCredits",
+                          "complete"
+                        ],
+                        "properties": {
+                          "accountNo": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "effectiveInvites": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "netTopupUsdMicros": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "consumedCredits": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "complete": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body, an id that is not a UUID, or more than 200 ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13718,7 +14232,8 @@
             "tokenUrl": "/oauth/token",
             "scopes": {
               "rewards.report": "Report application reward events",
-              "campaign.payout": "Pay campaign rewards and read their receipts within the application billing tenant; debits the campaign pool and credits the recipient."
+              "campaign.payout": "Pay campaign rewards and read their receipts within the application billing tenant; debits the campaign pool and credits the recipient.",
+              "community.badges.read": "Read private qualification totals only for this application's registered members; never grants payment authority."
             }
           }
         }
@@ -23815,7 +24330,8 @@
           "usageScope",
           "maxPayout",
           "configured",
-          "updatedAt"
+          "updatedAt",
+          "poolKey"
         ],
         "properties": {
           "balance": {
@@ -23849,6 +24365,14 @@
             ],
             "format": "date-time",
             "description": "When the pool or its rules last changed. `null` until the platform first funds or configures the pool."
+          },
+          "poolKey": {
+            "type": "string",
+            "enum": [
+              "default",
+              "leaderboard"
+            ],
+            "description": "The explicitly selected pool. Omitted on older Providers; never use a query parameter to request the dedicated pool."
           }
         }
       },
@@ -23925,7 +24449,8 @@
           "paidAt",
           "expiresAt",
           "usageScope",
-          "replayed"
+          "replayed",
+          "poolKey"
         ],
         "properties": {
           "key": {
@@ -23966,6 +24491,14 @@
           "replayed": {
             "type": "boolean",
             "description": "True when this response repeats an earlier payout of the same `key`; no new credits were paid."
+          },
+          "poolKey": {
+            "type": "string",
+            "enum": [
+              "default",
+              "leaderboard"
+            ],
+            "description": "The explicitly selected pool. Omitted on older Providers; never use a query parameter to request the dedicated pool."
           }
         }
       },
