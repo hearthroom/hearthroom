@@ -63,12 +63,18 @@ const groups = computed<Row[][]>(() => [
   [{ id: "help", icon: "lifebuoy", label: label("help"), hint: t("settings.section.helpHint"), to: lp("/settings/help") }],
 ]);
 
-/** 這一頁夠寬（兩欄）時才算「桌機」：只用來決定標題層級與預設選中的那列；顯示與否交給 CSS 容器查詢 */
+/**
+ * 這一頁夠寬（兩欄）時才算「桌機」：決定標題層級、預設選中的那列，以及列表頁要不要掛右邊的面板
+ * （手機的列表頁看不到面板，就不掛，免得替看不到的區發請求）。列表與面板的顯示交給 CSS 容器查詢。
+ * 掛載當下先量一次（第一次繪製前），之後跟著 ResizeObserver。
+ */
 const root = ref<HTMLElement | null>(null);
 const wide = ref(false);
 let observer: ResizeObserver | null = null;
 onMounted(() => {
-  if (typeof ResizeObserver === "undefined" || !root.value) return;
+  if (!root.value) return;
+  wide.value = root.value.clientWidth > 760;
+  if (typeof ResizeObserver === "undefined") return;
   observer = new ResizeObserver(([entry]) => { wide.value = (entry?.contentRect.width ?? 0) > 760; });
   observer.observe(root.value);
 });
@@ -77,12 +83,15 @@ onBeforeUnmount(() => observer?.disconnect());
 const isCurrent = (row: Row) => row.id === section.value || (wide.value && !section.value && row.id === "profile");
 const paneTitle = useId();
 
-/** 返回列表：從列表點進來的就退一步（瀏覽器的上一頁也是同一個結果），從深連結直接進來的換到列表 */
+/**
+ * 返回列表：從列表點進來的就退一步（跟瀏覽器的上一頁同一個結果，列表的捲動位置也回得來）；
+ * 從深連結或重新整理直接進到這一區的，上一頁不是列表，換到列表。
+ */
+let fromList = false;
+watch(section, (now, before) => { fromList = before === null && now !== null; });
 function back() {
-  const list = lp("/settings");
-  const from = router.options.history.state.back;
-  if (typeof from === "string" && from.split(/[?#]/)[0] === list) router.back();
-  else void router.push(list);
+  if (fromList) router.back();
+  else void router.push(lp("/settings"));
 }
 
 /** 帶 # 進來（舊深連結轉過來的、榜單「已隱藏 N 類」）：捲到那張卡 */
@@ -91,7 +100,11 @@ watch(() => [route.path, route.hash] as const, ([, hash]) => {
   void nextTick(() => requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" })));
 }, { immediate: true });
 
-watch(section, (s) => { document.title = pageTitle(s ? `${label(s)} · ${t("settings.title")}` : t("settings.title")); }, { immediate: true });
+// 換語言也是一次導航，站台的守衛會把標題重設成預設的：跟著整個網址重寫
+watch(() => route.fullPath, () => {
+  const s = section.value;
+  document.title = pageTitle(s ? `${label(s)} · ${t("settings.title")}` : t("settings.title"));
+}, { immediate: true });
 </script>
 
 <template>
@@ -116,7 +129,7 @@ watch(section, (s) => { document.title = pageTitle(s ? `${label(s)} · ${t("sett
         </div>
       </nav>
 
-      <section class="settings__pane" :data-settings-section="active" :aria-labelledby="paneTitle">
+      <section v-if="section || wide" class="settings__pane" :data-settings-section="active" :aria-labelledby="paneTitle">
         <button type="button" class="settings__back" @click="back">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
           {{ $t("settings.title") }}
@@ -167,12 +180,12 @@ watch(section, (s) => { document.title = pageTitle(s ? `${label(s)} · ${t("sett
 .settings__pane { min-width: 0; }
 
 /* 手機：列表與二級頁二選一 */
-@container (max-width: 760px) {
+@container (width <= 760px) {
   .settings--root .settings__pane { display: none; }
   .settings:not(.settings--root) .settings__nav { display: none; }
 }
 /* 桌機：左列表（sticky）＋右面板 */
-@container (min-width: 761px) {
+@container (width > 760px) {
   .settings__page { grid-template-columns: clamp(220px, 28%, 280px) minmax(0, 1fr); align-items: start; }
   .settings__nav { position: sticky; top: calc(var(--header-h) + 16px); }
   .settings__pane { max-width: 680px; }

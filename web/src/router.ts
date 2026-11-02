@@ -183,8 +183,8 @@ export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormal
   if (saved && to.meta.board) return nextTick().then(() => new Promise<{ left: number; top: number }>(resolve => requestAnimationFrame(() => resolve(boardScrollPosition(saved)))));
   if (saved) return saved;
   if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
-  // 桌機在設定裡換區只換右邊的面板，左邊列表與捲動位置不動；帶 # 的由設定頁自己捲到那一張卡
-  if (to.meta.settings && from.meta.settings) return false;
+  // 桌機在設定裡換區只換右邊的面板，左邊列表與捲動位置不動；手機是換一整頁，照常回頂端。帶 # 的由設定頁自己捲到那一張卡
+  if (to.meta.settings && from.meta.settings && settingsTwoColumns()) return false;
   return { top: 0 };
 }
 
@@ -219,6 +219,11 @@ router.beforeEach((to) => {
   if (share) delete query.s;
   return { path: to.path, query, hash: to.hash, replace: true };
 });
+
+/** 設定頁現在是不是兩欄（跟 SettingsPage 的容器查詢同一個切換點）：換區時頁面還是同一個，量得到 */
+function settingsTwoColumns(): boolean {
+  return (document.querySelector<HTMLElement>(".settings")?.clientWidth ?? 0) > 760;
+}
 
 /**
  * 設定的網址整理：不認得的區回列表；改版前的 /settings#hidden 這類深連結換到那張卡現在所在的區。
