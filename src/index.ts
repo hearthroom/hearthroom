@@ -624,7 +624,8 @@ app.get('/v1/cards/:id/honors',async c=>{
  if(!row||row.public_blocked)throw new HttpError(404,'card not found');
  const access=await checkedCardAccess(c,row);
  if(!access.reachable||(!access.managed&&row.status!=='approved'&&row.status!=='unlisted'))throw new HttpError(404,'card not found');
- if((isAdult(row)||access.access==='unlisted')&&!await viewerAllowsNsfw(c,{card:true}))throw new HttpError(403,'adult_content');
+ await assertRegionCard(c,row);
+ if((isAdult(row)||access.access==='unlisted')&&!await viewerAllowsAdultContent(c))throw new HttpError(403,'adult_content');
  c.header('Cache-Control','private, no-store');
  return c.json({items:await allCardHonors(c.env.DB,Number(row.id))});
 });
