@@ -4345,5 +4345,7 @@
   "review.history.status.rejected": "已驳回",
   "review.confirm.row": "{label}：{value}",
   "review.queue.tab.pendingNoCount": "待审",
-  "review.decide.noteFull": "说明栏最多 {max} 字，这段理由放不下，请先删减内容再添加。"
+  "review.decide.noteFull": "说明栏最多 {max} 字，这段理由放不下，请先删减内容再添加。",
+  "review.queue.worldbook": "世界书 {n} 条",
+  "review.queue.regex": "正则 {n} 条"
 }

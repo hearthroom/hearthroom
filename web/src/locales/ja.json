@@ -4345,5 +4345,7 @@
   "review.history.status.rejected": "却下済み",
   "review.confirm.row": "{label}：{value}",
   "review.queue.tab.pendingNoCount": "審査待ち",
-  "review.decide.noteFull": "コメントは最大 {max} 文字までで、この理由は入りきりません。内容を減らしてから追加してください。"
+  "review.decide.noteFull": "コメントは最大 {max} 文字までで、この理由は入りきりません。内容を減らしてから追加してください。",
+  "review.queue.worldbook": "世界設定 {n} 件",
+  "review.queue.regex": "正規表現 {n} 件"
 }

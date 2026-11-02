@@ -49,6 +49,9 @@ export interface SubmissionRow {
   rating_answers: string | null;
   /** 送審當下的有效字數合計（0099 起）；NULL＝不知道（見 migration） */
   review_length_total: number | null;
+  /** 世界書條目數、正規表示式規則數（0100 起，全部含停用）；NULL＝不知道 */
+  review_worldbook_entries: number | null;
+  review_regex_rules: number | null;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
@@ -109,13 +112,16 @@ export interface QueueItem {
   claimGeneration?: string;
   /** 送審當下的有效字數與現行門檻；null＝不知道，清單上就不標 */
   reviewLength: ReviewLengthStatus | null;
+  /** 世界書全部條目數、正規表示式全部規則數（含停用）；null＝不知道，清單上就不標 */
+  worldbookEntries: number | null;
+  regexRules: number | null;
 }
 
 /** 佇列：所有待審的單，最舊的在前。不帶作者。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total,
+      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total, s.review_worldbook_entries, s.review_regex_rules,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
@@ -130,7 +136,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null;
+      approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
     }>();
   return rows.results.map((r) => ({
     id: r.id,
@@ -152,6 +158,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     stampedByMe: r.mine > 0,
     ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
     reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
+    worldbookEntries: r.review_worldbook_entries,
+    regexRules: r.review_regex_rules,
   }));
 }
 
@@ -304,6 +312,22 @@ async function assertApprovableLength(db: D1Database, row: SubmissionRow): Promi
 /** 審核頁讀到完整設定、算出字數時補記到還在排隊的單上（只補沒記的，不改送審時記下的）。 */
 export function recordReviewLengthStatement(db: D1Database, submissionId: string, total: number): D1PreparedStatement {
   return db.prepare("UPDATE review_submissions SET review_length_total = ? WHERE id = ? AND status = 'pending' AND review_length_total IS NULL").bind(total, submissionId);
+}
+
+/**
+ * 清單上的世界書條目數與正規表示式規則數：所有世界書的全部條目、作者資產的全部規則，含停用。
+ * 跟審核頁「成本側寫」的條目總數與「正規表示式與版面」的規則數同一個口徑（都是這份設定直接數）。
+ */
+export function reviewCounts(settings: Record<string, unknown>): { worldbookEntries: number; regexRules: number } {
+  const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
+  const worldbookEntries = books.reduce((n: number, b) => n + (Array.isArray((b as { entries?: unknown })?.entries) ? ((b as { entries: unknown[] }).entries.length) : 0), 0);
+  const rules = (settings.authorAsset as { rules?: unknown } | undefined)?.rules;
+  return { worldbookEntries, regexRules: Array.isArray(rules) ? rules.length : 0 };
+}
+
+/** 審核頁讀到完整設定時補記數量（只補沒記的）。 */
+export function recordReviewCountsStatement(db: D1Database, submissionId: string, counts: { worldbookEntries: number; regexRules: number }): D1PreparedStatement {
+  return db.prepare("UPDATE review_submissions SET review_worldbook_entries = ?, review_regex_rules = ? WHERE id = ? AND status = 'pending' AND review_worldbook_entries IS NULL").bind(counts.worldbookEntries, counts.regexRules, submissionId);
 }
 
 /** 作者這幾張卡的審核狀態與最近一次駁回說明（給「我的卡片」）。 */

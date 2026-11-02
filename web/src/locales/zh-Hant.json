@@ -4345,5 +4345,7 @@
   "review.history.status.rejected": "已駁回",
   "review.confirm.row": "{label}：{value}",
   "review.queue.tab.pendingNoCount": "待審",
-  "review.decide.noteFull": "說明欄最多 {max} 字，這段理由放不下，請先刪減內容再加入。"
+  "review.decide.noteFull": "說明欄最多 {max} 字，這段理由放不下，請先刪減內容再加入。",
+  "review.queue.worldbook": "世界書 {n} 條",
+  "review.queue.regex": "正則 {n} 條"
 }

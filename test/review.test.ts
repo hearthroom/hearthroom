@@ -556,6 +556,36 @@ describe("審核工具第一批：字數門檻、結果、搜尋", () => {
     expect((await env.DB.prepare("SELECT length(note) AS n FROM review_stamps WHERE submission_id = ?").bind(id).first<{ n: number }>())!.n).toBe(2000);
   });
 
+  it("佇列帶世界書條目數與正規表示式規則數（全部，含停用；跟審核頁同一份設定算）", async () => {
+    reviewUpstream(() => ({
+      worldbooks: [
+        { entries: [{ content: "Synthetic constant setting ".repeat(150), isConstant: true, isEnabled: true }, { content: "停用的", isEnabled: false }] },
+        { entries: [{ content: "第二本" }] },
+      ],
+      authorAsset: { rules: [{ id: "r1", enabled: true }, { id: "r2", enabled: false }] },
+    }));
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const item = (await queue("rev-a")).body.items[0];
+    expect(item).toMatchObject({ worldbookEntries: 3, regexRules: 2 });
+    await act(item.id, "claim", "rev-a");
+    // 跟審核頁看到的同一份設定
+    const d = await detail(item.id);
+    expect(d.detail.worldbooks.reduce((n: number, b: any) => n + b.entries.length, 0)).toBe(3);
+    expect(d.detail.authorAsset.rules).toHaveLength(2);
+  });
+
+  it("沒記數量的舊單：佇列不給（null），審核頁讀到完整設定時補記", async () => {
+    await makeReviewer(REVIEWER_A);
+    await submit("role-1");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await env.DB.prepare("UPDATE review_submissions SET review_worldbook_entries = NULL, review_regex_rules = NULL WHERE id = ?").bind(id).run();
+    expect((await queue("rev-a")).body.items[0]).toMatchObject({ worldbookEntries: null, regexRules: null });
+    await act(id, "claim", "rev-a");
+    await detail(id);
+    expect((await queue("rev-a")).body.items[0]).toMatchObject({ worldbookEntries: 1, regexRules: 0 });
+  });
+
   it("審核頁算出字數時補記到審核單，佇列下次就看得到", async () => {
     await makeReviewer(REVIEWER_A);
     await submit("role-1");

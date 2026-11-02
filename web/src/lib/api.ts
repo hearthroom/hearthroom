@@ -510,6 +510,9 @@ export interface ReviewQueueItem {
   claimGeneration?: string;
   /** 送審當下的有效字數與現行門檻；null 或沒有＝算不出來，清單上不標 */
   reviewLength?: ReviewLengthStatus | null;
+  /** 世界書全部條目數、正規表示式全部規則數（含停用）；null 或沒有＝不知道，不標 */
+  worldbookEntries?: number | null;
+  regexRules?: number | null;
 }
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */

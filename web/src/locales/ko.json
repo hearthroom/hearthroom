@@ -4345,5 +4345,7 @@
   "review.history.status.rejected": "반려됨",
   "review.confirm.row": "{label}: {value}",
   "review.queue.tab.pendingNoCount": "심사 대기",
-  "review.decide.noteFull": "메모는 최대 {max}자까지라 이 사유를 넣을 수 없어요. 내용을 줄인 뒤 다시 추가해 주세요."
+  "review.decide.noteFull": "메모는 최대 {max}자까지라 이 사유를 넣을 수 없어요. 내용을 줄인 뒤 다시 추가해 주세요.",
+  "review.queue.worldbook": "세계관 {n}개",
+  "review.queue.regex": "정규식 {n}개"
 }

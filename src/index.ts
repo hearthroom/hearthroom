@@ -90,7 +90,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
-  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement,
+  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, recordReviewCountsStatement, reviewCounts,
 } from "./review";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
@@ -1727,6 +1727,7 @@ app.get("/v1/review/:id/detail", async (c) => {
     const length=reviewLength(detail);
     detail.reviewLength=length;
     if(s.review_length_total===null&&s.status==='pending')await recordReviewLengthStatement(c.env.DB,s.id,length.total).run();
+    if(s.review_worldbook_entries===null&&s.status==='pending')await recordReviewCountsStatement(c.env.DB,s.id,reviewCounts(detail)).run();
   }
   delete detail.authorNumId;
   const stamps = await c.env.DB

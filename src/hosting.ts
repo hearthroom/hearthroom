@@ -1,3 +1,4 @@
+import { reviewCounts } from './review';
 import { reviewLength } from './review-length';
 import { updateIntent, assertUpdateCooldown } from './card-update';
 import {bumpOp} from './ops-metrics';
@@ -188,6 +189,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
  const length=await assertReviewLength(db,settings,'sealed');
  settings.reviewLength=length;
+ const counts=reviewCounts(settings);
  await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
@@ -199,8 +201,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const finalize=(cardId:string):D1PreparedStatement[]=>[
    firstRegistrationStatement(db,{provider,account:input.account,source:input.role.roleId,now:input.now,packId:input.packId}),
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,fandom:fandom.fandom,fandomQid:fandom.qid,fandomKey:fandom.key,fandomSearch:fandom.search,searchName:buildSearchName({...sealed,fandom:fandom.fandom,fandomSearch:fandom.search}),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
-   db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers,review_length_total) SELECT ?,?,?,?,?,'pending',?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
-    .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,length.total,version!.version_id,submissionId),
+   db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers,review_length_total,review_worldbook_entries,review_regex_rules) SELECT ?,?,?,?,?,'pending',?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
+    .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,length.total,counts.worldbookEntries,counts.regexRules,version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),
    snapshot,
    // 查重指紋跟審核單同一批：單子沒寫成就不留指紋

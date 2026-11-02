@@ -186,6 +186,25 @@ describe("審核佇列頁", () => {
     expect(chip("b")?.textContent?.trim()).toBe(i18n.global.t("review.queue.length.ok", { total: "4,120" }));
     expect(chip("c")).toBeNull();
   });
+
+  it("世界書條目與正規表示式規則 chip：0 也標，不知道就不標", async () => {
+    app.unmount();
+    host.innerHTML = "";
+    const base = { kind: "first", submittedAt: Date.now(), stamps: { approve: 0, required: 1 }, claim: "free", stampedByMe: false };
+    const card = (id: string) => ({ id, roleId: id, name: `卡${id}`, summary: "", avatarUrl: null, zone: "zh", tags: [] });
+    api.fetchReviewQueue.mockResolvedValueOnce({ items: [
+      { ...base, id: "a", card: card("a"), worldbookEntries: 1240, regexRules: 0 },
+      { ...base, id: "b", card: card("b"), worldbookEntries: null, regexRules: null },
+    ], claimTtlMs: 1 } as any);
+    app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
+    app.mount(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("卡a"));
+    const row = (id: string) => host.querySelector(`[data-review-row="${id}"]`)!;
+    expect(row("a").querySelector("[data-worldbook-chip]")?.textContent?.trim()).toBe(i18n.global.t("review.queue.worldbook", { n: "1,240" }));
+    expect(row("a").querySelector("[data-regex-chip]")?.textContent?.trim()).toBe(i18n.global.t("review.queue.regex", { n: "0" }));
+    expect(row("b").querySelector("[data-worldbook-chip]")).toBeNull();
+    expect(row("b").querySelector("[data-regex-chip]")).toBeNull();
+  });
 });
 
 /**

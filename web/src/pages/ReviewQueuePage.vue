@@ -149,6 +149,9 @@ onMounted(() => {
               <span class="chip" :class="{ 'chip--re': item.kind === 're' }">{{ $t(`review.kind.${item.kind}`) }}</span>
               <span v-if="(item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
               <span v-if="lengthChip(item)" class="chip chip--length" :class="{ 'chip--short': lengthChip(item)!.short }" data-length-chip>{{ lengthChip(item)!.text }}</span>
+              <!-- 世界書條目與正規表示式規則（全部，含停用）：挑卡前先知道要讀多少；不知道就不標，0 照標 -->
+              <span v-if="typeof item.worldbookEntries === 'number'" class="chip chip--count" data-worldbook-chip>{{ $t("review.queue.worldbook", { n: numbers.format(item.worldbookEntries) }) }}</span>
+              <span v-if="typeof item.regexRules === 'number'" class="chip chip--count" data-regex-chip>{{ $t("review.queue.regex", { n: numbers.format(item.regexRules) }) }}</span>
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
             </div>
@@ -194,7 +197,7 @@ onMounted(() => {
 .row__minor { min-height: var(--h-md); width: 100%; }
 .chip--re { background: var(--accent-tint); color: var(--accent-text); }
 .chip--attempt { color: var(--warning-text); }
-.chip--length { font-variant-numeric: tabular-nums; }
+.chip--length, .chip--count { font-variant-numeric: tabular-nums; }
 .chip--short { color: var(--warning-text); }
 .filter { margin-bottom: var(--s-3); }
 .row-ghost { height: 96px; border-radius: var(--r-md); }
