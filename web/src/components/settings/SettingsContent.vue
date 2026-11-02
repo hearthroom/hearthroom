@@ -81,8 +81,8 @@ async function toggleHidden(key: string) {
 <template>
   <!-- 國家／地區：這裡（地區任務 2026-11-03-region-cn-limits） -->
 
+  <!-- 不放卡頭：面板標題已經是「內容」 -->
   <section class="panel set-card">
-    <p class="eyebrow set-card__head">{{ $t("settings.content.title") }}</p>
     <label class="content__row">
       <span class="content__text">
         <strong>{{ $t("settings.content.nsfw") }}</strong>
