@@ -36,6 +36,8 @@ const pages: RouteRecordRaw[] = [
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
+  // 作者的全部徽章（唯讀）：和自己的徽章頁同一個元件，看 :handle 決定模式
+  { path: "authors/:handle/badges", component: () => import("./pages/BadgesPage.vue") },
   { path: "library", component: () => import("./pages/LibraryPage.vue"), meta: { auth: true } },
   { path: "me/badges", component: () => import("./pages/BadgesPage.vue"), meta: { auth: true } },
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
