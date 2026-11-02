@@ -1,4 +1,4 @@
-import {initializeCountryRegion} from './country-region';
+import {initializeCountryRegion,countryRegionDefaults} from './country-region';
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } from "./providers";
 import { tagNamesFor } from "../shared/tag-catalog";
@@ -170,7 +170,7 @@ export function normalizeHiddenTags(input: unknown): string[] {
 }
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
-export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
+export async function memberProfile(db: D1Database, memberId: string, defaults?:{country:string;locale:string}): Promise<MemberProfile | null> {
   type ProfileRow = { country_region:string|null; handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; show_stats: number; followers: number; following: number };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
@@ -180,6 +180,12 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
   ]);
   const m = members.results[0] as ProfileRow | undefined;
   if (!m) return null;
+  // Only an authenticated caller with UI context may initialize this default.
+  // Read it back after the CAS: a concurrent explicit choice must win.
+  if(m.country_region==null&&defaults){
+    await initializeCountryRegion(db,memberId,defaults.country,defaults.locale);
+    return memberProfile(db,memberId);
+  }
   return {
     countryRegion: m.country_region ?? 'OTHER',
     handle: m.handle,
@@ -414,7 +420,7 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
    if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score)|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
   }
   const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now(),me);
-  if(member.country_region == null)await initializeCountryRegion(c.env.DB,member.id,String(c.req.raw?.cf?.country || c.req.header('CF-IPCountry') || ''),c.req.header('language') || (c.req.url?new URL(c.req.url).searchParams.get('lang'):null) || c.req.header('Accept-Language')?.split(',')[0] || 'zh');
+  if(member.country_region == null){const defaults=countryRegionDefaults(c.req);await initializeCountryRegion(c.env.DB,member.id,defaults.country,defaults.locale);}
   // 由本站 session 認出來的沒有供應商暱稱；顯示名稱留給下一個走供應商驗證的請求補上。
   if (member.display_name === null && !sessionIdentities.has(me)) {
     // Keep the SQL guard: another request or the member may initialize it after our read.

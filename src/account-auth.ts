@@ -1,3 +1,4 @@
+import {countryRegionDefaults} from './country-region';
 import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { Hono, type Context } from 'hono';
 import type { Pending } from './analytics';
@@ -601,7 +602,7 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   const guess=body.token===true?tokenFor(session.provider,Number(session.external_id)):null;
   guess?.catch(()=>{});
   const [profile,role,family]=await Promise.all([
-    memberProfile(c.env.DB,session.member_id),reviewerRole(c.env.DB,session.member_id),
+    memberProfile(c.env.DB,session.member_id,countryRegionDefaults(c.req)),reviewerRole(c.env.DB,session.member_id),
     c.env.DB.prepare(`SELECT DISTINCT s.origin FROM account_sessions s JOIN account_route_families f ON f.token_hash=s.token_hash
       WHERE f.family_hash=(SELECT family_hash FROM account_route_families WHERE token_hash=?)
         AND s.member_id=? AND s.origin<>? AND s.expires_at>? AND s.created_at>?`)

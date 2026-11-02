@@ -25,6 +25,7 @@ const items = async (path: string) => {
 async function unavailable(path: string, token = 'viewer-token') {
   const res = await request(path, token);
   expect(res.status).toBe(403);
+  expect(res.headers.get('Cache-Control')).toBe('private, no-store');
   const body = await res.json();
   expect(body).toMatchObject({ error: 'region_unavailable' });
   expect(JSON.stringify(body)).not.toContain('Region Adult');
@@ -68,6 +69,8 @@ it('CN filters author cards and author statistics, then restores them outside CN
   expect(await res.json()).toMatchObject({ cardCount: 1 });
   await region('JP');
   expect(await items(cards)).toHaveLength(2);
+  const restored=await request(`/v1/authors/${testHandle(AUTHOR)}?nsfw=1`);
+  expect(restored.status).toBe(200);expect(await restored.json()).toMatchObject({cardCount:2});
 });
 
 it('CN blocks direct detail, source/share aliases and platform links with region_unavailable', async () => {
@@ -153,4 +156,14 @@ it('counts region entry denials separately from rejected setting changes',async(
  const metrics=await(await request('/metrics')).text();
  expect(metrics).toContain('hearthroom_country_region_operations_total{operation="admission",outcome="denied"} 1');
  expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="denied"} 1');
+});
+
+it('does not exempt an author opening their own public R card in CN',async()=>{
+ expect((await request(`/v1/cards/${adultId}`,'author-token')).status).toBe(200);
+ await region('CN','author-token');
+ await unavailable(`/v1/cards/${adultId}`,'author-token');
+ await unavailable(`/v1/cards/${adultId}/platforms`,'author-token');
+ expect((await request(`/v1/cards/${generalId}`,'author-token')).status).toBe(200);
+ await region('TW','author-token');
+ expect((await request(`/v1/cards/${adultId}`,'author-token')).status).toBe(200);
 });

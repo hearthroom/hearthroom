@@ -576,3 +576,13 @@ it('a stale-consent guest credential is not carried; signing in without one chan
   await login('harbor',34);
   expect((await memberAdult(34))?.age_verified_at).toBeNull();
 });
+it('returns the persisted region on the first managed session after OAuth completion',async()=>{
+ providers();await login('harbor',22);
+ expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBeNull();
+ const response=await request('session',{provider:'harbor',token:true},{language:'zh-Hant','Accept-Language':'en','CF-IPCountry':'CN'});
+ expect(response.status).toBe(200);
+ expect((await response.json() as any).profile.countryRegion).toBe('TW');
+ expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe('TW');
+ const later=await request('session',{provider:'harbor'},{language:'ja','CF-IPCountry':'JP'});
+ expect((await later.json() as any).profile.countryRegion).toBe('TW');
+});

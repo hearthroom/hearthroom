@@ -1,3 +1,4 @@
+import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { ownedHistory } from '../src/owned-history';
@@ -70,3 +71,19 @@ it('rejects a CN old adult conversation link with region_unavailable while retai
   expect((await request('me/conversations/not-owned?provider=harbor')).status).toBe(404);
 });
 
+
+it('does not exempt an author resuming their own public R conversation in CN',async()=>{
+ const ownerRequest=(path:string,method='GET',body?:unknown)=>SELF.fetch(`https://c.test/v1/${path}`,{method,headers:{...bearer('author'),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ expect((await ownerRequest('me/settings','POST',{countryRegion:'TW',showNsfw:true,birthdate:'1990-01-01',consentVersion:ADULT_CONSENT_VERSION})).status).toBe(200);
+ expect((await ownerRequest('me/conversations','PUT',{roleId:'region-chat-role',conversationId:'owner-region-chat'})).status).toBe(200);
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(cardId).run();
+ expect((await ownerRequest('me/conversations/owner-region-chat?provider=harbor')).status).toBe(200);
+ expect((await ownerRequest('me/settings','POST',{countryRegion:'CN'})).status).toBe(200);
+ const blocked=await ownerRequest('me/conversations/owner-region-chat?provider=harbor');
+ expect(blocked.status).toBe(403);expect(blocked.headers.get('Cache-Control')).toBe('private, no-store');
+ expect(await blocked.json()).toMatchObject({error:'region_unavailable'});
+ expect((await data(await ownerRequest('me/conversations'))).conversations).toEqual([]);
+ expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM member_conversations WHERE conversation_id='owner-region-chat'").first<{n:number}>())?.n).toBe(1);
+ expect((await ownerRequest('me/settings','POST',{countryRegion:'TW'})).status).toBe(200);
+ expect((await ownerRequest('me/conversations/owner-region-chat?provider=harbor')).status).toBe(200);
+});
