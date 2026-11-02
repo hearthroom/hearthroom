@@ -10,7 +10,7 @@ import { nextStep, prevStep, stepsOf, tourState } from "../src/lib/coach-tour";
 
 const starters = vi.hoisted(() => ({ zh: { general: null as number | null, adult: null as number | null }, en: { general: null, adult: null }, ja: { general: null, adult: null }, ko: { general: null, adult: null } }));
 vi.mock("../../shared/starter-cards", () => ({ STARTER_CARDS: starters }));
-const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, profile: null as null | { memberSince: number; showNsfw: boolean } }));
+const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, profile: null as null | { memberSince: number; showNsfw: boolean; countryRegion?: string } }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 vi.mock("../src/lib/adult-consent", async () => {
   const { reactive } = await import("vue");
@@ -120,6 +120,16 @@ describe("走一遍", () => {
     expect(localStorage.getItem("hr-tour-done")).toBeNull();
     expect(router.currentRoute.value.path).toBe("/");
     await press("tour.next");
+    expect(router.currentRoute.value.path).toBe("/cards/100001");
+  });
+
+  it("地區選了中國大陸的新成員：頁首沒有 R18 鈕，跳過成人內容那一步，直接進一般入門卡", async () => {
+    starters.zh.adult = 100002;
+    session.me = { accountNumId: 7 }; session.profile = { memberSince: Date.now(), showNsfw: false, countryRegion: "CN" };
+    await mount();
+    expect(title()).toBe(t("tour.card.title"));
+    await press("tour.next");
+    expect(title()).not.toBe(t("tour.r18.title"));
     expect(router.currentRoute.value.path).toBe("/cards/100001");
   });
 

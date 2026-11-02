@@ -31,3 +31,13 @@ it('sends the player to authorize again when the app was revoked, but not in a l
  await expect(ensurePlayAuthorization('still-rejected','/play/a?provider=harbor')).rejects.toThrow('unavailable');
  expect(beginLogin).toHaveBeenCalledTimes(1);
 });
+// 卡片在這個國家／地區不提供（403 region_unavailable）：授權要重做也不轉，讓遊玩頁畫「暫不提供」；卡讀得到才轉。
+it('waits for the card before authorizing again, and stays put when the card is unavailable in the region',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error:'invalid_token'}),{status:401})));
+ const denied=Object.assign(new Error('forbidden'),{status:403,code:'region_unavailable'});
+ await expect(ensurePlayAuthorization('revoked-token','/play/a?provider=harbor','harbor',Promise.reject(denied))).rejects.toBe(denied);
+ expect(beginLogin).not.toHaveBeenCalled();
+ expect(sessionStorage.getItem('hearthroom.play.reconsentAt')).toBeNull();
+ expect(await ensurePlayAuthorization('revoked-token','/play/a?provider=harbor','harbor',Promise.resolve({}))).toBe(false);
+ expect(beginLogin).toHaveBeenCalledTimes(1);
+});

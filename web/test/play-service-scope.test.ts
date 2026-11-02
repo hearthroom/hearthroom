@@ -25,7 +25,7 @@ it('passes the selected service credentials to the player while keeping the comm
  const options=mocks.stage.mock.calls[0]![0];
  expect(options.provider).toBe('harbor');expect(options.player.accountNumId).toBe(11);
  expect(options.currentRoleId()).toBe('harbor-role');expect(await options.accessToken()).toBe('community-token');
- expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/harbor-role?provider=harbor','harbor');
+ expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/harbor-role?provider=harbor','harbor',expect.any(Promise));
  expect(currentProvider()).toBe('harbor');expect(session.me.accountNumId).toBe(11);expect(session.token.accessToken).toBe('community-token');expect(mocks.connect).not.toHaveBeenCalled();
 });
 
@@ -51,7 +51,7 @@ it('checks same-provider play permission while the community profile is pending,
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage}]});await router.push('/play/fixture?provider=harbor');
  root=document.createElement('div');document.body.append(root);app=createApp(PlayPage).use(pinia).use(i18n).use(router);app.mount(root);
  for(let i=0;i<40;i++)await Promise.resolve();
- expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/fixture?provider=harbor','harbor');
+ expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/fixture?provider=harbor','harbor',expect.any(Promise));
  expect(mocks.stage).not.toHaveBeenCalled();finish();
  for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
  expect(mocks.stage).toHaveBeenCalledTimes(1);

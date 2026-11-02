@@ -171,8 +171,12 @@ async function setRegion(next: string, select: HTMLSelectElement) {
 }
 /** 第一次登入時個人資料可能還沒有地區（伺服器在第一次讀取時才決定預設）：進設定頁再問一次本站，以那份為準 */
 async function refreshRegion() {
+  // 送出前記下現值：補讀回來之前使用者已經改過（或正在改）地區，就以使用者那次為準，不蓋回舊值
+  const before = region.value;
   const got = await fetchSiteMe(await token()).catch(() => null);
-  if (got?.countryRegion && session.profile && !regionBusy.value) session.profile.countryRegion = got.countryRegion;
+  if (!got?.countryRegion || !session.profile || regionBusy.value || region.value !== before) return;
+  applyAdultSettings(session.profile, got);
+  session.profile.countryRegion = got.countryRegion;
 }
 
 // ---- 主頁數據開關 ----
@@ -322,7 +326,7 @@ onMounted(() => {
         <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
       </label>
       <AdultConsentDialog v-if="askingConsent && !regionLocked" @close="askingConsent = false" @done="askingConsent = false" />
-      <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
+      <p v-if="nsfwError && !regionLocked" class="notice notice--error" role="alert">{{ nsfwError }}</p>
     </section>
 
     <section class="panel content">

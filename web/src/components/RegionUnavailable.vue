@@ -4,7 +4,7 @@
  * 卡片頁、遊玩頁（含分享連結、舊聊天連結）收到 403 region_unavailable 時畫這一頁：不是 404、不是成人內容的門。
  * 遊玩頁走到這裡時舞台不掛、不建立對話連線。
  *
- * 產品在說話，不讓蘇綺出場：限制與法規的事要準確，不要可愛（product-copy）。
+ * 產品在說話，頁面本身不放蘇綺的插圖與台詞：限制與法規的事要準確，不要可愛（product-copy）。全站的桌寵照常。
  * 拒絕次數由伺服器的 hearthroom_country_region_operations_total 計，這裡不另外打點。
  * href：遊玩子網域沒有站內路由，回榜單要走完整網址。
  */
@@ -38,6 +38,9 @@ onMounted(() => {
 .region { padding-top: var(--s-7); padding-bottom: var(--s-7); display: flex; flex-direction: column; align-items: center; text-align: center; }
 .region__icon { width: 48px; height: 48px; color: var(--text-3); }
 .region__title { margin: var(--s-4) 0 var(--s-2); max-width: 32em; font-size: 22px; font-weight: 700; text-wrap: balance; overflow-wrap: anywhere; }
-.region__hint { margin: 0 0 var(--s-5); max-width: 32em; text-wrap: pretty; overflow-wrap: anywhere; }
+/* 兩行以內的短句：balance 讓兩行等長，不留「提供。」這種孤字 */
+.region__hint { margin: 0 0 var(--s-5); max-width: 32em; text-wrap: balance; overflow-wrap: anywhere; }
 .region__title:lang(ko), .region__hint:lang(ko) { word-break: keep-all; }
+/* 日文不在詞中間斷行（コンテ／ンツ）；不支援的瀏覽器照舊逐字斷 */
+.region__title:lang(ja), .region__hint:lang(ja) { word-break: auto-phrase; }
 </style>

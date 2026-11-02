@@ -23,7 +23,7 @@ vi.mock("moonstage/stage.css", () => ({}));
 import SearchPage from "../src/pages/SearchPage.vue";
 import { useSession } from "../src/lib/session";
 
-const state = { showNsfw: false, ageVerified: true, adultConsent: true };
+const state: { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; countryRegion?: string } = { showNsfw: false, ageVerified: true, adultConsent: true };
 const calls: string[] = [];
 
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -69,7 +69,7 @@ const cardCalls = () => calls.filter((c) => c.includes("/v1/cards?"));
 beforeEach(() => {
   vi.stubGlobal("fetch", fakeFetch);
   calls.length = 0;
-  signedIn = true; state.showNsfw = false;
+  signedIn = true; state.showNsfw = false; delete state.countryRegion;
   setActivePinia(createPinia());
 });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
@@ -107,6 +107,12 @@ describe("搜尋頁", () => {
     await mountSearch("/search?q=霧港");
     expect(hint()?.textContent).toContain(i18n.global.t("search.adultHidden"));
     expect(hint()?.querySelector("a")?.getAttribute("href")).toContain("/settings");
+  });
+
+  it("地區選了中國大陸：那裡沒有成人內容可開，不提", async () => {
+    state.countryRegion = "CN";
+    await mountSearch("/search?q=霧港");
+    expect(hint()).toBeNull();
   });
 
   it("開著的成員不提；訪客也不提", async () => {

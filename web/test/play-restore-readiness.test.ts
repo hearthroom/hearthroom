@@ -31,7 +31,7 @@ it.each(['resume=saved','mode=source','review=submission'])('waits for cold sess
  try{
   await settle();expect(access).not.toHaveBeenCalled();expect(mocks.connect).not.toHaveBeenCalled();expect(mocks.stage).not.toHaveBeenCalled();
   finish();await settle();
-  expect(mocks.authorize).toHaveBeenCalledWith('saved-access',expect.any(String),'harbor');
+  expect(mocks.authorize).toHaveBeenCalledWith('saved-access',expect.any(String),'harbor',expect.any(Promise));
   expect(mocks.stage).toHaveBeenCalledOnce();expect(mocks.connect).not.toHaveBeenCalled();
   if(query.startsWith('resume'))expect(mocks.resolve.mock.calls[0][5]).toEqual({id:'saved',token:'saved-access',providerToken:'saved-access'});
  }finally{finish();}
