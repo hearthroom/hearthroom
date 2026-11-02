@@ -71,3 +71,9 @@ it("uses the collection the profile page already loaded instead of asking again"
   expect(api.request).not.toHaveBeenCalled();
   expect(el.querySelector(".worn__all")?.getAttribute("href")).toBe("/me/badges");
 });
+
+it("keeps the entry to the badges page on your own profile even before you earn anything", async () => {
+  await mount(null, { handle: "me", own: true, collection: { items: [], featured: [], public: false } });
+  expect(el.querySelector(".worn__row")).toBeNull();
+  expect(el.querySelector(".worn__all")?.getAttribute("href")).toBe("/me/badges");
+});

@@ -5,7 +5,8 @@
  * 一排、不折行、不擠名字：量每枚標籤的實際寬度（隱形的量測列），從最後一枚往回藏，
  * 直到「顯示的標籤＋「+N」」放得進一排，至少留一枚；寬度、字體、語系變了就重算。
  * 點標籤開詳情（桌機錨在標籤下方、手機從底部拉起）；「+N」開同一層，列出被藏起來的那幾枚。
- * 作者關掉公開、或沒有對外可見的徽章時，整列連同連結都不出現，不留空位。
+ * 看別人時：作者關掉公開、或沒有對外可見的徽章，整列連同連結都不出現，不留空位。
+ * 自己的頁面：連結永遠在（展示管理在徽章頁），就算還沒拿到任何徽章。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
@@ -111,7 +112,8 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
 </script>
 
 <template>
-  <div v-if="earned.length" class="worn">
+  <!-- 自己的頁面永遠留著入口（展示管理在那一頁）；看別人時沒有對外可見的徽章就整列不出現 -->
+  <div v-if="own || earned.length" class="worn">
     <ul v-if="worn.length" ref="row" class="worn__row" :aria-label="t('community.badgeLabel')">
       <li v-for="(badge, i) in worn" :key="badge.key" v-show="i < shown">
         <BadgeLabel as="button" :honor="honorOf(badge)" :icon="badge.icon" :text="nameOf(badge)" :count="badge.count" aria-haspopup="dialog" @click="openDetail([badge], $event)" />
