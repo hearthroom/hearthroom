@@ -11,9 +11,9 @@ export const RANK_START=Date.parse('2026-10-17T00:00:00+08:00');
 export const RANK_CRON='23 16 * * *';
 export const RANK_RETRY_CRON='* * * * *';
 export const rankTransport={
- async heats(env:Env,windows:RequestWindow[]):Promise<(RequestWindow&{heat:number;complete:boolean})[]>{
+ async heats(env:Env,windows:RequestWindow[]):Promise<((RequestWindow&{heat:number;complete:boolean})[]&{unavailable?:RequestWindow[]})>{
   const r=await fetch(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/role/heat/windows`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({windows}),signal:AbortSignal.timeout(10000)});
-  if(!r.ok)throw new Error('rank_heat_unavailable');const data=await r.json<{heat:unknown}>();if(!Array.isArray(data.heat))throw new Error('rank_heat_invalid');return data.heat;
+  if(!r.ok)throw new Error('rank_heat_unavailable');const data=await r.json<{heat:unknown;unavailable?:RequestWindow[]}>();if(!Array.isArray(data.heat)||(data.unavailable!==undefined&&!Array.isArray(data.unavailable)))throw new Error('rank_heat_invalid');return Object.assign(data.heat,{unavailable:data.unavailable});
  },
  async pay(env:Env,token:string,input:Payment):Promise<{key:string;accountNo:number;amount:number}>{
   const r=await fetch(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/campaign-pools/leaderboard/payouts`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(10000)});
@@ -22,7 +22,7 @@ export const rankTransport={
 };
 /** Persist original first publication; re-review never updates an existing row. */
 async function capturePublications(env:Env,now:number){
- const first="(SELECT MIN(s.decided_at) FROM review_submissions s WHERE s.card_id=c.id AND s.kind='first' AND s.status='approved')";
+ const first="(SELECT MIN(COALESCE((SELECT x.original_decided_at FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete'),s.decided_at)) FROM review_submissions s WHERE s.card_id=c.id AND s.kind='first' AND (s.status='approved' OR EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete')))";
  const early=`(SELECT MIN(r.registered_at) FROM card_registrations r WHERE r.provider=c.provider AND r.source_role_id=c.source_role_id AND r.registered_at<${REVIEW_ERA_START})`;
  await env.DB.prepare(`INSERT OR IGNORE INTO rank_publications(card_id,published_at,captured_at)
  SELECT id,published_at,? FROM (SELECT c.id,COALESCE(MIN(${first},${early}),${first},${early},
@@ -80,9 +80,10 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  for(const {window,period,entries}of dueJobs.sort((a,b)=>(attempts.get(`${a.window}:${a.period}`)??0)-(attempts.get(`${b.window}:${b.period}`)??0)).slice(0,3)){
    await env.DB.prepare('INSERT INTO rank_attempts(window,period,attempted_at) VALUES(?,?,?) ON CONFLICT(window,period) DO UPDATE SET attempted_at=excluded.attempted_at').bind(window,period,now).run();
    const windows=entries.map(r=>({roleId:r.hosted,from:new Date(r.published_at).toISOString(),to:new Date(r.published_at+RANK_DURATION[window]).toISOString()}));
-   const cached=(await env.DB.prepare('SELECT card_id,from_at,to_at,heat FROM rank_window_scores WHERE window=? AND card_id IN(SELECT value FROM json_each(?))').bind(window,JSON.stringify(entries.map(r=>r.id))).all<{card_id:number;from_at:number;to_at:number;heat:number}>()).results;
+   const cached=(await env.DB.prepare('SELECT card_id,from_at,to_at,heat,excluded FROM rank_window_scores WHERE window=? AND card_id IN(SELECT value FROM json_each(?))').bind(window,JSON.stringify(entries.map(r=>r.id))).all<{card_id:number;from_at:number;to_at:number;heat:number;excluded:number}>()).results;
    const publishedByCard=new Map(entries.map(r=>[r.id,r.published_at]));
    const scoresByCard=new Map(cached.filter(c=>publishedByCard.get(c.card_id)===c.from_at&&c.from_at+RANK_DURATION[window]===c.to_at).map(c=>[c.card_id,c.heat]));
+   const excluded=new Set(cached.filter(c=>c.excluded&&scoresByCard.has(c.card_id)).map(c=>c.card_id));
    const missing=entries.map((r,i)=>({r,expected:windows[i]})).filter(({r})=>!scoresByCard.has(r.id));
    try{
     for(let i=0;i<missing.length&&remaining>0;i+=200){
@@ -90,15 +91,17 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
      const completed=[];
      for(const {r,expected}of chunk){
       const score=scores.find(s=>s.roleId===expected.roleId&&Date.parse(s.from)===Date.parse(expected.from)&&Date.parse(s.to)===Date.parse(expected.to));
+      const unavailable=scores.unavailable?.some(w=>w.roleId===expected.roleId&&Date.parse(w.from)===Date.parse(expected.from)&&Date.parse(w.to)===Date.parse(expected.to));
+      if(!score&&unavailable){completed.push({id:r.id,from:r.published_at,to:r.published_at+RANK_DURATION[window],heat:0,excluded:1});scoresByCard.set(r.id,0);excluded.add(r.id);continue;}
       if(score?.complete!==true||!Number.isSafeInteger(score.heat)||score.heat<0)throw new Error('rank_incomplete');
-      completed.push({id:r.id,from:r.published_at,to:r.published_at+RANK_DURATION[window],heat:score.heat});scoresByCard.set(r.id,score.heat);
+      completed.push({id:r.id,from:r.published_at,to:r.published_at+RANK_DURATION[window],heat:score.heat,excluded:0});scoresByCard.set(r.id,score.heat);
      }
-     await env.DB.prepare(`INSERT OR IGNORE INTO rank_window_scores(card_id,window,from_at,to_at,heat,scored_at) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.from'),json_extract(value,'$.to'),json_extract(value,'$.heat'),? FROM json_each(?)`).bind(window,now,JSON.stringify(completed)).run();
+     await env.DB.prepare(`INSERT OR IGNORE INTO rank_window_scores(card_id,window,from_at,to_at,heat,scored_at,excluded) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.from'),json_extract(value,'$.to'),json_extract(value,'$.heat'),?,json_extract(value,'$.excluded') FROM json_each(?)`).bind(window,now,JSON.stringify(completed)).run();
     }
    }catch{await bumpOp(env.DB,'rank_settlement',window,'pending');continue;}
    if(scoresByCard.size!==entries.length){await bumpOp(env.DB,'rank_settlement',window,'pending');continue;}
-   const cards:AwardEntrant[]=entries.map(r=>({id:r.id,registeredAt:r.published_at,talkNum:r.talk_num,heat:scoresByCard.get(r.id)!,adult:r.rating==='R',memberId:r.member_id,accountNo:r.author_num_id}));
-   for(const zone of ['clean','all']as const)if(!settled.has(`${zone}:${window}:${period}`))await settleRankSnapshot(env,{zone,window,period,now,cards});
+   const cards:AwardEntrant[]=entries.filter(r=>!excluded.has(r.id)).map(r=>({id:r.id,registeredAt:r.published_at,talkNum:r.talk_num,heat:scoresByCard.get(r.id)!,adult:r.rating==='R',memberId:r.member_id,accountNo:r.author_num_id}));
+   for(const zone of ['clean','all']as const)if(!settled.has(`${zone}:${window}:${period}`))await settleRankSnapshot(env,{zone,window,period,now,cards,excludedCardIds:[...excluded]});
  }
 }
 export async function rankPaymentMaintenance(env:Env,now=Date.now()):Promise<void>{

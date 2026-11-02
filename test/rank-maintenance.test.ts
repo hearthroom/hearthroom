@@ -83,3 +83,21 @@ it('does not let an excluded test author with unknown publication hold other coh
  await rankMaintenance(env,at+3*86400000);
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(2);
 });
+
+it('preserves the proven first approval when correction rejects that submission but leaves a replacement public',async()=>{
+ await card();await env.DB.prepare("DELETE FROM review_submissions WHERE id='rank-first'").run();await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,decided_at) VALUES('corrected-first',100001,'harbor','rank-source','first','rejected',?,?)").bind(at,at+1000).run();await env.DB.prepare("INSERT INTO review_corrections(operation_id,submission_id,actor_member_id,actor_role,note,original_decided_at,created_at,state) VALUES('rank-correction','corrected-first',?,'manager','fixture',?,?,'complete')").bind(member,at+1000,at+2000).run();
+ rankTransport.heats=async(_env,windows)=>windows.map(w=>({...w,heat:100,complete:true}));
+ await rankMaintenance(env,at+3*86400000);
+ expect(await env.DB.prepare('SELECT published_at FROM rank_publications WHERE card_id=100001').first('published_at')).toBe(at+1000);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(2);
+});
+it('excludes explicitly unavailable works but holds a missing score with no visibility confirmation',async()=>{
+ await card();
+ rankTransport.heats=async(_env,windows)=>[];
+ await rankMaintenance(env,at+3*86400000);expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(0);
+ rankTransport.heats=async(_env,windows)=>Object.assign([],{unavailable:windows});
+ await rankMaintenance(env,at+3*86400000);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(2);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(0);
+ const snapshot=await env.DB.prepare('SELECT snapshot FROM rank_settlements LIMIT 1').first<string>('snapshot');expect(JSON.parse(snapshot!).excludedCardIds).toEqual([100001]);
+});

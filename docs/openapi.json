@@ -19148,7 +19148,8 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "heat"
+                    "heat",
+                    "unavailable"
                   ],
                   "properties": {
                     "heat": {
@@ -19186,6 +19187,32 @@
                           }
                         }
                       }
+                    },
+                    "unavailable": {
+                      "type": "array",
+                      "description": "Requested windows confirmed unavailable under public visibility rules. Missing scores without this confirmation remain incomplete.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "roleId",
+                          "from",
+                          "to"
+                        ],
+                        "properties": {
+                          "roleId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "from": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "to": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -19212,7 +19239,7 @@
           "Community"
         ],
         "summary": "Read private badge qualification totals for app members",
-        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD payments net of full/partial refunds (including paid plans); actual debit consumption for chat/API/image/speech/video. Missing currency conversion returns complete=false, never fabricated USD.",
+        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD payments net of full/partial refunds (including paid plans); actual debit consumption for chat/API/image/speech/video. Invitation and spending completeness are independent. Missing currency conversion sets spendingComplete=false without blocking complete invitation totals; complete is the conjunction of both flags.",
         "security": [
           {
             "appToken": [
@@ -19264,7 +19291,9 @@
                           "effectiveInvites",
                           "netTopupUsdMicros",
                           "consumedCredits",
-                          "complete"
+                          "complete",
+                          "invitesComplete",
+                          "spendingComplete"
                         ],
                         "properties": {
                           "accountNo": {
@@ -19288,7 +19317,16 @@
                             "minimum": 0
                           },
                           "complete": {
-                            "type": "boolean"
+                            "type": "boolean",
+                            "description": "True only when both invitesComplete and spendingComplete are true."
+                          },
+                          "invitesComplete": {
+                            "type": "boolean",
+                            "description": "True when invitation totals are complete, independently of payment currencies."
+                          },
+                          "spendingComplete": {
+                            "type": "boolean",
+                            "description": "False when spending qualification cannot be established; preserve previously verified spending badges."
                           }
                         }
                       }

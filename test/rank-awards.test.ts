@@ -25,3 +25,13 @@ it('does not publish provisional awards and keeps empty positive-heat cohorts as
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(1);
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(0);
 });
+it('rolls back the entire D1 snapshot and all honors when a later award insert fails, then recovers',async()=>{
+ await env.DB.prepare("CREATE TRIGGER rank_test_abort BEFORE INSERT ON rank_awards WHEN NEW.rank=2 BEGIN SELECT RAISE(ABORT,'rank_fixture_failure'); END").run();
+ try{
+  await expect(settleRankSnapshot(env,input())).rejects.toThrow('rank_fixture_failure');
+  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(0);
+  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(0);
+  expect(await env.DB.prepare("SELECT COUNT(*) n FROM community_awards WHERE source='rank-v1'").first('n')).toBe(0);
+ }finally{await env.DB.prepare('DROP TRIGGER rank_test_abort').run()}
+ await settleRankSnapshot(env,input());expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(10);
+});

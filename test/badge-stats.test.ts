@@ -19,3 +19,21 @@ it('reports missing qualifications as pending and does not overwrite a newer ref
  await applyBadgeStats(env,member,{...stats,effectiveInvites:0,netTopupUsdMicros:0,consumedCredits:0},Date.now(),'stale');
  expect((await badgeCollection(env,member)).items.find(b=>b.key==='spend_2')?.state).toBe('earned');
 });
+it('revalidates identity inside the qualification write after a concurrent link transfer',async()=>{
+ const other=await makeMember(22);await env.DB.prepare("DELETE FROM member_identities WHERE member_id=? AND provider='harbor'").bind(other).run();
+ await env.DB.prepare(`CREATE TRIGGER badge_test_transfer AFTER INSERT ON badge_qualification_refresh BEGIN UPDATE member_identities SET member_id='${other}' WHERE provider='harbor' AND external_id='11'; END`).run();
+ try{
+  await applyBadgeStats(env,member,stats);
+  expect(await env.DB.prepare('SELECT COUNT(*) n FROM badge_qualifications WHERE member_id=?').bind(member).first('n')).toBe(0);
+  expect(await env.DB.prepare("SELECT COUNT(*) n FROM community_awards WHERE member_id=? AND badge IN('spend_1','spend_2','invite_3','invite_10')").bind(member).first('n')).toBe(0);
+ }finally{await env.DB.prepare('DROP TRIGGER badge_test_transfer').run()}
+});
+
+it('updates complete invitation totals while incomplete currency totals preserve spending qualifications',async()=>{
+ await applyBadgeStats(env,member,stats);
+ await applyBadgeStats(env,member,{...stats,effectiveInvites:2,netTopupUsdMicros:0,consumedCredits:0,complete:false,invitesComplete:true,spendingComplete:false});
+ const wall=await badgeCollection(env,member);
+ expect(wall.items.find(b=>b.key==='invite_3')?.state).toBe('revoked');
+ expect(wall.items.find(b=>b.key==='spend_2')?.state).toBe('earned');
+ expect(await env.DB.prepare('SELECT net_topup_usd_micros FROM badge_qualifications WHERE member_id=?').bind(member).first('net_topup_usd_micros')).toBe(50000000);
+});
