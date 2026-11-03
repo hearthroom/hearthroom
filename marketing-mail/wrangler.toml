@@ -11,4 +11,7 @@ bucket_name = "suki-marketing-mail"
 [observability]
 enabled = true
 head_sampling_rate = 1
+[observability.logs]
+enabled = true
+invocation_logs = false
 # READ_TOKEN and FORWARD_TO are secrets, managed from infra-access; never put them here.

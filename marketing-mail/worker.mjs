@@ -21,8 +21,8 @@ async function recent(env, limit) {
 
 export default {
   async email(message, env) {
-    // Envelope recipient is authoritative; do not accept aliases, plus-addresses or header To.
-    if (message.to !== RECIPIENT) { message.setReject('Unsupported recipient'); event('rejected'); return; }
+    // Envelope recipient is authoritative; case variants are the same mailbox, plus aliases are not.
+    if (message.to.toLowerCase() !== RECIPIENT) { message.setReject('Unsupported recipient'); event('rejected'); return; }
     if (!env.FORWARD_TO) throw new Error('Forward destination is not configured');
     try { await message.forward(env.FORWARD_TO); }
     catch { event('forward_failed'); throw new Error('Mail forwarding failed'); }
@@ -34,7 +34,9 @@ export default {
       const parsed = await PostalMime.parse(raw);
       const receivedAt = new Date().toISOString();
       const text = (parsed.text || (parsed.html || '').replace(/<[^>]*>/g, ' ')).slice(0, MAX_TEXT);
-      const mail = { from: message.from, subject: (parsed.subject || '').slice(0, 2000), receivedAt, text,
+      const mail = { from: (parsed.from?.address || message.from).slice(0, 2000),
+        fromName: (parsed.from?.name || '').slice(0, 2000), envelopeFrom: message.from,
+        subject: (parsed.subject || '').slice(0, 2000), receivedAt, text,
         links: linksFrom(text + '\n' + (parsed.html || '').slice(0, MAX_TEXT)) };
       const key = `mail/${String(9999999999999 - Date.now()).padStart(13, '0')}-${crypto.randomUUID()}.json`;
       await env.MAIL.put(key, JSON.stringify(mail), { customMetadata: { receivedAt }, httpMetadata: { contentType: 'application/json' } });

@@ -49,3 +49,9 @@ test('HTML-only MIME、超大信與儲存讀取失敗均有界且不洩露診斷
  const stale=setup();const receivedAt=new Date(NOW-31*86400000).toISOString();stale.objects.set('mail/old',{key:'mail/old',customMetadata:{receivedAt},body:JSON.stringify({text:'expired',receivedAt})});
  assert.deepEqual(await (await worker.fetch(stale.req(),stale.env)).json(),{messages:[]});
 });
+test('寄件人顯示 MIME From，保留 envelope；同信箱大小寫變體仍雙收，別名拒絕',async()=>{
+ const f=setup();f.msg.from='bounce+opaque@example.net';f.msg.to='Suki@SukiSuki.AI';await worker.email(f.msg,f.env);
+ assert.deepEqual(f.events,['forward','store']);
+ const [m]=(await (await worker.fetch(f.req(),f.env)).json()).messages;assert.equal(m.from,'sender@example.net');assert.equal(m.fromName,'Sender');assert.equal(m.envelopeFrom,'bounce+opaque@example.net');
+ const g=setup();g.msg.to='suki+alias@sukisuki.ai';await worker.email(g.msg,g.env);assert.deepEqual(g.events,['reject']);
+});

@@ -5,7 +5,7 @@ This is independent of the community site Worker: no account access, player API,
 Gmail access, outbound compose endpoint, public inbox, or attachments archive.
 
 The email handler forwards to the existing verified destination first, then archives
-sender, decoded subject, receipt timestamp, plain text and HTTPS/HTTP links in a private
+MIME From, its display name, envelope sender, decoded subject, receipt timestamp, plain text and HTTPS/HTTP links in a private
 R2 bucket. Messages over 1 MiB are forwarded but not archived. Archive failures emit
 only a fixed outcome; they do not retry completed forwarding. MIME attachments are
 not stored. Text is capped at 128 KiB and links at 50. Mail content is untrusted input.
@@ -29,7 +29,9 @@ contains private mail. Do not save it to shared/public evidence. It follows no r
 The HTTP surface accepts authenticated GET `/messages?limit=1..20` and `/metrics` only.
 
 CI deploys only committed, tested main source, checking HEAD equals fetched origin/main
-and the checkout is clean. Provision the private bucket and secrets before enabling the
+and the checkout is clean. If main advances, a red stale run is intentional: dispatch
+the workflow against the latest main to verify and deploy synchronized source.
+Provision the private bucket and secrets before enabling the
 single existing routing rule. Keep the original rule in infra-access for rollback; do
 not modify MX, other recipients or other DNS. Confirm the original destination remains
 verified. After deployment read metrics, then switch only that rule and send a synthetic
@@ -41,6 +43,7 @@ Prometheus gauges `suki_marketing_mail_archive_available` and
 HTTP 503. Cloudflare Workers logs additionally emit fixed outcomes `forwarded`,
 `forward_failed`, `archived`, `archive_failed`, `oversized`, `rejected`, `read_failed`;
 never exception text, addresses, subjects, codes or message content.
+Automatic invocation logs are disabled because email event metadata can include recipients.
 
 MCP: not applicable. This is a private operator credential surface, deliberately excluded
 from public AI-client tools and Harbor member permissions. Public MCP must not gain access.
