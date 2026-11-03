@@ -1,19 +1,19 @@
 {
   "tier": "highlight",
   "audience": "everyone",
-  "try": "/blog/rewards/card-rewards",
+  "try": "/blog/rewards",
   "title": {
     "zh-Hant": "榜單有獎勵啦，你的卡拿到前十名，就能收到積分，還送一枚徽章～",
     "zh-Hans": "榜单有奖励啦，你的卡拿到前十名，就能收到积分，还送一枚徽章～",
     "en": "Land your card in a board's top 10 and you earn credits plus a badge.",
-    "ja": "カードがランキングのトップ10に入ると、ポイントとバッジがもらえるよ。",
+    "ja": "カードがランキングのトップ10に入ると、ポイントとバッジがもらえますよ。",
     "ko": "카드가 랭킹 10위 안에 들면 포인트와 배지를 받아요."
   },
   "body": {
     "zh-Hant": "返點、獎金表和怎麼比，我都寫在「卡片獎勵規則」那一頁了。",
     "zh-Hans": "返点、奖金表和怎么比，我都写在「卡片奖励规则」那一页了。",
     "en": "I put the payouts, the rebate and how the boards compare cards all on the Card Rewards page.",
-    "ja": "金額も比べ方も、「カード報酬ルール」のページにまとめたよ。",
+    "ja": "金額も比べ方も、「カード報酬ルール」のページにまとめましたよ。",
     "ko": "금액과 비교 방식은 '카드 보상 규칙' 페이지에 정리해 뒀어요."
   }
 }
