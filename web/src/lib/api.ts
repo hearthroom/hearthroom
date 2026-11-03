@@ -1032,6 +1032,17 @@ export interface CardScore {
   histogram: number[];
   /** 自己給的分數；訪客或沒評過是 null */
   mine: number | null;
+  /** Only the authenticated viewer's verified play progress. */
+  eligibility?: ScoreEligibility | { unavailable: true };
+}
+
+export interface ScoreEligibility {
+  eligible: boolean;
+  turns: number;
+  credits: string;
+  requiredTurns: number;
+  paidTurns: number;
+  requiredCredits: string;
 }
 
 async function scoreUrl(cardId: string): Promise<{ url: string; headers: Record<string, string> }> {

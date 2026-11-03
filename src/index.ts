@@ -116,6 +116,7 @@ import {CARD_REWARD_PUBLICATION_PATH,cardRewardPublicationRoutes} from './card-r
 import { campaignMaintenance } from "./campaign-evidence";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
+import { scoreEligibility } from './score-eligibility';
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { buildSearchName, buildSearchText, RoleGone, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
 import { resolveFandom } from "./fandom";
@@ -1336,7 +1337,13 @@ app.post("/v1/comments/:id/report", async (c) => {
 app.get("/v1/cards/:id/score", async (c) => {
   const card = await commentCardFor(c);
   const viewer = await commentViewer(c);
-  return c.json(await readScore(c.env.DB, card.id, viewer.memberId), 200, { "Cache-Control": "private, no-store" });
+  const score = await readScore(c.env.DB, card.id, viewer.memberId);
+  // Public score aggregates stay readable when the private progress service is unavailable.
+  const token = bearerOf(c);
+  const eligibility = viewer.memberId && token
+    ? await scoreEligibility(c.env, card, token).catch(() => ({ unavailable: true as const }))
+    : undefined;
+  return c.json({ ...score, ...(eligibility ? { eligibility } : {}) }, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.put("/v1/cards/:id/score", async (c) => {
@@ -1344,7 +1351,7 @@ app.put("/v1/cards/:id/score", async (c) => {
   const card = await commentCardFor(c);
   const body = (await c.req.json().catch(() => ({}))) as { score?: unknown };
   const now = Date.now();
-  await setScore(c.env.DB, card, member.id, body.score, now);
+  await setScore(c.env, card, member.id, body.score, now, bearerOf(c)!);
   if(card.rewardEligible)await reportRating(c.env.DB, { cardId: String(card.id), memberId: member.id, now });
   // 跟留言一樣當場送：新手「留言或評分」那天，評完回簽到頁就該能領，不等每小時的排程
   c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));

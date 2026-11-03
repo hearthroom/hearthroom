@@ -7,7 +7,9 @@ import {assertNormalMember} from './test-accounts';
  * 星數另外附在留言上（listTop 的 score），讓「寫了幾句」跟「給了幾星」一起看。
  */
 import { cardAuthorMemberId, type CommentCard } from "./comments";
-import { HttpError } from "./types";
+import { HttpError, type Env } from "./types";
+import { scoreEligibility } from './score-eligibility';
+import { bumpOp } from './ops-metrics';
 
 export interface CardScore {
   /** 平均，取到小數一位；沒人評過是 null */
@@ -40,10 +42,22 @@ export async function readScore(db: D1Database, cardId: string, memberId: string
   };
 }
 
-export async function setScore(db: D1Database, card: CommentCard, memberId: string, score: unknown, now: number): Promise<void> {
+export async function setScore(env: Env, card: CommentCard, memberId: string, score: unknown, now: number, token: string): Promise<void> {
+  const db = env.DB;
   await assertNormalMember(db,memberId,await cardAuthorMemberId(db,card));
   if (typeof score !== "number" || !Number.isInteger(score) || score < 1 || score > 5) throw new HttpError(400, "score_invalid");
   if ((await cardAuthorMemberId(db, card)) === memberId) throw new HttpError(403, "own_card");
+  let eligibility;
+  try {
+    eligibility = await scoreEligibility(env, card, token);
+  } catch (error) {
+    await bumpOp(db, 'score_admission', 'set', 'unavailable');
+    throw error;
+  }
+  if (!eligibility.eligible) {
+    await bumpOp(db, 'score_admission', 'set', 'denied');
+    throw new HttpError(403, 'score_play_required', undefined, { eligibility });
+  }
   await db
     .prepare(
       `INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)
@@ -51,6 +65,7 @@ export async function setScore(db: D1Database, card: CommentCard, memberId: stri
     )
     .bind(card.id, memberId, score, now)
     .run();
+  await bumpOp(db, 'score_admission', 'set', 'allowed');
 }
 
 export async function clearScore(db: D1Database, cardId: string, memberId: string): Promise<void> {

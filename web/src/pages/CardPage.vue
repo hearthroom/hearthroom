@@ -161,6 +161,8 @@ watch(introBox, (el) => {
 // ── 評分 ───────────────────────────────────────────────────────────────
 const score = ref<Score | null>(null);
 const scoreBusy = ref(false);
+const scoreToast = ref('');
+let scoreToastTimer: ReturnType<typeof setTimeout> | undefined;
 const own = computed(() => !!session.profile?.handle && session.profile.handle === card.value?.author.handle);
 async function loadScore() {
   const c = card.value;
@@ -186,6 +188,14 @@ async function rate(next: number | null) {
     await loadScore();
   } catch (err) {
     track("card_score", { detail: "score_failed", subject: c.roleId, ok: false });
+    if (err instanceof ApiError && (err.code === 'score_play_required' || err.code === 'score_eligibility_unavailable')) {
+      await loadScore();
+      const e = score.value?.eligibility;
+      scoreToast.value = e && !('unavailable' in e) && !e.eligible ? t('score.playRequired', { ...e }) : t('score.playUnavailable');
+      clearTimeout(scoreToastTimer);
+      scoreToastTimer = setTimeout(() => { scoreToast.value = ''; }, 5000);
+      return;
+    }
     await confirmDialog({ title: t("score.title"), message: err instanceof Error ? err.message : t("state.actionFailed"), single: true });
   } finally {
     scoreBusy.value = false;
@@ -353,7 +363,7 @@ watch(side, (el) => {
   sideObserver = new ResizeObserver(() => el.style.setProperty("--side-h", `${el.offsetHeight}px`));
   sideObserver.observe(el);
 });
-onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect(); });
+onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect(); clearTimeout(scoreToastTimer); });
 
 // 開關改了要重讀。身分第一次載好（undefined → 值）只在門已經畫出來時重讀：
 // 讀卡被擋時自己會等身分（見 load），卡已經讀到就不必再讀一次
@@ -548,6 +558,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
     <!-- live region 要先存在再改內容，讀屏器才會唸；所以常駐、用 hidden 切 -->
     <div class="toast" role="status" :hidden="!copied">{{ copied ? $t("card.idCopied") : "" }}</div>
+    <div v-if="scoreToast" class="toast role__score-toast" role="status">{{ scoreToast }}</div>
   </div>
 </template>
 
@@ -618,6 +629,7 @@ a.role__by:hover { color: var(--accent-text); }
 .role__by :deep(img), .role__by :deep(.role__by-avatar) { width: 24px; height: 24px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 11px; }
 .role__score { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
 .role__score-star { color: var(--gold); }
+.role__score-toast { width: max-content; max-width: calc(100vw - var(--s-4) * 2); box-sizing: border-box; overflow-wrap: anywhere; }
 .role__tagline {
   margin: 0; max-width: 62ch; font-size: 16px; line-height: 1.65; color: var(--text-2); white-space: pre-line;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;

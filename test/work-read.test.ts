@@ -1,3 +1,4 @@
+import { scoreGateway } from '../src/score-eligibility';
 import {createExecutionContext,env,waitOnExecutionContext} from 'cloudflare:test';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import worker,{iconCache} from '../src/index';
@@ -11,7 +12,7 @@ import {workPolicyGateway} from '../src/work-policy';
 import {hostGateway} from '../src/hosting';
 import {HttpError} from '../src/types';
 
-beforeEach(resetDb);
+beforeEach(async () => { await resetDb(); vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' }); });
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
 
 it('does not treat a local author number or profile token as permission to read a managed private card',async()=>{

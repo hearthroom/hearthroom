@@ -14236,6 +14236,102 @@
           }
         }
       }
+    },
+    "/open/v1/hosting/score-eligibility": {
+      "post": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Read current player rating eligibility",
+        "description": "Issuer key and bearer required. Counts permanently retained, distinct successful nonempty AI turns across the work lineage. Failed or blank replies and copied fork messages do not count; regenerate, retry and agent resume share a logical turn. Legacy history imports only currently verifiable successful replies. Net consumed credits include grants, regenerate charges and refunds. The issuer must enforce this result when saving a rating. No chat text or internal account identifiers are returned.",
+        "operationId": "hostingScoreEligibility",
+        "security": [
+          {
+            "HostingIssuerKey": [],
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "roleId"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current authenticated player eligibility",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "eligible",
+                    "turns",
+                    "credits",
+                    "requiredTurns",
+                    "paidTurns",
+                    "requiredCredits"
+                  ],
+                  "properties": {
+                    "eligible": {
+                      "type": "boolean"
+                    },
+                    "turns": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "credits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "requiredTurns": {
+                      "type": "integer",
+                      "enum": [
+                        6
+                      ]
+                    },
+                    "paidTurns": {
+                      "type": "integer",
+                      "enum": [
+                        3
+                      ]
+                    },
+                    "requiredCredits": {
+                      "type": "string",
+                      "enum": [
+                        "500"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, including caller-supplied viewer identity"
+          },
+          "401": {
+            "description": "Issuer key or bearer missing or invalid"
+          },
+          "404": {
+            "description": "Role is unavailable to this viewer"
+          }
+        }
+      }
     }
   },
   "components": {

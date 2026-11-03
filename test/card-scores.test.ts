@@ -1,6 +1,7 @@
+import { scoreGateway } from '../src/score-eligibility';
 import { approveFixtureResponse } from "./hosted-fixture";
 import { SELF, env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ratingBody, bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 
 // 評分：本站自己的資料，一位成員對一張卡一份 1–5 星，可以改、可以收回。
@@ -11,6 +12,7 @@ const OTHER = 20002;
 let cardId = "";
 beforeEach(async () => {
   await resetDb();
+  vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' });
   identities({ "author-token": AUTHOR, fan: FAN, other: OTHER });
   rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR });
   const res = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
@@ -18,7 +20,7 @@ beforeEach(async () => {
   }));
   cardId = ((await res.json()) as { id: string }).id;
 });
-afterEach(() => restoreUpstream());
+afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 
 const json = async (r: Response) => (await r.json()) as any;
 const read = (token?: string) => SELF.fetch(`https://c.test/v1/cards/${cardId}/score`, { headers: token ? bearer(token) : {} });
@@ -37,7 +39,7 @@ describe("評分", () => {
     expect((await put("other", 2)).status).toBe(204);
     expect((await put("fan", 4)).status).toBe(204);
     const body = await json(await read("fan"));
-    expect(body).toEqual({ average: 3, count: 2, histogram: [0, 1, 0, 1, 0], mine: 4 });
+    expect(body).toMatchObject({ average: 3, count: 2, histogram: [0, 1, 0, 1, 0], mine: 4 });
     expect((await json(await read("other"))).mine).toBe(2);
   });
 

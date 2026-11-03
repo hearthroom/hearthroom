@@ -1200,7 +1200,7 @@
             }
           }
         },
-        "description": "Listed cards only. Returns the average, the 1–5 star breakdown and, with authentication, the viewer's own rating.",
+        "description": "Public aggregates remain readable without sign-in. An authenticated viewer also receives their own private eligibility progress, or {unavailable:true} if it cannot be verified. Responses are private, no-store.",
         "parameters": [
           {
             "name": "id",
@@ -1289,7 +1289,7 @@
             }
           }
         },
-        "description": "One rating per member and card; rating again replaces the previous value. Authors cannot rate their own cards (`own_card`). `score` must be an integer from 1 to 5 (`score_invalid`).",
+        "description": "One rating per member and card; rating again replaces the previous value. Authors cannot rate their own cards (`own_card`). `score` must be an integer from 1 to 5 (`score_invalid`). A new or changed rating requires at least 6 verified successful AI replies, or 3 successful replies and 500 net credits spent on the same work across saves. Regeneration of a turn counts once; failures and blank replies do not count. Insufficient play returns 403 `score_play_required` with private `eligibility` progress; unavailable verification returns 503 `score_eligibility_unavailable`. Existing scores remain and DELETE can withdraw them without this play requirement. Comments have no play requirement.",
         "parameters": [
           {
             "name": "id",
@@ -5117,6 +5117,24 @@
             "minimum": 1,
             "maximum": 5,
             "description": "The viewer's own rating; null for guests or when the viewer has not rated the card."
+          },
+          "eligibility": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ScoreEligibility"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "unavailable"
+                ],
+                "properties": {
+                  "unavailable": {
+                    "const": true
+                  }
+                }
+              }
+            ]
           }
         }
       },
@@ -5470,6 +5488,42 @@
             }
           }
         ]
+      },
+      "ScoreEligibility": {
+        "type": "object",
+        "required": [
+          "eligible",
+          "turns",
+          "credits",
+          "requiredTurns",
+          "paidTurns",
+          "requiredCredits"
+        ],
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "turns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "credits": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "requiredTurns": {
+            "type": "integer",
+            "const": 6
+          },
+          "paidTurns": {
+            "type": "integer",
+            "const": 3
+          },
+          "requiredCredits": {
+            "type": "string",
+            "const": "500"
+          }
+        }
       }
     }
   }

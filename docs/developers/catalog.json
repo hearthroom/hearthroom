@@ -1860,9 +1860,9 @@
   "db3fd0ca1e6b3": "Limit for `roleReadme`: 20000 (English cards 40000).",
   "d5937fb15b88d": "Characters in `roleReadme`. Not part of `totalChars` or `estimatedTokens`, because the detail introduction is never sent to the model.",
   "d2b15b202a204": "Read a card's ratings",
-  "de057cd760d12": "Listed cards only. Returns the average, the 1–5 star breakdown and, with authentication, the viewer's own rating.",
+  "de057cd760d12": "Public aggregates remain readable without sign-in. An authenticated viewer also receives their own private eligibility progress, or {unavailable:true} if it cannot be verified. Responses are private, no-store.",
   "d598dd32740ff": "Rate a card",
-  "d4485aa749e01": "One rating per member and card; rating again replaces the previous value. Authors cannot rate their own cards (`own_card`). `score` must be an integer from 1 to 5 (`score_invalid`).",
+  "d4485aa749e01": "One rating per member and card; rating again replaces the previous value. Authors cannot rate their own cards (`own_card`). `score` must be an integer from 1 to 5 (`score_invalid`). A new or changed rating requires at least 6 verified successful AI replies, or 3 successful replies and 500 net credits spent on the same work across saves. Regeneration of a turn counts once; failures and blank replies do not count. Insufficient play returns 403 `score_play_required` with private `eligibility` progress; unavailable verification returns 503 `score_eligibility_unavailable`. Existing scores remain and DELETE can withdraw them without this play requirement. Comments have no play requirement.",
   "d3170f7eee71d": "Remove your rating",
   "dd0cc53a2f395": "Idempotent: removing a rating that does not exist succeeds.",
   "d836d85bbedb8": "Average rating rounded to one decimal place; null when nobody has rated the card.",
@@ -2526,5 +2526,11 @@
   "dc1858aa76212": "Requested windows confirmed unavailable under public visibility rules. Missing scores without this confirmation remain incomplete.",
   "d4c88f615fea6": "True only when both invitesComplete and spendingComplete are true.",
   "d0a58826c2328": "True when invitation totals are complete, independently of payment currencies.",
-  "d847decc1360c": "Only the deployment-pinned card-reward service client with campaign.payout may pay from the leaderboard pool. Human tokens and other application clients are rejected. Grants are permanent; validityDays must be omitted or null, with no public-retention obligation. Pool rules, wallet credit, audit, immutable receipts and same-key replay remain atomic. Older Providers reject this path instead of using the default pool."
+  "d847decc1360c": "Only the deployment-pinned card-reward service client with campaign.payout may pay from the leaderboard pool. Human tokens and other application clients are rejected. Grants are permanent; validityDays must be omitted or null, with no public-retention obligation. Pool rules, wallet credit, audit, immutable receipts and same-key replay remain atomic. Older Providers reject this path instead of using the default pool.",
+  "d2481ed1498e9": "Read current player rating eligibility",
+  "dbcbc0df44a1d": "Issuer key and bearer required. Counts permanently retained, distinct successful nonempty AI turns across the work lineage. Failed or blank replies and copied fork messages do not count; regenerate, retry and agent resume share a logical turn. Legacy history imports only currently verifiable successful replies. Net consumed credits include grants, regenerate charges and refunds. The issuer must enforce this result when saving a rating. No chat text or internal account identifiers are returned.",
+  "d363603320356": "Current authenticated player eligibility",
+  "df2b79f2f12d6": "Invalid request, including caller-supplied viewer identity",
+  "d395733b4129f": "Issuer key or bearer missing or invalid",
+  "d353a840f83e9": "Role is unavailable to this viewer"
 }

@@ -5,7 +5,8 @@
  * 只管畫與收點擊；讀寫在卡片頁（頁首那一行也要用同一份平均）。
  * 星數是一組單選：方向鍵移動、空白鍵選；再點一次自己目前的星數就是收回。
  */
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { CardScore } from "@/lib/api";
 
 const props = defineProps<{
@@ -15,6 +16,20 @@ const props = defineProps<{
   busy?: boolean;
 }>();
 const emit = defineEmits<{ rate: [score: number | null]; write: [] }>();
+const { t } = useI18n();
+const blockedHint = computed(() => {
+  const e = props.score?.eligibility;
+  if (!e) return '';
+  if ('unavailable' in e) return t('score.playUnavailable');
+  return e.eligible ? '' : t('score.playRequired', { ...e });
+});
+const alternative = computed(() => {
+  const e = props.score?.eligibility;
+  return e && !('unavailable' in e) && !e.eligible ? t('score.playPaidAlternative', { ...e }) : '';
+});
+const toast = ref('');
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+onUnmounted(() => clearTimeout(toastTimer));
 
 /** 滑過時先亮到那一顆，讓人看得出點下去是幾星 */
 const hover = ref(0);
@@ -23,6 +38,13 @@ const max = computed(() => Math.max(1, ...(props.score?.histogram ?? [0])));
 
 function pick(n: number) {
   if (props.busy) return;
+  // Withdrawing a pre-existing score stays available regardless of play progress.
+  if (props.score?.mine !== n && blockedHint.value) {
+    toast.value = blockedHint.value;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.value = ''; }, 5000);
+    return;
+  }
   emit("rate", props.score?.mine === n ? null : n);
 }
 function onKey(e: KeyboardEvent, n: number) {
@@ -81,7 +103,10 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="STAR" fill="currentColor" /></svg>
         </button>
       </div>
+      <p v-if="blockedHint" class="score__progress subtle">{{ blockedHint }}</p>
+      <p v-if="alternative" class="score__alternative subtle">{{ alternative }}</p>
     </div>
+    <Teleport to="body"><div v-if="toast" class="toast score-toast" role="status">{{ toast }}</div></Teleport>
   </section>
 </template>
 
@@ -104,6 +129,8 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
 .score__mine-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-2); }
 .score__write { border: 0; background: none; padding: 4px 0; font: inherit; font-weight: 600; color: var(--accent-text); cursor: pointer; }
 .score__input { display: flex; gap: 2px; }
+.score__progress, .score__alternative { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.score-toast { width: max-content; max-width: calc(100vw - var(--s-4) * 2); box-sizing: border-box; overflow-wrap: anywhere; }
 .score__star { width: 36px; height: 36px; padding: 3px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--border-strong); cursor: pointer; transition: color var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .score__star svg { width: 100%; height: 100%; }
 .score__star.is-on { color: var(--gold); }

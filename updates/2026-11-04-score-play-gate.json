@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片評分需要先玩過，未達條件時會顯示進度。",
+    "zh-Hans": "卡片评分需要先玩过，未达条件时会显示进度。",
+    "en": "Card ratings now require play progress, with a visible explanation when you need to chat more.",
+    "ja": "カードの評価に会話の条件が加わり、達成状況を確認できます。",
+    "ko": "카드를 평가하려면 먼저 대화해야 하며, 조건을 채우기까지 진행 상황이 표시돼요."
+  },
+  "body": {
+    "zh-Hant": "AI 成功回覆滿 6 輪，或滿 3 輪且花費 500 積分，就能評分。",
+    "zh-Hans": "AI 成功回复满 6 轮，或满 3 轮且花费 500 积分，就能评分。",
+    "en": "You can rate after 6 successful AI replies, or after 3 successful replies and spending 500 credits on that card.",
+    "ja": "このカードでAIの返答が6回完了するか、3回完了して500ポイント利用すると評価できます。",
+    "ko": "이 카드에서 AI 답변이 6회 완료되거나, 3회 완료되고 500포인트를 사용하면 평가할 수 있어요."
+  }
+}

@@ -1,3 +1,4 @@
+import { scoreGateway } from '../src/score-eligibility';
 /**
  * 綺夢社伺服器上報給 Harbor 的獎勵事件（AppRewards 技術設計 §10.3；Harper 研發 2026-10-19：share_open 改收 refCode）。
  *   - 分享連結被打開：同一個訪客同一天只算一次；機器人不算；不存 IP 原值，訪客只留匿名雜湊（每週換鑰匙、7 天後清）
@@ -21,11 +22,13 @@ async function harborCard(id: string, roleId: string, authorNumId: number) {
 }
 
 beforeEach(async () => {
-  await resetDb(); identities({ fan: 20001, author: 20002, mod: 30001 });
+  await resetDb();
+  vi.spyOn(scoreGateway, 'read').mockResolvedValue({ eligible: true, turns: 6, credits: '0', requiredTurns: 6, paidTurns: 3, requiredCredits: '500' });
+  identities({ fan: 20001, author: 20002, mod: 30001 });
   // 被分享的卡：帶了卡號就報 workRoleId（選填，首頁的邀請連結沒有卡）
   await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider) VALUES ('200009', 'role-share', 1, 0, 0, 'harbor')").run();
 });
-afterEach(() => { restoreUpstream(); Object.assign(rewardTransport, realTransport); });
+afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); Object.assign(rewardTransport, realTransport); });
 
 describe("分享連結被打開", () => {
   it("同一個訪客同一天只算一次；只留雜湊，不留 IP", async () => {
