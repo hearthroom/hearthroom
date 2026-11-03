@@ -378,6 +378,9 @@ describe("home announcement slide", () => {
     await mount();
     const slide = slides()[0];
     expect(slide.getAttribute("data-slide")).toBe("notice:card-rewards");
+    // 桌機未登入時輪播只有 220 高，會切掉圖上的字：公告那張要撐出夠的高度（樣式掛在這個 class 上）
+    expect(slide.classList.contains("carousel__slide--notice")).toBe(true);
+    expect(slides()[1].classList.contains("carousel__slide--notice")).toBe(false);
     const img = slide.querySelector("img")!;
     expect(img.getAttribute("src")).toBe("/announcements/card-rewards-zh-Hant.webp");
     expect(img.getAttribute("alt")).toBe(i18n.global.t("announcement.card-rewards.alt"));

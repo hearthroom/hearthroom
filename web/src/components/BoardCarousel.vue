@@ -193,7 +193,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   >
     <div class="carousel__track" :aria-live="on ? (running ? 'off' : 'polite') : undefined">
       <div
-        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i }"
+        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i, 'carousel__slide--notice': c.slug.startsWith('notice:') }"
         v-bind="slideAttrs(i)" :data-slide="c.slug"
       >
         <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': !c.poster && c.bannerUrl, 'carousel__card--poster': !!c.poster }" :to="lp(c.to)" @click="clicked(c.slug)">
@@ -261,6 +261,11 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 .carousel--on .carousel__hero > :slotted(*) { margin-bottom: 0; }
 /* 每張一樣高（桌機 220、手機 176）：換張時版面不跳；蘇綺那張比較高時大家跟著撐滿 */
 .carousel--on .carousel__slide { min-height: 220px; }
+/*
+ * 限時公告的圖是 1536×576、字畫在 y 75–501：桌機框 1152 寬時要 320 高才露得出整段字（未登入時歡迎卡只有 220 高，會切掉上下）。
+ * 幾張疊在同一格裡、高度取最高那張，所以公告在的這段期間整個輪播是 320 高，換張不跳；登入的人歡迎卡本來就這麼高。手機另見下面
+ */
+@media (min-width: 761px) { .carousel--on .carousel__slide--notice { min-height: 320px; } }
 
 .carousel__card {
   position: relative; overflow: hidden; isolation: isolate;
