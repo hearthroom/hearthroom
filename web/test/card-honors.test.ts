@@ -93,7 +93,10 @@ describe("card page honors", () => {
     expect(chips[0].querySelector(".rank-badge")).not.toBeNull();
     expect(chips[0].querySelector(".card-honors__name")?.textContent).toBe("清水日榜第一");
     expect(chips[0].querySelector(".card-honors__count")?.textContent).toBe("+2");
-    expect(chips[0].getAttribute("aria-label")).toBe("查看這張卡的全部榮譽，共 3 項");
+    // 唸出來的名字就是看得到的字（Label in Name）；共幾項放在描述裡
+    expect(chips[0].hasAttribute("aria-label")).toBe(false);
+    const desc = document.getElementById(chips[0].getAttribute("aria-describedby")!);
+    expect(desc?.textContent).toBe("查看這張卡的全部榮譽，共 3 項");
   });
 
   it("opens the full list as a dialog, closes on Escape and returns focus to the opener", async () => {
@@ -132,6 +135,19 @@ describe("card page honors", () => {
     props.honors = [{ zone: "clean", window: "day", band: 1 }]; await flush();
     expect(fetchMock.mock.calls.length).toBe(before);
     expect(el.querySelector(".card-honors__chip")).not.toBeNull();
+  });
+
+  it("still shows the chip from the cover honors when the full list fails, and retries when opened", async () => {
+    await applyLocale("zh-Hant");
+    const { root, fetchMock } = await mountList([{ zone: "all", window: "day", band: 3 }], new Error("down"));
+    const chip = root.querySelector<HTMLButtonElement>("button.card-honors__chip")!;
+    expect(chip.querySelector(".card-honors__name")?.textContent).toBe("綜合日榜前三");
+    expect(chip.querySelector(".card-honors__count")).toBeNull();
+    expect(chip.hasAttribute("aria-describedby")).toBe(false);
+    const before = fetchMock.mock.calls.length;
+    chip.click(); await flush();
+    expect(fetchMock.mock.calls.length).toBe(before + 1);
+    expect(document.querySelector('[role="dialog"] [role="alert"]')).not.toBeNull();
   });
 });
 

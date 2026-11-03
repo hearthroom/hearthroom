@@ -16,9 +16,10 @@ import RankBadge from "./RankBadge.vue";
 const props = defineProps<{ cardId: string; honors?: Honor[] }>();
 const { t, locale } = useI18n();
 const top = computed(() => coverHonors(props.honors ?? []));
+const all = ref<CardHonor[] | null>(null);
 /** 標籤列那一顆：讀到全部榮譽就從全部裡挑最高的，還沒讀到先用封面那幾枚 */
 const best = computed(() => bestHonor(all.value?.length ? all.value : top.value));
-const all = ref<CardHonor[] | null>(null);
+const descId = computed(() => `card-honors-${props.cardId}`);
 const failed = ref(false);
 let generation = 0;
 async function load() {
@@ -60,12 +61,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 
 <template>
   <li v-if="best" class="card-honors__item">
-    <button type="button" class="chip card-honors__chip" aria-haspopup="dialog" :aria-label="all?.length ? t('honor.chipAria', { n: all.length }) : undefined" @click="open">
+    <!-- 唸出來的名字＝看得到的字（語音操作說「清水日榜第一」要點得到）；「共幾項」放在描述裡 -->
+    <button type="button" class="chip card-honors__chip" aria-haspopup="dialog" :aria-describedby="all?.length ? descId : undefined" @click="open">
       <RankBadge :honor="best" decorative />
       <span class="card-honors__name">{{ honorName(t, best) }}</span>
       <!-- 其他還有幾個，和名字旁展示列的「+N」同一種寫法（美術總監 2026-11-03） -->
       <span v-if="(all?.length ?? 0) > 1" class="card-honors__count">+{{ all!.length - 1 }}</span>
     </button>
+    <span v-if="all?.length" :id="descId" class="sr-only">{{ t("honor.chipAria", { n: all.length }) }}</span>
   </li>
   <Teleport to="body">
     <div v-if="opened" class="modal-backdrop" @click.self="close">
@@ -89,7 +92,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 </template>
 
 <style scoped>
-.card-honors__item { display: flex; align-items: center; }
+.card-honors__item { display: flex; align-items: center; min-width: 0; }
 /* 和 #標籤 同一種 chip（26 高、12px），徽章縮到 20 高放進去；名字可省略，數字不省略 */
 .card-honors__chip { cursor: pointer; font: inherit; font-size: 12px; max-width: 100%; padding-left: 4px; gap: 5px; --rank-badge-h: 20px; }
 .card-honors__chip:hover { background: var(--border); }
