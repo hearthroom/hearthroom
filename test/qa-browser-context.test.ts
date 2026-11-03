@@ -25,6 +25,8 @@ it('keeps the pre-context document blank and disallows edge analytics injection'
 });
 
 it('exchanges a management ticket once and issues an exclusion-only host cookie',async()=>{
+ // Migrations may seed audit-only system members; the context exchange must add none.
+ const membersBefore=(await env.DB.prepare('SELECT count(*) AS n FROM members').first<{n:number}>())!.n;
  const token=await ticket();
  const request=()=>qaContextRoutes.request(origin+'/internal/qa/browser-context',{
   method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({ticket:token}),
@@ -38,7 +40,7 @@ it('exchanges a management ticket once and issues an exclusion-only host cookie'
  expect(await verifyQAContext(new Request('https://sukisuki.chat/',{headers:{Cookie:cookie}}),configured())).toBe(false);
  expect(await res.json()).toEqual({ready:true});
  expect((await request()).status).toBe(401);
- expect((await env.DB.prepare('SELECT count(*) AS n FROM members').first<{n:number}>())!.n).toBe(0);
+ expect((await env.DB.prepare('SELECT count(*) AS n FROM members').first<{n:number}>())!.n).toBe(membersBefore);
  expect((await env.DB.prepare('SELECT count(*) AS n FROM account_sessions').first<{n:number}>())!.n).toBe(0);
 });
 
