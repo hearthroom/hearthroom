@@ -8,7 +8,7 @@
 
 私有 `infra-access/services/blog-publisher/credential.json` 保存 `{ "origin": "https://sukisuki.ai", "key": "<64 lowercase hex>" }`，權限 600。不要把 key 放在命令列參數、shell history、環境範例、程式碼或公開倉庫。CLI 讀檔，不跟隨重新導向；只有本機 localhost/loopback 夾具可用 HTTP。
 
-Worker secret `BLOG_PUBLISHER_CONFIG` 是 `{ "memberId": "<固定工作室 AI 成員>", "keySha256": "<SHA-256(key UTF-8) hex>" }`。只配置已存在、由工作室持有的成員；每個操作都重新確認設定與成員存在，不吃快取。稽核 actor_kind 固定為 `ai`，actor_member_id 固定取設定，不接受請求指定身分。設定為空字串或移除 secret 就停用；換金鑰時在 infra-access 產生新 key，更新 Worker secret 再做正負控，舊 key 應為 403。
+Worker secret `BLOG_PUBLISHER_CONFIG` 是 `{ "memberId": "<固定工作室 AI 成員>", "keySha256": "<SHA-256(key UTF-8) hex>" }`。使用 migration `0107_blog_publisher_identity.sql` 建立的專用 `system-blog-publisher`；其顯示名為蘇綺，不建立登入連結、reviewer 或代理角色。migration 留 system audit，重跑不重建，也拒絕採用有登入／審核連結的既有帳號。只配置這個由工作室持有的專用成員；每個操作都重新確認設定與成員存在，不吃快取。稽核 actor_kind 固定為 `ai`，actor_member_id 固定取設定，不接受請求指定身分。設定為空字串或移除 secret 就停用；換金鑰時在 infra-access 產生新 key，更新 Worker secret 再做正負控，舊 key 應為 403。
 
 `memberId` 是伺服器端私有識別，不能放進公開文章或共享任務附件。金鑰授權與一般審核角色獨立：撤銷營運權限須移除／輪替本設定，不能只撤銷審核角色。
 

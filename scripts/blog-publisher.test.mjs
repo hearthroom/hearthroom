@@ -35,3 +35,10 @@ test('uploads a cover with a stable operation ID and reports HTTP failures',asyn
  await assert.rejects(publisherRequest(['GET','/v1/blog/admin/posts','--credential',credential],{fetch:async()=>new Response('{"error":"blog_write_forbidden"}',{status:403})}),/403.*blog_write_forbidden/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('edge HTML and null responses retain status and readback guidance',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'blog-cli-'));try{
+ const credential=join(dir,'credential.json');await writeFile(credential,JSON.stringify({origin:'https://sukisuki.ai',key:'12'.repeat(32)}),{mode:0o600});
+ for(const [body,status] of [['<html>gateway failure</html>',502],['null',200]])await assert.rejects(publisherRequest(['POST','/v1/blog/admin/posts','--credential',credential,'--operation-id','timeout-operation-123'],{fetch:async()=>new Response(body,{status})}),new RegExp(`${status}.*read back.*same operation ID`));
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
