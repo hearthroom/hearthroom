@@ -568,6 +568,8 @@ export class SukiPet {
     if ((this.phoneOriginal&&!this.deliberate&&!!a.say) || showIf?.() === false) return;
     const now = performance.now();
     const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
+    // 頁面叫她退場的期間，她要說的話（例如這一頁的介紹）不排隊：回來時已經換頁了
+    if (a.say && !urgent && this.away.has("page")) return;
     if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
     if (a.say && urgent) this.closeMenu(this.deliberate);
     if (urgent) this.queue = [];

@@ -20,8 +20,8 @@ defineProps<{ href?: string }>();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 onMounted(() => {
-  document.title = pageTitle(t("region.unavailable.title"));
   pageAway.value++;
+  document.title = pageTitle(t("region.unavailable.title"));
 });
 onBeforeUnmount(() => { pageAway.value--; });
 </script>

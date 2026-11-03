@@ -50,3 +50,10 @@ it('頁面叫她退場時，排著的台詞一起丟掉', () => {
   pet.on({ type: 'away', on: true });
   expect((p as unknown as { queue: unknown[] }).queue).toEqual([]);
 });
+
+// 退場之後才要說的話（桌寵比頁面晚載入：她出來時提示頁已經在了，接著才收到這一頁的介紹）也不排隊
+it('頁面叫她退場的期間要說的話不排隊，回來時不會在下一頁說出來', () => {
+  pet.on({ type: 'away', on: true });
+  (p as unknown as { act: (a: { say: string }) => void }).act({ say: 'card.hello' });
+  expect((p as unknown as { queue: unknown[] }).queue).toEqual([]);
+});
