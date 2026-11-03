@@ -10,7 +10,9 @@ name: CI & Deploy
 on:
   push:
     branches: [main]
+    paths-ignore: ['marketing-mail/**', '.github/workflows/marketing-mail.yml']
   pull_request:
+    paths-ignore: ['marketing-mail/**', '.github/workflows/marketing-mail.yml']
   workflow_dispatch:
     inputs:
       test_scope:

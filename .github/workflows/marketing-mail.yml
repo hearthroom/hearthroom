@@ -1,0 +1,41 @@
+name: Marketing Mail CI & Deploy
+on:
+  push:
+    branches: [main]
+    paths: ['marketing-mail/**', '.github/workflows/marketing-mail.yml']
+  pull_request:
+    paths: ['marketing-mail/**', '.github/workflows/marketing-mail.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: marketing-mail-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketing-mail
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: marketing-mail/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Deploy verified main source
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          test -z "$(git status --porcelain)"
+          npm run deploy

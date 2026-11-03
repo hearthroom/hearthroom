@@ -1,0 +1,14 @@
+name = "suki-marketing-mail"
+main = "worker.mjs"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+[[r2_buckets]]
+binding = "MAIL"
+bucket_name = "suki-marketing-mail"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+# READ_TOKEN and FORWARD_TO are secrets, managed from infra-access; never put them here.
