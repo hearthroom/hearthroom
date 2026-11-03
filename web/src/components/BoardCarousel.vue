@@ -263,9 +263,11 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 .carousel--on .carousel__slide { min-height: 220px; }
 /*
  * 限時公告的圖是 1536×576、字畫在 y 75–501：桌機框 1152 寬時要 320 高才露得出整段字（未登入時歡迎卡只有 220 高，會切掉上下）。
- * 幾張疊在同一格裡、高度取最高那張，所以公告在的這段期間整個輪播是 320 高，換張不跳；登入的人歡迎卡本來就這麼高。手機另見下面
+ * 幾張疊在同一格裡、高度取最高那張，所以公告在的這段期間整個輪播一起變高，換張不跳。手機另見下面
  */
-@media (min-width: 761px) { .carousel--on .carousel__slide--notice { min-height: 320px; } }
+/* 寬度跟著輪播走：27.8% ≈ 426／1536，1152 寬時剛好 320；窄一點的桌機維持 220（那時圖照樣露得出整段字），歡迎卡不會被撐高 */
+.carousel--on { container-type: inline-size; }
+@media (min-width: 761px) { .carousel--on .carousel__slide--notice { min-height: max(220px, 27.8cqw); } }
 
 .carousel__card {
   position: relative; overflow: hidden; isolation: isolate;
