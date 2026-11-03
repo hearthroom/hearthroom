@@ -30,7 +30,7 @@ import {rankingClearance} from '@/pet/ranking-clearance';
 import {homePhoneMode,homePhoneObstacles,type PhoneClearance} from "@/pet/home-clearance";
 import {phoneControls} from "@/pet/standby-clearance";
 import {sukiArtInView} from "@/pet/suki-art";
-import { petEnabled, takeSummon } from "@/pet/enabled";
+import { pageAway, petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
 const props = withDefaults(defineProps<{ listEndAllowed?: boolean }>(), { listEndAllowed: true });
@@ -234,12 +234,14 @@ watch(petEnabled, (on) => { if (on) void start(); else stop(); });
 const WORKSPACE = new Set(["editor"]);
 function enter(path: string) {
   // 頁面自己有蘇綺插圖的（簽到頁）：她整頁退場，離開就回來。由路由決定，因為她比頁面晚載入
-  pet.value?.on({ type: "away", on: route.meta.petAway === true });
+  pet.value?.on({ type: "away", on: route.meta.petAway === true || pageAway.value > 0 });
   const g = guide(path);
   if (g && WORKSPACE.has(g.id)) pet.value?.tuckAside();
   pet.value?.setGuide(g);
 }
 watch(() => route.path, enter);
+// 頁面的某個狀態要她退場（pet/enabled 的 pageAway），路由沒變也要跟著
+watch(() => pageAway.value > 0, (away) => { pet.value?.on({ type: "away", on: route.meta.petAway === true || away }); });
 // 她是寵物，一直都在（owner 2026-10-13）：只有玩卡頁與沙盒不出現（那兩頁根本不掛這個元件），
 // 首頁面板、歡迎橫幅、新手引導在的時候也不躲。
 

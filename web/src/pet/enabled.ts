@@ -21,6 +21,13 @@ export function summonPet() {
   if (!petEnabled.value) { summonOnStart = true; petEnabled.value = true; return; }
   suki({ type: "summon" });
 }
+/**
+ * 頁面要她整頁退場，但退場的不是整條路由（那種用路由的 petAway，例如簽到頁），是頁面的某個狀態：
+ * 例如卡片頁的「這張卡片在你目前的國家／地區暫不提供」——法規限制旁邊不放她的台詞（product-copy）。
+ * 頁面掛上時加一、卸下時減一；大於零她就退場。
+ */
+export const pageAway = ref(0);
+
 /** 桌寵載入好時問一次：剛才是不是被「叫她出來」開起來的 */
 export function takeSummon() { const v = summonOnStart; summonOnStart = false; return v; }
 

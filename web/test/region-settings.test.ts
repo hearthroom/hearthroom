@@ -25,6 +25,7 @@ import { resetManagedAuthForTest } from "../src/lib/managed-auth";
 import { recallCard, rememberCard } from "../src/lib/card-memory";
 import { libraryRequest } from "../src/lib/library";
 import { ApiError } from "../src/lib/api";
+import { pageAway } from "../src/pet/enabled";
 
 /** 伺服器那一份：地區＋成人偏好。中國大陸一律回 showNsfw:false，但原本的偏好不刪 */
 const server = { region: "TW", sessionRegion: "TW", wantsNsfw: true, cardRegionBlocked: false };
@@ -199,6 +200,10 @@ describe("國家／地區", () => {
     expect(el!.textContent).not.toContain(i18n.global.t("card.notFound.title"));
     expect(el!.textContent).not.toContain("記住的成人卡");
     expect(el!.querySelector("a.btn--primary")?.getAttribute("href")).toBe("/");
+    // 桌寵在這一頁退場：她的台詞不貼在法規限制旁邊（QA RG-UI-02）；離開這一頁她就回來
+    expect(pageAway.value).toBe(1);
+    app!.unmount(); app = null;
+    expect(pageAway.value).toBe(0);
   });
 
   it("圖書館的請求被擋：錯誤碼留在錯誤上", async () => {

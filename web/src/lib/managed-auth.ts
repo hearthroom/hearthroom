@@ -67,9 +67,22 @@ export async function managedAuth():Promise<boolean>{
   })().finally(()=>{loading=undefined;});
   return loading;
 }
+/*
+ * 按下登入時的介面語言。新成員的國家／地區預設在登入後第一次讀個人資料（session）時決定，要照介面語言。
+ * 可是登入回來先落在不帶語言前綴的 /auth/callback，那一刻介面語言是照瀏覽器猜的，還沒回到原本那一頁；
+ * 所以登入前記下來，回來後的第一次 session 用它，用過就丟。
+ */
+const LOGIN_LANGUAGE='hearthroom.oauth.language';
+export function rememberLoginLanguage(){try{sessionStorage.setItem(LOGIN_LANGUAGE,String(i18n.global.locale.value));}catch{/* 存不了：照目前的介面語言 */}}
+function requestLanguage(path:string):string{
+  let saved:string|null=null;
+  try{saved=path==='session'?sessionStorage.getItem(LOGIN_LANGUAGE):null;}catch{/* 讀不到：照目前的介面語言 */}
+  return saved||String(i18n.global.locale.value);
+}
 export async function authRequest<T>(path:string,body:unknown):Promise<T>{
-  // language：目前的介面語言。新成員的國家／地區預設在第一次讀個人資料時決定，照介面語言而不是瀏覽器語言。
-  const response=await fetch('/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Hearthroom-Request':'1',language:String(i18n.global.locale.value)},body:JSON.stringify(body)});
+  // language：介面語言（登入回來的第一次 session 用按下登入時那一個，見上面）
+  const response=await fetch('/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Hearthroom-Request':'1',language:requestLanguage(path)},body:JSON.stringify(body)});
+  if(path==='session'&&response.ok){try{sessionStorage.removeItem(LOGIN_LANGUAGE);}catch{/* 下次照樣用它，結果相同 */}}
   // 先看狀態再讀內容：邊緣或部署中的 5xx 常是 HTML，先 parse 會丟 SyntaxError，被當成「授權不對」。
   if(response.status>=500||response.status===429)throw new ManagedAuthUnavailable('auth_provider_unavailable');
   const data=await response.json().catch(()=>null) as {error?:string}|null;

@@ -15,7 +15,7 @@
  * 互動登入頁——每個匿名訪客每週被帶走一次。Harbor 子單（docs/studio/tasks/2026-10-22-harbor-oauth-prompt-none.md）
  * 上線並讀回之後才打開。
  */
-import { authRequest } from "./managed-auth";
+import { authRequest, rememberLoginLanguage } from "./managed-auth";
 import { oauthBaseOf } from "./provider";
 import { currentLine, inAndroidApp } from "./route-lines";
 
@@ -71,6 +71,7 @@ export async function trySilentLogin(o: { immersive: boolean; returnTo: string; 
   if (!silentLoginAllowed(o)) return "skipped";
   if (!(await harborReachable())) return "slow";
   write(TRIED_KEY, String(Date.now()));
+  rememberLoginLanguage();
   const { url } = await authRequest<{ url: string }>("start", { provider: "harbor", silent: true, returnTo: o.returnTo, locale: o.locale });
   // 拿到授權網址才標記：start 失敗（例如伺服器端開關沒開）留下的標記會讓這個分頁之後的一般登入走錯路
   try { sessionStorage.setItem(FLOW_KEY, o.returnTo); } catch { /* 回呼頁讀不到就當一般登入的失敗處理，不會循環（已記嘗試） */ }

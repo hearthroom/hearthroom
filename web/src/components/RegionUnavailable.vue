@@ -4,22 +4,26 @@
  * 卡片頁、遊玩頁（含分享連結、舊聊天連結）收到 403 region_unavailable 時畫這一頁：不是 404、不是成人內容的門。
  * 遊玩頁走到這裡時舞台不掛、不建立對話連線。
  *
- * 產品在說話，頁面本身不放蘇綺的插圖與台詞：限制與法規的事要準確，不要可愛（product-copy）。全站的桌寵照常。
+ * 產品在說話，不讓蘇綺出場：限制與法規的事要準確，不要可愛（product-copy）。頁面不放她的插圖，
+ * 全站的桌寵也在這一頁退場（pageAway），免得她的泡泡台詞貼在法規限制旁邊。
  * 拒絕次數由伺服器的 hearthroom_country_region_operations_total 計，這裡不另外打點。
  * href：遊玩子網域沒有站內路由，回榜單要走完整網址。
  */
-import { onMounted } from "vue";
+import { onBeforeUnmount, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { pageAway } from "@/pet/enabled";
 
 defineProps<{ href?: string }>();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 onMounted(() => {
   document.title = pageTitle(t("region.unavailable.title"));
+  pageAway.value++;
 });
+onBeforeUnmount(() => { pageAway.value--; });
 </script>
 
 <template>

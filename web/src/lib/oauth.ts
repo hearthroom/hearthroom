@@ -1,4 +1,4 @@
-import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout } from './managed-auth';
+import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout, rememberLoginLanguage } from './managed-auth';
 import { safeReturnTo } from './login-return';
 import { takeSilentFlow } from './silent-login';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
@@ -89,6 +89,7 @@ export async function beginLogin(returnTo: string, options: {provider?:ProviderI
     takeSilentFlow();
     // 回呼失敗時「重新登入」要回到同一頁：伺服器那份流程失敗就沒了，這裡自己也記一份。
     sessionStorage.setItem(STORE.returnTo, safeReturnTo(returnTo));
+    rememberLoginLanguage();
     const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo),locale:String(i18n.global.locale.value)});
     location.assign(result.url);return;
   }

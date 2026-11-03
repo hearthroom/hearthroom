@@ -165,7 +165,9 @@ watch(() => route.fullPath, () => {
 }
 .srow__ic svg { width: 18px; height: 18px; stroke-width: 1.6; }
 .srow__text { display: grid; gap: 2px; min-width: 0; flex: 1; }
-.srow__label { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+/* 英文長字（Troubleshooting）在窄側欄要依音節斷（Trouble-shooting），不是剩一個字母掉到下一行；
+   沒有斷字點的語言照舊在放不下時才斷 */
+.srow__label { font-size: 15px; font-weight: 600; overflow-wrap: break-word; hyphens: auto; }
 /* 左欄窄（761 起只有 220）時副標容易剩一個字掛在下一行 */
 .srow__hint { font-size: 12.5px; color: var(--text-3); overflow-wrap: anywhere; text-wrap: pretty; }
 /* 日文提示不在詞中間斷行（コンテン／ツ）；不支援的瀏覽器照舊逐字斷 */
