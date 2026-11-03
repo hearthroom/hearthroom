@@ -13,6 +13,9 @@ import boardSource from "../src/pages/BoardPage.vue?raw";
 
 const tracked: Array<[string, Record<string, unknown>]> = [];
 vi.mock("../src/lib/track", () => ({ track: (e: string, d: Record<string, unknown>) => tracked.push([e, d]), currentSurface: () => "board", setSurface: () => {} }));
+// 首頁限時公告：預設沒有，個別案例自己放
+const notices = vi.hoisted(() => ({ list: [] as unknown[] }));
+vi.mock("../src/lib/home-announcements", async (original) => ({ ...(await original<object>()), get HOME_ANNOUNCEMENTS() { return notices.list; } }));
 
 const DAY = 86_400_000;
 const item = (slug: string, over: Partial<CampaignSummary> = {}): CampaignSummary => ({
@@ -356,4 +359,46 @@ it("discards a late pinned-post response after the homepage locale changes again
   await settle();
   expect(host.textContent).toContain("Post zh-Hans");
   expect(host.textContent).not.toContain("Post en");
+});
+
+describe("home announcement slide", () => {
+  const DAYMS = 86_400_000;
+  const notice = { id: "card-rewards", path: "/blog/creators/card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
+    posters: { "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", alt: "卡片獎勵規則：榜單前十都有積分" } } };
+  afterEach(() => { notices.list = []; });
+  const serve = (pinned: unknown[] = []) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const path = url.split("?")[0];
+    const body = path === "/v1/campaigns" ? { items: list } : path === "/v1/blog/posts" ? { total: 0, pinned, items: [] } : path === "/v1/blog/columns" ? { items: [] } : null;
+    return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404, headers: { "Content-Type": "application/json" } });
+  }));
+
+  it("puts the notice first as a picture with its words drawn in, linking to its page", async () => {
+    notices.list = [notice];
+    serve();
+    await mount();
+    const slide = slides()[0];
+    expect(slide.getAttribute("data-slide")).toBe("notice:card-rewards");
+    const img = slide.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("/announcements/card-rewards-zh-Hant.webp");
+    expect(img.getAttribute("alt")).toBe("卡片獎勵規則：榜單前十都有積分");
+    expect(slide.querySelector(".carousel__body")).toBeNull();
+    expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/creators/card-rewards");
+    slide.querySelector("a")!.click();
+    expect(tracked).toContainEqual(["cta", { detail: "carousel", subject: "notice:card-rewards" }]);
+  });
+
+  it("does not repeat the same page as a pinned post slide", async () => {
+    notices.list = [notice];
+    serve([{ id: "p9", columnSlug: "creators", slug: "card-rewards", title: "卡片獎勵規則", excerpt: "", coverUrl: null, locale: "zh-Hant", firstPublishedAt: Date.now() - DAYMS, pinned: true, readMinutes: 1, commentCount: 0, campaign: null }]);
+    await mount();
+    expect($('[data-slide="notice:card-rewards"]')).not.toBeNull();
+    expect($('[data-slide^="post:"]')).toBeNull();
+  });
+
+  it("is absent once it ends", async () => {
+    notices.list = [{ ...notice, until: Date.now() - 1 }];
+    serve();
+    await mount();
+    expect($('[data-slide^="notice:"]')).toBeNull();
+  });
 });

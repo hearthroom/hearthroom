@@ -9,6 +9,8 @@
  * 沒有蘇綺時活動卡自己撐高度，跟歡迎橫幅一樣高。
  *
  * 活動之後最多再接一張文章：置頂中、30 天內發布的最新一篇（homePost），關聯的活動已經在輪播裡就不放。
+ * 站方的限時公告（lib/home-announcements）排在最前：一張字畫在圖裡的圖、點了去說明頁，期間到了自動消失；
+ * 和它同一頁的置頂文章不再另放一張。
  *
  * 每 7 秒換一張，進度條顯示這張還剩多久。滑鼠在上面、焦點在裡面、分頁在背景時暫停，進度停住不歸零；
  * 手指碰過之後 10 秒內不自己換（正在點蘇綺的選項時不被換走），之後恢復；系統設定減少動態時不自己換。
@@ -21,6 +23,7 @@ import { LOCALES } from "@/lib/i18n";
 import type { PostCard } from "@/lib/blog";
 import type { CampaignSummary } from "@/lib/campaign";
 import { track } from "@/lib/track";
+import { activeAnnouncements, HOME_ANNOUNCEMENTS } from "@/lib/home-announcements";
 import { useLocalePath } from "@/lib/use-locale";
 
 const props = defineProps<{ hero: boolean; campaigns: boolean; tourHero?: boolean }>();
@@ -57,7 +60,8 @@ watch([locale, campaignsReady, () => props.campaigns], async () => {
     const b = await import("@/lib/blog");
     const { pinned } = await b.fetchPosts({}, 1, lang);
     const pick = b.homePost(pinned, featured.value.map((c) => c.slug), Date.now());
-    if (!pick || mine !== postSeq) return;
+    // 限時公告已經指向這一篇，就不再放一張文章卡
+    if (!pick || mine !== postSeq || notices.value.some((n) => n.path === b.postPath(pick))) return;
     // 欄目名讀不到就寫「官方」，卡片照樣出現
     const name = await b.fetchColumns()
       .then(({ items }) => b.columnName(b.allColumns(items).find((c) => c.slug === pick.columnSlug), lang, ""))
@@ -70,13 +74,16 @@ watch([locale, campaignsReady, () => props.campaigns], async () => {
 });
 const postPath = ref("");
 
+/** 限時公告：和活動同一個開關（看板以外的列表不放），活動讀不到也照樣出現 */
+const notices = computed(() => props.campaigns ? activeAnnouncements(HOME_ANNOUNCEMENTS, Date.now(), locale.value) : []);
 const slides = computed(() => {
   const m = lib.value;
-  if (!m || !props.campaigns) return [];
-  return featured.value.map((c) => {
+  const first = notices.value.map((n) => ({ slug: `notice:${n.id}`, to: n.path, phase: "open" as const, bannerUrl: null, poster: { url: n.poster.src, alt: n.poster.alt }, title: n.poster.alt, parts: [n.poster.alt], period: "" }));
+  if (!m || !props.campaigns) return first;
+  return [...first, ...featured.value.map((c) => {
     const title = m.localized(c.title, locale.value) || c.slug;
-    return { slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, poster: c.posterUrls?.[locale.value], title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
-  });
+    return { slug: c.slug, to: `/campaign/${c.slug}`, phase: c.phase, bannerUrl: c.bannerUrl, poster: c.posterUrls?.[locale.value], title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
+  })];
 });
 /**
  * 活動名兩行時在品牌名後的空格斷（「SukiSuki／創作シーズン」）：品牌名與活動名各自不換行。
@@ -189,7 +196,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
         v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i }"
         v-bind="slideAttrs(i)" :data-slide="c.slug"
       >
-        <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': !c.poster && c.bannerUrl, 'carousel__card--poster': !!c.poster }" :to="lp(`/campaign/${c.slug}`)" @click="clicked(c.slug)">
+        <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': !c.poster && c.bannerUrl, 'carousel__card--poster': !!c.poster }" :to="lp(c.to)" @click="clicked(c.slug)">
           <img v-if="c.poster || c.bannerUrl" class="carousel__img" :src="c.poster?.url || c.bannerUrl!" :alt="c.poster?.alt || ''" decoding="async" />
           <svg v-else class="carousel__mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c1.6 9.6 10.4 18.4 20 20-9.6 1.6-18.4 10.4-20 20-1.6-9.6-10.4-18.4-20-20 9.6-1.6 18.4-10.4 20-20z" /></svg>
           <span v-if="!c.poster" class="carousel__body">
