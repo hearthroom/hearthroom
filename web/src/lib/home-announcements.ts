@@ -29,11 +29,13 @@ export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
     path: "/blog/creators/card-rewards",
     from: null,
     until: 30 * DAY,
-    // 圖由美工交（字畫在圖裡）；日文、韓文的圖還沒好，那兩語先不出現
+    // 圖由美工交（字畫在圖裡），五語各一張
     posters: {
       "zh-Hant": "/announcements/card-rewards-zh-Hant.webp",
       "zh-Hans": "/announcements/card-rewards-zh-Hans.webp",
       en: "/announcements/card-rewards-en.webp",
+      ja: "/announcements/card-rewards-ja.webp",
+      ko: "/announcements/card-rewards-ko.webp",
     },
   },
 ];
