@@ -36,6 +36,10 @@ const hover = ref(0);
 const shown = computed(() => hover.value || props.score?.mine || 0);
 const max = computed(() => Math.max(1, ...(props.score?.histogram ?? [0])));
 
+function preview(e: PointerEvent, n: number) {
+  hover.value = e.pointerType === 'mouse' ? n : 0;
+}
+
 function pick(n: number) {
   if (props.busy) return;
   // Withdrawing a pre-existing score stays available regardless of play progress.
@@ -96,7 +100,7 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
           :aria-checked="score?.mine === i"
           :aria-label="$t('score.stars', { n: i })"
           :tabindex="(score?.mine ?? 1) === i ? 0 : -1"
-          @mouseenter="hover = i"
+          @pointerenter="preview($event, i)"
           @click="pick(i)"
           @keydown="onKey($event, i)"
         >

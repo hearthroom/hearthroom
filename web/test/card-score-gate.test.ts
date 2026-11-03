@@ -46,3 +46,19 @@ it('lets the page handle guest login and eligible submissions', async () => {
   expect(rate).toHaveBeenCalledWith(5);
   expect(root.querySelector('.score__progress')).toBeNull();
 });
+
+it('keeps a rejected touch rating visually unselected and reserves hover preview for a mouse', async () => {
+  const { root, rate } = await mount(progress);
+  const star = root.querySelector<HTMLButtonElement>('[data-star="2"]')!;
+  const pointer = (kind: string) => { const e = new Event('pointerenter'); Object.defineProperty(e, 'pointerType', { value: kind }); star.dispatchEvent(e); };
+  pointer('touch');
+  // Browsers also emit compatibility mouseenter after a tap.
+  star.dispatchEvent(new MouseEvent('mouseenter'));
+  star.click(); await nextTick();
+  expect(rate).not.toHaveBeenCalled();
+  expect(root.querySelectorAll('.score__star.is-on')).toHaveLength(0);
+  pointer('mouse'); await nextTick();
+  expect(root.querySelectorAll('.score__star.is-on')).toHaveLength(2);
+  pointer('touch'); await nextTick();
+  expect(root.querySelectorAll('.score__star.is-on')).toHaveLength(0);
+});

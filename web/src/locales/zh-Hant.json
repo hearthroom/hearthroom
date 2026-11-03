@@ -2011,7 +2011,7 @@
   "score.write": "寫評論",
   "score.rate": "為這張卡評分",
   "score.stars": "{n} 顆星",
-  "score.playRequired": "在這張卡聊滿 {requiredTurns} 輪就能評分（{turns}／{requiredTurns}）",
+  "score.playRequired": "在這張卡聊滿 {requiredTurns} 輪就能評分，目前 {turns}／{requiredTurns}。",
   "score.playPaidAlternative": "聊滿 {paidTurns} 輪且花費 {requiredCredits} 積分也能評分。",
   "score.playUnavailable": "暫時無法確認評分資格，請稍後再試。",
   "score.attached": "附上 {n} 顆星",
