@@ -1,4 +1,4 @@
-import {countryRegionDefaults} from './country-region';
+import {countryRegionDefaults,initializeCountryRegion} from './country-region';
 import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { Hono, type Context } from 'hono';
 import type { Pending } from './analytics';
@@ -35,7 +35,7 @@ type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:numb
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};
 type Credential={provider:ProviderId;external_id:string;generation:string;payload:string;state:string;expires_at:number;refresh_started:number|null;updated_at:number};
-type Flow={verifier:string;clientId:string;redirectUri:string;returnTo:string;silent?:boolean;linkFrom?:ProviderId;pair?:Pair;externalId?:number;resultSession?:string};
+type Flow={verifier:string;clientId:string;redirectUri:string;returnTo:string;locale?:string;silent?:boolean;linkFrom?:ProviderId;pair?:Pair;externalId?:number;resultSession?:string};
 const SILENT_ERRORS=new Set(['login_required','consent_required','interaction_required','account_selection_required']);
 const bytes=(s:string)=>new TextEncoder().encode(s);
 const base64=(a:Uint8Array)=>btoa(String.fromCharCode(...a));
@@ -441,12 +441,13 @@ accountAuthRoutes.post('/v1/auth/start',async c=>{
   if(body.silent===true&&c.env.AUTH_SILENT_ENABLED!=='true')throw new HttpError(503,'auth_silent_not_enabled');
   const browser=random(),state=random(),stateHash=await hash(state),verifier=random();
   const clientId=await registeredClient(c,provider,origin),redirectUri=origin+'/auth/callback';
-  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo),...(body.silent===true?{silent:true}:{})};
+  // Keep the chosen UI language across the provider redirect and callback.
+  const locale=typeof body.locale==='string'&&/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(body.locale)?body.locale:'';
+  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo),...(locale?{locale}:{}),...(body.silent===true?{silent:true}:{})};
   await c.env.DB.prepare('INSERT INTO account_auth_attempts VALUES(?,?,?,?,?,?,?,?)').bind(stateHash,await hash(browser),origin,provider,null,await sealAuth(c.env,'attempt:'+stateHash,flow),'code',Date.now()+ATTEMPT_TTL).run();
   writeCookie(c,FLOW,browser,ATTEMPT_TTL/1000);
   const url=new URL(apiBaseOf(c.env,provider)+'/oauth/authorize');
   // 玩家在這裡用的介面語言：Harbor 的登入／同意頁用它，也記成成員的語言。只收像語言標籤的值。
-  const locale=typeof body.locale==='string'&&/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(body.locale)?body.locale:'';
   url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopeFor(c.env,provider)?{scope:scopeFor(c.env,provider)}:{}),...(locale?{ui_locales:locale}:{})}).toString();
   if(flow.silent)url.searchParams.set('prompt','none');
   return c.json({url:url.toString()});
@@ -493,6 +494,10 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
       return c.json({silent:true,authenticated:false,error:'consent_required',returnTo:flow.returnTo});
     }
     const member=await resolveMember(c.env.DB,a.provider,me.accountNumId,Date.now(),me);
+    // Persist before releasing the bearer token: callback requests may race the
+    // first profile/session read, and their browser language is not the UI choice.
+    const defaults=countryRegionDefaults(c.req);
+    await initializeCountryRegion(c.env.DB,member,defaults.country,flow.locale||defaults.locale);
     const raw=random(),sessionHash=await hash(raw),old=getCookie(c,SESSION);
     const statements=await credentialStatements(c.env,a.provider,me.accountNumId,pair,{attempt:a,phase:'exchanging'});
     if(me.accountClass==='test')statements.push(c.env.DB.prepare('INSERT INTO qa_session_generation(token_hash,test_generation) VALUES(?,?)').bind(sessionHash,me.testGeneration));

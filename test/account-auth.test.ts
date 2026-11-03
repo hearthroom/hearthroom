@@ -71,6 +71,7 @@ function providers(){
     const url=String(input);
     if(url.endsWith('/oauth/register'))return Response.json({client_id:url.includes('harperharbor')?'harbor-client':'luna-client'});
     if(url.endsWith('/oauth/revoke'))return new Response('',{status:200});
+    if(url.endsWith('/open/v1/me/referral'))return Response.json({registeredAt:new Date().toISOString()});
     if(url.endsWith('/oauth/token')){
       const body=new URLSearchParams(String(init?.body)),id=Number(body.get('code')||'22');
       const accessToken=`test-access-${++serial}`;identity.set(accessToken,id);
@@ -578,11 +579,58 @@ it('a stale-consent guest credential is not carried; signing in without one chan
 });
 it('returns the persisted region on the first managed session after OAuth completion',async()=>{
  providers();await login('harbor',22);
- expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBeNull();
+ expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe('TW');
  const response=await request('session',{provider:'harbor',token:true},{language:'zh-Hant','Accept-Language':'en','CF-IPCountry':'CN'});
  expect(response.status).toBe(200);
  expect((await response.json() as any).profile.countryRegion).toBe('TW');
  expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe('TW');
  const later=await request('session',{provider:'harbor'},{language:'ja','CF-IPCountry':'JP'});
  expect((await later.json() as any).profile.countryRegion).toBe('TW');
+});
+
+it.each([
+ ['en','zh-Hant','CN','OTHER'],['zh-Hant','en','CN','TW'],
+ ['en','zh-Hant','JP','JP'],['zh-Hant','en','US','US'],
+])('persists login UI %s despite browser %s in %s as %s before bearer analytics can initialize the region',async(locale,browserLanguage,country,expected)=>{
+ providers();envOverride.GA4_ENABLED='true';
+ const start=await request('start',{provider:'harbor',returnTo:'/me',locale},{language:locale,'CF-IPCountry':'CN'});
+ expect(start.status).toBe(200);
+ const url=new URL((await start.json() as any).url);
+ const completed=await request('complete',{code:'22',state:url.searchParams.get('state')},{language:browserLanguage,'Accept-Language':browserLanguage,'CF-IPCountry':country});
+ expect(completed.status).toBe(200);
+ const pair=(await completed.json() as any).token;
+ expect.soft((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe(expected);
+ // The callback starts profile loading without awaiting it. Exercise the allowed
+ // schedule where signup reaches requireMember before the first session read.
+ const analytics=await worker.fetch(new Request(origin+'/v1/analytics/signup',{
+  method:'POST',headers:{Origin:origin,'X-Hearthroom-Request':'1',Authorization:`Bearer ${pair.accessToken}`,'Accept-Language':browserLanguage,'CF-IPCountry':'CN'},
+ }),authEnv(),context);
+ expect(analytics.status).toBe(200);
+ expect.soft((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe(expected);
+ const session=await request('session',{provider:'harbor'},{language:locale,'CF-IPCountry':'CN'});
+ expect(session.status).toBe(200);
+ expect.soft((await session.json() as any).profile.countryRegion).toBe(expected);
+});
+
+it.each([undefined,'not_a_locale'])('keeps pending or unlocalized auth flows compatible when start locale is %s',async(locale)=>{
+ providers();
+ const start=await request('start',{provider:'harbor',locale});
+ const url=new URL((await start.json() as any).url);
+ const completed=await request('complete',{code:'22',state:url.searchParams.get('state')},{language:'en','Accept-Language':'zh-Hant','CF-IPCountry':'CN'});
+ expect(completed.status).toBe(200);
+ expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe('OTHER');
+});
+
+it('never replaces a manually chosen CN region when completing another login flow',async()=>{
+ providers();await login('harbor',22);
+ await env.DB.prepare("UPDATE members SET country_region='CN'").run();
+ const start=await request('start',{provider:'harbor',locale:'en'});
+ const url=new URL((await start.json() as any).url);
+ const completed=await request('complete',{code:'22',state:url.searchParams.get('state')},{language:'ja','CF-IPCountry':'JP'});
+ expect(completed.status).toBe(200);
+ expect((await env.DB.prepare('SELECT country_region FROM members').first())?.country_region).toBe('CN');
+ const response=await request('session',{provider:'harbor'},{language:'en','CF-IPCountry':'CN'});
+ expect((await response.json() as any).profile.countryRegion).toBe('CN');
+ const metrics=await(await worker.fetch(new Request(origin+'/metrics'),authEnv(),context)).text();
+ expect(metrics).toContain('hearthroom_country_region_operations_total{operation="initialize",outcome="success"} 1');
 });
