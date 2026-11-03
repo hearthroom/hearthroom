@@ -1,7 +1,7 @@
 import { nextTick } from "vue";
 import { boardScrollPosition } from "./lib/board-memory";
 import { preloadStage } from "./lib/stage-preload";
-import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
+import { createRouter, createWebHistory, type LocationQuery, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
 import { signedInHint } from "./lib/signin-hint";
@@ -185,9 +185,18 @@ export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormal
   if (saved && to.meta.board) return nextTick().then(() => new Promise<{ left: number; top: number }>(resolve => requestAnimationFrame(() => resolve(boardScrollPosition(saved)))));
   if (saved) return saved;
   if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
+  // 首頁只換類型（窄螢幕的類型浮層、寬螢幕的類型列）不動：浮層開著連點好幾個，每點一下都捲回頂端就得再滑下來（owner 2026-11-03）。
+  // 換排序、換榜照舊回頂端；換類型時一併清掉的 offset／cursor 不算別的改動
+  if (to.meta.board && to.path === from.path && onlyTagsChanged(to.query, from.query)) return false;
   // 桌機在設定裡換區只換右邊的面板，左邊列表與捲動位置不動；手機是換一整頁，照常回頂端。帶 # 的由設定頁自己捲到那一張卡
   if (to.meta.settings && from.meta.settings && settingsTwoColumns()) return false;
   return { top: 0 };
+}
+
+function onlyTagsChanged(to: LocationQuery, from: LocationQuery): boolean {
+  const same = (k: string) => JSON.stringify(to[k] ?? null) === JSON.stringify(from[k] ?? null);
+  const keys = new Set([...Object.keys(to), ...Object.keys(from)].filter(k => k !== "offset" && k !== "cursor"));
+  return !same("tag") && [...keys].every(k => k === "tag" || same(k));
 }
 
 const isLocaleCode = (v: unknown): v is string => typeof v === "string" && LOCALE_CODES.includes(v);

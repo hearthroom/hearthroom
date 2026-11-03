@@ -50,3 +50,18 @@ it('restores the clicked card after capture-phase decoration makes its href abso
   try { expect(await scrollFor(at('/', {}, { board: true }), at('/cards/1'), { left: 0, top: 480 })).toEqual({ left: 0, top: 820 }); }
   finally { list.remove(); prepareBoardScroll(null); }
 });
+
+it('keeps the board where it is when only the chosen types change (phone type panel, desktop type row)', async () => {
+  const { router } = await import('../src/router');
+  for (const prefix of ['', '/en']) {
+    const home = prefix || '/';
+    expect(scrollFor(router.resolve({ path: home, query: { tag: 'romance' } }), router.resolve(home), null), prefix).toBe(false);
+    expect(scrollFor(router.resolve({ path: home, query: { tag: ['romance', 'fantasy'], sort: 'week' } }), router.resolve({ path: home, query: { tag: 'romance', sort: 'week', offset: '24' } }), null), prefix).toBe(false);
+    expect(scrollFor(router.resolve(home), router.resolve({ path: home, query: { tag: 'romance' } }), null), prefix).toBe(false);
+    // 換排序、換分級、只換頁、從別頁帶著類型進首頁，仍照舊回頂端
+    expect(scrollFor(router.resolve({ path: home, query: { sort: 'week' } }), router.resolve(home), null), prefix).toEqual({ top: 0 });
+    expect(scrollFor(router.resolve({ path: home, query: { tag: 'romance', rating: 'pg' } }), router.resolve({ path: home, query: { tag: 'romance' } }), null), prefix).toEqual({ top: 0 });
+    expect(scrollFor(router.resolve({ path: home, query: { tag: 'romance', offset: '24' } }), router.resolve({ path: home, query: { tag: 'romance' } }), null), prefix).toEqual({ top: 0 });
+    expect(scrollFor(router.resolve({ path: home, query: { tag: 'romance' } }), router.resolve(`${prefix}/cards/1`), null), prefix).toEqual({ top: 0 });
+  }
+});

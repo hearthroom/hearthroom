@@ -3,9 +3,9 @@
  *   - 「角色卡／關注動態」那顆分段控制拿掉，「關注」併到排序列：它是看另一個榜，不是換排法，
  *     選中時其他分頁全部不亮、類型列與張數不畫（順序見 BoardPage 的 TABS，2026-11-03 起「關注」在第六位）；
  *   - R18 開關搬到頁首（App.vue），榜單頁自己不再畫；
- *   - 類型列在窄螢幕不再橫滑，改收合：預設兩行，右上「全部 N 類」展開、「收合」收回；
- *     有選中的類型時自動展開（看得到自己開了什麼篩選、關得掉）；「已隱藏 N 類」放標題列，收合時也看得到。
- *     寬螢幕照舊全部攤開，沒有展開鈕。
+ *   - 類型列在窄螢幕收成一顆「類型」鈕，跟分級選單同一列；點開浮層列出全部分類（站方 2026-11-02，owner 2026-11-03）。
+ *     選中的類型攤在鈕旁邊、點一下就拿掉（看得到自己開了什麼篩選、關得掉）；浮層 Esc 或點外面收，焦點回鈕。
+ *     寬螢幕照舊全部攤開，沒有這顆鈕。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
@@ -45,7 +45,6 @@ const button = (label: string) => buttons().find((x) => x.textContent?.trim() ==
 const sortButtons = () => [...root.querySelectorAll<HTMLButtonElement>(".sorts__item")];
 const modeButton = () => sortButtons().find((b) => b.textContent?.trim() === i18n.global.t("board.mode.following"));
 const tagsNav = () => root.querySelector<HTMLElement>(".discovery-tags");
-const expander = () => root.querySelector<HTMLButtonElement>(".discovery-tags__toggle");
 
 beforeEach(() => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: narrow && /max-width/.test(query), media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
@@ -91,14 +90,85 @@ describe("首頁：關注併進排序列", () => {
   });
 });
 
-describe("首頁：四組直接橫捲", () => {
- it("四組預設顯示，沒有更多或展開控制",async()=>{
-  await mount("/");expect(expander()).toBeNull();expect(tagsNav()?.classList.contains('discovery-tags--browse')).toBe(true);
-  expect(root.querySelectorAll('[data-group]')).toHaveLength(4);expect(root.querySelectorAll('.discovery-tags__chips')).toHaveLength(4);
- });
- it("清除選擇不收合，隱藏入口一直可達",async()=>{
-  await mount('/?tag=hypnosis',['loli','ntr']);expect(button('催眠')?.getAttribute('aria-pressed')).toBe('true');
-  expect(root.querySelectorAll('a[href$="#hidden"]')).toHaveLength(1);expect(button('蘿莉')).toBeUndefined();
-  button('清除類型')!.click();await settle();expect(router.currentRoute.value.query.tag).toBeUndefined();expect(expander()).toBeNull();
- });
+describe("首頁窄螢幕：類型收成一顆鈕＋浮層", () => {
+  const opener = () => root.querySelector<HTMLButtonElement>(".discovery-tags__button");
+  const panel = () => root.querySelector<HTMLElement>(".discovery-tags__panel");
+  const picked = () => [...root.querySelectorAll<HTMLButtonElement>(".discovery-tags__picked")];
+
+  it("不畫四組，只有一顆類型鈕，放在分級那一列；點開才列出四組", async () => {
+    await mount("/");
+    expect(root.querySelectorAll("[data-group]")).toHaveLength(0);
+    expect(opener()?.textContent?.trim()).toBe(i18n.global.t("board.tags"));
+    expect(opener()?.closest(".count-row")?.querySelector(".rating-filter select")).not.toBeNull();
+    expect(opener()?.getAttribute("aria-expanded")).toBe("false");
+    // 新手引導框的是 nav.discovery-tags：窄螢幕也要在
+    expect(tagsNav()?.contains(opener()!)).toBe(true);
+    opener()!.click(); await settle();
+    expect(opener()?.getAttribute("aria-expanded")).toBe("true");
+    expect([...panel()!.querySelectorAll("[data-group]")].map((x) => x.getAttribute("data-group"))).toEqual(["play", "setting", "character", "kink"]);
+    expect(panel()!.querySelectorAll(".tagchip[aria-pressed]").length).toBe(TAG_CATALOG.length);
+  });
+
+  it("在浮層裡選類型：浮層不收、可以連選；選中的籤攤在鈕旁邊，點一下就拿掉", async () => {
+    await mount("/");
+    opener()!.click(); await settle();
+    button("催眠")!.click(); await settle();
+    expect(router.currentRoute.value.query.tag).toEqual(["hypnosis"]);
+    expect(panel()).not.toBeNull();
+    button("武俠")!.click(); await settle();
+    expect(router.currentRoute.value.query.tag).toEqual(["hypnosis", "wuxia"]);
+    expect(opener()?.classList.contains("is-on")).toBe(true);
+    expect(picked().map((b) => b.querySelector(".tagchip__label")?.textContent)).toEqual(["催眠", "武俠"]);
+    expect(picked()[0]?.getAttribute("aria-label")).toBe(i18n.global.t("board.tags.remove", { name: "催眠" }));
+    picked()[0]!.click(); await settle();
+    expect(router.currentRoute.value.query.tag).toEqual(["wuxia"]);
+  });
+
+  it("浮層開著時選類型，榜單照樣載新的第一頁（浮層不算會擋住載卡的頁首選單）", async () => {
+    // 測試環境的元素預設沒有版面；給每個元素一個框，載卡的閘門才會把畫著的浮層當成「看得見」
+    const rects = vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+    try {
+      await mount("/");
+      opener()!.click(); await settle();
+      vi.mocked(api.fetchBoard).mockClear();
+      button("催眠")!.click(); await settle();
+      expect(panel()).not.toBeNull();
+      expect(vi.mocked(api.fetchBoard)).toHaveBeenCalledWith(expect.objectContaining({ tag: ["hypnosis"] }));
+    } finally { rects.mockRestore(); }
+  });
+
+  it("網址帶著類型進來：浮層沒開也看得到選了什麼", async () => {
+    await mount("/?tag=hypnosis&tag=roleplay");
+    expect(panel()).toBeNull();
+    expect(picked().map((b) => b.querySelector(".tagchip__label")?.textContent)).toEqual(["催眠", "角色扮演"]);
+  });
+
+  it("Esc 收浮層、焦點回鈕；點浮層外面也收", async () => {
+    await mount("/");
+    opener()!.click(); await settle();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); await settle();
+    expect(panel()).toBeNull();
+    expect(document.activeElement).toBe(opener());
+    opener()!.click(); await settle();
+    expect(panel()).not.toBeNull();
+    sortButtons()[0]!.click(); await settle();
+    expect(panel()).toBeNull();
+  });
+
+  it("清除類型與已隱藏的入口在浮層裡", async () => {
+    await mount("/?tag=hypnosis", ["loli", "ntr"]);
+    opener()!.click(); await settle();
+    expect(panel()!.querySelectorAll('a[href$="#hidden"]')).toHaveLength(1);
+    expect(button("蘿莉")).toBeUndefined();
+    panel()!.querySelector<HTMLButtonElement>(".discovery-tags__clear")!.click(); await settle();
+    expect(router.currentRoute.value.query.tag).toBeUndefined();
+    expect(picked()).toHaveLength(0);
+  });
+
+  it("寬螢幕沒有這顆鈕，四組直接攤開", async () => {
+    narrow = false;
+    await mount("/");
+    expect(opener()).toBeNull();
+    expect(root.querySelectorAll("[data-group]")).toHaveLength(4);
+  });
 });

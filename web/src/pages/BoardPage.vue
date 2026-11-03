@@ -25,6 +25,7 @@ import NewcomerStrip from "@/components/checkin/NewcomerStrip.vue";
 import NewcomerNudge from "@/components/checkin/NewcomerNudge.vue";
 import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
+import { useMediaQuery } from "@/lib/use-media";
 import { useSession } from "@/lib/session";
 import { currentStep } from "@/lib/newcomer-tour";
 import { guestAdult, viewerAdult } from "@/lib/adult-consent";
@@ -79,6 +80,8 @@ const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "updated", "random"
 const TABS: Array<Sort | "following"> = ["day", "week", "month", "hot", "new", "following", "updated", "random"];
 const restoring = ref(false);
 const wide = ref(window.innerWidth >= 1080);
+/** 窄螢幕的類型列收成一顆鈕，跟分級選單排在同一列（見 DiscoveryTags 的 popover） */
+const narrow = useMediaQuery("(max-width: 640px)");
 const sentinel = ref<HTMLElement | null>(null);
 let mounted = false;
 function canLoad() {
@@ -342,20 +345,25 @@ const ratingOptions = computed(() => {
       </template>
     </div>
 
-    <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
-    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" :counts="tagCounts" browse @change="navigate({ tag: $event.length ? $event : undefined })" />
-
+    <!--
+      類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕組名一欄、籤一欄全部攤開；
+      窄螢幕收成一顆「類型」鈕放進分級那一列，點開浮層才看全部（站方 2026-11-02）：不另佔一行，首屏多露出卡片。
+    -->
+    <DiscoveryTags v-if="mode === 'cards' && !narrow" :selected="tags" :hidden="hidden" :counts="tagCounts" browse @change="navigate({ tag: $event.length ? $event : undefined })" />
 
     <template v-if="mode === 'cards'">
-      <div class="count-row">
-        <p class="subtle count">{{ sort !== 'day' && page && page.total !== null ? $t("board.count", { n: page.total }) : "" }}</p>
-        <label class="rating-filter">
-          <span class="sr-only">{{ $t("board.rating.label") }}</span>
-          <select :value="maxRating ?? ''" @change="navigate({ rating: ($event.target as HTMLSelectElement).value || undefined })">
-            <option value="">{{ $t("board.rating.all") }}</option>
-            <option v-for="o in ratingOptions" :key="o.value" :value="o.value" :disabled="o.n === 0 && maxRating !== o.value">{{ o.label }}{{ o.n === null ? "" : ` (${o.n})` }}</option>
-          </select>
-        </label>
+      <div class="count-row" :class="{ 'count-row--tags': narrow }">
+        <DiscoveryTags v-if="narrow" :selected="tags" :hidden="hidden" :counts="tagCounts" popover @change="navigate({ tag: $event.length ? $event : undefined })" />
+        <div class="count-row__end">
+          <p class="subtle count">{{ sort !== 'day' && page && page.total !== null ? $t("board.count", { n: page.total }) : "" }}</p>
+          <label class="rating-filter">
+            <span class="sr-only">{{ $t("board.rating.label") }}</span>
+            <select :value="maxRating ?? ''" @change="navigate({ rating: ($event.target as HTMLSelectElement).value || undefined })">
+              <option value="">{{ $t("board.rating.all") }}</option>
+              <option v-for="o in ratingOptions" :key="o.value" :value="o.value" :disabled="o.n === 0 && maxRating !== o.value">{{ o.label }}{{ o.n === null ? "" : ` (${o.n})` }}</option>
+            </select>
+          </label>
+        </div>
       </div>
       <CardGrid
         v-if="page?.items.length || starterCard || (loading && !page)"
@@ -429,6 +437,15 @@ const ratingOptions = computed(() => {
 
 .count { margin: 0; font-variant-numeric: tabular-nums; }
 .count-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
+/*
+  窄螢幕：類型鈕（與選中的籤）在左、張數與分級在右；類型浮層錨在這一列，跟整列一樣寬。
+  選中的籤一行排不下時，張數與分級一起換到下一行靠右（張數與分級包成一組：分開換行會把分級單獨甩到下一行最左邊），籤自己橫排，不擠成一顆一行。
+  寬螢幕那一組 display: contents，版面跟以前一樣：張數在左、分級在右。
+*/
+.count-row--tags { position: relative; flex-wrap: wrap; gap: var(--s-2); }
+.count-row__end { display: contents; }
+.count-row--tags .count-row__end { display: flex; align-items: center; gap: var(--s-3); margin-inline-start: auto; }
+.count-row--tags .count:empty { display: none; }
 .rating-filter select {
   height: var(--h-sm); padding: 0 var(--s-6) 0 var(--s-3); border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--surface); color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer;

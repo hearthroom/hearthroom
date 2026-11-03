@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "手機首頁的類型收進一顆「類型」鈕，點開就看得到全部分類。",
+    "zh-Hans": "手机首页的类型收进一个「类型」按钮，点开就能看到全部分类。",
+    "en": "On phones, the homepage types now sit behind one Type button that opens the full list.",
+    "ja": "スマホのトップでは、タイプが「タイプ」ボタンにまとまり、タップすると全部表示されます。",
+    "ko": "휴대폰 첫 화면의 유형이 '유형' 버튼 하나로 정리되어, 누르면 전체 유형이 보여요."
+  },
+  "body": {
+    "zh-Hant": "電腦版的類型列也排整齊了，組名在左、類型在右。",
+    "zh-Hans": "电脑版的类型栏也排整齐了，分组名在左、类型在右。",
+    "en": "On larger screens the type list is aligned, with group names in their own column.",
+    "ja": "パソコンではタイプ一覧が整列し、グループ名が左の列にそろいます。",
+    "ko": "컴퓨터에서는 유형 목록이 그룹 이름은 왼쪽, 유형은 오른쪽으로 가지런히 정렬돼요."
+  }
+}
