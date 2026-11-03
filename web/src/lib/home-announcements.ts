@@ -10,32 +10,31 @@
  */
 export interface HomeAnnouncement {
   id: string;
-  /** 點了去哪裡（站內路徑，不帶語言前綴） */
-  path: string;
   /** 開始與結束（毫秒，結束不含）；開始是 null 時不出現——上線日定了再填 */
   from: number | null;
   until: number;
-  /** 每語一張圖（public 底下的路徑）；圖上的字給讀屏的版本在語系檔 announcement.<id>.alt */
-  posters: Partial<Record<string, string>>;
+  /**
+   * 每語一張圖（public 底下的路徑）與點了去的頁（站內路徑，不帶語言前綴，連結由 lp() 補）；
+   * 各語言的文章代稱不同（翻譯版帶語言後綴），所以頁也是每語各一個。圖上的字給讀屏的版本在語系檔 announcement.<id>.alt
+   */
+  posters: Partial<Record<string, { src: string; path: string }>>;
 }
 export interface ActiveAnnouncement { id: string; path: string; src: string }
-
-const DAY = 86_400_000;
 
 export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
   {
     // 卡片獎勵規則（返點＋榜單獎勵＋榜單徽章），掛一個月（owner 2026-11-03）
     id: "card-rewards",
-    path: "/blog/rewards/card-rewards",
-    from: null,
-    until: 30 * DAY,
-    // 圖由美工交（字畫在圖裡），五語各一張
+    // 說明頁 2026-11-03 發布；台北 11-03 00:00 起掛一個月，到 12-03 00:00 自動下架
+    from: Date.UTC(2026, 10, 2, 16),
+    until: Date.UTC(2026, 11, 2, 16),
+    // 圖由美工交（字畫在圖裡），五語各一張；頁是各語言自己的那一篇
     posters: {
-      "zh-Hant": "/announcements/card-rewards-zh-Hant.webp",
-      "zh-Hans": "/announcements/card-rewards-zh-Hans.webp",
-      en: "/announcements/card-rewards-en.webp",
-      ja: "/announcements/card-rewards-ja.webp",
-      ko: "/announcements/card-rewards-ko.webp",
+      "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", path: "/blog/rewards/card-rewards" },
+      "zh-Hans": { src: "/announcements/card-rewards-zh-Hans.webp", path: "/blog/rewards/card-rewards-zh-hans" },
+      en: { src: "/announcements/card-rewards-en.webp", path: "/blog/rewards/card-rewards-en" },
+      ja: { src: "/announcements/card-rewards-ja.webp", path: "/blog/rewards/card-rewards-ja" },
+      ko: { src: "/announcements/card-rewards-ko.webp", path: "/blog/rewards/card-rewards-ko" },
     },
   },
 ];
@@ -43,8 +42,8 @@ export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
 /** 現在這個語言看得到的公告，照清單順序。 */
 export function activeAnnouncements(list: readonly HomeAnnouncement[], now: number, locale: string): ActiveAnnouncement[] {
   return list.flatMap((a) => {
-    const src = a.posters[locale];
-    if (a.from === null || now < a.from || now >= a.until || !src) return [];
-    return [{ id: a.id, path: a.path, src }];
+    const poster = a.posters[locale];
+    if (a.from === null || now < a.from || now >= a.until || !poster) return [];
+    return [{ id: a.id, path: poster.path, src: poster.src }];
   });
 }

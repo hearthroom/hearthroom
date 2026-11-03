@@ -7,8 +7,11 @@ import { activeAnnouncements, type HomeAnnouncement } from "../src/lib/home-anno
 
 const DAY = 86_400_000;
 const notice = (over: Partial<HomeAnnouncement> = {}): HomeAnnouncement => ({
-  id: "card-rewards", path: "/blog/rewards/card-rewards", from: 10 * DAY, until: 40 * DAY,
-  posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" },
+  id: "card-rewards", from: 10 * DAY, until: 40 * DAY,
+  posters: {
+    "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", path: "/blog/rewards/card-rewards" },
+    en: { src: "/announcements/card-rewards-en.webp", path: "/blog/rewards/card-rewards-en" },
+  },
   ...over,
 });
 
@@ -21,12 +24,15 @@ describe("activeAnnouncements", () => {
   });
 
   it("skips languages that have no image of their own", () => {
-    expect(activeAnnouncements([notice()], 20 * DAY, "en")).toEqual([]);
+    expect(activeAnnouncements([notice()], 20 * DAY, "ko")).toEqual([]);
   });
 
-  it("hands back the image and where it leads", () => {
+  it("hands back each language's own image and its own page", () => {
     expect(activeAnnouncements([notice()], 20 * DAY, "zh-Hant")).toEqual([
       { id: "card-rewards", path: "/blog/rewards/card-rewards", src: "/announcements/card-rewards-zh-Hant.webp" },
+    ]);
+    expect(activeAnnouncements([notice()], 20 * DAY, "en")).toEqual([
+      { id: "card-rewards", path: "/blog/rewards/card-rewards-en", src: "/announcements/card-rewards-en.webp" },
     ]);
   });
 
@@ -38,8 +44,10 @@ describe("activeAnnouncements", () => {
 import { HOME_ANNOUNCEMENTS } from "../src/lib/home-announcements";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-it("has words for screen readers and a picture file for every language it runs in", () => {
-  for (const a of HOME_ANNOUNCEMENTS) for (const [locale, src] of Object.entries(a.posters)) {
+it("has words for screen readers, a picture file and a page for every language it runs in", () => {
+  for (const a of HOME_ANNOUNCEMENTS) for (const [locale, { src, path }] of Object.entries(a.posters) as [string, { src: string; path: string }][]) {
+    // 站內路徑不帶語言前綴（連結會由 lp() 補上），文章頁的路徑是 /blog/<欄目>/<代稱>
+    expect(path, `${a.id} ${locale}`).toMatch(/^\/blog\/[a-z0-9-]+\/[a-z0-9-]+$/);
     const words = JSON.parse(readFileSync(join(process.cwd(), "src/locales", `${locale}.json`), "utf8"))[`announcement.${a.id}.alt`];
     expect(words, `${a.id} ${locale}`).toBeTruthy();
     expect(() => readFileSync(join(process.cwd(), "public", src)), src).not.toThrow();

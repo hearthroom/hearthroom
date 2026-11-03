@@ -363,8 +363,8 @@ it("discards a late pinned-post response after the homepage locale changes again
 
 describe("home announcement slide", () => {
   const DAYMS = 86_400_000;
-  const notice = { id: "card-rewards", path: "/blog/rewards/card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
-    posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" } };
+  const notice = { id: "card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
+    posters: { "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", path: "/blog/rewards/card-rewards" } } };
   afterEach(() => { notices.list = []; });
   const serve = (pinned: unknown[] = []) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const path = url.split("?")[0];
