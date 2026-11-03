@@ -33,7 +33,7 @@ async function mount(path: string) {
 }
 const chip = (label: string) => [...root.querySelectorAll<HTMLButtonElement>(".tagchip")].find((b) => b.querySelector(".tagchip__label")?.textContent?.trim() === label);
 const visible = (el: HTMLElement | null | undefined) => !!el && !el.closest("[data-group]")?.hasAttribute("hidden") && (el.closest("[data-group]") as HTMLElement | null)?.style.display !== "none";
-const groupLabel = (g: string) => root.querySelector(`[data-group="${g}"] .discovery-tags__group`)?.textContent?.trim();
+const groupLabel = (g: string) => root.querySelector(`[data-group-label="${g}"]`)?.textContent?.trim();
 const more = () => root.querySelector<HTMLButtonElement>(".discovery-tags__more");
 
 beforeEach(() => {
@@ -47,6 +47,14 @@ describe("類型列分組", () => {
     expect(groupLabel("play")).toBe(i18n.global.t("board.tagGroup.play"));
     for (const label of ["角色扮演", "武俠", "御姐", "催眠"]) expect(visible(chip(label))).toBe(true);
     expect(more()).toBeNull();
+  });
+
+  it("組名與籤分成兩欄：組名不在籤的換行流裡，四組的籤從同一欄開始（站方 2026-11-02：標題和按鈕混在一起）", async () => {
+    await mount("/");
+    const inner = root.querySelector<HTMLElement>(".discovery-tags__inner")!;
+    const cells = [...inner.children].map((x) => x.getAttribute("data-group-label") ? `label:${x.getAttribute("data-group-label")}` : `chips:${x.getAttribute("data-group")}`);
+    expect(cells).toEqual(["label:play", "chips:play", "label:setting", "chips:setting", "label:character", "chips:character", "label:kink", "chips:kink"]);
+    expect(inner.querySelector("[data-group] .discovery-tags__group")).toBeNull();
   });
 
   it("沒選類型時不畫一顆點不動的「全部」；選了才在籤尾出現「清除類型」，點了清空", async () => {
