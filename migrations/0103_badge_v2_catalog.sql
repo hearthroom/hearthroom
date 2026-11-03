@@ -29,12 +29,16 @@ INSERT INTO community_badge_definitions(key,icon,category,titles,descriptions,cr
 ('spend_3','spend-3','spend','{"zh-Hant":"璀璨","zh-Hans":"璀璨","en":"Radiance","ja":"きらめき","ko":"찬란함"}','{"zh-Hant":"累積儲值達 200 美元，且累積使用 1,200,000 積分。","zh-Hans":"累计充值达 200 美元，且累计使用 1,200,000 积分。","en":"Top up a total of US$200 and use a total of 1,200,000 credits.","ja":"累計チャージ額が US$200 に達し、累計 1,200,000 ポイントを使用する。","ko":"누적 충전 US$200 이상, 누적 포인트 1,200,000 이상 사용하면 획득해요."}',0,NULL,NULL,226),
 ('spend_4','spend-4','spend','{"zh-Hant":"星輝","zh-Hans":"星辉","en":"Starlight","ja":"星の輝き","ko":"별빛"}','{"zh-Hant":"累積儲值達 1,000 美元，且累積使用 6,000,000 積分。","zh-Hans":"累计充值达 1,000 美元，且累计使用 6,000,000 积分。","en":"Top up a total of US$1,000 and use a total of 6,000,000 credits.","ja":"累計チャージ額が US$1,000 に達し、累計 6,000,000 ポイントを使用する。","ko":"누적 충전 US$1,000 이상, 누적 포인트 6,000,000 이상 사용하면 획득해요."}',0,NULL,NULL,227);
 -- Existing founders become the veteran matching the member's actual registration instant.
+-- Retired accounts (legacy_account_fence) are skipped: their write triggers RAISE(ABORT), which
+-- INSERT OR IGNORE does not absorb, and a retired account earns nothing (production 2026-11-03).
 INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at)
  SELECT id,CASE WHEN created_at<1792166400000 THEN 'beta_veteran' ELSE 'opening_veteran' END,'veteran-v2',created_at
- FROM members WHERE created_at<1794931200000;
+ FROM members WHERE created_at<1794931200000
+  AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=members.id);
 UPDATE community_preferences SET featured_badges=(SELECT json_group_array(CASE WHEN j.value='member_founder' THEN CASE WHEN m.created_at<1792166400000 THEN 'beta_veteran' ELSE 'opening_veteran' END ELSE j.value END)
  FROM json_each(community_preferences.featured_badges) j JOIN members m ON m.id=community_preferences.member_id
  WHERE j.value<>'member_founder' OR m.created_at<1794931200000)
- WHERE featured_badges IS NOT NULL AND EXISTS(SELECT 1 FROM json_each(featured_badges) WHERE value='member_founder');
+ WHERE featured_badges IS NOT NULL AND EXISTS(SELECT 1 FROM json_each(featured_badges) WHERE value='member_founder')
+  AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=community_preferences.member_id);
 DELETE FROM community_awards WHERE badge='member_founder';
 DELETE FROM community_badge_definitions WHERE key='member_founder';
