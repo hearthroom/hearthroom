@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 卡片頁的榜單榮譽：標籤列最前面一顆 chip，和 #標籤 同高——小徽章＋這張卡最高的那一個榮譽，拿過不只一個時後面接「· 總數」；
+ * 卡片頁的榜單榮譽：標籤列最前面一顆 chip，和 #標籤 同高——小徽章＋這張卡最高的那一個榮譽，拿過不只一個時後面接「+其他幾個」；
  * 點了開「卡片榮譽」對話框列出全部（新頒發的在前）。沒有榮譽時整顆不出現。這個元件只輸出 <li>，放在卡片頁的標籤列裡。
  * （原本是每個期別一顆 34 高的標籤再接「榮譽 N」，和 26 高的 #標籤 大小不一，owner 2026-11-03 退回。）
  * 全部榮譽要另外讀一次；只有封面有榮譽的卡才讀，沒有榮譽的卡不多打一次請求。
@@ -63,7 +63,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
     <button type="button" class="chip card-honors__chip" aria-haspopup="dialog" :aria-label="all?.length ? t('honor.chipAria', { n: all.length }) : undefined" @click="open">
       <RankBadge :honor="best" decorative />
       <span class="card-honors__name">{{ honorName(t, best) }}</span>
-      <span v-if="(all?.length ?? 0) > 1" class="card-honors__count">· {{ all!.length }}</span>
+      <!-- 其他還有幾個，和名字旁展示列的「+N」同一種寫法（美術總監 2026-11-03） -->
+      <span v-if="(all?.length ?? 0) > 1" class="card-honors__count">+{{ all!.length - 1 }}</span>
     </button>
   </li>
   <Teleport to="body">

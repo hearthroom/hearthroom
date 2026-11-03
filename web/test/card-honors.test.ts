@@ -92,7 +92,7 @@ describe("card page honors", () => {
     expect(chips[0].classList.contains("chip")).toBe(true);
     expect(chips[0].querySelector(".rank-badge")).not.toBeNull();
     expect(chips[0].querySelector(".card-honors__name")?.textContent).toBe("清水日榜第一");
-    expect(chips[0].querySelector(".card-honors__count")?.textContent).toBe("· 3");
+    expect(chips[0].querySelector(".card-honors__count")?.textContent).toBe("+2");
     expect(chips[0].getAttribute("aria-label")).toBe("查看這張卡的全部榮譽，共 3 項");
   });
 
