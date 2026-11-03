@@ -51,8 +51,11 @@ export async function publisherRequest(args, { fetch: send = globalThis.fetch } 
   let response;
   try { response = await send(origin + path, { method, headers, body, redirect: "error", signal: AbortSignal.timeout(30_000) }); }
   catch { throw new Error("Blog request failed; read back before retrying with the same operation ID"); }
-  const result = await response.json();
-  if (!response.ok) throw new Error(`Blog request failed (${response.status}): ${typeof result.error === "string" ? result.error : "unknown error"}`);
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result || typeof result !== "object" || Array.isArray(result)) {
+    const code = result && typeof result.error === "string" ? result.error : "invalid response";
+    throw new Error(`Blog request failed (${response.status}): ${code}; read back before retrying with the same operation ID`);
+  }
   return result;
 }
 
