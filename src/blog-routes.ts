@@ -7,6 +7,7 @@ import {
   publicPostById, publicPosts, publicView, recordView, relatedPosts, restoreRevision, saveColumn, savePost, setPostLike, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
+import { blogPublisher } from "./blog-publisher";
 import { blogFeed } from "./blog-head";
 import { bearerOf, canWriteBlog } from "./community-admin";
 import { providerOf, requireMember } from "./members";
@@ -60,8 +61,10 @@ blogRoutes.use("/v1/blog/admin/*", async (c, next) => {
   if (op) await bumpOp(c.env.DB, "blog", op, c.res.status < 500 ? "denied" : "error");
 });
 
-/** 寫作權限：供應商那邊本站應用的 owner／admin，不含 AI 帳號，所以稽核的 actor_kind 一律是 human。 */
+/** Human app admin or the explicitly configured private blog publisher; both use the same service and audit. */
 async function writer(c: Ctx): Promise<Actor> {
+  const publisher = await blogPublisher(c.env, c.req.header("X-Blog-Publisher-Key"), c.req.header("Origin"));
+  if (publisher) return publisher;
   const member = await requireMember(c);
   if (!(await canWriteBlog(c.env, member.id, bearerOf(c), providerOf(c)))) throw new HttpError(403, "blog_write_forbidden");
   return { memberId: member.id, kind: "human" };
@@ -240,11 +243,11 @@ blogRoutes.delete("/v1/blog/admin/columns/:id", async (c) => {
 });
 
 blogRoutes.post("/v1/blog/admin/images", bodyLimit({ maxSize: IMAGE_MAX_BYTES + 16384, onError: (c) => c.json({ error: "blog_image_invalid" }, 400) }), async (c) => {
-  await writer(c);
+  const actor = await writer(c);
   const form = await c.req.formData().catch(() => {
     throw new HttpError(400, "blog_image_invalid");
   });
-  return c.json(await uploadImage(c.env, form.get("file"), Date.now()));
+  return c.json(await uploadImage(c.env, form.get("file"), actor, operationOf(form.get("operationId") ?? crypto.randomUUID()), Date.now()));
 });
 
 // ---- Atom（最新 20 篇公開文章）---------------------------------------------------

@@ -7,7 +7,7 @@ import { BLOG_PINNED_LIMIT } from "../shared/blog";
 import { PRIMARY_HOST } from "../shared/site-hosts";
 
 /**
- * 官方部落格（開業活動設計 §6）。寫的人＝供應商那邊本站應用的 owner／admin（不含 AI 帳號，見 community-admin.ts）。
+ * 官方部落格（開業活動設計 §6）。寫的人＝真人應用管理員或明確配置的私有營運身分（見 blog-routes.ts）。
  * 公開判定只在 isPublic 一處：已發布且到了發布時間。定時發布靠讀取時判斷，不開排程。
  * 權限在路由層檢查（community-admin.ts 的 canWriteBlog）；這裡的寫入函式假設呼叫端已經確認過。
  */
@@ -194,7 +194,7 @@ export function cleanLocalized(v: unknown, field: string, max: number, required:
  * 同一個操作編號已經做過（連點、斷線重試）：回那一次的主體 id，呼叫端照原樣回現況、不再寫。
  * 編號被別種主體用過不是重送，回衝突。
  */
-async function priorSubject(db: D1Database, actor: Actor, operationId: string, kind: "blog_post" | "blog_column"): Promise<string | null> {
+async function priorSubject(db: D1Database, actor: Actor, operationId: string, kind: "blog_post" | "blog_column" | "blog_image"): Promise<string | null> {
   const r = await db.prepare("SELECT subject_kind, subject_id FROM audit_log WHERE actor_member_id = ? AND operation_id = ?").bind(actor.memberId, operationId).first<{ subject_kind: string; subject_id: string }>();
   if (!r) return null;
   if (r.subject_kind !== kind) throw new HttpError(409, "blog_operation_repeated");
@@ -205,7 +205,7 @@ async function priorSubject(db: D1Database, actor: Actor, operationId: string, k
  * 執行 batch。並發的同一次重送會在唯一鍵（稽核、slug）或版本條件上輸掉：先看是不是已經做過，是就回 replay；
  * 不是才把 slug 衝突轉成 409。第一條是條件式 UPDATE 而改到 0 列時，同樣先排除重送，剩下的才是版本衝突。
  */
-async function commit(db: D1Database, writes: D1PreparedStatement[], actor: Actor, operationId: string, kind: "blog_post" | "blog_column", slugTaken: string): Promise<{ replay: string } | { changes: number }> {
+async function commit(db: D1Database, writes: D1PreparedStatement[], actor: Actor, operationId: string, kind: "blog_post" | "blog_column" | "blog_image", slugTaken: string): Promise<{ replay: string } | { changes: number }> {
   try {
     const [first] = await db.batch(writes);
     const changes = first!.meta.changes;
@@ -741,8 +741,18 @@ export const imageErrorAs = (prefix: string) => (e: unknown): never => {
 };
 
 /** 上傳一張文章圖片。 */
-export async function uploadImage(env: Env, file: unknown, now: number): Promise<{ key: string; url: string }> {
+export async function uploadImage(env: Env, file: unknown, actor: Actor, operationId: string, now: number): Promise<{ key: string; url: string }> {
+  const previous = await priorSubject(env.DB, actor, operationId, "blog_image");
+  if (previous) return { key: previous, url: imageUrl(previous)! };
   const stored = await storeRasterImage(env, file, now).catch(imageErrorAs("blog"));
+  try {
+    await auditStmt(env.DB, { subjectKind: "blog_image", subjectId: stored.key, actorMemberId: actor.memberId, actorKind: actor.kind, action: "upload", after: { key: stored.key }, operationId, now }).run();
+  } catch (error) {
+    // The losing concurrent upload stays in avatar_cleanup; return the audited winner.
+    const winner = await priorSubject(env.DB, actor, operationId, "blog_image");
+    if (winner) return { key: winner, url: imageUrl(winner)! };
+    throw error;
+  }
   await bumpOp(env.DB, "blog", "image", "success");
   return stored;
 }
