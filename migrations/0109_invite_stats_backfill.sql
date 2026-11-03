@@ -3,13 +3,15 @@
 CREATE TABLE IF NOT EXISTS badge_stats_backfill_runs (
  job_key TEXT PRIMARY KEY,
  seeded_at INTEGER,
- completed_at INTEGER
+ completed_at INTEGER,
+ outcome TEXT NOT NULL DEFAULT 'running' CHECK(outcome IN('running','complete','incomplete'))
 );
 CREATE TABLE IF NOT EXISTS badge_stats_backfill_members (
  job_key TEXT NOT NULL REFERENCES badge_stats_backfill_runs(job_key),
  member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
  account_no INTEGER NOT NULL,
- status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN('pending','done','identity_changed')),
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN('pending','done','identity_changed','unavailable')),
+ incomplete_reads INTEGER NOT NULL DEFAULT 0 CHECK(incomplete_reads>=0),
  attempted_at INTEGER,
  applied_at INTEGER,
  effective_invites INTEGER,

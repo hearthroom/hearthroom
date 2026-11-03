@@ -73,3 +73,14 @@ it('snapshots every normal canonical linked member once and excludes fenced or t
  for(const sql of migration.queries)await env.DB.prepare(sql).run();
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM badge_stats_backfill_members').first('n')).toBe(2);
 });
+
+it('drains persistent omissions with an explicit incomplete outcome, preserving the old cache',async()=>{
+ const a=await makeMember(11);await enqueue(a,11);await applyBadgeStats(env,a,value(11),1);
+ let reads=0;badgeStatsTransport.read=async()=>{reads++;return []};
+ for(let attempt=0;attempt<6;attempt++)await badgeStatsBackfill(env,10+attempt);
+ expect(reads).toBe(5);
+ expect(await env.DB.prepare('SELECT status FROM badge_stats_backfill_members').first('status')).toBe('unavailable');
+ expect(await env.DB.prepare('SELECT effective_invites FROM badge_qualifications').first('effective_invites')).toBe(10);
+ expect(await env.DB.prepare("SELECT outcome FROM badge_stats_backfill_runs WHERE job_key='invite-source-v2'").first('outcome')).toBe('incomplete');
+ expect(await opsMetrics(env.DB)).not.toContain('hearthroom_badge_stats_total{operation="backfill",outcome="success"}');
+});
