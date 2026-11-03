@@ -32,6 +32,75 @@ node scripts/blog-publisher.mjs POST /v1/blog/admin/posts/<文章ID>/state --cre
 - 發布 `publish.json`：`{"change":{"status":"published","publishAt":<毫秒時間>}}`。下架：`{"change":{"status":"unpublished"}}`。置頂要另有任務授權，預設不置頂；留言開關、修訂還原與預覽同樣走既有 API。
 - 封面：上傳回傳與稽核都使用資產 key；文章存檔稽核再把資產連到該篇。重送同一上傳 operation ID 回已稽核資產，不重新計成功數。未引用的失敗／並發輸家資產由既有 24 小時清理機制回收。
 
+## 預覽草稿（不發布）
+
+前提：同一個 Worker 已有有效的 `AUTH_KEYRING` secret。其 JSON 包含 `active` 與 `keys`；`active` 是 1–32 字元的英數／底線／連字號識別，`keys[active]` 是 base64 編碼的 32-byte AES key。預覽沿用登入系統的 keyring，不要為預覽覆寫或輪替正式登入金鑰。本機由測開配置獨立合成 keyring，不複製正式值。未設定或無效時回 `503 blog_preview_unavailable`。
+
+先存草稿，從建立／讀取文章回應取得 `id`，在候選 Hearthroom 根目錄執行：
+
+```bash
+umask 077
+POST_ID='replace-with-post-id'
+PRIVATE_EVIDENCE_DIR="$(mktemp -d)"
+node scripts/blog-publisher.mjs POST "/v1/blog/admin/posts/$POST_ID/preview" \
+  --credential "$CREDENTIAL" --operation-id preview-check-0001 \
+  > "$PRIVATE_EVIDENCE_DIR/preview.json"
+```
+
+成功回 `{ "token": "...", "url": "/blog/欄目/slug?preview=..." }`。在瀏覽器開啟憑證檔 `origin` 加上回應的相對 `url`；token 已編入 url，不要自行再次編碼，也無須把營運 key 放入瀏覽器。網址本身能讀草稿，只給有權驗稿的人，不貼 hub、共享附件或截圖。
+
+預覽限同一篇文章、24 小時有效，讀取最新已存內容，並非內容快照。取得預覽不會發布文章、新增修訂或新增寫入 audit。CLI 仍要求 `--operation-id`，但此預覽編號不會記進文章寫入 audit，不能以查不到它判斷預覽失敗。
+
+## 按操作編號讀回 audit（唯讀）
+
+部落格 key 沒有 D1 查詢權限。以下只由任務已授權的 D1 管理者執行：本機使用本輪獨立 persist；正式站使用已授權的 Cloudflare 管理執行環境及 infra-access 憑證。確認目前在正確候選的 Hearthroom 根目錄，`DB` 對應目標環境。不要把管理 token 或原始查詢回應貼到 hub／共享 docs。
+
+取實際文字／欄目／圖片寫入所用的 operation ID；重試沿用同一編號。`AUDIT_MEMBER_ID` 正式使用專用營運成員，合成本機驗收則用本輪 fixture 的固定成員。以下先驗證輸入，再產生只讀 SQL；以下為 audit 另建私有目錄，不依賴先跑預覽；任何命令非零退出就停止，不使用舊 SQL 繼續查：
+
+```bash
+umask 077
+export OPERATION_ID='replace-with-write-operation-id'
+export AUDIT_MEMBER_ID='system-blog-publisher'
+export PRIVATE_EVIDENCE_DIR="$(mktemp -d)"
+python3 - <<'PY'
+import os, re
+from pathlib import Path
+operation = os.environ['OPERATION_ID']
+member = os.environ['AUDIT_MEMBER_ID']
+if not re.fullmatch(r'[a-zA-Z0-9-]{16,80}', operation):
+    raise SystemExit('Invalid operation ID')
+if not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}', member):
+    raise SystemExit('Invalid audit member ID')
+folder = Path(os.environ['PRIVATE_EVIDENCE_DIR'])
+folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+sql = f"""SELECT a.subject_kind, a.subject_id, a.actor_kind,
+       m.handle AS actor_handle, a.action, a.operation_id, a.created_at
+FROM audit_log a LEFT JOIN members m ON m.id = a.actor_member_id
+WHERE a.operation_id = '{operation}' AND a.actor_member_id = '{member}'
+  AND a.subject_kind IN ('blog_post', 'blog_column', 'blog_image')
+ORDER BY a.created_at, a.id;"""
+(folder / 'audit-by-operation.sql').write_text(sql, encoding='utf-8')
+PY
+```
+
+只查本機合成資料，`D1_PERSIST` 必須填測開交件的本輪 persist 路徑：
+
+```bash
+npx wrangler d1 execute DB --local --persist-to "$D1_PERSIST" \
+  --file "$PRIVATE_EVIDENCE_DIR/audit-by-operation.sql" --json \
+  > "$PRIVATE_EVIDENCE_DIR/audit-by-operation.json"
+```
+
+只有在任務授權的正式唯讀讀回階段，才使用以下命令；它需要獨立的 Cloudflare D1 管理讀取權限，營運 blog key 不能代替：
+
+```bash
+npx wrangler d1 execute DB --remote \
+  --file "$PRIVATE_EVIDENCE_DIR/audit-by-operation.sql" --json \
+  > "$PRIVATE_EVIDENCE_DIR/audit-by-operation.json"
+```
+
+核對 `actor_kind=ai`、營運 handle、主體（文章／欄目／圖片 key）、動作與時間；成功寫入及同 operation ID 重送應追到同一筆既有 audit。此查詢不取 `before_json`／`after_json` 草稿正文，也不輸出私有 member ID。沒有列時先核環境、固定成員與實際寫入編號，再讀管理 API 的文章／版本；不要直接認定未寫入而換新編號重送。回應及 subject ID 留私有證據，只回報去識別結論。
+
 ## 收環與故障
 
 每次寫入都應有 `audit_log`：文章／欄目／圖片主體、固定 AI 身分、動作、operation_id、前後內容與時間。JSON 寫入、翻譯、發布與下架沿用 blog service 的版本控制及 atomic batch 稽核；圖片存入後必須稽核成功才回成功。發布後分別 GET 五語公開文章，核對 locale、標題、內文、封面與 `pinned:false`，並由發布角色走正式頁面。API 200 不等於使用者路徑驗收。
