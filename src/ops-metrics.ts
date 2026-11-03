@@ -66,6 +66,11 @@ const METRICS = {
     operations: ["release", "remove", "mute", "unmute", "report", "flag", "dismiss", "keyword", "settings"],
     outcomes: ["success", "denied", "error"],
   },
+  blog_publisher: {
+    name: "hearthroom_blog_publisher_admissions_total",
+    help: "Private blog publisher credential admission; no member identifiers or secrets.",
+    label: "operation", operations: ["admission"], outcomes: ["allow", "denied", "error"],
+  },
   blog: {
     name: "hearthroom_blog_operations_total",
     help: "Official blog: saves, publishing, pinning, comment switch, restores, column changes, image uploads and reader likes.",
