@@ -21,6 +21,7 @@ beforeEach(() => {
         { id: 3, record: "campaign", recordType: "add", score: 5000, createTime: "2026-11-04T01:00:00Z", rankHonor: { zone: "clean", window: "day", band: 1 } },
         { id: 2, record: "campaign", recordType: "add", score: 25000, createTime: "2026-11-03T01:00:00Z", rankHonor: { zone: "all", window: "week", band: 3 } },
         { id: 1, record: "campaign", recordType: "add", score: 300, createTime: "2026-11-02T01:00:00Z" },
+        { id: 0, record: "campaign", recordType: "add", score: 100, createTime: "2026-11-01T01:00:00Z", rankHonor: { zone: "clean", window: "day", band: 5 } },
       ];
       return json({ total: records.length, size: 30, pages: 1, hasNextPage: false, records });
     }
@@ -43,7 +44,8 @@ async function mount(locale: string) {
 const rows = (root: Element) => [...root.querySelectorAll(".ledger .row")].map((r) => r.querySelector(".row__name")?.textContent);
 
 it("names the board honor on its reward row and keeps other campaign rows generic", async () => {
-  expect(rows(await mount("zh-Hant"))).toEqual(["清水日榜第一獎勵", "綜合週榜前三獎勵", "活動獎勵"]);
+  // 名次段不認得（服務先加了新的段、網頁還沒跟上）時照舊寫「活動獎勵」，不露出語系 key
+  expect(rows(await mount("zh-Hant"))).toEqual(["清水日榜第一獎勵", "綜合週榜前三獎勵", "活動獎勵", "活動獎勵"]);
 });
 
 it("composes the name in each language", async () => {

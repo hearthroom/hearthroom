@@ -16,7 +16,7 @@ import { useCheckin } from "@/lib/checkin-store";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan";
 import { useLocalePath } from "@/lib/use-locale";
-import { honorName } from "@/lib/honors";
+import { honorKey, honorName, parseHonorKey } from "@/lib/honors";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
@@ -73,9 +73,13 @@ function planItemOf(r: ScoreRecord): string {
   // 不認得的月卡種類：用通用的入帳或退款名稱，不露出原始代碼（ui.md §4.5）
   return t(r.record === "refund" ? "wallet.reason.refund" : "wallet.reason.grant");
 }
+/**
+ * 榜單獎勵的入帳列：服務帶了 rankHonor 就寫出是哪一個榮譽（「清水日榜第一獎勵」）。
+ * 只有三個值都認得時才用；服務先加了新的期別或名次段、網頁還沒跟上時，照舊寫「活動獎勵」，不露出語系 key。
+ */
+const honorOf = (r: ScoreRecord) => (r.record === "campaign" && r.recordType === "add" && r.rankHonor ? parseHonorKey(honorKey(r.rankHonor)) : null);
+const honorItemOf = (r: ScoreRecord) => { const h = honorOf(r); return h ? t("honor.grantReason", { honor: honorName(t, h) }) : ""; };
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…）；記憶壓縮另外記帳，分類仍是 chat，要另外點名；其餘照服務給的分類。 */
-/** 榜單獎勵：服務帶了 rankHonor 就寫出是哪一個榮譽（「清水日榜第一獎勵」），沒帶照舊「活動獎勵」 */
-const honorItemOf = (r: ScoreRecord) => (r.record === "campaign" && r.rankHonor ? t("honor.grantReason", { honor: honorName(t, r.rankHonor) }) : "");
 const itemOf = (r: ScoreRecord) => r.rewardRecovery?t("rewardRetention.reward.reclaimed"):r.memoryCompaction?t("wallet.reason.memory"):planItemOf(r) || honorItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
