@@ -712,6 +712,7 @@ a.role__author-who:hover { color: var(--accent-text); }
 
 /* ── 手機：單欄，介紹 → 評分 → 評論 → 卡片資訊 → 其他作品；開始對話固定在畫面最底部 ── */
 @media (max-width: 820px) {
+  .role__score-toast { bottom: calc(var(--h-lg) + var(--s-3) * 3 + env(safe-area-inset-bottom)); }
   .role { padding-bottom: calc(var(--s-8) + 72px); }
   .role__banner { --banner-h: 230px; top: calc(-1 * var(--s-4)); }
   .role__hero {

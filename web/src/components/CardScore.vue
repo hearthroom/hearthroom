@@ -131,6 +131,9 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
 .score__input { display: flex; gap: 2px; }
 .score__progress, .score__alternative { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
 .score-toast { width: max-content; max-width: calc(100vw - var(--s-4) * 2); box-sizing: border-box; overflow-wrap: anywhere; }
+@media (max-width: 820px) {
+  .score-toast { bottom: calc(var(--h-lg) + var(--s-3) * 3 + env(safe-area-inset-bottom)); }
+}
 .score__star { width: 36px; height: 36px; padding: 3px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--border-strong); cursor: pointer; transition: color var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .score__star svg { width: 100%; height: 100%; }
 .score__star.is-on { color: var(--gold); }
