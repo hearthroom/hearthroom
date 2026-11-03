@@ -363,7 +363,7 @@ it("discards a late pinned-post response after the homepage locale changes again
 
 describe("home announcement slide", () => {
   const DAYMS = 86_400_000;
-  const notice = { id: "card-rewards", path: "/blog/creators/card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
+  const notice = { id: "card-rewards", path: "/blog/rewards/card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
     posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" } };
   afterEach(() => { notices.list = []; });
   const serve = (pinned: unknown[] = []) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
@@ -383,14 +383,14 @@ describe("home announcement slide", () => {
     expect(img.getAttribute("alt")).toBe(i18n.global.t("announcement.card-rewards.alt"));
     expect(img.getAttribute("alt")).not.toBe("announcement.card-rewards.alt");
     expect(slide.querySelector(".carousel__body")).toBeNull();
-    expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/creators/card-rewards");
+    expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/rewards/card-rewards");
     slide.querySelector("a")!.click();
     expect(tracked).toContainEqual(["cta", { detail: "carousel", subject: "notice:card-rewards" }]);
   });
 
   it("does not repeat the same page as a pinned post slide", async () => {
     notices.list = [notice];
-    serve([{ id: "p9", columnSlug: "creators", slug: "card-rewards", title: "卡片獎勵規則", excerpt: "", coverUrl: null, locale: "zh-Hant", firstPublishedAt: Date.now() - DAYMS, pinned: true, readMinutes: 1, commentCount: 0, campaign: null }]);
+    serve([{ id: "p9", columnSlug: "rewards", slug: "card-rewards", title: "卡片獎勵規則", excerpt: "", coverUrl: null, locale: "zh-Hant", firstPublishedAt: Date.now() - DAYMS, pinned: true, readMinutes: 1, commentCount: 0, campaign: null }]);
     await mount();
     expect($('[data-slide="notice:card-rewards"]')).not.toBeNull();
     expect($('[data-slide^="post:"]')).toBeNull();

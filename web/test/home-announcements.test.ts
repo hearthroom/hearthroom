@@ -7,7 +7,7 @@ import { activeAnnouncements, type HomeAnnouncement } from "../src/lib/home-anno
 
 const DAY = 86_400_000;
 const notice = (over: Partial<HomeAnnouncement> = {}): HomeAnnouncement => ({
-  id: "card-rewards", path: "/blog/creators/card-rewards", from: 10 * DAY, until: 40 * DAY,
+  id: "card-rewards", path: "/blog/rewards/card-rewards", from: 10 * DAY, until: 40 * DAY,
   posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" },
   ...over,
 });
@@ -26,7 +26,7 @@ describe("activeAnnouncements", () => {
 
   it("hands back the image and where it leads", () => {
     expect(activeAnnouncements([notice()], 20 * DAY, "zh-Hant")).toEqual([
-      { id: "card-rewards", path: "/blog/creators/card-rewards", src: "/announcements/card-rewards-zh-Hant.webp" },
+      { id: "card-rewards", path: "/blog/rewards/card-rewards", src: "/announcements/card-rewards-zh-Hant.webp" },
     ]);
   });
 

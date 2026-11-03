@@ -26,7 +26,7 @@ export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
   {
     // 卡片獎勵規則（返點＋榜單獎勵＋榜單徽章），掛一個月（owner 2026-11-03）
     id: "card-rewards",
-    path: "/blog/creators/card-rewards",
+    path: "/blog/rewards/card-rewards",
     from: null,
     until: 30 * DAY,
     // 圖由美工交（字畫在圖裡），五語各一張
