@@ -4409,5 +4409,6 @@
   "settings.routes.desc": "连接很慢或连不上时，可以换一条线路。",
   "settings.routes.open": "查看线路",
   "settings.section.play": "游玩",
-  "honor.grantReason": "{honor}奖励"
+  "honor.grantReason": "{honor}奖励",
+  "announcement.card-rewards.alt": "榜单有奖励啦：前十名都有积分，月榜第一拿 100,000；清水榜、综合榜各发一份"
 }

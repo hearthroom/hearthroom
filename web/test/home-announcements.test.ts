@@ -8,7 +8,7 @@ import { activeAnnouncements, type HomeAnnouncement } from "../src/lib/home-anno
 const DAY = 86_400_000;
 const notice = (over: Partial<HomeAnnouncement> = {}): HomeAnnouncement => ({
   id: "card-rewards", path: "/blog/creators/card-rewards", from: 10 * DAY, until: 40 * DAY,
-  posters: { "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", alt: "卡片獎勵規則" } },
+  posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" },
   ...over,
 });
 
@@ -24,13 +24,24 @@ describe("activeAnnouncements", () => {
     expect(activeAnnouncements([notice()], 20 * DAY, "en")).toEqual([]);
   });
 
-  it("hands back the image, its words for screen readers and where it leads", () => {
+  it("hands back the image and where it leads", () => {
     expect(activeAnnouncements([notice()], 20 * DAY, "zh-Hant")).toEqual([
-      { id: "card-rewards", path: "/blog/creators/card-rewards", poster: { src: "/announcements/card-rewards-zh-Hant.webp", alt: "卡片獎勵規則" } },
+      { id: "card-rewards", path: "/blog/creators/card-rewards", src: "/announcements/card-rewards-zh-Hant.webp" },
     ]);
   });
 
   it("stays off until a start date is set", () => {
     expect(activeAnnouncements([notice({ from: null })], 20 * DAY, "zh-Hant")).toEqual([]);
   });
+});
+
+import { HOME_ANNOUNCEMENTS } from "../src/lib/home-announcements";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+it("has words for screen readers and a picture file for every language it runs in", () => {
+  for (const a of HOME_ANNOUNCEMENTS) for (const [locale, src] of Object.entries(a.posters)) {
+    const words = JSON.parse(readFileSync(join(process.cwd(), "src/locales", `${locale}.json`), "utf8"))[`announcement.${a.id}.alt`];
+    expect(words, `${a.id} ${locale}`).toBeTruthy();
+    expect(() => readFileSync(join(process.cwd(), "public", src)), src).not.toThrow();
+  }
 });

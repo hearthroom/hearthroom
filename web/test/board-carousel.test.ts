@@ -364,7 +364,7 @@ it("discards a late pinned-post response after the homepage locale changes again
 describe("home announcement slide", () => {
   const DAYMS = 86_400_000;
   const notice = { id: "card-rewards", path: "/blog/creators/card-rewards", from: Date.now() - DAYMS, until: Date.now() + 29 * DAYMS,
-    posters: { "zh-Hant": { src: "/announcements/card-rewards-zh-Hant.webp", alt: "卡片獎勵規則：榜單前十都有積分" } } };
+    posters: { "zh-Hant": "/announcements/card-rewards-zh-Hant.webp" } };
   afterEach(() => { notices.list = []; });
   const serve = (pinned: unknown[] = []) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     const path = url.split("?")[0];
@@ -380,7 +380,8 @@ describe("home announcement slide", () => {
     expect(slide.getAttribute("data-slide")).toBe("notice:card-rewards");
     const img = slide.querySelector("img")!;
     expect(img.getAttribute("src")).toBe("/announcements/card-rewards-zh-Hant.webp");
-    expect(img.getAttribute("alt")).toBe("卡片獎勵規則：榜單前十都有積分");
+    expect(img.getAttribute("alt")).toBe(i18n.global.t("announcement.card-rewards.alt"));
+    expect(img.getAttribute("alt")).not.toBe("announcement.card-rewards.alt");
     expect(slide.querySelector(".carousel__body")).toBeNull();
     expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/creators/card-rewards");
     slide.querySelector("a")!.click();

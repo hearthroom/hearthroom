@@ -4409,5 +4409,6 @@
   "settings.routes.desc": "連線很慢或連不上時，可以換一條線路。",
   "settings.routes.open": "查看線路",
   "settings.section.play": "遊玩",
-  "honor.grantReason": "{honor}獎勵"
+  "honor.grantReason": "{honor}獎勵",
+  "announcement.card-rewards.alt": "榜單有獎勵啦：前十名都有積分，月榜第一拿 100,000；清水榜、綜合榜各發一份"
 }

@@ -78,7 +78,7 @@ const postPath = ref("");
 const notices = computed(() => props.campaigns ? activeAnnouncements(HOME_ANNOUNCEMENTS, Date.now(), locale.value) : []);
 const slides = computed(() => {
   const m = lib.value;
-  const first = notices.value.map((n) => ({ slug: `notice:${n.id}`, to: n.path, phase: "open" as const, bannerUrl: null, poster: { url: n.poster.src, alt: n.poster.alt }, title: n.poster.alt, parts: [n.poster.alt], period: "" }));
+  const first = notices.value.map((n) => { const alt = t(`announcement.${n.id}.alt`); return { slug: `notice:${n.id}`, to: n.path, phase: "open" as const, bannerUrl: null, poster: { url: n.src, alt }, title: alt, parts: [alt], period: "" }; });
   if (!m || !props.campaigns) return first;
   return [...first, ...featured.value.map((c) => {
     const title = m.localized(c.title, locale.value) || c.slug;

@@ -4409,5 +4409,6 @@
   "settings.routes.desc": "When the site is slow or won’t load, you can connect through another route.",
   "settings.routes.open": "View routes",
   "settings.section.play": "Play",
-  "honor.grantReason": "{honor} reward"
+  "honor.grantReason": "{honor} reward",
+  "announcement.card-rewards.alt": "Boards pay out now: Top 10 earn credits. Monthly #1 gets 100,000; SFW and Overall boards, paid separately"
 }
