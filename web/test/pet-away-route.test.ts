@@ -21,6 +21,7 @@ vi.mock("../src/lib/notifications", () => ({ useNotifications: () => ({ unread: 
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ pending: 0 }) }));
 
 import SukiPet from "../src/components/SukiPet.vue";
+import { pageAway } from "../src/pet/enabled";
 
 let app: ReturnType<typeof createApp> | undefined;
 afterEach(() => { app?.unmount(); calls.length = 0; });
@@ -39,6 +40,25 @@ it("hides the desk pet on the check-in page and brings her back elsewhere", asyn
   expect(calls.filter((c) => c.type === "away").at(-1)).toEqual({ type: "away", on: true });
 
   await router.push("/");
+  await nextTick();
+  expect(calls.filter((c) => c.type === "away").at(-1)).toEqual({ type: "away", on: false });
+  vi.unstubAllGlobals();
+});
+
+// 卡片頁的「暫不提供」是同一條路由裡的狀態：路由沒變，頁面掛上提示就叫她退場，卸下就回來
+it("steps away while a page state asks (region notice) without a route change", async () => {
+  vi.stubGlobal("requestIdleCallback", (f: () => void) => f());
+  const page = defineComponent({ render: () => h("div") });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/cards/:id", component: page }] });
+  await router.push("/cards/1");
+  app = createApp(SukiPet).use(router).use(i18n);
+  app.mount(document.createElement("div"));
+  for (let i = 0; i < 5; i++) { await new Promise((r) => setTimeout(r, 0)); await nextTick(); }
+  expect(calls.filter((c) => c.type === "away").at(-1)).toEqual({ type: "away", on: false });
+  pageAway.value++;
+  await nextTick();
+  expect(calls.filter((c) => c.type === "away").at(-1)).toEqual({ type: "away", on: true });
+  pageAway.value--;
   await nextTick();
   expect(calls.filter((c) => c.type === "away").at(-1)).toEqual({ type: "away", on: false });
   vi.unstubAllGlobals();

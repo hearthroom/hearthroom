@@ -42,3 +42,11 @@ it('從手機避讓頁的選單點了會說話的項目：回答留著，不被�
   (p as unknown as { closeMenu: (keep: boolean) => void }).closeMenu(true); p.updateArt();
   expect(p.el.classList.contains('suki-pet--away')).toBe(false);
 });
+
+// 頁面叫她退場（簽到頁、地區「暫不提供」頁）：之前排著要說的話是那一頁的，不留到她回來的下一頁才說
+// （走查 2026-11-03：從提示頁回首頁，她說出卡片頁的介紹）
+it('頁面叫她退場時，排著的台詞一起丟掉', () => {
+  (p as unknown as { queue: unknown[] }).queue = [{ say: 'card.hello' }];
+  pet.on({ type: 'away', on: true });
+  expect((p as unknown as { queue: unknown[] }).queue).toEqual([]);
+});

@@ -1061,6 +1061,8 @@ export class SukiPet {
   private away = new Set<string>();
   private hide(on: boolean, reason: string) {
     if (on) this.away.add(reason); else this.away.delete(reason);
+    // 頁面叫她退場：排著的台詞是那一頁的，回來時已經換頁了，不留著說（她本來就因別的原因躲著也一樣）
+    if (on && reason === "page") this.queue = [];
     on = this.away.size > 0;
     if (this.hidden === on) return;
     this.hidden = on;
