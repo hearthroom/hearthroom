@@ -4408,5 +4408,6 @@
   "settings.routes.current": "Current route",
   "settings.routes.desc": "When the site is slow or won’t load, you can connect through another route.",
   "settings.routes.open": "View routes",
-  "settings.section.play": "Play"
+  "settings.section.play": "Play",
+  "honor.grantReason": "{honor} reward"
 }

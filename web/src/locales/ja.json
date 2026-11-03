@@ -4408,5 +4408,6 @@
   "settings.routes.current": "現在のルート",
   "settings.routes.desc": "サイトが遅いときや開けないときは、別のルートで接続できます。",
   "settings.routes.open": "ルートを見る",
-  "settings.section.play": "プレイ"
+  "settings.section.play": "プレイ",
+  "honor.grantReason": "{honor}の報酬"
 }

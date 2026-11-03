@@ -16,6 +16,7 @@ import { useCheckin } from "@/lib/checkin-store";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan";
 import { useLocalePath } from "@/lib/use-locale";
+import { honorName } from "@/lib/honors";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
@@ -73,7 +74,9 @@ function planItemOf(r: ScoreRecord): string {
   return t(r.record === "refund" ? "wallet.reason.refund" : "wallet.reason.grant");
 }
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…）；記憶壓縮另外記帳，分類仍是 chat，要另外點名；其餘照服務給的分類。 */
-const itemOf = (r: ScoreRecord) => r.rewardRecovery?t("rewardRetention.reward.reclaimed"):r.memoryCompaction?t("wallet.reason.memory"):planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
+/** 榜單獎勵：服務帶了 rankHonor 就寫出是哪一個榮譽（「清水日榜第一獎勵」），沒帶照舊「活動獎勵」 */
+const honorItemOf = (r: ScoreRecord) => (r.record === "campaign" && r.rankHonor ? t("honor.grantReason", { honor: honorName(t, r.rankHonor) }) : "");
+const itemOf = (r: ScoreRecord) => r.rewardRecovery?t("rewardRetention.reward.reclaimed"):r.memoryCompaction?t("wallet.reason.memory"):planItemOf(r) || honorItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
   if (r.record === "grant" && r.playerNote) return { text: r.playerNote, off: false };

@@ -20783,6 +20783,9 @@
           "rewardRecovery": {
             "type": "boolean",
             "description": "True for an author deletion reward recovery. The existing record reason remains adjust."
+          },
+          "rankHonor": {
+            "$ref": "#/components/schemas/LedgerRankHonor"
           }
         }
       },
@@ -26371,6 +26374,9 @@
             "type": "string",
             "maxLength": 200,
             "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
+          },
+          "rankHonor": {
+            "$ref": "#/components/schemas/LedgerRankHonor"
           }
         }
       },
@@ -27691,6 +27697,40 @@
           },
           "validityDays": {
             "type": "null"
+          }
+        }
+      },
+      "LedgerRankHonor": {
+        "type": "object",
+        "required": [
+          "zone",
+          "window",
+          "band"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "zone": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "all"
+            ]
+          },
+          "window": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "band": {
+            "type": "integer",
+            "enum": [
+              1,
+              3,
+              10
+            ]
           }
         }
       }

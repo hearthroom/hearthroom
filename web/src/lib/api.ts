@@ -14,7 +14,7 @@ import { dateTime } from "./format";
 import { canonicalType } from "./media-type";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
-import type { CardHonor } from "./honors";
+import type { CardHonor, Honor } from "./honors";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
@@ -1174,6 +1174,8 @@ export interface ScoreRecord {
   createTime: string;
   /** 獎勵入帳與它的到期：是哪一種獎勵（checkin／task／newcomer／referral…），Harper V0.2c B3 起 */
   rewardKind?: string;
+  /** 榜單獎勵那一列：是哪一個榜單榮譽（record 仍是 campaign）；其他列不帶 */
+  rankHonor?: Honor;
   /** 限時積分入帳的到期時刻 */
   expiresAt?: string;
   /** 月卡的列：daily 每日、bonus 首張加贈；退款收回它們的那一列帶同樣的值（record 是 refund） */

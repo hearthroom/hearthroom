@@ -4408,5 +4408,6 @@
   "settings.routes.current": "当前线路",
   "settings.routes.desc": "连接很慢或连不上时，可以换一条线路。",
   "settings.routes.open": "查看线路",
-  "settings.section.play": "游玩"
+  "settings.section.play": "游玩",
+  "honor.grantReason": "{honor}奖励"
 }

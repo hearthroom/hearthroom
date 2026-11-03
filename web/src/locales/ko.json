@@ -4408,5 +4408,6 @@
   "settings.routes.current": "현재 회선",
   "settings.routes.desc": "사이트가 느리거나 열리지 않으면 다른 회선으로 접속할 수 있어요.",
   "settings.routes.open": "회선 보기",
-  "settings.section.play": "플레이"
+  "settings.section.play": "플레이",
+  "honor.grantReason": "{honor} 보상"
 }
