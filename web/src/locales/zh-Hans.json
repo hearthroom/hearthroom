@@ -454,6 +454,7 @@
   "wallet.reason.adjust": "账务调整",
   "wallet.reason.redeem": "兑换码",
   "wallet.reason.rebate": "作者返点",
+  "wallet.reason.self_rebate": "自玩返点",
   "wallet.reason.referral": "邀请奖励",
   "wallet.reason.signup": "注册奖励",
   "board.mode.following": "关注",

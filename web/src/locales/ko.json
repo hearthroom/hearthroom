@@ -454,6 +454,7 @@
   "wallet.reason.adjust": "잔액 조정",
   "wallet.reason.redeem": "코드 교환",
   "wallet.reason.rebate": "작가 리베이트",
+  "wallet.reason.self_rebate": "직접 플레이 리베이트",
   "wallet.reason.referral": "초대 보상",
   "wallet.reason.signup": "가입 보상",
   "board.mode.following": "팔로잉",

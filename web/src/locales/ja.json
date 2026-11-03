@@ -454,6 +454,7 @@
   "wallet.reason.adjust": "残高調整",
   "wallet.reason.redeem": "コード引き換え",
   "wallet.reason.rebate": "作者還元",
+  "wallet.reason.self_rebate": "自プレイ還元",
   "wallet.reason.referral": "招待特典",
   "wallet.reason.signup": "登録特典",
   "board.mode.following": "フォロー",

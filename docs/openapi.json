@@ -25831,7 +25831,7 @@
           },
           "record": {
             "type": "string",
-            "description": "Human-readable description of the transaction (server-side text, may be localized/Chinese)."
+            "description": "Transaction reason code, including `rebate` for author rebates and `self_rebate` for author self-play rebates. Map known codes to client copy; legacy providers may return localized text."
           },
           "recordType": {
             "type": "string",
@@ -31486,7 +31486,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why the balance changed: `purchase`, `grant`, `campaign`, `chat`, `api`, `image`, `speech`, `video`, `refund`, `expire`, `adjust`, `redeem`, `rebate`, `referral` or `signup`. Map it to your own copy."
+            "description": "Why the balance changed: `purchase`, `grant`, `campaign`, `chat`, `api`, `image`, `speech`, `video`, `refund`, `expire`, `adjust`, `redeem`, `rebate`, `self_rebate`, `referral` or `signup`. `self_rebate` identifies author self-play rebates. Map it to your own copy."
           },
           "amount": {
             "type": "integer",
