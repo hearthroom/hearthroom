@@ -23,3 +23,7 @@ it('keeps public walls read-only and safely renders event text',()=>{
  app=createApp(BadgeWall,{items:[{...item('event_custom'),titles:{en:'<img src=x onerror=alert(1)>'}}]}).use(i18n);app.mount(el);
  expect(el.querySelector('img')).toBeNull();expect(el.querySelector('[data-feature]')).toBeNull();expect(el.textContent).toContain('<img');
 });
+it('shows whole numbers when the server sends a fractional counter',()=>{
+ app=createApp(BadgeWall,{items:[{...item('member_anniversary','locked'),progress:{value:0.0598,target:365,unit:'days'}}]}).use(i18n);app.mount(el);
+ expect(el.textContent).toContain('0 / 365 days');expect(el.textContent).not.toContain('0.0598');
+});

@@ -220,4 +220,5 @@ button.worn__more:hover { background: var(--surface); }
 .worn-detail__when { font-size: 13px; color: var(--text-2); }
 .worn-detail__condition { font-size: 13px; color: var(--text-2); white-space: pre-line; }
 @media (prefers-reduced-motion: no-preference) { .worn-detail--sheet { animation: settle var(--dur-slow) var(--ease); } }
+.worn-detail h3:lang(ko), .worn-detail p:lang(ko) { word-break: keep-all; }
 </style>

@@ -34,7 +34,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
    </div>
    <div><h3>{{ nameOf(badge) }}</h3><p class="badge-tile__condition">{{ badgeText(badge.descriptions,locale) }}</p></div>
    <div class="badge-tile__details">
-    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t(badge.progress.unit?'badgeWall.progress.'+badge.progress.unit:'badgeWall.progress',{value:badge.progress.value,target:badge.progress.target}) }}<progress :value="badge.progress.value" :max="badge.progress.target" /></label></template>
+    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t(badge.progress.unit?'badgeWall.progress.'+badge.progress.unit:'badgeWall.progress',{value:Math.floor(badge.progress.value),target:badge.progress.target}) }}<progress :value="Math.floor(badge.progress.value)" :max="badge.progress.target" /></label></template>
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
@@ -57,4 +57,6 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}
 .badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}
 .badge-tile__details{margin-top:auto}.badge-tile__details label{display:grid;gap:var(--s-2)}progress{width:100%;height:.5rem;accent-color:var(--accent)}.badge-tile .btn{width:100%;min-height:2.75rem;white-space:normal;line-height:1.5}.badge-tile .btn[aria-pressed=true]{color:var(--accent-text);border-color:var(--accent)}
+/* 韓文不在詞中換行 */
+.badge-tile h3:lang(ko),.badge-tile p:lang(ko){word-break:keep-all}
 </style>
