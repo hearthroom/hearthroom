@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "從 MMD 搬來的卡，改過樣式的「建議回覆」按鈕，現在也會照你寫的樣子顯示。",
+    "zh-Hans": "从 MMD 搬来的卡，改过样式的「建议回复」按钮，现在也会照你写的样子显示。",
+    "en": "On cards moved over from MMD, a restyled \"Suggested replies\" button now shows up the way you wrote it.",
+    "ja": "MMD から移したカードの「返信の候補」ボタンも、書いた見た目で表示されるようになりました。",
+    "ko": "MMD에서 옮겨 온 카드에서 스타일을 바꾼 '추천 답변' 버튼이 이제 작성한 대로 표시됩니다."
+  },
+  "body": {
+    "zh-Hant": "輸入列的其他自訂樣式，也一起照 MMD 的寫法生效。",
+    "zh-Hans": "输入栏的其他自定义样式，也一起照 MMD 的写法生效。",
+    "en": "Other custom styles on the input bar now work with the MMD naming too.",
+    "ja": "入力欄のほかのカスタムスタイルも、MMD と同じ書き方で効くようになりました。",
+    "ko": "입력창의 다른 사용자 지정 스타일도 MMD와 같은 방식으로 적용됩니다."
+  }
+}
