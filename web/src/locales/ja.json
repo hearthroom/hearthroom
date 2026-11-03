@@ -4365,7 +4365,7 @@
   "badgeWall.spend.hint": "チャージ額とポイントの使用額の両方が基準に達すると獲得できます。返金で基準を下回ると取り消されます。消費バッジは「プロフィールに飾る」に設定したときだけ公開ページに表示されます。",
   "badgeWall.public.empty": "公開されているバッジはありません",
   "badgeWall.public.back": "作者ページに戻る",
-  "honor.periodSingle": "{period} の実績",
+  "honor.periodSingle": "{period}の実績",
   "honor.recentMany": "{n} 回獲得、直近は {period}",
   "honor.issuedAt": "{date} 獲得",
   "honor.chip": "実績 {n}",

@@ -4365,7 +4365,7 @@
   "badgeWall.spend.hint": "儲值與使用積分都達標才會取得，退款後低於標準會收回。消費徽章設為展示後，才會出現在公開頁。",
   "badgeWall.public.empty": "作者沒有公開徽章",
   "badgeWall.public.back": "回到作者頁",
-  "honor.periodSingle": "{period} 的榮譽",
+  "honor.periodSingle": "{period}的榮譽",
   "honor.recentMany": "取得 {n} 次，最近一次 {period}",
   "honor.issuedAt": "{date} 取得",
   "honor.chip": "榮譽 {n}",

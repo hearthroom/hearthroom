@@ -4365,7 +4365,7 @@
   "badgeWall.spend.hint": "充值与使用积分都达标才会获得，退款后低于标准会收回。消费徽章设为展示后，才会出现在公开页。",
   "badgeWall.public.empty": "作者没有公开徽章",
   "badgeWall.public.back": "回到作者页",
-  "honor.periodSingle": "{period} 的荣誉",
+  "honor.periodSingle": "{period}的荣誉",
   "honor.recentMany": "获得 {n} 次，最近一次 {period}",
   "honor.issuedAt": "{date} 获得",
   "honor.chip": "荣誉 {n}",
