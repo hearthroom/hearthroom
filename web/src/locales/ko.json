@@ -4368,7 +4368,6 @@
   "honor.periodSingle": "{period} 수상",
   "honor.recentMany": "{n}번 획득, 최근 {period}",
   "honor.issuedAt": "{date} 획득",
-  "honor.chip": "수상 {n}",
   "honor.chipAria": "이 카드의 수상 내역 전체 보기, {n}건",
   "honor.dialogTitle": "카드 수상 내역",
   "honor.short.day": "일",

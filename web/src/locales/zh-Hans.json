@@ -4368,7 +4368,6 @@
   "honor.periodSingle": "{period}的荣誉",
   "honor.recentMany": "获得 {n} 次，最近一次 {period}",
   "honor.issuedAt": "{date} 获得",
-  "honor.chip": "荣誉 {n}",
   "honor.chipAria": "查看这张卡的全部荣誉，共 {n} 项",
   "honor.dialogTitle": "卡片荣誉",
   "honor.short.day": "日",

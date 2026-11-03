@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coverHonors, fitWorn, honorKey, parseHonorKey, periodLabel as label, sortHonors, timesLabel, type Honor } from '../src/lib/honors';
+import { bestHonor, coverHonors, fitWorn, honorKey, parseHonorKey, periodLabel as label, sortHonors, timesLabel, type Honor } from '../src/lib/honors';
 
 const h = (zone: Honor['zone'], window: Honor['window'], band: Honor['band']): Honor => ({ zone, window, band });
 
@@ -78,5 +78,15 @@ describe('period label', () => {
   });
   it('falls back to the raw text for a malformed period', () => {
     expect(periodLabel('day', 'soon', 'en')).toBe('soon');
+  });
+});
+
+describe('best honor', () => {
+  it('picks the highest place first, then the longer board (month over week over day), then the clean board', () => {
+    expect(bestHonor([h('all', 'day', 3)])).toEqual(h('all', 'day', 3));
+    expect(bestHonor([h('all', 'day', 3), h('clean', 'month', 10), h('all', 'week', 1)])).toEqual(h('all', 'week', 1));
+    expect(bestHonor([h('clean', 'day', 1), h('all', 'month', 1)])).toEqual(h('all', 'month', 1));
+    expect(bestHonor([h('all', 'week', 3), h('clean', 'week', 3)])).toEqual(h('clean', 'week', 3));
+    expect(bestHonor([])).toBeNull();
   });
 });

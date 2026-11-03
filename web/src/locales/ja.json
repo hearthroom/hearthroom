@@ -4368,7 +4368,6 @@
   "honor.periodSingle": "{period}の実績",
   "honor.recentMany": "{n} 回獲得、直近は {period}",
   "honor.issuedAt": "{date} 獲得",
-  "honor.chip": "実績 {n}",
   "honor.chipAria": "このカードの実績をすべて見る（{n} 件）",
   "honor.dialogTitle": "カードの実績",
   "honor.short.day": "日",

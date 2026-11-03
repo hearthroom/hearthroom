@@ -72,3 +72,14 @@ export function periodLabel(window: HonorWindow, period: string, locale: string)
   if (window === 'day') return day.format(start);
   return day.formatRange(start, new Date(start.getTime() + 6 * 86400000));
 }
+
+const WINDOW_WEIGHT: Record<HonorWindow, number> = { month: 0, week: 1, day: 2 };
+/**
+ * 一張卡最拿得出手的那一枚（卡片頁標籤列只放一顆）：名次段越前越高；同名次時比得越久的榜越難（月＞週＞日）；
+ * 再同時清水在前（和封面挑法一致，不是加權）。
+ */
+export function bestHonor(list: readonly Honor[]): Honor | null {
+  const rank = (h: Honor) => HONOR_BANDS.indexOf(h.band) * 100 + WINDOW_WEIGHT[h.window] * 10 + HONOR_ZONES.indexOf(h.zone);
+  const best = [...list].sort((a, b) => rank(a) - rank(b))[0];
+  return best ? { zone: best.zone, window: best.window, band: best.band } : null;
+}

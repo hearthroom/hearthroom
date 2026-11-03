@@ -4368,7 +4368,6 @@
   "honor.periodSingle": "Honor for {period}",
   "honor.recentMany": "Earned {n} times, latest {period}",
   "honor.issuedAt": "Earned {date}",
-  "honor.chip": "{n} honor | {n} honors",
   "honor.chipAria": "View all honors for this card ({n})",
   "honor.dialogTitle": "Card honors",
   "honor.short.day": "D",

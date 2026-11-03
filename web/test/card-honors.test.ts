@@ -78,7 +78,7 @@ describe("card page honors", () => {
     return { root: el, fetchMock };
   }
 
-  it("leads the tag row with the best honor per period and counts every honor on the chip", async () => {
+  it("leads the tag row with one chip: the highest honor, plus how many there are when more than one", async () => {
     await applyLocale("zh-Hant");
     const { root, fetchMock } = await mountList([{ zone: "clean", window: "day", band: 1 }, { zone: "all", window: "week", band: 10 }], [
       { zone: "all", window: "week", band: 10, period: "2026-11-02", at: Date.UTC(2026, 10, 16) },
@@ -86,14 +86,22 @@ describe("card page honors", () => {
       { zone: "all", window: "day", band: 3, period: "2026-11-03", at: Date.UTC(2026, 10, 4) },
     ]);
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/cards\/abc\/honors/);
-    expect([...root.querySelectorAll(".badge-label__text")].map(e => e.textContent)).toEqual(["清水日榜第一", "綜合週榜前十"]);
-    expect(root.querySelector(".card-honors__more")?.textContent).toBe("榮譽 3");
+    // 卡片頁標籤列只放一顆，和 #標籤 同高（owner 2026-11-03：「這裡有大有小好奇怪」）
+    const chips = root.querySelectorAll("button.card-honors__chip");
+    expect(chips).toHaveLength(1);
+    expect(chips[0].classList.contains("chip")).toBe(true);
+    expect(chips[0].querySelector(".rank-badge")).not.toBeNull();
+    expect(chips[0].querySelector(".card-honors__name")?.textContent).toBe("清水日榜第一");
+    expect(chips[0].querySelector(".card-honors__count")?.textContent).toBe("· 3");
+    expect(chips[0].getAttribute("aria-label")).toBe("查看這張卡的全部榮譽，共 3 項");
   });
 
   it("opens the full list as a dialog, closes on Escape and returns focus to the opener", async () => {
     await applyLocale("en");
     const { root } = await mountList([{ zone: "clean", window: "day", band: 1 }], [{ zone: "clean", window: "day", band: 1, period: "2026-11-03", at: Date.UTC(2026, 10, 4) }]);
-    const opener = root.querySelector<HTMLButtonElement>("button.badge-label")!;
+    const opener = root.querySelector<HTMLButtonElement>("button.card-honors__chip")!;
+    expect(opener.querySelector(".card-honors__name")?.textContent).toBe("SFW Daily #1");
+    expect(opener.querySelector(".card-honors__count")).toBeNull();
     opener.focus(); opener.click(); await flush();
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.querySelector(".modal__title")?.textContent).toBe("Card honors");
@@ -123,7 +131,7 @@ describe("card page honors", () => {
     const before = fetchMock.mock.calls.length;
     props.honors = [{ zone: "clean", window: "day", band: 1 }]; await flush();
     expect(fetchMock.mock.calls.length).toBe(before);
-    expect(el.querySelector(".card-honors__more")).not.toBeNull();
+    expect(el.querySelector(".card-honors__chip")).not.toBeNull();
   });
 });
 

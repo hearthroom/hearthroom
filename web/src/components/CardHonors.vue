@@ -1,19 +1,23 @@
 <script setup lang="ts">
 /**
- * 卡片頁的榜單榮譽：標籤列最前面放每個期別最高的那枚（徽章＋完整名稱），後面接「榮譽 N」，
- * 點任何一枚都開「卡片榮譽」對話框列出全部（新頒發的在前）。這個元件只輸出 <li>，放在卡片頁的標籤列裡。
+ * 卡片頁的榜單榮譽：標籤列最前面一顆 chip，和 #標籤 同高——小徽章＋這張卡最高的那一個榮譽，拿過不只一個時後面接「· 總數」；
+ * 點了開「卡片榮譽」對話框列出全部（新頒發的在前）。沒有榮譽時整顆不出現。這個元件只輸出 <li>，放在卡片頁的標籤列裡。
+ * （原本是每個期別一顆 34 高的標籤再接「榮譽 N」，和 26 高的 #標籤 大小不一，owner 2026-11-03 退回。）
  * 全部榮譽要另外讀一次；只有封面有榮譽的卡才讀，沒有榮譽的卡不多打一次請求。
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { fetchCardHonors } from "@/lib/api";
 import { wrapTab } from "@/lib/focus-trap";
-import { coverHonors, honorKey, honorName, periodLabel, type CardHonor, type Honor } from "@/lib/honors";
+import { bestHonor, coverHonors, honorKey, honorName, periodLabel, type CardHonor, type Honor } from "@/lib/honors";
 import BadgeLabel from "./BadgeLabel.vue";
+import RankBadge from "./RankBadge.vue";
 
 const props = defineProps<{ cardId: string; honors?: Honor[] }>();
 const { t, locale } = useI18n();
 const top = computed(() => coverHonors(props.honors ?? []));
+/** 標籤列那一顆：讀到全部榮譽就從全部裡挑最高的，還沒讀到先用封面那幾枚 */
+const best = computed(() => bestHonor(all.value?.length ? all.value : top.value));
 const all = ref<CardHonor[] | null>(null);
 const failed = ref(false);
 let generation = 0;
@@ -55,14 +59,13 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 </script>
 
 <template>
-  <template v-if="top.length">
-    <li v-for="honor in top" :key="honor.window">
-      <BadgeLabel as="button" :honor="honor" :text="honorName(t, honor)" size="lg" class="card-honors__label" aria-haspopup="dialog" @click="open" />
-    </li>
-    <li v-if="all?.length">
-      <button type="button" class="chip card-honors__more" aria-haspopup="dialog" :aria-label="t('honor.chipAria', { n: all.length })" @click="open">{{ t("honor.chip", { n: all.length }, all.length) }}</button>
-    </li>
-  </template>
+  <li v-if="best" class="card-honors__item">
+    <button type="button" class="chip card-honors__chip" aria-haspopup="dialog" :aria-label="all?.length ? t('honor.chipAria', { n: all.length }) : undefined" @click="open">
+      <RankBadge :honor="best" decorative />
+      <span class="card-honors__name">{{ honorName(t, best) }}</span>
+      <span v-if="(all?.length ?? 0) > 1" class="card-honors__count">· {{ all!.length }}</span>
+    </button>
+  </li>
   <Teleport to="body">
     <div v-if="opened" class="modal-backdrop" @click.self="close">
       <div ref="box" class="modal panel card-honors" role="dialog" aria-modal="true" aria-labelledby="card-honors-title">
@@ -85,8 +88,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 </template>
 
 <style scoped>
-.card-honors__more { cursor: pointer; font: inherit; font-size: 12px; border: 0; color: var(--text-2); }
-.card-honors__more:hover { background: var(--border); }
+.card-honors__item { display: flex; align-items: center; }
+/* 和 #標籤 同一種 chip（26 高、12px），徽章縮到 20 高放進去；名字可省略，數字不省略 */
+.card-honors__chip { cursor: pointer; font: inherit; font-size: 12px; max-width: 100%; padding-left: 4px; gap: 5px; --rank-badge-h: 20px; }
+.card-honors__chip:hover { background: var(--border); }
+.card-honors__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.card-honors__count { flex: none; font-variant-numeric: tabular-nums; }
 .card-honors { max-height: min(70dvh, calc(100dvh - 2 * var(--s-5))); grid-template-rows: auto 1fr auto; }
 .card-honors__list { display: grid; gap: var(--s-3); margin: 0; padding: 8px 8px 0 0; list-style: none; overflow-y: auto; min-height: 0; }
 .card-honors__list > li { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-width: 0; }

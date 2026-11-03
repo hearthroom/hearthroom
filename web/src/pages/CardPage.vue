@@ -628,7 +628,9 @@ a.role__by:hover { color: var(--accent-text); }
 .role__platforms { width: auto; min-width: 200px; }
 .role__platforms :deep(.btn--primary) { min-width: 200px; }
 .role__grade { display: flex; }
-.role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* 每一個（含換行後的第二行）都垂直置中、同高（owner 2026-11-03：「至少，它得居中對齊吧？」） */
+.role__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.role__tags > li { display: flex; align-items: center; }
 .role__fandom { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); background: transparent; }
 
 /* ── 下半：左欄介紹＋評論，右欄黏住 ── */
