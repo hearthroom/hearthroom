@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "部分美化卡的正文不再貼著螢幕邊，兩側按鈕也不會蓋住文字。",
+    "zh-Hans": "部分美化卡的正文不再贴着屏幕边，两侧按钮也不会盖住文字。",
+    "en": "Story text on some styled cards no longer runs to the screen edge under the side buttons.",
+    "ja": "一部の装飾付きカードで、本文が画面の端に寄ったり左右のボタンに隠れたりしなくなりました。",
+    "ko": "일부 꾸밈 카드에서 본문이 화면 끝에 붙거나 양옆 버튼에 가려지지 않아요."
+  }
+}
