@@ -95,7 +95,7 @@ describe("首頁窄螢幕：類型收成一顆鈕＋浮層", () => {
   const panel = () => root.querySelector<HTMLElement>(".discovery-tags__panel");
   const picked = () => [...root.querySelectorAll<HTMLButtonElement>(".discovery-tags__picked")];
 
-  it("不畫四組，只有一顆類型鈕，放在分級那一列；點開才列出四組，浮層開著時首頁暫停載卡", async () => {
+  it("不畫四組，只有一顆類型鈕，放在分級那一列；點開才列出四組", async () => {
     await mount("/");
     expect(root.querySelectorAll("[data-group]")).toHaveLength(0);
     expect(opener()?.textContent?.trim()).toBe(i18n.global.t("board.tags"));
@@ -105,7 +105,6 @@ describe("首頁窄螢幕：類型收成一顆鈕＋浮層", () => {
     expect(tagsNav()?.contains(opener()!)).toBe(true);
     opener()!.click(); await settle();
     expect(opener()?.getAttribute("aria-expanded")).toBe("true");
-    expect(panel()?.hasAttribute("data-discovery-overlay")).toBe(true);
     expect([...panel()!.querySelectorAll("[data-group]")].map((x) => x.getAttribute("data-group"))).toEqual(["play", "setting", "character", "kink"]);
     expect(panel()!.querySelectorAll(".tagchip[aria-pressed]").length).toBe(TAG_CATALOG.length);
   });
@@ -123,6 +122,19 @@ describe("首頁窄螢幕：類型收成一顆鈕＋浮層", () => {
     expect(picked()[0]?.getAttribute("aria-label")).toBe(i18n.global.t("board.tags.remove", { name: "催眠" }));
     picked()[0]!.click(); await settle();
     expect(router.currentRoute.value.query.tag).toEqual(["wuxia"]);
+  });
+
+  it("浮層開著時選類型，榜單照樣載新的第一頁（浮層不算會擋住載卡的頁首選單）", async () => {
+    // 測試環境的元素預設沒有版面；給每個元素一個框，載卡的閘門才會把畫著的浮層當成「看得見」
+    const rects = vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+    try {
+      await mount("/");
+      opener()!.click(); await settle();
+      vi.mocked(api.fetchBoard).mockClear();
+      button("催眠")!.click(); await settle();
+      expect(panel()).not.toBeNull();
+      expect(vi.mocked(api.fetchBoard)).toHaveBeenCalledWith(expect.objectContaining({ tag: ["hypnosis"] }));
+    } finally { rects.mockRestore(); }
   });
 
   it("網址帶著類型進來：浮層沒開也看得到選了什麼", async () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { TAG_CATALOG, TAG_GROUPS, tagGroupOf, tagLabel, type TagEntry } from "../../../shared/tag-catalog";
 import { visibleCatalog } from "@/lib/hidden-tags";
 import { useLocalePath } from "@/lib/use-locale";
@@ -9,13 +9,15 @@ import { useLocalePath } from "@/lib/use-locale";
  * 攤開的清單（首頁寬螢幕、搜尋頁的篩選面板）：組名一欄、籤一欄，籤擠不下就在自己那一欄裡換行，
  * 四組的第一顆籤對齊在同一條線上。組名跟籤同一個 flex 流時，換行的籤會折到組名底下、組名寬度又隨語言變，
  * 站方說「完全不對齊，分類標題和分類按鈕混在一起」（2026-11-02）。
+ * 窄螢幕（≤640px）一欄放不下組名加長籤，組名改放在籤的上方。
  *
  * popover（首頁窄螢幕）：只畫一顆「類型」鈕，點開浮層列出全部分類；選中的籤攤在鈕旁邊，點一下就拿掉。
  * 先前手機上每組一列橫捲、籤 44px 高，四列佔掉半屏、每列只看得到兩三顆（站方 2026-11-02：「這樣的 tag 欄
  * 就不應該存在」，提議改成一顆按鈕點開氣泡；owner 2026-11-03「按照他的意思改」）。
  * 選中的籤一定要在浮層外看得到：看不到自己開了什麼篩選就關不掉（owner 2026-10-02）。
  * 浮層是非模態的：Tab 走得出去、點外面或 Esc 就收，收起時焦點回到鈕上；選籤不收，可以一次選好幾個。
- * 浮層帶 data-discovery-overlay：開著時首頁暫停往下載卡（BoardPage canLoad）。
+ * 浮層不帶 data-discovery-overlay：那個標記讓首頁在頁首選單開著時暫停載卡（BoardPage canLoad），
+ * 但這個浮層的用途就是換榜單內容，選了類型要立刻載新的第一頁，不能等浮層收起來。
  *
  * 沒選類型時不畫「全部」：分組之後它孤零零佔一行、永遠亮著又點不動，看不出是什麼（owner 2026-10-11）。
  * 選了類型才出現「清除類型」（browse／popover）。搜尋頁的篩選面板自己有清除鈕，不重複畫。
@@ -58,10 +60,11 @@ function onDocClick(e: MouseEvent) {
   if (open.value && root.value && !root.value.contains(e.target as Node)) close(false);
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape" && open.value) close();
+  // 焦點已經走到別處（浮層不是模態的）就只收起來，不把焦點拉回鈕上
+  if (e.key === "Escape" && open.value) close(!!panel.value?.contains(document.activeElement) || document.activeElement === opener.value);
 }
-watch(() => props.popover, popover => { if (!popover) open.value = false; });
-onMounted(() => { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onKey); });
+// 只有浮層版需要聽整頁的點擊與按鍵；攤開的清單（寬螢幕、搜尋頁）不掛
+onMounted(() => { if (props.popover) { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onKey); } });
 onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); });
 </script>
 <template>
@@ -78,7 +81,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </div>
     </template>
     <!-- 同一份清單：寬螢幕直接攤開，窄螢幕裝進浮層 -->
-    <div v-if="!popover || open" v-bind="popover ? { id: 'discovery-tags-panel', role: 'group', 'aria-label': $t('board.tags'), 'data-discovery-overlay': '' } : {}" ref="panel" :class="{ 'discovery-tags__panel panel': popover }">
+    <div v-if="!popover || open" v-bind="popover ? { id: 'discovery-tags-panel', role: 'group', 'aria-label': $t('board.tags') } : {}" ref="panel" :class="{ 'discovery-tags__panel panel': popover }">
       <div v-if="popover" class="discovery-tags__panel-head">
         <span class="discovery-tags__title">{{ $t('board.tags') }}</span>
         <button type="button" class="discovery-tags__close" :aria-label="$t('dialog.close')" @click="close()">
@@ -147,13 +150,16 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 .discovery-tags__close:hover { background: var(--surface-2); color: var(--text); }
 .discovery-tags__close svg { width: 16px; height: 16px; }
 /*
-  浮層裡排密一點、組名放在籤的上方：手機寬度扣掉組名那一欄，英文、日文的長籤只能一顆一行，
-  整個浮層要捲兩三屏（360 寬實測英文 1284px → 1054px、日文 1027px → 907px）。
+  窄螢幕（首頁浮層、搜尋頁篩選面板）組名放在籤的上方：手機寬度扣掉組名那一欄，英文、日文的長籤只能一顆一行，
+  首頁浮層要捲兩三屏（360 寬實測英文 1284px → 1054px、日文 1027px → 907px）。
 */
-.discovery-tags__panel .discovery-tags__inner { grid-template-columns: minmax(0, 1fr); row-gap: 6px; padding-block: 0; }
-.discovery-tags__panel .discovery-tags__group { min-height: 0; }
-.discovery-tags__panel [data-group-label]:not(:first-child) { margin-top: 6px; }
-.discovery-tags__panel .discovery-tags__tail { grid-column: 1; }
+@media (max-width: 640px) {
+  .discovery-tags__inner { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
+  .discovery-tags__group { min-height: 0; }
+  [data-group-label]:not(:first-child) { margin-top: 6px; }
+  .discovery-tags__extras, .discovery-tags__tail { grid-column: 1; }
+}
+.discovery-tags__panel .discovery-tags__inner { padding-block: 0; }
 .discovery-tags__panel .discovery-tags__chips { gap: 6px; }
 .discovery-tags__panel .tagchip { gap: 4px; padding-inline: 10px; }
 </style>

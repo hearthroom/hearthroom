@@ -1,7 +1,6 @@
 /**
  * 類型列分組與張數（2026-10-11）：52 顆籤平鋪佔掉半屏，而且點下去常常是空的。
- *   - 分成玩法、題材、角色、偏好四組，各組前面有組名；預設只攤開前兩組，其餘收進「更多類型」。
- *   - 選中的類型在收起來的組裡：自動展開（看得到自己開了什麼篩選、關得掉）。
+ *   - 分成玩法、題材、角色、偏好四組，各組前面有組名；寬螢幕四組全部攤開（2026-11-03 起組名一欄、籤一欄）。
  *   - 每顆籤後面標張數（再加上這一類會剩幾張）；0 張的變灰、點不下去，已選中的照樣點得掉。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,7 +33,6 @@ async function mount(path: string) {
 const chip = (label: string) => [...root.querySelectorAll<HTMLButtonElement>(".tagchip")].find((b) => b.querySelector(".tagchip__label")?.textContent?.trim() === label);
 const visible = (el: HTMLElement | null | undefined) => !!el && !el.closest("[data-group]")?.hasAttribute("hidden") && (el.closest("[data-group]") as HTMLElement | null)?.style.display !== "none";
 const groupLabel = (g: string) => root.querySelector(`[data-group-label="${g}"]`)?.textContent?.trim();
-const more = () => root.querySelector<HTMLButtonElement>(".discovery-tags__more");
 
 beforeEach(() => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false }));
@@ -42,11 +40,10 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("類型列分組", () => {
-  it("首頁四組預設顯示，不再有更多類型收合", async () => {
+  it("首頁四組預設全部顯示", async () => {
     await mount("/");
     expect(groupLabel("play")).toBe(i18n.global.t("board.tagGroup.play"));
     for (const label of ["角色扮演", "武俠", "御姐", "催眠"]) expect(visible(chip(label))).toBe(true);
-    expect(more()).toBeNull();
   });
 
   it("組名與籤分成兩欄：組名不在籤的換行流裡，四組的籤從同一欄開始（站方 2026-11-02：標題和按鈕混在一起）", async () => {
@@ -70,7 +67,7 @@ describe("類型列分組", () => {
     expect(root.querySelector(".discovery-tags__clear")).toBeNull();
   });
 
-  it("選中的類型在收起來的組裡：自動展開", async () => {
+  it("網址帶著類型進來：那顆籤是選中的", async () => {
     await mount("/?tag=hypnosis");
     expect(visible(chip("催眠"))).toBe(true);
     expect(chip("催眠")?.getAttribute("aria-pressed")).toBe("true");
