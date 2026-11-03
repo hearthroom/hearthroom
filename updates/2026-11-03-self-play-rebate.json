@@ -2,7 +2,7 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/wallet",
-  "draft": true,
+  "draft": false,
   "title": {
     "zh-Hant": "作者玩自己的卡也有返點了，是別人玩時的一半～",
     "zh-Hans": "作者玩自己的卡也有返点了，是别人玩时的一半～",
