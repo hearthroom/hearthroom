@@ -7,6 +7,7 @@ import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
+import {badgeStatsBackfill} from './badge-stats-backfill';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import {enforcementNoticeRoutes} from './enforcement-notices';
 import { maintenanceResponse, readMaintenance } from './maintenance';
@@ -2331,6 +2332,7 @@ export default {
       return;
     }
     if(event.cron===RANK_RETRY_CRON){
+      ctx.waitUntil(badgeStatsBackfill(env,event.scheduledTime).catch(async()=>{console.warn('Badge qualification backfill unavailable');await bumpOp(env.DB,'badge_stats','backfill','error');}));
       const phase=Math.floor(event.scheduledTime/60000)%3;
       const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
       ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));

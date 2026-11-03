@@ -14127,7 +14127,7 @@
           "Community"
         ],
         "summary": "Read private badge qualification totals for app members",
-        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: granted referral_activation invitees excluding rejected or audited clawbacks; fulfilled USD payments net of full/partial refunds (including paid plans); actual debit consumption for chat/API/image/speech/video. Invitation and spending completeness are independent. Missing currency conversion sets spendingComplete=false without blocking complete invitation totals; complete is the conjunction of both flags.",
+        "description": "Confidential app-only community.badges.read grant required. Player tokens, personal keys, rewards.report and campaign.payout do not authorize this read. Only normal active members of the authenticated billing application are returned; unrelated accounts are omitted. Totals are account-wide: distinct invitees from paid bind_inviter awards, exact legacy binding credits and historical granted referral_activation claims, excluding held/rejected awards and audited clawbacks; fulfilled USD payments net of full/partial refunds (including paid plans); actual debit consumption for chat/API/image/speech/video. Invitation and spending completeness are independent. Missing currency conversion sets spendingComplete=false without blocking complete invitation totals; complete is the conjunction of both flags.",
         "security": [
           {
             "appToken": [

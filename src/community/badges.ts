@@ -47,7 +47,7 @@ export const METRICS:Record<string,Metric>={
  likes_received:{one:'SELECT COALESCE(SUM(like_count),0) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,SUM(like_count) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
  profile:{progress:false,one:'SELECT profile_edited_at IS NOT NULL FROM members WHERE id=?',all:'SELECT id AS member_id,1 AS value FROM members WHERE profile_edited_at IS NOT NULL'},
  beta_veteran:{progress:false,one:`SELECT created_at<${FOUNDER_CUTOFF} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${FOUNDER_CUTOFF}`},
- opening_veteran:{progress:false,one:`SELECT created_at>=${FOUNDER_CUTOFF} AND created_at<${VETERAN_END} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at>=${FOUNDER_CUTOFF} AND created_at<${VETERAN_END}`},
+ opening_veteran:{progress:false,one:`SELECT created_at<${VETERAN_END} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${VETERAN_END}`},
  tenure_days:{unit:'days',timed:true,one:`SELECT (?-created_at)/${DAY} FROM members WHERE id=?`,all:`SELECT id AS member_id,(?-created_at)/${DAY} AS value FROM members`},
 };
 export async function activeAwardKeys(env:Env,member:string) {
@@ -74,7 +74,7 @@ export async function sweepMilestones(env:Env) {
  const metrics=[...new Set((await definitions(env)).filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))];
  if(!metrics.length)return;
  await env.DB.batch(metrics.map(name=>env.DB.prepare(
-  `INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at) SELECT v.member_id,d.key,'metric-v1',? FROM (${METRICS[name].all}) v JOIN community_badge_definitions d ON d.metric=? AND d.threshold<=v.value WHERE v.member_id IS NOT NULL`
+  `INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at) SELECT v.member_id,d.key,'metric-v1',? FROM (${METRICS[name].all}) v JOIN community_badge_definitions d ON d.metric=? AND d.threshold<=v.value WHERE v.member_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=v.member_id)`
  ).bind(now,...(METRICS[name].timed?[now]:[]),name)));
 }
 export async function canManageBadges(env:Env,member:string) {

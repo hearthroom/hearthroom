@@ -7,10 +7,10 @@ import {publicCommunityView} from '../src/community/service';
 let member:string;const launch=Date.parse('2026-10-17T00:00:00+08:00'),end=Date.parse('2026-11-18T00:00:00+08:00');
 beforeEach(async()=>{await resetDb();member=await makeMember(11);await env.DB.prepare('UPDATE members SET created_at=?').bind(end).run()});afterEach(restoreUpstream);
 it('converts the old founder into the correct veteran and honors inclusive launch-month dates',async()=>{
- for(const [time,key] of [[launch-1,'beta_veteran'],[launch,'opening_veteran'],[end-1,'opening_veteran'],[end,'']] as const){
+ for(const [time,keys] of [[launch-1,['beta_veteran','opening_veteran']],[launch,['opening_veteran']],[end-1,['opening_veteran']],[end,[]]] as const){
   await env.DB.prepare('DELETE FROM community_awards WHERE member_id=?').bind(member).run();await env.DB.prepare('UPDATE members SET created_at=? WHERE id=?').bind(time,member).run();
   const wall=await badgeCollection(env,member);expect(wall.items.some(b=>b.key==='member_founder')).toBe(false);
-  expect(wall.items.filter(b=>['beta_veteran','opening_veteran'].includes(b.key)&&b.state==='earned').map(b=>b.key)).toEqual(key?[key]:[]);
+  expect(wall.items.filter(b=>['beta_veteran','opening_veteran'].includes(b.key)&&b.state==='earned').map(b=>b.key).sort()).toEqual([...keys].sort());
  }
 });
 it('counts permanent rank award events once and reveals spending badges only when explicitly pinned',async()=>{
