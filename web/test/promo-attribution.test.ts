@@ -7,7 +7,7 @@ import { createGa4 } from '../src/lib/ga4';
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('every configured landing sends the original campaign and saves the referral', () => {
-  for (const path of Object.values(links)) {
+  for (const [code, path] of Object.entries(links)) {
     const url = new URL(path, 'https://sukisuki.ai');
     expect(gaCampaign(url.href)).toEqual({
       campaign_source: url.searchParams.get('utm_source'),
@@ -15,12 +15,15 @@ it('every configured landing sends the original campaign and saves the referral'
       campaign_name: url.searchParams.get('utm_campaign'),
     });
     rememberShareRef(refFromQuery(url.searchParams.get('ref'))!);
-    expect(pendingShareRef()?.code).toBe('94A9H94Z');
+    expect(pendingShareRef()?.code).toBe(['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6' : '94A9H94Z');
   }
 });
 
-it('initializes actual GA4 commands from the landing snapshot after referral cleanup', () => {
-  const landingUrl = 'https://sukisuki.ai' + links['bh-slime'];
+it.each([
+  ['bh-slime', '94A9H94Z', 'bh-slime-20261106'],
+  ['bh-fate-tm', 'UVTEJ3N6', 'bh-fate-tm-20261105'],
+])('initializes sanitized GA4 commands for %s after referral cleanup', (code, ref, campaign) => {
+  const landingUrl = 'https://sukisuki.ai' + links[code as keyof typeof links];
   const cleaned = new URL(landingUrl);
   cleaned.searchParams.delete('ref');
   vi.stubGlobal('location', cleaned);
@@ -33,8 +36,8 @@ it('initializes actual GA4 commands from the landing snapshot after referral cle
   const ga = createGa4();
   ga.start(true, { landingUrl });
   expect(ga.commands().find(c => c[0] === 'config')?.[2]).toMatchObject({
-    campaign_source: 'bahamut', campaign_medium: 'forum', campaign_name: 'bh-slime-20261106',
+    campaign_source: 'bahamut', campaign_medium: 'forum', campaign_name: campaign,
     page_location: 'https://sukisuki.ai/cards/_',
   });
-  expect(JSON.stringify(ga.commands())).not.toContain('94A9H94Z');
+  expect(JSON.stringify(ga.commands())).not.toContain(ref);
 });
