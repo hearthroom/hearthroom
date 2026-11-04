@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from './worker.mjs';
+import {readMessages} from './cli.mjs';
 const NOW=Date.now();
 function setup(){
  const objects=new Map();const events=[];
@@ -19,6 +20,21 @@ test('只收指定 envelope 位址；先 forward 再存解析後文字與驗證�
  const r=await worker.fetch(f.req(),f.env);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');
  const [m]=(await r.json()).messages;assert.equal(m.subject,'驗證');assert.match(m.text,/123456/);assert.deepEqual(m.links,['https://example.net/verify?code=123456']);assert.ok(m.receivedAt);assert.equal(m.from,'sender@example.net');
  const g=setup();g.msg.to='other@sukisuki.ai';await worker.email(g.msg,g.env);assert.deepEqual(g.events,['reject']);
+});
+for(const to of ['suki@sukisuki.ai','Suki@SukiSuki.AI','meta@sukisuki.ai','META@SukiSuki.AI']) {
+ test(`收件人 ${to} 先轉寄再封存，CLI 顯示正規化 envelope 收件人`,async()=>{
+  const f=setup();f.msg.to=to;await worker.email(f.msg,f.env);
+  assert.deepEqual(f.events,['forward','store'],to);
+  const mail=JSON.parse([...f.objects.values()][0].body);assert.equal(mail.to,to.toLowerCase());
+  const result=await readMessages({endpoint:'https://mail.example.net',token:f.env.READ_TOKEN},5,
+   (url,options)=>worker.fetch(new Request(url,options),f.env));
+  assert.equal(result.messages[0].to,to.toLowerCase());
+ });
+}
+test('其他收件人、兩個信箱的 +別名與其他網域仍拒絕，不轉寄也不封存',async()=>{
+ for(const to of ['other@sukisuki.ai','suki+alias@sukisuki.ai','META+alias@sukisuki.ai','meta@example.net','meta@sukisuki.ai.example.net']) {
+  const f=setup();f.msg.to=to;await worker.email(f.msg,f.env);assert.deepEqual(f.events,['reject'],to);assert.equal(f.objects.size,0);
+ }
 });
 test('Gmail forwarding 失敗不存；私有存放失敗不阻斷已完成轉寄',async()=>{
  const f=setup();f.msg.forward=async()=>{throw Error('private address must not log');};await assert.rejects(worker.email(f.msg,f.env));assert.equal(f.objects.size,0);

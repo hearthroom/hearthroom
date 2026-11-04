@@ -1,6 +1,6 @@
 import PostalMime from 'postal-mime';
 
-const RECIPIENT = 'suki@sukisuki.ai';
+const RECIPIENTS = new Set(['suki@sukisuki.ai', 'meta@sukisuki.ai']);
 const RETENTION_MS = 30 * 86400000;
 const MAX_BYTES = 1024 * 1024;
 const MAX_TEXT = 128 * 1024;
@@ -22,7 +22,8 @@ async function recent(env, limit) {
 export default {
   async email(message, env) {
     // Envelope recipient is authoritative; case variants are the same mailbox, plus aliases are not.
-    if (message.to.toLowerCase() !== RECIPIENT) { message.setReject('Unsupported recipient'); event('rejected'); return; }
+    const to = message.to.toLowerCase();
+    if (!RECIPIENTS.has(to)) { message.setReject('Unsupported recipient'); event('rejected'); return; }
     if (!env.FORWARD_TO) throw new Error('Forward destination is not configured');
     try { await message.forward(env.FORWARD_TO); }
     catch { event('forward_failed'); throw new Error('Mail forwarding failed'); }
@@ -34,7 +35,7 @@ export default {
       const parsed = await PostalMime.parse(raw);
       const receivedAt = new Date().toISOString();
       const text = (parsed.text || (parsed.html || '').replace(/<[^>]*>/g, ' ')).slice(0, MAX_TEXT);
-      const mail = { from: (parsed.from?.address || message.from).slice(0, 2000),
+      const mail = { to, from: (parsed.from?.address || message.from).slice(0, 2000),
         fromName: (parsed.from?.name || '').slice(0, 2000), envelopeFrom: message.from,
         subject: (parsed.subject || '').slice(0, 2000), receivedAt, text,
         links: linksFrom(text + '\n' + (parsed.html || '').slice(0, MAX_TEXT)) };
