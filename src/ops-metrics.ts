@@ -6,6 +6,7 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  promo_redirect: {name:'hearthroom_promo_redirects_total',help:'Temporary promotion redirects by bounded outcome; no campaign or referral identifiers.',label:'operation',operations:['redirect'],outcomes:['success','unknown','invalid']},
   score_admission: {name:'hearthroom_score_admissions_total',help:'Verified card rating qualification before score writes.',label:'operation',operations:['set'],outcomes:['allowed','denied','unavailable']},
   country_region:{name:'hearthroom_country_region_operations_total',help:'First country/region defaults, settings saves and region policy denials.',label:'operation',operations:['initialize','save','admission'],outcomes:['success','denied','error']},
   badge_stats:{name:'hearthroom_badge_stats_total',help:'Private badge qualification refresh outcomes.',label:'operation',operations:['refresh','backfill'],outcomes:['success','pending','error']},
