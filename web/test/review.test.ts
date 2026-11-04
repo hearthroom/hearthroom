@@ -58,6 +58,15 @@ afterEach(() => {
 });
 
 describe("審核佇列頁", () => {
+  it("自審是永久拒絕，說明原因且不提示重試、不進詳情", async () => {
+    api.claimReview.mockRejectedValueOnce(new api.ApiError(403, "舊的通用訊息", "moderation_self_review"));
+    [...host.querySelectorAll("button")].find(b=>b.textContent?.trim()===i18n.global.t("review.action.claim"))!.click();
+    await vi.waitFor(()=>expect(host.querySelector('[data-review-row="s1"]')?.textContent).toContain(i18n.global.t('review.selfReview.claim')));
+    expect(host.textContent).not.toContain(i18n.global.t('review.claim.failed'));
+    expect(router.currentRoute.value.path).toBe('/review');
+    expect(api.claimReview).toHaveBeenCalledTimes(1);
+  });
+
   it("列出待審的卡：章數、初審／重審、可不可領；不顯示作者", () => {
     const text = host.textContent ?? "";
     // 一章即定案：每列不再放「n / 1 人通過」（沒有資訊量）

@@ -81,7 +81,8 @@ async function claim(item: ReviewQueueItem) {
   } catch (err) {
     // 被別人先領走：這一列改成「有人在看」並說明；其他失敗只說沒領成，按鈕照樣可以再按
     const taken = err instanceof ApiError && err.status === 409 && err.code !== "you already reviewed this submission";
-    const text = taken ? t("review.claim.taken")
+    const text = err instanceof ApiError && err.code === "moderation_self_review" ? t("review.selfReview.claim")
+      : taken ? t("review.claim.taken")
       : err instanceof ApiError && err.code === "age_verification_required" ? t("error.ageVerificationRequired")
       : err instanceof Error && err.message === t("auth.expired") ? err.message
       : t("review.claim.failed");
