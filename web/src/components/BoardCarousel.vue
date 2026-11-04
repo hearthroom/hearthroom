@@ -2,6 +2,8 @@
 /**
  * 首頁看板頂端的輪播：推薦到首頁的活動在前，原本的蘇綺（插槽，內容不動）固定排最後。
  * 一開始停在第一個活動：活動比歡迎卡重要（owner 2026-10-17：分享季 → 創作季 → 蘇綺卡）。
+ * 分享季排第一張是刻意的：使用者先看到它才會去分享，越往後看效果越少（owner 2026-11-04：先看分享季，再看創作季，最後看榜單有獎）。
+ * 順序：活動 → 限時公告 → 置頂文章 → 蘇綺。
  *
  * 活動從公開列表挑：推薦到首頁、進行中或即將開始，照活動設定的排序值，最多三個（featuredCampaigns）。
  * 一個都沒有就只畫插槽，外層全部 display: contents，跟沒有輪播時一模一樣；活動的程式碼等首頁畫好才下載。
@@ -9,8 +11,8 @@
  * 沒有蘇綺時活動卡自己撐高度，跟歡迎橫幅一樣高。
  *
  * 活動之後最多再接一張文章：置頂中、30 天內發布的最新一篇（homePost），關聯的活動已經在輪播裡就不放。
- * 站方的限時公告（lib/home-announcements）排在最前：一張字畫在圖裡的圖、點了去說明頁，期間到了自動消失；
- * 和它同一頁的置頂文章不再另放一張。
+ * 站方的限時公告（lib/home-announcements）接在活動後面、文章前面：一張字畫在圖裡的圖、點了去說明頁，期間到了自動消失；
+ * 活動讀不到時照樣出現。和它同一頁的置頂文章不再另放一張。
  *
  * 每 7 秒換一張，進度條顯示這張還剩多久。滑鼠在上面、焦點在裡面、分頁在背景時暫停，進度停住不歸零；
  * 手指碰過之後 10 秒內不自己換（正在點蘇綺的選項時不被換走），之後恢復；系統設定減少動態時不自己換。
@@ -78,12 +80,12 @@ const postPath = ref("");
 const notices = computed(() => props.campaigns ? activeAnnouncements(HOME_ANNOUNCEMENTS, Date.now(), locale.value) : []);
 const slides = computed(() => {
   const m = lib.value;
-  const first = notices.value.map((n) => { const alt = t(`announcement.${n.id}.alt`); return { slug: `notice:${n.id}`, to: n.path, phase: "open" as const, bannerUrl: null, poster: { url: n.src, alt }, title: alt, parts: [alt], period: "" }; });
-  if (!m || !props.campaigns) return first;
-  return [...first, ...featured.value.map((c) => {
+  const noticeSlides = notices.value.map((n) => { const alt = t(`announcement.${n.id}.alt`); return { slug: `notice:${n.id}`, to: n.path, phase: "open" as const, bannerUrl: null, poster: { url: n.src, alt }, title: alt, parts: [alt], period: "" }; });
+  if (!m || !props.campaigns) return noticeSlides;
+  return [...featured.value.map((c) => {
     const title = m.localized(c.title, locale.value) || c.slug;
     return { slug: c.slug, to: `/campaign/${c.slug}`, phase: c.phase, bannerUrl: c.bannerUrl, poster: c.posterUrls?.[locale.value], title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
-  })];
+  }), ...noticeSlides];
 });
 /**
  * 活動名兩行時在品牌名後的空格斷（「SukiSuki／創作シーズン」）：品牌名與活動名各自不換行。

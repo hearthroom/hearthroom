@@ -372,15 +372,17 @@ describe("home announcement slide", () => {
     return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404, headers: { "Content-Type": "application/json" } });
   }));
 
-  it("puts the notice first as a picture with its words drawn in, linking to its page", async () => {
+  // 首頁輪播先放活動（分享季 → 創作季），限時公告（榜單有獎）接在活動後面、蘇綺前面（owner 2026-11-04）
+  it("puts the notice after the campaigns as a picture with its words drawn in, linking to its page", async () => {
     notices.list = [notice];
     serve();
     await mount();
-    const slide = slides()[0];
-    expect(slide.getAttribute("data-slide")).toBe("notice:card-rewards");
+    expect(slides().map((s) => s.getAttribute("data-slide"))).toEqual(["open-one", "upcoming-one", "notice:card-rewards", null]);
+    expect(shown()).toBe(0);
+    const slide = slides()[2];
     // 桌機未登入時輪播只有 220 高，會切掉圖上的字：公告那張要撐出夠的高度（樣式掛在這個 class 上）
     expect(slide.classList.contains("carousel__slide--notice")).toBe(true);
-    expect(slides()[1].classList.contains("carousel__slide--notice")).toBe(false);
+    expect(slides()[0].classList.contains("carousel__slide--notice")).toBe(false);
     const img = slide.querySelector("img")!;
     expect(img.getAttribute("src")).toBe("/announcements/card-rewards-zh-Hant.webp");
     expect(img.getAttribute("alt")).toBe(i18n.global.t("announcement.card-rewards.alt"));
@@ -397,6 +399,13 @@ describe("home announcement slide", () => {
     await mount();
     expect($('[data-slide="notice:card-rewards"]')).not.toBeNull();
     expect($('[data-slide^="post:"]')).toBeNull();
+  });
+
+  it("still shows when the campaign list cannot be read", async () => {
+    notices.list = [notice];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500, headers: { "Content-Type": "application/json" } })));
+    await mount();
+    expect(slides()[0].getAttribute("data-slide")).toBe("notice:card-rewards");
   });
 
   it("is absent once it ends", async () => {
