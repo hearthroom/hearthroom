@@ -50,6 +50,8 @@ function focusOut(e: FocusEvent) { if (e.relatedTarget && !root.value?.contains(
 /**
  * 頁首的積分：顯示實際餘額（跟積分頁同一個數：一般＋限時）。只寫「積分與會員」幾個字沒有資訊量（owner 2026-10-11），
  * 讀不到餘額就整顆不放；百萬以上縮寫，免得把頁首撐開。
+ * 窄頁首（手機、平板、App）的選單在「積分與會員」後面也帶同一個數：手機頁首放不下這顆鈕。
+ * 寬頁首的選單不帶：鈕就在頭像旁邊，而且那個選單只有 220 寬，英文標籤加數字會擠成兩行。
  */
 const balance = computed(() => {
   const w = session.wallet;
@@ -98,7 +100,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </RouterLink>
       <div class="menu__group">
         <p v-if="props.compact" class="menu__label">{{ $t('home.rewardsGroup') }}</p>
-        <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}</RouterLink>
+        <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<span v-if="balance && props.compact" class="menu__aside menu__balance">{{ balance }}</span></RouterLink>
         <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="calendar" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
         <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
       </div>
@@ -169,11 +171,12 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 }
 .menu__item svg { width: 18px; height: 18px; color: var(--text-2); }
 .menu__item:hover { background: var(--surface-2); }
-.menu__aside { margin-inline-start: auto; padding-inline-start: var(--s-3); display: grid; text-align: right; font-size: 13px; line-height: 1.3; color: var(--text-2); white-space: nowrap; }
-.menu__aside-host { font-size: 12px; color: var(--text-3); }
+/* 列尾的值（「積分與會員」後面的餘額）：靠右、不換行。跟標籤之間只靠列本身的 gap：
+   窄頁首的選單寬 280，英文標籤 145 加六位數餘額剛好一行放得下，再多一點內距就把標籤擠成兩行 */
+.menu__aside { margin-inline-start: auto; flex: none; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.menu__balance { font-weight: 600; font-variant-numeric: tabular-nums; }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .menu__label { margin: var(--s-1) var(--s-2); font-size: 12px; font-weight: 600; color: var(--text-3); }
 .menu--compact { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); width: min(280px, calc(100vw - 24px)); }
 .menu--compact .menu__item { min-height: var(--h-lg); font-size: 14px; }
-.menu--compact .menu__aside { white-space: normal; overflow-wrap: anywhere; }
 </style>

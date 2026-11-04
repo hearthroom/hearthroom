@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "手機上點頭像打開選單，「積分與會員」旁邊就看得到剩餘積分。",
+    "zh-Hans": "手机上点头像打开菜单，“积分与会员”旁边就能看到剩余积分。",
+    "en": "On phones, the avatar menu now shows your credit balance right next to Credits & membership.",
+    "ja": "スマホでアバターのメニューを開くと、「ポイントと会員」の横に残りのポイントが表示されます。",
+    "ko": "휴대폰에서 아바타 메뉴를 열면 '포인트 및 멤버십' 옆에 남은 포인트가 보여요."
+  }
+}
