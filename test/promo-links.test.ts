@@ -79,3 +79,18 @@ it('all configured targets are safe local landings with attribution', () => {
     expect(url.searchParams.get('utm_campaign')).toBeTruthy();
   }
 });
+
+it.each([
+  ['bh-bofuri', '/cards/100184', 'bh-bofuri-20261104'],
+  ['bh-bofuri-indie', '/cards/100184', 'bh-bofuri-indie-20261105'],
+  ['bh-howto-doujin', '/guide', 'bh-howto-doujin-20261104'],
+  ['bh-intro', '/', 'bh-intro-20261105'],
+  ['bh-novelsim-fantasy', '/cards/100216', 'bh-novelsim-fantasy-20261105'],
+  ['bh-cli-dev', '/developers', 'bh-cli-dev-20261106'],
+  ['bh-novelsim-mini', '/cards/100216', 'bh-novelsim-mini-20261106'],
+])('serves the approved additional campaign %s', async (code, path, campaign) => {
+  const response = await visit(`/go/${code}`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${path}?ref=94A9H94Z&utm_source=bahamut&utm_medium=forum&utm_campaign=${campaign}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+});
