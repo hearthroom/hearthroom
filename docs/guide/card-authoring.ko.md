@@ -213,6 +213,12 @@
 
 페이지 작성자 API는 sandbox의 `sdk.history`와 classic의 `stage.history`입니다. 먼저 `capabilities().available`을 확인하세요. 이전 호스트와 미리보기에서는 지원하지 않을 수 있습니다. `list({cursor,revision,content:true})`는 현재 플레이어, 카드, 대화만 읽습니다. 다음 페이지도 첫 페이지와 같은 revision으로 읽으세요. 모든 페이지를 모으고 마지막 페이지의 `complete:true`를 확인한 뒤 전체 목록을 사용하세요.
 
+각 항목에는 `replyTo: string | null`이 있습니다. `role: 'ai'`이면 응답을 시작한 플레이어 메시지의 불투명한 `id`이며, 이 기록의 ID와 같은 값을 사용합니다. 대상이 다른 페이지에 있을 수도 있습니다. 플레이어 메시지, 시작 메시지, 연결을 확인할 수 없는 응답은 `null`입니다. 이전 데이터나 분기할 때 복사한 메시지는 연결을 알 수 없을 수 있고, 이전 호스트는 필드를 생략할 수도 있습니다. 모두 알 수 없는 상태로 처리하고, 인접한 순서로 연결을 추측하지 마세요.
+
+재생성하면 플레이어와 AI 메시지 ID가 새로 만들어지고, 새 응답의 `replyTo`는 새 플레이어 ID를 가리킵니다. AI 응답을 직접 편집해도 ID와 `replyTo`는 유지됩니다. 되돌리면 버린 메시지가 사라집니다. 플레이어 메시지만 삭제되고 AI 응답이 남으면 해당 응답의 `replyTo`는 `null`이 됩니다. 원래 응답에 덧붙이는 일반적인 이어 쓰기(`contine` / `continue_response`)는 여전히 지원하지 않습니다. 저장된 Agent 준비를 계속할 때는 원래 플레이어 메시지 ID를 사용합니다.
+
+`onChange`의 각 항목에는 `{op, id, replyTo}`가 있으며 `replacementId`가 추가될 수도 있습니다. `add` / `update`의 `replyTo`는 변경을 읽는 시점에 확인할 수 있는 연결이며, 과거 이벤트 revision의 스냅샷이 아닙니다. `remove`에서는 항상 `null`입니다. 이벤트는 파생 상태를 무효화하는 알림입니다. 플레이어 메시지 삭제만 보고되어도 AI 응답의 연결이 알 수 없게 될 수 있으므로 전체 목록을 다시 읽으세요.
+
 `onChange(callback)`은 구독 해제 함수를 반환하며, mount된 적이 없거나 이미 hollow 상태인 메시지의 실제 삭제도 알립니다. viewport unmount는 삭제가 아닙니다. 이벤트의 첫 부분을 받으면 파생 상태를 미확인으로 표시하고, 전체 목록을 다시 읽은 뒤 계산하세요. 만료된 cursor, reset, unavailable은 알 수 없는 상태이며 빈 기록이 아닙니다.
 
 선택적 본문은 종료된 메시지의 표시 가능한 원문만 포함하며 thinking, 생성 중 본문, moderation으로 숨긴 내용은 제외합니다. `item.complete`는 부분 또는 실패한 응답을 성공으로 취급하지 않습니다. revision과 불투명 ID는 플레이어 신원이 아닙니다.

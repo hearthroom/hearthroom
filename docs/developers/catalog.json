@@ -2532,5 +2532,7 @@
   "d363603320356": "Current authenticated player eligibility",
   "df2b79f2f12d6": "Invalid request, including caller-supplied viewer identity",
   "d395733b4129f": "Issuer key or bearer missing or invalid",
-  "d353a840f83e9": "Role is unavailable to this viewer"
+  "d353a840f83e9": "Role is unavailable to this viewer",
+  "d625faa5331e6": "For an AI reply, the verifiable triggering user message's opaque history id in this conversation, possibly on another page. Null for user messages, openings, deleted targets or unverifiable links (including older or copied fork messages). Regeneration points to the new user id; manual AI edits preserve the link. Never infer adjacency.",
+  "d15cc317cbff9": "For add/update, the triggering user's opaque history id verifiable at read time, not a snapshot of the event revision. Null for remove or an unverifiable link. Invalidate derived state and re-read the complete history list, including after user-message removal."
 }

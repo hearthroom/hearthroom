@@ -213,6 +213,12 @@
 
 頁級作者 API 提供沙盒卡的 `sdk.history` 與一般卡的 `stage.history`。先探測 `capabilities().available`；舊宿主與預覽可能不支援。`list({cursor,revision,content:true})` 只讀目前玩家、目前卡、目前會話；所有分頁必須沿用第一頁的 revision；累積每一頁，直到收到 `complete:true` 的最後一頁，才能採用整份清單。
 
+每個項目都有 `replyTo: string | null`。`role: 'ai'` 時，它是觸發這則回覆的玩家訊息之不透明 `id`，與這份 history 使用同一組 ID，目標可能在另一頁。玩家訊息、開場白與無法核實對應的回覆填 `null`；舊資料或從分叉複製的訊息可能沒有可核實關聯，舊宿主也可能省略欄位。這些情況都當未知，不要靠相鄰順序猜。
+
+重新生成會建立新的玩家與 AI 訊息 ID，新回覆指向新的玩家 ID。手動編輯 AI 回覆保留它的 ID 與 `replyTo`。退回會移除捨棄的訊息；玩家訊息被刪除而 AI 回覆仍保留時，該回覆的 `replyTo` 變成 `null`。一般接續原回覆的續寫（`contine`／`continue_response`）仍不支援；繼續已保存的 Agent 準備進度會沿用原玩家訊息 ID。
+
+`onChange` 的每個項目都有 `{op, id, replyTo}`（也可能有 `replacementId`）。`add`／`update` 的 `replyTo` 是讀取變更時可核實的關聯，不是事件舊 revision 的快照；`remove` 一律是 `null`。事件用來使衍生狀態失效；即使只收到玩家訊息的刪除，也要重新讀完整清單，因為 AI 回覆的關聯可能一併變成未知。
+
 `onChange(callback)` 回取消訂閱函式，從未 mount 或已 hollow 的訊息真刪除仍有變更，viewport unmount 不算刪除。收到第一包事件時，先將衍生狀態標為待確認，重新取得完整清單後再計算。舊游標、reset 或 unavailable 代表未知，不是空歷史。
 
 可選正文只有已終止的可見原文，不含 thinking、生成中文字或 moderation 隱藏內容；`item.complete` 不把部分／失敗回覆當成功。revision 與不透明 ID 不是玩家身分。

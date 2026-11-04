@@ -27264,7 +27264,8 @@
           "kind",
           "state",
           "complete",
-          "contentVersion"
+          "contentVersion",
+          "replyTo"
         ],
         "properties": {
           "id": {
@@ -27306,6 +27307,13 @@
           "content": {
             "type": "string",
             "description": "Optional visible original body of a terminal message; never thinking, streaming text or withheld moderated content."
+          },
+          "replyTo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For an AI reply, the verifiable triggering user message's opaque history id in this conversation, possibly on another page. Null for user messages, openings, deleted targets or unverifiable links (including older or copied fork messages). Regeneration points to the new user id; manual AI edits preserve the link. Never infer adjacency."
           }
         }
       },
@@ -27349,7 +27357,8 @@
               "type": "object",
               "required": [
                 "op",
-                "id"
+                "id",
+                "replyTo"
               ],
               "properties": {
                 "op": {
@@ -27362,6 +27371,13 @@
                 "id": {
                   "type": "string",
                   "description": "Opaque identifier scoped to this owned conversation; not a user identity."
+                },
+                "replyTo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "For add/update, the triggering user's opaque history id verifiable at read time, not a snapshot of the event revision. Null for remove or an unverifiable link. Invalidate derived state and re-read the complete history list, including after user-message removal."
                 }
               }
             }

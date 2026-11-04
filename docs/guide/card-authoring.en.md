@@ -213,6 +213,12 @@ On the friend's side, `sdk.share.context` holds the code; it is `null` when ther
 
 The page author API provides `sdk.history` (sandbox) and `stage.history` (classic). Check `capabilities().available` first; old hosts and previews may not support it. `list({cursor,revision,content:true})` reads only the current player, configuration and conversation. Use the first page's revision for every continuation page. Accumulate all pages and use the full collection only after the last page returns `complete:true`.
 
+Each item includes `replyTo: string | null`. For `role: 'ai'`, it is the opaque `id` of the player message that triggered the reply, using the same IDs as this history; the target may be on another page. Player messages, openings and replies with no verifiable link have `null`. Older or copied fork messages can have an unknown link; an older host may omit the field. Treat both as unknown and do not infer a link from adjacent messages.
+
+Regenerating creates new player and AI message IDs, and the new reply points to the new player ID. Manually editing an AI reply keeps its ID and `replyTo`. Going back removes the discarded messages; if a player message is deleted while its AI reply remains, that reply's `replyTo` becomes `null`. Ordinary append-to-reply Continue (`contine` / `continue_response`) remains unsupported; continuing saved Agent preparation uses the original player message ID.
+
+Each `onChange` entry has `{op, id, replyTo}` (and may have `replacementId`). For `add` and `update`, `replyTo` is the link verifiable when the changes are read, not a snapshot of the old event revision; for `remove`, it is `null`. These events invalidate derived state. Re-read the complete list even when only a player-message removal is reported, because an AI reply's link may also become unknown.
+
 `onChange(callback)` returns an unsubscribe function and reports committed changes even for messages never mounted or already hollow; viewport unmount is not deletion. Invalidate derived state as soon as the first event part arrives, then rebuild it from a complete list. A stale cursor, reset or unavailable result is unknown state, never an empty history.
 
 Only terminal visible original bodies are optional; thinking, streaming body and moderation-withheld text are excluded. `item.complete` excludes partial or failed replies. Revisions and opaque IDs are not player identities.

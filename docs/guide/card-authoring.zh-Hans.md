@@ -213,6 +213,12 @@
 
 页面作者 API 提供沙盒卡的 `sdk.history` 与普通卡的 `stage.history`。先检查 `capabilities().available`；旧宿主和预览可能不支持。`list({cursor,revision,content:true})` 只读取当前玩家、当前卡片、当前会话；所有分页必须沿用第一页的 revision；累积每一页，直到收到 `complete:true` 的最后一页，才能使用完整列表。
 
+每个项目都有 `replyTo: string | null`。`role: 'ai'` 时，它是触发这条回复的玩家消息的不透明 `id`，与这份 history 使用同一组 ID，目标可能在另一页。玩家消息、开场白和无法核实对应的回复填 `null`；旧数据或从分叉复制的消息可能没有可核实关联，旧宿主也可能省略字段。这些情况都按未知处理，不要根据相邻顺序猜测。
+
+重新生成会创建新的玩家和 AI 消息 ID，新回复指向新的玩家 ID。手动编辑 AI 回复会保留它的 ID 和 `replyTo`。退回会移除放弃的消息；玩家消息被删除而 AI 回复仍保留时，该回复的 `replyTo` 变成 `null`。接续原回复的普通续写（`contine` / `continue_response`）仍不支持；继续已保存的 Agent 准备进度会沿用原玩家消息 ID。
+
+`onChange` 的每个项目都有 `{op, id, replyTo}`（也可能有 `replacementId`）。`add` / `update` 的 `replyTo` 是读取变更时可核实的关联，不是事件旧 revision 的快照；`remove` 一律是 `null`。事件用于使派生状态失效；即使只收到玩家消息的删除，也要重新读取完整列表，因为 AI 回复的关联可能同时变成未知。
+
 `onChange(callback)` 返回取消订阅函数，从未 mount 或已 hollow 的消息被真正删除时仍有事件，viewport unmount 不表示删除。收到第一部分事件时，先将派生状态标为待确认，重新获取完整列表后再计算。失效游标、reset 或 unavailable 表示未知，不是空历史。
 
 可选正文只含已终止消息的可见原文，不含 thinking、生成中的正文或被 moderation 隐藏的内容；`item.complete` 不把部分或失败回复当成功。revision 和不透明 ID 不是玩家身份。
