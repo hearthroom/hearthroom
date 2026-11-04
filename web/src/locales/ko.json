@@ -4433,5 +4433,6 @@
   "lengthExemption.searchHint": "공개 카드 번호를 정확히 입력해 최소 글자 수 면제 여부를 확인하세요.",
   "lengthExemption.notFound": "카드를 찾을 수 없어요",
   "moderation.error.card_not_found": "카드를 찾을 수 없어요",
-  "moderation.error.review_length_exemption_conflict": "사안 상태가 변경되었거나 이미 투표했습니다. 새로고침하여 확인하세요."
+  "moderation.error.review_length_exemption_conflict": "이번 변경이 현재 면제 상태와 맞지 않아요. 새로고침한 뒤 다시 확인하세요.",
+  "lengthExemption.total": "합계 {total}자"
 }

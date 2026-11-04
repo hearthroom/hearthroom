@@ -1384,7 +1384,7 @@ async function exportCard(format: "png" | "json") {
             <template v-if="reviewCount">
             <p class="review-count__head">
               <span class="review-count__title">{{ $t("reviewLength.title") }}</span>
-              <span class="review-count__total">{{ $t("reviewLength.total", reviewCount.n) }}</span>
+              <span class="review-count__total">{{ $t(lengthExempt ? 'lengthExemption.total' : 'reviewLength.total', reviewCount.n) }}</span>
               <span v-if="!lengthExempt" class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
                 <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
                 {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}

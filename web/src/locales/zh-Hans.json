@@ -4433,5 +4433,6 @@
   "lengthExemption.searchHint": "输入公开卡号，查询这张卡的字数门槛豁免。",
   "lengthExemption.notFound": "查无此卡",
   "moderation.error.card_not_found": "查无此卡",
-  "moderation.error.review_length_exemption_conflict": "案件状态已变更或你已投过票，刷新后再确认。"
+  "moderation.error.review_length_exemption_conflict": "本次更改与当前豁免状态不一致，请刷新后再确认。",
+  "lengthExemption.total": "合计 {total} 字"
 }

@@ -4433,5 +4433,6 @@
   "lengthExemption.searchHint": "輸入公開卡號，查詢這張卡的字數門檻豁免。",
   "lengthExemption.notFound": "查無此卡",
   "moderation.error.card_not_found": "查無此卡",
-  "moderation.error.review_length_exemption_conflict": "案件狀態已變更或你已投過票，重新整理後再確認。"
+  "moderation.error.review_length_exemption_conflict": "這次變更與目前的豁免狀態不符，重新整理後再確認。",
+  "lengthExemption.total": "合計 {total} 字"
 }

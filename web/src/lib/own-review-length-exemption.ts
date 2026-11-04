@@ -9,7 +9,8 @@ export function useOwnReviewLengthExemption(roleId:Ref<string>){
  onScopeDispose(()=>{generation++;enabled.value=false;});
  watch(()=>[roleId.value,session.me?.accountNumId,currentProvider()],async()=>{
   const gen=++generation,id=roleId.value,provider=currentProvider();enabled.value=false;
-  if(!id||!session.me)return;
+  // The editor resolves its public number to the provider source role before this read.
+  if(!id||/^[1-9]\d*$/.test(id)||!session.me)return;
   try{
    const token=await session.accessToken();if(!token||gen!==generation)return;
    const response=await fetch(`/v1/me/review-length-exemptions/${encodeURIComponent(id)}`,{headers:{Authorization:`Bearer ${token}`,'X-Provider':provider},cache:'no-store'});

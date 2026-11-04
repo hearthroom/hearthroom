@@ -4433,5 +4433,6 @@
   "lengthExemption.searchHint": "公開カード番号を入力すると、そのカードの文字数の下限免除を確認できます。",
   "lengthExemption.notFound": "カードが見つかりません",
   "moderation.error.card_not_found": "カードが見つかりません",
-  "moderation.error.review_length_exemption_conflict": "案件の状態が変わったか、投票済みです。更新して確認してください。"
+  "moderation.error.review_length_exemption_conflict": "免除の状態と今回の変更が一致しません。更新して確認してください。",
+  "lengthExemption.total": "合計 {total} 文字"
 }

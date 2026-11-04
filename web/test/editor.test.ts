@@ -154,6 +154,7 @@ it('shows the authoritative exemption instead of a remaining-character warning',
   await mount('/cards/r1/edit');
   expect($('[data-review-count]').textContent).toContain(i18n.global.t('lengthExemption.author'));
   expect($('[data-review-count]').textContent).not.toContain('還差');
+  expect($('[data-review-count]').textContent).not.toContain('至少');
 });
 
 it.each(['entries', 'bindings'] as const)('blocks writes and offers a retry when Lorebook %s cannot load', async (part) => {

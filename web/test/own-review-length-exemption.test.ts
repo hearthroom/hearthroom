@@ -21,3 +21,11 @@ it('clears across cards, errors and identities, and ignores stale successful res
  id.value='X';await vi.waitFor(()=>expect(replies).toHaveLength(4));
  session.me=null;replies[3](Response.json({enabled:true}));await nextTick();await new Promise(r=>setTimeout(r,0));expect(enabled.value).toBe(false);
 });
+it('waits for the editor to resolve a public number before requesting source-role ownership',async()=>{
+ const fetcher=vi.fn(async(_url:RequestInfo|URL,_init?:RequestInit)=>Response.json({enabled:true}));vi.stubGlobal('fetch',fetcher);
+ const id=ref('490001'),scope=effectScope();stop=()=>scope.stop();
+ const enabled=scope.run(()=>useOwnReviewLengthExemption(id))!;
+ await nextTick();expect(fetcher).not.toHaveBeenCalled();expect(enabled.value).toBe(false);
+ id.value='source-role';await vi.waitFor(()=>expect(enabled.value).toBe(true));
+ expect(fetcher.mock.calls[0][0]).toBe('/v1/me/review-length-exemptions/source-role');
+});

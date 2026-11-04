@@ -4433,5 +4433,6 @@
   "lengthExemption.searchHint": "Enter the exact public card number to check its character minimum exemption.",
   "lengthExemption.notFound": "Card not found",
   "moderation.error.card_not_found": "Card not found",
-  "moderation.error.review_length_exemption_conflict": "The case changed or you already voted. Refresh to see its current state."
+  "moderation.error.review_length_exemption_conflict": "This change no longer matches the current exemption. Refresh and check it again.",
+  "lengthExemption.total": "Total: {total}"
 }

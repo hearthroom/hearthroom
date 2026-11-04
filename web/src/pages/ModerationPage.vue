@@ -157,7 +157,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
 .work-featured{display:grid;gap:var(--s-3);padding-block:var(--s-3);border-bottom:1px solid var(--line);}.work-featured h3{margin-top:0;}.work-featured .btn{justify-self:start;}
 .work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
 .exemption-search{padding:var(--s-4);margin-bottom:var(--s-4);display:grid;gap:var(--s-3);}
-.exemption-search .field{flex:1;min-width:0;}
+.exemption-search .field{flex:1;min-width:0;margin:0;}
 .exemption-search .work-search{align-items:end;}
 .work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}.work-search__quota{flex-basis:100%;}.work-author{justify-self:start;}
 .work-grid{display:grid;grid-template-columns:minmax(240px,0.85fr) minmax(0,1.4fr);gap:var(--s-4);align-items:start;}
