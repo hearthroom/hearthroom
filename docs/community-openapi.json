@@ -632,6 +632,7 @@
           "Authors"
         ],
         "summary": "Browse authors",
+        "description": "Lists authors and aggregates only their visible public cards. Adult access follows the same account preference, age verification, consent and region rules as card search. Cookie sessions use the saved preference; bearer callers must also request nsfw=1. Internal caches are separated by verified adult access.",
         "security": [],
         "responses": {
           "200": {
@@ -666,6 +667,13 @@
           }
         },
         "parameters": [
+          {
+            "name": "nsfw",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["1"] },
+            "description": "Requests adult content for bearer callers; does not grant access by itself."
+          },
           {
             "name": "zone",
             "in": "query",

@@ -114,7 +114,7 @@ export const NOT_ADULT = "rating IS NOT 'R'";
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 /**
  * 加上成人內容的門：沒開啟（或沒登入）的人只看得到一般內容。
- * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
+ * 標籤列只算一般內容；卡片與作者清單依讀者偏好篩選，內部快取按成人存取權分開。
  */
 const listed = (allowNsfw:boolean,alias='c') => `${alias}.status='approved' AND ${alias}.board_hidden=0 AND ${alias}.public_blocked=0
  AND NOT EXISTS(SELECT 1 FROM members qm WHERE (qm.account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence qf WHERE qf.member_id=qm.id)) AND qm.id IN(
@@ -900,9 +900,9 @@ export interface AuthorRow {
  */
 export async function listAuthors(
   db: D1Database,
-  opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
+  opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number; allowNsfw?: boolean },
 ) {
-  const where: string[] = [listed(false), NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const where: string[] = [listed(opts.allowNsfw ?? false), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) {

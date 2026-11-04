@@ -387,19 +387,20 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
   } });
 }
 
-/** Public author/tag lists share the same five-minute internal cache. */
-async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean } = {}) {
+/** Aggregate lists share a five-minute internal cache, partitioned by verified access. */
+async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: boolean } = {}) {
   if(['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'].includes(c.req.path))await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
   const moderation = await moderationRevision(c);
-  const key = await boardKey(c.req.url, moderation.revision, false);
+  const allowNsfw = opts.allowNsfw ?? false;
+  const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
   const started = performance.now();
   const hit = await readBoardCache(c.env, c.executionCtx, key);
   const cacheTiming = `${moderation.timing}, cache;dur=${(performance.now() - started).toFixed(1)}`;
-  if (hit) return boardResponse(hit.body, false, hit.layer, cacheTiming);
+  if (hit) return boardResponse(hit.body, allowNsfw, hit.layer, cacheTiming);
   const queryStarted = performance.now();
   const body = JSON.stringify(await compute());
   writeBoardCache(c.env, c.executionCtx, key, body, opts);
-  return boardResponse(body, false, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
+  return boardResponse(body, allowNsfw, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 }
 
 /** 榜單與搜尋。匿名可讀。 */
@@ -597,8 +598,9 @@ app.get("/v1/suggest", async (c) => {
 });
 
 /** 作者榜：按作品在本站的合計排。 */
-app.get("/v1/authors", (c) =>
-  cachedJson(c, async () => {
+app.get("/v1/authors", async (c) => {
+  const allowNsfw = await viewerAllowsNsfw(c);
+  return cachedJson(c, async () => {
     const sortParam = c.req.query("sort");
     const sort = sortParam === "cards" || sortParam === "hot" ? sortParam : "talk";
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
@@ -606,11 +608,11 @@ app.get("/v1/authors", (c) =>
     const { rows, hasNext } = await listAuthors(c.env.DB, {
       zone: parseZone(c.req.query("zone")),
       q: c.req.query("q")?.trim() || undefined,
-      sort, limit, offset,
+      sort, limit, offset, allowNsfw,
     });
     return { items: rows.map(toAuthor), hasNext, limit, offset, sort };
-  }),
-);
+  }, { allowNsfw });
+});
 
 /** Owner fallback for host-private legacy assets; never forwards credentials to a guessed provider. */
 async function checkedCardAccess(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,row:NonNullable<Awaited<ReturnType<typeof getCard>>>,surface:VisibilityReadSurface='detail'){

@@ -362,7 +362,9 @@ export interface AuthorPage { items: Author[]; hasNext: boolean; limit: number; 
 export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sort?: AuthorSort; limit?: number; offset?: number } = {}): Promise<AuthorPage> {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
-  return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`, { headers: from() }));
+  const viewer = await viewerAccess();
+  if (viewer.param) params.set("nsfw", "1");
+  return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
 export async function fetchAuthor(handle: string): Promise<Author> {

@@ -246,7 +246,7 @@ describe("成人內容開關與年齡驗證", () => {
 
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer() }));
     expect((await json(await SELF.fetch(`https://c.test/v1/authors/${me.handle}?nsfw=1`, { headers: bearer("viewer-token") }))).cardCount).toBe(2);
-    // 標籤列與作者榜永遠只算一般內容（它們走公開快取）
+    // 匿名作者榜維持一般內容。
     const authors = await json(await SELF.fetch("https://c.test/v1/authors?zone=all&c=1"));
     expect(authors.items[0].cardCount).toBe(1);
   });
