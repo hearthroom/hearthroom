@@ -140,6 +140,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   // 留言審核（/v1/moderation 底下的留言佇列、禁言、關鍵詞、運營設定）
   moderation_reason_required: "moderation.error.moderation_reason_required",
   moderation_conflict: "moderation.error.moderation_conflict",
+  moderation_self_review: "moderation.error.moderation_self_review",
   agent_not_allowed: "moderation.error.agent_not_allowed",
   community_admin_required: "moderation.settings.readOnly",
   invalid_settings: "error.invalidArguments",

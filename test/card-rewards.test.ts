@@ -185,7 +185,7 @@ describe("審核通過就發", () => {
   it("管理員不能發給自己：自己的卡停在待發放，由另一位管理員發", async () => {
     vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
     await submit("own", "admin-author-token");
-    const stamped = await approve("own", "admin-author-token");
+    const stamped = await approve("own", "mod-token");
     expect(stamped.reward).toBeNull();
     expect(stamped.rewardError).toBe("card_reward_service_unavailable");
     expect(pool.sent).toHaveLength(0);
@@ -397,9 +397,15 @@ it("service pays immediately after a non-admin reviewer approves", async () => {
   }
 });
 
-it('service pays an eligible author even when that author performed the review', async () => {
+it('service still pays an eligible author of a historical self-approved review', async () => {
+  vi.mocked(cardRewardTransport.token).mockRejectedValue(new Error('service unavailable'));
   await submit('own', 'admin-author-token');
-  expect((await approve('own', 'admin-author-token')).reward).toMatchObject({status:'paid'});
+  await approve('own', 'mod-token');
+  // Historical pre-fix receipt; the current claim/stamp endpoints forbid this.
+  await env.DB.prepare("UPDATE review_stamps SET member_id=? WHERE submission_id IN (SELECT id FROM review_submissions WHERE card_id=?)")
+    .bind(`member-${ADMIN_AUTHOR}`,await cardIdOf('own')).run();
+  vi.mocked(cardRewardTransport.token).mockResolvedValue('service-token');
+  expect((await serviceRewardOnApproval(env,await cardIdOf('own'),'maintenance')).reward).toMatchObject({status:'paid'});
   expect(pool.sent[0]).toMatchObject({token:'service-token',accountNo:ADMIN_AUTHOR});
   expect(await env.DB.prepare("SELECT actor_kind,actor_member_id FROM audit_log WHERE action='request'").first())
     .toEqual({actor_kind:'system',actor_member_id:null});

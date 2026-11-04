@@ -57,6 +57,19 @@ describe("fetchLibraryImages", () => {
 });
 
 describe("錯誤訊息給人看", () => {
+  it("claim/stamp 自審拒絕沿用既有產品說明，不顯示內部錯誤碼", async () => {
+    const { describeApiError } = await import("../src/lib/api");
+    const { i18n, loadLocale, LOCALE_CODES } = await import("../src/lib/i18n");
+    const initial=i18n.global.locale.value;
+    try {
+      for(const locale of LOCALE_CODES){
+        await loadLocale(locale);i18n.global.locale.value=locale as never;
+        expect(describeApiError(403, "moderation_self_review")).toBe(i18n.global.t("moderation.error.moderation_self_review"));
+        expect(describeApiError(403, "moderation_self_review")).not.toContain("moderation_self_review");
+      }
+    } finally { i18n.global.locale.value=initial; }
+  });
+
   it("認得的錯誤碼各有一句人話；不認得的碼附在後面；伺服器寫給人看的句子原樣講", async () => {
     const { describeApiError } = await import("../src/lib/api");
     const { i18n } = await import("../src/lib/i18n");
