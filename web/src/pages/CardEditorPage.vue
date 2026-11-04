@@ -95,6 +95,8 @@ import {
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
+import { formatReviewLength } from "@/lib/review-length";
+import { combineReviewLength, constantReviewCount, personaReviewCount } from "@/lib/draft-review-length";
 import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -484,6 +486,18 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
   ["roleOutputContract", "editor.contract", "persona"],
   ["jailbreak", "editor.jailbreak", "persona"],
 ];
+
+/**
+ * 送審字數：角色設定加卡綁世界書的已啟用常駐條目，跟送審檢查同一份算法（shared/review-length）。
+ * 上面欄位的「N / 上限」是原始字元數，兩個數字本來就不同；作者只看得到前者時，會以為送審算錯了。
+ * 世界書還沒載好或載不到時，常駐條目會是假的 0，這時不顯示。
+ */
+const reviewPersona = computed(() => personaReviewCount(draft.value.roleDetailDesc));
+const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : constantReviewCount(wb.entries)));
+const reviewCount = computed(() => {
+  const length = combineReviewLength(reviewPersona.value, reviewConstant.value);
+  return length && { eligible: length.eligible, n: formatReviewLength(length, String(locale.value)) };
+});
 
 /** 各分區缺哪個必填。導覽上的紅點與發布前的清單都看這個。 */
 const REQUIRED_OF: Partial<Record<Section, string>> = {
@@ -1363,6 +1377,20 @@ async function exportCard(format: "png" | "json") {
           <h2 class="pane__title">{{ $t("editor.section.persona") }}</h2>
           <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
                      :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
+          <div v-if="reviewCount" class="review-count" data-review-count>
+            <p class="review-count__head">
+              <span class="review-count__title">{{ $t("reviewLength.title") }}</span>
+              <span class="review-count__total">{{ $t("reviewLength.total", reviewCount.n) }}</span>
+              <span class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
+                {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
+              </span>
+            </p>
+            <p class="review-count__parts">
+              <span>{{ $t("reviewLength.persona", reviewCount.n) }}</span>
+              <span>{{ $t("reviewLength.constantWorldbook", reviewCount.n) }}</span>
+            </p>
+            <p class="review-count__hint">{{ $t("reviewLength.countingHint") }}</p>
+          </div>
           <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
                      :max="limits.roleOutputContract" :hint="$t('editor.contract.hint')" />
           <FieldText id="f-jb" v-model="draft.jailbreak" :label="$t('editor.jailbreak')" :rows="6"
@@ -1760,6 +1788,18 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .pane :deep(.field__foot) { margin-top: -2px; }
 .hint { margin: 0 0 var(--s-2); }
 .count { font-variant-numeric: tabular-nums; }
+/* 送審字數：貼在角色設定欄下面，算是那一欄的延伸，所以往上收、不另起一個面板 */
+.review-count { display: grid; gap: 2px; margin-top: calc(-1 * var(--s-2)); padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.5; }
+.review-count p { margin: 0; }
+.review-count__head, .review-count__parts { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--s-3); }
+.review-count__title { font-weight: 600; }
+.review-count__total, .review-count__parts { font-variant-numeric: tabular-nums; }
+.review-count__state { color: var(--warning-text); font-weight: 600; }
+.review-count__state.is-met { color: var(--success); }
+.review-count__parts, .review-count__hint { color: var(--text-2); }
+.review-count__hint { font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+:lang(ko) .review-count { word-break: keep-all; }
+:lang(ja) .review-count { word-break: auto-phrase; }
 .over { color: var(--danger); }
 .tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { cursor: default; }

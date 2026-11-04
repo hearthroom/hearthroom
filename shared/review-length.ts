@@ -16,3 +16,4 @@ export interface ReviewLengthStatus { total: number; required: number; remaining
 export function reviewLengthStatus(total: number): ReviewLengthStatus {
   return { total, required: REVIEW_REQUIRED_CHARACTERS, remaining: Math.max(0, REVIEW_REQUIRED_CHARACTERS - total), eligible: total >= REVIEW_REQUIRED_CHARACTERS };
 }
+

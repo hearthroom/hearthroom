@@ -23,6 +23,7 @@ import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
 import { ratingState } from "../src/lib/rating";
 import { makeDraft } from "../src/lib/role-draft";
+import { formatReviewLength } from "../src/lib/review-length";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -178,6 +179,39 @@ it('keeps a successfully loaded empty Lorebook editable', async () => {
   expect(root.querySelector('.wb [role="alert"]')).toBeNull();
   expect(root.querySelector('.wb')?.textContent).toContain(i18n.global.t('wb.entries.empty'));
   expect(btnIn(root, i18n.global.t('wb.entries.manage'))).toBeTruthy();
+});
+
+describe('review count next to the character definition', () => {
+  const counted = (length: Parameters<typeof formatReviewLength>[0]) => formatReviewLength(length, String(i18n.global.locale.value));
+  const t = (key: string, params: Record<string, string> = {}) => i18n.global.t(key, params);
+
+  it('counts the definition and enabled always-on entries the way the review check does, beside the field limit', async () => {
+    // 角色設定：<b>設定</b>，{{user}} 😀 → 2；常駐條目「北境小鎮。」→ 4；非常駐條目不計
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Count', roleDetailDesc: '<b>設定</b>，{{user}} 😀', roleWelcome: 'Opening' });
+    await mount('/cards/r1/edit');
+    const block = $('[data-section="persona"] [data-review-count]');
+    const params = counted({ persona: 2, constantWorldbook: 4, total: 6, required: 3001, remaining: 2995, eligible: false, welcome: 0 });
+    expect(block.textContent).toContain(t('reviewLength.persona', params));
+    expect(block.textContent).toContain(t('reviewLength.constantWorldbook', params));
+    expect(block.textContent).toContain(t('reviewLength.total', params));
+    expect(block.textContent).toContain(t('reviewLength.remaining', params));
+    expect(block.textContent).toContain(t('reviewLength.countingHint'));
+    // 欄位上限的計數照舊：原始字元數
+    expect($('[data-section="persona"] .count').textContent).toContain(String([...'<b>設定</b>，{{user}} 😀'].length));
+
+    await type($('#f-detail'), '字'.repeat(2997));
+    const met = counted({ persona: 2997, constantWorldbook: 4, total: 3001, required: 3001, remaining: 0, eligible: true, welcome: 0 });
+    expect(block.textContent).toContain(t('reviewLength.total', met));
+    expect(block.textContent).toContain(t('reviewLength.eligible'));
+    expect(block.textContent).not.toContain(t('reviewLength.remaining', met));
+  });
+
+  it('does not show a count while the Lorebook it depends on is unavailable', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Count', roleDetailDesc: '設定', roleWelcome: 'Opening' });
+    api.fetchWorldbookEntries.mockRejectedValueOnce(new Error('unavailable'));
+    await mount('/cards/r1/edit');
+    expect(root.querySelector('[data-review-count]')).toBeNull();
+  });
 });
 
 it('blocks all draft writes when a world character Lorebook failed to load', async () => {

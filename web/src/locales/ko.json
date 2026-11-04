@@ -3565,6 +3565,7 @@
   "reviewLength.total": "합계 {total}자 (최소 {required}자)",
   "reviewLength.eligible": "글자 수 기준 충족",
   "reviewLength.ineligible": "글자 수 부족",
+  "reviewLength.remaining": "{remaining}자 부족",
   "reviewLength.welcome": "첫 메시지 유효 글자 수 {welcome}자 (기준 합계에서 제외)",
   "reviewLength.unavailable": "이 심사에는 글자 수 통계가 없어요",
   "reviewLength.cliError": "유효 글자 수는 캐릭터 설정 {persona}자, 활성화된 상시 세계관 항목 {constantWorldbook}자, 합계 {total}자예요. 제출 기준인 {required}자까지 {remaining}자가 더 필요해요. 어느 쪽이든 내용을 추가한 뒤 변경 사항을 푸시하고 다시 제출하세요.",

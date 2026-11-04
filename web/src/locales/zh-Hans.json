@@ -3565,6 +3565,7 @@
   "reviewLength.total": "合计 {total} 字（至少 {required} 字）",
   "reviewLength.eligible": "字数达标",
   "reviewLength.ineligible": "字数未达标",
+  "reviewLength.remaining": "还差 {remaining} 字",
   "reviewLength.welcome": "开场白有效字数 {welcome} 字（不计入门槛）",
   "reviewLength.unavailable": "这份审核没有字数统计",
   "reviewLength.cliError": "人物设定 {persona} 字，已启用的世界书常驻条目 {constantWorldbook} 字，合计 {total} 字；提交审核至少需要 {required} 有效字，还差 {remaining} 字。两部分可以互相补足，修改后先推送，再重新提交审核。",

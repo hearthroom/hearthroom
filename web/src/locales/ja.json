@@ -3565,6 +3565,7 @@
   "reviewLength.total": "合計 {total} 文字（最低 {required} 文字）",
   "reviewLength.eligible": "文字数条件達成",
   "reviewLength.ineligible": "文字数不足",
+  "reviewLength.remaining": "あと {remaining} 文字",
   "reviewLength.welcome": "最初のメッセージの有効文字数 {welcome} 文字（条件の合計には含みません）",
   "reviewLength.unavailable": "この審査の文字数データはありません",
   "reviewLength.cliError": "有効文字数はキャラクター設定 {persona} 文字、有効な常時オンの世界設定項目 {constantWorldbook} 文字、合計 {total} 文字です。提出に必要な {required} 文字まであと {remaining} 文字です。どちらかに追記して変更をプッシュしてから、再提出してください。",

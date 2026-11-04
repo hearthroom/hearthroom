@@ -3565,6 +3565,7 @@
   "reviewLength.total": "Total: {total} (minimum: {required})",
   "reviewLength.eligible": "Length requirement met",
   "reviewLength.ineligible": "Below the length requirement",
+  "reviewLength.remaining": "Short by {remaining}",
   "reviewLength.welcome": "Counted characters in opening message: {welcome} (excluded from the minimum)",
   "reviewLength.unavailable": "No character count is available for this review",
   "reviewLength.cliError": "Counted characters: character definition {persona}, enabled always-on Lorebook entries {constantWorldbook}, total {total}. The submission minimum is {required}; add {remaining} more in either section, push your changes, then submit again.",
