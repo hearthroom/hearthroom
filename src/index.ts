@@ -128,6 +128,7 @@ import { wikidata } from "./wikidata";
 import { withD1Session } from "./d1-session";
 import { renderSiteManifest } from "./site-manifest";
 import { analyticsRoutes } from "./ga4";
+import { isPromoPurchasePath, promoLinkRoutes } from './promo-links';
 
 import { qaContextRoutes, verifyQAContext, excludeQABrowser } from './qa-browser-context';
 
@@ -238,6 +239,9 @@ app.use("*", async (c, next) => {
   const vary = response.headers.get("Vary");
   if (vary) c.header("Vary", vary);
 });
+
+app.use('/go/*', async (c, next) => isPromoPurchasePath(c.req.path)
+  ? next() : promoLinkRoutes.fetch(c.req.raw, c.env, c.executionCtx));
 
 app.route('/',reviewPlayAccessRoutes());
 app.route('/',enforcementNoticeRoutes());
