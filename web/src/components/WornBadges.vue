@@ -211,9 +211,8 @@ button.worn__more:hover { background: var(--surface); }
 }
 .worn-detail__item { display: flex; gap: var(--s-3); align-items: flex-start; min-width: 0; }
 .worn-detail__tile { display: flex; align-items: center; justify-content: center; flex: none; width: 56px; height: 56px; border-radius: var(--r-md); background: var(--accent-tint); color: var(--accent-text); }
-.worn-detail__tile svg { width: 28px; height: 28px; }
+.worn-detail__tile svg:not(.rank-badge) { width: 28px; height: 28px; }
 .worn-detail__tile--honor { background: var(--surface-2); --rank-badge-h: 43px; }
-.worn-detail__tile--honor svg { width: auto; height: auto; }
 .worn-detail__text { min-width: 0; display: grid; gap: 2px; }
 .worn-detail h3 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .worn-detail p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
