@@ -30,6 +30,13 @@ it.each(['missing', 'constructor', '__proto__', 'https%3A%2F%2Fevil.test'])('unk
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="unknown"} 1');
 });
 
+it.each(['/go', '/go/', '/go/missing/extra'])('malformed short path %s also returns home', async path => {
+  const response = await visit(path);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/');
+  expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
 it('HEAD uses the same temporary redirect', async () => {
   const response = await visit('/go/bh-slime', 'HEAD');
   expect(response.status).toBe(302);

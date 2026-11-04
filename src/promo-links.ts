@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import links from '../config/promo-links.json';
 import { bumpOp } from './ops-metrics';
 import type { Env } from './types';
@@ -21,13 +21,17 @@ export function promoTarget(value: unknown): string | null {
 }
 
 export const promoLinkRoutes = new Hono<{ Bindings: Env }>({ strict: false });
+function redirect(c: Context<{ Bindings: Env }>, target: string, outcome: 'success' | 'unknown' | 'invalid') {
+  c.executionCtx.waitUntil(bumpOp(c.env.DB, 'promo_redirect', 'redirect', outcome));
+  c.header('Cache-Control', 'no-store');
+  return c.redirect(target, 302);
+}
+promoLinkRoutes.notFound(c => redirect(c, '/', 'unknown'));
 promoLinkRoutes.get('/go/:code', c => {
   const code = c.req.param('code');
   const known = /^[a-z0-9][a-z0-9-]{0,63}$/.test(code) && Object.hasOwn(links, code);
   const target = known ? promoTarget(links[code as keyof typeof links]) : null;
-  c.executionCtx.waitUntil(bumpOp(c.env.DB, 'promo_redirect', 'redirect', known ? target ? 'success' : 'invalid' : 'unknown'));
-  c.header('Cache-Control', 'no-store');
-  return c.redirect(target ?? '/', 302);
+  return redirect(c, target ?? '/', known ? target ? 'success' : 'invalid' : 'unknown');
 });
 
 export const isPromoPurchasePath = (path: string) => /^\/go\/(?:plan|topup)\/?$/.test(path);
