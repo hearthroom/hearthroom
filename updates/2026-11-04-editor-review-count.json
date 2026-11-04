@@ -9,10 +9,10 @@
     "ko": "편집기의 캐릭터 설정 아래에 심사 제출 때와 같은 방식으로 센 심사 대상 글자 수가 표시됩니다."
   },
   "body": {
-    "zh-Hant": "標點、空白、表情符號與排版標記不算進送審字數，所以會比輸入框右下角的字數少。",
-    "zh-Hans": "标点、空格、表情符号和排版标记不计入送审字数，所以会比输入框右下角的字数少。",
-    "en": "Punctuation, spaces, emoji and formatting markup don't count toward it, so it is lower than the count under the field.",
-    "ja": "句読点、空白、絵文字、書式の記法は数えないため、入力欄の下の文字数より少なくなります。",
-    "ko": "문장 부호, 공백, 이모지, 서식 기호는 세지 않아서 입력란 아래 글자 수보다 적게 나옵니다."
+    "zh-Hant": "標點、空白、表情符號與排版標記不算進送審字數，所以通常會比輸入框右下角的字數少。",
+    "zh-Hans": "标点、空格、表情符号和排版标记不计入送审字数，所以通常会比输入框右下角的字数少。",
+    "en": "Punctuation, spaces, emoji and formatting markup don't count toward it, so it is usually lower than the count under the field.",
+    "ja": "句読点、空白、絵文字、書式の記法は数えないため、たいてい入力欄の下の文字数より少なくなります。",
+    "ko": "문장 부호, 공백, 이모지, 서식 기호는 세지 않아서 보통 입력란 아래 글자 수보다 적게 나옵니다."
   }
 }

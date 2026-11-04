@@ -1382,6 +1382,7 @@ async function exportCard(format: "png" | "json") {
               <span class="review-count__title">{{ $t("reviewLength.title") }}</span>
               <span class="review-count__total">{{ $t("reviewLength.total", reviewCount.n) }}</span>
               <span class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
+                <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
                 {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
               </span>
             </p>
@@ -1797,8 +1798,9 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .review-count__state { color: var(--warning-text); font-weight: 600; }
 /* 達標用正文色：--success 在淺色的 --surface-2 上只有 3.07:1，不夠文字用 */
 .review-count__state.is-met { color: var(--text); }
+.review-count__check { margin-right: 4px; color: var(--success); }
 .review-count__parts, .review-count__hint { color: var(--text-2); }
-.review-count__hint { font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.review-count__hint { font-size: 12px; overflow-wrap: anywhere; }
 :lang(ko) .review-count { word-break: keep-all; }
 :lang(ja) .review-count { word-break: auto-phrase; }
 .over { color: var(--danger); }
