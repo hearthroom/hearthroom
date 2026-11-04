@@ -53,6 +53,10 @@ it('handles many interrupted openers without rescanning an unterminated quoted t
   expect(performance.now()-start).toBeLessThan(1000);
 });
 
+it.each(['script','style'])('resumes after an interrupted %s closer without dropping later prose',name=>{
+  expect(effectiveCharacters(`<${name}>hidden</${name}\n<section>正文</section>`)).toBe(2);
+});
+
 it('excludes whole emoji graphemes even when their bases are Unicode letters or numbers',()=>{
   expect(effectiveCharacters('1️⃣ ℹ️ 2⃣ 🇹🇼 👩🏽‍💻')).toBe(0);
   expect(effectiveCharacters('1 i １２ 中文')).toBe(6);

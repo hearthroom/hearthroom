@@ -28,6 +28,8 @@ const CASES: Array<[string, string, number]> = [
   ["程式碼區塊", "```js\nconst 甲 = 1;\n```\n行內 `a<b>` 結束", 12],
   ["圖片與連結網址", "![圖說](https://img.test/a.png) [連結文字](https://example.test/path)", 4],
   ["未閉合標記後還有合法標記", '<cfg rule=，設定\n背景\n<section>內容</section>', 13],
+  ["未閉合 script 結尾", '<script>hidden</script\n<section>正文</section>', 2],
+  ["未閉合 style 結尾", '<style>hidden</style\n<section>正文</section>', 2],
 ];
 
 it.each(CASES)("counts %s the same way as the review check", (_name, text, expected) => {

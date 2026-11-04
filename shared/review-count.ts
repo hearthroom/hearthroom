@@ -81,7 +81,7 @@ function withoutMarkup(input:string):string{
       while(close>=0&&!/[\s>]/.test(input[close+name.length+2]??''))close=lower.indexOf('</'+name,close+2);
       if(close<0){cursor=input.length;continue;}
       const closeEnd=endOfTag(close+name.length+2);
-      cursor=closeEnd<0?input.length:closeEnd;
+      cursor=closeEnd===-2?close+name.length+2:closeEnd<0?input.length:closeEnd;
     }
   }
   return parts.join('');
