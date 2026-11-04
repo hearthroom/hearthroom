@@ -34,7 +34,7 @@ const fieldText = ref("");
 const fieldPick = ref<LookupValue>({ label: "" });
 /** 勾選框：開新彈窗時回到預設值 */
 const checked = ref(false);
-const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value) && validUpdate() && !busy.value);
+const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value) && validUpdate() && !busy.value && (!confirmState.current.field?.required || !!(confirmState.current.field.lookup?fieldPick.value.label:fieldText.value).trim()));
 /** 低權重的危險確認：只在 danger 時生效，非危險確認忽略這個選項。 */
 const subdued = computed(() => !!confirmState.current?.danger && confirmState.current.dangerAppearance === "subdued");
 async function confirm() {
@@ -119,6 +119,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
         <label v-if="confirmState.current.field" class="dlg__field" :inert="busy||pending">
           <span class="dlg__field-label">{{ confirmState.current.field.label }}</span>
           <LookupField v-if="confirmState.current.field.lookup" v-model="fieldPick" :lookup="confirmState.current.field.lookup" :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" :label="confirmState.current.field.label" />
+          <textarea v-else-if="confirmState.current.field.multiline" v-model="fieldText" class="input" rows="4" autocomplete="off" data-field :required="confirmState.current.field.required" :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" />
           <input v-else v-model="fieldText" class="input" type="text" autocomplete="off" data-field
                  :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" @keydown.enter.prevent="confirm" />
           <span v-if="confirmState.current.field.hint" class="subtle">{{ confirmState.current.field.hint }}</span>

@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "特殊卡片可由站方個別豁免送審字數門檻。",
+    "zh-Hans": "特殊卡片可由站方单独豁免审核字数门槛。",
+    "en": "Staff can waive the review character minimum for individual special-format cards.",
+    "ja": "特殊なカードは、運営により審査の最低文字数を個別に免除できます。",
+    "ko": "특수한 카드의 심사 최소 글자 수는 운영팀에서 개별적으로 면제할 수 있어요."
+  }
+}

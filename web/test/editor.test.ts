@@ -148,6 +148,14 @@ async function mount(path: string) {
 
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
 
+it('shows the authoritative exemption instead of a remaining-character warning',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({enabled:true})));
+  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic short card',roleDetailDesc:'Short',roleWelcome:'Opening'});
+  await mount('/cards/r1/edit');
+  expect($('[data-review-count]').textContent).toContain(i18n.global.t('lengthExemption.author'));
+  expect($('[data-review-count]').textContent).not.toContain('還差');
+});
+
 it.each(['entries', 'bindings'] as const)('blocks writes and offers a retry when Lorebook %s cannot load', async (part) => {
   api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Before', roleWelcome: 'Opening' });
   (part === 'entries' ? api.fetchWorldbookEntries : api.fetchRoleWorldbooks).mockRejectedValueOnce(new Error('unavailable'));

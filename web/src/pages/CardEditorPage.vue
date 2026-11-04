@@ -97,6 +97,7 @@ import {
 import { imageToPng } from "@/lib/export-image";
 import { formatReviewLength } from "@/lib/review-length";
 import { combineReviewLength, constantReviewCount, personaReviewCount } from "@/lib/draft-review-length";
+import { useOwnReviewLengthExemption } from '@/lib/own-review-length-exemption';
 import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -493,6 +494,7 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
  * 世界書還沒載好或載不到時，常駐條目會是假的 0，這時不顯示。
  */
 const reviewPersona = computed(() => personaReviewCount(draft.value.roleDetailDesc));
+const lengthExempt=useOwnReviewLengthExemption(roleId);
 const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : constantReviewCount(wb.entries)));
 const reviewCount = computed(() => {
   const length = combineReviewLength(reviewPersona.value, reviewConstant.value);
@@ -1377,11 +1379,13 @@ async function exportCard(format: "png" | "json") {
           <h2 class="pane__title">{{ $t("editor.section.persona") }}</h2>
           <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
                      :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
-          <div v-if="reviewCount" class="review-count" data-review-count>
+          <div v-if="reviewCount||lengthExempt" class="review-count" data-review-count>
+            <p v-if="lengthExempt" data-author-exemption>{{ $t('lengthExemption.author') }}</p>
+            <template v-if="reviewCount">
             <p class="review-count__head">
               <span class="review-count__title">{{ $t("reviewLength.title") }}</span>
               <span class="review-count__total">{{ $t("reviewLength.total", reviewCount.n) }}</span>
-              <span class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
+              <span v-if="!lengthExempt" class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
                 <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
                 {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
               </span>
@@ -1391,6 +1395,7 @@ async function exportCard(format: "png" | "json") {
               <span>{{ $t("reviewLength.constantWorldbook", reviewCount.n) }}</span>
             </p>
             <p class="review-count__hint">{{ $t("reviewLength.countingHint") }}</p>
+            </template>
           </div>
           <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
                      :max="limits.roleOutputContract" :hint="$t('editor.contract.hint')" />

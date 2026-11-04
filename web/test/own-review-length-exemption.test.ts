@@ -1,0 +1,23 @@
+import { effectScope, nextTick, reactive, ref } from 'vue';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+const session=reactive({me:{accountNumId:1} as {accountNumId:number}|null,accessToken:async()=>'author'});
+vi.mock('../src/lib/session',()=>({useSession:()=>session}));
+import { useOwnReviewLengthExemption } from '../src/lib/own-review-length-exemption';
+let stop=()=>{};
+beforeEach(()=>{session.me={accountNumId:1};});
+afterEach(()=>{stop();vi.unstubAllGlobals();});
+it('clears across cards, errors and identities, and ignores stale successful responses',async()=>{
+ const replies:((r:Response)=>void)[]=[];
+ vi.stubGlobal('fetch',vi.fn(()=>new Promise<Response>(resolve=>replies.push(resolve))));
+ const id=ref('X'),scope=effectScope();stop=()=>scope.stop();
+ const enabled=scope.run(()=>useOwnReviewLengthExemption(id))!;
+ await vi.waitFor(()=>expect(replies).toHaveLength(1));
+ replies[0](Response.json({enabled:true}));await vi.waitFor(()=>expect(enabled.value).toBe(true));
+ id.value='Y';expect(enabled.value).toBe(false);
+ await vi.waitFor(()=>expect(replies).toHaveLength(2));
+ id.value='Z';await vi.waitFor(()=>expect(replies).toHaveLength(3));
+ replies[1](Response.json({enabled:true}));replies[2](new Response('',{status:503}));
+ await nextTick();await new Promise(r=>setTimeout(r,0));expect(enabled.value).toBe(false);
+ id.value='X';await vi.waitFor(()=>expect(replies).toHaveLength(4));
+ session.me=null;replies[3](Response.json({enabled:true}));await nextTick();await new Promise(r=>setTimeout(r,0));expect(enabled.value).toBe(false);
+});

@@ -2,6 +2,8 @@ import {parseCountryRegion, updateCountryRegion} from './country-region';
 import {viewerCountryRegion, assertRegionCard, viewerAllowsAdultContent, normalizeHiddenTags, confirmAdult} from './members';
 import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
+import { lengthExemptionRoutes } from './review-length-exemption-routes';
+import { reviewLengthExemptForCard } from './review-length-exemption';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {allCardHonors} from './rank-honors';
@@ -288,6 +290,7 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
   return me;
 }
 
+app.route('/',lengthExemptionRoutes);
 app.get("/v1/health", (c) => c.json({ ok: true }));
 
 /** Compatibility discovery endpoint; only the configured Harper API is returned. */
@@ -1781,6 +1784,7 @@ app.get("/v1/review/:id/detail", async (c) => {
       submission: {
         id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at,
         // 作者問卷：級別、情節名稱、每題答案。審核人對照內容看是不是他說的那樣；問卷上線前送的單是 null
+        lengthExempt:await reviewLengthExemptForCard(c.env.DB,s.card_id),
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         // 同一張卡第幾次送審、上一次的結果與說明：審核人不必靠記憶認出「被退後重送」的卡

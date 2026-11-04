@@ -36,6 +36,7 @@ const forbidden = ref(false);
 const rowError = ref<{ id: string; text: string } | null>(null);
 const numbers = computed(() => new Intl.NumberFormat(String(locale.value)));
 const lengthChip = (item: ReviewQueueItem) => {
+  if(item.lengthExempt)return {short:false,text:t('lengthExemption.enabled')};
   const l = item.reviewLength;
   if (!l) return null;
   const params = { total: numbers.value.format(l.total), gap: numbers.value.format(l.remaining) };

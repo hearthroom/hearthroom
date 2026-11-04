@@ -1,5 +1,6 @@
 import { reviewCounts } from './review';
 import { reviewLength } from './review-length';
+import { reviewLengthExempt } from './review-length-exemption';
 import { updateIntent, assertUpdateCooldown } from './card-update';
 import {bumpOp} from './ops-metrics';
 import {assertNormalMember} from './test-accounts';
@@ -143,7 +144,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   throw new HttpError(409,'submission_pending');
  }
  if(!version){
-  try{await assertReviewLength(db,await upstream.readForReview(env,input.token,input.role.roleId,provider),'draft');}
+  try{await assertReviewLength(db,await upstream.readForReview(env,input.token,input.role.roleId,provider),'draft',provider,input.role.roleId);}
   catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_sync_pending');}
  }
  await adoptRetiredWork(db,provider,input.role.roleId);
@@ -187,7 +188,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
- const length=await assertReviewLength(db,settings,'sealed');
+ const length=await assertReviewLength(db,settings,'sealed',provider,input.role.roleId);
  settings.reviewLength=length;
  const counts=reviewCounts(settings);
  await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
@@ -254,9 +255,10 @@ async function hostingCall(env:Env,provider:ProviderId,token:string,operation:st
  return await response.json() as Record<string,string>;
 }
 
-async function assertReviewLength(db:D1Database,settings:Record<string,unknown>,phase:'draft'|'sealed'){
+async function assertReviewLength(db:D1Database,settings:Record<string,unknown>,phase:'draft'|'sealed',provider:string,roleId:string){
  const length=reviewLength(settings);
- await bumpOp(db,'review_length',phase,length.eligible?'eligible':'insufficient');
- if(!length.eligible)throw new HttpError(400,'review_length_insufficient',undefined,{detail:{reviewLength:length}});
+ const exempt=await reviewLengthExempt(db,provider,roleId);
+ await bumpOp(db,'review_length',phase,exempt?'exempt':length.eligible?'eligible':'insufficient');
+ if(!length.eligible&&!exempt)throw new HttpError(400,'review_length_insufficient',undefined,{detail:{reviewLength:length}});
  return length;
 }

@@ -27,6 +27,7 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { readTags, readTalkExample } from "@/lib/role-draft";
 import RatingMark from "@/components/RatingMark.vue";
+import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
 
@@ -187,7 +188,7 @@ const decided = computed(() => !!data.value && data.value.submission.status !== 
 
 /** 字數：伺服器算的那一份；partial（同步開的重審單）沒有，就是「無法計算」，不當成達標也不當成未達標 */
 const length = computed(() => (data.value?.detail.partial ? null : data.value?.detail.reviewLength ?? null));
-const approveBlocked = computed(() => !!length.value && !length.value.eligible);
+const approveBlocked = computed(() => !data.value?.submission.lengthExempt && !!length.value && !length.value.eligible);
 const approvals = computed(() => data.value?.submission.stamps.filter((s) => s.verdict === "approve").length ?? 0);
 const canDecide = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value);
 const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine) ?? null);
@@ -515,11 +516,12 @@ onMounted(() => { void load(); });
                 <span>{{ $t('reviewLength.persona', lengthParams) }}</span>
                 <span>{{ $t('reviewLength.constantWorldbook', lengthParams) }}</span>
                 <span>{{ $t('reviewLength.total', lengthParams) }}</span>
-                <strong class="length-status" :class="data.detail.reviewLength.eligible ? 'length-status--ok' : 'length-status--short'" data-length-status>{{ $t(data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
+                <strong class="length-status" :class="data.submission.lengthExempt || data.detail.reviewLength.eligible ? 'length-status--ok' : 'length-status--short'" data-length-status>{{ $t(data.submission.lengthExempt ? 'lengthExemption.enabled' : data.detail.reviewLength.eligible ? 'reviewLength.eligible' : 'reviewLength.ineligible') }}</strong>
             </p>
             <p class="subtle">{{ $t('reviewLength.welcome', lengthParams) }}</p>
           </template>
           <p v-else class="subtle">{{ $t('reviewLength.unavailable') }}</p>
+          <ReviewLengthExemptionControl v-if="data.submission.manager" :card-number="data.card.id" :disabled="busy" @change="data.submission.lengthExempt=$event" />
         </section>
         <div class="side__acts">
           <button v-if="canDecide" type="button" class="btn btn--primary btn--lg" @click="goDecide">{{ $t("review.action.toDecide") }}</button>

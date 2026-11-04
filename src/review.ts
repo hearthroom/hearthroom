@@ -6,6 +6,7 @@ import { dropSnapshotStatement, loadSnapshot } from "./review-snapshot";
 import { bumpOp } from "./ops-metrics";
 import { reviewLengthStatus, type ReviewLengthStatus } from "../shared/review-length";
 import { reviewLength } from "./review-length";
+import { reviewLengthExemptForCard } from './review-length-exemption';
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 
 /**
@@ -96,6 +97,7 @@ const claimIsLive = (row: { claimed_by: string | null; claimed_at: number | null
   !!row.claimed_by && row.claimed_at !== null && now - row.claimed_at < CLAIM_TTL_MS;
 
 export interface QueueItem {
+  lengthExempt:boolean;
   id: string;
   kind: SubmissionKind;
   submittedAt: number;
@@ -122,6 +124,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
   const rows = await db
     .prepare(
       `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total, s.review_worldbook_entries, s.review_regex_rules,
+              EXISTS(SELECT 1 FROM review_length_exemptions e WHERE e.card_number=s.card_id AND e.enabled=1) AS length_exempt,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
@@ -136,9 +139,10 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
+      length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
     }>();
   return rows.results.map((r) => ({
+    lengthExempt:!!r.length_exempt,
     id: r.id,
     kind: r.kind,
     submittedAt: r.submitted_at,
@@ -296,6 +300,7 @@ export async function stamp(
  * 不擋——審核頁也會顯示「無法計算」，由審核員自己判斷。
  */
 async function assertApprovableLength(db: D1Database, row: SubmissionRow): Promise<void> {
+  if(await reviewLengthExemptForCard(db,row.card_id)){await bumpOp(db,'review_length','stamp','exempt');return;}
   let total = row.review_length_total;
   if (total === null) {
     const snapshot = await loadSnapshot(db, row.id);

@@ -46,6 +46,7 @@ export interface ConfirmOptions {
   /** 一格選填的文字（例如原作）：有 initial 就先填好；suggestions 給瀏覽器的建議清單 */
   field?: {
     label: string; placeholder?: string; hint?: string; maxlength?: number; initial?: string;
+    required?:boolean; multiline?:boolean;
     /** 有 lookup 就是「打字找候選」的一格：候選帶編號，選了回 id；initialId 是先填好的那個編號 */
     initialId?: string;
     lookup?: (q: string) => Promise<{ id: string; label: string; description?: string }[]>;
@@ -90,6 +91,7 @@ export function settleConfirm(ok: boolean, typed = "", text = "", id?: string, c
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
+  if (ok && c.field?.required && !text.trim()) return;
   confirmState.current = null;
   c.resolve(ok, text.trim(), id, checked,update);
 }

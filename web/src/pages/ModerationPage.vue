@@ -13,6 +13,7 @@ import LookupField, { type LookupValue } from '@/components/LookupField.vue';
 import { fetchFandomLookup } from '@/lib/api';
 import { pageTitle } from '@/lib/i18n';
 import { useLocalePath } from '@/lib/use-locale';
+import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();const {lp}=useLocalePath();
 const featuredQuota=computed(()=>reviewer.featured?.admin&&reviewer.featuredProvider===currentProvider()?reviewer.featured:null);
 const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.meta.managementTab === 'history' ? 'history' : 'cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
@@ -22,6 +23,9 @@ const action=ref('delist');const tagText=ref('');const fandomPick=ref<LookupValu
 const canFeature=computed(()=>!!session.me && reviewer.reviewer===true && !!reviewer.featured?.admin && reviewer.featuredProvider===currentProvider() && history.value?.card.provider===currentProvider());
 const featureFull=computed(()=>!!reviewer.featured && reviewer.featured.featuredUsed>=reviewer.featured.featuredQuota);
 const isManager=computed(()=>reviewer.role==='manager'||reviewer.role==='owner');
+const exemptionNumber=ref(''),exemptionTarget=ref(''),exemptionAttempt=ref(0);
+function findExemption(){exemptionTarget.value=exemptionNumber.value.trim();exemptionAttempt.value++;}
+watch(()=>[session.me?.accountNumId,reviewer.role,tab.value],()=>{exemptionTarget.value='';exemptionNumber.value='';});
 const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend']:[]);
 const operation=ref(crypto.randomUUID());
 const identity=()=>`${currentProvider()}:${session.me?.accountNumId??''}`;
@@ -103,6 +107,12 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
  <section class="moderation" :aria-label="t(`moderation.tab.${tab}`)">
   <p v-if="error" class="notice notice--error" role="alert">{{error}} <button class="btn btn--sm" :disabled="busy" @click="load">{{t('review.refresh')}}</button></p>
   <p v-if="done" class="notice" role="status">{{done}}</p>
+  <details v-if="tab==='cards'&&session.me&&isManager" class="panel exemption-search" data-length-exemption-search>
+   <summary>{{t('lengthExemption.label')}}</summary>
+   <p class="subtle">{{t('lengthExemption.searchHint')}}</p>
+   <form class="work-search" @submit.prevent="findExemption"><label class="field"><span>{{t('moderation.cardNumber')}}</span><input v-model="exemptionNumber" class="input" inputmode="numeric" autocomplete="off" maxlength="15" required data-exemption-number /></label><button class="btn" data-exemption-find>{{t('moderation.find')}}</button></form>
+   <ReviewLengthExemptionControl v-if="exemptionTarget" :key="exemptionAttempt" :card-number="exemptionTarget" />
+  </details>
   <form v-if="tab==='cards'" class="work-search" @submit.prevent="offset=0;load()"><input v-model="q" class="input" type="search" :placeholder="t('moderation.search')" :aria-label="t('moderation.search')"/><button class="btn btn--primary" :disabled="loading||busy">{{t('moderation.find')}}</button><span v-if="featuredQuota" data-featured-entry class="subtle work-search__quota">{{t('card.featureQuota',{used:featuredQuota.featuredUsed,quota:featuredQuota.featuredQuota})}}</span></form>
   <div class="work-grid">
    <section class="work-list" :aria-busy="loading">
@@ -146,6 +156,9 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
 <style scoped>
 .work-featured{display:grid;gap:var(--s-3);padding-block:var(--s-3);border-bottom:1px solid var(--line);}.work-featured h3{margin-top:0;}.work-featured .btn{justify-self:start;}
 .work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
+.exemption-search{padding:var(--s-4);margin-bottom:var(--s-4);display:grid;gap:var(--s-3);}
+.exemption-search .field{flex:1;min-width:0;}
+.exemption-search .work-search{align-items:end;}
 .work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}.work-search__quota{flex-basis:100%;}.work-author{justify-self:start;}
 .work-grid{display:grid;grid-template-columns:minmax(240px,0.85fr) minmax(0,1.4fr);gap:var(--s-4);align-items:start;}
 .work-list{display:grid;gap:var(--s-3);}.work-item{display:grid;gap:var(--s-2);padding:var(--s-4);width:100%;text-align:start;color:var(--text);font:inherit;cursor:pointer;border:1px solid var(--line);}
