@@ -1795,7 +1795,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .review-count__title { font-weight: 600; }
 .review-count__total, .review-count__parts { font-variant-numeric: tabular-nums; }
 .review-count__state { color: var(--warning-text); font-weight: 600; }
-.review-count__state.is-met { color: var(--success); }
+/* 達標用正文色：--success 在淺色的 --surface-2 上只有 3.07:1，不夠文字用 */
+.review-count__state.is-met { color: var(--text); }
 .review-count__parts, .review-count__hint { color: var(--text-2); }
 .review-count__hint { font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
 :lang(ko) .review-count { word-break: keep-all; }
