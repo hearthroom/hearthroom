@@ -38,6 +38,21 @@ it('handles large unterminated tags in bounded time',()=>{
   expect(performance.now()-start).toBeLessThan(1000);
 });
 
+it('preserves an unclosed opener across paragraphs and resumes stripping at the next tag',()=>{
+  const setting='<cfg rule=，設定\n背景\n<section>內容</section>';
+  expect(effectiveCharacters(setting)).toBe(13);
+  expect(effectiveCharacters('前<span title="a < b > c">文</span>後')).toBe(3);
+  const result=reviewLength({document:{roleDetailDesc:'<cfg rule=，\n'+'字'.repeat(3001)+'\n<section>後</section>'}});
+  expect(result).toMatchObject({persona:3009,total:3009,eligible:true,remaining:0});
+});
+
+it('handles many interrupted openers without rescanning an unterminated quoted tail',()=>{
+  const start=performance.now();
+  expect(effectiveCharacters('<a '.repeat(10000)+'<b>文</b>')).toBe(10001);
+  expect(effectiveCharacters('<a title="'.repeat(10000))).toBe(60000);
+  expect(performance.now()-start).toBeLessThan(1000);
+});
+
 it('excludes whole emoji graphemes even when their bases are Unicode letters or numbers',()=>{
   expect(effectiveCharacters('1️⃣ ℹ️ 2⃣ 🇹🇼 👩🏽‍💻')).toBe(0);
   expect(effectiveCharacters('1 i １２ 中文')).toBe(6);

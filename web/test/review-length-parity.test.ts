@@ -27,6 +27,7 @@ const CASES: Array<[string, string, number]> = [
   ["emoji", "笑😀 1️⃣ 🇹🇼 👩🏽‍💻 ❤️ 心", 2],
   ["程式碼區塊", "```js\nconst 甲 = 1;\n```\n行內 `a<b>` 結束", 12],
   ["圖片與連結網址", "![圖說](https://img.test/a.png) [連結文字](https://example.test/path)", 4],
+  ["未閉合標記後還有合法標記", '<cfg rule=，設定\n背景\n<section>內容</section>', 13],
 ];
 
 it.each(CASES)("counts %s the same way as the review check", (_name, text, expected) => {
@@ -53,4 +54,12 @@ it("reaches eligibility at the same boundary as the review check", () => {
     expect(editor).toEqual(asSubmitted("字".repeat(n - 1), [entry("常")]));
     expect(editor?.eligible).toBe(n >= 3001);
   }
+});
+
+it("keeps interrupted markup content in both persona and always-on entries", () => {
+  const persona='<cfg rule=，\n'+'字'.repeat(2000)+'\n<section>後</section>';
+  const entries=[entry('<cfg rule=，\n'+'常'.repeat(1000)+'\n<section>後</section>')];
+  const editor=draftReviewLength(persona,entries);
+  expect(editor).toMatchObject({persona:2008,constantWorldbook:1008,total:3016,eligible:true,remaining:0});
+  expect(editor).toEqual(asSubmitted(persona,entries));
 });

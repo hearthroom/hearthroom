@@ -48,6 +48,23 @@ it('checks the immutable revision even if the draft passes preflight', async () 
   expect(await opsMetrics(env.DB)).toContain('hearthroom_review_length_checks_total{phase="sealed",outcome="insufficient"} 1');
 });
 
+it('admits interrupted markup in draft and sealed settings and records eligible metrics', async()=>{
+  const memberId=await makeMember(10001), draft=role({roleId:'interrupted-markup',authorNumId:10001});
+  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-markup'}));
+  vi.spyOn(hostGateway,'read').mockResolvedValue({...draft,roleId:'sealed-markup'});
+  vi.spyOn(upstream,'readForReview').mockResolvedValue({
+    document:{roleDetailDesc:'<cfg rule=，\n'+'字'.repeat(2000)+'\n<section>後</section>'},
+    worldbooks:[{entries:[{content:'<cfg rule=，\n'+'常'.repeat(1000)+'\n<section>後</section>',isEnabled:true,isConstant:true}]}],
+    hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''},
+  });
+  await submitHosted(env,{memberId,account:10001,role:draft,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
+  expect(await env.DB.prepare('SELECT review_length_total FROM review_submissions').first('review_length_total')).toBe(3016);
+  const {opsMetrics}=await import('../src/ops-metrics');
+  const metrics=await opsMetrics(env.DB);
+  expect(metrics).toContain('hearthroom_review_length_checks_total{phase="draft",outcome="eligible"} 1');
+  expect(metrics).toContain('hearthroom_review_length_checks_total{phase="sealed",outcome="eligible"} 1');
+});
+
 it('accepts 3001 mixed persona and constant characters, persists counts, replays accepted operations and preserves the public version on a short update', async () => {
   const { loadSnapshot } = await import('../src/review-snapshot');
   const { claim, stamp } = await import('../src/review');

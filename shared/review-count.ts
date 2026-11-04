@@ -42,6 +42,8 @@ function withoutMarkup(input:string):string{
       const ch=input[i];
       if(quote){if(ch===quote)quote='';}
       else if(ch==='"'||ch==="'")quote=ch;
+      // An unclosed opener must not borrow the closing bracket of a later tag.
+      else if(ch==='<')return -2;
       else if(ch==='>')return i+1;
     }
     return -1;
@@ -60,6 +62,7 @@ function withoutMarkup(input:string):string{
     if(closing)nameStart++;
     if(input[nameStart]==='!'||input[nameStart]==='?'){
       const end=endOfTag(nameStart+1);
+      if(end===-2){parts.push('<');cursor=open+1;continue;}
       if(end<0){parts.push(input.slice(open));break;}
       cursor=end;continue;
     }
@@ -68,6 +71,8 @@ function withoutMarkup(input:string):string{
     while(nameEnd<input.length&&/[a-z0-9:-]/i.test(input[nameEnd]))nameEnd++;
     if(nameEnd<input.length&&!/[\s/>]/.test(input[nameEnd])){parts.push('<');cursor=open+1;continue;}
     const end=endOfTag(nameEnd);
+    // Resume at the next opener, but stop scanning a truly unterminated tail once.
+    if(end===-2){parts.push('<');cursor=open+1;continue;}
     if(end<0){parts.push(input.slice(open));break;}
     const name=lower.slice(nameStart,nameEnd);
     cursor=end;
