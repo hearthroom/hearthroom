@@ -57,7 +57,7 @@ describe("fetchLibraryImages", () => {
 });
 
 describe("錯誤訊息給人看", () => {
-  it("claim/stamp 自審拒絕沿用既有產品說明，不顯示內部錯誤碼", async () => {
+  it("作品處置的自審拒絕沿用產品說明，不顯示內部錯誤碼", async () => {
     const { describeApiError } = await import("../src/lib/api");
     const { i18n, loadLocale, LOCALE_CODES } = await import("../src/lib/i18n");
     const initial=i18n.global.locale.value;
