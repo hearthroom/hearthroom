@@ -124,6 +124,7 @@ export const useSession = defineStore("session", () => {
     token.value = pair;
     persist(pair);
     me.value = identity;
+    rememberSignedIn(identity.accountNumId);
     void loadWallet(pair.accessToken);
     void loadProfile(pair.accessToken);
   }
