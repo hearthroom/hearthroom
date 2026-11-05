@@ -137,10 +137,10 @@ export function toCard(row: CardRow, lang: string) {
     zone: row.zone,
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
-    /** 台灣遊戲分級五級之一；null＝評級缺失（作者還沒填問卷的舊一般卡），不是成人卡。R＝成人內容 */
-    rating: row.rating ?? null,
+    /** 台灣遊戲分級五級之一；null＝不顯示評級（例如未公開卡）；存取另按公開範圍檢查。R＝已分類的成人內容 */
+    rating: row.status === 'unlisted' ? null : row.rating ?? null,
     /** 法規第 12 條的情節名稱（性、暴力⋯⋯的代號），照級別由高到低 */
-    ratingDescriptors: row.rating_descriptors ? (JSON.parse(row.rating_descriptors) as string[]) : [],
+    ratingDescriptors: row.status !== 'unlisted' && row.rating_descriptors ? (JSON.parse(row.rating_descriptors) as string[]) : [],
     /** HearthRoom 精選卡：社群代表標的，供應商那邊據此給作者較高的返點 */
     featured: row.featured_at !== null && row.featured_at !== undefined,
     name: pickLocale(names, lang),

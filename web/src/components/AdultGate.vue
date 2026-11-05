@@ -19,6 +19,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import AdultConsentDialog from "./AdultConsentDialog.vue";
 import RatingMark from "./RatingMark.vue";
 
+defineProps<{ unrated?: boolean }>();
 const emit = defineEmits<{ enabled: [] }>();
 const session = useSession();
 const route = useRoute();
@@ -58,7 +59,7 @@ function consented() {
 
 <template>
   <section class="gate panel">
-    <RatingMark rating="R" variant="chip" class="gate__badge" />
+    <RatingMark v-if="!unrated" rating="R" variant="chip" class="gate__badge" />
     <h1 class="gate__title display">{{ $t("card.gate.title") }}</h1>
 
     <template v-if="guestLoginOnly">

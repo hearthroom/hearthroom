@@ -23,13 +23,13 @@ async function request(source:string,token='reader',extra:Record<string,string>=
 async function adult(member:string){await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1,adult_consent_version=? WHERE id=?').bind(ADULT_CONSENT_VERSION,member).run();}
 it('lazily registers a verified legacy link once with social access and zero publication usage',async()=>{
  const {source,reader}=await fixture();await adult(reader);
- for(let i=0;i<2;i++){const response=await request(source);expect(response.status).toBe(200);expect(await response.json()).toMatchObject({sourceRoleId:source,status:'unlisted',name:'Latest link content',canInteract:true,listed:false});expect(response.headers.get('X-Robots-Tag')).toContain('noindex');}
+ for(let i=0;i<2;i++){const response=await request(source);expect(response.status).toBe(200);expect(await response.json()).toMatchObject({sourceRoleId:source,status:'unlisted',name:'Latest link content',rating:null,canInteract:true,listed:false});expect(response.headers.get('X-Robots-Tag')).toContain('noindex');}
  expect(await getCard(env.DB,source)).toMatchObject({registered_at:0,status:'unlisted',rating:'R'});
  for(const table of ['card_registrations','hosting_versions','review_submissions','managed_work_access','visibility_operations'])expect(await env.DB.prepare(`SELECT count(*) AS n FROM ${table}`).first()).toEqual({n:0});
  expect(await env.DB.prepare('SELECT count(*) AS n FROM cards').first()).toEqual({n:1});
 });
 it('checks the conservative adult gate before reading unreviewed source fields',async()=>{
- const {source,content}=await fixture();const response=await request(source);expect(response.status).toBe(403);expect(content).not.toHaveBeenCalled();expect(await getCard(env.DB,source)).toBeNull();
+ const {source,content}=await fixture();const response=await request(source);expect(response.status).toBe(403);expect(await response.json()).toMatchObject({error:'adult_content',reason:'unrated'});expect(content).not.toHaveBeenCalled();expect(await getCard(env.DB,source)).toBeNull();
 });
 it.each(['private','managed'])('never enrolls or registers unknown legacy authority when %s',async mode=>{
  const {source,reader,current}=await fixture();await adult(reader);current.readable=false;current.managed=mode==='managed';

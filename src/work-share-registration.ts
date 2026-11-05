@@ -13,7 +13,7 @@ export async function registerLegacyShare(env:Env,source:string,canReadUnreviewe
  // handles that fallback without creating a public community registration.
  if(!authority.targetReadable)return null;
  if(authority.shareRoleId!==source)throw new HttpError(404,'card not found');
- if(!await canReadUnreviewed())throw new HttpError(403,'adult_content');
+ if(!await canReadUnreviewed())throw new HttpError(403,'adult_content',undefined,{reason:'unrated'});
  const role=await upstream.fetchRole(env,source,'harbor');
  if(role.roleId!==source||!Number.isSafeInteger(role.authorNumId)||role.authorNumId<1||role.creationMethod!=='hearthroom')throw new HttpError(404,'card not found');
  const blocked=await env.DB.prepare("SELECT public_blocked FROM moderation_state WHERE provider='harbor' AND source_role_id=?").bind(source).first<{public_blocked:number}>();

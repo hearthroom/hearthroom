@@ -39,9 +39,9 @@ export async function privatePlayerCard(env:Env,row:CardRow,token:string|undefin
    if(!role)continue;
    result='allow';
    const source=target===row.source_role_id;
-   if((source||row.rating==='R')&&!await allowsAdult())throw new HttpError(403,'adult_content');
+   if((source||row.rating==='R')&&!await allowsAdult())throw new HttpError(403,'adult_content',undefined,source?{reason:'unrated'}:undefined);
    return {...previewCard(role,language,'harbor',row.num??Number(row.id)),sourceRoleId:row.source_role_id,
-    rating:source?'R':row.rating,ratingDescriptors:source?[]:row.rating_descriptors?JSON.parse(row.rating_descriptors) as string[]:[],
+    rating:source?null:row.rating,ratingDescriptors:source?[]:row.rating_descriptors?JSON.parse(row.rating_descriptors) as string[]:[],
     status:'private',canInteract:false,listed:false};
   }
   return null;

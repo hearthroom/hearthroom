@@ -52,7 +52,7 @@ it('keeps unlisted favorites reachable and reads latest saved content only after
  const sourceRead=vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Latest saved name'}));
  expect(await(await request('favorites')).json()).toMatchObject({items:[]});expect(sourceRead).not.toHaveBeenCalled();
  await env.DB.prepare('UPDATE members SET age_verified_at=1,adult_consent_version=? WHERE id=?').bind(ADULT_CONSENT_VERSION,member).run();
- expect(await(await request('favorites')).json()).toMatchObject({items:[{id:card.id,name:'Latest saved name'}]});expect(sourceRead).toHaveBeenCalledTimes(1);
+ expect(await(await request('favorites')).json()).toMatchObject({items:[{id:card.id,name:'Latest saved name',rating:null,ratingDescriptors:[]}]});expect(sourceRead).toHaveBeenCalledTimes(1);
 });
 it('gates feed candidates against current policy before returning any card fields',async()=>{
  const {member,owner}=await fixture();await env.DB.prepare('INSERT INTO member_follows VALUES(?,?,1)').bind(member,owner).run();

@@ -89,3 +89,21 @@ it('rejects a valid access filter when the capability is disabled instead of ret
  expect(res.status).toBe(409);expect(await res.json()).toEqual({error:'visibility_disabled'});
  expect(network).not.toHaveBeenCalled();expect(lists).not.toHaveBeenCalled();
 });
+
+
+it.each(['', '?access=unlisted'])('returns no displayed rating in the unlisted author inventory (%s)',async query=>{
+ const {roles,views}=await fixture(1);
+ Object.assign(roles[0],{rating:'R'});Object.assign(views[0],{access:'unlisted'});
+ await upsertCard(env.DB,role({roleId:roles[0].roleId,authorNumId:11}),0,{status:'unlisted'});
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id=?").bind(roles[0].roleId).run();
+ const response=await request(query);expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({items:[{roleId:roles[0].roleId,rating:null,workVisibility:{access:'unlisted'}}]});
+ expect((await getCard(env.DB,roles[0].roleId))?.rating).toBe('R');
+});
+
+it('omits the rating of a legacy unlisted card when visibility controls are disabled',async()=>{
+ const {roles}=await fixture(1);
+ await upsertCard(env.DB,role({roleId:roles[0].roleId,authorNumId:11}),0,{status:'unlisted'});
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id=?").bind(roles[0].roleId).run();
+ expect(await(await request('',false)).json()).toMatchObject({items:[{rating:null}]});
+});

@@ -29,6 +29,7 @@ const CARD = {
   summaries: { zh: "s", en: "", ja: "", ko: "" }, avatarUrl: null, backgroundUrl: null, slug: null, tags: [],
   author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "lunatalk", rating: "R",
 };
+let unrated = false;
 const state = { showNsfw: false, ageVerified: true, adultConsent: true };
 const calls: string[] = [];
 
@@ -46,7 +47,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.includes("/score")) return url.includes("nsfw=1") && auth ? json({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null }) : json({ error: "adult_content" }, 403);
   if (url.includes("/comments")) return url.includes("nsfw=1") && auth ? json({ total: 0, comments: [], isRoleCreator: false }) : json({ error: "adult_content" }, 403);
   if (url.includes('/platforms')) return url.includes('nsfw=1') && auth ? json({ platforms: [] }) : json({ error: 'nsfw_gated' }, 403);
-  if (url.includes("/v1/cards/abc")) return url.includes("nsfw=1") && auth ? json(CARD) : json({ error: "adult_content" }, 403);
+  if (url.includes("/v1/cards/abc")) return url.includes("nsfw=1") && auth ? json(unrated ? {...CARD,rating:null,status:"unlisted"} : CARD) : json({ error: "adult_content", ...(unrated?{reason:"unrated"}:{}) }, 403);
   if (url.includes("/v1/cards?")) return json({ items: [], total: 0, hasNext: false, limit: 9, offset: 0, sort: "hot" });
   return json({ error: "not_found" }, 404);
 }
@@ -55,7 +56,7 @@ let app: App | null = null;
 let el: HTMLElement | null = null;
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
 
-beforeEach(() => { vi.stubGlobal("fetch", fakeFetch); calls.length = 0; state.showNsfw = false; setActivePinia(createPinia()); });
+beforeEach(() => { vi.stubGlobal("fetch", fakeFetch); calls.length = 0; unrated = false; state.showNsfw = false; setActivePinia(createPinia()); });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 describe("成人內容的門（整條路）", () => {
@@ -70,7 +71,8 @@ describe("成人內容的門（整條路）", () => {
     expect(calls.some((c) => c.includes("/v1/cards/abc?") && c.includes("nsfw=1") && c.endsWith("[auth]"))).toBe(true);
   });
 
-  it("頁面層：畫門 → 按「顯示成人內容」→ 自己重讀 → 看到卡", async () => {
+  it.each([false,true])("頁面層：畫門 → 按「顯示成人內容」→ 自己重讀 → 看到卡（未評級=%s）", async (unratedCard) => {
+    unrated = unratedCard;
     el = document.createElement("div");
     document.body.appendChild(el);
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/cards/:id", component: CardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
@@ -85,6 +87,7 @@ describe("成人內容的門（整條路）", () => {
     app.mount(el);
     await flush();
     expect(el.textContent).toContain(i18n.global.t("card.gate.title"));
+    expect(!!el.querySelector(".rating-chip--R")).toBe(!unratedCard);
     const btn = el.querySelector<HTMLButtonElement>(".gate button.btn--primary");
     expect(btn, "門上要有「顯示成人內容」鍵").not.toBeNull();
     btn!.click();
@@ -93,6 +96,7 @@ describe("成人內容的門（整條路）", () => {
     expect(session.profile?.showNsfw).toBe(true);
     expect(el.textContent, `calls:\n${calls.join("\n")}`).not.toContain(i18n.global.t("card.gate.title"));
     expect(el.textContent).toContain("深夜的卡");
+    expect(!!el.querySelector("[data-rating-mark]")).toBe(!unratedCard);
   });
 
   it("身分比卡片晚到、而且本來就開著：不會卡在門上（第一次讀就等身分，或載好後自己重讀）", async () => {

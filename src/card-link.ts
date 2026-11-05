@@ -73,6 +73,6 @@ export async function linkPreview(env:Env,id:string,link:Awaited<ReturnType<type
     author:{...preview.author,handle:author?.handle??null,official:author?.is_official===1,
       name:author?.display_name??preview.author.name,avatar:author?.community_avatar??preview.author.avatar},
     sourceRoleId:source.roleId,
-    ...(link.row ? {num:link.row.num,status:link.row.status,rating:link.row.rating??null} : {}),
+    ...(link.row ? {num:link.row.num,status:link.row.status,rating:link.row.status==='unlisted'?null:link.row.rating??null} : {}),
   };
 }

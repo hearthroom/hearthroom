@@ -66,3 +66,12 @@ describe("card manifest head swap", () => {
     expect(q('meta[name="apple-mobile-web-app-title"]')).toBe("夜行偵探");
   });
 });
+
+
+it.each(['unlisted','private'])('requires a shortcut key even when an %s card has no displayed rating', (status) => {
+  applyCardHead({ ...card, rating: null, status }, 'en');
+  expect(installPrompt.target).toBe('site');
+  applyCardHead({ ...card, rating: null, status, shortcutKey: 'unlisted-key' }, 'en');
+  expect(installPrompt.target).toBe('card');
+  expect(q('link[rel="manifest"]')).toContain('k=unlisted-key');
+});

@@ -681,7 +681,7 @@ app.get("/v1/cards/:id", async (c) => {
     c.header('X-Robots-Tag','noindex');
     // Saved source content has not been classified by the approval snapshot.
     // Check the conservative adult gate before fetching any source fields.
-    if (!(await viewerAllowsNsfw(c,{card:true}))) throw new HttpError(403,await viewerCountryRegion(c)==='CN'?'region_unavailable':'adult_content');
+    if (!(await viewerAllowsNsfw(c,{card:true}))) throw new HttpError(403,await viewerCountryRegion(c)==='CN'?'region_unavailable':'adult_content',undefined,{reason:'unrated'});
     row=await unlistedCardRow(c.env,row);
   }
   // 榜單審核與連結存取分開；公開資料仍由來源平台授權。
@@ -695,8 +695,9 @@ app.get("/v1/cards/:id", async (c) => {
   }
   // 成人內容：沒開（或沒登入、沒驗年齡）的人拿不到內容，但要知道「這是成人內容、要登入／驗年齡」
   // 才能引導（owner 2026-09-08 改成 Steam 式的門，不是 404）。403 只透露這一件事，內容一個欄位都不給。
-  const allowNsfw = isAdult(row) ? await viewerAllowsNsfw(c, { card: true }) : false;
-  if (isAdult(row) && !allowNsfw) throw new HttpError(403, "adult_content");
+  const requiresAdult = isAdult(row) || access?.access === 'unlisted';
+  const allowNsfw = requiresAdult ? await viewerAllowsNsfw(c, { card: true }) : false;
+  if (requiresAdult && !allowNsfw) throw new HttpError(403, "adult_content");
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
   // 對話頁為了換 manifest 也讀這一條（view=0）：那不是一次瀏覽，卡片頁已經記過、從主畫面圖示直接進來的更不是

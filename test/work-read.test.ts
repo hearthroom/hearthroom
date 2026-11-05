@@ -178,8 +178,10 @@ it('returns unavailable instead of approved metadata when detail policy cannot b
  expect(response.status).toBe(503);expect(await response.text()).not.toContain('Stale managed work');
 });
 
-it('shares the latest saved source for unlisted with the conservative adult gate and noindex',async()=>{
+it.each(['G','R'])('shares the latest unlisted source without exposing the stored %s rating',async rating=>{
  const {source,work}=await managedFixture();providerFixture('unlisted');
+ await env.DB.prepare("UPDATE cards SET rating=?,rating_descriptors='[\"sex\"]' WHERE source_role_id=?").bind(rating,source).run();
+ const before=await getCard(env.DB,source);
  await env.DB.prepare("UPDATE managed_work_access SET access='unlisted' WHERE work_id=?").bind(work).run();
  const read=vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Latest saved title'}));
  const denied=await request('/v1/cards/'+source);
@@ -188,9 +190,10 @@ it('shares the latest saved source for unlisted with the conservative adult gate
  await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1,adult_consent_version=? WHERE id=?').bind(ADULT_CONSENT_VERSION,reader).run();
  const response=await request('/v1/cards/'+source,'reader');
  expect(response.status).toBe(200);
- expect(await response.json()).toMatchObject({roleId:source,sourceRoleId:source,name:'Latest saved title',rating:'R',status:'unlisted',canInteract:true,listed:false});
+ expect(await response.json()).toMatchObject({roleId:source,sourceRoleId:source,name:'Latest saved title',rating:null,ratingDescriptors:[],status:'unlisted',canInteract:true,listed:false});
  expect(response.headers.get('X-Robots-Tag')).toContain('noindex');
  expect(response.headers.get('Cache-Control')).toContain('no-store');
+ expect(await getCard(env.DB,source)).toEqual(before);
 });
 
 it.each(['manifest.webmanifest','icon-192.png','touch-icon.png','platforms'])('checks current permission before returning %s metadata',async file=>{
@@ -254,4 +257,66 @@ it.each(['https://play.sukisuki.ai/','https://sukisuki.ai/play/','https://sukisu
  const response=await request(`${base}${row.id}/`);
  expect(response.status).toBe(200);expect(response.headers.get('X-Robots-Tag')).toContain('noindex');
  expect(await response.text()).toContain('name="robots" content="noindex');expect(response.headers.get('Cache-Control')).toContain('no-store');
+});
+
+
+it('issues the same protected shortcut credential for an unrated unlisted card',async()=>{
+ const {source,work}=await managedFixture();providerFixture('unlisted');
+ await env.DB.prepare("UPDATE managed_work_access SET access='unlisted' WHERE work_id=?").bind(work).run();
+ vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:source,authorNumId:11}));
+ await adultReader();
+ const response=await request('/v1/cards/'+source,'reader');
+ const body=await response.json() as {rating:string|null;shortcutKey?:string};
+ expect(response.status).toBe(200);expect(body.rating).toBeNull();expect(body.shortcutKey).toBeTruthy();
+ expect((await request(`/v1/cards/${source}/manifest.webmanifest`)).status).toBe(404);
+ expect((await request(`/v1/cards/${source}/manifest.webmanifest?k=${encodeURIComponent(body.shortcutKey!)}`)).status).toBe(200);
+});
+
+it('keeps unlisted social reads gated and out of public discovery independently of the old approved rating',async()=>{
+ const {source,work}=await managedFixture();providerFixture('unlisted');
+ await env.DB.prepare("UPDATE managed_work_access SET access='unlisted' WHERE work_id=?").bind(work).run();
+ await env.DB.prepare("UPDATE cards SET rating='G' WHERE source_role_id=?").bind(source).run();
+ const row=(await getCard(env.DB,source))!;
+ for(const suffix of ['', '/comments', '/comments/count', '/score', '/leaderboard', '/honors']){
+  const denied=await request('/v1/cards/'+row.id+suffix);
+  expect(denied.status,suffix).toBe(403);
+ }
+ const denied=await request('/v1/cards/'+source);
+ expect(await denied.json()).toMatchObject({error:'adult_content',reason:'unrated'});
+ const control=await upsertCard(env.DB,role({roleId:crypto.randomUUID(),authorNumId:11,name:'Stale public control'}),Date.now(),{status:'approved'});
+ for(let warm=0;warm<2;warm++)for(const path of ['/v1/cards','/v1/cards?q=Stale','/v1/cards?sort=hot','/v1/cards?sort=random','/v1/cards?sort=day']){
+  expect(await(await request(path)).json()).toMatchObject({items:[{id:control.id}]});
+ }
+ const sitemap=await(await request('/sitemap.xml')).text();
+ // Card URLs are not part of the current sitemap at all (src/sitemap.ts).
+ expect(sitemap).toContain('/updates</loc>');expect(sitemap).not.toContain('/cards/');
+ const reader=await adultReader();
+ await env.DB.prepare("UPDATE members SET country_region='CN' WHERE id=?").bind(reader).run();
+ const cn=await request('/v1/cards/'+source,'reader');
+ expect(cn.status).toBe(403);expect(await cn.json()).toMatchObject({error:'region_unavailable'});
+});
+
+
+it('does not reuse an allowed unlisted response for an unverified or CN reader',async()=>{
+ const {source,work}=await managedFixture();providerFixture('unlisted');
+ await env.DB.prepare("UPDATE managed_work_access SET access='unlisted' WHERE work_id=?").bind(work).run();
+ vi.spyOn(upstream,'fetchRole').mockResolvedValue(role({roleId:source,authorNumId:11,name:'Unreviewed source'}));
+ const reader=await adultReader();
+ const path='/v1/cards/'+source;
+ expect(await(await request(path,'reader')).json()).toMatchObject({rating:null,status:'unlisted'});
+ for(const assignment of ['age_verified_at=NULL','adult_consent_version=NULL','show_nsfw=0',"country_region='CN'"]){
+  await env.DB.prepare('UPDATE members SET age_verified_at=1,adult_consent_version=?,show_nsfw=1,country_region=\'TW\' WHERE id=?').bind(ADULT_CONSENT_VERSION,reader).run();
+  await env.DB.prepare(`UPDATE members SET ${assignment} WHERE id=?`).bind(reader).run();
+  const denied=await request(path,'reader');expect(denied.status,assignment).toBe(403);
+  expect(await denied.text()).not.toContain('Unreviewed source');
+ }
+ await env.DB.prepare('UPDATE members SET age_verified_at=1,adult_consent_version=?,show_nsfw=1,country_region=\'TW\' WHERE id=?').bind(ADULT_CONSENT_VERSION,reader).run();
+ expect(await(await request(path,'reader')).json()).toMatchObject({rating:null,status:'unlisted'});
+});
+
+it.each(['G','P','PG12','PG15','R'])('preserves the approved public %s classification',async rating=>{
+ const {source}=await managedFixture();providerFixture('public');await adultReader();
+ await env.DB.prepare('UPDATE cards SET rating=? WHERE source_role_id=?').bind(rating,source).run();
+ const response=await request('/v1/cards/'+source,'reader');
+ expect(response.status).toBe(200);expect(await response.json()).toMatchObject({rating});
 });

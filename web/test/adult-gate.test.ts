@@ -33,10 +33,10 @@ import { ADULT_CONSENT_VERSION } from "../../shared/adult-consent";
 
 let app: App | null = null;
 let el: HTMLElement | null = null;
-async function mount(path = "/cards/x") {
+async function mount(path = "/cards/x", unrated = false) {
   el = document.createElement("div");
   document.body.appendChild(el);
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: AdultGate }] });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: AdultGate, props: { unrated } }] });
   await router.push(path);
   await router.isReady();
   app = createApp({ template: "<RouterView />" }).use(createPinia()).use(router).use(i18n);
@@ -129,4 +129,13 @@ describe("AdultGate", () => {
     expect(document.querySelector(".dlg")).toBeNull();
     expect(api.updateSiteSettings).toHaveBeenCalledWith({ showNsfw: true }, "tok");
   });
+});
+
+
+it('keeps the age verification action for unrated content without displaying an R classification', async () => {
+ session.me = null;
+ const root = await mount('/cards/unlisted', true);await flush();
+ expect(root.querySelector('.rating-chip')).toBeNull();
+ expect(root.textContent).toContain(i18n.global.t('card.gate.verify'));
+ expect(root.querySelector('button.btn--primary')).not.toBeNull();
 });

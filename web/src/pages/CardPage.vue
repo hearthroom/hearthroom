@@ -79,6 +79,7 @@ const revalidating = ref(false);
 const missing = ref(false);
 /** 成人內容、而看的人沒登入或沒開：畫門，不畫 404 */
 const gated = ref(false);
+const gateUnrated = ref(false);
 /** 看的人選的國家／地區不提供這張卡（403 region_unavailable）：畫「暫不提供」，不畫成人內容的門 */
 const regionBlocked = ref(false);
 const error = ref("");
@@ -263,6 +264,7 @@ async function load(afterIdentity = false) {
   loading.value = !card.value;
   missing.value = false;
   gated.value = false;
+  gateUnrated.value = false;
   regionBlocked.value = false;
   error.value = "";
   const shown = card.value;
@@ -293,6 +295,7 @@ async function load(afterIdentity = false) {
         if (request !== loadGeneration) return;
         if (session.profile?.showNsfw) { void load(true); return; }
       }
+      gateUnrated.value = err.reason === 'unrated';
       gated.value = true; card.value = null;
     }
     else {
@@ -378,7 +381,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 <template>
   <NotFoundPage v-if="missing" :title="$t('card.notFound.title')" :hint="$t('card.notFound.hint')" />
   <RegionUnavailable v-else-if="regionBlocked" />
-  <div v-else-if="gated" class="page"><AdultGate @enabled="load()" /></div>
+  <div v-else-if="gated" class="page"><AdultGate :unrated="gateUnrated" @enabled="load()" /></div>
 
   <div v-else class="page role">
     <!-- 骨架照著真的版面畫：封面＋名字，下面左右兩欄，資料來了不跳版 -->
@@ -492,7 +495,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <section v-if="showComments && listed" id="comments" class="role__comments-wrap" aria-labelledby="comments-h">
             <h2 id="comments-h" class="role__h2">{{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__h2-n">{{ commentCount }}</span></h2>
             <div class="panel role__comments">
-              <CommentPanel v-if="confirmed || card.rating !== 'R'" :key="card.id" data-tour="card-comments" :card-id="card.id" :role-id="card.roleId" :my-score="score?.mine ?? null" @count="commentCount = $event" />
+              <CommentPanel v-if="confirmed || (card.rating !== 'R' && card.status !== 'unlisted' && card.status !== 'private')" :key="card.id" data-tour="card-comments" :card-id="card.id" :role-id="card.roleId" :my-score="score?.mine ?? null" @count="commentCount = $event" />
             </div>
           </section>
         </div>
@@ -524,7 +527,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <div class="role__links">
               <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)">{{ $t("community.reportCard") }}</RouterLink>
               <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
-              <button v-if="installable && (card.rating !== 'R' || card.shortcutKey)" type="button" @click="addToHome">{{ $t("card.addHome") }}</button>
+              <button v-if="installable && ((card.rating !== 'R' && card.status !== 'unlisted' && card.status !== 'private') || card.shortcutKey)" type="button" @click="addToHome">{{ $t("card.addHome") }}</button>
             </div>
           </section>
 

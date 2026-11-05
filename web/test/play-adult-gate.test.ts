@@ -11,7 +11,7 @@ import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import { setProvider } from '../src/lib/provider';
 import PlayPage from '../src/pages/PlayPage.vue';
-const adult = vi.hoisted(() => ({ on: false, fail: false }));
+const adult = vi.hoisted(() => ({ on: false, fail: false, unrated: false }));
 const mocks = vi.hoisted(() => ({ stage: vi.fn(), preload: vi.fn(async () => {}), authorize: vi.fn(async () => true) }));
 vi.mock('../src/lib/stage-host', () => ({ ensureStage: mocks.stage, preloadStage: mocks.preload, remergeStageMessages: vi.fn(), stageToasts: { list: [] } }));
 vi.mock('../src/lib/connections', () => ({ accountToken: vi.fn(), connectAccount: vi.fn() }));
@@ -25,7 +25,7 @@ vi.mock('../src/lib/api', async original => {
   return { ...real,
     fetchCard: async () => {
       if (adult.fail) throw new real.ApiError(500, 'boom');
-      if (!adult.on) throw new real.ApiError(403, 'forbidden', 'adult_content');
+      if (!adult.on) throw new real.ApiError(403, 'forbidden', 'adult_content', undefined, adult.unrated ? 'unrated' : '');
       return { id: '100228', num: 100228, status: 'approved', roleId: 'harbor-role', provider: 'harbor' };
     },
     fetchCardPlatforms: async () => [{ provider: 'harbor', roleId: 'harbor-role', playable: true }],
@@ -52,7 +52,7 @@ async function mount(path: string, signedIn: boolean) {
   await settle();
 }
 beforeEach(() => {
-  setProvider('harbor'); adult.on = false; adult.fail = false;
+  setProvider('harbor'); adult.on = false; adult.fail = false; adult.unrated = false;
   mocks.stage.mockReset(); mocks.stage.mockResolvedValue({ template: '<div>Fixture player</div>' });
 });
 afterEach(() => { app?.unmount(); root?.remove(); document.body.innerHTML = ''; app = undefined; });
@@ -81,4 +81,11 @@ it('真的讀不到卡：照舊說載不進來，不畫門', async () => {
   await mount('/play/100228', false);
   expect(root!.textContent).toContain(i18n.global.t('play.loadFailed'));
   expect(root!.textContent).not.toContain(i18n.global.t('card.gate.title'));
+});
+
+it('keeps the play age gate but no rating badge for an unreviewed source', async () => {
+ adult.unrated = true;await mount('/play/100228', false);
+ expect(root!.querySelector('.gate')).not.toBeNull();
+ expect(root!.querySelector('.rating-chip')).toBeNull();
+ expect(mocks.stage).not.toHaveBeenCalled();
 });

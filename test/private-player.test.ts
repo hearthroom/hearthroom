@@ -60,7 +60,7 @@ it('advertises only the same authenticated private target as playable',async()=>
 it('uses source only after the Provider confirms that exact source is playable',async()=>{
  const {source,target,state,network}=await fixture();state.allowed=new Set([source]);
  const response=await request('/v1/cards/'+source,'player');
- expect(response.status).toBe(200);expect(await response.json()).toMatchObject({roleId:source,name:'Played source',rating:'R',canInteract:false});
+ expect(response.status).toBe(200);expect(await response.json()).toMatchObject({roleId:source,name:'Played source',rating:null,ratingDescriptors:[],canInteract:false});
  expect(network.mock.calls.map(([url])=>new URL(String(url)).searchParams.get('roleId'))).toEqual([target,source]);
 });
 it('opens an actually played source when no approved version exists',async()=>{
@@ -264,4 +264,20 @@ it('uses the region error for an authorized CN private source that has no review
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({error:'region_unavailable'});
  }
+});
+
+
+it('keeps the age gate for a private unreviewed source without assigning a displayed rating',async()=>{
+ const {source}=await fixture(false);
+ const player=await makeMember(42);
+ await env.DB.prepare('UPDATE members SET age_verified_at=NULL WHERE id=?').bind(player).run();
+ const denied=await request('/v1/cards/'+source,'player');
+ expect(denied.status).toBe(403);expect(await denied.json()).toMatchObject({error:'adult_content',reason:'unrated'});
+});
+
+it('preserves the reviewed rating of a retained approved private snapshot',async()=>{
+ const {source,target}=await fixture();
+ await env.DB.prepare("UPDATE cards SET rating='PG15' WHERE source_role_id=?").bind(source).run();
+ const response=await request('/v1/cards/'+source,'player');
+ expect(await response.json()).toMatchObject({roleId:target,status:'private',rating:'PG15'});
 });

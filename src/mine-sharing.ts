@@ -12,7 +12,7 @@ export async function loadSharingMine(env:Env,token:string,me:ProviderIdentity,o
  if(!opts.access){
   const result=await loadMine({...env,WORK_SHARING_ENABLED:'false'},token,me,{...opts,provider:'harbor'});
   const projections=await readOwnerVisibilities(env,result.body.items.map(r=>r.roleId),token);
-  return {...result,body:{...result.body,items:result.body.items.map(r=>({...r,workVisibility:projections.get(r.roleId)!,draftChanged:projections.get(r.roleId)!.draftChanged}))}};
+  return {...result,body:{...result.body,items:result.body.items.map(r=>({...r,...(projections.get(r.roleId)!.access==='unlisted'?{rating:null}:{}),workVisibility:projections.get(r.roleId)!,draftChanged:projections.get(r.roleId)!.draftChanged}))}};
  }
  const all:MyRole[]=[];let source:MineResult['source']='hit';
  const cache=await caches.open(mineCache.namespace);
@@ -44,7 +44,7 @@ export async function loadSharingMine(env:Env,token:string,me:ProviderIdentity,o
  const offset=(opts.page-1)*opts.pageSize;
  const items=rows.slice(offset,offset+opts.pageSize).map(({contentHash:_,...r})=>{
   const workVisibility=projections.get(r.roleId)!;
-  return {...r,registered:registered.has(r.roleId),workVisibility,draftChanged:workVisibility.draftChanged};
+  return {...r,...(workVisibility.access==='unlisted'?{rating:null}:{}),registered:registered.has(r.roleId),workVisibility,draftChanged:workVisibility.draftChanged};
  });
  return {source,body:{items,total:rows.length,registeredTotal:registered.size,quota,page:opts.page,pageSize:opts.pageSize,hasNext:offset+opts.pageSize<rows.length}};
 }

@@ -120,7 +120,7 @@ export interface CurrentCardAccess {
 export async function unlistedCardRow(env:Env,row:CardRow):Promise<CardRow>{
  const role=await upstream.fetchRole(env,row.source_role_id,'harbor');
  if(role.roleId!==row.source_role_id||role.authorNumId!==row.author_num_id)throw new HttpError(503,'visibility_provider_unavailable');
- return {...row,approved_hosted_role_id:row.source_role_id,status:'unlisted',rating:'R',rating_descriptors:null,
+ return {...row,approved_hosted_role_id:row.source_role_id,status:'unlisted',rating:null,rating_descriptors:null,
   names:JSON.stringify(role.names),summaries:JSON.stringify(role.summaries),tags:JSON.stringify(role.tags),
   zone:role.zone,background_url:role.backgroundUrl,share_image_url:role.shareImageUrl??null,
   landscape_url:role.backgroundLandscapeUrl??null,slug:role.slug??null,

@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "未公開的卡片不再顯示評級，審核通過後才會顯示。",
+    "zh-Hans": "未公开的卡片不再显示评级，审核通过后才会显示。",
+    "en": "Unlisted cards no longer show a rating until they pass review.",
+    "ja": "非公開のカードは、審査に通るまでレーティングを表示しません。",
+    "ko": "비공개 카드는 심사를 통과하기 전까지 등급을 표시하지 않습니다."
+  }
+}
