@@ -68,7 +68,7 @@ onMounted(() => { if (props.popover) { document.addEventListener("click", onDocC
 onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); });
 </script>
 <template>
-  <nav ref="root" class="discovery-tags" :class="{ 'discovery-tags--popover': popover }" :aria-label="$t('board.tags')">
+  <nav ref="root" class="discovery-tags" :class="{ 'discovery-tags--popover': popover, 'discovery-tags--browse': browse }" :aria-label="$t('board.tags')">
     <template v-if="popover">
       <div class="discovery-tags__bar">
         <button ref="opener" type="button" class="tagchip discovery-tags__button" :class="{ 'is-on': selected.length }" :aria-expanded="open" aria-controls="discovery-tags-panel" @click="open ? close() : show()">
@@ -159,6 +159,20 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
   [data-group-label]:not(:first-child) { margin-top: 6px; }
   .discovery-tags__extras, .discovery-tags__tail { grid-column: 1; }
 }
+/*
+  首頁寬螢幕攤開的類型籤是次層級，上面的榜單分頁才是主層級（站方 2026-11-05）。
+  籤照 .chip 原語的樣子（26 高、12px、--surface-2 淡底、不畫框），組名也降成 12px/500。
+  選中的籤留著強調色框，一眼看得出開了哪些篩選；「清除類型」「已隱藏」保留虛線框，跟一般籤分得開。
+  搜尋頁的篩選面板與手機的「類型」鈕不吃這一段。
+*/
+.discovery-tags--browse .discovery-tags__inner { column-gap: var(--s-3); row-gap: var(--s-2); }
+.discovery-tags--browse .discovery-tags__chips { gap: 6px; }
+.discovery-tags--browse .discovery-tags__group { min-height: 26px; font-weight: 500; letter-spacing: 0; }
+.discovery-tags--browse .tagchip { gap: 4px; min-height: 26px; padding: 0 10px; border-color: transparent; background: var(--surface-2); font-size: 12px; }
+.discovery-tags--browse .tagchip:hover { background: var(--border); }
+.discovery-tags--browse .tagchip.is-on { border-color: var(--accent); background: var(--accent-tint); }
+.discovery-tags--browse .tagchip.is-empty { border-color: transparent; background: var(--surface-2); }
+.discovery-tags--browse .discovery-tags__clear, .discovery-tags--browse .tagchip--hidden { border-color: var(--line); background: transparent; }
 .discovery-tags__panel .discovery-tags__inner { padding-block: 0; }
 .discovery-tags__panel .discovery-tags__chips { gap: 6px; }
 .discovery-tags__panel .tagchip { gap: 4px; padding-inline: 10px; }

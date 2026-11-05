@@ -418,22 +418,30 @@ const ratingOptions = computed(() => {
 @media(min-width:1440px) { .board-page { --board-columns: 5; } }
 @media(min-width:1920px) { .board-page { --board-columns: 6; } .board-page .board-layout { grid-template-columns: minmax(0,1fr) 288px; } }
 @media(min-width:2400px) { .board-page { --board-columns: 8; } }
-/* 分頁做成細字頁籤，擠不下就換行、不裁字：橫捲會把第六位的「關注」藏到畫面外 */
 .board-main { min-width: 0; }
 /* Already-read cards restore in place; entrance transforms would move the scroll anchor. */
 .board-main--restored :deep(.settle) { animation: none; }
 .board-sidebar { display: none; }
 @media(min-width:1080px) { .board-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: var(--s-5); align-items: start; } .board-sidebar { display: block; } }
+/*
+  分頁是這一頁的主層級，下面的類型籤是次層級（站方 2026-11-05：「應該才是主要的，要做顯眼一點，下面那堆比較次要」）。
+  手機 15px、30 高、左右內距 6px：行數跟改版前一樣（中文 390 寬以上一行，其他語言與更窄的螢幕兩行）；
+  16px 會讓英文在 375／360 寬變三行，10px 內距會讓中文在 390／414 寬多一行，首屏都少露一截卡。
+  寬螢幕 16px、36 高；左右內距 12px：側欄出現的 1080 寬，主欄約 738px，14px 內距的英文會換成兩行。
+  擠不下就換行、不裁字：橫捲會把第六位的「關注」藏到畫面外。
+*/
 .sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }
 .sorts__item {
-  height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);
-  background: transparent; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer;
+  height: var(--h-sm); padding: 0 6px; border: 0; border-radius: var(--r-pill);
+  background: transparent; font-size: 15px; font-weight: 600; color: var(--text-2); cursor: pointer;
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
-/* 窄螢幕把每顆的左右內距收 2px：八個分頁在手機上會換成兩行，少一點內距第二行就短一些 */
-@media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
+@media (min-width: 641px) {
+  .sorts { gap: 4px; margin-bottom: var(--s-4); }
+  .sorts__item { height: var(--h-md); padding: 0 12px; font-size: 16px; }
+}
 
 .count { margin: 0; font-variant-numeric: tabular-nums; }
 .count-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
