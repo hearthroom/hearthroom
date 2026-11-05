@@ -357,7 +357,7 @@ export async function statusAmong(
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
-      `SELECT c.source_role_id, c.status, c.rating, c.approved_content_hash, c.approved_revision_hash,
+      `SELECT c.source_role_id, c.status, CASE WHEN c.status='unlisted' THEN NULL ELSE c.rating END AS rating, c.approved_content_hash, c.approved_revision_hash,
               CASE WHEN c.approved_version_id IS NOT NULL THEN
                 (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
               END AS update_status,

@@ -199,7 +199,7 @@ export async function loadMine(
       const current = versions.get(r.roleId) ?? (contentHash ? { content: contentHash } : undefined);
       return {
         ...r, registered: registered.has(r.roleId),
-        ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, rating: s.status==='unlisted'?null:s.rating } : {}),
+        ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, rating: s.rating } : {}),
         ...(draftChanged(s, current) ? { draftChanged: true } : {}),
       };
     })
