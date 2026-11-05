@@ -74,7 +74,7 @@ it('all configured targets are safe local landings with attribution', () => {
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
     expect(url.searchParams.get('utm_source')).toBe('bahamut');
     expect(url.searchParams.get('utm_medium')).toBe('forum');
@@ -115,5 +115,20 @@ it.each([
   const response = await visit(`/go/${code}?ref=94A9H94Z&utm_campaign=override`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe(`/cards/100192?ref=H2DG5Q6Y&utm_source=bahamut&utm_medium=forum&utm_campaign=${campaign}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
+// Approved marketing plan (2026-11-05): each referral is the card author's code.
+it.each([
+  ['bh-dnd-indie', '/cards/100192', 'H2DG5Q6Y'],
+  ['bh-tiandao-mcs', '/cards/100169', '94A9H94Z'],
+  ['bh-tiandao-ynxy', '/cards/100169', '94A9H94Z'],
+  ['bh-tiandao-ggbh', '/cards/100169', '94A9H94Z'],
+  ['bh-bofuri-novel', '/cards/100184', '94A9H94Z'],
+  ['bh-mona-ai', '/cards/100271', '94A9H94Z'],
+])('serves the approved November 6 author campaign %s', async (code, path, ref) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${path}?ref=${ref}&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}-20261106`);
   expect(response.headers.get('cache-control')).toBe('no-store');
 });

@@ -16,7 +16,7 @@ it('every configured landing sends the original campaign and saves the referral'
     });
     rememberShareRef(refFromQuery(url.searchParams.get('ref'))!);
     const expectedRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
     expect(pendingShareRef()?.code).toBe(expectedRef);
   }
 });
