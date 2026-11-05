@@ -36,13 +36,14 @@ describe("榜單卡片", () => {
     await router.push("/zh-Hans/");
     el = document.createElement("div");
     document.body.appendChild(el);
-    const card = { id: "1", roleId: "r", num: 1, zone: "zh", name: "龍與魔法學園", summary: "", tags: [], avatarUrl: null, backgroundUrl: null, author: { handle: null, accountNumId: 1, name: "作者與貓", avatar: "" }, talkNum: 0, trending: 0 };
+    const card = { id: "1", roleId: "r", num: 1, zone: "zh", name: "龍與魔法學園", summary: "音樂與學園", tags: [], avatarUrl: null, backgroundUrl: null, author: { handle: null, accountNumId: 1, name: "作者與貓", avatar: "" }, talkNum: 0, trending: 0 };
     app = createApp(CardTile, { card }).use(router).use(i18n);
     app.mount(el);
     await displayScriptReady();
     await nextTick();
     expect(el.querySelector(".card__name")?.textContent).toContain("龙与魔法学园");
     expect(el.querySelector(".card__void")?.textContent).toContain("龙");
+    expect(el.querySelector(".card__hook")?.textContent).toBe("音乐与学园");
     expect(el.textContent).toContain("作者與貓");
   }, 15000);
 });

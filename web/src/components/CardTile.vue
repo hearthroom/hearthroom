@@ -128,8 +128,8 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       <h2 class="card__name" :class="{ 'card__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
         <RouterLink :to="href" class="card__link">{{ title.text }}</RouterLink>
       </h2>
-      <p v-if="note" class="card__hook card__hook--note"><b>{{ $t("cardUpdate.card.updateNote") }}</b>{{ note }}</p>
-      <p v-else class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
+      <p v-if="note" class="card__hook card__hook--note"><b>{{ $t("cardUpdate.card.updateNote") }}</b>{{ displayName(note, locale) }}</p>
+      <p v-else class="card__hook">{{ displayName(card.summary, locale) || $t("card.noSummary") }}</p>
 
       <ul v-if="tags.length" class="card__tags">
         <li v-for="tag in tags" :key="tag">

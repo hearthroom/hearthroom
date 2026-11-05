@@ -93,6 +93,7 @@ declare module "moonstage/display-script" {
   export function directionForLocale(locale: string | null | undefined): ScriptDirection;
   export function createDisplayScriptConverter(direction: ScriptDirection): (text: string) => string;
   export function convertPlainText(text: string, convert: (text: string) => string): string;
+  export function convertVisibleHtml(html: string, convert: (text: string) => string): string;
 }
 
 /**

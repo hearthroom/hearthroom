@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "卡片頁的介紹與簡介、遊玩頁的部分狀態欄，現在會跟著介面語言顯示繁體或簡體。",
+    "zh-Hans": "卡片页的介绍与简介、游玩页的部分状态栏，现在会跟着界面语言显示繁体或简体。",
+    "en": "Card descriptions, summaries and some status bars now follow your interface’s Chinese script.",
+    "ja": "カードの紹介と概要、一部のステータス欄が、表示言語に合わせて繁体字・簡体字に切り替わります。",
+    "ko": "카드 소개와 요약, 일부 상태 표시줄이 화면 언어에 따라 번체 또는 간체로 표시됩니다."
+  }
+}

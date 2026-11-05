@@ -46,7 +46,7 @@ import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, dateOnly, dateTime, hueFrom } from "@/lib/format";
 import { titleLayout } from "@/lib/title-layout";
-import { displayName } from "@/lib/display-name";
+import { displayName, displayHtml } from "@/lib/display-name";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
@@ -66,6 +66,7 @@ const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
 // 標題照介面字形顯示（跟榜單、對話頁同一套規則）；佔位色與分享出去的標題用原文。
+const shownSummary = computed(() => displayName(card.value?.summary ?? "", locale.value));
 const shownName = computed(() => displayName(card.value?.name ?? "", locale.value));
 const title = computed(() => titleLayout(shownName.value));
 /** 跳去對話頁時交給它的卡名與封面（lib/play-intro）：載入畫面第一幀就畫這張卡 */
@@ -140,7 +141,7 @@ const listed = computed(() => card.value?.canInteract ?? (!card.value?.status ||
  * 短的簡介頁首已經顯示過，不再重複一次。
  */
 const LONG_SUMMARY = 120;
-const readmeHtml = computed(() => (readme.value.trim() ? renderReadme(readme.value) : ""));
+const readmeHtml = computed(() => (readme.value.trim() ? displayHtml(renderReadme(readme.value), locale.value) : ""));
 const summaryAsIntro = computed(() => !readmeHtml.value && [...(card.value?.summary ?? "")].length > LONG_SUMMARY);
 const hasIntro = computed(() => !!readmeHtml.value || summaryAsIntro.value);
 
@@ -439,7 +440,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <span v-if="(card.heat ?? 0) > 0" class="subtle role__heat">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>
           </div>
           <!-- 一句話簡介；舊卡的簡介常常是一整段，頁首只露出三行，全文在下面的介紹或卡片的說明裡 -->
-          <p v-if="card.summary" class="role__tagline" :title="card.summary">{{ card.summary }}</p>
+          <p v-if="card.summary" class="role__tagline" :title="shownSummary">{{ shownSummary }}</p>
 
           <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
           <div class="role__actions">
@@ -478,7 +479,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <h2 id="intro-h" class="sr-only">{{ $t("card.about") }}</h2>
             <div ref="introBox" class="role__intro panel" :class="{ 'role__intro--clamped': introLong && !introOpen }" :style="{ '--intro-max': `${INTRO_MAX}px` }">
               <ReadmeView v-if="readmeHtml" :html="readmeHtml" />
-              <p v-else class="role__text">{{ card.summary }}</p>
+              <p v-else class="role__text">{{ shownSummary }}</p>
               <div v-if="introLong && !introOpen" class="role__intro-fade">
                 <button type="button" class="btn" @click="introOpen = true">{{ $t("card.aboutMore") }}</button>
               </div>
@@ -548,7 +549,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <span v-else class="role__mini-void" :style="{ background: `hsl(${hueFrom(m.name)} 40% 62%)` }" />
               <span class="role__mini-text">
                 <strong>{{ displayName(m.name, locale) }}</strong>
-                <span class="subtle">{{ m.summary }}</span>
+                <span class="subtle">{{ displayName(m.summary, locale) }}</span>
               </span>
             </RouterLink>
           </section>

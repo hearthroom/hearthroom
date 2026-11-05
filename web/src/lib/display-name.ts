@@ -1,14 +1,14 @@
 import { shallowRef } from "vue";
 
 /**
- * 卡片標題照玩家的介面字形顯示：簡體介面看繁體卡轉簡體，正體介面看簡體卡轉繁體。
+ * 卡片標題、簡介與介紹照玩家的介面字形顯示：簡體介面看繁體卡轉簡體，正體介面看簡體卡轉繁體。
  *
  * 規則跟對話頁同一套（moonstage/display-script）：看得出是來源字形才轉、單字多義不動，
  * 所以同一個標題在榜單、卡片頁、對話頁寫法一致。字典約 470 KB（gzip），只有中文介面、
  * 標題裡真的有要換字形的字時才載入（見 mayConvert），而且跟對話頁共用同一個檔——先逛榜單再開對話不會下載第二次。
  * 載入前先顯示原標題；首屏網路停了、瀏覽器空閒時才下載，好了自動換成轉換後的寫法。
  *
- * 只轉顯示的字。依標題算出的東西（佔位色）、搜尋、分享出去的標題都用原文。
+ * 只轉顯示的字；介紹先經 Markdown 渲染，再轉可見文字節點。依標題算出的東西（佔位色）、搜尋、分享出去的標題都用原文。
  */
 type ScriptApi = typeof import("moonstage/display-script");
 type Direction = "s2t" | "t2s";
@@ -107,15 +107,26 @@ function mayConvert(name: string, locale: string): boolean | null {
   return false;
 }
 
-export function displayName(name: string, locale: string): string {
-  if (!name || !/^zh/i.test(locale) || !HAS_HAN.test(name) || failed) return name;
+function converterFor(name: string, locale: string): ((text: string) => string) | null {
+  if (!name || !/^zh/i.test(locale) || !HAS_HAN.test(name) || failed) return null;
   const mod = api.value;
   if (!mod) {
     if (mayConvert(name, locale)) void load();
-    return name;
+    return null;
   }
   const direction = mod.directionForLocale(locale);
-  if (direction === "none") return name;
-  const convert = (converters[direction] ??= mod.createDisplayScriptConverter(direction));
-  return mod.convertPlainText(name, convert);
+  if (direction === "none") return null;
+  return (converters[direction] ??= mod.createDisplayScriptConverter(direction));
+}
+
+/** 卡名、簡介等純文字；不改來源欄位。 */
+export function displayName(text: string, locale: string): string {
+  const convert = converterFor(text, locale);
+  return convert ? api.value!.convertPlainText(text, convert) : text;
+}
+
+/** Markdown 渲染後才轉可見文字，URL、屬性與 code/pre 仍用作者原文。 */
+export function displayHtml(html: string, locale: string): string {
+  const convert = converterFor(html, locale);
+  return convert ? api.value!.convertVisibleHtml(html, convert) : html;
 }
