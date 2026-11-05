@@ -24,6 +24,7 @@ Dataset: `hearthroom_events` (the `EVENTS` binding in `wrangler.toml`). One data
 | `blob12` | outcome: `ok` or `error` |
 | `blob14` | detail: for `blog_share`, one of `share_web`, `share_clipboard`, `share_abort` |
 | `blob15` | client: `server`, `beacon` or `bot` |
+| `blob16` | registered promotional `utm_campaign` on a successful GET HTML response; otherwise empty. Added after blob15 so old queries keep their layout. |
 | `double1..4` | duration ms, result count, offset, HTTP status (all 0 for beacon events) |
 
 The blog and campaign events are beacon events (`POST /v1/e`): they are fired by the browser,
@@ -39,6 +40,22 @@ forged by anyone, so use them for trends and comparisons, not for billing or ran
 | `campaign_view` | campaign page loads, once per slug per page session | campaign slug |
 | `campaign_apply` | apply action on the campaign page | campaign slug |
 | `campaign_share` | a share link is copied | campaign slug |
+| `promo_redirect` | non-bot GET `/go/<code>` redirects; `detail` is `get`, `outcome` is `success`, `unknown` or `invalid` | configured short code; empty for unknown input |
+
+Promotional landing campaigns are accepted only when registered in `config/promo-links.json`,
+matching `[a-z0-9][a-z0-9-]{0,63}`, with exactly one `utm_campaign` parameter. Register a
+campaign there even if a post uses the full destination URL. Referral codes, arbitrary query
+values, complete URLs and identities are not copied into blob16; beacons cannot set it.
+HEAD and classified bots keep their existing events but do not get the new promotional
+event or campaign dimension; excluded QA contexts keep analytics disabled.
+
+For per-post counts, query `page_html` with `blob16 = '<registered-campaign>'` and successful
+HTTP status, or `promo_redirect` with `blob11 = '<configured-code>'`, `blob12 = 'success'`,
+`blob14 = 'get'`, HTTP 302. Exclude `blob15 = 'bot'` and sum `_sample_interval`. These are
+estimated requests, not unique visitors or registration attribution. No historical per-code
+or per-campaign values can be reconstructed from events written before these dimensions
+were enabled. Always declare the actual start of measurement; never report an unmeasured
+historical interval as zero.
 
 `blog_share` with `detail = 'share_abort'` is a dismissed share sheet, not a share. The
 queries below leave it out.

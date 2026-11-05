@@ -1,4 +1,5 @@
 import {parseCountryRegion, updateCountryRegion} from './country-region';
+import { promoCampaign } from './promo-attribution';
 import {viewerCountryRegion, assertRegionCard, viewerAllowsAdultContent, normalizeHiddenTags, confirmAdult} from './members';
 import { cardRewardMaintenance } from "./card-reward-service";
 import {readOwnCardView} from './card-owner-view';
@@ -128,7 +129,7 @@ import { wikidata } from "./wikidata";
 import { withD1Session } from "./d1-session";
 import { renderSiteManifest } from "./site-manifest";
 import { analyticsRoutes } from "./ga4";
-import { isPromoPurchasePath, promoLinkRoutes } from './promo-links';
+import { isPromoPurchasePath, promoRedirect } from './promo-links';
 
 import { qaContextRoutes, verifyQAContext, excludeQABrowser } from './qa-browser-context';
 
@@ -175,6 +176,11 @@ app.use("*", async (c, next) => {
   // beacon 端點自己發事件；健康檢查沒有分析價值
   const path = new URL(c.req.url).pathname;
   if (path === "/v1/e" || path === "/v1/health" || path === "/v1/region") return;
+  const campaign = ev.event === 'page_html' && c.req.method === 'GET'
+    && clientKind(c.req.header('User-Agent')) !== 'bot'
+    && c.res.status >= 200 && c.res.status < 300
+    && c.res.headers.get('Content-Type')?.toLowerCase().includes('text/html')
+    ? promoCampaign(new URL(c.req.url)) : '';
   emit(c.env, c.executionCtx, {
     event: ev.event ?? "api",
     from: surfaceOf(c.req.header("X-From")),
@@ -187,6 +193,7 @@ app.use("*", async (c, next) => {
     durationMs: Date.now() - started,
     outcome: ev.outcome ?? (c.res.status < 400 ? "ok" : "error"),
     ...ev,
+    campaign,
   } as EventFields);
 });
 
@@ -241,7 +248,7 @@ app.use("*", async (c, next) => {
 });
 
 app.use('/go/*', async (c, next) => isPromoPurchasePath(c.req.path)
-  ? next() : promoLinkRoutes.fetch(c.req.raw, c.env, c.executionCtx));
+  ? next() : promoRedirect(c));
 
 app.route('/',reviewPlayAccessRoutes());
 app.route('/',enforcementNoticeRoutes());

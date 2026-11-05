@@ -45,16 +45,19 @@ export interface EventFields {
   detail?: string;
   /** server / beacon / bot */
   client?: string;
+  /** Registered promotional campaign only; appended to preserve blob1..15. */
+  campaign?: string;
   durationMs?: number;
   resultCount?: number;
   offset?: number;
   status?: number;
 }
 
-/** blob 的顺序。查询时 blob1..blob15 就照这个数。 */
+/** blob 的顺序。查询时 blob1..blob16 就照这个数。 */
 const BLOBS: (keyof EventFields)[] = [
   "event", "from", "route", "locale", "zoneScope", "country", "refHost",
   "sortKey", "tag", "term", "subject", "outcome", "cache", "detail", "client",
+  "campaign",
 ];
 const DOUBLES: (keyof EventFields)[] = ["durationMs", "resultCount", "offset", "status"];
 

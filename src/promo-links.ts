@@ -1,6 +1,7 @@
-import { Hono, type Context } from 'hono';
+import type { Context } from 'hono';
 import links from '../config/promo-links.json';
 import { bumpOp } from './ops-metrics';
+import { clientKind, note, type Pending } from './analytics';
 import type { Env } from './types';
 
 const ORIGIN = 'https://sukisuki.ai';
@@ -20,18 +21,24 @@ export function promoTarget(value: unknown): string | null {
   } catch { return null; }
 }
 
-export const promoLinkRoutes = new Hono<{ Bindings: Env }>({ strict: false });
-function redirect(c: Context<{ Bindings: Env }>, target: string, outcome: 'success' | 'unknown' | 'invalid') {
+type PromoContext = Context<{ Bindings: Env; Variables: { ev: Pending } }>;
+function redirect(c: PromoContext, target: string, outcome: 'success' | 'unknown' | 'invalid', code = '') {
   c.executionCtx.waitUntil(bumpOp(c.env.DB, 'promo_redirect', 'redirect', outcome));
+  if (c.req.method === 'GET' && clientKind(c.req.header('User-Agent')) !== 'bot') {
+    note(c, { event: 'promo_redirect', subject: code, outcome, detail: 'get' });
+  }
   c.header('Cache-Control', 'no-store');
   return c.redirect(target, 302);
 }
-promoLinkRoutes.notFound(c => redirect(c, '/', 'unknown'));
-promoLinkRoutes.get('/go/:code', c => {
-  const code = c.req.param('code');
+/** Use the parent context so its one pending AE event receives the code. */
+export function promoRedirect(c: PromoContext) {
+  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return redirect(c, '/', 'unknown');
+  const match = /^\/go\/([^/]+)\/?$/.exec(c.req.path);
+  let code = '';
+  try { code = match ? decodeURIComponent(match[1]!) : ''; } catch { /* Unknown malformed code. */ }
   const known = /^[a-z0-9][a-z0-9-]{0,63}$/.test(code) && Object.hasOwn(links, code);
   const target = known ? promoTarget(links[code as keyof typeof links]) : null;
-  return redirect(c, target ?? '/', known ? target ? 'success' : 'invalid' : 'unknown');
-});
+  return redirect(c, target ?? '/', known ? target ? 'success' : 'invalid' : 'unknown', known ? code : '');
+}
 
 export const isPromoPurchasePath = (path: string) => /^\/go\/(?:plan|topup)\/?$/.test(path);

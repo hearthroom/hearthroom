@@ -69,5 +69,10 @@ it('suppresses server AE and the same-origin beacon before account login',async(
  const beaconCtx=createExecutionContext();
  await worker.fetch(new Request(origin+'/v1/e',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify([{event:'page_view',route:'/'}])}),target,beaconCtx);
  await waitOnExecutionContext(beaconCtx);
+ for(const path of ['/go/bh-fate-fgo','/?utm_campaign=bh-intro-20261105']){
+  const promoCtx=createExecutionContext();
+  await worker.fetch(new Request(origin+path,{headers:{Cookie:cookie,Origin:origin}}),target,promoCtx);
+  await waitOnExecutionContext(promoCtx);
+ }
  expect(points).toEqual([]);
 });
