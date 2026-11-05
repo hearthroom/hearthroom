@@ -66,7 +66,7 @@
       "name": "Directives"
     },
     {
-      "description": "Long-term memory atoms extracted from a conversation.",
+      "description": "AI notebook entries the character writes during Agent-mode turns.",
       "name": "Memory"
     },
     {
@@ -2066,8 +2066,8 @@
         "tags": [
           "Memory"
         ],
-        "summary": "List the active long-term memory entries of a conversation",
-        "description": "Returns the long-term memory entries (atoms) of a conversation the caller owns. Only entries with `status: \"active\"` are returned (superseded, decayed and archived entries are filtered out). The response body is a bare JSON array. Errors use the legacy `{error}` shape.",
+        "summary": "List the AI notebook entries of a conversation",
+        "description": "Returns the AI notebook entries (atoms) of a conversation the caller owns. The character writes these entries during Agent-mode turns; ordinary turns add none. Only entries with `status: \"active\"` are returned (superseded, decayed and archived entries are filtered out). The response body is a bare JSON array. Errors use the legacy `{error}` shape.",
         "security": [
           {
             "userToken": []
@@ -2165,7 +2165,7 @@
         "tags": [
           "Memory"
         ],
-        "summary": "Delete one long-term memory entry",
+        "summary": "Delete one AI notebook entry",
         "description": "Archives the given memory entry of a conversation the caller owns and removes it from retrieval. Only entries that are currently `active` can be deleted; any other status is reported as not found. Errors use the legacy `{error}` shape.",
         "security": [
           {
@@ -8093,7 +8093,7 @@
           "Player settings"
         ],
         "summary": "Per-card player settings",
-        "description": "The caller's settings for one card: persona fields, selected model/lane, context tier, thinking depth, memory/compaction switches, voice and display options. These values are what the chat turn actually reads (unlike /player/preference which is purely client-side appearance). If the caller has never saved settings for this card the response is a defaults object (200, not 404); an unknown `roleId` also yields defaults. `selectModel` is filled with the platform default when empty. For non-members `autoAudio` and `permanentMemory` are forced to false. The response is produced by reflecting the stored row, so it also carries a few legacy/internal keys documented below; `accountId` and the custom `customInstructions` are removed by the response scrub.",
+        "description": "The caller's settings for one card: persona fields, selected model/lane, context tier, thinking depth, memory/compaction switches, voice and display options. These values are what the chat turn actually reads (unlike /player/preference which is purely client-side appearance). If the caller has never saved settings for this card the response is a defaults object (200, not 404); an unknown `roleId` also yields defaults. `selectModel` is filled with the platform default when empty. For non-members `autoAudio` is forced to false. `permanentMemory` is a legacy key and is always false. The response is produced by reflecting the stored row, so it also carries a few legacy/internal keys documented below; `accountId` and the custom `customInstructions` are removed by the response scrub.",
         "security": [
           {
             "userToken": []
@@ -23708,7 +23708,7 @@
           },
           "permanentMemory": {
             "type": "boolean",
-            "description": "Permanent memory switch. Forced false for non-members."
+            "description": "Legacy key with no effect. Always false."
           },
           "backgroundUrl": {
             "type": "string",

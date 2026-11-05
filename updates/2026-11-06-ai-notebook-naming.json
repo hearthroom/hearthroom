@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "「永久記憶」改名為「AI 記事本」，並說明開啟 Agent 模式後才有記錄。",
+    "zh-Hans": "「永久记忆」改名为「AI 记事本」，并说明开启 Agent 模式后才有记录。",
+    "en": "Long-Term Memory is now AI Notebook, and it explains that notes only appear with Agent mode on.",
+    "ja": "「永久記憶」は「AI ノート」になり、Agent モードで記録されることを案内します。",
+    "ko": "「영구 기억」이 「AI 노트」로 바뀌었고, Agent 모드가 꺼져 있으면 켜야 기록된다고 안내합니다."
+  }
+}
