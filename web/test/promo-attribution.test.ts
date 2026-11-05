@@ -15,7 +15,9 @@ it('every configured landing sends the original campaign and saves the referral'
       campaign_name: url.searchParams.get('utm_campaign'),
     });
     rememberShareRef(refFromQuery(url.searchParams.get('ref'))!);
-    expect(pendingShareRef()?.code).toBe(['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6' : '94A9H94Z');
+    const expectedRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
+      : ['bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+    expect(pendingShareRef()?.code).toBe(expectedRef);
   }
 });
 
