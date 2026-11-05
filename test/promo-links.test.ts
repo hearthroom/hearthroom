@@ -76,10 +76,22 @@ it('all configured targets are safe local landings with attribution', () => {
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
-    expect(url.searchParams.get('utm_source')).toBe('bahamut');
-    expect(url.searchParams.get('utm_medium')).toBe('forum');
+    const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog'] : ['bahamut', 'forum'];
+    expect(url.searchParams.get('utm_source')).toBe(source);
+    expect(url.searchParams.get('utm_medium')).toBe(medium);
     expect(url.searchParams.get('utm_campaign')).toBeTruthy();
   }
+});
+
+it.each([
+  ['vc-howto-doujin', '/guide'],
+  ['vc-intro', '/'],
+])('keeps the approved Vocus destination and attribution for %s', async (code, path) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_source=override&utm_medium=override&utm_campaign=override&url=https://evil.test`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${path}?ref=94A9H94Z&utm_source=vocus&utm_medium=blog&utm_campaign=${code}-20261106`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });
 
 it.each([
