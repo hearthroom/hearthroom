@@ -74,7 +74,7 @@ it('all configured targets are safe local landings with attribution', () => {
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
     expect(url.searchParams.get('utm_source')).toBe('bahamut');
     expect(url.searchParams.get('utm_medium')).toBe('forum');
@@ -108,6 +108,7 @@ it.each([
 });
 
 it.each([
+  ['bh-trpg-dnd', 'bh-trpg-dnd-20261105'],
   ['bh-dnd-2206', 'bh-dnd-2206-20261105'],
   ['bh-dnd-bg3', 'bh-dnd-bg3-20261106'],
 ])('keeps the approved D&D author referral for %s', async (code, campaign) => {
