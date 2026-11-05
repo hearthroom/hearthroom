@@ -22,9 +22,11 @@ it('every configured landing sends the original campaign and saves the referral'
 });
 
 it.each([
-  ['bh-slime', '94A9H94Z', 'bh-slime-20261106'],
-  ['bh-fate-tm', 'UVTEJ3N6', 'bh-fate-tm-20261105'],
-])('initializes sanitized GA4 commands for %s after referral cleanup', (code, ref, campaign) => {
+  ['bh-slime', '94A9H94Z', 'bh-slime-20261106', 'bahamut', 'forum', '/cards/_'],
+  ['bh-fate-tm', 'UVTEJ3N6', 'bh-fate-tm-20261105', 'bahamut', 'forum', '/cards/_'],
+  ['vc-howto-doujin', '94A9H94Z', 'vc-howto-doujin-20261106', 'vocus', 'blog', '/guide'],
+  ['vc-intro', '94A9H94Z', 'vc-intro-20261106', 'vocus', 'blog', '/'],
+])('initializes sanitized GA4 commands for %s after referral cleanup', (code, ref, campaign, source, medium, page) => {
   const landingUrl = 'https://sukisuki.ai' + links[code as keyof typeof links];
   const cleaned = new URL(landingUrl);
   cleaned.searchParams.delete('ref');
@@ -38,8 +40,8 @@ it.each([
   const ga = createGa4();
   ga.start(true, { landingUrl });
   expect(ga.commands().find(c => c[0] === 'config')?.[2]).toMatchObject({
-    campaign_source: 'bahamut', campaign_medium: 'forum', campaign_name: campaign,
-    page_location: 'https://sukisuki.ai/cards/_',
+    campaign_source: source, campaign_medium: medium, campaign_name: campaign,
+    page_location: 'https://sukisuki.ai' + page,
   });
   expect(JSON.stringify(ga.commands())).not.toContain(ref);
 });

@@ -49,6 +49,16 @@ describe("GA4 outbound privacy boundary", () => {
       .toEqual({});
   });
 
+  it.each([
+    ['vocus', 'blog'],
+    ['dcard', 'social'],
+    ['x', 'social'],
+  ])('preserves the approved %s/%s campaign without exporting private input', (source, medium) => {
+    const result = gaCampaign(`https://sukisuki.ai/guide?ref=PRIVATE&utm_source=${source}&utm_medium=${medium}&utm_campaign=public-launch&utm_term=PRIVATE`);
+    expect(result).toEqual({ campaign_source: source, campaign_medium: medium, campaign_name: 'public-launch' });
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');
+  });
+
   it("distinguishes the four supported app shells", () => {
     expect(appShell({ userAgent: "Android HearthroomApp/1.0" })).toBe("webview");
     expect(appShell({ referrer: "android-app://club.hearthroom.app" })).toBe("twa");
