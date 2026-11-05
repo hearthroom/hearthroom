@@ -4434,7 +4434,5 @@
   "lengthExemption.notFound": "카드를 찾을 수 없어요",
   "moderation.error.card_not_found": "카드를 찾을 수 없어요",
   "moderation.error.review_length_exemption_conflict": "이번 변경이 현재 면제 상태와 맞지 않아요. 새로고침한 뒤 다시 확인하세요.",
-  "lengthExemption.total": "합계 {total}자",
-  "review.selfReview.claim": "자신의 작품은 심사할 수 없어요",
-  "review.selfReview.stamp": "자신의 작품은 심사할 수 없어요. 대기 목록으로 돌려보내면 다른 심사자가 처리할 수 있어요."
+  "lengthExemption.total": "합계 {total}자"
 }

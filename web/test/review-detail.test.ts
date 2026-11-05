@@ -15,48 +15,6 @@ beforeEach(async()=>{
  el=document.createElement('div');document.body.append(el);const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
 });
 afterEach(()=>{app.unmount();el.remove();vi.resetAllMocks();});
-
-it('automatic self-claim explains the permanent restriction without a claim retry button',async()=>{
- app.unmount();api.claimReview.mockReset().mockRejectedValue(new api.ApiError(403,'old generic message','moderation_self_review'));
- api.fetchReviewDetail.mockReset().mockRejectedValue(new api.ApiError(409,'x','claim this submission first'));
- await remount();
- await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.selfReview.claim')));
- expect(el.textContent).not.toContain(i18n.global.t('review.claim.failed'));
- expect(button(i18n.global.t('review.action.claim'))).toBeUndefined();
- expect(api.claimReview).toHaveBeenCalledTimes(1);
- expect(el.querySelector('a')?.getAttribute('href')).toBe('/review');
-});
-
-it('an explicit self-claim also uses the permanent restriction copy',async()=>{
- app.unmount();api.claimReview.mockReset().mockRejectedValueOnce(new api.ApiError(503,'temporary'));
- api.fetchReviewDetail.mockReset().mockRejectedValue(new api.ApiError(409,'x','claim this submission first'));
- await remount();
- await vi.waitFor(()=>expect(button(i18n.global.t('review.action.claim'))).toBeTruthy());
- api.claimReview.mockRejectedValueOnce(new api.ApiError(403,'old generic message','moderation_self_review'));
- button(i18n.global.t('review.action.claim'))!.click();
- await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.selfReview.claim')));
- expect(el.textContent).not.toContain(i18n.global.t('review.claim.failed'));
- expect(button(i18n.global.t('review.action.claim'))).toBeUndefined();
-});
-
-it.each(['approve','reject'] as const)('a refused historical self-%s preserves the note and offers release beside the explanation',async(verdict)=>{
- api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
- api.stampReview.mockRejectedValue(new api.ApiError(403,'old generic message','moderation_self_review'));
- await remount();
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
- const input=el.querySelector<HTMLTextAreaElement>('#review-note')!;
- input.value='Preserve this draft reason';input.dispatchEvent(new Event('input',{bubbles:true}));
- await vi.waitFor(()=>expect(button(i18n.global.t(`review.action.${verdict}`))!.disabled).toBe(false));
- button(i18n.global.t(`review.action.${verdict}`))!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
- await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.selfReview.stamp')));
- expect(el.textContent).not.toContain(i18n.global.t('review.decide.failed'));
- expect(input.value).toBe('Preserve this draft reason');
- const alert=[...el.querySelectorAll('[role="alert"]')].find(e=>e.textContent?.includes(i18n.global.t('review.selfReview.stamp')))!;
- const release=[...alert.querySelectorAll('button')].find(e=>e.textContent?.trim()===i18n.global.t('review.action.release'))!;
- expect(release).toBeTruthy();release.click();
- await vi.waitFor(()=>expect(api.releaseReview).toHaveBeenCalledWith('s1','local-reviewer','g1'));
-});
 // 2026-11-02：直接開連結撞到「請先領取」時自動再領一次，不再停在一顆領取鈕前
 it('claims automatically after opening an unclaimed submission, then retries its detail',async()=>{
  await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s1','local-reviewer'));

@@ -4434,7 +4434,5 @@
   "lengthExemption.notFound": "Card not found",
   "moderation.error.card_not_found": "Card not found",
   "moderation.error.review_length_exemption_conflict": "This change no longer matches the current exemption. Refresh and check it again.",
-  "lengthExemption.total": "Total: {total}",
-  "review.selfReview.claim": "Authors cannot review their own work.",
-  "review.selfReview.stamp": "Authors cannot review their own work. Return it to the queue for another reviewer."
+  "lengthExemption.total": "Total: {total}"
 }

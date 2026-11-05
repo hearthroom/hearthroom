@@ -181,20 +181,9 @@ export async function hasStamped(db: D1Database, submissionId: string, memberId:
   return !!row;
 }
 
-/** Match moderation's author resolution; staff roles never waive self-review. */
-async function assertNotReviewAuthor(db:D1Database,row:SubmissionRow,memberId:string):Promise<void>{
-  const author=await db.prepare(`SELECT COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS member_id FROM cards c
-    LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
-    LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
-    LEFT JOIN member_identities ai ON ai.provider=c.provider AND ai.external_id=CAST(c.author_num_id AS TEXT)
-    WHERE c.id=?`).bind(row.card_id).first<{member_id:string}>();
-  if(author?.member_id===memberId)throw new HttpError(403,'moderation_self_review');
-}
-
 /** 領取。別人領著且沒逾時 → 409；自己蓋過章的不能再領。 */
 export async function claim(db: D1Database, submissionId: string, memberId: string, now: number): Promise<SubmissionRow> {
   const row = await getSubmission(db, submissionId);
-  await assertNotReviewAuthor(db,row,memberId);
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (await hasStamped(db, submissionId, memberId)) throw new HttpError(409, "you already reviewed this submission");
   if (claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
@@ -232,7 +221,6 @@ export async function stamp(
   env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
-  await assertNotReviewAuthor(db,row,input.memberId);
   const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id=?').bind(row.id).first();
   if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
    if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');

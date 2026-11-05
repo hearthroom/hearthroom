@@ -4434,7 +4434,5 @@
   "lengthExemption.notFound": "查無此卡",
   "moderation.error.card_not_found": "查無此卡",
   "moderation.error.review_length_exemption_conflict": "這次變更與目前的豁免狀態不符，重新整理後再確認。",
-  "lengthExemption.total": "合計 {total} 字",
-  "review.selfReview.claim": "不能審核自己的作品",
-  "review.selfReview.stamp": "不能審核自己的作品，放回待審清單後由其他審核員處理"
+  "lengthExemption.total": "合計 {total} 字"
 }
