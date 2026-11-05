@@ -4434,7 +4434,5 @@
   "lengthExemption.notFound": "カードが見つかりません",
   "moderation.error.card_not_found": "カードが見つかりません",
   "moderation.error.review_length_exemption_conflict": "免除の状態と今回の変更が一致しません。更新して確認してください。",
-  "lengthExemption.total": "合計 {total} 文字",
-  "review.selfReview.claim": "自分の作品は審査できません",
-  "review.selfReview.stamp": "自分の作品は審査できません。キューに戻すと、ほかの審査担当者が対応できます。"
+  "lengthExemption.total": "合計 {total} 文字"
 }

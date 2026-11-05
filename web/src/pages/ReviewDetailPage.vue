@@ -59,7 +59,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;selfReviewDecision.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -223,7 +223,6 @@ function pickReason(reason: Reason) {
 const decideError = ref("");
 /** 送出後不知道有沒有成功（連線中斷）：不叫人直接重按，先去「我處理過的」看 */
 const decideUnknown = ref(false);
-const selfReviewDecision = ref(false);
 const decideErrorEl = ref<HTMLElement | null>(null);
 const decideSection = ref<HTMLElement | null>(null);
 /** 決定區已經在畫面裡：手機底部列收起，免得「前往決定」疊在「通過」下面 */
@@ -307,7 +306,6 @@ async function load() {
         if(claimErr instanceof ApiError&&claimErr.status===409){ claimNote.value=t("review.claim.otherNote"); return claimErr; }
         // 成人內容的單要先確認年齡：再按一次領取也不會成功，只說明怎麼辦
         if(claimErr instanceof ApiError&&claimErr.code==="age_verification_required"){ error.value=t("error.ageVerificationRequired"); return claimErr; }
-        if(claimErr instanceof ApiError&&claimErr.code==="moderation_self_review"){ error.value=t("review.selfReview.claim"); return claimErr; }
         needsClaim.value=true;error.value=t("review.claim.failed");return claimErr;
       }
       if(!active||seq!==loadSequence||target!==id.value)return;
@@ -365,9 +363,7 @@ async function claim() {
     await claimReview(id.value, await token());
     await load();
   } catch (err) {
-    if(err instanceof ApiError&&err.code==='moderation_self_review'){
-      needsClaim.value=false;error.value=t('review.selfReview.claim');
-    }else error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
+    error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
@@ -378,7 +374,6 @@ async function release() {
   try {
     await releaseReview(id.value, await token(),data.value?.submission.claimGeneration);
     if (data.value) data.value.submission.claimedByMe = false;
-    if(selfReviewDecision.value){selfReviewDecision.value=false;decideError.value='';await router.push(lp('/review'));}
   } catch (err) {
     error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
@@ -397,7 +392,6 @@ async function stamp(verdict: "approve" | "reject") {
   error.value = "";
   decideError.value = "";
   decideUnknown.value = false;
-  selfReviewDecision.value = false;
   const target=id.value,review=data.value,reason=note.value,generation=review.submission.claimGeneration;
   try {
     const confirmedToken=await token();
@@ -424,8 +418,6 @@ async function stamp(verdict: "approve" | "reject") {
     if (err instanceof ApiError && err.code === "review_length_insufficient") {
       const l = err.reviewLength ? formatReviewLength(err.reviewLength, String(locale.value)) : lengthParams.value;
       decideError.value = t("review.decide.errorLength", { total: l.total, required: l.required });
-    } else if (err instanceof ApiError && err.code === 'moderation_self_review') {
-      selfReviewDecision.value=true;decideError.value=t('review.selfReview.stamp');
     } else if (err instanceof ApiError && err.status === 409) decideError.value = t("review.claimChanged");
     else if (err instanceof ApiError) decideError.value = t("review.decide.failed");
     else if (err instanceof Error && err.message === t("auth.expired")) decideError.value = err.message;
@@ -778,7 +770,6 @@ onMounted(() => { void load(); });
           <h3 class="verdict__title" tabindex="-1" data-decide-title>{{ $t("review.decide.title") }}</h3>
           <div v-if="decideError || decideUnknown" ref="decideErrorEl" class="notice notice--error" role="alert" tabindex="-1">
             <p>{{ decideUnknown ? $t("review.decide.unknown") : decideError }}</p>
-            <button v-if="selfReviewDecision && claimedByMe" type="button" class="btn btn--sm" :disabled="busy" @click="release">{{ $t("review.action.release") }}</button>
             <RouterLink v-if="decideUnknown" class="btn btn--sm" :to="lp('/review/decisions')">{{ $t("review.history.title") }}</RouterLink>
           </div>
           <p v-if="approveBlocked" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
