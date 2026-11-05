@@ -73,7 +73,9 @@ it('all configured targets are safe local landings with attribution', () => {
     expect(promoTarget(value)).toBe(value);
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
-    expect(url.searchParams.get('ref')).toBe(['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6' : '94A9H94Z');
+    const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
+      : ['bh-dnd-2206', 'bh-dnd-bg3'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+    expect(url.searchParams.get('ref')).toBe(authorRef);
     expect(url.searchParams.get('utm_source')).toBe('bahamut');
     expect(url.searchParams.get('utm_medium')).toBe('forum');
     expect(url.searchParams.get('utm_campaign')).toBeTruthy();
@@ -102,5 +104,15 @@ it.each([
   const response = await visit(`/go/${code}?ref=94A9H94Z`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe(`/cards/100376?ref=UVTEJ3N6&utm_source=bahamut&utm_medium=forum&utm_campaign=${campaign}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
+it.each([
+  ['bh-dnd-2206', 'bh-dnd-2206-20261105'],
+  ['bh-dnd-bg3', 'bh-dnd-bg3-20261106'],
+])('keeps the approved D&D author referral for %s', async (code, campaign) => {
+  const response = await visit(`/go/${code}?ref=94A9H94Z&utm_campaign=override`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`/cards/100192?ref=H2DG5Q6Y&utm_source=bahamut&utm_medium=forum&utm_campaign=${campaign}`);
   expect(response.headers.get('cache-control')).toBe('no-store');
 });
