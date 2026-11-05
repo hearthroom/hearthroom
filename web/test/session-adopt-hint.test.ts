@@ -40,7 +40,7 @@ beforeEach(() => {
     return Response.json({});
   }));
 });
-afterEach(() => { releaseSession?.(); vi.unstubAllGlobals(); });
+afterEach(() => { releaseSession?.(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('sends Bearer on the first private-card read in a new document after OAuth adoption', async () => {
   await useSession().adopt(pair());
@@ -68,6 +68,39 @@ it('does not remember an identity when adoption is rejected', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'unauthorized' }, { status: 401 })));
   await expect(useSession().adopt(pair())).rejects.toMatchObject({ status: 401 });
   expect(signedInHint()).toBeNull();
+});
+
+it('clears the adopted hint on logout and ignores an adoption response from the old generation', async () => {
+  const session = useSession();
+  await session.adopt(pair());
+  await session.ensureProfile();
+  const originalFetch = fetch;
+  let releaseIdentity!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).endsWith('/open/v1/me')
+      ? new Promise<Response>(resolve => { releaseIdentity = resolve; })
+      : originalFetch(input, init)));
+  vi.stubGlobal('location', { reload: vi.fn() });
+  const staleAdoption = session.adopt(pair());
+  await session.logout();
+  expect(signedInHint()).toBeNull();
+  releaseIdentity(Response.json({ ...identity, accountNumId: 23 }));
+  await staleAdoption;
+  expect(signedInHint()).toBeNull();
+  expect(session.me).toBeNull();
+  expect(session.token).toBeNull();
+});
+
+it('keeps successful adoption usable when browser storage rejects writes', async () => {
+  vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new DOMException('denied', 'SecurityError'); });
+  const session = useSession();
+  await expect(session.adopt(pair())).resolves.toBeUndefined();
+  await session.ensureProfile();
+  expect(session.me?.accountNumId).toBe(identity.accountNumId);
+  expect(session.token?.accessToken).toBe('synthetic-access');
+  expect(signedInHint()).toBeNull();
+  await expect(fetchCard('fixture-card')).resolves.toHaveProperty('id', 'fixture-card');
+  expect(cardBearer).toBe('Bearer synthetic-access');
 });
 
 it('keeps a new visitor anonymous without waiting for session restoration', async () => {
