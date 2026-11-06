@@ -8,7 +8,7 @@
  * 只有上架中的公開卡才有：作者試玩（mode=source）、審核、找不到卡都不登記，兩顆就不畫。
  * 作者在卡片主頁關掉留言區時，入口照樣在，只是面板裡沒有評論分頁（跟卡片頁整塊不放一致）。
  */
-import { reactive, watch } from "vue";
+import { reactive, watch, type InjectionKey } from "vue";
 import { fetchRoleDetail } from "@/lib/api";
 import { libraryRequest } from "@/lib/library";
 import type { ProviderId } from "@/lib/provider";
@@ -20,6 +20,11 @@ export interface PlaySocialCard {
   card?: CommunityCard | null;
 }
 export type PlayInfoTab = "info" | "comments" | "rankings";
+/**
+ * 卡片資訊面板提供給它重用的元件（含經 Teleport 開出的完整知音榜）：站內連結改開新分頁、指回主站。
+ * 同分頁換頁會把遊玩頁與沙盒卸掉；卡片 App 網域上只有對話頁。登入連結不吃這個，照舊同分頁。
+ */
+export const PLAY_PANEL_LINKS: InjectionKey<boolean> = Symbol("play-panel-links");
 /** 來源端的卡片詳情：作者寫的介紹（Markdown 原文）與評論開關 */
 export interface PlaySocialDetail { readme: string; comments: boolean }
 

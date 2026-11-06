@@ -1,17 +1,23 @@
 <script setup lang="ts">
+import {inject} from 'vue';
 import {useI18n} from 'vue-i18n';
 import {RouterLink} from 'vue-router';
 import {useLocalePath} from '@/lib/use-locale';
+import {PLAY_PANEL_LINKS} from '@/lib/play-social';
+import {mainSiteLinks} from '@/lib/site';
 import {formatCredits,type SpendPlayer} from '@/lib/spend-leaderboard';
 import SpendAvatar from './SpendAvatar.vue';
 import CommunityName from './CommunityName.vue';
 defineProps<{player:SpendPlayer;podium?:boolean}>();
 const {t,locale}=useI18n(),{lp}=useLocalePath();
+// 對話頁卡片資訊面板裡：名字開新分頁到主站的作者頁，不換掉遊玩頁（lib/play-social 的 PLAY_PANEL_LINKS）
+const newTab=inject(PLAY_PANEL_LINKS,false);
+const authorUrl=(handle:string)=>{const site=mainSiteLinks({locale:String(locale.value),lp});return site.origin+site.lp('/authors/'+handle)};
 </script>
 <template><div class="board-player" :class="{'board-player--podium':podium,'board-player--self':player.isSelf,'board-player--wide':formatCredits(player.credits,locale).length>12}" :data-rank="player.rank">
  <span class="board-player__rank" :aria-label="t('spendBoard.rankLabel',{rank:player.rank})">{{ player.rank }}</span>
  <SpendAvatar :player="player" />
- <div class="board-player__name"><RouterLink v-if="!player.anonymous&&player.handle" :to="lp('/authors/'+player.handle)"><CommunityName :handle="player.handle" :name="player.nickname??''" /></RouterLink><CommunityName v-else-if="!player.anonymous" :name="player.nickname??''" /><span v-else class="board-player__anonymous">{{ t('spendBoard.anon') }}</span><small v-if="player.isSelf">{{ t('spendBoard.you') }}</small></div>
+ <div class="board-player__name"><a v-if="newTab&&!player.anonymous&&player.handle" :href="authorUrl(player.handle)" target="_blank" rel="noopener noreferrer"><CommunityName :handle="player.handle" :name="player.nickname??''" /></a><RouterLink v-else-if="!player.anonymous&&player.handle" :to="lp('/authors/'+player.handle)"><CommunityName :handle="player.handle" :name="player.nickname??''" /></RouterLink><CommunityName v-else-if="!player.anonymous" :name="player.nickname??''" /><span v-else class="board-player__anonymous">{{ t('spendBoard.anon') }}</span><small v-if="player.isSelf">{{ t('spendBoard.you') }}</small></div>
  <span class="board-player__amount">{{ t('spendBoard.'+(player.credits==='1'?'pointsAmountOne':'pointsAmount'),{points:formatCredits(player.credits,locale)}) }}</span>
 </div></template>
 <style scoped>

@@ -42,3 +42,14 @@ it('does not reveal a late appearance after the player changes to anonymous',asy
  expect(host.querySelector('.community-avatar,.community-name,img,a')).toBeNull();expect(host.querySelector('[data-anonymous-avatar]')).not.toBeNull();
  expect(host.textContent).not.toContain('Synthetic Player');expect(api.request).toHaveBeenCalledTimes(1);
 });
+it('links the player name in the same tab on the card page, and in a new tab to the main site inside the play info panel',async()=>{
+ const {PLAY_PANEL_LINKS}=await import('../src/lib/play-social');
+ await mount(SpendPlayer,{player:player()});
+ const same=host.querySelector<HTMLAnchorElement>('.board-player__name a')!;
+ expect(same.getAttribute('target')).toBeNull();expect(new URL(same.href).pathname).toBe('/authors/abcdefgh');
+ app?.unmount();host.innerHTML='';
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:{template:'<div />'}}]});await router.push('/');await router.isReady();
+ app=createApp(SpendPlayer,{player:player()}).use(i18n).use(router);app.provide(PLAY_PANEL_LINKS,true);app.mount(host);await settle();
+ const tab=host.querySelector<HTMLAnchorElement>('.board-player__name a')!;
+ expect(tab.target).toBe('_blank');expect(tab.rel).toContain('noopener');expect(new URL(tab.href).pathname).toBe('/authors/abcdefgh');
+});

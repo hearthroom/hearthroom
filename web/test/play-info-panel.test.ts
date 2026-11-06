@@ -4,11 +4,11 @@
  * 作者關評論就沒有評論分頁；面板裡只有兩個連結，都開新分頁；榜單只列拿到的榮譽，沒有就不畫那一塊。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, defineComponent, h, nextTick, ref, type App } from "vue";
+import { createApp, defineComponent, h, inject, nextTick, ref, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n, applyLocale } from "../src/lib/i18n";
-import { playSocial, registerPlayCard } from "../src/lib/play-social";
+import { PLAY_PANEL_LINKS, playSocial, registerPlayCard } from "../src/lib/play-social";
 import type { CommunityCard } from "../src/lib/types";
 
 vi.mock("../src/lib/oauth", () => ({ restorePersisted: () => null, refresh: async () => null, persist: () => {}, revokeSession: async () => {}, beginLogin: async () => {} }));
@@ -28,7 +28,8 @@ vi.mock("../src/components/CommentPanel.vue", () => ({
   }),
 }));
 vi.mock("../src/components/CardSpendLeaderboard.vue", () => ({
-  default: defineComponent({ props: ["cardId", "layout"], setup: (p) => () => h("section", { class: "spend-stub", "data-layout": p.layout }) }),
+  // Reports whether it sits under the panel's "links open in a new tab" provider (the real board's player names read it).
+  default: defineComponent({ props: ["cardId", "layout"], setup: (p) => { const newTab = inject(PLAY_PANEL_LINKS, false); return () => h("section", { class: "spend-stub", "data-layout": p.layout, "data-new-tab": String(newTab) }); } }),
 }));
 
 import PlayInfoPanel from "../src/components/PlayInfoPanel.vue";
@@ -345,5 +346,13 @@ describe("PlayInfoPanel", () => {
     dialog()!.focus();
     expect(tab(dialog()!, true)).toBe(true);
     expect(document.activeElement).toBe(lastLink);
+  });
+
+  it("tells the pieces it reuses to open their links in a new tab, so a player name never replaces the play page", async () => {
+    await mount({ provider: "harbor" });
+    playSocial.tab = "rankings";
+    playSocial.open = true;
+    await flush();
+    expect(document.querySelector(".spend-stub")?.getAttribute("data-new-tab")).toBe("true");
   });
 });

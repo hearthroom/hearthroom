@@ -12,17 +12,19 @@
  *   「回報卡片問題」兩個連結，都開新分頁。
  * - 不推瀏覽器歷史：Android 返回鍵照舊離開遊玩頁（跟原本的評論單一樣）。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import CommentPanel from "@/components/CommentPanel.vue";
 import PlayInfoDetails from "@/components/PlayInfoDetails.vue";
 import PlayInfoRankings from "@/components/PlayInfoRankings.vue";
 import { fetchCard } from "@/lib/api";
 import { contentLang } from "@/lib/i18n";
-import { playSocial, reloadPlayDetail, type PlayInfoTab } from "@/lib/play-social";
+import { PLAY_PANEL_LINKS, playSocial, reloadPlayDetail, type PlayInfoTab } from "@/lib/play-social";
 import type { CommunityCard } from "@/lib/types";
 
 const { t, locale } = useI18n();
+// 面板裡（含從面板開出的完整知音榜）重用元件的站內連結開新分頁，見 lib/play-social 的 PLAY_PANEL_LINKS
+provide(PLAY_PANEL_LINKS, true);
 
 /** 第一次打開才掛；換卡（或卡被收回）時拆掉，下一張卡重新從第一次打開算 */
 const mounted = ref(false);
