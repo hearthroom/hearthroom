@@ -46,3 +46,16 @@ export function descriptorList(topics: readonly Topic[], locale: string): string
 
 /** 官方分級標識（gamerating.org.tw 下載專區的原檔裁切）。 */
 export const markSrc = (r: Rating) => `/rating/gsrr-${r}.png`;
+
+/**
+ * 分級小標（RatingMark 的 chip）的顏色：底色取官方標識的底色（CMYK 換算），不改；
+ * 字色選讀得清的那一個，每一級都要過 4.5:1（test/rating-chip-contrast.test.ts）。
+ * 白字只有限制級的紅底過得了，其他用深字（2026-11-06 普遍級白字綠底只有 2.73:1，被 QA 退件）。
+ */
+export const RATING_CHIP_COLORS: Record<Rating, { bg: string; fg: string }> = {
+  G: { bg: "#59b031", fg: "#17171c" },
+  P: { bg: "#009fe3", fg: "#17171c" },
+  PG12: { bg: "#f7c600", fg: "#3a2e00" },
+  PG15: { bg: "#ec7a08", fg: "#17171c" },
+  R: { bg: "#e5141e", fg: "#ffffff" },
+};
