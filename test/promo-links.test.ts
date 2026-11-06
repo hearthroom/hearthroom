@@ -76,11 +76,23 @@ it('all configured targets are safe local landings with attribution', () => {
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
-    const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog'] : ['bahamut', 'forum'];
+    const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog']
+      : code.startsWith('bh-hut-') ? ['bahamut', 'cabin'] : ['bahamut', 'forum'];
     expect(url.searchParams.get('utm_source')).toBe(source);
     expect(url.searchParams.get('utm_medium')).toBe(medium);
     expect(url.searchParams.get('utm_campaign')).toBeTruthy();
   }
+});
+
+it.each([
+  ['bh-hut-dal', 'bahamut', 'cabin'],
+  ['vc-dal', 'vocus', 'blog'],
+])('serves the approved Date A Live blog campaign %s', async (code, source, medium) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_source=override&utm_medium=override&utm_campaign=override`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`/cards/100194?ref=94A9H94Z&utm_source=${source}&utm_medium=${medium}&utm_campaign=${code}-20261106`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });
 
 it.each([

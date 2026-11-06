@@ -50,6 +50,7 @@ describe("GA4 outbound privacy boundary", () => {
   });
 
   it.each([
+    ['bahamut', 'cabin'],
     ['vocus', 'blog'],
     ['dcard', 'social'],
     ['x', 'social'],

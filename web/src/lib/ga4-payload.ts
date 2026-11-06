@@ -61,7 +61,7 @@ export function gaCampaign(href: string): Params {
   if ([...query.keys()].some(key => key.startsWith("utm_"))) {
     const params: Params = {};
     if (["discord", "line", "x", "threads", "reddit", "blog", "newsletter", "bahamut", "vocus", "dcard"].includes(source)) params.campaign_source = source;
-    if (["social", "community", "email", "referral", "forum", "blog"].includes(medium)) params.campaign_medium = medium;
+    if (["social", "community", "email", "referral", "forum", "blog", "cabin"].includes(medium)) params.campaign_medium = medium;
     const campaign = query.get("utm_campaign") ?? "";
     if (params.campaign_source && /^[a-z0-9][a-z0-9-]{0,63}$/.test(campaign)) params.campaign_name = campaign;
     return params;
