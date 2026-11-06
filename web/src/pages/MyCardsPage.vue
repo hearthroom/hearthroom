@@ -155,8 +155,8 @@ async function submitReview(expected:WorkVisibility){
   };
   if(expected.everPublic){
    const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
-    publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
-      reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+    publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
+      reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
    if(!ok||!valid())return;
   }else{const consent=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});if(!consent||!valid())return;}
   await visibilityDialog.value?.reload();if(valid())await load(true);

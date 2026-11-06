@@ -93,8 +93,8 @@ test('no-accounts stage test execution requires the exact audited checkout and g
   }
 });
 
-test('the existing full test command remains byte-for-byte unchanged', () => {
+test('the full test command retains every required suite and the reviewed migration extension', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   // New maintained suites extend this reviewed snapshot; existing suites remain required.
-  assert.equal(pkg.scripts.test, 'npm run updates:build && node --test scripts/blog-publisher-identity.test.mjs scripts/blog-publisher.test.mjs scripts/maintenance-mode.test.mjs scripts/card-identity-migration.test.mjs scripts/blog-translation-migration.test.mjs scripts/card-cutover.test.mjs scripts/deploy-workflow.test.mjs scripts/updates/entries.test.mjs scripts/updates/check-commits.test.mjs scripts/mock-presets.test.mjs && vitest run && npm run test -w web');
+  assert.equal(pkg.scripts.test, 'npm run updates:build && node --test scripts/blog-publisher-identity.test.mjs scripts/blog-publisher.test.mjs scripts/maintenance-mode.test.mjs scripts/card-identity-migration.test.mjs scripts/card-update-cooldown-migration.test.mjs scripts/blog-translation-migration.test.mjs scripts/card-cutover.test.mjs scripts/deploy-workflow.test.mjs scripts/updates/entries.test.mjs scripts/updates/check-commits.test.mjs scripts/mock-presets.test.mjs && vitest run && npm run test -w web');
 });

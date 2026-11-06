@@ -25,7 +25,7 @@ function validUpdate(){
 }
 async function retryEligibility(){
  const cur=confirmState.current;if(!cur?.publication?.reloadEligibility)return;
- try{const value=await cur.publication.reloadEligibility();if(confirmState.current===cur)cur.publication.nextMajorUpdateAt=value;}catch{if(confirmState.current===cur)cur.publication.nextMajorUpdateAt=undefined;}
+ try{const value=await cur.publication.reloadEligibility();if(confirmState.current===cur)Object.assign(cur.publication,value);}catch{if(confirmState.current===cur)cur.publication.nextMajorUpdateAt=undefined;}
 }
 /** 要照打的字：每次開新彈窗清空 */
 const typed = ref("");
@@ -104,7 +104,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
       <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
-        <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
+        <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
         <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
         <code v-if="confirmState.current.detail" class="dlg__detail" tabindex="0" @click="($event.target as HTMLElement).ownerDocument.getSelection()?.selectAllChildren($event.target as Node)">{{ confirmState.current.detail }}</code>

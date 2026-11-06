@@ -69,8 +69,8 @@ async function submit(expected=visibility.value) {
   try {
     if(expected.everPublic){
       const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
-        publication:{key:`${p}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
-          reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token!,p);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+        publication:{key:`${p}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
+          reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token!,p);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
       if(!ok||!valid())return;
     }else{if(!await confirmDialog({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send})||!valid())return;}
     if(!valid())return;await visibilityControl.value?.reload();if(valid())emit('submitted');

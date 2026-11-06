@@ -3,8 +3,9 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { approveFixtureResponse } from './hosted-fixture';
 import { legacyPolicyFixture } from './work-policy-fixture';
 import { bearer, identities, makeMember, ratingBody, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
-import { assertUpdateCooldown, reserveUpdateNotification, sourceUpdateTimes } from '../src/card-update';
+import { assertUpdateCooldown, reserveUpdateNotification, sourceUpdateEligibility } from '../src/card-update';
 import { claim, stamp } from '../src/review';
+import { readOwnerVisibilities } from '../src/work-sharing';
 import app from '../src/index';
 import { createExecutionContext } from 'cloudflare:test';
 import { sign } from '../src/community/crypto';
@@ -196,7 +197,7 @@ it('uses the exact three-day boundary in admission, reservation and source eligi
   const version = await env.DB.prepare('SELECT submission_id FROM hosting_versions WHERE version_id=?').bind(versionId).first<{submission_id:string}>();
   await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(event!.published_at).run();
   const next = event!.published_at+3*day;
-  expect((await sourceUpdateTimes(env.DB,['draft'])).get('draft')).toBe(next);
+  expect((await sourceUpdateEligibility(env.DB,['draft'])).get('draft')).toEqual({nextMajorUpdateAt:next,updateCooldownExempt:false});
   await expect(assertUpdateCooldown(env.DB,event!.work_id,next-1)).rejects.toMatchObject({status:409,extra:{nextMajorUpdateAt:next}});
   await expect(reserveUpdateNotification(env.DB,version!.submission_id,next-1)).rejects.toMatchObject({status:409});
   await expect(env.DB.prepare("INSERT INTO card_update_events(version_id,work_id,state,reserved_at) VALUES(?,?,'reserved',?)").bind(versionId,event!.work_id,next-1).run()).rejects.toThrow('update_notification_cooldown');
@@ -232,4 +233,57 @@ it('orders the follow feed by each card\'s latest announced event and leaves sil
   await env.DB.prepare("UPDATE hosting_versions SET rating='R' WHERE version_id=(SELECT version_id FROM card_update_events)").run();
   expect((await feed())[0]!.feedEvent).toEqual({ kind: 'update', at: published, note: '' });
   expect((await SELF.fetch('https://c.test/v1/me/feed', { headers: bearer('collector') }).then(r => r.json()) as { items: unknown[] }).items).toEqual([]);
+});
+
+it('allows consecutive exempt updates with normal events and notices, then restores cooldown on removal', async () => {
+  await approve(await submit({ updateKind: 'major', updateNote: log }));
+  const event = (await env.DB.prepare("SELECT work_id,published_at FROM card_update_events WHERE state='published'").first<{work_id:string;published_at:number}>())!;
+  await env.DB.prepare('INSERT INTO card_update_cooldown_exempt(work_id,added_at,reason) VALUES(?,?,?)').bind(event.work_id,Date.now(),'Synthetic author request').run();
+  await expect(assertUpdateCooldown(env.DB,event.work_id,event.published_at+1)).resolves.toBeUndefined();
+  legacyPolicyFixture();
+  const availability = await SELF.fetch('https://c.test/v1/me/cards/draft/visibility', { headers: bearer('author') });
+  expect(await availability.json()).toMatchObject({workVisibility:{nextMajorUpdateAt:0,updateCooldownExempt:true}});
+  expect((await readOwnerVisibilities(env,['draft'],'author')).get('draft')).toMatchObject({nextMajorUpdateAt:0,updateCooldownExempt:true});
+  await approve(await submit({ updateKind: 'major', updateNote: log }));
+  expect((await notices()).results).toHaveLength(4);
+  expect((await env.DB.prepare("SELECT count(*) n FROM card_update_events WHERE state='published'").first<{n:number}>())?.n).toBe(2);
+  const metrics=await (await SELF.fetch('https://c.test/metrics')).text();
+  expect(metrics).toContain('hearthroom_card_update_notifications_total{operation="publish",outcome="queued"} 2');
+  expect(metrics).not.toContain('hearthroom_card_update_notifications_total{operation="admission",outcome="cooldown"}');
+  await env.DB.prepare('DELETE FROM card_update_cooldown_exempt WHERE work_id=?').bind(event.work_id).run();
+  await expect(assertUpdateCooldown(env.DB,event.work_id,Date.now())).rejects.toMatchObject({status:409});
+});
+
+it('lets the durable reservation guard bypass only the listed work and preserves one pending reservation', async () => {
+  await approve(await submit({ updateKind: 'major', updateNote: log }));
+  const event = (await env.DB.prepare("SELECT work_id,published_at FROM card_update_events WHERE state='published'").first<{work_id:string;published_at:number}>())!;
+  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(Date.now()-8*day).run();
+  const pending = await submit({updateKind:'major',updateNote:log});
+  expect(pending.status).toBe(200);
+  const {versionId}=await pending.json() as {versionId:string};
+  await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(event.published_at).run();
+  const reserve=()=>env.DB.prepare("INSERT INTO card_update_events(version_id,work_id,state,reserved_at) VALUES(?,?,'reserved',?)").bind(versionId,event.work_id,event.published_at+1).run();
+  await expect(reserve()).rejects.toThrow('update_notification_cooldown');
+  await env.DB.prepare('INSERT INTO card_update_cooldown_exempt(work_id,added_at,reason) VALUES(?,?,?)').bind(event.work_id,Date.now(),'Synthetic author request').run();
+  await expect(reserve()).resolves.toBeDefined();
+  await expect(reserve()).rejects.toThrow(); // Exemption cannot bypass durable uniqueness.
+  await env.DB.prepare('DELETE FROM card_update_events WHERE version_id=?').bind(versionId).run();
+  await env.DB.prepare('DELETE FROM card_update_cooldown_exempt WHERE work_id=?').bind(event.work_id).run();
+  await expect(reserve()).rejects.toThrow('update_notification_cooldown');
+});
+
+it('keeps same-author work eligibility isolated in both single and batched projections', async () => {
+  await approve(await submit({ updateKind:'major',updateNote:log }));
+  const event=(await env.DB.prepare("SELECT work_id,published_at FROM card_update_events WHERE state='published'").first<{work_id:string;published_at:number}>())!;
+  await env.DB.prepare("INSERT INTO works SELECT 'synthetic-other-work',member_id,source_provider,'other-source',created_at FROM works WHERE id=?").bind(event.work_id).run();
+  await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,state,created_at) SELECT 'synthetic-other-version','synthetic-other-work',member_id,'synthetic-other-operation','other-source',provider,rating,'approved',created_at FROM hosting_versions WHERE work_id=? LIMIT 1").bind(event.work_id).run();
+  await env.DB.prepare("INSERT INTO card_update_events VALUES('synthetic-other-version','synthetic-other-work','published',?,?)").bind(event.published_at,event.published_at).run();
+  await env.DB.prepare("INSERT INTO card_update_cooldown_exempt VALUES(?,?,'Synthetic author request')").bind(event.work_id,Date.now()).run();
+  await expect(assertUpdateCooldown(env.DB,event.work_id,event.published_at+1)).resolves.toBeUndefined();
+  await expect(assertUpdateCooldown(env.DB,'synthetic-other-work',event.published_at+1)).rejects.toMatchObject({status:409});
+  const projection=await sourceUpdateEligibility(env.DB,['draft','other-source']);
+  expect(projection.get('draft')).toEqual({nextMajorUpdateAt:0,updateCooldownExempt:true});
+  expect(projection.get('other-source')).toEqual({nextMajorUpdateAt:event.published_at+3*day,updateCooldownExempt:false});
+  await env.DB.prepare('DELETE FROM card_update_cooldown_exempt WHERE work_id=?').bind(event.work_id).run();
+  expect((await sourceUpdateEligibility(env.DB,['draft'])).get('draft')).toEqual({nextMajorUpdateAt:event.published_at+3*day,updateCooldownExempt:false});
 });

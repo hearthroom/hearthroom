@@ -14,7 +14,7 @@ export const publicationDrafts=new Map<string,UpdateIntent & {pending?:boolean}>
  * 畫面由 components/ConfirmDialog.vue 負責，掛在 App.vue，一次只會有一個。
  */
 export interface ConfirmOptions {
-  publication?: {key:string; nextMajorUpdateAt?:number; reloadEligibility?:()=>Promise<number>};
+  publication?: {key:string; nextMajorUpdateAt?:number; updateCooldownExempt?:boolean; reloadEligibility?:()=>Promise<{nextMajorUpdateAt:number;updateCooldownExempt?:boolean}>};
   onConfirm?:(values:ConfirmValues)=>Promise<void>;
   valid?:()=>boolean;
   title?: string;

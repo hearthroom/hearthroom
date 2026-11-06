@@ -144,3 +144,17 @@ it.each(['cancel', 'superseded'] as const)('clears a reserved intent and never n
   expect(await env.DB.prepare('SELECT approved_version_id FROM cards WHERE id=?').bind(f.cardId).first())
     .toEqual({ approved_version_id: f.initial.versionId });
 });
+
+it('publishes consecutive exempt managed versions and replays the second without duplicate effects',async()=>{
+  const f=await fixture();
+  await approve(f.id);
+  await env.DB.prepare("INSERT INTO card_update_cooldown_exempt VALUES(?,?,'Synthetic author request')").bind(f.update.workId,Date.now()).run();
+  const next=await submit('major');
+  const id=await submissionId(next.versionId);
+  expect((await approve(id,'next-reviewer')).submission.status).toBe('approved');
+  await finalizeManagedReview(env,id);await finalizeManagedReview(env,id);
+  expect((await updateNotices()).results).toHaveLength(2);
+  expect(await queued()).toEqual({value:2});
+  expect(await event(next.versionId)).toEqual({state:'published',published_at:expect.any(Number)});
+  expect((await env.DB.prepare("SELECT COUNT(*) n FROM card_update_events WHERE work_id=? AND state='published'").bind(f.update.workId).first<{n:number}>())?.n).toBe(2);
+});

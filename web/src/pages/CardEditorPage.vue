@@ -1099,8 +1099,8 @@ async function publish(expected:WorkVisibility) {
   try{
     if(expected.everPublic){
       const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
-        publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,
-          reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return state.workVisibility.nextMajorUpdateAt;}},onConfirm:send});
+        publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
+          reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
       if(!ok||!valid())return;
     }else{const answer=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});if(!answer||!valid())return;}
     if(valid())await router.push(lp('/mine?fresh=1'));

@@ -74,3 +74,15 @@ it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('shows the three-day inte
     expect(document.querySelector('.publication-fields')?.textContent).toContain(i18n.global.t('cardUpdate.update.intervalHint',{days:3},3));
   } finally { i18n.global.locale.value='zh-Hant'; }
 });
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('omits cooldown copy for an exempt card in %s while keeping notify and delivery guidance',async locale=>{
+  await loadLocale(locale);i18n.global.locale.value=locale;
+  try {
+    void open({publication:{key:'exempt',nextMajorUpdateAt:0,updateCooldownExempt:true}});await tick();
+    const text=document.querySelector('.publication-fields')?.textContent;
+    expect(text).not.toContain(i18n.global.t('cardUpdate.update.intervalHint',{days:3},3));
+    expect(text).toContain(i18n.global.t('cardUpdate.update.deliveryHint'));
+    expect(document.querySelector('#publication-eligibility')).toBeNull();
+    expect(document.querySelector<HTMLInputElement>('[data-update-choice="major"]')?.disabled).toBe(false);
+  } finally {i18n.global.locale.value='zh-Hant';}
+});

@@ -7,7 +7,7 @@ export function updateIntent(input: { updateKind?: unknown; updateNote?: unknown
   catch (error) { throw new HttpError(400, (error as Error).message); }
 }
 export async function nextMajorUpdateAt(db: D1Database, work: string): Promise<number> {
-  const row = await db.prepare("SELECT MAX(published_at) AS latest FROM card_update_events WHERE work_id=? AND state='published'").bind(work).first<{ latest: number | null }>();
+  const row = await db.prepare("SELECT CASE WHEN EXISTS(SELECT 1 FROM card_update_cooldown_exempt WHERE work_id=?1) THEN NULL ELSE MAX(published_at) END AS latest FROM card_update_events WHERE work_id=?1 AND state='published'").bind(work).first<{ latest: number | null }>();
   return row?.latest ? row.latest + UPDATE_COOLDOWN_MS : 0;
 }
 export async function assertUpdateCooldown(db: D1Database, work: string, now: number): Promise<void> {
@@ -43,11 +43,13 @@ export const notificationRecipientEligible=(n='n')=>`(${n}.author_id IS NULL
  OR (${n}.kind='followed_work' AND json_extract(${n}.extra,'$.event')='update'
  AND EXISTS(SELECT 1 FROM member_favorites f WHERE f.member_id=${n}.member_id AND f.card_id=${n}.card_id)))`;
 
-export async function sourceUpdateTimes(db:D1Database,sources:string[]):Promise<Map<string,number>> {
+export interface UpdateEligibility { nextMajorUpdateAt: number; updateCooldownExempt: boolean }
+export async function sourceUpdateEligibility(db:D1Database,sources:string[]):Promise<Map<string,UpdateEligibility>> {
   if(!sources.length)return new Map();
-  const rows=await db.prepare(`SELECT w.source_role_id AS source,MAX(e.published_at) AS latest
-    FROM works w JOIN card_update_events e ON e.work_id=w.id AND e.state='published'
+  const rows=await db.prepare(`SELECT w.source_role_id AS source,MAX(e.published_at) AS latest,x.work_id IS NOT NULL AS exempt
+    FROM works w LEFT JOIN card_update_events e ON e.work_id=w.id AND e.state='published'
+    LEFT JOIN card_update_cooldown_exempt x ON x.work_id=w.id
     WHERE w.source_provider='harbor' AND w.source_role_id IN(SELECT value FROM json_each(?)) GROUP BY w.source_role_id`)
-    .bind(JSON.stringify(sources)).all<{source:string;latest:number}>();
-  return new Map(rows.results.map(r=>[r.source,r.latest+UPDATE_COOLDOWN_MS]));
+    .bind(JSON.stringify(sources)).all<{source:string;latest:number|null;exempt:number}>();
+  return new Map(rows.results.map(r=>[r.source,{nextMajorUpdateAt:r.exempt||r.latest===null?0:r.latest+UPDATE_COOLDOWN_MS,updateCooldownExempt:!!r.exempt}]));
 }

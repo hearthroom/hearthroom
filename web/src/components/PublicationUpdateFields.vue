@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { normalizeUpdateNote, UPDATE_COOLDOWN_DAYS, UPDATE_NOTE_MIN, UPDATE_NOTE_MAX, type UpdateIntent } from '../../../shared/card-update';
-const props=defineProps<{modelValue:UpdateIntent;nextMajorUpdateAt?:number;now:number;disabled?:boolean}>();
+const props=defineProps<{modelValue:UpdateIntent;nextMajorUpdateAt?:number;updateCooldownExempt?:boolean;now:number;disabled?:boolean}>();
 const emit=defineEmits<{ 'update:modelValue':[UpdateIntent]; retry:[] }>();
 const {t,locale}=useI18n();
 const unavailable=computed(()=>props.nextMajorUpdateAt===undefined||props.nextMajorUpdateAt>props.now);
@@ -32,7 +32,7 @@ function choose(updateKind:UpdateIntent['updateKind']){emit('update:modelValue',
       <p class="subtle publication-count">{{ t('cardUpdate.update.noteCount',{count,limit:UPDATE_NOTE_MAX}) }}</p>
       <p v-if="noteError" id="publication-note-error" class="publication-error" role="status">{{ t(noteError,{min:UPDATE_NOTE_MIN,limit:UPDATE_NOTE_MAX}) }}</p>
     </div>
-    <p class="subtle">{{ t('cardUpdate.update.intervalHint',{days:UPDATE_COOLDOWN_DAYS},UPDATE_COOLDOWN_DAYS) }} {{ t('cardUpdate.update.deliveryHint') }}</p>
+    <p class="subtle"><template v-if="!updateCooldownExempt">{{ t('cardUpdate.update.intervalHint',{days:UPDATE_COOLDOWN_DAYS},UPDATE_COOLDOWN_DAYS) }} </template> {{ t('cardUpdate.update.deliveryHint') }}</p>
   </fieldset>
 </template>
 <style scoped>
