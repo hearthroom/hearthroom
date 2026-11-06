@@ -55,7 +55,7 @@ export function parsePublicCandidates(body:string):PublicCandidates|null{
 }
 export async function publicCandidatePage(env:Env,candidates:PublicCandidates,position:Position&{binding:string},opts:{limit:number;offset:number;lang:string;allowNsfw:boolean;surface?:VisibilityReadSurface},source:ListOptions){
  if(candidates.rawOffset!==position.raw)throw new HttpError(503,'visibility_provider_unavailable');
- const proven:{row:CardRow;raw:number}[]=[];
+ const proven:{row:CardRow;raw:number}[]=[],seen=new Set<string>();
  let batch=candidates;
  for(;;){
   const result=await cardsByIds(env.DB,batch.ids);
@@ -63,7 +63,10 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
   const ordered=batch.ids.map(id=>found.get(id)).filter((r):r is CardRow=>!!r&&(opts.allowNsfw||r.rating!=='R'));
   const visible=await filterPublicRows(env,ordered,opts.surface??'list');
   const positions=new Map(batch.ids.map((id,i)=>[id,batch.rawOffset+i+1]));
-  proven.push(...visible.rows.map(row=>({row,raw:positions.get(String(row.id))!})));
+  for(const row of visible.rows){
+   const id=String(row.id);if(seen.has(id))continue;seen.add(id);
+   proven.push({row,raw:positions.get(id)!});
+  }
   if(proven.length>opts.limit||!batch.more||batch.partial)break;
   if(!batch.ids.length)throw new HttpError(503,'visibility_provider_unavailable');
   batch=await publicCandidates(env,source,batch.rawOffset+batch.ids.length);

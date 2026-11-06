@@ -165,3 +165,13 @@ it('finishes an all-denied 401-candidate catalog without returning partial total
  const result=await page();expect(result.response.status).toBe(200);expect(result.body).toMatchObject({items:[],total:null,hasNext:false});expect(batches).toEqual([200,200,1]);
  const warm=await page();expect(warm.response.headers.get('X-Cache')).toBe('hit');expect(warm.body).toMatchObject({items:[],total:null,hasNext:false});expect(batches).toEqual([200,200,1,200,200,1]);
 });
+
+it('does not count a cached candidate twice after it moves across the live batch boundary',async()=>{
+ const {ids,denied}=await fixture(203);ids.slice(0,199).forEach(id=>denied.add(id));
+ const cold=await page();expect(cold.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[199],ids[200]]);
+ // Keep the cached head, but move its one visible card to the live second batch.
+ await env.DB.prepare('UPDATE cards SET registered_at=2.5 WHERE source_role_id=?').bind(ids[199]).run();
+ const warm=await page();expect(warm.response.headers.get('X-Cache')).toBe('hit');expect(warm.response.status).toBe(200);
+ expect(warm.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[199],ids[201]]);expect(warm.body.hasNext).toBe(true);
+ const next=await page('&offset=2&cursor='+encodeURIComponent(warm.body.nextCursor));expect(next.body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[202]]);expect(next.body.hasNext).toBe(false);
+});
