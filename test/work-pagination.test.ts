@@ -49,15 +49,19 @@ it('scans multiple bounded batches and keeps warm continuations free of duplicat
  const next=await page('&offset=2&cursor='+encodeURIComponent(first.body.nextCursor));expect(next.response.status).toBe(200);expect(next.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(202,204));
  const previous=await page('&cursor='+encodeURIComponent(next.body.previousCursor));expect(previous.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(200,202));expect(batches.every(n=>n<=200)).toBe(true);
 });
-it('fails closed when a later candidate batch cannot be proven',async()=>{
+it.each(['offline','missing','wrongWork'] as const)('fails closed when a later candidate batch is %s',async failure=>{
  const {ids,denied}=await fixture(201);ids.slice(0,199).forEach(id=>denied.add(id));
  const network=vi.mocked(globalThis.fetch),original=network.getMockImplementation()!;
  network.mockImplementation(async(input,init)=>{
   const {items}=JSON.parse(String(init?.body));
-  if(items.some((r:any)=>r.sourceRoleId===ids[200]))return Response.json({items:[]});
+  if(items.some((r:any)=>r.sourceRoleId===ids[200])){
+   if(failure==='offline')throw new TypeError('Synthetic later-batch reset');
+   if(failure==='missing')return Response.json({items:[]});
+   return Response.json({items:items.map((r:any)=>({...r,workId:crypto.randomUUID()}))});
+  }
   return original(input,init);
  });
- const result=await page();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+ const result=await page();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(failure==='offline'?3:2);
 });
 it('rejects tampered or cross-filter continuation tokens instead of trusting their position',async()=>{
  await fixture();const first=await page();expect(first.body.nextCursor).toEqual(expect.any(String));
@@ -154,4 +158,10 @@ it.each(['day','week','month','search','author','feed'] as const)('preserves %s 
  }
  const ctx=createExecutionContext(),response=await worker.fetch(new Request(url,{headers}),testEnv(),ctx);await waitOnExecutionContext(ctx);
  expect(response.status).toBe(200);const body=await response.json() as any;expect(body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[200]]);expect(body.hasNext).toBe(false);expect(batches).toEqual([200,1]);
+});
+
+it('finishes an all-denied 401-candidate catalog without returning partial totals or looping',async()=>{
+ const {ids,denied,batches}=await fixture(401);ids.forEach(id=>denied.add(id));
+ const result=await page();expect(result.response.status).toBe(200);expect(result.body).toMatchObject({items:[],total:null,hasNext:false});expect(batches).toEqual([200,200,1]);
+ const warm=await page();expect(warm.response.headers.get('X-Cache')).toBe('hit');expect(warm.body).toMatchObject({items:[],total:null,hasNext:false});expect(batches).toEqual([200,200,1,200,200,1]);
 });

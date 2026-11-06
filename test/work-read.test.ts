@@ -428,3 +428,19 @@ it.each(['G','P','PG12','PG15','R'])('preserves the approved public %s classific
  const response=await request('/v1/cards/'+source,'reader');
  expect(response.status).toBe(200);expect(await response.json()).toMatchObject({rating});
 });
+
+it.each(['headers','body'] as const)('enforces the real three-second deadline during %s and exhausts exactly one retry',async phase=>{
+ await managedFixture();const {network}=providerFixture('public');const started=performance.now();
+ network.mockImplementation(async(_input,init)=>{
+  const signal=init!.signal!;
+  if(phase==='headers')return new Promise<Response>((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  return new Response(new ReadableStream({start(controller){
+   controller.enqueue(new TextEncoder().encode('{"items":['));
+   signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});
+  }}),{headers:{'Content-Type':'application/json'}});
+ });
+ const result=await board();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+ expect(performance.now()-started).toBeGreaterThanOrEqual(6000);
+ const metrics=await opsMetrics(env.DB);for(const attempt of ['initial','retry'])expect(metrics).toContain(`hearthroom_visibility_provider_failures_total{attempt="${attempt}",outcome="timeout"} 1`);
+ expect(metrics).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="exhausted"} 1');
+},15000);
