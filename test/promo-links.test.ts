@@ -156,3 +156,14 @@ it.each([
   expect(response.headers.get('location')).toBe(`${path}?ref=${ref}&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}-20261106`);
   expect(response.headers.get('cache-control')).toBe('no-store');
 });
+it.each([
+  ['bh-dal-indie', '20261107'],
+  ['bh-dal-galgame', '20261108'],
+  ['bh-dal-webgame', '20261109'],
+])('serves the approved Date A Live board campaign %s', async (code, date) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`/cards/100194?ref=94A9H94Z&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}-${date}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
+});
