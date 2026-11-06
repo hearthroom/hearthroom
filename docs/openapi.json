@@ -6722,6 +6722,15 @@
               "default": 1
             },
             "description": "Context tier the client intends to use (a `contextBudgetOptions[].value`); affects `noLimitCovered` and dynamic price estimates. Invalid/<=0 becomes 1."
+          },
+          {
+            "name": "pendingAgent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Read-only preview of the pending Agent selection. True uses token-priced Agent estimates and no unlimited-plan coverage; false previews ordinary mode. Does not save a preference."
           }
         ],
         "responses": {
@@ -6750,13 +6759,53 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. supportsMultiPass describes tool capability; runtime availability comes from /player/agent-mode. Agent preparation can make multiple model calls, so the displayed per-turn estimate is not an Agent execution price cap.",
+          "description": "Returns configured model groups and current per-tier estimates. Requires chat.play. pendingAgent previews the unsaved mode. Agent estimates are typical/high credits and never a charge cap; use /player/agent-mode for the selected estimate and confirmation decision.",
           "security": [
             {
               "userToken": []
             }
           ],
-          "parameters": [],
+          "parameters": [
+            {
+              "name": "scene",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              },
+              "description": "`story` replaces `costScore` with the story-mode price. Any other value is ignored (no error)."
+            },
+            {
+              "name": "roleId",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "description": "Card id; used to read whether agent mode is on for the card (affects `billingType`, `noLimitEligible`, `noLimitCovered`) and to pick per-card price samples."
+            },
+            {
+              "name": "contextLevel",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              },
+              "description": "Context tier the client intends to use (a `contextBudgetOptions[].value`); affects `noLimitCovered` and dynamic price estimates. Invalid/<=0 becomes 1."
+            },
+            {
+              "name": "pendingAgent",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean"
+              },
+              "description": "Read-only preview of the pending Agent selection. True uses token-priced Agent estimates and no unlimited-plan coverage; false previews ordinary mode. Does not save a preference."
+            }
+          ],
           "responses": {
             "400": {
               "description": "invalid_request",
@@ -7369,7 +7418,7 @@
           "Player settings"
         ],
         "summary": "Agent mode (multi-pass) switch for a card",
-        "description": "Reads whether the caller enabled agent mode (multi-pass generation) on this card, whether the server currently runs it at all, and whether the (optionally proposed) model supports it. A card without settings reads as `multiPassEnabled=false`.",
+        "description": "Reads the caller's Agent preference and a read-only estimate for the proposed model/context/thinking/response length. costEstimate is preferred to the legacy costWarning boolean; no preference is saved by GET. Only a high estimate at least 1000 credits requires confirmation; the caller can still enable Agent.",
         "security": [
           {
             "userToken": []
@@ -7394,6 +7443,41 @@
               "type": "string"
             },
             "description": "Model value the client is about to select; `modelSupported`/`costWarning` are computed for it instead of the saved model."
+          },
+          {
+            "name": "contextLevel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                100
+              ]
+            },
+            "description": "Selected context tier; 100 is the legacy alias for 5."
+          },
+          {
+            "name": "thinkingDepth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Selected thinking option from the model catalog."
+          },
+          {
+            "name": "lengthTarget",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Supported response length target; omitted uses the current save preference."
           }
         ],
         "responses": {
@@ -7439,7 +7523,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API."
+          "description": "Reads the caller's Agent preference and a read-only estimate for the proposed model/context/thinking/response length. costEstimate is preferred to the legacy costWarning boolean; no preference is saved by GET. Only a high estimate at least 1000 credits requires confirmation; the caller can still enable Agent."
         }
       },
       "post": {
@@ -8291,7 +8375,7 @@
           "Player settings"
         ],
         "summary": "Save per-card player settings",
-        "description": "Partial update: every field is optional; fields absent from the body keep their stored value, fields present (even empty string / false / empty array) are written. On first save for a card a row is created with defaults for omitted fields (`speechSpeed` 1.0, `limitLevel` \"medium\", `context` 1, `autoCompactEnabled` true, everything else empty/false). Validation: `systemPrompt` <= 2000 characters; `userName` <= 20; `userDefine` <= 1000; `customInstructions` <= 1500 characters (500 for zh-Hans/zh-Hant `language`) and is trimmed; `personaMode` must be one of the enum values. Moderation: `userName`+`userDefine` are moderated together when either changes; a non-empty changed `customInstructions` is moderated. No server-side enum validation exists for `selectModel`, `context`, `thinkingDepth`, `sandboxLevel`, `limitLevel`, `promptStrategy`, `templateStyle` or `roleSpeech` — send values taken from /models. personaMode derivation when absent: if any of `userName`/`userSex`/`userDefine` is present the mode is set to `custom`; if none is present the mode is left unchanged.",
+        "description": "Partial update: every field is optional; fields absent from the body keep their stored value, fields present (even empty string / false / empty array) are written. On first save for a card a row is created with defaults for omitted fields (`speechSpeed` 1.0, `limitLevel` \"medium\", `context` 1, `autoCompactEnabled` true, everything else empty/false). Validation: `systemPrompt` <= 2000 characters; `userName` <= 20; `userDefine` <= 1000; `customInstructions` <= 1500 characters (500 for zh-Hans/zh-Hant `language`) and is trimmed; `personaMode` must be one of the enum values. Moderation: `userName`+`userDefine` are moderated together when either changes; a non-empty changed `customInstructions` is moderated. No server-side enum validation exists for `selectModel`, `context`, `thinkingDepth`, `sandboxLevel`, `limitLevel`, `promptStrategy`, `templateStyle` or `roleSpeech` — send values taken from /models. personaMode derivation when absent: if any of `userName`/`userSex`/`userDefine` is present the mode is set to `custom`; if none is present the mode is left unchanged. A multiPassEnabled patch is committed atomically with selectModel, context and thinkingDepth. Supply agentCostSelectionKey after confirmation; a mismatched current selection returns 409 quote_changed before saving. Cancelling the picker must send no save request.",
         "security": [
           {
             "userToken": []
@@ -8337,10 +8421,20 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "quote_changed: refresh the selected estimate and confirm again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "x-harperharbor": {
-          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent. customInstructions accepts at most 2000 UTF-16 code units before trimming; the legacy jailbreak alias uses the same limit. Optional capability on services that support account model preferences: A change to `selectModel` also saves the selected model as the user's account preference within this application, applied only when first starting other agent configurations. This includes changing to the model currently used as the application default. Sending the current value again does not update the account preference. Sending an empty string for `selectModel` clears the account preference and returns this configuration to the application default. Changes to other settings and single-turn model overrides do not change the account preference.",
+          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent. customInstructions accepts at most 2000 UTF-16 code units before trimming; the legacy jailbreak alias uses the same limit. Optional capability on services that support account model preferences: A change to `selectModel` also saves the selected model as the user's account preference within this application, applied only when first starting other agent configurations. This includes changing to the model currently used as the application default. Sending the current value again does not update the account preference. Sending an empty string for `selectModel` clears the account preference and returns this configuration to the application default. Changes to other settings and single-turn model overrides do not change the account preference. A multiPassEnabled patch is committed atomically with selectModel, context and thinkingDepth. Supply agentCostSelectionKey after confirmation; a mismatched current selection returns 409 quote_changed before saving. Cancelling the picker must send no save request.",
           "security": [
             {
               "userToken": []
@@ -8389,7 +8483,7 @@
               }
             },
             "409": {
-              "description": "chat_operation_conflict",
+              "description": "quote_changed: refresh the selected estimate and confirm again.",
               "content": {
                 "application/json": {
                   "schema": {
@@ -8465,8 +8559,21 @@
                     "context": {
                       "type": "integer",
                       "enum": [
-                        1
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
                       ]
+                    },
+                    "multiPassEnabled": {
+                      "type": "boolean",
+                      "description": "Atomically apply Agent preference with the selected model, context and thinking depth."
+                    },
+                    "agentCostSelectionKey": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "description": "Optional opaque confirmed selection key, stored with the selection. A changed selection without a key preserves legacy compatibility."
                     }
                   },
                   "required": [
@@ -19441,6 +19548,157 @@
           }
         }
       }
+    },
+    "/open/v1/player/agent-cost-action": {
+      "post": {
+        "operationId": "recordAgentCostWarningAction",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Record a cost warning choice",
+        "description": "Optional interaction telemetry for the authenticated caller and accessible configuration. Validates the current confirm estimate key. Limited to 30 requests per minute per account; this event is not billing evidence.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "roleId",
+                  "selectionKey",
+                  "action"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "contextLevel": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "thinkingDepth": {
+                    "type": "string"
+                  },
+                  "selectionKey": {
+                    "type": "string",
+                    "minLength": 64,
+                    "maxLength": 64
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "shown",
+                      "accepted",
+                      "declined"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "quote_changed: refresh the selected estimate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "temporarily_unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Optional interaction telemetry for the authenticated caller and accessible configuration. Validates the current confirm estimate key. Limited to 30 requests per minute per account; this event is not billing evidence."
+        }
+      }
     }
   },
   "components": {
@@ -19508,7 +19766,10 @@
           },
           "costWarning": {
             "type": "boolean",
-            "description": "Show a high-cost warning before enabling (model is supported and expensive)."
+            "description": "Compatibility decision: true for a high estimate (at least 1000 credits) or unknown; false for a known lower estimate. Does not determine Agent support."
+          },
+          "costEstimate": {
+            "$ref": "#/components/schemas/AgentCostEstimate"
           }
         }
       },
@@ -23823,6 +24084,11 @@
           },
           "conversationPersona": {
             "$ref": "#/components/schemas/ConversationPersona"
+          },
+          "agentCostSelectionKey": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional opaque confirmed selection key, stored with the selection. A changed selection without a key preserves legacy compatibility."
           }
         }
       },
@@ -23927,6 +24193,15 @@
               "conversation"
             ],
             "description": "If omitted but any of userName/userSex/userDefine is present, `custom` is stored. `conversation` selects the per-conversation persona (/player/conversation-persona); save that persona first, then set the mode."
+          },
+          "agentCostSelectionKey": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional opaque confirmed selection key, stored with the selection. A changed selection without a key preserves legacy compatibility."
+          },
+          "multiPassEnabled": {
+            "type": "boolean",
+            "description": "Atomically apply Agent preference with the selected model, context and thinking depth."
           }
         }
       },
@@ -34364,6 +34639,125 @@
             ]
           }
         }
+      },
+      "AgentCostEstimate": {
+        "type": "object",
+        "required": [
+          "status",
+          "typicalCredits",
+          "highCredits",
+          "normalTypicalCredits",
+          "reason",
+          "presentation",
+          "selectionKey",
+          "ruleVersion",
+          "generatedAt",
+          "expiresAt",
+          "sampleCount",
+          "source"
+        ],
+        "properties": {
+          "typicalCredits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Credits, not a charge limit. Unknown amounts are null."
+          },
+          "highCredits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Credits, not a charge limit. Unknown amounts are null."
+          },
+          "normalTypicalCredits": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Credits, not a charge limit. Unknown amounts are null."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "estimated",
+              "unknown"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "estimated",
+              "bootstrap",
+              "unknown"
+            ]
+          },
+          "presentation": {
+            "type": "string",
+            "enum": [
+              "none",
+              "inline",
+              "confirm"
+            ]
+          },
+          "sampleCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string"
+          },
+          "selectionKey": {
+            "type": "string"
+          },
+          "ruleVersion": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "contextLevel": {
+            "type": "string"
+          },
+          "thinkingDepth": {
+            "type": "string"
+          },
+          "lengthBucket": {
+            "type": "string"
+          },
+          "inputBucket": {
+            "type": "string"
+          },
+          "billingRegime": {
+            "type": "string"
+          },
+          "pricingFingerprint": {
+            "type": "string"
+          },
+          "costRuntimeVersion": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fixedRuleCredits": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Numeric normal fixed-price rule used only to invalidate an estimate when pricing changes; Agent itself is priced by token usage."
+          }
+        },
+        "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
       }
     }
   },

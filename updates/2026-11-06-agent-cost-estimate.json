@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "draft": true,
+  "title": {
+    "zh-Hant": "模型選單會顯示 Agent 模式每輪的預估花費。",
+    "zh-Hans": "模型菜单会显示 Agent 模式每轮的预估花费。",
+    "en": "The model picker shows an estimated cost per turn for Agent mode.",
+    "ja": "モデル選択で Agent モードの1ターンあたりの費用目安を確認できます。",
+    "ko": "모델 선택에서 Agent 모드의 턴당 예상 비용을 확인할 수 있어요."
+  }
+}
