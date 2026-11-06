@@ -1,8 +1,10 @@
 /**
- * 對話頁頁首的收藏與評論：舞台只給 roleId，本站用 PlayPage 登記的卡號去查、去改。
+ * 對話頁頁首的收藏與卡片資訊：舞台只給 roleId，本站用 PlayPage 登記的卡號去查、去改。
  * 沒登記（試玩、審核、非公開）或已經換到別張卡，就回 null，舞台不畫那兩顆。
+ * 有登記就有卡片資訊入口；作者關掉評論只收起面板裡的評論分頁（記在 playSocial.detail）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { fetchRoleDetail } from "../src/lib/api";
 import { libraryRequest } from "../src/lib/library";
 import { playSocial, playSocialHost, registerPlayCard } from "../src/lib/play-social";
@@ -22,19 +24,22 @@ describe("playSocialHost", () => {
     expect(libraryRequest).not.toHaveBeenCalled();
   });
 
-  it("reads favorite state from the site card and honors the author's comment switch", async () => {
+  it("reads favorite state from the site card; the author's comment switch and README go to the panel", async () => {
     registerPlayCard({ roleId: "role", cardId: "c1", provider: "harbor" });
-    vi.mocked(fetchRoleDetail).mockResolvedValueOnce({ previewShowComments: false });
+    vi.mocked(fetchRoleDetail).mockResolvedValueOnce({ previewShowComments: false, roleReadme: "# hi" });
     vi.mocked(libraryRequest).mockResolvedValueOnce({ active: true });
-    await expect(playSocialHost(deps()).social("role")).resolves.toEqual({ favorite: true, favorited: true, comments: false });
+    // Comments turned off still leaves the info entry: social() answers for the registered card.
+    await expect(playSocialHost(deps()).social("role")).resolves.toEqual({ favorite: true, favorited: true });
+    expect(playSocial.detail).toEqual({ comments: false, readme: "# hi" });
     expect(libraryRequest).toHaveBeenCalledWith("favorites/c1", "t");
     expect(fetchRoleDetail).toHaveBeenCalledWith("role", undefined, "zh-Hant", "harbor");
   });
 
-  it("hides favorite without a site sign-in but still offers comments", async () => {
+  it("hides favorite without a site sign-in but still offers the info entry with comments", async () => {
     registerPlayCard({ roleId: "role", cardId: "c1", provider: "harbor" });
     vi.mocked(fetchRoleDetail).mockResolvedValueOnce({});
-    await expect(playSocialHost(deps(false)).social("role")).resolves.toEqual({ favorite: false, favorited: false, comments: true });
+    await expect(playSocialHost(deps(false)).social("role")).resolves.toEqual({ favorite: false, favorited: false });
+    expect(playSocial.detail).toEqual({ comments: true, readme: "" });
     expect(libraryRequest).not.toHaveBeenCalled();
   });
 
@@ -47,6 +52,7 @@ describe("playSocialHost", () => {
     registerPlayCard({ roleId: "next", cardId: "c2", provider: "harbor" });
     finish({ active: true });
     await expect(pending).resolves.toBeNull();
+    expect(playSocial.detail).toBeNull();
   });
 
   it("writes favorites to the registered card and opens comments only for it", async () => {
@@ -59,11 +65,32 @@ describe("playSocialHost", () => {
     await expect(host.setFavorite("role", false)).resolves.toBe(false);
     expect(libraryRequest).toHaveBeenLastCalledWith("favorites/c1", "t", "DELETE");
     await expect(host.setFavorite("other", true)).rejects.toThrow();
-    host.openComments("other");
-    expect(playSocial.commentsOpen).toBe(false);
-    host.openComments("role");
-    expect(playSocial.commentsOpen).toBe(true);
+  });
+
+  it("toggles the info panel only for the registered card, reports changes, and resets on card change", async () => {
+    registerPlayCard({ roleId: "role", cardId: "c1", provider: "harbor" });
+    const host = playSocialHost(deps());
+    const seen: boolean[] = [];
+    const stop = host.onInfoChange((open) => seen.push(open));
+    host.toggleInfo("other");
+    expect(playSocial.open).toBe(false);
+    host.toggleInfo("role");
+    expect(playSocial.open).toBe(true);
+    expect(playSocial.tab).toBe("info");
+    playSocial.tab = "rankings";
+    host.toggleInfo("role");
+    expect(playSocial.open).toBe(false);
+    await Promise.resolve();
+    // Reopening returns to the last tab the player used.
+    host.toggleInfo("role");
+    expect(playSocial.tab).toBe("rankings");
+    await nextTick();
+    expect(seen.at(-1)).toBe(true);
     registerPlayCard(null);
-    expect(playSocial.commentsOpen).toBe(false);
+    expect(playSocial.open).toBe(false);
+    expect(playSocial.tab).toBe("info");
+    await nextTick();
+    expect(seen.at(-1)).toBe(false);
+    stop();
   });
 });

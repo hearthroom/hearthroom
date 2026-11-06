@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestHonor, coverHonors, fitWorn, honorKey, parseHonorKey, periodLabel as label, sortHonors, timesLabel, type Honor } from '../src/lib/honors';
+import { bestHonor, coverHonors, fitWorn, groupHonors, honorKey, parseHonorKey, periodLabel as label, sortHonors, timesLabel, type Honor } from '../src/lib/honors';
 
 const h = (zone: Honor['zone'], window: Honor['window'], band: Honor['band']): Honor => ({ zone, window, band });
 
@@ -88,5 +88,18 @@ describe('best honor', () => {
     expect(bestHonor([h('clean', 'day', 1), h('all', 'month', 1)])).toEqual(h('all', 'month', 1));
     expect(bestHonor([h('all', 'week', 3), h('clean', 'week', 3)])).toEqual(h('clean', 'week', 3));
     expect(bestHonor([])).toBeNull();
+  });
+});
+
+describe('honors earned, grouped for the play info panel', () => {
+  it('lists each board × period × band once with how many times it was earned, in badge-page order', () => {
+    const at = (x: Honor, period: string) => ({ ...x, period, at: 1 });
+    const groups = groupHonors([
+      at(h('all', 'week', 3), '2026-11-02'), at(h('clean', 'day', 1), '2026-11-03'),
+      at(h('clean', 'day', 1), '2026-11-04'), at(h('clean', 'month', 10), '2026-11-01'),
+    ]);
+    expect(groups.map(g => [honorKey(g.honor), g.count])).toEqual([['rank_clean_day_1', 2], ['rank_clean_month_10', 1], ['rank_all_week_3', 1]]);
+    expect(groups[0].honor).toEqual(h('clean', 'day', 1));
+    expect(groupHonors([])).toEqual([]);
   });
 });

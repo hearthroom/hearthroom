@@ -27,11 +27,12 @@ declare module "moonstage/stage" {
     clipboard: { write(text: string): Promise<void> };
     events: { on(name: string, fn: (payload: unknown) => void): () => void; emit(name: string, payload?: unknown): void };
     scrollTo(el: Element | null, options?: { offset?: number }): void;
-    /** 對話頁頁首的收藏與評論（lib/play-social.ts）；social() 回 null 兩顆都不畫。 */
+    /** 對話頁頁首的收藏與卡片資訊（lib/play-social.ts）；social() 回 null 兩顆都不畫。 */
     card?: {
-      social(roleId: string): Promise<{ favorite: boolean; favorited: boolean; comments: boolean } | null>;
+      social(roleId: string): Promise<{ favorite: boolean; favorited: boolean } | null>;
       setFavorite(roleId: string, on: boolean): Promise<boolean>;
-      openComments(roleId: string): void;
+      toggleInfo(roleId: string): void;
+      onInfoChange?(fn: (open: boolean) => void): () => void;
     };
     /** 卡內分享情境（lib/play-share.ts）：情境碼、分享連結、誰打得開；不給就是沒有分享連結。 */
     share?: {

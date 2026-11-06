@@ -25,6 +25,21 @@ const order = (h: Honor) => HONOR_ZONES.indexOf(h.zone) * 100 + HONOR_WINDOWS.in
 export const sortHonors = <T extends Honor>(list: readonly T[]) => [...list].sort((a, b) => order(a) - order(b));
 
 /**
+ * 拿過的榮譽按「榜別×期別×名次」併成一枚，記拿過幾次（徽章標籤的 ×N）；順序同徽章頁。
+ * 對話頁卡片資訊面板的榜單分頁用：只列拿到的，不畫空位。
+ */
+export function groupHonors(list: readonly Honor[]): { honor: Honor; count: number }[] {
+  const groups = new Map<string, { honor: Honor; count: number }>();
+  for (const h of list) {
+    const key = honorKey(h);
+    const group = groups.get(key);
+    if (group) group.count++;
+    else groups.set(key, { honor: { zone: h.zone, window: h.window, band: h.band }, count: 1 });
+  }
+  return sortHonors([...groups.values()].map(g => ({ ...g.honor, group: g }))).map(x => x.group);
+}
+
+/**
  * 封面上的那一列：每個期別只放最高名次那一枚，順序固定日→週→月，最多三枚。
  * 同名次時清水優先（不加權，只是兩枚長得一樣時固定挑一枚，免得同一張卡換頁就換徽章）。
  */

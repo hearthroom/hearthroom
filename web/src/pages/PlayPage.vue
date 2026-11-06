@@ -30,7 +30,7 @@ import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
 import { resolveShareToken, setPlayShare, setPlayShareRef, shareContextOf, shareTokenOf } from "@/lib/play-share";
 import { currentReferralCode } from "@/lib/share-ref";
-import PlayComments from "@/components/PlayComments.vue";
+import PlayInfoPanel from "@/components/PlayInfoPanel.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
 import AdultGate from "@/components/AdultGate.vue";
@@ -111,7 +111,7 @@ if (playApp) {
 }
 
 /**
- * 卡片解析好了：記下卡號與畫布要的 roleId、登記頁首的收藏與評論、卡片 App 的頭，網址換成卡號那一個。
+ * 卡片解析好了：記下卡號與畫布要的 roleId、登記頁首的收藏與卡片資訊、卡片 App 的頭，網址換成卡號那一個。
  * 換網址途中又換了卡（stale）回 false。
  */
 async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, provider: ReturnType<typeof playProvider>, stale: () => boolean, token: () => Promise<string | null>): Promise<boolean> {
@@ -119,10 +119,10 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   historyBootstrap.value = {conversationId:resolved.conversationId,readOnly:resolved.readOnly,reason:resolved.reason,title:resolved.title};
   if (resolved.card && !intro.value) intro.value = { name: displayName(resolved.card.name ?? "", locale.value), art: resolved.card.avatarUrl ?? "", backdrop: resolved.card.landscapeUrl ?? "" };
   roleId.value = resolved.roleId;
-  // 頁首的收藏與評論只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
+  // 頁首的收藏與卡片資訊只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
-  registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
+  registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider, card: resolved.card } : null);
   await adoptShare(resolved, stale, { provider, token });
   if (stale()) return false;
   if (playApp) applyCardHead(resolved.card, locale.value);
@@ -289,7 +289,7 @@ watch(locale, () => { void remergeStageMessages(); });
     <Transition name="play-cover">
       <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
     </Transition>
-    <PlayComments />
+    <PlayInfoPanel />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
     <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`" :role="toast.kind === 'error' ? 'alert' : 'status'" :aria-live="toast.kind === 'error' ? 'assertive' : 'polite'" aria-atomic="true">

@@ -268,7 +268,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         get: () => i18n.global.locale.value,
         set: (code) => { void applyLocale(code); },
       },
-      // 頁首的收藏與評論：記在本站帳號上（跟卡片頁同一份），不是遊玩用的供應商帳號。
+      // 頁首的收藏與卡片資訊：收藏記在本站帳號上（跟卡片頁同一份），不是遊玩用的供應商帳號。
       card: playSocialHost({
         signedIn: () => !!deps.session.me,
         token: () => deps.session.accessToken(),
