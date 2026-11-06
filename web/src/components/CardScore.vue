@@ -7,6 +7,7 @@
  */
 import { computed, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { MIN_SCORE_COUNT } from "../../../shared/card-score";
 import type { CardScore } from "@/lib/api";
 
 const props = defineProps<{
@@ -66,7 +67,7 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
 <template>
   <section class="score panel" data-tour="card-score" :aria-labelledby="'score-h'">
     <h2 id="score-h" class="score__title">{{ $t("score.title") }}</h2>
-    <div class="score__row">
+    <div v-if="own || (score?.count ?? 0) >= MIN_SCORE_COUNT" class="score__row">
       <div class="score__big">
         <strong class="score__avg">{{ score?.average != null ? score.average.toFixed(1) : "—" }}</strong>
         <span class="score__stars" role="img" :aria-label="$t('score.average', { n: score?.average ?? 0 })">
@@ -82,6 +83,7 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
         </li>
       </ol>
     </div>
+    <p v-else class="score__insufficient subtle">{{ $t("score.insufficient") }}</p>
 
     <div v-if="!own" class="score__mine">
       <div class="score__mine-head">
@@ -117,6 +119,7 @@ const STAR = "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2
 <style scoped>
 .score { display: grid; gap: var(--s-3); padding: var(--s-4); }
 .score__title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.score__insufficient { margin: 0; font-size: 13px; }
 .score__row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-4); align-items: center; }
 .score__big { display: grid; justify-items: center; gap: 2px; }
 .score__avg { font-size: 40px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -2014,6 +2014,7 @@
   "score.title": "Ratings",
   "score.average": "Average {n} stars",
   "score.count": "{n} ratings",
+  "score.insufficient": "Not enough ratings",
   "score.histogram": "Rating breakdown",
   "score.mine": "Your rating",
   "score.write": "Write a review",

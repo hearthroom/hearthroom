@@ -31,6 +31,7 @@ import ReadmeView from "@/components/ReadmeView.vue";
 import CoverImg from "@/components/CoverImg.vue";
 import { cardThumb, thumbChain } from "@/lib/card-thumb";
 import { BANNER_THUMB_WIDTH } from "../../../shared/card-thumb";
+import { MIN_SCORE_COUNT } from "../../../shared/card-score";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
 import { renderReadme } from "@/lib/card-readme";
@@ -434,10 +435,13 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" :official="card.author.official" />
             </component>
             <TipMenu v-if="tips.length" :tips="tips" variant="pill" />
-            <a v-if="score && score.count" class="role__score" href="#score" @click.prevent="side?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })">
-              <span class="role__score-star" aria-hidden="true">★</span>
-              <strong>{{ score.average?.toFixed(1) }}</strong>
-              <span class="subtle">{{ $t("score.count", { n: score.count }) }}</span>
+            <a v-if="score" class="role__score" href="#score" @click.prevent="side?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })">
+              <template v-if="score.count >= MIN_SCORE_COUNT || (own && score.count > 0)">
+                <span class="role__score-star" aria-hidden="true">★</span>
+                <strong>{{ score.average?.toFixed(1) }}</strong>
+                <span class="subtle">{{ $t("score.count", { n: score.count }) }}</span>
+              </template>
+              <span v-else class="subtle">{{ $t("score.insufficient") }}</span>
             </a>
             <span v-if="card.talkNum" class="subtle">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
             <span v-if="(card.heat ?? 0) > 0" class="subtle role__heat">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>

@@ -2014,6 +2014,7 @@
   "score.title": "평점",
   "score.average": "평균 별 {n}개",
   "score.count": "평점 {n}개",
+  "score.insufficient": "평점 표본 부족",
   "score.histogram": "평점 분포",
   "score.mine": "내 평점",
   "score.write": "리뷰 쓰기",

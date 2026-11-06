@@ -12,6 +12,7 @@ import RankBadge from "@/components/RankBadge.vue";
 import RatingMark from "@/components/RatingMark.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
 import { fetchCardScore, type CardScore } from "@/lib/api";
+import { MIN_SCORE_COUNT } from "../../../shared/card-score";
 import { thumbChain } from "@/lib/card-thumb";
 import { renderReadme } from "@/lib/card-readme";
 import { confirmDialog } from "@/lib/confirm";
@@ -108,10 +109,13 @@ onBeforeUnmount(() => { introObserver?.disconnect(); clearTimeout(copiedTimer); 
           <span class="pip-info__author">{{ card.author.name }}</span>
         </span>
         <div class="pip-info__meta">
-          <span v-if="score && score.count" class="pip-info__score">
-            <span class="pip-info__star" aria-hidden="true">★</span>
-            <strong>{{ score.average?.toFixed(1) }}</strong>
-            <span class="subtle">{{ t("score.count", { n: score.count }) }}</span>
+          <span v-if="score" class="pip-info__score">
+            <template v-if="score.count >= MIN_SCORE_COUNT">
+              <span class="pip-info__star" aria-hidden="true">★</span>
+              <strong>{{ score.average?.toFixed(1) }}</strong>
+              <span class="subtle">{{ t("score.count", { n: score.count }) }}</span>
+            </template>
+            <span v-else class="subtle">{{ t("score.insufficient") }}</span>
           </span>
           <RatingMark v-if="card.rating" :rating="card.rating" variant="chip" />
         </div>

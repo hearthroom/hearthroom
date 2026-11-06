@@ -29,9 +29,22 @@ const put = (token: string, score: unknown) =>
 const clear = (token: string) => SELF.fetch(`https://c.test/v1/cards/${cardId}/score`, { method: "DELETE", headers: bearer(token) });
 
 describe("評分", () => {
-  it("沒人評過：平均是 null、分布全 0；訪客沒有自己的分數", async () => {
+  it("沒人評過：平均是 null、分布全 0、未達顯示門檻；訪客沒有自己的分數", async () => {
     const body = await json(await read());
-    expect(body).toEqual({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null });
+    expect(body).toEqual({ average: null, count: 0, sufficient: false, histogram: [0, 0, 0, 0, 0], mine: null });
+  });
+
+  it("未滿 5 人 sufficient 為 false、滿 5 人為 true，但仍回原始分數與分布供作者檢視", async () => {
+    for (let i = 1; i <= 4; i++) {
+      const m = await env.DB.prepare("INSERT INTO members (id, handle, created_at) VALUES (?, ?, 0) RETURNING id").bind(`m-${i}`, `handle0${i}`).first<{ id: string }>();
+      await env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?, ?, ?, 0, 0)").bind(cardId, m!.id, i === 1 ? 2 : 3).run();
+    }
+    const four = await json(await read());
+    expect(four).toMatchObject({ average: 2.8, count: 4, sufficient: false, histogram: [0, 1, 3, 0, 0] });
+
+    expect((await put("fan", 5)).status).toBe(204);
+    const five = await json(await read("fan"));
+    expect(five).toMatchObject({ average: 3.2, count: 5, sufficient: true, histogram: [0, 1, 3, 0, 1], mine: 5 });
   });
 
   it("一人一份：再評一次是改分，不會多算一票；平均與分布跟著變", async () => {

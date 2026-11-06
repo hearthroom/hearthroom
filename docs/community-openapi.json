@@ -5108,6 +5108,9 @@
           "count": {
             "type": "integer"
           },
+          "sufficient": {
+            "type": "boolean"
+          },
           "histogram": {
             "type": "array",
             "items": {

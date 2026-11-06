@@ -7,6 +7,7 @@ import {assertNormalMember} from './test-accounts';
  * 星數另外附在留言上（listTop 的 score），讓「寫了幾句」跟「給了幾星」一起看。
  */
 import { cardAuthorMemberId, type CommentCard } from "./comments";
+import { MIN_SCORE_COUNT } from "../shared/card-score";
 import { HttpError, type Env } from "./types";
 import { scoreEligibility } from './score-eligibility';
 import { bumpOp } from './ops-metrics';
@@ -15,6 +16,8 @@ export interface CardScore {
   /** 平均，取到小數一位；沒人評過是 null */
   average: number | null;
   count: number;
+  /** 評分人數是否已達公開顯示平均分的門檻（MIN_SCORE_COUNT） */
+  sufficient: boolean;
   /** 1 星到 5 星各幾筆 */
   histogram: [number, number, number, number, number];
   /** 看的人自己給的分數；訪客或沒評過是 null */
@@ -37,6 +40,7 @@ export async function readScore(db: D1Database, cardId: string, memberId: string
   return {
     average: count ? Math.round((sum / count) * 10) / 10 : null,
     count,
+    sufficient: count >= MIN_SCORE_COUNT,
     histogram,
     mine: (mine!.results[0] as { score: number } | undefined)?.score ?? null,
   };

@@ -75,22 +75,22 @@ describe("卡片磚", () => {
   });
 });
 
-function fakeFetch(card: Record<string, unknown>) {
+function fakeFetch(card: Record<string, unknown>, scoreBody: Record<string, unknown> = { average: null, count: 0, mine: null }) {
   return (input: RequestInfo | URL): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const json = (body: unknown, status = 200) =>
       Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
     if (url.includes("/platforms")) return json({ platforms: [] });
     if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
-    if (url.includes("/score")) return json({ average: null, count: 0, mine: null });
+    if (url.includes("/score")) return json(scoreBody);
     if (/\/v1\/cards\/[^?/]+(\?|$)/.test(url)) return json(card);
     if (url.endsWith("/v1/me")) return json({ error: "unauthorized" }, 401);
     return json({ error: "not_found" }, 404);
   };
 }
 
-async function page(extra: Record<string, unknown>) {
-  vi.stubGlobal("fetch", fakeFetch({ ...BASE, ...extra }));
+async function page(extra: Record<string, unknown>, scoreBody?: Record<string, unknown>, profileHandle?: string) {
+  vi.stubGlobal("fetch", fakeFetch({ ...BASE, ...extra }, scoreBody));
   el = document.createElement("div"); document.body.appendChild(el);
   const router = createRouter({
     history: createMemoryHistory(),
@@ -98,6 +98,11 @@ async function page(extra: Record<string, unknown>) {
   });
   const pinia = createPinia();
   setActivePinia(pinia);
+  if (profileHandle) {
+    const { useSession } = await import("../src/lib/session");
+    const session = useSession();
+    session.profile = { handle: profileHandle, identities: [] } as any;
+  }
   await router.push("/cards/role-abc");
   await router.isReady();
   app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
@@ -126,5 +131,30 @@ describe("卡片頁", () => {
     expect(root.querySelector(".role__meta")!.textContent).not.toContain(t("card.heatCount", { n: compact(0) }));
     const values = [...root.querySelectorAll(".role__stats dd")].map((n) => n.textContent!.trim());
     expect(values[1]).toBe("—");
+  });
+
+  it("評分未滿 5 人時頁首與右欄只顯示門檻提示、不顯示平均分與星號", async () => {
+    const under = await page({}, { average: 2.5, count: 2, sufficient: false, histogram: [1, 0, 0, 1, 0], mine: null });
+    const heroUnder = under.querySelector(".role__score")!;
+    expect(heroUnder.textContent?.trim()).toBe(t("score.insufficient"));
+    expect(heroUnder.querySelector(".role__score-star")).toBeNull();
+    expect(under.querySelector(".score__avg")).toBeNull();
+    expect(under.querySelector(".score__insufficient")?.textContent).toBe(t("score.insufficient"));
+  });
+
+  it("評分滿 5 人時頁首與右欄照常顯示平均分與星號", async () => {
+    const enough = await page({}, { average: 4.6, count: 5, sufficient: true, histogram: [0, 0, 0, 2, 3], mine: null });
+    const heroEnough = enough.querySelector(".role__score")!;
+    expect(heroEnough.querySelector(".role__score-star")?.textContent).toBe("★");
+    expect(heroEnough.textContent).toContain("4.6");
+    expect(heroEnough.textContent).toContain(t("score.count", { n: 5 }));
+    expect(enough.querySelector(".score__avg")?.textContent).toBe("4.6");
+  });
+
+  it("作者本人檢視自己的卡片時，未滿 5 人仍能看到實際平均分與分布明細", async () => {
+    const ownView = await page({}, { average: 2.5, count: 2, sufficient: false, histogram: [1, 0, 0, 1, 0], mine: null }, "abcdefgh");
+    expect(ownView.querySelector(".role__score")?.textContent).toContain("2.5");
+    expect(ownView.querySelector(".score__avg")?.textContent).toBe("2.5");
+    expect(ownView.querySelector(".score__insufficient")).toBeNull();
   });
 });

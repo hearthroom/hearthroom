@@ -337,14 +337,25 @@ describe("排名", () => {
     expect(ids((await a.json()) as { items: any[] }).sort()).toEqual(["fresh", "old", "rising"]);
   });
 
-  // 評分最高（2026-10-11）：貝氏平均，先驗是每張卡先有 5 票 3 星——一票 5 星的卡贏過沒人評的，
-  // 但贏不過三票 5 星的；評得差的排到沒人評的後面。沒人評的照最熱排，榜不會空。
-  it("score 是評分的貝氏平均；沒人評的照累積對話數排在中間", async () => {
+  // 評分最高（2026-10-11；2026-11-07 改為滿 5 人門檻）：滿 5 人評分才算貝氏平均（先驗是每張卡先有 5 票 3 星），
+  // 未滿 5 人一律視為先驗均值 3 星、照累積對話數排，避免少數幾票 5 星就把卡頂到最前；滿 5 人且評得差的排到後面。
+  it("score 未滿 5 人評分視為先驗均值，照累積對話數排", async () => {
     // 照評分的寫入路徑（card-scores.ts setScore）綁數字：D1 把它當浮點數寫進文字欄，存成 "100194.0"（線上實際如此）
     const card = async (label: string) => (await env.DB.prepare("SELECT c.id FROM cards c WHERE source_role_id=?").bind(`role-${label}`).first<{ id: number }>())!.id;
     const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(cardId, member, score);
     const fresh = await card("fresh"), rising = await card("rising");
-    await env.DB.batch([vote(fresh, "m1", 5), vote(fresh, "m2", 5), vote(fresh, "m3", 5), vote(rising, "m1", 1)]);
+    await env.DB.batch([vote(fresh, "m1", 5), vote(fresh, "m2", 5), vote(fresh, "m3", 5), vote(fresh, "m4", 5), vote(rising, "m1", 1)]);
+    expect(ids((await list("?sort=score")).body)).toEqual(["old", "rising", "fresh"]);
+  });
+
+  it("score 滿 5 人評分按貝氏平均高低排", async () => {
+    const card = async (label: string) => (await env.DB.prepare("SELECT c.id FROM cards c WHERE source_role_id=?").bind(`role-${label}`).first<{ id: number }>())!.id;
+    const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(cardId, member, score);
+    const fresh = await card("fresh"), rising = await card("rising");
+    await env.DB.batch([
+      vote(fresh, "m1", 5), vote(fresh, "m2", 5), vote(fresh, "m3", 5), vote(fresh, "m4", 5), vote(fresh, "m5", 5),
+      vote(rising, "m1", 1), vote(rising, "m2", 1), vote(rising, "m3", 1), vote(rising, "m4", 1), vote(rising, "m5", 1),
+    ]);
     expect(ids((await list("?sort=score")).body)).toEqual(["fresh", "old", "rising"]);
   });
 

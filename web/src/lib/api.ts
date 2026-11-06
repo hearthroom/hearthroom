@@ -1033,6 +1033,8 @@ export interface CardScore {
   /** 平均（小數一位）；沒人評過是 null */
   average: number | null;
   count: number;
+  /** 評分人數是否已達公開顯示平均分的門檻 */
+  sufficient?: boolean;
   /** 1 星到 5 星各幾筆 */
   histogram: number[];
   /** 自己給的分數；訪客或沒評過是 null */

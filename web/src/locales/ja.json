@@ -2014,6 +2014,7 @@
   "score.title": "評価",
   "score.average": "平均 {n} つ星",
   "score.count": "{n} 件の評価",
+  "score.insufficient": "評価件数不足",
   "score.histogram": "評価の内訳",
   "score.mine": "自分の評価",
   "score.write": "レビューを書く",

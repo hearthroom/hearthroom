@@ -2014,6 +2014,7 @@
   "score.title": "评分",
   "score.average": "平均 {n} 星",
   "score.count": "{n} 条评分",
+  "score.insufficient": "评分样本过少",
   "score.histogram": "评分分布",
   "score.mine": "我的评分",
   "score.write": "写评论",

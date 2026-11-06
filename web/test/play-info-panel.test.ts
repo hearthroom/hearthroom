@@ -355,4 +355,14 @@ describe("PlayInfoPanel", () => {
     await flush();
     expect(document.querySelector(".spend-stub")?.getAttribute("data-new-tab")).toBe("true");
   });
+
+  it("shows the insufficient-ratings notice instead of average and star when rating count is under 5", async () => {
+    api.fetchCardScore.mockResolvedValueOnce({ average: 2.5, count: 2, sufficient: false, histogram: [1, 0, 0, 1, 0], mine: null });
+    await mount();
+    playSocial.open = true;
+    await flush();
+    const scoreEl = document.querySelector(".pip-info__score")!;
+    expect(scoreEl.textContent?.trim()).toBe("評分樣本過少");
+    expect(scoreEl.querySelector(".pip-info__star")).toBeNull();
+  });
 });

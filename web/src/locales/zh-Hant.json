@@ -2014,6 +2014,7 @@
   "score.title": "評分",
   "score.average": "平均 {n} 顆星",
   "score.count": "{n} 則評分",
+  "score.insufficient": "評分樣本過少",
   "score.histogram": "評分分布",
   "score.mine": "我的評分",
   "score.write": "寫評論",
