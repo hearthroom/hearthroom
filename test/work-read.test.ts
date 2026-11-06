@@ -117,6 +117,67 @@ it.each(['/v1/tags','/v1/tags/counts','/v1/authors'])('revalidates a cached aggr
  const response=await request(path);expect(response.status).toBe(503);expect(network).toHaveBeenCalledTimes(2);
 });
 
+// Real D1 contributors span multiple policy batches; the Provider mock remains
+// bounded and returns the current authority for every requested identity.
+async function aggregateFixture(size:number){
+ const member=await makeMember(11);
+ for(let start=0;start<size;start+=50){
+  const cards=Array.from({length:Math.min(50,size-start)},(_,i)=>{
+   const n=start+i+1;
+   return env.DB.prepare(`INSERT INTO cards(id,provider,source_role_id,author_num_id,names,tags,zone,status,registered_at,last_synced_at)
+    VALUES(?,'harbor',?,11,'{"zh":"Aggregate fixture"}','["劇情"]','zh','approved',1,1)`).bind(100000+n,`aggregate-source-${n}`);
+  });
+  await env.DB.batch(cards);
+ }
+ await env.DB.prepare(`INSERT INTO works(id,member_id,source_provider,source_role_id,created_at)
+  SELECT 'aggregate-work-'||id,?,'harbor',source_role_id,1 FROM cards`).bind(member).run();
+ await env.DB.prepare(`INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id)
+  SELECT 'aggregate-work-'||id,'harbor',source_role_id,'public',1,'none',source_role_id FROM cards`).run();
+}
+
+it('counts all contributors beyond two full visibility batches and revalidates a warm cache',async()=>{
+ await aggregateFixture(401);const {network}=providerFixture('public');
+ for(let repeat=0;repeat<2;repeat++){
+  const response=await request('/v1/tags/counts?zone=zh');
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({counts:{story:401},ratings:{none:401}});
+ }
+ const batches=network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items);
+ expect(batches.map(batch=>batch.length)).toEqual([200,200,1,200,200,1]);
+ for(const start of [0,3])expect(new Set(batches.slice(start,start+3).flat().map(item=>item.sourceRoleId)).size).toBe(401);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 6');
+});
+
+it.each(['/v1/tags','/v1/authors','/v1/fandoms','/v1/suggest?q=Aggregate'])('proves every batch for shared aggregate %s',async path=>{
+ await aggregateFixture(201);const {network}=providerFixture('public');
+ expect((await request(path)).status).toBe(200);expect(network).toHaveBeenCalledTimes(2);
+});
+
+it.each(['private','offline','missing','wrongWork'] as const)('rejects an aggregate when its second policy batch is %s',async failure=>{
+ await aggregateFixture(201);const {current,network}=providerFixture('public');
+ // Change authority only after the first batch has been read, so this catches
+ // implementations that return a partial count or stop after their first page.
+ const read=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  if(network.mock.calls.length===2){if(failure==='private')current.access='private';else current.mode=failure;}
+  return read(input,init);
+ });
+ const response=await request('/v1/tags/counts?zone=zh');
+ expect(response.status).toBe(503);expect(await response.json()).toEqual({error:failure==='private'?'visibility_sync_pending':'visibility_provider_unavailable'});
+ expect(network).toHaveBeenCalledTimes(2);
+ const metrics=await opsMetrics(env.DB);
+ expect(metrics).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 1');
+ expect(metrics).toContain(`hearthroom_visibility_reads_total{surface="aggregate",outcome="${failure==='private'?'denied':'unavailable'}"} 1`);
+});
+
+it('keeps zone and all-zone contributors isolated across an exact full batch',async()=>{
+ await aggregateFixture(201);const {network}=providerFixture('public');
+ await env.DB.prepare("UPDATE cards SET zone=CASE id WHEN 100001 THEN 'all' WHEN 100002 THEN 'en' ELSE 'zh' END").run();
+ const zh=await request('/v1/tags/counts?zone=zh');expect(zh.status).toBe(200);expect(await zh.json()).toMatchObject({ratings:{none:200}});
+ const en=await request('/v1/tags/counts?zone=en');expect(en.status).toBe(200);expect(await en.json()).toMatchObject({ratings:{none:2}});
+ expect(network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items.length)).toEqual([200,2]);
+});
+
 it('excludes locally private works from author and tag aggregates without granting from a cached approval',async()=>{
  const {work}=await managedFixture();const {network}=providerFixture('public');
  await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();

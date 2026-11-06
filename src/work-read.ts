@@ -96,18 +96,23 @@ export async function revalidateBoardBody(env:Env,body:string):Promise<string>{
  return JSON.stringify({...value,items,...(visible.checked||items.length!==value.items.length?{total:null}:{})});
 }
 
-// Aggregates cannot be proven by checking only the displayed cards. Bound the
-// managed contributors to one set query/RPC; larger or diverged projections are
-// unavailable until reconciled, rather than reporting stale totals or zero.
+// Aggregates cannot be proven by checking only the displayed cards. Check every
+// managed contributor in bounded batches before returning even a cached total.
+// Keyset pagination keeps the per-query/RPC budget independent of catalog size;
+// a diverged or unavailable batch still rejects the entire aggregate.
 export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
- const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
- ON c.provider=p.provider AND c.source_role_id=p.source_role_id
- WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
- AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
- ${zone?"AND c.zone IN (?, 'all')":''} LIMIT ?`).bind(...(zone?[zone]:[]),WORK_READ_BUDGET+1).all<CardRow>();
- if(result.results.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
- const visible=await filterPublicRows(env,result.results,'aggregate');
- if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
+ let after=0;
+ for(;;){
+  const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
+  ON c.provider=p.provider AND c.source_role_id=p.source_role_id
+  WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
+  AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
+  ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
+  const visible=await filterPublicRows(env,result.results,'aggregate');
+  if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
+  if(result.results.length<WORK_READ_BUDGET)return;
+  after=Number(result.results.at(-1)!.id);
+ }
 }
 
 export interface CurrentCardAccess {
