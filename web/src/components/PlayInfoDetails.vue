@@ -132,7 +132,9 @@ onBeforeUnmount(() => { introObserver?.disconnect(); clearTimeout(copiedTimer); 
     </dl>
 
     <!-- 介紹還在路上：先佔一塊骨架；讀不到：頁首與上面照畫，這裡放錯誤與重新載入 -->
-    <div v-if="detailStatus === 'loading' && !readmeHtml" class="ghost pip-info__intro-ghost" aria-hidden="true" />
+    <section v-if="detailStatus === 'loading' && !readmeHtml" class="pip-info__intro-loading" :aria-label="t('card.about')" aria-busy="true">
+      <div class="ghost pip-info__intro-ghost" />
+    </section>
     <div v-else-if="detailStatus === 'failed'" class="notice notice--error pip-info__error" role="alert">
       <span>{{ t("play.info.loadFailed") }}</span>
       <button type="button" class="btn btn--sm" @click="$emit('retry')">{{ t("spendBoard.retry") }}</button>

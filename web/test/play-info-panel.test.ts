@@ -315,7 +315,12 @@ describe("PlayInfoPanel", () => {
     playSocial.detailStatus = "loading";
     playSocial.open = true;
     await flush();
-    expect(document.querySelector(".pip-info__intro-ghost")).not.toBeNull();
+    const ghost = document.querySelector(".pip-info__intro-ghost");
+    expect(ghost).not.toBeNull();
+    // The loading region is announced as busy; the header stays readable and is not marked busy.
+    expect(ghost?.closest('[aria-busy="true"]')?.getAttribute("aria-label")).toBe("介紹");
+    expect(ghost?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(document.querySelector(".pip-info__head")?.closest('[aria-busy="true"]')).toBeNull();
   });
 
   it("keeps Tab inside the phone sheet: past the last link it wraps to the first control, skipping hidden tabs' controls", async () => {
