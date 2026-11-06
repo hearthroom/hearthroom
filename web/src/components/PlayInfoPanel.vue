@@ -84,7 +84,9 @@ watch(() => playSocial.open, async (open) => {
   if (!open) {
     remember(playSocial.tab);
     drag.value = 0;
-    if (restore?.isConnected) restore.focus?.();
+    // 焦點還在面板裡才還給入口；桌機上玩家可能已經點回輸入列在打字，不把他拉走
+    const inside = !!panel.value?.contains(document.activeElement);
+    if (inside && restore?.isConnected) restore.focus?.();
     restore = null;
     return;
   }
@@ -117,13 +119,19 @@ function onTabKey(e: KeyboardEvent) {
   void select(next, true);
 }
 
-/** 面板裡叫出來的對話框（榮譽、完整榜、評論的確認與檢舉）開著時，Esc 與 Tab 先交給它 */
+/**
+ * 面板裡叫出來的對話框（榮譽、完整榜、評論的確認與檢舉）開著時，Esc 與 Tab 先交給它。
+ * 舞台的彈層（canvas-popup）關著時內容仍帶 aria-modal，只是外層 hidden／inert，那些不算。
+ */
 function nestedDialogOpen(): boolean {
   if (document.querySelector(".modal-backdrop, .spend-backdrop, .dlg-backdrop")) return true;
-  return [...document.querySelectorAll('[aria-modal="true"]')].some((el) => el !== panel.value);
+  return [...document.querySelectorAll('[aria-modal="true"]')]
+    .some((el) => el !== panel.value && !el.closest('[hidden], [inert], [aria-hidden="true"]'));
 }
 function onKey(e: KeyboardEvent) {
-  if (!playSocial.open || nestedDialogOpen()) return;
+  if (!playSocial.open || e.defaultPrevented || e.isComposing || nestedDialogOpen()) return;
+  // 桌機不是 modal：焦點在畫布（例如輸入列）時 Esc 是畫布的事
+  if (desktop.value && !panel.value?.contains(document.activeElement)) return;
   if (e.key === "Escape") { e.preventDefault(); close(); return; }
   // 手機是 modal：焦點圈在面板裡；桌機不是 modal，Tab 照常走出去
   if (!desktop.value) wrapTab(e, panel.value);
@@ -277,7 +285,8 @@ const overlayStyle = computed(() => desktop.value
 </template>
 
 <style scoped>
-/* 100：蓋過對話畫布（同原本的評論單）；面板裡叫出來的榮譽、完整榜、確認框在 105／110 之上 */
+/* 100：蓋過對話畫布（同原本的評論單）。面板裡叫出來的榮譽對話框 105、確認框 110 在它之上；
+   完整知音榜（.spend-backdrop）也是 100，靠 Teleport 晚掛在 body 後面疊在上面。 */
 .pip { position: fixed; inset: 0; z-index: 100; }
 .pip__panel {
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;

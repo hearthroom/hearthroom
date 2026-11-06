@@ -255,4 +255,34 @@ describe("PlayInfoPanel", () => {
     overlay.click();
     expect(playSocial.open).toBe(true);
   });
+
+  it("is not held open by the stage's closed popups, which keep aria-modal on hidden content", async () => {
+    // canvas-popup.vue: the closed popup root is hidden + inert, its content still says aria-modal="true".
+    const popup = document.body.appendChild(document.createElement("div"));
+    popup.hidden = true;
+    popup.setAttribute("inert", "");
+    popup.innerHTML = '<div role="dialog" aria-modal="true"></div>';
+    await mount();
+    playSocial.open = true;
+    await flush();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(playSocial.open).toBe(false);
+  });
+
+  it("on a wide window leaves Esc to the chat when focus is outside the panel, and ignores IME composition", async () => {
+    wide = true;
+    await mount();
+    playSocial.open = true;
+    await flush();
+    const composer = document.body.appendChild(document.createElement("textarea"));
+    composer.focus();
+    composer.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(playSocial.open).toBe(true);
+    const tab = tabs()[0];
+    tab.focus();
+    tab.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, isComposing: true }));
+    expect(playSocial.open).toBe(true);
+    tab.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(playSocial.open).toBe(false);
+  });
 });
