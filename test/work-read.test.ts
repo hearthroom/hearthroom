@@ -140,6 +140,7 @@ it('counts all contributors beyond two full visibility batches and revalidates a
  for(let repeat=0;repeat<2;repeat++){
   const response=await request('/v1/tags/counts?zone=zh');
   expect(response.status).toBe(200);
+  expect(response.headers.get('X-Cache')).toBe(repeat?'hit':'miss');
   expect(await response.json()).toMatchObject({counts:{story:401},ratings:{none:401}});
  }
  const batches=network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items);
@@ -175,7 +176,8 @@ it('keeps zone and all-zone contributors isolated across an exact full batch',as
  await env.DB.prepare("UPDATE cards SET zone=CASE id WHEN 100001 THEN 'all' WHEN 100002 THEN 'en' ELSE 'zh' END").run();
  const zh=await request('/v1/tags/counts?zone=zh');expect(zh.status).toBe(200);expect(await zh.json()).toMatchObject({ratings:{none:200}});
  const en=await request('/v1/tags/counts?zone=en');expect(en.status).toBe(200);expect(await en.json()).toMatchObject({ratings:{none:2}});
- expect(network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items.length)).toEqual([200,2]);
+ const all=await request('/v1/tags/counts?zone=all');expect(all.status).toBe(200);expect(await all.json()).toMatchObject({ratings:{none:201}});
+ expect(network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).items.length)).toEqual([200,2,200,1]);
 });
 
 it('excludes locally private works from author and tag aggregates without granting from a cached approval',async()=>{
