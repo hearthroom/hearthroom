@@ -42,16 +42,19 @@ export function registerPlayCard(card: PlaySocialCard | null): void {
   playSocial.detailStatus = "idle";
 }
 
-/** 讀來源端的卡片詳情（介紹與評論開關）；途中換了卡就不寫。 */
+/** 讀來源端的卡片詳情（介紹與評論開關）。只有最後一次讀取寫得進來：途中換了卡、或又按了重新載入，舊的那次就不寫。 */
+let detailGeneration = 0;
 async function loadDetail(card: PlaySocialCard, lang: string): Promise<void> {
+  const generation = ++detailGeneration;
+  const latest = () => generation === detailGeneration && playSocial.card === card;
   playSocial.detailStatus = "loading";
   try {
     const detail = await fetchRoleDetail(card.roleId, undefined, lang, card.provider);
-    if (playSocial.card !== card) return;
+    if (!latest()) return;
     playSocial.detail = { comments: detail.previewShowComments !== false, readme: typeof detail.roleReadme === "string" ? detail.roleReadme : "" };
     playSocial.detailStatus = "ready";
   } catch {
-    if (playSocial.card === card) playSocial.detailStatus = "failed";
+    if (latest()) playSocial.detailStatus = "failed";
   }
 }
 

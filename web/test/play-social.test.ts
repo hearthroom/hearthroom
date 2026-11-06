@@ -110,4 +110,17 @@ describe("playSocialHost", () => {
     registerPlayCard(null);
     expect(playSocial.detailStatus).toBe("idle");
   });
+
+  it("lets only the latest detail read write, so a late failure cannot cover a reload that worked", async () => {
+    registerPlayCard({ roleId: "role", cardId: "c1", provider: "harbor" });
+    let failFirst!: (e: Error) => void;
+    vi.mocked(fetchRoleDetail).mockReturnValueOnce(new Promise((_, reject) => { failFirst = reject; }));
+    const first = reloadPlayDetail("zh-Hant");
+    vi.mocked(fetchRoleDetail).mockResolvedValueOnce({ roleReadme: "ok" });
+    await reloadPlayDetail("zh-Hant");
+    failFirst(new Error("late"));
+    await first;
+    expect(playSocial.detailStatus).toBe("ready");
+    expect(playSocial.detail).toEqual({ comments: true, readme: "ok" });
+  });
 });
