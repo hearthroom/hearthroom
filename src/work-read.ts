@@ -24,30 +24,62 @@ const keyOf=(item:WorkReadIdentity)=>JSON.stringify([item.sourceRoleId,item.work
 
 // This response is current authority, never an operation receipt or cache entry.
 // A missing, duplicate or mismatched identity makes the entire check unavailable.
-export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[]):Promise<CurrentWorkRead[]>{
- if(!items.length)return [];
- if(items.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
- const key=hostingKey(env,'harbor');if(!key)throw new HttpError(503,'visibility_provider_unavailable');
+type ReadFailureReason='timeout'|'transport'|'http_5xx'|'http_4xx'|'http_429'|'http_other'|'invalid_response'|'missing_key';
+class ReadFailure extends Error {
+ constructor(readonly reason:ReadFailureReason,readonly retryable=false){super(reason);}
+}
+function transportFailure(error:unknown):ReadFailure{
+ return new ReadFailure(error instanceof Error&&['TimeoutError','AbortError'].includes(error.name)?'timeout':'transport',true);
+}
+async function policyAttempt(env:Env,key:string,items:WorkReadIdentity[]):Promise<CurrentWorkRead[]>{
+ let response:Response;
  try{
-  const response=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/hosting/work-access/batch`,{
+  response=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/hosting/work-access/batch`,{
    method:'POST',headers:{'X-Hosting-Key':key,'Content-Type':'application/json'},body:JSON.stringify({items}),
    redirect:'manual',signal:AbortSignal.timeout(3000),
   });
-  if(!response.ok)throw new Error('Policy batch unavailable');
-  const body=await response.json() as {items?:CurrentWorkRead[]};
-  if(!Array.isArray(body.items)||body.items.length!==items.length)throw new Error('Incomplete policy batch');
-  const expected=new Set(items.map(keyOf));
-  for(const item of body.items){
-   if(!item||!expected.delete(keyOf(item))||typeof item.managed!=='boolean'||!Number.isSafeInteger(item.epoch)||item.epoch<0
-    ||typeof item.targetReadable!=='boolean'||typeof item.listed!=='boolean'||typeof item.shareRoleId!=='string'||typeof item.approvedRoleId!=='string'
-    ||(item.managed&&(!['private','unlisted','public'].includes(item.access)||!['none','delisted','suspended'].includes(item.restriction)||item.epoch<1)))throw new Error('Invalid policy batch');
-  }
-  if(expected.size)throw new Error('Missing policy identities');
-  const found=new Map(body.items.map(item=>[keyOf(item),item]));
-  return items.map(item=>found.get(keyOf(item))!);
- }catch{
-  throw new HttpError(503,'visibility_provider_unavailable');
+ }catch(error){throw transportFailure(error);}
+ if(!response.ok){
+  await response.body?.cancel().catch(()=>{});
+  throw new ReadFailure(response.status>=500?'http_5xx':response.status===429?'http_429':response.status>=400?'http_4xx':'http_other',response.status>=500);
  }
+ let body:{items?:CurrentWorkRead[]}|null;
+ try{body=await response.json();}catch(error){
+  if(error instanceof SyntaxError)throw new ReadFailure('invalid_response');
+  throw transportFailure(error);
+ }
+ if(!body||!Array.isArray(body.items)||body.items.length!==items.length)throw new ReadFailure('invalid_response');
+ const expected=new Set(items.map(keyOf));
+ for(const item of body.items){
+  if(!item||!expected.delete(keyOf(item))||typeof item.managed!=='boolean'||!Number.isSafeInteger(item.epoch)||item.epoch<0
+   ||typeof item.targetReadable!=='boolean'||typeof item.listed!=='boolean'||typeof item.shareRoleId!=='string'||typeof item.approvedRoleId!=='string'
+   ||(item.managed&&(!['private','unlisted','public'].includes(item.access)||!['none','delisted','suspended'].includes(item.restriction)||item.epoch<1)))throw new ReadFailure('invalid_response');
+ }
+ if(expected.size)throw new ReadFailure('invalid_response');
+ const found=new Map(body.items.map(item=>[keyOf(item),item]));
+ return items.map(item=>found.get(keyOf(item))!);
+}
+export async function readCurrentWorkPolicies(env:Env,items:WorkReadIdentity[]):Promise<CurrentWorkRead[]>{
+ if(!items.length)return [];
+ if(items.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
+ const key=hostingKey(env,'harbor');
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   if(!key)throw new ReadFailure('missing_key');
+   const result=await policyAttempt(env,key,items);
+   if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','recovered');
+   return result;
+  }catch(error){
+   const failure=error instanceof ReadFailure?error:new ReadFailure('invalid_response');
+   await bumpOp(env.DB,'visibility_provider_failure',attempt?'retry':'initial',failure.reason);
+   if(attempt)await bumpOp(env.DB,'visibility_provider_retry','public_batch','exhausted');
+   if(attempt||!failure.retryable)throw new HttpError(503,'visibility_provider_unavailable');
+   // One fresh authority read, never a cached grant. Do not retry backpressure,
+   // authentication, malformed responses or mismatched policy identities.
+   await new Promise(resolve=>setTimeout(resolve,100));
+  }
+ }
+ throw new HttpError(503,'visibility_provider_unavailable');
 }
 
 export async function localWorkPolicies(env:Env,rows:Pick<CardRow,'source_role_id'|'provider'>[]):Promise<Map<string,ManagedWork>>{

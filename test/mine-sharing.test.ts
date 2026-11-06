@@ -63,10 +63,21 @@ it('keeps share-only registration independent of the old listed filter',async()=
 it('rejects an unknown access filter instead of silently switching to all',async()=>{
  await fixture();expect((await request('?access=typo')).status).toBe(400);
 });
-it('fails unavailable rather than page-filtering an author catalog beyond the bounded budget',async()=>{
- const {network,lists}=await fixture(201);const response=await request('?access=private');
- expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error:'visibility_read_budget_exceeded'});
- expect(lists).toHaveBeenCalledTimes(2);expect(network).not.toHaveBeenCalled();
+it('filters a 401-work owner catalog in bounded authority batches before slicing the page',async()=>{
+ const {roles,network,lists,views}=await fixture(401);views[400].access='private';
+ const response=await request('?access=private&pageSize=24');expect(response.status).toBe(200);
+ const body=await response.json() as any;expect(body.total).toBe(24);expect(body.hasNext).toBe(false);expect(body.items.map((r:any)=>r.roleId)).toEqual([...roles.slice(0,23),roles[400]].map(r=>r.roleId));
+ expect(lists).toHaveBeenCalledTimes(5);expect(network.mock.calls.map(([,init])=>JSON.parse(String(init?.body)).sourceRoleIds.length)).toEqual([200,200,1]);
+ const warm=await request('?access=private&pageSize=24');expect(warm.status).toBe(200);expect(lists).toHaveBeenCalledTimes(5);expect(network).toHaveBeenCalledTimes(6);
+});
+it('returns no partial author catalog when a later authority batch is unavailable',async()=>{
+ const {network}=await fixture(201),original=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>JSON.parse(String(init?.body)).sourceRoleIds.length===1?Response.json({items:[]}):original(input,init));
+ const response=await request('?access=private');expect(response.status).toBe(503);expect(await response.json()).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+});
+it('rejects a repeated upstream inventory page rather than looping or returning a partial filter',async()=>{
+ const {lists,network,roles}=await fixture(201);lists.mockResolvedValue({items:roles.slice(0,100),hasNext:true,total:201});
+ const response=await request('?access=private');expect(response.status).toBe(503);expect(lists).toHaveBeenCalledTimes(2);expect(network).not.toHaveBeenCalled();
 });
 it('keeps ordinary inventory pages available beyond the access-filter budget',async()=>{
  const {network}=await fixture(201);const response=await request('?page=2&pageSize=24');

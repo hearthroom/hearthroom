@@ -116,8 +116,9 @@ for (const kind of ["favorites", "feed"] as const) {
     }
     const allowNsfw=access.showNsfw&&!!access.ageVerifiedAt;
     const position=await publicPosition(c.env,c.req.url,offset,allowNsfw,member.id);
-    const candidates=await publicCandidates(c.env,{followedBy:member.id,sort:'feed',limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])},position.raw);
-    const result=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'});
+    const source={followedBy:member.id,sort:'feed' as const,limit,offset,allowNsfw,excludeTags:hidden.flatMap(k=>tagNamesFor(k)??[])};
+    const candidates=await publicCandidates(c.env,source,position.raw);
+    const result=await publicCandidatePage(c.env,candidates,position,{limit,offset,lang:c.req.query('lang')||'zh-Hant',allowNsfw,surface:'library'},source);
     const events=await feedEvents(c.env.DB,result.items.map(card=>card.id),allowNsfw);
     return c.json({...result,items:result.items.map(card=>({...card,feedEvent:events.get(card.id)}))});
   });

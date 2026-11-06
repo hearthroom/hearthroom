@@ -5,6 +5,7 @@ import {requireMember} from './members';
 import {managedWork,workPolicyGateway,type WorkAccess,type WorkOwnerView,type ManagedWork} from './work-policy';
 import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
+import {WORK_READ_BUDGET} from './work-read';
 
 export interface WorkVisibility {
  nextMajorUpdateAt?:number;
@@ -90,7 +91,15 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
 // Provider validates each source's actual author and read scope in one RPC.
 // D1 facts are set queries rather than per-card network/database round trips.
 export async function readOwnerVisibilities(env:Env,sources:string[],token:string):Promise<Map<string,WorkVisibility>>{
- if(!sources.length)return new Map();
+ if(new Set(sources).size!==sources.length)throw new HttpError(503,'visibility_read_budget_exceeded');
+ const out=new Map<string,WorkVisibility>();
+ for(let offset=0;offset<sources.length;offset+=WORK_READ_BUDGET){
+  const batch=await ownerVisibilityBatch(env,sources.slice(offset,offset+WORK_READ_BUDGET),token);
+  for(const [source,value] of batch)out.set(source,value);
+ }
+ return out;
+}
+async function ownerVisibilityBatch(env:Env,sources:string[],token:string):Promise<Map<string,WorkVisibility>>{
  let provider=await workPolicyGateway.owners(env,'harbor',sources,token);
  const ids=JSON.stringify(sources);
  const before=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>();

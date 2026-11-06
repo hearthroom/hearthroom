@@ -65,6 +65,51 @@ it('revalidates a managed public candidate before returning a stale positive boa
  expect((await getCard(env.DB,source))?.status).toBe('approved');
 });
 
+it.each(['network','timeout','503'] as const)('recovers one transient current-policy read (%s) without using a stale grant',async kind=>{
+ const {source,work}=await managedFixture();const {network}=providerFixture('public');
+ network.mockImplementationOnce(async()=>{
+  if(kind==='network')throw new TypeError('Synthetic connection reset');
+  if(kind==='timeout')throw new DOMException('Synthetic deadline','TimeoutError');
+  return Response.json({error:'synthetic_unavailable'},{status:503});
+ });
+ const result=await board();expect(result.response.status).toBe(200);expect(result.body.items).toHaveLength(1);expect(network).toHaveBeenCalledTimes(2);
+ const metrics=await opsMetrics(env.DB);
+ expect(metrics).toContain(`hearthroom_visibility_provider_failures_total{attempt="initial",outcome="${kind==='network'?'transport':kind==='timeout'?'timeout':'http_5xx'}"} 1`);
+ expect(metrics).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="recovered"} 1');
+ expect(metrics).not.toContain(source);expect(metrics).not.toContain(work);
+});
+
+it('rechecks a warm candidate cache after a transport retry and honors the current private denial',async()=>{
+ await managedFixture();const {network,current}=providerFixture('public');
+ expect((await board()).body.items).toHaveLength(1);current.access='private';
+ network.mockRejectedValueOnce(new TypeError('Synthetic connection reset'));
+ const result=await board();expect(result.response.status).toBe(200);expect(result.response.headers.get('X-Cache')).toBe('hit');expect(result.body.items).toEqual([]);expect(network).toHaveBeenCalledTimes(3);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="recovered"} 1');
+});
+
+it.each(['network','timeout','503'] as const)('stops after one retry and returns no partial public data for persistent %s',async kind=>{
+ await managedFixture();const {network}=providerFixture('public');
+ network.mockImplementation(async()=>{
+  if(kind==='network')throw new TypeError('Synthetic connection reset');
+  if(kind==='timeout')throw new DOMException('Synthetic deadline','TimeoutError');
+  return Response.json({error:'synthetic_unavailable'},{status:503});
+ });
+ const result=await board();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
+ const metrics=await opsMetrics(env.DB);
+ for(const attempt of ['initial','retry'])expect(metrics).toContain(`hearthroom_visibility_provider_failures_total{attempt="${attempt}",outcome="${kind==='network'?'transport':kind==='timeout'?'timeout':'http_5xx'}"} 1`);
+ expect(metrics).toContain('hearthroom_visibility_provider_retries_total{operation="public_batch",outcome="exhausted"} 1');
+});
+
+it.each(['401','429','json','missing','wrongWork'] as const)('does not retry an untrusted or backpressured policy response (%s)',async kind=>{
+ await managedFixture();const {network,current}=providerFixture('public');
+ if(kind==='401'||kind==='429')network.mockImplementation(async()=>Response.json({error:'synthetic_denied'},{status:Number(kind)}));
+ else if(kind==='json')network.mockImplementation(async()=>new Response('{',{headers:{'Content-Type':'application/json'}}));
+ else current.mode=kind;
+ const result=await board();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(1);
+ const metrics=await opsMetrics(env.DB);expect(metrics).toContain(`hearthroom_visibility_provider_failures_total{attempt="initial",outcome="${kind==='401'?'http_4xx':kind==='429'?'http_429':'invalid_response'}"} 1`);
+ expect(metrics).not.toContain('hearthroom_visibility_provider_retries_total{');
+});
+
 async function adultReader(){
  identitiesFor({harbor:{reader:42,author:11}});const reader=await makeMember(42);
  await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1,adult_consent_version=? WHERE id=?').bind(ADULT_CONSENT_VERSION,reader).run();
@@ -165,7 +210,7 @@ it.each(['private','offline','missing','wrongWork'] as const)('rejects an aggreg
  });
  const response=await request('/v1/tags/counts?zone=zh');
  expect(response.status).toBe(503);expect(await response.json()).toEqual({error:failure==='private'?'visibility_sync_pending':'visibility_provider_unavailable'});
- expect(network).toHaveBeenCalledTimes(2);
+ expect(network).toHaveBeenCalledTimes(failure==='offline'?3:2);
  const metrics=await opsMetrics(env.DB);
  expect(metrics).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 1');
  expect(metrics).toContain(`hearthroom_visibility_reads_total{surface="aggregate",outcome="${failure==='private'?'denied':'unavailable'}"} 1`);

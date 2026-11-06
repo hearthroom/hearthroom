@@ -248,6 +248,8 @@ export interface ListOptions {
   boardWindow?: string;
   /** feed＝關注動態：依每張卡最近一次事件（新卡或通知過的更新）排，見 FEED_EVENT_AT。 */
   sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated" | "feed";
+  /** Internal seed keeps random candidate batches in one ordering. */
+  randomSeed?: number;
   /** 分級最高到這一級（見 ratingClause）；不給就不篩 */
   maxRating?: Rating;
   limit: number;
@@ -469,7 +471,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     else if (opts.sort === "feed") orderBy = `${FEED_EVENT_AT} DESC, c.id DESC`;
     else if (opts.sort === "updated") orderBy = `${UPDATED_AT} DESC, c.id DESC`;
     else if (opts.sort === "favorites") orderBy = "(SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) DESC, c.talk_num DESC, c.registered_at DESC";
-    else if (opts.sort === "random") orderBy = "RANDOM()";
+    else if (opts.sort === "random") {
+      if(opts.randomSeed!==undefined){orderBy="((c.id * ?) % 2147483647), c.id";orderBinds.push(opts.randomSeed);}
+      else orderBy = "RANDOM()";
+    }
     else if (opts.sort === "relevance" && search) {
       orderBy = `${search.relevance.sql}, c.talk_num DESC, c.follow_num DESC, c.registered_at DESC`;
       orderBinds.push(...search.relevance.binds);

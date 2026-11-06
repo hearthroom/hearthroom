@@ -3,7 +3,7 @@ import {hostingKey} from './hosting';
 import {type Env,HttpError} from './types';
 import {filterPublicRows,WORK_READ_BUDGET,type VisibilityReadSurface} from './work-read';
 
-type Position={raw:number;trail:number[]};
+type Position={raw:number;trail:number[];randomSeed?:number};
 interface Cursor extends Position {rank:number;binding:string;expires:number}
 export interface PublicCandidates {version:1;ids:string[];rawOffset:number;more:boolean;total:number|null;filtered:boolean;partial?:boolean}
 const encoder=new TextEncoder();
@@ -27,8 +27,9 @@ async function encode(env:Env,value:Cursor):Promise<string|undefined>{
  return base64(new Uint8Array([...iv,...new Uint8Array(ciphertext)]));
 }
 export async function publicPosition(env:Env,url:string,rank:number,adult:boolean,context=''):Promise<Position&{binding:string}>{
- const binding=await bindingOf(url,adult,context),token=new URL(url).searchParams.get('cursor');
- if(!token)return {raw:rank,trail:[],binding};
+ const parsed=new URL(url),binding=await bindingOf(url,adult,context),token=parsed.searchParams.get('cursor');
+ const randomSeed=parsed.searchParams.get('sort')==='random'?crypto.getRandomValues(new Uint32Array(1))[0]%2147483646+1:undefined;
+ if(!token)return {raw:rank,trail:[],binding,...(randomSeed?{randomSeed}:{})};
  try{
   if(token.length>8192||!/^[A-Za-z0-9_-]+$/.test(token))throw new Error('invalid');
   const secret=await key(env);if(!secret)throw new Error('unavailable');
@@ -37,8 +38,8 @@ export async function publicPosition(env:Env,url:string,rank:number,adult:boolea
   const value=JSON.parse(new TextDecoder().decode(plain)) as Cursor;
   const valid=(n:number)=>Number.isSafeInteger(n)&&n>=0&&n<=2_000_000;
   const matchingBinding=value.binding===binding||value.binding===await bindingOf(url,adult,context,true);
-  if(!matchingBinding||value.rank!==rank||value.expires<Date.now()||!valid(value.raw)||!Array.isArray(value.trail)||value.trail.length>500||!value.trail.every(valid))throw new Error('invalid');
-  return {...value,binding};
+  if(!matchingBinding||value.rank!==rank||value.expires<Date.now()||!valid(value.raw)||!Array.isArray(value.trail)||value.trail.length>500||!value.trail.every(valid)||(value.randomSeed!==undefined&&(!Number.isSafeInteger(value.randomSeed)||value.randomSeed<1||value.randomSeed>2147483646)))throw new Error('invalid');
+  return {...value,binding,...(randomSeed?{randomSeed:value.randomSeed??randomSeed}:{})};
  }catch{throw new HttpError(400,'invalid_cursor');}
 }
 export async function publicCandidates(env:Env,opts:ListOptions,rawOffset:number):Promise<PublicCandidates>{
@@ -52,19 +53,27 @@ export function parsePublicCandidates(body:string):PublicCandidates|null{
   return value?.version===1&&Array.isArray(value.ids)&&value.ids.length<=WORK_READ_BUDGET&&value.ids.every(id=>typeof id==='string')&&Number.isSafeInteger(value.rawOffset)&&typeof value.more==='boolean'?value:null;
  }catch{return null;}
 }
-export async function publicCandidatePage(env:Env,candidates:PublicCandidates,position:Position&{binding:string},opts:{limit:number;offset:number;lang:string;allowNsfw:boolean;surface?:VisibilityReadSurface}){
+export async function publicCandidatePage(env:Env,candidates:PublicCandidates,position:Position&{binding:string},opts:{limit:number;offset:number;lang:string;allowNsfw:boolean;surface?:VisibilityReadSurface},source:ListOptions){
  if(candidates.rawOffset!==position.raw)throw new HttpError(503,'visibility_provider_unavailable');
- const result=await cardsByIds(env.DB,candidates.ids);
- const found=new Map(result.filter(r=>r.status==='approved'&&!r.board_hidden&&!r.public_blocked).map(r=>[String(r.id),r]));
- const ordered=candidates.ids.map(id=>found.get(id)).filter((r):r is CardRow=>!!r&&(opts.allowNsfw||r.rating!=='R'));
- const visible=await filterPublicRows(env,ordered,opts.surface??'list');
- if(visible.rows.length<=opts.limit&&candidates.more)throw new HttpError(503,'visibility_read_budget_exceeded');
- const rows=visible.rows.slice(0,opts.limit),hasNext=!candidates.partial&&visible.rows.length>opts.limit;
+ const proven:{row:CardRow;raw:number}[]=[];
+ let batch=candidates;
+ for(;;){
+  const result=await cardsByIds(env.DB,batch.ids);
+  const found=new Map(result.filter(r=>r.status==='approved'&&!r.board_hidden&&!r.public_blocked).map(r=>[String(r.id),r]));
+  const ordered=batch.ids.map(id=>found.get(id)).filter((r):r is CardRow=>!!r&&(opts.allowNsfw||r.rating!=='R'));
+  const visible=await filterPublicRows(env,ordered,opts.surface??'list');
+  const positions=new Map(batch.ids.map((id,i)=>[id,batch.rawOffset+i+1]));
+  proven.push(...visible.rows.map(row=>({row,raw:positions.get(String(row.id))!})));
+  if(proven.length>opts.limit||!batch.more||batch.partial)break;
+  if(!batch.ids.length)throw new HttpError(503,'visibility_provider_unavailable');
+  batch=await publicCandidates(env,source,batch.rawOffset+batch.ids.length);
+ }
+ const rows=proven.slice(0,opts.limit).map(p=>p.row),hasNext=!batch.partial&&proven.length>opts.limit;
  const managed=await env.DB.prepare('SELECT 1 FROM managed_work_access LIMIT 1').first();
- const nextRaw=rows.length?position.raw+candidates.ids.indexOf(String(rows.at(-1)!.id))+1:position.raw;
- const common={binding:position.binding,expires:Date.now()+60*60*1000};
+ const nextRaw=rows.length?proven[rows.length-1].raw:position.raw;
+ const common={binding:position.binding,expires:Date.now()+60*60*1000,...(position.randomSeed?{randomSeed:position.randomSeed}:{})};
  const nextCursor=hasNext?await encode(env,{...common,raw:nextRaw,rank:opts.offset+opts.limit,trail:[...position.trail,position.raw]}):undefined;
  if(hasNext&&nextRaw!==opts.offset+opts.limit&&!nextCursor)throw new HttpError(503,'visibility_provider_unavailable');
  const previousCursor=position.trail.length?await encode(env,{...common,raw:position.trail.at(-1)!,rank:Math.max(0,opts.offset-opts.limit),trail:position.trail.slice(0,-1)}):undefined;
- return {items:rows.map(r=>toCard(r,opts.lang)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(candidates.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
+ return {items:rows.map(r=>toCard(r,opts.lang)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
 }

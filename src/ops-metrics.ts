@@ -41,6 +41,14 @@ const METRICS = {
     operations:['list','detail','social','library','metadata','aggregate','private_detail','private_metadata'],
     outcomes:['allow','denied','unavailable'],
   },
+  visibility_provider_failure: {
+    name:'hearthroom_visibility_provider_failures_total',help:'Failed current public policy read attempts by bounded cause; no work identities.',
+    label:'attempt',operations:['initial','retry'],outcomes:['timeout','transport','http_5xx','http_4xx','http_429','http_other','invalid_response','missing_key'],
+  },
+  visibility_provider_retry: {
+    name:'hearthroom_visibility_provider_retries_total',help:'One bounded fresh authority retry; recovered includes a valid denial.',
+    label:'operation',operations:['public_batch'],outcomes:['recovered','exhausted'],
+  },
   work_access: {
     name:'hearthroom_visibility_operations_total',
     help:'Durable work policy requests and publication finalization outcomes.',

@@ -42,9 +42,22 @@ it('does not disclose stale totals when only an off-page managed work became pri
  const {ids,denied}=await fixture();denied.add(ids.at(-1)!);
  const first=await page();expect(first.body.items).toHaveLength(2);expect(first.body.total).toBeNull();
 });
-it('fails unavailable when the bounded candidate set cannot prove another visible item',async()=>{
- const {ids,denied,batches}=await fixture(201);ids.slice(0,200).forEach(id=>denied.add(id));
- const result=await page();expect(result.response.status).toBe(503);expect(result.body.error).toBe('visibility_read_budget_exceeded');expect(batches).toEqual([200]);
+it('scans multiple bounded batches and keeps warm continuations free of duplicates',async()=>{
+ const {ids,denied,batches}=await fixture(260);ids.slice(0,200).forEach(id=>denied.add(id));
+ const first=await page();expect(first.response.status).toBe(200);expect(first.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(200,202));expect(first.body.hasNext).toBe(true);expect(batches).toEqual([200,60]);
+ const warm=await page();expect(warm.response.headers.get('X-Cache')).toBe('hit');expect(warm.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(200,202));
+ const next=await page('&offset=2&cursor='+encodeURIComponent(first.body.nextCursor));expect(next.response.status).toBe(200);expect(next.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(202,204));
+ const previous=await page('&cursor='+encodeURIComponent(next.body.previousCursor));expect(previous.body.items.map((r:any)=>r.sourceRoleId)).toEqual(ids.slice(200,202));expect(batches.every(n=>n<=200)).toBe(true);
+});
+it('fails closed when a later candidate batch cannot be proven',async()=>{
+ const {ids,denied}=await fixture(201);ids.slice(0,199).forEach(id=>denied.add(id));
+ const network=vi.mocked(globalThis.fetch),original=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  const {items}=JSON.parse(String(init?.body));
+  if(items.some((r:any)=>r.sourceRoleId===ids[200]))return Response.json({items:[]});
+  return original(input,init);
+ });
+ const result=await page();expect(result.response.status).toBe(503);expect(result.body).toEqual({error:'visibility_provider_unavailable'});expect(network).toHaveBeenCalledTimes(2);
 });
 it('rejects tampered or cross-filter continuation tokens instead of trusting their position',async()=>{
  await fixture();const first=await page();expect(first.body.nextCursor).toEqual(expect.any(String));
@@ -109,8 +122,36 @@ it('accepts an unexpired pre-deployment token that included nsfw in its binding'
  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([url.pathname,url.search,false,'']))));
  const binding=btoa(String.fromCharCode(...digest)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
  const candidates=await publicCandidates(testEnv(),{sort:'new',limit:2,offset:0},0);
- const first=await publicCandidatePage(testEnv(),candidates,{raw:0,trail:[],binding},{limit:2,offset:0,lang:'zh',allowNsfw:false});
+ const first=await publicCandidatePage(testEnv(),candidates,{raw:0,trail:[],binding},{limit:2,offset:0,lang:'zh',allowNsfw:false},{sort:'new',limit:2,offset:0});
  const next=await page('&nsfw=1&offset=2&cursor='+encodeURIComponent(first.nextCursor!));
  expect(next.response.status).toBe(200);
  expect(next.body.items).toHaveLength(2);
+});
+
+it('uses one random ordering across authority batches so a sparse recommendation remains discoverable',async()=>{
+ const {ids,denied,batches}=await fixture(201);ids.slice(0,200).forEach(id=>denied.add(id));
+ const source={sort:'random' as const,limit:2,offset:0,randomSeed:1};
+ const candidates=await publicCandidates(testEnv(),source,0);
+ expect(candidates.ids).toEqual((await env.DB.prepare('SELECT id FROM cards ORDER BY id LIMIT 200').all<{id:number}>()).results.map(r=>String(r.id)));
+ const result=await publicCandidatePage(testEnv(),candidates,{raw:0,trail:[],binding:'random-fixture'}, {limit:2,offset:0,lang:'zh',allowNsfw:false},source);
+ expect(result.items.map(r=>r.sourceRoleId)).toEqual([ids[200]]);expect(result.hasNext).toBe(false);expect(batches).toEqual([200,1]);
+});
+
+it.each(['day','week','month','search','author','feed'] as const)('preserves %s discovery scope while scanning beyond one authority batch',async surface=>{
+ const {ids,denied,batches}=await fixture(201);ids.slice(0,200).forEach(id=>denied.add(id));
+ await env.DB.prepare('UPDATE cards SET registered_at=registered_at+?').bind(Date.now()).run();
+ let url='https://c.test/v1/cards?limit=2&sort='+surface;
+ if(surface==='search')url='https://c.test/v1/cards?limit=2&sort=new&q=Card';
+ if(surface==='author'){
+  const member=await env.DB.prepare('SELECT handle FROM members WHERE id=?').bind('member-11').first<{handle:string}>();
+  url='https://c.test/v1/cards?limit=2&sort=new&author='+member!.handle;
+ }
+ const headers:Record<string,string>={};
+ if(surface==='feed'){
+  identities({'reader-token':22});await makeMember(22);
+  await env.DB.prepare('INSERT INTO member_follows(member_id,author_id,created_at) VALUES(?,?,?)').bind('member-22','member-11',Date.now()).run();
+  headers.Authorization='Bearer reader-token';url='https://c.test/v1/me/feed?limit=2';
+ }
+ const ctx=createExecutionContext(),response=await worker.fetch(new Request(url,{headers}),testEnv(),ctx);await waitOnExecutionContext(ctx);
+ expect(response.status).toBe(200);const body=await response.json() as any;expect(body.items.map((r:any)=>r.sourceRoleId)).toEqual([ids[200]]);expect(body.hasNext).toBe(false);expect(batches).toEqual([200,1]);
 });
