@@ -213,7 +213,8 @@ onBeforeUnmount(() => { introObserver?.disconnect(); clearTimeout(copiedTimer); 
 .pip-info__cid svg { width: 14px; height: 14px; color: var(--text-3); }
 .pip-info__cid:hover svg { color: var(--accent-text); }
 .pip-info__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); padding-top: var(--s-3); box-shadow: 0 -1px 0 var(--line); font-size: 13px; }
-.pip-info__report { color: var(--text-2); }
+/* 文字連結的點擊區撐到一般控件的 30（DESIGN §7），字不變大 */
+.pip-info__report { display: inline-flex; align-items: center; min-height: var(--h-sm); color: var(--text-2); }
 .pip-info__report:hover { color: var(--accent-text); }
 .pip-info__open { gap: 4px; }
 .pip-info__copied { display: block; font-size: 12px; color: var(--text-2); }
