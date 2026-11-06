@@ -284,5 +284,11 @@ describe("PlayInfoPanel", () => {
     expect(playSocial.open).toBe(true);
     tab.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(playSocial.open).toBe(false);
+    // Clicking plain text inside the panel drops focus to body; Esc still closes it.
+    playSocial.open = true;
+    await flush();
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(playSocial.open).toBe(false);
   });
 });

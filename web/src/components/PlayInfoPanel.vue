@@ -85,8 +85,7 @@ watch(() => playSocial.open, async (open) => {
     remember(playSocial.tab);
     drag.value = 0;
     // 焦點還在面板裡才還給入口；桌機上玩家可能已經點回輸入列在打字，不把他拉走
-    const inside = !!panel.value?.contains(document.activeElement);
-    if (inside && restore?.isConnected) restore.focus?.();
+    if (focusInPanel() && restore?.isConnected) restore.focus?.();
     restore = null;
     return;
   }
@@ -128,10 +127,15 @@ function nestedDialogOpen(): boolean {
   return [...document.querySelectorAll('[aria-modal="true"]')]
     .some((el) => el !== panel.value && !el.closest('[hidden], [inert], [aria-hidden="true"]'));
 }
+/** 焦點在面板裡，或點了面板裡的純文字而落回 body（沒有別的地方拿著焦點） */
+function focusInPanel(): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body || !!panel.value?.contains(active);
+}
 function onKey(e: KeyboardEvent) {
   if (!playSocial.open || e.defaultPrevented || e.isComposing || nestedDialogOpen()) return;
   // 桌機不是 modal：焦點在畫布（例如輸入列）時 Esc 是畫布的事
-  if (desktop.value && !panel.value?.contains(document.activeElement)) return;
+  if (desktop.value && !focusInPanel()) return;
   if (e.key === "Escape") { e.preventDefault(); close(); return; }
   // 手機是 modal：焦點圈在面板裡；桌機不是 modal，Tab 照常走出去
   if (!desktop.value) wrapTab(e, panel.value);
