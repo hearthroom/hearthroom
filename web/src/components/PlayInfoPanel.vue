@@ -96,7 +96,8 @@ watch(() => playSocial.open, async (open) => {
   else if (opens > 0) void refreshCard();
   opens++;
   await recall(playSocial.tab);
-  panel.value?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+  // 焦點進面板本身（不是分頁鍵）：觸控打開不會亮焦點框，讀屏先念面板名，Tab 下一步就是分頁
+  panel.value?.focus({ preventScroll: true });
 });
 watch(cardKey, () => { opens = 0; });
 
@@ -248,6 +249,7 @@ const overlayStyle = computed(() => desktop.value
           role="dialog"
           :aria-modal="desktop ? 'false' : 'true'"
           :aria-label="t('card.info')"
+          tabindex="-1"
           :style="drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined"
         >
           <div v-if="!desktop" class="pip__handle" aria-hidden="true" @pointerdown="dragStart" @pointermove="dragMove" @pointerup="dragEnd" @pointercancel="dragEnd" />
@@ -296,6 +298,7 @@ const overlayStyle = computed(() => desktop.value
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
 }
+.pip__panel:focus { outline: none; }
 .pip__head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); flex: none; }
 .pip__tabs { flex: 1; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .pip__tab { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 0 6px; }

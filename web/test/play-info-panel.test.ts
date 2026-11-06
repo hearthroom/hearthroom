@@ -81,6 +81,8 @@ describe("PlayInfoPanel", () => {
     expect(dialog()?.getAttribute("aria-label")).toBe("卡片資訊");
     expect(tabs().map(t => t.textContent?.replace(/\d+$/, "").trim())).toEqual(["資訊", "評論", "榜單"]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+    // Focus lands on the panel itself, so a touch open draws no focus ring on a tab.
+    expect(document.activeElement).toBe(dialog());
     expect(api.fetchCardScore).toHaveBeenCalledTimes(1);
     // The card read when the play page opened paints the header at once.
     expect(document.querySelector(".pip-info__name")?.textContent).toContain("夜行偵探");
