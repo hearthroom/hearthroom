@@ -1,7 +1,6 @@
 {
   "tier": "fix",
   "audience": "authors",
-  "draft": true,
   "try": "/resources",
   "title": {
     "zh-Hant": "資源庫批量連結手動複製時會保留分行，不再黏成一條。",

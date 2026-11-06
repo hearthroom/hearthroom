@@ -784,6 +784,7 @@ async function previewMove(direction: number) {
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
       <textarea
         v-if="copyFallback.includes('\n')"
+        autocomplete="off"
         readonly
         class="input"
         :aria-label="$t('res.copyManual')"
