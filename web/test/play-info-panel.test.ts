@@ -317,4 +317,28 @@ describe("PlayInfoPanel", () => {
     await flush();
     expect(document.querySelector(".pip-info__intro-ghost")).not.toBeNull();
   });
+
+  it("keeps Tab inside the phone sheet: past the last link it wraps to the first control, skipping hidden tabs' controls", async () => {
+    await mount();
+    playSocial.open = true;
+    await flush();
+    const tab = (target: Element, shift = false) => {
+      const e = new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true, cancelable: true });
+      target.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const links = [...dialog()!.querySelectorAll<HTMLAnchorElement>("a[href]")];
+    const lastLink = links[links.length - 1];
+    lastLink.focus();
+    expect(tab(lastLink)).toBe(true);
+    const first = document.activeElement as HTMLElement;
+    expect(first.getAttribute("role")).toBe("tab");
+    expect(first.getAttribute("aria-selected")).toBe("true");
+    expect(tab(first, true)).toBe(true);
+    expect(document.activeElement).toBe(lastLink);
+    // From the panel itself (where focus lands on open), Shift+Tab stays inside too.
+    dialog()!.focus();
+    expect(tab(dialog()!, true)).toBe(true);
+    expect(document.activeElement).toBe(lastLink);
+  });
 });

@@ -18,7 +18,6 @@ import CommentPanel from "@/components/CommentPanel.vue";
 import PlayInfoDetails from "@/components/PlayInfoDetails.vue";
 import PlayInfoRankings from "@/components/PlayInfoRankings.vue";
 import { fetchCard } from "@/lib/api";
-import { wrapTab } from "@/lib/focus-trap";
 import { contentLang } from "@/lib/i18n";
 import { playSocial, reloadPlayDetail, type PlayInfoTab } from "@/lib/play-social";
 import type { CommunityCard } from "@/lib/types";
@@ -139,7 +138,28 @@ function onKey(e: KeyboardEvent) {
   if (desktop.value && !focusInPanel()) return;
   if (e.key === "Escape") { e.preventDefault(); close(); return; }
   // 手機是 modal：焦點圈在面板裡；桌機不是 modal，Tab 照常走出去
-  if (!desktop.value) wrapTab(e, panel.value);
+  if (!desktop.value) trapTab(e);
+}
+
+/**
+ * 手機面板的焦點圈。共用的 wrapTab 不算連結，也會把藏起來的分頁裡的控件算進去，
+ * 結果從最後的「在卡片頁開啟」按 Tab 會跑到背景（QA 2026-11-06 PI09-01）。
+ * 這裡只算看得到的分頁裡能 Tab 到的：連結、沒停用的控件、tabindex 不是 -1 的。
+ */
+const TABBABLE = 'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]';
+function trapTab(e: KeyboardEvent) {
+  const box = panel.value;
+  if (e.key !== "Tab" || !box) return;
+  const items = [...box.querySelectorAll<HTMLElement>(TABBABLE)]
+    .filter((el) => el.getAttribute("tabindex") !== "-1" && !el.closest('[hidden], [style*="display: none"]'));
+  if (!items.length) return;
+  const first = items[0]!, last = items[items.length - 1]!;
+  const active = document.activeElement as HTMLElement | null;
+  const at = active ? items.indexOf(active) : -1;
+  // 焦點在面板本身（打開時落在這裡）或不在圈裡：往下到第一個、往上到最後一個
+  if (at < 0) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+  if (e.shiftKey && at === 0) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && at === items.length - 1) { e.preventDefault(); first.focus(); }
 }
 onMounted(() => document.addEventListener("keydown", onKey));
 onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
