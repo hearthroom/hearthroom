@@ -1,0 +1,13 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "draft": true,
+  "try": "/resources",
+  "title": {
+    "zh-Hant": "資源庫批量連結手動複製時會保留分行，不再黏成一條。",
+    "zh-Hans": "资源库批量链接手动复制时会保留分行，不再连成一条。",
+    "en": "Manually copying resource URLs keeps each link on its own line.",
+    "ja": "素材のURLを手動でまとめてコピーしても、1件ずつ改行が保たれます。",
+    "ko": "자료실 URL을 수동으로 일괄 복사해도 링크마다 줄바꿈이 유지됩니다."
+  }
+}

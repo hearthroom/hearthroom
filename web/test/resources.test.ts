@@ -97,6 +97,46 @@ afterEach(() => {
   root?.remove();
 });
 describe("provider resource library", () => {
+  it.each([false, true])("preserves the list URLs across 48 + 7 page copies (clipboard denied: %s)", async (denied) => {
+    const prefix = "https://assets.example.test/u/u0123456789abcdef0123456789abcdef/";
+    const expected = Array.from({ length: 55 }, (_, n) => `${prefix}%E6%B8%AC%E8%A9%A6/avatar-${n + 1}.webp`);
+    mocks.list.mockImplementation(async (_provider: string, query: { page: number }) => ({
+      ...page(), total: 55,
+      libraryPrefix: "https://assets.example.test/u/unrelated-prefix/",
+      items: expected.slice((query.page - 1) * 48, query.page * 48).map((imageUrl) => ({
+        id: imageUrl, imageUrl, kind: "image", byteSize: 12,
+      })),
+    }));
+    const writeText = denied ? vi.fn().mockRejectedValue(new Error("denied")) : vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await mount();
+    const clickButton = async (selector: string, label: string) => {
+      const button = [...root.querySelectorAll<HTMLButtonElement>(selector)].find((b) => b.textContent?.trim() === i18n.global.t(label));
+      expect(button).toBeDefined();
+      button!.click();
+      await flush();
+    };
+    await clickButton(".resource-toolbar button", "res.manage");
+    for (const [index, count] of [[0, 48], [1, 7]] as const) {
+      expect(root.querySelectorAll("[data-preview]")).toHaveLength(count);
+      root.querySelector<HTMLButtonElement>("[data-preview]")!.click();
+      await flush();
+      expect(document.querySelector<HTMLAnchorElement>('[role="dialog"] a[target="_blank"]')?.getAttribute("href")).toBe(expected[index * 48]);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await flush();
+      root.querySelector<HTMLInputElement>(".resource-batch input[type=checkbox]")!.click();
+      await flush();
+      await clickButton(".resource-batch button", "resource.copySelected");
+      const text = expected.slice(index * 48, index * 48 + count).join("\n");
+      expect(writeText).toHaveBeenLastCalledWith(text);
+      if (denied) expect(root.querySelector<HTMLTextAreaElement>("textarea[readonly]")?.value).toBe(text);
+      if (index === 0) {
+        root.querySelector<HTMLButtonElement>("[data-next]")!.click();
+        await flush();
+        expect(root.querySelector<HTMLInputElement>(".resource-batch input[type=checkbox]")!.checked).toBe(false);
+      }
+    }
+  });
   it("keeps the prefix and upload limits folded away until requested", async () => {
     mocks.list.mockResolvedValue({ ...page(), libraryPrefix: "https://assets.example/u/author/" });
     await mount();

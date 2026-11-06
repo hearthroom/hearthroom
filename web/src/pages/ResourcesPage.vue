@@ -782,8 +782,15 @@ async function previewMove(direction: number) {
         </button>
       </p>
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <textarea
+        v-if="copyFallback.includes('\n')"
+        readonly
+        class="input"
+        :aria-label="$t('res.copyManual')"
+        :value="copyFallback"
+        @focus="($event.target as HTMLTextAreaElement).select()" />
       <input
-        v-if="copyFallback"
+        v-else-if="copyFallback"
         readonly
         class="input"
         :aria-label="$t('res.copyManual')"
