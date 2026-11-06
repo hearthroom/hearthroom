@@ -25,7 +25,8 @@ import { mainSiteLinks } from "@/lib/site";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityCard } from "@/lib/types";
 
-const props = defineProps<{ card: CommunityCard; readme: string }>();
+const props = defineProps<{ card: CommunityCard; readme: string; detailStatus?: "idle" | "loading" | "ready" | "failed" }>();
+defineEmits<{ (e: "retry"): void }>();
 const { t } = useI18n();
 const { locale, lp } = useLocalePath();
 const session = useSession();
@@ -130,6 +131,12 @@ onBeforeUnmount(() => { introObserver?.disconnect(); clearTimeout(copiedTimer); 
       <div class="stat"><dt>{{ t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
     </dl>
 
+    <!-- 介紹還在路上：先佔一塊骨架；讀不到：頁首與上面照畫，這裡放錯誤與重新載入 -->
+    <div v-if="detailStatus === 'loading' && !readmeHtml" class="ghost pip-info__intro-ghost" aria-hidden="true" />
+    <div v-else-if="detailStatus === 'failed'" class="notice notice--error pip-info__error" role="alert">
+      <span>{{ t("play.info.loadFailed") }}</span>
+      <button type="button" class="btn btn--sm" @click="$emit('retry')">{{ t("spendBoard.retry") }}</button>
+    </div>
     <section v-if="readmeHtml" class="pip-info__intro-wrap" aria-labelledby="pip-intro-h">
       <h3 id="pip-intro-h" class="pip-info__h">{{ t("card.about") }}</h3>
       <div ref="introBox" class="pip-info__intro" :class="{ 'pip-info__intro--clamped': introLong && !introOpen }" :style="{ '--intro-max': `${INTRO_MAX}px` }">
@@ -196,6 +203,8 @@ onBeforeUnmount(() => { introObserver?.disconnect(); clearTimeout(copiedTimer); 
 .pip-info__intro--clamped { max-height: var(--intro-max); }
 .pip-info__intro--clamped::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: linear-gradient(to bottom, transparent, var(--surface)); pointer-events: none; }
 .pip-info__more { margin-top: var(--s-2); }
+.pip-info__intro-ghost { height: 120px; border-radius: var(--r-md); }
+.pip-info__error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .pip-info__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px var(--s-4); margin: 0; font-size: 13px; }
 .pip-info__kv dt { color: var(--text-3); }
 .pip-info__kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { fetchRoleDetail } from "../src/lib/api";
 import { libraryRequest } from "../src/lib/library";
-import { playSocial, playSocialHost, registerPlayCard } from "../src/lib/play-social";
+import { playSocial, playSocialHost, registerPlayCard, reloadPlayDetail } from "../src/lib/play-social";
 
 vi.mock("../src/lib/api", () => ({ fetchRoleDetail: vi.fn() }));
 vi.mock("../src/lib/library", () => ({ libraryRequest: vi.fn() }));
@@ -92,5 +92,22 @@ describe("playSocialHost", () => {
     await nextTick();
     expect(seen.at(-1)).toBe(false);
     stop();
+  });
+
+  it("marks the card details as failed when they cannot be read, and reloads them on request", async () => {
+    registerPlayCard({ roleId: "role", cardId: "c1", provider: "harbor" });
+    expect(playSocial.detailStatus).toBe("idle");
+    vi.mocked(fetchRoleDetail).mockRejectedValueOnce(new Error("down"));
+    await expect(playSocialHost(deps(false)).social("role")).resolves.toEqual({ favorite: false, favorited: false });
+    expect(playSocial.detailStatus).toBe("failed");
+    expect(playSocial.detail).toBeNull();
+    vi.mocked(fetchRoleDetail).mockResolvedValueOnce({ roleReadme: "hi" });
+    const pending = reloadPlayDetail("zh-Hant");
+    expect(playSocial.detailStatus).toBe("loading");
+    await pending;
+    expect(playSocial.detailStatus).toBe("ready");
+    expect(playSocial.detail).toEqual({ comments: true, readme: "hi" });
+    registerPlayCard(null);
+    expect(playSocial.detailStatus).toBe("idle");
   });
 });

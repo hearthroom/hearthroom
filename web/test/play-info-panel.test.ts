@@ -14,7 +14,7 @@ import type { CommunityCard } from "../src/lib/types";
 vi.mock("../src/lib/oauth", () => ({ restorePersisted: () => null, refresh: async () => null, persist: () => {}, revokeSession: async () => {}, beginLogin: async () => {} }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "play", setSurface: () => {} }));
 const api = vi.hoisted(() => ({
-  fetchCard: vi.fn(), fetchCardScore: vi.fn(), fetchCardHonors: vi.fn(),
+  fetchCard: vi.fn(), fetchCardScore: vi.fn(), fetchCardHonors: vi.fn(), fetchRoleDetail: vi.fn(),
 }));
 vi.mock("../src/lib/api", async (orig) => ({ ...(await orig<typeof import("../src/lib/api")>()), ...api }));
 vi.mock("../src/components/CommentPanel.vue", () => ({
@@ -292,5 +292,29 @@ describe("PlayInfoPanel", () => {
     (document.activeElement as HTMLElement | null)?.blur();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(playSocial.open).toBe(false);
+  });
+
+  it("keeps the header and shows an error with reload when the card details could not be read", async () => {
+    await mount({}, null);
+    playSocial.detailStatus = "failed";
+    playSocial.open = true;
+    await flush();
+    expect(document.querySelector(".pip-info__name")?.textContent).toContain("夜行偵探");
+    const notice = document.querySelector<HTMLElement>(".pip-info__error")!;
+    expect(notice.textContent).toContain("卡片資訊暫時無法載入");
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleReadme: "# 介紹" });
+    notice.querySelector("button")!.click();
+    await flush();
+    expect(api.fetchRoleDetail).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".pip-info__error")).toBeNull();
+    expect(document.querySelector(".pip-info__intro-wrap")).not.toBeNull();
+  });
+
+  it("draws a placeholder for the introduction while the card details are still loading", async () => {
+    await mount({}, null);
+    playSocial.detailStatus = "loading";
+    playSocial.open = true;
+    await flush();
+    expect(document.querySelector(".pip-info__intro-ghost")).not.toBeNull();
   });
 });

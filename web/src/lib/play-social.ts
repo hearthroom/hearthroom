@@ -30,13 +30,35 @@ export const playSocial = reactive<{
   tab: PlayInfoTab;
   /** social() 讀到才有；讀不到時當作評論開著（跟卡片頁一樣） */
   detail: PlaySocialDetail | null;
-}>({ card: null, open: false, tab: "info", detail: null });
+  /** 詳情讀取的狀態：資訊分頁據此畫介紹的骨架，或錯誤與「重新載入」 */
+  detailStatus: "idle" | "loading" | "ready" | "failed";
+}>({ card: null, open: false, tab: "info", detail: null, detailStatus: "idle" });
 
 export function registerPlayCard(card: PlaySocialCard | null): void {
   playSocial.card = card;
   playSocial.open = false;
   playSocial.tab = "info";
   playSocial.detail = null;
+  playSocial.detailStatus = "idle";
+}
+
+/** 讀來源端的卡片詳情（介紹與評論開關）；途中換了卡就不寫。 */
+async function loadDetail(card: PlaySocialCard, lang: string): Promise<void> {
+  playSocial.detailStatus = "loading";
+  try {
+    const detail = await fetchRoleDetail(card.roleId, undefined, lang, card.provider);
+    if (playSocial.card !== card) return;
+    playSocial.detail = { comments: detail.previewShowComments !== false, readme: typeof detail.roleReadme === "string" ? detail.roleReadme : "" };
+    playSocial.detailStatus = "ready";
+  } catch {
+    if (playSocial.card === card) playSocial.detailStatus = "failed";
+  }
+}
+
+/** 資訊分頁的「重新載入」。 */
+export function reloadPlayDetail(lang: string): Promise<void> {
+  const card = playSocial.card;
+  return card ? loadDetail(card, lang) : Promise.resolve();
 }
 
 export interface PlaySocialDeps {
@@ -58,13 +80,12 @@ export function playSocialHost(deps: PlaySocialDeps) {
       const card = current(roleId);
       if (!card) return null;
       const token = deps.signedIn() ? await deps.token().catch(() => null) : null;
-      const [detail, favorite] = await Promise.all([
+      const [, favorite] = await Promise.all([
         // 介紹與評論開關給面板用；這一趟本來就要問評論開關，介紹順便帶回來
-        fetchRoleDetail(card.roleId, undefined, deps.lang(), card.provider).catch(() => null),
+        loadDetail(card, deps.lang()),
         token ? libraryRequest<{ active: boolean }>(`favorites/${encodeURIComponent(card.cardId)}`, token).catch(() => null) : Promise.resolve(null),
       ]);
       if (current(roleId) !== card) return null;
-      if (detail) playSocial.detail = { comments: detail.previewShowComments !== false, readme: typeof detail.roleReadme === "string" ? detail.roleReadme : "" };
       return { favorite: !!favorite, favorited: !!favorite?.active };
     },
     async setFavorite(roleId: string, on: boolean) {

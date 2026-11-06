@@ -20,7 +20,7 @@ import PlayInfoRankings from "@/components/PlayInfoRankings.vue";
 import { fetchCard } from "@/lib/api";
 import { wrapTab } from "@/lib/focus-trap";
 import { contentLang } from "@/lib/i18n";
-import { playSocial, type PlayInfoTab } from "@/lib/play-social";
+import { playSocial, reloadPlayDetail, type PlayInfoTab } from "@/lib/play-social";
 import type { CommunityCard } from "@/lib/types";
 
 const { t, locale } = useI18n();
@@ -276,7 +276,7 @@ const overlayStyle = computed(() => desktop.value
             </button>
           </header>
           <div :ref="(el) => { panes.info = el as HTMLElement | null }" id="pip-pane-info" v-show="playSocial.tab === 'info'" class="pip__pane" role="tabpanel" aria-labelledby="pip-tab-info">
-            <PlayInfoDetails v-if="card" :key="cardKey" :card="card" :readme="playSocial.detail?.readme ?? ''" />
+            <PlayInfoDetails v-if="card" :key="cardKey" :card="card" :readme="playSocial.detail?.readme ?? ''" :detail-status="playSocial.detailStatus" @retry="reloadPlayDetail(contentLang(locale))" />
           </div>
           <div v-if="commentsEnabled" :ref="(el) => { panes.comments = el as HTMLElement | null }" id="pip-pane-comments" v-show="playSocial.tab === 'comments'" class="pip__pane" role="tabpanel" aria-labelledby="pip-tab-comments">
             <CommentPanel :key="cardKey" :card-id="playSocial.card.cardId" :role-id="playSocial.card.roleId" @count="commentCount = $event" />
