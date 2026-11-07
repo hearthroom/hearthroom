@@ -4443,5 +4443,8 @@
   "lengthExemption.notFound": "카드를 찾을 수 없어요",
   "moderation.error.card_not_found": "카드를 찾을 수 없어요",
   "moderation.error.review_length_exemption_conflict": "이번 변경이 현재 면제 상태와 맞지 않아요. 새로고침한 뒤 다시 확인하세요.",
-  "lengthExemption.total": "합계 {total}자"
+  "lengthExemption.total": "합계 {total}자",
+  "wb.totalChars": "세계관 총 글자 수 {n}자",
+  "reviewLength.constantTotal": "상시 글자 수 {total}자",
+  "reviewLength.threshold": "심사 기준 {required}자"
 }

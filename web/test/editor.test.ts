@@ -215,11 +215,62 @@ describe('review count next to the character definition', () => {
     expect(block.textContent).not.toContain(t('reviewLength.remaining', met));
   });
 
+  it('persistently shows card always-on characters and threshold in the top bar and total Lorebook characters in the Lorebook section, updating live on edits', async () => {
+    // 角色設定：<b>設定</b>，{{user}} 😀 → 2；常駐條目「北境小鎮。」→ 4；非常駐條目「廢棄了。」→ 3
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Count', roleDetailDesc: '<b>設定</b>，{{user}} 😀', roleWelcome: 'Opening' });
+    await mount('/cards/r1/edit');
+
+    const topBar = $('[data-card-constant-count]');
+    const initial = counted({ persona: 2, constantWorldbook: 4, total: 6, required: 3001, remaining: 2995, eligible: false, welcome: 0 });
+    expect(topBar.textContent).toContain(t('reviewLength.constantTotal', initial));
+    expect(topBar.textContent).toContain(t('reviewLength.threshold', initial));
+
+    const wbTotal = $('[data-section="worldbook"] [data-worldbook-total]');
+    expect(wbTotal.textContent).toContain(t('wb.totalChars', { n: '7' }));
+
+    // 編輯非常駐條目：世界書總字數即時更新，頂欄常駐字數不變
+    await openEntries();
+    expect($d('[data-worldbook-dialog-total]').textContent).toContain(t('wb.totalChars', { n: '7' }));
+    await pickEntry(1);
+    await type($d<HTMLTextAreaElement>('#wbd-content'), '廢棄的採石場，有十個字。');
+    expect($d('[data-worldbook-dialog-total]').textContent).toContain(t('wb.totalChars', { n: '14' }));
+    expect($('[data-section="worldbook"] [data-worldbook-total]').textContent).toContain(t('wb.totalChars', { n: '14' }));
+    expect($('[data-card-constant-count]').textContent).toContain(t('reviewLength.constantTotal', initial));
+
+    // 將非常駐條目改為常駐：頂欄常駐字數即時增加（2 + 4 + 10 = 16），世界書總字數仍為 14
+    const constantCheckbox = $d<HTMLInputElement>('.wbd__recall input[type="checkbox"]');
+    constantCheckbox.checked = true;
+    constantCheckbox.dispatchEvent(new Event('change'));
+    await flush();
+    const afterConstant = counted({ persona: 2, constantWorldbook: 14, total: 16, required: 3001, remaining: 2985, eligible: false, welcome: 0 });
+    expect($('[data-card-constant-count]').textContent).toContain(t('reviewLength.constantTotal', afterConstant));
+    expect($('[data-section="worldbook"] [data-worldbook-total]').textContent).toContain(t('wb.totalChars', { n: '14' }));
+
+    // 編輯人設達標：頂欄常駐字數即時更新並標示達標
+    await type($('#f-detail'), '字'.repeat(2987));
+    const met = counted({ persona: 2987, constantWorldbook: 14, total: 3001, required: 3001, remaining: 0, eligible: true, welcome: 0 });
+    expect($('[data-card-constant-count]').textContent).toContain(t('reviewLength.constantTotal', met));
+    expect($('[data-card-constant-count]').classList.contains('is-met')).toBe(true);
+  });
+
+  it('omits the submission threshold in the top bar when the card is exempt', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ enabled: true })));
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Exempt card', roleDetailDesc: '角色設定', roleWelcome: 'Opening' });
+    await mount('/cards/r1/edit');
+    const topBar = $('[data-card-constant-count]');
+    const params = counted({ persona: 4, constantWorldbook: 4, total: 8, required: 3001, remaining: 2993, eligible: false, welcome: 0 });
+    expect(topBar.textContent).toContain(t('reviewLength.constantTotal', params));
+    expect(topBar.textContent).toContain(t('lengthExemption.enabled'));
+    expect(topBar.textContent).not.toContain(t('reviewLength.threshold', params));
+  });
+
   it('does not show a count while the Lorebook it depends on is unavailable', async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Count', roleDetailDesc: '設定', roleWelcome: 'Opening' });
     api.fetchWorldbookEntries.mockRejectedValueOnce(new Error('unavailable'));
     await mount('/cards/r1/edit');
     expect(root.querySelector('[data-review-count]')).toBeNull();
+    expect(root.querySelector('[data-card-constant-count]')).toBeNull();
+    expect(root.querySelector('[data-worldbook-total]')).toBeNull();
   });
 });
 

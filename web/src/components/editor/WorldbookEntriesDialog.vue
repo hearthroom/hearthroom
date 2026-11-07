@@ -21,6 +21,8 @@ const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
   /** 這本書所綁的卡的語區：條目內容上限跟著它走。 */
   language: string;
+  /** 整本已啟用條目的有效字數（格式化後的數字字串；算不出時為 null）。 */
+  totalChars?: string | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
@@ -156,7 +158,13 @@ function onKeydown(event: KeyboardEvent) {
       <div class="wbd__panel panel">
         <header class="wbd__head">
           <h2>{{ $t("wb.entries.title") }}</h2>
-          <span class="subtle">{{ $t("wb.count", { n: modelValue.length }) }}</span>
+          <span class="subtle wbd__head-meta">
+            <span>{{ $t("wb.count", { n: modelValue.length }) }}</span>
+            <template v-if="totalChars !== null && totalChars !== undefined">
+              <span aria-hidden="true"> · </span>
+              <span data-worldbook-dialog-total>{{ $t("wb.totalChars", { n: totalChars }) }}</span>
+            </template>
+          </span>
           <div class="wbd__head-acts">
             <button type="button" class="btn btn--sm btn--primary" @click="emit('close')">{{ $t("wb.entries.done") }}</button>
           </div>
@@ -325,8 +333,9 @@ function onKeydown(event: KeyboardEvent) {
   display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden;
   box-shadow: var(--shadow-md), 0 0 0 1px var(--line);
 }
-.wbd__head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); box-shadow: 0 1px 0 var(--line); }
+.wbd__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-4); box-shadow: 0 1px 0 var(--line); }
 .wbd__head h2 { font-size: 16px; }
+.wbd__head-meta { font-variant-numeric: tabular-nums; }
 .wbd__head-acts { margin-left: auto; display: flex; gap: var(--s-2); }
 .wbd__body { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: 0; }
 .wbd__list {

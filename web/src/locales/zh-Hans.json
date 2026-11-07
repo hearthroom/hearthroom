@@ -4443,5 +4443,8 @@
   "lengthExemption.notFound": "查无此卡",
   "moderation.error.card_not_found": "查无此卡",
   "moderation.error.review_length_exemption_conflict": "本次更改与当前豁免状态不一致，请刷新后再确认。",
-  "lengthExemption.total": "合计 {total} 字"
+  "lengthExemption.total": "合计 {total} 字",
+  "wb.totalChars": "世界书总字数 {n} 字",
+  "reviewLength.constantTotal": "常驻字数 {total} 字",
+  "reviewLength.threshold": "送审门槛 {required} 字"
 }

@@ -4443,5 +4443,8 @@
   "lengthExemption.notFound": "カードが見つかりません",
   "moderation.error.card_not_found": "カードが見つかりません",
   "moderation.error.review_length_exemption_conflict": "免除の状態と今回の変更が一致しません。更新して確認してください。",
-  "lengthExemption.total": "合計 {total} 文字"
+  "lengthExemption.total": "合計 {total} 文字",
+  "wb.totalChars": "世界設定の総文字数 {n} 文字",
+  "reviewLength.constantTotal": "常時オン文字数 {total} 文字",
+  "reviewLength.threshold": "審査下限 {required} 文字"
 }

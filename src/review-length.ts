@@ -1,1 +1,1 @@
-export { effectiveCharacters, reviewLength } from '../shared/review-count';
+export { effectiveCharacters, reviewLength, worldbookCharacters, type WorldbookCharacterCounts } from '../shared/review-count';

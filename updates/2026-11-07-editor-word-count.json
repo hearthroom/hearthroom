@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "卡片編輯頁頂欄常駐顯示卡片常駐字數，世界書區塊也會即時顯示世界書總字數。",
+    "zh-Hans": "卡片编辑页顶栏常驻显示卡片常驻字数，世界书区块也会实时显示世界书总字数。",
+    "en": "The card editor top bar now shows always-on characters at all times, and the Lorebook section shows total characters.",
+    "ja": "カード編集ページ上部に常時オン文字数、世界設定欄に総文字数をリアルタイムで表示します。",
+    "ko": "카드 편집 상단 바에 상시 글자 수를, 세계관 영역에 총 글자 수를 실시간으로 보여줘요."
+  }
+}

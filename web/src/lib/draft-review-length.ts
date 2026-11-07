@@ -1,4 +1,4 @@
-import {reviewLength} from '../../../shared/review-count';
+import {reviewLength, worldbookCharacters, type WorldbookCharacterCounts} from '../../../shared/review-count';
 import {reviewLengthStatus, type ReviewLength} from '../../../shared/review-length';
 import type {WorldbookEntryDraft} from './role-draft';
 
@@ -9,11 +9,13 @@ import type {WorldbookEntryDraft} from './role-draft';
  * 兩半分開算：打字時只有角色設定在變，世界書那一半（可能上萬字）不必每個按鍵重算。
  * 瀏覽器沒有 Intl.Segmenter 時算不出來，回 null，編輯器就不顯示這一塊（存檔與送審不受影響）。
  */
-const safely=(count:()=>number):number|null=>{
+const safely=<T>(count:()=>T):T|null=>{
   try{return count();}catch{return null;}
 };
 export const personaReviewCount=(roleDetailDesc:string)=>safely(()=>reviewLength({document:{roleDetailDesc}}).persona);
-export const constantReviewCount=(entries:readonly WorldbookEntryDraft[])=>safely(()=>reviewLength({worldbooks:[{entries}]}).constantWorldbook);
+export const worldbookReviewCounts=(entries:readonly WorldbookEntryDraft[]):WorldbookCharacterCounts|null=>safely(()=>worldbookCharacters({worldbooks:[{entries}]}));
+export const worldbookReviewCount=(entries:readonly WorldbookEntryDraft[])=>worldbookReviewCounts(entries)?.total??null;
+export const constantReviewCount=(entries:readonly WorldbookEntryDraft[])=>worldbookReviewCounts(entries)?.constant??null;
 
 export function combineReviewLength(persona:number|null,constantWorldbook:number|null):ReviewLength|null{
   if(persona===null||constantWorldbook===null)return null;

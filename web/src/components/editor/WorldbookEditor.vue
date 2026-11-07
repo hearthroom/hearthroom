@@ -22,6 +22,7 @@ import { useI18n } from "vue-i18n";
 import { deleteWorldbook, fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { useSession } from "@/lib/session";
+import { worldbookReviewCount } from "@/lib/draft-review-length";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
 import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
 import WorldbookEntriesDialog from "./WorldbookEntriesDialog.vue";
@@ -38,6 +39,8 @@ const props = defineProps<{
   loadFailed?: boolean;
   /** 這張卡的語區：條目內容上限與匯入時長條目怎麼拆都跟著它走。 */
   language: string;
+  /** 整本已啟用條目的有效字數（格式化後的數字字串；未傳時自己照 modelValue 算）。 */
+  totalChars?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -56,8 +59,15 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const session = useSession();
+
+const totalCharsText = computed(() => {
+  if (props.totalChars !== undefined) return props.totalChars;
+  if (props.loading || props.loadFailed) return null;
+  const n = worldbookReviewCount(props.modelValue);
+  return n === null ? null : n.toLocaleString(locale.value);
+});
 
 /** 條目編輯在彈窗裡：一本書幾十條，攤在表單中欄裡找一條要捲半天。 */
 const open = ref(false);
@@ -165,7 +175,12 @@ const preview = computed(() =>
     </div>
     <template v-else>
     <div v-if="!bound" class="empty panel">
-      <p class="muted">{{ $t("wb.empty") }}</p>
+      <div class="empty__copy">
+        <p class="muted">{{ $t("wb.empty") }}</p>
+        <p v-if="totalCharsText !== null" class="subtle wb__count" data-worldbook-total>
+          {{ $t("wb.totalChars", { n: totalCharsText }) }}
+        </p>
+      </div>
       <div class="empty__acts">
         <button type="button" class="btn btn--sm" @click="emit('create')">{{ $t("wb.create") }}</button>
         <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
@@ -213,7 +228,13 @@ const preview = computed(() =>
       <!-- 條目本體在彈窗裡；這裡只留一眼看得完的摘要與入口 -->
       <div class="wb__entries panel">
         <div class="wb__entries-head">
-          <span class="subtle">{{ $t("wb.count", { n: modelValue.length }) }}</span>
+          <span class="subtle wb__count">
+            <span>{{ $t("wb.count", { n: modelValue.length }) }}</span>
+            <template v-if="totalCharsText !== null">
+              <span aria-hidden="true"> · </span>
+              <span data-worldbook-total>{{ $t("wb.totalChars", { n: totalCharsText }) }}</span>
+            </template>
+          </span>
           <button type="button" class="btn btn--sm btn--primary" @click="open = true">{{ $t("wb.entries.manage") }}</button>
         </div>
         <ul v-if="preview.length" class="wb__names" aria-hidden="true">
@@ -240,7 +261,7 @@ const preview = computed(() =>
       </ul>
     </div>
 
-    <WorldbookEntriesDialog v-if="open" :model-value="modelValue" :language="language"
+    <WorldbookEntriesDialog v-if="open" :model-value="modelValue" :language="language" :total-chars="totalCharsText"
                             @update:model-value="emit('update:modelValue', $event)" @close="open = false" />
     </template>
   </section>
@@ -250,8 +271,9 @@ const preview = computed(() =>
 .wb__load { padding: var(--s-4); display: grid; gap: var(--s-3); justify-items: start; }
 .wb__load p { margin: 0; }
 .wb__load .btn { min-height: var(--h-lg); }
-.empty { display: flex; gap: var(--s-3); align-items: center; justify-content: space-between; padding: var(--s-4); }
-.empty .muted { margin: 0; }
+.empty { display: flex; gap: var(--s-3); align-items: center; justify-content: space-between; flex-wrap: wrap; padding: var(--s-4); }
+.empty__copy { display: grid; gap: 2px; min-width: 0; }
+.empty .muted, .empty .subtle { margin: 0; }
 .empty__acts, .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .wb > .notice { margin-top: var(--s-3); }
 .report { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 2px; font-size: 12.5px; }
@@ -259,7 +281,8 @@ const preview = computed(() =>
 .reuse__row { display: flex; gap: var(--s-2); align-items: center; }
 .reuse__row .input { flex: 1; min-width: 0; }
 .wb__entries { padding: var(--s-3); display: grid; gap: var(--s-2); margin-bottom: var(--s-3); }
-.wb__entries-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.wb__entries-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
+.wb__count { font-variant-numeric: tabular-nums; }
 .wb__names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .wb__more { font-size: 12px; }
 </style>
