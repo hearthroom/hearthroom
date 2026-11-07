@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { i18n } from "../src/lib/i18n";
+import { applyLocale, i18n } from "../src/lib/i18n";
 
 vi.mock("../src/lib/oauth", () => ({
   restorePersisted: () => null,
@@ -31,9 +31,9 @@ const OTHER = { ...BASE, id: "def", roleId: "role-def", num: 100022, name: "另�
 let app: App | null = null;
 let el: HTMLElement | null = null;
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
-afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
+afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; i18n.global.locale.value = "zh-Hant"; vi.unstubAllGlobals(); });
 
-function fakeFetch(card: Record<string, unknown>, readme: boolean) {
+function fakeFetch(card: Record<string, unknown>, readme: boolean, versions: Record<string, unknown>[] = []) {
   return (input: RequestInfo | URL): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const json = (body: unknown, status = 200) =>
@@ -42,6 +42,7 @@ function fakeFetch(card: Record<string, unknown>, readme: boolean) {
     if (url.includes("/platforms")) return json({ platforms: [] });
     if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
     if (url.includes("/score")) return json({ average: null, count: 0, mine: null });
+    if (url.includes("/versions")) return json({ items: versions, page: 1, hasMore: false });
     if (/\/v1\/cards\?/.test(url) && url.includes("author=")) return json({ items: [card, OTHER], total: 2, nextOffset: null });
     if (/\/v1\/cards\/[^?/]+(\?|$)/.test(url)) return json(card);
     if (url.endsWith("/v1/me")) return json({ error: "unauthorized" }, 401);
@@ -49,8 +50,9 @@ function fakeFetch(card: Record<string, unknown>, readme: boolean) {
   };
 }
 
-async function page(extra: Record<string, unknown> = {}, locale = "", readme = true) {
-  vi.stubGlobal("fetch", fakeFetch({ ...BASE, ...extra }, readme));
+async function page(extra: Record<string, unknown> = {}, locale = "", readme = true, versions: Record<string, unknown>[] = []) {
+  await applyLocale(locale || "zh-Hant");
+  vi.stubGlobal("fetch", fakeFetch({ ...BASE, ...extra }, readme, versions));
   el = document.createElement("div"); document.body.appendChild(el);
   const router = createRouter({
     history: createMemoryHistory(),
@@ -77,6 +79,33 @@ describe("卡片內容依介面轉換字形", () => {
     expect(root.querySelector(".readme p")?.textContent).toContain("讀取音樂 記錄 读取");
     expect(decodeURI(root.querySelector(".readme a")!.getAttribute("href")!)).toBe("https://example.test/读取");
     expect(root.querySelector(".readme pre code")?.textContent).toBe("读取\n");
+  }, 15000);
+
+  it("卡片頁更新日誌與過往版本記錄雙向轉換字形（繁看簡、簡看繁）", async () => {
+    const { displayScriptReady } = await import("../src/lib/display-name");
+    const simpVersions = [
+      { versionId: "v2", updateKind: "major", updateNote: "新增学园支线与音乐结局", publishedAt: 1793080800000, publicationTimeSource: "published" },
+      { versionId: "v1", updateKind: "major", updateNote: "初版读取学园记录", publishedAt: 1793000000000, publicationTimeSource: "published" },
+    ];
+    const rootHant = await page({}, "", false, simpVersions);
+    await displayScriptReady(); await flush();
+    expect(rootHant.querySelector("[data-current-version] .version-history__note")?.textContent).toBe("新增學園支線與音樂結局");
+    rootHant.querySelector<HTMLButtonElement>("[data-history-toggle]")!.click();
+    await flush();
+    expect(rootHant.querySelector("#older-versions .version-history__note")?.textContent).toBe("初版讀取學園記錄");
+
+    app?.unmount(); el?.remove(); app = null; el = null;
+
+    const tradVersions = [
+      { versionId: "v2", updateKind: "major", updateNote: "新增學園支線與音樂結局", publishedAt: 1793080800000, publicationTimeSource: "published" },
+      { versionId: "v1", updateKind: "major", updateNote: "初版讀取學園記錄", publishedAt: 1793000000000, publicationTimeSource: "published" },
+    ];
+    const rootHans = await page({}, "zh-Hans", false, tradVersions);
+    await displayScriptReady(); await flush();
+    expect(rootHans.querySelector("[data-current-version] .version-history__note")?.textContent).toBe("新增学园支线与音乐结局");
+    rootHans.querySelector<HTMLButtonElement>("[data-history-toggle]")!.click();
+    await flush();
+    expect(rootHans.querySelector("#older-versions .version-history__note")?.textContent).toBe("初版读取学园记录");
   }, 15000);
 });
 

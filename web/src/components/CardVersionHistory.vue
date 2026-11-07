@@ -2,6 +2,7 @@
 import {computed,nextTick,onBeforeUnmount,ref,watch} from 'vue';
 import {useI18n} from 'vue-i18n';
 import {fetchCardVersions,type CardVersion} from '@/lib/api';
+import {displayName} from '@/lib/display-name';
 const props=defineProps<{cardId:string;target?:string}>();
 const {t,locale}=useI18n();
 const root=ref<HTMLElement|null>(null),items=ref<CardVersion[]>([]),batches=ref<CardVersion[][]>([]),selected=ref<CardVersion|null>(null);
@@ -63,7 +64,7 @@ onBeforeUnmount(()=>{generation++;});
   <div v-else-if="latest" data-current-version :data-version-id="latest.versionId" class="version-history__latest">
    <p class="subtle"><time :datetime="iso(latest)">{{dateLine(latest)}}</time></p>
    <p v-if="dateHint(latest)" class="subtle">{{t(dateHint(latest))}}</p>
-   <p v-if="latest.updateKind==='major'" class="version-history__note">{{latest.updateNote}}</p>
+   <p v-if="latest.updateKind==='major'" class="version-history__note">{{displayName(latest.updateNote,locale)}}</p>
   </div>
   <p v-else class="subtle">{{t('cardUpdate.history.empty')}}</p>
   <div v-if="historyOpen&&!busy&&!failed" id="older-versions" class="version-history__older">
@@ -76,7 +77,7 @@ onBeforeUnmount(()=>{generation++;});
     </details>
     <details v-else class="version-history__entry" :data-version-id="group.items[0]!.versionId" :open="opened.has(group.items[0]!.versionId)" @toggle="toggle(group.items[0]!.versionId,$event)">
      <summary><time :datetime="iso(group.items[0]!)">{{dateLine(group.items[0]!)}}</time><span class="subtle">{{t('cardUpdate.notice.updateLog')}}</span></summary>
-     <p v-if="dateHint(group.items[0]!)" class="subtle">{{t(dateHint(group.items[0]!))}}</p><p class="version-history__note">{{group.items[0]!.updateNote}}</p>
+     <p v-if="dateHint(group.items[0]!)" class="subtle">{{t(dateHint(group.items[0]!))}}</p><p class="version-history__note">{{displayName(group.items[0]!.updateNote,locale)}}</p>
     </details>
    </template>
    <p v-if="moreFailed" role="status" class="subtle">{{t('cardUpdate.history.moreFailed')}}</p>
