@@ -68,13 +68,20 @@ it.each(['https://evil.test/', '//evil.test/', '/\\evil.test', '/%2f%2fevil.test
   expect(promoTarget(value)).toBeNull();
 });
 
+const MALIANG_CODES = [
+  'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
+  'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
+  'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie',
+];
+
 it('all configured targets are safe local landings with attribution', () => {
   for (const [code, value] of Object.entries(links)) {
     expect(promoTarget(value)).toBe(value);
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y' : '94A9H94Z';
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y'
+      : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog']
       : code.startsWith('bh-hut-') ? ['bahamut', 'cabin'] : ['bahamut', 'forum'];
@@ -164,6 +171,26 @@ it.each([
   const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe(`/cards/100194?ref=94A9H94Z&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}-${date}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
+});
+
+it.each([
+  ['bh-maple-85994', '/cards/100218', 'bahamut', 'forum', '20261108'],
+  ['bh-hut-maple', '/cards/100218', 'bahamut', 'cabin', '20261108'],
+  ['vc-maple', '/cards/100218', 'vocus', 'blog', '20261108'],
+  ['bh-maple-gal', '/cards/100218', 'bahamut', 'forum', '20261112'],
+  ['bh-sanguo-6331', '/cards/100240', 'bahamut', 'forum', '20261108'],
+  ['bh-hut-sanguo', '/cards/100240', 'bahamut', 'cabin', '20261108'],
+  ['vc-sanguo', '/cards/100240', 'vocus', 'blog', '20261108'],
+  ['bh-sanguo-indie', '/cards/100240', 'bahamut', 'forum', '20261111'],
+  ['bh-hut-fanren', '/cards/100257', 'bahamut', 'cabin', '20261110'],
+  ['vc-fanren', '/cards/100257', 'vocus', 'blog', '20261110'],
+  ['bh-fanren-indie', '/cards/100257', 'bahamut', 'forum', '20261110'],
+])('serves the approved three-cards campaign %s', async (code, path, source, medium, date) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${path}?ref=6M9ZV5FS&utm_source=${source}&utm_medium=${medium}&utm_campaign=${code}-${date}`);
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });
