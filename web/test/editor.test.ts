@@ -445,10 +445,24 @@ describe("正則匯入的聊天頁模式", () => {
     expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("Existing opening");
   });
 
-  it("新卡首次匯入預設沙箱，保存後重新匯入美化也保持沙箱", async () => {
+  it("新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），保存後重匯也保持傳統頁；帶 chatVersion: 1 則為沙箱", async () => {
     await mount("/create");
     await type($("#f-name"), "Local fixture");
     await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(oldMmd)], "old-mmd.json"));
+    expect($(".chatpage [aria-checked=true]").textContent?.trim()).toBe(i18n.global.t("editor.chatPage.classic"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({ pageMode: "classic", version: 0 }), "tok");
+    const changed = { ...oldMmd, regex_scripts: [{ ...oldMmd.regex_scripts[0], replaceString: "<style>body{color:blue}</style>" }] };
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(changed)], "updated-mmd.json"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({ pageMode: "classic", version: 1 }), "tok");
+  });
+
+  it("新卡首次匯入 chatVersion: 1 檔案設為沙箱，保存後重匯未指定模式的更新檔也保持沙箱", async () => {
+    await mount("/create");
+    await type($("#f-name"), "Local fixture");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify({ chatVersion: 1, ...oldMmd })], "sandbox-mmd.json"));
+    expect($(".chatpage [aria-checked=true]").textContent?.trim()).toBe(i18n.global.t("editor.chatPage.sandbox"));
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenLastCalledWith("r1", expect.objectContaining({ pageMode: "sandbox", version: 0 }), "tok");
     const changed = { ...oldMmd, regex_scripts: [{ ...oldMmd.regex_scripts[0], replaceString: "<style>body{color:blue}</style>" }] };
@@ -780,6 +794,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(regexRole).toBe("r1");
     expect(asset.version).toBe(0);
     expect(asset.mountLayer).toBe("over");
+    expect((asset as { pageMode?: string }).pageMode).toBe("classic");
     expect(asset.rules.map((r) => r.name)).toEqual(["status"]);
     // 建立完成 → 網址換成編輯頁，本機草稿清掉
     expect(window.location.pathname).toBe("/cards/100021/edit");

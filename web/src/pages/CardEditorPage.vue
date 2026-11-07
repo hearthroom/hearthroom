@@ -830,8 +830,8 @@ function onRegexFile(event: Event) {
     try {
       const imported = ruleSetFromImport(JSON.parse(await file.text()));
       if (!imported) throw new Error("regex_invalid");
-      // 舊格式檔沒有聊天頁模式；更新美化時沿用作者目前選擇，避免已存沙箱卡被切回傳統頁。
-      imported.set.pageMode ??= regexSet.value.pageMode;
+      // 舊格式檔沒有聊天頁模式；新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），已存卡更新美化時沿用作者目前選擇。
+      imported.set.pageMode ??= isNew.value ? "classic" : regexSet.value.pageMode;
       regexSet.value = imported.set;
       defaultChatPageForNew();
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
@@ -1138,7 +1138,12 @@ function applyImport(result: ImportResult) {
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
-  if (result.regex) regexSet.value = result.regex;
+  if (result.regex) {
+    result.regex.pageMode ??= "classic";
+    regexSet.value = result.regex;
+  } else {
+    regexSet.value.pageMode = "classic";
+  }
   defaultChatPageForNew();
   goto("basic");
 }
