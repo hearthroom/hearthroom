@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片評分累積滿 5 人才會顯示平均分數，未滿時顯示「評分樣本過少」。",
+    "zh-Hans": "卡片评分累积满 5 人才会显示平均分数，未满时显示「评分样本过少」。",
+    "en": "Card ratings now show an average score once 5 people have rated, and show Not enough ratings before that.",
+    "ja": "カードの評価は5人分集まってから平均点を表示し、それまでは「評価件数不足」と表示します。",
+    "ko": "카드 평점은 5명이 평가한 뒤부터 평균 점수를 보여주며, 그전에는 「평점 표본 부족」으로 표시돼요."
+  }
+}
