@@ -340,9 +340,10 @@ describe("排名", () => {
   // 評分最高（2026-10-11；2026-11-07 改為滿 5 人門檻）：滿 5 人評分才算貝氏平均（先驗是每張卡先有 5 票 3 星），
   // 未滿 5 人一律視為先驗均值 3 星、照累積對話數排，避免少數幾票 5 星就把卡頂到最前；滿 5 人且評得差的排到後面。
   it("score 未滿 5 人評分視為先驗均值，照累積對話數排", async () => {
-    // 照評分的寫入路徑（card-scores.ts setScore）綁數字：D1 把它當浮點數寫進文字欄，存成 "100194.0"（線上實際如此）
+    // 0112 與 setScore 都使用整數字串卡號，與卡片頁共用相同票數。
     const card = async (label: string) => (await env.DB.prepare("SELECT c.id FROM cards c WHERE source_role_id=?").bind(`role-${label}`).first<{ id: number }>())!.id;
-    const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(cardId, member, score);
+    const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(String(cardId), member, score);
+    for (let i=1;i<=5;i++) await env.DB.prepare("INSERT INTO members(id,handle,created_at) VALUES(?,?,0)").bind(`m${i}`, `scorefan${i}`).run();
     const fresh = await card("fresh"), rising = await card("rising");
     await env.DB.batch([vote(fresh, "m1", 5), vote(fresh, "m2", 5), vote(fresh, "m3", 5), vote(fresh, "m4", 5), vote(rising, "m1", 1)]);
     expect(ids((await list("?sort=score")).body)).toEqual(["old", "rising", "fresh"]);
@@ -350,13 +351,25 @@ describe("排名", () => {
 
   it("score 滿 5 人評分按貝氏平均高低排", async () => {
     const card = async (label: string) => (await env.DB.prepare("SELECT c.id FROM cards c WHERE source_role_id=?").bind(`role-${label}`).first<{ id: number }>())!.id;
-    const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(cardId, member, score);
+    const vote = (cardId: number, member: string, score: number) => env.DB.prepare("INSERT INTO card_scores (card_id, member_id, score, created_at, updated_at) VALUES (?,?,?,0,0)").bind(String(cardId), member, score);
+    for (let i=1;i<=5;i++) await env.DB.prepare("INSERT INTO members(id,handle,created_at) VALUES(?,?,0)").bind(`m${i}`, `scorefan${i}`).run();
     const fresh = await card("fresh"), rising = await card("rising");
     await env.DB.batch([
       vote(fresh, "m1", 5), vote(fresh, "m2", 5), vote(fresh, "m3", 5), vote(fresh, "m4", 5), vote(fresh, "m5", 5),
       vote(rising, "m1", 1), vote(rising, "m2", 1), vote(rising, "m3", 1), vote(rising, "m4", 1), vote(rising, "m5", 1),
     ]);
     expect(ids((await list("?sort=score")).body)).toEqual(["fresh", "old", "rising"]);
+  });
+
+  it("score 與卡片頁只統計一般成員，第五張非一般成員票不跨過門檻", async () => {
+    const fresh = (await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='role-fresh'").first<{id:number}>())!.id;
+    for (let i=1;i<=5;i++) {
+      await env.DB.prepare("INSERT INTO members(id,handle,created_at) VALUES(?,?,0)").bind(`m${i}`, `scorefan${i}`).run();
+      await env.DB.prepare("INSERT INTO card_scores VALUES(?,?,5,0,0)").bind(String(fresh),`m${i}`).run();
+    }
+    await env.DB.prepare("UPDATE members SET account_class='test' WHERE id='m5'").run();
+    expect(await (await SELF.fetch(`https://c.test/v1/cards/${fresh}/score`)).json()).toMatchObject({count:4,sufficient:false});
+    expect(ids((await list("?sort=score")).body)).toEqual(["old", "rising", "fresh"]);
   });
 
   it("favorites 是收藏數；一樣多照累積對話數", async () => {
