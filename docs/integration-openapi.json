@@ -28180,6 +28180,14 @@
             "type": "integer",
             "minimum": 0,
             "description": "Numeric normal fixed-price rule used only to invalidate an estimate when pricing changes; Agent itself is priced by token usage."
+          },
+          "costPhase": {
+            "type": "string",
+            "enum": [
+              "first",
+              "steady"
+            ],
+            "description": "Numeric cohort phase for the current runtime and active conversation branch. First means no successfully observed Agent root for that runtime/branch; it is not a guarantee about initialization. Omitted when phase evidence is unavailable. This statistical phase does not change selectionKey."
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
