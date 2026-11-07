@@ -243,7 +243,16 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
       app.mount(host);
       await flush();
 
-      const editorHtml = host.innerHTML;
+      // Keep the preview iframe's layout box, but not its live /play navigation.
+      // These snapshots run inside 20 srcdoc documents; preview loading must not
+      // hold their load events or Chrome's virtual-time budget open.
+      const snapshot = host.cloneNode(true) as HTMLElement;
+      snapshot.querySelectorAll('iframe').forEach((frame) => {
+        frame.removeAttribute('src');
+        frame.setAttribute('srcdoc', '<!doctype html><body></body>');
+      });
+      expect(snapshot.querySelector('iframe[src]'), 'Layout snapshots must not navigate previews').toBeNull();
+      const editorHtml = snapshot.innerHTML;
 
       // Open WorldbookEntriesDialog to capture its rendered DOM too
       const manageBtn = host.querySelector<HTMLButtonElement>('[data-section="worldbook"] .wb__entries-head button');
