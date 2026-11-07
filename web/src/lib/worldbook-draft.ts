@@ -277,7 +277,11 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
         await unbindWorldbook(book.boundId, options.bindRoleId, token);
         book.boundId = "";
       }
-      if (options.bindRoleId && id) book.boundId = id;
+      if (options.bindRoleId) {
+        // 已保存的當前書不再是「其餘書」；之後再換書時它會被解綁，不能復活舊快照。
+        book.otherBoundBooks = book.otherBoundBooks.filter((b) => b.id !== id);
+        if (id) book.boundId = id;
+      }
       return id;
     },
     async saveBook(token: string, options: { bindRoleId?: string }): Promise<string> {

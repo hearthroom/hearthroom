@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const api = vi.hoisted(() => ({entries:vi.fn(), bindings:vi.fn(), mine:vi.fn(), write:vi.fn()}));
-vi.mock('../src/lib/api', async original => ({...await original<typeof import('../src/lib/api')>(),fetchWorldbookEntries:api.entries,fetchRoleWorldbooks:api.bindings,fetchMyWorldbooks:api.mine,patchWorldbookDocument:api.write}));
+const api = vi.hoisted(() => ({entries:vi.fn(), bindings:vi.fn(), mine:vi.fn(), write:vi.fn(), unbind:vi.fn()}));
+vi.mock('../src/lib/api', async original => ({...await original<typeof import('../src/lib/api')>(),fetchWorldbookEntries:api.entries,fetchRoleWorldbooks:api.bindings,fetchMyWorldbooks:api.mine,patchWorldbookDocument:api.write,unbindWorldbook:api.unbind}));
 import { useWorldbookDraft } from '../src/lib/worldbook-draft';
 const entry = {entryId:'entry',name:'Secret',content:'Reveal later.',keywords:['reveal'],secondaryKeywords:[],isEnabled:true,isConstant:false,semanticRecall:false};
 beforeEach(() => {
@@ -56,4 +56,20 @@ it('does not present partial counts when an additional bound book fails, and ret
   expect(api.write).not.toHaveBeenCalled();
   await book.retryLoad('tok');
   expect(book.loadFailed).toBe(false);expect(book.reviewEntries()).toHaveLength(2);
+});
+
+it('drops the auxiliary snapshot when that book becomes current and is saved before another replacement', async () => {
+  const book=useWorldbookDraft({untitled:()=>'',fallbackName:()=>'',language:()=>'en'});
+  api.bindings.mockResolvedValue([{worldbookId:'older',name:'Older'},{worldbookId:'latest',name:'Latest'}]);
+  api.entries.mockImplementation(async(id:string)=>[{...entry,entryId:id,content:id,isConstant:true}]);
+  await book.loadBound('tok','role');
+  book.release();
+  await book.pick({worldbookId:'older',name:'Older',description:'',entryCount:1,iconUrl:'',visibility:'private',tags:''},'tok');
+  await book.save('tok',{bindRoleId:'role'});
+  book.release();
+  await book.pick({worldbookId:'third',name:'Third',description:'',entryCount:1,iconUrl:'',visibility:'private',tags:''},'tok');
+  await book.save('tok',{bindRoleId:'role'});
+  expect(book.reviewEntries().map(e=>e.content)).toEqual(['third']);
+  book.release();await book.save('tok',{bindRoleId:'role'});
+  expect(book.reviewEntries()).toEqual([]);
 });
