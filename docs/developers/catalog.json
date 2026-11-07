@@ -2554,5 +2554,6 @@
   "d49c405cefead": "quote_changed: refresh the selected estimate and confirm again.",
   "d3084e89ef570": "rate_limit",
   "d0bc36b14a5d1": "temporarily_unavailable",
-  "de9d83f01c9af": "unauthorized"
+  "de9d83f01c9af": "unauthorized",
+  "deccd87623164": "Which cost estimate applies to the next Agent turn: first until a completed Agent turn has been recorded for cost estimation on this runtime and conversation branch; steady afterwards. A display hint only, not a guarantee about setup state. Omitted when unknown. Does not change selectionKey."
 }

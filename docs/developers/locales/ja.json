@@ -2554,5 +2554,6 @@
   "d49c405cefead": "quote_changed：選択中の見積りを再取得し、もう一度確認してください。",
   "d3084e89ef570": "rate_limit",
   "d0bc36b14a5d1": "temporarily_unavailable",
-  "de9d83f01c9af": "unauthorized"
+  "de9d83f01c9af": "unauthorized",
+  "deccd87623164": "次の Agent ターンに適用する費用見積もりです。現在のランタイムと会話ブランチで、完了した Agent ターンが費用見積もりに記録されるまでは first、その後は steady になります。表示上の目安であり、準備状態を保証するものではありません。不明な場合は省略され、selectionKey は変わりません。"
 }

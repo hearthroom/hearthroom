@@ -2554,5 +2554,6 @@
   "d49c405cefead": "quote_changed：重新取得所選估價並再次確認。",
   "d3084e89ef570": "rate_limit",
   "d0bc36b14a5d1": "temporarily_unavailable",
-  "de9d83f01c9af": "unauthorized"
+  "de9d83f01c9af": "unauthorized",
+  "deccd87623164": "下一輪 Agent 適用的費用估計：這個執行版本與對話分支上還沒有完成過 Agent 回合並記入費用估計時為 first，之後為 steady。這只是顯示提示，不保證準備狀態；無法判斷時省略，也不會改變 selectionKey。"
 }

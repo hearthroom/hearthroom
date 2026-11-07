@@ -28187,7 +28187,7 @@
               "first",
               "steady"
             ],
-            "description": "Numeric cohort phase for the current runtime and active conversation branch. First means no successfully observed Agent root for that runtime/branch; it is not a guarantee about initialization. Omitted when phase evidence is unavailable. This statistical phase does not change selectionKey."
+            "description": "Which cost estimate applies to the next Agent turn: first until a completed Agent turn has been recorded for cost estimation on this runtime and conversation branch; steady afterwards. A display hint only, not a guarantee about setup state. Omitted when unknown. Does not change selectionKey."
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
