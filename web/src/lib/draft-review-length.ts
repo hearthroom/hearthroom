@@ -3,7 +3,7 @@ import {reviewLengthStatus, type ReviewLength} from '../../../shared/review-leng
 import type {WorldbookEntryDraft} from './role-draft';
 
 /*
- * 編輯器裡的送審字數：角色設定＋卡綁的那本世界書條目，交給送審檢查用的同一份 reviewLength。
+ * 編輯器裡的送審字數：角色設定＋卡綁的全部世界書條目，交給送審檢查用的同一份 reviewLength。
  * 角色的私有書不綁卡、送審不讀，這裡也不收。
  * 只給編輯器匯入：計數帶著 markdown-it，放進 review-length.ts 會被 api.ts 拉進每一頁的主包。
  * 兩半分開算：打字時只有角色設定在變，世界書那一半（可能上萬字）不必每個按鍵重算。

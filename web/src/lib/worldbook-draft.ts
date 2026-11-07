@@ -72,6 +72,12 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
     format: undefined as "tavern" | undefined,
     entries: [] as WorldbookEntryDraft[],
     original: [] as WorldbookEntryDraft[],
+    /** 其餘已綁定書只供送審字數計算，不加入目前書的編輯／保存差分。 */
+    otherBoundBooks: [] as { id: string; entries: WorldbookEntryDraft[] }[],
+    reviewEntries(): WorldbookEntryDraft[] {
+      // 換成本來就綁著的另一本時，使用它的即時草稿，避免重複計入快照。
+      return [...book.otherBoundBooks.filter((b) => b.id !== book.id).flatMap((b) => b.entries), ...book.entries];
+    },
     /** 剛匯入、還沒送出去的那本。儲存時要先建再寫。 */
     pending: false,
     /** 挑了作者已經有的一本：書已存在，缺的只有「綁到這張卡」那一步。 */
@@ -87,6 +93,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
     reset() {
       loadTarget = null; book.loading = false; book.loadFailed = false;
       book.id = ""; book.name = ""; book.desc = ""; book.meta = null; book.format = undefined;
+      book.otherBoundBooks = [];
       book.entries = []; book.original = []; book.pending = false; book.bindPending = false; book.boundId = "";
     },
     /** 有沒有沒存的改動。 */
@@ -139,8 +146,10 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
      */
     release() {
       const bound = book.boundId;
+      const others = book.otherBoundBooks;
       book.reset();
       book.boundId = bound;
+      book.otherBoundBooks = others;
     },
     /**
      * 匯入一本世界書：整本覆蓋，不併入。手上有書就覆蓋手上這本；還沒有書、而作者已經有一本同名的，
@@ -176,8 +185,12 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
         const bound = await fetchRoleWorldbooks(roleId, token);
         const latest = bound[bound.length - 1];
         if (latest) {
+          const others = await Promise.all(bound.slice(0, -1).map(async (b) => ({
+            id: b.worldbookId, entries: await fetchWorldbookEntries(b.worldbookId, token),
+          })));
           await readBook(token, latest.worldbookId, latest.name);
           book.boundId = latest.worldbookId;
+          book.otherBoundBooks = others;
         } else {
           book.reset();
           loadTarget = { roleId };

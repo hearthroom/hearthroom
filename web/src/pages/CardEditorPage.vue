@@ -496,7 +496,7 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
 const reviewPersona = computed(() => personaReviewCount(draft.value.roleDetailDesc));
 const lengthExempt=useOwnReviewLengthExemption(roleId);
 const wbCounts = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.entries)));
-const reviewConstant = computed(() => wbCounts.value?.constant ?? null);
+const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.reviewEntries())?.constant ?? null));
 const wbTotalChars = computed(() => (wbCounts.value ? wbCounts.value.total.toLocaleString(String(locale.value)) : null));
 const reviewCount = computed(() => {
   const length = combineReviewLength(reviewPersona.value, reviewConstant.value);

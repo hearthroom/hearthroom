@@ -44,7 +44,7 @@ const api = vi.hoisted(() => ({
   unbindWorldbook: vi.fn(async () => {}),
   findWorldbookByName: vi.fn(async (): Promise<{ worldbookId: string; name: string; description: string; entryCount: number } | null> => null),
   deleteWorldbook: vi.fn(async () => {}),
-  fetchWorldbookEntries: vi.fn(async () => [
+  fetchWorldbookEntries: vi.fn(async (_id?:string, _token?:string) => [
     { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, category: "location" },
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
@@ -251,6 +251,25 @@ describe('review count next to the character definition', () => {
     const met = counted({ persona: 2987, constantWorldbook: 14, total: 3001, required: 3001, remaining: 0, eligible: true, welcome: 0 });
     expect($('[data-card-constant-count]').textContent).toContain(t('reviewLength.constantTotal', met));
     expect($('[data-card-constant-count]').classList.contains('is-met')).toBe(true);
+  });
+
+  it('counts every bound Lorebook like review, with live edits replacing the current book', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Multi', roleDetailDesc: '角色設定', roleWelcome: 'Opening' });
+    api.fetchRoleWorldbooks.mockResolvedValueOnce([
+      {worldbookId:'other',name:'Other',description:'',entryCount:1},
+      {worldbookId:'wb-bound',name:'Current',description:'',entryCount:1},
+    ]);
+    for(let i=0;i<2;i++) api.fetchWorldbookEntries.mockImplementationOnce(async(id) => [{entryId:id+'-entry',name:id==='other'?'Other':'Current',content:'字'.repeat(id==='other'?10:20),keywords:[],secondaryKeywords:[],isEnabled:true,isConstant:true}]);
+    await mount('/cards/r1/edit');
+    const expectTotal = (total:number) => expect($('[data-card-constant-count]').textContent).toContain(t('reviewLength.constantTotal', {total:String(total)}));
+    expectTotal(34);
+    expect($('[data-worldbook-total]').textContent).toContain(t('wb.totalChars', {n:'20'}));
+    await openEntries();
+    await type($d('#wbd-content'), '字'.repeat(25));
+    expectTotal(39);
+    const constant = $d<HTMLInputElement>('.wbd__recall input[type="checkbox"]');
+    constant.checked=false; constant.dispatchEvent(new Event('change')); await flush();
+    expectTotal(14);
   });
 
   it('omits the submission threshold in the top bar when the card is exempt', async () => {
