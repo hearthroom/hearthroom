@@ -16,14 +16,15 @@ import { rememberAndroidAppLaunch } from "./lib/route-lines";
 import { LEGACY_SETTINGS_HASH, isSettingsSection } from "./lib/settings-sections";
 
 /**
- * 語言放在網址路徑裡，不是 localStorage。
+ * 語言放在網址路徑裡，分享連結與搜尋引擎都以網址前綴為準。
  *
  * 這是個靠分享與搜尋被發現的社群站：連結要能帶著語言傳給別人，搜尋引擎要能把
- * 每個語言各自收錄（配 hreflang）。存在 localStorage 的話，別人打開你分享的連結
- * 看到的還是他自己的預設語言，而 Google 只會看到一種。
+ * 每個語言各自收錄（配 hreflang）。帶語言前綴的網址（/en/...、/zh-Hans/...）一律照前綴走，
+ * 別人打開你分享的連結看到的就是那個語言，Google 也能收錄各語言版本。
  *
  * 預設語言不帶前綴（/ 而不是 /zh-Hant/），其餘是 /en/、/ja/⋯⋯
- * 這是多數多語言站的做法：預設語言的網址保持乾淨，也不必為了上線而做一次全站轉址。
+ * 使用者主動切換語言時另外記在 localStorage，下次從沒帶前綴的網址進站時先看記住的選擇，
+ * 沒有才看瀏覽器語言；自動偵測結果不寫入 localStorage。
  */
 import BoardPage from "./pages/BoardPage.vue";
 
@@ -254,6 +255,10 @@ export function settingsRedirect(to: Pick<RouteLocationNormalized, "path" | "has
 
 let firstNavigation = true;
 
+export function resetFirstNavigationForTest(): void {
+  firstNavigation = true;
+}
+
 router.beforeEach(async (to) => {
   const locale = localeOf(to);
 
@@ -262,8 +267,8 @@ router.beforeEach(async (to) => {
     return { path: `${to.path}/`, query: to.query, hash: to.hash, replace: true };
   }
 
-  // 第一次進站且沒指定語言時，照瀏覽器偏好轉一次。之後不再自動轉——
-  // 使用者手動選了語言，網址就是他的選擇，不該被偵測結果蓋掉。
+  // 第一次進站且網址沒帶語言前綴時，先看使用者主動記住的語言，沒有再照瀏覽器偏好轉一次。
+  // 帶前綴的網址一律照前綴走；之後站內導航不再自動轉。
   if (firstNavigation) {
     firstNavigation = false;
     if (!isPlayHost() && !to.params.locale) {

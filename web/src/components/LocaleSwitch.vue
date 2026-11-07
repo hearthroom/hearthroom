@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { LOCALES } from "@/lib/i18n";
+import { LOCALES, rememberLocale } from "@/lib/i18n";
 import { localeOf } from "@/router";
 import { localeSwitchTarget } from "@/lib/locale-switch";
 import { track } from "@/lib/track";
@@ -26,6 +26,7 @@ const label = computed(() => LOCALES.find((l) => l.code === current.value)?.labe
 function switchTo(code: string) {
   open.value = false;
   externalOpener?.focus();
+  rememberLocale(code);
   if (code === current.value) return;
   track("locale_switch", { subject: code });
   router.push(localeSwitchTarget(route, code));

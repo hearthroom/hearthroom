@@ -8,7 +8,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppearanceControls from "@/components/AppearanceControls.vue";
-import { LOCALES } from "@/lib/i18n";
+import { LOCALES, rememberLocale } from "@/lib/i18n";
 import { localeSwitchTarget } from "@/lib/locale-switch";
 import { communityRequest } from "@/lib/community";
 import { useSession } from "@/lib/session";
@@ -21,6 +21,7 @@ const router = useRouter();
 const session = useSession();
 
 function switchLocale(code: string) {
+  rememberLocale(code);
   if (code === localeOf(route)) return;
   track("locale_switch", { subject: code });
   void router.push(localeSwitchTarget(route, code));

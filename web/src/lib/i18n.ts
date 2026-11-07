@@ -118,8 +118,32 @@ export function updateHreflang(bareePath: string): void {
   add("x-default", bareePath);
 }
 
-/** 從瀏覽器偏好挑一個支援的語言。先比完整標籤，再比主語言。 */
+export const LOCALE_STORAGE_KEY = "hearthroom.locale";
+
+/** 使用者主動選過的語言；沒有、存不了或不是有效語言代碼時回 null。 */
+export function savedLocale(): string | null {
+  try {
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return saved && LOCALE_CODES.includes(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 記住使用者主動切換的語言（自動偵測結果不記）。 */
+export function rememberLocale(code: string): void {
+  if (!LOCALE_CODES.includes(code)) return;
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, code);
+  } catch {
+    /* 無痕模式：這次不記，退回瀏覽器語言判斷 */
+  }
+}
+
+/** 先看使用者主動選過的語言，沒有才從瀏覽器偏好挑一個支援的語言（先比完整標籤，再比主語言）。 */
 export function detectLocale(): string {
+  const saved = savedLocale();
+  if (saved) return saved;
   for (const pref of navigator.languages ?? []) {
     const exact = LOCALE_CODES.find((c) => c.toLowerCase() === pref.toLowerCase());
     if (exact) return exact;
