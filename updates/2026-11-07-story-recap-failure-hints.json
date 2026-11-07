@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "draft": true,
+  "title": {
+    "zh-Hant": "劇情整理超限時，提示不再誤報為回覆超限。",
+    "zh-Hans": "剧情整理超限时，提示不再误报为回复超限。",
+    "en": "A Story Recap length limit now shows a recap message instead of a reply length error.",
+    "ja": "ストーリー整理の長さ制限を、返信の長さ制限と区別して表示します。",
+    "ko": "스토리 정리의 길이 제한과 답변 길이 제한을 구분해 안내해요."
+  }
+}
