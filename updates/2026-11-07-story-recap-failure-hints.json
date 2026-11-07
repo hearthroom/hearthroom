@@ -2,10 +2,17 @@
   "tier": "fix",
   "draft": true,
   "title": {
-    "zh-Hant": "劇情整理超限時，提示不再誤報為回覆超限。",
-    "zh-Hans": "剧情整理超限时，提示不再误报为回复超限。",
-    "en": "A Story Recap length limit now shows a recap message instead of a reply length error.",
-    "ja": "ストーリー整理の長さ制限を、返信の長さ制限と区別して表示します。",
-    "ko": "스토리 정리의 길이 제한과 답변 길이 제한을 구분해 안내해요."
+    "zh-Hant": "長對話整理劇情時不再卡住、留下空白回覆。",
+    "zh-Hans": "长对话整理剧情时不再卡住、留下空白回复。",
+    "en": "Long conversations no longer get stuck on Story Recap with a blank reply.",
+    "ja": "長い会話でもストーリーの整理で止まり、空白の返信が残る問題を修正しました。",
+    "ko": "긴 대화에서 스토리 정리 중 멈추고 빈 답변이 남던 문제를 해결했어요."
+  },
+  "body": {
+    "zh-Hant": "整理失敗時，提示會說明是在整理劇情這一步。",
+    "zh-Hans": "整理失败时，提示会说明是在整理剧情这一步。",
+    "en": "If Story Recap fails, the message tells you which step could not finish.",
+    "ja": "整理に失敗した場合は、ストーリーの整理中に起きたことが表示されます。",
+    "ko": "정리에 실패하면 스토리 정리 단계에서 발생한 문제라고 안내해요."
   }
 }
