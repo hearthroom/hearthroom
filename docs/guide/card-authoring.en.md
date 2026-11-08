@@ -55,6 +55,8 @@ If making room would leave the column narrower than 75% of its original width, n
 
 ## Rules
 
+Each rule can target AI replies, player messages, system messages, or any mix. New rules default to AI replies; existing rules without a target setting still apply to all three. SillyTavern imports keep the original user/AI placement. Selecting none leaves the rule saved without applying it to messages. The function bar still expands through all enabled rules.
+
 A rule consists of a "find" part and a "replace" part. Reply text passes through all rules, in order, before it is displayed.
 
 ### Find
