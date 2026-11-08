@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "draft": false,
+  "title": {
+    "zh-Hant": "部分卡片的展開欄現在點一下就能收起，不會一直開著。",
+    "zh-Hans": "部分卡片的展开栏现在点一下就能收起，不会一直开着。",
+    "en": "Expandable panels on some cards now close with one click instead of staying open.",
+    "ja": "一部のカードで開いたままになっていたパネルが、1回のタップで閉じるようになりました。",
+    "ko": "일부 카드에서 계속 열려 있던 펼침 패널을 이제 한 번 누르면 접을 수 있어요."
+  }
+}

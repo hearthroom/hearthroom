@@ -348,14 +348,12 @@ export async function catalogTagCounts(db: D1Database, opts: CountScope): Promis
 /**
  * 評分最高的排序鍵：貝氏平均，先驗是每張卡先有 PRIOR_VOTES 票 PRIOR_MEAN 星。一票 5 星贏過沒人評的，
  * 滿 MIN_SCORE_COUNT 人評分才算貝氏平均；未滿門檻或沒人評的全是先驗均值，再照累積對話數排，榜不會空。
- * card_scores.card_id 是文字欄，但評分的寫入路徑綁的是數字，D1 存成 "100194.0"（線上實際如此），
- * 所以按數值比，不按字串比。
- * ponytail: CAST 用不到 card_scores 的主鍵索引，每張卡掃一次整張表；評分多了以後把 card_id 正規化成整數字串再改回等值比對。
+ * 0112 已把評分卡號正規化為整數字串；轉換外層卡號以使用評分主鍵索引，與 readScore 相同。
  */
 import { MIN_SCORE_COUNT } from "../shared/card-score";
 const PRIOR_VOTES = MIN_SCORE_COUNT;
 const PRIOR_MEAN = 3;
-const BAYES_SCORE = `(SELECT CASE WHEN COUNT(*) >= ${MIN_SCORE_COUNT} THEN (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) ELSE ${PRIOR_MEAN} END FROM card_scores s WHERE CAST(s.card_id AS INTEGER) = c.id)`;
+const BAYES_SCORE = `(SELECT CASE WHEN COUNT(*) >= ${MIN_SCORE_COUNT} THEN (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) ELSE ${PRIOR_MEAN} END FROM card_scores s WHERE s.card_id = CAST(c.id AS TEXT) AND EXISTS(SELECT 1 FROM members m WHERE m.id=s.member_id AND m.account_class='normal'))`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [listed(!!opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
@@ -740,7 +738,8 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 /** Only after a confirmed private receipt; never grants or changes PG access. */
 export async function finishManagedWithdrawal(db:D1Database,cardId:string,completion:D1PreparedStatement[]=[]):Promise<void>{
  await db.batch([
-  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending'").bind(cardId),
+  // 審核員發起的重新審核留著：作者收回後再公開同一版，重審還在
+  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending' AND reopen_of IS NULL").bind(cardId),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded')").bind(cardId),
   db.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(cardId),
   ...completion,

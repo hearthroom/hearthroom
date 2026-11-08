@@ -118,3 +118,19 @@ it('omits the rating of a legacy unlisted card when visibility controls are disa
  await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id=?").bind(roles[0].roleId).run();
  expect(await(await request('',false)).json()).toMatchObject({items:[{rating:null}]});
 });
+// 重新審核（審核員 2026-11-08）：作品分享開著時，「我的卡片」的每一條路都要帶出重新審核中，不帶理由
+it('marks a card under re-review on every sharing list path, without the reason',async()=>{
+ const {roles}=await fixture(4);
+ await upsertCard(env.DB,role({roleId:roles[0].roleId,authorNumId:11}),0,{status:'approved'});
+ const card=(await env.DB.prepare('SELECT id FROM cards WHERE source_role_id=?').bind(roles[0].roleId).first<{id:number}>())!.id;
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,reopen_of,reopened_by,reopen_reason) VALUES('reopen-1',?,'harbor','hosted-revision-1','re','pending','version:v1',1,'orig','member-x','疑似盜用')").bind(card).run();
+ // 重審單的 source_role_id 是過審那一版的封存編號（不是作者的草稿），作者的「新版審核中」不會被它觸發
+ for(const query of ['','?access=public']){
+  const res=await request(query);expect(res.status).toBe(200);
+  const body=await res.json() as {items:{roleId:string;reReview?:boolean}[]};
+  expect(body.items.find(i=>i.roleId===roles[0].roleId)?.reReview,query).toBe(true);
+  expect(body.items.filter(i=>i.reReview)).toHaveLength(1);
+  expect(JSON.stringify(body)).not.toContain('疑似盜用');
+  expect((body.items.find(i=>i.roleId===roles[0].roleId) as {workVisibility?:{update?:string}}).workVisibility?.update).not.toBe('pending');
+ }
+});

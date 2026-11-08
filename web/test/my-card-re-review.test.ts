@@ -1,0 +1,54 @@
+import { afterEach, expect, it } from "vitest";
+import { createApp, h, type App } from "vue";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { i18n } from "../src/lib/i18n";
+import MyCardTile from "../src/components/MyCardTile.vue";
+
+// 重新審核（審核員 2026-11-08）：作者只看到卡正在重審、照常公開；看不到理由與發起人
+let app: App | null = null;
+afterEach(() => { app?.unmount(); app = null; document.body.innerHTML = ""; });
+
+async function mount(card: Record<string, unknown>) {
+  const el = document.createElement("div");
+  document.body.append(el);
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
+  await router.push("/mine");
+  app = createApp({ render: () => h(MyCardTile, { card: card as never, busy: false }) }).use(router).use(i18n);
+  app.mount(el);
+  return el;
+}
+const base = { roleId: "r1", num: 100855, name: "雨夜書店", summary: "", avatarUrl: null, zone: "zh", talkNum: 0, visibility: "", registered: true, status: "approved", note: "", rating: null };
+
+it("a published card under re-review shows the re-review badge and that it stays public", async () => {
+  const el = await mount({ ...base, reReview: true });
+  expect(el.textContent).toContain(i18n.global.t("mine.badge.reReview"));
+  expect(el.querySelector("[data-re-review]")?.textContent).toContain(i18n.global.t("mine.note.reReview"));
+  expect(el.textContent).not.toContain(i18n.global.t("mine.badge.listed"));
+});
+
+it("without a re-review the card reads as published", async () => {
+  const el = await mount(base);
+  expect(el.textContent).toContain(i18n.global.t("mine.badge.listed"));
+  expect(el.querySelector("[data-re-review]")).toBeNull();
+});
+
+// 作品分享開著（正式站目前是開的）：卡片狀態改由 workVisibility 顯示，重新審核中照樣要出現
+const shared = { access: "public", effectiveAccess: "public", review: "approved", update: "none", everPublic: true, revisionState: "unchanged", restorable: false, draftChanged: false, restriction: "none", syncState: "complete" };
+it("with work sharing on, a card under re-review still shows the badge and note", async () => {
+  const el = await mount({ ...base, reReview: true, workVisibility: shared });
+  // 主標照舊是公開範圍；重審是另外一個琥珀標（跟「更新審核中」同一種）
+  expect(el.querySelector(".card__status--access")?.textContent).toContain(i18n.global.t("visibility.short.public"));
+  const badge = el.querySelector("[data-re-review-badge]");
+  expect(badge?.textContent?.trim()).toBe(i18n.global.t("mine.badge.reReview"));
+  expect(badge?.classList.contains("card__status--wait")).toBe(true);
+  expect(el.querySelector("[data-re-review]")?.textContent).toContain(i18n.global.t("mine.note.reReview"));
+});
+it("with work sharing on, a suspended card shows the suspension first", async () => {
+  const el = await mount({ ...base, reReview: true, workVisibility: { ...shared, restriction: "suspended" } });
+  expect(el.textContent).toContain(i18n.global.t("visibility.badge.suspended"));
+});
+it("with work sharing on and no re-review, the old per-status notes stay hidden", async () => {
+  const el = await mount({ ...base, updateStatus: "pending", workVisibility: { ...shared, update: "pending" } });
+  expect(el.textContent).not.toContain(i18n.global.t("workspace.updatePending"));
+  expect(el.querySelector("[data-re-review]")).toBeNull();
+});

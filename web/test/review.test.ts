@@ -26,6 +26,7 @@ const api = vi.hoisted(() => ({
   })),
   claimReview: vi.fn(async () => ({ id: "s1", claimedAt: Date.now(), generation: "claim-v2" })),
   releaseReview: vi.fn(async () => undefined),
+  unholdReview: vi.fn(async () => ({ hold: null })),
   fetchReviewMe: vi.fn(async () => ({ reviewer: true })),
   ApiError: class ApiError extends Error { constructor(readonly status: number, message: string, readonly code = "") { super(message); } },
 }));
@@ -204,6 +205,37 @@ describe("審核佇列頁", () => {
     expect(row("a").querySelector("[data-regex-chip]")?.textContent?.trim()).toBe(i18n.global.t("review.queue.regex", { n: "0" }));
     expect(row("b").querySelector("[data-worldbook-chip]")).toBeNull();
     expect(row("b").querySelector("[data-regex-chip]")).toBeNull();
+  });
+
+  it("冷凍中的卡：標出已冷凍與冷凍人；只能領來看；冷凍人自己能在清單上解凍", async () => {
+    app.unmount();
+    host.innerHTML = "";
+    const base = { kind: "first", submittedAt: Date.now(), stamps: { approve: 0, required: 1 }, claim: "free", stampedByMe: false };
+    const card = (id: string) => ({ id, roleId: id, name: `卡${id}`, summary: "", avatarUrl: null, zone: "zh", tags: [] });
+    api.fetchReviewQueue.mockResolvedValueOnce({ items: [
+      { ...base, id: "mine", card: card("mine"), hold: { holder: "審核人", at: Date.now(), byMe: true, canRelease: true } },
+      { ...base, id: "theirs", card: card("theirs"), hold: { holder: "Mika", at: Date.now(), byMe: false, canRelease: false } },
+      { ...base, id: "open", card: card("open"), hold: null },
+      { ...base, kind: "re", id: "again", card: card("again"), hold: null, reopen: true },
+    ], claimTtlMs: 1 } as any);
+    app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
+    app.mount(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("卡mine"));
+    const row = (id: string) => host.querySelector(`[data-review-row="${id}"]`)!;
+    const t = (k: string, p?: Record<string, unknown>) => i18n.global.t(k, p ?? {});
+    expect(row("theirs").querySelector("[data-hold-chip]")?.textContent?.trim()).toBe(t("review.hold.chip"));
+    expect(row("theirs").querySelector("[data-hold-by]")?.textContent).toContain(t("review.hold.by", { name: "Mika" }));
+    expect(row("mine").querySelector("[data-hold-by]")?.textContent).toContain(t("review.hold.byMe"));
+    expect(row("open").querySelector("[data-hold-chip]")).toBeNull();
+    expect(row("open").querySelector("[data-reopen-chip]")).toBeNull();
+    expect(row("theirs").querySelector("button")?.textContent?.trim()).toBe(t("review.action.claimHeld"));
+    expect(row("open").querySelector("button")?.textContent?.trim()).toBe(t("review.action.claim"));
+    expect(row("theirs").querySelector("[data-unhold]")).toBeNull();
+    // 重新審核：已發布的卡被拿回來重審，清單上要分得出來
+    expect(row("again").querySelector("[data-reopen-chip]")?.textContent?.trim()).toBe(t("review.reopen.chip"));
+    (row("mine").querySelector("[data-unhold]") as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(api.unholdReview).toHaveBeenCalledWith("mine", "tok"));
+    await vi.waitFor(() => expect(row("mine").querySelector("[data-hold-chip]")).toBeNull());
   });
 });
 

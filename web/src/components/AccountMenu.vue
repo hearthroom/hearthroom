@@ -51,7 +51,7 @@ function focusOut(e: FocusEvent) { if (e.relatedTarget && !root.value?.contains(
  * 頁首的積分：顯示實際餘額（跟積分頁同一個數：一般＋限時）。只寫「積分與會員」幾個字沒有資訊量（owner 2026-10-11），
  * 讀不到餘額就整顆不放；百萬以上縮寫，免得把頁首撐開。
  * 窄頁首（手機、平板、App）的選單在「積分與會員」後面也帶同一個數：手機頁首放不下這顆鈕。
- * 寬頁首的選單不帶：鈕就在頭像旁邊，而且那個選單只有 220 寬，英文標籤加數字會擠成兩行。
+ * 寬頁首的選單不帶：鈕就在頭像旁邊，重複一次沒有資訊量。
  */
 const balance = computed(() => {
   const w = session.wallet;
@@ -98,24 +98,31 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         </span>
         <AccountIcon name="arrow" class="menu__chevron" />
       </RouterLink>
-      <div class="menu__group">
-        <p v-if="props.compact" class="menu__label">{{ $t('home.rewardsGroup') }}</p>
-        <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<span v-if="balance && props.compact" class="menu__aside menu__balance">{{ balance }}</span></RouterLink>
-        <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="calendar" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
-        <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
+      <!-- 寬一點的螢幕分兩欄：左邊「我的東西」，右邊「偏好與網站」，一眼看完不用捲；手機窄螢幕照舊一欄 -->
+      <div class="menu__cols">
+        <div class="menu__col">
+          <div class="menu__group">
+            <p class="menu__label">{{ $t('home.rewardsGroup') }}</p>
+            <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<span v-if="balance && props.compact" class="menu__aside menu__balance">{{ balance }}</span></RouterLink>
+            <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="calendar" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
+            <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
+          </div>
+          <div class="menu__group">
+            <p class="menu__label">{{ $t('home.contentGroup') }}</p>
+            <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
+            <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
+            <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("preset.nav") }}</RouterLink>
+            <RouterLink v-if="can('instructions')" :to="lp('/me/instructions')" class="menu__item" role="menuitem"><AccountIcon name="chat" />{{ $t("instructions.nav") }}</RouterLink>
+            <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
+            <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
+          </div>
+        </div>
+        <div class="menu__col">
+          <CompactSiteSections :opener="opener" no-pet-menu @activate="open = false" @appearance="preference('appearance')" @language="preference('language')">
+            <template #settings><RouterLink :to="lp('/settings')" role="menuitem">{{ $t('nav.settings') }}</RouterLink></template>
+          </CompactSiteSections>
+        </div>
       </div>
-      <div class="menu__group">
-        <p v-if="props.compact" class="menu__label">{{ $t('home.contentGroup') }}</p>
-        <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
-        <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
-        <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("preset.nav") }}</RouterLink>
-        <RouterLink v-if="can('instructions')" :to="lp('/me/instructions')" class="menu__item" role="menuitem"><AccountIcon name="chat" />{{ $t("instructions.nav") }}</RouterLink>
-        <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
-        <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
-      </div>
-      <CompactSiteSections :opener="opener" no-pet-menu @activate="open = false" @appearance="preference('appearance')" @language="preference('language')">
-        <template #settings><RouterLink :to="lp('/settings')" role="menuitem">{{ $t('nav.settings') }}</RouterLink></template>
-      </CompactSiteSections>
       <div class="menu__group">
         <button class="menu__item" role="menuitem" @click="logoutWithRoutes(session)"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
       </div>
@@ -179,4 +186,15 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 .menu__label { margin: var(--s-1) var(--s-2); font-size: 12px; font-weight: 600; color: var(--text-3); }
 .menu--compact { position: fixed; top: calc(var(--site-header-h, var(--header-h)) + var(--s-2)); right: var(--s-3); max-height: calc(100dvh - var(--site-header-h, var(--header-h)) - var(--s-5)); width: min(280px, calc(100vw - 24px)); }
 .menu--compact .menu__item { min-height: var(--h-lg); font-size: 14px; }
+/* 兩欄：欄頂那條線換成橫跨兩欄的一條，右欄的網站項目跟左欄同一個行高，兩邊才對得齊 */
+@media (min-width: 600px) {
+  .menu, .menu--compact { width: min(500px, calc(100vw - 24px)); max-width: none; }
+  .menu__cols { display: grid; grid-template-columns: 1fr 1fr; margin-top: 6px; border-top: 1px solid var(--line); }
+  .menu__col { min-width: 0; padding-bottom: 6px; }
+  .menu__col + .menu__col { padding-inline-start: 6px; margin-inline-start: 6px; border-inline-start: 1px solid var(--line); }
+  .menu__col > .menu__group:first-child, .menu__col :deep(.compact-group:first-child) { margin-top: 0; border-top: 0; }
+  .menu:not(.menu--compact) :deep(.compact-group a), .menu:not(.menu--compact) :deep(.compact-group button), .menu:not(.menu--compact) :deep(.compact-other summary) { min-height: 0; padding: 8px 10px; font-size: 13.5px; }
+  .menu:not(.menu--compact) :deep(.compact-group) { padding-top: 6px; }
+  .menu:not(.menu--compact) :deep(.compact-other) { margin-top: 6px; }
+}
 </style>

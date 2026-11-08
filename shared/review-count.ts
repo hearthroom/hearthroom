@@ -112,18 +112,37 @@ export function effectiveCharacters(value: unknown): number {
   return count;
 }
 
-export function reviewLength(settings: Record<string, unknown>): ReviewLength {
-  const persona = effectiveCharacters(record(settings.document).roleDetailDesc);
+export type WorldbookCharacterCounts = {
+  total: number;
+  constant: number;
+};
+
+export function worldbookCharacters(
+  settings: Record<string, unknown>,
+  options?: { constantOnly?: boolean },
+): WorldbookCharacterCounts {
+  const constantOnly = options?.constantOnly === true;
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
-  let constantWorldbook = 0;
+  let total = 0;
+  let constant = 0;
   for (const book of books) {
     const entries = record(book).entries;
     if (!Array.isArray(entries)) continue;
     for (const entry of entries) {
       const e = record(entry);
-      if (e.isEnabled !== false && e.isConstant === true) constantWorldbook += effectiveCharacters(e.content);
+      if (e.isEnabled === false) continue;
+      if (constantOnly && e.isConstant !== true) continue;
+      const chars = effectiveCharacters(e.content);
+      total += chars;
+      if (e.isConstant === true) constant += chars;
     }
   }
+  return {total, constant};
+}
+
+export function reviewLength(settings: Record<string, unknown>): ReviewLength {
+  const persona = effectiveCharacters(record(settings.document).roleDetailDesc);
+  const constantWorldbook = worldbookCharacters(settings, {constantOnly: true}).constant;
   const total = persona + constantWorldbook;
   return {persona, constantWorldbook, total, required: REVIEW_REQUIRED_CHARACTERS,
     remaining: Math.max(0, REVIEW_REQUIRED_CHARACTERS-total), eligible: total >= REVIEW_REQUIRED_CHARACTERS,

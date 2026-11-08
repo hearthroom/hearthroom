@@ -20,10 +20,11 @@ const source=computed(()=>props.card.sourceProvider??props.card.provider??curren
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
 const detailHref=computed(()=>lp(`/cards/${props.card.num ?? props.card.detailId ?? props.card.workId ?? sourceId.value}`));
 const hasDetails = computed(() => props.card.workVisibility ? (
- props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
+ !!props.card.reReview||props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
 ) : (
   !!props.card.draftChanged ||
   ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
+  !!props.card.reReview ||
   (props.card.status === 'rejected' && !!props.card.note) ||
   props.card.sourceAvailable === false
 ));
@@ -41,6 +42,8 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
   if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
+  // 重新審核：照常公開，但作者要知道卡正在被重審（不說原因）
+  if (c.status === "approved" && c.reReview) return { key: "mine.badge.reReview", tone: "wait" };
   if (!c.status || c.status === "approved") return { key: "mine.badge.listed", tone: "on" };
   if (c.status === "rejected" || c.status === "unshared") return { key: `mine.badge.${c.status}`, tone: "alert" };
   return { key: `mine.badge.${c.status}`, tone: "wait" };
@@ -96,6 +99,8 @@ onBeforeUnmount(() => listen(false));
         <span class="card__status" :class="[`card__status--${status.tone}`,{'card__status--access':!!card.workVisibility&&card.workVisibility.restriction==='none'}]"><svg v-if="card.workVisibility?.syncState==='complete'&&card.workVisibility.restriction==='none'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><template v-if="card.workVisibility.access==='private'"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></template><template v-else-if="card.workVisibility.access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></template><template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template></svg>{{ $t(status.key) }}</span>
         <span v-if="card.workVisibility?.review==='pending'" class="card__status card__status--wait">{{ $t('mine.badge.pending') }}</span>
         <span v-if="card.workVisibility?.update==='pending'" class="card__status card__status--wait">{{ $t('visibility.badge.updatePending') }}</span>
+        <!-- 重新審核：作品分享開著時，主標仍是公開範圍，重審跟「更新審核中」一樣另掛一個琥珀標 -->
+        <span v-if="card.workVisibility && card.reReview" class="card__status card__status--wait" data-re-review-badge>{{ $t('mine.badge.reReview') }}</span>
         <span v-if="card.workVisibility?.update==='rejected'" class="card__status card__status--alert">{{ $t('visibility.badge.updateRejected') }}</span>
         <span v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
@@ -132,9 +137,13 @@ onBeforeUnmount(() => listen(false));
       </p>
 
       <div v-if="hasDetails" class="card__body">
-        <p v-if="card.workVisibility" class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+        <template v-if="card.workVisibility">
+          <p class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+          <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
+        </template>
         <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
+        <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
         <p v-if="card.updateStatus==='pending'" class="card__note">{{ $t("workspace.updatePending") }}</p>
         <p v-if="card.updateStatus==='rejected'" class="card__note card__note--alert">{{ $t("workspace.updateRejected") }}</p>
         <p v-if="card.updateStatus==='superseded'" class="card__note card__note--alert">{{ $t("workspace.reviewSaveRetry") }}</p>

@@ -526,7 +526,14 @@ export interface ReviewQueueItem {
   /** 世界書全部條目數、正規表示式全部規則數（含停用）；null 或沒有＝不知道，不標 */
   worldbookEntries?: number | null;
   regexRules?: number | null;
+  /** 冷凍並討論：有人把這張卡擋下來了；null 或沒有＝沒冷凍 */
+  hold?: ReviewHold | null;
+  /** 審核員對已發布的卡發起的重新審核 */
+  reopen?: boolean;
 }
+
+/** 冷凍：holder 是冷凍人的顯示名；canRelease＝我能解凍（冷凍人自己，或管理員） */
+export interface ReviewHold { holder: string; at: number; byMe: boolean; canRelease: boolean }
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
 export interface ReviewDetail {
@@ -541,6 +548,9 @@ export interface ReviewDetail {
     /** 我在這張單上蓋過章：可以回頭唯讀查看，不必再領 */
     stampedByMe?: boolean;
     claimGeneration?: string; required: number;
+    hold?: ReviewHold | null;
+    /** 重新審核：已發布的卡回到待審；reopenReason 是發起理由（只給審核員） */
+    reopen?: boolean; reopenReason?: string;
     /** mine＝我蓋的那一章；舊版伺服器不帶 */
     stamps: { verdict: "approve" | "reject"; note: string; at: number; mine?: boolean }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
@@ -618,6 +628,11 @@ export async function setCardFeatured(cardId: string, featured: boolean, token: 
 
 export const claimReview = (id: string, token: string) => reviewAction<{ id: string; claimedAt: number; generation: string }>(id, "claim", token);
 export const releaseReview = (id: string, token: string, generation?:string) => reviewAction<void>(id, "release", token, {generation});
+export const holdReview = (id: string, token: string, generation?: string) => reviewAction<{ hold: ReviewHold }>(id, "hold", token, { generation });
+/** 管理員解凍別人冷凍的卡要帶理由 */
+export const unholdReview = (id: string, token: string, reason?: string) => reviewAction<{ hold: null }>(id, "unhold", token, { reason });
+/** 撤銷重新審核（限管理員，要寫理由） */
+export const withdrawReopen = (id: string, token: string, reason: string) => reviewAction<{ status: string }>(id, "withdraw", token, { reason });
 export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
@@ -822,6 +837,8 @@ export interface MyCard {
   /** 本站的審核狀態；只有 registered 時才有。 */
   status?: CardStatus;
   updateStatus?: string;
+  /** 審核員對這張已發布的卡發起了重新審核（卡照常公開）；理由與發起人不給作者 */
+  reReview?: boolean;
   /** 最近一次駁回給作者的說明。 */
   note?: string;
   /** 過審那一版的級別（只有 registered 時才有）；null＝評級缺失（問卷上線前上架的一般卡），下次送審要補 */

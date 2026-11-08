@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "徽章依取得難度分成普通到傳說四階，越難拿的圖示和卡片越華麗。",
+    "zh-Hans": "徽章按获得难度分成普通到传说四阶，越难拿的图标和卡片越华丽。",
+    "en": "Badges are now graded Common to Legendary by how hard they are to earn, and the harder ones look grander.",
+    "ja": "バッジは獲得の難しさでコモン〜レジェンドの4段階になり、難しいものほど豪華に表示されます。",
+    "ko": "배지가 얻기 어려운 정도에 따라 일반부터 전설까지 네 등급으로 나뉘고 어려울수록 화려해져요."
+  }
+}

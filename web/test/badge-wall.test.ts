@@ -2,14 +2,15 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createApp,nextTick,type App} from 'vue';
 import {i18n,applyLocale} from '../src/lib/i18n';
 import BadgeWall from '../src/components/BadgeWall.vue';
-import type {CollectedBadge} from '../../shared/community-badges';
+import {BADGE_ICONS,type CollectedBadge} from '../../shared/community-badges';
+import {existsSync} from 'node:fs';
 let app:App,el:HTMLDivElement;
 const item=(key:string,state:CollectedBadge['state']='earned'):CollectedBadge=>({key,state,icon:'star',category:'event',titles:{en:'Summer traveler'},descriptions:{en:'Participate in the summer event.'},earnedAt:1000,expiresAt:null});
 beforeEach(async()=>{el=document.createElement('div');document.body.append(el);await applyLocale('en');});
 afterEach(()=>{app?.unmount();el.remove();});
 it('renders icons, conditions and earned/locked states without showing internal keys',()=>{
  app=createApp(BadgeWall,{items:[item('event_summer'),{...item('community_level_5','locked'),progress:{value:1,target:250}}],selected:[],editable:true}).use(i18n);app.mount(el);
- expect(el.textContent).toContain('Participate in the summer event.');expect(el.textContent).toContain('Not yet earned');expect(el.textContent).not.toContain('event_summer');expect(el.querySelectorAll('svg')).toHaveLength(2);expect(el.querySelector('progress')?.value).toBe(1);
+ expect(el.textContent).toContain('Participate in the summer event.');expect(el.textContent).toContain('Not yet earned');expect(el.textContent).not.toContain('event_summer');const art=[...el.querySelectorAll<HTMLElement>('.badge-tile__art')];expect(art).toHaveLength(2);for(const a of art)expect(a.style.backgroundImage).toContain('/badges/icons/star.webp');expect(el.querySelector('progress')?.value).toBe(1);
 });
 it('prevents a sixth featured badge while allowing deselection',async()=>{
  const change=vi.fn();app=createApp(BadgeWall,{items:['a','b','c','d','e','f'].map(k=>item(k)),selected:['a','b','c','d','e'],editable:true,onChange:change}).use(i18n);app.mount(el);
@@ -26,4 +27,9 @@ it('keeps public walls read-only and safely renders event text',()=>{
 it('shows whole numbers when the server sends a fractional counter',()=>{
  app=createApp(BadgeWall,{items:[{...item('member_anniversary','locked'),progress:{value:0.0598,target:365,unit:'days'}}]}).use(i18n);app.mount(el);
  expect(el.textContent).toContain('0 / 365 days');expect(el.textContent).not.toContain('0.0598');
+});
+it('ships painted art for every icon except the Discord brand mark, which stays the official line mark',()=>{
+ expect(BADGE_ICONS.filter(i=>i!=='discord'&&!existsSync(`public/badges/icons/${i}.webp`))).toEqual([]);
+ app=createApp(BadgeWall,{items:[{...item('discord_linked'),icon:'discord'}]}).use(i18n);app.mount(el);
+ expect(el.querySelector('.badge-tile__art')).toBeNull();expect(el.querySelector('svg[data-icon=discord]')).not.toBeNull();
 });

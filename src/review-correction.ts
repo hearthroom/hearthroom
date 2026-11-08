@@ -12,7 +12,8 @@ export const REVIEW_CORRECTION_TTL_MS = 24 * 60 * 60 * 1000;
 export async function correctionEligibility(db:D1Database,id:string,member:string,now:number) {
  const [s,role,stamp]=await Promise.all([getSubmission(db,id),reviewerRole(db,member),db.prepare("SELECT 1 FROM review_stamps WHERE submission_id=? AND member_id=? AND verdict='approve'").bind(id,member).first()]);
  const manager=role==='manager'||role==='owner';
- return {canCorrect:s.status==='approved'&&(manager||!!stamp&&s.decided_at!==null&&now-s.decided_at<=REVIEW_CORRECTION_TTL_MS),manager,deadline:s.decided_at===null?null:s.decided_at+REVIEW_CORRECTION_TTL_MS};
+ // 重新審核的「維持通過」只是結束那張重審單，沒有版本可改判；要改判就改原本通過的那張
+ return {canCorrect:s.status==='approved'&&!s.reopen_of&&(manager||!!stamp&&s.decided_at!==null&&now-s.decided_at<=REVIEW_CORRECTION_TTL_MS),manager,deadline:s.decided_at===null?null:s.decided_at+REVIEW_CORRECTION_TTL_MS};
 }
 
 interface Correction {
@@ -131,6 +132,13 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
    .bind(receipt.access,receipt.restriction,receipt.epoch,x.public_version_id,v.work_id,x.operation_id,fenceEpoch),
   db.prepare("UPDATE review_submissions SET status='rejected',note=? WHERE id=? AND status='approved'").bind(x.note,s.id),
   db.prepare("UPDATE hosting_versions SET state='rejected' WHERE version_id=?").bind(v.version_id),
+  // 由重審單發起的改判（操作編號＝重審單）在同一批把那張重審單記成駁回：Harbor 結果不明、之後由排程補完時也一樣
+  // 審核章要在單子還排隊時寫（定案後的單不收章）；卡被冷凍時不寫，免得守衛擋下整批改判
+  db.prepare("INSERT OR IGNORE INTO review_stamps(submission_id,member_id,verdict,note,created_at,claim_generation) SELECT id,?,'reject',?,?,'' FROM review_submissions r WHERE r.id=? AND r.reopen_of=? AND r.status='pending' AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=r.card_id)").bind(x.actor_member_id,x.note,input.now,x.operation_id,s.id),
+  db.prepare("UPDATE review_submissions SET status='rejected',note=?,decided_at=?,claimed_by=NULL,claimed_at=NULL,claim_generation='' WHERE id=? AND reopen_of=? AND status='pending'").bind(x.note,input.now,x.operation_id,s.id),
+  db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND reopen_of IS NOT NULL)").bind(x.operation_id,x.operation_id),
+  // 這一版的其他重新審核沒有意義了
+  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,claim_generation='',decided_at=? WHERE reopen_of=? AND status='pending' AND id<>?").bind(input.now,s.id,x.operation_id),
  ];
  if(x.public_state!=='unchanged'){
   const replacement=x.public_version_id?await db.prepare('SELECT public_role,rating FROM hosting_versions WHERE version_id=?').bind(x.public_version_id).first<{public_role:string;rating:string|null}>():null;
@@ -186,6 +194,6 @@ export async function listReviewDecisions(db:D1Database, member:string, now:numb
   return {items:page.map(r=>({
     id:r.id,status:r.status,kind:r.kind,verdict:r.verdict,note:r.note,at:r.created_at,
     submittedAt:r.submitted_at,corrected:!!r.corrected,decidedAt:r.decided_at,versionId:r.version_id,card:{id:String(r.card_id),name:pickLocale(JSON.parse(r.names) as Localized,lang)},
-    canCorrect:r.status==='approved'&&r.verdict==='approve'&&r.decided_at!==null&&now-r.decided_at<=REVIEW_CORRECTION_TTL_MS,
+    canCorrect:r.status==='approved'&&r.verdict==='approve'&&r.version_id!==null&&r.decided_at!==null&&now-r.decided_at<=REVIEW_CORRECTION_TTL_MS,
   })),nextCursor:rows.results.length>50?page.at(-1)!.cursor:null};
 }

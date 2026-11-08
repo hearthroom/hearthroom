@@ -1,8 +1,10 @@
 import { auditStmtIfChanged } from './audit';
+import { reviewerRole } from './members';
 import { serviceRewardOnApproval } from './card-reward-service';
 import { reserveUpdateNotification } from './card-update';
 import {finalizeManagedReview} from './work-publication';
-import { dropSnapshotStatement, loadSnapshot } from "./review-snapshot";
+import { dropSnapshotStatement, encodeSnapshot, loadSnapshot } from "./review-snapshot";
+import { correctReview } from "./review-correction";
 import { bumpOp } from "./ops-metrics";
 import { reviewLengthStatus, type ReviewLengthStatus } from "../shared/review-length";
 import { reviewLength } from "./review-length";
@@ -53,12 +55,17 @@ export interface SubmissionRow {
   /** 世界書條目數、正規表示式規則數（0100 起，全部含停用）；NULL＝不知道 */
   review_worldbook_entries: number | null;
   review_regex_rules: number | null;
+  /** 重新審核（0114 起）：重審的是哪一張已通過的單、誰發起、為什麼。作者自己送的單是 NULL */
+  reopen_of: string | null;
+  reopened_by: string | null;
+  reopen_reason: string;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
 export async function pendingSubmissionOf(db: D1Database, cardId: string): Promise<SubmissionRow | null> {
   return await db
-    .prepare("SELECT * FROM review_submissions WHERE card_id = ? AND status = 'pending' ORDER BY submitted_at DESC LIMIT 1")
+    // 只看作者自己送的單：審核員發起的重新審核不是作者的送審，不能拿來判斷作者重送是不是重複
+    .prepare("SELECT * FROM review_submissions WHERE card_id = ? AND status = 'pending' AND reopen_of IS NULL ORDER BY submitted_at DESC LIMIT 1")
     .bind(cardId)
     .first<SubmissionRow>();
 }
@@ -68,7 +75,7 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
  * 沒人看過，不算一次送審。用送審時間排，同一毫秒再看 rowid。
  */
 const EARLIER_DECIDED = (p: string, s: string) =>
-  `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected')
+  `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected') AND ${p}.reopen_of IS NULL
    AND (${p}.submitted_at < ${s}.submitted_at OR (${p}.submitted_at = ${s}.submitted_at AND ${p}.rowid < ${s}.rowid))`;
 
 export interface PreviousSubmission { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null }
@@ -117,13 +124,27 @@ export interface QueueItem {
   /** 世界書全部條目數、正規表示式全部規則數（含停用）；null＝不知道，清單上就不標 */
   worldbookEntries: number | null;
   regexRules: number | null;
+  /** 冷凍並討論：有人把這張卡擋下來了；null＝沒冷凍 */
+  hold: HoldView | null;
+  /** 審核員對已發布的卡發起的重新審核 */
+  reopen: boolean;
 }
+
+/** 冷凍給審核員看的樣子。holder 是冷凍人的顯示名（審核員之間本來就看得到彼此，作者看不到） */
+export interface HoldView { holder: string; at: number; byMe: boolean; canRelease: boolean }
+
+const isManager = (role: Awaited<ReturnType<typeof reviewerRole>>) => role === "manager" || role === "owner";
+const holdView = (h: { hold_by: string | null; hold_at: number | null; hold_name: string | null }, memberId: string, manager: boolean): HoldView | null =>
+  h.hold_by === null || h.hold_at === null ? null
+    : { holder: (h.hold_name ?? "").slice(0, 80), at: h.hold_at, byMe: h.hold_by === memberId, canRelease: h.hold_by === memberId || manager };
+const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN members hm ON hm.id = h.member_id";
+const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
 
 /** 佇列：所有待審的單，最舊的在前。不帶作者。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total, s.review_worldbook_entries, s.review_regex_rules,
+      `SELECT s.id, s.kind, s.submitted_at, s.reopen_of, s.claimed_by, s.claimed_at, s.claim_generation, s.rating, s.review_length_total, s.review_worldbook_entries, s.review_regex_rules,
               EXISTS(SELECT 1 FROM review_length_exemptions e WHERE e.card_number=s.card_id AND e.enabled=1) AS length_exempt,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
@@ -131,8 +152,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
-              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier
-       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id
+              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier, ${HOLD_COLUMNS}
+       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id ${HOLD_JOIN}
        WHERE s.status = 'pending' ORDER BY s.submitted_at ASC LIMIT 200`,
     )
     .bind(memberId)
@@ -140,7 +161,9 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
+      hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null;
     }>();
+  const manager = isManager(await reviewerRole(db, memberId));
   return rows.results.map((r) => ({
     lengthExempt:!!r.length_exempt,
     id: r.id,
@@ -164,7 +187,69 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
     worldbookEntries: r.review_worldbook_entries,
     regexRules: r.review_regex_rules,
+    hold: holdView(r, memberId, manager),
+    reopen: r.reopen_of !== null,
   }));
+}
+
+/** 這張單所屬的卡現在的冷凍（給審核頁）。 */
+export async function holdOf(db: D1Database, cardId: string | number, memberId: string): Promise<HoldView | null> {
+  const row = await db
+    .prepare(`SELECT ${HOLD_COLUMNS} FROM review_holds h LEFT JOIN members hm ON hm.id = h.member_id WHERE h.card_id = ?`)
+    .bind(cardId)
+    .first<{ hold_by: string; hold_at: number; hold_name: string | null }>();
+  return row ? holdView(row, memberId, isManager(await reviewerRole(db, memberId))) : null;
+}
+
+/**
+ * 冷凍並討論。跟蓋章同一個前提：領著（沒逾時）才能冷凍。冷凍後放回領取，別人領得到、讀得到，一起討論；
+ * 冷凍中誰都不能蓋章（冷凍人自己也要先解凍）。冷凍掛在卡上，作者重送新版本照樣冷凍。
+ */
+export async function hold(db: D1Database, input: { submissionId: string; memberId: string; now: number; generation?: string }): Promise<HoldView> {
+  const row = await getSubmission(db, input.submissionId);
+  if (row.status !== "pending") throw new HttpError(409, "submission already decided");
+  // 託管作品：審核決定已經記下、只差同步完成，等同定案
+  if (await db.prepare("SELECT 1 FROM work_review_decisions WHERE submission_id = ?").bind(row.id).first()) throw new HttpError(409, "submission already decided");
+  if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
+  if (input.generation !== undefined && input.generation !== row.claim_generation) throw new HttpError(409, "claim changed");
+  if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_already_held");
+  await db.batch([
+    // 寫入當下再確認一次：單子還在排隊、還是我這一次的領取、沒有定案。上面的檢查與這裡之間，別人可能剛蓋完章
+    db.prepare(`INSERT INTO review_holds (card_id, member_id, submission_id, created_at)
+      SELECT card_id, ?, id, ? FROM review_submissions s
+      WHERE s.id = ? AND s.status = 'pending' AND s.claimed_by = ? AND s.claim_generation = ? AND s.claimed_at > ?
+      AND NOT EXISTS (SELECT 1 FROM work_review_decisions d WHERE d.submission_id = s.id)
+      ON CONFLICT(card_id) DO NOTHING`)
+      .bind(input.memberId, input.now, row.id, input.memberId, row.claim_generation, input.now - CLAIM_TTL_MS),
+    auditStmtIfChanged(db, { subjectKind: "review_hold", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "hold", after: { cardId: Number(row.card_id) }, operationId: crypto.randomUUID(), now: input.now }),
+    db.prepare(`UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = ''
+      WHERE id = ? AND claimed_by = ? AND claim_generation = ? AND EXISTS (SELECT 1 FROM review_holds WHERE card_id = ? AND member_id = ? AND submission_id = ?)`)
+      .bind(row.id, input.memberId, row.claim_generation, row.card_id, input.memberId, row.id),
+  ]);
+  const placed = await holdOf(db, row.card_id, input.memberId);
+  // 同時有兩個人按：先寫進去的那個算數
+  if (!placed?.byMe) throw new HttpError(409, "review_already_held");
+  return placed;
+}
+
+/**
+ * 解凍。冷凍人自己隨時能解，不必先領（單子可能正被別人領著讀）；管理員也能解別人的冷凍，
+ * 例如冷凍人已經不審了，但要寫理由，稽核留得到為什麼。
+ */
+export async function unhold(db: D1Database, input: { submissionId: string; memberId: string; reason: string; now: number }): Promise<void> {
+  const row = await getSubmission(db, input.submissionId);
+  const current = await db.prepare("SELECT member_id, created_at FROM review_holds WHERE card_id = ?").bind(row.card_id).first<{ member_id: string; created_at: number }>();
+  if (!current) throw new HttpError(409, "review_not_held");
+  const reason = input.reason.trim();
+  if (reason.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
+  if (current.member_id !== input.memberId) {
+    if (!isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_hold_not_yours");
+    if (!reason) throw new HttpError(400, "review_hold_reason_required");
+  }
+  await db.batch([
+    db.prepare("DELETE FROM review_holds WHERE card_id = ? AND member_id = ? AND created_at = ?").bind(row.card_id, current.member_id, current.created_at),
+    auditStmtIfChanged(db, { subjectKind: "review_hold", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "release", reason, before: { cardId: Number(row.card_id), heldBy: current.member_id, heldAt: current.created_at }, operationId: crypto.randomUUID(), now: input.now }),
+  ]);
 }
 
 export async function getSubmission(db: D1Database, id: string): Promise<SubmissionRow> {
@@ -231,9 +316,12 @@ export async function stamp(
   }
 
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
+  // 冷凍中誰都不能定案（資料庫的 trigger 也會擋）。放在領取檢查前：冷凍的單不該被說成「請先領取」
+  if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_held");
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
+  if (row.reopen_of) return stampReopen(db, row, input, env);
   if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
@@ -282,6 +370,7 @@ export async function stamp(
   }
   try { await db.batch(writes); } catch (error) {
     if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
+    if(error instanceof Error && error.message.includes('review_held')) throw new HttpError(409,'review_held');
     throw error;
   }
   if(managed&&input.verdict==='approve'&&approvals>=required){
@@ -335,28 +424,32 @@ export function recordReviewCountsStatement(db: D1Database, submissionId: string
   return db.prepare("UPDATE review_submissions SET review_worldbook_entries = ?, review_regex_rules = ? WHERE id = ? AND status = 'pending' AND review_worldbook_entries IS NULL").bind(counts.worldbookEntries, counts.regexRules, submissionId);
 }
 
+export interface AuthorReviewState { status: CardStatus; note: string; rating: string | null; updateStatus?: string; reReview?: boolean; approvedHash?: string; approvedRevision?: string }
+
 /** 作者這幾張卡的審核狀態與最近一次駁回說明（給「我的卡片」）。 */
 export async function statusAmong(
   db: D1Database,
   roleIds: string[],
-): Promise<Map<string, { status: CardStatus; note: string; rating: string | null; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>> {
-  const out = new Map<string, { status: CardStatus; note: string; rating: string | null; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>();
+): Promise<Map<string, AuthorReviewState>> {
+  const out = new Map<string, AuthorReviewState>();
   if (!roleIds.length) return out;
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
       `SELECT c.source_role_id, c.status, CASE WHEN c.status='unlisted' THEN NULL ELSE c.rating END AS rating, c.approved_content_hash, c.approved_revision_hash,
               CASE WHEN c.approved_version_id IS NOT NULL THEN
-                (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
+                (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id AND s.reopen_of IS NULL ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
               END AS update_status,
+              EXISTS(SELECT 1 FROM review_submissions s WHERE s.card_id=c.id AND s.status='pending' AND s.reopen_of IS NOT NULL) AS re_review,
               (SELECT note FROM review_submissions s WHERE s.card_id = c.id AND s.status = 'rejected'
                ORDER BY s.decided_at DESC LIMIT 1) AS note
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )
     .bind(...roleIds)
-    .all<{ source_role_id: string; status: CardStatus; note: string | null; rating: string | null; update_status:string|null; approved_content_hash: string|null; approved_revision_hash: string|null }>();
+    .all<{ source_role_id: string; status: CardStatus; note: string | null; rating: string | null; update_status:string|null; re_review:number; approved_content_hash: string|null; approved_revision_hash: string|null }>();
   // approvedHash：過審那一版的內容版本（0052）；approvedRevision：整份內容版本（0055）。「我的卡片」拿來跟草稿現在的比
-  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", rating: r.rating, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}), ...(r.approved_revision_hash?{approvedRevision:r.approved_revision_hash}:{}) });
+  // reReview：審核員發起的重新審核還沒結束。作者只看到這一件事，看不到理由與發起人
+  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", rating: r.rating, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.re_review&&r.status==='approved'?{reReview:true}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}), ...(r.approved_revision_hash?{approvedRevision:r.approved_revision_hash}:{}) });
   return out;
 }
 
@@ -375,4 +468,127 @@ export function needsReviewStatements(
       )
       .bind(crypto.randomUUID(), input.cardId, input.provider, input.roleId, input.contentHash, input.now, input.cardId),
   ];
+}
+
+/**
+ * 重新審核（審核員 2026-11-08）：已發布的卡由一位審核員（不含 AI 審核帳號）發起，回到待審清單。
+ * 重審單是一張普通的待審單（kind re），指向目前公開的那張已通過的單：內容讀作者當初送審時封存的那一版，
+ * 領取、冷凍照舊。卡片在重審期間照常公開；要立刻止血另按「暫停公開」。理由只給審核員看。
+ */
+export const REOPEN_REASON_MAX = REVIEW_NOTE_MAX;
+export async function reopenCard(db: D1Database, input: { cardId: string; memberId: string; reason: string; now: number }): Promise<{ id: string }> {
+  const reason = input.reason.trim();
+  if (!reason) throw new HttpError(400, "review_reopen_reason_required");
+  if (reason.length > REOPEN_REASON_MAX) throw new HttpError(400, "note_too_long");
+  const card = await db.prepare("SELECT id, status, approved_version_id FROM cards WHERE id = ?").bind(input.cardId).first<{ id: number; status: string; approved_version_id: string | null }>();
+  if (!card) throw new HttpError(404, "card not found");
+  // 只有託管版本才有封存內容可讀、才能改判；同步來的舊卡沒有版本
+  const original = card.status === "approved" && card.approved_version_id
+    ? await db.prepare("SELECT s.* FROM hosting_versions v JOIN review_submissions s ON s.id = v.submission_id WHERE v.version_id = ? AND s.status = 'approved'").bind(card.approved_version_id).first<SubmissionRow>()
+    : null;
+  if (!original) throw new HttpError(409, "review_reopen_not_published");
+  if (await db.prepare("SELECT 1 FROM review_submissions WHERE card_id = ? AND status = 'pending' AND reopen_of IS NOT NULL").bind(card.id).first()) throw new HttpError(409, "review_reopen_exists");
+  const id = crypto.randomUUID();
+  // 審核頁看「精簡副本」就會去讀 Harbor 封存版（跟作者送審時一樣）；這裡不抄任何私有設定
+  const snapshot = await encodeSnapshot({ slim: true, document: { roleName: "", userName: "", roleDetailDesc: "" } } as never);
+  const batch = await db.batch([
+    db.prepare(`INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at, rating, rating_descriptors, rating_answers,
+        review_length_total, review_worldbook_entries, review_regex_rules, reopen_of, reopened_by, reopen_reason)
+      SELECT ?, card_id, provider, source_role_id, 're', 'pending', content_hash, ?, rating, rating_descriptors, rating_answers,
+        review_length_total, review_worldbook_entries, review_regex_rules, id, ?, ?
+      FROM review_submissions o WHERE o.id = ? AND o.status = 'approved'
+      AND NOT EXISTS (SELECT 1 FROM review_submissions p WHERE p.card_id = o.card_id AND p.status = 'pending' AND p.reopen_of IS NOT NULL)`)
+      .bind(id, input.now, input.memberId, reason, original.id),
+    auditStmtIfChanged(db, { subjectKind: "review_reopen", subjectId: id, actorMemberId: input.memberId, actorKind: "human", action: "open", reason, after: { cardId: Number(card.id), reopenOf: original.id }, operationId: crypto.randomUUID(), now: input.now }),
+    db.prepare("INSERT INTO review_snapshots (submission_id, detail, created_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM review_submissions WHERE id = ?)").bind(id, snapshot, input.now, id),
+  ]);
+  if (!batch[0]?.meta.changes) throw new HttpError(409, "review_reopen_exists");
+  return { id };
+}
+
+/** 撤銷重新審核：限管理員，要寫理由（例如確認是誤會）。卡片完全不動。 */
+export async function withdrawReopen(db: D1Database, input: { submissionId: string; memberId: string; reason: string; now: number }): Promise<void> {
+  const row = await getSubmission(db, input.submissionId);
+  if (!row.reopen_of) throw new HttpError(409, "review_not_reopen");
+  if (!isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_reopen_manager_required");
+  const reason = input.reason.trim();
+  if (!reason) throw new HttpError(400, "review_reopen_reason_required");
+  if (reason.length > REOPEN_REASON_MAX) throw new HttpError(400, "note_too_long");
+  if (row.status !== "pending") throw new HttpError(409, "submission already decided");
+  await db.batch([
+    db.prepare("UPDATE review_submissions SET status = 'superseded', claimed_by = NULL, claimed_at = NULL, claim_generation = '', decided_at = ? WHERE id = ? AND status = 'pending'").bind(input.now, row.id),
+    auditStmtIfChanged(db, { subjectKind: "review_reopen", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "withdraw", reason, after: { cardId: Number(row.card_id) }, operationId: crypto.randomUUID(), now: input.now }),
+    dropSnapshotStatement(db, row.id),
+  ]);
+}
+
+/**
+ * 重審單的決定。維持通過：任一位領著的審核員，只結束這張單，卡片一個欄位都不動（不能拿舊單去改寫現在的過審版本）。
+ * 駁回：限管理員，走改判（Harbor 同步、獎勵保護、作者收到駁回說明）；改判以這張重審單的編號當操作編號，
+ * Harbor 那邊結果不明時重按同一個決定會接續同一次改判，不會做兩次。
+ */
+async function stampReopen(
+  db: D1Database, row: SubmissionRow,
+  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number },
+  env?: Env,
+): Promise<StampResult> {
+  const original = await getSubmission(db, row.reopen_of!);
+  const note = input.note.trim();
+  if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
+  // 這張重審單已經在駁回（改判進行中或已完成）：只能接續同一次駁回，不能改成維持通過
+  const rejecting = await db.prepare("SELECT 1 FROM review_corrections WHERE operation_id = ? AND state <> 'conflict'").bind(row.id).first();
+  if (rejecting) {
+    if (input.verdict === "approve") { await bumpOp(db, "review_reopen", "keep", "conflict"); throw new HttpError(409, "review_reopen_rejecting"); }
+    return rejectReopen(db, row, original, input, note, env);
+  }
+  // 原單正在被一般改判：結果出來前不能維持通過
+  if (input.verdict === "approve" && await db.prepare("SELECT 1 FROM review_corrections WHERE submission_id = ? AND state IN ('pending', 'applying')").bind(original.id).first()) {
+    await bumpOp(db, "review_reopen", "keep", "conflict");
+    throw new HttpError(409, "review_reopen_rejecting");
+  }
+  const current = await db.prepare("SELECT v.submission_id FROM cards c JOIN hosting_versions v ON v.version_id = c.approved_version_id WHERE c.id = ?").bind(row.card_id).first<{ submission_id: string }>();
+  if (original.status !== "approved" || current?.submission_id !== original.id) {
+    // 重審的那一版已經不是公開版：這張單沒有意義了
+    await db.batch([
+      db.prepare("UPDATE review_submissions SET status = 'superseded', claimed_by = NULL, claimed_at = NULL, claim_generation = '', decided_at = ? WHERE id = ? AND status = 'pending'").bind(input.now, row.id),
+      dropSnapshotStatement(db, row.id),
+    ]);
+    await bumpOp(db, "review_reopen", input.verdict === "approve" ? "keep" : "reject", "conflict");
+    throw new HttpError(409, "review_reopen_stale");
+  }
+  if (input.verdict === "reject") return rejectReopen(db, row, original, input, note, env);
+  try {
+    await db.batch([
+      db.prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, 'approve', ?, ?, ?)")
+        .bind(row.id, input.memberId, note, input.now, row.claim_generation),
+      db.prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = '', status = 'approved', decided_at = ?, note = '' WHERE id = ? AND status = 'pending'")
+        .bind(input.now, row.id),
+      dropSnapshotStatement(db, row.id),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("claim changed")) throw new HttpError(409, "claim changed");
+    if (error instanceof Error && error.message.includes("review_held")) throw new HttpError(409, "review_held");
+    throw error;
+  }
+  await bumpOp(db, "review_reopen", "keep", "success");
+  return { submission: await getSubmission(db, row.id), cardStatus: "approved", approvals: 1, required: STAMPS_REQUIRED[row.kind] };
+}
+
+/**
+ * 重審駁回：限管理員，走改判。改判把這張重審單記成駁回（同一批寫入，見 correctReview）；
+ * Harbor 結果不明時重按同一個決定會接續同一次改判。審核章也在改判那一批寫（給「我處理過的」用）。
+ */
+async function rejectReopen(
+  db: D1Database, row: SubmissionRow, original: SubmissionRow,
+  input: { memberId: string; now: number }, note: string, env?: Env,
+): Promise<StampResult> {
+  if (!isManager(await reviewerRole(db, input.memberId))) {
+    await bumpOp(db, "review_reopen", "reject", "denied");
+    throw new HttpError(403, "review_reopen_reject_manager");
+  }
+  if (!env) throw new HttpError(503, "visibility_sync_pending");
+  await correctReview(env, { id: original.id, member: input.memberId, operationId: row.id, note, now: input.now });
+  await bumpOp(db, "review_reopen", "reject", "success");
+  const card = await db.prepare("SELECT status FROM cards WHERE id = ?").bind(row.card_id).first<{ status: CardStatus }>();
+  return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "rejected", approvals: 0, required: STAMPS_REQUIRED[row.kind] };
 }

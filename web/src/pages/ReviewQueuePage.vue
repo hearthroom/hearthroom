@@ -5,13 +5,16 @@
  * 誰想審就自己領；領了就是「我正在看」，逾時自動放回。這裡只列狀態與入口，
  * 看設定、蓋章在 ReviewDetailPage。不顯示作者（盲審）。
  *
+ * 冷凍並討論的卡照樣列著，標出冷凍人；領了只能看、不能決定。冷凍人自己在這裡就能解凍
+ * （管理員解別人的冷凍要寫理由，在審核頁做）。
+ *
  * 領取與開始審是同一顆按鈕（2026-11-02 體檢 R1）：以前領取不導頁、「查看」又隨時可按，
  * 太早點就撞進「請先領取」。現在只有領成功才進詳情；領取送出中這一列的按鈕都不能按。
  */
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewQueue, releaseReview, type ReviewQueueItem } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewQueue, releaseReview, unholdReview, type ReviewQueueItem } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useReviewer } from "@/lib/review";
@@ -93,6 +96,23 @@ async function claim(item: ReviewQueueItem) {
   }
 }
 
+async function unhold(item: ReviewQueueItem) {
+  if (busy.value) return;
+  busy.value = item.id;
+  rowError.value = null;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await unholdReview(item.id, token);
+    item.hold = null;
+  } catch (err) {
+    rowError.value = { id: item.id, text: err instanceof Error && err.message === t("auth.expired") ? err.message : t("review.hold.unholdFailed") };
+    if (err instanceof ApiError && err.status === 409) void load();
+  } finally {
+    busy.value = null;
+  }
+}
+
 async function release(item: ReviewQueueItem) {
   busy.value = item.id;
   try {
@@ -155,9 +175,12 @@ onMounted(() => {
               <span v-if="typeof item.regexRules === 'number'" class="chip chip--count" data-regex-chip>{{ $t("review.queue.regex", { n: numbers.format(item.regexRules) }) }}</span>
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
+              <span v-if="item.reopen" class="chip chip--re" data-reopen-chip>{{ $t("review.reopen.chip") }}</span>
+              <span v-if="item.hold" class="chip chip--hold" data-hold-chip>{{ $t("review.hold.chip") }}</span>
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>
             <p class="row__meta">{{ zoneLabel(item.card.zone) }} · {{ relativeTime(item.submittedAt) }}</p>
+            <p v-if="item.hold" class="row__meta row__hold" data-hold-by>{{ item.hold.byMe ? $t("review.hold.byMe") : $t("review.hold.by", { name: item.hold.holder || $t("review.hold.someone") }) }} · {{ relativeTime(item.hold.at) }}</p>
             <p v-if="rowError?.id === item.id" class="notice notice--error row__error" role="alert">{{ rowError.text }}</p>
           </div>
           <div class="row__acts">
@@ -168,8 +191,10 @@ onMounted(() => {
             <RouterLink v-else-if="item.stampedByMe" class="btn row__main" :to="lp(`/review/${item.id}`)">{{ $t("review.action.open") }}</RouterLink>
             <button v-else-if="item.claim === 'other'" class="btn row__main" disabled>{{ $t("review.claim.other") }}</button>
             <button v-else class="btn btn--primary row__main" :disabled="!!busy" :aria-busy="busy === item.id" @click="claim(item)">
-              {{ busy === item.id ? $t("review.action.claiming") : $t("review.action.claim") }}
+              {{ busy === item.id ? $t("review.action.claiming") : $t(item.hold ? "review.action.claimHeld" : "review.action.claim") }}
             </button>
+            <!-- 冷凍人自己解凍；管理員解別人的要寫理由，在審核頁 -->
+            <button v-if="item.hold?.byMe" class="btn btn--ghost row__minor" :disabled="!!busy" data-unhold @click="unhold(item)">{{ $t("review.action.unhold") }}</button>
           </div>
         </li>
       </ul>
@@ -200,6 +225,8 @@ onMounted(() => {
 .chip--attempt { color: var(--warning-text); }
 .chip--length, .chip--count { font-variant-numeric: tabular-nums; }
 .chip--short { color: var(--warning-text); }
+.chip--hold { color: var(--warning-text); }
+.row__hold { color: var(--warning-text); overflow-wrap: anywhere; }
 .filter { margin-bottom: var(--s-3); }
 .row-ghost { height: 96px; border-radius: var(--r-md); }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-2); }

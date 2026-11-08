@@ -6,8 +6,8 @@
  * 一個數字、送審時被告知另一個數字。這裡在瀏覽器環境（happy-dom）裡逐類對拍。
  */
 import { expect, it } from "vitest";
-import { draftReviewLength } from "../src/lib/draft-review-length";
-import { reviewLength } from "../../src/review-length";
+import { draftReviewLength, worldbookReviewCount, worldbookReviewCounts } from "../src/lib/draft-review-length";
+import { reviewLength, worldbookCharacters } from "../../src/review-length";
 import type { WorldbookEntryDraft } from "../src/lib/role-draft";
 
 const entry = (content: string, extra: Partial<WorldbookEntryDraft> = {}): WorldbookEntryDraft => ({
@@ -48,6 +48,12 @@ it("adds only enabled always-on entries and matches the submitted total", () => 
   const editor = draftReviewLength("角色設定", entries);
   expect(editor).toMatchObject({ persona: 4, constantWorldbook: 6 + 6, total: 16, required: 3001, remaining: 2985, eligible: false });
   expect(editor).toEqual(asSubmitted("角色設定", entries));
+  expect(worldbookReviewCounts(entries)).toEqual({ total: 6 + 5 + 6, constant: 6 + 6 });
+  expect(worldbookReviewCount(entries)).toBe(
+    worldbookCharacters({
+      worldbooks: [{ entries: entries.map((e, i) => ({ entryId: String(i), content: e.content, isEnabled: e.isEnabled !== false, isConstant: e.isConstant === true })) }],
+    }).total,
+  );
 });
 
 it("reaches eligibility at the same boundary as the review check", () => {

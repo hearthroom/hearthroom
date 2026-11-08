@@ -96,7 +96,7 @@ import {
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
 import { formatReviewLength } from "@/lib/review-length";
-import { combineReviewLength, constantReviewCount, personaReviewCount } from "@/lib/draft-review-length";
+import { combineReviewLength, personaReviewCount, worldbookReviewCounts } from "@/lib/draft-review-length";
 import { useOwnReviewLengthExemption } from '@/lib/own-review-length-exemption';
 import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
@@ -495,7 +495,9 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
  */
 const reviewPersona = computed(() => personaReviewCount(draft.value.roleDetailDesc));
 const lengthExempt=useOwnReviewLengthExemption(roleId);
-const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : constantReviewCount(wb.entries)));
+const wbCounts = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.entries)));
+const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.reviewEntries())?.constant ?? null));
+const wbTotalChars = computed(() => (wbCounts.value ? wbCounts.value.total.toLocaleString(String(locale.value)) : null));
 const reviewCount = computed(() => {
   const length = combineReviewLength(reviewPersona.value, reviewConstant.value);
   return length && { eligible: length.eligible, n: formatReviewLength(length, String(locale.value)) };
@@ -830,8 +832,8 @@ function onRegexFile(event: Event) {
     try {
       const imported = ruleSetFromImport(JSON.parse(await file.text()));
       if (!imported) throw new Error("regex_invalid");
-      // 舊格式檔沒有聊天頁模式；更新美化時沿用作者目前選擇，避免已存沙箱卡被切回傳統頁。
-      imported.set.pageMode ??= regexSet.value.pageMode;
+      // 舊格式檔沒有聊天頁模式；新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），已存卡更新美化時沿用作者目前選擇。
+      imported.set.pageMode ??= isNew.value ? "classic" : regexSet.value.pageMode;
       regexSet.value = imported.set;
       defaultChatPageForNew();
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
@@ -1138,7 +1140,12 @@ function applyImport(result: ImportResult) {
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
-  if (result.regex) regexSet.value = result.regex;
+  if (result.regex) {
+    result.regex.pageMode ??= "classic";
+    regexSet.value = result.regex;
+  } else {
+    regexSet.value.pageMode = "classic";
+  }
   defaultChatPageForNew();
   goto("basic");
 }
@@ -1194,29 +1201,47 @@ async function exportCard(format: "png" | "json") {
     </div>
 
     <template v-else>
-      <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
-      <nav class="side" :aria-label="$t('editor.sections')">
-        <button
-          v-for="key in sections"
-          :key="key"
-          type="button"
-          class="side__item"
-          :class="{ 'side__item--on': section === key }"
-          :aria-current="section === key ? 'true' : undefined"
-          @click="goto(key)"
-        >
-          <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
-          <span v-if="key === 'world'" class="exp-tag">{{ $t("editor.experimental") }}</span>
-          <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
-          <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
-          <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
-          <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
-               :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
-               stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3.5 8.5l3 3 6-7" />
-          </svg>
-        </button>
-      </nav>
+      <div class="topbar">
+        <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
+        <nav class="side" :aria-label="$t('editor.sections')">
+          <button
+            v-for="key in sections"
+            :key="key"
+            type="button"
+            class="side__item"
+            :class="{ 'side__item--on': section === key }"
+            :aria-current="section === key ? 'true' : undefined"
+            @click="goto(key)"
+          >
+            <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
+            <span v-if="key === 'world'" class="exp-tag">{{ $t("editor.experimental") }}</span>
+            <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
+            <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
+            <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
+            <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
+                 :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 8.5l3 3 6-7" />
+            </svg>
+          </button>
+        </nav>
+        <div v-if="reviewCount || lengthExempt" class="topbar__count" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-card-constant-count>
+          <span v-if="reviewCount" class="topbar__total">{{ $t("reviewLength.constantTotal", reviewCount.n) }}</span>
+          <template v-if="lengthExempt">
+            <span v-if="reviewCount" class="topbar__sep" aria-hidden="true">·</span>
+            <span class="topbar__state is-met">{{ $t("lengthExemption.enabled") }}</span>
+          </template>
+          <template v-else-if="reviewCount">
+            <span class="topbar__sep" aria-hidden="true">·</span>
+            <span class="topbar__threshold">{{ $t("reviewLength.threshold", reviewCount.n) }}</span>
+            <span class="topbar__sep" aria-hidden="true">·</span>
+            <span class="topbar__state" :class="{ 'is-met': reviewCount.eligible }">
+              <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
+              {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
+            </span>
+          </template>
+        </div>
+      </div>
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
@@ -1530,7 +1555,7 @@ async function exportCard(format: "png" | "json") {
           <WorldbookEditor v-model="wb.entries" v-model:book-name="wb.name"
                            v-model:book-desc="wb.desc"
                            :loading="wb.loading" :load-failed="wb.loadFailed" @retry="retryBook(wb)"
-                           :meta-locked="Boolean(wb.id) && !wb.meta?.visibility" :language="draft.language"
+                           :meta-locked="Boolean(wb.id) && !wb.meta?.visibility" :language="draft.language" :total-chars="wbTotalChars"
                            :bound="Boolean(wb.id) || wb.pending" @create="wb.createDraft()"
                            @imported="importBook(wb, $event)" @pick="pickBook(wb, $event)"
                            @release="releaseBook(wb)" @export-book="exportBook(wb, draft.roleName)" />
@@ -1743,16 +1768,31 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    出血到頁面兩側（負邊距＝頁面的左右內距）；
    分區多到放不下就橫向捲，右緣淡出提示後面還有。
 */
-.side {
+.topbar {
   grid-column: 1;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s-2) var(--s-3); min-width: 0;
+}
+.side {
+  flex: 1 1 auto; min-width: 0;
   position: relative; z-index: 5;
   display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 calc(var(--s-5) * -1); padding: var(--s-2) var(--s-5);
+  margin: 0 0 0 calc(var(--s-5) * -1); padding: var(--s-2) 0 var(--s-2) var(--s-5);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
+.topbar__count {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s-2);
+  font-size: 13px; line-height: 1.4; color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.topbar__total { color: var(--text); font-weight: 600; }
+.topbar__sep { color: var(--text-3); }
+.topbar__state { color: var(--warning-text); font-weight: 600; }
+.topbar__state.is-met { color: var(--text); }
+:lang(ko) .topbar__count { word-break: keep-all; }
+:lang(ja) .topbar__count { word-break: auto-phrase; }
 .side::-webkit-scrollbar { display: none; }
 .side__item {
   flex: none; display: flex; align-items: center; gap: var(--s-2);
@@ -1952,7 +1992,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 }
 /* 640 以下頁面左右內距縮成 s-4（base.css），導覽的出血邊距跟著縮，不然兩邊各差 8px 露一條底 */
 @media (max-width: 640px) {
-  .side { margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4); }
+  .side { margin: 0 0 0 calc(var(--s-4) * -1); padding: var(--s-2) 0 var(--s-2) var(--s-4); }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 /* 卡片展示：一組有外框的欄位，標題列右邊是「顯示在哪裡？」 */
@@ -1973,7 +2013,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .editor { padding-top: var(--s-2); }
   .layout { grid-template-rows: auto minmax(0, 1fr); row-gap: var(--s-2); }
   .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .side { grid-row: 1; }
+  .topbar { grid-row: 1; }
   .body { grid-row: 2; }
   .rail { grid-row: 1 / span 2; }
 }

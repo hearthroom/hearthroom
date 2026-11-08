@@ -16,7 +16,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue"
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
 import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
@@ -59,7 +59,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -188,9 +188,25 @@ const decided = computed(() => !!data.value && data.value.submission.status !== 
 
 /** 字數：伺服器算的那一份；partial（同步開的重審單）沒有，就是「無法計算」，不當成達標也不當成未達標 */
 const length = computed(() => (data.value?.detail.partial ? null : data.value?.detail.reviewLength ?? null));
-const approveBlocked = computed(() => !data.value?.submission.lengthExempt && !!length.value && !length.value.eligible);
+// 重新審核的「維持通過」不看字數門檻：卡已經發布，伺服器也不擋
+const approveBlocked = computed(() => !data.value?.submission.reopen && !data.value?.submission.lengthExempt && !!length.value && !length.value.eligible);
 const approvals = computed(() => data.value?.submission.stamps.filter((s) => s.verdict === "approve").length ?? 0);
-const canDecide = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value);
+/** 冷凍並討論：有人把這張卡擋下來了，解凍前誰都不能通過或駁回（伺服器也擋） */
+const hold = computed(() => (decided.value ? null : data.value?.submission.hold ?? null));
+const canDecide = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value && !hold.value);
+const canHold = computed(() => claimedByMe.value && !stampedByMe.value && !decided.value && !hold.value);
+const holdBusy = ref(false);
+const holdError = ref("");
+/** 管理員解別人的冷凍：先按解凍才展開理由欄 */
+const holdReasonOpen = ref(false);
+const holdReason = ref("");
+/** 重新審核：已發布的卡回到待審。維持通過任一審核員；駁回與撤銷限管理員 */
+const reopen = computed(() => !!data.value?.submission.reopen);
+const manager = computed(() => !!data.value?.submission.manager);
+const rejectLocked = computed(() => reopen.value && !manager.value);
+const withdrawOpen = ref(false);
+const withdrawReason = ref("");
+const withdrawError = ref("");
 const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine) ?? null);
 /** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
 const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
@@ -251,7 +267,8 @@ const nextBusy = ref(false);
 async function loadNext() {
   try {
     const q = await fetchReviewQueue(await token(), String(locale.value));
-    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe && !skipped.has(i.id));
+    // 冷凍中的卡不能決定，「下一張」不帶人過去
+    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe && !i.hold && !skipped.has(i.id));
     nextItems.value = [...open.filter((i) => i.claim === "mine"), ...open.filter((i) => i.claim === "free")];
   } catch { nextItems.value = null; }
 }
@@ -381,8 +398,81 @@ async function release() {
   }
 }
 
+async function holdCard() {
+  if (busy.value || holdBusy.value || !data.value || !canHold.value) return;
+  const target = id.value;
+  holdBusy.value = true;
+  holdError.value = "";
+  try {
+    await holdReview(target, await token(), data.value.submission.claimGeneration);
+    if (!active || id.value !== target) return;
+    done.value = t("review.hold.done");
+    await load();
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    holdError.value = err instanceof ApiError && err.code === "review_already_held" ? t("review.hold.taken")
+      : err instanceof ApiError && err.status === 409 ? t("review.claimChanged")
+      : err instanceof Error && err.message === t("auth.expired") ? err.message : t("review.hold.failed");
+    if (err instanceof ApiError && err.status === 409) await load();
+  } finally {
+    holdBusy.value = false;
+  }
+}
+
+async function unholdCard() {
+  const current = hold.value;
+  if (busy.value || holdBusy.value || !current?.canRelease) return;
+  // 管理員解別人的冷凍要寫理由：第一次按只展開理由欄
+  if (!current.byMe && !holdReasonOpen.value) { holdReasonOpen.value = true; return; }
+  if (!current.byMe && !holdReason.value.trim()) return;
+  const target = id.value;
+  holdBusy.value = true;
+  holdError.value = "";
+  try {
+    await unholdReview(target, await token(), current.byMe ? undefined : holdReason.value.trim());
+    if (!active || id.value !== target) return;
+    // 先在畫面上拿掉冷凍：解凍後冷凍人可能沒領著（單子正被別人領著讀），重讀會被擋，舊畫面不能還寫著「已冷凍」
+    if (data.value?.submission.id === target) data.value.submission.hold = null;
+    holdReasonOpen.value = false;
+    holdReason.value = "";
+    done.value = t("review.hold.released");
+    await load();
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    holdError.value = err instanceof Error && err.message === t("auth.expired") ? err.message : t("review.hold.unholdFailed");
+    if (err instanceof ApiError && err.status === 409) await load();
+  } finally {
+    holdBusy.value = false;
+  }
+}
+
+async function withdraw() {
+  if (busy.value || !data.value || !manager.value || decided.value) return;
+  if (!withdrawOpen.value) { withdrawOpen.value = true; return; }
+  const reason = withdrawReason.value.trim();
+  if (!reason) return;
+  const target = id.value;
+  busy.value = true;
+  withdrawError.value = "";
+  try {
+    await withdrawReopen(target, await token(), reason);
+    if (!active || id.value !== target) return;
+    withdrawOpen.value = false;
+    withdrawReason.value = "";
+    done.value = t("review.reopen.withdrawn");
+    await load();
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    withdrawError.value = err instanceof Error && err.message === t("auth.expired") ? err.message : t("review.reopen.withdrawFailed");
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function stamp(verdict: "approve" | "reject") {
   if(busy.value||!data.value||data.value.submission.id!==id.value)return;
+  if (hold.value) return;
+  if (verdict === "reject" && rejectLocked.value) return;
   if (!claimedByMe.value) {
     error.value = t("review.claimFirst");
     return;
@@ -396,7 +486,10 @@ async function stamp(verdict: "approve" | "reject") {
   try {
     const confirmedToken=await token();
     const approved=approvals.value+1>=review.submission.required;
-    if(!await decisionConfirm({scrollMessage:true,title:t(verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(`review.action.${verdict}`),reason)+'\n\n'+t(verdict==='reject'?'review.confirm.rejectBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending'),confirmText:t(verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    // 重新審核：維持通過不動卡片；駁回走改判，卡改回上一個通過的版本或下架
+    const keep=verdict==='approve'&&reopen.value;
+    const body=verdict==='reject'?(reopen.value?'review.reopen.rejectBody':'review.confirm.rejectBody'):keep?'review.reopen.keepBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending';
+    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
     const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation });
@@ -418,6 +511,17 @@ async function stamp(verdict: "approve" | "reject") {
     if (err instanceof ApiError && err.code === "review_length_insufficient") {
       const l = err.reviewLength ? formatReviewLength(err.reviewLength, String(locale.value)) : lengthParams.value;
       decideError.value = t("review.decide.errorLength", { total: l.total, required: l.required });
+    } else if (err instanceof ApiError && err.code === "review_reopen_stale") {
+      decideError.value = t("review.reopen.stale");
+      await load();
+    } else if (err instanceof ApiError && err.code === "review_reopen_reject_manager") {
+      decideError.value = t("review.reopen.rejectManager");
+    } else if (err instanceof ApiError && err.code === "review_correction_reward_pending") {
+      decideError.value = t("review.reopen.rewardPending");
+    } else if (err instanceof ApiError && err.code === "review_held") {
+      // 送出前一刻被別人冷凍了：說明並重讀，畫面換成冷凍狀態
+      decideError.value = t("review.hold.decideBlocked");
+      await load();
     } else if (err instanceof ApiError && err.status === 409) decideError.value = t("review.claimChanged");
     else if (err instanceof ApiError) decideError.value = t("review.decide.failed");
     else if (err instanceof Error && err.message === t("auth.expired")) decideError.value = err.message;
@@ -500,10 +604,32 @@ onMounted(() => { void load(); });
             <strong v-else>{{ $t("review.rating.sfw") }}</strong>
             · {{ $t("review.rating.hint") }}
           </p>
+          <!-- 冷凍並討論：放在卡名下面，進來第一眼就看得到為什麼不能決定、誰能解凍 -->
+          <div v-if="hold" class="hold" role="status" data-hold-notice>
+            <p class="hold__text">{{ hold.byMe ? $t("review.hold.noticeMine") : $t("review.hold.noticeOther", { name: hold.holder || $t("review.hold.someone") }) }}</p>
+            <p class="subtle hold__time">{{ $t("review.hold.since", { time: dateTime(hold.at) }) }}</p>
+            <div v-if="hold.canRelease && !hold.byMe && holdReasonOpen" class="field hold__reason">
+              <label for="hold-reason">{{ $t("review.hold.reasonLabel") }}</label>
+              <textarea id="hold-reason" v-model="holdReason" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="holdBusy" />
+            </div>
+            <p v-if="holdError" class="notice notice--error hold__error" role="alert">{{ holdError }}</p>
+            <button v-if="hold.canRelease" type="button" class="btn btn--sm hold__release" :disabled="busy || holdBusy || (!hold.byMe && holdReasonOpen && !holdReason.trim())" data-unhold @click="unholdCard">{{ $t("review.action.unhold") }}</button>
+          </div>
+          <!-- 重新審核：說清楚這是已發布的卡、為什麼被拿回來審；管理員在這裡撤銷 -->
+          <div v-if="reopen && !decided" class="reopen" role="status" data-reopen-notice>
+            <p class="reopen__text">{{ $t("review.reopen.notice") }}</p>
+            <p v-if="data.submission.reopenReason" class="text reopen__reason">{{ $t("review.reopen.reason", { reason: data.submission.reopenReason }) }}</p>
+            <div v-if="manager && withdrawOpen" class="field reopen__withdraw">
+              <label for="withdraw-reason">{{ $t("review.reopen.withdrawReason") }}</label>
+              <textarea id="withdraw-reason" v-model="withdrawReason" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" />
+            </div>
+            <p v-if="withdrawError" class="notice notice--error" role="alert">{{ withdrawError }}</p>
+            <button v-if="manager" type="button" class="btn btn--sm reopen__action" :disabled="busy || (withdrawOpen && !withdrawReason.trim())" data-withdraw @click="withdraw">{{ $t("review.action.withdraw") }}</button>
+          </div>
         </div>
         <div class="head__acts">
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
 
@@ -548,7 +674,7 @@ onMounted(() => { void load(); });
           <template v-if="!editingTags">
             <div class="tags-row">
               <ul class="tags"><li v-for="tag in tags" :key="tag" class="chip">{{ tag }}</li></ul>
-              <button v-if="claimedByMe && !decided" type="button" class="btn btn--sm btn--ghost" @click="editTags">{{ $t("review.tags.edit") }}</button>
+              <button v-if="claimedByMe && !decided && !reopen" type="button" class="btn btn--sm btn--ghost" @click="editTags">{{ $t("review.tags.edit") }}</button>
             </div>
             <span v-if="tagsChanged" class="subtle">{{ $t("review.tags.author", { tags: authorTags.join("、") || "—" }) }}</span>
           </template>
@@ -772,6 +898,8 @@ onMounted(() => { void load(); });
             <p>{{ decideUnknown ? $t("review.decide.unknown") : decideError }}</p>
             <RouterLink v-if="decideUnknown" class="btn btn--sm" :to="lp('/review/decisions')">{{ $t("review.history.title") }}</RouterLink>
           </div>
+          <p v-if="hold" class="notice blocked" data-hold-blocked>{{ $t("review.hold.decideBlocked") }}</p>
+          <p v-else-if="rejectLocked && claimedByMe" class="subtle" data-reject-locked>{{ $t("review.reopen.rejectManager") }}</p>
           <p v-if="approveBlocked" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
           <p v-else-if="!length && !decided" id="approve-blocked" class="subtle">{{ $t("review.decide.lengthUnknown") }}</p>
           <!-- 已經有人蓋過的章（舊單或需要兩章時）。駁回說明可能很長：不能塞進固定高度的 chip -->
@@ -797,13 +925,19 @@ onMounted(() => { void load(); });
           </div>
           <div class="field">
             <label for="review-note">{{ $t("review.note.label") }}</label>
-            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy" @focus="noteFocused = true" @blur="noteFocused = false" />
+            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" @focus="noteFocused = true" @blur="noteFocused = false" />
           </div>
-          <p v-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
+          <p v-if="!claimedByMe && !decided && !hold" class="subtle">{{ $t("review.claimFirst") }}</p>
+          <!-- 拿不定主意、要先跟其他審核員討論：冷凍後誰都不能決定，卡留在清單上 -->
+          <div v-if="canHold" class="field hold-entry">
+            <button type="button" class="btn" :disabled="busy || holdBusy" data-hold @click="holdCard">{{ $t("review.action.hold") }}</button>
+            <p class="subtle small-note">{{ $t("review.hold.hint") }}</p>
+            <p v-if="holdError" class="notice notice--error" role="alert">{{ holdError }}</p>
+          </div>
           <div class="verdict__acts">
             <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
-            <button class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !note.trim()" @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
-            <button class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || approveBlocked" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t("review.action.approve") }}</button>
+            <button class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !note.trim()" @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
+            <button class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : "review.action.approve") }}</button>
           </div>
         </template>
       </section>
@@ -908,6 +1042,22 @@ onMounted(() => { void load(); });
   .verdict__back { flex: 1 1 100%; margin-right: 0; justify-content: flex-start; }
   .verdict__acts > .btn--lg { flex: 1 1 0; min-width: max-content; }
 }
+.hold { display: grid; gap: var(--s-2); justify-items: start; margin-top: var(--s-3); padding: var(--s-3); border-radius: var(--r-md); color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 10%, var(--surface)); min-width: 0; }
+.hold__text, .hold__time { margin: 0; overflow-wrap: anywhere; }
+.hold__time { color: var(--text-2); font-size: 13px; }
+.hold__reason { width: 100%; margin: 0; color: var(--text); }
+.hold__error { margin: 0; }
+.hold__release { min-height: var(--h-md); }
+/* 手機：解凍是這一格唯一的動作，照觸控主行動 44 */
+@media (max-width: 600px) { .hold__release { min-height: var(--h-lg); } }
+.reopen { display: grid; gap: var(--s-2); justify-items: start; margin-top: var(--s-3); padding: var(--s-3); border-radius: var(--r-md); background: var(--accent-tint); min-width: 0; }
+.reopen__text { margin: 0; font-weight: 600; color: var(--accent-text); }
+.reopen__reason { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.reopen__withdraw { width: 100%; margin: 0; }
+.reopen__action { min-height: var(--h-md); }
+@media (max-width: 600px) { .reopen__action { min-height: var(--h-lg); } }
+.hold-entry { display: grid; gap: var(--s-2); justify-items: start; margin-bottom: 0; }
+.hold-entry .small-note { margin: 0; }
 .blocked { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 10%, var(--surface)); margin: 0; }
 .reasons__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; }
 .reasons { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2); }
