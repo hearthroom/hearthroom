@@ -10,6 +10,7 @@ import { reviewLengthStatus, type ReviewLengthStatus } from "../shared/review-le
 import { reviewLength } from "./review-length";
 import { reviewLengthExemptForCard } from './review-length-exemption';
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
+import { submissionType, type SubmissionType } from "./review-author";
 
 /**
  * 社群審核：審核單、共享佇列、蓋章。
@@ -19,7 +20,8 @@ import { HttpError, type Env, type Localized, pickLocale } from "./types";
  *     自動視為放回——沒有排程，讀取與動作時懶惰判定。
  *   - 初審、重審都是一章（owner 2026-09-24：審核人手不夠，先降成 1/1；恢復兩章只改 STAMPS_REQUIRED）；
  *     任何一個駁回即駁回。
- *   - 盲審：佇列與詳情都不帶作者身分。卡片名稱與封面會露出，那是內容本身，擋不了。
+ *   - 審核頁看得到原作者（owner 2026-11-08 取消盲審：「如果看不到作者的話就不知道怎麼抓到」），
+ *     並能列出同一位作者的所有卡，見 review-author.ts。佇列本身仍不列作者。
  *   - 過審綁內容版本：approved 時把提交當下的雜湊寫進 cards.reviewed_hash；同步時發現
  *     主站雜湊變了就開重審單、卡片離榜。
  */
@@ -110,6 +112,8 @@ export interface QueueItem {
   submittedAt: number;
   /** 同一張卡第幾次送審（1＝首送）；只算審核人定案過的單 */
   attempt: number;
+  /** 送審類型：首次／更新／退回後再送／重新審核（見 submissionType） */
+  type: SubmissionType;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: string; tags: string[] };
   stamps: { approve: number; required: number };
   /** 作者問卷算出的級別；null＝問卷上線前送的一般卡 */
@@ -140,7 +144,7 @@ const holdView = (h: { hold_by: string | null; hold_at: number | null; hold_name
 const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN members hm ON hm.id = h.member_id";
 const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
 
-/** 佇列：所有待審的單，最舊的在前。不帶作者。 */
+/** 佇列：所有待審的單，最舊的在前。不帶作者（作者在審核頁看）。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
@@ -152,7 +156,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
-              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier, ${HOLD_COLUMNS}
+              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
+              (SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1) AS previous_status, ${HOLD_COLUMNS}
        FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id ${HOLD_JOIN}
        WHERE s.status = 'pending' ORDER BY s.submitted_at ASC LIMIT 200`,
     )
@@ -161,7 +166,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
-      hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null;
+      hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null; previous_status: "approved" | "rejected" | null;
     }>();
   const manager = isManager(await reviewerRole(db, memberId));
   return rows.results.map((r) => ({
@@ -170,6 +175,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     kind: r.kind,
     submittedAt: r.submitted_at,
     attempt: r.earlier + 1,
+    type: submissionType({ reopen_of: r.reopen_of, kind: r.kind, previous: r.previous_status }),
     card: {
       id: String(r.card_id),
       roleId: r.source_role_id,
