@@ -96,7 +96,7 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  if(card.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
  const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
- const reviews=await db.prepare('SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,note,content_hash AS version FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100').bind(card.id).all();
+ const reviews=await db.prepare("SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,COALESCE(NULLIF(note,''),reopen_reason) AS note,content_hash AS version,reopen_of IS NOT NULL AS reopen FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100").bind(card.id).all();
  const author=card.author_member_id?await db.prepare('SELECT handle FROM members WHERE id=?').bind(card.author_member_id).first<{handle:string}>():null;
  return c.json({card:{...projection(card,c.req.query('lang')||'zh-Hant'),authorHandle:author?.handle??null},cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
 });

@@ -99,7 +99,7 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
-  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, recordReviewCountsStatement, reviewCounts,
+  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
 } from "./review";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
@@ -1677,6 +1677,40 @@ app.post("/v1/review/:id/hold", async (c) => {
   }
 });
 
+/**
+ * 重新審核（審核員 2026-11-08）：已發布的卡回到待審清單。發起任一審核員、撤銷限管理員，
+ * 規則見 src/review.ts reopenCard／withdrawReopen；決定走一般的 stamp（重審單另有分支）。
+ */
+app.post("/v1/review/cards/:id/reopen", async (c) => {
+  const member = await requireReviewer(c);
+  const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
+  try {
+    const result = await reopenCard(c.env.DB, { cardId: c.req.param("id"), memberId: member.id, reason: typeof body.reason === "string" ? body.reason : "", now: Date.now() });
+    await bumpOp(c.env.DB, "review_reopen", "open", "success");
+    note(c, { event: "review_reopen", detail: "open" });
+    queuePush(c);
+    return c.json(result, 201, { "Cache-Control": "private, no-store" });
+  } catch (error) {
+    if (error instanceof HttpError) await bumpOp(c.env.DB, "review_reopen", "open", error.status === 409 ? "conflict" : "denied");
+    throw error;
+  }
+});
+
+app.post("/v1/review/:id/withdraw", async (c) => {
+  const member = await requireReviewer(c);
+  const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
+  try {
+    await withdrawReopen(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, reason: typeof body.reason === "string" ? body.reason : "", now: Date.now() });
+    await bumpOp(c.env.DB, "review_reopen", "withdraw", "success");
+    note(c, { event: "review_reopen", detail: "withdraw" });
+    queuePush(c);
+    return c.json({ status: "superseded" }, 200, { "Cache-Control": "private, no-store" });
+  } catch (error) {
+    if (error instanceof HttpError) await bumpOp(c.env.DB, "review_reopen", "withdraw", error.status === 409 ? "conflict" : "denied");
+    throw error;
+  }
+});
+
 app.post("/v1/review/:id/unhold", async (c) => {
   const member = await requireReviewer(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
@@ -1841,6 +1875,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         hold: s.status === 'pending' ? await holdOf(c.env.DB, s.card_id, member.id) : null,
+        // 重新審核：發起理由只給審核員看
+        ...(s.reopen_of ? { reopen: true, reopenReason: s.reopen_reason } : {}),
         // 同一張卡第幾次送審、上一次的結果與說明：審核人不必靠記憶認出「被退後重送」的卡
         ...(await submissionHistory(c.env.DB, s.id)),
         // mine：哪一章是我蓋的（結果卡顯示「你的決定」）；不帶審核員身分
