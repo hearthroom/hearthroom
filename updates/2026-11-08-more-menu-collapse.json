@@ -1,12 +1,12 @@
 {
   "tier": "fix",
   "audience": "everyone",
-  "draft": true,
+  "draft": false,
   "title": {
-    "zh-Hant": "部分美化卡的更多選單不再一直展開，點按鈕即可收起。",
-    "zh-Hans": "部分美化卡的更多菜单不再一直展开，点击按钮即可收起。",
-    "en": "The More menu on some styled cards no longer stays open and can be collapsed.",
-    "ja": "一部の装飾付きカードで開いたままになるメニューを閉じられるようになりました。",
-    "ko": "일부 꾸밈 카드에서 계속 펼쳐져 있던 더 보기 메뉴를 접을 수 있어요."
+    "zh-Hant": "部分卡片的展開欄現在點一下就能收起，不會一直開著。",
+    "zh-Hans": "部分卡片的展开栏现在点一下就能收起，不会一直开着。",
+    "en": "Expandable panels on some cards now close with one click instead of staying open.",
+    "ja": "一部のカードで開いたままになっていたパネルが、1回のタップで閉じるようになりました。",
+    "ko": "일부 카드에서 계속 열려 있던 펼침 패널을 이제 한 번 누르면 접을 수 있어요."
   }
 }
