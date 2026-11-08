@@ -1681,7 +1681,7 @@ app.post("/v1/review/:id/hold", async (c) => {
  * 重新審核（審核員 2026-11-08）：已發布的卡回到待審清單。發起任一審核員、撤銷限管理員，
  * 規則見 src/review.ts reopenCard／withdrawReopen；決定走一般的 stamp（重審單另有分支）。
  */
-app.post("/v1/review/cards/:id/reopen", async (c) => {
+app.post("/v1/moderation/cards/:id/reopen", async (c) => {
   const member = await requireReviewer(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
   try {
