@@ -72,8 +72,12 @@ function toggle() {
     </button>
     <p v-else class="author__only" data-author-only>{{ $t("review.author.onlyThis") }}</p>
 
-    <div v-if="open" id="author-cards" class="author__cards">
-      <div v-if="loading" class="author__list" aria-hidden="true"><div v-for="i in Math.min(author.cardCount, 3)" :key="i" class="ghost author__ghost" /></div>
+    <!-- 容器一直在（v-show），aria-controls 才指得到；載入中給螢幕閱讀器一句狀態 -->
+    <div v-if="author.cardCount > 1" v-show="open" id="author-cards" class="author__cards">
+      <template v-if="loading">
+        <p class="sr-only" role="status">{{ $t("state.loading") }}</p>
+        <div class="author__list" aria-hidden="true"><div v-for="i in Math.min(author.cardCount, 3)" :key="i" class="ghost author__ghost" /></div>
+      </template>
       <div v-else-if="error" class="notice notice--error author__error" role="alert">
         <p>{{ error }}</p>
         <button type="button" class="btn btn--sm" data-author-cards-retry @click="load">{{ $t("review.correction.reload") }}</button>
@@ -146,6 +150,6 @@ function toggle() {
 @media (max-width: 600px) {
   .item { grid-template-columns: 36px minmax(0, 1fr); }
   .item__acts { grid-column: 2; }
-  .item__acts .btn, .author__toggle { min-height: var(--h-lg); }
+  .item__acts .btn, .author__toggle, .author__error .btn { min-height: var(--h-lg); }
 }
 </style>
