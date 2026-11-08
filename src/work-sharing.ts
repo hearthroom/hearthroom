@@ -72,7 +72,7 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
  if(syncState==='complete'&&restriction!=='takedown'){
   if(!provider.rewardRetention)actions.push('set_private');
   if(restriction!=='suspended'&&!provider.rewardRetention)actions.push('set_unlisted');
-  if(restriction==='none'){
+  if(restriction==='none'||restriction==='delisted'){
    if(restorable)actions.push('restore_public');
    else actions.push(access==='public'?'submit_update':'submit_review');
   }

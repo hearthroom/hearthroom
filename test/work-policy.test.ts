@@ -180,3 +180,41 @@ it('recovers an unknown prepare receipt before a submission exists without publi
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_pending_operations 0');
  expect(await env.DB.prepare('SELECT access FROM managed_work_access WHERE work_id=?').bind(initial.workId).first()).toEqual({access:'private'});
 });
+
+
+it.each(['delisted','suspended','private','public_blocked','stale_epoch','mismatched_restriction'] as const)('publishes an approved delisted update while retaining the fence: %s',async mode=>{
+ const memberId=await makeMember(10101);const draft=role({roleId:'delisted-update',authorNumId:10101});
+ vi.spyOn(upstream,'fetchRole').mockResolvedValue(draft);
+ const submit=()=>submitHosted(env,{memberId,account:10101,role:draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
+ const initial=await submit();
+ const submission=async(version:string)=>(await env.DB.prepare('SELECT submission_id FROM hosting_versions WHERE version_id=?').bind(version).first<{submission_id:string}>())!.submission_id;
+ const approve=async(id:string)=>{await claim(env.DB,id,'reviewer',Date.now());return stamp(env.DB,{submissionId:id,memberId:'reviewer',verdict:'approve',note:'',now:Date.now()},env);};
+ await approve(await submission(initial.versionId));
+ const before=await env.DB.prepare('SELECT registered_at,approved_version_id FROM cards WHERE source_role_id=?').bind(draft.roleId).first<{registered_at:number;approved_version_id:string}>();
+ await env.DB.prepare('UPDATE cards SET board_hidden=1 WHERE source_role_id=?').bind(draft.roleId).run();
+ vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,c)=>({sourceRoleId:source,workId:c.workId,operationId:c.operationId,access:'public',restriction:'delisted',epoch:1,state:c.action==='prepare'?'prepared':'complete',replayed:false}));
+ await enrollWorkAccess(env,{memberId,roleId:draft.roleId,operationId:crypto.randomUUID(),access:'public',token:'fixture'});
+ const state:WorkPolicyReceipt={sourceRoleId:draft.roleId,workId:initial.workId,operationId:'',access:'public',restriction:'delisted',epoch:1,state:'complete',replayed:false};
+ vi.spyOn(workPolicyGateway,'state').mockImplementation(async()=>state);
+ const update=await submit();const id=await submission(update.versionId);
+ vi.spyOn(workPolicyGateway,'operation').mockResolvedValue(null);
+ const receipt:WorkPolicyReceipt={...state,operationId:'',epoch:2};
+ vi.spyOn(workPolicyGateway,'commit').mockImplementation(async()=>{Object.assign(state,receipt);if(mode==='stale_epoch')state.epoch++;if(mode==='mismatched_restriction')state.restriction='none';return receipt;});
+ if(mode==='suspended')receipt.restriction='suspended';
+ if(mode==='private')receipt.access='private';
+ if(mode==='public_blocked'){
+  await env.DB.prepare('UPDATE cards SET public_blocked=1 WHERE source_role_id=?').bind(draft.roleId).run();
+  receipt.restriction='suspended';
+ }
+ if(mode!=='delisted'){
+  await expect(approve(id)).rejects.toMatchObject({status:409});
+  expect(await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(id).first()).toEqual({status:'superseded'});
+  expect(await env.DB.prepare('SELECT registered_at,approved_version_id FROM cards WHERE source_role_id=?').bind(draft.roleId).first()).toEqual(before);
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_operations_total{operation="publish",outcome="conflict"} 1');
+  return;
+ }
+ const result=await approve(id);expect(result.submission.status).toBe('approved');
+ expect(await env.DB.prepare('SELECT registered_at,approved_version_id,board_hidden,public_blocked FROM cards WHERE source_role_id=?').bind(draft.roleId).first()).toEqual({registered_at:before!.registered_at,approved_version_id:update.versionId,board_hidden:1,public_blocked:0});
+ expect(await env.DB.prepare('SELECT access,restriction,approved_role_id,sync_state FROM managed_work_access WHERE work_id=?').bind(initial.workId).first()).toEqual({access:'public',restriction:'delisted',approved_role_id:update.hostedRevisionId,sync_state:'complete'});
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_operations_total{operation="publish",outcome="success"} 1');
+});

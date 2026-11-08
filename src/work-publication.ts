@@ -49,8 +49,8 @@ export async function finalizeManagedReview(env:Env,submission:string,path:'stam
   const recovered=await workPolicyGateway.operation(env,row.provider,row.source_role_id,row.work_id,row.operation_id);
   receipt=recovered?.state==='complete'?recovered:await workPolicyGateway.commit(env,row.provider,row.source_role_id,row.work_id,row.operation_id);
   const current=await workPolicyGateway.state(env,row.provider,row.source_role_id);
-  if(!current||current.workId!==row.work_id||current.epoch!==receipt.epoch||current.access!=='public'||current.restriction!=='none'
-   ||receipt.state!=='complete'||receipt.access!=='public'||receipt.restriction!=='none')throw new HttpError(409,'visibility_operation_conflict');
+  if(!current||current.workId!==row.work_id||current.epoch!==receipt.epoch||current.restriction!==receipt.restriction||current.access!=='public'||!['none','delisted'].includes(current.restriction)
+   ||receipt.state!=='complete'||receipt.access!=='public'||!['none','delisted'].includes(receipt.restriction))throw new HttpError(409,'visibility_operation_conflict');
  }catch(error){
   if(error instanceof HttpError&&error.status===409){
    await db.batch([

@@ -583,3 +583,20 @@ it('keeps the confirmed amount and resumes a lost Provider reply without reading
  expect((await request(endpoint,'owner',{rewardRecoveryCredits:13700})).status).toBe(200);expect(deletes).toBe(2);
  expect(await (await request(endpoint)).json()).toMatchObject({deletion:{state:'complete'}});
 });
+
+
+it('offers submission for a delisted public update while keeping restore and suspended updates unavailable',async()=>{
+ const {source,work,card,current}=await fixture();current.access='public';current.restriction='delisted';current.restorable=false;
+ await env.DB.prepare("UPDATE managed_work_access SET access='public',restriction='delisted' WHERE work_id=?").bind(work).run();
+ await env.DB.prepare('UPDATE cards SET board_hidden=1 WHERE id=?').bind(card.id).run();
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_e,_t,id)=>role({roleId:id,authorNumId:11}));
+ const view=await(await request(`/v1/me/cards/${card.id}/visibility`)).json() as {workVisibility:{actions:string[];effectiveAccess:string}};
+ expect(view.workVisibility.effectiveAccess).toBe('link');
+ expect(view.workVisibility.actions).toContain('submit_update');expect(view.workVisibility.actions).not.toContain('restore_public');
+ const response=await request('/v1/cards','owner',await submissionBody(card.id,source));expect(response.status,await response.clone().text()).toBe(200);
+ expect(await env.DB.prepare('SELECT state FROM work_publication_permits').first()).toEqual({state:'prepared'});
+ current.restriction='suspended';await env.DB.prepare("UPDATE managed_work_access SET restriction='suspended' WHERE work_id=?").bind(work).run();
+ await env.DB.prepare('UPDATE cards SET public_blocked=1 WHERE id=?').bind(card.id).run();
+ const blocked=await(await request(`/v1/me/cards/${card.id}/visibility`)).json() as {workVisibility:{actions:string[]}};
+ expect(blocked.workVisibility.actions).not.toContain('submit_update');
+});
