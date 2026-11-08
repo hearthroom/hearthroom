@@ -7478,6 +7478,15 @@
               "type": "integer"
             },
             "description": "Supported response length target; omitted uses the current save preference."
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Locale used to resolve the current agent configuration and player name for format-note readiness; defaults to the original locale."
           }
         ],
         "responses": {
@@ -34654,7 +34663,8 @@
           "generatedAt",
           "expiresAt",
           "sampleCount",
-          "source"
+          "source",
+          "notesInitialization"
         ],
         "properties": {
           "typicalCredits": {
@@ -34763,6 +34773,15 @@
               "steady"
             ],
             "description": "Which cost estimate applies to the next Agent turn: first until a completed Agent turn has been recorded for cost estimation on this runtime and conversation branch; steady afterwards. A display hint only, not a guarantee about setup state. Omitted when unknown. Does not change selectionKey."
+          },
+          "notesInitialization": {
+            "type": "string",
+            "enum": [
+              "required",
+              "ready",
+              "unknown"
+            ],
+            "description": "Whether this estimate includes a separate reply-format initialization call for the admitted Agent root. Missing, stale or previous-version notes require initialization. Amounts are unknown when readiness cannot be read. The call uses standard metered Agent billing; no fixed fee is added. This state does not change selectionKey."
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
