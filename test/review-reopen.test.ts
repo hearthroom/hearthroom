@@ -150,6 +150,8 @@ describe("重新審核：審核", () => {
     expect(JSON.parse(notice!.extra)).toMatchObject({ status: "rejected", correction: true, note: "設定與他人作品雷同" });
     expect((await env.DB.prepare("SELECT count(*) AS n FROM review_corrections").first<{ n: number }>())!.n).toBe(1);
     expect(await metric("reject", "success")).toBe(1);
+    // 「我處理過的」看得到這次駁回
+    expect(await env.DB.prepare("SELECT verdict, note FROM review_stamps WHERE submission_id=?").bind(id).first()).toEqual({ verdict: "reject", note: "設定與他人作品雷同" });
   });
 
   it("可以接冷凍：冷凍中維持通過與駁回都被擋", async () => {

@@ -137,8 +137,10 @@ onBeforeUnmount(() => listen(false));
       </p>
 
       <div v-if="hasDetails" class="card__body">
-        <p v-if="card.workVisibility" class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
-        <p v-if="card.workVisibility && card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
+        <template v-if="card.workVisibility">
+          <p class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+          <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
+        </template>
         <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
         <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
