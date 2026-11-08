@@ -205,8 +205,13 @@ export async function hold(db: D1Database, input: { submissionId: string; member
   if (input.generation !== undefined && input.generation !== row.claim_generation) throw new HttpError(409, "claim changed");
   if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_already_held");
   await db.batch([
-    db.prepare("INSERT INTO review_holds (card_id, member_id, submission_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(card_id) DO NOTHING")
-      .bind(row.card_id, input.memberId, row.id, input.now),
+    // 寫入當下再確認一次：單子還在排隊、還是我這一次的領取、沒有定案。上面的檢查與這裡之間，別人可能剛蓋完章
+    db.prepare(`INSERT INTO review_holds (card_id, member_id, submission_id, created_at)
+      SELECT card_id, ?, id, ? FROM review_submissions s
+      WHERE s.id = ? AND s.status = 'pending' AND s.claimed_by = ? AND s.claim_generation = ? AND s.claimed_at > ?
+      AND NOT EXISTS (SELECT 1 FROM work_review_decisions d WHERE d.submission_id = s.id)
+      ON CONFLICT(card_id) DO NOTHING`)
+      .bind(input.memberId, input.now, row.id, input.memberId, row.claim_generation, input.now - CLAIM_TTL_MS),
     auditStmtIfChanged(db, { subjectKind: "review_hold", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "hold", after: { cardId: Number(row.card_id) }, operationId: crypto.randomUUID(), now: input.now }),
     db.prepare(`UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = ''
       WHERE id = ? AND claimed_by = ? AND claim_generation = ? AND EXISTS (SELECT 1 FROM review_holds WHERE card_id = ? AND member_id = ? AND submission_id = ?)`)
