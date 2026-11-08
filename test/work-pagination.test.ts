@@ -5,17 +5,33 @@ import {sealAuth} from '../src/account-auth';
 import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 import {publicCandidates,publicCandidatePage} from '../src/work-pagination';
 import {getCard,upsertCard} from '../src/cards';
+import {buildSearchBody,buildSearchName,buildSearchText} from '../src/upstream';
 import {identities,makeMember,resetDb,restoreUpstream,role} from './helpers';
 beforeEach(resetDb);afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
 async function fixture(count=5){
  const member=await makeMember(11),ids:string[]=[],denied=new Set<string>();
+ // Pagination exercises reads, not publication. Keep the same rows as upsertCard,
+ // including allocated card numbers and FTS fields, but avoid eight D1 RPCs per card.
+ // Bound each batch to 25 cards (100 statements); ordering and FK checks stay intact.
+ const statements:D1PreparedStatement[]=[];
  for(let i=0;i<count;i++){
   const source=crypto.randomUUID(),target=crypto.randomUUID(),work=crypto.randomUUID();ids.push(source);
-  await upsertCard(env.DB,role({roleId:source,authorNumId:11,name:'Card '+i}),count-i,{status:'approved'});
-  await env.DB.prepare('UPDATE cards SET approved_hosted_role_id=? WHERE source_role_id=?').bind(target,source).run();
-  await env.DB.prepare('INSERT INTO works VALUES(?,?,?,?,1)').bind(work,member,'harbor',source).run();
-  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id) VALUES(?,'harbor',?,'public',1,'none',?)").bind(work,source,target).run();
+  const card=role({roleId:source,authorNumId:11,name:'Card '+i}),now=count-i;
+  statements.push(
+   env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES ('harbor',?)").bind(source),
+   env.DB.prepare(`INSERT INTO cards (id,source_role_id,zone,author_num_id,author_name,author_avatar,names,summaries,
+    background_url,share_image_url,landscape_url,slug,tags,talk_num,follow_num,search_name,search_text,search_body,
+    last_synced_at,talk_num_prev,registered_at,provider,status,approved_hosted_role_id)
+    SELECT num,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'harbor','approved',? FROM card_numbers WHERE provider='harbor' AND source_role_id=?`)
+    .bind(source,card.zone,card.authorNumId,card.authorName,card.authorAvatar,JSON.stringify(card.names),JSON.stringify(card.summaries),
+     card.backgroundUrl||card.avatarUrl,card.shareImageUrl||null,card.backgroundLandscapeUrl||null,card.slug,JSON.stringify(card.tags),
+     card.talkNum,card.followNum,buildSearchName(card),buildSearchText(card),buildSearchBody(card),now,card.talkNum,now,target,source),
+   env.DB.prepare('INSERT INTO works VALUES(?,?,?,?,1)').bind(work,member,'harbor',source),
+   env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id) VALUES(?,'harbor',?,'public',1,'none',?)").bind(work,source,target),
+  );
+  if(statements.length===100){await env.DB.batch(statements);statements.length=0;}
  }
+ if(statements.length)await env.DB.batch(statements);
  const batches:number[]=[];
  vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
   if(!String(input).endsWith('/hosting/work-access/batch'))throw new Error('Unexpected request');

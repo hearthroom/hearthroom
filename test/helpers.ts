@@ -14,27 +14,31 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  await env.DB.prepare('DELETE FROM review_length_exemptions').run();
-  await env.DB.prepare('DELETE FROM badge_stats_backfill_members').run();
-  await env.DB.prepare("UPDATE badge_stats_backfill_runs SET completed_at=NULL,outcome='running' WHERE job_key='invite-source-v2'").run();
-  await env.DB.batch(['badge_qualification_refresh','badge_qualifications','rank_window_scores','rank_attempts','rank_awards','rank_settlements','rank_publications'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
-  await env.DB.prepare('DELETE FROM leaderboard_privacy_operations').run();
-  await env.DB.prepare('DELETE FROM leaderboard_privacy').run();
+  // D1 batch executes in order. Preserve dependency/trigger cleanup order while
+  // resetting the database in one RPC instead of a round trip for every table.
+  const statements:D1PreparedStatement[]=[];
+  statements.push(env.DB.prepare('DELETE FROM review_length_exemptions'));
+  statements.push(env.DB.prepare('DELETE FROM badge_stats_backfill_members'));
+  statements.push(env.DB.prepare("UPDATE badge_stats_backfill_runs SET completed_at=NULL,outcome='running' WHERE job_key='invite-source-v2'"));
+  statements.push(...['badge_qualification_refresh','badge_qualifications','rank_window_scores','rank_attempts','rank_awards','rank_settlements','rank_publications'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
+  statements.push(env.DB.prepare('DELETE FROM leaderboard_privacy_operations'));
+  statements.push(env.DB.prepare('DELETE FROM leaderboard_privacy'));
   frozenFixtureRoles.clear();hostedFixture();
-  await env.DB.batch(['qa_session_exclusion','legacy_account_fence','qa_account_operation','qa_session_generation','qa_browser_nonce','qa_browser_receipt'].map(table=>env.DB.prepare(`DELETE FROM ${table}`)));
-  await env.DB.prepare('DELETE FROM author_card_deletions').run();
-  await env.DB.prepare('DELETE FROM review_corrections').run();
-  await env.DB.prepare('DELETE FROM author_visibility_operations').run();
-  await env.DB.prepare('DELETE FROM account_route_handoffs').run();
-  await env.DB.prepare('DELETE FROM account_route_families').run();
+  statements.push(...['qa_session_exclusion','legacy_account_fence','qa_account_operation','qa_session_generation','qa_browser_nonce','qa_browser_receipt'].map(table=>env.DB.prepare(`DELETE FROM ${table}`)));
+  statements.push(env.DB.prepare('DELETE FROM author_card_deletions'));
+  statements.push(env.DB.prepare('DELETE FROM review_corrections'));
+  statements.push(env.DB.prepare('DELETE FROM author_visibility_operations'));
+  statements.push(env.DB.prepare('DELETE FROM account_route_handoffs'));
+  statements.push(env.DB.prepare('DELETE FROM account_route_families'));
 for (const table of ["card_update_cooldown_exempt", "card_update_events", "card_state_eligibility", "card_share_snapshots", "card_share_tokens", "card_state_members", "card_state_totals", "card_state_controls", "work_review_decisions", "work_publication_permits", "visibility_operations", "managed_work_access","reward_event_outbox", "share_opens", "checkin_prompts", "official_author_audit","suki_states", "suki_metrics", "update_entries", "member_update_state", "update_digests", "update_deliveries", "update_reports", "update_metrics", "originality_prints", "originality_texts", "account_auth_attempts", "account_sessions", "account_credentials", "account_auth_revocations", "account_auth_clients", "account_auth_metrics", "review_deliveries", "review_holds", "community_badge_audit", "community_appearance_media", "community_discord_appearance", "community_appearance_preferences", "community_review_signal", "community_case_jobs", "community_notifications", "community_metrics", "community_nonces", "community_awards", "community_xp", "discord_link_attempts", "discord_links", "community_subjects", "community_preferences", "member_conversations", "library_metrics", "member_favorites", "member_follows", "hosting_transfers", "hosting_replicas", "hosting_versions", "avatar_cleanup", "work_copies", "works", "member_connections", "card_saves", "card_scores", "comment_reports", "comment_mutes", "comment_keywords", "review_agents", "community_settings", "ops_metrics", "audit_log", "comment_likes", "comments", "campaign_active_days", "campaign_attributions", "campaign_share_visits", "card_reward_topups", "card_rewards", "card_reward_campaigns", "share_payouts", "share_evidence", "share_placements", "share_contents", "campaigns", "blog_post_likes", "blog_post_revisions", "blog_posts", "blog_translation_groups", "blog_columns", "game_worlds", "cards", "fandom_entities", "card_numbers", "card_registrations", "registration_packs", "review_stamps", "review_snapshots", "review_submissions", "reviewers", "member_identities", "members", "moderation_blocked_versions", "moderation_votes", "moderation_cases", "moderation_compensation", "moderation_events", "moderation_state", "moderation_metrics"]) {
-    await env.DB.prepare(`DELETE FROM ${table}`).run();
+    statements.push(env.DB.prepare(`DELETE FROM ${table}`));
   }
-  await env.DB.prepare("DELETE FROM community_badge_definitions WHERE category='event'").run();
+  statements.push(env.DB.prepare("DELETE FROM community_badge_definitions WHERE category='event'"));
   // 卡號是 AUTOINCREMENT（刪過的號不再發），測試之間把序號推回起點，每個測試都從 100001 數起
   // sqlite_sequence 沒有唯一鍵，不能 INSERT OR REPLACE（只會多一列）；刪掉再放
-  await env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'card_numbers'").run();
-  await env.DB.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES ('card_numbers', 100000)").run();
+  statements.push(env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'card_numbers'"));
+  statements.push(env.DB.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES ('card_numbers', 100000)"));
+  await env.DB.batch(statements);
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
 }
