@@ -43,3 +43,8 @@ it("with work sharing on, a suspended card shows the suspension first", async ()
   const el = await mount({ ...base, reReview: true, workVisibility: { ...shared, restriction: "suspended" } });
   expect(el.textContent).toContain(i18n.global.t("visibility.badge.suspended"));
 });
+it("with work sharing on and no re-review, the old per-status notes stay hidden", async () => {
+  const el = await mount({ ...base, updateStatus: "pending", workVisibility: { ...shared, update: "pending" } });
+  expect(el.textContent).not.toContain(i18n.global.t("workspace.updatePending"));
+  expect(el.querySelector("[data-re-review]")).toBeNull();
+});
