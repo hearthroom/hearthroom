@@ -1,6 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { legacyPolicyFixture } from "./work-policy-fixture";
+import { SAME_AUTHOR } from "../src/review-author";
 import { bearer, identities, makeAgent, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
 
 // 審核員看得到原作者、同一位作者的其他卡（owner 2026-11-08），以及送審類型：
@@ -169,5 +170,13 @@ describe("送審類型", () => {
     const { id } = (await res.json()) as { id: string };
     expect((await queue()).find((i) => i.id === id)!.type).toBe("reopen");
     expect(await typeInDetail(id)).toBe("reopen");
+  });
+});
+
+describe("查同一位作者的卡走作者索引", () => {
+  it("不因 provider 條件退回掃整張卡片表", async () => {
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN SELECT c.id FROM cards c WHERE ${SAME_AUTHOR} ORDER BY c.registered_at DESC`).bind("harbor", AUTHOR, null).all<{ detail: string }>();
+    const steps = plan.results.map((r) => r.detail).join("\n");
+    expect(steps).toMatch(/USING (COVERING )?INDEX idx_cards_author/);
   });
 });

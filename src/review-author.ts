@@ -53,8 +53,12 @@ const AUTHOR_OF_CARD = `SELECT c.provider, c.author_num_id, c.author_name, c.aut
   LEFT JOIN member_identities ai ON ai.provider = c.provider AND ai.external_id = CAST(c.author_num_id AS TEXT)
   WHERE c.id = ?`;
 
-/** 同一位作者的卡：這張卡的數字 ID，加上同一個成員在同一家供應商上的其他身分。 */
-const SAME_AUTHOR = `c.provider = ?1 AND c.author_num_id IN (
+/**
+ * 同一位作者的卡：這張卡的數字 ID，加上同一個成員在同一家供應商上的其他身分。
+ * provider 前面的 + 讓 SQLite 不拿 (provider, source_role_id) 那個索引：幾乎所有卡都是同一家供應商，
+ * 用它等於掃全表；要走 idx_cards_author(author_num_id)（code-review 2026-11-08 用 EXPLAIN 量到）。
+ */
+export const SAME_AUTHOR = `+c.provider = ?1 AND c.author_num_id IN (
     SELECT ?2
     UNION SELECT CAST(external_id AS INTEGER) FROM member_identities WHERE ?3 IS NOT NULL AND member_id = ?3 AND provider = ?1
     UNION SELECT CAST(external_id AS INTEGER) FROM member_connections WHERE ?3 IS NOT NULL AND owner_member_id = ?3 AND provider = ?1)`;
