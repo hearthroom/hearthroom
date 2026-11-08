@@ -3,7 +3,10 @@
  * /review — 社群審核的共享佇列。
  *
  * 誰想審就自己領；領了就是「我正在看」，逾時自動放回。這裡只列狀態與入口，
- * 看設定、蓋章在 ReviewDetailPage。不顯示作者（盲審）。
+ * 看設定、蓋章在 ReviewDetailPage。清單不列作者，作者在審核頁看。
+ *
+ * 每列標出送審類型（首次送審／更新／退回後再送／重新審核，由伺服器依上次結果判定）與第幾次送審；
+ * 重新審核不標次數（審的是已發布的那一版，作者送了幾次跟這次無關）。
  *
  * 冷凍並討論的卡照樣列著，標出冷凍人；領了只能看、不能決定。冷凍人自己在這裡就能解凍
  * （管理員解別人的冷凍要寫理由，在審核頁做）。
@@ -15,6 +18,7 @@ import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, claimReview, fetchReviewQueue, releaseReview, unholdReview, type ReviewQueueItem } from "@/lib/api";
+import { submissionTypeKey, submissionTypeOf } from "@/lib/review-type";
 import { relativeTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useReviewer } from "@/lib/review";
@@ -167,15 +171,14 @@ onMounted(() => {
           <div class="row__body">
             <div class="row__top">
               <span class="row__name">{{ item.card.name }}</span>
-              <span class="chip" :class="{ 'chip--re': item.kind === 're' }">{{ $t(`review.kind.${item.kind}`) }}</span>
-              <span v-if="(item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
+              <span class="chip" :class="{ 'chip--re': submissionTypeOf(item) !== 'first' }" data-type-chip :data-reopen-chip="submissionTypeOf(item) === 'reopen' ? '' : undefined">{{ $t(submissionTypeKey(submissionTypeOf(item))) }}</span>
+              <span v-if="submissionTypeOf(item) !== 'reopen' && (item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
               <span v-if="lengthChip(item)" class="chip chip--length" :class="{ 'chip--short': lengthChip(item)!.short }" data-length-chip>{{ lengthChip(item)!.text }}</span>
               <!-- 世界書條目與正規表示式規則（全部，含停用）：挑卡前先知道要讀多少；不知道就不標，0 照標 -->
               <span v-if="typeof item.worldbookEntries === 'number'" class="chip chip--count" data-worldbook-chip>{{ $t("review.queue.worldbook", { n: numbers.format(item.worldbookEntries) }) }}</span>
               <span v-if="typeof item.regexRules === 'number'" class="chip chip--count" data-regex-chip>{{ $t("review.queue.regex", { n: numbers.format(item.regexRules) }) }}</span>
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
-              <span v-if="item.reopen" class="chip chip--re" data-reopen-chip>{{ $t("review.reopen.chip") }}</span>
               <span v-if="item.hold" class="chip chip--hold" data-hold-chip>{{ $t("review.hold.chip") }}</span>
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>
