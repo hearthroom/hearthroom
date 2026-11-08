@@ -36,7 +36,11 @@ it("without a re-review the card reads as published", async () => {
 const shared = { access: "public", effectiveAccess: "public", review: "approved", update: "none", everPublic: true, revisionState: "unchanged", restorable: false, draftChanged: false, restriction: "none", syncState: "complete" };
 it("with work sharing on, a card under re-review still shows the badge and note", async () => {
   const el = await mount({ ...base, reReview: true, workVisibility: shared });
-  expect(el.textContent).toContain(i18n.global.t("mine.badge.reReview"));
+  // 主標照舊是公開範圍；重審是另外一個琥珀標（跟「更新審核中」同一種）
+  expect(el.querySelector(".card__status--access")?.textContent).toContain(i18n.global.t("visibility.short.public"));
+  const badge = el.querySelector("[data-re-review-badge]");
+  expect(badge?.textContent?.trim()).toBe(i18n.global.t("mine.badge.reReview"));
+  expect(badge?.classList.contains("card__status--wait")).toBe(true);
   expect(el.querySelector("[data-re-review]")?.textContent).toContain(i18n.global.t("mine.note.reReview"));
 });
 it("with work sharing on, a suspended card shows the suspension first", async () => {
