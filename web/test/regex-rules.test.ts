@@ -44,13 +44,13 @@ describe("匯入匯出", () => {
     expect(ruleSetToExport({ version: 1, rules: [], statusbar: "", lowered: false }, "").pageDepth).toBe(2);
   });
 
-  it("酒館規則只收作用於 AI 輸出的：placement 沒有 2 的丟掉，沒寫 placement 的全收", () => {
+  it("酒館規則保留玩家與 AI placement，沒寫 placement 保留舊行為", () => {
     const scripts = [
       { scriptName: "in", findRegex: "/a/", replaceString: "", placement: [1] },
       { scriptName: "out", findRegex: "/b/", replaceString: "", placement: [1, 2] },
       { scriptName: "any", findRegex: "/c/", replaceString: "" },
     ];
-    expect(ruleSetFromImport(scripts)!.set.rules.map((r) => r.name)).toEqual(["out", "any"]);
+    expect(ruleSetFromImport(scripts)!.set.rules.map((r) => r.name)).toEqual(["in", "out", "any"]);
   });
 
   it("魅魔島新版卡：chatVersion 1 → pageMode sandbox，匯出時還原 chatVersion；舊版不帶", () => {
@@ -190,5 +190,36 @@ describe("large replacement warnings", () => {
     const set = { version: 1 as const, rules: [rule], statusbar: "", lowered: false };
     expect(ruleSetWarnings(set)).toEqual(bytes > 262144 && bytes <= 524288 ? [{ ruleId: rule.id, key: "regex.warning.largeReplacement" }] : []);
     expect(validateRuleSet(set).some(issue => issue.key === "regex.issue.replaceLong")).toBe(bytes > 524288);
+  });
+});
+
+ describe("message targets", () => {
+  it("new rules default to AI, legacy native rules preserve all targets", () => {
+    expect(makeRule().targets).toEqual(["ai"]);
+    const old = ruleSetFromAuthorAsset({ rules: [{ id: "old", find: "x", replace: "y", enabled: true }] });
+    expect(old.rules[0].targets).toBeUndefined();
+    for (const target of ["ai", "user", "system"] as const) expect(applyRules("x", old.rules, target)).toBe("y");
+  });
+  it("every target combination applies only to selected messages", () => {
+    const kinds = ["ai", "user", "system"] as const;
+    for (let mask = 0; mask < 8; mask++) {
+      const targets = kinds.filter((_, i) => mask & (1 << i));
+      const rules = [makeRule({ find: "x", replace: "y", targets })];
+      for (const target of kinds) expect(applyRules("x", rules, target)).toBe(targets.includes(target) ? "y" : "x");
+      expect(renderStatusbar({ version: 1, rules, statusbar: "x", lowered: false })).toBe("y");
+    }
+  });
+  it("native import and author assets preserve missing, empty and combined targets", () => {
+    for (const targets of [undefined, [], ["user", "system"]] as const) {
+      const rule = { id: "test", name: "test", find: "x", replace: "y", enabled: true, ...(targets ? { targets: [...targets] } : {}) };
+      const set = ruleSetFromImport({ rules: [rule] })!.set;
+      expect(set.rules[0].targets).toEqual(targets);
+      expect(ruleSetFromAuthorAsset(ruleSetToAuthorAsset(set, 1)).rules[0].targets).toEqual(targets);
+      expect(ruleSetFromImport(ruleSetToExport(set, ""))!.set.rules[0].targets).toEqual(targets);
+    }
+  });
+  it("imports user, AI, both and skips scripts for non-message placements", () => {
+    const rules = rulesFromTavern([[1], [2], [1, 2], [3], [], undefined].map((placement, i) => ({ findRegex: "x", scriptName: String(i), placement })));
+    expect(rules.map(r => [r.name, r.targets])).toEqual([["0", ["user"]], ["1", ["ai"]], ["2", ["user", "ai"]], ["4", undefined], ["5", undefined]]);
   });
 });

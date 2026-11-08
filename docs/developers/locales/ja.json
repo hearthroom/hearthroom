@@ -593,7 +593,7 @@
   "d8851edc5174c": "`not_found: role does not exist`。",
   "d5b0841deccc7": "未分類のエラーです。`retryable: true`。",
   "d819f32c14b58": "所有するキャラクターの表示ルールを置き換える",
-  "d12e797743a8a": "作者の素材を全体置換します（部分更新なし）。楽観的ロックを使用し、`version` は最後に読んだバージョン（素材がなければ `0`）と一致する必要があります。不一致は 409 `version_conflict` です。`mountLayer` は必須で `under`、`over`、`cover` のいずれかです。`pageMode` は省略可（`classic` として扱う）で、`immersive` または `sandbox` も指定できます。各ルールの `find` は空白のみではいけません。`replace` は各 524288 バイト、全ルールの `id`+`name`+`find`+`replace` 合計は 33554432 バイトが上限です（`validate_reject` と `message`、`detail` `{reason: emptyFind|ruleReplace|rulesTotal|sharedState, index, name, max, actual, unit: bytes}`）。保存すると `status` は直ちに `passed` となり `version` が増加します。ルールは描画レイヤーだけに作用し、プロンプトには入りません。例外として、`sharedState` は省略または `null` のとき保存済みの値を保ち、`{}` で消去します。規則に合わない宣言は `reason: sharedState` で拒否されます。",
+  "d12e797743a8a": "作者の素材を全体置換します（部分更新なし）。楽観的ロックを使用し、`version` は最後に読んだバージョン（素材がなければ `0`）と一致する必要があります。不一致は 409 `version_conflict` です。`mountLayer` は必須で `under`、`over`、`cover` のいずれかです。`pageMode` は省略可（`classic` として扱う）で、`immersive` または `sandbox` も指定できます。各ルールの `find` は空白のみではいけません。`replace` は各 524288 バイト、全ルールの `id`+`name`+`find`+`replace` 合計は 33554432 バイトが上限です（`validate_reject` と `message`、`detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|sharedState, index, name, max, actual, unit: bytes}`）。保存すると `status` は直ちに `passed` となり `version` が増加します。ルールは描画レイヤーだけに作用し、プロンプトには入りません。例外として、`sharedState` は省略または `null` のとき保存済みの値を保ち、`{}` で消去します。規則に合わない宣言は `reason: sharedState` で拒否されます。",
   "da0cc0b1439f3": "保存済みの素材です（新しい `version`、`status: passed`）。",
   "dcd6869c6042e": "`invalid_param`（不正な JSON）、または `validate_reject`（不明な mountLayer/pageMode、空の `find`、ルールまたは合計サイズ超過）です。本文は `{\"error\": \"<code>\"}`。空の `find` とサイズ上限の場合は `message`（英文）と `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}` も含みます。",
   "db6e05fe712a9": "`version_conflict`：`version` が保存済みバージョンと一致しません（素材が存在するのに `version` が 0 の場合も含む）。",
@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`、`trial_invalid_body`（不正な JSON、作成時に `name` なし）は `{error, message}`。`trial_unsupported`（不明な `authorAsset.mountLayer`、`pageMode`、`cardFormat`、有効な項目に内容なし、ルールに `find` なし、不正なルール）は `{error, message, detail}`。またはキャラクターサービスの `invalid_arguments` です。",
   "d915157325f00": "キャラクターサービスからの `permission_denied` です。",
   "d13752e2ce964": "`trial_slots_full`：すべての枠が使用済みで `evict` が未設定です。本文に `slots` と候補 `oldest` を含みます。",
-  "def8eddb9ada2": "`trial_payload_too_large`：本文が 48 MiB 超、`name` が長すぎる、項目数が多すぎる、項目の `content` が長すぎる、ルールの `replace` またはルール合計が大きすぎる、あるいはカードフィールドの言語別上限超過です（`reason` は `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal`）。`detail` に対象セクション・項目と上限を示します。",
+  "def8eddb9ada2": "`trial_payload_too_large`：本文が 48 MiB 超、`name` が長すぎる、項目数が多すぎる、項目の `content` が長すぎる、ルールの `replace` またはルール合計が大きすぎる、あるいはカードフィールドの言語別上限超過です（`reason` は `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets`）。`detail` に対象セクション・項目と上限を示します。",
   "defb61b08263b": "未分類のエラーです（保存済み開始文を消去するときの `empty_field_patch` を含む）。`{error, message, retryable:true}`。",
   "da3b558dfecfe": "`worldbook_unavailable`：Lorebookサービスが停止しており、何も書き込みませんでした。`{error, message, retryable:true}`。",
   "d2603ca1c6f6c": "試用カードを 1 件取得する",
@@ -1693,7 +1693,7 @@
   "d5ad9e6892725": "その日に獲得したポイントです。",
   "d3b31cfc7c305": "その日の台帳記録の件数です。",
   "dc0c36c52790d": "カードの表示ルールを通してオープニングを描画する",
-  "d067a6aba77da": "プレイページと同じエンジンで、所有者自身のカードの 1 つのオープニングに作者の表示ルールを適用し、プレイヤー側レンダラーが Markdown 展開前に受け取るテキストを返します。先に `{{char}}` と `{{user}}` を展開します。`{{user}}` はカードのプレイヤー名になり、それが `你` や `user` のようなプレースホルダーなら言語の既定値になります。各ルールは `applied`、`unmatched`、`disabled`、`empty`、`rolled_back` のいずれかを報告します（ロールバック時にはエンジンの `reason`：`bad_regex`、`empty_match`、`replacement_alone`、`volume`、`timeout` が付きます）。`{{random}}` は常に最初の選択肢を取るので、同じカードを 2 回描画しても結果は同じです。`report.unsupported` には、カードが選んだチャットページが提供しない作者向け API の識別子を `hint` 付きで列挙します。クラシックページのカードではサンドボックスの `sdk`、`[data-chat]` ノード、`--chat-*` 変数（カードをサンドボックスページに切り替えれば使えます）、どのページにもないのは MMD のプラットフォーム状態変数です。`capture` はブラウザでしか確認できない点を示します。Markdown、HTML カードコンポーネント、レイアウト、コントラストはプレイページが最終的な基準です。",
+  "d067a6aba77da": "プレイページと同じエンジンで、所有者自身のカードの 1 つのオープニングに作者の表示ルールを適用し、プレイヤー側レンダラーが Markdown 展開前に受け取るテキストを返します。先に `{{char}}` と `{{user}}` を展開します。`{{user}}` はカードのプレイヤー名になり、それが `你` や `user` のようなプレースホルダーなら言語の既定値になります。各ルールは `applied`、`unmatched`、`disabled`、`empty`、`out_of_scope`（開始メッセージは AI として扱います）または `rolled_back` のいずれかを報告します（ロールバック時にはエンジンの `reason`：`bad_regex`、`empty_match`、`replacement_alone`、`volume`、`timeout` が付きます）。`{{random}}` は常に最初の選択肢を取るので、同じカードを 2 回描画しても結果は同じです。`report.unsupported` には、カードが選んだチャットページが提供しない作者向け API の識別子を `hint` 付きで列挙します。クラシックページのカードではサンドボックスの `sdk`、`[data-chat]` ノード、`--chat-*` 変数（カードをサンドボックスページに切り替えれば使えます）、どのページにもないのは MMD のプラットフォーム状態変数です。`capture` はブラウザでしか確認できない点を示します。Markdown、HTML カードコンポーネント、レイアウト、コントラストはプレイページが最終的な基準です。",
   "d3f7ddccb3b68": "描画するオープニング：`0`（既定）は `roleWelcome`、`N` は `welcomeAlternates[N-1]`。範囲外は `invalid_param`。",
   "d6f5d8e91338e": "描画レポート。",
   "d47f268ac1270": "`roleId is required`。`opening` がオープニングのインデックスでない場合は `invalid_param`。",
@@ -2555,5 +2555,6 @@
   "d3084e89ef570": "rate_limit",
   "d0bc36b14a5d1": "temporarily_unavailable",
   "de9d83f01c9af": "unauthorized",
-  "deccd87623164": "次の Agent ターンに適用する費用見積もりです。現在のランタイムと会話ブランチで、完了した Agent ターンが費用見積もりに記録されるまでは first、その後は steady になります。表示上の目安であり、準備状態を保証するものではありません。不明な場合は省略され、selectionKey は変わりません。"
+  "deccd87623164": "次の Agent ターンに適用する費用見積もりです。現在のランタイムと会話ブランチで、完了した Agent ターンが費用見積もりに記録されるまでは first、その後は steady になります。表示上の目安であり、準備状態を保証するものではありません。不明な場合は省略され、selectionKey は変わりません。",
+  "d67355b587dba": "ルールを適用するメッセージの種類です。省略すると従来どおり3種類すべてに適用し、[] はどのメッセージにも適用しません。エディターで新規作成するルールの既定値は [\"ai\"] です。機能バーの展開には影響しません。"
 }

@@ -1,5 +1,5 @@
 /**
- * 正則規則：作者替 AI 回覆寫的一組「找到 → 換成」。
+ * 正則規則：作者替選定訊息寫的一組「找到 → 換成」。
  *
  * 用途是把 AI 吐出的標記（『台詞』、<status>…</status>、《美1》這類佔位）在畫面上換成有樣式、
  * 有互動的 HTML。這是酒館與同類站台共有的玩法，資料形狀也跟它們對齊，卡片才搬得動：
@@ -9,9 +9,15 @@
  * `find` 有兩種寫法：`/pattern/flags` 是正則（JS 語法，替換裡的 $1 原樣可用）；不是這個形狀就是
  * 字面字串，全部出現處都換。樣例資料 38 條裡 33 條是字面標記，這不是邊角情況。
  *
- * 規則在**看的人**的瀏覽器裡跑：對話頁把 AI 回覆先過一遍規則再渲染。替換內容裡的 script / style
+ * 規則在**看的人**的瀏覽器裡跑：對話頁把選定種類的訊息先過一遍規則再渲染。替換內容裡的 script / style
  * 會執行——這跟本站「AI 生成的 HTML 卡」是同一個信任模型，不是漏洞。
  */
+
+export type RegexMessageTarget = "ai" | "user" | "system";
+export const MESSAGE_TARGETS: RegexMessageTarget[] = ["ai", "user", "system"];
+
+/** Missing targets preserves legacy all-message behavior; [] selects no messages. */
+export const ruleTargets = (rule: Pick<RegexRule, "targets">): RegexMessageTarget[] => rule.targets ?? MESSAGE_TARGETS;
 
 export interface RegexRule {
   id: string;
@@ -20,6 +26,7 @@ export interface RegexRule {
   find: string;
   replace: string;
   enabled: boolean;
+  targets?: RegexMessageTarget[];
 }
 
 export interface RegexRuleSet {
@@ -125,6 +132,7 @@ export const makeRule = (partial: Partial<RegexRule> = {}): RegexRule => ({
   find: "",
   replace: "",
   enabled: true,
+  targets: ["ai"],
   ...partial,
 });
 
@@ -150,10 +158,10 @@ function replaceAllLiteral(text: string, needle: string, replacement: string): s
 }
 
 /** 依序套用啟用中的規則。壞規則跳過——一條寫錯不該讓整則回覆變空白。 */
-export function applyRules(text: string, rules: RegexRule[]): string {
+export function applyRules(text: string, rules: RegexRule[], target?: RegexMessageTarget): string {
   let out = text;
   for (const rule of rules) {
-    if (!rule.enabled || !rule.find) continue;
+    if (!rule.enabled || !rule.find || (target && !ruleTargets(rule).includes(target))) continue;
     const parsed = parseFind(rule.find);
     if (parsed instanceof Error) continue;
     out = typeof parsed === "string" ? replaceAllLiteral(out, parsed, rule.replace) : out.replace(parsed, rule.replace);
@@ -163,7 +171,7 @@ export function applyRules(text: string, rules: RegexRule[]): string {
 
 /** 套用一整組到一則 AI 回覆。 */
 export function renderWithRules(text: string, set: RegexRuleSet): string {
-  return applyRules(text, set.rules);
+  return applyRules(text, set.rules, "ai");
 }
 
 /** 功能欄展開後的 HTML；沒填就是空字串（畫面不渲染那一層）。 */
@@ -211,20 +219,21 @@ export interface TavernRegexScript {
 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/**
- * 酒館的 placement：1 = 使用者輸入、2 = AI 輸出、3 = 斜線指令、5 = 世界書。
- * 本站的規則只作用在畫面上的 AI 回覆，所以只收作用於 AI 輸出的；沒寫 placement 的當成全部。
- */
-function actsOnAiOutput(s: TavernRegexScript): boolean {
-  const placement = Array.isArray(s.placement) ? s.placement.map(Number) : null;
-  return !placement || !placement.length || placement.includes(2);
+/** 酒館 placement: 1 = 玩家、2 = AI；缺欄位保留舊匯入行為。 */
+function targetsFromTavern(script: TavernRegexScript): RegexMessageTarget[] | undefined {
+  // Our exports carry targets as well, preserving system-only and empty selections.
+  if (Array.isArray(script.targets)) return script.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v as RegexMessageTarget));
+  if (!Array.isArray(script.placement) || !script.placement.length) return undefined;
+  const placement = script.placement.map(Number);
+  return ([1, 2] as const).filter(p => placement.includes(p)).map(p => p === 1 ? "user" : "ai");
 }
 
 export function rulesFromTavern(scripts: unknown): RegexRule[] {
   if (!Array.isArray(scripts)) return [];
   return (scripts as TavernRegexScript[])
-    .filter((s) => s && typeof s === "object" && text(s.findRegex) && actsOnAiOutput(s))
-    .map((s, i) => makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true }));
+    .filter((s) => s && typeof s === "object" && text(s.findRegex))
+    .filter((s) => Array.isArray(s.targets) || targetsFromTavern(s)?.length !== 0)
+    .map((s, i) => makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true, targets: targetsFromTavern(s) }));
 }
 
 /** 魅魔島自家「導出正則」列表（或 API 回包的 data）：條目是 { regex, content, name }。 */
@@ -244,11 +253,11 @@ export function rulesFromMeimoList(items: unknown): RegexRule[] {
   return items
     .filter(isMeimoRegexItem)
     .filter((it) => text(it.regex))
-    .map((it, i) => makeRule({ name: text(it.name) || `#${i + 1}`, find: text(it.regex), replace: text(it.content) }));
+    .map((it, i) => makeRule({ name: text(it.name) || `#${i + 1}`, find: text(it.regex), replace: text(it.content), targets: undefined }));
 }
 
 export function rulesToTavern(rules: RegexRule[]): TavernRegexScript[] {
-  return rules.map((r, i) => ({ id: i + 1, scriptName: r.name, findRegex: r.find, replaceString: r.replace, disabled: !r.enabled }));
+  return rules.map((r, i) => ({ id: i + 1, scriptName: r.name, findRegex: r.find, replaceString: r.replace, disabled: !r.enabled, ...(r.targets ? { targets: r.targets, placement: r.targets.filter(t => t !== "system").map(t => t === "user" ? 1 : 2) } : {}) }));
 }
 
 /** 魅魔島的匯出檔。`beginning` 是第一句話（開場白），跟規則分開回給呼叫端決定要不要蓋。 */
@@ -266,7 +275,7 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   if (!Array.isArray(obj.rules)) return null;
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])
     .filter((r) => r && typeof r === "object" && text(r.find))
-    .map((r) => ({ id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false }));
+    .map((r) => ({ id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: r.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v)) } : {}) }));
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
   const pageMode = pageModeFrom(obj.pageMode);
   if (pageMode) set.pageMode = pageMode;
@@ -343,7 +352,7 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
 export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<AuthorAssetLike> & { rules: RegexRule[]; version: number } {
   const mountLayer = set.lowered ? "under" : set.mountLayer === "cover" ? "cover" : "over";
   return {
-    rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled })),
+    rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, ...(r.targets ? { targets: r.targets } : {}) })),
     mountTrigger: set.statusbar,
     mountLayer,
     pageMode: set.pageMode ?? "",

@@ -13,6 +13,9 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import {
   REGEX_LIMITS,
+  MESSAGE_TARGETS,
+  ruleTargets,
+  type RegexMessageTarget,
   utf8Bytes,
   applyRules,
   makeRule,
@@ -61,8 +64,14 @@ const length = (s: string) => [...s].length;
 const testOutput = computed(() => {
   if (!testInput.value) return "";
   const rules = testScope.value === "one" && selected.value ? [selected.value] : set.value.rules;
-  return applyRules(testInput.value, rules);
+  return applyRules(testInput.value, rules, "ai");
 });
+
+function toggleTarget(target: RegexMessageTarget, checked: boolean) {
+  if (!selected.value) return;
+  const current = ruleTargets(selected.value);
+  selected.value.targets = MESSAGE_TARGETS.filter(t => t === target ? checked : current.includes(t));
+}
 
 function add() {
   const rule = makeRule({ name: t("regex.rule.untitled") });
@@ -169,6 +178,16 @@ watch(selectedId, () => { testScope.value = testScope.value; });
               <span class="subtle count" :class="{ over: length(selected.find) > REGEX_LIMITS.find }">{{ length(selected.find) }} / {{ REGEX_LIMITS.find }}</span>
             </span>
           </div>
+          <fieldset class="rx__targets">
+            <legend>{{ $t("regex.rule.targets") }}</legend>
+            <div class="rx__target-options">
+              <label v-for="target in MESSAGE_TARGETS" :key="target" class="check">
+                <input type="checkbox" :data-rule-target="target" :checked="ruleTargets(selected).includes(target)" @change="toggleTarget(target, ($event.target as HTMLInputElement).checked)" />
+                <span>{{ $t(`regex.rule.targets.${target}`) }}</span>
+              </label>
+            </div>
+            <p v-if="!ruleTargets(selected).length" class="subtle" data-target-warning role="status">{{ $t("regex.rule.targets.empty") }}</p>
+          </fieldset>
           <div class="field rx__replace">
             <label for="rx-replace">{{ $t("regex.rule.replace") }}</label>
             <textarea autocomplete="off" id="rx-replace" v-model="selected.replace" class="input mono-input" spellcheck="false" :placeholder="$t('regex.rule.replace.placeholder')" />
@@ -247,7 +266,12 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__rule:hover .rx__rule-tools, .rx__rule--on .rx__rule-tools { display: inline-flex; }
 .rx__empty { text-align: center; padding: var(--s-5) 0; }
 
-.rx__edit { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 0; padding: var(--s-3) var(--s-4); min-height: 0; overflow: hidden; }
+.rx__edit { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 0; padding: var(--s-3) var(--s-4); min-height: 0; overflow: hidden; }
+.rx__targets { border: 0; padding: 0; margin: 0 0 var(--s-2); min-width: 0; }
+.rx__targets legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
+.rx__target-options { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); }
+.rx__target-options .check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-sm); overflow-wrap: anywhere; }
+.rx__targets p { margin: var(--s-1) 0 0; }
 .rx__edit--empty { place-items: center; }
 .rx__edit .field { margin-bottom: var(--s-2); gap: 6px; }
 .rx__replace { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; }
@@ -284,7 +308,12 @@ watch(selectedId, () => { testScope.value = testScope.value; });
   .rx__list > * + * { margin-top: var(--s-2); }
   .rx__rules { max-height: 240px; }
   .rx__edit { display: block; overflow: visible; }
-  .rx__edit--empty { display: grid; min-height: 160px; }
+  .rx__targets { border: 0; padding: 0; margin: 0 0 var(--s-2); min-width: 0; }
+.rx__targets legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
+.rx__target-options { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); }
+.rx__target-options .check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--h-sm); overflow-wrap: anywhere; }
+.rx__targets p { margin: var(--s-1) 0 0; }
+.rx__edit--empty { display: grid; min-height: 160px; }
   .rx__replace { display: block; }
   .rx__replace textarea { height: auto; min-height: 160px; }
   .rx__globals { box-shadow: 0 1px 0 var(--line); }

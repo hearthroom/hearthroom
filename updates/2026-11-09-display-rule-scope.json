@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "draft": true,
+  "title": {
+    "zh-Hant": "顯示規則可選套用範圍",
+    "zh-Hans": "显示规则可选应用范围",
+    "en": "Choose where display rules apply",
+    "ja": "表示ルールの適用対象を選べるように",
+    "ko": "표시 규칙 적용 대상 선택"
+  },
+  "body": {
+    "zh-Hant": "每條顯示規則可以分別勾選套用於 AI 回覆、玩家訊息或系統訊息。",
+    "zh-Hans": "每条显示规则可以分别勾选应用于 AI 回复、玩家消息或系统消息。",
+    "en": "Each display rule can now apply to AI replies, player messages, system messages, or any mix.",
+    "ja": "表示ルールごとに、AI の返信・プレイヤーのメッセージ・システムメッセージから適用先を選べます。",
+    "ko": "표시 규칙마다 AI 답변, 플레이어 메시지, 시스템 메시지 중 적용 대상을 고를 수 있습니다."
+  }
+}
