@@ -52,10 +52,11 @@ export async function maintainReviewNotifications(db:D1Database,now:number){
   db.prepare('DELETE FROM review_deliveries WHERE terminal_at IS NOT NULL AND terminal_at<?').bind(now-30*DAY),
  ]);
  // One digest per Taipei calendar day, starting at 10:00. Never replay yesterday's digest.
+ // Frozen cards (review_holds) are parked on purpose for discussion: never counted as waiting.
  const taipei=new Date(now+8*60*MINUTE), day=taipei.toISOString().slice(0,10);
  if(taipei.getUTCHours()>=10) await db.prepare(`INSERT OR IGNORE INTO review_deliveries(id,kind,updated_at)
   SELECT ?,'digest',? WHERE EXISTS(SELECT 1 FROM review_submissions s JOIN cards c ON c.id=s.card_id
-  WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0 AND
+  WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0 AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AND
   COALESCE((SELECT MAX(created_at) FROM review_stamps st WHERE st.submission_id=s.id AND st.verdict='approve'),s.submitted_at)<=?)`).bind('digest:'+day,now,now-DAY).run();
  await db.prepare("DELETE FROM review_deliveries WHERE kind='digest' AND id<>?").bind('digest:'+day).run();
 }
@@ -84,9 +85,9 @@ async function reviewDeliveryProjection(db:D1Database,d:Delivery,lang:string,now
  const rows=await db.prepare(`SELECT COUNT(*) AS total,
  SUM(CASE WHEN s.claimed_by IS NOT NULL AND s.claimed_at>? AND EXISTS(SELECT 1 FROM reviewers r WHERE r.member_id=s.claimed_by AND r.revoked_at IS NULL) THEN 1 ELSE 0 END) AS claimed,
  SUM(CASE WHEN (s.claimed_by IS NULL OR s.claimed_at<=?) AND EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.verdict='approve') THEN 1 ELSE 0 END) AS second
- FROM review_submissions s JOIN cards c ON c.id=s.card_id WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0
+ FROM review_submissions s JOIN cards c ON c.id=s.card_id WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0 AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
  AND COALESCE((SELECT MAX(created_at) FROM review_stamps st WHERE st.submission_id=s.id AND st.verdict='approve'),s.submitted_at)<=?`).bind(now-CLAIM_TTL_MS,now-CLAIM_TTL_MS,now-DAY).first<{total:number;claimed:number;second:number}>();
- const oldest=await db.prepare(select+" WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0 AND COALESCE((SELECT MAX(created_at) FROM review_stamps st WHERE st.submission_id=s.id AND st.verdict='approve'),s.submitted_at)<=? ORDER BY waiting_since,s.id LIMIT 5").bind(now-DAY).all<Row>();
+ const oldest=await db.prepare(select+" WHERE s.status='pending' AND c.status<>'unshared' AND c.public_blocked=0 AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AND COALESCE((SELECT MAX(created_at) FROM review_stamps st WHERE st.submission_id=s.id AND st.verdict='approve'),s.submitted_at)<=? ORDER BY waiting_since,s.id LIMIT 5").bind(now-DAY).all<Row>();
  return {projection:null,digest:{total:rows?.total??0,claimed:rows?.claimed??0,second:rows?.second??0,items:oldest.results.map(r=>({...project(r,now,lang),waitingSince:r.waiting_since,escalated:r.waiting_since<=now-2*DAY}))}};
 }
 export async function checkReviewDelivery(db:D1Database,id:string,lease:string,revision:number,now:number){

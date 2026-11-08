@@ -1,4 +1,5 @@
 import { auditStmtIfChanged } from './audit';
+import { reviewerRole } from './members';
 import { serviceRewardOnApproval } from './card-reward-service';
 import { reserveUpdateNotification } from './card-update';
 import {finalizeManagedReview} from './work-publication';
@@ -117,7 +118,19 @@ export interface QueueItem {
   /** 世界書全部條目數、正規表示式全部規則數（含停用）；null＝不知道，清單上就不標 */
   worldbookEntries: number | null;
   regexRules: number | null;
+  /** 冷凍並討論：有人把這張卡擋下來了；null＝沒冷凍 */
+  hold: HoldView | null;
 }
+
+/** 冷凍給審核員看的樣子。holder 是冷凍人的顯示名（審核員之間本來就看得到彼此，作者看不到） */
+export interface HoldView { holder: string; at: number; byMe: boolean; canRelease: boolean }
+
+const isManager = (role: Awaited<ReturnType<typeof reviewerRole>>) => role === "manager" || role === "owner";
+const holdView = (h: { hold_by: string | null; hold_at: number | null; hold_name: string | null }, memberId: string, manager: boolean): HoldView | null =>
+  h.hold_by === null || h.hold_at === null ? null
+    : { holder: (h.hold_name ?? "").slice(0, 80), at: h.hold_at, byMe: h.hold_by === memberId, canRelease: h.hold_by === memberId || manager };
+const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN members hm ON hm.id = h.member_id";
+const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
 
 /** 佇列：所有待審的單，最舊的在前。不帶作者。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
@@ -131,8 +144,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
-              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier
-       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id
+              (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier, ${HOLD_COLUMNS}
+       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id ${HOLD_JOIN}
        WHERE s.status = 'pending' ORDER BY s.submitted_at ASC LIMIT 200`,
     )
     .bind(memberId)
@@ -140,7 +153,9 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
+      hold_by: string | null; hold_at: number | null; hold_name: string | null;
     }>();
+  const manager = isManager(await reviewerRole(db, memberId));
   return rows.results.map((r) => ({
     lengthExempt:!!r.length_exempt,
     id: r.id,
@@ -164,7 +179,63 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
     worldbookEntries: r.review_worldbook_entries,
     regexRules: r.review_regex_rules,
+    hold: holdView(r, memberId, manager),
   }));
+}
+
+/** 這張單所屬的卡現在的冷凍（給審核頁）。 */
+export async function holdOf(db: D1Database, cardId: string | number, memberId: string): Promise<HoldView | null> {
+  const row = await db
+    .prepare(`SELECT ${HOLD_COLUMNS} FROM review_holds h LEFT JOIN members hm ON hm.id = h.member_id WHERE h.card_id = ?`)
+    .bind(cardId)
+    .first<{ hold_by: string; hold_at: number; hold_name: string | null }>();
+  return row ? holdView(row, memberId, isManager(await reviewerRole(db, memberId))) : null;
+}
+
+/**
+ * 冷凍並討論。跟蓋章同一個前提：領著（沒逾時）才能冷凍。冷凍後放回領取，別人領得到、讀得到，一起討論；
+ * 冷凍中誰都不能蓋章（冷凍人自己也要先解凍）。冷凍掛在卡上，作者重送新版本照樣冷凍。
+ */
+export async function hold(db: D1Database, input: { submissionId: string; memberId: string; now: number; generation?: string }): Promise<HoldView> {
+  const row = await getSubmission(db, input.submissionId);
+  if (row.status !== "pending") throw new HttpError(409, "submission already decided");
+  // 託管作品：審核決定已經記下、只差同步完成，等同定案
+  if (await db.prepare("SELECT 1 FROM work_review_decisions WHERE submission_id = ?").bind(row.id).first()) throw new HttpError(409, "submission already decided");
+  if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
+  if (input.generation !== undefined && input.generation !== row.claim_generation) throw new HttpError(409, "claim changed");
+  if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_already_held");
+  await db.batch([
+    db.prepare("INSERT INTO review_holds (card_id, member_id, submission_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(card_id) DO NOTHING")
+      .bind(row.card_id, input.memberId, row.id, input.now),
+    auditStmtIfChanged(db, { subjectKind: "review_hold", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "hold", after: { cardId: Number(row.card_id) }, operationId: crypto.randomUUID(), now: input.now }),
+    db.prepare(`UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = ''
+      WHERE id = ? AND claimed_by = ? AND claim_generation = ? AND EXISTS (SELECT 1 FROM review_holds WHERE card_id = ? AND member_id = ? AND submission_id = ?)`)
+      .bind(row.id, input.memberId, row.claim_generation, row.card_id, input.memberId, row.id),
+  ]);
+  const placed = await holdOf(db, row.card_id, input.memberId);
+  // 同時有兩個人按：先寫進去的那個算數
+  if (!placed?.byMe) throw new HttpError(409, "review_already_held");
+  return placed;
+}
+
+/**
+ * 解凍。冷凍人自己隨時能解，不必先領（單子可能正被別人領著讀）；管理員也能解別人的冷凍，
+ * 例如冷凍人已經不審了，但要寫理由，稽核留得到為什麼。
+ */
+export async function unhold(db: D1Database, input: { submissionId: string; memberId: string; reason: string; now: number }): Promise<void> {
+  const row = await getSubmission(db, input.submissionId);
+  const current = await db.prepare("SELECT member_id, created_at FROM review_holds WHERE card_id = ?").bind(row.card_id).first<{ member_id: string; created_at: number }>();
+  if (!current) throw new HttpError(409, "review_not_held");
+  const reason = input.reason.trim();
+  if (reason.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
+  if (current.member_id !== input.memberId) {
+    if (!isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_hold_not_yours");
+    if (!reason) throw new HttpError(400, "review_hold_reason_required");
+  }
+  await db.batch([
+    db.prepare("DELETE FROM review_holds WHERE card_id = ? AND member_id = ? AND created_at = ?").bind(row.card_id, current.member_id, current.created_at),
+    auditStmtIfChanged(db, { subjectKind: "review_hold", subjectId: row.id, actorMemberId: input.memberId, actorKind: "human", action: "release", reason, before: { cardId: Number(row.card_id), heldBy: current.member_id, heldAt: current.created_at }, operationId: crypto.randomUUID(), now: input.now }),
+  ]);
 }
 
 export async function getSubmission(db: D1Database, id: string): Promise<SubmissionRow> {
@@ -231,6 +302,8 @@ export async function stamp(
   }
 
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
+  // 冷凍中誰都不能定案（資料庫的 trigger 也會擋）。放在領取檢查前：冷凍的單不該被說成「請先領取」
+  if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_held");
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
@@ -282,6 +355,7 @@ export async function stamp(
   }
   try { await db.batch(writes); } catch (error) {
     if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
+    if(error instanceof Error && error.message.includes('review_held')) throw new HttpError(409,'review_held');
     throw error;
   }
   if(managed&&input.verdict==='approve'&&approvals>=required){
