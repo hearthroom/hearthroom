@@ -76,6 +76,16 @@ it('digests use Taipei day, count work instead of votes and include wait-for-sec
  const d=await leaseReviewDelivery(env.DB,'digest:2026-09-22','223456789012345678','en',now);
  expect(d.digest).toMatchObject({total:2,claimed:0,second:1});expect(d.digest!.items).toHaveLength(2);
 });
+it('frozen cards stay out of the digest: they are parked on purpose, not waiting',async()=>{
+ const now=Date.parse('2026-09-22T02:00:00Z');await submission('old',now-3*86400000);await submission('held',now-3*86400000);
+ await env.DB.prepare("INSERT INTO review_holds(card_id,member_id,submission_id,created_at) SELECT card_id,'reviewer','held',? FROM review_submissions WHERE id='held'").bind(now-86400000).run();
+ await pendingReviewDeliveries(env.DB,now);
+ const d=await leaseReviewDelivery(env.DB,'digest:2026-09-22','223456789012345678','en',now);
+ expect(d.digest).toMatchObject({total:1});expect(d.digest!.items.map((i:any)=>i.path)).toEqual(['/review/old']);
+ await env.DB.prepare('DELETE FROM review_deliveries').run();await env.DB.prepare("DELETE FROM review_submissions WHERE id='old'").run();
+ await pendingReviewDeliveries(env.DB,now);
+ expect(await env.DB.prepare("SELECT id FROM review_deliveries WHERE kind='digest'").first()).toBeNull();
+});
 it('new claims fence delayed release and stamp requests from the previous claim',async()=>{
  await submission();const m=await makeReviewer(2),now=Date.now();
  const a=await claim(env.DB,'s1',m,now),b=await claim(env.DB,'s1',m,now+1);
