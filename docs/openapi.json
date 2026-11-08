@@ -10609,7 +10609,7 @@
             }
           },
           "413": {
-            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|roleReadme|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets`). `detail` says which section/item and the limit.",
+            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|roleReadme|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
             "content": {
               "application/json": {
                 "schema": {
@@ -27206,8 +27206,7 @@
                   "roleDetailDesc",
                   "roleOutputContract",
                   "customInstructions",
-                  "roleReadme",
-                  "ruleTargets"
+                  "roleReadme"
                 ]
               },
               "section": {

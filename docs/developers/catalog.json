@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`; `trial_invalid_body` (malformed JSON, or `name` missing on create) — `{error, message}`; `trial_unsupported` (unknown `authorAsset.mountLayer`, `pageMode` or `cardFormat`, enabled entry without content, rule without `find`, invalid rules) — `{error, message, detail}`; `invalid_arguments` from the role service.",
   "d915157325f00": "`permission_denied` from the role service.",
   "d13752e2ce964": "`trial_slots_full` — all slots used and `evict` not set. Body carries `slots` and the `oldest` candidate.",
-  "def8eddb9ada2": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets`). `detail` says which section/item and the limit.",
+  "def8eddb9ada2": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
   "defb61b08263b": "Unclassified error (including `empty_field_patch` when clearing a stored welcome); `{error, message, retryable:true}`.",
   "da3b558dfecfe": "`worldbook_unavailable` — worldbook service down; nothing written. `{error, message, retryable:true}`.",
   "d2603ca1c6f6c": "Get one trial card",

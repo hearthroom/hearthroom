@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`、`trial_invalid_body`（不正な JSON、作成時に `name` なし）は `{error, message}`。`trial_unsupported`（不明な `authorAsset.mountLayer`、`pageMode`、`cardFormat`、有効な項目に内容なし、ルールに `find` なし、不正なルール）は `{error, message, detail}`。またはキャラクターサービスの `invalid_arguments` です。",
   "d915157325f00": "キャラクターサービスからの `permission_denied` です。",
   "d13752e2ce964": "`trial_slots_full`：すべての枠が使用済みで `evict` が未設定です。本文に `slots` と候補 `oldest` を含みます。",
-  "def8eddb9ada2": "`trial_payload_too_large`：本文が 48 MiB 超、`name` が長すぎる、項目数が多すぎる、項目の `content` が長すぎる、ルールの `replace` またはルール合計が大きすぎる、あるいはカードフィールドの言語別上限超過です（`reason` は `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets`）。`detail` に対象セクション・項目と上限を示します。",
+  "def8eddb9ada2": "`trial_payload_too_large`：本文が 48 MiB 超、`name` が長すぎる、項目数が多すぎる、項目の `content` が長すぎる、ルールの `replace` またはルール合計が大きすぎる、あるいはカードフィールドの言語別上限超過です（`reason` は `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal`）。`detail` に対象セクション・項目と上限を示します。",
   "defb61b08263b": "未分類のエラーです（保存済み開始文を消去するときの `empty_field_patch` を含む）。`{error, message, retryable:true}`。",
   "da3b558dfecfe": "`worldbook_unavailable`：Lorebookサービスが停止しており、何も書き込みませんでした。`{error, message, retryable:true}`。",
   "d2603ca1c6f6c": "試用カードを 1 件取得する",
