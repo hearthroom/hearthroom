@@ -81,7 +81,13 @@ jobs:
       - name: Run audited tests without account fixtures
         if: steps.test-scope.outputs.scope == 'no-accounts'
         run: npm run test:no-accounts
+      # Diagnostic-only branch: preserve an earlier failure while observing the
+      # complete downstream suites. This commit must not be merged or deployed.
+      - name: Observe complete web suite after upstream failure
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        run: npm run test -w web
       - name: Verify and build the pinned playground
+        if: ${{ !cancelled() }}
         working-directory: stage
         env:
           NODE_OPTIONS: --max-old-space-size=6144
