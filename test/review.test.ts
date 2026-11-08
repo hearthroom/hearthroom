@@ -200,7 +200,7 @@ describe("審核佇列", () => {
     expect((await listed())[0].tags).toEqual(["推理"]);
   });
 
-  it("蓋過章的審核人回頭看：不必再領，唯讀；定案後只剩公開資料，仍不帶作者；沒蓋過的人看不到", async () => {
+  it("蓋過章的審核人回頭看：不必再領，唯讀；定案後只剩公開資料，作者只在 author 一欄；沒蓋過的人看不到", async () => {
     reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", customInstructions: "自訂指示" } }));
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
@@ -229,7 +229,10 @@ describe("審核佇列", () => {
     expect(body.detail).toMatchObject({ partial: true, closed: true });
     expect(body.detail.document.roleName).toBe("夜行偵探");
     expect(body.detail.document.customInstructions).toBeUndefined();
-    expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
+    // owner 2026-11-08 取消盲審：審核頁看得到原作者，但只從 author 一欄給，快照與審核單裡仍不帶
+    const { author, ...rest } = body;
+    expect(author.accountNumId).toBe(AUTHOR);
+    expect(JSON.stringify(rest)).not.toContain(String(AUTHOR));
     // 沒蓋過章的審核人：定案的單照舊看不到
     expect((await detail("rev-b")).status).toBe(410);
   });
@@ -267,7 +270,7 @@ describe("審核佇列", () => {
     expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(409);
   });
 
-  it("審核頁：看的是送審當下的快照，帶審核單狀態，不帶作者；定案後快照就刪", async () => {
+  it("審核頁：看的是送審當下的快照，帶審核單狀態，作者只在 author 一欄；定案後快照就刪", async () => {
     reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", customInstructions: "自訂指示" } }));
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
@@ -281,7 +284,10 @@ describe("審核佇列", () => {
     expect(body.card.id).toBe("100001");
     expect(body.detail.document.customInstructions).toBe("自訂指示");
     expect(body.submission).toMatchObject({ kind: "first", required: 1, claimedByMe: true, stampedByMe: false });
-    expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
+    // owner 2026-11-08 取消盲審：審核頁看得到原作者，但只從 author 一欄給，快照與審核單裡仍不帶
+    const { author, ...rest } = body;
+    expect(author.accountNumId).toBe(AUTHOR);
+    expect(JSON.stringify(rest)).not.toContain(String(AUTHOR));
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
     // 審核頁不再回頭問供應商：快照是唯一來源
     expect(settingsReads).toHaveLength(2);
