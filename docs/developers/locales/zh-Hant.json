@@ -593,7 +593,7 @@
   "d8851edc5174c": "`not_found: role does not exist`。",
   "d5b0841deccc7": "未分類錯誤；`retryable: true`。",
   "d819f32c14b58": "取代自己角色的顯示規則",
-  "d12e797743a8a": "完整取代作者素材（不支援部分更新）。樂觀鎖定：`version` 必須等於最後讀取的版本（尚無素材時為 `0`）；不符時回傳 409 `version_conflict`。`mountLayer` 必填，須為 `under`、`over` 或 `cover`；`pageMode` 可省略（視為 `classic`），或為 `immersive`、`sandbox`。每條規則需要非空白 `find`；每個 `replace` 上限為 524288 位元組，所有規則的 `id` + `name` + `find` + `replace` 總計上限為 33554432 位元組（`validate_reject`，附 `message` 與 `detail` `{reason: emptyFind|ruleReplace|rulesTotal|sharedState, index, name, max, actual, unit: bytes}`）。儲存會立即將 `status` 設為 `passed` 並增加 `version`。規則只作用於轉譯層，絕不進入提示詞。例外：`sharedState` 省略或為 `null` 時保留原值，`{}` 會清空；不合規則的宣告以 `reason: sharedState` 拒絕。",
+  "d12e797743a8a": "完整取代作者素材（不支援部分更新）。樂觀鎖定：`version` 必須等於最後讀取的版本（尚無素材時為 `0`）；不符時回傳 409 `version_conflict`。`mountLayer` 必填，須為 `under`、`over` 或 `cover`；`pageMode` 可省略（視為 `classic`），或為 `immersive`、`sandbox`。每條規則需要非空白 `find`；每個 `replace` 上限為 524288 位元組，所有規則的 `id` + `name` + `find` + `replace` 總計上限為 33554432 位元組（`validate_reject`，附 `message` 與 `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|sharedState, index, name, max, actual, unit: bytes}`）。儲存會立即將 `status` 設為 `passed` 並增加 `version`。規則只作用於轉譯層，絕不進入提示詞。例外：`sharedState` 省略或為 `null` 時保留原值，`{}` 會清空；不合規則的宣告以 `reason: sharedState` 拒絕。",
   "da0cc0b1439f3": "已儲存素材（新 `version`、`status: passed`）。",
   "dcd6869c6042e": "`invalid_param`（JSON 錯誤）或 `validate_reject`（未知 mountLayer／pageMode、空白 `find`、單條規則或總大小超限）。本文為 `{\"error\": \"<code>\"}`；空白 `find` 與大小限制另含 `message`（英文句子）及 `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`。",
   "db6e05fe712a9": "`version_conflict` — `version` 與已儲存版本不符（素材已存在而 `version` 為 0 時亦同）。",
@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`；`trial_invalid_body`（JSON 格式錯誤，或建立時缺少 `name`）— `{error, message}`；`trial_unsupported`（未知 `authorAsset.mountLayer`、`pageMode` 或 `cardFormat`、啟用條目無內容、規則無 `find`、規則無效）— `{error, message, detail}`；角色服務的 `invalid_arguments`。",
   "d915157325f00": "角色服務的 `permission_denied`。",
   "d13752e2ce964": "`trial_slots_full` — 所有名額已使用，且未設定 `evict`。本文含 `slots` 與候選 `oldest`。",
-  "def8eddb9ada2": "`trial_payload_too_large` — 本文超過 48 MiB、`name` 太長、條目太多、條目 `content` 太長、規則 `replace` 太大、規則總大小太大，或角色欄位超過其語言上限（`reason` 為 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal` 之一）。`detail` 指出區段／項目與上限。",
+  "def8eddb9ada2": "`trial_payload_too_large` — 本文超過 48 MiB、`name` 太長、條目太多、條目 `content` 太長、規則 `replace` 太大、規則總大小太大，或角色欄位超過其語言上限（`reason` 為 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets` 之一）。`detail` 指出區段／項目與上限。",
   "defb61b08263b": "未分類錯誤（含清除已儲存開場白時的 `empty_field_patch`）；`{error, message, retryable:true}`。",
   "da3b558dfecfe": "`worldbook_unavailable` — 世界書服務停止；未寫入任何資料。`{error, message, retryable:true}`。",
   "d2603ca1c6f6c": "取得單一試玩角色卡",
@@ -1693,7 +1693,7 @@
   "d5ad9e6892725": "當天獲得的點數。",
   "d3b31cfc7c305": "當天的帳本條目數。",
   "dc0c36c52790d": "把開場白套上卡片的顯示規則後渲染",
-  "d067a6aba77da": "用播放頁同一套引擎，把作者的顯示規則套在持有者自己卡片的一則開場白上，回傳玩家端渲染器在展開 Markdown 之前收到的文字。會先展開 `{{char}}` 與 `{{user}}`：`{{user}}` 換成卡片的玩家名，若那是 `你`、`user` 這類佔位字則用語言預設值。每條規則回報 `applied`、`unmatched`、`disabled`、`empty` 或 `rolled_back`（附引擎的 `reason`：`bad_regex`、`empty_match`、`replacement_alone`、`volume` 或 `timeout`）。`{{random}}` 一律取第一個選項，同一張卡渲染兩次結果相同。`report.unsupported` 列出這張卡選的聊天頁不提供的作者 API 識別字，並附 `hint`：舊版頁的卡是沙盒 `sdk`、`[data-chat]` 節點與 `--chat-*` 變數（把卡切到沙盒頁即可）；任何頁都沒有的是 MMD 的平台狀態變數。`capture` 說明哪些仍要用瀏覽器看。Markdown、HTML 內容卡元件、版面與對比以播放頁為準。",
+  "d067a6aba77da": "用播放頁同一套引擎，把作者的顯示規則套在持有者自己卡片的一則開場白上，回傳玩家端渲染器在展開 Markdown 之前收到的文字。會先展開 `{{char}}` 與 `{{user}}`：`{{user}}` 換成卡片的玩家名，若那是 `你`、`user` 這類佔位字則用語言預設值。每條規則回報 `applied`、`unmatched`、`disabled`、`empty` 或 `out_of_scope`（開場視為 AI 訊息）或 `rolled_back`（附引擎的 `reason`：`bad_regex`、`empty_match`、`replacement_alone`、`volume` 或 `timeout`）。`{{random}}` 一律取第一個選項，同一張卡渲染兩次結果相同。`report.unsupported` 列出這張卡選的聊天頁不提供的作者 API 識別字，並附 `hint`：舊版頁的卡是沙盒 `sdk`、`[data-chat]` 節點與 `--chat-*` 變數（把卡切到沙盒頁即可）；任何頁都沒有的是 MMD 的平台狀態變數。`capture` 說明哪些仍要用瀏覽器看。Markdown、HTML 內容卡元件、版面與對比以播放頁為準。",
   "d3f7ddccb3b68": "要渲染哪一則開場白：`0`（預設）是 `roleWelcome`；`N` 是 `welcomeAlternates[N-1]`。超出範圍回 `invalid_param`。",
   "d6f5d8e91338e": "渲染報告。",
   "d47f268ac1270": "`roleId is required`；`opening` 不是開場白的索引時回 `invalid_param`。",
@@ -2555,5 +2555,6 @@
   "d3084e89ef570": "rate_limit",
   "d0bc36b14a5d1": "temporarily_unavailable",
   "de9d83f01c9af": "unauthorized",
-  "deccd87623164": "下一輪 Agent 適用的費用估計：這個執行版本與對話分支上還沒有完成過 Agent 回合並記入費用估計時為 first，之後為 steady。這只是顯示提示，不保證準備狀態；無法判斷時省略，也不會改變 selectionKey。"
+  "deccd87623164": "下一輪 Agent 適用的費用估計：這個執行版本與對話分支上還沒有完成過 Agent 回合並記入費用估計時為 first，之後為 steady。這只是顯示提示，不保證準備狀態；無法判斷時省略，也不會改變 selectionKey。",
+  "d67355b587dba": "規則套用的訊息種類。省略時維持既有行為（三種皆套用）；[] 不套用任何訊息。編輯器新建規則預設為 [\"ai\"]。功能欄展開不受此設定限制。"
 }

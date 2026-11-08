@@ -9254,7 +9254,7 @@
           "Roles"
         ],
         "summary": "Render an opening through the card's display rules",
-        "description": "Applies the author's display rules to one opening of a card owned by the bearer, using the same engine the play page runs, and returns the text the player's renderer receives before Markdown expansion. `{{char}}` and `{{user}}` are expanded first: `{{user}}` becomes the card's player name, or a language default when that name is a placeholder such as `你` or `user`. Each rule reports `applied`, `unmatched`, `disabled`, `empty` or `rolled_back` (with the engine's `reason`: `bad_regex`, `empty_match`, `replacement_alone`, `volume` or `timeout`). `{{random}}` always takes its first option, so two renders of the same card are identical. `report.unsupported` lists author-API identifiers the card's chat page does not provide, with a `hint`: on a classic-page card that is the sandbox `sdk`, `[data-chat]` nodes and `--chat-*` variables (switch the card to the sandbox page); on any page it is MMD's platform state variables. `capture` says what still needs a browser. The play page remains authoritative for Markdown, HTML card components, layout and contrast.",
+        "description": "Applies the author's display rules to one opening of a card owned by the bearer, using the same engine the play page runs, and returns the text the player's renderer receives before Markdown expansion. `{{char}}` and `{{user}}` are expanded first: `{{user}}` becomes the card's player name, or a language default when that name is a placeholder such as `你` or `user`. Each rule reports `applied`, `unmatched`, `disabled`, `empty`, `out_of_scope` (the opening is an AI message) or `rolled_back` (with the engine's `reason`: `bad_regex`, `empty_match`, `replacement_alone`, `volume` or `timeout`). `{{random}}` always takes its first option, so two renders of the same card are identical. `report.unsupported` lists author-API identifiers the card's chat page does not provide, with a `hint`: on a classic-page card that is the sandbox `sdk`, `[data-chat]` nodes and `--chat-*` variables (switch the card to the sandbox page); on any page it is MMD's platform state variables. `capture` says what still needs a browser. The play page remains authoritative for Markdown, HTML card components, layout and contrast.",
         "security": [
           {
             "userToken": []
@@ -9560,7 +9560,7 @@
           "Author assets"
         ],
         "summary": "Replace the display rules of an owned role",
-        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|sharedState, index, name, max, actual, unit: bytes}`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
+        "description": "Full replacement of the author asset (there is no partial update). Optimistic locking: `version` must equal the version last read (`0` when no asset exists yet); a mismatch returns 409 `version_conflict`. `mountLayer` is required and must be `under`, `over` or `cover`; `pageMode` may be omitted (treated as `classic`), `immersive` or `sandbox`. Every rule needs a non-blank `find`; each `replace` is limited to 524288 bytes and the sum of `id`+`name`+`find`+`replace` across all rules to 33554432 bytes (`validate_reject`, with `message` and `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|sharedState, index, name, max, actual, unit: bytes}`). Saving sets `status` to `passed` immediately and increments `version`. Rules act on the rendering layer only and never enter the prompt. Exception: `sharedState` is kept when omitted or `null`, and `{}` clears it; an invalid declaration is rejected with `reason: sharedState`.",
         "security": [
           {
             "userToken": []
@@ -10609,7 +10609,7 @@
             }
           },
           "413": {
-            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|roleReadme|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
+            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|roleReadme|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets`). `detail` says which section/item and the limit.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21634,6 +21634,20 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ai",
+                "user",
+                "system"
+              ]
+            },
+            "description": "Message types this rule applies to. Omitted preserves legacy behavior (all three); [] applies to no messages. New rules created in the editor default to [\"ai\"]. Does not restrict function-bar expansion.",
+            "maxItems": 3,
+            "uniqueItems": true
           }
         }
       },
@@ -27192,7 +27206,8 @@
                   "roleDetailDesc",
                   "roleOutputContract",
                   "customInstructions",
-                  "roleReadme"
+                  "roleReadme",
+                  "ruleTargets"
                 ]
               },
               "section": {
@@ -29657,7 +29672,8 @@
               "unmatched",
               "disabled",
               "empty",
-              "rolled_back"
+              "rolled_back",
+              "out_of_scope"
             ]
           },
           "reason": {
