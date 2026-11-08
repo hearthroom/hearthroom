@@ -140,6 +140,19 @@ describe("冷凍並討論", () => {
     expect(JSON.stringify([...author.values()])).not.toMatch(/hold/i);
   });
 
+  it("作者撤銷登記再重新送審：卡號不變，冷凍照樣在", async () => {
+    const id = await freeze();
+    const card = (await env.DB.prepare("SELECT id FROM cards").first<{ id: number }>())!.id;
+    expect((await SELF.fetch("https://c.test/v1/cards/role-1", { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    expect((await submit()).status).toBeLessThan(300);
+    const next = await pendingId();
+    expect(next).not.toBe(id);
+    expect((await env.DB.prepare("SELECT id FROM cards").first<{ id: number }>())!.id).toBe(card);
+    expect((await queue("rev-b"))[0].hold).toMatchObject({ byMe: false });
+    await act(next, "claim", "rev-b");
+    expect(await code(await act(next, "stamp", "rev-b", { verdict: "approve" }))).toBe("review_held");
+  });
+
   it("作者重送新版本：冷凍跟著卡走", async () => {
     const id = await freeze();
     await SELF.fetch("https://c.test/v1/cards/role-1/edit", { method: "POST", headers: bearer("author-token") });

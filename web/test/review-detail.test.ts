@@ -481,3 +481,18 @@ it('a hold placed just before approving explains itself where the decision is ma
  await vi.waitFor(()=>expect(el.textContent).toContain(t('review.hold.decideBlocked')));
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeTruthy());
 });
+
+it('after the holder releases a card someone else is reading, the page stops saying it is held',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(held({holder:'Mika',at:5,byMe:true,canRelease:true})).mockRejectedValue(new api.ApiError(409,'x','claim this submission first'));
+ api.claimReview.mockRejectedValue(new api.ApiError(409,'x','claimed by another reviewer'));
+ api.unholdReview.mockResolvedValue({hold:null});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice] [data-unhold]')).toBeTruthy());
+ // 冷凍人沒領著：標頭的領取鈕說「領取並查看」，說明欄不能填
+ expect(btn(t('review.action.claimHeld'))).toBeTruthy();
+ expect((el.querySelector('#review-note') as HTMLTextAreaElement).disabled).toBe(true);
+ (el.querySelector('[data-unhold]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(api.unholdReview).toHaveBeenCalledWith('s1','local-reviewer',undefined));
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeNull());
+ expect(el.textContent).toContain(t('review.hold.released'));
+});

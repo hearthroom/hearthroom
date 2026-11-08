@@ -423,6 +423,8 @@ async function unholdCard() {
   try {
     await unholdReview(target, await token(), current.byMe ? undefined : holdReason.value.trim());
     if (!active || id.value !== target) return;
+    // 先在畫面上拿掉冷凍：解凍後冷凍人可能沒領著（單子正被別人領著讀），重讀會被擋，舊畫面不能還寫著「已冷凍」
+    if (data.value?.submission.id === target) data.value.submission.hold = null;
     holdReasonOpen.value = false;
     holdReason.value = "";
     done.value = t("review.hold.released");
@@ -574,7 +576,7 @@ onMounted(() => { void load(); });
         </div>
         <div class="head__acts">
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
 
@@ -869,7 +871,7 @@ onMounted(() => { void load(); });
           </div>
           <div class="field">
             <label for="review-note">{{ $t("review.note.label") }}</label>
-            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy" @focus="noteFocused = true" @blur="noteFocused = false" />
+            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" @focus="noteFocused = true" @blur="noteFocused = false" />
           </div>
           <p v-if="!claimedByMe && !decided && !hold" class="subtle">{{ $t("review.claimFirst") }}</p>
           <!-- 拿不定主意、要先跟其他審核員討論：冷凍後誰都不能決定，卡留在清單上 -->
@@ -992,6 +994,8 @@ onMounted(() => { void load(); });
 .hold__reason { width: 100%; margin: 0; color: var(--text); }
 .hold__error { margin: 0; }
 .hold__release { min-height: var(--h-md); }
+/* 手機：解凍是這一格唯一的動作，照觸控主行動 44 */
+@media (max-width: 600px) { .hold__release { min-height: var(--h-lg); } }
 .hold-entry { display: grid; gap: var(--s-2); justify-items: start; margin-bottom: 0; }
 .hold-entry .small-note { margin: 0; }
 .blocked { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 10%, var(--surface)); margin: 0; }
