@@ -40,8 +40,6 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
   if(c.workVisibility?.syncState==='unavailable')return {key:'visibility.operation.unknown',tone:'wait'};
   if(c.workVisibility?.syncState==='changing')return {key:'visibility.operation.updating',tone:'wait'};
   if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
-  // 重新審核：作品分享開著時也要告訴作者（處置中的狀態優先）
-  if(c.workVisibility&&c.reReview)return { key: "mine.badge.reReview", tone: "wait" };
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
   // 重新審核：照常公開，但作者要知道卡正在被重審（不說原因）
@@ -101,6 +99,8 @@ onBeforeUnmount(() => listen(false));
         <span class="card__status" :class="[`card__status--${status.tone}`,{'card__status--access':!!card.workVisibility&&card.workVisibility.restriction==='none'}]"><svg v-if="card.workVisibility?.syncState==='complete'&&card.workVisibility.restriction==='none'" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75"><template v-if="card.workVisibility.access==='private'"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></template><template v-else-if="card.workVisibility.access==='unlisted'"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></template><template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template></svg>{{ $t(status.key) }}</span>
         <span v-if="card.workVisibility?.review==='pending'" class="card__status card__status--wait">{{ $t('mine.badge.pending') }}</span>
         <span v-if="card.workVisibility?.update==='pending'" class="card__status card__status--wait">{{ $t('visibility.badge.updatePending') }}</span>
+        <!-- 重新審核：作品分享開著時，主標仍是公開範圍，重審跟「更新審核中」一樣另掛一個琥珀標 -->
+        <span v-if="card.workVisibility && card.reReview" class="card__status card__status--wait" data-re-review-badge>{{ $t('mine.badge.reReview') }}</span>
         <span v-if="card.workVisibility?.update==='rejected'" class="card__status card__status--alert">{{ $t('visibility.badge.updateRejected') }}</span>
         <span v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
