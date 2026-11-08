@@ -133,6 +133,8 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
   db.prepare("UPDATE review_submissions SET status='rejected',note=? WHERE id=? AND status='approved'").bind(x.note,s.id),
   db.prepare("UPDATE hosting_versions SET state='rejected' WHERE version_id=?").bind(v.version_id),
   // 由重審單發起的改判（操作編號＝重審單）在同一批把那張重審單記成駁回：Harbor 結果不明、之後由排程補完時也一樣
+  // 審核章要在單子還排隊時寫（定案後的單不收章）；卡被冷凍時不寫，免得守衛擋下整批改判
+  db.prepare("INSERT OR IGNORE INTO review_stamps(submission_id,member_id,verdict,note,created_at,claim_generation) SELECT id,?,'reject',?,?,'' FROM review_submissions r WHERE r.id=? AND r.reopen_of=? AND r.status='pending' AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=r.card_id)").bind(x.actor_member_id,x.note,input.now,x.operation_id,s.id),
   db.prepare("UPDATE review_submissions SET status='rejected',note=?,decided_at=?,claimed_by=NULL,claimed_at=NULL,claim_generation='' WHERE id=? AND reopen_of=? AND status='pending'").bind(x.note,input.now,x.operation_id,s.id),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND reopen_of IS NOT NULL)").bind(x.operation_id,x.operation_id),
   // 這一版的其他重新審核沒有意義了

@@ -576,7 +576,7 @@ async function stampReopen(
 
 /**
  * 重審駁回：限管理員，走改判。改判把這張重審單記成駁回（同一批寫入，見 correctReview）；
- * Harbor 結果不明時重按同一個決定會接續同一次改判。審核章事後補記，給「我處理過的」用；補不上不影響結果。
+ * Harbor 結果不明時重按同一個決定會接續同一次改判。審核章也在改判那一批寫（給「我處理過的」用）。
  */
 async function rejectReopen(
   db: D1Database, row: SubmissionRow, original: SubmissionRow,
@@ -588,10 +588,6 @@ async function rejectReopen(
   }
   if (!env) throw new HttpError(503, "visibility_sync_pending");
   await correctReview(env, { id: original.id, member: input.memberId, operationId: row.id, note, now: input.now });
-  try {
-    await db.prepare("INSERT OR IGNORE INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, 'reject', ?, ?, '')")
-      .bind(row.id, input.memberId, note, input.now).run();
-  } catch { /* 冷凍等守衛擋下補記：駁回本身已完成 */ }
   await bumpOp(db, "review_reopen", "reject", "success");
   const card = await db.prepare("SELECT status FROM cards WHERE id = ?").bind(row.card_id).first<{ status: CardStatus }>();
   return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "rejected", approvals: 0, required: STAMPS_REQUIRED[row.kind] };
