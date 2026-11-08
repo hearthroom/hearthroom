@@ -567,7 +567,6 @@ onMounted(() => { void load(); });
             <div v-if="hold.canRelease && !hold.byMe && holdReasonOpen" class="field hold__reason">
               <label for="hold-reason">{{ $t("review.hold.reasonLabel") }}</label>
               <textarea id="hold-reason" v-model="holdReason" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="holdBusy" />
-              <p class="subtle small-note">{{ $t("review.hold.reasonHint") }}</p>
             </div>
             <p v-if="holdError" class="notice notice--error hold__error" role="alert">{{ holdError }}</p>
             <button v-if="hold.canRelease" type="button" class="btn btn--sm hold__release" :disabled="busy || holdBusy || (!hold.byMe && holdReasonOpen && !holdReason.trim())" data-unhold @click="unholdCard">{{ $t("review.action.unhold") }}</button>
