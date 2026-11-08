@@ -17,15 +17,18 @@ watch(()=>[props.value,props.phase,props.resumeAction] as const,([v,phase,action
 const update=computed(()=>selected.value==='public'&&props.value?.access==='public'&&props.value.actions.includes('submit_update'));
 const changed=computed(()=>selected.value!==props.value?.access||cancel.value||update.value);
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));
+const canSubmit=computed(()=>!!props.value?.actions.some(action=>action==='submit_review'||action==='submit_update'));
+const delistedReview=computed(()=>props.value?.restriction==='delisted'&&canSubmit.value&&!props.value.actions.includes('restore_public'));
 function disabled(access:WorkAccess){
  if(props.newCard||busy.value||!props.value||props.value.syncState!=='complete')return true;
  if(access===props.value.access&&access!=='public')return false;
  if(access==='private')return !props.value.actions.includes('set_private');
  if(access==='unlisted')return !props.value.actions.includes('set_unlisted');
- return pending.value||props.value.restriction!=='none'||props.dirty||!!props.missing||(!props.value.actions.includes('restore_public')&&(!props.value.actions.some(action=>action==='submit_review'||action==='submit_update')||props.quotaFull));
+ return pending.value||(props.value.restriction!=='none'&&!delistedReview.value)||props.dirty||!!props.missing||(!props.value.actions.includes('restore_public')&&(!canSubmit.value||props.quotaFull));
 }
 const effect=computed(()=>{
  const v=props.value;if(!v||!selected.value)return '';
+ if(!cancel.value&&selected.value==='public'&&delistedReview.value)return t('visibility.effect.delistedUpdate');
  const n=cancel.value?8:selected.value==='public'?(review.value?3:4):selected.value==='unlisted'?(v.access==='public'?5:1):(v.access==='public'?6:2);
  return t(`visibility.effect.t${n}`,{access:t(`visibility.option.${v.access}`)});
 });
@@ -56,7 +59,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
       <template v-else><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></template>
      </svg>
      <span class="visibility-option__body"><span class="visibility-option__title">{{ t(`visibility.option.${access}`) }} <span v-if="value?.access===access&&phase==='ready'" class="chip">{{ t('visibility.current') }}</span><span v-if="access==='public'&&value&&value.restriction!=='none'" class="chip visibility-option__restriction">{{ t(`visibility.badge.${value.restriction}`) }}</span></span>
-      <span :id="`${uid}-${access}`" class="visibility-option__description">{{ t(`visibility.description.${access}`) }}</span>
+      <span :id="`${uid}-${access}`" class="visibility-option__description">{{ t(access==='public'&&delistedReview?'visibility.description.delisted':`visibility.description.${access}`) }}</span>
       <template v-if="access==='public'&&value">
        <span v-if="value.restriction!=='none'" class="visibility-option__reason">{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[0] }}<a :href="appealUrl" target="_blank" rel="noopener">Discord</a>{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[1] }}</span>
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>

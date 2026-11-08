@@ -3281,6 +3281,8 @@
   "visibility.description.private": "只有你和玩过的人能玩。",
   "visibility.description.unlisted": "知道链接的人可以玩、评论，不会出现在探索、榜单和搜索里。",
   "visibility.description.public": "审核通过后，所有人都能在探索、榜单和搜索里找到。",
+  "visibility.description.delisted": "这张卡已退出榜单，新版通过审核后也不会出现在探索、榜单或搜索中，仍可通过链接游玩。",
+  "visibility.effect.delistedUpdate": "新版审核通过后更新内容，卡片仍不上榜。",
   "visibility.public.restore": "内容没改，可直接恢复",
   "visibility.public.changed": "内容改过，需要重新审核",
   "visibility.public.unknown": "需要重新审核",

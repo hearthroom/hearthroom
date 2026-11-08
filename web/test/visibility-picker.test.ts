@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createApp,h,nextTick,type App } from 'vue';
-import { i18n } from '../src/lib/i18n';
+import { i18n,loadLocale } from '../src/lib/i18n';
 import VisibilityPicker from '../src/components/VisibilityPicker.vue';
 const base={access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:false,revisionState:'unknown',restorable:false,restoreReason:'no_approval',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'0',actions:['set_private','set_unlisted','submit_review'],syncState:'complete'} as any;
 let app:App,root:HTMLElement;afterEach(()=>{app?.unmount();root?.remove();});
@@ -45,6 +45,57 @@ it('submits saved public edits through the current public option without changin
  expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(false);
  const button=root.querySelector<HTMLButtonElement>('[data-visibility-apply]');expect(button).not.toBeNull();
  button!.click();await nextTick();expect(submit).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
+});
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('submits a delisted update without restoring discovery in %s',async locale=>{
+ const previous=i18n.global.locale.value;await loadLocale(locale);i18n.global.locale.value=locale;
+ try{
+  const submit=vi.fn(),apply=vi.fn();
+  await mount({value:{...base,access:'public',effectiveAccess:'link',everPublic:true,revisionState:'changed',draftChanged:true,restriction:'delisted',actions:['set_private','set_unlisted','submit_update']},onSubmit:submit,onApply:apply});
+  const radio=root.querySelector<HTMLInputElement>('input[value="public"]')!;
+  expect(radio.disabled).toBe(false);expect(radio.checked).toBe(true);
+  expect(radio.closest('label')!.querySelector('.visibility-option__restriction')?.textContent).toBe(i18n.global.t('visibility.badge.delisted'));
+  const button=root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!;
+  expect(button.disabled).toBe(false);button.click();await nextTick();
+  expect(submit).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
+ }finally{i18n.global.locale.value=previous;}
+});
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('does not promise discovery after a delisted update in %s',async locale=>{
+ const previous=i18n.global.locale.value;await loadLocale(locale);i18n.global.locale.value=locale;
+ try{
+  await mount({value:{...base,access:'public',effectiveAccess:'link',everPublic:true,restriction:'delisted',actions:['submit_update']}});
+  const row=root.querySelector<HTMLInputElement>('input[value="public"]')!.closest('label')!;
+  expect(row.querySelector('.visibility-option__description')!.textContent).not.toBe(i18n.global.t('visibility.description.public'));
+  expect(root.querySelector('.visibility-effect')!.textContent).not.toContain(i18n.global.t('visibility.effect.t3',{access:i18n.global.t('visibility.option.public')}));
+  expect(i18n.global.te('visibility.description.delisted',locale)).toBe(true);
+  expect(i18n.global.te('visibility.effect.delistedUpdate',locale)).toBe(true);
+  expect(row.querySelector('.visibility-option__description')!.textContent).toBe(i18n.global.t('visibility.description.delisted'));
+  expect(root.querySelector('.visibility-effect p')!.textContent).toBe(i18n.global.t('visibility.effect.delistedUpdate'));
+ }finally{i18n.global.locale.value=previous;}
+});
+
+it.each(['private','unlisted'])('allows a fresh delisted review from %s only when the server offers submission',async access=>{
+ const submit=vi.fn(),apply=vi.fn();
+ await mount({value:{...base,access,effectiveAccess:access==='private'?'owner':'link',restriction:'delisted',actions:['set_private','set_unlisted','submit_review']},onSubmit:submit,onApply:apply});
+ const radio=root.querySelector<HTMLInputElement>('input[value="public"]')!;expect(radio.disabled).toBe(false);
+ radio.click();await nextTick();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await nextTick();
+ expect(submit).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
+});
+
+it.each(['suspended','takedown','delisted-restore'])('keeps %s blocked even if a public action is offered',async mode=>{
+ const submit=vi.fn(),apply=vi.fn();
+ await mount({value:{...base,access:'public',effectiveAccess:'link',restriction:mode==='delisted-restore'?'delisted':mode,actions:mode==='delisted-restore'?['restore_public']:['submit_update']},onSubmit:submit,onApply:apply});
+ expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(true);
+ root.querySelector<HTMLButtonElement>('[data-visibility-apply]')?.click();await nextTick();
+ expect(submit).not.toHaveBeenCalled();expect(apply).not.toHaveBeenCalled();
+});
+
+it.each(['pending','dirty','missing','quota','sync'])('keeps a delisted update blocked for %s',async mode=>{
+ const submit=vi.fn();
+ await mount({value:{...base,access:'public',effectiveAccess:'link',restriction:'delisted',update:mode==='pending'?'pending':'none',syncState:mode==='sync'?'changing':'complete',actions:['submit_update']},dirty:mode==='dirty',missing:mode==='missing'?'Character setting':'',quotaFull:mode==='quota',onSubmit:submit});
+ expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(true);
+ root.querySelector<HTMLButtonElement>('[data-visibility-apply]')?.click();await nextTick();expect(submit).not.toHaveBeenCalled();
 });
 
 it.each(['delisted','suspended','takedown'])('keeps the current access neutral and gives %s a separate restriction badge',async restriction=>{

@@ -3281,6 +3281,8 @@
   "visibility.description.private": "自分と、このカードで遊んだことがある人だけが遊べます。",
   "visibility.description.unlisted": "リンクを知る人だけが遊べます。カードを探す・ランキング・検索には出ません。",
   "visibility.description.public": "審査に通ると、誰でもカードを探す・ランキング・検索で見つけられます。",
+  "visibility.description.delisted": "このカードはランキングから除外されています。更新版が承認されても「カードを探す」・ランキング・検索には表示されず、リンクからは引き続き遊べます。",
+  "visibility.effect.delistedUpdate": "更新版が承認されると内容が切り替わり、ランキングからの除外は続きます。",
   "visibility.public.restore": "内容は変更なし。そのまま復元できます",
   "visibility.public.changed": "内容を変更したため、再審査が必要です",
   "visibility.public.unknown": "再審査が必要です",

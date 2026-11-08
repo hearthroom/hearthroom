@@ -3281,6 +3281,8 @@
   "visibility.description.private": "Only you and people who have played this card can play it.",
   "visibility.description.unlisted": "Anyone with the link can play and comment. Not in Explore, Board or search.",
   "visibility.description.public": "After review, everyone can find it in Explore, the Board and search.",
+  "visibility.description.delisted": "This card is off the Board. Approved updates stay out of Explore, the Board and search, and the card remains playable by link.",
+  "visibility.effect.delistedUpdate": "After approval, the card uses the new content and stays off the Board.",
   "visibility.public.restore": "Unchanged, so it can be restored right away",
   "visibility.public.changed": "Edited since approval, so it needs a new review",
   "visibility.public.unknown": "It needs a new review",

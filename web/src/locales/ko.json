@@ -3281,6 +3281,8 @@
   "visibility.description.private": "나와 이 카드를 플레이한 적 있는 사람만 플레이할 수 있어요.",
   "visibility.description.unlisted": "링크를 아는 사람만 플레이할 수 있어요. 둘러보기·랭킹·검색에는 나오지 않아요.",
   "visibility.description.public": "심사를 통과하면 누구나 둘러보기·랭킹·검색에서 찾을 수 있어요.",
+  "visibility.description.delisted": "이 카드는 랭킹에서 제외됐어요. 새 버전이 승인돼도 둘러보기·랭킹·검색에는 표시되지 않으며 링크로는 계속 플레이할 수 있어요.",
+  "visibility.effect.delistedUpdate": "새 버전이 승인되면 내용이 바뀌고 랭킹 제외 상태는 유지돼요.",
   "visibility.public.restore": "내용이 그대로라 바로 복원할 수 있어요",
   "visibility.public.changed": "내용이 바뀌어서 다시 심사받아야 해요",
   "visibility.public.unknown": "다시 심사받아야 해요",
