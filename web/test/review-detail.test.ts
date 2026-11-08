@@ -547,6 +547,7 @@ it('shows the original author and lists every card of the same person on demand'
  // 清單點開才讀
  expect(api.fetchReviewAuthorCards).not.toHaveBeenCalled();
  const toggle=el.querySelector<HTMLButtonElement>('[data-author-cards-toggle]')!;
+ expect(el.querySelector(`#${toggle.getAttribute('aria-controls')}`)).toBeTruthy();
  expect(toggle.textContent?.trim()).toBe(t('review.author.showCards',{n:4}));
  expect(toggle.getAttribute('aria-expanded')).toBe('false');
  toggle.click();
@@ -571,8 +572,11 @@ it('shows the original author and lists every card of the same person on demand'
  expect(card('100004').querySelector('[data-author-card-status]')?.textContent).toBe(t('review.author.status.rejected'));
  expect(card('100004').querySelector('a')).toBeNull();
  // 收起再展開不重讀
- toggle.click();await vi.waitFor(()=>expect(el.querySelector('[data-author-cards]')).toBeNull());
- toggle.click();await vi.waitFor(()=>expect(el.querySelector('[data-author-cards]')).toBeTruthy());
+ // aria-controls 收起時也指得到東西
+ const panel=el.querySelector<HTMLElement>(`#${toggle.getAttribute('aria-controls')}`)!;
+ toggle.click();await vi.waitFor(()=>expect(panel.style.display).toBe('none'));
+ expect(el.querySelector(`#${toggle.getAttribute('aria-controls')}`)).toBe(panel);
+ toggle.click();await vi.waitFor(()=>expect(panel.style.display).toBe(''));
  expect(api.fetchReviewAuthorCards).toHaveBeenCalledTimes(1);
 });
 
