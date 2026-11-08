@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "上下文容量不夠時，提示會說清楚是這張卡還是這段對話需要更大的容量。",
+    "zh-Hans": "上下文容量不够时，提示会说清楚是这张卡还是这段对话需要更大的容量。",
+    "en": "When context capacity runs short, the prompt now says whether this card or this chat needs more.",
+    "ja": "コンテキスト容量が足りないとき、カードと会話のどちらに必要かを表示します。",
+    "ko": "컨텍스트 용량이 부족할 때 카드와 대화 중 어느 쪽에 더 필요한지 알려 줘요."
+  }
+}
