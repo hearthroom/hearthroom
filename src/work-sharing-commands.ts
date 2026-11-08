@@ -85,7 +85,8 @@ async function finalize(env:Env,op:AuthorOperation,receipt:WorkPolicyReceipt):Pr
  const confirmed="EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND access=? AND restriction=? AND sync_state='complete' AND sync_operation_id IS NULL AND moderation_revision=confirmed_moderation_revision)";
  const status=receipt.access==='public'?'approved':'unshared';
  const writes=[
-  env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE card_id=? AND status='pending' AND ${guard}`).bind(Date.now(),card.id,op.work_id,op.provider_operation_id),
+  // 審核員發起的重新審核不隨作者的操作結束（作者改成私密再公開不能讓重審消失）
+  env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE card_id=? AND status='pending' AND reopen_of IS NULL AND ${guard}`).bind(Date.now(),card.id,op.work_id,op.provider_operation_id),
   env.DB.prepare(`DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded') AND ${guard}`).bind(card.id,op.work_id,op.provider_operation_id),
   env.DB.prepare(`UPDATE work_publication_permits SET state='cancelled' WHERE state='prepared' AND version_id IN(SELECT version_id FROM hosting_versions WHERE work_id=? AND state='superseded') AND ${guard}`).bind(op.work_id,op.work_id,op.provider_operation_id),
   // The database publication guard requires this projection before a retained

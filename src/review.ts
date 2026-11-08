@@ -533,6 +533,19 @@ async function stampReopen(
   env?: Env,
 ): Promise<StampResult> {
   const original = await getSubmission(db, row.reopen_of!);
+  const note = input.note.trim();
+  if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
+  // 這張重審單已經在駁回（改判進行中或已完成）：只能接續同一次駁回，不能改成維持通過
+  const rejecting = await db.prepare("SELECT 1 FROM review_corrections WHERE operation_id = ? AND state <> 'conflict'").bind(row.id).first();
+  if (rejecting) {
+    if (input.verdict === "approve") { await bumpOp(db, "review_reopen", "keep", "conflict"); throw new HttpError(409, "review_reopen_rejecting"); }
+    return rejectReopen(db, row, original, input, note, env);
+  }
+  // 原單正在被一般改判：結果出來前不能維持通過
+  if (input.verdict === "approve" && await db.prepare("SELECT 1 FROM review_corrections WHERE submission_id = ? AND state IN ('pending', 'applying')").bind(original.id).first()) {
+    await bumpOp(db, "review_reopen", "keep", "conflict");
+    throw new HttpError(409, "review_reopen_rejecting");
+  }
   const current = await db.prepare("SELECT v.submission_id FROM cards c JOIN hosting_versions v ON v.version_id = c.approved_version_id WHERE c.id = ?").bind(row.card_id).first<{ submission_id: string }>();
   if (original.status !== "approved" || current?.submission_id !== original.id) {
     // 重審的那一版已經不是公開版：這張單沒有意義了
@@ -543,23 +556,13 @@ async function stampReopen(
     await bumpOp(db, "review_reopen", input.verdict === "approve" ? "keep" : "reject", "conflict");
     throw new HttpError(409, "review_reopen_stale");
   }
-  const note = input.note.trim();
-  if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
-  if (input.verdict === "reject") {
-    if (!isManager(await reviewerRole(db, input.memberId))) {
-      await bumpOp(db, "review_reopen", "reject", "denied");
-      throw new HttpError(403, "review_reopen_reject_manager");
-    }
-    if (!env) throw new HttpError(503, "visibility_sync_pending");
-    await correctReview(env, { id: original.id, member: input.memberId, operationId: row.id, note, now: input.now });
-  }
-  const status = input.verdict === "approve" ? "approved" : "rejected";
+  if (input.verdict === "reject") return rejectReopen(db, row, original, input, note, env);
   try {
     await db.batch([
-      db.prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(row.id, input.memberId, input.verdict, note, input.now, row.claim_generation),
-      db.prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = '', status = ?, decided_at = ?, note = ? WHERE id = ? AND status = 'pending'")
-        .bind(status, input.now, input.verdict === "reject" ? note : "", row.id),
+      db.prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, 'approve', ?, ?, ?)")
+        .bind(row.id, input.memberId, note, input.now, row.claim_generation),
+      db.prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = '', status = 'approved', decided_at = ?, note = '' WHERE id = ? AND status = 'pending'")
+        .bind(input.now, row.id),
       dropSnapshotStatement(db, row.id),
     ]);
   } catch (error) {
@@ -567,7 +570,29 @@ async function stampReopen(
     if (error instanceof Error && error.message.includes("review_held")) throw new HttpError(409, "review_held");
     throw error;
   }
-  await bumpOp(db, "review_reopen", input.verdict === "approve" ? "keep" : "reject", "success");
+  await bumpOp(db, "review_reopen", "keep", "success");
+  return { submission: await getSubmission(db, row.id), cardStatus: "approved", approvals: 1, required: STAMPS_REQUIRED[row.kind] };
+}
+
+/**
+ * 重審駁回：限管理員，走改判。改判把這張重審單記成駁回（同一批寫入，見 correctReview）；
+ * Harbor 結果不明時重按同一個決定會接續同一次改判。審核章事後補記，給「我處理過的」用；補不上不影響結果。
+ */
+async function rejectReopen(
+  db: D1Database, row: SubmissionRow, original: SubmissionRow,
+  input: { memberId: string; now: number }, note: string, env?: Env,
+): Promise<StampResult> {
+  if (!isManager(await reviewerRole(db, input.memberId))) {
+    await bumpOp(db, "review_reopen", "reject", "denied");
+    throw new HttpError(403, "review_reopen_reject_manager");
+  }
+  if (!env) throw new HttpError(503, "visibility_sync_pending");
+  await correctReview(env, { id: original.id, member: input.memberId, operationId: row.id, note, now: input.now });
+  try {
+    await db.prepare("INSERT OR IGNORE INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, 'reject', ?, ?, '')")
+      .bind(row.id, input.memberId, note, input.now).run();
+  } catch { /* 冷凍等守衛擋下補記：駁回本身已完成 */ }
+  await bumpOp(db, "review_reopen", "reject", "success");
   const card = await db.prepare("SELECT status FROM cards WHERE id = ?").bind(row.card_id).first<{ status: CardStatus }>();
-  return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "approved", approvals: input.verdict === "approve" ? 1 : 0, required: STAMPS_REQUIRED[row.kind] };
+  return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "rejected", approvals: 0, required: STAMPS_REQUIRED[row.kind] };
 }

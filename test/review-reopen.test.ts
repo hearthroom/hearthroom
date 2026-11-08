@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { legacyPolicyFixture } from "./work-policy-fixture";
 import { bearer, identities, makeReviewer, makeAgent, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, sealedReads } from "./helpers";
 import { pendingSubmissionOf, statusAmong } from "../src/review";
+import { workPolicyGateway } from "../src/work-policy";
+import { finishManagedWithdrawal } from "../src/cards";
+import { correctionEligibility, listReviewDecisions } from "../src/review-correction";
 
 // 重新審核（審核員 2026-11-08，卡 100855）：已通過的卡由一位審核員發起，回到待審清單重審。
 // 重審期間照常公開；任一審核員可「維持通過」；駁回限管理員，走改判（作者收到駁回說明）；
@@ -190,5 +193,44 @@ describe("重新審核：撤銷與失效", () => {
     const res = await SELF.fetch(`https://c.test/v1/review/${original}/correction`, { method: "POST", headers: { ...json, ...bearer("mgr") }, body: JSON.stringify({ operationId: crypto.randomUUID(), note: "改判" }) });
     expect(res.status).toBe(200);
     expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "superseded" });
+  });
+});
+
+describe("重新審核：審查修正（2026-11-08）", () => {
+  it("駁回時 Harbor 回覆不明：重審單留著、不能改成維持通過；管理員重按同一個決定接續，重審單記成駁回", async () => {
+    const { id } = await opened();
+    const change = workPolicyGateway.change;
+    workPolicyGateway.change = async (...args) => { await change(...args); throw new Error("reply lost"); };
+    await act(id, "claim", "mgr");
+    const first = await act(id, "stamp", "mgr", { verdict: "reject", note: "盜用" });
+    expect(first.status).toBe(503);
+    workPolicyGateway.change = change;
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "pending" });
+    // 改判進行中：別人不能把它維持通過
+    await env.DB.prepare("UPDATE review_submissions SET claimed_at=0 WHERE id=?").bind(id).run();
+    await act(id, "claim", "rev-b");
+    expect(await code(await act(id, "stamp", "rev-b", { verdict: "approve" }))).toBe("review_reopen_rejecting");
+    await env.DB.prepare("UPDATE review_submissions SET claimed_at=0 WHERE id=?").bind(id).run();
+    await act(id, "claim", "mgr");
+    expect((await act(id, "stamp", "mgr", { verdict: "reject", note: "盜用" })).status).toBe(200);
+    expect(await env.DB.prepare("SELECT status, note FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "rejected", note: "盜用" });
+    expect(await cardRow()).toMatchObject({ status: "rejected" });
+    expect((await env.DB.prepare("SELECT count(*) AS n FROM review_corrections").first<{ n: number }>())!.n).toBe(1);
+  });
+
+  it("作者收回卡片：重審單留著（之後再公開同一版，重審還在）", async () => {
+    const { id, cardId } = await opened();
+    await finishManagedWithdrawal(env.DB, cardId);
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "pending" });
+  });
+
+  it("維持通過的重審單不提供改判（沒有版本可改）", async () => {
+    const { id } = await opened();
+    await act(id, "claim", "rev-b");
+    expect((await act(id, "stamp", "rev-b", { verdict: "approve" })).status).toBe(200);
+    const member = (await env.DB.prepare("SELECT member_id FROM review_stamps WHERE submission_id=?").bind(id).first<{ member_id: string }>())!.member_id;
+    expect((await correctionEligibility(env.DB, id, member, Date.now())).canCorrect).toBe(false);
+    const decisions = await listReviewDecisions(env.DB, member, Date.now(), "zh-Hant");
+    expect(decisions.items.find((d) => d.id === id)?.canCorrect).toBe(false);
   });
 });
