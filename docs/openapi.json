@@ -7486,7 +7486,16 @@
             "schema": {
               "type": "string"
             },
-            "description": "Locale used to resolve the current agent configuration and player name for format-note readiness; defaults to the original locale."
+            "description": "Overrides the language header for format-note readiness; otherwise the request header, then original locale, is used."
+          },
+          {
+            "name": "language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request locale, shared with the model catalog and conversation context. Used for format-note readiness when no language query override is supplied."
           }
         ],
         "responses": {
@@ -19706,7 +19715,27 @@
         },
         "x-harperharbor": {
           "description": "Optional interaction telemetry for the authenticated caller and accessible configuration. Validates the current confirm estimate key. Limited to 30 requests per minute per account; this event is not billing evidence."
-        }
+        },
+        "parameters": [
+          {
+            "name": "language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Request locale, shared with the model catalog and conversation context. Used for format-note readiness when no language query override is supplied."
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional locale override matching the estimate request; defaults to the language header, then original locale."
+          }
+        ]
       }
     }
   },
