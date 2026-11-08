@@ -101,6 +101,7 @@ import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
 } from "./review";
+import { authorCards, reviewAuthor, submissionType } from "./review-author";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
@@ -1526,7 +1527,7 @@ app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
 // ---- 社群審核 ----------------------------------------------------------------
 //
 // 共享佇列、領取、蓋章。誰能審由 reviewers 表決定（初期站方手動登記，見 scripts/grant-reviewer.mjs）。
-// 佇列與詳情都不帶作者身分（盲審）。詳情是作者送審當下本站替這張單存的快照，定案就刪；
+// 佇列不帶作者；審核頁帶原作者與他的其他卡（owner 2026-11-08 取消盲審，見 review-author.ts）。詳情是作者送審當下本站替這張單存的快照，定案就刪；
 // 同步開的重審單沒有快照（那時手上沒有作者的 token），審核人看的是變動後的公開資料。
 
 app.get("/v1/review/me", async (c) => {
@@ -1853,14 +1854,15 @@ app.get("/v1/review/:id/detail", async (c) => {
       costProfile: { personaChars: 0, worldbookEntryCount: 0, worldbookEnabledCount: 0, worldbookConstantCount: 0, worldbookChars: 0, worldbookConstantChars: 0, estimatedConstantTokens: 0, estimatedMaxTokens: 0 },
     };
   }
-  // 盲審：作者的公開 ID 不進審核頁。快照本來就不含，這裡再擋一次——組快照的那一層換了實作也不會漏。
   if(!detail.partial){
     const length=reviewLength(detail);
     detail.reviewLength=length;
     if(s.review_length_total===null&&s.status==='pending')await recordReviewLengthStatement(c.env.DB,s.id,length.total).run();
     if(s.review_worldbook_entries===null&&s.status==='pending')await recordReviewCountsStatement(c.env.DB,s.id,reviewCounts(detail)).run();
   }
+  // 作者另外從卡片登記列給（reviewAuthor），審核單種類都一樣；快照裡的不用
   delete detail.authorNumId;
+  const history = await submissionHistory(c.env.DB, s.id);
   const stamps = await c.env.DB
     .prepare("SELECT verdict, note, created_at, member_id FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")
     .bind(s.id)
@@ -1878,7 +1880,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         // 重新審核：發起理由只給審核員看
         ...(s.reopen_of ? { reopen: true, reopenReason: s.reopen_reason } : {}),
         // 同一張卡第幾次送審、上一次的結果與說明：審核人不必靠記憶認出「被退後重送」的卡
-        ...(await submissionHistory(c.env.DB, s.id)),
+        ...history,
+        type: submissionType({ reopen_of: s.reopen_of, kind: s.kind, previous: history.previous?.status ?? null }),
         // mine：哪一章是我蓋的（結果卡顯示「你的決定」）；不帶審核員身分
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at, mine: st.member_id === member.id })),
         correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
@@ -1886,11 +1889,27 @@ app.get("/v1/review/:id/detail", async (c) => {
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份
       card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },
+      // 原作者：Harbor 帳號名稱、數字帳號 ID、本站代號與卡數。只有審核頁給，作者端與玩家端不變
+      author: await reviewAuthor(c.env.DB, s.card_id),
       detail,
     },
     200,
     { "Cache-Control": "private, no-store" },
   );
+});
+
+/**
+ * 同一位作者的所有卡與各自的審核狀態（owner 2026-11-08：盜卡抓到一張要能一串查出）。
+ * 跟審核頁同一道門；作者用審核單找，伺服器端解析，網址與回應都沒有成員 ID。
+ * 未驗年齡的審核員看不到成人卡的名稱與封面，卡號與狀態照列。
+ */
+app.get("/v1/review/:id/author-cards", async (c) => {
+  const { member, s } = await claimedSubmission(c);
+  const adultAllowed = (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt !== null;
+  const result = await authorCards(c.env.DB, s.card_id, { lang: lang(c), adultAllowed });
+  if (!result) throw new HttpError(404, "card not found");
+  note(c, { event: "review_author_cards", resultCount: result.items.length });
+  return c.json(result, 200, { "Cache-Control": "private, no-store" });
 });
 
 /** 作者自己撤銷登記。這是作品離開榜單的唯一途徑。 */
