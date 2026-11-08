@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "已發布的卡可能由審核員重新審核，重審期間照常公開，「我的卡片」會標示「重新審核中」。",
+    "zh-Hans": "已发布的卡可能由审核员重新审核，重审期间照常公开，「我的卡片」会标注「重新审核中」。",
+    "en": "Reviewers can re-review a published card. It stays public meanwhile, and My cards marks it Under re-review.",
+    "ja": "公開中のカードは審査員が再審査することがあります。再審査中も公開は続き、「マイカード」に「再審査中」と表示されます。",
+    "ko": "공개된 카드는 심사자가 다시 심사할 수 있어요. 재심사 중에도 공개는 유지되고, 「내 카드」에 「재심사 중」으로 표시돼요."
+  }
+}

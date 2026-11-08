@@ -131,6 +131,8 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
    .bind(receipt.access,receipt.restriction,receipt.epoch,x.public_version_id,v.work_id,x.operation_id,fenceEpoch),
   db.prepare("UPDATE review_submissions SET status='rejected',note=? WHERE id=? AND status='approved'").bind(x.note,s.id),
   db.prepare("UPDATE hosting_versions SET state='rejected' WHERE version_id=?").bind(v.version_id),
+  // 這一版的重新審核沒有意義了；由重審單發起的改判（操作編號＝重審單）自己會結束那一張
+  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,claim_generation='',decided_at=? WHERE reopen_of=? AND status='pending' AND id<>?").bind(input.now,s.id,x.operation_id),
  ];
  if(x.public_state!=='unchanged'){
   const replacement=x.public_version_id?await db.prepare('SELECT public_role,rating FROM hosting_versions WHERE version_id=?').bind(x.public_version_id).first<{public_role:string;rating:string|null}>():null;

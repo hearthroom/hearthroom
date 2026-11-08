@@ -17,6 +17,7 @@ const METRICS = {
   review_length: {name:'hearthroom_review_length_checks_total',help:'Effective publication length checks against the draft preflight, sealed revision, and reviewer approval (unknown: no recorded length).',label:'phase',operations:['draft','sealed','stamp'],outcomes:['eligible','insufficient','unknown','exempt']},
   review_length_exemption:{name:'hearthroom_review_length_exemption_operations_total',help:'Manager publication length exception operations.',label:'operation',operations:['enable','disable','read'],outcomes:['success','replay','denied','conflict','error']},
   review_hold:{name:'hearthroom_review_holds_total',help:'Reviewer hold (freeze for discussion) operations: hold places one, release lifts it (holder or manager).',label:'operation',operations:['hold','release'],outcomes:['success','denied','conflict']},
+  review_reopen:{name:'hearthroom_review_reopens_total',help:'Re-reviews of published cards: open (any reviewer), withdraw (manager), keep (still approved), reject (manager, via correction).',label:'operation',operations:['open','withdraw','keep','reject'],outcomes:['success','denied','conflict']},
   review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',
