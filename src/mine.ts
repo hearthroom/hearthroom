@@ -49,7 +49,7 @@ const LISTED_SEARCH_LIMIT = 1000;
 const DRAFT_CHECK_LIMIT = 24;
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
-  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; rating?: string | null; draftChanged?: boolean;workVisibility?:WorkVisibility })[];
+  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; reReview?: boolean; note?: string; rating?: string | null; draftChanged?: boolean;workVisibility?:WorkVisibility })[];
   /** 符合條件的卡一共幾張（翻頁用）。全部／未上架由上游算；已上架由本站的庫算。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -153,6 +153,7 @@ export async function loadMine(
             registered: true,
             status: row.status as CardStatus,
             updateStatus: notes.get(row.source_role_id)?.updateStatus,
+            ...(notes.get(row.source_role_id)?.reReview ? { reReview: true } : {}),
             note: notes.get(row.source_role_id)?.note ?? "",
             rating: card.rating,
             ...(draftChanged(notes.get(row.source_role_id), current.get(row.source_role_id)) ? { draftChanged: true } : {}),
@@ -199,7 +200,7 @@ export async function loadMine(
       const current = versions.get(r.roleId) ?? (contentHash ? { content: contentHash } : undefined);
       return {
         ...r, registered: registered.has(r.roleId),
-        ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, rating: s.rating } : {}),
+        ...(s ? { status: s.status, updateStatus: s.updateStatus, ...(s.reReview ? { reReview: true } : {}), note: s.note, rating: s.rating } : {}),
         ...(draftChanged(s, current) ? { draftChanged: true } : {}),
       };
     })
