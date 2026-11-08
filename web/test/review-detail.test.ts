@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -419,4 +419,65 @@ it('a reason that would push the note past 2,000 characters is not added, and th
  el.querySelector<HTMLButtonElement>('[data-reason="setting"]')!.click();
  await vi.waitFor(()=>expect(note.value).toBe('x'.repeat(10)+'\n'+i18n.global.t('review.reason.setting.text')));
  expect(el.querySelector('[data-note-full]')).toBeNull();
+});
+
+// 冷凍並討論（審核員 2026-11-08）
+const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+const btn=(label:string)=>[...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===label) as HTMLButtonElement|undefined;
+const held=(hold:{holder:string;at:number;byMe:boolean;canRelease:boolean},claimedByMe=false)=>{const d=pendingDetail();return {...d,submission:{...d.submission,claimedByMe,hold}};};
+
+it('a claimed reviewer can hold the card; the page then says nobody can decide, including them',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(pendingDetail()).mockResolvedValue(held({holder:'Mika',at:5,byMe:true,canRelease:true}));
+ api.holdReview.mockResolvedValue({hold:{holder:'Mika',at:5,byMe:true,canRelease:true}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold]')).toBeTruthy());
+ (el.querySelector('[data-hold]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(api.holdReview).toHaveBeenCalledWith('s1','local-reviewer','g1'));
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')?.textContent).toContain(t('review.hold.noticeMine')));
+ expect(el.textContent).toContain(t('review.hold.done'));
+ expect(btn(t('review.action.approve'))?.disabled).toBe(true);
+ expect(btn(t('review.action.reject'))?.disabled).toBe(true);
+ expect(el.querySelector('[data-hold-blocked]')).toBeTruthy();
+ expect(el.querySelector('[data-hold]')).toBeNull();
+ expect(el.querySelector('[data-hold-notice] [data-unhold]')).toBeTruthy();
+});
+
+it('another reviewer reading a held card sees who holds it, cannot decide and cannot release it',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')?.textContent).toContain(t('review.hold.noticeOther',{name:'Mika'})));
+ expect(btn(t('review.action.approve'))?.disabled).toBe(true);
+ expect(el.querySelector('[data-unhold]')).toBeNull();
+ expect(el.querySelector('[data-hold]')).toBeNull();
+ // 手機底部「前往決定」也收起：沒有可以決定的東西
+ expect(el.querySelector('.dock')).toBeNull();
+});
+
+it('a manager releasing someone else\'s hold must write a reason first',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(held({holder:'Mika',at:5,byMe:false,canRelease:true},true)).mockResolvedValue(pendingDetail());
+ api.unholdReview.mockResolvedValue({hold:null});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-unhold]')).toBeTruthy());
+ (el.querySelector('[data-unhold]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(el.querySelector('#hold-reason')).toBeTruthy());
+ expect(api.unholdReview).not.toHaveBeenCalled();
+ expect((el.querySelector('[data-unhold]') as HTMLButtonElement).disabled).toBe(true);
+ const box=el.querySelector('#hold-reason') as HTMLTextAreaElement;box.value='冷凍人已不在審核群';box.dispatchEvent(new Event('input'));
+ await vi.waitFor(()=>expect((el.querySelector('[data-unhold]') as HTMLButtonElement).disabled).toBe(false));
+ (el.querySelector('[data-unhold]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(api.unholdReview).toHaveBeenCalledWith('s1','local-reviewer','冷凍人已不在審核群'));
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeNull());
+ expect(el.textContent).toContain(t('review.hold.released'));
+});
+
+it('a hold placed just before approving explains itself where the decision is made',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(pendingDetail()).mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
+ api.stampReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
+ await remount();
+ await vi.waitFor(()=>expect(btn(t('review.action.approve'))).toBeTruthy());
+ btn(t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(el.textContent).toContain(t('review.hold.decideBlocked')));
+ await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeTruthy());
 });
