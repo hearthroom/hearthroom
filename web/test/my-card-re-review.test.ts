@@ -31,3 +31,15 @@ it("without a re-review the card reads as published", async () => {
   expect(el.textContent).toContain(i18n.global.t("mine.badge.listed"));
   expect(el.querySelector("[data-re-review]")).toBeNull();
 });
+
+// 作品分享開著（正式站目前是開的）：卡片狀態改由 workVisibility 顯示，重新審核中照樣要出現
+const shared = { access: "public", effectiveAccess: "public", review: "approved", update: "none", everPublic: true, revisionState: "unchanged", restorable: false, draftChanged: false, restriction: "none", syncState: "complete" };
+it("with work sharing on, a card under re-review still shows the badge and note", async () => {
+  const el = await mount({ ...base, reReview: true, workVisibility: shared });
+  expect(el.textContent).toContain(i18n.global.t("mine.badge.reReview"));
+  expect(el.querySelector("[data-re-review]")?.textContent).toContain(i18n.global.t("mine.note.reReview"));
+});
+it("with work sharing on, a suspended card shows the suspension first", async () => {
+  const el = await mount({ ...base, reReview: true, workVisibility: { ...shared, restriction: "suspended" } });
+  expect(el.textContent).toContain(i18n.global.t("visibility.badge.suspended"));
+});

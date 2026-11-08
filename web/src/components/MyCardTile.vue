@@ -20,7 +20,7 @@ const source=computed(()=>props.card.sourceProvider??props.card.provider??curren
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
 const detailHref=computed(()=>lp(`/cards/${props.card.num ?? props.card.detailId ?? props.card.workId ?? sourceId.value}`));
 const hasDetails = computed(() => props.card.workVisibility ? (
- props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
+ !!props.card.reReview||props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
 ) : (
   !!props.card.draftChanged ||
   ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
@@ -40,6 +40,8 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
   if(c.workVisibility?.syncState==='unavailable')return {key:'visibility.operation.unknown',tone:'wait'};
   if(c.workVisibility?.syncState==='changing')return {key:'visibility.operation.updating',tone:'wait'};
   if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
+  // 重新審核：作品分享開著時也要告訴作者（處置中的狀態優先）
+  if(c.workVisibility&&c.reReview)return { key: "mine.badge.reReview", tone: "wait" };
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
   // 重新審核：照常公開，但作者要知道卡正在被重審（不說原因）
@@ -136,6 +138,7 @@ onBeforeUnmount(() => listen(false));
 
       <div v-if="hasDetails" class="card__body">
         <p v-if="card.workVisibility" class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+        <p v-if="card.workVisibility && card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
         <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
         <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
