@@ -175,6 +175,7 @@ onMounted(() => {
               <span v-if="typeof item.regexRules === 'number'" class="chip chip--count" data-regex-chip>{{ $t("review.queue.regex", { n: numbers.format(item.regexRules) }) }}</span>
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
+              <span v-if="item.reopen" class="chip chip--re" data-reopen-chip>{{ $t("review.reopen.chip") }}</span>
               <span v-if="item.hold" class="chip chip--hold" data-hold-chip>{{ $t("review.hold.chip") }}</span>
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>

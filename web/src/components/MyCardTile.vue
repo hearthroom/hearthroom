@@ -24,6 +24,7 @@ const hasDetails = computed(() => props.card.workVisibility ? (
 ) : (
   !!props.card.draftChanged ||
   ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
+  !!props.card.reReview ||
   (props.card.status === 'rejected' && !!props.card.note) ||
   props.card.sourceAvailable === false
 ));
@@ -41,6 +42,8 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
   if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
   if (!c.registered) return { key: c.sourceAvailable === false ? "workspace.unknown" : "workspace.draft", tone: "muted" };
+  // 重新審核：照常公開，但作者要知道卡正在被重審（不說原因）
+  if (c.status === "approved" && c.reReview) return { key: "mine.badge.reReview", tone: "wait" };
   if (!c.status || c.status === "approved") return { key: "mine.badge.listed", tone: "on" };
   if (c.status === "rejected" || c.status === "unshared") return { key: `mine.badge.${c.status}`, tone: "alert" };
   return { key: `mine.badge.${c.status}`, tone: "wait" };
@@ -135,6 +138,7 @@ onBeforeUnmount(() => listen(false));
         <p v-if="card.workVisibility" class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
         <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
+        <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
         <p v-if="card.updateStatus==='pending'" class="card__note">{{ $t("workspace.updatePending") }}</p>
         <p v-if="card.updateStatus==='rejected'" class="card__note card__note--alert">{{ $t("workspace.updateRejected") }}</p>
         <p v-if="card.updateStatus==='superseded'" class="card__note card__note--alert">{{ $t("workspace.reviewSaveRetry") }}</p>
