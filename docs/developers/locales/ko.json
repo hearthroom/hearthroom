@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`, `trial_invalid_body`(잘못된 JSON 또는 생성 시 `name` 누락)는 `{error, message}`입니다. `trial_unsupported`(알 수 없는 `authorAsset.mountLayer`, `pageMode` 또는 `cardFormat`, 내용 없는 활성 항목, `find` 없는 규칙, 잘못된 규칙)는 `{error, message, detail}`입니다. 또는 캐릭터 서비스의 `invalid_arguments`입니다.",
   "d915157325f00": "캐릭터 서비스의 `permission_denied`입니다.",
   "d13752e2ce964": "`trial_slots_full` — 모든 슬롯을 사용 중이며 `evict`가 설정되지 않았습니다. 본문에는 `slots`와 `oldest` 후보가 포함됩니다.",
-  "def8eddb9ada2": "`trial_payload_too_large` — 본문 48 MiB 초과, 너무 긴 `name`, 너무 많은 항목, 너무 긴 항목 `content`, 너무 큰 규칙 `replace`, 전체 규칙 크기 초과 또는 캐릭터 필드의 언어별 한도 초과입니다. `reason`은 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets` 중 하나입니다. `detail`은 해당 섹션/항목과 한도를 나타냅니다.",
+  "def8eddb9ada2": "`trial_payload_too_large` — 본문 48 MiB 초과, 너무 긴 `name`, 너무 많은 항목, 너무 긴 항목 `content`, 너무 큰 규칙 `replace`, 전체 규칙 크기 초과 또는 캐릭터 필드의 언어별 한도 초과입니다. `reason`은 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal` 중 하나입니다. `detail`은 해당 섹션/항목과 한도를 나타냅니다.",
   "defb61b08263b": "분류되지 않은 오류입니다. 저장된 환영문을 지울 때의 `empty_field_patch`도 포함합니다. `{error, message, retryable:true}`.",
   "da3b558dfecfe": "`worldbook_unavailable` — 세계관 설정집 서비스가 중단되어 아무것도 기록하지 않았습니다. `{error, message, retryable:true}`.",
   "d2603ca1c6f6c": "체험 카드 하나 조회",

@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`；`trial_invalid_body`（JSON 格式錯誤，或建立時缺少 `name`）— `{error, message}`；`trial_unsupported`（未知 `authorAsset.mountLayer`、`pageMode` 或 `cardFormat`、啟用條目無內容、規則無 `find`、規則無效）— `{error, message, detail}`；角色服務的 `invalid_arguments`。",
   "d915157325f00": "角色服務的 `permission_denied`。",
   "d13752e2ce964": "`trial_slots_full` — 所有名額已使用，且未設定 `evict`。本文含 `slots` 與候選 `oldest`。",
-  "def8eddb9ada2": "`trial_payload_too_large` — 本文超過 48 MiB、`name` 太長、條目太多、條目 `content` 太長、規則 `replace` 太大、規則總大小太大，或角色欄位超過其語言上限（`reason` 為 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets` 之一）。`detail` 指出區段／項目與上限。",
+  "def8eddb9ada2": "`trial_payload_too_large` — 本文超過 48 MiB、`name` 太長、條目太多、條目 `content` 太長、規則 `replace` 太大、規則總大小太大，或角色欄位超過其語言上限（`reason` 為 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal` 之一）。`detail` 指出區段／項目與上限。",
   "defb61b08263b": "未分類錯誤（含清除已儲存開場白時的 `empty_field_patch`）；`{error, message, retryable:true}`。",
   "da3b558dfecfe": "`worldbook_unavailable` — 世界書服務停止；未寫入任何資料。`{error, message, retryable:true}`。",
   "d2603ca1c6f6c": "取得單一試玩角色卡",

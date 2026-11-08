@@ -650,7 +650,7 @@
   "d1cb42940683e": "`trial_invalid_key`；`trial_invalid_body`（JSON 格式错误，或创建时缺少 `name`）— `{error, message}`；`trial_unsupported`（未知 `authorAsset.mountLayer`、`pageMode` 或 `cardFormat`、启用条目无内容、规则无 `find`、规则无效）— `{error, message, detail}`；角色服务的 `invalid_arguments`。",
   "d915157325f00": "角色服务的 `permission_denied`。",
   "d13752e2ce964": "`trial_slots_full` — 所有名额已使用，且未设置 `evict`。响应体含 `slots` 与候选 `oldest`。",
-  "def8eddb9ada2": "`trial_payload_too_large` — 请求体超过 48 MiB、`name` 太长、条目太多、条目 `content` 太长、规则 `replace` 太大、规则总大小太大，或角色字段超过其语言上限（`reason` 为 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal|ruleTargets` 之一）。`detail` 指出区段／项目与上限。",
+  "def8eddb9ada2": "`trial_payload_too_large` — 请求体超过 48 MiB、`name` 太长、条目太多、条目 `content` 太长、规则 `replace` 太大、规则总大小太大，或角色字段超过其语言上限（`reason` 为 `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal` 之一）。`detail` 指出区段／项目与上限。",
   "defb61b08263b": "未分类错误（含清除已保存开场白时的 `empty_field_patch`）；`{error, message, retryable:true}`。",
   "da3b558dfecfe": "`worldbook_unavailable` — 世界书服务停止；未写入任何数据。`{error, message, retryable:true}`。",
   "d2603ca1c6f6c": "获取单个试玩角色卡",
