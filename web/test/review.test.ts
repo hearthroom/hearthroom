@@ -19,7 +19,7 @@ const api = vi.hoisted(() => ({
       {
         id: "s2", kind: "re", submittedAt: Date.now() - 120_000,
         card: { id: "c2", roleId: "r2", name: "雨城", summary: "", avatarUrl: null, zone: "zh", tags: [] },
-        stamps: { approve: 0, required: 1 }, claim: "other", stampedByMe: false, attempt: 2,
+        stamps: { approve: 0, required: 1 }, claim: "other", stampedByMe: false, attempt: 2, type: "resubmit",
       },
     ],
     claimTtlMs: 2_700_000,
@@ -59,12 +59,15 @@ afterEach(() => {
 });
 
 describe("審核佇列頁", () => {
-  it("列出待審的卡：章數、初審／重審、可不可領；不顯示作者", () => {
+  it("列出待審的卡：章數、送審類型、可不可領；清單不列作者", () => {
     const text = host.textContent ?? "";
     // 一章即定案：每列不再放「n / 1 人通過」（沒有資訊量）
     expect(text).not.toContain("1 / 2");
     expect(text).not.toContain("0 / 1");
-    expect(text).toContain(i18n.global.t("review.kind.re"));
+    // 送審類型照伺服器判定；舊版伺服器沒帶 type 的首送照 kind 退回「首次送審」
+    const typeOf = (id: string) => host.querySelector(`[data-review-row="${id}"] [data-type-chip]`)?.textContent?.trim();
+    expect(typeOf("s1")).toBe(i18n.global.t("review.type.first"));
+    expect(typeOf("s2")).toBe(i18n.global.t("review.type.resubmit"));
     expect(text).not.toContain("author");
     const buttons = [...host.querySelectorAll("button")].filter((b) => b.textContent?.trim() === i18n.global.t("review.action.claim"));
     expect(buttons).toHaveLength(1);
@@ -216,7 +219,7 @@ describe("審核佇列頁", () => {
       { ...base, id: "mine", card: card("mine"), hold: { holder: "審核人", at: Date.now(), byMe: true, canRelease: true } },
       { ...base, id: "theirs", card: card("theirs"), hold: { holder: "Mika", at: Date.now(), byMe: false, canRelease: false } },
       { ...base, id: "open", card: card("open"), hold: null },
-      { ...base, kind: "re", id: "again", card: card("again"), hold: null, reopen: true },
+      { ...base, kind: "re", id: "again", card: card("again"), hold: null, reopen: true, type: "reopen", attempt: 3 },
     ], claimTtlMs: 1 } as any);
     app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
     app.mount(host);
@@ -233,6 +236,9 @@ describe("審核佇列頁", () => {
     expect(row("theirs").querySelector("[data-unhold]")).toBeNull();
     // 重新審核：已發布的卡被拿回來重審，清單上要分得出來
     expect(row("again").querySelector("[data-reopen-chip]")?.textContent?.trim()).toBe(t("review.reopen.chip"));
+    // 重新審核取代類型 chip（不再兩顆並列），也不標第幾次送審
+    expect(row("again").querySelectorAll("[data-type-chip]")).toHaveLength(1);
+    expect(row("again").querySelector("[data-attempt]")).toBeNull();
     (row("mine").querySelector("[data-unhold]") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(api.unholdReview).toHaveBeenCalledWith("mine", "tok"));
     await vi.waitFor(() => expect(row("mine").querySelector("[data-hold-chip]")).toBeNull());

@@ -530,12 +530,35 @@ export interface ReviewQueueItem {
   hold?: ReviewHold | null;
   /** 審核員對已發布的卡發起的重新審核 */
   reopen?: boolean;
+  /** 送審類型；舊版伺服器不帶就退回 kind */
+  type?: ReviewSubmissionType;
+}
+
+/** 首次送審／更新（上次通過）／退回後再送（上次駁回）／審核員發起的重新審核 */
+export type ReviewSubmissionType = "first" | "update" | "resubmit" | "reopen";
+
+/** 原作者（只給審核頁）：Harbor 帳號名稱、數字帳號 ID、本站代號與他登記過的卡數 */
+export interface ReviewAuthor { name: string; communityName: string | null; handle: string | null; accountNumId: number; avatar: string; cardCount: number }
+
+/** 同一位作者的一張卡與它的審核狀態 */
+export interface ReviewAuthorCard {
+  id: string; name: string | null; coverUrl: string | null; adultHidden: boolean;
+  status: "pending" | "approved" | "rejected" | "needs_review" | "unshared" | string;
+  publicBlocked: boolean; boardHidden: boolean; held: boolean; reReview: boolean;
+  decided: number; rejected: number;
+  latest: { id: string; status: string; submittedAt: number; decidedAt: number | null; reopen: boolean } | null;
+  current: boolean;
+}
+
+export async function fetchReviewAuthorCards(id: string, token: string, lang?: string): Promise<{ items: ReviewAuthorCard[]; total: number }> {
+  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/author-cards${q}`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
 /** 冷凍：holder 是冷凍人的顯示名；canRelease＝我能解凍（冷凍人自己，或管理員） */
 export interface ReviewHold { holder: string; at: number; byMe: boolean; canRelease: boolean }
 
-/** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
+/** 送審當下本站替這張單存的整份設定（快照）。作者身分不在快照裡，另放在 author。partial＝同步開的重審單，只有公開資料。 */
 export interface ReviewDetail {
   submission: {
     lengthExempt?:boolean;
@@ -558,7 +581,10 @@ export interface ReviewDetail {
     /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */
     attempt?: number;
     previous?: { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null } | null;
+    type?: ReviewSubmissionType;
   };
+  /** 原作者；舊版伺服器不帶 */
+  author?: ReviewAuthor | null;
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };
   detail: {

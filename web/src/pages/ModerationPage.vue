@@ -17,7 +17,7 @@ import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionCont
 const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();const {lp}=useLocalePath();
 const featuredQuota=computed(()=>reviewer.featured?.admin&&reviewer.featuredProvider===currentProvider()?reviewer.featured:null);
 const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.meta.managementTab === 'history' ? 'history' : 'cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
-const selected=ref<ModerationCase|null>(null);const history=ref<CardHistory|null>(null);const q=ref('');const offset=ref(0);const hasNext=ref(false);
+const selected=ref<ModerationCase|null>(null);const history=ref<CardHistory|null>(null);const q=ref(typeof route.query.q==='string'?route.query.q.slice(0,100):'');const offset=ref(0);const hasNext=ref(false);
 const loading=ref(false);const busy=ref(false);const error=ref('');const done=ref('');const reason=ref('');
 const action=ref('delist');const tagText=ref('');const fandomPick=ref<LookupValue>({label:''});const hours=ref(1);const board=ref('day');
 const canFeature=computed(()=>!!session.me && reviewer.reviewer===true && !!reviewer.featured?.admin && reviewer.featuredProvider===currentProvider() && history.value?.card.provider===currentProvider());

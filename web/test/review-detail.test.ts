@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -524,4 +524,87 @@ it('a manager can withdraw a re-review after writing a reason',async()=>{
  (el.querySelector('[data-withdraw]') as HTMLButtonElement).click();
  await vi.waitFor(()=>expect(api.withdrawReopen).toHaveBeenCalledWith('s1','local-reviewer','確認是原作者'));
  await vi.waitFor(()=>expect(el.textContent).toContain(t('review.reopen.withdrawn')));
+});
+
+// 審核頁看得到原作者，並能一鍵展開他所有的卡（owner 2026-11-08）
+const author={name:'月光',communityName:'小月',handle:'moon',accountNumId:10001,avatar:'',cardCount:4};
+const authorCards=[
+ {id:'100001',name:'Night Detective',coverUrl:null,adultHidden:false,status:'pending',publicBlocked:false,boardHidden:false,held:false,reReview:false,decided:0,rejected:0,latest:{id:'s1',status:'pending',submittedAt:1,decidedAt:null,reopen:false},current:true},
+ {id:'100002',name:'雨城',coverUrl:null,adultHidden:false,status:'approved',publicBlocked:true,boardHidden:false,held:false,reReview:true,decided:2,rejected:1,latest:{id:'s9',status:'pending',submittedAt:5,decidedAt:null,reopen:true},current:false},
+ {id:'100003',name:'舊作',coverUrl:null,adultHidden:false,status:'approved',publicBlocked:false,boardHidden:false,held:false,reReview:false,decided:1,rejected:0,latest:{id:'s8',status:'approved',submittedAt:3,decidedAt:4,reopen:false},current:false},
+ {id:'100004',name:null,coverUrl:null,adultHidden:true,status:'rejected',publicBlocked:false,boardHidden:false,held:false,reReview:false,decided:1,rejected:1,latest:{id:'s7',status:'rejected',submittedAt:2,decidedAt:3,reopen:false},current:false},
+];
+it('shows the original author and lists every card of the same person on demand',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...pendingDetail(),author});
+ api.fetchReviewAuthorCards.mockResolvedValue({items:authorCards,total:4});
+ await remount();
+ const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+ await vi.waitFor(()=>expect(el.querySelector('[data-review-author]')).toBeTruthy());
+ expect(el.querySelector('[data-author-name]')?.textContent).toBe('月光');
+ expect(el.querySelector('[data-author-handle]')?.textContent).toBe('@moon');
+ expect(el.querySelector('[data-author-account]')?.textContent).toBe(t('review.author.accountId',{id:10001}));
+ expect(el.querySelector('[data-author-nickname]')?.textContent).toBe(t('review.author.nickname',{name:'小月'}));
+ // 清單點開才讀
+ expect(api.fetchReviewAuthorCards).not.toHaveBeenCalled();
+ const toggle=el.querySelector<HTMLButtonElement>('[data-author-cards-toggle]')!;
+ expect(toggle.textContent?.trim()).toBe(t('review.author.showCards',{n:4}));
+ expect(toggle.getAttribute('aria-expanded')).toBe('false');
+ toggle.click();
+ await vi.waitFor(()=>expect(el.querySelectorAll('[data-author-card]')).toHaveLength(4));
+ expect(api.fetchReviewAuthorCards).toHaveBeenCalledWith('s1','local-reviewer',expect.any(String));
+ expect(toggle.getAttribute('aria-expanded')).toBe('true');
+ const card=(id:string)=>el.querySelector(`[data-author-card="${id}"]`)!;
+ // 這張：標出來、不給連結
+ expect(card('100001').textContent).toContain(t('review.author.current'));
+ expect(card('100001').querySelector('a')).toBeNull();
+ // 重審中的已發布卡：待審單優先，連到它的審核單；狀態與暫停公開都看得到；開新分頁
+ const review=card('100002').querySelector<HTMLAnchorElement>('[data-author-card-review]')!;
+ expect(review.getAttribute('href')).toBe('/review/s9');
+ expect(review.getAttribute('target')).toBe('_blank');
+ expect(card('100002').textContent).toContain(t('mine.badge.reReview'));
+ expect(card('100002').textContent).toContain(t('moderation.blocked'));
+ expect(card('100002').textContent).toContain(t('review.author.counts',{decided:2,rejected:1}));
+ // 已發布、沒有待審：連到作品管理並帶卡號
+ expect(card('100003').querySelector('[data-author-card-manage]')?.getAttribute('href')).toBe('/review/cards?q=100003');
+ // 成人卡沒驗年齡：只說是成人卡，狀態照列，沒有連結
+ expect(card('100004').querySelector('[data-adult-hidden]')?.textContent).toBe(t('review.author.adultHidden'));
+ expect(card('100004').querySelector('[data-author-card-status]')?.textContent).toBe(t('review.author.status.rejected'));
+ expect(card('100004').querySelector('a')).toBeNull();
+ // 收起再展開不重讀
+ toggle.click();await vi.waitFor(()=>expect(el.querySelector('[data-author-cards]')).toBeNull());
+ toggle.click();await vi.waitFor(()=>expect(el.querySelector('[data-author-cards]')).toBeTruthy());
+ expect(api.fetchReviewAuthorCards).toHaveBeenCalledTimes(1);
+});
+
+it('says the author has only this card instead of offering an empty list',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...pendingDetail(),author:{...author,communityName:null,handle:null,cardCount:1}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-only]')?.textContent).toBe(i18n.global.t('review.author.onlyThis')));
+ expect(el.querySelector('[data-author-cards-toggle]')).toBeNull();
+ expect(el.querySelector('[data-author-handle]')).toBeNull();
+ expect(el.querySelector('[data-author-nickname]')).toBeNull();
+});
+
+it('keeps the author list retryable when it cannot load',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...pendingDetail(),author});
+ api.fetchReviewAuthorCards.mockRejectedValueOnce(new Error('down')).mockResolvedValue({items:authorCards,total:4});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-cards-toggle]')).toBeTruthy());
+ el.querySelector<HTMLButtonElement>('[data-author-cards-toggle]')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('review.author.loadFailed')));
+ el.querySelector<HTMLButtonElement>('[data-author-cards-retry]')!.click();
+ await vi.waitFor(()=>expect(el.querySelectorAll('[data-author-card]')).toHaveLength(4));
+});
+
+it('labels the submission type from the server and drops the attempt count on a re-review',async()=>{
+ const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+ const base=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,kind:'first',type:'resubmit',attempt:2}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-type-label]')?.textContent).toBe(t('review.type.resubmit')));
+ expect(el.querySelector('[data-attempt]')?.textContent?.trim()).toBe(t('review.attempt',{n:2}));
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,type:'reopen',reopen:true,attempt:3}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-type-label]')?.textContent).toBe(t('review.reopen.chip')));
+ expect(el.querySelector('[data-attempt]')).toBeNull();
 });
