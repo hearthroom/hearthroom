@@ -526,7 +526,12 @@ export interface ReviewQueueItem {
   /** 世界書全部條目數、正規表示式全部規則數（含停用）；null 或沒有＝不知道，不標 */
   worldbookEntries?: number | null;
   regexRules?: number | null;
+  /** 冷凍並討論：有人把這張卡擋下來了；null 或沒有＝沒冷凍 */
+  hold?: ReviewHold | null;
 }
+
+/** 冷凍：holder 是冷凍人的顯示名；canRelease＝我能解凍（冷凍人自己，或管理員） */
+export interface ReviewHold { holder: string; at: number; byMe: boolean; canRelease: boolean }
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
 export interface ReviewDetail {
@@ -541,6 +546,7 @@ export interface ReviewDetail {
     /** 我在這張單上蓋過章：可以回頭唯讀查看，不必再領 */
     stampedByMe?: boolean;
     claimGeneration?: string; required: number;
+    hold?: ReviewHold | null;
     /** mine＝我蓋的那一章；舊版伺服器不帶 */
     stamps: { verdict: "approve" | "reject"; note: string; at: number; mine?: boolean }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
@@ -618,6 +624,9 @@ export async function setCardFeatured(cardId: string, featured: boolean, token: 
 
 export const claimReview = (id: string, token: string) => reviewAction<{ id: string; claimedAt: number; generation: string }>(id, "claim", token);
 export const releaseReview = (id: string, token: string, generation?:string) => reviewAction<void>(id, "release", token, {generation});
+export const holdReview = (id: string, token: string, generation?: string) => reviewAction<{ hold: ReviewHold }>(id, "hold", token, { generation });
+/** 管理員解凍別人冷凍的卡要帶理由 */
+export const unholdReview = (id: string, token: string, reason?: string) => reviewAction<{ hold: null }>(id, "unhold", token, { reason });
 export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
