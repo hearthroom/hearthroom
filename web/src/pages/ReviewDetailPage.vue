@@ -27,6 +27,8 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { readTags, readTalkExample } from "@/lib/role-draft";
 import RatingMark from "@/components/RatingMark.vue";
+import ReviewAuthorPanel from '@/components/ReviewAuthorPanel.vue';
+import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
@@ -202,6 +204,7 @@ const holdReasonOpen = ref(false);
 const holdReason = ref("");
 /** 重新審核：已發布的卡回到待審。維持通過任一審核員；駁回與撤銷限管理員 */
 const reopen = computed(() => !!data.value?.submission.reopen);
+const submissionType = computed(() => (data.value ? submissionTypeOf({ ...data.value.submission, reopen: reopen.value }) : "first"));
 const manager = computed(() => !!data.value?.submission.manager);
 const rejectLocked = computed(() => reopen.value && !manager.value);
 const withdrawOpen = ref(false);
@@ -581,12 +584,12 @@ onMounted(() => { void load(); });
         <div class="head__text">
           <p class="eyebrow">
             <RouterLink :to="lp('/review')">{{ $t("review.eyebrow") }}</RouterLink>
-            · {{ $t(`review.kind.${data.submission.kind}`) }}
+            · <span data-type-label>{{ $t(submissionTypeKey(submissionType)) }}</span>
             · {{ $t("review.stamps", { n: approvals, required: data.submission.required }) }}
           </p>
           <div class="head__name">
             <h2 class="head__title display">{{ doc.roleName }}</h2>
-            <span v-if="(data.submission.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: data.submission.attempt }) }}</span>
+            <span v-if="submissionType !== 'reopen' && (data.submission.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: data.submission.attempt }) }}</span>
           </div>
           <p class="subtle">{{ doc.roleDesc }}</p>
           <!-- 重送的卡：上一次的結果與說明。駁回說明預設一行，點開看全文 -->
@@ -597,6 +600,8 @@ onMounted(() => { void load(); });
             <p v-else class="previous__note">{{ $t("review.previous.approved") }}</p>
             <p class="subtle previous__time">{{ $t("review.previous.submittedAt", { time: dateTime(data.submission.previous.submittedAt) }) }}</p>
           </div>
+          <!-- 原作者與他的其他卡（owner 2026-11-08 取消盲審）：抓到一張盜卡要能一串查出 -->
+          <ReviewAuthorPanel v-if="data.author" :submission-id="data.submission.id" :author="data.author" />
           <!-- 作者的分級放最上面：審核人第一件事就是對照內容跟它符不符；問卷在「分級問卷」分頁 -->
           <p class="rating">
             {{ $t("review.rating.declared") }}
