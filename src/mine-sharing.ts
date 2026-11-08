@@ -4,6 +4,7 @@ import {upstream,type MyRole,type ProviderIdentity} from './upstream';
 import {quotaFor} from './quota';
 import {readOwnerVisibilities} from './work-sharing';
 import type {WorkAccess} from './work-policy';
+import {statusAmong} from './review';
 
 // A filter sees the whole catalog in bounded batches before slicing a page. Raw
 // inventory may be cached; current author permissions and review facts never are.
@@ -42,9 +43,12 @@ export async function loadSharingMine(env:Env,token:string,me:ProviderIdentity,o
  const rows=all.filter(r=>(!opts.access||projections.get(r.roleId)!.access===opts.access)
   &&(opts.filter==='listed'?registered.has(r.roleId):opts.filter==='unlisted'?!registered.has(r.roleId):true));
  const offset=(opts.page-1)*opts.pageSize;
- const items=rows.slice(offset,offset+opts.pageSize).map(({contentHash:_,...r})=>{
+ const page=rows.slice(offset,offset+opts.pageSize);
+ // 重新審核中（審核員發起）不在 Harbor 的可見性裡，只在本站：這一頁照樣補上，不帶理由與發起人
+ const review=await statusAmong(env.DB,page.map(r=>r.roleId));
+ const items=page.map(({contentHash:_,...r})=>{
   const workVisibility=projections.get(r.roleId)!;
-  return {...r,...(workVisibility.access==='unlisted'?{rating:null}:{}),registered:registered.has(r.roleId),workVisibility,draftChanged:workVisibility.draftChanged};
+  return {...r,...(workVisibility.access==='unlisted'?{rating:null}:{}),registered:registered.has(r.roleId),workVisibility,draftChanged:workVisibility.draftChanged,...(review.get(r.roleId)?.reReview?{reReview:true}:{})};
  });
  return {source,body:{items,total:rows.length,registeredTotal:registered.size,quota,page:opts.page,pageSize:opts.pageSize,hasNext:offset+opts.pageSize<rows.length}};
 }

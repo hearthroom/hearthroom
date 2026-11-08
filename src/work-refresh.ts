@@ -60,7 +60,7 @@ export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:stri
    const writes:D1PreparedStatement[]=[];
    if(r.epoch>p.epoch){
     writes.push(env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=?
-     WHERE card_id=? AND status='pending' AND ${guard}`).bind(now,p.card_id,...args));
+     WHERE card_id=? AND status='pending' AND reopen_of IS NULL AND ${guard}`).bind(now,p.card_id,...args));
     writes.push(env.DB.prepare(`DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded') AND ${guard}`).bind(p.card_id,...args));
    }
    const projectionIndex=writes.length;
