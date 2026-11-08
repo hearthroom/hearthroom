@@ -103,3 +103,11 @@ it('a published card can be sent back for re-review with a reason; a card alread
  expect([...el.querySelector<HTMLSelectElement>('#case-action')!.options].map(o=>o.value)).not.toContain('reopen');
  expect(el.textContent).toContain(i18n.global.t('moderation.reReview'));
 });
+// 審核頁「這位作者的卡」連到作品管理時帶卡號：一打開就是那張卡（2026-11-08）
+it('opens the works tab already searching the card number from the link',async()=>{
+ app.unmount();mock.request.mockClear();
+ await router.push('/review/cards?q=100003');
+ app=createApp(Page).use(createPinia()).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(mock.request).toHaveBeenCalledWith(expect.stringMatching(/^\/cards\?q=100003&/),'reviewer'));
+ expect(el.querySelector<HTMLInputElement>('input[type="search"], input')?.value).toBe('100003');
+});
