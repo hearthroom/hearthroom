@@ -11,7 +11,7 @@ export interface MemberDetail {
  badges:{key:string;icon:string;titles:Record<string,string>;earnedAt:number|null;expiresAt:number|null}[];
  badgeAudit:{id:string;badge:string;titles:Record<string,string>|null;action:string;reason:string;at:number;actor:string}[];
 }
-export interface CardHistory {card:ManagedCard;cases:ModerationCase[];reviews:{id:string;kind:string;status:string;note:string;submittedAt:number;version:string}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number}[]}
+export interface CardHistory {card:ManagedCard;cases:ModerationCase[];reviews:{id:string;kind:string;status:string;note:string;submittedAt:number;version:string;reopen?:boolean|number}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number}[]}
 export async function moderationRequest<T>(path:string,token:string,body?:unknown):Promise<T>{
  const res=await fetch(`/v1/moderation${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,'X-Provider':currentProvider(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
  const data=await res.json().catch(()=>({})) as {error?:string};

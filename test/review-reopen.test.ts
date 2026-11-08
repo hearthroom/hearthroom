@@ -47,7 +47,7 @@ const published = async () => {
   return { cardId: String(card.id), original, card };
 };
 const reopen = (cardId: string, token: string, reason = "疑似盜用他人設定") =>
-  SELF.fetch(`https://c.test/v1/review/cards/${cardId}/reopen`, { method: "POST", headers: { ...json, ...bearer(token) }, body: JSON.stringify({ reason }) });
+  SELF.fetch(`https://c.test/v1/moderation/cards/${cardId}/reopen`, { method: "POST", headers: { ...json, ...bearer(token) }, body: JSON.stringify({ reason }) });
 const queue = async (token: string) => ((await (await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer(token) })).json()) as { items: any[] }).items;
 const board = async () => ((await (await SELF.fetch("https://c.test/v1/cards")).json()) as { items: unknown[] }).items;
 const cardRow = async () => (await env.DB.prepare("SELECT status, reviewed_hash, approved_version_id FROM cards").first<{ status: string; reviewed_hash: string; approved_version_id: string | null }>())!;

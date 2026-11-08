@@ -216,6 +216,7 @@ describe("審核佇列頁", () => {
       { ...base, id: "mine", card: card("mine"), hold: { holder: "審核人", at: Date.now(), byMe: true, canRelease: true } },
       { ...base, id: "theirs", card: card("theirs"), hold: { holder: "Mika", at: Date.now(), byMe: false, canRelease: false } },
       { ...base, id: "open", card: card("open"), hold: null },
+      { ...base, kind: "re", id: "again", card: card("again"), hold: null, reopen: true },
     ], claimTtlMs: 1 } as any);
     app = createApp(ReviewQueuePage).use(createPinia()).use(router).use(i18n);
     app.mount(host);
@@ -226,9 +227,12 @@ describe("審核佇列頁", () => {
     expect(row("theirs").querySelector("[data-hold-by]")?.textContent).toContain(t("review.hold.by", { name: "Mika" }));
     expect(row("mine").querySelector("[data-hold-by]")?.textContent).toContain(t("review.hold.byMe"));
     expect(row("open").querySelector("[data-hold-chip]")).toBeNull();
+    expect(row("open").querySelector("[data-reopen-chip]")).toBeNull();
     expect(row("theirs").querySelector("button")?.textContent?.trim()).toBe(t("review.action.claimHeld"));
     expect(row("open").querySelector("button")?.textContent?.trim()).toBe(t("review.action.claim"));
     expect(row("theirs").querySelector("[data-unhold]")).toBeNull();
+    // 重新審核：已發布的卡被拿回來重審，清單上要分得出來
+    expect(row("again").querySelector("[data-reopen-chip]")?.textContent?.trim()).toBe(t("review.reopen.chip"));
     (row("mine").querySelector("[data-unhold]") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(api.unholdReview).toHaveBeenCalledWith("mine", "tok"));
     await vi.waitFor(() => expect(row("mine").querySelector("[data-hold-chip]")).toBeNull());

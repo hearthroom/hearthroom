@@ -3,7 +3,7 @@ import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -495,4 +495,33 @@ it('after the holder releases a card someone else is reading, the page stops say
  await vi.waitFor(()=>expect(api.unholdReview).toHaveBeenCalledWith('s1','local-reviewer',undefined));
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeNull());
  expect(el.textContent).toContain(t('review.hold.released'));
+});
+
+// 重新審核
+const reopened=(manager:boolean)=>{const d=pendingDetail();return {...d,submission:{...d.submission,reopen:true,reopenReason:'疑似盜用他人設定',manager}};};
+
+it('a re-review says the card is published, shows the reason, offers keep-approved and locks rejection for non-managers',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(reopened(false));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-reopen-notice]')?.textContent).toContain(t('review.reopen.notice')));
+ expect(el.querySelector('[data-reopen-notice]')?.textContent).toContain('疑似盜用他人設定');
+ expect(btn(t('review.action.keep'))).toBeTruthy();
+ expect(btn(t('review.action.approve'))).toBeUndefined();
+ expect(btn(t('review.action.reject'))?.disabled).toBe(true);
+ expect(el.querySelector('[data-reject-locked]')?.textContent).toContain(t('review.reopen.rejectManager'));
+ expect(el.querySelector('[data-withdraw]')).toBeNull();
+});
+
+it('a manager can withdraw a re-review after writing a reason',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce(reopened(true)).mockResolvedValue({...reopened(true),submission:{...reopened(true).submission,status:'superseded'}});
+ api.withdrawReopen=vi.fn(async()=>({status:'superseded'})) as any;
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-withdraw]')).toBeTruthy());
+ (el.querySelector('[data-withdraw]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(el.querySelector('#withdraw-reason')).toBeTruthy());
+ const box=el.querySelector('#withdraw-reason') as HTMLTextAreaElement;box.value='確認是原作者';box.dispatchEvent(new Event('input'));
+ await vi.waitFor(()=>expect((el.querySelector('[data-withdraw]') as HTMLButtonElement).disabled).toBe(false));
+ (el.querySelector('[data-withdraw]') as HTMLButtonElement).click();
+ await vi.waitFor(()=>expect(api.withdrawReopen).toHaveBeenCalledWith('s1','local-reviewer','確認是原作者'));
+ await vi.waitFor(()=>expect(el.textContent).toContain(t('review.reopen.withdrawn')));
 });

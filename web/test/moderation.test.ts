@@ -81,3 +81,25 @@ it('keeps the new operation busy and owns its confirmation when an earlier tab r
  const {settleConfirm}=await import('../src/lib/confirm');expect(settleConfirm).toHaveBeenCalledWith(false);
  finishConfirm(false);
 });
+
+// 重新審核（審核員 2026-11-08）：已發布的卡從管理頁送回待審清單，跟處置案件分開走
+it('a published card can be sent back for re-review with a reason; a card already in re-review cannot',async()=>{
+ const history=(reviews:unknown[])=>({card:{id:'card1',name:'Card one',tags:[],status:'approved',boardHidden:false,publicBlocked:false},cases:[],events:[],reviews});
+ let reviews:unknown[]=[];
+ mock.request.mockImplementation(async(path:string)=>path.startsWith('/cards?')?{items:[{id:'card1',name:'Card one'}]}:path==='/cards/card1/reopen'?{id:'r1'}:path.startsWith('/cards/card1')?history(reviews):{items:[]});
+ await router.push('/review/cards');await vi.waitFor(()=>expect(el.textContent).toContain('Card one'));
+ el.querySelector<HTMLButtonElement>('.work-item')!.click();await vi.waitFor(()=>expect(el.querySelector('#case-action')).not.toBeNull());
+ const select=el.querySelector<HTMLSelectElement>('#case-action')!;
+ expect([...select.options].map(o=>o.value)).toContain('reopen');
+ select.value='reopen';select.dispatchEvent(new Event('change'));await nextTick();
+ expect(el.textContent).toContain(i18n.global.t('moderation.proposal.reopen'));
+ const reason=el.querySelector<HTMLTextAreaElement>('#card-reason')!;reason.value='疑似盜用';reason.dispatchEvent(new Event('input'));await nextTick();
+ el.querySelector<HTMLButtonElement>('.work-submit')!.click();
+ await vi.waitFor(()=>expect(mock.request).toHaveBeenCalledWith('/cards/card1/reopen','reviewer',{reason:'疑似盜用'}));
+ expect(mock.request.mock.calls.some(c=>c[0]==='/cases'&&c[2])).toBe(false);
+ reviews=[{id:'r1',kind:'re',status:'pending',note:'疑似盜用',submittedAt:1,version:'version:v1',reopen:1}];
+ await router.push('/review/cases');await router.push('/review/cards');await vi.waitFor(()=>expect(el.textContent).toContain('Card one'));
+ el.querySelector<HTMLButtonElement>('.work-item')!.click();await vi.waitFor(()=>expect(el.querySelector('#case-action')).not.toBeNull());
+ expect([...el.querySelector<HTMLSelectElement>('#case-action')!.options].map(o=>o.value)).not.toContain('reopen');
+ expect(el.textContent).toContain(i18n.global.t('moderation.reReview'));
+});
