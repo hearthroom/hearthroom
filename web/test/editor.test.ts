@@ -1948,6 +1948,38 @@ describe("卡片變數", () => {
     api.fetchRoleDetail.mockResolvedValue({});
   });
 
+  it("只清掉骨架、規則還在：不當成移除，在這一區擋下，不送 DELETE 也不送寫入", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce(JSON.parse(JSON.stringify(DETAIL)));
+    await mount("/cards/r1/edit");
+    await type($("#f-state-data"), "");
+    await submit();
+    expect(api.deleteRoleState).not.toHaveBeenCalled();
+    expect(api.putRoleState).not.toHaveBeenCalled();
+    expect(root.textContent).toContain(i18n.global.t("editor.state.reject.data"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+  });
+
+  it("清單元素上的規則、含點的鍵：讀回再存，規則、可擴充、必填照路徑送回去", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({
+      ...JSON.parse(JSON.stringify(DETAIL)),
+      state: {
+        version: 2,
+        data: { "HP.max": 100, 背包: ["短刀"], "任務.a": {} },
+        rules: { text: "", paths: { '["HP.max"]': "上限", "背包[0]": "第一格" } },
+        open: ['["任務.a"]'],
+        required: ['["HP.max"]'],
+      },
+    });
+    await mount("/cards/r1/edit");
+    await type($("#f-state-rules"), "新規則");
+    await submit();
+    expect(api.putRoleState).toHaveBeenCalledWith("r1", {
+      convention: "mvu",
+      data: { $meta: { required: ["HP.max"] }, "HP.max": [100, "上限"], 背包: ["短刀"], "任務.a": { $meta: { extensible: true } } },
+      rules: { text: "新規則", paths: { "背包[0]": "第一格" } },
+    }, "tok");
+  });
+
   it("骨架解不開時先在本地擋下，指到這一區，不送任何寫入", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "合成", roleDetailDesc: "合成設定", roleWelcome: "合成開場" });
     await mount("/cards/r1/edit");

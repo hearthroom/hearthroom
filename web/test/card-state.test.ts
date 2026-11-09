@@ -9,10 +9,12 @@ import {
   readState,
   rebuildStateText,
   stateChanged,
+  stateEmpty,
   statePayload,
   stateProblem,
   stateTurnSize,
   STATE_LIMITS,
+  switchConvention,
   type CardStateDraft,
   type StateConvention,
 } from "../src/lib/card-state";
@@ -125,6 +127,71 @@ describe("讀回與往返", () => {
   });
 });
 
+describe("路徑寫法跟上游一致（含點、括號、引號的鍵寫成 [\"鍵\"]）", () => {
+  it("正規化：鍵名像路徑語法時用中括號；清單索引不算被剝掉的標記", () => {
+    const n = normalizeState("mvu", {
+      $meta: { required: ["HP.max"] },
+      "HP.max": [100, "上限"],
+      "任務.a": { $meta: { extensible: true, required: ["x.y"] }, "x.y": [1, "內層"] },
+      背包: ["$__META_EXTENSIBLE__$", { "名.稱": ["短刀", "物品"] }],
+      "": [0, "空鍵"],
+    });
+    expect(n.paths).toEqual({ '["HP.max"]': "上限", '["任務.a"]["x.y"]': "內層", '背包[0]["名.稱"]': "物品", '[""]': "空鍵" });
+    expect(n.open).toEqual(['["任務.a"]']);
+    expect(n.required).toEqual(['["HP.max"]', '["任務.a"]["x.y"]']);
+  });
+
+  it("讀回 → 寫入體 → 上游再正規化：規則、可擴充、必填一條都不掉（含 MVU 原文放不下的清單元素規則）", () => {
+    const server = {
+      data: { "HP.max": 100, "任務.a": {}, 背包: [["短刀", "rule0"]], 屬性: { "x.y": 1 } },
+      rules: { text: "", paths: { '["HP.max"]': "上限", "背包[0]": "清單元素的規則" } },
+      open: ['["任務.a"]'],
+      required: ['["HP.max"]', '屬性["x.y"]'],
+    };
+    const draft = readState(server)!;
+    expect(draft.convention).toBe("mvu");
+    expect(draft.pathRules).toEqual({ "背包[0]": "清單元素的規則" });
+    const payload = statePayload(draft);
+    expect(payload.rules).toEqual({ paths: { "背包[0]": "清單元素的規則" } });
+    const again = normalizeState(payload.convention, payload.data, payload.rules?.paths);
+    expect(again.data).toEqual(server.data);
+    expect(again.paths).toEqual(server.rules.paths);
+    expect(again.open).toEqual(server.open);
+    expect(again.required).toEqual([...server.required].sort());
+  });
+
+  it("只有值的寫法也把逐值規則放進 rules.paths；對不上任何值的那幾條存檔時不送", () => {
+    const draft: CardStateDraft = { convention: "plain", dataText: '{"背包": ["短刀"]}', rulesText: "", template: "", pathRules: { "背包[0]": "第一格", "背包[3]": "已刪掉的值" } };
+    expect(statePayload(draft)).toEqual({ convention: "plain", data: { 背包: ["短刀"] }, rules: { paths: { "背包[0]": "第一格" } } });
+  });
+});
+
+describe("切換寫法時轉換骨架", () => {
+  const draft = (convention: "mvu" | "plain", dataText: string, extra: Partial<CardStateDraft> = {}): CardStateDraft => ({ convention, dataText, rulesText: "", template: "", ...extra });
+
+  it("只有值 → MVU：兩個字串的清單包一層空規則，空物件標成可擴充，值不變", () => {
+    const next = switchConvention(draft("plain", '{"背包": ["短刀", "鐵護腕"], "任務": {}, "好感度": 1}'), "mvu");
+    expect(next.convention).toBe("mvu");
+    expect(JSON.parse(next.dataText)).toEqual({ 背包: [["短刀", "鐵護腕"], ""], 任務: { $meta: { extensible: true } }, 好感度: 1 });
+    const norm = normalizeState("mvu", JSON.parse(next.dataText));
+    expect(norm.data).toEqual({ 背包: ["短刀", "鐵護腕"], 任務: {}, 好感度: 1 });
+    expect(norm.paths).toEqual({});
+    expect(norm.open).toEqual(["任務"]);
+  });
+
+  it("MVU → 只有值：值留在骨架，逐值規則搬到變數規則，一條一行", () => {
+    const next = switchConvention(draft("mvu", '{"好感度": [100, "0 到 100"], "背包": [["短刀", "鐵護腕"], ""], "HP.max": [5, "上限"]}', { rulesText: "原本的規則" }), "plain");
+    expect(next.convention).toBe("plain");
+    expect(JSON.parse(next.dataText)).toEqual({ 好感度: 100, 背包: ["短刀", "鐵護腕"], "HP.max": 5 });
+    expect(next.rulesText).toBe('原本的規則\n\n好感度: 0 到 100\n["HP.max"]: 上限');
+  });
+
+  it("骨架解不開或是空的：只換寫法，原文不動", () => {
+    expect(switchConvention(draft("plain", '{"a": '), "mvu")).toEqual(draft("mvu", '{"a": '));
+    expect(switchConvention(draft("mvu", ""), "plain")).toEqual(draft("plain", ""));
+  });
+});
+
 describe("寫入體與變更判斷", () => {
   const state: CardStateDraft = { convention: "mvu", dataText: '{"a": [1, "r"]}', rulesText: "  ", template: "" };
 
@@ -152,6 +219,14 @@ describe("寫入體與變更判斷", () => {
 
 describe("本地檢查與每輪大小", () => {
   const draft = (dataText: string, extra: Partial<CardStateDraft> = {}): CardStateDraft => ({ convention: "plain", dataText, rulesText: "", template: "", ...extra });
+
+  it("骨架空了但規則或皮膚還有字：不算移除，是骨架的錯", () => {
+    expect(stateEmpty(draft(""))).toBe(true);
+    expect(stateEmpty(draft("", { rulesText: "規則" }))).toBe(false);
+    expect(stateEmpty(draft(" ", { template: "<b/>" }))).toBe(false);
+    expect(stateProblem(draft("", { rulesText: "規則" }))).toBe("data");
+    expect(stateProblem(draft("", { template: "<b/>" }))).toBe("data");
+  });
 
   it("照上游的上限點名原因", () => {
     expect(stateProblem(null)).toBeNull();
