@@ -196,8 +196,8 @@ export const BEACON_DETAILS = new Set([
   "comment_root", "comment_reply", "like_on", "like_off",
   // 外观分两类，实际选了哪一个放 subject——不然每加一套主题都要回来改白名单，忘了就静默变空
   "mode", "theme",
-  // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣
-  "png", "json",
+  // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣；mmd／fengyue 是那兩個來源的匯入
+  "png", "json", "mmd", "fengyue",
   "invite_redeem", "invite_mine", "invite_copy", "invite_fallback",
   // 月卡入口的位置
   "wallet", "newcomer",

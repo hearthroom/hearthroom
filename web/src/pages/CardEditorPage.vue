@@ -1136,7 +1136,7 @@ function applyImport(result: ImportResult) {
   const language = draft.value.language;
   draft.value = { ...result.draft, language };
   tagsText.value = formatTags(draft.value.roleTag);
-  track("card_import", { detail: result.spec === "mmd" ? "mmd" : result.image ? "png" : "json" });
+  track("card_import", { detail: result.spec === "mmd" || result.spec === "fengyue" ? result.spec : result.image ? "png" : "json" });
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
@@ -1144,7 +1144,8 @@ function applyImport(result: ImportResult) {
     result.regex.pageMode ??= "classic";
     regexSet.value = result.regex;
   } else {
-    regexSet.value.pageMode = "classic";
+    // 風月卡本來就是新的網頁玩法，沒有舊版聊天頁要相容
+    regexSet.value.pageMode = result.spec === "fengyue" ? "sandbox" : "classic";
   }
   defaultChatPageForNew();
   goto("basic");

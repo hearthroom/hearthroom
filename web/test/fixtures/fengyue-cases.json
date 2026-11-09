@@ -1,0 +1,1685 @@
+{
+  "cases": [
+    {
+      "name": "export #5 as captured",
+      "input": {
+        "wb": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "abs_txt": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "preset_tp": 1,
+        "ban_wd": [
+          "TESTKEY"
+        ],
+        "descr": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sq": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "nm": "xB_au9VW",
+        "ai_variable_text": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "re_replaces": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pre_text": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "posttxt": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "pchats": [],
+        "inner_css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "shortcut_commands": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "pre_pt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "alias rotation 0",
+      "input": {
+        "world_book": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ps_type": 1,
+        "block_wd": [
+          "TESTKEY"
+        ],
+        "description": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sq": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "title": "xB_au9VW",
+        "ai_variable_text": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "rgx_rep": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pre_text": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "post_text": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "pst_chats": [],
+        "builtCss": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "sc_cmds": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "pre_prompt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "alias rotation 1",
+      "input": {
+        "world_bk": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "smry": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ptype": 1,
+        "bw": [
+          "TESTKEY"
+        ],
+        "desc": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sug_q": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "ttl": "xB_au9VW",
+        "ai_variable_prompt": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "rrep": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pre_tx": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "post_tx": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "ps_chats": [],
+        "builtInCss": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "scmd": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "prompt_pre": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "alias rotation 2",
+      "input": {
+        "wbook": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "sum_info": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "preset_tp": 1,
+        "ban_wd": [
+          "TESTKEY"
+        ],
+        "descr": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sugg_ques": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "name": "xB_au9VW",
+        "ai_v_prompt": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "regex_rp": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pretxt": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "posttxt": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "preset_ch": [],
+        "bicss": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "shortcut_cmd": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "pre_pt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "alias rotation 3",
+      "input": {
+        "wb": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "abs_txt": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ps_type": 1,
+        "banned_wd": [
+          "TESTKEY"
+        ],
+        "dsc": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "suggested_questions": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "nm": "xB_au9VW",
+        "ai_variable_text": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "re_replaces": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "ptx": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "potx": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "pchats": [],
+        "inner_css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "shortcut_commands": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "ppt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "alias rotation 4",
+      "input": {
+        "lore_bk": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ptype": 1,
+        "banned_words": [
+          "TESTKEY"
+        ],
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sq": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "app_name": "xB_au9VW",
+        "ai_variable_prompt": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "regex_replaces": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "prefix_txt": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "suffix_txt": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "pst_chats": [],
+        "built_in_css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "sc_cmds": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "pre_prompt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "title key is name, intro key is desc",
+      "input": {
+        "world_book": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ps_type": 1,
+        "block_wd": [
+          "TESTKEY"
+        ],
+        "desc": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sq": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "name": "xB_au9VW",
+        "ai_variable_text": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "rgx_rep": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": false
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pre_text": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "post_text": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "pst_chats": [],
+        "builtCss": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "sc_cmds": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "pre_prompt": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "TEST-OPENING 开场白选项一"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "intro",
+          "regexHistory",
+          "shortcuts",
+          "summaryConfig",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "unverified values and long opening list",
+      "input": {
+        "world_bk": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_WBKEY",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "TEST-WB-CONTENT 世界书内容",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          },
+          {
+            "group": "人物",
+            "match_type": 2,
+            "key": "_or_甲,乙",
+            "key_region": 4,
+            "value_type": 0,
+            "value": "第二條",
+            "value_configs": [],
+            "value_region": 2,
+            "sort": 3,
+            "depth": 0,
+            "probability": 50,
+            "enable": false
+          },
+          {
+            "group": "",
+            "match_type": 1,
+            "key": "_and_丙",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "第三條",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 1,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          },
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_空",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "   ",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 2,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "category": 0,
+        "smry": "TEST-SHORT-DESC 列表短简介",
+        "modp": 4,
+        "bg_mobile": "",
+        "ptype": 1,
+        "bw": [
+          "TESTKEY"
+        ],
+        "desc": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "tmp_val": "default",
+        "ai_variable_template": "",
+        "sug_q": [
+          "開場 1",
+          "開場 2",
+          "開場 3",
+          "開場 4",
+          "開場 5",
+          "開場 6",
+          "開場 7",
+          "開場 8",
+          "開場 9",
+          "開場 10",
+          "開場 11",
+          "開場 12",
+          "開場 13",
+          "開場 14",
+          "開場 15",
+          "開場 16",
+          "開場 17",
+          "開場 18",
+          "開場 19",
+          "開場 20",
+          "開場 21",
+          "開場 22",
+          "開場 23",
+          "開場 24",
+          "開場 25"
+        ],
+        "ttl": "xB_au9VW",
+        "ai_variable_prompt": "TEST-VAR-PROMPT 变量提示词",
+        "ai_v_json": "",
+        "rrep": [
+          {
+            "scope": 10,
+            "title": "TESTRGX",
+            "is_enable": true,
+            "match_regex": "foo(\\d+)",
+            "replace_text": "BAR$1",
+            "is_only_render": true
+          },
+          {
+            "scope": 3,
+            "title": "其他範圍",
+            "is_enable": false,
+            "match_regex": "a/b",
+            "replace_text": "c",
+            "is_only_render": true
+          }
+        ],
+        "default_sent_message_count": 6,
+        "bg_image": "",
+        "pre_tx": "TEST-PRE-TEXT 前置词",
+        "open_st": "选择一段开场白",
+        "cover_sm": "",
+        "post_tx": "TEST-POST-TEXT 后置词",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "show_scope": 0,
+        "is_anonymous": true,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "ps_chats": [
+          {
+            "title": "T",
+            "chats": [
+              {
+                "query": "Q",
+                "answer": "A"
+              }
+            ],
+            "suggested_questions": [
+              "O"
+            ]
+          }
+        ],
+        "builtInCss": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "cover_img": null,
+        "scmd": [
+          {
+            "label": "tcmd",
+            "command_text": "TEST-SHORTCUT-BODY 快捷指令内容"
+          }
+        ],
+        "tags": [],
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "disable_css_mod": true,
+        "is_available_not_public": true,
+        "card_type": 1,
+        "sq_after": {
+          "enabled": false
+        },
+        "cgb": [],
+        "prompt_pre": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "chk_tag": "",
+        "ai_summary_config": {
+          "big_prompt": "<平台預設自動總結提示詞，共 1183 字，已省略>",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "<平台預設自動總結提示詞，共 602 字，已省略>",
+          "enable_status": 1
+        },
+        "lng": "zh-Hans"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "xB_au9VW",
+        "summary": "TEST-SHORT-DESC 列表短简介",
+        "definition": "TEST-MAIN-PROMPT 主提示词。<Reply Example><div class=\"st-bar\">状态栏示例</div></Reply Example>",
+        "outputContract": "TEST-PRE-TEXT 前置词",
+        "custom": "TEST-POST-TEXT 后置词",
+        "intro": "<style>.t-intro{padding:12px;border:1px solid #c9a;border-radius:8px}</style><div class=\"t-intro\"><h2>TEST-DETAIL-INTRO</h2><details><summary>分支</summary><p>detail body</p></details></div>",
+        "prologue": [
+          "開場 1",
+          "開場 2",
+          "開場 3",
+          "開場 4",
+          "開場 5",
+          "開場 6",
+          "開場 7",
+          "開場 8",
+          "開場 9",
+          "開場 10",
+          "開場 11",
+          "開場 12",
+          "開場 13",
+          "開場 14",
+          "開場 15",
+          "開場 16",
+          "開場 17",
+          "開場 18",
+          "開場 19",
+          "開場 20"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700} /* TEST-CSS */",
+        "lorebook": [
+          {
+            "name": "WBKEY",
+            "content": "TEST-WB-CONTENT 世界书内容",
+            "keywords": [
+              "WBKEY"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          },
+          {
+            "name": "甲",
+            "content": "第二條",
+            "keywords": [
+              "甲",
+              "乙"
+            ],
+            "triggerRegion": "",
+            "enabled": false,
+            "order": 3
+          },
+          {
+            "name": "_and_丙",
+            "content": "第三條",
+            "keywords": [
+              "_and_丙"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 1
+          }
+        ],
+        "rules": [
+          {
+            "name": "TESTRGX",
+            "find": "/foo(\\d+)/g",
+            "replace": "BAR$1",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          },
+          {
+            "name": "其他範圍",
+            "find": "/a\\/b/g",
+            "replace": "c",
+            "enabled": false,
+            "targets": null
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "entryGroup",
+          "entryKeyFormat",
+          "entryPosition",
+          "entryProbability",
+          "entryRegion",
+          "intro",
+          "prologueLimit",
+          "regexScope",
+          "shortcuts",
+          "summaryConfig",
+          "unusedPresets",
+          "variables"
+        ]
+      }
+    },
+    {
+      "name": "SillyTavern V1 card",
+      "input": {
+        "name": "Alice",
+        "description": "persona",
+        "first_mes": "hi",
+        "personality": "",
+        "scenario": ""
+      },
+      "expect": {
+        "fengyue": false
+      }
+    },
+    {
+      "name": "SillyTavern V2 card",
+      "input": {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": {
+          "name": "Alice",
+          "description": "persona"
+        }
+      },
+      "expect": {
+        "fengyue": false
+      }
+    },
+    {
+      "name": "World Info file",
+      "input": {
+        "name": "book",
+        "description": "",
+        "entries": {
+          "0": {
+            "key": [
+              "a"
+            ],
+            "content": "x"
+          }
+        }
+      },
+      "expect": {
+        "fengyue": false
+      }
+    },
+    {
+      "name": "aliases without the variable-panel keys",
+      "input": {
+        "title": "x",
+        "desc": "y",
+        "summary": "z",
+        "pre_prompt": "p",
+        "pre_text": "q"
+      },
+      "expect": {
+        "fengyue": false
+      }
+    },
+    {
+      "name": "real export, opening-choice mode (export-opening-1.json)",
+      "input": {
+        "sqaa": {
+          "enabled": true
+        },
+        "img_book": [],
+        "sys_opt": false,
+        "ai_variable_json": "",
+        "vis_pf": 0,
+        "lore_bk": [],
+        "card_type": 1,
+        "built_in_css": "",
+        "msc": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "ps_type": 1,
+        "bgimg": "",
+        "ext": {
+          "ai_variable_enabled": false
+        },
+        "ai_v_template": "",
+        "ai_variable_text": "",
+        "ptx": "",
+        "scmd": [],
+        "cat": 0,
+        "regex_replaces": [],
+        "post_text": "",
+        "mperm": 4,
+        "language": "zh-Hans",
+        "ai_s_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "ext_cfg": {
+          "enabled": true
+        },
+        "no_css_mod": false,
+        "intro": "<div>TEST-INTRO-HTML</div>",
+        "ianon": false,
+        "default_msg_count": 6,
+        "opening_statement": "选择一段开场白",
+        "app_name": "TEST-MODE-6D1P",
+        "ui_flag": [],
+        "cvr_tiny": "",
+        "bg_m": "",
+        "banned_words": [],
+        "is_avail_np": true,
+        "ppt": "TEST-PROMPT",
+        "sug_q": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "pst_chats": [],
+        "tg": [],
+        "sum_info": "TEST-BRIEF",
+        "cvr": null
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "TEST-MODE-6D1P",
+        "summary": "TEST-BRIEF",
+        "definition": "TEST-PROMPT",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<div>TEST-INTRO-HTML</div>",
+        "css": "",
+        "lorebook": [],
+        "rules": [],
+        "prologue": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "notes": [
+          "intro"
+        ]
+      }
+    },
+    {
+      "name": "real export, opening-choice mode (export-opening-2.json)",
+      "input": {
+        "cover_img": null,
+        "inner_css": "",
+        "ext_cfg": {
+          "enabled": true
+        },
+        "ai_variable_json": "",
+        "ost": "选择一段开场白",
+        "pretxt": "",
+        "labels": [],
+        "bgmusic": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "wb": [],
+        "ai_v_template": "",
+        "ext": {
+          "ai_variable_enabled": false
+        },
+        "suggest_q_after": {
+          "enabled": true
+        },
+        "cov_tn": "",
+        "potx": "",
+        "lc": "zh-Hans",
+        "mod_perm": 4,
+        "summary_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "visible_platform": 0,
+        "category": 0,
+        "sug_q": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "pre_prompt": "TEST-PROMPT",
+        "ps_chats": [],
+        "avail_np": true,
+        "regex_rp": [],
+        "ttl": "TEST-MODE-6D1P",
+        "kind": 1,
+        "shortcut_cmd": [],
+        "bgmob": "",
+        "is_anon": false,
+        "ban_wd": [],
+        "no_css_mod": false,
+        "ref_id2": 1,
+        "bgi": "",
+        "ptype": 1,
+        "img_book": [],
+        "description": "<div>TEST-INTRO-HTML</div>",
+        "def_sent_cnt": 6,
+        "smry": "TEST-BRIEF",
+        "ai_variable_text": "",
+        "chk_tag": ""
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "TEST-MODE-6D1P",
+        "summary": "TEST-BRIEF",
+        "definition": "TEST-PROMPT",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<div>TEST-INTRO-HTML</div>",
+        "css": "",
+        "lorebook": [],
+        "rules": [],
+        "prologue": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "notes": [
+          "intro"
+        ]
+      }
+    },
+    {
+      "name": "real export, preset-chat mode (export-preset-1.json)",
+      "input": {
+        "bg_mb": "",
+        "ai_variable_tmpl": "",
+        "bgi": "",
+        "prefix_txt": "",
+        "sq": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "description": "<div>TEST-INTRO-HTML</div>",
+        "world_book": [],
+        "locale": "zh-Hans",
+        "is_available_not_public": true,
+        "img_book": [],
+        "cover_sm": "",
+        "show_scope": 0,
+        "mod_permission": 4,
+        "bw": [],
+        "ost": "选择一段开场白",
+        "knd": 1,
+        "tags": [],
+        "msc": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "sqaa": {
+          "enabled": true
+        },
+        "builtCss": "",
+        "scmd": [],
+        "def_msg_cnt": 6,
+        "chk_tag": "",
+        "extend": {
+          "ai_variable_enabled": false
+        },
+        "title": "TEST-MODE-6D1P",
+        "ptype": 2,
+        "abs_txt": "TEST-BRIEF",
+        "is_anon": false,
+        "regex_rp": [],
+        "ai_variable_text": "",
+        "ai_v_json": "",
+        "ai_s_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "dis_css_mod": false,
+        "pre_prompt": "TEST-PROMPT",
+        "ps_chats": [
+          {
+            "title": "TEST-PRESET-TITLE",
+            "chats": [
+              {
+                "query": "TEST-PRESET-Q",
+                "answer": "TEST-PRESET-A"
+              }
+            ],
+            "suggested_questions": [
+              "TEST-PRESET-OPEN"
+            ]
+          }
+        ],
+        "ui_flag": [],
+        "categ": 0,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "posttxt": "",
+        "cover": null
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "TEST-MODE-6D1P",
+        "summary": "TEST-BRIEF",
+        "definition": "TEST-PROMPT",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<div>TEST-INTRO-HTML</div>",
+        "css": "",
+        "lorebook": [],
+        "rules": [],
+        "prologue": [
+          "TEST-PRESET-OPEN"
+        ],
+        "notes": [
+          "intro",
+          "presetChats",
+          "unusedOpenings"
+        ]
+      }
+    },
+    {
+      "name": "real export, preset-chat mode (export-preset-2.json)",
+      "input": {
+        "preset_ch": [
+          {
+            "title": "TEST-PRESET-TITLE",
+            "chats": [
+              {
+                "query": "TEST-PRESET-Q",
+                "answer": "TEST-PRESET-A"
+              }
+            ],
+            "suggested_questions": [
+              "TEST-PRESET-OPEN"
+            ]
+          }
+        ],
+        "pre_text": "",
+        "builtInCss": "",
+        "sys_opt": false,
+        "def_msg_cnt": 6,
+        "bgi": "",
+        "ban_wd": [],
+        "locale": "zh-Hans",
+        "ref_id2": 1,
+        "shortcut_commands": [],
+        "disable_cssmod": false,
+        "prompt_pre": "TEST-PROMPT",
+        "suggest_q_after": {
+          "enabled": true
+        },
+        "open_st": "选择一段开场白",
+        "descr": "<div>TEST-INTRO-HTML</div>",
+        "preset_tp": 2,
+        "nm": "TEST-MODE-6D1P",
+        "suffix_txt": "",
+        "bg_music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "re_replaces": [],
+        "knd": 1,
+        "avail_np": true,
+        "cg_book": [],
+        "bg_mobile": "",
+        "suggested_questions": [
+          "TEST-OPEN-A",
+          "TEST-OPEN-B"
+        ],
+        "tag_list": [],
+        "modp": 4,
+        "cvr": null,
+        "ai_s_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "ai_v_json": "",
+        "ctg": 0,
+        "is_anon": false,
+        "cover_sm": "",
+        "ui_flag": [],
+        "ai_variable_template": "",
+        "vp_mode": 0,
+        "extend": {
+          "ai_variable_enabled": false
+        },
+        "ai_v_prompt": "",
+        "summary": "TEST-BRIEF",
+        "world_bk": []
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "TEST-MODE-6D1P",
+        "summary": "TEST-BRIEF",
+        "definition": "TEST-PROMPT",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<div>TEST-INTRO-HTML</div>",
+        "css": "",
+        "lorebook": [],
+        "rules": [],
+        "prologue": [
+          "TEST-PRESET-OPEN"
+        ],
+        "notes": [
+          "intro",
+          "presetChats",
+          "unusedOpenings"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "fields": {
+    "name": ["title", "ttl", "name", "nm", "app_name"],
+    "intro": ["description", "desc", "descr", "dsc", "intro"],
+    "summary": ["summary", "smry", "sum_info", "abs_txt"],
+    "prompt": ["pre_prompt", "prompt_pre", "pre_pt", "ppt"],
+    "prefix": ["pre_text", "pre_tx", "pretxt", "ptx", "prefix_txt"],
+    "suffix": ["post_text", "post_tx", "posttxt", "potx", "suffix_txt"],
+    "worldbook": ["world_book", "world_bk", "wbook", "wb", "lore_bk"],
+    "css": ["builtCss", "builtInCss", "bicss", "inner_css", "built_in_css"],
+    "bannedWords": ["block_wd", "bw", "ban_wd", "banned_wd", "banned_words"],
+    "regex": ["rgx_rep", "rrep", "regex_rp", "re_replaces", "regex_replaces"],
+    "openings": ["sq", "sug_q", "sugg_ques", "suggested_questions"],
+    "shortcuts": ["sc_cmds", "scmd", "shortcut_cmd", "shortcut_commands"],
+    "variablePrompt": ["ai_variable_text", "ai_variable_prompt", "ai_v_prompt"],
+    "openingMode": ["ps_type", "ptype", "preset_tp"],
+    "presetChats": ["pst_chats", "ps_chats", "preset_ch", "pchats"]
+  },
+  "detect": {
+    "minFields": 4,
+    "signalKeyPrefixes": ["ai_v", "ai_variable"],
+    "worldbookEntryKeys": ["key", "value", "key_region", "value_region"]
+  },
+  "worldbook": {
+    "keyPrefix": "_or_",
+    "triggerRegion": { "2": "user_only" },
+    "defaultValueRegion": 1,
+    "defaultProbability": 100
+  },
+  "openingMode": { "presetChats": 2 },
+  "limits": { "openings": 20 },
+  "regex": {
+    "flags": "g",
+    "targets": { "10": ["ai", "user"] }
+  }
+}

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 /**
- * 匯入：酒館角色卡（一個 PNG / JSON），或魅魔島的三件套（正則匯出檔、世界書 JSON、設定 TXT）。
+ * 匯入：酒館角色卡（一個 PNG / JSON）、AI 風月的匯出檔（一個 JSON），或魅魔島的三件套（正則匯出檔、世界書 JSON、設定 TXT）。
+ *
+ * 風月的檔不管丟進哪個分頁都會認出來：它的鍵名每次匯出都不同，作者不會知道自己的檔「長得像」哪一種。
  *
  * 兩階段：先解析並列出「哪些東西沒能帶過來」，作者確認之後才蓋掉表單。中間不自動套用——
  * 匯入會覆寫整份草稿，而作者可能已經打了半天字。
@@ -14,6 +16,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
 import { isPng } from "@/lib/png-chunks";
+import { fengyueToDraft, readFengyueFile } from "@/lib/fengyue";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
 import { ruleSetWarnings, validateRuleSet } from "@/lib/regex-rules";
 import RegexIssueList from "./RegexIssueList.vue";
@@ -23,11 +26,12 @@ const emit = defineEmits<{ apply: [ImportResult] }>();
 
 const { t } = useI18n();
 
-type Kind = "tavern" | "mmd";
+type Kind = "tavern" | "fengyue" | "mmd";
 const KIND_KEY = "hr.import.kind";
 const readKind = (): Kind => {
   try {
-    return localStorage.getItem(KIND_KEY) === "mmd" ? "mmd" : "tavern";
+    const saved = localStorage.getItem(KIND_KEY);
+    return saved === "mmd" || saved === "fengyue" ? saved : "tavern";
   } catch {
     return "tavern";
   }
@@ -47,8 +51,12 @@ const input = ref<HTMLInputElement | null>(null);
 const acceptFor = computed(() =>
   kind.value === "mmd"
     ? ".json,.txt,application/json,text/plain"
-    : ".png,.json,.charx,image/png,application/json,application/zip",
+    : kind.value === "fengyue"
+      ? ".json,application/json"
+      : ".png,.json,.charx,image/png,application/json,application/zip",
 );
+const dropCopy = computed(() => ({ tavern: "import.drop", fengyue: "import.fengyue.drop", mmd: "import.mmd.drop" })[kind.value]);
+const formatsCopy = computed(() => ({ tavern: "import.formats", fengyue: "import.fengyue.formats", mmd: "import.mmd.formats" })[kind.value]);
 const dragging = ref(false);
 const error = ref("");
 const preview = ref<ImportResult | null>(null);
@@ -80,6 +88,14 @@ function build() {
 async function read(file: File) {
   error.value = "";
   preview.value = null;
+  const fengyue = await readFengyueFile(file);
+  if (fengyue) {
+    raw.value = null;
+    rawImage.value = null;
+    rawBackground.value = null;
+    preview.value = fengyueToDraft(fengyue, { language: props.language });
+    return;
+  }
   try {
     const parsed = await parseTavernFile(file);
     raw.value = parsed.card;
@@ -112,6 +128,12 @@ async function addMmd(files: File[]) {
     // 「角色設定」——幾萬個亂碼字（2026-09-11 用戶回報）。切到酒館卡那條路照常讀。
     if (isPng(new Uint8Array(await file.slice(0, 8).arrayBuffer()))) {
       kind.value = "tavern";
+      await read(file);
+      return;
+    }
+    // 風月的匯出檔也是單一 JSON，不是三件套的一部分：切到風月那條路
+    if (await readFengyueFile(file)) {
+      kind.value = "fengyue";
       await read(file);
       return;
     }
@@ -186,6 +208,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
     <div class="seg import__kind" role="radiogroup" :aria-label="$t('import.kind')">
       <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'tavern' }" role="radio" :aria-checked="kind === 'tavern'" @click="kind = 'tavern'">{{ $t("import.kind.tavern") }}</button>
       <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'mmd' }" role="radio" :aria-checked="kind === 'mmd'" @click="kind = 'mmd'">{{ $t("import.kind.mmd") }}</button>
+      <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'fengyue' }" role="radio" :aria-checked="kind === 'fengyue'" @click="kind = 'fengyue'">{{ $t("import.kind.fengyue") }}</button>
     </div>
 
     <div
@@ -200,9 +223,9 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <path d="M12 16V4M8 8l4-4 4 4" />
         <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
       </svg>
-      <p class="muted">{{ kind === "mmd" ? $t("import.mmd.drop") : $t("import.drop") }}</p>
+      <p class="muted">{{ $t(dropCopy) }}</p>
       <button type="button" class="btn btn--sm" @click="input?.click()">{{ $t("import.pick") }}</button>
-      <p class="subtle">{{ kind === "mmd" ? $t("import.mmd.formats") : $t("import.formats") }}</p>
+      <p class="subtle">{{ $t(formatsCopy) }}</p>
       <!-- 一個 input 兩種模式：原本是 v-if/v-else 兩個元素共用同一個 ref="input"，
            切換分頁時 ref 的掛載與卸載誰先誰後決定它是元素還是 null，而按鈕寫的是
            `input?.click()`——真的變成 null 時會**靜默什麼都不做**，正好就是作者回報的
@@ -226,15 +249,18 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <img v-if="thumb && kind === 'tavern'" :src="thumb" alt="" class="review__thumb" />
         <div>
           <h3>{{ $t("import.review.title", { name: current.draft.roleName || $t("import.review.unnamed") }) }}</h3>
-          <p class="subtle">{{ $t("import.review.spec", { spec: current.spec === "mmd" ? $t("import.kind.mmd") : current.spec }) }}</p>
+          <p class="subtle">{{ $t("import.review.spec", { spec: current.spec === "mmd" || current.spec === "fengyue" ? $t(`import.kind.${current.spec}`) : current.spec }) }}</p>
         </div>
       </div>
 
       <ul class="landed">
         <li>{{ $t("import.landed.persona", { n: [...current.draft.roleDetailDesc].length }) }}</li>
         <li>{{ $t("import.landed.greetings", { n: (current.draft.roleWelcome ? 1 : 0) + current.draft.alternates.length }) }}</li>
-        <li v-if="current.spec !== 'mmd'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
-        <li v-if="current.spec !== 'mmd'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
+        <li v-if="current.draft.roleOutputContract">{{ $t("import.landed.outputContract", { n: [...current.draft.roleOutputContract].length }) }}</li>
+        <li v-if="current.draft.jailbreak">{{ $t("import.landed.custom", { n: [...current.draft.jailbreak].length }) }}</li>
+        <li v-if="current.draft.prologue.length">{{ $t("import.landed.prologue", { n: current.draft.prologue.length }) }}</li>
+        <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
+        <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
         <li v-if="current.worldbook">{{ $t("import.landed.worldbook", { n: current.worldbook.entries.length }) }}</li>
         <li v-if="current.regex">{{ $t("import.landed.regex", { n: current.regex.rules.length }) }}</li>
         <li v-if="current.image">{{ $t("import.landed.image") }}</li>
