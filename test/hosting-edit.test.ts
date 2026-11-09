@@ -119,6 +119,17 @@ it('HTTP edit requires the source author and preserves the public play choice',a
  } finally {delete (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY;}
 });
 
+it('allows an active test author to edit a draft with a matching generation',async()=>{
+ const memberId=await makeMember(80001);
+ await env.DB.prepare("UPDATE members SET account_class='test',test_generation=2 WHERE id=?").bind(memberId).run();
+ vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:80001,accountClass:'test',testState:'active',testGeneration:2});
+ (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';
+ try {
+  const response=await SELF.fetch('https://c.test/v1/cards/draft/edit',{method:'POST',headers:{Authorization:'Bearer fixture','X-Provider':'harbor'}});
+  expect({status:response.status,body:await response.json()}).toEqual({status:200,body:{resubmit:false}});
+ } finally {delete (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY;}
+});
+
 it('a delayed sync of A cannot overwrite the public projection after B is approved',async()=>{
  const f=await setup();await f.submit();await f.approve();
  const card=(await getCard(env.DB,'draft','harbor'))!;
