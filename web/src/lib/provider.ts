@@ -57,6 +57,8 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true,
     world: true,
+    // 卡片變數（任務 2026-11-09-card-state）：編輯器的「卡片變數」一區跟著這個開關
+    state: true,
     // 我的預設（任務 2026-10-29-preset-library，owner 批准上線）。要關就改回 false，Worker 的 PRESET_SCOPES_ENABLED 一起關
     presets: true,
     // 長期指令組的管理頁（任務 2026-10-31-long-term-instructions）。畫布裡「管理指令組」的連結跟著同一個開關

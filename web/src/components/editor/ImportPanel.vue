@@ -19,6 +19,7 @@ import { isPng } from "@/lib/png-chunks";
 import { fengyueToDraft, readFengyueFile } from "@/lib/fengyue";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
 import { ruleSetWarnings, validateRuleSet } from "@/lib/regex-rules";
+import { stateLeafCount, stateValues } from "@/lib/card-state";
 import RegexIssueList from "./RegexIssueList.vue";
 
 const props = defineProps<{ language: string; detailMax?: number }>();
@@ -175,6 +176,12 @@ function onPick(event: Event) {
 
 /** 目前要套用的那份（兩種模式擇一）。 */
 const current = computed<ImportResult | null>(() => (kind.value === "mmd" ? mmdPreview.value : preview.value));
+/** 帶過來的卡片變數有幾個值；骨架解不開時不列（摘要裡另有一條說明）。 */
+const stateCount = computed(() => {
+  const state = current.value?.draft.state;
+  const values = state ? stateValues(state) : null;
+  return values ? stateLeafCount(values.data) : null;
+});
 /** 讀到檔之後把報告捲進畫面：手機上編輯區只剩半屏，報告與「套用」按鈕原本落在畫面外。 */
 const reviewEl = ref<HTMLElement | null>(null);
 watch(current, (now, before) => {
@@ -268,6 +275,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
         <li v-if="current.worldbook">{{ $t("import.landed.worldbook", { n: current.worldbook.entries.length }) }}</li>
+        <li v-if="stateCount !== null">{{ $t("import.landed.state", { n: stateCount }) }}</li>
         <li v-if="current.regex">{{ $t("import.landed.regex", { n: current.regex.rules.length }) }}</li>
         <li v-if="current.image">{{ $t("import.landed.image") }}</li>
       </ul>

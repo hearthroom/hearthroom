@@ -83,11 +83,62 @@ describe("風月匯出檔：網頁這邊的落點", () => {
       ...fengyueToDraft(edge, { language: "zh-Hans" }).dropped.map((n) => n.key),
       ...["name", "summary", "definition", "outputContract", "custom"].map((f) => `import.fengyue.tooLong.${f}`),
       "import.fengyue.presetChats", "import.fengyue.unusedOpenings", "import.fengyue.missingFields", "import.fengyue.openingModeUnknown", "import.kind.fengyue", "import.fengyue.drop", "import.fengyue.formats", "import.landed.outputContract", "import.landed.custom", "import.landed.prologue", "import.landed.openingPage",
+      "import.landed.state", "import.fengyue.variablesConverted", "import.fengyue.variablesPartial", "import.fengyue.variablesPromptOnly",
+      "import.fengyue.variablesTemplateOnly", "import.fengyue.variablesUnknown",
     ]);
     for (const locale of locales) {
       const messages = (await import(`../src/locales/${locale}.json`)).default as Record<string, string>;
       for (const key of keys) expect(messages[key], `${locale} 缺 ${key}`).toBeTruthy();
     }
+  });
+});
+
+describe("風月匯出檔：變量面板 → 卡片變數", () => {
+  const sample = (cases as { cases: Case[] }).cases[0].input;
+  /** 拿掉樣本裡的變量三欄（各種別名），換成指定的鍵。 */
+  const withVars = (vars: Record<string, unknown>) => {
+    const rest = Object.fromEntries(Object.entries(sample).filter(([k]) => !/^ai_v/.test(k)));
+    return { ...rest, ...vars };
+  };
+
+  for (const [skeletonKey, promptKey, templateKey] of [
+    ["ai_v_json", "ai_variable_text", "ai_variable_template"],
+    ["ai_variable_json", "ai_v_prompt", "ai_v_template"],
+    ["ai_v_json", "ai_variable_prompt", "ai_variable_tmpl"],
+  ]) {
+    it(`骨架（${skeletonKey}）、提示詞（${promptKey}）、皮膚（${templateKey}）都帶過去`, () => {
+      const input = withVars({ [skeletonKey]: '{"好感度": 0, "任務": {}}', [promptKey]: "好感度隨互動變化", [templateKey]: "<b>{{好感度}}</b>" });
+      expect(isFengyueExport(input)).toBe(true);
+      const result = fengyueToDraft(input, { language: "zh-Hans" });
+      expect(result.draft.state).toEqual({ convention: "plain", dataText: '{\n  "好感度": 0,\n  "任務": {}\n}', rulesText: "好感度隨互動變化", template: "<b>{{好感度}}</b>" });
+      const keys = result.dropped.map((n) => n.key);
+      expect(keys).toContain("import.fengyue.variablesConverted");
+      expect(keys).not.toContain("import.fengyue.variablesPromptOnly");
+      expect(keys).not.toContain("import.fengyue.missingFields");
+    });
+  }
+
+  it("只有提示詞、骨架是空字串：不開，提示詞原文留在摘要", () => {
+    const result = fengyueToDraft(withVars({ ai_v_json: "", ai_variable_text: "每輪更新好感度", ai_variable_template: "" }), { language: "zh-Hans" });
+    expect(result.draft.state).toBeNull();
+    expect(result.dropped).toContainEqual({ key: "import.fengyue.variablesPromptOnly", params: { text: "每輪更新好感度" } });
+  });
+
+  it("骨架解不開：原文放進去，摘要說要修", () => {
+    const result = fengyueToDraft(withVars({ ai_v_json: "{好感度: 0", ai_variable_text: "", ai_variable_template: "" }), { language: "zh-Hans" });
+    expect(result.draft.state).toEqual({ convention: "plain", dataText: "{好感度: 0", rulesText: "", template: "" });
+    expect(result.dropped.map((n) => n.key)).toContain("import.fengyue.variablesPartial");
+  });
+
+  it("三欄都空：沒有卡片變數，也沒有變量相關的摘要", () => {
+    const result = fengyueToDraft(withVars({ ai_v_json: "", ai_variable_text: "", ai_variable_template: "" }), { language: "zh-Hans" });
+    expect(result.draft.state).toBeNull();
+    expect(result.dropped.filter((n) => n.key.startsWith("import.fengyue.variables"))).toEqual([]);
+  });
+
+  it("別名表沒收的變量鍵有內容時另外列出", () => {
+    const result = fengyueToDraft(withVars({ ai_v_json: "", ai_variable_text: "", ai_variable_template: "", ai_variable_extra: "something" }), { language: "zh-Hans" });
+    expect(result.dropped.map((n) => n.key)).toContain("import.fengyue.variablesUnknown");
   });
 });
 

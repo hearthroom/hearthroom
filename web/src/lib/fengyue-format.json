@@ -13,6 +13,8 @@
     "openings": ["sq", "sug_q", "sugg_ques", "suggested_questions"],
     "shortcuts": ["sc_cmds", "scmd", "shortcut_cmd", "shortcut_commands"],
     "variablePrompt": ["ai_variable_text", "ai_variable_prompt", "ai_v_prompt"],
+    "variableSkeleton": ["ai_v_json", "ai_variable_json"],
+    "variableTemplate": ["ai_variable_template", "ai_v_template", "ai_variable_tmpl"],
     "openingMode": ["ps_type", "ptype", "preset_tp"],
     "presetChats": ["pst_chats", "ps_chats", "preset_ch", "pchats"]
   },

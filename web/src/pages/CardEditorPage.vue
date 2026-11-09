@@ -43,6 +43,8 @@ import {
   patchRoleWelcome,
   putRoleWorld,
   deleteRoleWorld,
+  putRoleState,
+  deleteRoleState,
   saveAuthorAsset,
   ApiError,
   registerCard,
@@ -114,6 +116,8 @@ import ImageField from "@/components/editor/ImageField.vue";
 import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
+import CardStateEditor from "@/components/editor/CardStateEditor.vue";
+import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
 import TagPicker from "@/components/editor/TagPicker.vue";
 import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -426,7 +430,7 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "world", "dialogue", "worldbook", "publish"] as const;
+const SECTIONS = ["basic", "persona", "world", "state", "dialogue", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 /**
@@ -434,7 +438,11 @@ const section = ref<Section>("basic");
  * 只有打開時本來就是世界卡的才顯示這一區；開啟時記一次，作者在這頁關掉再存也不會讓它消失。
  */
 const worldShown = ref(false);
-const sections = computed(() => SECTIONS.filter((key) => key !== "world" || (can("world") && worldShown.value)));
+// 卡片變數只給單卡：世界卡的每個角色各自開口，沒有一份共用的數值（任務 2026-11-09-card-state）
+const sections = computed(() => SECTIONS.filter((key) =>
+  key === "world" ? can("world") && worldShown.value
+  : key === "state" ? can("state") && !draft.value.world
+  : true));
 const body = ref<HTMLElement | null>(null);
 const scrollBody = ref<HTMLElement | null>(null);
 
@@ -545,11 +553,20 @@ function removeWorldCharacter(index: number) {
   draft.value.world.characters.splice(index, 1);
   if (!draft.value.world.characters.length) draft.value.world = null;
 }
+// ── 卡片變數 ──────────────────────────────────────────────────────────
+// 骨架、規則、皮膚住在 draft.state；null＝沒有。移除只是把它設成 null，存檔時才真的拿掉。
+function enableState() {
+  if (!draft.value.state) draft.value.state = { convention: "mvu", dataText: "", rulesText: "", template: "" };
+}
+function disableState() {
+  draft.value.state = null;
+}
 /** 這一區已經有東西了。給導覽畫一個勾，作者才知道自己走到哪。 */
 const filled = computed<Record<Section, boolean>>(() => ({
   basic: Boolean(draft.value.roleName.trim()),
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   world: Boolean(draft.value.world),
+  state: !stateEmpty(draft.value.state),
   dialogue: Boolean(draft.value.roleWelcome.trim()),
   worldbook: wb.entries.some((e) => e.content.trim()),
   publish: false,
@@ -934,6 +951,13 @@ async function save() {
       : t("editor.world.tooLong", { n, field: t(worldIssue.reason === "profile" ? "editor.world.char.profile" : "editor.world.char.description") });
     return;
   }
+  // 變數骨架解不開、或超過上限：上游會整份拒收，先在本地點名（只看改過的，沒動的照上游存的那份）
+  const stateIssue = !draft.value.world && stateChanged(draft.value, original.value) ? stateProblem(draft.value.state) : null;
+  if (stateIssue) {
+    section.value = "state";
+    error.value = t(`editor.state.reject.${stateIssue}`, stateLimitParams());
+    return;
+  }
   const wasNew = isNew.value;
   saving.value = true;
   error.value = "";
@@ -996,6 +1020,16 @@ async function save() {
     if (worldChanged(sent, original.value)) {
       if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
       else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
+    }
+    // 卡片變數整包寫入或移除；被拒時把導覽帶到這一區，錯誤句子由 putRoleState 依原因翻好
+    if (!sent.world && stateChanged(sent, original.value)) {
+      try {
+        if (!stateEmpty(sent.state)) await putRoleState(targetRoleId, statePayload(sent.state!), token);
+        else if (original.value?.state) await deleteRoleState(targetRoleId, token);
+      } catch (err) {
+        section.value = "state";
+        throw err;
+      }
     }
 
     // Editing cancels this submission. Only the explicit public flow may submit again.
@@ -1494,6 +1528,21 @@ async function exportCard(format: "png" | "json") {
             <div class="rxbar__acts">
               <button type="button" class="btn btn--sm btn--primary" :disabled="draft.world.characters.length >= WORLD_LIMITS.characters" @click="addWorldCharacter">{{ $t("editor.world.addCharacter") }}</button>
               <button type="button" class="btn btn--sm" @click="disableWorld">{{ $t("editor.world.disable") }}</button>
+            </div>
+          </template>
+        </section>
+
+        <!-- 卡片變數：單卡才有；世界卡隱藏 -->
+        <section v-if="sections.includes('state')" data-section="state" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.state") }}</h2>
+          <p class="muted">{{ $t("editor.state.lede") }}</p>
+          <div v-if="!draft.state" class="rxbar__acts">
+            <button type="button" class="btn btn--sm" @click="enableState">{{ $t("editor.state.enable") }}</button>
+          </div>
+          <template v-else>
+            <CardStateEditor :model-value="draft.state" :language="draft.language" @update:model-value="draft.state = $event" />
+            <div class="rxbar__acts">
+              <button type="button" class="btn btn--sm" @click="disableState">{{ $t("editor.state.disable") }}</button>
             </div>
           </template>
         </section>

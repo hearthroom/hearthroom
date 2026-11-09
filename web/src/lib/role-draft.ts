@@ -6,6 +6,8 @@
  * 每個欄位都得在畫面裡再解一次。草稿是表單的形狀，進出各轉一次，轉換邏輯只有這一份。
  */
 
+import { readState, type CardStateDraft } from "./card-state";
+
 export interface TalkExampleEntry {
   roleType: "user" | "ai";
   content: string;
@@ -99,6 +101,8 @@ export interface RoleDraft {
   cardMeta: CardMeta;
   /** 世界模式的成員；null＝普通單卡。世界觀是 roleDetailDesc、世界級世界書是綁卡的那本，都不在這裡。 */
   world: WorldDraft | null;
+  /** 卡片變數（好感度、背包、任務這類每輪更新的數值）；null＝沒有。世界卡不用。 */
+  state: CardStateDraft | null;
 }
 
 export interface WorldCharacterDraft {
@@ -234,6 +238,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   jailbreak: "",
   cardMeta: {},
   world: null,
+  state: null,
 });
 
 /**
@@ -393,6 +398,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.roleOutputContract = str(raw.roleOutputContract);
   draft.jailbreak = str(raw.customInstructions ?? raw.jailbreak);
   draft.world = readWorld(raw.world);
+  draft.state = readState(raw.state);
   return draft;
 }
 

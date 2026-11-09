@@ -26,6 +26,8 @@ import type { CardMeta, RoleDraft, TalkExampleEntry, WorldbookEntryDraft, Worldb
 import { makeDraft } from "./role-draft";
 import { rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules";
 import { unzipSync } from "fflate";
+import { deepMerge, formatJson, type CardStateDraft } from "./card-state";
+import { parseRelaxedJson } from "./relaxed-json";
 
 export interface TavernBookEntry {
   scan_depth?: number;
@@ -662,7 +664,11 @@ export function tavernToDraft(
 
   let worldbook: ImportResult["worldbook"] = null;
   const book = data.character_book;
-  const bookEntries = Array.isArray(book?.entries) ? book!.entries! : [];
+  // MagVarUpdate 的初始變數條目變成卡片變數，不進世界書
+  const vars = splitStateEntries(Array.isArray(book?.entries) ? book!.entries! : [], [text(data.first_mes), ...list(data.alternate_greetings), ...groupGreetings]);
+  draft.state = vars.state;
+  dropped.push(...vars.notes);
+  const bookEntries = vars.entries;
   if (bookEntries.length) {
     worldbook = {
       name: text(book?.name) || draft.roleName || "",
@@ -679,6 +685,73 @@ export function tavernToDraft(
   }
 
   return { draft, worldbook, dropped, image: options.image ?? null, background: options.background ?? null, spec: card.spec, regex };
+}
+
+const INIT_VAR = /\[initvar\]/i;
+const VARIABLE_MACRO = "{{get_message_variable::";
+
+const hasMetaTemplate = (v: unknown): boolean => {
+  if (Array.isArray(v)) return v.some(hasMetaTemplate);
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  const meta = o.$meta;
+  if (meta && typeof meta === "object" && !Array.isArray(meta) && "template" in meta) return true;
+  return Object.values(o).some(hasMetaTemplate);
+};
+
+/**
+ * 酒館 MagVarUpdate（MVU）的變數：世界書裡備註含 [InitVar] 的條目是初始變數（JSON，作者常手寫成
+ * JSON5），照順序逐層合併成卡片變數的骨架（MVU 寫法），不進世界書。
+ *
+ *   - 解不開的（多半是 YAML）留成停用的條目，作者看得到原文、自己改寫。
+ *   - 用 {{get_message_variable::…}} 讀變數的條目停用：本站把目前的數值與規則自己送給模型，
+ *     這些巨集不展開，留著只會送一段讀不懂的字。
+ *   - 開場白裡的 <UpdateVariable> 原樣留著：上游開新對話時把它當成開局的數值。
+ *   - 本站不做的 MVU 寫法（$meta.template、EJS、_.move）便宜地認得出來就列進摘要。
+ */
+export function splitStateEntries(entries: TavernBookEntry[], greetings: string[] = []): { entries: TavernBookEntry[]; state: CardStateDraft | null; notes: DropNote[] } {
+  const kept: TavernBookEntry[] = [];
+  const notes: DropNote[] = [];
+  let merged: unknown;
+  let used = 0;
+  let unparsed = 0;
+  let macro = 0;
+  let metaTemplate = false;
+  for (const entry of entries) {
+    const content = typeof entry.content === "string" ? entry.content : "";
+    if (INIT_VAR.test(`${text(entry.comment)}\n${text(entry.name)}`)) {
+      let parsed: unknown;
+      try {
+        parsed = parseRelaxedJson(content);
+      } catch {
+        parsed = undefined;
+      }
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        metaTemplate ||= hasMetaTemplate(parsed);
+        merged = merged === undefined ? parsed : deepMerge(merged, parsed);
+        used++;
+      } else {
+        unparsed++;
+        kept.push({ ...entry, enabled: false });
+      }
+      continue;
+    }
+    if (content.includes(VARIABLE_MACRO)) {
+      macro++;
+      kept.push({ ...entry, enabled: false });
+      continue;
+    }
+    kept.push(entry);
+  }
+  if (used) notes.push({ key: "import.state.initVar", params: { n: used } });
+  if (unparsed) notes.push({ key: "import.state.initVarUnparsed", params: { n: unparsed } });
+  if (macro) notes.push({ key: "import.state.macroEntry", params: { n: macro } });
+  if (metaTemplate) notes.push({ key: "import.state.metaTemplate" });
+  const texts = [...entries.map((e) => (typeof e.content === "string" ? e.content : "")), ...greetings];
+  if (texts.some((t) => t.includes("<%"))) notes.push({ key: "import.state.ejs" });
+  if (texts.some((t) => t.includes("_.move"))) notes.push({ key: "import.state.move" });
+  const state: CardStateDraft | null = merged === undefined ? null : { convention: "mvu", dataText: formatJson(merged), rulesText: "", template: "" };
+  return { entries: kept, state, notes };
 }
 
 /**
