@@ -3779,7 +3779,7 @@
               },
               "prepStep": {
                 "data": {
-                  "stage": "looking_up|browsing|reading|retrying|deciding|noting|drafting|rolling|sealing|revealing|fetching|found|done",
+                  "stage": "looking_up|browsing|reading|retrying|deciding|noting|drafting|rolling|sealing|revealing|fetching|found|done|reviewing_lorebook|reading_memory|checking_format|organizing_format|waiting_model|model_working|model_thinking",
                   "resource": "worldbook|setting|note|draft|past|mod|shared|status|settled|requirement (optional)",
                   "keywords": "string[] (optional)",
                   "query": "string (optional, keywords joined)",
@@ -3789,7 +3789,7 @@
                   "retryInSeconds": "integer (optional)",
                   "reason": "rate_limited|empty_turn (optional)"
                 },
-                "description": "Agent-mode preparation progress and upstream retry notices. Stage semantics only; the client supplies copy."
+                "description": "Agent-mode preparation progress and upstream retry notices. Stage semantics only; the client supplies copy. Unknown stages may be ignored. Waiting for the model does not establish that an upstream queue is active."
               },
               "thinking": {
                 "data": "OpenAI chunk: {id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",

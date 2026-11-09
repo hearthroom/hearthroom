@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "draft": true,
+  "title": {
+    "zh-Hant": "Agent 模式會顯示目前的準備步驟，讓你知道正在等什麼。",
+    "zh-Hans": "Agent 模式会显示当前的准备步骤，让你知道正在等什么。",
+    "en": "Agent mode shows what it’s doing while you wait for a reply.",
+    "ja": "Agent モードでは、返信を待つ間に今の準備状況がわかります。",
+    "ko": "Agent 모드에서 답변을 기다리는 동안 현재 준비 단계를 볼 수 있어요."
+  }
+}
