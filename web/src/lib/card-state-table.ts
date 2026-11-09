@@ -158,9 +158,12 @@ const oneLine = (s: string): string => {
   return s;
 };
 
-/** 鍵名：空字串分不出是「還沒取名的新列」，$ 開頭是 MVU 的特殊鍵，都交給原始碼。 */
+/**
+ * 鍵名：空字串分不出是「還沒取名的新列」，$ 開頭是 MVU 的特殊鍵，前後有空白的寫回時會被修掉
+ * （規則與面板引用的就是原本那個名字），都交給原始碼。
+ */
 const plainKey = (k: string): string => {
-  if (!k || k.startsWith("$")) throw new Unsupported();
+  if (!k || k.startsWith("$") || k !== k.trim()) throw new Unsupported();
   return oneLine(k);
 };
 
@@ -337,7 +340,9 @@ export function newRow(kind: Exclude<StateKind, "boolean">): StateRow {
 
 /**
  * 把範例（MVU 寫法的物件）併進目前的原文：同名的由範例蓋掉、位置不變，其餘照原順序，數字原文不動。
- * 原文是 plain 時先換成 mvu 的讀法再併（範例本身是 MVU 寫法）。原文解不開時回 null。
+ * 原文是 plain 時先換成 mvu 的讀法再併（範例本身是 MVU 寫法）；這一步走 switchConvention，
+ * 會照 formatJson 重排（像整數的鍵排到前面、數字照 JSON 數值印），只在 plain 原文插範例時發生。
+ * 原文解不開時回 null。
  */
 export function mergeStateExample(draft: Pick<CardStateDraft, "convention" | "dataText">, example: Record<string, unknown>): { dataText: string; convention: "mvu" } | null {
   const add = parseJson(JSON.stringify(example));

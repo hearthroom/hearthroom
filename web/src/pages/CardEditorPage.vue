@@ -998,7 +998,9 @@ async function save() {
   }
   // 欄位超過語區上限也一樣先攔：計數器變紅不擋輸入，上游會拒收，而且之前拒收訊息是
   // 「服務暫時無法回應 (jailbreak_too_long)」——作者以為伺服器壞了（2026-09-11）。
-  const overLimit = FIELD_LIMIT_KEYS.find(([field]) => [...draft.value[field]].length > limits.value[field]);
+  // 切到開場網頁時開場白存檔就移除，不擋它的長度（欄位也藏起來了，點名它作者找不到）
+  const welcomeGoes = openingMode.value === "page" && savedOpening.value !== "page";
+  const overLimit = FIELD_LIMIT_KEYS.find(([field]) => !(field === "roleWelcome" && welcomeGoes) && [...draft.value[field]].length > limits.value[field]);
   if (overLimit) {
     section.value = overLimit[2];
     error.value = t("editor.fieldTooLong", { label: t(overLimit[1]), n: [...draft.value[overLimit[0]]].length, max: limits.value[overLimit[0]] });
