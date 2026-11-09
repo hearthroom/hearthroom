@@ -245,19 +245,31 @@ export const makeDraft = (language: string): RoleDraft => ({
  * 送審前一定要有的東西。跟上游 validate_role 的阻斷項對齊，但在本地先算一次——
  * 作者不該填到最後一步才知道第一步漏了什麼。上游仍是最終權威。
  */
-export const REQUIRED_FIELDS = ["roleName", "roleWelcome", "roleDetailDesc"] as const;
+export type RequiredKey = "roleName" | "roleWelcome" | "prologue" | "roleDetailDesc";
 
-export function missingRequired(draft: RoleDraft, extras: { openingPage?: string } = {}): string[] {
-  const playerFirst = playerSpeaksFirst(draft, extras.openingPage);
-  return REQUIRED_FIELDS.filter((key) => !(key === "roleWelcome" && playerFirst) && !String(draft[key] ?? "").trim());
+/**
+ * 必填三項：名稱、開局、角色設定。開局看作者選的呈現：開場白要有開場白；開場網頁要有至少一個
+ * 第一句選項（網頁本身可以留空，玩家只看到選項）。
+ */
+export function requiredKeys(openingMode: "greeting" | "page" = "greeting"): RequiredKey[] {
+  return ["roleName", openingMode === "page" ? "prologue" : "roleWelcome", "roleDetailDesc"];
 }
 
 /**
- * 玩家先開口的卡（AI 風月匯入的那種）：有開場選項或首屏網頁時，AI 開場白可以留空。
- * 跟上游 PATCH /welcome 的規則一致——兩樣都沒有，開新對話時畫面上什麼都沒有，仍然要開場白。
+ * 開場白的卡就算有選項或首屏網頁，缺開場白仍然列出來（舊卡打開來亮紅點、提醒作者補），但這只擋送審、
+ * 不擋儲存——上游照舊收這種卡的空開場白（見 playerSpeaksFirst）。
  */
-export function playerSpeaksFirst(draft: Pick<RoleDraft, "prologue">, openingPage = ""): boolean {
-  return draft.prologue.some((p) => p.trim()) || !!openingPage.trim();
+export function missingRequired(draft: RoleDraft, extras: { openingMode?: "greeting" | "page" } = {}): RequiredKey[] {
+  return requiredKeys(extras.openingMode).filter((key) =>
+    key === "prologue" ? !draft.prologue.some((p) => p.trim()) : !String(draft[key] ?? "").trim());
+}
+
+/**
+ * 開場白可以留空的卡：開局呈現是開場網頁，或是有開場選項、首屏網頁的舊卡。跟上游 PATCH /welcome
+ * 的規則一致——都不是時送空開場白會被拒收，這時不送，作者看到的是「缺開場白」。
+ */
+export function playerSpeaksFirst(draft: Pick<RoleDraft, "prologue">, extras: { openingPage?: string; openingMode?: "greeting" | "page" } = {}): boolean {
+  return extras.openingMode === "page" || draft.prologue.some((p) => p.trim()) || !!(extras.openingPage ?? "").trim();
 }
 
 /**

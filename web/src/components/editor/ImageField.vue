@@ -75,7 +75,7 @@ function pick(file: File) {
     <label>{{ label }}</label>
     <div class="shell">
       <!-- 框本身就是選圖的按鈕：點一下開檔、拖一張進來也行；旁邊那顆文字鈕給不知道能點框的人 -->
-      <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy }]"
+      <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy, 'frame--empty': !modelValue }]"
               :aria-label="pickLabel" :disabled="busy"
               @click="input?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
         <img v-if="modelValue" :src="modelValue" alt="" />
@@ -126,6 +126,8 @@ function pick(file: File) {
 /* 背景是整頁的底圖，照實際比例看才知道會長怎樣；小方框判斷不了亮不亮 */
 .frame--wide { width: 256px; height: 144px; }
 .frame--tall { width: 144px; height: 256px; }
+/* 還沒有圖：直式框縮成縮圖位，不在表單裡撐出一大塊空白（建卡頁 ui.md §2.1） */
+.frame--tall.frame--empty { width: 96px; height: 171px; }
 .frame--share { width: 256px; height: 134px; }
 .frame { position: relative; }
 /* 安全區：外圍各 12.5% 是可能被裁掉的區域 */

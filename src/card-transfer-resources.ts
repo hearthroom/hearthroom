@@ -9,9 +9,15 @@ export function canonicalEntry(e:Record<string,any>,preservePriority=false):Reco
 export function canonicalAsset(a:Record<string,any>) {
  return {rules:(a.rules||[]).map((r:any)=>({id:r.id,name:r.name,find:r.find,replace:r.replace,enabled:r.enabled!==false})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic',
   // 首屏網頁與風月格式只在有的時候才放：沒有它們的卡算出的快照雜湊跟以前一樣
-  ...(string(a.openingPage)?{openingPage:string(a.openingPage)}:{}),...(a.cardFormat==='fengyue'?{cardFormat:'fengyue'}:{})};
+  ...(string(a.openingPage)?{openingPage:string(a.openingPage)}:{}),...(a.cardFormat==='fengyue'?{cardFormat:'fengyue'}:{}),
+  // 開局呈現只在跟格式的預設不同時才放（風月預設開場網頁、其他預設開場白）：既有卡的快照雜湊不變
+  ...(openingModeOverride(a)?{openingMode:openingModeOverride(a)}:{})};
 }
-export function hasAsset(a:ReturnType<typeof canonicalAsset>) { return !!(a.rules.length||a.mountTrigger||a.pageMode==='sandbox'||a.openingPage); }
+function openingModeOverride(a:Record<string,any>):string {
+ const fallback=a.cardFormat==='fengyue'?'page':'greeting';
+ return (a.openingMode==='page'||a.openingMode==='greeting')&&a.openingMode!==fallback?a.openingMode:'';
+}
+export function hasAsset(a:ReturnType<typeof canonicalAsset>) { return !!(a.rules.length||a.mountTrigger||a.pageMode==='sandbox'||a.openingPage||a.openingMode); }
 export async function readBooks(call:TransferCall,roleId:string,preserveExecution=false):Promise<TransferBook[]> {
  const bindings=await call(`/worldbook/bindings?roleId=${encodeURIComponent(roleId)}`);
  if(!Array.isArray(bindings.bindings))throw new HttpError(409,'sync_unsupported_content');

@@ -8142,7 +8142,7 @@
           "Roles"
         ],
         "summary": "Set the opening message, alternate openings and prologue options",
-        "description": "Writes the opening (`roleWelcome`) of an owned private role. It may be blank only when the card lets the player speak first, that is when it has `prologue` entries (sent in this request or already stored) or an author-asset `openingPage`; otherwise it is required and non-blank. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Each list keeps at most 20 non-blank entries (`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`), and every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
+        "description": "Writes the opening (`roleWelcome`) of an owned private role. It may be blank only when the card lets the player speak first, that is when its author-asset `openingMode` is `page`, or it has `prologue` entries (sent in this request or already stored) or an author-asset `openingPage`; otherwise it is required and non-blank. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Each list keeps at most 20 non-blank entries (`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`), and every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
         "security": [
           {
             "userToken": []
@@ -8181,7 +8181,7 @@
             }
           },
           "400": {
-            "description": "`invalid JSON body`, `roleWelcome is required` (blank opening on a card with no prologue and no opening page).",
+            "description": "`invalid JSON body`, `roleWelcome is required` (blank opening on a card whose `openingMode` is not `page` and that has no prologue and no opening page).",
             "content": {
               "application/json": {
                 "schema": {
@@ -14950,6 +14950,14 @@
             "type": "string",
             "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
           },
+          "openingMode": {
+            "type": "string",
+            "enum": [
+              "greeting",
+              "page"
+            ],
+            "description": "Opening presentation chosen by the author: `greeting` (the opening message starts the chat; tapping an opening choice fills the composer) or `page` (the player starts from the opening page and choices; tapping a choice sends it as the player's first message, and the opening message may be blank). Always present; `greeting` when not set."
+          },
           "cardFormat": {
             "type": "string",
             "enum": [
@@ -14958,7 +14966,7 @@
               "tavern",
               "fengyue"
             ],
-            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
           }
         }
       },
@@ -15053,6 +15061,14 @@
             "type": "string",
             "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
           },
+          "openingMode": {
+            "type": "string",
+            "enum": [
+              "greeting",
+              "page"
+            ],
+            "description": "Opening presentation chosen by the author: `greeting` (the opening message starts the chat; tapping an opening choice fills the composer) or `page` (the player starts from the opening page and choices; tapping a choice sends it as the player's first message, and the opening message may be blank). Always present; `greeting` when not set."
+          },
           "cardFormat": {
             "type": "string",
             "enum": [
@@ -15061,7 +15077,7 @@
               "tavern",
               "fengyue"
             ],
-            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
           }
         }
       },
@@ -15117,6 +15133,14 @@
             "maxLength": 524288,
             "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
           },
+          "openingMode": {
+            "type": "string",
+            "enum": [
+              "greeting",
+              "page"
+            ],
+            "description": "Opening presentation, `greeting` or `page` (see the response). Omitted or `null` keeps the stored value; the first save defaults to `page` when `cardFormat` is `fengyue` and to `greeting` otherwise. Unknown values are rejected (`validate_reject` reason `openingMode`)."
+          },
           "cardFormat": {
             "type": "string",
             "enum": [
@@ -15125,7 +15149,7 @@
               "tavern",
               "fengyue"
             ],
-            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
           }
         }
       },
@@ -22150,6 +22174,14 @@
             "type": "string",
             "maxLength": 524288,
             "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
+          },
+          "openingMode": {
+            "type": "string",
+            "enum": [
+              "greeting",
+              "page"
+            ],
+            "description": "Opening presentation, same as the owned card's `openingMode`; omitted keeps the stored value. `trial_unsupported` when unknown."
           }
         }
       },

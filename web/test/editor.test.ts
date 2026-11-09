@@ -200,19 +200,17 @@ describe('review count next to the character definition', () => {
     // 角色設定：<b>設定</b>，{{user}} 😀 → 2；常駐條目「北境小鎮。」→ 4；非常駐條目不計
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Count', roleDetailDesc: '<b>設定</b>，{{user}} 😀', roleWelcome: 'Opening' });
     await mount('/cards/r1/edit');
+    // 角色設定下面只留一行「常駐 N 字 · 還差 M 字」；拆項與計算說明在頂列（ui.md §2.1）
     const block = $('[data-section="persona"] [data-review-count]');
     const params = counted({ persona: 2, constantWorldbook: 4, total: 6, required: 3001, remaining: 2995, eligible: false, welcome: 0 });
-    expect(block.textContent).toContain(t('reviewLength.persona', params));
-    expect(block.textContent).toContain(t('reviewLength.constantWorldbook', params));
-    expect(block.textContent).toContain(t('reviewLength.total', params));
+    expect(block.textContent).toContain(t('reviewLength.constantTotal', params));
     expect(block.textContent).toContain(t('reviewLength.remaining', params));
-    expect(block.textContent).toContain(t('reviewLength.countingHint'));
     // 欄位上限的計數照舊：原始字元數
     expect($('[data-section="persona"] .count').textContent).toContain(String([...'<b>設定</b>，{{user}} 😀'].length));
 
     await type($('#f-detail'), '字'.repeat(2997));
     const met = counted({ persona: 2997, constantWorldbook: 4, total: 3001, required: 3001, remaining: 0, eligible: true, welcome: 0 });
-    expect(block.textContent).toContain(t('reviewLength.total', met));
+    expect(block.textContent).toContain(t('reviewLength.constantTotal', met));
     expect(block.textContent).toContain(t('reviewLength.eligible'));
     expect(block.textContent).not.toContain(t('reviewLength.remaining', met));
   });
@@ -392,7 +390,7 @@ describe('bounded author workspace scrolling', () => {
     viewport.getBoundingClientRect = () => ({ top }) as DOMRect;
     $('.side').getBoundingClientRect = () => ({ bottom: top - 8 }) as DOMRect;
     let destination = 'publish';
-    const keys = ['basic', 'persona', 'state', 'dialogue', 'worldbook', 'publish'];
+    const keys = ['basic', 'persona', 'opening', 'worldbook', 'display', 'advanced', 'publish'];
     root.querySelectorAll<HTMLElement>('[data-section]').forEach(el => {
       el.style.scrollMarginTop = '8px';
       el.getBoundingClientRect = () => ({ top: top + 16 + (keys.indexOf(el.dataset.section!) - keys.indexOf(destination)) * 500 }) as DOMRect;
@@ -400,7 +398,7 @@ describe('bounded author workspace scrolling', () => {
     const now = Date.now();
     byText(i18n.global.t('editor.section.publish')).click();
     vi.spyOn(Date, 'now').mockReturnValue(now + 1600);
-    for (const key of ['publish', 'worldbook', 'dialogue', 'publish']) {
+    for (const key of ['publish', 'worldbook', 'opening', 'publish']) {
       destination = key;
       viewport.dispatchEvent(new Event('scroll'));
       await new Promise(r => setTimeout(r, 40));
@@ -990,8 +988,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     byText("世界書").click();
     await flush();
     const info = { entries: { "0": { key: ["eldoria"], content: "A forest.", comment: "eldoria" }, "1": { key: ["glade"], keysecondary: ["safe"], content: "A glade.", constant: true } } };
-    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
-    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
+    await pickFile($('[data-section="worldbook"] input[type=file]'), new File([JSON.stringify(info)], "eldoria.json"));
     expect(root.textContent).toContain("匯入了 2 條");
     await openEntries();
     expect(document.querySelectorAll(".wbd__row")).toHaveLength(2);
@@ -1008,8 +1005,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     api.patchWorldbookDocument.mockClear();
     const info = { entries: { "0": { key: ["eldoria"], content: "A forest.", comment: "eldoria" } } };
-    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
-    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
+    await pickFile($('[data-section="worldbook"] input[type=file]'), new File([JSON.stringify(info)], "eldoria.json"));
     await submit();
     const [id, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string; entryId?: string }[] }];
     expect(id).toBe("wb-bound");
@@ -1024,8 +1020,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     byText("世界書").click();
     await flush();
     const info = { name: "Eldoria", entries: { "0": { key: ["eldoria"], content: "A forest.", comment: "eldoria" } } };
-    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
-    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
+    await pickFile($('[data-section="worldbook"] input[type=file]'), new File([JSON.stringify(info)], "eldoria.json"));
     await flush();
     await submit();
     expect(api.findWorldbookByName).toHaveBeenCalledWith("tok", "Eldoria");
@@ -1355,8 +1350,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     const entries: Record<string, unknown> = {};
     for (let i = 0; i < 250; i++) entries[String(i)] = { key: [`k${i}`], content: `entry ${i}`, comment: `e${i}` };
-    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
-    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify({ entries })], "big.json"));
+    await pickFile($('[data-section="worldbook"] input[type=file]'), new File([JSON.stringify({ entries })], "big.json"));
     expect(root.textContent).toContain("匯入了 250 條");
 
     // 伺服器：每段回這段新建條目的 id；第二段故意失敗一次（模擬連線被切）
@@ -1682,8 +1676,8 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/create");
     expect(root.querySelector('[data-section="world"]')).toBeNull();
     expect(root.querySelector('[data-section="persona"]')).not.toBeNull();
-    // 基本、人設、卡片變數、對話、世界書、發布
-    expect(root.querySelectorAll(".side__item")).toHaveLength(6);
+    // 基本資料、角色設定、開局、世界書、顯示、進階、發布
+    expect(root.querySelectorAll(".side__item")).toHaveLength(7);
   });
 
   it("一般舊卡打開來也看不到", async () => {
@@ -1700,9 +1694,9 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/cards/r1/edit");
     expect(root.querySelector('[data-section="world"]')).not.toBeNull();
     expect(root.querySelectorAll(".world-char")).toHaveLength(1);
-    // 世界卡沒有卡片變數這一區：數目跟單卡一樣是 6，換掉的是「卡片變數」
-    expect(root.querySelector('[data-section="state"]')).toBeNull();
-    expect(root.querySelectorAll(".side__item")).toHaveLength(6);
+    // 世界卡沒有卡片變數，進階那一區不顯示：數目跟單卡一樣是 7，換掉的是「進階」
+    expect(root.querySelector('[data-section="advanced"]')).toBeNull();
+    expect(root.querySelectorAll(".side__item")).toHaveLength(7);
   });
 });
 
@@ -1890,16 +1884,18 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect(root.textContent).toContain(i18n.global.t("import.landed.openingPage", { n: [..."<div>TEST-INTRO-HTML</div>"].length }));
     byText("套用到表單").click();
     await flush();
+    // 風月卡歸開場網頁：只顯示網頁內容與第一句選項，沒有開場白欄位
+    expect($('[data-opening-mode="page"]').getAttribute("aria-checked")).toBe("true");
     expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>TEST-INTRO-HTML</div>");
-    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("");
-    // 開場白空著也不算缺：有首屏網頁與開場選項，玩家先開口
+    expect(root.querySelector("#f-welcome")).toBeNull();
+    // 開場網頁有第一句選項就不缺
     expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
     const order: string[] = [];
     api.saveAuthorAsset.mockImplementationOnce(async () => { order.push("asset"); return { rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", status: "passed", version: 1 }; });
     api.patchRoleWelcome.mockImplementationOnce(async () => { order.push("welcome"); return {}; });
     await submit();
-    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { cardFormat: string; openingPage: string; pageMode: string }];
-    expect(asset).toMatchObject({ cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", pageMode: "sandbox" });
+    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { cardFormat: string; openingPage: string; pageMode: string; openingMode: string }];
+    expect(asset).toMatchObject({ cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", pageMode: "sandbox", openingMode: "page" });
     expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["TEST-OPEN-A", "TEST-OPEN-B"] }, "tok");
     expect(order).toEqual(["asset", "welcome"]);
   });
@@ -1956,7 +1952,7 @@ describe("卡片變數", () => {
     expect(api.deleteRoleState).not.toHaveBeenCalled();
     expect(api.putRoleState).not.toHaveBeenCalled();
     expect(root.textContent).toContain(i18n.global.t("editor.state.reject.data"));
-    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.advanced"));
   });
 
   it("清單元素上的規則、含點的鍵：讀回再存，規則、可擴充、必填照路徑送回去", async () => {
@@ -1991,7 +1987,7 @@ describe("卡片變數", () => {
     expect(api.beginCardEdit).not.toHaveBeenCalled();
     expect(api.putRoleState).not.toHaveBeenCalled();
     expect(root.textContent).toContain(i18n.global.t("editor.state.reject.data"));
-    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.advanced"));
   });
 
   it("上游拒收時錯誤停在這一區", async () => {
@@ -2005,7 +2001,7 @@ describe("卡片變數", () => {
     await submit();
     expect(api.putRoleState).toHaveBeenCalledTimes(1);
     expect(root.textContent).toContain(i18n.global.t("editor.state.reject.rule_path"));
-    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.advanced"));
   });
 
   it("匯入帶 [InitVar] 的酒館卡：卡片變數一區已經填好，第一次儲存就寫上去", async () => {
@@ -2024,5 +2020,79 @@ describe("卡片變數", () => {
     expect(JSON.parse($<HTMLTextAreaElement>("#f-state-data").value)).toEqual({ 好感度: [0, "0 到 100"] });
     await submit();
     expect(api.putRoleState).toHaveBeenCalledWith("r1", { convention: "mvu", data: { 好感度: [0, "0 到 100"] } }, "tok");
+  });
+});
+
+describe("開局：開場白與開場網頁二選一（ui.md §3）", () => {
+  const greetingCard = () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "雨夜", roleDetailDesc: "設定", roleWelcome: "雨還在下。", roleWelcomeAlternates: ["另一個開頭"], rolePrologue: ["我推開門。"] });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "greeting", openingPage: "", status: "passed", version: 2 } as any);
+  };
+
+  it("切到開場網頁：存檔時先存呈現、再送空的開場白與備選；選項保留，存完提示消失", async () => {
+    greetingCard();
+    await mount("/cards/r1/edit");
+    $('[data-opening-mode="page"]').click();
+    await flush();
+    expect(root.querySelector("#f-welcome")).toBeNull();
+    expect($("[data-opening-switched]").textContent).toContain(i18n.global.t("editor.opening.switched.toPageWithAlternates", { n: 1 }));
+    // 開局的必填換成第一句選項（底部列）
+    expect($(".bar__check").textContent).toContain(i18n.global.t("editor.required.prologue"));
+    const order: string[] = [];
+    api.saveAuthorAsset.mockImplementationOnce(async () => { order.push("asset"); return { rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "page", openingPage: "", status: "none", version: 3 } as any; });
+    api.patchRoleWelcome.mockImplementationOnce(async () => { order.push("welcome"); return {}; });
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ openingMode: "page" }), "tok");
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["我推開門。"] }, "tok");
+    expect(order).toEqual(["asset", "welcome"]);
+    expect(root.querySelector("[data-opening-switched]")).toBeNull();
+    expect(root.querySelector("[data-opening-leftover]")).toBeNull();
+  });
+
+  it("切過去又切回來：開場白都還在，存檔不動開場", async () => {
+    greetingCard();
+    await mount("/cards/r1/edit");
+    $('[data-opening-mode="page"]').click();
+    await flush();
+    byText(i18n.global.t("editor.opening.switchBack")).click();
+    await flush();
+    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("雨還在下。");
+    expect(root.querySelector("[data-opening-switched]")).toBeNull();
+  });
+
+  it("切到開場白：網頁內容在存檔時移除", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "首屏", roleDetailDesc: "設定", roleWelcome: "", rolePrologue: ["出發"] });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", openingMode: "page", openingPage: "<div>首屏</div>", status: "passed", version: 5 } as any);
+    await mount("/cards/r1/edit");
+    $('[data-opening-mode="greeting"]').click();
+    await flush();
+    expect($("[data-opening-switched]").textContent).toContain(i18n.global.t("editor.opening.switched.toGreeting"));
+    await type($("#f-welcome"), "門開了。");
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ openingMode: "greeting", openingPage: "", version: 5 }), "tok");
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", expect.objectContaining({ roleWelcome: "門開了。" }), "tok");
+  });
+
+  it("舊卡兩種都有：照舊保留、提醒作者選一種，不擋儲存", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "風月", roleDetailDesc: "設定", roleWelcome: "作者另外寫的開場白", rolePrologue: ["出發"] });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "fengyue", openingMode: "page", openingPage: "<div>首屏</div>", status: "passed", version: 1 } as any);
+    await mount("/cards/r1/edit");
+    expect($("[data-opening-leftover]").textContent).toContain(i18n.global.t("editor.opening.leftover.greeting"));
+    byText(i18n.global.t("editor.opening.leftover.greeting.remove")).click();
+    await flush();
+    expect(root.querySelector("[data-opening-leftover]")).toBeNull();
+    await submit();
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["出發"] }, "tok");
+  });
+
+  it("開場白的舊卡只有選項沒有開場白：亮紅點，但照樣存得下（上游照舊收）", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "舊卡", roleDetailDesc: "設定", roleWelcome: "", rolePrologue: ["我推開門。"] });
+    await mount("/cards/r1/edit");
+    expect($('.side__item:nth-child(3) .side__dot')).toBeTruthy();
+    expect(root.querySelector("#f-welcome")).not.toBeNull();
+    await type($("#f-detail"), "設定改了");
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalled();
+    expect(root.querySelector('.body__scroll > [role="alert"]')).toBeNull();
   });
 });

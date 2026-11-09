@@ -57,7 +57,8 @@ import {
   uploadImage,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
+import OpeningEditor from "@/components/editor/OpeningEditor.vue";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import RegexIssueList from "@/components/editor/RegexIssueList.vue";
 import { can } from "@/lib/provider";
@@ -81,6 +82,7 @@ import {
   makeDraft,
   missingRequired,
   playerSpeaksFirst,
+  requiredKeys,
   NICKNAME_MAX,
   parseTags,
   resolveLimits,
@@ -117,7 +119,7 @@ import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
 import CardStateEditor from "@/components/editor/CardStateEditor.vue";
-import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
+import { stateChanged, stateEmpty, stateLeafCount, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
 import TagPicker from "@/components/editor/TagPicker.vue";
 import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -397,6 +399,15 @@ const openingPageText = computed({
     else delete regexSet.value.openingPage;
   },
 });
+/**
+ * 開局呈現（開場白／開場網頁）也存在作者資產。savedOpening 是上次存下來（或剛匯入）的那一種：
+ * 現在選的跟它不同就是「切換了」，另一種專屬的內容在儲存時移除，存之前切回來就都還在（ui.md §3.3）。
+ */
+const openingMode = computed<OpeningMode>({
+  get: () => openingModeOf(regexSet.value),
+  set: (v) => { regexSet.value.openingMode = v; },
+});
+const savedOpening = ref<OpeningMode>("greeting");
 const regexWarnings = computed(() => can("regex") ? ruleSetWarnings(regexSet.value) : []);
 const regexSaveIssues = ref<ReturnType<typeof validateRuleSet>>([]);
 
@@ -430,7 +441,8 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "world", "state", "dialogue", "worldbook", "publish"] as const;
+// 照寫卡的順序（ui.md §2）：基本資料 → 角色設定 →（多角色舊卡）→ 開局 → 世界書 → 顯示 → 進階 → 發布
+const SECTIONS = ["basic", "persona", "world", "opening", "worldbook", "display", "advanced", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 /**
@@ -438,11 +450,15 @@ const section = ref<Section>("basic");
  * 只有打開時本來就是世界卡的才顯示這一區；開啟時記一次，作者在這頁關掉再存也不會讓它消失。
  */
 const worldShown = ref(false);
-// 卡片變數只給單卡：世界卡的每個角色各自開口，沒有一份共用的數值（任務 2026-11-09-card-state）
+// 進階現在只放卡片變數：只給單卡，世界卡的每個角色各自開口，沒有一份共用的數值（任務 2026-11-09-card-state）。
+// 多角色的入口先藏起來（owner 2026-11-10），已經是世界卡的照舊顯示它那一區。
 const sections = computed(() => SECTIONS.filter((key) =>
   key === "world" ? can("world") && worldShown.value
-  : key === "state" ? can("state") && !draft.value.world
+  : key === "advanced" ? can("state") && !draft.value.world
+  : key === "worldbook" ? can("worldbook")
   : true));
+/** 卡片變數那一塊：預設收起（多數卡用不到），按「加入」或存檔被擋在變數上時才打開。 */
+const stateOpen = ref(false);
 const body = ref<HTMLElement | null>(null);
 const scrollBody = ref<HTMLElement | null>(null);
 
@@ -492,7 +508,9 @@ const dirty = computed(
 );
 
 
-const missing = computed(() => missingRequired(draft.value, { openingPage: regexSet.value.openingPage }));
+const missing = computed<string[]>(() => missingRequired(draft.value, { openingMode: openingMode.value }));
+/** 底部列與「還缺什麼」的三項：開局那一項跟著呈現換（開場白／第一句選項）。 */
+const required = computed(() => requiredKeys(openingMode.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
 
 /** 有字數上限的欄位：欄位、標籤文案鍵、所在分區。存檔前逐一對上限，超過就點名。 */
@@ -500,7 +518,7 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
   ["roleDesc", "editor.summary", "basic"],
   ["roleReadme", "editor.readme", "basic"],
   ["roleDetailDesc", "editor.detail", "persona"],
-  ["roleWelcome", "editor.welcome", "dialogue"],
+  ["roleWelcome", "editor.welcome", "opening"],
   ["roleOutputContract", "editor.contract", "persona"],
   ["jailbreak", "editor.jailbreak", "persona"],
 ];
@@ -521,14 +539,14 @@ const reviewCount = computed(() => {
 });
 
 /** 各分區缺哪個必填。導覽上的紅點與發布前的清單都看這個。 */
-const REQUIRED_OF: Partial<Record<Section, string>> = {
+const REQUIRED_OF = computed<Partial<Record<Section, string>>>(() => ({
   basic: "roleName",
   persona: "roleDetailDesc",
-  dialogue: "roleWelcome",
-};
-const lacks = (key: Section) => Boolean(REQUIRED_OF[key] && missing.value.includes(REQUIRED_OF[key] as string));
+  opening: openingMode.value === "page" ? "prologue" : "roleWelcome",
+}));
+const lacks = (key: Section) => Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
-const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome" };
+const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
   if (!before || now || isNew.value || !missing.value.length) return;
   const names = missing.value.map((f) => FIELD_LABEL[f] ? t(FIELD_LABEL[f]) : "").filter(Boolean).join(t("mascot.pet.listSep"));
@@ -557,6 +575,7 @@ function removeWorldCharacter(index: number) {
 // 骨架、規則、皮膚住在 draft.state；null＝沒有。移除只是把它設成 null，存檔時才真的拿掉。
 function enableState() {
   if (!draft.value.state) draft.value.state = { convention: "mvu", dataText: "", rulesText: "", template: "" };
+  stateOpen.value = true;
 }
 function disableState() {
   draft.value.state = null;
@@ -566,11 +585,49 @@ const filled = computed<Record<Section, boolean>>(() => ({
   basic: Boolean(draft.value.roleName.trim()),
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   world: Boolean(draft.value.world),
-  state: !stateEmpty(draft.value.state),
-  dialogue: Boolean(draft.value.roleWelcome.trim()),
+  opening: !lacks("opening"),
   worldbook: wb.entries.some((e) => e.content.trim()),
+  display: false,
+  advanced: false,
   publish: false,
 }));
+const stateUsed = computed(() => !stateEmpty(draft.value.state));
+/** 進階那塊的狀態字：沒用、幾個數值、有沒有面板。 */
+const stateSummary = computed(() => {
+  const state = draft.value.state;
+  if (stateEmpty(state)) return t("editor.state.unused");
+  let n = 0;
+  try { n = stateLeafCount(JSON.parse(state!.dataText || "{}")); } catch { /* 解不開時不數 */ }
+  return state!.template.trim() ? t("editor.state.summaryPanel", { n }) : t("editor.state.summary", { n });
+});
+
+/**
+ * 收起來的幾列（ui.md §2）：有內容時打開，沒有就收著。只在載入、匯入、還原草稿時定一次，
+ * 作者自己開關之後不再替他改。
+ */
+const mediaMoreOpen = ref(false);
+const personaMoreOpen = ref(false);
+const tagsOpen = ref(false);
+function settleDisclosures() {
+  mediaMoreOpen.value = Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage);
+  personaMoreOpen.value = Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim());
+  tagsOpen.value = draft.value.roleTag.length > 0;
+}
+const mediaMoreSet = computed(() => Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage));
+const personaMoreSet = computed(() => Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim()));
+
+/** 手機（760 以下）：標題與送審字數跟著表單捲走，只有分區籤黏著（ui.md §2.1）。 */
+const PHONE = "(max-width: 760px)";
+const phone = ref(typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(PHONE).matches : false);
+let phoneQuery: MediaQueryList | null = null;
+const onPhoneChange = (e: MediaQueryListEvent) => { phone.value = e.matches; };
+onMounted(() => {
+  if (typeof window.matchMedia !== "function") return;
+  phoneQuery = window.matchMedia(PHONE);
+  phone.value = phoneQuery.matches;
+  phoneQuery.addEventListener?.("change", onPhoneChange);
+});
+onBeforeUnmount(() => phoneQuery?.removeEventListener?.("change", onPhoneChange));
 
 watch(tagsText, (raw) => {
   draft.value.roleTag = parseTags(raw);
@@ -626,6 +683,7 @@ function restoreDraft() {
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
     worldShown.value = Boolean(draft.value.world);
+    settleDisclosures();
     restoredDraft.value = true;
   } catch {
     localStorage.removeItem(DRAFT_KEY);
@@ -698,6 +756,7 @@ onMounted(async () => {
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
     worldShown.value = Boolean(draft.value.world);
+    settleDisclosures();
     if (token) {
       // 提前做好的評測：讀不到不擋編輯，送審時再填
       fetchRatingDraft(roleId.value, token, editorProvider.value).then((a) => { ratingAnswers.value = usable(a); }).catch(() => {});
@@ -836,6 +895,7 @@ async function loadRegexRules(token: string) {
     regexSet.value = ruleSetFromAuthorAsset(asset);
     regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
     regexVersion.value = asset.version;
+    savedOpening.value = openingModeOf(regexSet.value);
   } catch {
     // 讀不到就當沒有：舊上游沒這條路，不擋編輯
   }
@@ -863,6 +923,8 @@ function onRegexFile(event: Event) {
       // 規則檔不帶首屏網頁與卡片格式：換規則不能順手把它們洗掉（存檔是整份覆寫）
       if (regexSet.value.openingPage && imported.set.openingPage == null) imported.set.openingPage = regexSet.value.openingPage;
       if (regexSet.value.format === "fengyue" && !imported.set.format) imported.set.format = "fengyue";
+      // 開局呈現也不是規則檔的事：照作者現在選的
+      imported.set.openingMode = openingMode.value;
       regexSet.value = imported.set;
       defaultChatPageForNew();
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
@@ -903,7 +965,7 @@ const visibilityActor = computed(()=>String(session.profile?.identities.find(i=>
 const editorVisibilityNotice = computed(()=>{const v=workVisibility.value;if(!v)return '';if(v.syncState!=='complete')return t(v.syncState==='unavailable'?'visibility.operation.unknown':'visibility.operation.updating');if(v.access==='private'&&v.review==='none'&&v.restriction==='none')return v.everPublic&&!v.restorable?t(v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):'';return t(visibilityStateKey(v,true),{note:v.reviewNote??'',reason:v.restrictionNote??''});});
 const visibilityToken=()=>session.accessToken();
 function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
-function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'dialogue');}
+function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'opening');}
 
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
@@ -954,7 +1016,8 @@ async function save() {
   // 變數骨架解不開、或超過上限：上游會整份拒收，先在本地點名（只看改過的，沒動的照上游存的那份）
   const stateIssue = !draft.value.world && stateChanged(draft.value, original.value) ? stateProblem(draft.value.state) : null;
   if (stateIssue) {
-    section.value = "state";
+    section.value = "advanced";
+    stateOpen.value = true;
     error.value = t(`editor.state.reject.${stateIssue}`, stateLimitParams());
     return;
   }
@@ -989,13 +1052,19 @@ async function save() {
     // 存完拿快照當「上次存的內容」，中途進來的改動才會留在未儲存狀態、下次存得到；
     // 用當下的草稿當基準，那張頭像就會靜默消失（2026-09-15 匯入 V3 範例卡時發生）。
     const sent = cloneDraft(draft.value);
+    // 切換了開局呈現：另一種專屬的內容這次一起移除（開場白與備選開場白，或網頁內容）
+    const mode = openingMode.value;
+    const clearGreeting = mode === "page" && savedOpening.value !== "page";
+    const clearPage = mode === "greeting" && savedOpening.value !== "greeting";
+    if (clearGreeting) { sent.roleWelcome = ""; sent.alternates = []; }
+    if (clearPage && regexSnapshot) delete regexSnapshot.openingPage;
     const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
 
-    // 作者資產（含首屏網頁）先存：開場白留空時，上游要看到首屏網頁或開場選項才收。
+    // 作者資產（含開局呈現與網頁內容）先存：開場白留空時，上游要先看到開場網頁、首屏網頁或開場選項才收。
     await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
 
-    if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, regexSet.value.openingPage))) {
+    if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, { openingPage: (regexSnapshot ?? regexSet.value).openingPage, openingMode: mode }))) {
       await patchRoleWelcome(
         targetRoleId,
         {
@@ -1027,7 +1096,8 @@ async function save() {
         if (!stateEmpty(sent.state)) await putRoleState(targetRoleId, statePayload(sent.state!), token);
         else if (original.value?.state) await deleteRoleState(targetRoleId, token);
       } catch (err) {
-        section.value = "state";
+        section.value = "advanced";
+        stateOpen.value = true;
         throw err;
       }
     }
@@ -1036,6 +1106,9 @@ async function save() {
     if (review.resubmit) { reviewRetry.value=false; reviewResubmitted.value=true; }
 
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
+    if (clearGreeting) { draft.value.roleWelcome = ""; draft.value.alternates = []; }
+    if (clearPage && regexSnapshot) delete regexSet.value.openingPage;
+    savedOpening.value = mode;
     original.value = sent;
     saved.value = true;
     restoredDraft.value = false;
@@ -1195,7 +1268,11 @@ function applyImport(result: ImportResult) {
     // 風月卡本來就是新的網頁玩法，沒有舊版聊天頁要相容
     regexSet.value.pageMode = result.spec === "fengyue" ? "sandbox" : "classic";
   }
+  // 風月卡一直是玩家點選項開局（點了直接送出）：歸開場網頁；其他照開場白（owner 2026-11-10）
+  regexSet.value.openingMode = result.spec === "fengyue" || regexSet.value.format === "fengyue" ? "page" : "greeting";
+  savedOpening.value = openingMode.value;
   defaultChatPageForNew();
+  settleDisclosures();
   goto("basic");
 }
 
@@ -1237,7 +1314,7 @@ async function exportCard(format: "png" | "json") {
 <template>
 
   <div class="page editor layout" :style="layoutStyle">
-    <header class="head">
+    <header v-if="!phone || loading" class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
       <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
@@ -1266,6 +1343,8 @@ async function exportCard(format: "png" | "json") {
             <span v-if="key === 'world'" class="exp-tag">{{ $t("editor.experimental") }}</span>
             <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
             <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
+            <!-- 進階：開了卡片變數時標一個小字，作者知道裡面有東西 -->
+            <span v-if="key === 'advanced' && stateUsed" class="side__tag">{{ $t("editor.state.navTag") }}</span>
             <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
             <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
                  :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -1274,7 +1353,7 @@ async function exportCard(format: "png" | "json") {
             </svg>
           </button>
         </nav>
-        <div v-if="reviewCount || lengthExempt" class="topbar__count" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-card-constant-count>
+        <div v-if="!phone && (reviewCount || lengthExempt)" class="topbar__count" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-card-constant-count>
           <span v-if="reviewCount" class="topbar__total">{{ $t("reviewLength.constantTotal", reviewCount.n) }}</span>
           <template v-if="lengthExempt">
             <span v-if="reviewCount" class="topbar__sep" aria-hidden="true">·</span>
@@ -1295,14 +1374,30 @@ async function exportCard(format: "png" | "json") {
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
         <div ref="scrollBody" class="body__scroll" @scroll.passive="onScroll">
-        <div v-if="isNew" class="field">
-          <label for="new-card-visibility">{{ $t('visibility.title') }}</label>
-          <select id="new-card-visibility" v-model="newCardVisibility" class="input" :disabled="saving" aria-describedby="new-card-visibility-description">
-            <option value="unlisted">{{ $t('visibility.option.unlisted') }}</option>
-            <option value="private">{{ $t('visibility.option.private') }}</option>
-          </select>
-          <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
-        </div>
+        <!-- 手機：標題與送審字數放進表單裡，跟著捲走，上方只留分區籤（ui.md §2.1） -->
+        <template v-if="phone">
+          <header class="head head--inline">
+            <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+            <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
+            <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
+          </header>
+          <div v-if="reviewCount || lengthExempt" class="topbar__count topbar__count--inline" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-card-constant-count>
+            <span v-if="reviewCount" class="topbar__total">{{ $t("reviewLength.constantTotal", reviewCount.n) }}</span>
+            <template v-if="lengthExempt">
+              <span v-if="reviewCount" class="topbar__sep" aria-hidden="true">·</span>
+              <span class="topbar__state is-met">{{ $t("lengthExemption.enabled") }}</span>
+            </template>
+            <template v-else-if="reviewCount">
+              <span class="topbar__sep" aria-hidden="true">·</span>
+              <span class="topbar__threshold">{{ $t("reviewLength.threshold", reviewCount.n) }}</span>
+              <span class="topbar__sep" aria-hidden="true">·</span>
+              <span class="topbar__state" :class="{ 'is-met': reviewCount.eligible }">
+                <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
+                {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
+              </span>
+            </template>
+          </div>
+        </template>
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
@@ -1322,47 +1417,18 @@ async function exportCard(format: "png" | "json") {
           <RegexIssueList :set="regexSet" :issues="regexWarnings" />
         </div>
 
-        <!-- 基础 -->
+        <!-- 基本資料 -->
         <section data-section="basic" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.basic") }}</h2>
+          <!-- 匯入放最前面：要直接匯入的作者不必看底下這些（owner 2026-11-10） -->
           <ImportPanel v-if="isNew" :language="draft.language" :detail-max="limits.roleDetailDesc" @apply="applyImport" />
 
-          <!-- 聊天頁模式放在最上面：這是整張卡怎麼跑的決定，不藏在規則編輯器裡（站台管理者 2026-09-14） -->
-          <div class="field">
-            <label>{{ $t("editor.chatPage") }}</label>
-            <div class="seg chatpage" role="radiogroup" :aria-label="$t('editor.chatPage')">
-              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'sandbox' }" role="radio"
-                      :aria-checked="chatPage === 'sandbox'" @click="chatPage = 'sandbox'">{{ $t("editor.chatPage.sandbox") }}</button>
-              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
-                      :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
-            </div>
-            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink class="link chatpage-guide" :to="`${lp('/guide')}?way=web`">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+          <div class="row2">
+            <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
+                       :placeholder="$t('create.name.placeholder')" />
+            <FieldText id="f-nickname" v-model="draft.nickname" :label="$t('editor.nickname')" :max="NICKNAME_MAX"
+                       :hint="$t('editor.nickname.hint')" />
           </div>
-
-          <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
-                     :placeholder="$t('create.name.placeholder')" />
-          <FieldText id="f-nickname" v-model="draft.nickname" :label="$t('editor.nickname')" :max="NICKNAME_MAX"
-                     :hint="$t('editor.nickname.hint')" />
-
-          <!-- 形象緊接在名稱後面：寫卡最先有的是名字跟圖，簡介之後才寫（社群管理員 2026-09-14） -->
-          <p class="muted">{{ $t("editor.media.lede") }}</p>
-          <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
-               所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
-          <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
-                      :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage"
-                      :generate-label="genLabel('roleBackground')" @generate="openGenerate('roleBackground')" />
-          <ImageField v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
-                      :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage"
-                      :generate-label="genLabel('roleBackgroundLandscape')" @generate="openGenerate('roleBackgroundLandscape')" />
-          <!-- 分享圖（選填）：連結預覽的大圖，1.91:1。沒有就用橫式背景，再沒有就用直式背景（src/index.ts 卡片頁 og:image）。 -->
-          <ImageField v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
-                      :hint="$t('editor.shareImage.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="share" @pick="onPickImage" />
 
           <div v-if="isNew" class="field">
             <label for="f-lang">{{ $t("create.language") }}</label>
@@ -1377,6 +1443,36 @@ async function exportCard(format: "png" | "json") {
               <option v-for="l in scriptOptions" :key="l.value" :value="l.value">{{ l.label }}</option>
             </select>
             <span class="subtle">{{ $t("editor.language.scriptHint") }}</span>
+          </div>
+
+          <!-- 形象緊接在名稱後面：寫卡最先有的是名字跟圖，簡介之後才寫（社群管理員 2026-09-14） -->
+          <div class="group">
+            <h3 class="group__title">{{ $t("editor.section.media") }}</h3>
+            <p class="subtle group__lede">{{ $t("editor.media.lede") }}</p>
+            <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
+                 所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
+            <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
+                        :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
+                        :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                        :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage"
+                        :generate-label="genLabel('roleBackground')" @generate="openGenerate('roleBackground')" />
+            <button type="button" class="disclosure" :aria-expanded="mediaMoreOpen" aria-controls="media-more" @click="mediaMoreOpen = !mediaMoreOpen">
+              <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
+              <span class="disclosure__label">{{ $t("editor.media.more") }}</span>
+              <span v-if="mediaMoreSet" class="disclosure__state">{{ $t("editor.disclosure.set") }}</span>
+            </button>
+            <div v-show="mediaMoreOpen" id="media-more" class="group__more">
+              <ImageField v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
+                          :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
+                          :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                          :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage"
+                          :generate-label="genLabel('roleBackgroundLandscape')" @generate="openGenerate('roleBackgroundLandscape')" />
+              <!-- 分享圖（選填）：連結預覽的大圖，1.91:1。沒有就用橫式背景，再沒有就用直式背景（src/index.ts 卡片頁 og:image）。 -->
+              <ImageField v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
+                          :hint="$t('editor.shareImage.hint')" :pick-label="$t('editor.image.pick')"
+                          :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                          :uploading="$t('editor.image.uploading')" ratio="share" @pick="onPickImage" />
+            </div>
           </div>
 
           <!-- 卡片展示（owner 2026-10-11）：玩家開始對話前看到的三樣東西放在一起，旁邊說清楚各自出現在哪裡 -->
@@ -1424,57 +1520,90 @@ async function exportCard(format: "png" | "json") {
               <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
                 <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
               </ul>
-              <!-- 站內榜單認得的分類：點了就加進標籤，跟手打的是同一條 -->
-              <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
+              <!-- 站內榜單認得的分類：收在一列裡，有已選時預設打開；點了就加進標籤，跟手打的是同一條 -->
+              <button type="button" class="disclosure" :aria-expanded="tagsOpen" aria-controls="tag-picker" @click="tagsOpen = !tagsOpen">
+                <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
+                <span class="disclosure__label">{{ $t("editor.tags.pick") }}</span>
+                <span v-if="draft.roleTag.length" class="disclosure__state">{{ $t("editor.tags.picked", { n: draft.roleTag.length }) }}</span>
+              </button>
+              <div v-show="tagsOpen" id="tag-picker">
+                <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
+              </div>
             </div>
           </div>
           <ShowcaseGuide :open="guideOpen" :name="draft.roleName" :summary="draft.roleDesc" :tags="draft.roleTag"
                          :cover="draft.roleBackground" :banner="draft.roleBackgroundLandscape" :advise="SUMMARY_ADVISE"
                          @close="guideOpen = false" />
-
-          <!-- 角色卡 V3 的署名與版本：匯入的卡帶什麼就留什麼，作者也能自己填；匯出時原樣寫回 -->
-          <div class="row2">
-            <div class="field">
-              <label for="f-creator">{{ $t("editor.creator") }}</label>
-              <input id="f-creator" v-model="cardCreator" class="input" :maxlength="120" :placeholder="$t('editor.creator.placeholder')" />
-            </div>
-            <div class="field">
-              <label for="f-version">{{ $t("editor.version") }}</label>
-              <input id="f-version" v-model="cardVersion" class="input" :maxlength="40" :placeholder="$t('editor.version.placeholder')" />
-            </div>
-          </div>
-          <span class="subtle">{{ $t("editor.creator.hint") }}</span>
-
-
         </section>
 
-        <!-- 人设 -->
+        <!-- 角色設定 -->
         <section data-section="persona" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.persona") }}</h2>
-          <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
-                     :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
-          <div v-if="reviewCount||lengthExempt" class="review-count" data-review-count>
-            <p v-if="lengthExempt" data-author-exemption>{{ $t('lengthExemption.author') }}</p>
-            <template v-if="reviewCount">
-            <p class="review-count__head">
-              <span class="review-count__title">{{ $t("reviewLength.title") }}</span>
-              <span class="review-count__total">{{ $t(lengthExempt ? 'lengthExemption.total' : 'reviewLength.total', reviewCount.n) }}</span>
-              <span v-if="!lengthExempt" class="review-count__state" :class="{ 'is-met': reviewCount.eligible }">
-                <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
-                {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
-              </span>
+          <div class="persona-detail">
+            <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
+                       :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
+            <!-- 送審字數的完整說明在頂列；這裡只留一行，貼在角色設定下面 -->
+            <p v-if="reviewCount||lengthExempt" class="review-line" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-review-count>
+              <template v-if="lengthExempt"><span data-author-exemption>{{ $t('lengthExemption.author') }}</span></template>
+              <template v-else-if="reviewCount">
+                <span>{{ $t("reviewLength.constantTotal", reviewCount.n) }}</span>
+                <span aria-hidden="true">·</span>
+                <span class="review-line__state">
+                  <span v-if="reviewCount.eligible" class="review-count__check" aria-hidden="true">✓</span>
+                  {{ reviewCount.eligible ? $t("reviewLength.eligible") : $t("reviewLength.remaining", reviewCount.n) }}
+                </span>
+              </template>
             </p>
-            <p class="review-count__parts">
-              <span>{{ $t("reviewLength.persona", reviewCount.n) }}</span>
-              <span>{{ $t("reviewLength.constantWorldbook", reviewCount.n) }}</span>
-            </p>
-            <p class="review-count__hint">{{ $t("reviewLength.countingHint") }}</p>
-            </template>
           </div>
-          <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
-                     :max="limits.roleOutputContract" :hint="$t('editor.contract.hint')" />
-          <FieldText id="f-jb" v-model="draft.jailbreak" :label="$t('editor.jailbreak')" :rows="6"
-                     :max="limits.jailbreak" :hint="$t('editor.jailbreak.hint')" />
+
+          <div class="field">
+            <label>{{ $t("editor.talkExample") }}</label>
+            <p class="subtle hint">{{ $t("editor.talkExample.hint") }}</p>
+            <ul class="turns">
+              <li v-for="(turn, i) in draft.talkExample" :key="i" class="turn">
+                <select v-model="turn.roleType" class="input input--who" :aria-label="$t('editor.talkExample.who')">
+                  <option value="user">{{ $t("editor.talkExample.user") }}</option>
+                  <option value="ai">{{ $t("editor.talkExample.ai") }}</option>
+                </select>
+                <textarea autocomplete="off" v-model="turn.content" class="input turn__text" rows="1"
+                          :aria-label="$t('editor.talkExample.content')" />
+                <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('list.remove')"
+                        :title="$t('list.remove')" @click="draft.talkExample.splice(i, 1)">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 7h14M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
+                  </svg>
+                </button>
+              </li>
+            </ul>
+            <div class="acts">
+              <button type="button" class="btn btn--sm"
+                      @click="draft.talkExample.push({ roleType: 'user', content: '' })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                {{ $t("editor.talkExample.addUser") }}
+              </button>
+              <button type="button" class="btn btn--sm"
+                      @click="draft.talkExample.push({ roleType: 'ai', content: '' })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                {{ $t("editor.talkExample.addAi") }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 多數卡留空的兩欄收在一列裡；任一有內容就打開，列尾寫「已填寫」 -->
+          <div class="group">
+            <button type="button" class="disclosure" :aria-expanded="personaMoreOpen" aria-controls="persona-more" @click="personaMoreOpen = !personaMoreOpen">
+              <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
+              <span class="disclosure__label">{{ $t("editor.persona.more") }}</span>
+              <span v-if="personaMoreSet" class="disclosure__state">{{ $t("editor.disclosure.filled") }}</span>
+            </button>
+            <div v-show="personaMoreOpen" id="persona-more" class="group__more">
+              <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
+                         :max="limits.roleOutputContract" :hint="$t('editor.contract.hint')" />
+              <FieldText id="f-jb" v-model="draft.jailbreak" :label="$t('editor.jailbreak')" :rows="6"
+                         :max="limits.jailbreak" :hint="$t('editor.jailbreak.hint')" />
+            </div>
+          </div>
         </section>
 
         <!-- 世界模式：一張卡多個角色 -->
@@ -1532,91 +1661,18 @@ async function exportCard(format: "png" | "json") {
           </template>
         </section>
 
-        <!-- 卡片變數：單卡才有；世界卡隱藏 -->
-        <section v-if="sections.includes('state')" data-section="state" class="pane">
-          <h2 class="pane__title">{{ $t("editor.section.state") }}</h2>
-          <p class="muted">{{ $t("editor.state.lede") }}</p>
-          <div v-if="!draft.state" class="rxbar__acts">
-            <button type="button" class="btn btn--sm" @click="enableState">{{ $t("editor.state.enable") }}</button>
-          </div>
-          <template v-else>
-            <CardStateEditor :model-value="draft.state" :language="draft.language" @update:model-value="draft.state = $event" />
-            <div class="rxbar__acts">
-              <button type="button" class="btn btn--sm" @click="disableState">{{ $t("editor.state.disable") }}</button>
-            </div>
-          </template>
+        <!-- 開局：開場白或開場網頁，作者二選一（ui.md §3） -->
+        <section data-section="opening" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.opening") }}</h2>
+          <p class="muted pane__lede">{{ $t("editor.opening.lede") }}</p>
+          <OpeningEditor v-model:mode="openingMode" v-model:welcome="draft.roleWelcome" v-model:alternates="draft.alternates"
+                         v-model:prologue="draft.prologue" v-model:opening-page="openingPageText"
+                         :saved-mode="savedOpening" :page-available="can('regex')" :rules="regexSet.rules"
+                         :card-format="regexSet.format" :role-name="draft.roleName" :welcome-max="limits.roleWelcome"
+                         :missing="lacks('opening')" @edit-rules="goto('display')" />
         </section>
 
-        <!-- 对话 -->
-        <section data-section="dialogue" class="pane">
-          <h2 class="pane__title">{{ $t("editor.section.dialogue") }}</h2>
-          <!-- 正則規則放這一頁最上面（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
-          <div class="rxbar">
-            <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
-            <div class="rxbar__acts">
-              <button v-if="can('regex')" type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
-                {{ $t("regex.open") }}
-                <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
-              </button>
-              <button type="button" class="btn btn--sm" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
-              <button type="button" class="btn btn--sm" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
-              <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
-            </div>
-          </div>
-
-          <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
-                     :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
-
-          <ListEditor v-model="draft.alternates" :label="$t('editor.alternates')" :hint="$t('editor.alternates.hint')"
-                      :rows="4" :add-label="$t('editor.alternates.add')" :remove-label="$t('list.remove')"
-                      :up-label="$t('list.up')" :down-label="$t('list.down')" />
-
-          <ListEditor v-model="draft.prologue" :label="$t('editor.prologue')" :hint="$t('editor.prologue.hint')"
-                      :add-label="$t('editor.prologue.add')" :remove-label="$t('list.remove')"
-                      :up-label="$t('list.up')" :down-label="$t('list.down')" />
-
-          <!-- 首屏網頁存在作者資產（跟顯示規則一起），只給玩家看、不送模型；有它或開場選項時，開場白可以留空。 -->
-          <FieldText v-if="can('regex')" id="f-opening-page" v-model="openingPageText" :label="$t('editor.openingPage')" :rows="6"
-                     :hint="$t('editor.openingPage.hint')" />
-
-          <div class="field">
-            <label>{{ $t("editor.talkExample") }}</label>
-            <p class="subtle hint">{{ $t("editor.talkExample.hint") }}</p>
-            <ul class="turns">
-              <li v-for="(turn, i) in draft.talkExample" :key="i" class="turn">
-                <select v-model="turn.roleType" class="input input--who" :aria-label="$t('editor.talkExample.who')">
-                  <option value="user">{{ $t("editor.talkExample.user") }}</option>
-                  <option value="ai">{{ $t("editor.talkExample.ai") }}</option>
-                </select>
-                <textarea autocomplete="off" v-model="turn.content" class="input" rows="2" style="min-height: calc(2 * 1.7em + 26px)"
-                          :aria-label="$t('editor.talkExample.content')" />
-                <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('list.remove')"
-                        :title="$t('list.remove')" @click="draft.talkExample.splice(i, 1)">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 7h14M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
-                  </svg>
-                </button>
-              </li>
-            </ul>
-            <div class="acts">
-              <button type="button" class="btn btn--sm"
-                      @click="draft.talkExample.push({ roleType: 'user', content: '' })">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                {{ $t("editor.talkExample.addUser") }}
-              </button>
-              <button type="button" class="btn btn--sm"
-                      @click="draft.talkExample.push({ roleType: 'ai', content: '' })">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                {{ $t("editor.talkExample.addAi") }}
-              </button>
-            </div>
-          </div>
-
-        </section>
-
-        <!-- 形象 -->
-        <!-- 世界书 -->
+        <!-- 世界書 -->
         <section v-if="can('worldbook')" data-section="worldbook" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
           <p class="muted">{{ $t("wb.lede") }}</p>
@@ -1629,23 +1685,87 @@ async function exportCard(format: "png" | "json") {
                            @release="releaseBook(wb)" @export-book="exportBook(wb, draft.roleName)" />
         </section>
 
-        <!-- 发布 -->
-        <!-- 遊戲模式：把這張卡當 3D 遊戲玩的世界配置 -->
+        <!-- 顯示：聊天頁與顯示規則 -->
+        <section data-section="display" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.display") }}</h2>
+          <p class="muted pane__lede">{{ $t("editor.display.lede") }}</p>
+          <div class="field">
+            <label>{{ $t("editor.chatPage") }}</label>
+            <div class="seg chatpage" role="radiogroup" :aria-label="$t('editor.chatPage')">
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'sandbox' }" role="radio"
+                      :aria-checked="chatPage === 'sandbox'" @click="chatPage = 'sandbox'">{{ $t("editor.chatPage.sandbox") }}</button>
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
+                      :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
+            </div>
+            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink class="link chatpage-guide" :to="`${lp('/guide')}?way=web`">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+          </div>
 
+          <div class="field">
+            <label>{{ $t("editor.rules") }}</label>
+            <div class="rxbar">
+              <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
+              <div class="rxbar__acts">
+                <button v-if="can('regex')" type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
+                  {{ $t("regex.open") }}
+                  <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
+                </button>
+                <button type="button" class="btn btn--sm" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
+                <button type="button" class="btn btn--sm" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
+                <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 進階：卡片變數（預設收起）。多角色的入口先不放（owner 2026-11-10） -->
+        <section v-if="sections.includes('advanced')" data-section="advanced" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.advanced") }}</h2>
+          <p class="muted pane__lede">{{ $t("editor.advanced.lede") }}</p>
+          <div class="panel state-panel" data-state-panel>
+            <div class="state-panel__head">
+              <div class="state-panel__title">
+                <h3>{{ $t("editor.section.state") }}</h3>
+                <span class="chip state-panel__chip">{{ stateSummary }}</span>
+              </div>
+              <button v-if="!draft.state" type="button" class="btn btn--sm" @click="enableState">{{ $t("editor.state.enable") }}</button>
+              <button v-else type="button" class="btn btn--sm" :aria-expanded="stateOpen" aria-controls="state-body" @click="stateOpen = !stateOpen">
+                {{ stateOpen ? $t("editor.state.collapse") : $t("editor.state.expand") }}
+              </button>
+            </div>
+            <p class="muted">{{ $t("editor.state.lede") }}</p>
+            <div v-if="draft.state" v-show="stateOpen" id="state-body" class="state-panel__body">
+              <CardStateEditor :model-value="draft.state" :language="draft.language" @update:model-value="draft.state = $event" />
+              <div class="rxbar__acts">
+                <button type="button" class="btn btn--sm btn--danger" @click="disableState">{{ $t("editor.state.disable") }}</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 發布 -->
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
+          <div v-if="isNew" class="field">
+            <label for="new-card-visibility">{{ $t('visibility.title') }}</label>
+            <select id="new-card-visibility" v-model="newCardVisibility" class="input" :disabled="saving" aria-describedby="new-card-visibility-description">
+              <option value="unlisted">{{ $t('visibility.option.unlisted') }}</option>
+              <option value="private">{{ $t('visibility.option.private') }}</option>
+            </select>
+            <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
+          </div>
           <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
           <SharedStatePanel v-if="!isNew && roleId" :role-id="roleId" :provider="editorProvider" :card-name="draft.roleName" :token="visibilityToken" />
-          <div class="panel checklist">
+          <!-- 還缺什麼：只列缺的；都填好了換成一行 -->
+          <div class="panel checklist" data-checklist>
             <h2>{{ $t("editor.checklist") }}</h2>
-            <ul>
-              <li v-for="key in ['roleName', 'roleWelcome', 'roleDetailDesc']" :key="key"
-                  :class="{ ok: !missing.includes(key) }">
-                <span aria-hidden="true">{{ missing.includes(key) ? "○" : "●" }}</span>
+            <ul v-if="missing.length">
+              <li v-for="key in required.filter((k) => missing.includes(k))" :key="key">
+                <span aria-hidden="true">○</span>
                 {{ $t(`editor.required.${key}`) }}
               </li>
             </ul>
+            <p v-else class="checklist__done">{{ $t("editor.checklist.done") }}</p>
             <p v-if="blockers.length" class="subtle">{{ $t("editor.blockers", { n: blockers.length }) }}</p>
           </div>
 
@@ -1661,6 +1781,27 @@ async function exportCard(format: "png" | "json") {
             </button>
           </div>
 
+          <!-- 匯出：角色卡 V3 的署名與版本只進匯出檔，跟匯出放在一起；匯入的卡帶什麼就留什麼 -->
+          <div class="panel">
+            <h2>{{ $t("export.title") }}</h2>
+            <p class="muted">{{ $t("export.hint") }}</p>
+            <div class="row2">
+              <div class="field">
+                <label for="f-creator">{{ $t("editor.creator") }}</label>
+                <input id="f-creator" v-model="cardCreator" class="input" :maxlength="120" :placeholder="$t('editor.creator.placeholder')" />
+              </div>
+              <div class="field">
+                <label for="f-version">{{ $t("editor.version") }}</label>
+                <input id="f-version" v-model="cardVersion" class="input" :maxlength="40" :placeholder="$t('editor.version.placeholder')" />
+              </div>
+            </div>
+            <span class="subtle">{{ $t("editor.creator.hint") }}</span>
+            <div class="acts">
+              <button type="button" class="btn btn--sm" @click="exportCard('png')">{{ $t("export.png") }}</button>
+              <button type="button" class="btn btn--sm" @click="exportCard('json')">{{ $t("export.json") }}</button>
+            </div>
+          </div>
+
           <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
           <div v-if="!isNew" class="panel panel--danger">
             <h2>{{ $t("editor.delete") }}</h2>
@@ -1669,15 +1810,6 @@ async function exportCard(format: "png" | "json") {
             <button type="button" class="btn btn--danger" :disabled="saving" @click="remove">
               {{ $t("editor.delete.button") }}
             </button>
-          </div>
-
-          <div class="panel">
-            <h2>{{ $t("export.title") }}</h2>
-            <p class="muted">{{ $t("export.hint") }}</p>
-            <div class="acts">
-              <button type="button" class="btn btn--sm" @click="exportCard('png')">{{ $t("export.png") }}</button>
-              <button type="button" class="btn btn--sm" @click="exportCard('json')">{{ $t("export.json") }}</button>
-            </div>
           </div>
         </section>
 
@@ -1718,7 +1850,7 @@ async function exportCard(format: "png" | "json") {
             {{ $t("edit.back") }}
           </RouterLink>
           <ul class="bar__check">
-            <li v-for="key in ['roleName', 'roleDetailDesc', 'roleWelcome']" :key="key"
+            <li v-for="key in required" :key="key"
                 :class="{ ok: !missing.includes(key) }">
               <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
                    stroke-linecap="round" stroke-linejoin="round">
@@ -1805,7 +1937,14 @@ async function exportCard(format: "png" | "json") {
 
 <style scoped>
 .visibility-notice-action{background:transparent;border:0;color:var(--accent-text);font:inherit;min-height:var(--h-sm);padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+/*
+   並排欄位對齊（owner 2026-11-10，ui.md §2.0）：同一列的欄位上緣對齊、不被較高的那欄拉伸；
+   標籤固定一行；單行輸入框與下拉一律 --h-md；說明、字數、錯誤都在輸入框下方，不補空白佔位。
+*/
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); align-items: start; }
+.row2 > :deep(.field), .row2 > .field { align-content: start; margin: 0; }
+.row2 :deep(.field > label), .row2 .field > label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.row2 :deep(input.input), .row2 :deep(select.input), .row2 input.input, .row2 select.input { height: var(--h-md); min-height: 0; }
 /*
    這一頁比別頁寬得多。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器是工作區，
    表單與對話測試並排，2026-09 使用者回饋 2000px 的螢幕兩側各空三百多像素、表單只剩
@@ -1889,6 +2028,38 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .pane { display: grid; gap: var(--s-4); scroll-margin-top: var(--s-2); }
 .pane + .pane { margin-top: var(--s-7); }
 .pane__title { margin: 0; padding-bottom: var(--s-2); font-size: 17px; border-bottom: 1px solid var(--line); }
+.pane__lede { margin: calc(-1 * var(--s-2)) 0 0; }
+/* 一組欄位（形象、回覆格式與額外指示）：小標＋說明，收起來的部分放在展開列底下 */
+.group { display: grid; gap: var(--s-3); min-width: 0; }
+.group__title { margin: 0; font-size: 15px; font-weight: 600; }
+.group__lede { margin: calc(-1 * var(--s-2)) 0 0; }
+.group__more { display: grid; gap: var(--s-4); }
+/* 展開列：整列都是按鈕，箭頭轉向表示開合，列尾寫狀態（已設定／已填寫／已選 N 個） */
+.disclosure {
+  display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: var(--h-md);
+  padding: 0 var(--s-3); border: 0; border-radius: var(--r-sm); background: var(--surface-2);
+  color: var(--text); font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
+}
+.disclosure:hover { background: color-mix(in srgb, var(--surface-2) 80%, var(--text) 6%); }
+.disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.disclosure__chev { width: 14px; height: 14px; flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
+.disclosure[aria-expanded="true"] .disclosure__chev { transform: rotate(90deg); }
+.disclosure__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disclosure__state { flex: none; font-size: 13px; color: var(--text-2); font-weight: 400; }
+/* 送審字數一行：貼在角色設定欄下面 */
+.persona-detail { display: grid; gap: var(--s-2); }
+.review-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s-2); margin: 0; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.review-line__state { color: var(--warning-text); font-weight: 600; }
+.review-line.is-met .review-line__state { color: var(--text); }
+/* 進階：卡片變數一塊，預設收起 */
+.state-panel { gap: var(--s-3); }
+.state-panel__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.state-panel__title { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; min-width: 0; }
+.state-panel__title h3 { margin: 0; font-size: 15px; }
+.state-panel__chip { font-variant-numeric: tabular-nums; }
+.state-panel__body { display: grid; gap: var(--s-4); padding-top: var(--s-2); border-top: 1px solid var(--line); }
+.checklist__done { margin: 0; color: var(--text-2); font-size: 14px; }
+.side__tag { font-size: 11px; color: var(--text-3); }
 .pane > .field, .pane :deep(.field) { margin-bottom: 0; }
 /*
  * 多行欄位跟著內容長高（原生 field-sizing，不用 JS 量高）：寫上千字的人設不該在一個小框裡捲。
@@ -1923,7 +2094,9 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turns { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: grid; gap: var(--s-2); }
 .turn { display: flex; gap: var(--s-2); align-items: flex-start; }
 .turn .input { flex: 1; resize: vertical; }
-.input--who { flex: none; width: 96px; }
+/* 「誰說的」固定寬，內容框吃剩下的；內容框起始高度跟下拉一樣，長高往下長（ui.md §2.0、§2.1） */
+.input--who { flex: none; width: 92px; height: var(--h-md); }
+.pane textarea.turn__text { min-height: var(--h-md); padding-block: 6px; line-height: 1.6; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 /* 正則是這頁最容易被漏看的功能，給它一塊自己的底色撐住 */
 .rxbar {
@@ -2029,7 +2202,6 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .row2 { grid-template-columns: minmax(0, 1fr); }
   /*
      右欄在窄螢幕整條收起來，但對話測試與我的資源不能跟著消失——站上其他功能都適配
      手機，這兩個也要有（owner 2026-09-08）。改成鋪滿整個視窗的浮層：從底部那條
@@ -2051,6 +2223,10 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 再窄：手機 -------------------------------------------------------------- */
 @media (max-width: 760px) {
   .layout { gap: var(--s-4); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+  /* 標題與送審字數放進表單後，分區籤是唯一黏在上面的東西 */
+  .head--inline { margin-bottom: var(--s-3); }
+  .topbar__count--inline { margin-bottom: var(--s-4); }
   .side__item { height: var(--h-sm); font-size: 13px; }
   /* 手機動作列保留三個工作操作，按鈕可換行增高，由grid自動縮短表單可視區。
      「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
