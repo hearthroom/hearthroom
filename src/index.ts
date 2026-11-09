@@ -1512,7 +1512,7 @@ app.post('/v1/cards/:roleId/edit',async(c)=>{
  const me=await requireAuthor(c);
  const provider=providerOf(c);
  if(!hostingKey(c.env,provider))throw new HttpError(503,'hosting_unavailable');
- const memberId=await resolveMember(c.env.DB,provider,me.accountNumId,Date.now());
+ const memberId=await resolveMember(c.env.DB,provider,me.accountNumId,Date.now(),me);
  const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now(),provider,c.env);
  note(c,{event:'register',detail:result.resubmit?'review_superseded':'draft_edit'});
  return c.json(result,200,{'Cache-Control':'private, no-store'});
