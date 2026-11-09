@@ -10583,7 +10583,7 @@
           "Trial cards"
         ],
         "summary": "Create or update a trial card from a local file",
-        "description": "Upserts an auto-expiring private role card identified by the client's own key (typically a local draft id). First call creates a private role (idempotency key `trial:<clientKey>`), registers it as a trial card and applies the payload; later calls re-apply only the sections whose content hash changed (`sections` in the response holds the stored hashes). Sections: `card` (role fields, same shape as `POST /role/{roleId}/document` `fields`; `card.roleName` is overwritten by top-level `name` and `card.roleWelcome` is dropped — openings live in `welcome`), `welcome`, `worldbook` and `authorAsset`. `welcome`, `worldbook` and `authorAsset` are whole-document sections: omitting one that was previously stored clears it (welcome reset, worldbook deleted, display rules reset); omitting `card` leaves the card as is. Worldbook entries are diffed by content hash: unchanged entries are kept, new ones created, missing ones deleted; entries with `isEnabled:false` and exact duplicates are ignored. Limits: request body 48 MiB; `name` <= 100 chars and required on create; <= 1000 worldbook entries, each `content` non-blank when enabled and within the entry limit for the card's language (4000 chars for Chinese, 6000 for Japanese or Korean, 12000 for English; other languages count as Chinese); display rule `replace` <= 524288 bytes, all rules <= 33554432 bytes, `find` non-blank; role field limits as for `/role/{roleId}/document`. Slots: when the account already has `slots.max` active trial cards, creation fails with 409 `trial_slots_full` naming the least recently active card; send `evict: true` to purge that card and proceed. Every successful PUT refreshes `expiresAt` to now + TTL; a background sweep purges expired cards (role, conversations, worldbook and rules) unless they were played recently, in which case expiry is extended from the last play. Trial cards do not appear in `GET /role/mine`. When the worldbook service is unavailable and the payload contains `worldbook`, nothing is written (503). Note: clearing a previously stored `welcome` by omitting it sends an empty opening to the role service, which rejects blank openings (`empty_field_patch`, surfaced as HTTP 500); to remove an opening send a new non-blank one instead.",
+        "description": "Upserts an auto-expiring private role card identified by the client's own key (typically a local draft id). First call creates a private role (idempotency key `trial:<clientKey>`), registers it as a trial card and applies the payload; later calls re-apply only the sections whose content hash changed (`sections` in the response holds the stored hashes). Sections: `card` (role fields, same shape as `POST /role/{roleId}/document` `fields`; `card.roleName` is overwritten by top-level `name` and `card.roleWelcome` is dropped — openings live in `welcome`), `welcome`, `worldbook` and `authorAsset`. `welcome`, `worldbook` and `authorAsset` are whole-document sections: omitting one that was previously stored clears it (welcome reset, worldbook deleted, display rules reset); omitting `card` leaves the card as is. Worldbook entries are diffed by content hash: unchanged entries are kept, new ones created, missing ones deleted; entries with `isEnabled:false` and exact duplicates are ignored. Limits: request body 48 MiB; `name` <= 100 chars and required on create; <= 1000 worldbook entries, each `content` non-blank when enabled and within the entry limit for the card's language (4000 chars for Chinese, 6000 for Japanese or Korean, 12000 for English; other languages count as Chinese); display rule `replace` <= 524288 bytes, all rules <= 33554432 bytes, `find` non-blank; role field limits as for `/role/{roleId}/document`. Slots: when the account already has `slots.max` active trial cards, creation fails with 409 `trial_slots_full` naming the least recently active card; send `evict: true` to purge that card and proceed. Every successful PUT refreshes `expiresAt` to now + TTL; a background sweep purges expired cards (role, conversations, worldbook and rules) unless they were played recently, in which case expiry is extended from the last play. Trial cards do not appear in `GET /role/mine`. When the worldbook service is unavailable and the payload contains `worldbook`, nothing is written (503). Note: clearing a previously stored `welcome` by omitting it sends an empty opening to the role service, which rejects blank openings (`empty_field_patch`, surfaced as HTTP 500); to remove an opening send a new non-blank one instead. `state` (card variables, same shape as `PUT /role/{roleId}/state`) is a whole-document section too: omitting it removes the card's variables. It has no hash in `sections`; `changed` lists `state` when the variables were written.",
         "security": [
           {
             "userToken": []
@@ -10624,7 +10624,7 @@
             }
           },
           "400": {
-            "description": "`trial_invalid_key`; `trial_invalid_body` (malformed JSON, or `name` missing on create) — `{error, message}`; `trial_unsupported` (unknown `authorAsset.mountLayer`, `pageMode` or `cardFormat`, enabled entry without content, rule without `find`, invalid rules) — `{error, message, detail}`; `invalid_arguments` from the role service.",
+            "description": "`trial_invalid_key`; `trial_invalid_body` (malformed JSON, or `name` missing on create) — `{error, message}`; `trial_unsupported` (unknown `authorAsset.mountLayer`, `pageMode` or `cardFormat`, enabled entry without content, rule without `find`, invalid rules) — `{error, message, detail}`; `invalid_arguments` from the role service. An invalid `state` is `trial_unsupported` with `detail.section: \"state\"` and `detail.reason` as for `PUT /role/{roleId}/state`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13079,6 +13079,173 @@
         "x-harperharbor": {
           "summary": "World mode members",
           "description": "A world card is one agent configuration whose instructions describe a shared world and whose members each carry their own long description and, optionally, a private Lorebook the author owns. Every turn the service runs one world pass (a hidden judgment plus the visible narration) and then at most maxSpeakers member replies, all inside one operation and one charge. Authentication, role.write scope and authorship are required; a member's lorebookId must be a Lorebook the author owns. Changing members changes the card's content hash."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/state": {
+      "put": {
+        "operationId": "putRoleState",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Set the variables of a card",
+        "description": "Writes the whole variable definition of an owned card: starting values the model keeps up to date as the story moves, rules that tell it what changes each value, and an optional panel template that shows the values to the player. `convention` says how `data` is written. `mvu` (MagVarUpdate style): each leaf is a `[value, \"rule\"]` pair, `$meta.extensible` or `$meta.recursiveExtensible` marks an object that may gain keys, `$meta.required` lists keys that cannot be removed, and the `\"$__META_EXTENSIBLE__$\"` marker is dropped; the server moves each rule into `rules.paths`. `plain` (AI Fengyue style skeleton): bare values, and an empty object `{}` may gain keys. The input is normalized once on write: lists may always gain or lose items, object keys are fixed except in objects that may gain keys, and each value keeps its kind. Limits: `data` at most 16 KiB serialized, nesting depth 8, 400 keys in total and 2 KiB per string; `rules.text` at most 8 KiB; `rules.paths` at most 8 KiB in total, and every path must exist in `data`; `panel.template` at most 32 KiB. During play the model sees the rules in the cached part of the prompt and the current values every turn, and records changes in an `<UpdateVariable>` block at the end of its reply, which is removed before the reply is shown (in Agent mode it records them through a tool instead). A turn that records nothing keeps the values; rewriting a reply recomputes from the previous turn, rolling back rewinds the values, and editing a reply's text keeps them. Not supported: math expressions, `_.move`, EJS templates and script hooks. Changing the variables changes the card's content hash.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleStateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored variables, as the author sees them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleStateOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid JSON body`, or `validate_reject` with `detail.reason` naming the refused part: `convention`, `data` (not a JSON object), `data_size`, `depth`, `keys`, `string_size`, `rules_text_size`, `rule_paths_size`, `rule_path` (a rule names a path missing from `data`) or `template_size`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "Card variables",
+          "description": "Card variables are a value tree attached to one agent configuration. Every turn the model sees the author's rules and the current values and reports changes at the end of its reply; the service applies them, keeps one snapshot per reply and hides the update block from readers. Players receive the values and the panel template; only the author receives the rules. Authentication, role.write scope and authorship are required. Changing the variables changes the card's content hash."
+        }
+      },
+      "delete": {
+        "operationId": "deleteRoleState",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Remove the variables of a card",
+        "description": "Removes the variable definition from an owned card. Existing conversations keep the values they stored, but those values are no longer sent to the model, read from replies or shown. Idempotent.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ \"state\": null }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "Card variables",
+          "description": "Card variables are a value tree attached to one agent configuration. Every turn the model sees the author's rules and the current values and reports changes at the end of its reply; the service applies them, keeps one snapshot per reply and hides the update block from readers. Players receive the values and the panel template; only the author receives the rules. Authentication, role.write scope and authorship are required. Changing the variables changes the card's content hash."
         }
       }
     },
@@ -20717,6 +20884,10 @@
           "hasContextUsage": {
             "type": "boolean",
             "description": "This provider supports diagnostics for this specific reply."
+          },
+          "cardState": {
+            "$ref": "#/components/schemas/CardStateView",
+            "description": "Card variables after this reply's turn, on assistant rows whose turn recorded them and on the opening row (opening values, `seq` 0). A row without it keeps the latest earlier values."
           }
         }
       },
@@ -20918,6 +21089,10 @@
           "summaryUncharged": {
             "type": "boolean",
             "description": "Optional evidence about every observed story recap job in this turn: true means all settled at zero, false means a published recap was charged, absence means unknown. Say no credits were charged only when this is true and the foreground operation is also settled with chargeCredits zero. Previously published recap jobs retain their independent charge after a later recap fails."
+          },
+          "cardState": {
+            "$ref": "#/components/schemas/CardStateView",
+            "description": "Card variables this turn settled; only on finished turns that recorded them."
           }
         }
       },
@@ -25113,6 +25288,10 @@
           "world": {
             "$ref": "#/components/schemas/RoleWorld",
             "description": "Present only on world cards. Viewers get each member's id, name, avatar and profile plus maxSpeakers; the author also gets description, lorebookId, sex and strictness."
+          },
+          "state": {
+            "$ref": "#/components/schemas/RoleState",
+            "description": "Present only on cards with variables. Every reader gets `data` and `panel`; the author also gets `rules`, `open` and `required`."
           }
         }
       },
@@ -27209,6 +27388,10 @@
           "authorAsset": {
             "$ref": "#/components/schemas/TrialAuthorAsset"
           },
+          "state": {
+            "$ref": "#/components/schemas/RoleStateInput",
+            "description": "Card variables, same shape as `PUT /role/{roleId}/state`. Whole-document section: omitting it removes the card's variables."
+          },
           "evict": {
             "type": "boolean",
             "default": false,
@@ -27453,7 +27636,8 @@
                 "card",
                 "welcome",
                 "worldbook",
-                "authorAsset"
+                "authorAsset",
+                "state"
               ]
             },
             "description": "Sections written in this request (empty when everything was unchanged)."
@@ -29322,6 +29506,229 @@
         "properties": {
           "world": {
             "$ref": "#/components/schemas/RoleWorld"
+          }
+        }
+      },
+      "RoleStateRules": {
+        "type": "object",
+        "description": "Rules the model follows when it changes the values.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Rules for the variables as a whole, at most 8 KiB."
+          },
+          "paths": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Rule for one value, keyed by its path (for example `stats.hp` or `items[0].name`); at most 8 KiB in total, and every path must exist in `data`."
+          }
+        }
+      },
+      "RoleStatePanel": {
+        "type": "object",
+        "required": [
+          "template"
+        ],
+        "description": "Optional panel that shows the values to the player.",
+        "properties": {
+          "template": {
+            "type": "string",
+            "description": "Panel template, at most 32 KiB. A blank template means no panel."
+          }
+        }
+      },
+      "RoleStateInput": {
+        "type": "object",
+        "required": [
+          "convention",
+          "data"
+        ],
+        "description": "Card variables as the author writes them. Limits and the `convention` rules are described on `PUT /role/{roleId}/state`.",
+        "properties": {
+          "convention": {
+            "type": "string",
+            "enum": [
+              "mvu",
+              "plain"
+            ],
+            "description": "How `data` is written: `mvu` (leaves as `[value, \"rule\"]` pairs; `$meta` marks objects that may gain keys and keys that cannot be removed) or `plain` (bare values; an empty object may gain keys)."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Starting values as a JSON object: at most 16 KiB serialized, nesting depth 8, 400 keys in total, 2 KiB per string."
+          },
+          "rules": {
+            "$ref": "#/components/schemas/RoleStateRules"
+          },
+          "panel": {
+            "$ref": "#/components/schemas/RoleStatePanel"
+          }
+        }
+      },
+      "RoleState": {
+        "type": "object",
+        "required": [
+          "version",
+          "data"
+        ],
+        "description": "Card variables as stored, after normalization.",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [
+              2
+            ],
+            "description": "Format version."
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Starting values of a new conversation, as plain values; with `mvu` the rules have moved into `rules.paths`."
+          },
+          "panel": {
+            "$ref": "#/components/schemas/RoleStatePanel"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/RoleStateRules"
+          },
+          "open": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths of objects that may gain keys."
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths of keys that cannot be removed."
+          }
+        }
+      },
+      "RoleStateOutput": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/RoleState"
+          }
+        }
+      },
+      "CardStateView": {
+        "type": "object",
+        "required": [
+          "data",
+          "changes",
+          "seq",
+          "source"
+        ],
+        "description": "Card variables after a turn.",
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "All values after this turn."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardStateChange"
+            },
+            "description": "Changes this turn applied, in order; empty when none applied."
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardStateRejection"
+            },
+            "description": "Updates from the model that did not apply. Present only for the card's author."
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "`id` of the assistant row these values follow; `0` for the opening values."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "agent",
+              "seed"
+            ],
+            "description": "Where the values came from: `inline` (an update block in the reply), `agent` (the Agent-mode variables tool) or `seed` (the opening values)."
+          }
+        }
+      },
+      "CardStateChange": {
+        "type": "object",
+        "required": [
+          "op",
+          "path"
+        ],
+        "description": "One change that took effect.",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add",
+              "assign",
+              "remove"
+            ],
+            "description": "`set` replaces a value, `add` adds an amount to a number, `assign` inserts a key or list item, `remove` deletes a key or list item."
+          },
+          "path": {
+            "type": "string",
+            "description": "Path of the changed value, or of the object or list that gained or lost an entry."
+          },
+          "key": {
+            "type": "string",
+            "description": "Key inserted into or removed from the object at `path`."
+          },
+          "old": {
+            "description": "Value before the change."
+          },
+          "new": {
+            "description": "Value after the change."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason the model gave, when it gave one."
+          }
+        }
+      },
+      "CardStateRejection": {
+        "type": "object",
+        "required": [
+          "op",
+          "path",
+          "reason"
+        ],
+        "description": "An update from the model that did not apply.",
+        "properties": {
+          "op": {
+            "type": "string",
+            "description": "Operation as the model wrote it."
+          },
+          "path": {
+            "type": "string",
+            "description": "Path as the model wrote it."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "path",
+              "type",
+              "locked",
+              "notfound",
+              "size"
+            ],
+            "description": "`path`: no such path, or an unknown operation; `type`: the value does not match the kind stored there; `locked`: the object cannot gain that key, or the key cannot be removed; `notfound`: nothing to remove at that path; `size`: the result would exceed the limits."
           }
         }
       },
