@@ -621,7 +621,7 @@
   "d3e37ff5d6bfd": "設定開場訊息、替代開場白與序幕選項",
   "d93526251d0dc": "寫入自己私人角色的開場白（`roleWelcome`）；只有卡片讓玩家先開口時可以空白，也就是卡片有 `prologue` 條目（這次請求帶的或已存的）或作者資產的 `openingPage`，其餘情況必填且不可空白。`alternates`（玩家第一回合前可選的替代 AI 開場白）與 `prologue`（供玩家選擇的第一句台詞）皆為完整取代，依鍵是否出現區分：沒有鍵 = 不變更，空陣列 = 清除。每份清單最多保留 20 個非空白條目（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`），每個條目與 `roleWelcome` 本身皆受角色卡語言的開場白上限限制（8000 個字元；英文角色卡 10000；`role_welcome_too_long`）。角色必須為 `private`（`public_role_requires_clone`）。上限與可見性違規由錯誤映射器回傳為 HTTP 500。",
   "d1ba7e0b48786": "角色摘要；`fieldChars.roleWelcome` 回報變更前／後的字元數。",
-  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（卡片沒有 `prologue` 也沒有首屏網頁時開場白空白）。",
+  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（卡片沒有開場選項也沒有首屏網頁時開場白空白）。",
   "d142e691efe99": "`record not found`、`public_role_requires_clone`、`role_welcome_too_long`、`role_welcome_alternates_too_many`、`role_welcome_prologue_too_many`，或其他未分類錯誤；`retryable: true`。",
   "d9a48aaa139a9": "將分享碼匯入為新手帳範本",
   "d873e00afe99e": "將分享碼保存的固定快照複製為呼叫端擁有的新手帳範本。副本獨立：後續撤銷分享碼或作者編輯皆不影響；範本的 `sourceCode` 僅記錄來源。呼叫端已有 50 個範本時拒絕。分享碼採用與預覽相同的寬鬆解析。解析分享碼失敗使用 `{errorCode, messageKey}` 格式。",
