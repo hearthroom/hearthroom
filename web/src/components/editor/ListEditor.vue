@@ -15,6 +15,8 @@ const props = defineProps<{
   upLabel: string;
   downLabel: string;
   rows?: number;
+  /** 必填：標籤後面加星號（跟 FieldText 一樣貼字） */
+  required?: boolean;
 }>();
 
 const emit = defineEmits<{ "update:modelValue": [string[]] }>();
@@ -42,7 +44,7 @@ const move = (index: number, delta: number) => {
 
 <template>
   <div class="field">
-    <label>{{ label }}</label>
+    <label>{{ label }}<span v-if="required" class="req" aria-hidden="true">*</span></label>
     <p v-if="hint" class="subtle hint">{{ hint }}</p>
     <ul class="rows">
       <li v-for="(item, index) in modelValue" :key="index" class="row">
@@ -88,6 +90,7 @@ const move = (index: number, delta: number) => {
 </template>
 
 <style scoped>
+.req { color: var(--danger); margin-left: 2px; }
 .hint { margin: 0 0 var(--s-2); }
 /* .field 是 grid，按鈕預設會被拉成整欄寬；動作鈕該只有自己那麼寬，跟對話示例那組一致 */
 .add { justify-self: start; }

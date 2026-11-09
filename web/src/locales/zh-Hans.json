@@ -4609,7 +4609,7 @@
   "editor.opening.player.empty": "还没有开场白",
   "editor.opening.page.empty": "还没有网页内容",
   "editor.opening.rules.hit": "开场白套到 {n} 条显示规则",
-  "editor.opening.rules.none": "显示规则也会套用到开场白，可以把它做成首屏画面",
+  "editor.opening.rules.none": "显示规则也会套用到开场白，可以把它做成开场画面",
   "editor.opening.rules.edit": "编辑显示规则",
   "editor.opening.suggest": "建议的第一句",
   "editor.opening.suggest.hint": "这些句子显示在开场白下方，玩家点了会填进输入框。",

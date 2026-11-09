@@ -122,6 +122,7 @@ import CardStateEditor from "@/components/editor/CardStateEditor.vue";
 import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
 import { readStateTable } from "@/lib/card-state-table";
 import TagPicker from "@/components/editor/TagPicker.vue";
+import { TAG_CATALOG } from "../../../shared/tag-catalog";
 import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
 
@@ -620,8 +621,10 @@ const tagsOpen = ref(false);
 function settleDisclosures() {
   mediaMoreOpen.value = Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage);
   personaMoreOpen.value = Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim());
-  tagsOpen.value = draft.value.roleTag.length > 0;
+  tagsOpen.value = catalogPicked.value > 0;
 }
+/** 分類與玩法亮起幾個：只數目錄裡的分類，手打的其他標籤不算（ui-review K）。 */
+const catalogPicked = computed(() => TAG_CATALOG.filter((entry) => Object.values(entry.names).some((name) => draft.value.roleTag.includes(name))).length);
 const mediaMoreSet = computed(() => Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage));
 const personaMoreSet = computed(() => Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim()));
 
@@ -1340,6 +1343,8 @@ async function exportCard(format: "png" | "json") {
     </div>
 
     <template v-else>
+      <!-- 手機：分區籤搬進表單捲動區、排在標題與送審字數下面，黏在頂端；標題捲走後只剩它（ui.md §2.1） -->
+      <Teleport to="#editor-phone-nav" :disabled="!phone" defer>
       <div class="topbar">
         <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
         <nav class="side" :aria-label="$t('editor.sections')">
@@ -1383,6 +1388,7 @@ async function exportCard(format: "png" | "json") {
           </template>
         </div>
       </div>
+      </Teleport>
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
@@ -1411,6 +1417,7 @@ async function exportCard(format: "png" | "json") {
             </template>
           </div>
         </template>
+        <div id="editor-phone-nav" class="phone-nav" />
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
@@ -1537,7 +1544,7 @@ async function exportCard(format: "png" | "json") {
               <button type="button" class="disclosure" :aria-expanded="tagsOpen" aria-controls="tag-picker" @click="tagsOpen = !tagsOpen">
                 <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
                 <span class="disclosure__label">{{ $t("editor.tags.pick") }}</span>
-                <span v-if="draft.roleTag.length" class="disclosure__state">{{ $t("editor.tags.picked", { n: draft.roleTag.length }) }}</span>
+                <span v-if="catalogPicked" class="disclosure__state">{{ $t("editor.tags.picked", { n: catalogPicked }) }}</span>
               </button>
               <div v-show="tagsOpen" id="tag-picker">
                 <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
@@ -2058,6 +2065,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .disclosure__chev { width: 14px; height: 14px; flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
 .disclosure[aria-expanded="true"] .disclosure__chev { transform: rotate(90deg); }
 .disclosure__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 分類選單收在展開列裡，展開列本身就是標題：選單自帶的小標不再重複一次 */
+#tag-picker :deep(.picker > .eyebrow) { display: none; }
 .disclosure__state { flex: none; font-size: 13px; color: var(--text-2); font-weight: 400; }
 /* 送審字數一行：貼在角色設定欄下面 */
 .persona-detail { display: grid; gap: var(--s-2); }
@@ -2251,6 +2260,16 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* 640 以下頁面左右內距縮成 s-4（base.css），導覽的出血邊距跟著縮，不然兩邊各差 8px 露一條底 */
 @media (max-width: 640px) {
   .side { margin: 0 0 0 calc(var(--s-4) * -1); padding: var(--s-2) 0 var(--s-2) var(--s-4); }
+}
+/*
+   手機：分區籤在表單捲動區裡、標題下面，捲動時黏在頂端。捲動區會裁掉負邊距，所以兩邊都不出血：
+   底色跟表單同寬。捲動區右邊有 s-2 內距，這裡補回去才左右對稱。
+*/
+@media (max-width: 760px) {
+  .phone-nav:empty { display: none; }
+  .phone-nav { position: sticky; top: calc(-1 * var(--s-2)); z-index: 5; margin: 0 calc(-1 * var(--s-2)) var(--s-3) 0; background: var(--bg); }
+  .phone-nav .side { margin: 0; padding: var(--s-2) 0; mask-image: none; -webkit-mask-image: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .pane { scroll-margin-top: 52px; }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 /* 卡片展示：一組有外框的欄位，標題列右邊是「顯示在哪裡？」 */

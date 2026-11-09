@@ -2131,3 +2131,13 @@ describe("空白新卡", () => {
     expect(root.querySelector("[data-review-count]")).not.toBeNull();
   });
 });
+
+describe("分類與玩法的展開列", () => {
+  it("只數分類目錄裡亮起的標籤，手打的其他標籤不算；有亮起時預設展開", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "標籤", roleDetailDesc: "設定", roleWelcome: "開場", roleTag: ["校園", "自訂的標籤"] });
+    await mount("/cards/r1/edit");
+    const row = $('[aria-controls="tag-picker"]');
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(row.textContent).toContain(i18n.global.t("editor.tags.picked", { n: 1 }));
+  });
+});

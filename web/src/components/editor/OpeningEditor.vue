@@ -229,7 +229,7 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
       </div>
 
       <div class="opening__choices" :class="{ 'is-missing': missing }">
-        <ListEditor :model-value="prologue" :label="$t('editor.opening.choices')" :hint="$t('editor.opening.choices.hint')"
+        <ListEditor :model-value="prologue" :label="$t('editor.opening.choices')" required :hint="$t('editor.opening.choices.hint')"
                     :add-label="$t('editor.opening.choices.add')" :remove-label="$t('list.remove')"
                     :up-label="$t('list.up')" :down-label="$t('list.down')" @update:model-value="emit('update:prologue', $event)" />
       </div>
