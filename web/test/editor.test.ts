@@ -1997,6 +1997,10 @@ describe("卡片變數", () => {
     expect(api.putRoleState).not.toHaveBeenCalled();
     expect(root.textContent).toContain(i18n.global.t("editor.state.reject.data"));
     expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.advanced"));
+    // 進階亮紅點；再改變數就消掉
+    expect($(".side__item[aria-current=true] .side__dot")).toBeTruthy();
+    await type($("#f-state-data"), '{"好感度": 1}');
+    expect(root.querySelector(".side__item[aria-current=true] .side__dot")).toBeNull();
   });
 
   it("上游拒收時錯誤停在這一區", async () => {
