@@ -6,6 +6,7 @@ import {identitiesFor,makeMember,resetDb,restoreUpstream,role,ratingBody} from '
 import {reconcileWorkAccess} from '../src/work-reconcile';
 import {hostGateway} from '../src/hosting';
 import {unregister} from '../src/cards';
+import {upstream} from '../src/upstream';
 
 beforeEach(resetDb);
 afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
@@ -501,6 +502,37 @@ it('recovers a definitively refused first bind without inventing a managed polic
  expect(await env.DB.prepare('SELECT count(*) AS n FROM review_submissions').first()).toEqual({n:0});
  expect(await env.DB.prepare('SELECT count(*) AS n FROM card_registrations').first()).toEqual({n:0});
 
+});
+
+it('recovers a refused first bind when the author retries the card list before maintenance',async()=>{
+ const {source,current,network,behavior}=await fixture(true);
+ vi.spyOn(upstream,'fetchMyRoles').mockResolvedValue({
+  items:[{roleId:source,name:'Draft',summary:'',avatarUrl:null,backgroundUrl:null,zone:'all',visibility:'private',talkNum:0}],
+  total:1,hasNext:false,
+ });
+ const intent=await command(source);
+ const prior=network.getMockImplementation()!;
+ network.mockImplementation(async(input,init)=>{
+  const pathname=new URL(String(input)).pathname;
+  if(pathname==='/open/v1/hosting/work-access/owner-batch')return Response.json({items:[current]});
+  if(pathname===`/open/v1/hosting/work-access/${source}`&&init?.method==='POST'){
+   current.policyRevision='concurrent-unmanaged-save-revision';
+  }
+  return prior(input,init);
+ });
+ const visibilityPath=`/v1/me/cards/${source}/visibility`;
+ expect((await request(visibilityPath,'owner',intent)).status).toBe(409);
+ expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first()).toEqual({epoch:0,sync_state:'changing'});
+ const response=await request('/v1/me/cards?fresh=1');
+ expect(await response.json()).toMatchObject({
+  items:[{roleId:source,workVisibility:{access:'private',effectiveAccess:'owner',syncState:'complete'}}],
+ });
+ expect(response.status).toBe(200);
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access').first()).toBeNull();
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'conflict'});
+ expect(await env.DB.prepare('SELECT state FROM visibility_operations').first()).toEqual({state:'conflict'});
+ expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='work_access' AND operation='reconcile' AND outcome='success'").first()).toEqual({value:1});
+ expect(behavior.commands).toBe(0);
 });
 
 it.each(['offline','receipt','managed','moderation','new_fence','other_intent','low_pending'])('retains a refused first-bind fence when cleanup proof is %s',async mode=>{

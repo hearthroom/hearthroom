@@ -104,8 +104,15 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string):Promi
  const ids=JSON.stringify(sources);
  const before=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>();
  const prior=new Map(before.results.map(p=>[p.source_role_id,p]));
- const saved=sources.flatMap((source,i)=>savedEpochAdvanced(provider[i],prior.get(source)??null)?[prior.get(source)!.work_id]:[]);
- if(saved.length){await refreshWorkAccess(env,saved.length,[],saved);provider=await workPolicyGateway.owners(env,'harbor',sources,token);}
+ const refresh=sources.flatMap((source,i)=>{
+  const local=prior.get(source);
+  if(!local)return [];
+  // A refused first bind can leave the author's list fenced until maintenance.
+  // Recovery still requires both terminal conflicts, unmanaged authority and no receipt.
+  const firstBindUnconfirmed=local.epoch===0&&local.sync_state==='changing'&&!provider[i].managed;
+  return firstBindUnconfirmed||savedEpochAdvanced(provider[i],local)?[local.work_id]:[];
+ });
+ if(refresh.length){await refreshWorkAccess(env,refresh.length,[],refresh);provider=await workPolicyGateway.owners(env,'harbor',sources,token);}
  const [cards,policies,reviews,moderation]=await Promise.all([
   env.DB.prepare("SELECT * FROM cards WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<CardRow>(),
   env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>(),
