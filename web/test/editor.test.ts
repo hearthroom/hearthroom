@@ -1845,6 +1845,39 @@ describe('large replacement advisory', () => {
 });
 
 describe("匯入 AI 風月卡 → 建立", () => {
+  it("匯入的世界書還在建立時就按建立：規則與綁定照樣寫上去", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases[0];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    api.createWorldbook.mockImplementationOnce(async () => { await gate; return "wb1"; });
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(fixture.input)], "export.json", { type: "application/json" }));
+    byText("套用到表單").click();
+    await flush();
+    const saving = submit();
+    await flush();
+    release();
+    await saving;
+    await flush();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    const docs = api.patchWorldbookDocument.mock.calls as unknown as [string, { binding?: unknown }][];
+    expect(docs.some(([, doc]) => JSON.stringify(doc.binding ?? null).includes("r1"))).toBe(true);
+  });
+
+  it("規則、內置 CSS 與世界書都跟著第一次儲存寫上去，世界書綁到這張卡", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases[0];
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(fixture.input)], "export.json", { type: "application/json" }));
+    byText("套用到表單").click();
+    await flush();
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { rules: { find: string }[] }];
+    expect(asset.rules.length).toBe(2);
+    const docs = api.patchWorldbookDocument.mock.calls as unknown as [string, { binding?: unknown; entries: unknown[] }][];
+    expect(docs.some(([, doc]) => JSON.stringify(doc.binding ?? null).includes("r1"))).toBe(true);
+  });
+
   it("詳細介紹成為首屏網頁、開場選項帶進來、開場白留空也能存；作者資產先存、再存開場", async () => {
     const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find((c: { name: string }) => c.name.startsWith("real export, opening-choice mode"))!;
     await mount("/create");
