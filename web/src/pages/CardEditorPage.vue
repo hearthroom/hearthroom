@@ -460,6 +460,9 @@ const sections = computed(() => SECTIONS.filter((key) =>
   : true));
 /** 卡片變數那一塊：預設收起（多數卡用不到），按「加入」或存檔被擋在變數上時才打開。 */
 const stateOpen = ref(false);
+/** 存檔被擋在卡片變數上：進階亮紅點，直到作者再改變數或存成功（ui.md §2）。 */
+const stateBlocked = ref(false);
+watch(() => draft.value.state, () => { stateBlocked.value = false; }, { deep: true });
 const body = ref<HTMLElement | null>(null);
 const scrollBody = ref<HTMLElement | null>(null);
 
@@ -547,7 +550,7 @@ const REQUIRED_OF = computed<Partial<Record<Section, string>>>(() => ({
   persona: "roleDetailDesc",
   opening: openingMode.value === "page" ? "prologue" : "roleWelcome",
 }));
-const lacks = (key: Section) => Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
+const lacks = (key: Section) => (key === "advanced" && stateBlocked.value) || Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
 const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
@@ -1026,6 +1029,7 @@ async function save() {
   if (stateIssue) {
     section.value = "advanced";
     stateOpen.value = true;
+    stateBlocked.value = true;
     error.value = t(`editor.state.reject.${stateIssue}`, stateLimitParams());
     return;
   }
@@ -1106,6 +1110,7 @@ async function save() {
       } catch (err) {
         section.value = "advanced";
         stateOpen.value = true;
+        stateBlocked.value = true;
         throw err;
       }
     }
