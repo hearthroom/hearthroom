@@ -2,11 +2,12 @@
  * 卡片變數（CardState）：作者在編輯器裡寫的那份骨架，跟上游存的正規化結果之間的轉換。
  *
  * 上游只在寫入時正規化一次（server provider/internal/service/cardstate/definition.go 的 Normalize）：
- *   - mvu：葉子寫成 [值, "規則"]，值進 data、規則進 rules.paths["a.b"]；
+ *   - mvu：葉子寫成 [值, "規則"]，值進 data、規則進 rules.paths（路徑寫法見 keyPath）；
+ *     寫入時另外帶的 rules.paths 照收，原文裡的 [值, "規則"] 再疊上去；
  *     物件上的 {"$meta": {"extensible": true}}／recursiveExtensible 記成 open（可以新增鍵）；
  *     $meta.required 記成 required；清單裡的 "$__META_EXTENSIBLE__$" 標記剝掉；
  *     一對 [值, 規則] 裡的值若是清單，它就是清單，不再當成另一對。
- *   - plain：照原樣存；每個空物件 {} 都記成 open。
+ *   - plain：照原樣存；每個空物件 {} 都記成 open；逐值規則只能走 rules.paths。
  * 讀回來的只有正規化後的純值樹，所以編輯器要把它組回作者寫的樣子（rebuildStateText），
  * 而且再存一次要得到同一份結果。normalizeState 是上游規則的本地鏡像：存檔前的檢查、
  * 每輪大小的提示、與往返測試都靠它。兩邊不一致時以上游為準，改這裡去配合。
@@ -22,6 +23,11 @@ export interface CardStateDraft {
   rulesText: string;
   /** 面板皮膚（Handlebars 的 HTML／CSS）；空字串＝沒有面板。 */
   template: string;
+  /**
+   * 骨架原文放不下的逐值規則，照路徑記（清單元素上的規則、或「只有值」寫法下的規則），
+   * 存檔時當 rules.paths 送出，讀回再存一次才不會掉。沒有就不帶這個欄位。
+   */
+  pathRules?: Record<string, string>;
 }
 
 /** 上游的上限（definition.go）。位元組都是 UTF-8。 */
@@ -68,9 +74,74 @@ const isObject = (v: unknown): v is JsonObject => !!v && typeof v === "object" &
 const isMarker = (v: unknown): boolean => v === MARKER;
 const bytes = (s: string): number => new TextEncoder().encode(s).length;
 
-/** 上游路徑的標準寫法：a.b[0].c（索引前沒有點）。 */
-const keyPath = (p: string, key: string): string => (p ? `${p}.${key}` : key);
+/**
+ * 上游路徑的標準寫法（Path.String）：鍵用點接、索引寫 [n]；鍵是空字串或含 . [ ] " 時寫成 ["鍵"]，
+ * 前面不加點，例如 a["x.y"]、["HP.max"]、背包[0]。上游回傳的 rules.paths／open／required 都是這個寫法，
+ * 這裡組不出一模一樣的字串，讀回時就對不上、再存一次就掉了。
+ */
+const keyPath = (p: string, key: string): string => (key === "" || /[.[\]"]/.test(key) ? `${p}["${key}"]` : p ? `${p}.${key}` : key);
 const indexPath = (p: string, i: number): string => `${p}[${i}]`;
+
+type PathPart = { key: string } | { index: number; raw: string };
+
+/** 上游 ParsePath 的鏡像：a.b、a[0].c、a["有點的鍵"]、a['鍵']、/a/0/c。讀不懂就 null。 */
+function parsePath(raw: string): PathPart[] | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const parts: PathPart[] = [];
+  if (s.startsWith("/")) {
+    for (let seg of s.slice(1).split("/")) {
+      seg = seg.replaceAll("~1", "/").replaceAll("~0", "~");
+      parts.push(/^\d+$/.test(seg) ? { index: Number(seg), raw: seg } : { key: seg });
+    }
+    return parts;
+  }
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === ".") { i++; continue; }
+    if (s[i] === "[") {
+      const end = s.indexOf("]", i);
+      if (end < 0) return null;
+      const inner = s.slice(i + 1, end).trim();
+      i = end + 1;
+      if (inner.length >= 2 && (inner[0] === '"' || inner[0] === "'") && inner.at(-1) === inner[0]) {
+        parts.push({ key: inner.slice(1, -1) });
+        continue;
+      }
+      if (!/^\d+$/.test(inner)) return null;
+      parts.push({ index: Number(inner), raw: inner });
+      continue;
+    }
+    let j = i;
+    while (j < s.length && s[j] !== "." && s[j] !== "[") j++;
+    parts.push({ key: s.slice(i, j).trim() });
+    i = j;
+  }
+  return parts.length ? parts : null;
+}
+
+const formatPath = (parts: PathPart[]): string => parts.reduce((p, part) => ("index" in part ? indexPath(p, part.index) : keyPath(p, part.key)), "");
+
+/** 路徑在值樹裡找得到東西（上游 Lookup：對不上的規則路徑整份拒收）。 */
+function pathExists(data: Json, path: string): boolean {
+  const parts = parsePath(path);
+  if (!parts) return false;
+  let cur: Json = data;
+  for (const part of parts) {
+    if (isObject(cur) && "key" in part) {
+      if (!Object.hasOwn(cur, part.key)) return false;
+      cur = cur[part.key];
+    } else if (isObject(cur) && "index" in part) {
+      // 物件上的索引照原字當鍵名找（上游 Lookup 也這樣）
+      if (!Object.hasOwn(cur, part.raw)) return false;
+      cur = cur[part.raw];
+    } else if (Array.isArray(cur) && "index" in part) {
+      if (part.index >= cur.length) return false;
+      cur = cur[part.index];
+    } else return false;
+  }
+  return true;
+}
 
 /** 一對 [值, "規則"] 的樣子；清單裡的元素永遠不是一對。 */
 const isPair = (v: unknown): v is [Json, string] =>
@@ -128,11 +199,10 @@ export function normalizeState(convention: StateConvention, data: unknown, ruleP
     return n;
   };
   const value = (n: Json, p: string, inherited: boolean): Json => (Array.isArray(n) ? list(n, p, inherited) : node(n, p, inherited));
+  // 索引是剝掉標記之後的位置，跟上游一樣
   const list = (n: Json[], p: string, inherited: boolean): Json[] => {
     const out: Json[] = [];
-    n.forEach((v, i) => {
-      if (!isMarker(v)) out.push(value(v, indexPath(p, i), inherited));
-    });
+    for (const v of n) if (!isMarker(v)) out.push(value(v, indexPath(p, out.length), inherited));
     return out;
   };
   return { data: node(data, "", false) as JsonObject, paths, open: sortDedupe(open), required: sortDedupe(required) };
@@ -153,39 +223,54 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
  * 可擴充的物件補 {"$meta": {"extensible": true}}，必填鍵記在父物件的 $meta.required。
  * 兩個元素、第二個是字串的清單（["短刀", "鐵護腕"]）在 MVU 裡會被讀成一對，
  * 所以沒有規則時也包一層 [清單, ""]——空規則上游不記，值照樣是清單。
- * 規則掛在清單元素上（a[0]）的寫法 MVU 原文表達不了，那幾條組不回去。
+ * 規則掛在清單元素上（a[0]）的寫法 MVU 原文表達不了，那幾條放進 pathRules，存檔時照路徑送回去。
  */
-export function rebuildStateText(def: { data: unknown; paths?: Record<string, string>; open?: string[]; required?: string[] }): { convention: StateConvention; dataText: string } {
+export function rebuildStateText(def: { data: unknown; paths?: Record<string, string>; open?: string[]; required?: string[] }): { convention: StateConvention; dataText: string; pathRules: Record<string, string> } {
   const data = isObject(def.data) ? def.data : {};
   const paths = def.paths ?? {};
-  const open = new Set(def.open ?? []);
   const required = def.required ?? [];
   const plain = normalizeState("plain", data);
-  const plainFits = !Object.keys(paths).length && !required.length && sameList(plain.open, sortDedupe([...open]));
-  if (plainFits) return { convention: "plain", dataText: formatJson(data) };
+  const plainFits = !Object.keys(paths).length && !required.length && sameList(plain.open, sortDedupe([...(def.open ?? [])]));
+  if (plainFits) return { convention: "plain", dataText: formatJson(data), pathRules: {} };
+  const built = mvuSkeleton(data, paths, def.open ?? [], required);
+  return { convention: "mvu", dataText: formatJson(built.data), pathRules: built.pathRules };
+}
 
-  const requiredUnder = (p: string): string[] => {
-    const prefix = p ? `${p}.` : "";
-    return required.filter((r) => r.startsWith(prefix) && r.length > prefix.length && !/[.[]/.test(r.slice(prefix.length))).map((r) => r.slice(prefix.length));
-  };
+/**
+ * 純值樹 → MVU 原文的物件：paths 裡掛在物件鍵上的規則寫成 [值, "規則"]，其餘的（清單元素上的、
+ * 對不上的）原樣回傳在 pathRules；open 的物件補 $meta.extensible，required 記在父物件的 $meta.required。
+ */
+function mvuSkeleton(data: JsonObject, paths: Record<string, string>, openList: string[], required: string[]): { data: JsonObject; pathRules: Record<string, string> } {
+  const open = new Set(openList);
+  const rest = { ...paths };
+  // 每條必填路徑是「父物件路徑 + 一個鍵」：照父物件分組，組回時寫進那個物件的 $meta.required
+  const requiredByParent = new Map<string, string[]>();
+  for (const r of required) {
+    const parts = parsePath(r);
+    const last = parts?.at(-1);
+    if (!parts || !last || !("key" in last)) continue;
+    const parent = formatPath(parts.slice(0, -1));
+    requiredByParent.set(parent, [...(requiredByParent.get(parent) ?? []), last.key]);
+  }
   const build = (n: Json, p: string): Json => {
     if (Array.isArray(n)) return n.map((v, i) => build(v, indexPath(p, i)));
     if (!isObject(n)) return n;
     const out: JsonObject = {};
     const meta: JsonObject = {};
     if (p && open.has(p)) meta.extensible = true;
-    const req = requiredUnder(p);
-    if (req.length) meta.required = req;
+    const req = requiredByParent.get(p);
+    if (req?.length) meta.required = req;
     if (Object.keys(meta).length) out.$meta = meta;
     for (const [k, v] of Object.entries(n)) {
       const cp = keyPath(p, k);
       const child = build(v, cp);
-      const rule = paths[cp];
+      const rule = rest[cp];
+      if (rule !== undefined) delete rest[cp];
       out[k] = rule !== undefined ? [child, rule] : isPair(child) ? [child, ""] : child;
     }
     return out;
   };
-  return { convention: "mvu", dataText: formatJson(build(data, "")) };
+  return { data: build(data, "") as JsonObject, pathRules: rest };
 }
 
 const sameList = (a: string[], b: string[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
@@ -235,6 +320,7 @@ export function readState(raw: unknown): CardStateDraft | null {
     dataText: rebuilt.dataText,
     rulesText: typeof rules.text === "string" ? rules.text : "",
     template: typeof panel.template === "string" ? panel.template : "",
+    ...(Object.keys(rebuilt.pathRules).length ? { pathRules: rebuilt.pathRules } : {}),
   };
 }
 
@@ -254,18 +340,66 @@ export function parseStateData(text: string): JsonObject {
 export interface StatePayload {
   convention: StateConvention;
   data: JsonObject;
-  rules?: { text?: string };
+  rules?: { text?: string; paths?: Record<string, string> };
   panel?: { template: string };
 }
 
-/** 骨架是空的＝沒有變數（存檔時移除）。 */
-export const stateEmpty = (state: CardStateDraft | null): boolean => !state || !state.dataText.trim();
+/**
+ * 骨架、規則、皮膚三格都空＝沒有變數（存檔時移除）。只清掉骨架、規則或皮膚還有字的，
+ * 不是要移除：stateProblem 把它當骨架的錯擋下來，免得一存就把另外兩格一起刪掉。
+ */
+export const stateEmpty = (state: CardStateDraft | null): boolean =>
+  !state || (!state.dataText.trim() && !state.rulesText.trim() && !state.template.trim());
+
+/** 要送出的逐值規則：空白的不送；骨架裡已經沒有那個值的也不送（上游會整份拒收，作者在這裡看不到也刪不掉它）。 */
+function sentPathRules(state: CardStateDraft, data: JsonObject): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!state.pathRules) return out;
+  let values: JsonObject;
+  try {
+    values = normalizeState(state.convention, data).data;
+  } catch {
+    return out;
+  }
+  for (const [k, v] of Object.entries(state.pathRules)) if (v.trim() && pathExists(values, k)) out[k] = v;
+  return out;
+}
 
 export function statePayload(state: CardStateDraft): StatePayload {
-  const out: StatePayload = { convention: state.convention, data: parseStateData(state.dataText) };
-  if (state.rulesText.trim()) out.rules = { text: state.rulesText };
+  const data = parseStateData(state.dataText);
+  const out: StatePayload = { convention: state.convention, data };
+  const rules: NonNullable<StatePayload["rules"]> = {};
+  if (state.rulesText.trim()) rules.text = state.rulesText;
+  const paths = sentPathRules(state, data);
+  if (Object.keys(paths).length) rules.paths = paths;
+  if (Object.keys(rules).length) out.rules = rules;
   if (state.template.trim()) out.panel = { template: state.template };
   return out;
+}
+
+/**
+ * 切換寫法時把骨架轉成另一種寫法，值與規則都不掉：
+ *   - 只有值 → MVU：值照原樣，像一對的清單包成 [清單, ""]、空物件補 $meta.extensible（只有值寫法裡它們本來就能新增）；
+ *   - MVU → 只有值：骨架只留值，每條逐值規則搬到變數規則，一條一行「路徑: 規則」。
+ *     MVU 才有的可擴充（非空物件）與必填在只有值的寫法裡沒有寫法，切過去就沒了。
+ * 骨架是空的或解不開時只換寫法，原文不動（錯誤照樣標在骨架下面）。
+ */
+export function switchConvention(state: CardStateDraft, to: StateConvention): CardStateDraft {
+  if (state.convention === to) return state;
+  let data: JsonObject;
+  try {
+    data = parseStateData(state.dataText);
+  } catch {
+    return { ...state, convention: to };
+  }
+  if (to === "mvu") {
+    const plain = normalizeState("plain", data);
+    return { ...state, convention: to, dataText: formatJson(mvuSkeleton(data, {}, plain.open, []).data) };
+  }
+  const norm = normalizeState("mvu", data);
+  const lines = Object.entries(norm.paths).map(([k, v]) => `${k}: ${v}`).join("\n");
+  const rulesText = !lines ? state.rulesText : state.rulesText.trim() ? `${state.rulesText.trimEnd()}\n\n${lines}` : lines;
+  return { ...state, convention: to, dataText: formatJson(norm.data), rulesText };
 }
 
 /** 有沒有改過（含開關本身）。 */
@@ -277,7 +411,7 @@ export function stateChanged(draft: { state: CardStateDraft | null }, original: 
 /** 正規化之後的值樹（每一輪送進對話的就是它）的精簡 JSON；解不開就 null。 */
 export function stateValues(state: CardStateDraft): NormalizedState | null {
   try {
-    return normalizeState(state.convention, parseStateData(state.dataText));
+    return normalizeState(state.convention, parseStateData(state.dataText), state.pathRules);
   } catch {
     return null;
   }
@@ -292,7 +426,8 @@ export function stateProblem(state: CardStateDraft | null): StateReason | null {
   const s = state!;
   let norm: NormalizedState;
   try {
-    norm = normalizeState(s.convention, parseStateData(s.dataText));
+    const data = parseStateData(s.dataText);
+    norm = normalizeState(s.convention, data, sentPathRules(s, data));
   } catch (err) {
     return err instanceof StateError ? err.reason : "data";
   }

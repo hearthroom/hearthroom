@@ -149,7 +149,9 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-declare module "stage-panel/handlebars-lite" {
+declare module "stage-panel/state-panel" {
   export interface PanelRenderResult { html: string; error?: { message: string; line: number; helper?: string } }
-  export function renderPanel(template: string, data: unknown, opts?: { changes?: unknown[]; audience?: "author" | "player" }): PanelRenderResult;
+  export const STATE_PANEL_SKIN_CLASS: string;
+  export type StatePanelAudience = "author" | "player";
+  export function renderStatePanelSkin(template: string, data: unknown, changes: unknown[], audience: StatePanelAudience): PanelRenderResult;
 }

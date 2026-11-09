@@ -20,8 +20,8 @@ export default defineConfig({
       { find: "stage-canvas/components", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/components", import.meta.url)) },
       // 舞台作者規則快取的資料庫名與刪除（無依賴的小檔）：登出時刪掉，不必為此載入整個舞台。
       { find: "stage-author-rules/store", replacement: fileURLToPath(new URL("../stage/src/common/author-rules/store.ts", import.meta.url)) },
-      // 卡片數值面板的模板渲染器（無依賴、不跑 JS）：建卡頁預覽跟遊玩畫布用同一份。
-      { find: "stage-panel/handlebars-lite", replacement: fileURLToPath(new URL("../stage/src/common/panel/handlebars-lite.ts", import.meta.url)) },
+      // 卡片數值面板的皮膚怎麼畫（模板渲染器＋皮膚樣式前綴，無依賴、不跑 JS）：建卡頁預覽跟遊玩畫布的面板同一支。
+      { find: "stage-panel/state-panel", replacement: fileURLToPath(new URL("../stage/src/common/panel/state-panel.ts", import.meta.url)) },
       {
         find: /^@\/(.*)$/,
         replacement: "$1",

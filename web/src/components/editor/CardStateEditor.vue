@@ -21,6 +21,7 @@ import {
   stateProblem,
   stateTurnSize,
   stateValues,
+  switchConvention,
   type CardStateDraft,
   type StateConvention,
 } from "@/lib/card-state";
@@ -39,6 +40,8 @@ const rulesText = field("rulesText");
 const template = field("template");
 
 const CONVENTIONS: StateConvention[] = ["mvu", "plain"];
+/** 換寫法時連骨架一起轉（switchConvention）：只翻開關的話，["短刀", "鐵護腕"] 會被讀成值加規則。 */
+const setConvention = (c: StateConvention) => emit("update:modelValue", switchConvention(props.modelValue, c));
 
 /** 骨架解不開時，盡量指出第幾行（各家瀏覽器的錯誤訊息格式不同，拿不到就只講格式有誤）。 */
 const parseError = computed(() => {
@@ -106,7 +109,7 @@ async function insertExample(key: ExampleKey) {
       <div class="seg cstate__seg" role="radiogroup" aria-labelledby="f-state-convention-label">
         <button v-for="c in CONVENTIONS" :key="c" type="button" class="seg__item" role="radio"
                 :class="{ 'seg__item--on': modelValue.convention === c }" :aria-checked="modelValue.convention === c"
-                @click="update({ convention: c })">{{ $t(`editor.state.convention.${c}`) }}</button>
+                @click="setConvention(c)">{{ $t(`editor.state.convention.${c}`) }}</button>
       </div>
       <span class="subtle">{{ $t(`editor.state.convention.${modelValue.convention}.hint`) }}</span>
     </div>

@@ -55,6 +55,29 @@ describe("CardStateEditor", () => {
     expect(JSON.parse(model.value.dataText)).toEqual({ 背包: ["短刀", "鐵護腕"] });
   });
 
+  it("切換寫法時轉換骨架：清單不會變成一對，規則搬到變數規則不會掉", async () => {
+    const { model } = mount({ convention: "plain", dataText: '{"背包": ["短刀", "鐵護腕"]}', rulesText: "", template: "" });
+    button(t("editor.state.convention.mvu")).click();
+    await nextTick();
+    expect(model.value.convention).toBe("mvu");
+    expect(JSON.parse(model.value.dataText)).toEqual({ 背包: [["短刀", "鐵護腕"], ""] });
+
+    model.value = { ...model.value, dataText: '{"生命": [100, "受傷時減少"]}' };
+    await nextTick();
+    button(t("editor.state.convention.plain")).click();
+    await nextTick();
+    expect(model.value.convention).toBe("plain");
+    expect(JSON.parse(model.value.dataText)).toEqual({ 生命: 100 });
+    expect(model.value.rulesText).toBe("生命: 受傷時減少");
+
+    model.value = { ...model.value, dataText: '{"a": ' };
+    await nextTick();
+    button(t("editor.state.convention.mvu")).click();
+    await nextTick();
+    expect(model.value).toMatchObject({ convention: "mvu", dataText: '{"a": ' });
+    expect(root.querySelector("#f-state-data-error")).not.toBeNull();
+  });
+
   it("範例跟著卡片語言", async () => {
     const { model } = mount(empty(), "en");
     button(t("editor.state.example.inventory")).click();
@@ -83,6 +106,16 @@ describe("CardStateEditor", () => {
     mount({ convention: "mvu", dataText: '{"好感度": [10, "規則"]}', rulesText: "", template: "<b>{{好感度}}</b>" });
     await nextTick();
     expect(root.querySelector("iframe")?.getAttribute("srcdoc")).toContain("<b>10</b>");
+  });
+  it("預覽跟遊玩畫布同一套畫法：皮膚放在面板容器裡，樣式只套在容器之內", async () => {
+    mount({ convention: "plain", dataText: '{"a": 1}', rulesText: "", template: "<style>b { color: red; }</style><b>{{a}}</b>" });
+    await nextTick();
+    const doc = new DOMParser().parseFromString(root.querySelector("iframe")?.getAttribute("srcdoc") ?? "", "text/html");
+    const skin = doc.querySelector(".lt-state-skin");
+    expect(skin?.querySelector("b")?.textContent).toBe("1");
+    const css = skin?.querySelector("style")?.textContent ?? "";
+    expect(css).toMatch(/\.lt-state-skin\s+b\b/);
+    for (const [, selector] of css.matchAll(/([^{}]+)\{/g)) expect(selector.trim()).toMatch(/^\.lt-state-skin\b/);
   });
   it("皮膚寫壞時標出第幾行，不畫空白框", async () => {
     mount({ convention: "plain", dataText: '{"金錢": 1}', rulesText: "", template: "{{#if 金錢}}<b>" });
