@@ -163,7 +163,7 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
       </button>
     </div>
 
-    <p v-if="switchNotice" class="notice opening__notice" role="status" data-opening-switched>
+    <p v-if="switchNotice" class="notice opening__notice opening__notice--switched" role="status" data-opening-switched>
       <span>{{ switchNotice }}</span>
       <button type="button" class="btn btn--sm btn--ghost" @click="emit('update:mode', savedMode)">{{ $t("editor.opening.switchBack") }}</button>
     </p>
@@ -264,6 +264,8 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 
 .opening__notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); margin: 0; }
 .opening__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* 剛切換造成的提示用淡強調底，跟「這張卡原本就兩樣都有」的灰底分得開 */
+.opening__notice--switched { background: var(--accent-tint); }
 .opening__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--h-sm); }
 .opening__head label { font-size: 13px; font-weight: 600; line-height: 1.3; }
 .opening__head .seg__item { height: 28px; padding: 0 12px; font-size: 12.5px; }

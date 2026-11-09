@@ -43,10 +43,7 @@ const beyond = computed(() => !over.value && Boolean(props.advise) && length.val
 <template>
   <div class="field">
     <!-- 沒有標籤：外面自己畫（例如標籤旁邊還有撰寫／預覽切換） -->
-    <label v-if="label" :for="id">
-      {{ label }}
-      <span v-if="required" class="req" aria-hidden="true">*</span>
-    </label>
+    <label v-if="label" :for="id">{{ label }}<span v-if="required" class="req" aria-hidden="true">*</span></label>
     <!-- min-height 照 rows 算：欄位會跟內容長高（見編輯頁的 field-sizing），rows 只剩「起始有多高」這個意思 -->
     <textarea autocomplete="off" v-if="rows > 0" :id="id" v-model="value" class="input" :rows="rows" :placeholder="placeholder"
               :style="{ minHeight: `calc(${rows} * 1.7em + 26px)` }" />

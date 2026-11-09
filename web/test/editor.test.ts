@@ -1913,6 +1913,15 @@ describe("卡片變數", () => {
     },
   };
 
+  it("已存過變數的卡打開時收著；狀態列數頂層與群組裡的值，清單算一個、規則不算", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce(JSON.parse(JSON.stringify(DETAIL)));
+    await mount("/cards/r1/edit");
+    const toggle = $('[data-state-panel] [aria-controls="state-body"]');
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // 好感度、背包（清單）、任務（空群組，0 項）→ 2
+    expect($(".state-panel__chip").textContent).toBe(i18n.global.t("editor.state.summary", { n: 2 }));
+  });
+
   it("讀回上游的定義組回 MVU 寫法，改規則後整包寫入", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce(JSON.parse(JSON.stringify(DETAIL)));
     await mount("/cards/r1/edit");
@@ -2106,5 +2115,15 @@ describe("開局：切到開場網頁時不擋要被移除的開場白", () => {
     await submit();
     expect(root.querySelector('.body__scroll > [role="alert"]')).toBeNull();
     expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["出發"] }, "tok");
+  });
+});
+
+describe("空白新卡", () => {
+  it("還沒寫設定就不顯示送審字數", async () => {
+    await mount("/create");
+    expect(root.querySelector("[data-card-constant-count]")).toBeNull();
+    expect(root.querySelector("[data-review-count]")).toBeNull();
+    await type($("#f-detail"), "設定");
+    expect(root.querySelector("[data-review-count]")).not.toBeNull();
   });
 });

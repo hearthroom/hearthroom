@@ -252,7 +252,7 @@ export type RequiredKey = "roleName" | "roleWelcome" | "prologue" | "roleDetailD
  * 第一句選項（網頁本身可以留空，玩家只看到選項）。
  */
 export function requiredKeys(openingMode: "greeting" | "page" = "greeting"): RequiredKey[] {
-  return ["roleName", openingMode === "page" ? "prologue" : "roleWelcome", "roleDetailDesc"];
+  return ["roleName", "roleDetailDesc", openingMode === "page" ? "prologue" : "roleWelcome"];
 }
 
 /**
