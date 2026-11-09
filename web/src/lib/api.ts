@@ -610,6 +610,8 @@ export interface ReviewDetail {
     authorAsset: {
       rules: { id: string; name: string; find: string; replace: string; enabled: boolean }[];
       mountTrigger: string; mountLayer: string; pageMode: string; status: string; version: number;
+      /** 首屏網頁（作者 HTML，開新對話時畫布最上方）；沒有就不帶。 */
+      openingPage?: string;
     };
     hashes: { card: string; welcome: string; worldbook: string; authorAsset: string; content: string };
     reviewLength?:ReviewLength;
@@ -1562,6 +1564,10 @@ export interface AuthorAsset {
   mountTrigger: string;
   mountLayer: string;
   pageMode: string;
+  /** 卡片格式（mmd／tavern／fengyue）。讀回來要帶著：存檔時整份覆寫，漏讀就會被洗成空的。 */
+  cardFormat: string;
+  /** 首屏網頁：開新對話時畫布最上方的作者網頁，只顯示、不送模型。 */
+  openingPage: string;
   status: string;
   version: number;
 }
@@ -1570,6 +1576,8 @@ const asAuthorAsset = (b: Partial<AuthorAsset>): AuthorAsset => ({
   mountTrigger: b.mountTrigger ?? "",
   mountLayer: b.mountLayer ?? "",
   pageMode: b.pageMode ?? "",
+  cardFormat: b.cardFormat ?? "",
+  openingPage: b.openingPage ?? "",
   status: b.status ?? "none",
   version: b.version ?? 0,
 });

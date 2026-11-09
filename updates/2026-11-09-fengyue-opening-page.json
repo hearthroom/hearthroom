@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "風月卡的詳細介紹會成為首屏網頁",
+    "zh-Hans": "风月卡的详细介绍会成为首屏网页",
+    "en": "Fengyue introductions become opening pages",
+    "ja": "風月の詳細紹介が最初の画面に",
+    "ko": "풍월 상세 소개가 첫 화면으로"
+  },
+  "body": {
+    "zh-Hant": "匯入的詳細介紹顯示在開新對話的最上方，只給玩家看、不送給 AI；點開場選項會直接送出，跟在風月一樣。",
+    "zh-Hans": "导入的详细介绍显示在开新对话的最上方，只给玩家看、不发给 AI；点开场选项会直接发送，跟在风月一样。",
+    "en": "An imported introduction now shows at the top of every new chat for players only, never sent to the AI, and tapping an opening choice sends it, as on Fengyue.",
+    "ja": "読み込んだ詳細紹介は新しい会話の一番上にプレイヤーにだけ表示され AI には送られず、最初の選択肢は押すとそのまま送信されます。",
+    "ko": "가져온 상세 소개가 새 대화 맨 위에 플레이어에게만 보이고 AI에는 보내지 않으며, 첫 선택지는 누르면 바로 보내져요."
+  }
+}

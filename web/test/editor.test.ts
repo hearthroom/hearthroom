@@ -1833,3 +1833,26 @@ describe('large replacement advisory', () => {
   ] }), 'tok');
  });
 });
+
+describe("匯入 AI 風月卡 → 建立", () => {
+  it("詳細介紹成為首屏網頁、開場選項帶進來、開場白留空也能存；作者資產先存、再存開場", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find((c: { name: string }) => c.name.startsWith("real export, opening-choice mode"))!;
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(fixture.input)], "export.json", { type: "application/json" }));
+    expect(root.textContent).toContain(i18n.global.t("import.landed.openingPage", { n: [..."<div>TEST-INTRO-HTML</div>"].length }));
+    byText("套用到表單").click();
+    await flush();
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>TEST-INTRO-HTML</div>");
+    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("");
+    // 開場白空著也不算缺：有首屏網頁與開場選項，玩家先開口
+    expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
+    const order: string[] = [];
+    api.saveAuthorAsset.mockImplementationOnce(async () => { order.push("asset"); return { rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", status: "passed", version: 1 }; });
+    api.patchRoleWelcome.mockImplementationOnce(async () => { order.push("welcome"); return {}; });
+    await submit();
+    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { cardFormat: string; openingPage: string; pageMode: string }];
+    expect(asset).toMatchObject({ cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", pageMode: "sandbox" });
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["TEST-OPEN-A", "TEST-OPEN-B"] }, "tok");
+    expect(order).toEqual(["asset", "welcome"]);
+  });
+});

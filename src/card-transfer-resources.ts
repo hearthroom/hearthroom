@@ -7,9 +7,11 @@ export function canonicalEntry(e:Record<string,any>,preservePriority=false):Reco
  return {...(preservePriority&&typeof e.priority==='number'?{priority:e.priority}:{}),name:e.name,content:e.content,keywords:e.keywords||[],secondaryKeywords:e.secondaryKeywords||[],category:e.category||'custom',triggerRegion:e.triggerRegion||'both',isEnabled:e.isEnabled!==false,isConstant:e.isConstant===true,matchOptions:e.matchOptions??null};
 }
 export function canonicalAsset(a:Record<string,any>) {
- return {rules:(a.rules||[]).map((r:any)=>({id:r.id,name:r.name,find:r.find,replace:r.replace,enabled:r.enabled!==false})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic'};
+ return {rules:(a.rules||[]).map((r:any)=>({id:r.id,name:r.name,find:r.find,replace:r.replace,enabled:r.enabled!==false})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic',
+  // 首屏網頁與風月格式只在有的時候才放：沒有它們的卡算出的快照雜湊跟以前一樣
+  ...(string(a.openingPage)?{openingPage:string(a.openingPage)}:{}),...(a.cardFormat==='fengyue'?{cardFormat:'fengyue'}:{})};
 }
-export function hasAsset(a:ReturnType<typeof canonicalAsset>) { return !!(a.rules.length||a.mountTrigger||a.pageMode==='sandbox'); }
+export function hasAsset(a:ReturnType<typeof canonicalAsset>) { return !!(a.rules.length||a.mountTrigger||a.pageMode==='sandbox'||a.openingPage); }
 export async function readBooks(call:TransferCall,roleId:string,preserveExecution=false):Promise<TransferBook[]> {
  const bindings=await call(`/worldbook/bindings?roleId=${encodeURIComponent(roleId)}`);
  if(!Array.isArray(bindings.bindings))throw new HttpError(409,'sync_unsupported_content');
