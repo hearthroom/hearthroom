@@ -119,7 +119,7 @@ export function validateNative(doc) {
     for (const k of Object.keys(p)) if (!["identifier", "name", "role", "content", "marker", "injection_position"].includes(k)) return "preset_native_field_unsupported";
     const framework = MARKERS.has(p.identifier);
     if (!!p.marker !== framework || (p.injection_position ?? 0) !== 0) return "preset_native_entry_unsupported";
-    if (framework ? (p.content || (p.role && p.role !== "system")) : p.role !== "system") return "preset_native_entry_unsupported";
+    if (framework ? (p.content || (p.role && p.role !== "system")) : !["system", "user", "assistant"].includes(p.role)) return "preset_native_entry_unsupported";
     if (!framework && !nativeMacrosValid(p.content ?? "")) return "preset_native_entry_unsupported";
   }
   for (const prof of st.prompt_order ?? []) {

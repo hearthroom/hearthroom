@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   adaptationId, addEntry, canDeleteEntry, clearParam, deleteEntry, moveToSide, nativeMacrosValid, nativeProblems, detachEntry, detachedPrompts, duplicateEntry, entryRows, insertEntry,
   canMoveEntry, inspectRows, isPromptPack, moveEntry, moveEntryTo, newDocument, prefixLayout, paramState, profilesOf, restoreOrder, setAdaptation, setEnabled, setParamAdopted,
-  setParamValue, type PresetDocument,
+  setParamValue, type PresetDocument, type StPrompt,
 } from "../src/lib/st-preset";
 
 // 合成的 ST Chat Completion 預設：兩組排序，帶一個不認得的擴充欄位（匯出時要原樣留著）。
@@ -410,11 +410,23 @@ describe("本站寫的預設：存檔前照上游規則找出存不進去的地�
     expect(doc.selection.excludedFields).toEqual([]);
     expect(nativeProblems(doc).sort()).toEqual([a, b].sort());
   });
-  it("新建、新增、複製、換位置後的值也符合（系統身分、位置 0、只有框架條目是 marker）", () => {
+  it("新建、新增、複製、換位置後的值也符合（位置 0、只有框架條目是 marker）", () => {
     const doc = newDocument("主要指示");
     const id = addEntry(doc, { name: "新", slot: "P", content: "{{char}}" });
     duplicateEntry(doc, id, "副本");
     moveToSide(doc, id, "after");
     expect(nativeProblems(doc)).toEqual([]);
+  });
+  // owner 2026-11-09：本站寫的條目也能以系統、玩家或 AI 身分送出（上游 ValidateNative 收這三種）
+  it("條目身分可以是系統、玩家或 AI；其他身分照樣擋", () => {
+    const doc = newDocument("主要指示");
+    const user = addEntry(doc, { name: "玩家說", slot: "P", content: "我先開口" });
+    const ai = addEntry(doc, { name: "AI 說", slot: "S", content: "好的" });
+    const prompts = doc.st.prompts as StPrompt[];
+    prompts.find((p) => p.identifier === user)!.role = "user";
+    prompts.find((p) => p.identifier === ai)!.role = "assistant";
+    expect(nativeProblems(doc)).toEqual([]);
+    prompts.find((p) => p.identifier === ai)!.role = "narrator";
+    expect(nativeProblems(doc)).toEqual([ai]);
   });
 });

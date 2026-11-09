@@ -462,17 +462,19 @@ export function nativeMacrosValid(text: string): boolean {
 }
 
 const NATIVE_RANGE: Record<string, number> = { temperature: 2, top_p: 1 };
+/** 本站寫的條目可以用的身分，跟 Harbor ValidateNative 一致 */
+const NATIVE_ROLES = ["system", "user", "assistant"];
 
 /**
  * 本站寫的預設存檔前會被上游擋下的地方：所有自訂條目（開著、關著、移出排序的都算——上游每條都查）
- * 身分不是系統、不在相對位置或巨集不合；以及最外層的 temperature／top_p 不在範圍內（不管有沒有採用）。
+ * 身分不是系統／玩家／AI、不在相對位置或巨集不合；以及最外層的 temperature／top_p 不在範圍內（不管有沒有採用）。
  * 回傳條目的 identifier 或參數鍵。
  */
 export function nativeProblems(doc: PresetDocument): string[] {
   const out: string[] = [];
   for (const p of promptsOf(doc.st)) {
     if (isFramework(p.identifier)) continue;
-    if (p.role !== "system" || (p.injection_position ?? 0) !== 0 || !nativeMacrosValid(p.content ?? "")) out.push(p.identifier);
+    if (!NATIVE_ROLES.includes(p.role ?? "") || (p.injection_position ?? 0) !== 0 || !nativeMacrosValid(p.content ?? "")) out.push(p.identifier);
   }
   for (const [key, max] of Object.entries(NATIVE_RANGE)) {
     if (!(key in doc.st)) continue;

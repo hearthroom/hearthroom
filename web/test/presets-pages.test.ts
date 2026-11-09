@@ -293,6 +293,33 @@ describe("預設編輯器：API 建立的預設（選擇欄位可省略）", () 
   });
 });
 
+describe("本站寫的預設：條目身分（owner 2026-11-09）", () => {
+  it("自己寫的條目也能選系統、玩家或 AI，預設系統；選了照樣能存，送出帶著選的身分", async () => {
+    const d = doc();
+    d.st = { prompts: [(d.st.prompts as object[])[0], { identifier: "chatHistory", name: "Chat History", marker: true }], prompt_order: [{ character_id: 100001, order: [{ identifier: "clear", enabled: true }, { identifier: "chatHistory", enabled: true }] }] };
+    const c = (): Compatibility => ({ ...compat(), reviewRequired: false, entries: compat().entries.filter((e) => e.identifier === "clear" || e.identifier === "chatHistory"), fields: [] });
+    mocks.detail.mockResolvedValue(detail({ sourceKind: "native" }));
+    mocks.revision.mockResolvedValue({ revision: { revisionId: "r2", presetId: "p1", version: 2, document: d, sourceKind: "native", compilerVersion: "preset-p1.3", contentHash: "h", recommendedModels: [], createdAt: "" }, compatibility: c() });
+    mocks.analyze.mockImplementation(async () => c());
+    await mount(PresetEditorPage, "/me/presets/p1");
+    // 位置固定的區塊（對話記錄等）沒有身分可選
+    $$("[data-testid=provided-row]")[0]!.click(); await flush();
+    expect($("#role-chatHistory")).toBeNull();
+    expect($("[data-testid=provided-detail] select")).toBeNull();
+    $$("[data-testid=entry-row]").find((b) => b.textContent?.includes("清楚敘述"))!.click(); await flush();
+    const role = $<HTMLSelectElement>("#role-clear");
+    expect([...role.options].map((o) => o.value)).toEqual(["system", "user", "assistant"]);
+    expect(role.value).toBe("system");
+    role.value = "assistant"; role.dispatchEvent(new Event("change"));
+    await new Promise((r) => setTimeout(r, 600)); await flush();
+    expect($("[data-testid=preset-blocked]")).toBeNull();
+    mocks.revise.mockResolvedValue({ presetId: "p1", revisionId: "r3", version: 3 });
+    $("[data-testid=preset-save]").click(); await flush(); await flush();
+    const sent = mocks.revise.mock.calls[0]![2].document.st.prompts as { identifier: string; role?: string }[];
+    expect(sent.find((p) => p.identifier === "clear")!.role).toBe("assistant");
+  });
+});
+
 describe("預設編輯器：匯入確認（QA N04）", () => {
   it("匯入後的確認只講一次：網址上的參數用完就拿掉", async () => {
     mocks.detail.mockResolvedValue(detail());
