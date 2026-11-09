@@ -74,10 +74,7 @@ const fields = computed(() => {
   }
   return [...out].map(([name, reasons]) => ({ name, reasons: [...reasons] }));
 });
-const reasonText = (id: string, code: string) => {
-  const role = rows.value.find((r) => r.identifier === id)?.prompt.role === "assistant" ? "assistant" : "user";
-  return te(`preset.reason.entry.${code}`) ? t(`preset.reason.entry.${code}`, { role: t(`preset.entry.role.${role}`) }) : "";
-};
+const reasonText = (code: string) => (te(`preset.reason.entry.${code}`) ? t(`preset.reason.entry.${code}`) : "");
 
 // 每組附條目數與前三條自訂條目的名稱：只有序號的話玩家分不出要選哪一組
 const profileLabel = (p: LocalProfile, index: number) => t("preset.import.profile.option", {
@@ -266,7 +263,7 @@ onMounted(() => { document.title = pageTitle(t("preset.import.title")); });
                 <span v-if="statusOf(r.identifier)" class="preset-import__tag" :class="`preset-import__tag--${statusOf(r.identifier)}`">{{ $t(`preset.report.status.${statusKey(statusOf(r.identifier))}`) }}</span>
                 <span v-else-if="excluded(r.identifier)" class="subtle">{{ $t("preset.report.skip") }}</span>
                 <div v-if="compatOf(r.identifier)?.reasonCodes.length" class="preset-import__reason">
-                  <p v-for="code in compatOf(r.identifier)!.reasonCodes" :key="code">{{ reasonText(r.identifier, code) }}</p>
+                  <p v-for="code in compatOf(r.identifier)!.reasonCodes" :key="code">{{ reasonText(code) }}</p>
                 </div>
               </template>
             </li>

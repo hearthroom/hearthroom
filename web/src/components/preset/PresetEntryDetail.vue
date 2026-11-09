@@ -28,9 +28,7 @@ const prompt = computed(() => props.row.prompt);
 const content = ref<HTMLTextAreaElement | null>(null);
 const macro = ref<(typeof MACROS)[number]>("char");
 
-const reasonText = (code: string) => te(`preset.reason.entry.${code}`)
-  ? t(`preset.reason.entry.${code}`, { role: t(`preset.entry.role.${prompt.value.role === "assistant" ? "assistant" : "user"}`) })
-  : "";
+const reasonText = (code: string) => (te(`preset.reason.entry.${code}`) ? t(`preset.reason.entry.${code}`) : "");
 const reasons = computed(() => (props.compat?.reasonCodes ?? []).filter((c) => c !== "framework_owned").map(reasonText).filter(Boolean));
 const adaptation = computed(() => props.compat?.availableAdaptationIds.find((id) => id === adaptationId(props.row.identifier)));
 const accepted = computed(() => props.doc.selection.acceptedAdaptationIds.includes(adaptationId(props.row.identifier)));

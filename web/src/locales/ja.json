@@ -4049,7 +4049,7 @@
   "preset.reauth.cancel": "戻る",
   "preset.reason.entry.framework_owned": "{site}が用意。この内容は{site}が取り込むため、元のオン／オフと位置は反映されず、プリセットの中に重ねて入れることもありません。",
   "preset.reason.entry.unknown_marker": "SillyTavernの特殊なプレースホルダーで、{site}には対応する内容がないため実行されません。",
-  "preset.reason.entry.message_role_not_supported": "このエントリーのメッセージの役割は{role}です。{site}が実行するのはシステム指示だけで、ユーザーやAIが話したことにはしません。役割を「システム」に変えると内容が反映されます。",
+  "preset.reason.entry.message_role_not_supported": "このエントリーのメッセージの役割がシステム・ユーザー・AI のどれでもないため、内容は送られません。どれかに変えると反映されます。",
   "preset.reason.entry.conditional_not_supported": "このエントリーにはトリガー条件が設定されています。{site}は条件を判定しないため実行されません。いったん無効にしても、元の内容は残ります。",
   "preset.reason.entry.history_injection_not_supported": "SillyTavernでは会話履歴の途中に入るエントリーで、このままでは実行されません。「会話履歴の後」に移すと、そのまま使えます。",
   "preset.reason.entry.macro_not_supported": "内容に{site}が対応していないマクロ（乱数・変数・スクリプトなど）が含まれています。内容を修正するか、このエントリーをいったん無効にしてください。",

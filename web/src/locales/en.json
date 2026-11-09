@@ -4049,7 +4049,7 @@
   "preset.reauth.cancel": "Back",
   "preset.reason.entry.framework_owned": "Provided by {site}. {site} supplies this content, so the switch and position from the source have no effect and it isn't repeated inside the preset.",
   "preset.reason.entry.unknown_marker": "This is a special placeholder from SillyTavern. {site} has nothing that matches it, so it isn't applied.",
-  "preset.reason.entry.message_role_not_supported": "This entry's message role is {role}. {site} only applies system instructions, and never puts words in the user's or the AI's mouth. Change the role to System for the content to take effect.",
+  "preset.reason.entry.message_role_not_supported": "This entry's message role isn't System, User or AI, so its content isn't sent. Choose one of those for it to take effect.",
   "preset.reason.entry.conditional_not_supported": "This entry has trigger conditions. {site} doesn't evaluate them, so it isn't applied. You can disable it for now and the content is kept.",
   "preset.reason.entry.history_injection_not_supported": "In SillyTavern this goes inside the conversation history, so it won't run as it is. Move it to \"After conversation history\" and it will be used as usual.",
   "preset.reason.entry.macro_not_supported": "The content has a macro {site} doesn't support, such as random numbers, variables or scripts. Edit the content, or disable this entry for now.",

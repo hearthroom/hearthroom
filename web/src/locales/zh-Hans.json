@@ -4049,7 +4049,7 @@
   "preset.reauth.cancel": "返回",
   "preset.reason.entry.framework_owned": "由绮梦社提供。这份内容由绮梦社带入，来源的开关和位置不生效，也不会重复放进预设。",
   "preset.reason.entry.unknown_marker": "这是酒馆里的特殊占位项，绮梦社没有对应的内容，不会执行。",
-  "preset.reason.entry.message_role_not_supported": "这条的消息角色是{role}。绮梦社只执行系统指令，不会冒充玩家或 AI 说过的话。把角色改成「系统」，内容才会生效。",
+  "preset.reason.entry.message_role_not_supported": "这条的消息角色不是系统、玩家或 AI，内容不会发出。改成其中一种就会生效。",
   "preset.reason.entry.conditional_not_supported": "这条设了触发条件，绮梦社不判断这些条件，所以不会执行。可以先停用，原内容会保留。",
   "preset.reason.entry.history_injection_not_supported": "这条在酒馆插在对话记录中间，目前不会执行。改放到「对话记录之后」，内容就会照常使用。",
   "preset.reason.entry.macro_not_supported": "内容含有绮梦社不支持的宏，例如随机数、变量或脚本。修改内容，或先停用这条。",

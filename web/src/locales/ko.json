@@ -4049,7 +4049,7 @@
   "preset.reauth.cancel": "돌아가기",
   "preset.reason.entry.framework_owned": "{site} 제공. 이 내용은 {site}에서 가져오므로 원본의 켜짐 여부와 위치는 적용되지 않으며, 프리셋 안에 중복해서 넣지도 않습니다.",
   "preset.reason.entry.unknown_marker": "SillyTavern의 특수한 자리 표시 항목으로, {site}에는 대응하는 내용이 없어 실행되지 않습니다.",
-  "preset.reason.entry.message_role_not_supported": "이 항목의 메시지 역할은 {role}입니다. {site}에서는 시스템 지시만 실행하며, 사용자나 AI가 한 말처럼 꾸미지 않습니다. 역할을 '시스템'으로 바꾸면 내용이 적용됩니다.",
+  "preset.reason.entry.message_role_not_supported": "이 항목의 메시지 역할이 시스템, 사용자, AI 중 하나가 아니어서 내용이 전달되지 않습니다. 셋 중 하나로 바꾸면 적용됩니다.",
   "preset.reason.entry.conditional_not_supported": "이 항목에는 발동 조건이 설정되어 있습니다. {site}에서는 조건을 판단하지 않으므로 실행되지 않습니다. 우선 꺼 두어도 원래 내용은 보존됩니다.",
   "preset.reason.entry.history_injection_not_supported": "SillyTavern에서는 대화 기록 중간에 들어가는 항목이라 이대로는 실행되지 않습니다. '대화 기록 뒤'로 옮기면 그대로 사용할 수 있습니다.",
   "preset.reason.entry.macro_not_supported": "내용에 {site}에서 지원하지 않는 매크로(난수, 변수, 스크립트 등)가 있습니다. 내용을 고치거나 이 항목을 우선 꺼 두세요.",

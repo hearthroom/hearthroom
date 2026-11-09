@@ -10,10 +10,10 @@
     "ko": "직접 만든 프리셋 항목도 시스템, 사용자, AI 중에서 역할을 고를 수 있어요"
   },
   "body": {
-    "zh-Hant": "在預設編輯器點進條目，用「訊息角色」選這段要以誰的口吻送給 AI，跟酒館匯入的預設一樣。",
-    "zh-Hans": "在预设编辑器点进条目，用“消息角色”选这段要以谁的口吻发给 AI，和酒馆导入的预设一样。",
-    "en": "Open an entry in the preset editor and pick its Message role to choose who the AI sees it coming from, just like in imported SillyTavern presets.",
-    "ja": "プリセット編集画面でエントリーを開き、「メッセージの役割」で AI にだれの発言として送るかを選べ、SillyTavernから取り込んだプリセットと同じように使えます。",
-    "ko": "프리셋 편집기에서 항목을 열고 「메시지 역할」에서 AI에게 누구의 말로 보낼지 고를 수 있으며, SillyTavern에서 가져온 프리셋과 똑같이 쓸 수 있어요."
+    "zh-Hant": "在預設編輯器點進條目，用「訊息角色」選這段要以誰的口吻送給 AI。",
+    "zh-Hans": "在预设编辑器点进条目，用“消息角色”选这段要以谁的口吻发给 AI。",
+    "en": "Open an entry in the preset editor and pick its Message role to choose who the AI sees it coming from.",
+    "ja": "プリセット編集画面でエントリーを開くと、「メッセージの役割」で AI にだれの発言として送るかを選べます。",
+    "ko": "프리셋 편집기에서 항목을 열면 「메시지 역할」에서 AI에게 누구의 말로 보낼지 고를 수 있어요."
   }
 }

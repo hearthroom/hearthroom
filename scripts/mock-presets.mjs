@@ -1,7 +1,7 @@
 /**
  * 假上游的「我的預設」與預設綁定（給本機走查用）。形狀照 Harbor 的預設契約
  * （docs/studio/tasks/2026-10-29-preset-library/backend-p1-contract.md §9）：
- * 相容判定用很粗的規則模擬——非系統身分、插進歷史中間、白名單外的巨集標「不支援」；
+ * 相容判定用很粗的規則模擬——系統／玩家／AI 以外的身分、插進歷史中間、白名單外的巨集標「不支援」；
  * 對話記錄之前用了 {{lastUserMessage}} 標「需調整」。真正的判定在 Harbor，這裡只為了看畫面。
  *
  * /__presets?scenario=<名稱> 切情境（再送一次不帶 scenario 就回到預設）；/__presets/reset 清空。

@@ -4049,7 +4049,7 @@
   "preset.reauth.cancel": "返回",
   "preset.reason.entry.framework_owned": "由綺夢社提供。這份內容由綺夢社帶入，來源的開關和位置不生效，也不會重複放進預設。",
   "preset.reason.entry.unknown_marker": "這是酒館裡的特殊佔位項，綺夢社沒有對應的內容，不會執行。",
-  "preset.reason.entry.message_role_not_supported": "這條的訊息角色是{role}。綺夢社只執行系統指令，不會冒充玩家或 AI 說過的話。把角色改成「系統」，內容才會生效。",
+  "preset.reason.entry.message_role_not_supported": "這條的訊息角色不是系統、玩家或 AI，內容不會送出。改成其中一種就會生效。",
   "preset.reason.entry.conditional_not_supported": "這條設了觸發條件，綺夢社不判斷這些條件，所以不會執行。可以先停用，原內容會保留。",
   "preset.reason.entry.history_injection_not_supported": "這條在酒館插在對話記錄中間，目前不會執行。改放到「對話記錄之後」，內容就會照常使用。",
   "preset.reason.entry.macro_not_supported": "內容含有綺夢社不支援的巨集，例如隨機數、變數或腳本。修改內容，或先停用這條。",
