@@ -843,6 +843,9 @@ function onRegexFile(event: Event) {
       if (!imported) throw new Error("regex_invalid");
       // 舊格式檔沒有聊天頁模式；新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），已存卡更新美化時沿用作者目前選擇。
       imported.set.pageMode ??= isNew.value ? "classic" : regexSet.value.pageMode;
+      // 規則檔不帶首屏網頁與卡片格式：換規則不能順手把它們洗掉（存檔是整份覆寫）
+      if (regexSet.value.openingPage && imported.set.openingPage == null) imported.set.openingPage = regexSet.value.openingPage;
+      if (regexSet.value.format === "fengyue" && !imported.set.format) imported.set.format = "fengyue";
       regexSet.value = imported.set;
       defaultChatPageForNew();
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的

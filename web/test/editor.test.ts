@@ -515,6 +515,16 @@ describe("正則匯入的聊天頁模式", () => {
     expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("Existing opening");
   });
 
+  it("已存的首屏網頁與風月格式：重匯一份規則檔後照樣存回去，不會被洗掉", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Local fixture", roleWelcome: "", rolePrologue: ["我推開門。"] });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "fengyue", openingPage: "<div>首屏</div>", status: "passed", version: 3 });
+    await mount("/cards/r1/edit");
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>首屏</div>");
+    await pickFile($(".rxbar input[type=file]"), new File([JSON.stringify(oldMmd)], "old-mmd.json"));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ openingPage: "<div>首屏</div>", cardFormat: "fengyue", version: 3 }), "tok");
+  });
+
   it("新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），保存後重匯也保持傳統頁；帶 chatVersion: 1 則為沙箱", async () => {
     await mount("/create");
     await type($("#f-name"), "Local fixture");
