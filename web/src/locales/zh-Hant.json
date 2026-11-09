@@ -654,7 +654,6 @@
   "editor.prologue": "開場選項",
   "editor.openingPage": "網頁內容",
   "editor.openingPage.hint": "開新對話時顯示在最上方，可以寫 HTML、樣式與腳本。留空時只顯示選項。",
-  "editor.prologue.add": "加一個開場選項",
   "editor.talkExample": "對話示例",
   "editor.talkExample.hint": "一問一答，示範這個角色該怎麼講話。兩三輪就夠，多了反而綁死。",
   "editor.talkExample.who": "誰說的",
@@ -4674,5 +4673,7 @@
   "editor.state.number.invalid": "要是數字，例如 10 或 0.5",
   "editor.state.preview.opening": "· 用開局的值",
   "editor.state.preview.empty": "沒有面板皮膚，對話頁不顯示面板",
-  "editor.state.template.example": "用範例皮膚"
+  "editor.state.template.example": "用範例皮膚",
+  "editor.opening.suggest.add": "加一句建議",
+  "editor.opening.choices.add": "加一個選項"
 }

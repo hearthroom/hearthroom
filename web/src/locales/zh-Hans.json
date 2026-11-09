@@ -654,7 +654,6 @@
   "editor.prologue": "开场选项",
   "editor.openingPage": "网页内容",
   "editor.openingPage.hint": "开新对话时显示在最上方，可以写 HTML、样式与脚本。留空时只显示选项。",
-  "editor.prologue.add": "加一个开场选项",
   "editor.talkExample": "对话示例",
   "editor.talkExample.hint": "一问一答，示范这个角色该怎么讲话。两三轮就够，多了反而绑死。",
   "editor.talkExample.who": "谁说的",
@@ -4674,5 +4673,7 @@
   "editor.state.number.invalid": "需要是数字，比如 10 或 0.5",
   "editor.state.preview.opening": "· 用开局的值",
   "editor.state.preview.empty": "没有面板皮肤，对话页不显示面板",
-  "editor.state.template.example": "用示例皮肤"
+  "editor.state.template.example": "用示例皮肤",
+  "editor.opening.suggest.add": "加一句建议",
+  "editor.opening.choices.add": "加一个选项"
 }

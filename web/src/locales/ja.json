@@ -654,7 +654,6 @@
   "editor.prologue": "最初の選択肢",
   "editor.openingPage": "ページの内容",
   "editor.openingPage.hint": "新しい会話の一番上に表示。HTML、スタイル、スクリプトが使えます。空なら選択肢だけ表示します。",
-  "editor.prologue.add": "選択肢を追加",
   "editor.talkExample": "会話例",
   "editor.talkExample.hint": "話し方を示すやり取り。二、三往復で十分、多すぎると縛りになります。",
   "editor.talkExample.who": "話し手",
@@ -4674,5 +4673,7 @@
   "editor.state.number.invalid": "10 や 0.5 のような数値を入力してください",
   "editor.state.preview.opening": "· 初期値で表示",
   "editor.state.preview.empty": "パネルのスキンがないため、会話画面にパネルは出ません",
-  "editor.state.template.example": "サンプルを使う"
+  "editor.state.template.example": "サンプルを使う",
+  "editor.opening.suggest.add": "一言を追加",
+  "editor.opening.choices.add": "選択肢を追加"
 }

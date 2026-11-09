@@ -61,7 +61,7 @@ const beyond = computed(() => !over.value && Boolean(props.advise) && length.val
 
 <style scoped>
 .req { color: var(--danger); margin-left: 2px; }
-.count { font-variant-numeric: tabular-nums; }
+.count { font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
 .over { color: var(--danger); }
 .beyond { color: var(--gold-dark); }
 .advise {
