@@ -21682,6 +21682,10 @@
           "modelPreferenceFallback": {
             "type": "boolean",
             "description": "Optional capability on services that support account model preferences: `true` only when this call first starts an agent configuration for this user and saves the application default because the account's preferred model or exact lane is unavailable or absent from the selectable catalog. The account preference is retained for future configurations. Resuming a previously opened configuration does not reapply the account preference."
+          },
+          "openingCardState": {
+            "$ref": "#/components/schemas/CardStateView",
+            "description": "Opening card variables of a conversation this call started (or whose opening it refreshed), for the opening row drawn from `defaultRelay`. Absent when the card has no variables or an existing conversation was resumed; its rows carry `cardState` in `firstPage` instead."
           }
         }
       },
