@@ -625,6 +625,8 @@
   "editor.state.rules.hint": "AI 向けの説明です。どんなときにどの値をどう変えるかを書きます。毎ターン数値と一緒に送信されます。",
   "editor.state.template": "パネルのスキン",
   "editor.state.template.hint": "Handlebars で書いた HTML と CSS です。会話画面はこれで今の数値をパネルとして表示します。空欄ならパネルは表示されません。",
+  "editor.state.preview": "パネルのプレビュー",
+  "editor.state.preview.error": "{line} 行目：{message}",
   "editor.state.reject.convention": "変数の書き方は「値ごとにルール付き」か「値のみ」のどちらかです。",
   "editor.state.reject.data": "変数の骨組みは有効な JSON オブジェクトにしてください。直してから保存してください。",
   "editor.state.reject.data_size": "変数の骨組みが {dataKB} KB を超えています。使わない数値を削除してから保存してください。",

@@ -625,6 +625,8 @@
   "editor.state.rules.hint": "寫給 AI 看：什麼情況要改哪個值、怎麼改。每一輪都會跟數值一起送出。",
   "editor.state.template": "面板皮膚",
   "editor.state.template.hint": "用 Handlebars 寫的 HTML 與 CSS，對話頁用它把目前的數值畫成面板；留空就不顯示面板。",
+  "editor.state.preview": "面板預覽",
+  "editor.state.preview.error": "第 {line} 行：{message}",
   "editor.state.reject.convention": "變數的寫法只能是「每個值附規則」或「只有值」。",
   "editor.state.reject.data": "變數骨架要是一個有效的 JSON 物件，修正後再存。",
   "editor.state.reject.data_size": "變數骨架超過 {dataKB} KB，刪掉用不到的數值再存。",
