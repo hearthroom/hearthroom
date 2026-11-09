@@ -833,6 +833,11 @@ onMounted(() => { void load(); });
           <label>{{ $t("review.mount") }}</label>
           <input class="input" :value="`${data.detail.authorAsset.mountTrigger} · ${data.detail.authorAsset.mountLayer} · ${data.detail.authorAsset.pageMode}`" readonly />
         </div>
+        <!-- 首屏網頁：每次開新對話都會出現在畫布最上方的作者網頁，審核要看得到原文；效果直接去試玩看 -->
+        <details v-if="data.detail.authorAsset.openingPage" class="field">
+          <summary>{{ $t("review.openingPage", { n: [...data.detail.authorAsset.openingPage].length }) }}</summary>
+          <pre class="entry__body">{{ data.detail.authorAsset.openingPage }}</pre>
+        </details>
       </section>
 
       <section v-show="section === 'cost'" class="pane panel">

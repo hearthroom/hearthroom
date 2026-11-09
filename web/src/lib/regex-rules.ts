@@ -54,12 +54,18 @@ export interface RegexRuleSet {
    * 沒生效過；聊天頁照同一套政策落地，卡在兩邊才長得一樣。由匯入來源宣告，讀的人不猜。
    */
   format?: RegexCardFormat;
+  /**
+   * 首屏網頁（AI 風月的「詳細介紹」）：開新對話時畫布最上方的作者網頁，只顯示、不送模型。
+   * 跟規則一起存在作者資產裡；空字串或缺＝沒有。
+   */
+  openingPage?: string;
 }
 
-export type RegexCardFormat = "mmd" | "tavern";
+/** `fengyue`＝AI 風月匯入的卡：樣式整頁生效、深淺跟著宿主，開場選項點了直接送出。 */
+export type RegexCardFormat = "mmd" | "tavern" | "fengyue";
 export function cardFormatFrom(v: unknown): RegexCardFormat | undefined {
   const value = typeof v === "string" ? v.trim().toLowerCase() : "";
-  return value === "mmd" || value === "tavern" ? value : undefined;
+  return value === "mmd" || value === "tavern" || value === "fengyue" ? value : undefined;
 }
 
 export type RegexPageMode = "classic" | "immersive" | "sandbox";
@@ -335,6 +341,7 @@ export interface AuthorAssetLike {
   mountLayer?: string;
   pageMode?: string;
   cardFormat?: string;
+  openingPage?: string;
 }
 
 export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
@@ -346,6 +353,7 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
   if (pageMode) set.pageMode = pageMode;
   const format = cardFormatFrom(asset.cardFormat);
   if (format) set.format = format;
+  if (text(asset.openingPage)) set.openingPage = String(asset.openingPage);
   return set;
 }
 
@@ -357,6 +365,7 @@ export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Requir
     mountLayer,
     pageMode: set.pageMode ?? "",
     cardFormat: set.format ?? "",
+    openingPage: set.openingPage ?? "",
     version,
   };
 }

@@ -82,7 +82,7 @@ describe("風月匯出檔：網頁這邊的落點", () => {
     const keys = new Set([
       ...fengyueToDraft(edge, { language: "zh-Hans" }).dropped.map((n) => n.key),
       ...["name", "summary", "definition", "outputContract", "custom"].map((f) => `import.fengyue.tooLong.${f}`),
-      "import.fengyue.presetChats", "import.fengyue.unusedOpenings", "import.fengyue.missingFields", "import.fengyue.openingModeUnknown", "import.kind.fengyue", "import.fengyue.drop", "import.fengyue.formats", "import.landed.outputContract", "import.landed.custom", "import.landed.prologue",
+      "import.fengyue.presetChats", "import.fengyue.unusedOpenings", "import.fengyue.missingFields", "import.fengyue.openingModeUnknown", "import.kind.fengyue", "import.fengyue.drop", "import.fengyue.formats", "import.landed.outputContract", "import.landed.custom", "import.landed.prologue", "import.landed.openingPage",
     ]);
     for (const locale of locales) {
       const messages = (await import(`../src/locales/${locale}.json`)).default as Record<string, string>;

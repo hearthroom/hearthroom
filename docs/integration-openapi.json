@@ -8142,7 +8142,7 @@
           "Roles"
         ],
         "summary": "Set the opening message, alternate openings and prologue options",
-        "description": "Writes the opening (`roleWelcome`, required, non-blank) of an owned private role. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Each list keeps at most 20 non-blank entries (`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`), and every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
+        "description": "Writes the opening (`roleWelcome`) of an owned private role. It may be blank only when the card lets the player speak first, that is when it has `prologue` entries (sent in this request or already stored) or an author-asset `openingPage`; otherwise it is required and non-blank. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Each list keeps at most 20 non-blank entries (`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`), and every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
         "security": [
           {
             "userToken": []
@@ -8181,7 +8181,7 @@
             }
           },
           "400": {
-            "description": "`invalid JSON body`, `roleWelcome is required`.",
+            "description": "`invalid JSON body`, `roleWelcome is required` (blank opening on a card with no prologue and no opening page).",
             "content": {
               "application/json": {
                 "schema": {
@@ -14786,6 +14786,20 @@
           },
           "sharedState": {
             "$ref": "#/components/schemas/SharedStateDeclaration"
+          },
+          "openingPage": {
+            "type": "string",
+            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
+          },
+          "cardFormat": {
+            "type": "string",
+            "enum": [
+              "",
+              "mmd",
+              "tavern",
+              "fengyue"
+            ],
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
           }
         }
       },
@@ -14875,6 +14889,20 @@
           },
           "sharedState": {
             "$ref": "#/components/schemas/SharedStateDeclaration"
+          },
+          "openingPage": {
+            "type": "string",
+            "description": "Opening page: author HTML (style, script and handlers allowed) shown at the top of the play canvas when a conversation starts, above any opening message. Display only: never sent to the model or read by memory compaction. Empty when not set."
+          },
+          "cardFormat": {
+            "type": "string",
+            "enum": [
+              "",
+              "mmd",
+              "tavern",
+              "fengyue"
+            ],
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
           }
         }
       },
@@ -14924,6 +14952,21 @@
           "sharedState": {
             "$ref": "#/components/schemas/SharedStateDeclaration",
             "description": "Omitted or `null` keeps the stored declaration; `{}` clears it."
+          },
+          "openingPage": {
+            "type": "string",
+            "maxLength": 524288,
+            "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
+          },
+          "cardFormat": {
+            "type": "string",
+            "enum": [
+              "",
+              "mmd",
+              "tavern",
+              "fengyue"
+            ],
+            "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles, and tapping an opening choice sends it as the player's first message). Empty means `mmd`."
           }
         }
       },
@@ -21919,13 +21962,19 @@
             "type": "string",
             "enum": [
               "mmd",
-              "tavern"
+              "tavern",
+              "fengyue"
             ],
             "description": "Origin dialect of the rules; `trial_unsupported` when unknown."
           },
           "sharedState": {
             "$ref": "#/components/schemas/SharedStateDeclaration",
             "description": "Omitted or `null` keeps the stored declaration; `{}` clears it."
+          },
+          "openingPage": {
+            "type": "string",
+            "maxLength": 524288,
+            "description": "Opening page HTML, at most 524288 UTF-8 bytes (`validate_reject` reason `openingPage`). Omitted or `null` keeps the stored page; `\"\"` clears it."
           }
         }
       },

@@ -18,7 +18,7 @@
  *   - 世界書 → 一本酒館格式的書；`value` 是內容，`key` 去掉 `_or_` 前綴
  *   - 內置 CSS → 一條整頁常駐的 `<style>` 顯示規則（MMD 關側邊留白那條同一種寫法）
  *   - 正則腳本 → 顯示規則
- *   - 詳細介紹（首屏網頁）放在結果的 intro，本站還沒有顯示它的位置，先列進摘要
+ *   - 詳細介紹 → 作者資產的首屏網頁 openingPage（畫布最上方的作者網頁，只顯示、不送模型）；卡片格式記成 fengyue
  * 只有實測過的值才照映射（世界書 key_region、正則 scope），其餘退回預設並列進摘要。
  */
 
@@ -205,8 +205,6 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   } else if (presets.length) {
     notes.push({ key: "import.fengyue.unusedPresets", params: { n: presets.length } });
   }
-  // 風月沒有 AI 先說的開場白，本站存檔要求有一段
-  notes.push({ key: "import.fengyue.noWelcome" });
   const max = contract.limits.openings;
   draft.prologue = openings.slice(0, max);
   if (openings.length > max) notes.push({ key: "import.fengyue.prologueLimit", params: { n: openings.length - max, max } });
@@ -227,7 +225,8 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   }
 
   const intro = typeof pick(raw, "intro") === "string" ? String(pick(raw, "intro")).trim() : "";
-  if (intro) notes.push({ key: "import.fengyue.intro", params: { n: [...intro].length } });
+  // 風月沒有 AI 先說的開場白：有開場選項或首屏網頁時本站也讓玩家先開口；兩樣都沒有才要作者補一段
+  if (!intro && !draft.prologue.length) notes.push({ key: "import.fengyue.noWelcome" });
 
   let worldbook: ImportResult["worldbook"] = null;
   const bookRows = listOf(pick(raw, "worldbook")).filter(isObj);
@@ -254,7 +253,9 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
     const names = cssRuleNames as Record<string, string>;
     rules.push({ id: FENGYUE_CSS_RULE_ID, name: names[language] ?? names.en, find: CSS_FIND, replace: `$1<style>${css}</style>`, enabled: true });
   }
-  const regex: RegexRuleSet | null = rules.length ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "mmd" } : null;
+  const regex: RegexRuleSet | null = rules.length || intro
+    ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}) }
+    : null;
 
   unmappedFeatures(raw, notes);
   return { draft, worldbook, dropped: notes, image: null, background: null, spec: "fengyue", regex, intro };

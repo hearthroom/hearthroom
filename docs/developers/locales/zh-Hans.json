@@ -619,9 +619,9 @@
   "d9fde414079ff": "`invalid JSON body`，或 `only visibility=private is allowed here; use publish to go public`。",
   "d0d5fbb25031d": "`role_in_review`（角色卡正在人工审核）、`record not found`，或其他未分类错误；`retryable: true`。",
   "d3e37ff5d6bfd": "设置开场消息、替代开场白与序幕选项",
-  "d93526251d0dc": "写入自己私有角色的开场白（`roleWelcome`，必填且不可空白）。`alternates`（玩家第一回合前可选的替代 AI 开场白）与 `prologue`（供玩家选择的第一句台词）皆为完整替换，依键是否出现区分：没有键 = 不变更，空数组 = 清除。每份列表最多保留 20 个非空白条目（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`），每个条目与 `roleWelcome` 本身皆受角色卡语言的开场白上限限制（8000 个字符；英文角色卡 10000；`role_welcome_too_long`）。角色必须为 `private`（`public_role_requires_clone`）。上限与可见性违规由错误映射器返回为 HTTP 500。",
+  "d93526251d0dc": "写入自己私有角色的开场白（`roleWelcome`）；只有卡片让玩家先开口时可以空白，也就是卡片有 `prologue` 条目（这次请求带的或已存的）或作者资产的 `openingPage`，其余情况必填且不可空白。`alternates`（玩家第一回合前可选的替代 AI 开场白）与 `prologue`（供玩家选择的第一句台词）皆为完整替换，依键是否出现区分：没有键 = 不变更，空数组 = 清除。每份列表最多保留 20 个非空白条目（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`），每个条目与 `roleWelcome` 本身皆受角色卡语言的开场白上限限制（8000 个字符；英文角色卡 10000；`role_welcome_too_long`）。角色必须为 `private`（`public_role_requires_clone`）。上限与可见性违规由错误映射器返回为 HTTP 500。",
   "d1ba7e0b48786": "角色摘要；`fieldChars.roleWelcome` 报告变更前／后的字符数。",
-  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`。",
+  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（卡片没有 `prologue` 也没有首屏网页时开场白空白）。",
   "d142e691efe99": "`record not found`、`public_role_requires_clone`、`role_welcome_too_long`、`role_welcome_alternates_too_many`、`role_welcome_prologue_too_many`，或其他未分类错误；`retryable: true`。",
   "d9a48aaa139a9": "将分享码导入为新笔记模板",
   "d873e00afe99e": "将分享码保存的固定快照拷贝为调用方拥有的新笔记模板。副本独立：后续撤销分享码或作者编辑皆不影响；模板的 `sourceCode` 仅记录来源。调用方已有 50 个模板时拒绝。分享码采用与预览相同的宽松解析。解析分享码失败使用 `{errorCode, messageKey}` 格式。",
@@ -2562,5 +2562,8 @@
   "dd9a6f7a9f313": "此状态表示下一轮 Agent 的费用估算是否包含一次额外的回复格式整理。笔记缺失、与当前设置不符或版本较旧时，需要重新整理。无法读取状态时，费用为未知。整理按 Agent 的标准用量计费，无额外固定费用，也不会改变 selectionKey。",
   "dbd81af8ab2e5": "此查询参数覆盖 language 请求头，用于判断是否需要整理格式笔记。省略时先使用请求头，再使用原始语言。",
   "d14c20685f8aa": "此请求语言与模型目录、对话上下文共用。未指定 language 查询参数时，使用此语言判断是否需要整理格式笔记。",
-  "dccc1b16f469b": "此选填语言可与估算请求的设置保持一致。省略时先使用 language 请求头，再使用原始语言。"
+  "dccc1b16f469b": "此选填语言可与估算请求的设置保持一致。省略时先使用 language 请求头，再使用原始语言。",
+  "dc0157115cb9f": "首屏网页：开始对话时显示在游玩画布最上方、开场白之上的作者 HTML（可含 style、script 与事件处理）。只供显示：不会发送给模型，也不会被记忆整理读取。未设置时为空字符串。",
+  "d440f758d9397": "首屏网页 HTML，最多 524288 个 UTF-8 字节（`validate_reject`，reason 为 `openingPage`）。省略或 `null` 保留已存的网页；`\"\"` 清除。",
+  "d901bfd9200dc": "卡片的来源写法：`mmd`（样式作用于整页）、`tavern`（样式限定在消息内）、`fengyue`（从 AI 风月导入：样式作用于整页，点选开场选项会直接作为玩家的第一条消息发送）。空字符串等同 `mmd`。"
 }

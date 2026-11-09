@@ -242,8 +242,17 @@ export const makeDraft = (language: string): RoleDraft => ({
  */
 export const REQUIRED_FIELDS = ["roleName", "roleWelcome", "roleDetailDesc"] as const;
 
-export function missingRequired(draft: RoleDraft): string[] {
-  return REQUIRED_FIELDS.filter((key) => !String(draft[key] ?? "").trim());
+export function missingRequired(draft: RoleDraft, extras: { openingPage?: string } = {}): string[] {
+  const playerFirst = playerSpeaksFirst(draft, extras.openingPage);
+  return REQUIRED_FIELDS.filter((key) => !(key === "roleWelcome" && playerFirst) && !String(draft[key] ?? "").trim());
+}
+
+/**
+ * 玩家先開口的卡（AI 風月匯入的那種）：有開場選項或首屏網頁時，AI 開場白可以留空。
+ * 跟上游 PATCH /welcome 的規則一致——兩樣都沒有，開新對話時畫面上什麼都沒有，仍然要開場白。
+ */
+export function playerSpeaksFirst(draft: Pick<RoleDraft, "prologue">, openingPage = ""): boolean {
+  return draft.prologue.some((p) => p.trim()) || !!openingPage.trim();
 }
 
 /**
@@ -459,7 +468,8 @@ export const hasAnyField = (patch: RoleDocumentFields): boolean => Object.keys(p
 
 /** 開場白那一組有沒有動過。三個欄位任一變了就得整組重送。 */
 export function welcomeChanged(draft: RoleDraft, original: RoleDraft | null): boolean {
-  if (!original) return Boolean(draft.roleWelcome.trim());
+  // 新卡：開場白、備選或開場選項任一有字就要送（玩家先開口的卡開場白是空的，開場選項仍得存上去）
+  if (!original) return Boolean(draft.roleWelcome.trim()) || draft.alternates.some((a) => a.trim()) || draft.prologue.some((p) => p.trim());
   return (
     draft.roleWelcome !== original.roleWelcome ||
     JSON.stringify(draft.alternates) !== JSON.stringify(original.alternates) ||

@@ -78,6 +78,7 @@ import {
   hasAnyField,
   makeDraft,
   missingRequired,
+  playerSpeaksFirst,
   NICKNAME_MAX,
   parseTags,
   resolveLimits,
@@ -384,6 +385,14 @@ watch([panel, panelOpen], () => {
 });
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+/** 首屏網頁的編輯框：存在作者資產（regexSet.openingPage），空字串就是沒有。 */
+const openingPageText = computed({
+  get: () => regexSet.value.openingPage ?? "",
+  set: (v: string) => {
+    if (v.trim()) regexSet.value.openingPage = v;
+    else delete regexSet.value.openingPage;
+  },
+});
 const regexWarnings = computed(() => can("regex") ? ruleSetWarnings(regexSet.value) : []);
 const regexSaveIssues = ref<ReturnType<typeof validateRuleSet>>([]);
 
@@ -475,7 +484,7 @@ const dirty = computed(
 );
 
 
-const missing = computed(() => missingRequired(draft.value));
+const missing = computed(() => missingRequired(draft.value, { openingPage: regexSet.value.openingPage }));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
 
 /** 有字數上限的欄位：欄位、標籤文案鍵、所在分區。存檔前逐一對上限，超過就點名。 */
@@ -956,7 +965,10 @@ async function save() {
     const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
 
-    if (welcomeChanged(sent, original.value) && sent.roleWelcome.trim()) {
+    // 作者資產（含首屏網頁）先存：開場白留空時，上游要看到首屏網頁或開場選項才收。
+    await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
+
+    if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, regexSet.value.openingPage))) {
       await patchRoleWelcome(
         targetRoleId,
         {
@@ -982,7 +994,6 @@ async function save() {
       if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
       else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
     }
-    await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
 
     // Editing cancels this submission. Only the explicit public flow may submit again.
     if (review.resubmit) { reviewRetry.value=false; reviewResubmitted.value=true; }
@@ -1511,6 +1522,10 @@ async function exportCard(format: "png" | "json") {
           <ListEditor v-model="draft.prologue" :label="$t('editor.prologue')" :hint="$t('editor.prologue.hint')"
                       :add-label="$t('editor.prologue.add')" :remove-label="$t('list.remove')"
                       :up-label="$t('list.up')" :down-label="$t('list.down')" />
+
+          <!-- 首屏網頁存在作者資產（跟顯示規則一起），只給玩家看、不送模型；有它或開場選項時，開場白可以留空。 -->
+          <FieldText v-if="can('regex')" id="f-opening-page" v-model="openingPageText" :label="$t('editor.openingPage')" :rows="6"
+                     :hint="$t('editor.openingPage.hint')" />
 
           <div class="field">
             <label>{{ $t("editor.talkExample") }}</label>

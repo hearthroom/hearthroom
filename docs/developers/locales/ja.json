@@ -619,9 +619,9 @@
   "d9fde414079ff": "`invalid JSON body`、または `only visibility=private is allowed here; use publish to go public`。",
   "d0d5fbb25031d": "`role_in_review`（人による審査中）、`record not found`、または他の未分類エラーです。`retryable: true`。",
   "d3e37ff5d6bfd": "開始メッセージ、別の開始文、プロローグの選択肢を設定する",
-  "d93526251d0dc": "所有する非公開キャラクターの開始文（`roleWelcome`、必須、空白のみ不可）を書き込みます。`alternates`（最初のターン前に選べる別の AI 開始文）と `prologue`（プレイヤー側の最初の発言候補）は全体置換で、キーの有無で区別します。キーなしは変更なし、空配列は消去です。各一覧は空白のみでない項目を最大 20 件保持します（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`）。各項目は `roleWelcome` 自体と同じくカード言語の開始文上限に従います（8000 文字、英語は 10000。`role_welcome_too_long`）。カードは `private` が必要です（`public_role_requires_clone`）。上限と公開範囲の違反はエラーマッパーが HTTP 500 で返します。",
+  "d93526251d0dc": "所有する非公開キャラクターの開始文（`roleWelcome`）。プレイヤーから話し始めるカード、つまり `prologue` の項目（このリクエストで送ったもの、または保存済みのもの）か作者アセットの `openingPage` があるカードに限り空白にできます。それ以外は必須で、空白のみは不可ですを書き込みます。`alternates`（最初のターン前に選べる別の AI 開始文）と `prologue`（プレイヤー側の最初の発言候補）は全体置換で、キーの有無で区別します。キーなしは変更なし、空配列は消去です。各一覧は空白のみでない項目を最大 20 件保持します（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`）。各項目は `roleWelcome` 自体と同じくカード言語の開始文上限に従います（8000 文字、英語は 10000。`role_welcome_too_long`）。カードは `private` が必要です（`public_role_requires_clone`）。上限と公開範囲の違反はエラーマッパーが HTTP 500 で返します。",
   "d1ba7e0b48786": "キャラクター概要です。`fieldChars.roleWelcome` は変更前後の文字数を示します。",
-  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`。",
+  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（`prologue` も最初の画面もないカードで開始文が空白の場合）。",
   "d142e691efe99": "`record not found`、`public_role_requires_clone`、`role_welcome_too_long`、`role_welcome_alternates_too_many`、`role_welcome_prologue_too_many`、または他の未分類エラーです。`retryable: true`。",
   "d9a48aaa139a9": "共有コードを新しいメモ帳テンプレートとしてインポートする",
   "d873e00afe99e": "共有コードの固定スナップショットを、呼び出し元が所有する新しいメモ帳テンプレートにコピーします。コピーは独立しており、後のコード失効や作者の編集には影響されません。テンプレートの `sourceCode` は出所情報にすぎません。すでに 50 件所有する場合は拒否します。コードの柔軟な解析規則はプレビューと同じです。コード解決の失敗には `{errorCode, messageKey}` 形式を使用します。",
@@ -2562,5 +2562,8 @@
   "dd9a6f7a9f313": "次の Agent ターンの見積もりに、返信形式を整理する追加リクエストが含まれるかを示します。ノートがない場合や、現在の設定と合わない場合、旧バージョンの場合は、再度整理します。状態を取得できない場合、料金は不明です。整理には通常の Agent 従量料金が適用され、追加の固定料金はかかりません。selectionKey は変わりません。",
   "dbd81af8ab2e5": "形式ノートの整理が必要か判断する際に、language ヘッダーより優先します。省略した場合はリクエストヘッダーを使い、それもなければ元の言語を使います。",
   "d14c20685f8aa": "モデルカタログと会話コンテキストで共通のリクエスト言語です。language クエリパラメータがない場合は、この言語で形式ノートの整理が必要か判断します。",
-  "dccc1b16f469b": "見積もりリクエストに合わせて指定できる言語です。省略した場合は language ヘッダーを使い、それもなければ元の言語を使います。"
+  "dccc1b16f469b": "見積もりリクエストに合わせて指定できる言語です。省略した場合は language ヘッダーを使い、それもなければ元の言語を使います。",
+  "dc0157115cb9f": "最初の画面：会話の開始時にプレイ画面の最上部、開始文より上に表示される作者の HTML（style、script、イベントハンドラーを含められます）。表示専用で、モデルには送られず、記憶の整理でも読まれません。未設定なら空文字列です。",
+  "d440f758d9397": "最初の画面の HTML。最大 524288 UTF-8 バイト（`validate_reject`、reason は `openingPage`）。省略または `null` なら保存済みのページを保持し、`\"\"` で消去します。",
+  "d901bfd9200dc": "カードの元の書き方：`mmd`（スタイルはページ全体に適用）、`tavern`（スタイルはメッセージ内に限定）、`fengyue`（AI 風月から読み込んだカード：スタイルはページ全体に適用され、最初の選択肢をタップするとプレイヤーの最初のメッセージとして送信）。空文字列は `mmd` と同じです。"
 }
