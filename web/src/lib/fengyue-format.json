@@ -27,7 +27,7 @@
     "defaultValueRegion": 1,
     "defaultProbability": 100
   },
-  "openingMode": { "presetChats": 2 },
+  "openingMode": { "openings": 1, "presetChats": 2 },
   "limits": { "openings": 20 },
   "regex": {
     "flags": "g",

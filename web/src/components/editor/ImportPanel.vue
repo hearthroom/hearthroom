@@ -12,7 +12,7 @@
  *
  * 次要關鍵詞直接落到條目的 AND 門，跟酒館同一個語意，不再需要作者選要不要併。
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
 import { isPng } from "@/lib/png-chunks";
@@ -175,6 +175,11 @@ function onPick(event: Event) {
 
 /** 目前要套用的那份（兩種模式擇一）。 */
 const current = computed<ImportResult | null>(() => (kind.value === "mmd" ? mmdPreview.value : preview.value));
+/** 讀到檔之後把報告捲進畫面：手機上編輯區只剩半屏，報告與「套用」按鈕原本落在畫面外。 */
+const reviewEl = ref<HTMLElement | null>(null);
+watch(current, (now, before) => {
+  if (now && !before) void nextTick(() => reviewEl.value?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
+});
 const regexWarnings = computed(() => current.value?.regex ? ruleSetWarnings(current.value.regex) : []);
 const regexIssues = computed(() => current.value?.regex ? validateRuleSet(current.value.regex) : []);
 
@@ -244,7 +249,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       </li>
     </ul>
 
-    <div v-if="current" class="review panel">
+    <div v-if="current" ref="reviewEl" class="review panel">
       <div class="review__head">
         <img v-if="thumb && kind === 'tavern'" :src="thumb" alt="" class="review__thumb" />
         <div>

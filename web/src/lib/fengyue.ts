@@ -151,6 +151,10 @@ function unmappedFeatures(raw: Raw, notes: DropNote[]) {
   const variables = !!str(pick(raw, "variablePrompt")) || Object.entries(raw).some(([k, v]) => isSignalKey(k) && !aliasOf.has(k) && !!str(v));
   if (variables) notes.push({ key: "import.fengyue.variables" });
 
+  // 匯出檔每個欄位都會寫出鍵（空的也寫）；一個別名都沒出現，就是風月換了我們沒收到的名字
+  const missing = (Object.keys(contract.fields) as Field[]).filter((f) => !contract.fields[f].some((alias) => alias in raw)).length;
+  if (missing) notes.push({ key: "import.fengyue.missingFields", params: { n: missing } });
+
   // 其餘鍵沒量到別名，靠形狀認：自定義總結、背景音樂；剩下有實質內容的一起算
   let other = 0;
   for (const [key, value] of Object.entries(raw)) {
@@ -185,14 +189,24 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   // 開場白模式點的是 openings；預設對話模式點的是每組預設對話裡的那句，另外還有一段先演給玩家看的問答
   const presets = listOf(pick(raw, "presetChats")).filter(isObj);
   const choiceList = listOf(pick(raw, "openings")).map(str).filter(Boolean);
-  const presetMode = Number(pick(raw, "openingMode")) === contract.openingMode.presetChats;
-  const openings = presetMode ? presets.flatMap((p) => listOf(p.suggested_questions).map(str).filter(Boolean)) : choiceList;
-  if (presetMode) {
+  // 模式鍵若用了別名表沒收的名字，就看哪一份清單有內容；兩份都有時不猜哪一份玩家看得到
+  const modeValue = Number(pick(raw, "openingMode"));
+  const mode = modeValue === contract.openingMode.presetChats ? "presets"
+    : modeValue === contract.openingMode.openings ? "openings"
+    : presets.length && !choiceList.length ? "presets"
+    : choiceList.length && !presets.length ? "openings"
+    : presets.length ? "unknown" : "openings";
+  const openings = mode === "presets" ? presets.flatMap((p) => listOf(p.suggested_questions).map(str).filter(Boolean)) : choiceList;
+  if (mode === "presets") {
     if (presets.length) notes.push({ key: "import.fengyue.presetChats", params: { n: presets.length } });
     if (choiceList.length) notes.push({ key: "import.fengyue.unusedOpenings", params: { n: choiceList.length } });
+  } else if (mode === "unknown") {
+    notes.push({ key: "import.fengyue.openingModeUnknown", params: { n: presets.length } });
   } else if (presets.length) {
     notes.push({ key: "import.fengyue.unusedPresets", params: { n: presets.length } });
   }
+  // 風月沒有 AI 先說的開場白，本站存檔要求有一段
+  notes.push({ key: "import.fengyue.noWelcome" });
   const max = contract.limits.openings;
   draft.prologue = openings.slice(0, max);
   if (openings.length > max) notes.push({ key: "import.fengyue.prologueLimit", params: { n: openings.length - max, max } });
