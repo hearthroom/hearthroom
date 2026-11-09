@@ -3,17 +3,17 @@
   "audience": "authors",
   "try": "/mine",
   "title": {
-    "zh-Hant": "審核新增決定前確認與改判，作者也能查看完整理由。",
-    "zh-Hans": "审核新增决定前确认和改判，作者也能查看完整理由。",
-    "en": "Reviews now include confirmation and corrections, and authors can view the full reasons.",
-    "ja": "審査に決定前の確認と訂正が加わり、作者は理由の全文を確認できます。",
-    "ko": "심사 결정 전 확인과 정정 기능이 생겼고, 작성자는 사유 전체를 볼 수 있어요."
+    "zh-Hant": "審核員送出決定前會多一次確認，也能在 24 小時內改正自己誤判的通過。",
+    "zh-Hans": "审核员提交决定前会多一次确认，也能在 24 小时内改正自己误判的通过。",
+    "en": "Reviewers now confirm before deciding and can fix their own mistaken approvals within 24 hours.",
+    "ja": "審査担当者は決定前に確認が入り、自分の誤った承認を24時間以内なら訂正できます。",
+    "ko": "심사자는 결정 전에 한 번 더 확인하고, 잘못 승인한 건을 24시간 안에 바로잡을 수 있어요."
   },
   "body": {
-    "zh-Hant": "審核員能查看自己的處理紀錄，並在定案後 24 小時內更正自己誤判的通過；超時或他人審核由管理員處理。",
-    "zh-Hans": "审核员能查看自己的处理记录，并在定案后 24 小时内更正自己误判的通过；超时或他人审核由管理员处理。",
-    "en": "Reviewers can view their review history and change their own mistaken approvals to rejections within 24 hours of the final decision; an administrator handles older reviews or another reviewer's decisions.",
-    "ja": "審査担当者は自分の履歴を確認でき、最終結果の確定から24時間以内なら自分の誤承認を却下に訂正でき、それ以外は管理者が対応します。",
-    "ko": "심사자는 자신의 기록을 보고 최종 결과 확정 후 24시간 이내에 자신이 잘못 승인한 심사를 반려로 정정할 수 있고, 기한이 지났거나 다른 심사자의 결정은 관리자가 처리해요."
+    "zh-Hant": "作者可以看到完整理由，審核員能查看自己的處理紀錄，超過 24 小時或他人的審核由管理員處理。",
+    "zh-Hans": "作者可以看到完整理由，审核员能查看自己的处理记录，超过 24 小时或他人的审核由管理员处理。",
+    "en": "Authors can read the full reason for a decision, reviewers can see their own history, and older reviews or other reviewers' decisions go to an administrator.",
+    "ja": "作者は理由の全文を読め、審査担当者は自分の履歴を見られ、24時間を過ぎたものや他の人の審査は管理者が対応します。",
+    "ko": "작가는 사유 전체를 볼 수 있고 심사자는 자기 기록을 볼 수 있으며, 24시간이 지났거나 다른 사람의 심사는 관리자가 처리해요."
   }
 }

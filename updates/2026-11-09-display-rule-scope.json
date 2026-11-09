@@ -4,8 +4,8 @@
   "try": "/create",
   "draft": true,
   "title": {
-    "zh-Hant": "顯示規則可選套用範圍",
-    "zh-Hans": "显示规则可选应用范围",
+    "zh-Hant": "顯示規則現在可以選擇套用在哪些訊息上。",
+    "zh-Hans": "显示规则现在可以选择应用在哪些消息上。",
     "en": "Choose where display rules apply",
     "ja": "表示ルールの適用対象を選べるように",
     "ko": "표시 규칙 적용 대상 선택"

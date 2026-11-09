@@ -2,8 +2,8 @@
   "tier": "fix",
   "audience": "authors",
   "title": {
-    "zh-Hant": "編輯器的角色設定下方，現在會顯示跟送審時同一種算法的送審字數。",
-    "zh-Hans": "编辑器的角色设定下方，现在会显示和提交审核时同一种算法的送审字数。",
+    "zh-Hant": "編輯器的角色設定下方會顯示送審字數，算法和送審時一樣。",
+    "zh-Hans": "编辑器的角色设定下方会显示送审字数，算法和提交审核时一样。",
     "en": "The editor now shows your review character count under the character definition, counted like the review check.",
     "ja": "エディターのキャラクター設定の下に、審査提出時と同じ数え方の文字数が出るようになりました。",
     "ko": "편집기의 캐릭터 설정 아래에 심사 제출 때와 같은 방식으로 센 심사 대상 글자 수가 표시됩니다."

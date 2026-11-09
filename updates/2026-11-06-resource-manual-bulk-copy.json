@@ -3,7 +3,7 @@
   "audience": "authors",
   "try": "/resources",
   "title": {
-    "zh-Hant": "資源庫批量連結手動複製時會保留分行，不再黏成一條。",
+    "zh-Hant": "資源庫手動複製多個連結時，每個連結會各佔一行，不再黏成一條。",
     "zh-Hans": "资源库批量链接手动复制时会保留分行，不再连成一条。",
     "en": "Manually copying resource URLs keeps each link on its own line.",
     "ja": "素材のURLを手動でまとめてコピーしても、1件ずつ改行が保たれます。",

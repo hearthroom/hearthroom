@@ -3,17 +3,17 @@
   "audience": "authors",
   "try": "/mine",
   "title": {
-    "zh-Hant": "送審至少需要 3,001 有效字，系統會自動計算。",
-    "zh-Hans": "提交审核至少需要 3,001 有效字，系统会自动计算。",
-    "en": "Review submissions now require at least 3,001 counted characters, with the total calculated for you.",
-    "ja": "審査への提出には有効文字数が合計3,001文字以上必要になり、自動で集計されます。",
-    "ko": "심사 제출에는 유효 글자 수가 최소 3,001자 필요하며, 자동으로 집계돼요."
+    "zh-Hant": "送審至少要 3,001 字，系統會自動幫你計算。",
+    "zh-Hans": "提交审核至少要 3,001 字，系统会自动帮你计算。",
+    "en": "Submitting for review now needs at least 3,001 counted characters, tallied for you automatically.",
+    "ja": "審査に出すには数えた文字数が3,001文字以上必要で、自動で集計されます。",
+    "ko": "심사 제출에는 센 글자 수가 3,001자 이상 필요하고, 자동으로 계산돼요."
   },
   "body": {
-    "zh-Hant": "人物設定與已啟用的世界書常駐條目可互相補足，開場白與範例對話不計入。",
-    "zh-Hans": "人物设定与已启用的世界书常驻条目可以互相补足，开场白和示例对话不计入。",
-    "en": "The character definition and enabled always-on Lorebook entries count together; opening messages and example conversations are excluded.",
-    "ja": "キャラクター設定と有効な常時オンの世界設定項目を合算し、最初のメッセージや会話例は含みません。",
-    "ko": "캐릭터 설정과 활성화된 상시 세계관 항목을 합산하며, 첫 메시지와 대화 예시는 포함하지 않아요."
+    "zh-Hant": "人物設定和已開啟的常駐世界書條目合併計算，標點、空白、開場白與範例對話不計入。",
+    "zh-Hans": "人物设定和已开启的常驻世界书条目合并计算，标点、空格、开场白与示例对话不计入。",
+    "en": "The character definition and enabled always-on Lorebook entries are added together, and punctuation, spaces, openings and example conversations are not counted.",
+    "ja": "キャラクター設定と有効な常時オンの世界設定の項目を合算し、句読点・空白・最初のメッセージ・会話例は数えません。",
+    "ko": "캐릭터 설정과 켜 둔 상시 세계관 항목을 합산하며, 문장 부호·공백·첫 메시지·대화 예시는 세지 않아요."
   }
 }

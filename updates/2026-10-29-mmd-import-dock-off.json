@@ -2,17 +2,17 @@
   "tier": "fix",
   "audience": "authors",
   "title": {
-    "zh-Hant": "從 MMD 三件套匯入的卡片，不再為側邊按鈕多留空白。",
-    "zh-Hans": "从 MMD 三件套导入的卡片，不再为侧边按钮额外留白。",
-    "en": "Cards imported from MMD file sets no longer add extra space for side buttons.",
-    "ja": "MMDの3点セットから取り込んだカードで、左右の余分な空白がなくなりました。",
-    "ko": "MMD 파일 세트로 가져온 카드에 양옆 버튼용 여백이 더 생기던 문제를 수정했어요."
+    "zh-Hant": "從 MMD 匯入的卡片，兩側按鈕旁不會再多留一塊空白。",
+    "zh-Hans": "从 MMD 导入的卡片，两侧按钮旁不会再多留一块空白。",
+    "en": "Cards imported from MMD no longer leave extra space beside the side buttons.",
+    "ja": "MMDから取り込んだカードで、左右のボタンの横に余分な空白が出なくなりました。",
+    "ko": "MMD에서 가져온 카드에서 양옆 버튼 옆에 여백이 더 생기지 않아요."
   },
   "body": {
-    "zh-Hant": "新匯入的卡片未達規則上限時，才會新增「側邊自動留白（關閉）」規則；滿額時維持原設定，停用或刪除新增規則可恢復自動留白。",
-    "zh-Hans": "新导入的卡片未达规则上限时，才会添加「侧边自动留白（关闭）」规则；满额时保留原设置，停用或删除新增规则可恢复自动留白。",
-    "en": "New imports get a “No auto side spacing” rule only if below the rule limit; at the limit, spacing stays as it was, and disabling or deleting the added rule restores automatic spacing.",
-    "ja": "新しく取り込むカードはルール数に空きがあれば「左右の自動余白（無効）」が追加され、上限時は元の設定が維持されますが、追加されたルールを無効にするか削除すると自動余白を元に戻せます。",
-    "ko": "새로 가져오는 카드에 규칙 수가 한도 미만일 때만 ‘자동 좌우 여백 해제’ 규칙이 추가되고 한도에 도달하면 기존 설정이 유지되며, 추가된 규칙을 끄거나 삭제하면 자동 여백이 돌아와요."
+    "zh-Hant": "新匯入的卡片會加上「側邊自動留白（關閉）」規則，規則已滿的卡維持原樣，想恢復留白就停用或刪掉它。",
+    "zh-Hans": "新导入的卡片会加上「侧边自动留白（关闭）」规则，规则已满的卡保持原样，想恢复留白就停用或删掉它。",
+    "en": "A “No auto side spacing” rule is added to newly imported cards unless the card is at its rule limit, and turning it off or deleting it brings the spacing back.",
+    "ja": "新しく取り込むカードに「左右の自動余白（無効）」ルールが加わり（ルールが上限のカードは元のまま）、無効にするか削除すると余白が戻ります。",
+    "ko": "새로 가져온 카드에 '자동 좌우 여백 해제' 규칙이 추가되고(규칙이 가득 찬 카드는 그대로), 끄거나 삭제하면 여백이 돌아와요."
   }
 }

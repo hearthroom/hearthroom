@@ -9,10 +9,10 @@
     "ko": "Claude 메뉴가 기본으로 Opus, Sonnet, Haiku 순으로 표시돼요"
   },
   "body": {
-    "zh-Hant": "同系列的新版本會排在前面，這次白露新線的名稱也統一為白露。",
-    "zh-Hans": "同系列的新版本会排在前面，这次白露新线路的名称也统一为白露。",
-    "en": "Newer versions appear first within each series, and the new Dew lanes are simply named Dew.",
-    "ja": "同じシリーズでは新しいバージョンが先に並び、今回の白露の新回線は白露という名前に統一されました。",
-    "ko": "각 시리즈에서 새 버전이 먼저 표시되며 이번에 추가된 이슬 경로의 이름도 이슬로 통일됐어요"
+    "zh-Hant": "同系列的新版本排在前面，新的線路也統一叫白露。",
+    "zh-Hans": "同系列的新版本排在前面，新的线路也统一叫白露。",
+    "en": "Newer versions appear first within each series, and the new routes are simply named Dew.",
+    "ja": "同じシリーズでは新しいバージョンが先に並び、新しいルートは白露という名前にそろえました。",
+    "ko": "각 시리즈에서 새 버전이 먼저 표시되고, 새 회선의 이름도 이슬로 통일했어요."
   }
 }

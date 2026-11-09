@@ -2,10 +2,10 @@
   "tier": "fix",
   "audience": "authors",
   "title": {
-    "zh-Hant": "匯入時會提早指出超限正則，避免開場已存、規則卻沒存的情況。",
-    "zh-Hans": "导入时会提前指出超限正则，避免开场已保存、规则却没保存的情况。",
-    "en": "Imports now flag oversized regex rules before saving, preventing openings from being saved without their rules.",
-    "ja": "インポート時に容量超過の正規表現を知らせ、開幕だけ保存される問題を防ぎます。",
-    "ko": "가져올 때 용량을 초과한 정규식을 알려 오프닝만 저장되고 규칙은 빠지던 문제를 막아요."
+    "zh-Hant": "匯入時會先提醒有規則超過上限，以免開場白存下來、規則卻沒存到。",
+    "zh-Hans": "导入时会先提醒有规则超过上限，以免开场白存下来、规则却没存上。",
+    "en": "Import now warns you about a rule over the limit, so an opening isn't saved without its rules.",
+    "ja": "取り込み時に上限を超えたルールを知らせ、最初のメッセージだけ保存されてルールが抜けるのを防ぎます。",
+    "ko": "가져올 때 한도를 넘은 규칙을 먼저 알려 줘서, 첫 메시지만 저장되고 규칙이 빠지는 일을 막아요."
   }
 }

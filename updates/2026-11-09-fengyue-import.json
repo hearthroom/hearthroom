@@ -10,7 +10,7 @@
     "ko": "AI 풍월 카드 가져오기"
   },
   "body": {
-    "zh-Hant": "把風月「導出配置」的檔丟進建卡頁的匯入，提示詞、世界書、正則、內置 CSS 與開場白選項都會帶進表單，帶不過來的逐項列出。",
+    "zh-Hant": "把風月「導出配置」的檔案拖進建卡頁的匯入，提示詞、世界書、正規表示式規則、內建樣式與開場白選項都會帶進表單，帶不過來的逐項列出。",
     "zh-Hans": "把风月「导出配置」的文件拖进建卡页的导入，提示词、世界书、正则、内置 CSS 与开场白选项都会带进表单，带不过来的逐项列出。",
     "en": "Drop a Fengyue export into Import on the new-card page to fill the form with its prompts, lorebook, regex rules, built-in CSS and opening choices, with anything left out listed.",
     "ja": "風月の書き出しファイルをカード作成の読み込みに入れると、プロンプトやワールドブック、正規表現、内蔵 CSS、選択肢がフォームに入ります。",

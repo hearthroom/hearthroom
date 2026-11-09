@@ -1,10 +1,17 @@
 {
   "tier": "fix",
   "title": {
-    "zh-Hant": "有自訂外觀的卡片，思考過程改用對話氣泡樣式，訊息間距補回，重新生成鈕與⋯一致。",
-    "zh-Hans": "有自定义外观的卡片，思考过程改用对话气泡样式，消息间距补回，重新生成键与⋯一致。",
-    "en": "On cards with a custom look, Thinking now matches the bubbles, spacing is back, and Regenerate matches ⋯.",
-    "ja": "独自デザインのカードで、思考過程が吹き出しと同じ見た目に、間隔も戻り、再生成ボタンも⋯と揃いました。",
-    "ko": "자체 디자인 카드에서 사고 과정이 말풍선과 같아지고, 간격이 돌아왔으며, 다시 생성 버튼도 ⋯와 같아졌어요."
+    "zh-Hant": "有自訂外觀的卡片，思考過程套用氣泡樣式，訊息間距也恢復了。",
+    "zh-Hans": "有自定义外观的卡片，思考过程套用气泡样式，消息间距也恢复了。",
+    "en": "On cards with a custom look, Thinking now uses the chat bubble style and message spacing is back.",
+    "ja": "独自デザインのカードで、思考過程が吹き出しの見た目になり、メッセージの間隔も元に戻りました。",
+    "ko": "자체 디자인 카드에서 사고 과정이 말풍선 스타일로 보이고 메시지 간격도 돌아왔어요."
+  },
+  "body": {
+    "zh-Hant": "「重新生成」鈕的樣子也跟「⋯」按鈕一致。",
+    "zh-Hans": "「重新生成」键的样子也跟「⋯」按钮一致。",
+    "en": "The Regenerate button now looks like the ⋯ button.",
+    "ja": "「再生成」ボタンも「⋯」ボタンと同じ見た目になりました。",
+    "ko": "'다시 생성' 버튼도 '⋯' 버튼과 같은 모양이에요."
   }
 }
