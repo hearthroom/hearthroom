@@ -335,10 +335,13 @@ export async function catalogTagCounts(db: D1Database, opts: CountScope): Promis
   const { where, binds } = countScope(opts);
   const names = TAG_CATALOG.flatMap((e) => [...new Set(Object.values(e.names))].map((n) => [e.key, n]));
   const { results } = await db.prepare(
-    `SELECT json_extract(cat.value, '$[0]') AS k, COUNT(DISTINCT c.id) AS n
-       FROM cards c, json_each(c.tags) t, json_each(?) cat
-      WHERE t.value = json_extract(cat.value, '$[1]') AND ${where.join(" AND ")}
-      GROUP BY k`,
+    `WITH catalog AS MATERIALIZED (
+       SELECT json_extract(value, '$[0]') AS k, json_extract(value, '$[1]') AS name FROM json_each(?)
+     )
+     SELECT catalog.k, COUNT(DISTINCT c.id) AS n
+       FROM cards c CROSS JOIN json_each(c.tags) t CROSS JOIN catalog ON catalog.name = t.value
+      WHERE ${where.join(" AND ")}
+      GROUP BY catalog.k`,
   ).bind(JSON.stringify(names), ...binds).all<{ k: string; n: number }>();
   const counts: Record<string, number> = Object.fromEntries(TAG_CATALOG.map((e) => [e.key, 0]));
   for (const row of results) counts[row.k] = row.n;
@@ -600,6 +603,12 @@ export async function setCardFeatured(db: D1Database, cardId: string, featuredAt
   await db.prepare("UPDATE cards SET featured_at = ? WHERE id = ?").bind(featuredAt, cardId).run();
 }
 
+// Collect only IDs, then hydrate each match by primary key. CROSS JOIN keeps
+// SQLite from starting at cards (or at the provider-wide index) again.
+const CARD_ID_MATCHES = `SELECT id FROM cards WHERE id = ?1
+  UNION SELECT id FROM cards WHERE source_role_id = ?1
+  UNION SELECT id FROM cards WHERE approved_hosted_role_id = ?1`;
+
 /**
  * 找一張卡：卡號（純數字）、上游的卡片 ID、或本站列的 id 都認。
  * 卡號是站內唯一的，不看供應商；另外兩種在兩家會撞號，要帶供應商。
@@ -611,11 +620,15 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
       .bind(Number(id))
       .first<CardRow>();
   }
+  // Preserve the former provider/zone index order if different identifier types collide.
   return await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ? OR EXISTS (
-      SELECT 1 FROM hosting_versions v WHERE v.card_id=c.id AND v.hosted_revision_id=? AND v.state='approved'
-    ))`)
-    .bind(provider, id, id, id, id)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM (
+      ${CARD_ID_MATCHES}
+      UNION SELECT card_id FROM hosting_versions WHERE hosted_revision_id = ?1 AND state = 'approved'
+    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN}
+    WHERE c.provider = ?2
+    ORDER BY c.zone, c.registered_at DESC, c.id LIMIT 1`)
+    .bind(id, provider)
     .first<CardRow>();
 }
 
@@ -627,12 +640,13 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
 export async function getPublicCard(db: D1Database, id: string, provider: ProviderId = "harbor") {
   if (CARD_NUMBER.test(id)) return getCard(db, id, provider);
   return await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN}
-      WHERE c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ? OR EXISTS (
-        SELECT 1 FROM hosting_versions v JOIN hosting_replicas r ON r.version_id=v.version_id WHERE v.card_id=c.id AND r.hosted_revision_id=? AND r.state='ready' AND v.state='approved'
-      )
-      ORDER BY (c.id = ?) DESC, (c.provider = ?) DESC, c.id LIMIT 1`)
-    .bind(id, id, id, id, id, provider)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM (
+      ${CARD_ID_MATCHES}
+      UNION SELECT v.card_id FROM hosting_replicas r JOIN hosting_versions v ON v.version_id = r.version_id
+      WHERE r.hosted_revision_id = ?1 AND r.state = 'ready' AND v.state = 'approved'
+    ) matches CROSS JOIN cards c ON c.id = matches.id ${AUTHOR_JOIN}
+    ORDER BY (c.id = ?1) DESC, (c.provider = ?2) DESC, c.id LIMIT 1`)
+    .bind(id, provider)
     .first<CardRow>();
 }
 
