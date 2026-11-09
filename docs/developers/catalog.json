@@ -2606,5 +2606,6 @@
   "d5f7ca640aa33": "`path`: no such path, or an unknown operation; `type`: the value does not match the kind stored there; `locked`: the object cannot gain that key, or the key cannot be removed; `notfound`: nothing to remove at that path; `size`: the result would exceed the limits.",
   "dfc98497e36e4": "Card variables after this reply's turn, on assistant rows whose turn recorded them and on the opening row (opening values, `seq` 0). A row without it keeps the latest earlier values.",
   "d979777c05aa9": "Card variables this turn settled; only on finished turns that recorded them.",
-  "dc0dbb7b210d1": "Card variables, same shape as `PUT /role/{roleId}/state`. Whole-document section: omitting it removes the card's variables."
+  "dc0dbb7b210d1": "Card variables, same shape as `PUT /role/{roleId}/state`. Whole-document section: omitting it removes the card's variables.",
+  "d11e635616732": "Opening card variables of a conversation this call started (or whose opening it refreshed), for the opening row drawn from `defaultRelay`. Absent when the card has no variables or an existing conversation was resumed; its rows carry `cardState` in `firstPage` instead."
 }
