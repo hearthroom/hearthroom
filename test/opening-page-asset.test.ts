@@ -19,4 +19,11 @@ describe("作者資產標準形與首屏網頁", () => {
     expect(hasAsset(canonicalAsset({ rules: [], pageMode: "classic", openingPage: "<p>x</p>" }))).toBe(true);
     expect(hasAsset(canonicalAsset({ rules: [], pageMode: "classic" }))).toBe(false);
   });
+
+  it("開局呈現只在跟格式的預設不同時才帶，既有卡的標準形不變", () => {
+    expect(canonicalAsset({ ...base, openingMode: "greeting" })).not.toHaveProperty("openingMode");
+    expect(canonicalAsset({ ...base, cardFormat: "fengyue", openingMode: "page" })).not.toHaveProperty("openingMode");
+    expect(canonicalAsset({ ...base, openingMode: "page" })).toMatchObject({ openingMode: "page" });
+    expect(canonicalAsset({ ...base, cardFormat: "fengyue", openingMode: "greeting" })).toMatchObject({ openingMode: "greeting" });
+  });
 });

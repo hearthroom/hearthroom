@@ -114,8 +114,19 @@ declare module "stage-canvas/rule-engine" {
     options?: { macros?: { char?: string; user?: string }; variants?: unknown },
   ): Promise<{ html: string; rollbacks: { ruleId: string; reason: string }[] }>;
 }
+declare module "stage-canvas/rule-engine-core" {
+  export function applyTavernRules(
+    text: string,
+    rules: unknown[],
+    options?: { macros?: { char?: string; user?: string }; variants?: unknown; messageRole?: "ai" | "user" | "system" },
+  ): { html: string; rollbacks: { ruleId: string; reason: string }[] };
+}
+/** 開場網頁（作者資產 openingPage）在畫布裡的 srcdoc：白底、hearthroom.fill／send 橋接。 */
+declare module "stage-common/opening-page" {
+  export function openingSrcdoc(html: string): string;
+}
 declare module "stage-canvas/style-scope" {
-  export type CardFormat = "mmd" | "tavern";
+  export type CardFormat = "mmd" | "tavern" | "fengyue";
   export function normalizeCardFormat(raw: unknown): CardFormat;
   export function scopeCardHtml(html: string, format: CardFormat, scope?: string): string;
 }

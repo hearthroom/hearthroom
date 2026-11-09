@@ -59,9 +59,29 @@ export interface RegexRuleSet {
    * 跟規則一起存在作者資產裡；空字串或缺＝沒有。
    */
   openingPage?: string;
+  /**
+   * 開局呈現：作者在編輯頁選的「開場白」（greeting）或「開場網頁」（page）。畫布看它決定點開場選項
+   * 是填進輸入框還是直接送出；缺＝還沒讀到上游的值，照卡片格式判斷（見 openingModeOf）。
+   */
+  openingMode?: OpeningMode;
 }
 
-/** `fengyue`＝AI 風月匯入的卡：樣式整頁生效、深淺跟著宿主，開場選項點了直接送出。 */
+/** 開局呈現：greeting＝開場白開啟對話；page＝玩家從開場網頁與選項開局（點了直接送出）。 */
+export type OpeningMode = "greeting" | "page";
+
+export function openingModeFrom(v: unknown): OpeningMode | undefined {
+  return v === "greeting" || v === "page" ? v : undefined;
+}
+
+/**
+ * 這張卡現在的開局呈現。上游讀回來一定有值；沒讀過（新卡、舊上游）時照卡片格式：
+ * AI 風月匯入的卡一直是點選項直接送出，算開場網頁，其他卡算開場白（owner 2026-11-10，既有卡行為不變）。
+ */
+export function openingModeOf(set: Pick<RegexRuleSet, "openingMode" | "format">): OpeningMode {
+  return set.openingMode ?? (set.format === "fengyue" ? "page" : "greeting");
+}
+
+/** `fengyue`＝AI 風月匯入的卡：樣式整頁生效、深淺跟著宿主。點開場選項的行為看開局呈現，不看格式。 */
 export type RegexCardFormat = "mmd" | "tavern" | "fengyue";
 export function cardFormatFrom(v: unknown): RegexCardFormat | undefined {
   const value = typeof v === "string" ? v.trim().toLowerCase() : "";
@@ -342,6 +362,7 @@ export interface AuthorAssetLike {
   pageMode?: string;
   cardFormat?: string;
   openingPage?: string;
+  openingMode?: string;
 }
 
 export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
@@ -354,10 +375,12 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
   const format = cardFormatFrom(asset.cardFormat);
   if (format) set.format = format;
   if (text(asset.openingPage)) set.openingPage = String(asset.openingPage);
+  const mode = openingModeFrom(asset.openingMode);
+  if (mode) set.openingMode = mode;
   return set;
 }
 
-export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<AuthorAssetLike> & { rules: RegexRule[]; version: number } {
+export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<Omit<AuthorAssetLike, "openingMode">> & { openingMode?: OpeningMode; rules: RegexRule[]; version: number } {
   const mountLayer = set.lowered ? "under" : set.mountLayer === "cover" ? "cover" : "over";
   return {
     rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, ...(r.targets ? { targets: r.targets } : {}) })),
@@ -366,6 +389,8 @@ export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Requir
     pageMode: set.pageMode ?? "",
     cardFormat: set.format ?? "",
     openingPage: set.openingPage ?? "",
+    // 沒選過就不送，上游保留原值（新卡照卡片格式給預設）
+    ...(set.openingMode ? { openingMode: set.openingMode } : {}),
     version,
   };
 }

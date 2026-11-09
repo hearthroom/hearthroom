@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "建卡頁重新整理，開局可以選開場白或開場網頁。",
+    "zh-Hans": "建卡页重新整理，开局可以选开场白或开场网页。",
+    "en": "The card editor is reorganized, and the opening can be a message or a page.",
+    "ja": "カード作成ページを整理し、始まり方を最初のメッセージか最初のページから選べるようになりました。",
+    "ko": "카드 편집 화면을 정리했고, 시작을 첫 메시지나 첫 페이지 중에서 고를 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "填寫項目照寫卡的順序分區，進階功能收起來；開場白可以直接看套完顯示規則的樣子，開場網頁的選項點了就直接送出；卡片變數改用表格編輯。",
+    "zh-Hans": "填写项目按写卡的顺序分区，进阶功能收起来；开场白可以直接看套完显示规则的样子，开场网页的选项点了就直接发送；卡片变量改用表格编辑。",
+    "en": "Fields follow the order you write a card in, the opening message can be previewed with display rules applied, choices on an opening page are sent as soon as they're tapped, and card variables are edited as a table.",
+    "ja": "項目はカードを書く順に並んで詳細設定はたたまれ、最初のメッセージは表示ルールを適用した見た目をその場で確認でき、最初のページの選択肢は押すとすぐ送信され、カード変数は表で編集できます。",
+    "ko": "항목이 카드를 쓰는 순서대로 나뉘고 고급 기능은 접혀 있으며, 첫 메시지는 표시 규칙이 적용된 모습을 바로 볼 수 있고, 첫 페이지의 선택지는 누르면 바로 보내지고, 카드 변수는 표로 편집해요."
+  }
+}

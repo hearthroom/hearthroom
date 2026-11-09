@@ -15,6 +15,10 @@ export default defineConfig({
     alias: [
       { find: "@/utils/display-rule-engine.js", replacement: fileURLToPath(new URL("../stage/src/utils/display-rule-engine.js", import.meta.url)) },
       { find: "@/common/card-format", replacement: fileURLToPath(new URL("../stage/src/common/card-format.ts", import.meta.url)) },
+      // 建卡頁「玩家看到的」開場白預覽：只要規則套用本身（core 不帶 Web Worker 那層）。放在 rule-engine 之前，前綴才不會被它先吃掉。
+      { find: "stage-canvas/rule-engine-core", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine-core.ts", import.meta.url)) },
+      // 開場網頁的預覽：跟畫布同一份 srcdoc（白底、hearthroom.fill／send 橋接）。
+      { find: "stage-common/opening-page", replacement: fileURLToPath(new URL("../stage/src/common/opening-page.ts", import.meta.url)) },
       { find: "stage-canvas/rule-engine", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine.ts", import.meta.url)) },
       { find: "stage-canvas/style-scope", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-style-scope.ts", import.meta.url)) },
       { find: "stage-canvas/platform-defaults", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-platform-defaults.ts", import.meta.url)) },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 數值面板皮膚的預覽：跟遊玩畫布同一支 renderStatePanelSkin（模板渲染＋皮膚樣式加 .lt-state-skin 前綴），
- * 皮膚也放在同一個容器 class 裡，玩家看到什麼這裡就是什麼。畫在不跑腳本的 iframe 裡，
+ * 皮膚也放在同一個容器 class 裡，玩家看到什麼這裡就是什麼。標題與皮膚空白時的樣子由呼叫端畫。畫在不跑腳本的 iframe 裡，
  * 皮膚自帶的 CSS 不會漏到建卡頁。作者看得到錯在哪一行。
  */
 import { computed } from "vue";
@@ -19,7 +19,6 @@ const doc = computed(() =>
 
 <template>
   <div v-if="result" class="ppreview">
-    <span class="ppreview__label">{{ $t("editor.state.preview") }}</span>
     <p v-if="result.error" class="ppreview__error" role="alert">
       {{ $t("editor.state.preview.error", { line: result.error.line, message: result.error.message }) }}
     </p>
@@ -28,8 +27,7 @@ const doc = computed(() =>
 </template>
 
 <style scoped>
-.ppreview { display: grid; gap: var(--s-1); margin-top: var(--s-2); }
-.ppreview__label { font-size: 13px; font-weight: 600; }
+.ppreview { display: grid; gap: var(--s-1); }
 .ppreview__error { color: var(--danger, #c0392b); font-size: 13px; margin: 0; }
 .ppreview__frame { width: 100%; min-height: 160px; border: 1px solid var(--line); border-radius: var(--r-2, 8px); background: var(--surface); }
 </style>

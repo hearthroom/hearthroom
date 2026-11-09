@@ -619,9 +619,9 @@
   "d9fde414079ff": "`invalid JSON body`，或 `only visibility=private is allowed here; use publish to go public`。",
   "d0d5fbb25031d": "`role_in_review`（角色卡正在人工审核）、`record not found`，或其他未分类错误；`retryable: true`。",
   "d3e37ff5d6bfd": "设置开场消息、替代开场白与序幕选项",
-  "d93526251d0dc": "写入自己私有角色的开场白（`roleWelcome`）；只有卡片让玩家先开口时可以空白，也就是卡片有 `prologue` 条目（这次请求带的或已存的）或作者资产的 `openingPage`，其余情况必填且不可空白。`alternates`（玩家第一回合前可选的替代 AI 开场白）与 `prologue`（供玩家选择的第一句台词）皆为完整替换，依键是否出现区分：没有键 = 不变更，空数组 = 清除。每份列表最多保留 20 个非空白条目（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`），每个条目与 `roleWelcome` 本身皆受角色卡语言的开场白上限限制（8000 个字符；英文角色卡 10000；`role_welcome_too_long`）。角色必须为 `private`（`public_role_requires_clone`）。上限与可见性违规由错误映射器返回为 HTTP 500。",
+  "d93526251d0dc": "写入自己私有角色的开场白（`roleWelcome`）；只有卡片让玩家先开口时可以空白，也就是作者资产的 `openingMode` 为 `page`，或卡片有 `prologue` 条目（这次请求带的或已存的）或作者资产的 `openingPage`，其余情况必填且不可空白。`alternates`（玩家第一回合前可选的替代 AI 开场白）与 `prologue`（供玩家选择的第一句台词）皆为完整替换，依键是否出现区分：没有键 = 不变更，空数组 = 清除。每份列表最多保留 20 个非空白条目（`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`），每个条目与 `roleWelcome` 本身皆受角色卡语言的开场白上限限制（8000 个字符；英文角色卡 10000；`role_welcome_too_long`）。角色必须为 `private`（`public_role_requires_clone`）。上限与可见性违规由错误映射器返回为 HTTP 500。",
   "d1ba7e0b48786": "角色摘要；`fieldChars.roleWelcome` 报告变更前／后的字符数。",
-  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（卡片没有开场选项也没有首屏网页时开场白空白）。",
+  "d53c9c80a97d8": "`invalid JSON body`、`roleWelcome is required`（卡片的 `openingMode` 不是 `page`，又没有开场选项也没有首屏网页时开场白空白）。",
   "d142e691efe99": "`record not found`、`public_role_requires_clone`、`role_welcome_too_long`、`role_welcome_alternates_too_many`、`role_welcome_prologue_too_many`，或其他未分类错误；`retryable: true`。",
   "d9a48aaa139a9": "将分享码导入为新笔记模板",
   "d873e00afe99e": "将分享码保存的固定快照拷贝为调用方拥有的新笔记模板。副本独立：后续撤销分享码或作者编辑皆不影响；模板的 `sourceCode` 仅记录来源。调用方已有 50 个模板时拒绝。分享码采用与预览相同的宽松解析。解析分享码失败使用 `{errorCode, messageKey}` 格式。",
@@ -2565,7 +2565,7 @@
   "dccc1b16f469b": "此选填语言可与估算请求的设置保持一致。省略时先使用 language 请求头，再使用原始语言。",
   "dc0157115cb9f": "首屏网页：开始对话时显示在游玩画布最上方、开场白之上的作者 HTML（可含 style、script 与事件处理）。只供显示：不会发送给模型，也不会被记忆整理读取。未设置时为空字符串。",
   "d440f758d9397": "首屏网页 HTML，最多 524288 个 UTF-8 字节（`validate_reject`，reason 为 `openingPage`）。省略或 `null` 保留已存的网页；`\"\"` 清除。",
-  "d901bfd9200dc": "卡片的来源写法：`mmd`（样式作用于整页）、`tavern`（样式限定在消息内）、`fengyue`（从 AI 风月导入：样式作用于整页，点选开场选项会直接作为玩家的第一条消息发送）。空字符串等同 `mmd`。",
+  "d901bfd9200dc": "卡片的来源写法：`mmd`（样式作用于整页）、`tavern`（样式限定在消息内）、`fengyue`（从 AI 风月导入：样式作用于整页）。空字符串等同 `mmd`。点选开场选项的行为看 `openingMode`，不看来源写法。",
   "db5374f79c1dc": "设置卡片变量",
   "d1c1a738ebcc1": "写入自己卡片的完整变量定义：模型随剧情推进持续更新的初始数值、告诉模型每个数值如何变动的规则，以及可选的、向玩家显示数值的面板模板。`convention` 说明 `data` 的写法。`mvu`（MagVarUpdate 写法）：每个叶节点是 `[value, \"rule\"]` 配对，`$meta.extensible` 或 `$meta.recursiveExtensible` 标记可新增键的对象，`$meta.required` 列出不可移除的键，`\"$__META_EXTENSIBLE__$\"` 标记会被舍弃；服务器会把每条规则移入 `rules.paths`。`plain`（AI 风月式骨架）：直接写值，空对象 `{}` 可新增键。输入在写入时规范化一次：列表始终可增减项目，对象的键固定（可新增键的对象除外），每个值的种类不变。上限：`data` 序列化后最多 16 KiB、嵌套深度 8、键总数 400、每个字符串 2 KiB；`rules.text` 最多 8 KiB；`rules.paths` 合计最多 8 KiB，且每条路径都必须存在于 `data`；`panel.template` 最多 32 KiB。游玩时，模型在提示词的缓存部分看到规则、每轮看到当前数值，并在回复结尾以 `<UpdateVariable>` 区块记录变更；该区块会在显示回复前移除（Agent 模式改用工具记录）。没有记录的回合沿用原数值；重写回复会从上一轮重新计算，回溯会倒回数值，编辑回复文字则保留数值。不支持：数学表达式、`_.move`、EJS 模板与脚本钩子。变更变量会改变卡片的内容哈希。",
   "da0f12a7aefe9": "作者可见的已保存变量。",
@@ -2607,5 +2607,8 @@
   "dfc98497e36e4": "这条回复那一轮结束后的卡片变量，出现在有记录变量的助理消息行，以及开场消息行（开场数值，`seq` 为 0）。没有此字段的行沿用更早最近一次的数值。",
   "d979777c05aa9": "这一轮确定的卡片变量；仅出现在已完成且有记录变量的回合。",
   "dc0dbb7b210d1": "卡片变量，形状与 `PUT /role/{roleId}/state` 相同。整份式区段：省略即移除卡片的变量。",
-  "d11e635616732": "这次调用开出的新对话（或刷新了开场白的对话）的开场卡片变量，给用 `defaultRelay` 画出的开场消息列使用。卡片没有变量、或接回既有对话时不带；那时各列在 `firstPage` 里带 `cardState`。"
+  "d11e635616732": "这次调用开出的新对话（或刷新了开场白的对话）的开场卡片变量，给用 `defaultRelay` 画出的开场消息列使用。卡片没有变量、或接回既有对话时不带；那时各列在 `firstPage` 里带 `cardState`。",
+  "d6e1c0a7b3f21": "作者选的开局呈现：`greeting`（开场白开启对话；点选开场选项会填进输入框）或 `page`（玩家从开场网页与选项开局；点选选项会直接作为玩家的第一条消息发送，开场白可以空白）。一定会出现；未设置时为 `greeting`。",
+  "d2b9f4e81c7a0": "开局呈现，`greeting` 或 `page`（见响应）。没有键或 `null` 保留已存的值；第一次保存时，`cardFormat` 为 `fengyue` 默认 `page`，其余默认 `greeting`。未知的值会被拒绝（`validate_reject` 原因 `openingMode`）。",
+  "d7a3c5e0f9b12": "开局呈现，与正式卡的 `openingMode` 相同；没有键保留已存的值。未知的值返回 `trial_unsupported`。"
 }

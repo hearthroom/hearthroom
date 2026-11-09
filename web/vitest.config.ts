@@ -13,6 +13,8 @@ export default defineConfig({
     alias: [
       { find: "@/utils/display-rule-engine.js", replacement: fileURLToPath(new URL("../stage/src/utils/display-rule-engine.js", import.meta.url)) },
       { find: "@/common/card-format", replacement: fileURLToPath(new URL("../stage/src/common/card-format.ts", import.meta.url)) },
+      { find: "stage-canvas/rule-engine-core", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine-core.ts", import.meta.url)) },
+      { find: "stage-common/opening-page", replacement: fileURLToPath(new URL("../stage/src/common/opening-page.ts", import.meta.url)) },
       { find: "stage-canvas/rule-engine", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine.ts", import.meta.url)) },
       { find: "stage-canvas/style-scope", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-style-scope.ts", import.meta.url)) },
       { find: "stage-canvas/platform-defaults", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-platform-defaults.ts", import.meta.url)) },
