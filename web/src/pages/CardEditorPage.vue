@@ -119,7 +119,8 @@ import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
 import CardStateEditor from "@/components/editor/CardStateEditor.vue";
-import { stateChanged, stateEmpty, stateLeafCount, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
+import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
+import { readStateTable } from "@/lib/card-state-table";
 import TagPicker from "@/components/editor/TagPicker.vue";
 import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -534,6 +535,8 @@ const wbCounts = computed(() => (wb.loading || wb.loadFailed ? null : worldbookR
 const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.reviewEntries())?.constant ?? null));
 const wbTotalChars = computed(() => (wbCounts.value ? wbCounts.value.total.toLocaleString(String(locale.value)) : null));
 const reviewCount = computed(() => {
+  // 空白新卡不顯示送審字數（ui.md §5）：還沒寫任何設定，「還差 3001 字」只是嚇人
+  if (isNew.value && !draft.value.roleDetailDesc.trim() && !wb.entries.some((e) => e.content.trim())) return null;
   const length = combineReviewLength(reviewPersona.value, reviewConstant.value);
   return length && { eligible: length.eligible, n: formatReviewLength(length, String(locale.value)) };
 });
@@ -596,8 +599,11 @@ const stateUsed = computed(() => !stateEmpty(draft.value.state));
 const stateSummary = computed(() => {
   const state = draft.value.state;
   if (stateEmpty(state)) return t("editor.state.unused");
+  // 數法跟表格一樣：最外層與群組裡的每一項算一個，清單整份算一個，規則不算
+  const read = readStateTable(state!);
   let n = 0;
-  try { n = stateLeafCount(JSON.parse(state!.dataText || "{}")); } catch { /* 解不開時不數 */ }
+  if (read.ok) n = read.rows.reduce((sum, row) => sum + (row.kind === "group" ? row.children.length : 1), 0);
+  else try { n = Object.keys(JSON.parse(state!.dataText || "{}")).filter((k) => !k.startsWith("$")).length; } catch { /* 解不開時不數 */ }
   return state!.template.trim() ? t("editor.state.summaryPanel", { n }) : t("editor.state.summary", { n });
 });
 
@@ -2097,7 +2103,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turn { display: flex; gap: var(--s-2); align-items: flex-start; }
 .turn .input { flex: 1; resize: vertical; }
 /* 「誰說的」固定寬，內容框吃剩下的；內容框起始高度跟下拉一樣，長高往下長（ui.md §2.0、§2.1） */
-.input--who { flex: none; width: 92px; height: var(--h-md); }
+.turn .input--who { flex: none; width: 92px; height: var(--h-md); }
 .pane textarea.turn__text { min-height: var(--h-md); padding-block: 6px; line-height: 1.6; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 /* 正則是這頁最容易被漏看的功能，給它一塊自己的底色撐住 */
@@ -2137,7 +2143,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .bar {
   position: relative; z-index: 12;
   display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
-  margin: 0; padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
+  /* 右邊留跟表單捲動區同樣的內距：最右的「有未儲存的修改」不貼邊被裁 */
+  margin: 0; padding: var(--s-3) var(--s-2) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) 0;
   border-top: 1px solid var(--line); background: var(--bg);
 }
 /* 檢查清單推到最右邊：左邊是要按的，右邊是要看的 */

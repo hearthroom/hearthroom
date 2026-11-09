@@ -18,8 +18,9 @@ describe("開局呈現", () => {
   });
 
   it("必填的開局項跟著呈現換：開場白要開場白，開場網頁要至少一個第一句選項", () => {
-    expect(requiredKeys("greeting")).toEqual(["roleName", "roleWelcome", "roleDetailDesc"]);
-    expect(requiredKeys("page")).toEqual(["roleName", "prologue", "roleDetailDesc"]);
+    // 順序跟導覽一樣：名字 → 角色設定 → 開局
+    expect(requiredKeys("greeting")).toEqual(["roleName", "roleDetailDesc", "roleWelcome"]);
+    expect(requiredKeys("page")).toEqual(["roleName", "roleDetailDesc", "prologue"]);
     const draft = { ...makeDraft("zh-Hant"), roleName: "卡", roleDetailDesc: "設定" };
     expect(missingRequired(draft, { openingMode: "page" })).toEqual(["prologue"]);
     expect(missingRequired({ ...draft, prologue: [" ", "我推開門。"] }, { openingMode: "page" })).toEqual([]);
