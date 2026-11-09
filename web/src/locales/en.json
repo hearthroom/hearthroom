@@ -654,7 +654,6 @@
   "editor.prologue": "Opening choices",
   "editor.openingPage": "Page content",
   "editor.openingPage.hint": "Shown at the top of every new chat. HTML, styles and scripts work. Leave empty to show only the choices.",
-  "editor.prologue.add": "Add an opening choice",
   "editor.talkExample": "Example dialogue",
   "editor.talkExample.hint": "A few exchanges showing how this character talks. Two or three is plenty; more locks them in.",
   "editor.talkExample.who": "Speaker",
@@ -4674,5 +4673,7 @@
   "editor.state.number.invalid": "Needs a number, such as 10 or 0.5",
   "editor.state.preview.opening": "· starting values",
   "editor.state.preview.empty": "No panel skin, so the chat page shows no panel",
-  "editor.state.template.example": "Use sample skin"
+  "editor.state.template.example": "Use sample skin",
+  "editor.opening.suggest.add": "Add a line",
+  "editor.opening.choices.add": "Add a choice"
 }

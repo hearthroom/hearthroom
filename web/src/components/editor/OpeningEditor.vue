@@ -204,7 +204,7 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
                   :up-label="$t('list.up')" :down-label="$t('list.down')" @update:model-value="emit('update:alternates', $event)" />
 
       <ListEditor :model-value="prologue" :label="$t('editor.opening.suggest')" :hint="$t('editor.opening.suggest.hint')"
-                  :add-label="$t('editor.prologue.add')" :remove-label="$t('list.remove')"
+                  :add-label="$t('editor.opening.suggest.add')" :remove-label="$t('list.remove')"
                   :up-label="$t('list.up')" :down-label="$t('list.down')" @update:model-value="emit('update:prologue', $event)" />
     </template>
 
@@ -230,7 +230,7 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 
       <div class="opening__choices" :class="{ 'is-missing': missing }">
         <ListEditor :model-value="prologue" :label="$t('editor.opening.choices')" :hint="$t('editor.opening.choices.hint')"
-                    :add-label="$t('editor.prologue.add')" :remove-label="$t('list.remove')"
+                    :add-label="$t('editor.opening.choices.add')" :remove-label="$t('list.remove')"
                     :up-label="$t('list.up')" :down-label="$t('list.down')" @update:model-value="emit('update:prologue', $event)" />
       </div>
     </template>

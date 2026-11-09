@@ -654,7 +654,6 @@
   "editor.prologue": "첫 선택지",
   "editor.openingPage": "페이지 내용",
   "editor.openingPage.hint": "새 대화 맨 위에 표시됩니다. HTML, 스타일, 스크립트를 쓸 수 있고, 비워 두면 선택지만 보입니다.",
-  "editor.prologue.add": "선택지 추가",
   "editor.talkExample": "대화 예시",
   "editor.talkExample.hint": "말투를 보여 주는 주고받기. 두세 번이면 충분하고, 많으면 오히려 묶입니다.",
   "editor.talkExample.who": "화자",
@@ -4674,5 +4673,7 @@
   "editor.state.number.invalid": "10이나 0.5 같은 숫자를 입력해야 해요",
   "editor.state.preview.opening": "· 시작값으로 표시",
   "editor.state.preview.empty": "패널 스킨이 없어서 대화 화면에 패널이 나오지 않아요",
-  "editor.state.template.example": "예시 스킨 쓰기"
+  "editor.state.template.example": "예시 스킨 쓰기",
+  "editor.opening.suggest.add": "첫 마디 추가",
+  "editor.opening.choices.add": "선택지 추가"
 }
