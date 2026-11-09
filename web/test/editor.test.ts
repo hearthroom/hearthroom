@@ -2096,3 +2096,15 @@ describe("開局：開場白與開場網頁二選一（ui.md §3）", () => {
     expect(root.querySelector('.body__scroll > [role="alert"]')).toBeNull();
   });
 });
+
+describe("開局：切到開場網頁時不擋要被移除的開場白", () => {
+  it("超過上限的舊開場白：切到開場網頁照樣存得下，開場白送空的", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "長開場", roleDetailDesc: "設定", roleWelcome: "字".repeat(8001), rolePrologue: ["出發"] });
+    await mount("/cards/r1/edit");
+    $('[data-opening-mode="page"]').click();
+    await flush();
+    await submit();
+    expect(root.querySelector('.body__scroll > [role="alert"]')).toBeNull();
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["出發"] }, "tok");
+  });
+});
