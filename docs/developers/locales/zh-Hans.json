@@ -363,7 +363,7 @@
   "d98b32043a28e": "string（可选，合并的关键字）",
   "d274d9f7a64e2": "integer（可选）",
   "dc0302c18fa67": "rate_limited|empty_turn（可选）",
-  "d063bc392af8a": "Agent 模式准备进度与上游重试通知。仅提供阶段语义；文案由客户端提供。",
+  "d063bc392af8a": "Agent 模式的准备进度和模型服务重试通知。事件只提供阶段含义，显示文字由客户端决定。可忽略未知阶段。等待模型响应本身无法判断模型服务是否正在排队。",
   "d811a19652279": "OpenAI 区块：{id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",
   "d5d3014daf3fa": "推理增量（提供可见思考的模型）。",
   "d9ba858635be5": "增量使用 OpenAI 区块：{id:'',object:'',created:0,model:'',choices:[{delta:{role:'assistant',content},index:0,finish_reason:null}]}；最后区块的 content 为空，并设置 `finish_reason`（例如 stop、length、content_filter）；之后为字面字符串 `[DONE]`。",

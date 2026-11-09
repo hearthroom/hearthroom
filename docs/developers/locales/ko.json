@@ -363,7 +363,7 @@
   "d98b32043a28e": "string(선택 사항, 결합된 키워드)",
   "d274d9f7a64e2": "integer(선택 사항)",
   "dc0302c18fa67": "rate_limited|empty_turn(선택 사항)",
-  "d063bc392af8a": "Agent 모드 준비 진행도 및 상위 서비스 재시도 알림입니다. 단계 의미만 제공하며 표시 문구는 클라이언트가 정합니다.",
+  "d063bc392af8a": "Agent 모드의 준비 진행 상황과 모델 서비스 재시도 알림이에요. 이벤트는 단계의 의미만 전달하며 표시 문구는 클라이언트가 정해요. 알 수 없는 단계는 건너뛸 수 있어요. 모델 응답을 기다린다는 사실만으로 모델 서비스에 대기열이 생겼는지는 알 수 없어요.",
   "d811a19652279": "OpenAI 청크: {id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",
   "d5d3014daf3fa": "추론 델타입니다. 사고 내용을 공개하는 모델에 해당합니다.",
   "d9ba858635be5": "델타용 OpenAI 청크: {id:'',object:'',created:0,model:'',choices:[{delta:{role:'assistant',content},index:0,finish_reason:null}]}. 이후 content가 비어 있고 `finish_reason`이 설정된 마지막 청크(예: stop, length, content_filter), 그다음 리터럴 문자열 `[DONE]`을 보냅니다.",

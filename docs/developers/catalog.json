@@ -363,7 +363,7 @@
   "d98b32043a28e": "string (optional, keywords joined)",
   "d274d9f7a64e2": "integer (optional)",
   "dc0302c18fa67": "rate_limited|empty_turn (optional)",
-  "d063bc392af8a": "Agent-mode preparation progress and upstream retry notices. Stage semantics only; the client supplies copy.",
+  "d063bc392af8a": "Agent-mode preparation progress and upstream retry notices. Stage semantics only; the client supplies copy. Unknown stages may be ignored. Waiting for the model does not establish that an upstream queue is active.",
   "d811a19652279": "OpenAI chunk: {id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",
   "d5d3014daf3fa": "Reasoning delta (models with visible thinking).",
   "d9ba858635be5": "OpenAI chunk: {id:'',object:'',created:0,model:'',choices:[{delta:{role:'assistant',content},index:0,finish_reason:null}]} for deltas; a final chunk with empty content and `finish_reason` set (e.g. stop, length, content_filter); then the literal string `[DONE]`.",

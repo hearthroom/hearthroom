@@ -363,7 +363,7 @@
   "d98b32043a28e": "string（任意。キーワードを連結）",
   "d274d9f7a64e2": "integer（任意）",
   "dc0302c18fa67": "rate_limited|empty_turn（任意）",
-  "d063bc392af8a": "エージェントモードの準備状況と上流の再試行通知です。段階の意味だけを伝え、表示文言はクライアントが用意します。",
+  "d063bc392af8a": "Agent モードの準備状況とモデルサービスへの再試行通知です。イベントが示すのは段階の意味で、表示文言はクライアントが決めます。未知の段階は無視できます。モデルの応答待ちだけでは、サービス側で順番待ちが発生しているかは分かりません。",
   "d811a19652279": "OpenAI チャンク：{id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",
   "d5d3014daf3fa": "推論の差分です（思考を表示するモデル）。",
   "d9ba858635be5": "差分の OpenAI チャンクは {id:'',object:'',created:0,model:'',choices:[{delta:{role:'assistant',content},index:0,finish_reason:null}]} です。続いて content が空で `finish_reason` を設定した最終チャンク（例：stop、length、content_filter）、最後にリテラル文字列 `[DONE]` を送ります。",

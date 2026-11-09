@@ -363,7 +363,7 @@
   "d98b32043a28e": "string（選填，合併的關鍵字）",
   "d274d9f7a64e2": "integer（選填）",
   "dc0302c18fa67": "rate_limited|empty_turn（選填）",
-  "d063bc392af8a": "Agent 模式準備進度與上游重試通知。僅提供階段語意；文案由用戶端提供。",
+  "d063bc392af8a": "Agent 模式的準備進度和模型服務重試通知。事件只提供階段的含義，顯示文字由用戶端決定。可略過未知階段。等待模型回應本身無法判定模型服務是否正在排隊。",
   "d811a19652279": "OpenAI 區塊：{id,object,created,model,choices:[{delta:{role:'assistant',reasoning_content},index,finish_reason:null}]}",
   "d5d3014daf3fa": "推理增量（提供可見思考的模型）。",
   "d9ba858635be5": "增量使用 OpenAI 區塊：{id:'',object:'',created:0,model:'',choices:[{delta:{role:'assistant',content},index:0,finish_reason:null}]}；最後區塊的 content 為空，並設定 `finish_reason`（例如 stop、length、content_filter）；之後為字面字串 `[DONE]`。",
