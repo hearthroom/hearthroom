@@ -3,17 +3,17 @@
   "audience": "authors",
   "try": "/create",
   "title": {
-    "zh-Hant": "風月卡的詳細介紹，會顯示在新對話的最上方。",
-    "zh-Hans": "风月卡的详细介绍，会显示在新对话的最上方。",
-    "en": "Fengyue introductions become opening pages",
-    "ja": "風月の詳細紹介が最初の画面に",
-    "ko": "풍월 상세 소개가 첫 화면으로"
+    "zh-Hant": "匯入的風月卡會先顯示作者的介紹頁。",
+    "zh-Hans": "导入的风月卡会先显示作者的介绍页。",
+    "en": "Imported Fengyue cards now open with the author's intro page.",
+    "ja": "取り込んだ風月のカードは、最初に作者の紹介ページが表示されます。",
+    "ko": "가져온 풍월 카드는 작가가 쓴 소개 페이지가 먼저 보여요."
   },
   "body": {
-    "zh-Hant": "匯入的詳細介紹只給玩家看、不會送給 AI，點開場選項會直接送出，跟在風月一樣。",
-    "zh-Hans": "导入的详细介绍只给玩家看、不会发给 AI，点开场选项会直接发送，跟在风月一样。",
-    "en": "An imported introduction now shows at the top of every new chat for players only, never sent to the AI, and tapping an opening choice sends it, as on Fengyue.",
-    "ja": "読み込んだ詳細紹介は新しい会話の一番上にプレイヤーにだけ表示され AI には送られず、最初の選択肢は押すとそのまま送信されます。",
-    "ko": "가져온 상세 소개가 새 대화 맨 위에 플레이어에게만 보이고 AI에는 보내지 않으며, 첫 선택지는 누르면 바로 보내져요."
+    "zh-Hant": "開新對話時，最上方會先顯示卡片作者寫的介紹頁，只給你看、不會送給 AI；點下面的開場選項，會直接當成你的第一句送出。",
+    "zh-Hans": "开新对话时，最上方会先显示卡片作者写的介绍页，只给你看、不会发给 AI；点下面的开场选项，会直接当成你的第一句发出。",
+    "en": "At the top of a new chat you see the intro page the card's author wrote, which the AI never receives, and tapping an opening choice sends it as your first message.",
+    "ja": "新しい会話の一番上に作者が書いた紹介ページが出て、あなたにだけ見えて AI には送られず、下の最初の選択肢を押すとそのままあなたの最初の発言として送信されます。",
+    "ko": "새 대화 맨 위에 카드 작가가 쓴 소개 페이지가 나오고 나에게만 보이며 AI에는 보내지 않고, 아래 첫 선택지를 누르면 내 첫 말로 바로 보내져요."
   }
 }
