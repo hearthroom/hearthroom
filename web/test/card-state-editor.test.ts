@@ -1,5 +1,5 @@
 /**
- * 卡片變數編輯區：插入範例、寫法切換、解析錯誤與每輪大小的提示、預覽插槽。
+ * 卡片變數編輯區：插入範例、寫法切換、解析錯誤與每輪大小的提示、面板預覽。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp, h, nextTick, ref, type App } from "vue";
@@ -79,9 +79,15 @@ describe("CardStateEditor", () => {
     expect(root.querySelector(".cstate__warn")?.textContent).toContain(t("editor.state.size.warn", { n: (4522).toLocaleString(String(i18n.global.locale.value)) }));
   });
 
-  it("預覽插槽拿到皮膚原文與正規化後的值", async () => {
-    const { slotProps } = mount({ convention: "mvu", dataText: '{"好感度": [10, "規則"]}', rulesText: "", template: "<b>{{好感度}}</b>" });
+  it("預覽用正規化後的值畫皮膚", async () => {
+    mount({ convention: "mvu", dataText: '{"好感度": [10, "規則"]}', rulesText: "", template: "<b>{{好感度}}</b>" });
     await nextTick();
-    expect(slotProps.value).toEqual({ template: "<b>{{好感度}}</b>", data: { 好感度: 10 } });
+    expect(root.querySelector("iframe")?.getAttribute("srcdoc")).toContain("<b>10</b>");
+  });
+  it("皮膚寫壞時標出第幾行，不畫空白框", async () => {
+    mount({ convention: "plain", dataText: '{"金錢": 1}', rulesText: "", template: "{{#if 金錢}}<b>" });
+    await nextTick();
+    expect(root.querySelector("iframe")).toBeNull();
+    expect(root.querySelector(".ppreview [role=alert]")?.textContent).toContain("1");
   });
 });

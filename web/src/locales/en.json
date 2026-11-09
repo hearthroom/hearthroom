@@ -625,6 +625,8 @@
   "editor.state.rules.hint": "For the AI: which value changes in which situation, and how. Sent with the values every turn.",
   "editor.state.template": "Panel skin",
   "editor.state.template.hint": "HTML and CSS written in Handlebars. The chat page uses it to draw the current values as a panel; leave it empty for no panel.",
+  "editor.state.preview": "Panel preview",
+  "editor.state.preview.error": "Line {line}: {message}",
   "editor.state.reject.convention": "The variable format must be either value with a rule or values only.",
   "editor.state.reject.data": "The variable skeleton must be a valid JSON object. Fix it and save again.",
   "editor.state.reject.data_size": "The variable skeleton is over {dataKB} KB. Remove values you don't need and save again.",

@@ -625,6 +625,8 @@
   "editor.state.rules.hint": "AI에게 주는 설명이에요. 어떤 상황에서 어떤 값을 어떻게 바꾸는지 적어요. 매 턴 수치와 함께 전송돼요.",
   "editor.state.template": "패널 스킨",
   "editor.state.template.hint": "Handlebars로 쓴 HTML과 CSS예요. 대화 화면은 이것으로 현재 수치를 패널로 그려요. 비워 두면 패널이 표시되지 않아요.",
+  "editor.state.preview": "패널 미리보기",
+  "editor.state.preview.error": "{line}번째 줄: {message}",
   "editor.state.reject.convention": "변수 작성 방식은 '값마다 규칙 포함'과 '값만' 중 하나여야 해요.",
   "editor.state.reject.data": "변수 골격은 올바른 JSON 객체여야 해요. 고친 뒤 다시 저장해 주세요.",
   "editor.state.reject.data_size": "변수 골격이 {dataKB}KB를 넘어요. 쓰지 않는 수치를 지운 뒤 다시 저장해 주세요.",

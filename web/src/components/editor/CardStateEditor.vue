@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PanelPreview from "@/components/editor/PanelPreview.vue";
 /**
  * 卡片變數的編輯區：骨架（JSON）、寫法切換、變數規則、面板皮膚。
  *
@@ -8,7 +9,7 @@
  * 超過 4 KB 換成提醒的樣子——數值太多會讓每一輪變慢、變貴，作者應該在寫的時候就知道。
  *
  * 面板預覽：皮膚是 Handlebars，渲染器之後由遊玩畫布那邊提供（同一套才會跟對話頁長得一樣），
- * 這裡不自己做一個模板引擎。預覽的位置留成具名插槽 `preview`，拿得到皮膚原文與正規化後的值。
+ * 這裡不自己做一個模板引擎：預覽用遊玩畫布同一份渲染器（PanelPreview）。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
@@ -144,8 +145,7 @@ async function insertExample(key: ExampleKey) {
                 autocapitalize="off" :aria-invalid="problem === 'template_size' ? 'true' : undefined" />
       <p v-if="problem === 'template_size'" class="cstate__error" role="alert">{{ problemText }}</p>
       <span class="subtle">{{ $t("editor.state.template.hint") }}</span>
-      <!-- 面板預覽的位置：渲染器由遊玩畫布提供後接在這裡（拿 template 與正規化後的 data），這個元件不做模板引擎 -->
-      <slot name="preview" :template="modelValue.template" :data="values" />
+      <PanelPreview :template="modelValue.template" :data="values" />
     </div>
   </div>
 </template>

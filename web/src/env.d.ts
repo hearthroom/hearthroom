@@ -148,3 +148,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare module "stage-panel/handlebars-lite" {
+  export interface PanelRenderResult { html: string; error?: { message: string; line: number; helper?: string } }
+  export function renderPanel(template: string, data: unknown, opts?: { changes?: unknown[]; audience?: "author" | "player" }): PanelRenderResult;
+}
