@@ -12,6 +12,7 @@ import { currentSurface } from "./track";
 import { i18n } from "./i18n";
 import { dateTime } from "./format";
 import { canonicalType } from "./media-type";
+import { stateLimitParams, type StatePayload } from "./card-state";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 import type { CardHonor, Honor } from "./honors";
@@ -1846,6 +1847,37 @@ export async function putRoleWorld(roleId: string, world: Record<string, unknown
 export async function deleteRoleWorld(roleId: string, token: string): Promise<unknown> {
   return json<unknown>(
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/world`, {
+      method: "DELETE",
+      headers: writeHeaders(token),
+    }),
+  );
+}
+
+/**
+ * 卡片變數：整包寫入（上游正規化一次後回存好的樣子）。
+ * 驗證失敗是 400 validate_reject，原因在 detail.reason（骨架太大、太深、規則路徑對不上…），
+ * 各給一句人話（editor.state.reject.<reason>）；ApiError.reason 帶著它，編輯頁才知道是這一區出的錯。
+ */
+export async function putRoleState(roleId: string, state: StatePayload, token: string): Promise<{ state: unknown }> {
+  const res = await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/state`, {
+    method: "PUT",
+    headers: writeHeaders(token),
+    body: JSON.stringify(state),
+  });
+  if (!res.ok) {
+    const body = (await res.clone().json().catch(() => ({}))) as { error?: string; detail?: { reason?: unknown } };
+    const reason = typeof body.detail?.reason === "string" ? body.detail.reason : "";
+    if (body.error === "validate_reject" && reason && i18n.global.te(`editor.state.reject.${reason}`)) {
+      throw new ApiError(res.status, i18n.global.t(`editor.state.reject.${reason}`, stateLimitParams()), "validate_reject", undefined, reason);
+    }
+  }
+  return json<{ state: unknown }>(res);
+}
+
+/** 拿掉卡片變數：之後的對話不再帶數值，既有對話裡的紀錄不動。 */
+export async function deleteRoleState(roleId: string, token: string): Promise<{ state: null }> {
+  return json<{ state: null }>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/state`, {
       method: "DELETE",
       headers: writeHeaders(token),
     }),

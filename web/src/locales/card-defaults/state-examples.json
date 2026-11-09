@@ -1,0 +1,27 @@
+{
+  "zh-Hant": {
+    "affection": { "好感度": [0, "0 到 100；對方被打動時加 1 到 5，被冒犯時減少"] },
+    "inventory": { "背包": [["短刀", "鐵護腕"], "隨身物品；得到時加入，用掉或丟棄時移除"] },
+    "quests": { "任務": [{ "$meta": { "extensible": true } }, "接到新任務時以任務名稱加入一項，值寫目前進度；完成後刪除"] }
+  },
+  "zh-Hans": {
+    "affection": { "好感度": [0, "0 到 100；对方被打动时加 1 到 5，被冒犯时减少"] },
+    "inventory": { "背包": [["短刀", "铁护腕"], "随身物品；得到时加入，用掉或丢弃时移除"] },
+    "quests": { "任务": [{ "$meta": { "extensible": true } }, "接到新任务时以任务名称加入一项，值写当前进度；完成后删除"] }
+  },
+  "en": {
+    "affection": { "affection": [0, "0 to 100; +1 to +5 when they are moved, lower when they are offended"] },
+    "inventory": { "inventory": [["dagger", "iron bracer"], "Items carried; add when gained, remove when used up or dropped"] },
+    "quests": { "quests": [{ "$meta": { "extensible": true } }, "Add an item named after each new quest with its current progress; remove it when done"] }
+  },
+  "ja": {
+    "affection": { "好感度": [0, "0〜100。心を動かされたら 1〜5 上げ、気分を害したら下げる"] },
+    "inventory": { "持ち物": [["短刀", "鉄の腕当て"], "身に着けている物。手に入れたら追加し、使い切るか捨てたら削除"] },
+    "quests": { "クエスト": [{ "$meta": { "extensible": true } }, "新しいクエストを受けたらクエスト名で項目を追加し、値に進み具合を書く。終わったら削除"] }
+  },
+  "ko": {
+    "affection": { "호감도": [0, "0~100. 마음이 움직이면 1~5 올리고, 불쾌해하면 내린다"] },
+    "inventory": { "소지품": [["단검", "철제 팔보호대"], "지니고 있는 물건. 얻으면 추가하고, 다 쓰거나 버리면 제거"] },
+    "quests": { "퀘스트": [{ "$meta": { "extensible": true } }, "새 퀘스트를 받으면 퀘스트 이름으로 항목을 추가하고 값에 진행 상황을 적는다. 끝나면 삭제"] }
+  }
+}

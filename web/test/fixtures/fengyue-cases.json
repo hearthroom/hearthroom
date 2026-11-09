@@ -135,7 +135,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -274,7 +274,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -413,7 +413,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -552,7 +552,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -691,7 +691,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -830,7 +830,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -969,7 +969,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -1249,7 +1249,7 @@
           "shortcuts",
           "summaryConfig",
           "unusedPresets",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -1995,7 +1995,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     },
@@ -2131,7 +2131,7 @@
           "regexHistory",
           "shortcuts",
           "summaryConfig",
-          "variables"
+          "variablesPromptOnly"
         ]
       }
     }

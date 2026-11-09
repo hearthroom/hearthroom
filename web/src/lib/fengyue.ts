@@ -19,6 +19,7 @@
  *   - 內置 CSS → 一條整頁常駐的 `<style>` 顯示規則（MMD 關側邊留白那條同一種寫法）
  *   - 正則腳本 → 顯示規則
  *   - 詳細介紹 → 作者資產的首屏網頁 openingPage（畫布最上方的作者網頁，只顯示、不送模型）；卡片格式記成 fengyue
+ *   - 變量面板：資料骨架 → 卡片變數（plain 寫法）、變量提示詞 → 變數規則、面板皮膚 → 面板皮膚
  * 只有實測過的值才照映射（世界書 key_region、正則 scope），其餘退回預設並列進摘要。
  */
 
@@ -26,6 +27,7 @@ import contract from "./fengyue-format.json";
 import cssRuleNames from "../locales/card-defaults/fengyue-css.json";
 import { bookEntriesToDrafts, countSplitEntries, entryContentMax, type DropNote, type ImportResult, type TavernBookEntry } from "./tavern";
 import { fallbackLimits, makeDraft } from "./role-draft";
+import { formatJson, type CardStateDraft } from "./card-state";
 import type { RegexMessageTarget, RegexRule, RegexRuleSet } from "./regex-rules";
 
 type Field = keyof typeof contract.fields;
@@ -148,8 +150,8 @@ function unmappedFeatures(raw: Raw, notes: DropNote[]) {
   if (shortcuts) notes.push({ key: "import.fengyue.shortcuts", params: { n: shortcuts } });
   const banned = listOf(pick(raw, "bannedWords")).filter((w) => str(w)).length;
   if (banned) notes.push({ key: "import.fengyue.bannedWords", params: { n: banned } });
-  const variables = !!str(pick(raw, "variablePrompt")) || Object.entries(raw).some(([k, v]) => isSignalKey(k) && !aliasOf.has(k) && !!str(v));
-  if (variables) notes.push({ key: "import.fengyue.variables" });
+  // 變量面板認得的三欄（骨架、提示詞、皮膚）在 convertVariables 處理；這裡只管別名表沒收的變量鍵
+  if (Object.entries(raw).some(([k, v]) => isSignalKey(k) && !aliasOf.has(k) && !!str(v))) notes.push({ key: "import.fengyue.variablesUnknown" });
 
   // 匯出檔每個欄位都會寫出鍵（空的也寫）；一個別名都沒出現，就是風月換了我們沒收到的名字
   const missing = (Object.keys(contract.fields) as Field[]).filter((f) => !contract.fields[f].some((alias) => alias in raw)).length;
@@ -166,6 +168,34 @@ function unmappedFeatures(raw: Raw, notes: DropNote[]) {
     } else if (hasContent(value)) other++;
   }
   if (other) notes.push({ key: "import.fengyue.otherFields", params: { n: other } });
+}
+
+/**
+ * 變量面板 → 卡片變數。風月的骨架是一段 JSON 字串（只有值，沒有逐值規則），所以用 plain 寫法；
+ * 變量提示詞是寫給模型的更新規則，進規則欄；面板皮膚（Handlebars）原樣帶過去。
+ * 骨架是空字串＝作者沒用變量面板（編輯頁預填的範本沒改就不會存）：這時只有提示詞也不開，
+ * 提示詞原文列進摘要，作者要的話自己補骨架。骨架解不開時照原文放進去，編輯器會標出錯在哪。
+ */
+function convertVariables(raw: Raw, notes: DropNote[]): CardStateDraft | null {
+  const rawSkeleton = pick(raw, "variableSkeleton");
+  const skeleton = isObj(rawSkeleton) ? formatJson(rawSkeleton) : str(rawSkeleton);
+  const prompt = str(pick(raw, "variablePrompt"));
+  const template = typeof pick(raw, "variableTemplate") === "string" ? String(pick(raw, "variableTemplate")).trim() : "";
+  if (!skeleton) {
+    if (prompt) notes.push({ key: "import.fengyue.variablesPromptOnly", params: { text: prompt } });
+    if (template) notes.push({ key: "import.fengyue.variablesTemplateOnly" });
+    return null;
+  }
+  let dataText = skeleton;
+  try {
+    const parsed: unknown = JSON.parse(skeleton);
+    if (!isObj(parsed)) throw new Error("not_object");
+    dataText = formatJson(parsed);
+    notes.push({ key: "import.fengyue.variablesConverted" });
+  } catch {
+    notes.push({ key: "import.fengyue.variablesPartial" });
+  }
+  return { convention: "plain", dataText, rulesText: prompt, template };
 }
 
 /** 平台設定（開關、數字、短代碼）不算內容；陣列、網址、長字串才算。 */
@@ -257,6 +287,7 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
     ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}) }
     : null;
 
+  draft.state = convertVariables(raw, notes);
   unmappedFeatures(raw, notes);
   return { draft, worldbook, dropped: notes, image: null, background: null, spec: "fengyue", regex, intro };
 }

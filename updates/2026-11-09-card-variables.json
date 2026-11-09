@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "卡片數值與數值面板",
+    "zh-Hans": "卡片数值与数值面板",
+    "en": "Card variables and variable panels",
+    "ja": "カードの変数と変数パネル",
+    "ko": "카드 변수와 변수 패널"
+  },
+  "body": {
+    "zh-Hant": "作者可以在建卡頁宣告好感度、金錢、物品這類數值，AI 每輪照規則記下變化，玩家在遊玩頁的面板看到最新數值；酒館 MVU 與風月的變量面板匯入時會一起轉過來。",
+    "zh-Hans": "作者可以在建卡页声明好感度、金钱、物品这类数值，AI 每轮按规则记下变化，玩家在游玩页的面板看到最新数值；酒馆 MVU 与风月的变量面板导入时会一起转过来。",
+    "en": "Authors can declare values such as affection, money and items on the card page; the AI records how each turn changes them, and players see the latest values in a panel while playing. SillyTavern MVU variables and Fengyue variable panels come along on import.",
+    "ja": "作者はカード作成ページで好感度・お金・持ち物などの値を宣言でき、AI が毎ターンの変化を記録し、プレイヤーはプレイ画面のパネルで最新の値を確認できます。SillyTavern の MVU 変数と風月の変数パネルも読み込み時に変換されます。",
+    "ko": "작가는 카드 만들기 페이지에서 호감도, 돈, 아이템 같은 값을 선언할 수 있고, AI가 매 턴의 변화를 기록하며, 플레이어는 플레이 화면의 패널에서 최신 값을 볼 수 있어요. SillyTavern MVU 변수와 풍월 변수 패널도 가져올 때 함께 변환돼요."
+  }
+}

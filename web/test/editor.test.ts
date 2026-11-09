@@ -66,6 +66,8 @@ const api = vi.hoisted(() => ({
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
   fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
   saveAuthorAsset: vi.fn(async (_roleId: string, body: { version: number }) => ({ ...body, status: "passed", version: body.version + 1 })),
+  putRoleState: vi.fn(async (_roleId: string, _body: unknown, _token: string): Promise<{ state: unknown }> => ({ state: {} })),
+  deleteRoleState: vi.fn(async () => ({ state: null })),
 }));
 vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
 vi.mock("../src/lib/session", () => ({
@@ -390,7 +392,7 @@ describe('bounded author workspace scrolling', () => {
     viewport.getBoundingClientRect = () => ({ top }) as DOMRect;
     $('.side').getBoundingClientRect = () => ({ bottom: top - 8 }) as DOMRect;
     let destination = 'publish';
-    const keys = ['basic', 'persona', 'dialogue', 'worldbook', 'publish'];
+    const keys = ['basic', 'persona', 'state', 'dialogue', 'worldbook', 'publish'];
     root.querySelectorAll<HTMLElement>('[data-section]').forEach(el => {
       el.style.scrollMarginTop = '8px';
       el.getBoundingClientRect = () => ({ top: top + 16 + (keys.indexOf(el.dataset.section!) - keys.indexOf(destination)) * 500 }) as DOMRect;
@@ -1680,7 +1682,8 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/create");
     expect(root.querySelector('[data-section="world"]')).toBeNull();
     expect(root.querySelector('[data-section="persona"]')).not.toBeNull();
-    expect(root.querySelectorAll(".side__item")).toHaveLength(5);
+    // 基本、人設、卡片變數、對話、世界書、發布
+    expect(root.querySelectorAll(".side__item")).toHaveLength(6);
   });
 
   it("一般舊卡打開來也看不到", async () => {
@@ -1697,6 +1700,8 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/cards/r1/edit");
     expect(root.querySelector('[data-section="world"]')).not.toBeNull();
     expect(root.querySelectorAll(".world-char")).toHaveLength(1);
+    // 世界卡沒有卡片變數這一區：數目跟單卡一樣是 6，換掉的是「卡片變數」
+    expect(root.querySelector('[data-section="state"]')).toBeNull();
     expect(root.querySelectorAll(".side__item")).toHaveLength(6);
   });
 });
@@ -1897,5 +1902,95 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect(asset).toMatchObject({ cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", pageMode: "sandbox" });
     expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["TEST-OPEN-A", "TEST-OPEN-B"] }, "tok");
     expect(order).toEqual(["asset", "welcome"]);
+  });
+});
+
+describe("卡片變數", () => {
+  const DETAIL = {
+    roleName: "合成變數卡", roleDetailDesc: "合成設定", roleWelcome: "合成開場", language: "zh-Hant",
+    state: {
+      version: 2,
+      data: { 好感度: 10, 背包: ["短刀", "鐵護腕"], 任務: {} },
+      rules: { text: "合成規則", paths: { 好感度: "0 到 100" } },
+      open: ["任務"],
+      required: [],
+    },
+  };
+
+  it("讀回上游的定義組回 MVU 寫法，改規則後整包寫入", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce(JSON.parse(JSON.stringify(DETAIL)));
+    await mount("/cards/r1/edit");
+    const data = $<HTMLTextAreaElement>("#f-state-data");
+    expect(JSON.parse(data.value)).toEqual({ 好感度: [10, "0 到 100"], 背包: [["短刀", "鐵護腕"], ""], 任務: { $meta: { extensible: true } } });
+    expect($<HTMLTextAreaElement>("#f-state-rules").value).toBe("合成規則");
+    await type($("#f-state-rules"), "新規則");
+    await submit();
+    expect(api.putRoleState).toHaveBeenCalledWith("r1", {
+      convention: "mvu",
+      data: { 好感度: [10, "0 到 100"], 背包: [["短刀", "鐵護腕"], ""], 任務: { $meta: { extensible: true } } },
+      rules: { text: "新規則" },
+    }, "tok");
+    expect(api.deleteRoleState).not.toHaveBeenCalled();
+  });
+
+  it("沒動過就不寫；移除後存檔才送 DELETE", async () => {
+    api.fetchRoleDetail.mockResolvedValue(JSON.parse(JSON.stringify(DETAIL)));
+    await mount("/cards/r1/edit");
+    await type($("#f-name"), "改名");
+    await submit();
+    expect(api.putRoleState).not.toHaveBeenCalled();
+    byText(i18n.global.t("editor.state.disable")).click();
+    await flush();
+    expect(root.querySelector("#f-state-data")).toBeNull();
+    await submit();
+    expect(api.deleteRoleState).toHaveBeenCalledWith("r1", "tok");
+    api.fetchRoleDetail.mockReset();
+    api.fetchRoleDetail.mockResolvedValue({});
+  });
+
+  it("骨架解不開時先在本地擋下，指到這一區，不送任何寫入", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "合成", roleDetailDesc: "合成設定", roleWelcome: "合成開場" });
+    await mount("/cards/r1/edit");
+    byText(i18n.global.t("editor.state.enable")).click();
+    await flush();
+    await type($("#f-state-data"), '{"好感度": 1,');
+    expect($("#f-state-data-error").textContent).toBeTruthy();
+    await submit();
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.putRoleState).not.toHaveBeenCalled();
+    expect(root.textContent).toContain(i18n.global.t("editor.state.reject.data"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+  });
+
+  it("上游拒收時錯誤停在這一區", async () => {
+    const { ApiError } = await vi.importActual<typeof import("../src/lib/api")>("../src/lib/api");
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "合成", roleDetailDesc: "合成設定", roleWelcome: "合成開場" });
+    api.putRoleState.mockRejectedValueOnce(new ApiError(400, i18n.global.t("editor.state.reject.rule_path"), "validate_reject", undefined, "rule_path"));
+    await mount("/cards/r1/edit");
+    byText(i18n.global.t("editor.state.enable")).click();
+    await flush();
+    await type($("#f-state-data"), '{"好感度": 1}');
+    await submit();
+    expect(api.putRoleState).toHaveBeenCalledTimes(1);
+    expect(root.textContent).toContain(i18n.global.t("editor.state.reject.rule_path"));
+    expect($(".side__item[aria-current=true]").textContent).toContain(i18n.global.t("editor.section.state"));
+  });
+
+  it("匯入帶 [InitVar] 的酒館卡：卡片變數一區已經填好，第一次儲存就寫上去", async () => {
+    await mount("/create");
+    const card = { spec: "chara_card_v2", spec_version: "2.0", data: {
+      name: "合成變數卡", description: "合成設定", first_mes: "合成開場",
+      character_book: { entries: [
+        { keys: [], comment: "[InitVar] 初始變數", content: "{ 好感度: [0, '0 到 100'], // 註解\n }", enabled: false },
+        { keys: ["鎮"], comment: "鎮", content: "北境小鎮。", enabled: true },
+      ] },
+    } };
+    await pickFile($("input[type=file]"), new File([JSON.stringify(card)], "card.json", { type: "application/json" }));
+    expect(root.textContent).toContain(i18n.global.t("import.landed.state", { n: 1 }));
+    byText("套用到表單").click();
+    await flush();
+    expect(JSON.parse($<HTMLTextAreaElement>("#f-state-data").value)).toEqual({ 好感度: [0, "0 到 100"] });
+    await submit();
+    expect(api.putRoleState).toHaveBeenCalledWith("r1", { convention: "mvu", data: { 好感度: [0, "0 到 100"] } }, "tok");
   });
 });
