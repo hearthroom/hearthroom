@@ -208,13 +208,13 @@ watch(()=>route.query.fresh, fresh=>{
         </p>
         <!-- 創作季進行中：額度下方一行，整行可點到活動頁 -->
         <CreatorSeasonEntry where="mine" class="head__entry" />
+        <AuthorDiscordEntry v-if="can('editor')" where="my-cards" class="head__discord" />
       </div>
       <div v-if="can('editor')" class="head__actions">
         <AgentOnboard from="mine" class="head__agent" />
         <RouterLink :to="lp('/create')" class="btn btn--primary head__create">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("mine.create") }}
         </RouterLink>
-        <AuthorDiscordEntry where="my-cards" class="head__discord" />
       </div>
     </header>
 
@@ -294,11 +294,8 @@ watch(()=>route.query.fresh, fresh=>{
 }
 .head__text { flex: 1 1 280px; min-width: 0; display: grid; gap: 6px; }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 0; }
-.head__actions {
-  display: grid; grid-template-columns: 1fr auto; justify-content: end; justify-items: end;
-  align-items: center; gap: var(--s-2); flex: 0 1 auto; max-width: 520px; min-width: 0;
-}
-.head__discord { grid-column: 1 / -1; width: 100%; }
+.head__discord { margin-top: 2px; }
+.head__actions { display: flex; align-items: center; gap: var(--s-2); flex: none; }
 .head__create { gap: 6px; padding-inline: var(--s-4) var(--s-5); }
 .head__create svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 /* 兩顆鍵一樣高：膠囊本身是 min-height，主鍵是 height */
@@ -357,7 +354,7 @@ watch(()=>route.query.fresh, fresh=>{
   .quota { grid-area: quota; margin-top: calc(-1 * var(--s-1)); }
   .head__create { grid-area: create; }
   .head__agent { grid-area: agent; display: flex; margin-top: var(--s-1); }
-  .head__discord { grid-area: discord; }
+  .head__discord { grid-area: discord; margin-top: 0; }
   /* 創作季進行中或有 Discord 入口：額度與按鈕下面各一列，整列寬（沒有時不留空列） */
   .head:has(.head__entry) { grid-template-areas: "title create" "quota quota" "entry entry" "agent agent"; }
   .head:has(.head__discord) { grid-template-areas: "title create" "quota quota" "agent agent" "discord discord"; }

@@ -4676,6 +4676,5 @@
   "editor.state.template.example": "用示例皮肤",
   "editor.opening.suggest.add": "加一句建议",
   "editor.opening.choices.add": "加一个选项",
-  "authorDiscord.label": "作者 Discord",
-  "authorDiscord.hint": "你可以在里面找写卡资源、和其他作者交流，遇到问题也能直接向官方反馈。"
+  "authorDiscord.hint": "在 Discord 里获取写卡资源，和其他作者进行交流，遇到问题也能直接反馈。"
 }

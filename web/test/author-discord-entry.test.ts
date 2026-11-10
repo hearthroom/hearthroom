@@ -110,7 +110,7 @@ function makeFooterCtx(discordInvite: string | null) {
   };
 }
 
-describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
+describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage and CardEditorPage", () => {
   let app: App | null = null;
   let root: HTMLElement | null = null;
 
@@ -128,19 +128,32 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("provides label and hint copy across all 5 locales", async () => {
+  it("uses community.join for button label, removes authorDiscord.label, and sets finalized 5-locale authorDiscord.hint", async () => {
+    const expectedHints: Record<string, string> = {
+      "zh-Hant": "在 Discord 裡獲取寫卡資源，和其他作者進行交流，遇到問題也能直接回饋。",
+      "zh-Hans": "在 Discord 里获取写卡资源，和其他作者进行交流，遇到问题也能直接反馈。",
+      en: "Discord has card-writing resources and other authors, and you can report problems to the team directly.",
+      ja: "Discord には作成の資料があり、作者同士の交流や、問題の運営への直接報告もできます。",
+      ko: "Discord에서 카드 제작 자료를 찾고, 다른 작가와 교류하고, 문제는 운영팀에 바로 제보할 수 있어요.",
+    };
     for (const loc of LOCALE_CODES) {
       await applyLocale(loc);
-      const label = i18n.global.t("authorDiscord.label");
+      expect(i18n.global.te("authorDiscord.label"), `${loc} authorDiscord.label removed`).toBe(false);
+      const joinLabel = i18n.global.t("community.join");
       const hint = i18n.global.t("authorDiscord.hint");
-      expect(label, `${loc} label`).not.toBe("authorDiscord.label");
-      expect(hint, `${loc} hint`).not.toBe("authorDiscord.hint");
-      expect(label.toLowerCase()).toContain("discord");
-      expect(hint.length).toBeGreaterThan(12);
+      expect(joinLabel.toLowerCase()).toContain("discord");
+      expect(hint, `${loc} hint`).toBe(expectedHints[loc]);
     }
+
+    const tokensCss = readFileSync("src/styles/tokens.css", "utf8");
+    expect(tokensCss).toMatch(/--discord:\s*#5865f2/i);
+    expect(tokensCss).toMatch(/--discord:\s*#8a93ff/i);
+
+    const baseCss = readFileSync("src/styles/base.css", "utf8");
+    expect(baseCss).toContain(".btn--discord");
   });
 
-  it("renders in MyCardsPage header actions when invite is present, tracks my-cards on click, and hides when invite is null", async () => {
+  it("renders in MyCardsPage .head__text below quota, links aria-describedby, tracks my-cards on click, and hides when invite is null", async () => {
     const { inviteRef, ctx } = makeFooterCtx("https://discord.gg/sukisuki");
     const router = createRouter({
       history: createMemoryHistory(),
@@ -163,27 +176,34 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
     app.mount(root);
     await settle();
 
+    const headText = root.querySelector(".head .head__text")!;
     const actions = root.querySelector(".head .head__actions")!;
-    const pill = actions.querySelector(".onboard__pill")!;
-    const create = actions.querySelector('a[href$="/create"]')!;
-    const discord = actions.querySelector<HTMLAnchorElement>("[data-author-discord]")!;
+    const quota = headText.querySelector(".quota")!;
+    const joinGroup = headText.querySelector<HTMLElement>("[data-author-discord]")!;
+    expect(joinGroup).not.toBeNull();
+    expect(actions.querySelector("[data-author-discord]")).toBeNull();
+    expect(quota.compareDocumentPosition(joinGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    expect(discord).not.toBeNull();
-    expect(discord.getAttribute("href")).toBe("https://discord.gg/sukisuki");
-    expect(discord.getAttribute("target")).toBe("_blank");
-    expect(discord.querySelector("svg")).not.toBeNull();
-    expect(discord.textContent).toContain(i18n.global.t("authorDiscord.label"));
-    expect(discord.textContent).toContain(i18n.global.t("authorDiscord.hint"));
-    expect(pill.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(create.compareDocumentPosition(discord) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const btn = joinGroup.querySelector<HTMLAnchorElement>("a.btn.btn--discord")!;
+    const hint = joinGroup.querySelector<HTMLParagraphElement>("p.join__hint")!;
+    expect(btn).not.toBeNull();
+    expect(hint).not.toBeNull();
+    expect(btn.getAttribute("href")).toBe("https://discord.gg/sukisuki");
+    expect(btn.getAttribute("target")).toBe("_blank");
+    expect(btn.getAttribute("aria-describedby")).toBe("author-discord-hint-my-cards");
+    expect(hint.getAttribute("id")).toBe("author-discord-hint-my-cards");
+    expect(btn.querySelector("svg")).not.toBeNull();
+    expect(btn.textContent?.trim()).toBe(i18n.global.t("community.join"));
+    expect(hint.textContent?.trim()).toBe(i18n.global.t("authorDiscord.hint"));
 
-    discord.addEventListener("click", (e) => e.preventDefault());
-    discord.click();
+    btn.addEventListener("click", (e) => e.preventDefault());
+    btn.click();
     expect(trackCalls).toContainEqual(["cta", { detail: "discord", subject: "my-cards" }]);
 
     inviteRef.value = null;
     await settle();
     expect(root.querySelector("[data-author-discord]")).toBeNull();
+    expect(root.querySelector(".join__hint")).toBeNull();
   });
 
   it("renders in CardEditorPage header when invite is fetched from /community/config, tracks editor on click, and hides when invite is empty", async () => {
@@ -220,15 +240,21 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
     app.mount(root);
     await settle();
 
-    const discord = root.querySelector<HTMLAnchorElement>(".head [data-author-discord]")!;
-    expect(discord).not.toBeNull();
-    expect(discord.getAttribute("href")).toBe("https://discord.gg/authors");
-    expect(discord.querySelector("svg")).not.toBeNull();
-    expect(discord.textContent).toContain(i18n.global.t("authorDiscord.label"));
-    expect(discord.textContent).toContain(i18n.global.t("authorDiscord.hint"));
+    const joinGroup = root.querySelector<HTMLElement>(".head [data-author-discord]")!;
+    expect(joinGroup).not.toBeNull();
+    const btn = joinGroup.querySelector<HTMLAnchorElement>("a.btn.btn--discord")!;
+    const hint = joinGroup.querySelector<HTMLParagraphElement>("p.join__hint")!;
+    expect(btn).not.toBeNull();
+    expect(hint).not.toBeNull();
+    expect(btn.getAttribute("href")).toBe("https://discord.gg/authors");
+    expect(btn.getAttribute("aria-describedby")).toBe("author-discord-hint-editor");
+    expect(hint.getAttribute("id")).toBe("author-discord-hint-editor");
+    expect(btn.querySelector("svg")).not.toBeNull();
+    expect(btn.textContent?.trim()).toBe(i18n.global.t("community.join"));
+    expect(hint.textContent?.trim()).toBe(i18n.global.t("authorDiscord.hint"));
 
-    discord.addEventListener("click", (e) => e.preventDefault());
-    discord.click();
+    btn.addEventListener("click", (e) => e.preventDefault());
+    btn.click();
     expect(trackCalls).toContainEqual(["cta", { detail: "discord", subject: "editor" }]);
 
     app.unmount();
@@ -246,9 +272,10 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
     comp.mount(root);
     await settle();
     expect(root.querySelector("[data-author-discord]")).toBeNull();
+    expect(root.querySelector(".join__hint")).toBeNull();
   });
 
-  it("renders without horizontal overflow or control overlap in Chrome at 390px and 1440px across all 5 locales", async () => {
+  it("renders finalized C button + A hint layout and geometry in Chrome at 390px and 1440px across all 5 locales and light/dark modes", async () => {
     const chrome =
       process.env.CHROME_BIN ||
       ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/google-chrome", "/usr/bin/chromium"].find(existsSync);
@@ -375,30 +402,55 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
                   const d = this.contentDocument;
                   const head = d.querySelector('.head');
                   const entry = d.querySelector('[data-author-discord]');
+                  const btn = entry.querySelector('a.btn.btn--discord');
+                  const hint = entry.querySelector('p.join__hint');
+                  const svg = btn.querySelector('svg');
                   const hr = head.getBoundingClientRect();
                   const er = entry.getBoundingClientRect();
+                  const br = btn.getBoundingClientRect();
+                  const htr = hint.getBoundingClientRect();
+                  const sr = svg.getBoundingClientRect();
+                  const svgColor = d.defaultView.getComputedStyle(svg).color;
                   const overlaps = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
                   let siblingOverlap = false;
-                  let buttonsCompact = true;
+                  let layoutOk = false;
+                  let btnHeightOk = false;
                   if ('${surface}' === 'mine') {
                     const pill = d.querySelector('.onboard__pill').getBoundingClientRect();
                     const create = d.querySelector('.head__create').getBoundingClientRect();
                     const title = d.querySelector('.head__title').getBoundingClientRect();
-                    siblingOverlap = overlaps(er, pill) || overlaps(er, create) || overlaps(er, title);
-                    if (${width} >= 600) buttonsCompact = (create.left - pill.right) <= 16;
+                    const quota = d.querySelector('.quota').getBoundingClientRect();
+                    const search = d.querySelector('.tools__search').getBoundingClientRect();
+                    siblingOverlap = overlaps(er, pill) || overlaps(er, create) || overlaps(er, title) || overlaps(br, htr);
+                    if (${width} >= 600) {
+                      btnHeightOk = Math.round(br.height) === 36;
+                      layoutOk = (create.left - pill.right) <= 16 && br.top >= quota.bottom - 1 && htr.left >= br.right + 8;
+                    } else {
+                      btnHeightOk = Math.round(br.height) === 44;
+                      layoutOk = Math.abs(br.width - hr.width) <= 2 && br.top >= pill.bottom - 1 && htr.top >= br.bottom - 1 && search.top >= htr.bottom - 1;
+                    }
                   } else {
                     const copy = d.querySelector('.head__text').getBoundingClientRect();
-                    siblingOverlap = overlaps(er, copy);
+                    siblingOverlap = overlaps(er, copy) || overlaps(br, htr);
+                    btnHeightOk = Math.round(br.height) === 36;
+                    if (${width} >= 761) {
+                      layoutOk = er.width <= 320.5 && er.left >= copy.right - 1 && htr.top >= br.bottom - 1 && br.width < er.width;
+                    } else {
+                      layoutOk = er.top >= copy.bottom - 1 && htr.top >= br.bottom - 1 && br.width < er.width - 20;
+                    }
                   }
                   window.results.push({
                     loc: '${loc}',
                     width: ${width},
                     mode: '${mode}',
                     surface: '${surface}',
-                    visible: er.width > 0 && er.height >= 36,
+                    visible: er.width > 0 && br.height >= 36 && htr.height > 0,
                     inBounds: er.left >= hr.left - 1 && er.right <= hr.right + 1,
+                    icon18: Math.round(sr.width) === 18 && Math.round(sr.height) === 18,
+                    svgColor,
                     siblingOverlap,
-                    buttonsCompact
+                    btnHeightOk,
+                    layoutOk
                   });
                   document.querySelector('#result').textContent = JSON.stringify(window.results);
                 "></iframe>`,
@@ -434,8 +486,11 @@ describe("AuthorDiscordEntry across MyCardsPage and CardEditorPage", () => {
         const label = `${row.surface} ${row.loc} ${row.width}px ${row.mode}`;
         expect(row.visible, `${label}: visible`).toBe(true);
         expect(row.inBounds, `${label}: inBounds`).toBe(true);
+        expect(row.icon18, `${label}: icon18`).toBe(true);
+        expect(row.svgColor, `${label}: svgColor`).toBe(row.mode === "light" ? "rgb(88, 101, 242)" : "rgb(138, 147, 255)");
         expect(row.siblingOverlap, `${label}: siblingOverlap`).toBe(false);
-        expect(row.buttonsCompact, `${label}: buttonsCompact`).toBe(true);
+        expect(row.btnHeightOk, `${label}: btnHeightOk`).toBe(true);
+        expect(row.layoutOk, `${label}: layoutOk`).toBe(true);
       }
 
       if (shotsDir) {

@@ -4676,6 +4676,5 @@
   "editor.state.template.example": "サンプルを使う",
   "editor.opening.suggest.add": "一言を追加",
   "editor.opening.choices.add": "選択肢を追加",
-  "authorDiscord.label": "作者向け Discord",
-  "authorDiscord.hint": "Discord ではカード作成の資料を探したり他の作者と交流したりでき、問題があれば運営へ直接報告できます。"
+  "authorDiscord.hint": "Discord には作成の資料があり、作者同士の交流や、問題の運営への直接報告もできます。"
 }

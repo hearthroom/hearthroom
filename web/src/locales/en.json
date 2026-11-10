@@ -4676,6 +4676,5 @@
   "editor.state.template.example": "Use sample skin",
   "editor.opening.suggest.add": "Add a line",
   "editor.opening.choices.add": "Add a choice",
-  "authorDiscord.label": "Author Discord",
-  "authorDiscord.hint": "You can find card-writing resources, talk with other authors, and report issues to the team."
+  "authorDiscord.hint": "Discord has card-writing resources and other authors, and you can report problems to the team directly."
 }

@@ -2,9 +2,10 @@
 /**
  * 作者 Discord 入口：放在「我的卡片」頁首與建卡頁頁首。
  *
+ * 按鈕（.btn.btn--discord）加緊鄰的說明句（.join__hint）成一組（.join）。
  * 邀請連結優先取自 App.vue 提供的 siteLinksKey（同一次 /community/config 請求）；
  * 單獨掛載（如元件或頁面測試）時才自己讀一次 /community/config。
- * 沒有 invite 時不顯示，不露出壞連結。
+ * 沒有 invite 時整組不顯示，不留空位。
  */
 import { computed, inject, onMounted, ref } from "vue";
 import CommunityIcon from "@/components/CommunityIcon.vue";
@@ -22,6 +23,8 @@ const invite = computed(() => {
   return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 });
 
+const hintId = computed(() => `author-discord-hint-${props.where}`);
+
 onMounted(() => {
   if (siteLinks) return;
   communityRequest<{ invite?: string | null }>("/community/config")
@@ -37,100 +40,73 @@ function onClick() {
 </script>
 
 <template>
-  <a
+  <div
     v-if="invite"
-    :href="invite"
-    target="_blank"
-    rel="noopener noreferrer"
-    class="author-discord"
+    class="join"
+    :class="`join--${where}`"
     data-author-discord
     :data-where="where"
-    @click="onClick"
   >
-    <span class="author-discord__icon" aria-hidden="true">
+    <a
+      :href="invite"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="btn btn--discord join__btn"
+      :aria-describedby="hintId"
+      data-author-discord-btn
+      @click="onClick"
+    >
       <CommunityIcon name="discord" />
-    </span>
-    <span class="author-discord__copy">
-      <span class="author-discord__label">{{ $t("authorDiscord.label") }}</span>
-      <span class="author-discord__hint">{{ $t("authorDiscord.hint") }}</span>
-    </span>
-    <span class="author-discord__arrow" aria-hidden="true">→</span>
-  </a>
+      <span>{{ $t("community.join") }}</span>
+    </a>
+    <p :id="hintId" class="join__hint">{{ $t("authorDiscord.hint") }}</p>
+  </div>
 </template>
 
 <style scoped>
-.author-discord {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: var(--h-md);
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.author-discord:hover {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-.author-discord:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.author-discord__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
-  color: var(--text);
-}
-.author-discord__copy {
-  flex: 1 1 auto;
+.join {
   min-width: 0;
+}
+.join--my-cards {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+}
+.join--my-cards .join__btn {
+  flex: none;
+}
+.join--my-cards .join__hint {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.join--editor {
   display: grid;
-  gap: 2px;
-  text-align: left;
-  overflow-wrap: anywhere;
+  justify-items: start;
+  gap: var(--s-1);
 }
-.author-discord__label {
+.join__hint {
+  margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--text);
-}
-.author-discord__hint {
-  font-size: 12px;
-  font-weight: 400;
   line-height: 1.5;
   color: var(--text-2);
+  overflow-wrap: anywhere;
 }
-.author-discord__arrow {
-  flex: none;
-  font-size: 13px;
-  line-height: 1;
-  color: var(--text-3);
-  transition: transform var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.author-discord:hover .author-discord__arrow {
-  color: var(--text);
-  transform: translateX(2px);
-}
-:lang(ko) .author-discord__copy {
+:lang(ko) .join__hint {
   word-break: keep-all;
 }
-:lang(ja) .author-discord__copy {
+:lang(ja) .join__hint {
   word-break: auto-phrase;
 }
-@media (pointer: coarse) {
-  .author-discord {
-    min-height: var(--h-lg);
+@media (max-width: 599px) {
+  .join--my-cards {
+    display: grid;
+    justify-items: stretch;
+    gap: var(--s-1);
+  }
+  .join--my-cards .join__btn {
+    width: 100%;
+    height: var(--h-lg);
   }
 }
 </style>

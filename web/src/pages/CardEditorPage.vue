@@ -1986,8 +1986,8 @@ async function exportCard(format: "png" | "json") {
   justify-content: space-between; gap: var(--s-2) var(--s-4);
 }
 .head__text { flex: 1 1 280px; min-width: 0; }
-.head__discord { flex: 0 1 460px; min-width: 0; }
-.head--inline .head__discord { flex: 1 1 100%; }
+.head__discord { flex: 0 1 320px; max-width: 320px; min-width: 0; }
+.head--inline .head__discord { flex: 1 1 100%; max-width: none; }
 h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .lede { margin: 0; max-width: 52ch; }
 .ghosts { grid-column: 1 / -1; display: grid; gap: var(--s-4); }

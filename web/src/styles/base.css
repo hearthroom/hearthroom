@@ -173,6 +173,15 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 /* 破壞性動作的確認鍵：實心警示色，只在確認彈窗裡用 */
 .btn--danger-solid { background: var(--danger); border-color: transparent; color: var(--on-danger); }
 .btn--danger-solid:hover { background: var(--danger); filter: brightness(0.92); }
+/* Discord 入口：圖示用品牌色，底與邊線帶同色淡色；實心紅色仍只給主行動 */
+.btn--discord {
+  background: color-mix(in srgb, var(--discord) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--discord) 38%, var(--border-strong));
+  color: var(--text);
+  font-weight: 600;
+}
+.btn--discord:hover { background: color-mix(in srgb, var(--discord) 16%, var(--surface)); }
+.btn.btn--discord svg { width: 18px; height: 18px; color: var(--discord); }
 .btn--sm { height: var(--h-sm); padding: 0 var(--s-3); font-size: 13px; }
 .btn--lg { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; }
 /* 只有 icon 的圓鈕 */
