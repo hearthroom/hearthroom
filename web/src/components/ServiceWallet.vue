@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { fetchScoreRecords, fetchScoreSummary, fetchWallet, type Wallet, type ScoreDay, type ScoreRecord } from "@/lib/api";
-import { dayLabel, hourMinute, localDate, monthDayTime, whole } from "@/lib/format";
+import { dayLabel, glueUnits, hourMinute, localDate, monthDayOf, monthDayTime, taipeiHourSlot, whole } from "@/lib/format";
 import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
 import { accountToken } from "@/lib/connections";
 import { providerName, type ProviderId } from "@/lib/provider";
@@ -81,8 +81,15 @@ const honorOf = (r: ScoreRecord) => (r.record === "campaign" && r.recordType ===
 const honorItemOf = (r: ScoreRecord) => { const h = honorOf(r); return h ? t("honor.grantReason", { honor: honorName(t, h) }) : ""; };
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…）；記憶壓縮另外記帳，分類仍是 chat，要另外點名；其餘照服務給的分類。 */
 const itemOf = (r: ScoreRecord) => r.rewardRecovery?t("rewardRetention.reward.reclaimed"):r.memoryCompaction?t("wallet.reason.memory"):planItemOf(r) || honorItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
-/** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
+/** 高頻返點（作者返點、自玩返點）按台北時間整點彙總：第二行顯示筆數，時間欄顯示整點時段。 */
+const isHourlyRebate = (r: ScoreRecord) =>
+  r.recordType === "add" && (r.record === "rebate" || r.record === "self_rebate") && (r.count !== undefined || r.hourStart !== undefined);
+/** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期；每小時彙總返點寫筆數。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
+  if (isHourlyRebate(r)) {
+    const count = r.count ?? 1;
+    return { text: glueUnits(t("wallet.record.hourlyCount", { n: whole(count) }, count)), off: false };
+  }
   if (r.record === "grant" && r.playerNote) return { text: r.playerNote, off: false };
   // 對話支出：當時用的模型與線路，回頭對照每個模型花了多少
   if (r.recordType === "sub" && r.modelName) return { text: r.laneName ? `${r.modelName} · ${r.laneName}` : r.modelName, off: false };
@@ -116,6 +123,17 @@ function timeOf(input: string): string {
   yesterday.setDate(yesterday.getDate() - 1);
   const date = localDate(input);
   return date === localDate(today) || date === localDate(yesterday) ? hourMinute(input) : monthDayTime(input);
+}
+
+/** 返點彙總列顯示台北整點時段（14:00–15:00；更早的記錄補月日），其餘列顯示逐筆時間。 */
+function recordTimeOf(r: ScoreRecord): string {
+  if (!isHourlyRebate(r)) return timeOf(r.createTime);
+  const slot = taipeiHourSlot(r.hourStart ?? r.createTime);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const date = localDate(r.createTime);
+  return date === localDate(today) || date === localDate(yesterday) ? slot : `${monthDayOf(r.createTime)} ${slot}`;
 }
 
 /** 按日分組：同一天的擠在一起；每一天附上當天的支出與收入小計。 */
@@ -289,7 +307,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
               <span class="row__item" :class="{ 'row__item--off': subOf(r)?.off }"><span class="row__name">{{ itemOf(r) }}</span><small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small></span>
               <span class="row__value">
                 <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
-                <time class="row__time" :datetime="r.createTime">{{ timeOf(r.createTime) }}</time>
+                <time class="row__time" :datetime="r.hourStart ?? r.createTime">{{ recordTimeOf(r) }}</time>
               </span>
             </li>
           </ul>

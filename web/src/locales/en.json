@@ -3180,6 +3180,7 @@
   "wallet.expiring.amount": "{amount} credits",
   "wallet.record.expiredFrom": "From: {source}",
   "wallet.record.expired": "Expired",
+  "wallet.record.hourlyCount": "{n} entry | {n} entries",
   "checkin.suki.first": "A chest every day, full of chat credits~",
   "checkin.suki.normal": "Today's chest is ready, open it~",
   "checkin.suki.normal.night": "Evening! Today's chest is here~",

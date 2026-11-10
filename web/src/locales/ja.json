@@ -3180,6 +3180,7 @@
   "wallet.expiring.amount": "{amount} ポイント",
   "wallet.record.expiredFrom": "獲得元：{source}",
   "wallet.record.expired": "期限切れ",
+  "wallet.record.hourlyCount": "{n} 件",
   "checkin.suki.first": "毎日ひとつ、ポイント入りの宝箱だよ～",
   "checkin.suki.normal": "今日の宝箱だよ、開けてみて～",
   "checkin.suki.normal.night": "こんばんは、今日の宝箱だよ～",

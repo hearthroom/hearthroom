@@ -104,9 +104,12 @@ http.createServer(async (req, res) => {
     { id: 4, record: "chat", recordType: "sub", score: 308, createTime: new Date(Date.now() - 120e3).toISOString(), modelName: "DeepSeek V4.1 Flash", laneName: "DeepInfra" },
     { id: 3, record: "chat", recordType: "sub", score: 349, createTime: new Date(Date.now() - 180e3).toISOString(), modelName: "Claude Opus 5.5", laneName: { "zh-Hant": "凌波", "zh-Hans": "凌波", en: "Ripple", ja: "凌波", ko: "잔물결" }[req.headers.language] ?? "Ripple" },
   ];
-  if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2 + chatRows.length + planRecords().length, size: 30, pages: 1, hasNextPage: false, records: [
+  const hourStart = new Date(Math.floor(Date.now() / 3600e3) * 3600e3).toISOString();
+  if (path === "/open/v1/me/score/records") return json(res, 200, { total: 4 + chatRows.length + planRecords().length, size: 30, pages: 1, hasNextPage: false, records: [
+    { id: 7, record: "rebate", recordType: "add", score: 412, count: 38, hourStart, createTime: new Date(Date.now() - 30e3).toISOString() },
     ...chatRows,
     ...planRecords(),
+    { id: 6, record: "campaign", recordType: "add", score: 2500, createTime: new Date(Date.now() - 1800e3).toISOString(), rankHonor: { zone: "all", window: "day", band: 3 } },
     { id: 2, record: "chat", recordType: "sub", score: 1, createTime: new Date().toISOString() },
     { id: 1, record: "grant", recordType: "add", score: 10000, createTime: new Date(Date.now() - 3600e3).toISOString() },
   ] });

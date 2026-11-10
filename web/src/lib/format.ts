@@ -120,5 +120,13 @@ export function hourMinute(input: string | number): string {
   return new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
 }
 
+/** 台北時間的整點時段（14:00–15:00）：每小時彙總的返點列固定按台北時間切整點。 */
+export function taipeiHourSlot(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  const start = Math.floor(ms / HOUR) * HOUR;
+  const fmt = new Intl.DateTimeFormat(locale(), { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return `${fmt.format(start)}–${fmt.format(start + HOUR)}`;
+}
+
 /** 數字與後面的單位黏在一起不斷行（「5 回合」「3 days」）：把中間的空白換成不換行空白。 */
 export const glueUnits = (text: string): string => text.replace(/(\d) (?=\S)/g, "$1\u00a0");
