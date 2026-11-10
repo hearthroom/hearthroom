@@ -877,11 +877,20 @@ app.get("/v1/me/cards", async (c) => {
   const works = await worksFor(c.env.DB, provider, body.items.map((item) => item.roleId));
   const numbered = body.items.map((item) => { const work = works.get(item.roleId); return { provider: work?.source_provider ?? provider, roleId: work?.source_role_id ?? item.roleId }; });
   const numbers = await ensureCardNumbers(c.env.DB, numbered);
+  const nums = [...new Set(numbers.values())];
+  const unreadComments = new Map<number, number>();
+  if (nums.length) {
+    const rows = await c.env.DB.prepare(
+      `SELECT card_id, CAST(json_extract(extra, '$.count') AS INTEGER) AS n FROM community_notifications WHERE event_key IN (${nums.map(() => "?").join(",")}) AND read_at IS NULL`,
+    ).bind(...nums.map((n) => `card_comments:${n}`)).all<{ card_id: number; n: number }>();
+    for (const r of rows.results) if (r.n > 0) unreadComments.set(Number(r.card_id), r.n);
+  }
   const items = body.items.map((item, i) => {
     const work = works.get(item.roleId);
     const num = numbers.get(`${numbered[i]!.provider}\n${numbered[i]!.roleId}`)!;
     const source = work ? authoringSource(work, provider, item.roleId) : null;
-    return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:source?.provider, sourceRoleId:source?.roleId};
+    const newComments = unreadComments.get(num);
+    return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:source?.provider, sourceRoleId:source?.roleId, ...(newComments ? {newComments} : {})};
   });
   // 各段耗時（毫秒，不含任何資料）：認人、讀清單（含上游與登記狀態）、補作品與卡號
   c.header("Server-Timing", `identity;dur=${(identified - started).toFixed(1)}, list;dur=${(listedAt - identified).toFixed(1)}, works;dur=${(performance.now() - listedAt).toFixed(1)}`);

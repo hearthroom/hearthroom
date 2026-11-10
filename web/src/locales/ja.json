@@ -4680,5 +4680,8 @@
   "editor.state.template.example": "サンプルを使う",
   "editor.opening.suggest.add": "一言を追加",
   "editor.opening.choices.add": "選択肢を追加",
-  "authorDiscord.hint": "Discord には作成の資料があり、作者同士の交流や、問題の運営への直接報告もできます。"
+  "authorDiscord.hint": "Discord には作成の資料があり、作者同士の交流や、問題の運営への直接報告もできます。",
+  "community.noticeText.card_comments": "{card}に新しいコメントが {count} 件あります",
+  "community.notices.card_comments": "カードに新しいコメントがあります",
+  "mine.newComments": "新着コメント {count} 件"
 }

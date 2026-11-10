@@ -4680,5 +4680,8 @@
   "editor.state.template.example": "Use sample skin",
   "editor.opening.suggest.add": "Add a line",
   "editor.opening.choices.add": "Add a choice",
-  "authorDiscord.hint": "Discord has card-writing resources and other authors, and you can report problems to the team directly."
+  "authorDiscord.hint": "Discord has card-writing resources and other authors, and you can report problems to the team directly.",
+  "community.noticeText.card_comments": "{card} has {count} new comment | {card} has {count} new comments",
+  "community.notices.card_comments": "Your card has a new comment | Your card has {count} new comments",
+  "mine.newComments": "{count} new comment | {count} new comments"
 }

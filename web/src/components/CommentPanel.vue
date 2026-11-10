@@ -14,6 +14,9 @@ import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
 import { useReviewer } from "@/lib/review";
 import { setPostState } from "@/lib/blog";
+import { lastShown } from "@/lib/mine-memory";
+import { useNotifications } from "@/lib/notifications";
+import { getActivePinia } from "pinia";
 
 /**
  * 卡片：本站的卡 id（留言掛在本站的卡上，不看這張卡住在哪一家供應商），roleId 只給埋點用。
@@ -26,7 +29,7 @@ const emit = defineEmits<{ count: [n: number] }>();
 const session = useSession();
 const route = useRoute();
 const router = useRouter();
-const { lp } = useLocalePath();
+const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 const reviewer = useReviewer();
 
@@ -116,6 +119,23 @@ async function load(reset = false) {
     total.value = Number(res.total) || 0;
     pinnedId.value = res.pinnedCommentId ?? null;
     mutedUntil.value = res.mutedUntil;
+    if (!isPost.value && res.isRoleCreator && on.value.kind === "card") {
+      lastShown.clearCardNewComments(on.value.cardId);
+      if (getActivePinia()) {
+        const notices = useNotifications();
+        if (notices.loaded) {
+          const now = Date.now();
+          for (const n of notices.items) {
+            if (n.kind === "card_comments" && !n.read_at && (String(n.card?.id ?? "") === String(on.value.cardId) || n.path === `/cards/${on.value.cardId}#comments`)) {
+              n.read_at = now;
+              notices.unread = Math.max(0, notices.unread - 1);
+            }
+          }
+        } else {
+          void notices.refresh(locale.value);
+        }
+      }
+    }
     emit("count", total.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");

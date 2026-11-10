@@ -133,3 +133,19 @@ it('treats a read HarperHarbor notice like any other, by time and without the st
   expect(links.map(a => a.getAttribute('href'))).toEqual(['/cards/12', '/cards/13', APPEAL]);
   expect(links[2].classList.contains('bell__item--pinned')).toBe(false);
 });
+it('formats card comment digest notifications across all five languages and navigates to #comments', async () => {
+  const digest = (count = 3, over: Partial<CommunityNotice> = {}) =>
+    notice({ id: 'd1', kind: 'card_comments', path: '/cards/12#comments', actor: null, extra: { count }, ...over });
+  await applyLocale('zh-Hant');
+  expect(noticeText(digest(3))).toBe('「雨夜書店」有 3 則新評論');
+  await applyLocale('zh-Hans');
+  expect(noticeText(digest(3))).toBe('「雨夜書店」有 3 条新评论');
+  await applyLocale('en');
+  expect(noticeText(digest(1))).toBe('“雨夜書店” has 1 new comment');
+  expect(noticeText(digest(3))).toBe('“雨夜書店” has 3 new comments');
+  await applyLocale('ja');
+  expect(noticeText(digest(3))).toBe('『雨夜書店』に新しいコメントが 3 件あります');
+  await applyLocale('ko');
+  expect(noticeText(digest(3))).toBe('“雨夜書店”에 새 댓글이 3개 달렸습니다');
+  expect(noticeText(digest(3, { card: null }))).toBe(i18n.global.t('community.notices.card_comments', { count: 3 }, 3));
+});

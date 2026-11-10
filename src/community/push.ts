@@ -33,7 +33,7 @@ type Sub = { id: string; endpoint: string; p256dh: string; auth: string; locale:
 
 const quote = (locale: PushLocale, name: string) => (locale.startsWith("zh") ? `「${name}」` : locale === "ja" ? `『${name}』` : `“${name}”`);
 type Copy = {
-  title: string; reply: string; replyPlain: string; work: string; workNew: string; workUpdate: string; workPlain: string;
+  title: string; reply: string; replyPlain: string; cardComments: string; cardCommentsMany?: string; cardCommentsPlain: string; work: string; workNew: string; workUpdate: string; workPlain: string;
   approved: string; approvedUpdate: string; rejected: string; rejectedNote: string; rejectedUpdate: string; rejectedUpdateNote: string; reviewPlain: string;
   like: string; likes: string; pack: string; packCount: string; reminder: string; reminderCard: string; shipped: string; generic: string;
   /** 蘇綺的召回：標題是她的名字，內容是她的口吻 */
@@ -46,6 +46,7 @@ type Copy = {
 const copy: Record<PushLocale, Copy> = {
   "zh-Hant": {
     title: siteName("zh-Hant"), reply: "{actor} 回覆了你在{card}的留言", replyPlain: "有人回覆你的留言",
+    cardComments: "{card}有 {count} 則新評論", cardCommentsPlain: "你的卡片有新評論",
     work: "{actor} 發佈或更新了{card}", workNew: "{actor} 發佈了{card}", workUpdate: "{actor} 更新了{card}", workPlain: "追蹤的作者有新作品或更新",
     approved: "{card}審核通過了", approvedUpdate: "{card}的更新審核通過了",
     rejected: "{card}這次沒有通過審核", rejectedNote: "{card}這次沒有通過審核，審核員說：{note}",
@@ -60,6 +61,7 @@ const copy: Record<PushLocale, Copy> = {
   },
   "zh-Hans": {
     title: siteName("zh-Hans"), reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
+    cardComments: "{card}有 {count} 条新评论", cardCommentsPlain: "你的卡片有新评论",
     work: "{actor} 发布或更新了{card}", workNew: "{actor} 发布了{card}", workUpdate: "{actor} 更新了{card}", workPlain: "关注的作者有新作品或更新",
     approved: "{card}审核通过了", approvedUpdate: "{card}的更新审核通过了",
     rejected: "{card}这次没有通过审核", rejectedNote: "{card}这次没有通过审核，审核员说：{note}",
@@ -74,6 +76,7 @@ const copy: Record<PushLocale, Copy> = {
   },
   en: {
     title: SITE_NAME, reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
+    cardComments: "{card} has {count} new comment", cardCommentsMany: "{card} has {count} new comments", cardCommentsPlain: "Your card has new comments",
     work: "{actor} published or updated {card}", workNew: "{actor} published {card}", workUpdate: "{actor} updated {card}", workPlain: "An author you follow published or updated a work",
     approved: "{card} passed review", approvedUpdate: "Your update to {card} passed review",
     rejected: "{card} did not pass review this time", rejectedNote: "{card} did not pass review this time. The reviewer wrote: {note}",
@@ -88,6 +91,7 @@ const copy: Record<PushLocale, Copy> = {
   },
   ja: {
     title: SITE_NAME, reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
+    cardComments: "{card}に新しいコメントが {count} 件あります", cardCommentsPlain: "カードに新しいコメントがあります",
     work: "{actor} さんが{card}を公開・更新しました", workNew: "{actor} さんが{card}を公開しました", workUpdate: "{actor} さんが{card}を更新しました", workPlain: "フォロー中の作者が作品を公開・更新しました",
     approved: "{card}が審査を通過しました", approvedUpdate: "{card}の更新が審査を通過しました",
     rejected: "{card}は今回審査を通過しませんでした", rejectedNote: "{card}は今回審査を通過しませんでした。審査担当者のコメント：{note}",
@@ -102,6 +106,7 @@ const copy: Record<PushLocale, Copy> = {
   },
   ko: {
     title: SITE_NAME, reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
+    cardComments: "{card}에 새 댓글이 {count}개 달렸습니다", cardCommentsPlain: "내 카드에 새 댓글이 달렸습니다",
     work: "{actor} 님이 {card}을(를) 공개하거나 업데이트했습니다", workNew: "{actor} 님이 {card}을(를) 공개했습니다", workUpdate: "{actor} 님이 {card}을(를) 업데이트했습니다", workPlain: "팔로우하는 작가가 작품을 공개하거나 업데이트했습니다",
     approved: "{card}이(가) 심사를 통과했습니다", approvedUpdate: "{card}의 업데이트가 심사를 통과했습니다",
     rejected: "{card}이(가) 이번 심사를 통과하지 못했습니다", rejectedNote: "{card}이(가) 이번 심사를 통과하지 못했습니다. 검토자 의견: {note}",
@@ -135,6 +140,7 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
   const card = row.card_names ? quote(locale, pickLocale(JSON.parse(row.card_names) as Localized, locale)) : "";
   const count = Number(extra.count ?? 1);
   if (row.kind === "comment_reply") return actor && card ? fill(c.reply, { actor, card }) : c.replyPlain;
+  if (row.kind === "card_comments") return card ? fill(c.cardCommentsMany && count > 1 ? c.cardCommentsMany : c.cardComments, { card, count }) : c.cardCommentsPlain;
   if (row.kind === "followed_work") {
     if (!actor || !card) return typeof extra.version==='string'?privateUpdateCopy[locale]:c.workPlain;
     return fill(extra.event === "new" ? c.workNew : extra.event === "update" ? c.workUpdate : c.work, { actor, card }) + (extra.event === "update" && typeof extra.note === "string" ? "\n" + extra.note : "");

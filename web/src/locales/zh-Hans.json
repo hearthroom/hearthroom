@@ -4680,5 +4680,8 @@
   "editor.state.template.example": "用示例皮肤",
   "editor.opening.suggest.add": "加一句建议",
   "editor.opening.choices.add": "加一个选项",
-  "authorDiscord.hint": "在 Discord 里获取写卡资源，和其他作者进行交流，遇到问题也能直接反馈。"
+  "authorDiscord.hint": "在 Discord 里获取写卡资源，和其他作者进行交流，遇到问题也能直接反馈。",
+  "community.noticeText.card_comments": "{card}有 {count} 条新评论",
+  "community.notices.card_comments": "你的卡片有新评论",
+  "mine.newComments": "{count} 条新评论"
 }

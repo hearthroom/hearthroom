@@ -125,6 +125,7 @@ export function noticeText(n: CommunityNotice): string {
     return t(key,{card,note});
   }
   if (n.kind === "comment_reply" && actor && card) return t("community.noticeText.comment_reply", { actor, card });
+  if (n.kind === "card_comments") return card ? t("community.noticeText.card_comments", { card, count }, count) : t("community.notices.card_comments", { count }, count);
   if(n.kind==='followed_work'&&typeof extra.version==='string')return actor&&card?t('cardUpdate.notice.updateBy',{actor,card}):t('cardUpdate.notice.updatePrivate');
   if (n.kind === "followed_work" && actor && card)
     return t(extra.event === "new" ? "community.noticeText.followed_work_new" : extra.event === "update" ? "community.noticeText.followed_work_update" : "community.noticeText.followed_work", { actor, card });

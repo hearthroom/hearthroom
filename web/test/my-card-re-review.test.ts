@@ -52,3 +52,12 @@ it("with work sharing on and no re-review, the old per-status notes stay hidden"
   expect(el.textContent).not.toContain(i18n.global.t("workspace.updatePending"));
   expect(el.querySelector("[data-re-review]")).toBeNull();
 });
+it("shows the unread comment count linking to #comments only when newComments > 0", async () => {
+  const none = await mount(base);
+  expect(none.querySelector("[data-new-comments]")).toBeNull();
+  const withComments = await mount({ ...base, newComments: 3 });
+  const link = withComments.querySelector<HTMLAnchorElement>("[data-new-comments]");
+  expect(link).not.toBeNull();
+  expect(link?.getAttribute("href")).toBe("/cards/100855#comments");
+  expect(link?.textContent?.trim()).toBe("3 則新評論");
+});

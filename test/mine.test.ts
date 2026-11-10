@@ -6,6 +6,7 @@ import {
   contentHashCalls,
   contentHashesOnUpstream,
   identities,
+  makeMember,
   myRolesOnUpstream,
   resetDb,
   restoreUpstream,
@@ -441,5 +442,30 @@ describe("已發布、有修改還沒送審", () => {
     expect(other.status).toBe(404);
     const none = await SELF.fetch("https://c.test/v1/me/cards/same/draft");
     expect(none.status).toBe(401);
+  });
+
+  it("每張卡帶未讀新評論數，作者看過該卡評論就清掉", async () => {
+    await makeMember(10001);
+    const num = await ensureCardNumber(env.DB, "harbor", "same");
+    await publish("same", "h-same");
+    await SELF.fetch(`https://c.test/v1/cards/${num}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...bearer("bob-token") },
+      body: JSON.stringify({ content: "第一則評論" }),
+    });
+    await SELF.fetch(`https://c.test/v1/cards/${num}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...bearer("bob-token") },
+      body: JSON.stringify({ content: "第二則評論" }),
+    });
+    const before = (await mine()).body.items;
+    expect(before.find((i: any) => i.roleId === "same")?.newComments).toBe(2);
+    expect(before.find((i: any) => i.roleId === "edited")?.newComments).toBeUndefined();
+
+    // 作者打開該卡評論區後，新評論數立即清掉
+    const viewed = await SELF.fetch(`https://c.test/v1/cards/${num}/comments`, { headers: bearer("alice-token") });
+    expect(viewed.status).toBe(200);
+    const after = (await mine()).body.items;
+    expect(after.find((i: any) => i.roleId === "same")?.newComments).toBeUndefined();
   });
 });

@@ -144,10 +144,14 @@ export async function listTop(
     : null;
   const p = Math.max(1, page);
   const shift = pin ? 1 : 0;
+  const isRoleCreator = !!viewer.memberId && viewer.memberId === author;
   const [count, tops] = await db.batch<Row & { n: number }>([
     db.prepare(`SELECT COUNT(*) AS n FROM comments WHERE ${col} = ? AND root_id IS NULL AND ((deleted_at IS NULL AND status = 'visible') OR (status = 'removed' AND reply_count > 0))`).bind(id),
     db.prepare(`${SELECT} WHERE c.${col} = ?2 AND c.root_id IS NULL AND ${TOP_SHOWN} AND c.id <> ?5 ORDER BY ${ORDER[sort]} LIMIT ?3 OFFSET ?4`)
       .bind(me, id, COMMENT_PAGE_SIZE - (p === 1 ? shift : 0), Math.max(0, (p - 1) * COMMENT_PAGE_SIZE - shift), pin?.id ?? ""),
+    ...(!post && isRoleCreator && viewer.memberId
+      ? [db.prepare("UPDATE community_notifications SET read_at = ? WHERE event_key = ? AND member_id = ? AND read_at IS NULL").bind(Date.now(), `card_comments:${id}`, viewer.memberId)]
+      : []),
   ]);
   const rows = [...(pin && p === 1 ? [pin] : []), ...(tops!.results as Row[])];
   const comments: CommentView[] = rows.map((r) => view(r, viewer, author, post));
@@ -166,7 +170,6 @@ export async function listTop(
     }
   }
   const total = (count!.results[0] as { n: number }).n;
-  const isRoleCreator = !!viewer.memberId && viewer.memberId === author;
   // 被禁言的本人：前端據此收起發表與回覆，不必等送出才被擋。只回給本人，別人看不到誰被禁言。
   const muted = viewer.memberId ? await mutedUntil(db, viewer.memberId, Date.now()) : false;
   const mutedField = muted === false ? {} : { mutedUntil: muted };

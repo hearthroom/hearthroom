@@ -377,6 +377,16 @@ watch(() => session.profile?.showNsfw, (now, before) => {
   if (before === undefined && !gated.value) return;
   void load();
 });
+
+watch(
+  [() => route.hash, () => card.value?.id, loading, showComments, listed],
+  async ([hash, id, isLoading, canShow, isListed]) => {
+    if (hash !== "#comments" || !id || isLoading || !canShow || !isListed) return;
+    await nextTick();
+    document.getElementById("comments")?.scrollIntoView({ block: "start" });
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

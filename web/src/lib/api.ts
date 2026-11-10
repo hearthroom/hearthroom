@@ -880,6 +880,8 @@ export interface MyCard {
   rating?: Rating | null;
   /** 已發布，但作者之後改過、還沒送審（草稿的內容版本跟過審那一版不同）；只在是的時候才有。 */
   draftChanged?: boolean;
+  /** 作者還沒看過的新評論數；0 或看過就不帶。 */
+  newComments?: number;
 }
 
 export interface ListingQuota {

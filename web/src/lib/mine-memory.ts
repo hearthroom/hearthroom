@@ -60,6 +60,24 @@ class ShownMemory {
       /* 本來就沒存 */
     }
   }
+
+  /** 作者看過某張卡的評論後，把快取裡那張卡的未讀新評論數清掉，回上一頁時先畫的那一份也不會留著舊數字。 */
+  clearCardNewComments(cardId?: string | number): void {
+    if (cardId === undefined || cardId === null || cardId === "") return;
+    const target = String(cardId);
+    let touched = false;
+    for (const page of this.load().values()) {
+      for (const list of Object.values(page.rows)) {
+        for (const c of list ?? []) {
+          if ((String(c.num ?? "") === target || String(c.detailId ?? "") === target) && c.newComments) {
+            delete c.newComments;
+            touched = true;
+          }
+        }
+      }
+    }
+    if (touched) this.persist();
+  }
 }
 
 export const lastShown = new ShownMemory();

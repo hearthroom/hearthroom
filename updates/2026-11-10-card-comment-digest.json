@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "你的卡收到新評論時，通知鈴鐺和「我的卡片」都會顯示有幾則新評論。",
+    "zh-Hans": "你的卡收到新评论时，通知铃铛和「我的卡片」都会显示有几条新评论。",
+    "en": "When your card gets new comments, the notification bell and My cards show how many are new.",
+    "ja": "あなたのカードに新しいコメントが届くと、お知らせのベルと「マイカード」に件数が表示されます。",
+    "ko": "내 카드에 새 댓글이 달리면 알림 종과 「내 카드」에 새 댓글 수가 표시돼요."
+  }
+}

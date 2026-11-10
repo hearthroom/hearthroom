@@ -4680,5 +4680,8 @@
   "editor.state.template.example": "예시 스킨 쓰기",
   "editor.opening.suggest.add": "첫마디 추가",
   "editor.opening.choices.add": "선택지 추가",
-  "authorDiscord.hint": "Discord에서 카드 제작 자료를 찾고, 다른 작가와 교류하고, 문제는 운영팀에 바로 제보할 수 있어요."
+  "authorDiscord.hint": "Discord에서 카드 제작 자료를 찾고, 다른 작가와 교류하고, 문제는 운영팀에 바로 제보할 수 있어요.",
+  "community.noticeText.card_comments": "{card}에 새 댓글이 {count}개 달렸습니다",
+  "community.notices.card_comments": "내 카드에 새 댓글이 달렸습니다",
+  "mine.newComments": "새 댓글 {count}개"
 }

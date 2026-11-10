@@ -4680,5 +4680,8 @@
   "editor.state.template.example": "用範例皮膚",
   "editor.opening.suggest.add": "加一句建議",
   "editor.opening.choices.add": "加一個選項",
-  "authorDiscord.hint": "在 Discord 裡獲取寫卡資源，和其他作者進行交流，遇到問題也能直接回饋。"
+  "authorDiscord.hint": "在 Discord 裡獲取寫卡資源，和其他作者進行交流，遇到問題也能直接回饋。",
+  "community.noticeText.card_comments": "{card}有 {count} 則新評論",
+  "community.notices.card_comments": "你的卡片有新評論",
+  "mine.newComments": "{count} 則新評論"
 }

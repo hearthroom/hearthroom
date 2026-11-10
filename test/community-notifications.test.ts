@@ -44,13 +44,14 @@ it('tells the author who replied and which card, and names the card in their lan
  const stored = (await rows(author, 'comment_reply')).results;
  expect(stored).toHaveLength(1);
  expect(stored[0]).toMatchObject({ actor_id: fan, card_id: Number(cardId), path: '/cards/' + cardId });
- // Registering the card already produced its own "approved" notice, so pick the reply by kind.
+ // Registering the card already produced its own "approved" notice, and commenting on the author's card also updates its comment digest.
  const list = await json(await api('?lang=en', 'author'));
- expect(list.items.map((n: any) => n.kind)).toEqual(['comment_reply', 'review_result']);
- expect(list.items[0]).toMatchObject({ kind: 'comment_reply', path: '/cards/' + cardId, read_at: null, actor: { name: '小雨' }, card: { id: Number(cardId), name: 'Rainy Bookshop' }, extra: { comment: expect.any(String) } });
- expect(list.items[0].actor.handle).toMatch(/^[a-j]{8}$/);
+ expect(list.items.map((n: any) => n.kind).sort()).toEqual(['card_comments', 'comment_reply', 'review_result']);
+ const reply = list.items.find((n: any) => n.kind === 'comment_reply');
+ expect(reply).toMatchObject({ kind: 'comment_reply', path: '/cards/' + cardId, read_at: null, actor: { name: '小雨' }, card: { id: Number(cardId), name: 'Rainy Bookshop' }, extra: { comment: expect.any(String) } });
+ expect(reply.actor.handle).toMatch(/^[a-j]{8}$/);
  expect(JSON.stringify(list)).not.toContain(fan);
- expect((await json(await api('?lang=ja', 'author'))).items[0].card.name).toBe('雨夜の本屋');
+ expect((await json(await api('?lang=ja', 'author'))).items.find((n: any) => n.kind === 'comment_reply').card.name).toBe('雨夜の本屋');
 });
 it('sends by default, honours an explicit opt-out, and never notifies yourself', async () => {
  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_preferences').first<{ n: number }>()).toEqual({ n: 0 });
@@ -134,8 +135,8 @@ it('summarises unread counts, remembers the interface language for Discord, and 
  const root = await say('author', '頂樓');
  await say('fan', '一', { rootId: root, parentId: root });
  await say('other', '二', { rootId: root, parentId: root });
- // Two replies plus the "approved" notice from registering the card.
- expect(await json(await api('/summary?lang=ja', 'author'))).toEqual({ unread: 3 });
+ // Two replies, one card comment digest, plus the "approved" notice from registering the card.
+ expect(await json(await api('/summary?lang=ja', 'author'))).toEqual({ unread: 4 });
  expect(await env.DB.prepare('SELECT locale FROM members WHERE id=?').bind(author).first()).toEqual({ locale: 'ja' });
  await api('/summary?lang=xx', 'author');
  expect(await env.DB.prepare('SELECT locale FROM members WHERE id=?').bind(author).first()).toEqual({ locale: 'ja' });
@@ -188,4 +189,68 @@ it('carries the card and the verdict on review results', async () => {
   expect(JSON.parse(String(update.extra))).toEqual({ status: 'approved', kind: 're', note: null });
   expect((await json(await bridge('notification', { id: update.id }))).text).toBe('「雨夜書店」的更新審核通過了 / Your update to “Rainy Bookshop” passed review');
  } finally { reviewOff(); }
+});
+it('aggregates new card comments into one silent digest per card and clears it when the author views comments', async () => {
+ // Author's own comment never triggers a card comment digest.
+ const ownComment = await say('author', '作者自留');
+ expect((await rows(author, 'card_comments')).results).toHaveLength(0);
+ // First comment by fan (without @author): creates unread digest with count 1, silent (delivered=1, push_at set).
+ const c1 = await say('fan', '好看！');
+ let stored = (await rows(author, 'card_comments')).results;
+ expect(stored).toHaveLength(1);
+ expect(stored[0]).toMatchObject({
+  event_key: 'card_comments:' + cardId,
+  card_id: Number(cardId),
+  path: '/cards/' + cardId + '#comments',
+  read_at: null,
+  delivered: 1,
+ });
+ expect(stored[0].push_at).not.toBeNull();
+ expect(JSON.parse(String(stored[0].extra)).count).toBe(1);
+ // Second comment by other (replying to fan, still not @author): updates count to 2 on the same row.
+ const c2 = await say('other', '我也覺得', { rootId: c1, parentId: c1 });
+ stored = (await rows(author, 'card_comments')).results;
+ expect(stored).toHaveLength(1);
+ expect(JSON.parse(String(stored[0].extra)).count).toBe(2);
+ expect((await rows(author, 'comment_reply')).results).toHaveLength(0);
+ // The notification list must give the bell both the title and the count.
+ for (const [lang, name] of [['zh-Hant', '雨夜書店'], ['zh-Hans', '雨夜書店'], ['en', 'Rainy Bookshop'], ['ja', '雨夜の本屋'], ['ko', '雨夜書店']]) {
+  const list = await json(await api('?lang=' + lang, 'author'));
+  expect(list.items.filter((item: any) => item.kind === 'card_comments')).toMatchObject([{
+   path: '/cards/' + cardId + '#comments',
+   card: { id: Number(cardId), name },
+   extra: { count: 2 },
+  }]);
+ }
+ // Author replying to fan does not inflate the digest count.
+ await say('author', '謝謝你們', { rootId: c1, parentId: c1 });
+ expect(JSON.parse(String((await rows(author, 'card_comments')).results[0].extra)).count).toBe(2);
+ // Deleting an unread comment decrements the count; deleting the last unread comment removes the unread digest.
+ expect((await SELF.fetch(`https://c.test/v1/comments/${c2}`, { method: 'DELETE', headers: bearer('other') })).status).toBe(204);
+ expect(JSON.parse(String((await rows(author, 'card_comments')).results[0].extra)).count).toBe(1);
+ expect((await SELF.fetch(`https://c.test/v1/comments/${c1}`, { method: 'DELETE', headers: bearer('fan') })).status).toBe(204);
+ expect((await rows(author, 'card_comments')).results).toHaveLength(0);
+ // New comments again: count is 2; never sent to Discord DM or Web Push.
+ const c3 = await say('fan', '再留一則');
+ await say('other', '直接回作者', { rootId: ownComment, parentId: ownComment });
+ stored = (await rows(author, 'card_comments')).results;
+ expect(stored).toHaveLength(1);
+ expect(JSON.parse(String(stored[0].extra)).count).toBe(2);
+ // Direct @reply to author still produces comment_reply per reply.
+ expect((await rows(author, 'comment_reply')).results).toHaveLength(1);
+ await setPreferences(env as Env, author, { discordDm: true });
+ await linkDiscord(author);
+ const pending = await json(await bridge('pending'));
+ expect(JSON.stringify(pending)).not.toContain(stored[0].id);
+ // Non-author viewing comments does not clear the author's digest.
+ expect((await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments`, { headers: bearer('fan') })).status).toBe(200);
+ expect((await rows(author, 'card_comments')).results[0].read_at).toBeNull();
+ // Author viewing comments marks the digest read; the next new comment starts a fresh count from 1.
+ expect((await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments`, { headers: bearer('author') })).status).toBe(200);
+ expect((await rows(author, 'card_comments')).results[0].read_at).not.toBeNull();
+ await say('other', '讀過之後的新留言', { rootId: c3, parentId: c3 });
+ stored = (await rows(author, 'card_comments')).results;
+ expect(stored).toHaveLength(1);
+ expect(stored[0].read_at).toBeNull();
+ expect(JSON.parse(String(stored[0].extra)).count).toBe(1);
 });

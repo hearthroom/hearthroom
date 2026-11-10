@@ -247,3 +247,33 @@ it("shows a temporary token failure without an unhandled like action or optimist
   expect(host.textContent).toContain(t("state.serverBusy"));
   expect(like.getAttribute('aria-pressed')).toBe('false');
 });
+
+it("clears cached newComments on /mine and marks the card's comment digest notice read when the author views the comments", async () => {
+  const { createPinia, setActivePinia } = await import("pinia");
+  const { lastShown } = await import("../src/lib/mine-memory");
+  const { useNotifications } = await import("../src/lib/notifications");
+  setActivePinia(createPinia());
+  lastShown.set("mine:1", {
+    rows: { harbor: [{ num: 1, detailId: "1", roleId: "r1", zone: "zh-Hant", name: "月下獨酌", summary: "", avatarUrl: null, visibility: "public", talkNum: 0, registered: true, newComments: 3 }] },
+    totals: { harbor: 1 },
+    quota: null,
+  });
+  const notices = useNotifications();
+  notices.loaded = true;
+  notices.unread = 1;
+  notices.items = [{ id: "n1", kind: "card_comments", path: "/cards/1#comments", created_at: 1000, read_at: null, actor: null, card: { id: "1", name: "月下獨酌" }, extra: { count: 3 } }];
+  api.fetchComments.mockImplementation(async () => ({ total: 2, comments: [comment("c1")], isRoleCreator: true }));
+  await mount({ cardId: "1", roleId: "r1" });
+  expect(lastShown.get("mine:1")?.rows.harbor?.[0]?.newComments).toBeUndefined();
+  expect(notices.items[0]?.read_at).not.toBeNull();
+  expect(notices.unread).toBe(0);
+
+  // 鈴鐺清單還沒展開過（loaded === false）：直接重抓未讀數摘要
+  app.unmount(); host.innerHTML = "";
+  notices.loaded = false;
+  notices.items = [];
+  notices.unread = 1;
+  const refreshSpy = vi.spyOn(notices, "refresh").mockResolvedValue();
+  await mount({ cardId: "1", roleId: "r1" });
+  expect(refreshSpy).toHaveBeenCalledWith("zh-Hant");
+});
