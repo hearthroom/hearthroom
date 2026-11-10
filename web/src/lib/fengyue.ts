@@ -97,12 +97,14 @@ const countWhere = <T>(rows: T[], test: (row: T) => boolean): number => rows.fil
 
 function convertBook(rows: Raw[], notes: DropNote[]): TavernBookEntry[] {
   const prefix = contract.worldbook.keyPrefix;
+  const sep = contract.worldbook.keySeparator;
   const regions = contract.worldbook.triggerRegion as Record<string, string>;
+  const isOrKey = (r: Raw) => str(r.key).startsWith(prefix) && (r.match_type === undefined || Number(r.match_type) === 2);
   const n = {
     region: countWhere(rows, (r) => !(String(r.key_region) in regions)),
     position: countWhere(rows, (r) => r.value_region !== undefined && Number(r.value_region) !== contract.worldbook.defaultValueRegion),
     probability: countWhere(rows, (r) => r.probability !== undefined && Number(r.probability) !== contract.worldbook.defaultProbability),
-    keyFormat: countWhere(rows, (r) => !str(r.key).startsWith(prefix) || (r.match_type !== undefined && Number(r.match_type) !== 2)),
+    keyFormat: countWhere(rows, (r) => !isOrKey(r)),
     group: countWhere(rows, (r) => !!str(r.group)),
   };
   if (n.region) notes.push({ key: "import.fengyue.entryRegion", params: { n: n.region } });
@@ -112,8 +114,10 @@ function convertBook(rows: Raw[], notes: DropNote[]): TavernBookEntry[] {
   if (n.group) notes.push({ key: "import.fengyue.entryGroup", params: { n: n.group } });
   return rows.map((r) => {
     const key = str(r.key);
-    // 只有 `_or_`（任一關鍵詞）實測過；其他前綴原樣留著，作者看得到也改得了，已列進摘要
-    const keys = (key.startsWith(prefix) ? key.slice(prefix.length) : key).split(/[,，]/).map((k) => k.trim()).filter(Boolean);
+    // 只有 `_or_`（任一關鍵詞，風月用 @wb@ 分隔）能拆成多關鍵詞；其他前綴原樣留著，作者看得到也改得了，已列進摘要
+    const keys = isOrKey(r)
+      ? key.slice(prefix.length).split(sep).flatMap((part) => part.split(/[,，]/)).map((k) => k.trim()).filter(Boolean)
+      : key ? [key] : [];
     const depth = Number(r.depth);
     return {
       keys,

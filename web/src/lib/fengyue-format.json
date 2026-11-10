@@ -2,7 +2,7 @@
   "fields": {
     "name": ["title", "ttl", "name", "nm", "app_name"],
     "intro": ["description", "desc", "descr", "dsc", "intro"],
-    "summary": ["summary", "smry", "sum_info", "abs_txt"],
+    "summary": ["summary", "smry", "sum_info", "abs_txt", "abstract"],
     "prompt": ["pre_prompt", "prompt_pre", "pre_pt", "ppt"],
     "prefix": ["pre_text", "pre_tx", "pretxt", "ptx", "prefix_txt"],
     "suffix": ["post_text", "post_tx", "posttxt", "potx", "suffix_txt"],
@@ -15,7 +15,7 @@
     "variablePrompt": ["ai_variable_text", "ai_variable_prompt", "ai_v_prompt"],
     "variableSkeleton": ["ai_v_json", "ai_variable_json"],
     "variableTemplate": ["ai_variable_template", "ai_v_template", "ai_variable_tmpl"],
-    "openingMode": ["ps_type", "ptype", "preset_tp"],
+    "openingMode": ["ps_type", "ptype", "preset_tp", "pst_type"],
     "presetChats": ["pst_chats", "ps_chats", "preset_ch", "pchats"]
   },
   "detect": {
@@ -25,6 +25,7 @@
   },
   "worldbook": {
     "keyPrefix": "_or_",
+    "keySeparator": "@wb@",
     "triggerRegion": { "2": "user_only" },
     "defaultValueRegion": 1,
     "defaultProbability": 100
@@ -33,6 +34,6 @@
   "limits": { "openings": 20 },
   "regex": {
     "flags": "g",
-    "targets": { "10": ["ai", "user"] }
+    "targets": { "1": ["ai"], "10": ["ai", "user"] }
   }
 }
