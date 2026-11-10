@@ -214,6 +214,38 @@ it("uses the same issuer for legacy multipart fallback", async () => {
   ).toBe(true);
 });
 
+it.each(["uploadComplete", "upload"])("gives MP3 conversion guidance for %s content rejection", async (failedPath) => {
+  let completed = false;
+  const fetcher = vi.fn(async (url: string) => {
+    if (url.endsWith("uploadIntent")) {
+      return failedPath === "upload"
+        ? new Response("{}", { status: 404 })
+        : response({ uploadId: "u", uploadUrl: "https://storage.test/u" });
+    }
+    expect(url.endsWith("/" + failedPath)).toBe(true);
+    if (completed) return new Response(JSON.stringify({ error: "upload_missing" }), { status: 404 });
+    completed = true;
+    return new Response(JSON.stringify({ error: "invalid_param", detail: { reason: "mp3_content_mismatch" } }), { status: 400 });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubGlobal("XMLHttpRequest", class {
+    status = 204;
+    upload = {};
+    open() {}
+    setRequestHeader() {}
+    onload = () => {};
+    send() { this.onload(); }
+  });
+  const client = resourceClient("harbor", "token");
+  const file = new File(["m4a"], "夜巡ED.MP3", { type: "audio/mp4" });
+  const message = i18n.global.t("res.error.mp3Content");
+  await expect(client.upload(file, [], () => {})).rejects.toMatchObject({ message });
+  if (failedPath === "uploadComplete") {
+    await expect(client.upload(file, [], () => {})).rejects.toMatchObject({ message });
+    expect(fetcher.mock.calls.filter(([url]) => url.endsWith("/uploadComplete"))).toHaveLength(1);
+  }
+});
+
 describe("direct upload timing", () => {
   // 模擬瀏覽器的 XHR：尊重 timeout 屬性，並依腳本在指定時間點回報進度或完成。
   function scriptedXhr(steps: { at: number; loaded?: number; done?: boolean }[]) {

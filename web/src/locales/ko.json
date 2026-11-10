@@ -945,6 +945,7 @@
   "res.error.tooLarge": "파일 하나는 100 MB를 넘을 수 없습니다.",
   "res.error.type": "지원 형식: PNG/JPEG/GIF/WebP/SVG, MP4/WebM, MP3/WAV/OGG, WOFF2/WOFF, JS/WASM, JSON.",
   "res.error.mov": "MOV 동영상은 업로드할 수 없으니 MP4로 내보낸 뒤 업로드해 주세요.",
+  "res.error.mp3Content": "이 파일을 MP3로 읽을 수 없어요. MP3로 변환한 뒤 다시 업로드해 주세요.",
   "res.kind.all": "전체",
   "res.kind.image": "이미지",
   "res.kind.video": "동영상",

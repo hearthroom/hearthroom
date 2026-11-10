@@ -1,4 +1,4 @@
-import { ApiError, describeApiError } from "./api";
+import { ApiError, describeApiError, MP3_CONTENT_MISMATCH } from "./api";
 import { apiBaseOf, type ProviderId } from "./provider";
 import { canonicalType } from "./media-type";
 // 直傳多久完全沒有進度就放棄。
@@ -84,12 +84,15 @@ export function resourceClient(provider: ProviderId, credentials: string | ((rej
         r.status,
         describeApiError(r.status, b.error || b.message || "", b.detail),
         b.error || "",
+        undefined,
+        b.detail?.reason,
       );
     return b.data ?? {};
   }
   type UploadState = {
     intent?: { uploadId: string; uploadUrl: string; contentType?: string };
     stored?: boolean;
+    contentError?: ApiError;
     done?: { imageId: ResourceId; imageUrl: string };
     attached: Set<string>;
   };
@@ -185,6 +188,7 @@ export function resourceClient(provider: ProviderId, credentials: string | ((rej
       const contentType = canonicalType(file);
       const state = uploadStates.get(file) ?? { attached: new Set<string>() };
       uploadStates.set(file, state);
+      if (state.contentError) throw state.contentError;
       if (!state.done) {
         if (!state.intent) {
           try {
@@ -255,6 +259,11 @@ export function resourceClient(provider: ProviderId, credentials: string | ((rej
               fileName: file.name,
               ...(provider === "harbor" && relativePath(file, prefix) ? { relativePath: relativePath(file, prefix) } : {}),
               folderIds,
+            }).catch((error: unknown) => {
+              // Harbor deleted the rejected payload. Keep the guidance for this File on retry.
+              if (error instanceof ApiError && error.code === "invalid_param" && error.reason === MP3_CONTENT_MISMATCH)
+                state.contentError = error;
+              throw error;
             });
         }
       }

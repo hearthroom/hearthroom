@@ -945,6 +945,7 @@
   "res.error.tooLarge": "A single file can’t exceed 100 MB.",
   "res.error.type": "Accepted: PNG/JPEG/GIF/WebP/SVG, MP4/WebM, MP3/WAV/OGG, WOFF2/WOFF, JS/WASM, JSON.",
   "res.error.mov": "MOV videos aren’t supported, so export this one as MP4 and upload that file.",
+  "res.error.mp3Content": "This file couldn’t be read as MP3. Convert it to MP3 and upload the converted file.",
   "res.kind.all": "All",
   "res.kind.image": "Images",
   "res.kind.video": "Video",

@@ -172,9 +172,12 @@ const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
  */
 const looksInternal = (raw: string): boolean => /^[a-z]+( [a-z]+)+$/.test(raw);
 
+export const MP3_CONTENT_MISMATCH = "mp3_content_mismatch";
+
 export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
   // .mov：資源庫不收 QuickTime，請作者匯出成 MP4。上傳前的檢查也講同一句。
   if (detail?.reason === "quicktime") return i18n.global.t("res.error.mov");
+  if (raw === "invalid_param" && detail?.reason === MP3_CONTENT_MISMATCH) return i18n.global.t("res.error.mp3Content");
   if(raw==='review_length_insufficient'&&detail?.reviewLength)return i18n.global.t('reviewLength.insufficient',formatReviewLength(detail.reviewLength,String(i18n.global.locale.value)));
   const legacy = (raw || "").trim();
   const text = legacy === "jailbreak_too_long" ? "custom_instructions_too_long" : legacy;

@@ -945,6 +945,7 @@
   "res.error.tooLarge": "單個檔案不能超過 100 MB。",
   "res.error.type": "只能上傳 PNG／JPEG／GIF／WebP／SVG、MP4／WebM、MP3／WAV／OGG、WOFF2／WOFF、JS／WASM、JSON。",
   "res.error.mov": "MOV 影片放不進資源庫，請先匯出成 MP4 再上傳。",
+  "res.error.mp3Content": "這個檔案無法辨識為 MP3，請轉成 MP3 再上傳。",
   "res.kind.all": "全部",
   "res.kind.image": "圖片",
   "res.kind.video": "影片",
