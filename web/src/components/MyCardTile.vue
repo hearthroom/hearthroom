@@ -223,9 +223,9 @@ onBeforeUnmount(() => listen(false));
 .card__talks svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
 .card__comments {
   position: relative; z-index: 1; align-self: flex-start; display: inline-flex; align-items: center;
-  height: 22px; padding: 0 var(--s-2); max-width: 100%;
+  min-height: var(--h-sm); padding: 0 var(--s-2); max-width: 100%;
   border-radius: var(--r-pill); background: var(--accent-tint); color: var(--accent-text);
-  font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .card__comments:hover { color: var(--accent); }
