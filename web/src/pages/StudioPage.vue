@@ -597,7 +597,7 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
   position: sticky; top: var(--site-header-h, var(--header-h)); z-index: 4;
   display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap;
   margin-top: calc(-1 * var(--s-2)); padding: var(--s-2) 0 var(--s-3);
-  background: linear-gradient(to top, transparent, var(--bg) var(--s-3));
+  background: linear-gradient(to top, transparent, var(--hr-page-bg) var(--s-3));
 }
 .studio__head h1 { margin: 0 0 var(--s-1); font-size: 20px; }
 .studio__head p { margin: 0; font-size: 13.5px; }
@@ -634,7 +634,7 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
 /* 輸入框固定在底下；上緣淡出，捲動的紀錄從它後面經過 */
 .dock {
   position: sticky; bottom: 0; z-index: 5; display: grid; gap: var(--s-2);
-  padding: var(--s-4) 0 var(--s-3); background: linear-gradient(to bottom, transparent, var(--bg) var(--s-4));
+  padding: var(--s-4) 0 var(--s-3); background: linear-gradient(to bottom, transparent, var(--hr-page-bg) var(--s-4));
 }
 .dock__notice { margin: 0; }
 .lightbox { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: var(--s-6) var(--s-7) 96px; background: rgba(8, 8, 12, 0.88); outline: none; }

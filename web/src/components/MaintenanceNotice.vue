@@ -33,9 +33,9 @@ async function check(){manual.value=true;await props.monitor.check();}
  </dialog>
 </template>
 <style scoped>
-.maintenance { position: fixed; inset: 0; width: 100%; height: 100vh; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: max(var(--s-5),env(safe-area-inset-top)) max(var(--s-4),env(safe-area-inset-right)) max(var(--s-5),env(safe-area-inset-bottom)) max(var(--s-4),env(safe-area-inset-left)); border: 0; color: var(--text); background: var(--bg); overflow: auto; }
+.maintenance { position: fixed; inset: 0; width: 100%; height: 100vh; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: max(var(--s-5),env(safe-area-inset-top)) max(var(--s-4),env(safe-area-inset-right)) max(var(--s-5),env(safe-area-inset-bottom)) max(var(--s-4),env(safe-area-inset-left)); border: 0; color: var(--text); background: var(--hr-page-bg); overflow: auto; }
 .maintenance[open] { display: flex; align-items: center; justify-content: center; }
-.maintenance::backdrop { background: var(--bg); }
+.maintenance::backdrop { background: var(--hr-page-bg); }
 .maintenance__panel { width: 100%; max-width: 480px; margin: auto; padding: var(--s-6) var(--s-5); text-align: center; overflow-wrap: anywhere; }
 .maintenance__art { display: block; margin: 0 auto var(--s-4); max-width: 40vw; height: auto; }
 h1 { font-size: clamp(22px, 5vw, 28px); margin: 0 0 var(--s-3); }

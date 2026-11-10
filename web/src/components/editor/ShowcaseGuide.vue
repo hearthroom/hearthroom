@@ -171,7 +171,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chips i { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); min-width: 28px; min-height: 14px; }
 
-.cpage { position: relative; border-radius: var(--r-md); overflow: hidden; background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+.cpage { position: relative; border-radius: var(--r-md); overflow: hidden; background: var(--hr-page-bg); box-shadow: 0 0 0 1px var(--line); }
 .cpage__banner { height: 70px; background: var(--surface-2) center 20% / cover; mask-image: linear-gradient(to bottom, #000 50%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent); }
 .cpage__hero { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 0 12px; margin-top: -36px; position: relative; }
 .cpage__cover { aspect-ratio: 3 / 4; border-radius: 6px; background: var(--surface-2) center / cover; box-shadow: 0 0 0 1px var(--line); }

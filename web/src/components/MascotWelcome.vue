@@ -44,7 +44,7 @@ function close(source: "close" | "browse") {
 </template>
 
 <style scoped>
-/* 配色取自設定集：底 #f8d6df，字 #2a1d24／#5c4650；不吃 --bg、--text，深色模式下也是同一張粉色卡 */
+/* 配色取自設定集：底 #f8d6df，字 #2a1d24／#5c4650；不吃 --hr-page-bg、--text，深色模式下也是同一張粉色卡 */
 .welcome {
   --welcome-bg: #f8d6df;
   position: relative; overflow: hidden; isolation: isolate;

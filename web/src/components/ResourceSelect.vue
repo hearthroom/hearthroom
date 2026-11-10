@@ -226,7 +226,7 @@ svg {
   padding: var(--s-2);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--bg);
+  background: var(--hr-page-bg);
   box-shadow: var(--shadow-md);
 }
 .resource-select__menu.is-above {

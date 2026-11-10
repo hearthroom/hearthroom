@@ -2018,7 +2018,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   position: relative; z-index: 5;
   display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
   margin: 0 0 0 calc(var(--s-5) * -1); padding: var(--s-2) 0 var(--s-2) var(--s-5);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--hr-page-bg) 88%, transparent);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
@@ -2172,7 +2172,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
   /* 右邊留跟表單捲動區同樣的內距：最右的「有未儲存的修改」不貼邊被裁 */
   margin: 0; padding: var(--s-3) var(--s-2) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) 0;
-  border-top: 1px solid var(--line); background: var(--bg);
+  border-top: 1px solid var(--line); background: var(--hr-page-bg);
 }
 /* 檢查清單推到最右邊：左邊是要按的，右邊是要看的 */
 .bar__check {
@@ -2248,7 +2248,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
     display: grid; position: fixed; inset: 0; z-index: 100;
     height: auto; grid-template-rows: auto minmax(0, 1fr);
     padding: calc(var(--s-3) + env(safe-area-inset-top, 0px)) calc(var(--s-3) + env(safe-area-inset-right, 0px)) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)) calc(var(--s-3) + env(safe-area-inset-left, 0px)); gap: var(--s-3);
-    background: var(--bg);
+    background: var(--hr-page-bg);
   }
   .body { padding-bottom: 0; }
   .bar__panel { display: inline-flex; }
@@ -2280,7 +2280,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 */
 @media (max-width: 760px) {
   .phone-nav:empty { display: none; }
-  .phone-nav { position: sticky; top: calc(-1 * var(--s-2)); z-index: 5; margin: 0 calc(-1 * var(--s-2)) var(--s-3) 0; background: var(--bg); }
+  .phone-nav { position: sticky; top: calc(-1 * var(--s-2)); z-index: 5; margin: 0 calc(-1 * var(--s-2)) var(--s-3) 0; background: var(--hr-page-bg); }
   .phone-nav .side { margin: 0; padding: var(--s-2) 0; mask-image: none; -webkit-mask-image: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .pane { scroll-margin-top: 52px; }
 }

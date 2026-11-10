@@ -82,7 +82,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile--earned .badge-tile__medal{filter:drop-shadow(0 6px 12px var(--glow))}
 .badge-tile:not(.badge-tile--earned) .badge-tile__medal{filter:grayscale(1) opacity(.5)}
 .badge-tile__stack{position:relative;display:flex;isolation:isolate}.badge-tile__ghost{position:absolute;left:0;top:0;filter:grayscale(1);opacity:.35}
-.badge-tile__times{position:absolute;right:2px;bottom:8px;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--text);color:var(--bg);font-size:12px;font-weight:700;line-height:20px;text-align:center;font-variant-numeric:tabular-nums}
+.badge-tile__times{position:absolute;right:2px;bottom:8px;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--text);color:var(--hr-page-bg);font-size:12px;font-weight:700;line-height:20px;text-align:center;font-variant-numeric:tabular-nums}
 .badge-tile__meta{display:grid;justify-items:end;gap:var(--s-2);min-width:0}
 .badge-tile__rarity{padding:2px 9px;border-radius:var(--r-pill);color:var(--ink);background:color-mix(in srgb,var(--ink) 10%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 28%,transparent);font-size:12px;font-weight:700;letter-spacing:.04em;line-height:1.6;white-space:nowrap}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}

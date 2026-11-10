@@ -591,7 +591,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 .role__banner img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
 .role__banner::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(to bottom, transparent 0%, transparent 45%, color-mix(in srgb, var(--bg) 70%, transparent) 75%, var(--bg) 97%);
+  background: linear-gradient(to bottom, transparent 0%, transparent 45%, color-mix(in srgb, var(--hr-page-bg) 70%, transparent) 75%, var(--hr-page-bg) 97%);
 }
 
 .role__own { position: relative; z-index: 1; margin-bottom: var(--s-4); }
@@ -743,7 +743,7 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__cta {
     position: fixed; z-index: 15; left: 0; right: 0; bottom: 0;
     flex-wrap: nowrap; padding: 12px var(--s-4) calc(12px + env(safe-area-inset-bottom, 0px));
-    background: color-mix(in srgb, var(--bg) 84%, transparent);
+    background: color-mix(in srgb, var(--hr-page-bg) 84%, transparent);
     backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
     box-shadow: 0 -1px 0 var(--line);
   }

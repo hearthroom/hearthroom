@@ -218,7 +218,7 @@ onBeforeUnmount(() => { abandoned = true; clearTimeout(slowTimer); });
   min-height: 100vh; min-height: 100dvh;
   padding: max(var(--s-6), calc(28vh - 120px)) var(--s-4) calc(var(--s-6) + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2); text-align: center;
-  background: var(--bg);
+  background: var(--hr-page-bg);
 }
 .handoff__art { height: 120px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: var(--s-2); }
 .handoff__mark { width: 56px; height: 56px; border-radius: var(--r-pill); }

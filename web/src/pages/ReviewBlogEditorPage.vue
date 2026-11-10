@@ -786,7 +786,7 @@ watch(() => [route.params.id,route.query.translationOf,route.query.language], ([
 .bed-version-list { display:flex;flex-wrap:wrap;gap:var(--s-2);margin-block:var(--s-2); }
 .bed-version-list .btn { white-space:normal;text-align:start;overflow-wrap:anywhere;max-width:100%;height:auto;min-height:var(--h-sm); }
 .bed { display: grid; gap: var(--s-3); min-width: 0; }
-.bed-top { position: sticky; top: var(--header-h); z-index: 20; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-2) 0; background: var(--bg); }
+.bed-top { position: sticky; top: var(--header-h); z-index: 20; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-2) 0; background: var(--hr-page-bg); }
 .bed-top__spacer { flex: 1; }
 .bed-status { cursor: default; }
 .bed-state { font-size: 13px; }

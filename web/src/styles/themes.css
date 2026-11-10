@@ -51,7 +51,7 @@
 
 /* 紙：連中性色一起換成暖紙 */
 :root[data-theme="sepia"] {
-  --bg: #f4efe6; --surface: #fffcf6; --surface-2: #efe8dc; --border: #e4dccd; --border-strong: #cfc4b0;
+  --hr-page-bg: #f4efe6; --surface: #fffcf6; --surface-2: #efe8dc; --border: #e4dccd; --border-strong: #cfc4b0;
   --line: rgba(60, 40, 20, 0.09); --line-strong: rgba(60, 40, 20, 0.16);
   --text: #2a2420; --text-2: #655a50; --text-3: #6f645a;
   --accent: #b0512c; --accent-btn: #b0512c; --accent-deep: #8f3f21; --accent-text: #8f3f21;
@@ -60,7 +60,7 @@
   --shadow-md: 0 12px 32px -8px rgba(60, 40, 20, 0.24), 0 2px 6px rgba(60, 40, 20, 0.06);
 }
 :root[data-theme="sepia"][data-mode="dark"] {
-  --bg: #17130f; --surface: #211c17; --surface-2: #2b2520; --border: #332c26; --border-strong: #463d35;
+  --hr-page-bg: #17130f; --surface: #211c17; --surface-2: #2b2520; --border: #332c26; --border-strong: #463d35;
   --line: rgba(255, 240, 220, 0.08); --line-strong: rgba(255, 240, 220, 0.14);
   --text: #f3ece2; --text-2: #b3a798; --text-3: #9d9285;
   --accent: #cf6a42; --accent-btn: #bc5730; --accent-deep: #ad532f; --accent-text: #f0a37f;

@@ -15,10 +15,14 @@ beforeEach(() => {
     removeEventListener: () => {},
   }));
   document.head.innerHTML = '<meta name="theme-color" content="#f5f5f7">';
-  document.documentElement.style.setProperty("--bg", "#f5f5f7");
+  document.documentElement.style.setProperty("--hr-page-bg", "#f5f5f7");
   document.body.removeAttribute("style");
 });
-afterEach(() => { vi.unstubAllGlobals(); document.head.innerHTML = ""; });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.head.innerHTML = "";
+  document.documentElement.removeAttribute("style");
+});
 
 const meta = () => document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')!;
 
@@ -38,7 +42,7 @@ it("replaces the theme-color tag instead of editing it, and paints the body in t
 it("keeps the card's header color when the system switches between light and dark", async () => {
   const { useAppearance } = await import("@/lib/appearance");
   useAppearance().setChromeColor("rgb(32, 28, 40)");
-  document.documentElement.style.setProperty("--bg", "#101014");
+  document.documentElement.style.setProperty("--hr-page-bg", "#101014");
   changeListener?.({ matches: true });
   expect(meta().content).toBe("rgb(32, 28, 40)");
 });
@@ -46,6 +50,7 @@ it("keeps the card's header color when the system switches between light and dar
 it("returns to the site color and clears the body color when the conversation page is left", async () => {
   const { useAppearance } = await import("@/lib/appearance");
   useAppearance().setChromeColor("rgb(32, 28, 40)");
+  document.documentElement.style.setProperty("--bg", "#f3ead6");
   useAppearance().setChromeColor(null);
   expect(meta().content).toBe("#f5f5f7");
   expect(document.body.style.backgroundColor).toBe("");

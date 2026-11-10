@@ -1029,15 +1029,15 @@ onMounted(() => { void load(); });
 .layout__body { grid-area: body; min-width: 0; scroll-margin-top: var(--header-h); --tabs-bar-h: calc(var(--h-sm) + var(--s-1) * 2 + var(--s-2) * 3); }
 .side__acts { display: none; }
 /* 分頁條黏在頁首下方（z 15，不透明底，內容不會從底下透出來）；讀到很長的人設也換得了分頁 */
-.tabs-bar { position: sticky; top: var(--header-h); z-index: 15; background: var(--bg); padding-block: var(--s-2); margin-bottom: var(--s-2); }
+.tabs-bar { position: sticky; top: var(--header-h); z-index: 15; background: var(--hr-page-bg); padding-block: var(--s-2); margin-bottom: var(--s-2); }
 /* 手機底部固定列：試玩與前往決定（DESIGN：底部動作列 z 15、玻璃、上緣一條線、safe-area）。
    用 sticky 而不是 fixed：讀卡時黏在畫面底部，捲到頁尾時停在頁面內容的最後，不蓋住站台頁尾的連結 */
-.dock { position: sticky; bottom: 0; z-index: 15; display: flex; gap: var(--s-2); margin-top: var(--s-4); padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--bg) 84%, transparent); clip-path: inset(0 -100vmax); }
+.dock { position: sticky; bottom: 0; z-index: 15; display: flex; gap: var(--s-2); margin-top: var(--s-4); padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--hr-page-bg) 84%, transparent); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--hr-page-bg) 84%, transparent); clip-path: inset(0 -100vmax); }
 .dock__play { flex: none; min-width: 88px; }
 .dock__main { flex: 1; }
 @media (max-width: 1079px) {
   /* 右緣漸層：分頁比畫面寬時，提示還可以往右滑 */
-  .tabs-bar::after { content: ""; position: absolute; top: 0; right: 0; width: 36px; height: calc(var(--h-sm) + var(--s-2) * 2 + var(--s-1) * 2); pointer-events: none; background: linear-gradient(to right, transparent, var(--bg)); }
+  .tabs-bar::after { content: ""; position: absolute; top: 0; right: 0; width: 36px; height: calc(var(--h-sm) + var(--s-2) * 2 + var(--s-1) * 2); pointer-events: none; background: linear-gradient(to right, transparent, var(--hr-page-bg)); }
 }
 @media (min-width: 1080px) {
   .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "body side"; }

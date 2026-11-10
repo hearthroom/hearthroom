@@ -3,7 +3,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { background: var(--bg); }
+html { background: var(--hr-page-bg); }
 body {
   margin: 0;
   font-family: var(--font);

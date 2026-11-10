@@ -13,7 +13,7 @@
  * 其餘凡是卡沒動到的，才是這裡的值。
  */
 .play .ms-stage {
-  --lt-canvas-bg: var(--bg);
+  --lt-canvas-bg: var(--hr-page-bg);
   --lt-canvas-fg: var(--text);
   --lt-canvas-muted: var(--text-2);
   --lt-canvas-line: var(--line);
@@ -21,7 +21,7 @@
   --lt-canvas-radius: var(--r-lg);
 
   /* 頂欄：紙色的玻璃 */
-  --lt-canvas-header-bg: color-mix(in srgb, var(--bg) 78%, transparent);
+  --lt-canvas-header-bg: color-mix(in srgb, var(--hr-page-bg) 78%, transparent);
 
   /* 訊息：AI 是白色的一塊（跟卡片一樣），自己的那句用強調色的淡底 */
   --lt-canvas-name-color: var(--text-3);
@@ -30,7 +30,7 @@
   --lt-canvas-bubble-radius: var(--r-lg);
 
   /* 輸入區 */
-  --lt-canvas-composer-bg: color-mix(in srgb, var(--bg) 86%, transparent);
+  --lt-canvas-composer-bg: color-mix(in srgb, var(--hr-page-bg) 86%, transparent);
   --lt-canvas-composer-field-bg: var(--surface);
   --lt-canvas-composer-border: var(--line);
   --lt-canvas-composer-radius: var(--r-lg);

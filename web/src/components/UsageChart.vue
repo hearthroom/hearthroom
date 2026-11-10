@@ -92,7 +92,7 @@ const tip = (b: UsageBar) => t("wallet.usage.tip", { period: period(b), earned: 
 .usage-chart__col:hover .usage-chart__bar, .usage-chart__col:focus-visible .usage-chart__bar { filter: brightness(1.1); }
 .usage-chart__tip {
   position: absolute; bottom: calc(100% + 6px); left: 50%; z-index: 2; transform: translateX(-50%);
-  padding: 6px 10px; border-radius: var(--r-sm); background: var(--text); color: var(--bg);
+  padding: 6px 10px; border-radius: var(--r-sm); background: var(--text); color: var(--hr-page-bg);
   font-size: 12px; line-height: 1.4; white-space: nowrap; pointer-events: none;
   opacity: 0; transition: opacity var(--dur) var(--ease);
 }

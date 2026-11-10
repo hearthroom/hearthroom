@@ -60,7 +60,7 @@ function apply(): void {
   else d.dataset.theme = theme.value;
   // 瀏覽器的視窗外框（手機的網址列）跟著紙的顏色走，不然深色頁面頂著一條白；對話頁上跟卡片頂欄走。
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  const color = chromeOverride || getComputedStyle(d).getPropertyValue("--bg").trim() || meta?.content || "";
+  const color = chromeOverride || getComputedStyle(d).getPropertyValue("--hr-page-bg").trim() || meta?.content || "";
   if (color) replaceThemeColor(color);
   // 對話頁期間 body 也塗成同色：iOS 狀態列的半透明、下拉回彈、畫布沒蓋滿的邊緣都會透出 body。
   if (chromeOverride) document.body.style.backgroundColor = chromeOverride;

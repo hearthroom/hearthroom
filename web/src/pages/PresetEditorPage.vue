@@ -654,7 +654,7 @@ onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); clear
 .preset-editor__foot {
   position: sticky; bottom: 0; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3);
   padding: var(--s-3) 0 calc(var(--s-3) + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--hr-page-bg) 84%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-top: 1px solid var(--line);
 }
 .preset-editor__state { flex: 1 1 240px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .preset-editor__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; min-width: 0; }
