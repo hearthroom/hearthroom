@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "點數明細裡的作者返點與自玩返點改按每小時合併顯示。",
+    "zh-Hans": "点数明细里的作者返点与自玩返点改按每小时合并显示。",
+    "en": "Author and self-play rebates in Credit History are now grouped by the hour.",
+    "ja": "ポイント履歴の作者還元と自作カード還元が 1 時間ごとにまとめて表示されます。",
+    "ko": "포인트 내역의 작가 환급과 내 카드 환급이 1시간 단위로 묶여 표시됩니다."
+  },
+  "body": {
+    "zh-Hant": "同一小時的返點會記成一列並標出時段、筆數與合計，榜單獎勵、官方發放與消費紀錄仍逐筆列出。",
+    "zh-Hans": "同一小时的返点会记成一列并标出时段、笔数与合计，榜单奖励、官方发放与消费记录仍逐笔列出。",
+    "en": "Rebates within the same hour appear on one line with the time slot, entry count, and total, while leaderboard rewards, official grants, and spending stay itemized.",
+    "ja": "同じ時間帯の還元は時間帯・件数・合計を 1 行にまとめ、ランキング報酬や公式付与、消費の履歴はこれまで通り 1 件ずつ並びます。",
+    "ko": "같은 시간대의 환급은 시간대, 건수, 합계를 한 줄로 보여 주고, 랭킹 보상과 공식 지급, 사용 내역은 그대로 한 건씩 표시됩니다."
+  }
+}

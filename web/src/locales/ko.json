@@ -3170,6 +3170,7 @@
   "wallet.expiring.amount": "{amount}포인트",
   "wallet.record.expiredFrom": "출처: {source}",
   "wallet.record.expired": "만료됨",
+  "wallet.record.hourlyCount": "{n}건",
   "checkin.suki.first": "매일 대화용 포인트 상자가 있어~",
   "checkin.suki.normal": "오늘 상자 챙겨 왔어. 열어 봐~",
   "checkin.suki.normal.night": "좋은 밤! 오늘 상자 여기 있어~",

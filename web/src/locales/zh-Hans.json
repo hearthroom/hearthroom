@@ -3170,6 +3170,7 @@
   "wallet.expiring.amount": "{amount} 积分",
   "wallet.record.expiredFrom": "来自{source}",
   "wallet.record.expired": "已过期",
+  "wallet.record.hourlyCount": "{n} 笔",
   "checkin.suki.first": "每天一个宝箱，装着聊天用的积分～",
   "checkin.suki.normal": "宝箱帮你捧好了，快来开～",
   "checkin.suki.normal.night": "晚上好，今天的宝箱在这～",

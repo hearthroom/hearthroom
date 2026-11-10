@@ -1233,11 +1233,14 @@ export async function redeemReferral(token: string, code: string, provider: Prov
 export interface ScoreRecord {
  rewardRecovery?:boolean;
   playerNote?: string;
-  id: number;
+  id: number | string;
   record: string;
   recordType: "add" | "sub" | string;
   score: number;
   createTime: string;
+  /** 高頻返點（rebate／self_rebate）按台北時間整點彙總時的筆數與整點起點 */
+  count?: number;
+  hourStart?: string;
   /** 獎勵入帳與它的到期：是哪一種獎勵（checkin／task／newcomer／referral…），Harper V0.2c B3 起 */
   rewardKind?: string;
   /** 榜單獎勵那一列：是哪一個榜單榮譽（record 仍是 campaign）；其他列不帶 */
