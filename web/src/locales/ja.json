@@ -4631,7 +4631,7 @@
   "editor.opening.suggest": "おすすめの一言",
   "editor.opening.suggest.hint": "最初のメッセージの下に表示され、押すと入力欄に入ります。",
   "editor.opening.choices": "最初の選択肢",
-  "editor.opening.choices.hint": "ページの下に表示され、押すとそのまま送信されます。1 つ以上入力してください。",
+  "editor.opening.choices.hint": "選択肢はプレイ画面ツールバーの「オープニングを選ぶ」にまとまり、選ぶと入力欄に入ります。1 つ以上入力してください。",
   "editor.opening.switched.toPage": "最初のページにすると、保存時に最初のメッセージが削除されます。戻せば元どおりです。",
   "editor.opening.switched.toPageWithAlternates": "最初のページにすると、保存時に最初のメッセージと別の書き出し {n} 件が削除されます。戻せば元どおりです。",
   "editor.opening.switched.toGreeting": "最初のメッセージにすると、保存時にページの内容が削除されます。戻せば元どおりです。",

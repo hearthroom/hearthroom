@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "try": "/",
+  "title": {
+    "zh-Hant": "有開場網頁的卡，開場選項收進工具列的「選擇開場」，點了先填進輸入框。",
+    "zh-Hans": "有开场网页的卡，开场选项收进工具栏的「选择开场」，点了先填进输入框。",
+    "en": "Cards with an opening page list their openings under Choose an opening in the toolbar.",
+    "ja": "オープニングページのあるカードは、ツールバーの「オープニングを選ぶ」から選べます。",
+    "ko": "오프닝 페이지가 있는 카드는 툴바의 '오프닝 선택'에서 오프닝을 고를 수 있어요."
+  }
+}

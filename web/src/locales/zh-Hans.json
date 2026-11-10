@@ -4631,7 +4631,7 @@
   "editor.opening.suggest": "建议的第一句",
   "editor.opening.suggest.hint": "这些句子显示在开场白下方，玩家点了会填进输入框。",
   "editor.opening.choices": "第一句选项",
-  "editor.opening.choices.hint": "选项显示在网页下方，玩家点了就直接发送，至少要填一个。",
+  "editor.opening.choices.hint": "选项收在游玩页工具栏的「选择开场」里，玩家挑一条会填进输入框，至少要填一个。",
   "editor.opening.switched.toPage": "改用开场网页后，开场白会在保存时移除，切回来就会还原。",
   "editor.opening.switched.toPageWithAlternates": "改用开场网页后，开场白与 {n} 段备选开场白会在保存时移除，切回来就会还原。",
   "editor.opening.switched.toGreeting": "改用开场白后，网页内容会在保存时移除，切回来就会还原。",

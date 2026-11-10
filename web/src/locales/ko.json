@@ -4631,7 +4631,7 @@
   "editor.opening.suggest": "추천 첫마디",
   "editor.opening.suggest.hint": "첫 메시지 아래에 표시되며, 누르면 입력창에 채워져요.",
   "editor.opening.choices": "첫마디 선택지",
-  "editor.opening.choices.hint": "페이지 아래에 표시되며, 누르면 바로 보내져요. 하나 이상 적어 주세요.",
+  "editor.opening.choices.hint": "선택지는 플레이 화면 툴바의 '오프닝 선택'에 들어가며, 고르면 입력창에 채워져요. 하나 이상 적어 주세요.",
   "editor.opening.switched.toPage": "첫 페이지로 바꾸면 저장할 때 첫 메시지가 삭제돼요. 되돌리면 그대로 남아요.",
   "editor.opening.switched.toPageWithAlternates": "첫 페이지로 바꾸면 저장할 때 첫 메시지와 대체 도입부 {n}개가 삭제돼요. 되돌리면 그대로 남아요.",
   "editor.opening.switched.toGreeting": "첫 메시지로 바꾸면 저장할 때 페이지 내용이 삭제돼요. 되돌리면 그대로 남아요.",

@@ -4631,7 +4631,7 @@
   "editor.opening.suggest": "Suggested first lines",
   "editor.opening.suggest.hint": "These lines appear below the opening message, and tapping one fills the input box.",
   "editor.opening.choices": "First-line choices",
-  "editor.opening.choices.hint": "Choices appear below the page and send right away when tapped; add at least one.",
+  "editor.opening.choices.hint": "Choices sit under Choose an opening in the play toolbar, and a pick fills the message box; add at least one.",
   "editor.opening.switched.toPage": "With the opening page, the opening message is removed when you save. Switch back to keep it.",
   "editor.opening.switched.toPageWithAlternates": "With the opening page, the opening message and alternate openings ({n}) are removed when you save. Switch back to keep them.",
   "editor.opening.switched.toGreeting": "With the opening message, the page content is removed when you save. Switch back to keep it.",

@@ -4631,7 +4631,7 @@
   "editor.opening.suggest": "建議的第一句",
   "editor.opening.suggest.hint": "這些句子顯示在開場白下方，玩家點了會填進輸入框。",
   "editor.opening.choices": "第一句選項",
-  "editor.opening.choices.hint": "選項顯示在網頁下方，玩家點了就直接送出，至少要填一個。",
+  "editor.opening.choices.hint": "選項收在遊玩頁工具列的「選擇開場」裡，玩家挑一條會填進輸入框，至少要填一個。",
   "editor.opening.switched.toPage": "改用開場網頁後，開場白會在儲存時移除，切回來就會還原。",
   "editor.opening.switched.toPageWithAlternates": "改用開場網頁後，開場白與 {n} 段備選開場白會在儲存時移除，切回來就會還原。",
   "editor.opening.switched.toGreeting": "改用開場白後，網頁內容會在儲存時移除，切回來就會還原。",
