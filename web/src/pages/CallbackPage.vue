@@ -27,7 +27,7 @@ onMounted(async () => {
     const { token, returnTo, provider, linkFrom } = completed;
     if(linkFrom)throw new Error('auth_reauthorization_required');
     setProvider(provider); useProviderUpstream();
-    await session.adopt(token);
+    await session.adoptFromCallback(token,completed.silent===true);
     track(completed.silent ? "login_silent" : "login_done");
     void recordGa4Login(() => session.accessToken());
     // 用 replace：回上一頁不該再回到帶著授權碼的網址。

@@ -12,7 +12,8 @@ const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_SILENT_ENABLED:'true
   AUTH_METRICS_SECRET: 'metrics-test-only', ...envOverride });
 // 預設模擬沒設固定客戶端的自架部署（動態註冊路徑）；固定客戶端的測試自己設。
 let envOverride: Record<string, string> = {HARBOR_CLIENT_ID:''};
-const context = { waitUntil: (_p: Promise<unknown>) => {}, passThroughOnException() {} } as ExecutionContext;
+let background: Promise<unknown>[] | undefined;
+const context = { waitUntil: (p: Promise<unknown>) => { background?.push(p); }, passThroughOnException() {} } as ExecutionContext;
 let cookies: Record<string, string> = {};
 function cookieHeader() { return Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; '); }
 async function request(path: string, body?: unknown, extra: Record<string,string> = {}) {
@@ -27,7 +28,7 @@ async function request(path: string, body?: unknown, extra: Record<string,string
   return response;
 }
 beforeEach(async()=>{ await resetDb(); cookies={}; envOverride={HARBOR_CLIENT_ID:''}; });
-afterEach(()=>vi.restoreAllMocks());
+afterEach(()=>{ background=undefined; vi.restoreAllMocks(); });
 
 it('adds exact pro auth origins without replacing the existing allowlist or CSRF checks', async()=>{
   envOverride.AUTH_ADDITIONAL_ORIGINS='https://sukisuki.pro,https://www.sukisuki.pro,https://play.sukisuki.pro';
@@ -92,6 +93,30 @@ async function login(provider:string,id:number,linkFrom?:string){
 async function connection(path:string,provider:string,token:string,choice={}){
   return worker.fetch(new Request(origin+'/v1/me/connections'+path,{method:'POST',headers:{Origin:origin,Cookie:cookieHeader(),'X-Hearthroom-Request':'1','X-Provider':'harbor','Content-Type':'application/json'},body:JSON.stringify({provider,token,...choice})}),authEnv(),context);
 }
+it('counts managed interactive success and silent miss by UI locale and edge country', async()=>{
+  providers();
+  background=[];
+  const headers={'CF-IPCountry':'HK','language':'en'};
+  const start=await request('start',{provider:'harbor',locale:'zh-Hant'},headers);
+  const state=new URL((await start.json() as {url:string}).url).searchParams.get('state');
+  expect((await request('complete',{state,code:'42'},headers)).status).toBe(200);
+  expect((await request('session',{provider:'harbor',firstEntry:'interactive'},{...headers,language:'zh-Hant'})).status).toBe(200);
+  expect((await request('session',{provider:'harbor'},headers)).status).toBe(200);
+  const silent=await request('start',{provider:'harbor',silent:true,locale:'ja'},headers);
+  const silentState=new URL((await silent.json() as {url:string}).url).searchParams.get('state');
+  expect(await (await request('complete',{state:silentState,error:'login_required'},headers)).json())
+    .toMatchObject({authenticated:false});
+  await Promise.all(background);
+
+  const metrics=await (await worker.fetch(new Request(origin+'/metrics'),authEnv(),context)).text();
+  expect(metrics).toContain('auth_funnel_attempts_total{step="hearthroom_start",mode="interactive",app="hearthroom",locale="zh-Hant",country="HK",result="ok",code="none"} 1');
+  expect(metrics).toContain('auth_funnel_attempts_total{step="hearthroom_callback",mode="interactive",app="hearthroom",locale="zh-Hant",country="HK",result="ok",code="none"} 1');
+  expect(metrics).toContain('auth_funnel_attempts_total{step="hearthroom_session",mode="interactive",app="hearthroom",locale="zh-Hant",country="HK",result="ok",code="none"} 1');
+  expect(metrics).toContain('auth_funnel_attempts_total{step="hearthroom_callback",mode="silent",app="hearthroom",locale="ja",country="HK",result="fail",code="login_required"} 1');
+  expect(metrics).toContain('auth_funnel_attempts_total{step="hearthroom_first_entry",mode="interactive",app="hearthroom",locale="zh-Hant",country="HK",result="ok",code="none"} 1');
+  expect(metrics).not.toContain(silentState);
+});
+
 it('requests prompt=none with the existing PKCE, state and return path',async()=>{
   providers();
   const response=await request('start',{provider:'harbor',silent:true,returnTo:'/en/cards/123?x=y#last'});

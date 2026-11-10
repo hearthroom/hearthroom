@@ -3,6 +3,7 @@ import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { Hono, type Context } from 'hono';
 import type { Pending } from './analytics';
 import { getCookie, setCookie } from 'hono/cookie';
+import { countAuthStep, type AuthFunnelDimensions } from './auth-funnel';
 import { bodyLimit } from 'hono/body-limit';
 import { HttpError, type Env } from './types';
 import { apiBaseOf, parseProvider, requireConfigured, type ProviderId } from './providers';
@@ -13,7 +14,7 @@ import { upstream } from './upstream';
 import routeManifest from '../android/routes.json';
 
 /** Token-mediating backend. Only short-lived access tokens cross the browser boundary. */
-type AuthContext={Bindings:Env;Variables:{ev:Pending}};
+type AuthContext={Bindings:Env;Variables:{ev:Pending;authFunnel:AuthFunnelDimensions;authFunnelError:string;authFunnelSession:boolean}};
 type C = Context<AuthContext>;
 const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY, SESSION_TOUCH=DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
@@ -435,6 +436,37 @@ accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
   // another tab prepared a transfer while this session response was in flight.
   return c.json({ok:true,returnTo:row.return_to});
 });
+accountAuthRoutes.use('/v1/auth/start',async(c,next)=>{
+  const body=await authBody(c);
+  await next();
+  c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_start',
+    {mode:body.silent===true?'silent':'interactive',locale:body.locale},c.req.raw,authFunnelError(c)));
+});
+accountAuthRoutes.use('/v1/auth/complete',async(c,next)=>{
+  await next();
+  const dimensions=c.get('authFunnel')??{mode:'unknown',locale:undefined};
+  const error=authFunnelError(c);
+  if(c.get('authFunnelSession')){
+    c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_callback',dimensions,c.req.raw));
+    c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_session',dimensions,c.req.raw,error));
+  }else{
+    c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_callback',dimensions,c.req.raw,error));
+  }
+});
+accountAuthRoutes.use('/v1/auth/session',async(c,next)=>{
+  await next();
+  const firstEntry=c.get('authFunnel');
+  if(firstEntry)c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_first_entry',firstEntry,c.req.raw,authFunnelError(c)));
+});
+function authFunnelError(c:C):string|undefined{
+  if(c.error instanceof HttpError){
+    if(c.error.message==='unknown provider')return 'provider_unsupported';
+    if(c.error.message==='provider not configured')return 'provider_not_configured';
+    return c.error.message;
+  }
+  if(c.error)return 'auth_provider_unavailable';
+  return c.get('authFunnelError')??(c.res.status>=400?'other_error':undefined);
+}
 accountAuthRoutes.post('/v1/auth/start',async c=>{
   const body=await authBody(c),provider=providerOf(body.provider,c.env),origin=originOf(c);
   if(body.linkFrom)throw new HttpError(410,'service_retired');
@@ -457,11 +489,13 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
   if(typeof body.state!=='string'||body.state.length>128)throw new HttpError(400,'auth_state_invalid');
   const a=await attemptFor(c,body.state);
   const flow=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
+  c.set('authFunnel',{mode:flow.silent?'silent':'interactive',locale:flow.locale});
   if(body.error!==undefined){
     if(!flow.silent||typeof body.error!=='string'||!SILENT_ERRORS.has(body.error)||body.code!==undefined)throw new HttpError(400,'auth_state_invalid');
     const ended=await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase='code' AND expires_at>? RETURNING state_hash").bind(a.state_hash,Date.now()).first();
     if(!ended)throw new HttpError(400,'auth_state_invalid');
     writeCookie(c,FLOW,'',0);
+    c.set('authFunnelError',body.error);
     await metric(c.env,'silent','site',body.error);
     return c.json({silent:true,authenticated:false,error:body.error,returnTo:flow.returnTo});
   }
@@ -469,6 +503,7 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
   const consumed=await c.env.DB.prepare("UPDATE account_auth_attempts SET phase='exchanging' WHERE state_hash=? AND phase='code' RETURNING state_hash").bind(a.state_hash).first();
   if(!consumed)throw new HttpError(400,'auth_state_invalid');
   const pair=await exchange(c.env,a.provider,flow.clientId,{grant_type:'authorization_code',code:body.code,redirect_uri:flow.redirectUri,code_verifier:flow.verifier});
+  c.set('authFunnelSession',true);
   const stored=await c.env.DB.prepare("UPDATE account_auth_attempts SET payload=? WHERE state_hash=? AND phase='exchanging' RETURNING state_hash").bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair}),a.state_hash).first();
   if(!stored){await queueRevocation(c.env,a.provider,pair,a.state_hash);throw new HttpError(400,'auth_state_invalid');}
   const me=await upstream.fetchMe(c.env,pair.accessToken,a.provider);
@@ -490,6 +525,7 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
       await queueRevocation(c.env,a.provider,pair,a.state_hash);
       await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase='exchanging'").bind(a.state_hash).run();
       writeCookie(c,FLOW,'',0);
+      c.set('authFunnelError','consent_required');
       await metric(c.env,'silent','site','consent_required');
       return c.json({silent:true,authenticated:false,error:'consent_required',returnTo:flow.returnTo});
     }
@@ -532,7 +568,7 @@ accountAuthRoutes.post('/v1/auth/commit',async c=>{
   if(a.phase!=='committed')throw new HttpError(409,'auth_confirmation_required');
   writeCookie(c,FLOW,'',0);return c.json({ok:true});
 });
-async function cancelAttempt(c:C,logout=false){
+async function cancelAttempt(c:C,logout=false,callbackError?:string){
   const browser=getCookie(c,FLOW);
   if(browser){
     // Fence first and retain the encrypted snapshot until revocation is durably queued.
@@ -541,13 +577,17 @@ async function cancelAttempt(c:C,logout=false){
       const f=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
       if(f.pair&&a.phase==='cancelled')await queueRevocation(c.env,a.provider,f.pair,a.state_hash);
       if(logout&&f.resultSession)await c.env.DB.prepare('DELETE FROM account_sessions WHERE token_hash=?').bind(f.resultSession).run();
-      await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase IN ('closed','cancelled')").bind(a.state_hash).run();
+      const ended=await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase IN ('closed','cancelled')").bind(a.state_hash).run();
+      if(callbackError&&ended.meta.changes===1)c.executionCtx.waitUntil(countAuthStep(c.env,'hearthroom_callback',
+        {mode:f.silent?'silent':'interactive',locale:f.locale},c.req.raw,callbackError));
     }
   }
   writeCookie(c,FLOW,'',0);
 }
 accountAuthRoutes.post('/v1/auth/cancel',async c=>{
-  await cancelAttempt(c);return c.json({ok:true});
+  const {callbackError}=await authBody(c);
+  await cancelAttempt(c,false,typeof callbackError==='string'?(callbackError==='access_denied'?callbackError:'other_error'):undefined);
+  return c.json({ok:true});
 });
 /**
  * 遊客的成人內容開關，對應成員的 /v1/me/settings 那一段。沒帶 showNsfw 就只回現況。
@@ -594,6 +634,9 @@ async function issueToken(c:C,session:Session,provider:ProviderId,externalId:num
 accountAuthRoutes.post('/v1/auth/session',async c=>{
   const started=Date.now(),phases:string[]=[];
   const session=(await readSession(c))!,body=await authBody(c);
+  if(body.firstEntry==='interactive'||body.firstEntry==='silent'){
+    c.set('authFunnel',{mode:body.firstEntry,locale:c.req.header('language')});
+  }
   phases.push(`session;dur=${Date.now()-started}`);
   // 前端要求時把授權一起帶回：開頁本來是 session 回來才去要 token，兩趟往返串在一起。
   // 換不到授權（供應商那邊斷了）不影響本站 session，token 就是 null，前端照舊處理。
