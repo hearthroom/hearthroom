@@ -113,14 +113,17 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
       </span>
       </div>
       <!--
-        左上一列：目前名次（只有榜單頁）或關注動態的事件類別在最前，接著榜單榮譽徽章（日→週→月）。
-        和右上的 R 方塊同高、同一個頂邊距，中心在同一條線上；不換行
+        左上先放目前名次或關注動態的事件類別，再按日、週、月排列榜單榮譽。
+        手機用單列圖示，寬版封面的級距標籤可另起一列。
       -->
       <div v-if="rank || (event && !rank) || honors.length" class="card__marks">
         <!-- 關注動態不排名，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
         <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
         <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
-        <RankBadge v-for="honor in honors" :key="honor.window" :honor="honor" class="card__honor" />
+        <span v-for="honor in honors" :key="honor.window" class="card__honor-mark" :class="{ 'card__honor-mark--tier': honor.band !== 1 }">
+          <RankBadge :honor="honor" class="card__honor" />
+          <span v-if="honor.band !== 1" class="card__honor-tier" aria-hidden="true">{{ t('honor.badgeLabel', { window: t(`honor.window.${honor.window}`), band: t(`honor.band.${honor.band}`) }) }}</span>
+        </span>
       </div>
     </div>
 
@@ -197,6 +200,28 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 .card__rank { flex: none; box-sizing: border-box; min-width: var(--mark-h); height: var(--mark-h); padding: 0 4px; margin-right: 2.5px; font-size: 11px; }
 /* 榜單徽章是固定彩色圖示（不隨主題），輕陰影讓它在任何封面圖上都看得見 */
 .card__honor { --rank-badge-h: var(--mark-h); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
+.card__honor-mark { display: flex; align-items: center; flex: none; }
+.card__honor-tier { display: none; }
+
+@media (min-width: 761px) {
+  @container (min-width: 151px) {
+    .card__marks:has(.card__honor-mark--tier) {
+      right: var(--mark-in); height: auto; flex-wrap: wrap; gap: var(--s-1);
+    }
+    .card__flag ~ .card__marks:has(.card__honor-mark--tier) {
+      right: calc(2 * var(--mark-in) + var(--mark-h));
+    }
+    .card__honor-mark--tier {
+      height: var(--mark-h); gap: var(--s-1); padding-inline: var(--s-1) var(--s-2);
+      border-radius: var(--r-pill); background: var(--surface-2); color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+    .card__honor-mark--tier .card__honor {
+      --rank-badge-h: 18px; --rank-badge-words: none; filter: none;
+    }
+    .card__honor-tier { display: block; font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
+  }
+}
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
 .card__corner {

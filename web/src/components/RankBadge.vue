@@ -34,7 +34,7 @@ const label = computed(() => honorName(t, props.honor));
       <path v-else-if="honor.window === 'week'" d="M16 2 29 6.5V18c0 9-6.5 14.5-13 16.5C9.5 32.5 3 27 3 18V6.5Z" />
       <path v-else d="M16 2l13.5 7.5v17L16 34 2.5 26.5v-17Z" />
     </g>
-    <g :fill="clean ? color : '#fff'" text-anchor="middle" font-weight="800">
+    <g class="rank-badge__words" :fill="clean ? color : '#fff'" text-anchor="middle" font-weight="800">
       <template v-if="honor.band === 1">
         <text x="16" y="17.6" font-size="11">{{ t(`honor.short.${honor.window}`) }}</text>
         <text x="16" y="27.1" font-size="8.8">1</text>
@@ -50,6 +50,7 @@ const label = computed(() => honorName(t, props.honor));
 <style scoped>
 .rank-badge { display: block; flex: none; height: var(--rank-badge-h, 26px); width: calc(var(--rank-badge-h, 26px) * 32 / 36); overflow: visible; }
 .rank-badge text { font-family: var(--font); }
+.rank-badge__words { display: var(--rank-badge-words, inline); }
 .rank-badge__tier { letter-spacing: -0.2px; }
 .rank-badge__period:lang(en), .rank-badge__tier:lang(en) { font-size: 7px; }
 .rank-badge__tier:lang(zh) { font-size: 9px; }

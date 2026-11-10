@@ -43,16 +43,19 @@ describe("cover honors", () => {
   });
 
   it.each([
-    ["zh-Hant", "週", "週榜", "前三", "前十"],
-    ["zh-Hans", "周", "周榜", "前三", "前十"],
-    ["en", "W", "Week", "Top 3", "Top 10"],
-    ["ja", "週", "週間", "3位内", "10位内"],
-    ["ko", "주", "주간", "상위 3", "상위 10"],
-  ] as const)("renders all three visible badge tiers in %s", async (locale, shortPeriod, period, top3, top10) => {
+    ["zh-Hant", "週", "週榜", "前三", "前十", "週榜前三", "週榜前十"],
+    ["zh-Hans", "周", "周榜", "前三", "前十", "周榜前三", "周榜前十"],
+    ["en", "W", "Week", "Top 3", "Top 10", "Weekly Top 3", "Weekly Top 10"],
+    ["ja", "週", "週間", "3位内", "10位内", "週間トップ3", "週間トップ10"],
+    ["ko", "주", "주간", "상위 3", "상위 10", "주간 3위 이내", "주간 10위 이내"],
+  ] as const)("renders all three badge tiers in %s", async (locale, shortPeriod, period, top3, top10, label3, label10) => {
     await applyLocale(locale);
-    for (const [band, expected] of [[1, [shortPeriod, "1"]], [3, [period, top3]], [10, [period, top10]]] as const) {
+    for (const [band, expected, label] of [[1, [shortPeriod, "1"], undefined], [3, [period, top3], label3], [10, [period, top10], label10]] as const) {
       const root = await mount({ honors: [{ zone: "clean", window: "week", band }] });
       expect([...root.querySelectorAll(".card__honor text")].map(line => line.textContent)).toEqual(expected);
+      const tier = root.querySelector(".card__honor-tier");
+      expect(tier?.textContent).toBe(label);
+      if (tier) expect(tier.getAttribute("aria-hidden")).toBe("true");
       app?.unmount();
       root.remove();
       app = null;
