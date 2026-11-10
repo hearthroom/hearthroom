@@ -2611,5 +2611,5 @@
   "d6e1c0a7b3f21": "作者選的開局呈現：`greeting`（開場白開啟對話；點選開場選項會填進輸入框）或 `page`（玩家從開場網頁與選項開局；點選選項會直接當作玩家的第一則訊息送出，開場白可以空白）。一定會出現；未設定時為 `greeting`。",
   "d2b9f4e81c7a0": "開局呈現，`greeting` 或 `page`（見回應）。沒有鍵或 `null` 保留已存的值；第一次儲存時，`cardFormat` 為 `fengyue` 預設 `page`，其餘預設 `greeting`。未知的值會被拒絕（`validate_reject` 原因 `openingMode`）。",
   "d7a3c5e0f9b12": "開局呈現，與正式卡的 `openingMode` 相同；沒有鍵保留已存的值。未知的值回 `trial_unsupported`。",
-  "ded388e1e0453": "這條規則替換內容裡 `<style>` 的寫法：`fengyue`（AI 風月的 CSS：它聊天頁的元素 id 對到聊天頁的對應元素，它本來就不生效的規則（`body`、`html`、`:root`）丟掉，按鈕只保留上色，去掉 `!important`，結果放在自己的一層，高於平台預設、低於作者其他所有樣式）、`tavern`（每條選擇器前接 `.mes_text `）或 `mmd`（照寫的生效）。省略時照 `cardFormat`。同一張卡可以有不同值的規則。"
+  "ded388e1e0453": "這條規則替換內容裡 `<style>` 的寫法：`fengyue`（AI 風月的 CSS：它聊天頁的元素 id 對到聊天頁的對應元素，它本來就不生效的規則（`body`、`html`、`:root`）丟掉，按鈕不套位置、尺寸、顯示方式、變形與外距，去掉 `!important`，結果放在自己的一層，高於平台預設、低於作者其他所有樣式）、`tavern`（每條選擇器前接 `.mes_text `）或 `mmd`（照寫的生效）。省略時照 `cardFormat`。同一張卡可以有不同值的規則。"
 }

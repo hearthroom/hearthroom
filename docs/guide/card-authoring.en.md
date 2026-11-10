@@ -74,7 +74,7 @@ A rule with `<style>` can set **CSS written for** to say how that CSS is written
 | Value | How it applies |
 |---|---|
 | Default | Follows where the card came from: Tavern imports behave as Tavern, everything else as MMD. |
-| AI Fengyue | CSS written for the Fengyue chat page. Fengyue chat elements (such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button`) map onto the bubbles, input box and send button here; rules starting with `.dark` apply in dark mode; `body`, `html` and `:root` rules do nothing (they do nothing on Fengyue either); buttons keep colour, border and shadow only; `!important` is removed. Built-in CSS imported from AI Fengyue uses this value automatically. |
+| AI Fengyue | CSS written for the Fengyue chat page. Fengyue chat elements (such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button`) map onto the bubbles, input box and send button here; rules starting with `.dark` apply in dark mode; `body`, `html` and `:root` rules do nothing (they do nothing on Fengyue either); buttons drop position, size, display, transform and margin; `!important` is removed. Built-in CSS imported from AI Fengyue uses this value automatically. |
 | Tavern | Every selector is prefixed with `.mes_text `, so it applies inside messages only. |
 | MMD | Applies as written. |
 

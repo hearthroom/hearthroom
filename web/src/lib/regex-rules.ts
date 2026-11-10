@@ -25,6 +25,8 @@ export const ruleTargets = (rule: Pick<RegexRule, "targets">): RegexMessageTarge
  */
 export const CSS_DIALECTS = ["fengyue", "tavern", "mmd"] as const;
 export type CssDialect = (typeof CSS_DIALECTS)[number];
+/** 風月匯入器產生的內置 CSS 規則 id（fengyue.ts 的 FENGYUE_CSS_RULE_ID，畫布同一個值）。 */
+const LEGACY_FENGYUE_CSS_RULE_ID = "hearthroom-fengyue-inner-css";
 export const cssDialectFrom = (v: unknown): CssDialect | undefined => (CSS_DIALECTS as readonly string[]).includes(String(v)) ? (v as CssDialect) : undefined;
 
 export interface RegexRule {
@@ -268,7 +270,11 @@ export function rulesFromTavern(scripts: unknown): RegexRule[] {
   return (scripts as TavernRegexScript[])
     .filter((s) => s && typeof s === "object" && text(s.findRegex))
     .filter((s) => Array.isArray(s.targets) || targetsFromTavern(s)?.length !== 0)
-    .map((s, i) => makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true, targets: targetsFromTavern(s) }));
+    .map((s, i) => {
+      // 我們自己的匯出檔帶著 cssDialect；別家的檔沒有這個欄位。
+      const cssDialect = cssDialectFrom(s.cssDialect);
+      return makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true, targets: targetsFromTavern(s), ...(cssDialect ? { cssDialect } : {}) });
+    });
 }
 
 /** 魅魔島自家「導出正則」列表（或 API 回包的 data）：條目是 { regex, content, name }。 */
@@ -292,7 +298,7 @@ export function rulesFromMeimoList(items: unknown): RegexRule[] {
 }
 
 export function rulesToTavern(rules: RegexRule[]): TavernRegexScript[] {
-  return rules.map((r, i) => ({ id: i + 1, scriptName: r.name, findRegex: r.find, replaceString: r.replace, disabled: !r.enabled, ...(r.targets ? { targets: r.targets, placement: r.targets.filter(t => t !== "system").map(t => t === "user" ? 1 : 2) } : {}) }));
+  return rules.map((r, i) => ({ id: i + 1, scriptName: r.name, findRegex: r.find, replaceString: r.replace, disabled: !r.enabled, ...(r.targets ? { targets: r.targets, placement: r.targets.filter(t => t !== "system").map(t => t === "user" ? 1 : 2) } : {}), ...(r.cssDialect ? { cssDialect: r.cssDialect } : {}) }));
 }
 
 /** 魅魔島的匯出檔。`beginning` 是第一句話（開場白），跟規則分開回給呼叫端決定要不要蓋。 */
@@ -311,7 +317,8 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])
     .filter((r) => r && typeof r === "object" && text(r.find))
     .map((r) => {
-      const cssDialect = cssDialectFrom(r.cssDialect);
+      // 這個欄位出現前匯入的風月內置 CSS（固定 id、沒標）畫布當風月寫法；編輯器照實顯示，存檔時補上。
+      const cssDialect = cssDialectFrom(r.cssDialect) ?? (text(r.id) === LEGACY_FENGYUE_CSS_RULE_ID ? "fengyue" : undefined);
       return { id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: r.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v)) } : {}), ...(cssDialect ? { cssDialect } : {}) };
     });
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };

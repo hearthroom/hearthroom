@@ -16778,7 +16778,7 @@
               "tavern",
               "mmd"
             ],
-            "description": "How the `<style>` in this rule's replacement is written: `fengyue` (AI Fengyue CSS: its chat-element ids are mapped onto the chat page, rules it never applies (`body`, `html`, `:root`) are dropped, buttons keep colour only, `!important` is removed, and the result sits in its own layer above the platform defaults and below every other author style), `tavern` (each selector prefixed with `.mes_text `) or `mmd` (applied as written). Omitted follows `cardFormat`. Rules with different values can live on one card."
+            "description": "How the `<style>` in this rule's replacement is written: `fengyue` (AI Fengyue CSS: its chat-element ids are mapped onto the chat page, rules it never applies (`body`, `html`, `:root`) are dropped, buttons drop position, size, display, transform and margin, `!important` is removed, and the result sits in its own layer above the platform defaults and below every other author style), `tavern` (each selector prefixed with `.mes_text `) or `mmd` (applied as written). Omitted follows `cardFormat`. Rules with different values can live on one card."
           }
         }
       },

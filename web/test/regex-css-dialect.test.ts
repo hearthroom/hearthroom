@@ -51,3 +51,11 @@ it('the editor shows the CSS dialect only for rules with styles, and saves the c
   expect(saved?.rules[1].cssDialect).toBe('fengyue');
   expect('cssDialect' in (saved?.rules[0] ?? {})).toBe(false);
 });
+
+it('the legacy Fengyue CSS rule reads as Fengyue CSS; export and re-import keep the dialect', async () => {
+  const { rulesToTavern, rulesFromTavern } = await import('../src/lib/regex-rules');
+  const set = ruleSetFromAuthorAsset({ rules: [{ id: 'hearthroom-fengyue-inner-css', name: 'css', find: '/([\\s\\S])$/', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true }] });
+  expect(set.rules[0].cssDialect).toBe('fengyue');
+  const back = rulesFromTavern(rulesToTavern(set.rules));
+  expect(back[0].cssDialect).toBe('fengyue');
+});

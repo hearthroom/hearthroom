@@ -74,7 +74,7 @@
 | 写法 | 应用方式 |
 |---|---|
 | 默认 | 依卡片来源：酒馆导入的卡同「酒馆」，其他同「MMD」。 |
-| AI 风月 | 写给风月聊天页的样式。风月界面元素（如 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button`）对应到本站的气泡、输入框与发送键；`.dark` 开头的规则在深色模式生效；`body`、`html`、`:root` 规则不生效（在风月也不生效）；按钮类只应用颜色、边框与阴影；`!important` 会移除。从 AI 风月导入的内置 CSS 自动使用这个写法。 |
+| AI 风月 | 写给风月聊天页的样式。风月界面元素（如 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button`）对应到本站的气泡、输入框与发送键；`.dark` 开头的规则在深色模式生效；`body`、`html`、`:root` 规则不生效（在风月也不生效）；按钮类不应用位置、尺寸、显示方式、变形与外边距；`!important` 会移除。从 AI 风月导入的内置 CSS 自动使用这个写法。 |
 | 酒馆 | 每个选择器前加上 `.mes_text `，只作用在消息内。 |
 | MMD | 照写的生效。 |
 
