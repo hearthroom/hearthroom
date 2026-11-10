@@ -879,10 +879,12 @@ app.get("/v1/me/cards", async (c) => {
   const numbers = await ensureCardNumbers(c.env.DB, numbered);
   const nums = [...new Set(numbers.values())];
   const unreadComments = new Map<number, number>();
-  if (nums.length) {
+  const memberId = nums.length ? await connectedMemberId(c.env.DB, provider, me.accountNumId) : null;
+  if (memberId) {
     const rows = await c.env.DB.prepare(
-      `SELECT card_id, CAST(json_extract(extra, '$.count') AS INTEGER) AS n FROM community_notifications WHERE event_key IN (${nums.map(() => "?").join(",")}) AND read_at IS NULL`,
-    ).bind(...nums.map((n) => `card_comments:${n}`)).all<{ card_id: number; n: number }>();
+      `SELECT card_id, CAST(json_extract(extra, '$.count') AS INTEGER) AS n FROM community_notifications
+       WHERE event_key IN (SELECT value FROM json_each(?)) AND member_id=? AND read_at IS NULL`,
+    ).bind(JSON.stringify(nums.map((n) => `card_comments:${n}`)), memberId).all<{ card_id: number; n: number }>();
     for (const r of rows.results) if (r.n > 0) unreadComments.set(Number(r.card_id), r.n);
   }
   const items = body.items.map((item, i) => {

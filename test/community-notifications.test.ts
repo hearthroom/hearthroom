@@ -254,3 +254,22 @@ it('aggregates new card comments into one silent digest per card and clears it w
  expect(stored[0].read_at).toBeNull();
  expect(JSON.parse(String(stored[0].extra)).count).toBe(1);
 });
+
+it('removes only comments counted in the unread digest, regardless of insert order', async () => {
+ const insert = (id: string, createdAt: number) => env.DB.prepare(
+  'INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES(?,?,?,?,?)',
+ ).bind(id, Number(cardId), fan, '一則評論', createdAt).run();
+ const count = async () => (await rows(author, 'card_comments')).results.map(row => JSON.parse(String(row.extra)).count);
+ await insert('first-committed', 200);
+ await insert('second-committed', 100);
+ expect(await count()).toEqual([2]);
+ await setPreferences(env as Env, author, { notifications: false });
+ await insert('excluded', 300);
+ await setPreferences(env as Env, author, { notifications: true });
+ expect((await SELF.fetch('https://c.test/v1/comments/excluded', { method: 'DELETE', headers: bearer('fan') })).status).toBe(204);
+ expect(await count()).toEqual([2]);
+ expect((await SELF.fetch('https://c.test/v1/comments/second-committed', { method: 'DELETE', headers: bearer('fan') })).status).toBe(204);
+ expect(await count()).toEqual([1]);
+ expect((await SELF.fetch('https://c.test/v1/comments/first-committed', { method: 'DELETE', headers: bearer('fan') })).status).toBe(204);
+ expect(await count()).toEqual([]);
+});

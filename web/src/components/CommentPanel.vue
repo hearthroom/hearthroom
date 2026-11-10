@@ -131,9 +131,8 @@ async function load(reset = false) {
               notices.unread = Math.max(0, notices.unread - 1);
             }
           }
-        } else {
-          void notices.refresh(locale.value);
         }
+        void notices.refresh(locale.value);
       }
     }
     emit("count", total.value);

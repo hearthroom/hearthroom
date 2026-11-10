@@ -268,12 +268,15 @@ it("clears cached newComments on /mine and marks the card's comment digest notic
   expect(notices.items[0]?.read_at).not.toBeNull();
   expect(notices.unread).toBe(0);
 
-  // 鈴鐺清單還沒展開過（loaded === false）：直接重抓未讀數摘要
-  app.unmount(); host.innerHTML = "";
-  notices.loaded = false;
-  notices.items = [];
-  notices.unread = 1;
   const refreshSpy = vi.spyOn(notices, "refresh").mockResolvedValue();
-  await mount({ cardId: "1", roleId: "r1" });
-  expect(refreshSpy).toHaveBeenCalledWith("zh-Hant");
+  // 清單未載入，或上次展開時還沒有這筆通知，都要用摘要更新鈴鐺。
+  for (const loaded of [false, true]) {
+    app.unmount(); host.innerHTML = "";
+    refreshSpy.mockClear();
+    notices.loaded = loaded;
+    notices.items = [];
+    notices.unread = 1;
+    await mount({ cardId: "1", roleId: "r1" });
+    expect(refreshSpy).toHaveBeenCalledWith("zh-Hant");
+  }
 });

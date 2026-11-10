@@ -2,12 +2,26 @@
 -- 同一張卡在作者未讀期間只維護一筆（event_key = card_comments:<card_id>），
 -- 只累加 count；已讀後若有新評論，從 1 重新計數。
 -- 用 IIF 不用 CASE：wrangler 的 migration 切割器靠 BEGIN／END 數深度，CASE 的 END 會把 trigger 切斷（見 0049）。
+-- 只保留目前未讀批次實際計入的評論，供刪除或審核移除時扣回。
+CREATE TABLE card_comment_digest_entries (
+ comment_id TEXT PRIMARY KEY,
+ event_key TEXT NOT NULL REFERENCES community_notifications(event_key) ON DELETE CASCADE
+);
+CREATE INDEX card_comment_digest_entries_event ON card_comment_digest_entries(event_key);
+
+CREATE TRIGGER community_card_comments_clear AFTER UPDATE OF read_at, member_id ON community_notifications
+WHEN OLD.kind = 'card_comments' AND OLD.read_at IS NULL
+ AND (NEW.read_at IS NOT NULL OR NEW.member_id <> OLD.member_id)
+BEGIN
+ DELETE FROM card_comment_digest_entries WHERE event_key=OLD.event_key;
+END;
+
 CREATE TRIGGER community_card_comments AFTER INSERT ON comments
 WHEN NEW.post_id IS NULL AND NEW.card_id > 0 AND NEW.status = 'visible' AND NEW.deleted_at IS NULL
 BEGIN
  INSERT INTO community_notifications(event_key,member_id,kind,path,created_at,actor_id,card_id,extra,delivered,push_at)
  SELECT 'card_comments:'||NEW.card_id,o.member_id,'card_comments','/cards/'||NEW.card_id||'#comments',NEW.created_at,NEW.member_id,NEW.card_id,
-  json_object('count',1,'since',NEW.created_at),1,NEW.created_at
+  json_object('count',1),1,NEW.created_at
  FROM (SELECT DISTINCT card_id,member_id FROM community_card_owners WHERE card_id=NEW.card_id AND member_id IS NOT NULL) o
  WHERE o.member_id<>NEW.member_id
  AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=o.member_id AND p.notifications=0)
@@ -19,10 +33,13 @@ BEGIN
   card_id=excluded.card_id,
   delivered=1,
   push_at=excluded.push_at,
-  extra=IIF(community_notifications.read_at IS NULL,
+  extra=IIF(community_notifications.read_at IS NULL AND community_notifications.member_id=excluded.member_id,
    json_set(community_notifications.extra,'$.count',COALESCE(json_extract(community_notifications.extra,'$.count'),0)+1),
    excluded.extra),
   read_at=NULL;
+ -- changes() 只在上面的 UPSERT 確實寫入彙總時大於零。
+ INSERT INTO card_comment_digest_entries(comment_id,event_key)
+ SELECT NEW.id,'card_comments:'||NEW.card_id WHERE changes()>0;
 END;
 
 CREATE TRIGGER community_card_comments_hide AFTER UPDATE OF status, deleted_at ON comments
@@ -30,12 +47,11 @@ WHEN OLD.post_id IS NULL AND OLD.card_id > 0 AND OLD.status = 'visible' AND OLD.
  AND (NEW.status <> 'visible' OR NEW.deleted_at IS NOT NULL)
 BEGIN
  DELETE FROM community_notifications
- WHERE event_key='card_comments:'||OLD.card_id AND read_at IS NULL AND member_id<>OLD.member_id
-  AND OLD.created_at>=COALESCE(json_extract(extra,'$.since'),0)
+ WHERE event_key=(SELECT event_key FROM card_comment_digest_entries WHERE comment_id=OLD.id) AND read_at IS NULL
   AND COALESCE(json_extract(extra,'$.count'),1)<=1;
  UPDATE community_notifications
  SET extra=json_set(extra,'$.count',json_extract(extra,'$.count')-1)
- WHERE event_key='card_comments:'||OLD.card_id AND read_at IS NULL AND member_id<>OLD.member_id
-  AND OLD.created_at>=COALESCE(json_extract(extra,'$.since'),0)
+ WHERE event_key=(SELECT event_key FROM card_comment_digest_entries WHERE comment_id=OLD.id) AND read_at IS NULL
   AND COALESCE(json_extract(extra,'$.count'),1)>1;
+ DELETE FROM card_comment_digest_entries WHERE comment_id=OLD.id;
 END;
