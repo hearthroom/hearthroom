@@ -32,7 +32,7 @@ import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
-import { OPENING_ALLOW, OPENING_SANDBOX, openingSrcdoc, parseOpeningMessage } from "stage-common/opening-page";
+import { OPENING_ALLOW, OPENING_SANDBOX, createFrameSizer, openingSrcdoc, parseOpeningMessage } from "stage-common/opening-page";
 import { openingModeOf, ruleSetFromAuthorAsset } from "@/lib/regex-rules";
 
 const route = useRoute();
@@ -148,14 +148,16 @@ const isOpeningPage = computed(() => {
 const openingPage = computed(() => data.value?.detail.authorAsset.openingPage ?? "");
 const openingDoc = computed(() => openingSrcdoc(openingPage.value));
 const openingFrame = ref<HTMLIFrameElement | null>(null);
-const openingFrameHeight = ref<number | null>(null);
-watch(openingPage, () => { openingFrameHeight.value = null; });
+// 跟遊玩頁同一套高度規則：框有上限，內容在框裡捲。照視窗寫的頁面（min-height:100vh、position:fixed）回報的高度
+// 會跟著框長，照回報撐開的話整頁會被拉到幾萬像素。審核頁沒有輸入列，上限取視窗高的八成，上下文仍看得到。
+const openingCap = () => Math.round(window.innerHeight * 0.8);
+let openingSizer = createFrameSizer(openingCap());
+const openingFrameHeight = ref(openingSizer.height);
+watch(openingPage, () => { openingSizer = createFrameSizer(openingCap()); openingFrameHeight.value = openingSizer.height; });
 function onOpeningMessage(event: MessageEvent) {
   if (!openingFrame.value || event.source !== openingFrame.value.contentWindow) return;
   const message = parseOpeningMessage(event.data);
-  if (message?.kind === "height" && message.height > 0) {
-    openingFrameHeight.value = Math.max(message.height, 40);
-  }
+  if (message?.kind === "height") openingFrameHeight.value = openingSizer.report(message.height);
 }
 onMounted(() => window.addEventListener("message", onOpeningMessage));
 onBeforeUnmount(() => window.removeEventListener("message", onOpeningMessage));
@@ -804,7 +806,7 @@ onMounted(() => { void load(); });
               :allow="OPENING_ALLOW"
               :srcdoc="openingDoc"
               :title="$t('editor.opening.page')"
-              :style="openingFrameHeight ? { height: `${openingFrameHeight}px` } : undefined"
+              :style="{ height: `${openingFrameHeight}px` }"
               data-opening-preview
             />
             <details class="opening-source" data-opening-source>

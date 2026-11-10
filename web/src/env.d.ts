@@ -132,6 +132,8 @@ declare module "stage-common/opening-page" {
     | { kind: "send"; text: string };
   export function openingSrcdoc(html: string): string;
   export function parseOpeningMessage(data: unknown): OpeningMessage | null;
+  /** 框的高度：一開始給上限，內容短就縮到內容高，照視窗寫的頁面固定在上限、在框裡捲。 */
+  export function createFrameSizer(cap: number): { readonly height: number; report(reported: number): number; setCap(nextCap: number): number };
 }
 declare module "stage-canvas/style-scope" {
   export type CardFormat = "mmd" | "tavern" | "fengyue";

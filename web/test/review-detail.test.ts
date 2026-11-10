@@ -641,6 +641,12 @@ it('shows the opening page preview and expandable source in Dialogue for an open
  expect(frame).toBeTruthy();
  expect(frame.getAttribute('sandbox')).toBe(OPENING_SANDBOX);
  expect(frame.getAttribute('srcdoc')).toBe(openingSrcdoc(html));
+ // 照視窗寫的頁面（min-height:100vh、position:fixed）回報的高度會跟著框長：框停在上限、在框裡捲，不撐開整頁
+ const cap=`${Math.round(window.innerHeight*0.8)}px`;
+ await vi.waitFor(()=>expect(frame.style.height).toBe(cap));
+ window.dispatchEvent(new MessageEvent('message',{data:{type:OPENING_MESSAGE_TYPE,kind:'height',height:20000},source:frame.contentWindow}));
+ await new Promise(r=>setTimeout(r,0));
+ expect(frame.style.height).toBe(cap);
  window.dispatchEvent(new MessageEvent('message',{data:{type:OPENING_MESSAGE_TYPE,kind:'height',height:520},source:frame.contentWindow}));
  await vi.waitFor(()=>expect(frame.style.height).toBe('520px'));
  const source=box.querySelector<HTMLDetailsElement>('[data-opening-source]')!;
