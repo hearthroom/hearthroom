@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "卡片的畫面沒載入時，現在會說明可能的原因，並可以點「重新載入畫面」再試一次。",
+    "zh-Hans": "卡片的画面没加载出来时，现在会说明可能的原因，并可以点「重新加载画面」再试一次。",
+    "en": "When a card's screen fails to load, the notice now says why and offers Reload screen to try again.",
+    "ja": "カードの画面が読み込めないとき、理由が表示され「画面を再読み込み」で再試行できます。",
+    "ko": "카드 화면을 불러오지 못하면 이유를 알려 주고 '화면 다시 불러오기'로 다시 시도할 수 있습니다."
+  }
+}
