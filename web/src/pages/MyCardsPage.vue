@@ -8,6 +8,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
 import MyCardTile from "@/components/MyCardTile.vue";
 import AgentOnboard from "@/components/AgentOnboard.vue";
+import AuthorDiscordEntry from "@/components/AuthorDiscordEntry.vue";
 import CreatorSeasonEntry from "@/components/CreatorSeasonEntry.vue";
 
 import { useSession } from "@/lib/session";
@@ -213,6 +214,7 @@ watch(()=>route.query.fresh, fresh=>{
         <RouterLink :to="lp('/create')" class="btn btn--primary head__create">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("mine.create") }}
         </RouterLink>
+        <AuthorDiscordEntry where="my-cards" class="head__discord" />
       </div>
     </header>
 
@@ -285,14 +287,18 @@ watch(()=>route.query.fresh, fresh=>{
 </template>
 
 <style scoped>
-/* ── 頁首：標題＋額度一塊、兩顆開始寫卡的鍵一塊；放不下時鍵換到下一列並撐滿 ── */
+/* ── 頁首：標題＋額度一塊、開始寫卡與作者 Discord 一塊；放不下時鍵換到下一列並撐滿 ── */
 .head {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
   gap: var(--s-3) var(--s-5); margin-bottom: var(--s-4);
 }
-.head__text { flex: 1 1 auto; min-width: 0; display: grid; gap: 6px; }
+.head__text { flex: 1 1 280px; min-width: 0; display: grid; gap: 6px; }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 0; }
-.head__actions { display: flex; align-items: center; gap: var(--s-2); flex: none; }
+.head__actions {
+  display: grid; grid-template-columns: 1fr auto; justify-content: end; justify-items: end;
+  align-items: center; gap: var(--s-2); flex: 0 1 auto; max-width: 520px; min-width: 0;
+}
+.head__discord { grid-column: 1 / -1; width: 100%; }
 .head__create { gap: 6px; padding-inline: var(--s-4) var(--s-5); }
 .head__create svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 /* 兩顆鍵一樣高：膠囊本身是 min-height，主鍵是 height */
@@ -351,8 +357,11 @@ watch(()=>route.query.fresh, fresh=>{
   .quota { grid-area: quota; margin-top: calc(-1 * var(--s-1)); }
   .head__create { grid-area: create; }
   .head__agent { grid-area: agent; display: flex; margin-top: var(--s-1); }
-  /* 創作季進行中：額度下面多一列，整列寬（沒有這一行時不留空列） */
+  .head__discord { grid-area: discord; }
+  /* 創作季進行中或有 Discord 入口：額度與按鈕下面各一列，整列寬（沒有時不留空列） */
   .head:has(.head__entry) { grid-template-areas: "title create" "quota quota" "entry entry" "agent agent"; }
+  .head:has(.head__discord) { grid-template-areas: "title create" "quota quota" "agent agent" "discord discord"; }
+  .head:has(.head__entry):has(.head__discord) { grid-template-areas: "title create" "quota quota" "entry entry" "agent agent" "discord discord"; }
   .head__entry { grid-area: entry; margin-top: calc(-1 * var(--s-1)); }
   .head__agent :deep(.onboard__pill) { flex: 1; justify-content: center; }
   .tools__search { flex: 1 1 100%; }

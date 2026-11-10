@@ -68,6 +68,7 @@ import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
+import AuthorDiscordEntry from "@/components/AuthorDiscordEntry.vue";
 import SharedStatePanel from "@/components/SharedStatePanel.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
@@ -1331,9 +1332,12 @@ async function exportCard(format: "png" | "json") {
 
   <div class="page editor layout" :style="layoutStyle">
     <header v-if="!phone || loading" class="head">
-      <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
-      <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-      <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
+      <div class="head__text">
+        <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+        <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
+        <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
+      </div>
+      <AuthorDiscordEntry v-if="!loading" where="editor" class="head__discord" />
     </header>
 
     <div v-if="loading" class="ghosts" aria-hidden="true">
@@ -1396,9 +1400,12 @@ async function exportCard(format: "png" | "json") {
         <!-- 手機：標題與送審字數放進表單裡，跟著捲走，上方只留分區籤（ui.md §2.1） -->
         <template v-if="phone">
           <header class="head head--inline">
-            <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
-            <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-            <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
+            <div class="head__text">
+              <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+              <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
+              <p v-if="isNew||workVisibility?.access==='public'" class="muted lede">{{ isNew?$t('editor.lede.new'):$t('workspace.editHint') }}</p>
+            </div>
+            <AuthorDiscordEntry where="editor" class="head__discord" />
           </header>
           <div v-if="reviewCount || lengthExempt" class="topbar__count topbar__count--inline" :class="{ 'is-met': Boolean(lengthExempt || reviewCount?.eligible) }" data-card-constant-count>
             <span v-if="reviewCount" class="topbar__total">{{ $t("reviewLength.constantTotal", reviewCount.n) }}</span>
@@ -1974,7 +1981,13 @@ async function exportCard(format: "png" | "json") {
 /* 作者工作區填滿實際頁首下方的可視高度，只有表單內容捲動。 */
 .editor { max-width: 1720px; width: 100%; height: 100%; min-height: 0; padding-bottom: 0; overflow: hidden; }
 /* 頁首只佔表單那一欄：右欄要從頁面最上緣開始，不然手機框整條被壓到標題底下 */
-.head { grid-column: 1; }
+.head {
+  grid-column: 1; display: flex; flex-wrap: wrap; align-items: flex-start;
+  justify-content: space-between; gap: var(--s-2) var(--s-4);
+}
+.head__text { flex: 1 1 280px; min-width: 0; }
+.head__discord { flex: 0 1 460px; min-width: 0; }
+.head--inline .head__discord { flex: 1 1 100%; }
 h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .lede { margin: 0; max-width: 52ch; }
 .ghosts { grid-column: 1 / -1; display: grid; gap: var(--s-4); }

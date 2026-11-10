@@ -4675,5 +4675,7 @@
   "editor.state.preview.empty": "No panel skin, so the chat page shows no panel",
   "editor.state.template.example": "Use sample skin",
   "editor.opening.suggest.add": "Add a line",
-  "editor.opening.choices.add": "Add a choice"
+  "editor.opening.choices.add": "Add a choice",
+  "authorDiscord.label": "Author Discord",
+  "authorDiscord.hint": "You can find card-writing resources, talk with other authors, and report issues to the team."
 }

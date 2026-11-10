@@ -4675,5 +4675,7 @@
   "editor.state.preview.empty": "패널 스킨이 없어서 대화 화면에 패널이 나오지 않아요",
   "editor.state.template.example": "예시 스킨 쓰기",
   "editor.opening.suggest.add": "첫마디 추가",
-  "editor.opening.choices.add": "선택지 추가"
+  "editor.opening.choices.add": "선택지 추가",
+  "authorDiscord.label": "작가 Discord",
+  "authorDiscord.hint": "Discord에서 카드 제작 자료를 찾고 다른 작가와 교류하며, 문제가 생기면 운영팀에 바로 제보할 수 있어요."
 }

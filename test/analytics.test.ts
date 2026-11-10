@@ -355,6 +355,13 @@ describe("欄位過濾", () => {
     expect(safeSubject("3")).toBe("3");
   });
 
+  it("作者 Discord 入口沿用 cta + discord，subject 標出 my-cards 與 editor", () => {
+    expect(BEACON_EVENTS.has("cta")).toBe(true);
+    expect(BEACON_DETAILS.has("discord")).toBe(true);
+    expect(safeSubject("my-cards")).toBe("my-cards");
+    expect(safeSubject("editor")).toBe("editor");
+  });
+
   it("認得抓取器", () => {
     expect(clientKind("Discordbot/2.0")).toBe("bot");
     expect(clientKind("Mozilla/5.0 (Macintosh)")).toBe("server");

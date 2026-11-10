@@ -4675,5 +4675,7 @@
   "editor.state.preview.empty": "沒有面板皮膚，對話頁不顯示面板",
   "editor.state.template.example": "用範例皮膚",
   "editor.opening.suggest.add": "加一句建議",
-  "editor.opening.choices.add": "加一個選項"
+  "editor.opening.choices.add": "加一個選項",
+  "authorDiscord.label": "作者 Discord",
+  "authorDiscord.hint": "你可以在裡面找寫卡資源、和其他作者交流，遇到問題也能直接向官方回報。"
 }
