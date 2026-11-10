@@ -219,7 +219,8 @@ function onKeydown(event: KeyboardEvent) {
               <input id="wbd-name" class="input" :value="entry.name" :maxlength="NAME_MAX"
                      :placeholder="$t('wb.entry.name.placeholder')"
                      @input="patch({ name: ($event.target as HTMLInputElement).value })" />
-              <span v-if="typeof entry.activationCount === 'number'" class="subtle">
+              <!-- Harbor uses 0 as a placeholder when activation statistics are unavailable. -->
+              <span v-if="typeof entry.activationCount === 'number' && entry.activationCount > 0" class="subtle">
                 {{ $t("wb.entry.activations", { n: entry.activationCount }) }}
               </span>
             </div>

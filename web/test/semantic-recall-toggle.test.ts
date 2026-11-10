@@ -21,3 +21,27 @@ it("defaults on, changes the state explanation, and remains editable for constan
   expect(document.querySelector("#wbd-semantic-hint")?.textContent).toContain("Always-on entries are sent every turn");
   toggle().click();await nextTick();expect(entries.value[0].semanticRecall).toBe(true);
 });
+
+it("shows observed activation counts and hides the Harbor zero placeholder", async () => {
+  await loadLocale("en");
+  i18n.global.locale.value = "en";
+  const entry: WorldbookEntryDraft = { name: "Archive", content: "Check the index.", keywords: ["archive"], isEnabled: true, isConstant: true };
+  const entries = ref<WorldbookEntryDraft[]>([{ ...entry, activationCount: 0 }]);
+  app = createApp({ render: () => h(WorldbookEntriesDialog, { modelValue: entries.value, language: "en" }) });
+  const root = document.createElement("div");
+  document.body.append(root);
+  app.use(i18n).mount(root);
+  await nextTick();
+
+  const nameField = document.querySelector("#wbd-name")?.closest(".field");
+  expect(nameField).not.toBeNull();
+  expect(nameField?.textContent).not.toContain(i18n.global.t("wb.entry.activations", { n: 0 }));
+
+  entries.value = [{ ...entry, activationCount: 7 }];
+  await nextTick();
+  expect(nameField?.textContent).toContain(i18n.global.t("wb.entry.activations", { n: 7 }));
+
+  entries.value = [entry];
+  await nextTick();
+  expect(nameField?.querySelector(".subtle")).toBeNull();
+});
