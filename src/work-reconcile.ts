@@ -12,16 +12,16 @@ import {refreshWorkAccess} from './work-refresh';
 // Bounded recovery of persisted intent. No identity or bearer is stored. A lost
 // author command is read back, but never newly authorized by the scheduler.
 export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:number;pending:number}>{
- const rows=await env.DB.prepare(`SELECT p.work_id AS work_id,p.provider,p.source_role_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,p.reconcile_at AS due,0 AS prepare_only
+ const rows=await env.DB.prepare(`SELECT p.work_id AS work_id,p.provider,p.source_role_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,o.state AS operation_state,p.reconcile_at AS due,0 AS prepare_only
  FROM managed_work_access p LEFT JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
  WHERE (p.sync_state='changing' AND NOT EXISTS(SELECT 1 FROM author_visibility_operations a WHERE a.work_id=p.work_id AND a.provider_operation_id=p.sync_operation_id AND a.state='conflict')) OR p.moderation_revision>p.confirmed_moderation_revision
  UNION ALL
- SELECT p.work_id AS work_id,p.provider,p.source_role_id,o.operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,o.updated_at AS due,1 AS prepare_only
+ SELECT p.work_id AS work_id,p.provider,p.source_role_id,o.operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id,o.state,o.updated_at AS due,1 AS prepare_only
  FROM visibility_operations o JOIN managed_work_access p ON p.work_id=o.work_id
  WHERE o.state IN ('intent','pending') AND json_extract(o.command,'$.action')='prepare' AND p.sync_state='complete'
  AND p.moderation_revision=p.confirmed_moderation_revision AND p.sync_operation_id IS NOT o.operation_id
  ORDER BY due,work_id LIMIT ?`)
- .bind(Math.max(1,Math.min(10,limit))).all<{work_id:string;provider:ProviderId;source_role_id:string;sync_operation_id:string;moderation_revision:number;confirmed_moderation_revision:number;command:string|null;root_operation_id:string|null;prepare_only:number}>();
+ .bind(Math.max(1,Math.min(10,limit))).all<{work_id:string;provider:ProviderId;source_role_id:string;sync_operation_id:string;moderation_revision:number;confirmed_moderation_revision:number;command:string|null;root_operation_id:string|null;operation_state:string|null;prepare_only:number}>();
  let complete=0,pending=0;
  for(const row of rows.results){
   try{
@@ -57,6 +57,11 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
     if(!row.command||!row.root_operation_id)throw new HttpError(503,'visibility_sync_pending');
     const command=JSON.parse(row.command) as WorkPolicyCommand;
     if(command.action==='bind'){
+     if(row.operation_state==='conflict'){
+      const refreshed=await refreshWorkAccess(env,1,[],[row.work_id]);
+      if(!refreshed.complete&&!refreshed.pending)throw new HttpError(409,'visibility_operation_conflict');
+      complete+=refreshed.complete;pending+=refreshed.pending;continue;
+     }
      const receipt=await runWorkPolicyOperation(env,row.provider,row.source_role_id,command);
      await projectWorkReceipt(env,row.provider,receipt,undefined,'bind');
     }else if(command.action==='prepare'){

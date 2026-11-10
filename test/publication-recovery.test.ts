@@ -1,21 +1,121 @@
-import {env,SELF} from 'cloudflare:test';
+import {createExecutionContext,env,SELF,waitOnExecutionContext} from 'cloudflare:test';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {resetDb,makeMember,role,GENERAL_RATING} from './helpers';
 import {beginHostedEdit,submitHosted,hostGateway} from '../src/hosting';
-import {workPolicyGateway,type WorkPolicyReceipt} from '../src/work-policy';
+import {enrollWorkAccess,policyOperationId,workPolicyGateway,workPolicyIntentStatement,type WorkPolicyReceipt} from '../src/work-policy';
+import {refreshWorkAccess} from '../src/work-refresh';
+import {reconcileWorkAccess} from '../src/work-reconcile';
+import {getCard,upsertCard} from '../src/cards';
+import {currentCardAccess} from '../src/work-read';
+import {HttpError} from '../src/types';
 import {opsMetrics} from '../src/ops-metrics';
 import {upstream} from '../src/upstream';
+import worker from '../src/index';
 
 beforeEach(resetDb);afterEach(()=>vi.restoreAllMocks());
-async function orphan(){
+async function orphan(approvedRole?:string){
  const memberId=await makeMember(10001),draft=role({roleId:'orphan-fixture',authorNumId:10001});
  const work=crypto.randomUUID(),version=crypto.randomUUID(),operation=crypto.randomUUID(),permit=crypto.randomUUID();
  await env.DB.prepare('INSERT INTO works VALUES(?,?,?,?,?)').bind(work,memberId,'harbor',draft.roleId,Date.now()).run();
+ if(approvedRole){
+  await upsertCard(env.DB,draft,Date.now(),{status:'approved'});
+  await env.DB.prepare('UPDATE cards SET approved_hosted_role_id=? WHERE source_role_id=?').bind(approvedRole,draft.roleId).run();
+ }
  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction) VALUES(?,'harbor',?,'public',3,'none')").bind(work,draft.roleId).run();
  await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at) VALUES(?,?,?,?,?,'harbor','G',?,?)").bind(version,work,memberId,operation,draft.roleId,JSON.stringify(GENERAL_RATING.answers),Date.now()-86400000).run();
  await env.DB.prepare("INSERT INTO work_publication_permits(version_id,operation_id,epoch,state) VALUES(?,?,3,'prepared')").bind(version,permit).run();
  return {memberId,draft,work,version,operation,permit};
 }
+
+async function refusedSubmissionBind(hasApprovedCard=true){
+ const approvedRole=hasApprovedCard?'approved-fixture':undefined;
+ const x=await orphan(approvedRole);
+ const bind=await policyOperationId('submission-enroll:'+x.version);
+ const revision='fixture-provider-revision';
+ const access=hasApprovedCard?'public':'unlisted';
+ const command={workId:x.work,operationId:bind,expectedEpoch:0,expectedOwnerRevision:revision,action:'bind',access} as const;
+ await env.DB.prepare("DELETE FROM work_publication_permits WHERE version_id=?").bind(x.version).run();
+ await env.DB.prepare("UPDATE hosting_versions SET state='cancelling',visibility_consent=? WHERE version_id=?")
+  .bind(JSON.stringify({providerEpoch:0,providerRevision:revision,initialAccess:access}),x.version).run();
+ await env.DB.prepare("UPDATE managed_work_access SET access=?,epoch=0,sync_state='changing',sync_operation_id=? WHERE work_id=?").bind(access,bind,x.work).run();
+ await (await workPolicyIntentStatement(env,'harbor',x.draft.roleId,command)).run();
+ await env.DB.prepare("UPDATE visibility_operations SET state='conflict' WHERE operation_id=?").bind(bind).run();
+ const readReceipt=vi.spyOn(workPolicyGateway,'operation').mockResolvedValue(null);
+ const change=vi.spyOn(workPolicyGateway,'change').mockRejectedValue(new HttpError(409,'visibility_operation_conflict'));
+ vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+  expect(String(input)).toMatch(/\/work-access\/batch$/);
+  const {items}=JSON.parse(String(init?.body));
+  return Response.json({items:items.map((item:object)=>({...item,managed:false,epoch:0,access:'',restriction:'',
+   targetReadable:false,listed:false,shareRoleId:'',approvedRoleId:''}))});
+ });
+ return {...x,bind,approvedRole,readReceipt,change,environment:{...env,HOSTING_SERVICE_KEY:'fixture-issuer'}};
+}
+
+it.each(['author edit','list recovery','scheduled reconciliation'])('retires the refused submission bind through %s without replaying it',async entry=>{
+ const x=await refusedSubmissionBind();
+ const oldCard=(await getCard(env.DB,x.draft.roleId,'harbor'))!;
+ await expect(currentCardAccess(x.environment,oldCard)).rejects.toMatchObject({status:503,message:'visibility_sync_pending'});
+ if(entry==='author edit')await beginHostedEdit(env.DB,x.memberId,x.draft.roleId,Date.now(),'harbor',x.environment);
+ else if(entry==='scheduled reconciliation')expect(await reconcileWorkAccess(x.environment,1)).toEqual({complete:1,pending:0});
+ else {
+  vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:10001});
+  vi.spyOn(upstream,'fetchMyRoles').mockResolvedValue({items:[{roleId:x.draft.roleId,name:'Draft',summary:'',
+   avatarUrl:null,backgroundUrl:null,zone:'all',visibility:'unlisted',talkNum:0}],total:1,hasNext:false});
+  vi.spyOn(workPolicyGateway,'owners').mockResolvedValue([{sourceRoleId:x.draft.roleId,
+   workId:'00000000-0000-0000-0000-000000000000',operationId:'',managed:false,access:'unlisted',epoch:0,restriction:'none',
+   state:'complete',replayed:false,approvedRoleId:'',policyRevision:'fixture-provider-revision',approvalRevision:'fixture-approval',
+   revisionState:'unknown',restorable:false,restoreReason:'not_approved',providerRestriction:'none'}]);
+  const context=createExecutionContext();
+  const res=await worker.fetch(new Request('https://c.test/v1/me/cards?page=1&pageSize=2',{headers:{Authorization:'Bearer fixture'}}),
+   {...x.environment,WORK_SHARING_ENABLED:'true'},context);
+  await waitOnExecutionContext(context);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({items:[{roleId:x.draft.roleId,workVisibility:{access:'public',syncState:'complete'}}]});
+ }
+ expect(x.change).not.toHaveBeenCalled();
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'superseded'});
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT state FROM visibility_operations WHERE operation_id=?').bind(x.bind).first()).toEqual({state:'conflict'});
+ expect(await env.DB.prepare('SELECT status,approved_hosted_role_id FROM cards WHERE source_role_id=?').bind(x.draft.roleId).first())
+  .toEqual({status:'approved',approved_hosted_role_id:x.approvedRole});
+ expect(await currentCardAccess(x.environment,oldCard)).toMatchObject({reachable:true,shareRoleId:x.approvedRole});
+ expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM review_submissions').first()).toEqual({n:0});
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_publication_recovery_total{operation="cancel",outcome="complete"} 1');
+ await expect(submitHosted(x.environment,{memberId:x.memberId,account:10001,role:x.draft,token:'fixture',rating:GENERAL_RATING,operationId:x.operation,now:Date.now()}))
+  .rejects.toMatchObject({status:409,message:'hosting_operation_conflict'});
+ await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,created_at) VALUES(?,?,?,?,?,'harbor',?)")
+  .bind(crypto.randomUUID(),x.work,x.memberId,crypto.randomUUID(),x.draft.roleId,Date.now()).run();
+});
+
+it('releases a refused first submission before there is a community card row',async()=>{
+ const x=await refusedSubmissionBind(false);
+ expect(await reconcileWorkAccess(x.environment,1)).toEqual({complete:1,pending:0});
+ expect(await getCard(env.DB,x.draft.roleId,'harbor')).toBeNull();
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'superseded'});
+ expect(x.change).not.toHaveBeenCalled();
+});
+
+it('does not recreate a retired fence when an older submit reaches enrollment late',async()=>{
+ const x=await refusedSubmissionBind();
+ expect(await refreshWorkAccess(x.environment,1,[],[x.work])).toEqual({complete:1,pending:0});
+ await expect(enrollWorkAccess(x.environment,{memberId:x.memberId,roleId:x.draft.roleId,operationId:x.bind,
+  access:'public',token:'fixture',expectedOwnerRevision:'fixture-provider-revision',preparationId:x.version})).rejects.toMatchObject({status:409});
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toBeNull();
+ expect(x.change).not.toHaveBeenCalled();
+});
+
+it.each(['receipt','unknown receipt','different operation'])('preserves the refused submission fence with %s',async evidence=>{
+ const x=await refusedSubmissionBind();
+ if(evidence==='receipt')x.readReceipt.mockResolvedValue({sourceRoleId:x.draft.roleId,workId:x.work,operationId:x.bind,
+  access:'public',restriction:'none',epoch:1,state:'complete',replayed:true});
+ else if(evidence==='unknown receipt')x.readReceipt.mockRejectedValue(new Error('receipt read unavailable'));
+ else await env.DB.prepare('UPDATE hosting_versions SET version_id=? WHERE version_id=?').bind(crypto.randomUUID(),x.version).run();
+ expect(await refreshWorkAccess(x.environment,1,[],[x.work])).toEqual({complete:0,pending:1});
+ expect(x.change).not.toHaveBeenCalled();
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toEqual({epoch:0});
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE work_id=?').bind(x.work).first()).toEqual({state:'cancelling'});
+});
 it('retires an unsubmitted preparation only after canonical cancellation, then rejects its late resurrection',async()=>{
  const x=await orphan();let epoch=3;const receipts=new Map<string,WorkPolicyReceipt>();let lose=true;
  const change=vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,c)=>{

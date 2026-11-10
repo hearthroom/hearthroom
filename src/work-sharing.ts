@@ -108,7 +108,7 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string):Promi
   const local=prior.get(source);
   if(!local)return [];
   // A refused first bind can leave the author's list fenced until maintenance.
-  // Recovery still requires both terminal conflicts, unmanaged authority and no receipt.
+  // Recovery still requires a terminal refusal, unmanaged authority and no receipt.
   const firstBindUnconfirmed=local.epoch===0&&local.sync_state==='changing'&&!provider[i].managed;
   return firstBindUnconfirmed||savedEpochAdvanced(provider[i],local)?[local.work_id]:[];
  });

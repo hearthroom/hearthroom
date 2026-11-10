@@ -174,7 +174,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(consent){
   if(version.visibility_consent!==JSON.stringify(consent))throw new HttpError(409,'visibility_operation_conflict');
   if(consent.providerEpoch===0){
-   const receipt=await enrollWorkAccess(env,{memberId:input.memberId,roleId:input.role.roleId,operationId:await policyOperationId('submission-enroll:'+version.version_id),access:consent.initialAccess,token:input.token,provider,expectedOwnerRevision:consent.providerRevision});
+   const receipt=await enrollWorkAccess(env,{memberId:input.memberId,roleId:input.role.roleId,operationId:await policyOperationId('submission-enroll:'+version.version_id),
+    access:consent.initialAccess,token:input.token,provider,expectedOwnerRevision:consent.providerRevision,preparationId:version.version_id});
    const current=await workPolicyGateway.owner(env,provider,input.role.roleId,input.token,true);
    if(current.epoch!==receipt.epoch||current.workId!==work.id||current.access!==consent.initialAccess)throw new HttpError(409,'visibility_operation_conflict');
    const next={...consent,providerEpoch:receipt.epoch,providerRevision:current.policyRevision};

@@ -2,6 +2,7 @@ import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
 import {managedWork,policyOperationId,projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,workPolicyIntentStatement,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkRestriction} from './work-policy';
+import {refreshWorkAccess} from './work-refresh';
 
 interface PendingPermit {operation_id:string;version_id:string;submission_id:string}
 export async function fenceManagedWork(env:Env,provider:ProviderId,source:string,identity:string,action:'cancel'|'restrict'|'private'|'unlisted'|'restore',options:{token?:string;restriction?:WorkRestriction;rootOperation?:string;moderationRevision?:number;publicationVersion?:string}={}):Promise<WorkPolicyReceipt|null>{
@@ -93,10 +94,16 @@ async function retireUnsubmittedPreparations(env:Env,provider:ProviderId,source:
    if(managed?.epoch===0){
     // Only recover the already-authorized bind for this work; never enroll a
     // new intent or clean up another work as a side effect of this edit.
-    const bind=await db.prepare('SELECT command FROM visibility_operations WHERE work_id=? AND operation_id=?')
-     .bind(version.work_id,managed.sync_operation_id).first<{command:string}>();
+    const bind=await db.prepare('SELECT command,state FROM visibility_operations WHERE work_id=? AND operation_id=?')
+     .bind(version.work_id,managed.sync_operation_id).first<{command:string;state:string}>();
     const command=bind?JSON.parse(bind.command) as WorkPolicyCommand:null;
     if(!command||command.action!=='bind')throw new HttpError(503,'visibility_sync_pending');
+    if(bind?.state==='conflict'){
+     await refreshWorkAccess(env,1,[],[version.work_id]);
+     const retired=await db.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(version.version_id).first<{state:string}>();
+     if(retired?.state==='superseded')continue;
+     throw new HttpError(409,'visibility_operation_conflict');
+    }
     const receipt=await runWorkPolicyOperation(env,provider,source,command);
     await projectWorkReceipt(env,provider,receipt,undefined,'bind');
     managed=await managedWork(db,provider,source);

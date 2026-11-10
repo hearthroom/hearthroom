@@ -143,7 +143,7 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
   return receipt;
  }catch(error){
   const conflict=error instanceof HttpError&&error.status===409;
-  await db.prepare('UPDATE visibility_operations SET state=?,updated_at=? WHERE work_id=? AND operation_id=? AND state<>\'complete\'')
+  await db.prepare("UPDATE visibility_operations SET state=?,updated_at=? WHERE work_id=? AND operation_id=? AND state IN ('intent','pending')")
    .bind(conflict?'conflict':'pending',Date.now(),command.workId,command.operationId).run();
   await bumpOp(db,'work_access',command.action,conflict?'conflict':'pending');
   if(conflict)throw error;
@@ -174,7 +174,7 @@ export async function projectWorkReceipt(env:Env,provider:ProviderId,receipt:Wor
 
 // Enrollment is internal and opt-in. It derives lineage/approval from issuer
 // records; the initial access is the authenticated author's requested setting.
-export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:string;operationId:string;access:WorkAccess;token:string;provider?:ProviderId;expectedOwnerRevision?:string}):Promise<WorkPolicyReceipt>{
+export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:string;operationId:string;access:WorkAccess;token:string;provider?:ProviderId;expectedOwnerRevision?:string;preparationId?:string}):Promise<WorkPolicyReceipt>{
  const provider=input.provider??'harbor';const db=env.DB;
  const work=await db.prepare('SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?').bind(provider,input.roleId).first<{id:string;member_id:string}>();
  if(!work)throw new HttpError(404,'card_not_found');if(work.member_id!==input.memberId)throw new HttpError(403,'not_the_author');
@@ -189,8 +189,15 @@ export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:str
  if(saved&&(saved.action!=='bind'||saved.access!==input.access))throw new HttpError(409,'visibility_operation_conflict');
  // Mark the work managed before sending bind. Otherwise a legacy reviewer can
  // publish while the remote result is unknown and D1 has no policy row yet.
+ // A terminal bind can never acquire a new fence, even if recovery retired
+ // its old fence while this request was reading the saved operation.
  await db.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id)
- VALUES(?,?,?,?,0,?,?,'changing',?)`).bind(work.id,provider,input.roleId,input.access,command.restriction,card?.approved_hosted_role_id??null,input.operationId).run();
+ SELECT ?,?,?,?,0,?,?,'changing',?
+ WHERE NOT EXISTS(SELECT 1 FROM visibility_operations WHERE work_id=? AND operation_id=? AND state='conflict')
+ AND (? IS NULL OR EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND work_id=?
+  AND state IN ('preparing','failed') AND submission_id IS NULL))`)
+ .bind(work.id,provider,input.roleId,input.access,command.restriction,card?.approved_hosted_role_id??null,input.operationId,
+  work.id,input.operationId,input.preparationId??null,input.preparationId??null,work.id).run();
  const fence=await managedWork(db,provider,input.roleId);
  if(!fence||fence.epoch!==0||fence.sync_state!=='changing'||fence.sync_operation_id!==input.operationId){
   // Exact completed replay may return its receipt; it cannot project over a
