@@ -611,6 +611,7 @@ export interface ReviewDetail {
     authorAsset: {
       rules: { id: string; name: string; find: string; replace: string; enabled: boolean }[];
       mountTrigger: string; mountLayer: string; pageMode: string; status: string; version: number;
+      cardFormat?: string;
       /** 首屏網頁（作者 HTML，開新對話時畫布最上方）；沒有就不帶。 */
       openingPage?: string;
       /** 開局呈現：只在跟卡片格式的預設不同時才帶（見 card-transfer-resources）。 */

@@ -32,6 +32,8 @@ import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
+import { OPENING_ALLOW, OPENING_SANDBOX, openingSrcdoc, parseOpeningMessage } from "stage-common/opening-page";
+import { openingModeOf, ruleSetFromAuthorAsset } from "@/lib/regex-rules";
 
 const route = useRoute();
 const router = useRouter();
@@ -139,6 +141,24 @@ async function loadOriginality() {
 }
 
 const doc = computed(() => data.value?.detail.document);
+const isOpeningPage = computed(() => {
+  const asset = data.value?.detail.authorAsset;
+  return !!asset && openingModeOf(ruleSetFromAuthorAsset(asset)) === "page";
+});
+const openingPage = computed(() => data.value?.detail.authorAsset.openingPage ?? "");
+const openingDoc = computed(() => openingSrcdoc(openingPage.value));
+const openingFrame = ref<HTMLIFrameElement | null>(null);
+const openingFrameHeight = ref<number | null>(null);
+watch(openingPage, () => { openingFrameHeight.value = null; });
+function onOpeningMessage(event: MessageEvent) {
+  if (!openingFrame.value || event.source !== openingFrame.value.contentWindow) return;
+  const message = parseOpeningMessage(event.data);
+  if (message?.kind === "height" && message.height > 0) {
+    openingFrameHeight.value = Math.max(message.height, 40);
+  }
+}
+onMounted(() => window.addEventListener("message", onOpeningMessage));
+onBeforeUnmount(() => window.removeEventListener("message", onOpeningMessage));
 // 對話示例入庫是一串 JSON，作者在編輯頁看到的是一輪一輪的「誰說、說什麼」；審核頁照編輯頁的樣子畫，不倒原始字串。
 const talkTurns = computed(() => readTalkExample(doc.value?.talkExample));
 const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
@@ -774,7 +794,27 @@ onMounted(() => { void load(); });
       </section>
 
       <section v-show="section === 'dialogue'" class="pane panel">
-        <div class="field"><label>{{ $t("editor.welcome") }}</label><pre class="text mono">{{ data.detail.greetings.welcome }}</pre></div>
+        <div v-if="isOpeningPage" class="field" data-opening-page>
+          <label>{{ $t("editor.opening.page") }}</label>
+          <template v-if="openingPage.trim()">
+            <iframe
+              ref="openingFrame"
+              class="opening-frame"
+              :sandbox="OPENING_SANDBOX"
+              :allow="OPENING_ALLOW"
+              :srcdoc="openingDoc"
+              :title="$t('editor.opening.page')"
+              :style="openingFrameHeight ? { height: `${openingFrameHeight}px` } : undefined"
+              data-opening-preview
+            />
+            <details class="opening-source" data-opening-source>
+              <summary>{{ $t("review.openingPage.source", { n: [...openingPage].length }) }}</summary>
+              <pre class="entry__body mono">{{ openingPage }}</pre>
+            </details>
+          </template>
+          <p v-else class="subtle">{{ $t("editor.opening.page.empty") }}</p>
+        </div>
+        <div v-if="!isOpeningPage || data.detail.greetings.welcome" class="field"><label>{{ $t("editor.welcome") }}</label><pre class="text mono">{{ data.detail.greetings.welcome }}</pre></div>
         <div v-if="data.detail.greetings.alternates.length" class="field">
           <label>{{ $t("editor.alternates") }}</label>
           <pre v-for="(a, i) in data.detail.greetings.alternates" :key="i" class="text mono">{{ a }}</pre>
@@ -833,8 +873,12 @@ onMounted(() => { void load(); });
           <label>{{ $t("review.mount") }}</label>
           <input class="input" :value="`${data.detail.authorAsset.mountTrigger} · ${data.detail.authorAsset.mountLayer} · ${data.detail.authorAsset.pageMode}`" readonly />
         </div>
-        <!-- 首屏網頁：每次開新對話都會出現在畫布最上方的作者網頁，審核要看得到原文；效果直接去試玩看 -->
-        <details v-if="data.detail.authorAsset.openingPage" class="field">
+        <!-- 開場網頁：開局形式是開場網頁時，預覽與原文在「對話」分頁，這裡只給跳過去的連結，不重複放大段原文 -->
+        <p v-if="isOpeningPage && data.detail.authorAsset.openingPage" class="field subtle opening-ref">
+          <span>{{ $t("review.openingPage", { n: [...data.detail.authorAsset.openingPage].length }) }}</span>
+          <button type="button" class="link opening-ref__link" data-opening-page-link @click="section = 'dialogue'">{{ $t("review.openingPage.inDialogue") }}</button>
+        </p>
+        <details v-else-if="data.detail.authorAsset.openingPage" class="field">
           <summary>{{ $t("review.openingPage", { n: [...data.detail.authorAsset.openingPage].length }) }}</summary>
           <pre class="entry__body">{{ data.detail.authorAsset.openingPage }}</pre>
         </details>
@@ -1027,6 +1071,12 @@ onMounted(() => { void load(); });
 .entry--off { opacity: 0.6; }
 .entry__head { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-2); }
 .entry__body { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+.opening-frame { display: block; width: 100%; height: 320px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.opening-source { margin-top: var(--s-2); }
+.opening-source > summary { cursor: pointer; font-size: 13px; color: var(--text-2); padding: var(--s-1) 0; }
+.opening-source[open] > summary { margin-bottom: var(--s-2); }
+.opening-ref { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+.opening-ref__link { min-height: var(--h-sm); padding: 0; border: 0; background: transparent; font: inherit; color: var(--accent-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .length-values { display:flex; flex-wrap:wrap; gap:var(--s-2) var(--s-4); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 :lang(ko) .length-values { word-break:keep-all; }
 /* 達標與否一眼分得出：未達標用跟清單字數 chip 同一個警示色，達標用成功色；狀態仍是文字 */

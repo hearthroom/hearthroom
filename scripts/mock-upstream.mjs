@@ -42,6 +42,22 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/img/")) { const n = parseInt(path.slice(5), 10); if (!path.endsWith(".png")) { res.writeHead(200, { "content-type": "application/octet-stream", "access-control-allow-origin": "*" }); return res.end(Buffer.alloc(16)); } res.writeHead(200, { "content-type": "image/svg+xml", "access-control-allow-origin": "*" }); return res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768"><rect width="100%" height="100%" fill="hsl(${(n * 47) % 360} 60% 70%)"/><text x="50%" y="50%" font-size="64" text-anchor="middle" fill="#fff">${n}</text></svg>`); }
   // 角色詳情是公開讀接口：Worker 登記時不帶 token 去讀它，放在鑑權前面
   if (path === "/open/v1/role/detail") { const r = roles.get(url.searchParams.get("roleId")); return r ? json(res, 200, { ...r, talkExample: JSON.stringify(r.talkExample ?? []) }) : json(res, 404, { error: "not_found" }); }
+  if (m === "GET" && (mm = path.match(/^\/open\/v1\/hosting\/revisions\/([^/]+)\/review$/))) {
+    const rid = decodeURIComponent(mm[1]), r = roles.get(rid);
+    if (!r) return json(res, 404, { error: "not_found" });
+    const q = encodeURIComponent(rid), bIds = bindings.get(rid) ?? [], a = regex.get(rid);
+    const responses = {
+      [`/role/detail?roleId=${q}`]: { ...r, roleDetailDesc: r.roleDetailDesc ?? "", talkExample: JSON.stringify(r.talkExample ?? []) },
+      [`/worldbook/bindings?roleId=${q}`]: { bindings: bIds.map((b) => books.get(b)).filter(Boolean) },
+      ...(a ? { [`/role/author-asset?roleId=${q}`]: a } : {}),
+    };
+    for (const bid of bIds) {
+      const bq = encodeURIComponent(bid), b = books.get(bid);
+      if (b) responses[`/worldbook/detail?worldbookId=${bq}`] = b;
+      responses[`/worldbook/entry/list?worldbookId=${bq}`] = { list: (entries.get(bid) ?? []).map((e, i) => ({ ...e, keywords: JSON.stringify(e.keywords ?? []), secondaryKeywords: JSON.stringify(e.secondaryKeywords ?? []), activationCount: i * 3 })) };
+    }
+    return json(res, 200, { responses });
+  }
   // 應用獎勵：公開方案免登入，其餘要 token；情境切換見 mock-rewards.mjs 開頭
   if (path === "/__rewards" || /^\/open\/v1\/apps\/[^/]+\/rewards\/plan$/.test(path)) { await handleRewards({ m, path, url, body, json, res }); return; }
   // 月卡：方案清單免登入、情境切換見 mock-plans.mjs 開頭
@@ -59,17 +75,17 @@ http.createServer(async (req, res) => {
   ] });
   // 作者資產（正則規則 + 功能欄）：形狀照 server 的 authorAssetResponse
   if (m === "GET" && path === "/open/v1/role/author-asset") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, a ?? { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 }); }
-  if (m === "PUT" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/author-asset$/))) { const cur = regex.get(mm[1]); const have = cur ? cur.version : 0; if ((body.version ?? 0) !== have) return json(res, 409, { error: "version_conflict" }); if (!["under", "over", "cover", ""].includes(body.mountLayer ?? "")) return json(res, 400, { error: "validate_reject" }); const a = { rules: body.rules ?? [], mountTrigger: body.mountTrigger ?? "", mountLayer: body.mountLayer || "over", pageMode: body.pageMode || "classic", status: "passed", version: have + 1 }; regex.set(mm[1], a); return json(res, 200, a); }
+  if (m === "PUT" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/author-asset$/))) { const cur = regex.get(mm[1]); const have = cur ? cur.version : 0; if ((body.version ?? 0) !== have) return json(res, 409, { error: "version_conflict" }); if (!["under", "over", "cover", ""].includes(body.mountLayer ?? "")) return json(res, 400, { error: "validate_reject" }); const a = { rules: body.rules ?? [], mountTrigger: body.mountTrigger ?? "", mountLayer: body.mountLayer || "over", pageMode: body.pageMode || "classic", ...(body.cardFormat ? { cardFormat: body.cardFormat } : {}), ...(body.openingPage ? { openingPage: body.openingPage } : {}), ...(body.openingMode ? { openingMode: body.openingMode } : {}), status: "passed", version: have + 1 }; regex.set(mm[1], a); return json(res, 200, a); }
   // ── 舞台（Moonstage）在本機也能開：模型清單讀 fixtures/models.json（本機合成目錄），其餘給最小形狀 ──
   if (path === "/open/v1/models") { const f = pathMod.join(CARDS, "models.json"); return fs.existsSync(f) ? (res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" }), res.end(fs.readFileSync(f))) : json(res, 200, []); }
   if (path === "/open/v1/player/role-settings") return json(res, 200, { roleId: url.searchParams.get("roleId"), context: 1, selectModel: "kiro-claude-sonnet-4-5-ripple", selectModelName: "kiro-claude-sonnet-4-5-ripple", thinkingDepth: "", userName: "", userSex: "", userDefine: "", sandboxLevel: "", autoCompactEnabled: true, permanentMemory: false, multiPassEnabled: false, showAll: false, backgroundUrl: "" });
   if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
   if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
-  if (path === "/open/v1/role/author-asset/serve") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, { rules: a?.rules ?? [], mountTrigger: a?.mountTrigger ?? "", mountLayer: a?.mountLayer ?? "", pageMode: sandboxAll ? "sandbox" : a?.pageMode ?? "classic", status: a ? "passed" : "none", version: a?.version ?? 0, variants: {} }); }
+  if (path === "/open/v1/role/author-asset/serve") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, { rules: a?.rules ?? [], mountTrigger: a?.mountTrigger ?? "", mountLayer: a?.mountLayer ?? "", pageMode: sandboxAll ? "sandbox" : a?.pageMode ?? "classic", ...(a?.cardFormat ? { cardFormat: a.cardFormat } : {}), ...(a?.openingPage ? { openingPage: a.openingPage } : {}), ...(a?.openingMode ? { openingMode: a.openingMode } : {}), status: a ? "passed" : "none", version: a?.version ?? 0, variants: {} }); }
   // 畫布一開就讀的兩支：真上游都有（沒存過就回空的），這裡沒接的話畫布會彈「操作未完成」
   if (m === "GET" && path === "/open/v1/player/preference") return json(res, 200, { prefs: {} });
   if (m === "GET" && path === "/open/v1/player/conversation-persona") return json(res, 200, { userName: "", userSex: "", userDefine: "", exists: false });
-  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
+  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome ?? "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "", roleWelcome: r.roleWelcome ?? "" }, historyConversation: null }); }
   if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
   if (path === "/open/v1/conversation/notepad") return json(res, 200, { content: "", maxLength: 10000 });

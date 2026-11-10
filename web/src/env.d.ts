@@ -123,7 +123,15 @@ declare module "stage-canvas/rule-engine-core" {
 }
 /** 開場網頁（作者資產 openingPage）在畫布裡的 srcdoc：白底、hearthroom.fill／send 橋接。 */
 declare module "stage-common/opening-page" {
+  export const OPENING_MESSAGE_TYPE: string;
+  export const OPENING_SANDBOX: string;
+  export const OPENING_ALLOW: string;
+  export type OpeningMessage =
+    | { kind: "height"; height: number }
+    | { kind: "fill"; text: string }
+    | { kind: "send"; text: string };
   export function openingSrcdoc(html: string): string;
+  export function parseOpeningMessage(data: unknown): OpeningMessage | null;
 }
 declare module "stage-canvas/style-scope" {
   export type CardFormat = "mmd" | "tavern" | "fengyue";

@@ -1,8 +1,9 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
-import {i18n} from '../src/lib/i18n';
+import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
+import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
 const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
@@ -612,3 +613,110 @@ it('labels the submission type from the server and drops the attempt count on a 
  await vi.waitFor(()=>expect(el.querySelector('[data-type-label]')?.textContent).toBe(t('review.reopen.chip')));
  expect(el.querySelector('[data-attempt]')).toBeNull();
 });
+
+// 審核頁看得到開場網頁（風月卡／開場網頁形式，2026-11-10）
+it('shows the opening page preview and expandable source in Dialogue for an opening-page card, and links to Dialogue from Display without duplicating the source',async()=>{
+ const html='<div class="fy-intro"><h1>風月角色介紹</h1><p>開局說明</p></div>';
+ const detail=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({
+  ...detail,
+  detail:{
+   ...detail.detail,
+   greetings:{welcome:'',alternates:[],prologue:['推開房門','在門外聽一會']},
+   authorAsset:{...detail.detail.authorAsset,cardFormat:'fengyue',openingPage:html},
+  },
+ });
+ await remount();
+ const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+ await vi.waitFor(()=>expect(btn(t('editor.section.dialogue'))).toBeTruthy());
+ expect(t('editor.section.dialogue')).not.toBe('editor.section.dialogue');
+ btn(t('editor.section.dialogue'))!.click();
+ const box=await vi.waitFor(()=>{
+  const found=el.querySelector<HTMLElement>('[data-opening-page]');
+  expect(found).toBeTruthy();
+  return found!;
+ });
+ expect(box.querySelector('label')?.textContent).toBe(t('editor.opening.page'));
+ const frame=box.querySelector<HTMLIFrameElement>('[data-opening-preview]')!;
+ expect(frame).toBeTruthy();
+ expect(frame.getAttribute('sandbox')).toBe(OPENING_SANDBOX);
+ expect(frame.getAttribute('srcdoc')).toBe(openingSrcdoc(html));
+ window.dispatchEvent(new MessageEvent('message',{data:{type:OPENING_MESSAGE_TYPE,kind:'height',height:520},source:frame.contentWindow}));
+ await vi.waitFor(()=>expect(frame.style.height).toBe('520px'));
+ const source=box.querySelector<HTMLDetailsElement>('[data-opening-source]')!;
+ expect(source.querySelector('summary')?.textContent).toBe(t('review.openingPage.source',{n:[...html].length}));
+ expect(source.querySelector('pre')?.textContent).toBe(html);
+ // 開場白空白時不另外畫空的「開場白」格；開場選項照舊列在下面
+ expect([...el.querySelectorAll('label')].some(l=>l.textContent===t('editor.welcome'))).toBe(false);
+ expect(el.textContent).toContain('推開房門');
+ expect(el.textContent).toContain('在門外聽一會');
+
+ // 「顯示」分頁不重複放大段原文，改給指向「對話」分頁的連結
+ btn(t('review.section.display'))!.click();
+ await vi.waitFor(()=>expect(btn(t('review.section.display'))!.getAttribute('aria-pressed')).toBe('true'));
+ const link=el.querySelector<HTMLButtonElement>('[data-opening-page-link]')!;
+ expect(link).toBeTruthy();
+ expect(link.parentElement?.textContent).toContain(t('review.openingPage',{n:[...html].length}));
+ expect([...el.querySelectorAll('pre')].filter(p=>p.textContent===html)).toHaveLength(1);
+ link.click();
+ await vi.waitFor(()=>expect(btn(t('editor.section.dialogue'))!.getAttribute('aria-pressed')).toBe('true'));
+});
+
+it('keeps greeting cards on the opening message field in Dialogue',async()=>{
+ const detail=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({
+  ...detail,
+  detail:{
+   ...detail.detail,
+   greetings:{welcome:'你好，旅人。',alternates:[],prologue:['點頭致意']},
+  },
+ });
+ await remount();
+ const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+ await vi.waitFor(()=>expect(btn(t('editor.section.dialogue'))).toBeTruthy());
+ btn(t('editor.section.dialogue'))!.click();
+ await vi.waitFor(()=>expect(btn(t('editor.section.dialogue'))!.getAttribute('aria-pressed')).toBe('true'));
+ expect(el.querySelector('[data-opening-page]')).toBeNull();
+ expect([...el.querySelectorAll('label')].some(l=>l.textContent===t('editor.welcome'))).toBe(true);
+ expect(el.textContent).toContain('你好，旅人。');
+});
+
+it('shows the empty-page note when an opening-page card only has first-line choices',async()=>{
+ const detail=pendingDetail();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({
+  ...detail,
+  detail:{
+   ...detail.detail,
+   greetings:{welcome:'',alternates:[],prologue:['直接開始']},
+   authorAsset:{...detail.detail.authorAsset,openingMode:'page',openingPage:''},
+  },
+ });
+ await remount();
+ const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+ await vi.waitFor(()=>expect(btn(t('editor.section.dialogue'))).toBeTruthy());
+ btn(t('editor.section.dialogue'))!.click();
+ const box=await vi.waitFor(()=>{
+  const found=el.querySelector<HTMLElement>('[data-opening-page]');
+  expect(found).toBeTruthy();
+  return found!;
+ });
+ expect(box.textContent).toContain(t('editor.opening.page.empty'));
+ expect(box.querySelector('[data-opening-preview]')).toBeNull();
+ expect(box.querySelector('[data-opening-source]')).toBeNull();
+});
+
+it('translates dialogue tab and opening-page review strings across all 5 locales',async()=>{
+ for(const loc of LOCALE_CODES){
+  await applyLocale(loc);
+  const t=(k:string,p?:Record<string,unknown>)=>i18n.global.t(k,p??{});
+  expect(t('editor.section.dialogue'),`${loc} editor.section.dialogue`).not.toBe('editor.section.dialogue');
+  expect(t('review.openingPage',{n:128}),`${loc} review.openingPage`).toContain('128');
+  expect(t('review.openingPage.source',{n:128}),`${loc} review.openingPage.source`).toContain('128');
+  expect(t('review.openingPage.inDialogue'),`${loc} review.openingPage.inDialogue`).not.toBe('review.openingPage.inDialogue');
+ }
+ await applyLocale('zh-Hant');
+});
+
+
+
+

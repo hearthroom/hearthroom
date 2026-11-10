@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../src/types";
-import { estimateTokens, publicHash, readForReview } from "../src/review-snapshot";
+import { estimateTokens, publicHash, readForReview, readSealedForReview } from "../src/review-snapshot";
 import { role } from "./helpers";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -74,6 +74,30 @@ describe("送審時讀整份設定", () => {
     const err = await readForReview(env, "t", "role-1", "harbor").catch((e) => e);
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(401);
+  });
+
+  it("封存版讀取保留開場網頁、開局呈現與開場選項供審核頁與試玩使用", async () => {
+    provider({
+      "/open/v1/hosting/revisions/rev-fy/review": {
+        responses: {
+          "/role/detail?roleId=rev-fy": { ...own, roleWelcome: "", rolePrologue: ["推開門", "敲門"] },
+          "/worldbook/bindings?roleId=rev-fy": { bindings: [] },
+          "/role/author-asset?roleId=rev-fy": {
+            rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox",
+            cardFormat: "fengyue", openingPage: "<section>風月介紹</section>", status: "passed", version: 2,
+          },
+        },
+      },
+    });
+    const d = (await readSealedForReview({ ...env, HOSTING_SERVICE_KEY: "k" }, "rev-fy", "harbor")) as any;
+    expect(d.greetings).toEqual({ welcome: "", alternates: ["備選一"], prologue: ["推開門", "敲門"] });
+    expect(d.authorAsset).toMatchObject({
+      pageMode: "sandbox",
+      cardFormat: "fengyue",
+      openingPage: "<section>風月介紹</section>",
+      status: "passed",
+      version: 2,
+    });
   });
 });
 
