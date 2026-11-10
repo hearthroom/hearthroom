@@ -189,7 +189,9 @@ function onKeydown(event: KeyboardEvent) {
                     {{ row.name || $t("wb.entry.untitled") }}
                     <span v-if="row.isConstant" class="chip">{{ $t("wb.entry.constantShort") }}</span>
                   </span>
-                  <span class="subtle wbd__row-keys">{{ summary(row) || $t("wb.entry.keywords.placeholder") }}</span>
+                  <span v-if="!row.isConstant || row.keywords.length || row.secondaryKeywords?.length" class="subtle wbd__row-keys">
+                    {{ summary(row) || $t("wb.entry.keywords.placeholder") }}
+                  </span>
                 </button>
                 <span class="wbd__row-tools">
                   <button v-if="canOrder" type="button" class="btn btn--icon btn--sm btn--ghost" :disabled="index === 0"

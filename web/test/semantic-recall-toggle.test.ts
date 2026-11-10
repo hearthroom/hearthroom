@@ -45,3 +45,23 @@ it("shows observed activation counts and hides the Harbor zero placeholder", asy
   await nextTick();
   expect(nameField?.querySelector(".subtle")).toBeNull();
 });
+
+it("keeps the always-on badge without a keyword placeholder for a keyless constant", async () => {
+  await loadLocale("en");
+  i18n.global.locale.value = "en";
+  const entry: WorldbookEntryDraft = { name: "Archive", content: "Check the index.", keywords: [], isEnabled: true, isConstant: true };
+  const entries = ref<WorldbookEntryDraft[]>([entry]);
+  app = createApp({ render: () => h(WorldbookEntriesDialog, { modelValue: entries.value, language: "en" }) });
+  const root = document.createElement("div");
+  document.body.append(root);
+  app.use(i18n).mount(root);
+  await nextTick();
+
+  const row = document.querySelector(".wbd__row-name");
+  expect(row?.querySelector(".wbd__row-title")?.textContent).toContain("Always");
+  expect(row?.querySelector(".wbd__row-keys")).toBeNull();
+
+  entries.value = [{ ...entry, keywords: ["archive"] }];
+  await nextTick();
+  expect(row?.querySelector(".wbd__row-keys")?.textContent).toBe("archive");
+});
