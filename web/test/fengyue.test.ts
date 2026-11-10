@@ -11,7 +11,7 @@ import ImportPanel from "../src/components/editor/ImportPanel.vue";
 import { i18n } from "../src/lib/i18n";
 import cases from "./fixtures/fengyue-cases.json";
 import { fengyueToDraft, isFengyueExport, FENGYUE_CSS_RULE_ID } from "../src/lib/fengyue";
-import { installCard } from "../../stage/src/sandbox/rules";
+import { installCard, renderContent } from "../../stage/src/sandbox/rules";
 import { stylePolicyFor } from "../../stage/src/common/author-style-policy";
 
 type Case = { name: string; input: Record<string, unknown>; expect: Record<string, unknown> & { fengyue: boolean } };
@@ -60,6 +60,25 @@ describe("風月匯出檔：網頁這邊的落點", () => {
     expect(result.regex?.pageMode).toBe("sandbox");
     const installed = installCard(result.regex!.rules, stylePolicyFor(result.regex!.format ?? "mmd"));
     expect(installed.styles.join("\n")).toContain(".st-bar{color:#c33");
+  });
+
+  it("示範卡在沙箱裝卡時：AI 輸出正則只改 AI 訊息、全部訊息正則兩邊都改、內置 CSS 與狀態欄落地", () => {
+    const demo = (cases as { cases: Case[] }).cases.find((c) => c.name.startsWith("real demo card, opening-choice mode"))!.input;
+    const result = fengyueToDraft(demo, { language: "zh-Hans" });
+    expect(result.regex?.pageMode).toBe("sandbox");
+    expect(result.regex?.format).toBe("fengyue");
+    expect(result.regex?.openingPage).toContain("FY-INTRO 星灯茶馆");
+    const installed = installCard(result.regex!.rules, stylePolicyFor(result.regex!.format ?? "fengyue"));
+    expect(installed.styles.join("\n")).toContain(".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px}");
+    const userHtml = renderContent("我是茶客3号，暗号是 FYSWAP", installed.rules, { messageRole: "user", macros: { user: "旅人", char: "阿萤" } });
+    expect(userHtml).toContain("【FY-RGX-第3位客人】");
+    expect(userHtml).toContain("FYSWAP");
+    expect(userHtml).not.toContain("FY-已替换");
+    const aiHtml = renderContent("欢迎茶客3号，这里是 FYSWAP。<div class=\"st-bar\">FY-STATUSBAR 今夜客人：1 位</div>", installed.rules, { messageRole: "ai", macros: { user: "旅人", char: "阿萤" } });
+    expect(aiHtml).toContain("【FY-RGX-第3位客人】");
+    expect(aiHtml).toContain("FY-已替换");
+    expect(aiHtml).not.toContain("FYSWAP");
+    expect(aiHtml).toContain('<div class="st-bar">FY-STATUSBAR 今夜客人：1 位</div>');
   });
 
   it("超過本站上限的欄位整段保留並列出，不截斷", () => {

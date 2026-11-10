@@ -1705,7 +1705,7 @@
           "ai_variable_enabled": false
         },
         "title": "TEST-MODE-6D1P",
-        "pst_type": 2,
+        "unseen_pst_type": 2,
         "abs_txt": "TEST-BRIEF",
         "is_anon": false,
         "regex_rp": [],
@@ -1800,7 +1800,7 @@
           "ai_variable_enabled": false
         },
         "title": "TEST-MODE-6D1P",
-        "pst_type": 2,
+        "unseen_pst_type": 2,
         "abs_txt": "TEST-BRIEF",
         "is_anon": false,
         "regex_rp": [],
@@ -2132,6 +2132,389 @@
           "shortcuts",
           "summaryConfig",
           "variablesPromptOnly"
+        ]
+      }
+    },
+    {
+      "name": "real demo card, opening-choice mode (作品-FY星灯茶馆示范卡-20261110-111807.json)",
+      "input": {
+        "vis_pf": 0,
+        "tag_list": [],
+        "banned_words": [
+          "FYBAN"
+        ],
+        "img_book": [],
+        "ai_variable_template": "<style>.fy-panel{border:2px solid #a0522d;background:#fffaf0;color:#4a3a20;padding:8px;border-radius:8px}</style><div class=\"fy-panel\">FY-PANEL 好感度：{{茶馆.好感度}}　金钱：{{茶馆.金钱}}　招牌茶：{{茶馆.招牌茶}}{{#if (gt 茶馆.金钱 50)}}<b>　FY-RICH</b>{{/if}}</div>",
+        "open_st": "选择一段开场白",
+        "cover_tiny": "",
+        "categ": 0,
+        "cvr_url": null,
+        "ext": {
+          "ai_variable_enabled": true
+        },
+        "kind": 1,
+        "summary_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "pchats": [],
+        "builtInCss": ".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px} /* FY-CSS */",
+        "music": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "pre_pt": "你是星灯茶馆的老板娘阿萤，温柔，爱讲茶的故事。FY-MAIN-PROMPT\n玩家是刚推门进来的客人。\n每次回复末尾附上状态栏：<Reply Example><div class=\"st-bar\">FY-STATUSBAR 今夜客人：1 位</div></Reply Example>",
+        "scmd": [
+          {
+            "label": "fycmd",
+            "command_text": "FY-SHORTCUT 请给我推荐一壶茶"
+          }
+        ],
+        "post_tx": "FY-POST 请把回复控制在两百字以内。",
+        "is_anonymous": false,
+        "abstract": "FY-SHORT 一间只在夜里营业的茶馆。",
+        "ianp": true,
+        "ui_flag": [],
+        "suggested_questions": [
+          "FY-OPEN-A 我推开门，走了进去。",
+          "FY-OPEN-B 请问今晚有什么茶？",
+          "FY-OPEN-C 我是茶客3号。"
+        ],
+        "disable_css_mod": false,
+        "mod_perm": 4,
+        "def_msg_cnt": 6,
+        "ai_variable_prompt": "FY-VARPROMPT 每轮对话好感度加2；客人点茶时金钱减10；今夜客人在客人说话时加1。",
+        "bg_m": "",
+        "ai_v_json": "{\"茶馆\":{\"今夜客人\":0,\"好感度\":10,\"金钱\":100,\"招牌茶\":\"桂花乌龙\"}}",
+        "world_book": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_酒酿@wb@桂花",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "FY-WB-OR 桂花酒酿是阿萤的拿手甜品，只在秋夜供应，加一勺蜂蜜最好。",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          },
+          {
+            "group": "",
+            "match_type": 1,
+            "key": "_and_茉莉@wb@白桃",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "FY-WB-AND 白桃茉莉茶是阿萤新研发的冷泡茶，需要冰镇三小时。",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ],
+        "ref_id2": 1,
+        "re_replaces": [
+          {
+            "scope": 10,
+            "title": "FYRGX-ALL",
+            "is_enable": true,
+            "match_regex": "茶客(\\d+)号",
+            "replace_text": "【FY-RGX-第$1位客人】",
+            "is_only_render": false
+          },
+          {
+            "scope": 1,
+            "title": "FYRGX-AI",
+            "is_enable": true,
+            "match_regex": "FYSWAP",
+            "replace_text": "FY-已替换",
+            "is_only_render": true
+          }
+        ],
+        "ps_type": 1,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "desc": "<style>.fy-intro{padding:14px;border:1px solid #c9a96b;border-radius:10px;background:#fffaf0;color:#4a3a20}.fy-intro h2{margin:0 0 8px;color:#a0522d}.fy-btn{display:inline-block;margin:4px 6px 0 0;padding:6px 12px;border:1px solid #a0522d;border-radius:6px;background:#fff;color:#a0522d;cursor:pointer}</style><div class=\"fy-intro\"><h2>FY-INTRO 星灯茶馆</h2><p>一间只在夜里营业的茶馆，老板娘阿萤会为每位客人泡一壶合心意的茶。</p><details><summary>FY-DETAILS 点开看菜单</summary><p>桂花乌龙 · 白桃茉莉 · 炭焙铁观音</p></details><div><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：旅人')\">复制身份：旅人</span><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：茶商')\">复制身份：茶商</span></div></div>",
+        "sq_after": {
+          "enabled": true
+        },
+        "lng": "zh-Hans",
+        "title": "FY星灯茶馆示范卡",
+        "back_img": "",
+        "pretxt": "FY-PRE 【客人说】"
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "FY星灯茶馆示范卡",
+        "summary": "FY-SHORT 一间只在夜里营业的茶馆。",
+        "definition": "你是星灯茶馆的老板娘阿萤，温柔，爱讲茶的故事。FY-MAIN-PROMPT\n玩家是刚推门进来的客人。\n每次回复末尾附上状态栏：<Reply Example><div class=\"st-bar\">FY-STATUSBAR 今夜客人：1 位</div></Reply Example>",
+        "outputContract": "FY-PRE 【客人说】",
+        "custom": "FY-POST 请把回复控制在两百字以内。",
+        "intro": "<style>.fy-intro{padding:14px;border:1px solid #c9a96b;border-radius:10px;background:#fffaf0;color:#4a3a20}.fy-intro h2{margin:0 0 8px;color:#a0522d}.fy-btn{display:inline-block;margin:4px 6px 0 0;padding:6px 12px;border:1px solid #a0522d;border-radius:6px;background:#fff;color:#a0522d;cursor:pointer}</style><div class=\"fy-intro\"><h2>FY-INTRO 星灯茶馆</h2><p>一间只在夜里营业的茶馆，老板娘阿萤会为每位客人泡一壶合心意的茶。</p><details><summary>FY-DETAILS 点开看菜单</summary><p>桂花乌龙 · 白桃茉莉 · 炭焙铁观音</p></details><div><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：旅人')\">复制身份：旅人</span><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：茶商')\">复制身份：茶商</span></div></div>",
+        "prologue": [
+          "FY-OPEN-A 我推开门，走了进去。",
+          "FY-OPEN-B 请问今晚有什么茶？",
+          "FY-OPEN-C 我是茶客3号。"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px} /* FY-CSS */",
+        "lorebook": [
+          {
+            "name": "酒酿",
+            "content": "FY-WB-OR 桂花酒酿是阿萤的拿手甜品，只在秋夜供应，加一勺蜂蜜最好。",
+            "keywords": [
+              "酒酿",
+              "桂花"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          },
+          {
+            "name": "_and_茉莉@wb@白桃",
+            "content": "FY-WB-AND 白桃茉莉茶是阿萤新研发的冷泡茶，需要冰镇三小时。",
+            "keywords": [
+              "_and_茉莉@wb@白桃"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "FYRGX-ALL",
+            "find": "/茶客(\\d+)号/g",
+            "replace": "【FY-RGX-第$1位客人】",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          },
+          {
+            "name": "FYRGX-AI",
+            "find": "/FYSWAP/g",
+            "replace": "FY-已替换",
+            "enabled": true,
+            "targets": [
+              "ai"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "entryKeyFormat",
+          "regexHistory",
+          "shortcuts",
+          "variablesConverted"
+        ]
+      }
+    },
+    {
+      "name": "real demo card, preset-chat mode (作品-FY星灯茶馆示范卡-20261110-112710.json)",
+      "input": {
+        "pst_type": 2,
+        "lng": "zh-Hans",
+        "ianon": false,
+        "title": "FY星灯茶馆示范卡",
+        "abs_txt": "FY-SHORT 一间只在夜里营业的茶馆。",
+        "ppt": "你是星灯茶馆的老板娘阿萤，温柔，爱讲茶的故事。FY-MAIN-PROMPT\n玩家是刚推门进来的客人。\n每次回复末尾附上状态栏：<Reply Example><div class=\"st-bar\">FY-STATUSBAR 今夜客人：1 位</div></Reply Example>",
+        "msc": {
+          "tracks": [],
+          "autoplay": true
+        },
+        "extend": {
+          "ai_variable_enabled": true
+        },
+        "desc": "<style>.fy-intro{padding:14px;border:1px solid #c9a96b;border-radius:10px;background:#fffaf0;color:#4a3a20}.fy-intro h2{margin:0 0 8px;color:#a0522d}.fy-btn{display:inline-block;margin:4px 6px 0 0;padding:6px 12px;border:1px solid #a0522d;border-radius:6px;background:#fff;color:#a0522d;cursor:pointer}</style><div class=\"fy-intro\"><h2>FY-INTRO 星灯茶馆</h2><p>一间只在夜里营业的茶馆，老板娘阿萤会为每位客人泡一壶合心意的茶。</p><details><summary>FY-DETAILS 点开看菜单</summary><p>桂花乌龙 · 白桃茉莉 · 炭焙铁观音</p></details><div><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：旅人')\">复制身份：旅人</span><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：茶商')\">复制身份：茶商</span></div></div>",
+        "v_mode": 0,
+        "card_type": 1,
+        "is_avail_np": true,
+        "dcm": false,
+        "ext_cfg": {
+          "enabled": true
+        },
+        "ps_chats": [
+          {
+            "title": "FY-PRESET-TITLE 夜访茶馆",
+            "chats": [
+              {
+                "query": "FY-PRESET-Q 今晚有什么茶？",
+                "answer": "FY-PRESET-A 今夜有桂花乌龙，慢慢喝。"
+              }
+            ],
+            "suggested_questions": [
+              "FY-PRESET-OPEN 我想先喝一杯"
+            ]
+          }
+        ],
+        "mod_pm": 4,
+        "ai_s_config": {
+          "big_prompt": "",
+          "model_config": {
+            "name": "",
+            "provider": ""
+          },
+          "small_prompt": "",
+          "enable_status": 2
+        },
+        "sq": [
+          "FY-OPEN-A 我推开门，走了进去。",
+          "FY-OPEN-B 请问今晚有什么茶？",
+          "FY-OPEN-C 我是茶客3号。"
+        ],
+        "cat": 0,
+        "cgb": [],
+        "ai_v_json": "{\"茶馆\":{\"今夜客人\":0,\"好感度\":10,\"金钱\":100,\"招牌茶\":\"桂花乌龙\"}}",
+        "ai_variable_tmpl": "<style>.fy-panel{border:2px solid #a0522d;background:#fffaf0;color:#4a3a20;padding:8px;border-radius:8px}</style><div class=\"fy-panel\">FY-PANEL 好感度：{{茶馆.好感度}}　金钱：{{茶馆.金钱}}　招牌茶：{{茶馆.招牌茶}}{{#if (gt 茶馆.金钱 50)}}<b>　FY-RICH</b>{{/if}}</div>",
+        "regex_rp": [
+          {
+            "scope": 10,
+            "title": "FYRGX-ALL",
+            "is_enable": true,
+            "match_regex": "茶客(\\d+)号",
+            "replace_text": "【FY-RGX-第$1位客人】",
+            "is_only_render": false
+          },
+          {
+            "scope": 1,
+            "title": "FYRGX-AI",
+            "is_enable": true,
+            "match_regex": "FYSWAP",
+            "replace_text": "FY-已替换",
+            "is_only_render": true
+          }
+        ],
+        "mobile_bg": "",
+        "def_msg_cnt": 6,
+        "greet_st": "选择一段开场白",
+        "built_in_css": ".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px} /* FY-CSS */",
+        "suggest_q_after": {
+          "enabled": true
+        },
+        "pre_text": "FY-PRE 【客人说】",
+        "shortcut_commands": [
+          {
+            "label": "fycmd",
+            "command_text": "FY-SHORTCUT 请给我推荐一壶茶"
+          }
+        ],
+        "plat_vis": 0,
+        "ai_v_prompt": "FY-VARPROMPT 每轮对话好感度加2；客人点茶时金钱减10；今夜客人在客人说话时加1。",
+        "ban_wd": [
+          "FYBAN"
+        ],
+        "cover": null,
+        "cov_tn": "",
+        "tags": [],
+        "bg_img": "",
+        "ui_flag": [],
+        "post_tx": "FY-POST 请把回复控制在两百字以内。",
+        "wb": [
+          {
+            "group": "",
+            "match_type": 2,
+            "key": "_or_酒酿@wb@桂花",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "FY-WB-OR 桂花酒酿是阿萤的拿手甜品，只在秋夜供应，加一勺蜂蜜最好。",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          },
+          {
+            "group": "",
+            "match_type": 1,
+            "key": "_and_茉莉@wb@白桃",
+            "key_region": 2,
+            "value_type": 0,
+            "value": "FY-WB-AND 白桃茉莉茶是阿萤新研发的冷泡茶，需要冰镇三小时。",
+            "value_configs": [],
+            "value_region": 1,
+            "sort": 0,
+            "depth": 0,
+            "probability": 100,
+            "enable": true
+          }
+        ]
+      },
+      "expect": {
+        "fengyue": true,
+        "name": "FY星灯茶馆示范卡",
+        "summary": "FY-SHORT 一间只在夜里营业的茶馆。",
+        "definition": "你是星灯茶馆的老板娘阿萤，温柔，爱讲茶的故事。FY-MAIN-PROMPT\n玩家是刚推门进来的客人。\n每次回复末尾附上状态栏：<Reply Example><div class=\"st-bar\">FY-STATUSBAR 今夜客人：1 位</div></Reply Example>",
+        "outputContract": "FY-PRE 【客人说】",
+        "custom": "FY-POST 请把回复控制在两百字以内。",
+        "intro": "<style>.fy-intro{padding:14px;border:1px solid #c9a96b;border-radius:10px;background:#fffaf0;color:#4a3a20}.fy-intro h2{margin:0 0 8px;color:#a0522d}.fy-btn{display:inline-block;margin:4px 6px 0 0;padding:6px 12px;border:1px solid #a0522d;border-radius:6px;background:#fff;color:#a0522d;cursor:pointer}</style><div class=\"fy-intro\"><h2>FY-INTRO 星灯茶馆</h2><p>一间只在夜里营业的茶馆，老板娘阿萤会为每位客人泡一壶合心意的茶。</p><details><summary>FY-DETAILS 点开看菜单</summary><p>桂花乌龙 · 白桃茉莉 · 炭焙铁观音</p></details><div><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：旅人')\">复制身份：旅人</span><span class=\"fy-btn\" onclick=\"navigator.clipboard.writeText('FY-GEN-ROLE 身份：茶商')\">复制身份：茶商</span></div></div>",
+        "prologue": [
+          "FY-PRESET-OPEN 我想先喝一杯"
+        ],
+        "css": ".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px} /* FY-CSS */",
+        "lorebook": [
+          {
+            "name": "酒酿",
+            "content": "FY-WB-OR 桂花酒酿是阿萤的拿手甜品，只在秋夜供应，加一勺蜂蜜最好。",
+            "keywords": [
+              "酒酿",
+              "桂花"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          },
+          {
+            "name": "_and_茉莉@wb@白桃",
+            "content": "FY-WB-AND 白桃茉莉茶是阿萤新研发的冷泡茶，需要冰镇三小时。",
+            "keywords": [
+              "_and_茉莉@wb@白桃"
+            ],
+            "triggerRegion": "user_only",
+            "enabled": true,
+            "order": 0
+          }
+        ],
+        "rules": [
+          {
+            "name": "FYRGX-ALL",
+            "find": "/茶客(\\d+)号/g",
+            "replace": "【FY-RGX-第$1位客人】",
+            "enabled": true,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          },
+          {
+            "name": "FYRGX-AI",
+            "find": "/FYSWAP/g",
+            "replace": "FY-已替换",
+            "enabled": true,
+            "targets": [
+              "ai"
+            ]
+          }
+        ],
+        "notes": [
+          "bannedWords",
+          "entryKeyFormat",
+          "presetChats",
+          "regexHistory",
+          "shortcuts",
+          "unusedOpenings",
+          "variablesConverted"
         ]
       }
     }
