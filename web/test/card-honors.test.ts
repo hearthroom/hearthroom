@@ -1,6 +1,6 @@
 /**
  * 榜單榮譽（徽章第一期，2026-11-03）：封面左上一列是「目前名次（榜單頁）＋日週月徽章」，右上是限制級的 R 方塊。
- * 徽章只放期別字與名次，完整名稱給讀屏與 tooltip；沒有榮譽的卡完全不畫這一列。
+ * 徽章顯示期別與榮譽級距，完整名稱給讀屏與 tooltip；沒有榮譽的卡完全不畫這一列。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
@@ -36,8 +36,28 @@ describe("cover honors", () => {
     const root = await mount({ honors: [{ zone: "all", window: "month", band: 10 }, { zone: "clean", window: "day", band: 1 }, { zone: "all", window: "week", band: 3 }] });
     const badges = [...root.querySelectorAll(".card__marks .rank-badge")];
     expect(badges.map(b => b.getAttribute("aria-label"))).toEqual(["清水日榜第一", "綜合週榜前三", "綜合月榜前十"]);
-    expect(badges.map(b => b.textContent?.replace(/\s/g, ""))).toEqual(["清水日榜第一日1", "綜合週榜前三週3", "綜合月榜前十月10"]);
+    expect(badges.map(b => [...b.querySelectorAll("text")].map(line => line.textContent))).toEqual([
+      ["日", "1"], ["週榜", "前三"], ["月榜", "前十"],
+    ]);
     expect(badges.map(b => (b as SVGElement).dataset.zone)).toEqual(["clean", "all", "all"]);
+  });
+
+  it.each([
+    ["zh-Hant", "週", "週榜", "前三", "前十"],
+    ["zh-Hans", "周", "周榜", "前三", "前十"],
+    ["en", "W", "Week", "Top 3", "Top 10"],
+    ["ja", "週", "週間", "3位内", "10位内"],
+    ["ko", "주", "주간", "상위 3", "상위 10"],
+  ] as const)("renders all three visible badge tiers in %s", async (locale, shortPeriod, period, top3, top10) => {
+    await applyLocale(locale);
+    for (const [band, expected] of [[1, [shortPeriod, "1"]], [3, [period, top3]], [10, [period, top10]]] as const) {
+      const root = await mount({ honors: [{ zone: "clean", window: "week", band }] });
+      expect([...root.querySelectorAll(".card__honor text")].map(line => line.textContent)).toEqual(expected);
+      app?.unmount();
+      root.remove();
+      app = null;
+      el = null;
+    }
   });
 
   it("puts the current board rank first in the same row", async () => {

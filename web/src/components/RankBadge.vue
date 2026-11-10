@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 榜單徽章：期別＝外形＋顏色（日＝橘圓、週＝藍盾、月＝紫六角），榜別＝填色反差（清水＝描邊款、綜合＝實心款），
- * 裡面只有一個期別字與名次數字。底形、色號、字的位置照美工定稿（docs studio 任務 2026-11-02-badges-v2 的
+ * 第一名沿用期別簡稱與數字，其他級距顯示期別與級距文字。底形與色號照美工定稿（docs studio 任務 2026-11-02-badges-v2 的
  * icons/rank-badges.mjs，viewBox 32×36）；字由這裡疊上去，所以隨語系換。
  * 這是唯一的固定彩色圖示：長在封面圖上，主題色靠不住，色弱與灰階靠外形分。
  * 尺寸由外層用 CSS 給高度（寬度照 32:36 跟著算），這裡不寫死。
@@ -15,7 +15,6 @@ const { t } = useI18n();
 const color = computed(() => HONOR_COLORS[props.honor.window]);
 const clean = computed(() => props.honor.zone === "clean");
 const label = computed(() => honorName(t, props.honor));
-const band = computed(() => String(props.honor.band));
 </script>
 
 <template>
@@ -36,8 +35,14 @@ const band = computed(() => String(props.honor.band));
       <path v-else d="M16 2l13.5 7.5v17L16 34 2.5 26.5v-17Z" />
     </g>
     <g :fill="clean ? color : '#fff'" text-anchor="middle" font-weight="800">
-      <text x="16" y="17.6" font-size="11">{{ t(`honor.short.${honor.window}`) }}</text>
-      <text x="16" y="27.1" :font-size="band.length > 1 ? 8 : 8.8">{{ band }}</text>
+      <template v-if="honor.band === 1">
+        <text x="16" y="17.6" font-size="11">{{ t(`honor.short.${honor.window}`) }}</text>
+        <text x="16" y="27.1" font-size="8.8">1</text>
+      </template>
+      <template v-else>
+        <text class="rank-badge__period" x="16" y="15" font-size="9">{{ t(`honor.badgeWindow.${honor.window}`) }}</text>
+        <text class="rank-badge__tier" x="16" y="23.5" font-size="7.5">{{ t(`honor.badgeBand.${honor.band}`) }}</text>
+      </template>
     </g>
   </svg>
 </template>
@@ -45,4 +50,7 @@ const band = computed(() => String(props.honor.band));
 <style scoped>
 .rank-badge { display: block; flex: none; height: var(--rank-badge-h, 26px); width: calc(var(--rank-badge-h, 26px) * 32 / 36); overflow: visible; }
 .rank-badge text { font-family: var(--font); }
+.rank-badge__tier { letter-spacing: -0.2px; }
+.rank-badge__period:lang(en), .rank-badge__tier:lang(en) { font-size: 7px; }
+.rank-badge__tier:lang(zh) { font-size: 9px; }
 </style>
