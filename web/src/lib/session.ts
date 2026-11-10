@@ -82,12 +82,12 @@ export const useSession = defineStore("session", () => {
   }
   /** 正在載的本站身分：公開讀取要等它到了再決定要不要帶成人內容，不然第一屏永遠是沒開的版本 */
   let profilePromise: Promise<void> | null = null;
-  function loadProfile(bearerToken: string): Promise<void> {
+  function loadProfile(bearerToken: string, firstEntry?: "interactive" | "silent"): Promise<void> {
     const expected=generation;
     profilePromise = (async () => {
       try {
         const value=isManagedAuth()
-          ? (await authRequest<{profile:SiteMe}>("session",{provider:currentProvider()})).profile
+          ? (await authRequest<{profile:SiteMe}>("session",{provider:currentProvider(),firstEntry})).profile
           : await fetchSiteMe(bearerToken);
         if(expected===generation)profile.value=value;
       } catch {
@@ -118,7 +118,7 @@ export const useSession = defineStore("session", () => {
   let restoring: Promise<void> | null = null;
   let generation=0;
 
-  async function adopt(pair: TokenPair, expected=generation) {
+  async function adopt(pair: TokenPair, expected=generation, firstEntry?: "interactive" | "silent") {
     const identity=await fetchMe(pair.accessToken);
     if(expected!==generation)return;
     token.value = pair;
@@ -126,7 +126,7 @@ export const useSession = defineStore("session", () => {
     me.value = identity;
     rememberSignedIn(identity.accountNumId);
     void loadWallet(pair.accessToken);
-    void loadProfile(pair.accessToken);
+    void loadProfile(pair.accessToken, firstEntry);
   }
 
   function restore(): Promise<void> {
@@ -245,5 +245,8 @@ export const useSession = defineStore("session", () => {
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
-  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, otherLines, adopt, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
+  function adoptFromCallback(pair: TokenPair, silent: boolean) {
+    return adopt(pair, generation, silent ? "silent" : "interactive");
+  }
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, otherLines, adopt, adoptFromCallback, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
 });

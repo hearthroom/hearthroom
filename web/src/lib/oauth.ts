@@ -187,7 +187,8 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
         return {silent:true,authenticated:false,returnTo:fallback};
       }
     }
-    if(query.get("error")){await authRequest("cancel",{});throw new Error("oauth_denied");}
+    const denial=query.get("error");
+    if(denial){await authRequest("cancel",{callbackError:denial==="access_denied"?denial:"other_error"});throw new Error("oauth_denied");}
     forgetManaged();
     const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean; authenticated?: boolean }>("complete",{code:query.get("code"),state:query.get("state")});
     sessionStorage.removeItem(STORE.returnTo);
