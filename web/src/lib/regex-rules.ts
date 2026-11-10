@@ -19,6 +19,14 @@ export const MESSAGE_TARGETS: RegexMessageTarget[] = ["ai", "user", "system"];
 /** Missing targets preserves legacy all-message behavior; [] selects no messages. */
 export const ruleTargets = (rule: Pick<RegexRule, "targets">): RegexMessageTarget[] => rule.targets ?? MESSAGE_TARGETS;
 
+/**
+ * 規則裡 <style> 的寫法：風月、酒館、MMD／本站。沒填照卡片格式。畫布照它解讀這段 CSS
+ * （風月寫法會轉到我們的介面元素，並排在作者其他樣式之下），所以同一張卡可以混用不同寫法的規則。
+ */
+export const CSS_DIALECTS = ["fengyue", "tavern", "mmd"] as const;
+export type CssDialect = (typeof CSS_DIALECTS)[number];
+export const cssDialectFrom = (v: unknown): CssDialect | undefined => (CSS_DIALECTS as readonly string[]).includes(String(v)) ? (v as CssDialect) : undefined;
+
 export interface RegexRule {
   id: string;
   name: string;
@@ -27,6 +35,7 @@ export interface RegexRule {
   replace: string;
   enabled: boolean;
   targets?: RegexMessageTarget[];
+  cssDialect?: CssDialect;
 }
 
 export interface RegexRuleSet {
@@ -301,7 +310,10 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   if (!Array.isArray(obj.rules)) return null;
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])
     .filter((r) => r && typeof r === "object" && text(r.find))
-    .map((r) => ({ id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: r.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v)) } : {}) }));
+    .map((r) => {
+      const cssDialect = cssDialectFrom(r.cssDialect);
+      return { id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: r.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v)) } : {}), ...(cssDialect ? { cssDialect } : {}) };
+    });
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
   const pageMode = pageModeFrom(obj.pageMode);
   if (pageMode) set.pageMode = pageMode;
@@ -383,7 +395,7 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
 export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<Omit<AuthorAssetLike, "openingMode">> & { openingMode?: OpeningMode; rules: RegexRule[]; version: number } {
   const mountLayer = set.lowered ? "under" : set.mountLayer === "cover" ? "cover" : "over";
   return {
-    rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, ...(r.targets ? { targets: r.targets } : {}) })),
+    rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, ...(r.targets ? { targets: r.targets } : {}), ...(r.cssDialect ? { cssDialect: r.cssDialect } : {}) })),
     mountTrigger: set.statusbar,
     mountLayer,
     pageMode: set.pageMode ?? "",

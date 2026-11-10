@@ -285,7 +285,8 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   const css = typeof pick(raw, "css") === "string" ? String(pick(raw, "css")).trim() : "";
   if (css) {
     const names = cssRuleNames as Record<string, string>;
-    rules.push({ id: FENGYUE_CSS_RULE_ID, name: names[language] ?? names.en, find: CSS_FIND, replace: `$1<style>${css}</style>`, enabled: true });
+    // 標成風月寫法：畫布把它對準風月介面元素的部分轉到我們的元素上（stage common/rule-css-dialect）。
+    rules.push({ id: FENGYUE_CSS_RULE_ID, name: names[language] ?? names.en, find: CSS_FIND, replace: `$1<style>${css}</style>`, enabled: true, cssDialect: "fengyue" });
   }
   const regex: RegexRuleSet | null = rules.length || intro
     ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}) }

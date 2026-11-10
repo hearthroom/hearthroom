@@ -7,7 +7,9 @@ export function canonicalEntry(e:Record<string,any>,preservePriority=false):Reco
  return {...(preservePriority&&typeof e.priority==='number'?{priority:e.priority}:{}),name:e.name,content:e.content,keywords:e.keywords||[],secondaryKeywords:e.secondaryKeywords||[],category:e.category||'custom',triggerRegion:e.triggerRegion||'both',isEnabled:e.isEnabled!==false,isConstant:e.isConstant===true,matchOptions:e.matchOptions??null};
 }
 export function canonicalAsset(a:Record<string,any>) {
- return {rules:(a.rules||[]).map((r:any)=>({id:r.id,name:r.name,find:r.find,replace:r.replace,enabled:r.enabled!==false})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic',
+ return {rules:(a.rules||[]).map((r:any)=>({id:r.id,name:r.name,find:r.find,replace:r.replace,enabled:r.enabled!==false,
+  // 規則裡 <style> 的寫法只在有的時候才放：沒有它的卡算出的快照雜湊跟以前一樣
+  ...(['fengyue','tavern','mmd'].includes(r.cssDialect)?{cssDialect:r.cssDialect}:{})})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic',
   // 首屏網頁與風月格式只在有的時候才放：沒有它們的卡算出的快照雜湊跟以前一樣
   ...(string(a.openingPage)?{openingPage:string(a.openingPage)}:{}),...(a.cardFormat==='fengyue'?{cardFormat:'fengyue'}:{}),
   // 開局呈現只在跟格式的預設不同時才放（風月預設開場網頁、其他預設開場白）：既有卡的快照雜湊不變

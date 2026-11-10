@@ -7,7 +7,7 @@
     "prefix": ["pre_text", "pre_tx", "pretxt", "ptx", "prefix_txt"],
     "suffix": ["post_text", "post_tx", "posttxt", "potx", "suffix_txt"],
     "worldbook": ["world_book", "world_bk", "wbook", "wb", "lore_bk"],
-    "css": ["builtCss", "builtInCss", "bicss", "inner_css", "built_in_css"],
+    "css": ["builtCss", "builtInCss", "bicss", "inner_css", "built_in_css", "custom_css"],
     "bannedWords": ["block_wd", "bw", "ban_wd", "banned_wd", "banned_words"],
     "regex": ["rgx_rep", "rrep", "regex_rp", "re_replaces", "regex_replaces"],
     "openings": ["sq", "sug_q", "sugg_ques", "suggested_questions"],

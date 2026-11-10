@@ -67,6 +67,27 @@ A fixed string (for example `《status》`) or a regular expression (for example
 
 Any HTML, including `<style>` and `<script>`. The `<style>` blocks from all rules are merged into one stylesheet; each `<script>` runs once per card.
 
+### CSS written for, and which style wins
+
+A rule with `<style>` can set **CSS written for** to say how that CSS is written:
+
+| Value | How it applies |
+|---|---|
+| Default | Follows where the card came from: Tavern imports behave as Tavern, everything else as MMD. |
+| AI Fengyue | CSS written for the Fengyue chat page. Fengyue chat elements (such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button`) map onto the bubbles, input box and send button here; rules starting with `.dark` apply in dark mode; `body`, `html` and `:root` rules do nothing (they do nothing on Fengyue either); buttons keep colour, border and shadow only; `!important` is removed. Built-in CSS imported from AI Fengyue uses this value automatically. |
+| Tavern | Every selector is prefixed with `.mes_text `, so it applies inside messages only. |
+| MMD | Applies as written. |
+
+One card can mix rules with different values. When several styles set the same element, the higher level wins:
+
+1. Platform defaults.
+2. The site's light or dark theme and colours; MMD cards stay dark.
+3. `--chat-*` variables (see CSS variables), which only change the colours the platform defaults use.
+4. Styles written for AI Fengyue.
+5. Every other rule's `<style>`: above level 4 whatever the selector weight; among themselves normal CSS applies, so the heavier selector wins and, at equal weight, the later rule wins.
+
+To override Fengyue-style CSS, write a normal `<style>` in another rule; `!important` is not needed.
+
 ### Function bar
 
 The "Function bar" field in the rules editor is content pinned above the message list. It is visible to the player and never sent to the model. The usual pattern is to place trigger words there (for example `【status】【theme】`) and let rules expand them into the actual panels.

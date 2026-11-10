@@ -593,7 +593,7 @@
   "d8851edc5174c": "`not_found: role does not exist`。",
   "d5b0841deccc7": "未分类错误；`retryable: true`。",
   "d819f32c14b58": "替换自己角色的显示规则",
-  "d12e797743a8a": "完整替换作者素材（不支持部分更新）。乐观锁定：`version` 必须等于最后读取的版本（尚无素材时为 `0`）；不符时返回 409 `version_conflict`。`mountLayer` 必填，须为 `under`、`over` 或 `cover`；`pageMode` 可省略（视为 `classic`），或为 `immersive`、`sandbox`。每条规则需要非空白 `find`；每个 `replace` 上限为 524288 字节，所有规则的 `id` + `name` + `find` + `replace` 总计上限为 33554432 字节（`validate_reject`，附 `message` 与 `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|sharedState, index, name, max, actual, unit: bytes}`）。保存会立即将 `status` 设为 `passed` 并增加 `version`。规则只作用于渲染层，绝不进入提示词。例外：`sharedState` 省略或为 `null` 时保留原值，`{}` 会清空；不合规则的声明以 `reason: sharedState` 拒绝。",
+  "d12e797743a8a": "完整替换作者素材（不支持部分更新）。乐观锁定：`version` 必须等于最后读取的版本（尚无素材时为 `0`）；不符时返回 409 `version_conflict`。`mountLayer` 必填，须为 `under`、`over` 或 `cover`；`pageMode` 可省略（视为 `classic`），或为 `immersive`、`sandbox`。每条规则需要非空白 `find`；每个 `replace` 上限为 524288 字节，所有规则的 `id` + `name` + `find` + `replace` 总计上限为 33554432 字节（`validate_reject`，附 `message` 与 `detail` `{reason: emptyFind|ruleReplace|rulesTotal|ruleTargets|ruleCssDialect|sharedState, index, name, max, actual, unit: bytes}`）。保存会立即将 `status` 设为 `passed` 并增加 `version`。规则只作用于渲染层，绝不进入提示词。例外：`sharedState` 省略或为 `null` 时保留原值，`{}` 会清空；不合规则的声明以 `reason: sharedState` 拒绝。",
   "da0cc0b1439f3": "已保存素材（新 `version`、`status: passed`）。",
   "dcd6869c6042e": "`invalid_param`（JSON 错误）或 `validate_reject`（未知 mountLayer／pageMode、空白 `find`、单条规则或总大小超限）。响应体为 `{\"error\": \"<code>\"}`；空白 `find` 与大小限制另含 `message`（英文句子）及 `detail` `{reason, index (0-based, -1 for the whole set), name, max, actual, unit: \"bytes\"}`。",
   "db6e05fe712a9": "`version_conflict` — `version` 与已保存版本不符（素材已存在而 `version` 为 0 时亦同）。",
@@ -2610,5 +2610,6 @@
   "d11e635616732": "这次调用开出的新对话（或刷新了开场白的对话）的开场卡片变量，给用 `defaultRelay` 画出的开场消息列使用。卡片没有变量、或接回既有对话时不带；那时各列在 `firstPage` 里带 `cardState`。",
   "d6e1c0a7b3f21": "作者选的开局呈现：`greeting`（开场白开启对话；点选开场选项会填进输入框）或 `page`（玩家从开场网页与选项开局；点选选项会直接作为玩家的第一条消息发送，开场白可以空白）。一定会出现；未设置时为 `greeting`。",
   "d2b9f4e81c7a0": "开局呈现，`greeting` 或 `page`（见响应）。没有键或 `null` 保留已存的值；第一次保存时，`cardFormat` 为 `fengyue` 默认 `page`，其余默认 `greeting`。未知的值会被拒绝（`validate_reject` 原因 `openingMode`）。",
-  "d7a3c5e0f9b12": "开局呈现，与正式卡的 `openingMode` 相同；没有键保留已存的值。未知的值返回 `trial_unsupported`。"
+  "d7a3c5e0f9b12": "开局呈现，与正式卡的 `openingMode` 相同；没有键保留已存的值。未知的值返回 `trial_unsupported`。",
+  "ded388e1e0453": "这条规则替换内容里 `<style>` 的写法：`fengyue`（AI 风月的 CSS：它聊天页的元素 id 对到聊天页的对应元素，它本来就不生效的规则（`body`、`html`、`:root`）丢掉，按钮只保留上色，去掉 `!important`，结果放在自己的一层，高于平台默认、低于作者其他所有样式）、`tavern`（每条选择器前接 `.mes_text `）或 `mmd`（照写的生效）。省略时照 `cardFormat`。同一张卡可以有不同值的规则。"
 }

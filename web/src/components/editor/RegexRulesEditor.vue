@@ -14,6 +14,8 @@ import { confirmDialog } from "@/lib/confirm";
 import {
   REGEX_LIMITS,
   MESSAGE_TARGETS,
+  CSS_DIALECTS,
+  cssDialectFrom,
   ruleTargets,
   type RegexMessageTarget,
   utf8Bytes,
@@ -66,6 +68,16 @@ const testOutput = computed(() => {
   const rules = testScope.value === "one" && selected.value ? [selected.value] : set.value.rules;
   return applyRules(testInput.value, rules, "ai");
 });
+
+// CSS 寫法只對帶 <style> 的規則有意義：沒有樣式、也沒選過的規則不顯示這一欄。
+const showDialect = computed(() => !!selected.value && (!!selected.value.cssDialect || /<style\b/i.test(selected.value.replace)));
+
+function setDialect(value: string) {
+  if (!selected.value) return;
+  const dialect = cssDialectFrom(value);
+  if (dialect) selected.value.cssDialect = dialect;
+  else delete selected.value.cssDialect;
+}
 
 function toggleTarget(target: RegexMessageTarget, checked: boolean) {
   if (!selected.value) return;
@@ -188,6 +200,14 @@ watch(selectedId, () => { testScope.value = testScope.value; });
             </div>
             <p v-if="!ruleTargets(selected).length" class="subtle" data-target-warning role="status">{{ $t("regex.rule.targets.empty") }}</p>
           </fieldset>
+          <div v-if="showDialect" class="field rx__dialect">
+            <label for="rx-dialect">{{ $t("regex.rule.dialect") }}</label>
+            <select id="rx-dialect" class="input" data-rule-dialect :value="selected.cssDialect ?? ''" @change="setDialect(($event.target as HTMLSelectElement).value)">
+              <option value="">{{ $t("regex.rule.dialect.default") }}</option>
+              <option v-for="d in CSS_DIALECTS" :key="d" :value="d">{{ $t(`regex.rule.dialect.${d}`) }}</option>
+            </select>
+            <span v-if="selected.cssDialect === 'fengyue'" class="subtle">{{ $t("regex.rule.dialect.fengyue.hint") }}</span>
+          </div>
           <div class="field rx__replace">
             <label for="rx-replace">{{ $t("regex.rule.replace") }}</label>
             <textarea autocomplete="off" id="rx-replace" v-model="selected.replace" class="input mono-input" spellcheck="false" :placeholder="$t('regex.rule.replace.placeholder')" />
@@ -266,7 +286,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__rule:hover .rx__rule-tools, .rx__rule--on .rx__rule-tools { display: inline-flex; }
 .rx__empty { text-align: center; padding: var(--s-5) 0; }
 
-.rx__edit { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 0; padding: var(--s-3) var(--s-4); min-height: 0; overflow: hidden; }
+.rx__edit { display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: 0; padding: var(--s-3) var(--s-4); min-height: 0; overflow: hidden; }
 .rx__targets { border: 0; padding: 0; margin: 0 0 var(--s-2); min-width: 0; }
 .rx__targets legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
 .rx__target-options { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); }
@@ -275,6 +295,9 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__edit--empty { place-items: center; }
 .rx__edit .field { margin-bottom: var(--s-2); gap: 6px; }
 .rx__replace { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; }
+/* CSS 寫法那一列只在規則有樣式時出現：替換內容固定在最後一列，那一列不在時也撐滿。 */
+.rx__edit > .rx__replace { grid-row: 5; }
+.rx__dialect span { line-height: 1.5; }
 .rx__replace textarea { height: 100%; min-height: 160px; resize: none; }
 .mono-input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; }
 .count { font-variant-numeric: tabular-nums; }
