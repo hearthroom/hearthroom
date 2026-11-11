@@ -67,26 +67,43 @@
 
 任意 HTML，可包含 `<style>` 與 `<script>`。所有規則的 `<style>` 合併為一份樣式表套用；每段 `<script>` 每張卡執行一次。
 
-### CSS 寫法與層級
+### 卡片樣式與層級
 
-含 `<style>` 的規則可以在「CSS 寫法」選擇這段樣式的寫法：
+編輯器的「卡片樣式」用來設定整張卡的 CSS，直接貼入 CSS，不必加 `<style>` 標籤或填匹配文字，聊天頁開啟時只套用一次。CLI 卡片資料夾使用 `card.css`，上限為 512 KiB，以 UTF-8 位元組計算。
 
-| 寫法 | 套用方式 |
+作者不用選樣式來源。畫布會自動把 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button` 等已知風月選擇器對到本站的氣泡、輸入框與送出鍵；其他選擇器維持卡片原有規則：MMD／本站樣式照寫的生效，酒館樣式只作用在訊息內。同一段 CSS 可以混用風月與本站選擇器，單獨出現 `.mes` 不會被當成酒館來源標記。
+
+卡片樣式高於平台預設與主題，低於顯示規則的樣式。需要蓋過卡片基本外觀時，在顯示規則中設定。既有匯入卡會保留已儲存的樣式設定與優先序，開啟、儲存時不用重選來源或改動這些設定。
+
+### 常用外觀變數
+
+這些變數在兩種聊天頁共用；在「卡片樣式」的 `.canvas-root` 中設定，就能調整卡片的基本外觀。
+
+| 外觀 | 變數 |
 |---|---|
-| 預設 | 依卡片來源：酒館匯入的卡同「酒館」，其他同「MMD」。 |
-| AI 風月 | 寫給風月聊天頁的樣式。風月介面元素（如 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button`）對應到本站的氣泡、輸入框與送出鍵；`.dark` 開頭的規則在深色模式生效；`body`、`html`、`:root` 規則不生效（在風月也不生效）；按鈕類不套位置、尺寸、顯示方式、變形與外距；`!important` 會移除。從 AI 風月匯入的內置 CSS 自動使用這個寫法。 |
-| 酒館 | 每個選擇器前加上 `.mes_text `，只作用在訊息內。 |
-| MMD | 照寫的生效。 |
+| AI 氣泡底色 | `--lt-canvas-bubble-ai-bg` |
+| 氣泡文字顏色（AI 與玩家共用） | `--lt-canvas-bubble-fg` |
+| 玩家氣泡底色 | `--lt-canvas-bubble-user-bg` |
+| 輸入框底色 | `--lt-canvas-composer-field-bg` |
+| 送出鍵底色 | `--lt-canvas-send-bg` |
+| 強調色 | `--lt-canvas-accent` |
+| 字型（完整的 CSS font-family 名單） | `--lt-canvas-font` |
+| 對話背景色 | `--lt-canvas-bg` |
 
-同一張卡可以混用不同寫法的規則。同一個元素被多處設定樣式時，層級高的優先：
+```css
+.canvas-root {
+  --lt-canvas-bubble-ai-bg: #243447;
+  --lt-canvas-bubble-fg: #f2f2f5;
+  --lt-canvas-bubble-user-bg: #37465b;
+  --lt-canvas-composer-field-bg: #1e2938;
+  --lt-canvas-send-bg: #355a7c;
+  --lt-canvas-accent: #8fc9ff;
+  --lt-canvas-font: system-ui, sans-serif;
+  --lt-canvas-bg: #121b28;
+}
+```
 
-1. 平台預設樣式。
-2. 站台的深淺色與配色；MMD 卡固定深色。
-3. `--chat-*` 變數（見「CSS 變數」），只改平台預設用的顏色。
-4. 「AI 風月」寫法的樣式。
-5. 其他規則的 `<style>`：不論選擇器權重都高於第 4 層；彼此之間依一般 CSS 規則，權重高者優先，權重相同時後面的規則優先。
-
-要蓋過風月寫法的樣式，在另一條規則寫一般的 `<style>` 即可，不需要 `!important`。
+既有 MMD 變數仍可使用，包括 `--background-color`、`--primary-font-color` 與 `--input-background-color`。變數只影響有使用它的元素；卡片直接指定的 CSS 可能優先。
 
 ### 功能欄
 
@@ -127,7 +144,7 @@
 
 ### CSS 變數
 
-顏色與尺寸由 `--chat-*` 變數定義（如 `--chat-bg`、`--chat-text`、`--chat-accent`、`--chat-bubble-ai-bg`）。在根節點覆寫即可整體換色。
+沙箱殼另外有 `--chat-*` 變數（如 `--chat-bg`、`--chat-text`、`--chat-accent`），僅適用於沙箱。需要和舊版聊天頁共用的樣式，請用[常用外觀變數](#常用外觀變數)。
 
 ### sdk
 
