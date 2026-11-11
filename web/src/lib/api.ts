@@ -617,6 +617,8 @@ export interface ReviewDetail {
       cardFormat?: string;
       /** 首屏網頁（作者 HTML，開新對話時畫布最上方）；沒有就不帶。 */
       openingPage?: string;
+      cardCss?: string;
+      cardCssDialect?: string;
       /** 開局呈現：只在跟卡片格式的預設不同時才帶（見 card-transfer-resources）。 */
       openingMode?: string;
     };
@@ -1580,6 +1582,8 @@ export interface AuthorAsset {
   cardFormat: string;
   /** 首屏網頁：開新對話時畫布最上方的作者網頁，只顯示、不送模型。 */
   openingPage: string;
+  cardCss?: string;
+  cardCssDialect?: string;
   /** 開局呈現（greeting｜page）。舊上游不帶就是沒有，編輯頁照卡片格式判斷。 */
   openingMode?: string;
   status: string;
@@ -1592,6 +1596,8 @@ const asAuthorAsset = (b: Partial<AuthorAsset>): AuthorAsset => ({
   pageMode: b.pageMode ?? "",
   cardFormat: b.cardFormat ?? "",
   openingPage: b.openingPage ?? "",
+  ...(typeof b.cardCss === "string" ? { cardCss: b.cardCss } : {}),
+  ...(typeof b.cardCssDialect === "string" ? { cardCssDialect: b.cardCssDialect } : {}),
   ...(b.openingMode ? { openingMode: b.openingMode } : {}),
   status: b.status ?? "none",
   version: b.version ?? 0,

@@ -272,6 +272,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <li v-if="current.draft.jailbreak">{{ $t("import.landed.custom", { n: [...current.draft.jailbreak].length }) }}</li>
         <li v-if="current.draft.prologue.length">{{ $t("import.landed.prologue", { n: current.draft.prologue.length }) }}</li>
         <li v-if="current.regex?.openingPage">{{ $t("import.landed.openingPage", { n: [...current.regex.openingPage].length }) }}</li>
+        <li v-if="current.regex?.cardCss" data-import-card-css>{{ $t("editor.cardCss.title") }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
         <li v-if="current.worldbook">{{ $t("import.landed.worldbook", { n: current.worldbook.entries.length }) }}</li>

@@ -10,16 +10,16 @@ import { createApp, nextTick } from "vue";
 import ImportPanel from "../src/components/editor/ImportPanel.vue";
 import { i18n } from "../src/lib/i18n";
 import cases from "./fixtures/fengyue-cases.json";
-import { fengyueToDraft, isFengyueExport, FENGYUE_CSS_RULE_ID } from "../src/lib/fengyue";
+import { fengyueToDraft, isFengyueExport } from "../src/lib/fengyue";
 import { installCard, renderContent } from "../../stage/src/sandbox/rules";
 import { stylePolicyFor } from "../../stage/src/common/author-style-policy";
+import { compileCardCss } from "../../stage/src/common/card-css";
 
 type Case = { name: string; input: Record<string, unknown>; expect: Record<string, unknown> & { fengyue: boolean } };
 
 function project(input: Record<string, unknown>) {
   const result = fengyueToDraft(input, { language: "zh-Hans" });
   const rules = result.regex?.rules ?? [];
-  const cssRule = rules.find((r) => r.id === FENGYUE_CSS_RULE_ID);
   return {
     fengyue: true,
     name: result.draft.roleName,
@@ -29,7 +29,7 @@ function project(input: Record<string, unknown>) {
     custom: result.draft.jailbreak,
     intro: result.intro,
     prologue: result.draft.prologue,
-    css: cssRule ? /<style>([\s\S]*)<\/style>/.exec(cssRule.replace)?.[1] ?? "" : "",
+    css: result.regex?.cardCss ?? "",
     lorebook: (result.worldbook?.entries ?? []).map((e) => ({
       name: e.name,
       content: e.content,
@@ -38,7 +38,7 @@ function project(input: Record<string, unknown>) {
       enabled: e.isEnabled,
       order: e.matchOptions?.order ?? 0,
     })),
-    rules: rules.filter((r) => r.id !== FENGYUE_CSS_RULE_ID).map((r) => ({ name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, targets: r.targets ?? null })),
+    rules: rules.map((r) => ({ name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, targets: r.targets ?? null })),
     notes: result.dropped.map((n) => n.key).filter((k) => k.startsWith("import.fengyue.")).map((k) => k.slice("import.fengyue.".length)).sort(),
   };
 }
@@ -58,8 +58,9 @@ describe("風月匯出檔：網頁這邊的落點", () => {
   it("內置 CSS 在沙箱裝卡時成為常駐樣式", () => {
     const result = fengyueToDraft(sample, { language: "zh-Hans" });
     expect(result.regex?.pageMode).toBe("sandbox");
-    const installed = installCard(result.regex!.rules, stylePolicyFor(result.regex!.format ?? "mmd"));
-    expect(installed.styles.join("\n")).toContain(".st-bar{color:#c33");
+    const css = compileCardCss(result.regex!);
+    expect(css).toContain(".st-bar");
+    expect(css).toContain("color:#c33");
   });
 
   it("示範卡在沙箱裝卡時：AI 輸出正則只改 AI 訊息、全部訊息正則兩邊都改、內置 CSS 與狀態欄落地", () => {
@@ -69,7 +70,9 @@ describe("風月匯出檔：網頁這邊的落點", () => {
     expect(result.regex?.format).toBe("fengyue");
     expect(result.regex?.openingPage).toContain("FY-INTRO 星灯茶馆");
     const installed = installCard(result.regex!.rules, stylePolicyFor(result.regex!.format ?? "fengyue"));
-    expect(installed.styles.join("\n")).toContain(".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px}");
+    expect(result.regex?.cardCss).toContain(".st-bar{color:#c33;font-weight:700;border-left:4px solid #c33;padding-left:8px}");
+    expect(compileCardCss(result.regex!)).toContain(".st-bar");
+    expect(compileCardCss(result.regex!)).toContain("color:#c33");
     const userHtml = renderContent("我是茶客3号，暗号是 FYSWAP", installed.rules, { messageRole: "user", macros: { user: "旅人", char: "阿萤" } });
     expect(userHtml).toContain("【FY-RGX-第3位客人】");
     expect(userHtml).toContain("FYSWAP");
@@ -191,6 +194,7 @@ describe("匯入面板認得風月的檔", () => {
       expect(text).toContain("xB_au9VW");
       expect(text).toContain(i18n.global.t("import.landed.prologue", { n: 1 }));
       expect(text).toContain(i18n.global.t("import.landed.custom", { n: [..."TEST-POST-TEXT 后置词"].length }));
+      expect(el.querySelector('[data-import-card-css]')).not.toBeNull();
       expect(text).toContain(i18n.global.t("import.fengyue.shortcuts", { n: 1 }));
       expect(el.querySelector(".seg__item--on")?.textContent?.trim()).toBe(tab === 0 ? i18n.global.t("import.kind.tavern") : i18n.global.t("import.kind.fengyue"));
       done();
