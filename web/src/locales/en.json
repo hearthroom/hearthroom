@@ -4793,5 +4793,8 @@
   "editor.cardCss.removeTitle": "Remove card styles?",
   "editor.cardCss.removeMessage": "This clears the appearance settings and custom CSS here. It takes effect when you save the card.",
   "editor.cardCss.removeConfirm": "Remove styles",
-  "editor.cardCss.guideAnchor": "common-style-variables"
+  "editor.cardCss.guideAnchor": "common-style-variables",
+  "editor.cardCss.fengyueAliases": "Imported Fengyue cards can use #installedBuiltInCss and .dark #installedBuiltInCss for the whole page and dark mode.",
+  "editor.cardCss.copyFengyueRoot": "Copy page selector",
+  "editor.cardCss.copyFengyueDark": "Copy dark selector"
 }

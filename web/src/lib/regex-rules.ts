@@ -435,6 +435,7 @@ function migrateLegacyCardCss(set: RegexRuleSet, asset: AuthorAssetLike): void {
   const match = /^\$1<style>([\s\S]*?)<\/style>$/.exec(rule.replace);
   // CSS 字串裡若出現提早閉合 style 的內容，不當成可安全搬移的單一樣式。
   if (!match || /<\/?style\b/i.test(match[1])) return;
+  if (!("cardCss" in set) && set.rules.some(peer => peer !== rule && peer.enabled && /<(?:style|script)\b/i.test(peer.replace))) return;
   if (!("cardCss" in set)) {
     set.cardCss = match[1];
     set.cardCssDialect = rule.cssDialect ?? "fengyue";
