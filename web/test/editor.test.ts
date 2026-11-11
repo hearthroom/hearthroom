@@ -31,7 +31,7 @@ const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none"
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
- fetchApprovedDraft:vi.fn(async()=>({approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"draft"})),
+ fetchApprovedDraft:vi.fn(async()=>({operationId:'00000000-0000-4000-8000-000000000001',approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"draft"})),
  saveApprovedDraft:vi.fn(async()=>({approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"saved"})),
  fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
   registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
@@ -2240,4 +2240,83 @@ it('keeps save recovery guidance when restore committed but reloading its baseli
  await submit();expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
  expect(root.querySelector('[data-approved-undo]')).toBeNull();
  expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
+});
+
+it('recovers an unsaved approved restore after reload without undo and can discard to the server draft',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const server={roleName:'Server draft',roleWelcome:'Draft opening',roleDetailDesc:'Draft setting'};
+ const approved={roleName:'Approved title',roleWelcome:'Approved opening',roleDetailDesc:'Approved setting'};
+ api.fetchRoleDetail.mockResolvedValue(server).mockResolvedValueOnce(server).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await type($('#f-name'),'Edit after restore');await new Promise(r=>setTimeout(r,450));
+ expect(Object.keys(localStorage).some(k=>k.startsWith('hearthroom.draft.approved.'))).toBe(true);
+ app.unmount();root.remove();api.fetchRoleDetail.mockResolvedValue({...server,roleName:'New server draft'});await mount('/cards/r1/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Edit after restore');
+ expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('Approved opening');
+ expect(root.textContent).toContain(i18n.global.t('editor.draftRestored'));
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();
+ expect(root.querySelector('[data-approved-restore]')).toBeNull();
+ btnIn(root,i18n.global.t('editor.draftDiscard')).click();await flush();
+ expect($<HTMLInputElement>('#f-name').value).toBe('New server draft');
+ expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('Draft opening');
+ expect(root.textContent).not.toContain(i18n.global.t('editor.draftRestored'));
+ expect(Object.keys(localStorage).some(k=>k.startsWith('hearthroom.draft.approved.'))).toBe(false);
+});
+
+it('saves a recovered approved restore atomically before applying its later edits',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const server={roleName:'Server draft',roleWelcome:'Draft opening',roleDetailDesc:'Draft setting'};
+ const approved={roleName:'Approved title',roleWelcome:'Approved opening',roleDetailDesc:'Approved setting'};
+ api.fetchRoleDetail.mockResolvedValue(server).mockResolvedValueOnce(server).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ const version=api.fetchApprovedDraft.mock.results[0].value;await type($('#f-name'),'Edit after restore');
+ app.unmount();root.remove();await mount('/cards/r1/edit');
+ api.fetchRoleDetail.mockResolvedValueOnce(approved);await submit();
+ expect(api.saveApprovedDraft).toHaveBeenCalledWith('r1',await version,'tok');
+ expect(api.patchRoleDocument).toHaveBeenCalledWith('r1',{roleName:'Edit after restore'},'tok');
+ expect(Object.keys(localStorage).some(k=>k.startsWith('hearthroom.draft.approved.'))).toBe(false);
+ expect(root.textContent).not.toContain(i18n.global.t('editor.draftRestored'));
+});
+
+it('isolates approved recovery by source and author and clears it before an uncertain save',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const server={roleName:'Server draft',roleWelcome:'Draft opening',roleDetailDesc:'Draft setting'};
+ const approved={roleName:'Approved title',roleWelcome:'Approved opening',roleDetailDesc:'Approved setting'};
+ api.fetchRoleDetail.mockResolvedValue(server).mockResolvedValueOnce(server).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ app.unmount();root.remove();await mount('/cards/r2/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Server draft');
+ expect(root.textContent).not.toContain(i18n.global.t('editor.draftRestored'));
+ app.unmount();root.remove();platforms.profile={identities:[{provider:'harbor',externalId:'another-author'}]};await mount('/cards/r1/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Server draft');
+ expect(root.textContent).not.toContain(i18n.global.t('editor.draftRestored'));
+ app.unmount();root.remove();platforms.profile=undefined;await mount('/cards/r1/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Approved title');
+ api.saveApprovedDraft.mockRejectedValueOnce(new TypeError('Failed to fetch'));await submit();
+ expect(Object.keys(localStorage).some(k=>k.startsWith('hearthroom.draft.approved.'))).toBe(false);
+ expect(root.textContent?.split(i18n.global.t('editor.revertSaveUnknown')).length).toBe(2);
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();
+});
+
+it.each(['book','asset'] as const)('preserves cached recovery without applying it when the server %s baseline fails',async(part)=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const server={roleName:'Server draft',roleWelcome:'Draft opening',roleDetailDesc:'Draft setting'};
+ const approved={roleName:'Approved title',roleWelcome:'Approved opening',roleDetailDesc:'Approved setting'};
+ api.fetchRoleDetail.mockResolvedValue(server).mockResolvedValueOnce(server).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ app.unmount();root.remove();
+ (part==='book'?api.fetchWorldbookEntries:api.fetchAuthorAsset).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+ await mount('/cards/r1/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Server draft');
+ expect(root.textContent).not.toContain(i18n.global.t('editor.draftRestored'));
+ expect($<HTMLButtonElement>('.bar button[type="submit"]').disabled).toBe(true);
+ await submit();expect(api.saveApprovedDraft).not.toHaveBeenCalled();
+ expect(Object.keys(localStorage).some(k=>k.startsWith('hearthroom.draft.approved.'))).toBe(true);
+ app.unmount();root.remove();await mount('/cards/r1/edit');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Approved title');
+ expect(root.textContent).toContain(i18n.global.t('editor.draftRestored'));
 });
