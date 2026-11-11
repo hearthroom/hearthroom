@@ -29,6 +29,10 @@ export type CssDialect = (typeof CSS_DIALECTS)[number];
 const LEGACY_FENGYUE_CSS_RULE_ID = "hearthroom-fengyue-inner-css";
 export const cssDialectFrom = (v: unknown): CssDialect | undefined => (CSS_DIALECTS as readonly string[]).includes(String(v)) ? (v as CssDialect) : undefined;
 
+/** 整卡樣式的新版原站底樣式提示，不擴大顯示規則的寫法清單。 */
+export type CardCssDialect = CssDialect | "fengyue-v2";
+const cardCssDialectFrom = (v: unknown): CardCssDialect | undefined => v === "fengyue-v2" ? v : cssDialectFrom(v);
+
 export interface RegexRule {
   id: string;
   name: string;
@@ -73,7 +77,7 @@ export interface RegexRuleSet {
   /** 整卡只套用一次的作者 CSS；缺欄位保留舊上游資料，空字串清除。 */
   cardCss?: string;
   /** 匯入／舊資料的相容提示；作者不用選。 */
-  cardCssDialect?: CssDialect;
+  cardCssDialect?: CardCssDialect;
   /**
    * 開局呈現：作者在編輯頁選的「開場白」（greeting）或「開場網頁」（page）。畫布看它決定點開場選項
    * 是填進輸入框還是直接送出；缺＝還沒讀到上游的值，照卡片格式判斷（見 openingModeOf）。
@@ -416,7 +420,7 @@ export interface AuthorAssetLike {
 function migrateLegacyCardCss(set: RegexRuleSet, asset: AuthorAssetLike): void {
   if (typeof asset.cardCss === "string") {
     set.cardCss = asset.cardCss;
-    const dialect = cssDialectFrom(asset.cardCssDialect);
+    const dialect = cardCssDialectFrom(asset.cardCssDialect);
     if (dialect) set.cardCssDialect = dialect;
   }
   const candidates = set.rules.filter(r => r.id === LEGACY_FENGYUE_CSS_RULE_ID);

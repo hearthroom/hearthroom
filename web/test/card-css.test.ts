@@ -5,9 +5,17 @@ import { fengyueToDraft } from '../src/lib/fengyue';
 const legacy = { id: 'hearthroom-fengyue-inner-css', name: 'CSS', find: '/([\\s\\S])$/', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true, cssDialect: 'fengyue' };
 
 describe('card styles are separate from message replacement', () => {
+  it('preserves the card-only version through save/export/reimport without accepting it on a display rule', async () => {
+    const { ruleSetFromImport, ruleSetToExport, cssDialectFrom } = await import('../src/lib/regex-rules');
+    const css = '\uFEFF\r\n#ai-chat-input { border-width: 1px }\r\n';
+    const set = ruleSetFromAuthorAsset({ rules: [], cardCss: css, cardCssDialect: 'fengyue-v2' });
+    expect(ruleSetToAuthorAsset(set, 2)).toMatchObject({ cardCss: css, cardCssDialect: 'fengyue-v2' });
+    expect(ruleSetFromImport(ruleSetToExport(set, ''))?.set).toMatchObject({ cardCss: css, cardCssDialect: 'fengyue-v2' });
+    expect(cssDialectFrom('fengyue-v2')).toBeUndefined();
+  });
   it('imports Fengyue built-in CSS into the card field without a fake replacement rule', () => {
     const result = fengyueToDraft({ title: 'T', pre_prompt: 'p', ai_variable_prompt: 'v', description: 'd', builtInCss: '#ai-chat-input{color:red}' } as any, { language: 'zh-Hant' });
-    expect(result.regex).toMatchObject({ cardCss: '#ai-chat-input{color:red}', cardCssDialect: 'fengyue' });
+    expect(result.regex).toMatchObject({ cardCss: '#ai-chat-input{color:red}', cardCssDialect: 'fengyue-v2' });
     expect(result.regex?.rules.some(r => r.id === legacy.id)).toBe(false);
   });
 
