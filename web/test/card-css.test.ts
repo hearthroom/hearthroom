@@ -25,6 +25,14 @@ describe('card styles are separate from message replacement', () => {
       expect('cardCss' in set).toBe(false);
     }
   });
+  it('preserves the original rule order when another enabled style or script may depend on it', () => {
+    for (const replace of ['<style>#ai-chat-input{color:blue}</style>', '<script>window.theme=1</script>']) {
+      const peer = { id: 'peer', find: 'x', replace, enabled: true, cssDialect: 'fengyue' };
+      const set = ruleSetFromAuthorAsset({ rules: [peer, legacy] });
+      expect(set.rules.map(r => r.id)).toEqual(['peer', legacy.id]);
+      expect('cardCss' in ruleSetToAuthorAsset(set, 2)).toBe(false);
+    }
+  });
 
   it('honors an explicit empty field over the legacy rule; a missing field stays omitted on save', () => {
     const cleared = ruleSetFromAuthorAsset({ rules: [legacy], cardCss: '' } as any);
