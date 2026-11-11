@@ -42,7 +42,14 @@ function updateField(field: (typeof APPEARANCE_FIELDS)[number], value: string) {
   storedValues[field.id] = value.trim();
   commit();
 }
-function updateCustom(value: string) { customCss.value = value; commit(); }
+function updateCustom(value: string) {
+  const parsed = readAppearance(value);
+  if (parsed.customCss !== value) {
+    for (const field of APPEARANCE_FIELDS) values[field.id] = storedValues[field.id] = parsed.values[field.id] ?? "";
+  }
+  customCss.value = parsed.customCss;
+  commit();
+}
 
 const bytes = computed(() => new TextEncoder().encode(props.modelValue).length);
 const overLimit = computed(() => props.invalid || bytes.value > CARD_CSS_MAX_BYTES);
@@ -82,16 +89,10 @@ const reference = [
   { id: "background", variable: "--lt-canvas-bg", selector: ".canvas-root" },
   { id: "dark", variable: "", selector: '.canvas-root[data-lt-theme="dark"]' },
 ];
-const example = `.canvas-root {
-  --lt-canvas-bubble-ai-bg: #243447;
-  --lt-canvas-bubble-fg: #f2f2f5;
-  --lt-canvas-bubble-user-bg: #37465b;
-  --lt-canvas-composer-field-bg: #1e2938;
-  --lt-canvas-send-bg: #355a7c;
-  --lt-canvas-accent: #8fc9ff;
-  --lt-canvas-font: system-ui, sans-serif;
-  --lt-canvas-bg: #121b28;
-}`;
+const example = writeAppearance({
+  aiBg: "#243447", bubbleText: "#f2f2f5", userBg: "#37465b", inputBg: "#1e2938",
+  sendBg: "#355a7c", accent: "#8fc9ff", font: "system-ui, sans-serif", background: "#121b28",
+}, "");
 const guideHref = computed(() => `${locale.value === "zh-Hant" ? "" : `/${locale.value}`}/guide?way=web#${t("editor.cardCss.guideAnchor")}`);
 const copied = ref("");
 const copyStatus = ref("");
@@ -130,7 +131,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer));
               <span v-if="field.kind === 'font'" :style="!problems[field.id] ? { fontFamily: values[field.id] || undefined } : undefined">Aa</span>
             </span>
             <label :for="`${id}-${field.id}`">{{ t(`editor.cardCss.field.${field.id}`) }}</label>
-            <input :id="`${id}-${field.id}`" class="input card-style__value" :data-appearance-field="field.id" :value="values[field.id]" :placeholder="t('editor.cardCss.default')" :aria-invalid="problems[field.id] || undefined" :aria-describedby="problems[field.id] ? `${id}-${field.id}-error` : undefined" spellcheck="false" @input="updateField(field, ($event.target as HTMLInputElement).value)" />
+            <input :id="`${id}-${field.id}`" class="input card-style__value" :data-appearance-field="field.id" :value="values[field.id]" :placeholder="t('editor.cardCss.default')" :aria-invalid="problems[field.id] || undefined" :aria-describedby="problems[field.id] ? `${id}-${field.id}-error` : undefined" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" @input="updateField(field, ($event.target as HTMLInputElement).value)" />
             <button v-if="values[field.id]" type="button" class="btn btn--sm btn--icon btn--ghost card-style__clear" :data-appearance-clear="field.id" :aria-label="t('editor.cardCss.clearField', { name: t(`editor.cardCss.field.${field.id}`) })" @click="updateField(field, '')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
             </button>
@@ -142,7 +143,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer));
 
       <div class="field card-style__custom">
         <label :for="`${id}-custom`">{{ t("editor.cardCss.custom") }}</label>
-        <textarea :id="`${id}-custom`" class="input" :value="customCss" :placeholder="t('editor.cardCss.placeholder')" spellcheck="false" :aria-invalid="overLimit || undefined" :aria-describedby="`${id}-custom-hint ${id}-usage${overLimit ? ` ${id}-limit` : ''}`" @input="updateCustom(($event.target as HTMLTextAreaElement).value)" />
+        <textarea :id="`${id}-custom`" class="input" :value="customCss" :placeholder="t('editor.cardCss.placeholder')" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" :aria-invalid="overLimit || undefined" :aria-describedby="`${id}-custom-hint ${id}-usage${overLimit ? ` ${id}-limit` : ''}`" @input="updateCustom(($event.target as HTMLTextAreaElement).value)" />
         <div class="card-style__custom-meta">
           <span :id="`${id}-custom-hint`" class="subtle">{{ t("editor.cardCss.customHint") }}</span>
           <span :id="`${id}-usage`" class="subtle card-style__usage" :class="{ 'card-style__error': overLimit }" data-card-css-usage>{{ t("editor.cardCss.usage", { size: (bytes / 1024).toLocaleString(String(locale), { maximumFractionDigits: 1 }), max: CARD_CSS_MAX_BYTES / 1024 }) }}</span>
@@ -173,6 +174,11 @@ onBeforeUnmount(() => clearTimeout(copyTimer));
           </dl>
           <p class="subtle">{{ t("editor.cardCss.directCssHint") }}</p>
           <p class="subtle">{{ t("editor.cardCss.fengyueHint") }}</p>
+          <div v-if="props.cssDialect === 'fengyue'" class="card-style__aliases" data-fengyue-aliases>
+            <p class="subtle">{{ t("editor.cardCss.fengyueAliases") }}</p>
+            <div class="card-style__code-row"><code>#installedBuiltInCss</code><button type="button" class="btn btn--sm btn--ghost" data-copy-fengyue-root @click="copy('#installedBuiltInCss', 'fengyue-root')">{{ t(copied === 'fengyue-root' ? "editor.cardCss.copied" : "editor.cardCss.copyFengyueRoot") }}</button></div>
+            <div class="card-style__code-row"><code>.dark #installedBuiltInCss</code><button type="button" class="btn btn--sm btn--ghost" data-copy-fengyue-dark @click="copy('.dark #installedBuiltInCss', 'fengyue-dark')">{{ t(copied === 'fengyue-dark' ? "editor.cardCss.copied" : "editor.cardCss.copyFengyueDark") }}</button></div>
+          </div>
           <div class="card-style__example">
             <div class="card-style__example-head"><h4>{{ t("editor.cardCss.example") }}</h4><button type="button" class="btn btn--sm btn--ghost" data-copy-example @click="copy(example, 'example')">{{ t(copied === 'example' ? "editor.cardCss.copied" : "editor.cardCss.copy") }}</button></div>
             <pre><code>{{ example }}</code></pre>
@@ -216,6 +222,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer));
 .card-style__reference-toggle svg { transition: transform var(--dur) var(--ease); }
 .card-style__reference-toggle svg.is-open { transform: rotate(180deg); }
 .card-style__reference-body { display: grid; gap: var(--s-3); padding-top: var(--s-2); }
+.card-style__aliases { display: grid; gap: var(--s-2); }
 .card-style__positions { margin: 0; }
 .card-style__position { display: grid; grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--s-3); padding-block: var(--s-2); border-bottom: 1px solid var(--line); align-items: center; }
 .card-style__position dt { font-size: 13px; font-weight: 600; }

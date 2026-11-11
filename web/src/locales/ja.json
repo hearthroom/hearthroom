@@ -4742,5 +4742,8 @@
   "editor.cardCss.removeTitle": "カードのスタイルを削除しますか？",
   "editor.cardCss.removeMessage": "ここの外観設定とカスタム CSS を消去します。カードを保存すると反映されます。",
   "editor.cardCss.removeConfirm": "スタイルを削除",
-  "editor.cardCss.guideAnchor": "よく使う外観変数"
+  "editor.cardCss.guideAnchor": "よく使う外観変数",
+  "editor.cardCss.fengyueAliases": "取り込み済みの風月カードでは、画面全体に #installedBuiltInCss、ダークモードに .dark #installedBuiltInCss を使えます。",
+  "editor.cardCss.copyFengyueRoot": "画面全体をコピー",
+  "editor.cardCss.copyFengyueDark": "ダーク用をコピー"
 }
