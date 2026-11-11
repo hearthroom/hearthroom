@@ -101,7 +101,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 <template>
   <Teleport to="body">
     <div v-if="confirmState.current" class="dlg-backdrop" @click.self="!busy && settleConfirm(false)">
-      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
+      <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage,'dlg--phrase-wrap':confirmState.current.phraseWrap }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
@@ -192,6 +192,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 }
 /* 低權重的危險確認在韓文按詞換行（標題、內文）；長 key 仍靠 overflow-wrap: anywhere 斷開 */
 .dlg--danger-subdued:lang(ko) .dlg__title, .dlg--danger-subdued:lang(ko) .dlg__msg { word-break: keep-all; }
+.dlg--phrase-wrap:lang(ko) .dlg__title, .dlg--phrase-wrap:lang(ko) .dlg__msg { word-break: keep-all; }
+.dlg--phrase-wrap:lang(ja) .dlg__title, .dlg--phrase-wrap:lang(ja) .dlg__msg { word-break: auto-phrase; }
 /* 低權重的破壞動作：透明底、警示色字與細框；hover 只加淡色，不變實心紅 */
 .dlg__subdued { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
 .dlg__subdued:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: var(--danger); }
