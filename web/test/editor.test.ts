@@ -2228,12 +2228,14 @@ it('keeps the same save identity and withholds undo while confirming a lost resp
 it('keeps save recovery guidance when restore committed but reloading its baseline failed',async()=>{
  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
  const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
- api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved).mockRejectedValueOnce(new Error('baseline unavailable')).mockResolvedValueOnce(approved);
+ api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved).mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(approved);
  await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
  await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
  await submit();
  expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);expect(root.querySelector('[data-approved-undo]')).toBeNull();
  expect(root.textContent).toContain(i18n.global.t('editor.revertSaveUnknown'));
+ expect(root.querySelector('.body__scroll > .notice--error')?.textContent?.trim()).toBe(i18n.global.t('editor.revertSaveUnknown'));
+ expect(root.textContent).not.toContain('Failed to fetch');
  await submit();expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
  expect(root.querySelector('[data-approved-undo]')).toBeNull();
 });
