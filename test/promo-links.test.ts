@@ -71,7 +71,7 @@ it.each(['https://evil.test/', '//evil.test/', '/\\evil.test', '/%2f%2fevil.test
 const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
-  'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie',
+  'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
 ];
 
 it('all configured targets are safe local landings with attribution', () => {
@@ -85,6 +85,7 @@ it('all configured targets are safe local landings with attribution', () => {
     expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog']
       : code.startsWith('x-') ? ['x', 'social']
+      : code.startsWith('dcard-') ? ['dcard', 'social']
       : code.startsWith('bh-hut-') ? ['bahamut', 'cabin'] : ['bahamut', 'forum'];
     expect(url.searchParams.get('utm_source')).toBe(source);
     expect(url.searchParams.get('utm_medium')).toBe(medium);
@@ -213,6 +214,14 @@ it('serves the approved X Fengyue import post to the create page with the offici
   const response = await visit('/go/x-fengyue-import?ref=ATTACKER&utm_campaign=override&url=https://evil.test');
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe('/create?ref=94A9H94Z&utm_source=x&utm_medium=social&utm_campaign=x-fengyue-import-20261111');
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
+});
+
+it('serves the approved Dcard Fanren first post to the card with the author ref', async () => {
+  const response = await visit('/go/dcard-fanren?ref=ATTACKER&utm_campaign=override&url=https://evil.test');
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/cards/100257?ref=6M9ZV5FS&utm_source=dcard&utm_medium=social&utm_campaign=dcard-fanren-20261111');
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });

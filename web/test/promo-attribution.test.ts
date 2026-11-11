@@ -9,7 +9,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
-  'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie',
+  'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
 ];
 
 it('every configured landing sends the original campaign and saves the referral', () => {
