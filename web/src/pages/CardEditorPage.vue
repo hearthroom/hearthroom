@@ -1249,7 +1249,7 @@ async function save() {
       // 卡建好了、內容沒存進去：講清楚，並把卡的編號記進本機草稿，重開頁面再存也是同一張。
       storeDraft();
       error.value = t("editor.createdButNotSaved", { why });
-    } else error.value = why;
+    } else error.value = pendingRevert.value?.saveAttempted && why === t('editor.revertSaveUnknown') ? '' : why;
   } finally {
     saving.value = false;
   }
