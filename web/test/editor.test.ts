@@ -2234,8 +2234,10 @@ it('keeps save recovery guidance when restore committed but reloading its baseli
  await submit();
  expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);expect(root.querySelector('[data-approved-undo]')).toBeNull();
  expect(root.textContent).toContain(i18n.global.t('editor.revertSaveUnknown'));
- expect(root.querySelector('.body__scroll > .notice--error')?.textContent?.trim()).toBe(i18n.global.t('editor.revertSaveUnknown'));
+ expect(root.querySelector('.body__scroll > .notice--error')).toBeNull();
+ expect(root.textContent?.split(i18n.global.t('editor.revertSaveUnknown')).length).toBe(2);
  expect(root.textContent).not.toContain('Failed to fetch');
  await submit();expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
  expect(root.querySelector('[data-approved-undo]')).toBeNull();
+ expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
 });
