@@ -31,6 +31,8 @@ const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none"
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
+ fetchApprovedDraft:vi.fn(async()=>({approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"draft"})),
+ saveApprovedDraft:vi.fn(async()=>({approvedRoleId:"approved-r1",approvalRevision:"approval",policyRevision:"saved"})),
  fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
   registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
@@ -2140,4 +2142,85 @@ describe("分類與玩法的展開列", () => {
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(row.textContent).toContain(i18n.global.t("editor.tags.picked", { n: 1 }));
   });
+});
+
+
+describe('restore currently published content',()=>{
+ it('previews without writing and restores the full unsaved draft on undo',async()=>{
+  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Draft title',roleWelcome:'Draft opening',roleDetailDesc:'Draft setting'})
+   .mockResolvedValueOnce({roleName:'Approved title',roleWelcome:'Approved opening',roleDetailDesc:'Approved setting'});
+  await mount('/cards/r1/edit');
+  await type($('#f-name'),'Unsaved title');
+  const entry=$<HTMLButtonElement>('[data-approved-restore]');expect(entry).not.toBeNull();entry.click();await flush();
+  expect(confirmState.current?.focusCancel).toBe(true);
+  await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+  expect(($<HTMLInputElement>('#f-name')).value).toBe('Approved title');
+  expect(api.saveApprovedDraft).not.toHaveBeenCalled();expect(api.patchRoleDocument).not.toHaveBeenCalled();
+  $<HTMLButtonElement>('[data-approved-undo]').click();await flush();
+  expect(($<HTMLInputElement>('#f-name')).value).toBe('Unsaved title');
+  expect(root.querySelector('[data-approved-undo]')).toBeNull();
+ });
+ it('keeps the original input when any dependency read fails',async()=>{
+  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Draft title',roleWelcome:'Draft opening'}).mockRejectedValueOnce(new Error('network'));
+  await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+  await expect(confirmState.current!.onConfirm!({} as any)).rejects.toThrow();
+  expect(($<HTMLInputElement>('#f-name')).value).toBe('Draft title');expect(api.saveApprovedDraft).not.toHaveBeenCalled();settleConfirm(false);
+ });
+ it.each([{revisionState:'same'},{revisionState:'unknown'},{revisionState:'changed',restriction:'delisted'},{revisionState:'changed',syncState:'syncing'},{revisionState:'changed',review:'pending'},{revisionState:'changed',update:'pending'}])('hides the action for %o',async state=>{
+  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy(state)});await mount('/cards/r1/edit');
+  expect(root.querySelector('[data-approved-restore]')).toBeNull();
+ });
+});
+
+it('saves an unedited revert atomically without writing frozen dependencies',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await submit();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+ expect(api.patchRoleDocument).not.toHaveBeenCalled();expect(api.patchRoleWelcome).not.toHaveBeenCalled();
+ expect(api.patchWorldbookDocument).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();
+});
+
+it('asks before discarding edits made after a revert and keeps them when cancelled',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Broken draft',roleWelcome:'Opening'}).mockResolvedValueOnce({roleName:'Published title',roleWelcome:'Opening'});
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await type($('#f-name'),'Post-revert edit');$<HTMLButtonElement>('[data-approved-undo]').click();await flush();
+ expect(confirmState.current?.title).toBe(i18n.global.t('editor.revertUndoTitle'));settleConfirm(false);await flush();
+ expect($<HTMLInputElement>('#f-name').value).toBe('Post-revert edit');
+ $<HTMLButtonElement>('[data-approved-undo]').click();await flush();settleConfirm(true);await flush();
+ expect($<HTMLInputElement>('#f-name').value).toBe('Broken draft');expect(api.saveApprovedDraft).not.toHaveBeenCalled();
+});
+
+it('saves later edits against the restored baseline rather than the abandoned draft',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft',roleDetailDesc:'Abandoned setting'}).mockResolvedValueOnce(approved).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await type($('#f-name'),'New title after revert');await submit();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+ expect(api.patchRoleDocument).toHaveBeenCalledWith('r1',{roleName:'New title after revert'},'tok');
+ expect(api.patchRoleWelcome).not.toHaveBeenCalled();
+});
+
+it('keeps the same save identity and withholds undo while confirming a lost response',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved).mockResolvedValueOnce(approved);
+ api.saveApprovedDraft.mockRejectedValueOnce(new TypeError('network'));
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await submit();
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();expect(api.patchRoleDocument).not.toHaveBeenCalled();
+ const firstIdentity=api.saveApprovedDraft.mock.calls[0];await submit();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(2);expect(api.saveApprovedDraft.mock.calls[1]).toEqual(firstIdentity);
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();
 });
