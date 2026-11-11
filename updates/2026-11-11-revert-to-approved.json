@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "建卡頁可以把草稿還原成已發布的版本，儲存前可撤銷。",
+    "zh-Hans": "建卡页可以把草稿还原为已发布的版本，保存前可撤销。",
+    "en": "The card editor can revert your draft to the published version, with Undo available until you save.",
+    "ja": "カード編集で下書きを公開済みの版に戻せるようになり、保存前なら取り消せます。",
+    "ko": "카드 편집에서 초안을 게시된 버전으로 되돌릴 수 있고, 저장 전에는 취소할 수 있어요."
+  }
+}
