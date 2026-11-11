@@ -80,7 +80,7 @@ it('all configured targets are safe local landings with attribution', () => {
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
-      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie'].includes(code) ? 'H2DG5Q6Y'
+      : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118'].includes(code) ? 'H2DG5Q6Y'
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog']
@@ -191,6 +191,19 @@ it.each([
   const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe(`${path}?ref=6M9ZV5FS&utm_source=${source}&utm_medium=${medium}&utm_campaign=${code}-${date}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
+});
+
+it.each([
+  ['bh-dnd-trpg-actions-20261113', '/cards/100192', 'H2DG5Q6Y'],
+  ['bh-slime-village-20261115', '/cards/100188', '94A9H94Z'],
+  ['bh-bofuri-operator-20261116', '/cards/100184', '94A9H94Z'],
+  ['bh-dnd-ai-start-20261118', '/cards/100192', 'H2DG5Q6Y'],
+])('serves the approved four-day Bahamut plan code %s', async (code, path, ref) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${path}?ref=${ref}&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}`);
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });
