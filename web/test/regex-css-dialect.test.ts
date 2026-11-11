@@ -25,7 +25,7 @@ it('cssDialect survives the author asset round trip; a rule without it stays wit
 
 it('the Fengyue importer preserves the hidden compatibility hint on card CSS', () => {
   const result = fengyueToDraft({ title: 'T', pre_prompt: 'p', ai_variable_prompt: 'v', description: 'd', builtInCss: '#ai-chat-input{color:red}' } as any, { language: 'zh-Hant' });
-  expect(result.regex?.cardCssDialect).toBe('fengyue');
+  expect(result.regex?.cardCssDialect).toBe('fengyue-v2');
   expect(result.regex?.cardCss).toContain('#ai-chat-input');
 });
 
