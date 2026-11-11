@@ -4793,5 +4793,8 @@
   "editor.cardCss.removeTitle": "카드 스타일을 제거할까요?",
   "editor.cardCss.removeMessage": "이곳의 외관 설정과 사용자 CSS를 지워요. 카드를 저장하면 적용돼요.",
   "editor.cardCss.removeConfirm": "스타일 제거",
-  "editor.cardCss.guideAnchor": "자주-쓰는-스타일-변수"
+  "editor.cardCss.guideAnchor": "자주-쓰는-스타일-변수",
+  "editor.cardCss.fengyueAliases": "가져온 풍월 카드에서는 화면 전체에 #installedBuiltInCss, 다크 모드에 .dark #installedBuiltInCss를 쓸 수 있어요.",
+  "editor.cardCss.copyFengyueRoot": "전체 화면 선택자 복사",
+  "editor.cardCss.copyFengyueDark": "다크 선택자 복사"
 }

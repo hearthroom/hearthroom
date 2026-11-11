@@ -4793,5 +4793,8 @@
   "editor.cardCss.removeTitle": "移除卡片样式？",
   "editor.cardCss.removeMessage": "这里的外观设置与自定义 CSS 会清空，保存卡片后才会应用。",
   "editor.cardCss.removeConfirm": "移除样式",
-  "editor.cardCss.guideAnchor": "常用外观变量"
+  "editor.cardCss.guideAnchor": "常用外观变量",
+  "editor.cardCss.fengyueAliases": "导入的风月卡可用 #installedBuiltInCss／.dark #installedBuiltInCss 指定整页与深色模式。",
+  "editor.cardCss.copyFengyueRoot": "复制整页写法",
+  "editor.cardCss.copyFengyueDark": "复制深色写法"
 }

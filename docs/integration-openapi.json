@@ -15186,6 +15186,20 @@
               "fengyue"
             ],
             "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
+          },
+          "cardCss": {
+            "type": "string",
+            "description": "Card-wide author CSS, applied once per page below display-rule styles; never sent to the model. At most 524288 UTF-8 bytes (not a character count). Known AI Fengyue selectors are mapped automatically; authors do not choose a source. Omitted when never set; an empty string means explicitly cleared."
+          },
+          "cardCssDialect": {
+            "type": "string",
+            "enum": [
+              "",
+              "fengyue",
+              "tavern",
+              "mmd"
+            ],
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set."
           }
         }
       },
@@ -15297,6 +15311,20 @@
               "fengyue"
             ],
             "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
+          },
+          "cardCss": {
+            "type": "string",
+            "description": "Card-wide author CSS, applied once per page below display-rule styles; never sent to the model. At most 524288 UTF-8 bytes (not a character count). Known AI Fengyue selectors are mapped automatically; authors do not choose a source. Omitted when never set; an empty string means explicitly cleared."
+          },
+          "cardCssDialect": {
+            "type": "string",
+            "enum": [
+              "",
+              "fengyue",
+              "tavern",
+              "mmd"
+            ],
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set."
           }
         }
       },
@@ -15369,6 +15397,23 @@
               "fengyue"
             ],
             "description": "Origin dialect of the card: `mmd` (styles apply page-wide), `tavern` (styles are scoped to messages), `fengyue` (imported from AI Fengyue: page-wide styles). Empty means `mmd`. What tapping an opening choice does follows `openingMode`, not the format."
+          },
+          "cardCss": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 524288,
+            "description": "Card-wide author CSS, applied once per page below display-rule styles; never sent to the model. At most 524288 UTF-8 bytes (not a character count). Known AI Fengyue selectors are mapped automatically; authors do not choose a source. Omitted or null keeps the stored CSS; an empty string clears it. Rejected with validate_reject reason cardCss (trial validation uses trial_unsupported)."
+          },
+          "cardCssDialect": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "",
+              "fengyue",
+              "tavern",
+              "mmd"
+            ],
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it."
           }
         }
       },
@@ -22408,6 +22453,23 @@
               "page"
             ],
             "description": "Opening presentation, same as the owned card's `openingMode`; omitted keeps the stored value. `trial_unsupported` when unknown."
+          },
+          "cardCss": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 524288,
+            "description": "Card-wide author CSS, applied once per page below display-rule styles; never sent to the model. At most 524288 UTF-8 bytes (not a character count). Known AI Fengyue selectors are mapped automatically; authors do not choose a source. Omitted or null keeps the stored CSS; an empty string clears it. Rejected with validate_reject reason cardCss (trial validation uses trial_unsupported)."
+          },
+          "cardCssDialect": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "",
+              "fengyue",
+              "tavern",
+              "mmd"
+            ],
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it."
           }
         }
       },
