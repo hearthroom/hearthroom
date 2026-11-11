@@ -1875,7 +1875,7 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
     const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { rules: { find: string }[] }];
     expect(asset.rules.length).toBe(1);
-    expect(asset).toMatchObject({ cardCss: expect.any(String), cardCssDialect: 'fengyue' });
+    expect(asset).toMatchObject({ cardCss: expect.any(String), cardCssDialect: 'fengyue-v2' });
     const docs = api.patchWorldbookDocument.mock.calls as unknown as [string, { binding?: unknown; entries: unknown[] }][];
     expect(docs.some(([, doc]) => JSON.stringify(doc.binding ?? null).includes("r1"))).toBe(true);
   });
