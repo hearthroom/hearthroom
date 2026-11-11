@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "顯示規則上限提高到 1000 條。",
+    "zh-Hans": "显示规则上限提高到 1000 条。",
+    "en": "Display rules now support up to 1,000 rules.",
+    "ja": "表示ルールを1,000件まで設定できるようになりました。",
+    "ko": "표시 규칙을 최대 1,000개까지 설정할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "編輯大量規則時，修改名稱和內容更順暢。",
+    "zh-Hans": "编辑大量规则时，修改名称和内容更流畅。",
+    "en": "Editing names and content is smoother in large rule sets.",
+    "ja": "ルールが多い場合も、名前や内容をよりスムーズに編集できます。",
+    "ko": "규칙이 많아도 이름과 내용을 더 매끄럽게 편집할 수 있어요."
+  }
+}
