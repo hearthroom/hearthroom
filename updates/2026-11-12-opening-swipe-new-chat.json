@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "開新對話後也能切換作者提供的備選開場白。",
+    "zh-Hans": "新开对话后也能切换作者提供的备选开场白。",
+    "en": "New conversations now let you choose from the author's alternate openings.",
+    "ja": "新しい会話でも、作者が用意した別のオープニングを選べるようになりました。",
+    "ko": "새 대화를 열어도 작가가 준비한 다른 오프닝을 고를 수 있어요."
+  }
+}
