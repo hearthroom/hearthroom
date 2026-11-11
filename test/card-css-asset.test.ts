@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalAsset, hasAsset } from '../src/card-transfer-resources';
+import api from '../docs/integration-openapi.json';
 
 describe('card CSS review snapshot', () => {
-  it('retains card CSS and its hidden hint even without display rules', () => {
-    const asset = canonicalAsset({ cardCss: '.canvas-root { color:red }', cardCssDialect: 'fengyue' });
-    expect(asset).toMatchObject({ cardCss: '.canvas-root { color:red }', cardCssDialect: 'fengyue' });
+  it('publishes the card-only version on every author-asset schema without widening rule dialects', () => {
+    let fields = 0;
+    for (const schema of Object.values(api.components.schemas)) {
+      for (const [name, field] of Object.entries((schema as any).properties ?? {})) {
+        if (name === 'cardCssDialect') { expect((field as any).enum).toContain('fengyue-v2'); fields++; }
+        if (name === 'cssDialect') expect((field as any).enum).not.toContain('fengyue-v2');
+      }
+    }
+    expect(fields).toBe(4);
+  });
+  it.each(['fengyue', 'fengyue-v2'])('retains card CSS and hidden %s hint even without display rules', (dialect) => {
+    const asset = canonicalAsset({ cardCss: '.canvas-root { color:red }', cardCssDialect: dialect });
+    expect(asset).toMatchObject({ cardCss: '.canvas-root { color:red }', cardCssDialect: dialect });
     expect(hasAsset(asset)).toBe(true);
   });
   it('does not change legacy asset hashes for absent or empty CSS', () => {

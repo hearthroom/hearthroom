@@ -71,7 +71,7 @@ Any HTML, including `<style>` and `<script>`. The `<style>` blocks from all rule
 
 The editor's **Card styles** field holds CSS for the whole card. Paste CSS directly, without `<style>` tags or a matching pattern; it is installed once when the chat page opens. In a CLI card folder, put the same CSS in `card.css`. The file can contain up to 512 KiB of UTF-8 text.
 
-Put CSS written for AI Fengyue in **Card styles**; no style-source selection is needed. Only this field automatically maps known Fengyue selectors such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button` to the bubbles, input box and send button here. Other selectors in this field apply as written, so one stylesheet can mix Fengyue and site selectors; `.mes` is not treated as a Tavern source marker.
+Put CSS written for AI Fengyue in **Card styles**; no style-source selection is needed. Only this field automatically maps known Fengyue selectors such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button` to the bubbles, input box and send button here. Other selectors in this field apply as written, so one stylesheet can mix Fengyue and site selectors; `.mes` is not treated as a Tavern source marker. Reimport an older Fengyue card to use the latest Fengyue compatibility.
 
 Display-rule `<style>` blocks keep their original policy: existing `cssDialect` values and compiled style markers stay in effect; otherwise the card format applies (Tavern scopes styles to messages, other formats apply them as written). Display rules do not gain automatic Fengyue selector mapping.
 
