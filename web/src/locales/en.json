@@ -892,6 +892,7 @@
   "play.title": "Play",
   "play.loading": "Loading the stage…",
   "play.loadFailed": "The stage failed to load. Please try again later.",
+  "play.authorDraftHint": "“Play draft” opens the draft version of this card.",
   "play.entering": "Entering the chat…",
   "play.loadingSlow": "The first visit takes a little longer…",
   "play.backToCard": "Back to the card",

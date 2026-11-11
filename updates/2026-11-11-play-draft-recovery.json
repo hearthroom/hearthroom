@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "遊玩頁載入失敗時，作者可改用「試玩草稿」",
+    "zh-Hans": "游玩页加载失败时，作者可改用「试玩草稿」",
+    "en": "Authors can use “Play draft” when the play page fails to load",
+    "ja": "プレイ画面が開けないとき、作者は「下書きを試す」を選べます",
+    "ko": "플레이 화면을 열 수 없을 때 작가는 ‘초안 플레이’를 선택할 수 있어요"
+  }
+}

@@ -15,7 +15,8 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { playProvider } from '@/lib/play-context';
 import { accountToken, connectAccount } from '@/lib/connections';
-import { currentProvider, apiBaseOf } from '@/lib/provider';
+import { currentProvider, apiBaseOf, type ProviderId } from '@/lib/provider';
+import { platformPath } from '@/lib/distribution';
 import { ensurePlayAuthorization } from "@/lib/play-authorization";
 import { ensureStage, preloadStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
 import { useSession } from "@/lib/session";
@@ -24,6 +25,9 @@ import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { fetchMeAt } from "@/lib/api";
 import { resolvePlayCard } from "@/lib/play-card";
+import { authorPlaytest } from "@/lib/play-recovery";
+import { loginPath } from "@/lib/login-return";
+import { isManagedAuth } from "@/lib/managed-auth";
 import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
@@ -51,6 +55,8 @@ const roleId = shallowRef("");
 const historyBootstrap = shallowRef<{conversationId?:string;readOnly?:boolean;reason?:string;title?:string}>({});
 const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
+const authorDraftHref = shallowRef("");
+const errorLoginHref = computed(() => lp(loginPath(route.fullPath)));
 /** 審核試玩打不開是因為沒領著（含領取過了時效）或這輪已結束：回審核頁就能處理，不是舞台壞了 */
 const backToReview = shallowRef(false);
 /**
@@ -189,14 +195,17 @@ onMounted(() => {
     roleId.value = "";
     cardNumber.value = "";
     error.value = "";
+    authorDraftHref.value = "";
     gated.value = false; gateUnrated.value = false;
     regionBlocked.value = false;
     backToReview.value = false;
     registerPlayCard(null);
     setPlayShare(null);
+    let recoveryProvider: ProviderId | null = null;
     try {
       void preloadStage();
       const provider = playProvider(route.query.provider);
+      recoveryProvider = provider;
       // Stage installs its API and credential host once per document.
       const reviewId=typeof route.query.review==='string'?route.query.review:undefined;
       const documentIdentity=provider+':'+(reviewId??'');
@@ -266,6 +275,16 @@ onMounted(() => {
       if (isRegionUnavailable(err)) { regionBlocked.value = true; return; }
       if (status === 403 && code === "adult_content") { gateUnrated.value = reason === 'unrated'; gated.value = true; cardNumber.value ||= routeId.value; return; }
       backToReview.value = typeof route.query.review === "string" && (code === "claim this submission first" || status === 410);
+      // No extra request on a successful entrance. Keep the cover while checking,
+      // and never infer ownership from public author metadata or from a 404.
+      if (session.me && recoveryProvider && route.query.mode !== "source" && typeof route.query.review !== "string" && typeof route.query.resume !== "string") {
+        const actor = session.me.accountNumId;
+        const number = await authorPlaytest(routeId.value, recoveryProvider, contentLang(locale.value));
+        if (stale()) return;
+        if (number && session.me?.accountNumId === actor) {
+          authorDraftHref.value = platformPath(lp(`${playApp ? `/${number}/` : `/play/${number}`}?mode=source`), recoveryProvider);
+        }
+      }
       error.value = !backToReview.value ? t("play.loadFailed") : status === 410 ? t("review.inactive") : t("play.claimFirst");
     }
   }, { immediate: true });
@@ -278,13 +297,22 @@ watch(locale, () => { void remergeStageMessages(); });
   <div class="play">
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" />
     <RegionUnavailable v-else-if="regionBlocked" :href="playApp ? homeUrl : undefined" />
-    <div v-else-if="error || gated" class="play__state">
+    <div v-else-if="error || gated" class="play__state" :class="{ 'play__state--author': authorDraftHref }">
       <AdultGate v-if="gated" :unrated="gateUnrated" @enabled="retry++" />
-      <p v-else class="play__error" role="alert">{{ error }}</p>
-      <a v-if="backToReview && playApp" class="btn" :href="`https://${communityHost()}${lp(reviewPath)}`">{{ $t("play.backToReview") }}</a>
+      <div v-else role="alert">
+        <p class="play__error">{{ error }}</p>
+        <p v-if="authorDraftHref" class="play__author-hint muted">{{ $t('play.authorDraftHint') }}</p>
+      </div>
+      <div v-if="authorDraftHref" class="play__recovery-actions">
+        <a class="btn btn--primary btn--lg" :href="authorDraftHref">{{ $t('card.owner.playDraft') }}</a>
+        <a v-if="playApp" class="btn btn--lg" :href="cardPageUrl">{{ $t('play.backToCard') }}</a>
+        <RouterLink v-else class="btn btn--lg" :to="lp(cardPagePath)">{{ $t('play.backToCard') }}</RouterLink>
+      </div>
+      <a v-else-if="backToReview && playApp" class="btn" :href="`https://${communityHost()}${lp(reviewPath)}`">{{ $t("play.backToReview") }}</a>
       <RouterLink v-else-if="backToReview" class="btn" :to="lp(reviewPath)">{{ $t("play.backToReview") }}</RouterLink>
       <a v-else-if="playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
       <RouterLink v-else class="btn" :to="lp(cardPagePath)">{{ $t("play.backToCard") }}</RouterLink>
+      <RouterLink v-if="error && !session.me && !backToReview && isManagedAuth()" class="btn btn--ghost" :to="errorLoginHref">{{ $t('nav.login') }}</RouterLink>
     </div>
     <Transition name="play-cover">
       <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
@@ -304,6 +332,12 @@ watch(locale, () => { void remergeStageMessages(); });
 .play { min-height: 100vh; min-height: 100dvh; }
 .play__state { min-height: 60vh; display: grid; place-content: center; gap: var(--s-4); text-align: center; padding: var(--s-6); }
 .play__error { color: var(--danger); }
+.play__state--author { justify-items: center; grid-template-columns: min(100%, 360px); }
+.play__author-hint { max-width: 360px; margin-top: var(--s-4); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.play__author-hint:lang(ko) { word-break: keep-all; }
+.play__author-hint:lang(ja) { word-break: auto-phrase; }
+.play__recovery-actions { display: grid; gap: var(--s-3); width: min(100%, 320px); }
+@media (min-width: 760px) { .play__recovery-actions { width: 240px; } }
 .play-cover-leave-active { transition: opacity 250ms ease-out; }
 .play-cover-leave-to { opacity: 0; }
 .play__toasts { position: fixed; left: 50%; width: min(calc(100vw - 2 * var(--s-2)), 480px); justify-items: center; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }

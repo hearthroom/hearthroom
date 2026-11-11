@@ -892,6 +892,7 @@
   "play.title": "對話",
   "play.loading": "舞台載入中⋯",
   "play.loadFailed": "舞台載不進來，請稍後再試。",
+  "play.authorDraftHint": "這張卡的草稿可以用「試玩草稿」開啟。",
   "play.entering": "正在進入對話⋯",
   "play.loadingSlow": "第一次進入要多等一下⋯",
   "play.backToCard": "回到卡片",

@@ -892,6 +892,7 @@
   "play.title": "플레이",
   "play.loading": "무대를 불러오는 중…",
   "play.loadFailed": "무대를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  "play.authorDraftHint": "이 카드의 초안은 ‘초안 플레이’로 열 수 있어요.",
   "play.entering": "대화에 들어가는 중…",
   "play.loadingSlow": "처음에는 조금 더 걸려요…",
   "play.backToCard": "카드로 돌아가기",
