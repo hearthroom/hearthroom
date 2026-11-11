@@ -1050,7 +1050,7 @@ async function commitPendingRevert(token:string){
   try{await saveApprovedDraft(roleId.value,pending.version,token);pending.committed=true;}
   catch(err){if(err instanceof ApiError&&err.status>=400&&err.status<500){pending.saveAttempted=false;throw err;}throw new Error(t('editor.revertSaveUnknown'));}
  }
- const baseline=await readEditorSnapshot(roleId.value,token);
+ const baseline=await readEditorSnapshot(roleId.value,token).catch(()=>{throw new Error(t('editor.revertSaveUnknown'));});
  const edited=editorSnapshot();
  applyEditorSnapshot(baseline.state);original.value=cloneDraft(draft.value);regexOriginal.value=copied(regexSet.value);regexVersion.value=baseline.assetVersion;savedOpening.value=openingModeOf(regexSet.value);
  for(const key of Object.keys(edited.draft) as (keyof RoleDraft)[]){
