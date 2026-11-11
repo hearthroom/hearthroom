@@ -4724,7 +4724,7 @@
   "editor.cardCss.reference": "꾸밀 수 있는 위치",
   "editor.cardCss.referenceHint": "각 위치의 변수나 선택자를 복사해 사용자 CSS에 붙여 넣을 수 있어요.",
   "editor.cardCss.directCssHint": "CSS로 직접 정한 색상은 변수로 덮어쓰지 못할 수 있어요.",
-  "editor.cardCss.fengyueHint": "AI 풍월 채팅 화면용 스타일은 이 위치에 자동으로 대응해요.",
+  "editor.cardCss.fengyueHint": "풍월용 CSS는 카드 스타일에서 자동으로 대응해요. 표시 규칙은 원래 카드 형식과 저장된 설정을 유지해요.",
   "editor.cardCss.position.ai": "AI 말풍선",
   "editor.cardCss.position.user": "플레이어 말풍선",
   "editor.cardCss.position.input": "입력창",
