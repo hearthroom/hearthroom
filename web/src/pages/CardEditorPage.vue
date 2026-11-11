@@ -2158,7 +2158,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .restored { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .restored > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
 .restored > .btn { position: relative; }
-.restored > .btn::after { content: ""; position: absolute; inset: -7px 0; }
+.restored > .btn::after { content: ""; position: absolute; inset: -8px 0; }
 :lang(ko) .restored > span { word-break: keep-all; }
 :lang(ja) .restored > span { word-break: auto-phrase; }
 /* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
