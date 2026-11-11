@@ -67,26 +67,43 @@ A fixed string (for example `《status》`) or a regular expression (for example
 
 Any HTML, including `<style>` and `<script>`. The `<style>` blocks from all rules are merged into one stylesheet; each `<script>` runs once per card.
 
-### CSS written for, and which style wins
+### Card styles and priority
 
-A rule with `<style>` can set **CSS written for** to say how that CSS is written:
+The editor's **Card styles** field holds CSS for the whole card. Paste CSS directly, without `<style>` tags or a matching pattern; it is installed once when the chat page opens. In a CLI card folder, put the same CSS in `card.css`. The file can contain up to 512 KiB of UTF-8 text.
 
-| Value | How it applies |
+Authors do not choose a style source. Known Fengyue selectors such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button` map automatically to the bubbles, input box and send button here. Other selectors keep the card's existing policy: MMD/site CSS applies as written, while Tavern CSS is scoped to messages. A single stylesheet can contain Fengyue selectors and site selectors; `.mes` alone is not treated as a Tavern source marker.
+
+Card styles sit above the platform defaults and theme, and below display-rule styles. Use a display rule when a style needs to override the card's base appearance. Existing imported cards keep their saved style settings and priority; opening and saving them does not require choosing a source or changing those settings.
+
+### Common style variables
+
+These variables work on both chat pages. Write them on `.canvas-root` in Card styles to change the base appearance.
+
+| Appearance | Variable |
 |---|---|
-| Default | Follows where the card came from: Tavern imports behave as Tavern, everything else as MMD. |
-| AI Fengyue | CSS written for the Fengyue chat page. Fengyue chat elements (such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button`) map onto the bubbles, input box and send button here; rules starting with `.dark` apply in dark mode; `body`, `html` and `:root` rules do nothing (they do nothing on Fengyue either); buttons drop position, size, display, transform and margin; `!important` is removed. Built-in CSS imported from AI Fengyue uses this value automatically. |
-| Tavern | Every selector is prefixed with `.mes_text `, so it applies inside messages only. |
-| MMD | Applies as written. |
+| AI bubble background | `--lt-canvas-bubble-ai-bg` |
+| Bubble text (shared by AI and player) | `--lt-canvas-bubble-fg` |
+| Player bubble background | `--lt-canvas-bubble-user-bg` |
+| Input field background | `--lt-canvas-composer-field-bg` |
+| Send button background | `--lt-canvas-send-bg` |
+| Accent colour | `--lt-canvas-accent` |
+| Font family (a CSS font-family list) | `--lt-canvas-font` |
+| Chat background | `--lt-canvas-bg` |
 
-One card can mix rules with different values. When several styles set the same element, the higher level wins:
+```css
+.canvas-root {
+  --lt-canvas-bubble-ai-bg: #243447;
+  --lt-canvas-bubble-fg: #f2f2f5;
+  --lt-canvas-bubble-user-bg: #37465b;
+  --lt-canvas-composer-field-bg: #1e2938;
+  --lt-canvas-send-bg: #355a7c;
+  --lt-canvas-accent: #8fc9ff;
+  --lt-canvas-font: system-ui, sans-serif;
+  --lt-canvas-bg: #121b28;
+}
+```
 
-1. Platform defaults.
-2. The site's light or dark theme and colours; MMD cards stay dark.
-3. `--chat-*` variables (see CSS variables), which only change the colours the platform defaults use.
-4. Styles written for AI Fengyue.
-5. Every other rule's `<style>`: above level 4 whatever the selector weight; among themselves normal CSS applies, so the heavier selector wins and, at equal weight, the later rule wins.
-
-To override Fengyue-style CSS, write a normal `<style>` in another rule; `!important` is not needed.
+Existing MMD variables, including `--background-color`, `--primary-font-color` and `--input-background-color`, remain supported. A variable changes the elements that use it; direct CSS from the card can take priority.
 
 ### Function bar
 
@@ -127,7 +144,7 @@ Select nodes by their `data-chat` attributes, not by class names.
 
 ### CSS variables
 
-Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, `--chat-text`, `--chat-accent`, `--chat-bubble-ai-bg`). Override them on the root node to retheme the whole screen.
+The sandbox shell also has `--chat-*` variables (for example `--chat-bg`, `--chat-text` and `--chat-accent`), which apply only there. For styles shared with the classic page, use the [common style variables](#common-style-variables).
 
 ### sdk
 

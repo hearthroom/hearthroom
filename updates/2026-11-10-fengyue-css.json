@@ -10,10 +10,10 @@
     "ko": "풍월 카드의 화면 꾸미기가 그대로 나와요"
   },
   "body": {
-    "zh-Hant": "從風月匯入的卡，內置 CSS 寫給風月聊天頁氣泡、輸入框與按鈕的樣式現在會套到這裡對應的位置，正規表示式規則也能選「CSS 寫法」來寫新的風月樣式。",
-    "zh-Hans": "从风月导入的卡，内置 CSS 写给风月聊天页气泡、输入框与按钮的样式现在会套到这里对应的位置，正则规则也能选「CSS 写法」来写新的风月样式。",
-    "en": "Built-in CSS from imported Fengyue cards now styles the matching bubbles, input box and buttons here, and regex rules have a CSS written for option for new Fengyue-style CSS.",
-    "ja": "風月から読み込んだカードの内蔵 CSS が吹き出しや入力欄、ボタンの対応する場所に適用され、正規表現ルールでは「CSS の書き方」を選んで風月向けのスタイルを新しく書けます。",
-    "ko": "풍월에서 가져온 카드의 내장 CSS가 말풍선, 입력창, 버튼의 해당 위치에 적용되고, 정규식 규칙에서 'CSS 작성 방식'을 골라 풍월용 스타일을 새로 쓸 수 있어요."
+    "zh-Hant": "從風月匯入的內置 CSS 會套到這裡對應的氣泡、輸入框與按鈕，作者也能在卡片樣式中繼續修改，不必選擇樣式來源。",
+    "zh-Hans": "从风月导入的内置 CSS 会应用到这里对应的气泡、输入框与按钮，作者也能在卡片样式中继续修改，不必选择样式来源。",
+    "en": "Built-in CSS from Fengyue cards styles the matching bubbles, input box and buttons here, and authors can edit it in Card styles without choosing a source.",
+    "ja": "風月から読み込んだ内蔵 CSS は対応する吹き出しや入力欄、ボタンに適用され、作者はスタイルの出所を選ばずにカードのスタイルで編集できます。",
+    "ko": "풍월에서 가져온 내장 CSS는 말풍선, 입력창, 버튼의 해당 위치에 적용되며, 작성자는 출처를 고르지 않고 카드 스타일에서 수정할 수 있어요."
   }
 }

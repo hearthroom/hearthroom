@@ -70,6 +70,10 @@ export interface RegexRuleSet {
    * 跟規則一起存在作者資產裡；空字串或缺＝沒有。
    */
   openingPage?: string;
+  /** 整卡只套用一次的作者 CSS；缺欄位保留舊上游資料，空字串清除。 */
+  cardCss?: string;
+  /** 匯入／舊資料的相容提示；作者不用選。 */
+  cardCssDialect?: CssDialect;
   /**
    * 開局呈現：作者在編輯頁選的「開場白」（greeting）或「開場網頁」（page）。畫布看它決定點開場選項
    * 是填進輸入框還是直接送出；缺＝還沒讀到上游的值，照卡片格式判斷（見 openingModeOf）。
@@ -238,6 +242,7 @@ export function validateRule(rule: RegexRule): RuleIssue[] {
 
 export function validateRuleSetLimits(set: RegexRuleSet, bytes: number): RuleIssue[] {
   const issues: RuleIssue[] = [];
+  if (utf8Bytes(set.cardCss ?? "") > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: "", key: "editor.cardCss.tooLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
   if (set.rules.length > REGEX_LIMITS.rules) issues.push({ ruleId: "", key: "regex.issue.tooMany", params: { max: REGEX_LIMITS.rules } });
   if ([...set.statusbar].length > REGEX_LIMITS.statusbar) issues.push({ ruleId: "", key: "regex.issue.statusbarLong", params: { max: REGEX_LIMITS.statusbar } });
   if (bytes > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong", params: { size: formatMB(bytes), max: REGEX_LIMITS.total / 1024 / 1024 } });
@@ -321,6 +326,8 @@ export interface MeimoRegexFile {
   statusbar?: string;
   beginning?: string;
   regex_scripts?: TavernRegexScript[];
+  cardCss?: string;
+  cardCssDialect?: string;
 }
 
 /** 本站自己存的文件（lunatalk.regexRules.v1）讀回來。欄位缺的補預設，壞條目丟掉。 */
@@ -348,7 +355,9 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   // 魅魔島的「匯入酬載」也是 rules 陣列，旁邊多 statusbar / welcome / pageDepth。
   if (Array.isArray(obj.rules)) {
     const native = ruleSetFromNative(obj);
-    if (!native || !native.rules.length) return null;
+    if (!native) return null;
+    migrateLegacyCardCss(native, obj as AuthorAssetLike);
+    if (!native.rules.length && !native.cardCss) return null;
     if ("pageDepth" in obj) native.lowered = loweredFromPageDepth(obj.pageDepth);
     if (isSandboxChatVersion(obj.chatVersion)) native.pageMode = "sandbox";
     return { set: native, welcome: text(obj.welcome) };
@@ -358,8 +367,9 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!scripts && obj.data && typeof obj.data === "object") scripts = (obj.data as { extensions?: { regex_scripts?: unknown } }).extensions?.regex_scripts;
   if (!scripts && Array.isArray(raw)) scripts = raw;
   const rules = rulesFromTavern(scripts);
-  if (!rules.length) return null;
+  if (!rules.length && typeof obj.cardCss !== "string") return null;
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) };
+  migrateLegacyCardCss(set, obj as AuthorAssetLike);
   if (isSandboxChatVersion(obj.chatVersion)) set.pageMode = "sandbox";
   // 魅魔島的正則匯出檔也是酒館的欄位名（regex_scripts），但那是 MMD 卡；只有真的酒館卡才是酒館寫法。
   if (obj.spec === "chara_card_v2" || obj.spec === "chara_card_v3" || Array.isArray(raw)) set.format = "tavern";
@@ -378,6 +388,10 @@ export function loweredFromPageDepth(v: unknown): boolean {
 
 export function ruleSetToExport(set: RegexRuleSet, welcome: string): MeimoRegexFile {
   const file: MeimoRegexFile = { pageDepth: set.lowered ? 1 : 2, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+  if (typeof set.cardCss === "string") {
+    file.cardCss = set.cardCss;
+    if (set.cardCssDialect) file.cardCssDialect = set.cardCssDialect;
+  }
   // 新版卡的匯出檔第一個鍵就是 chatVersion；舊版檔沒有這個鍵，原站據此分辨，所以舊版不能寫 0。
   if (set.pageMode === "sandbox") return { chatVersion: 1, ...file };
   return file;
@@ -394,6 +408,29 @@ export interface AuthorAssetLike {
   cardFormat?: string;
   openingPage?: string;
   openingMode?: string;
+  cardCss?: string;
+  cardCssDialect?: string;
+}
+
+/** 只搬移舊匯入器生成的純 CSS 載體，編輯過的 HTML 與停用規則原樣保留。 */
+function migrateLegacyCardCss(set: RegexRuleSet, asset: AuthorAssetLike): void {
+  if (typeof asset.cardCss === "string") {
+    set.cardCss = asset.cardCss;
+    const dialect = cssDialectFrom(asset.cardCssDialect);
+    if (dialect) set.cardCssDialect = dialect;
+  }
+  const candidates = set.rules.filter(r => r.id === LEGACY_FENGYUE_CSS_RULE_ID);
+  if (candidates.length !== 1) return;
+  const rule = candidates[0];
+  if (!rule.enabled || rule.find !== "/([\\s\\S])$/") return;
+  const match = /^\$1<style>([\s\S]*?)<\/style>$/.exec(rule.replace);
+  // CSS 字串裡若出現提早閉合 style 的內容，不當成可安全搬移的單一樣式。
+  if (!match || /<\/?style\b/i.test(match[1])) return;
+  if (!("cardCss" in set)) {
+    set.cardCss = match[1];
+    set.cardCssDialect = rule.cssDialect ?? "fengyue";
+  }
+  set.rules = set.rules.filter(r => r !== rule);
 }
 
 export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
@@ -408,10 +445,11 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
   if (text(asset.openingPage)) set.openingPage = String(asset.openingPage);
   const mode = openingModeFrom(asset.openingMode);
   if (mode) set.openingMode = mode;
+  migrateLegacyCardCss(set, asset);
   return set;
 }
 
-export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<Omit<AuthorAssetLike, "openingMode">> & { openingMode?: OpeningMode; rules: RegexRule[]; version: number } {
+export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<Omit<AuthorAssetLike, "openingMode" | "cardCss" | "cardCssDialect">> & { openingMode?: OpeningMode; cardCss?: string; cardCssDialect?: string; rules: RegexRule[]; version: number } {
   const mountLayer = set.lowered ? "under" : set.mountLayer === "cover" ? "cover" : "over";
   return {
     rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled, ...(r.targets ? { targets: r.targets } : {}), ...(r.cssDialect ? { cssDialect: r.cssDialect } : {}) })),
@@ -420,6 +458,7 @@ export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Requir
     pageMode: set.pageMode ?? "",
     cardFormat: set.format ?? "",
     openingPage: set.openingPage ?? "",
+    ...(typeof set.cardCss === "string" ? { cardCss: set.cardCss, cardCssDialect: set.cardCssDialect ?? "" } : {}),
     // 沒選過就不送，上游保留原值（新卡照卡片格式給預設）
     ...(set.openingMode ? { openingMode: set.openingMode } : {}),
     version,
