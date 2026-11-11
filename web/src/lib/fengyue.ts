@@ -282,7 +282,7 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   // CSS 是作者原文，前後空白與換行也要保留；不能照一般文字欄位 trim。
   const css = typeof pick(raw, "css") === "string" ? String(pick(raw, "css")) : "";
   const regex: RegexRuleSet | null = rules.length || intro || css
-    ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}), ...(css ? { cardCss: css, cardCssDialect: "fengyue" } : {}) }
+    ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}), ...(css ? { cardCss: css, cardCssDialect: "fengyue-v2" } : {}) }
     : null;
 
   draft.state = convertVariables(raw, notes);

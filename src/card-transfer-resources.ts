@@ -12,7 +12,7 @@ export function canonicalAsset(a:Record<string,any>) {
   ...(['fengyue','tavern','mmd'].includes(r.cssDialect)?{cssDialect:r.cssDialect}:{})})),mountTrigger:string(a.mountTrigger),mountLayer:string(a.mountLayer),pageMode:a.pageMode==='sandbox'?'sandbox':'classic',
   // 首屏網頁與風月格式只在有的時候才放：沒有它們的卡算出的快照雜湊跟以前一樣
   ...(string(a.openingPage)?{openingPage:string(a.openingPage)}:{}),...(a.cardFormat==='fengyue'?{cardFormat:'fengyue'}:{}),
-  ...(typeof a.cardCss==='string'&&(a.cardCss||(a.rules||[]).some((r:any)=>r.id==='hearthroom-fengyue-inner-css'))?{cardCss:a.cardCss,...(['fengyue','tavern','mmd'].includes(a.cardCssDialect)?{cardCssDialect:a.cardCssDialect}:{})}:{}),
+  ...(typeof a.cardCss==='string'&&(a.cardCss||(a.rules||[]).some((r:any)=>r.id==='hearthroom-fengyue-inner-css'))?{cardCss:a.cardCss,...(['fengyue','fengyue-v2','tavern','mmd'].includes(a.cardCssDialect)?{cardCssDialect:a.cardCssDialect}:{})}:{}),
   // 開局呈現只在跟格式的預設不同時才放（風月預設開場網頁、其他預設開場白）：既有卡的快照雜湊不變
   ...(openingModeOverride(a)?{openingMode:openingModeOverride(a)}:{})};
 }
