@@ -1881,9 +1881,11 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/cards/r1/edit");
     expect(root.querySelector('[data-section="world"]')).not.toBeNull();
     expect(root.querySelectorAll(".world-char")).toHaveLength(1);
-    // 世界卡沒有卡片變數，進階那一區不顯示：數目跟單卡一樣是 7，換掉的是「進階」
-    expect(root.querySelector('[data-section="advanced"]')).toBeNull();
-    expect(root.querySelectorAll(".side__item")).toHaveLength(7);
+    // 世界卡可用獨立卡片樣式，但仍不顯示單卡變數。
+    expect(root.querySelector('[data-section="advanced"]')).not.toBeNull();
+    expect(root.querySelector('[data-card-css-panel]')).not.toBeNull();
+    expect(root.querySelector('[data-state-panel]')).toBeNull();
+    expect(root.querySelectorAll(".side__item")).toHaveLength(8);
   });
 });
 
@@ -2059,7 +2061,8 @@ describe("匯入 AI 風月卡 → 建立", () => {
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
     const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { rules: { find: string }[] }];
-    expect(asset.rules.length).toBe(2);
+    expect(asset.rules.length).toBe(1);
+    expect(asset).toMatchObject({ cardCss: expect.any(String), cardCssDialect: 'fengyue' });
     const docs = api.patchWorldbookDocument.mock.calls as unknown as [string, { binding?: unknown; entries: unknown[] }][];
     expect(docs.some(([, doc]) => JSON.stringify(doc.binding ?? null).includes("r1"))).toBe(true);
   });
@@ -2526,5 +2529,27 @@ describe('prompt-only 規則匯入不洗舊規則', () => {
     expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ name: 'Visible imported', replace: 'shown' })] }), 'tok');
+
+describe('independent card CSS', () => {
+  it('keeps card CSS and its compatibility hint when importing a separate rules file', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.x {color:red}', cardCssDialect: 'fengyue', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ regex_scripts: [{ scriptName: 'new', findRegex: 'x', replaceString: 'y' }] })], 'rules.json'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ cardCss: '.x {color:red}', cardCssDialect: 'fengyue', version: 3 }), 'tok');
+  });
+  it('blocks an oversized stylesheet before any card write and opens the advanced section', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.x {color:red}', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    const panel = root.querySelector('[data-card-css-panel]')!;
+    panel.querySelector<HTMLButtonElement>('[data-card-css-toggle]')!.click();
+    await flush();
+    await type(panel.querySelector<HTMLTextAreaElement>('textarea')!, '界'.repeat(174763));
+    await submit();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($('.side__item[aria-current=true]').textContent).toContain(i18n.global.t('editor.section.advanced'));
   });
 });

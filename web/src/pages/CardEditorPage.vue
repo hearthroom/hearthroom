@@ -125,6 +125,8 @@ import GenerateImageDialog from "@/components/GenerateImageDialog.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
 import CardStateEditor from "@/components/editor/CardStateEditor.vue";
+import CardStyleEditor from "@/components/editor/CardStyleEditor.vue";
+import { CARD_CSS_MAX_BYTES } from "@/lib/card-appearance";
 import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
 import { readStateTable } from "@/lib/card-state-table";
 import TagPicker from "@/components/editor/TagPicker.vue";
@@ -403,6 +405,13 @@ watch([panel, panelOpen], () => {
 });
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+const cardCssText = computed({
+  get: () => regexSet.value.cardCss ?? "",
+  set: (value: string) => { regexSet.value.cardCss = value; },
+});
+const cardCssUsed = computed(() => !!cardCssText.value.trim());
+const cardCssOver = computed(() => new TextEncoder().encode(cardCssText.value).length > CARD_CSS_MAX_BYTES);
+function removeCardCss() { regexSet.value.cardCss = ""; delete regexSet.value.cardCssDialect; }
 /** 首屏網頁的編輯框：存在作者資產（regexSet.openingPage），空字串就是沒有。 */
 const openingPageText = computed({
   get: () => regexSet.value.openingPage ?? "",
@@ -462,11 +471,11 @@ const section = ref<Section>("basic");
  * 只有打開時本來就是世界卡的才顯示這一區；開啟時記一次，作者在這頁關掉再存也不會讓它消失。
  */
 const worldShown = ref(false);
-// 進階現在只放卡片變數：只給單卡，世界卡的每個角色各自開口，沒有一份共用的數值（任務 2026-11-09-card-state）。
+// 卡片樣式所有卡都能用；卡片變數只給單卡。
 // 多角色的入口先藏起來（owner 2026-11-10），已經是世界卡的照舊顯示它那一區。
 const sections = computed(() => SECTIONS.filter((key) =>
   key === "world" ? can("world") && worldShown.value
-  : key === "advanced" ? can("state") && !draft.value.world
+  : key === "advanced" ? can("regex") || (can("state") && !draft.value.world)
   : key === "worldbook" ? can("worldbook")
   : true));
 /** 卡片變數那一塊：預設收起（多數卡用不到），按「加入」或存檔被擋在變數上時才打開。 */
@@ -562,7 +571,7 @@ const REQUIRED_OF = computed<Partial<Record<Section, string>>>(() => ({
   persona: "roleDetailDesc",
   opening: openingMode.value === "page" ? "prologue" : "roleWelcome",
 }));
-const lacks = (key: Section) => (key === "advanced" && stateBlocked.value) || Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
+const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
 const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
@@ -1054,6 +1063,10 @@ function onRegexFile(event: Event) {
       imported.set.pageMode ??= isNew.value ? "classic" : regexSet.value.pageMode;
       // 規則檔不帶首屏網頁與卡片格式：換規則不能順手把它們洗掉（存檔是整份覆寫）
       if (regexSet.value.openingPage && imported.set.openingPage == null) imported.set.openingPage = regexSet.value.openingPage;
+      if (imported.set.cardCss == null && regexSet.value.cardCss != null) {
+        imported.set.cardCss = regexSet.value.cardCss;
+        imported.set.cardCssDialect = regexSet.value.cardCssDialect;
+      }
       if (regexSet.value.format === "fengyue" && !imported.set.format) imported.set.format = "fengyue";
       // 開局呈現也不是規則檔的事：照作者現在選的
       imported.set.openingMode = openingMode.value;
@@ -1228,6 +1241,11 @@ async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
   regexSaveIssues.value = [];
+  if (cardCssOver.value) {
+    section.value = "advanced";
+    error.value = t("editor.cardCss.tooLong", { max: CARD_CSS_MAX_BYTES / 1024 });
+    return;
+  }
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
@@ -1617,7 +1635,7 @@ async function exportCard(format: "png" | "json") {
             <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
             <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
             <!-- 進階：開了卡片變數時標一個小字，作者知道裡面有東西 -->
-            <span v-if="key === 'advanced' && stateUsed" class="side__tag">{{ $t("editor.state.navTag") }}</span>
+            <span v-if="key === 'advanced' && (stateUsed || cardCssUsed)" class="side__tag">{{ stateUsed && cardCssUsed ? $t('editor.cardCss.navBoth') : cardCssUsed ? $t('editor.cardCss.navTag') : $t('editor.state.navTag') }}</span>
             <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
             <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
                  :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -2003,11 +2021,12 @@ async function exportCard(format: "png" | "json") {
           </div>
         </section>
 
-        <!-- 進階：卡片變數（預設收起）。多角色的入口先不放（owner 2026-11-10） -->
+        <!-- 進階：卡片樣式與單卡變數，兩者預設收起。 -->
         <section v-if="sections.includes('advanced')" data-section="advanced" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.advanced") }}</h2>
           <p class="muted pane__lede">{{ $t("editor.advanced.lede") }}</p>
-          <div class="panel state-panel" data-state-panel>
+          <CardStyleEditor v-if="can('regex')" v-model="cardCssText" :css-dialect="regexSet.cardCssDialect" :invalid="cardCssOver" @remove="removeCardCss" />
+          <div v-if="can('state') && !draft.world" class="panel state-panel" data-state-panel>
             <div class="state-panel__head">
               <div class="state-panel__title">
                 <h3>{{ $t("editor.section.state") }}</h3>
