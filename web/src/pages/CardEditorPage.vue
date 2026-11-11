@@ -1022,7 +1022,7 @@ function revertReadError(err:unknown){
 }
 async function revertPublished(){
  if(!mayRevert.value||saving.value||loading.value||visibilityBusy.value||booksUnavailable.value)return;
- const ok=await confirmDialog({title:t('editor.revertTitle'),message:t('editor.revertBody')+'\n\n'+t('editor.revertLibraryNote'),confirmText:t('editor.revertConfirm'),cancelText:t('editor.revertCancel'),focusCancel:true,onConfirm:async()=>{
+ const ok=await confirmDialog({phraseWrap:true,title:t('editor.revertTitle'),message:t('editor.revertBody')+'\n\n'+t('editor.revertLibraryNote'),confirmText:t('editor.revertConfirm'),cancelText:t('editor.revertCancel'),focusCancel:true,onConfirm:async()=>{
   visibilityBusy.value=true;
   try{
    const token=await session.accessToken();if(!token)throw new ApiError(401,'');
@@ -1039,7 +1039,7 @@ async function revertPublished(){
 }
 async function undoPublished(){
  const pending=pendingRevert.value;if(!pending||pending.saveAttempted||saving.value)return;
- if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
+ if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({phraseWrap:true,title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
  applyEditorSnapshot(pending.before);pendingRevert.value=null;
  await nextTick();restoreButton.value?.focus();
 }
@@ -1523,7 +1523,7 @@ async function exportCard(format: "png" | "json") {
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="pendingRevert" class="notice restored" role="status">
-          <span>{{ $t(pendingRevert.saveAttempted&&!pendingRevert.committed?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
+          <span>{{ $t(pendingRevert.saveAttempted?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
           <button v-if="!pendingRevert.saveAttempted" ref="undoButton" data-approved-undo type="button" class="btn btn--sm btn--ghost" :disabled="saving||visibilityBusy" @click="undoPublished">{{ $t('editor.revertUndo') }}</button>
         </p>
         <p v-else-if="mayRevert" class="notice restored" role="status">
