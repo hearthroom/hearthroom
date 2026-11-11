@@ -4724,7 +4724,7 @@
   "editor.cardCss.reference": "変更できる場所",
   "editor.cardCss.referenceHint": "各場所の変数やセレクターをコピーして、カスタム CSS に貼り付けられます。",
   "editor.cardCss.directCssHint": "CSS で直接指定した色は、変数では上書きできない場合があります。",
-  "editor.cardCss.fengyueHint": "AI 風月のチャット画面向けのスタイルは、これらの場所に自動で対応します。",
+  "editor.cardCss.fengyueHint": "風月向け CSS は「カードのスタイル」で自動対応します。表示ルールは元のカード形式と保存済みの設定に従います。",
   "editor.cardCss.position.ai": "AI の吹き出し",
   "editor.cardCss.position.user": "プレイヤーの吹き出し",
   "editor.cardCss.position.input": "入力欄",

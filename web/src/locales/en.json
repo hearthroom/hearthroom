@@ -4724,7 +4724,7 @@
   "editor.cardCss.reference": "Places you can style",
   "editor.cardCss.referenceHint": "Copy a location's variable or selector into custom CSS.",
   "editor.cardCss.directCssHint": "Variables may not override colours set directly in CSS.",
-  "editor.cardCss.fengyueHint": "Styles written for AI Fengyue's chat page map to these locations automatically.",
+  "editor.cardCss.fengyueHint": "Put Fengyue CSS in Card styles for automatic mapping; display rules keep the card’s original format and saved settings.",
   "editor.cardCss.position.ai": "AI bubble",
   "editor.cardCss.position.user": "Player bubble",
   "editor.cardCss.position.input": "Input field",
