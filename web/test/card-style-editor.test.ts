@@ -4,6 +4,7 @@ import CardStyleEditor from "../src/components/editor/CardStyleEditor.vue";
 import { i18n, loadLocale } from "../src/lib/i18n";
 import { readAppearance, writeAppearance, CARD_CSS_MAX_BYTES } from "../src/lib/card-appearance";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
+import { compileCardCss } from "../../stage/src/common/card-css";
 
 let app: App | undefined;
 let root: HTMLElement | undefined;
@@ -39,6 +40,8 @@ describe("CardStyleEditor", () => {
     expect(document.activeElement).toBe(root!.querySelector('[data-appearance-field="aiBg"]'));
     expect(model.value).toBe("");
     expect(root!.querySelector("select")).toBeNull();
+    await click("[data-card-css-reference-toggle]");
+    expect(root!.querySelector("[data-fengyue-aliases]")).toBeNull();
   });
 
   it("keeps imported CSS unchanged until an edit, validates fields locally, and lets valid edits continue", async () => {
@@ -99,6 +102,52 @@ describe("CardStyleEditor", () => {
     await click('[data-copy-selector="ai"]'); await nextTick();
     expect(root!.querySelector('[role="status"]')!.textContent).toContain(t("copyFailed"));
     expect(root!.querySelector(".toast")).toBeNull();
+  });
+
+  it("the copied example remains a native root rule when pasted into a legacy Fengyue card", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, "clipboard", "get").mockReturnValue({ writeText } as unknown as Clipboard);
+    const original = "#ai-chat-input{color:red}";
+    const { model } = mount(original, "fengyue");
+    await click("[data-card-css-toggle]"); await click("[data-card-css-reference-toggle]");
+    await click("[data-copy-example]");
+    const copiedCss = writeText.mock.calls[0][0] as string;
+    const compiled = compileCardCss({ cardCss: original + "\n" + copiedCss, cardCssDialect: "fengyue" });
+    expect(compiled).toContain("@layer lt-card-css");
+    expect(compiled).toContain(".canvas-root {\n  --lt-canvas-bubble-ai-bg: #243447;");
+    expect(compiled).not.toContain(".canvas-root):not(#lt-fy) .canvas-root");
+    expect(readAppearance(copiedCss).values.font).toBe("system-ui, sans-serif");
+    expect(model.value).toBe(original);
+  });
+
+  it("pasting the example into custom CSS updates the appearance rows without duplicating managed blocks", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, "clipboard", "get").mockReturnValue({ writeText } as unknown as Clipboard);
+    const { model } = mount(writeAppearance({ aiBg: "#111111" }, ".mine{color:red}"), "fengyue");
+    await click("[data-card-css-toggle]"); await click("[data-card-css-reference-toggle]");
+    await click("[data-copy-example]");
+    const copiedCss = writeText.mock.calls[0][0] as string;
+    await input("textarea", ".mine{color:red}\n" + copiedCss);
+    expect(root!.querySelector<HTMLInputElement>('[data-appearance-field="aiBg"]')!.value).toBe("#243447");
+    await input('[data-appearance-field="font"]', "Georgia, serif");
+    expect(model.value.match(/lt-card-appearance:start/g)).toHaveLength(1);
+    expect(readAppearance(model.value).customCss.trim()).toBe(".mine{color:red}");
+  });
+
+  it("offers Fengyue root aliases only as an import aid, and both copied selectors reach the root", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, "clipboard", "get").mockReturnValue({ writeText } as unknown as Clipboard);
+    mount("#ai-chat-input{color:red}", "fengyue");
+    await click("[data-card-css-toggle]"); await click("[data-card-css-reference-toggle]");
+    expect(root!.querySelector('[data-copy-selector="background"]')!.closest(".card-style__position")!.textContent).toContain(".canvas-root");
+    expect(root!.querySelector("[data-fengyue-aliases]")!.textContent).toContain(t("fengyueAliases"));
+    await click("[data-copy-fengyue-root]"); await click("[data-copy-fengyue-dark]");
+    expect(writeText.mock.calls.map(([value]) => value)).toEqual(["#installedBuiltInCss", ".dark #installedBuiltInCss"]);
+    for (const [selector] of writeText.mock.calls) {
+      const compiled = compileCardCss({ cardCss: `${selector}{color:red}`, cardCssDialect: "fengyue" });
+      expect(compiled).toContain(':where(.canvas-root):not(#lt-fy)');
+      expect(compiled).not.toContain('.canvas-root):not(#lt-fy) .canvas-root');
+    }
   });
 
   it("counts UTF-8 bytes and expands when the parent marks the CSS invalid", async () => {
