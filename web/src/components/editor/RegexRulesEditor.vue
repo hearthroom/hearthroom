@@ -8,7 +8,7 @@
  *
  * 替換內容多半是幾千到兩萬字的 HTML/CSS/JS，所以右欄那格 textarea 要夠大，並用等寬字。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import {
@@ -21,8 +21,9 @@ import {
   makeRule,
   parseFind,
   formatMB,
-  ruleSetBytes,
-  validateRuleSet,
+  ruleBytes,
+  validateRule,
+  validateRuleSetLimits,
   type RegexRule,
   type RegexRuleSet,
 } from "@/lib/regex-rules";
@@ -47,12 +48,23 @@ const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
   return q ? set.value.rules.filter((r) => r.name.toLowerCase().includes(q) || r.find.toLowerCase().includes(q)) : set.value.rules;
 });
-const issues = computed(() => validateRuleSet(set.value));
-const issueOf = (id: string) => issues.value.find((i) => i.ruleId === id);
-// 掛在整份上的問題（太多條、整份太大、狀態欄太長）：沒有哪一條規則可以標紅，
-// 只灰掉「完成」的話作者看不出為什麼（2026-09-11 一份 1.18 MB 的匯入檔就是這樣卡住）。
-const setIssues = computed(() => issues.value.filter((i) => !i.ruleId));
-const sizeText = computed(() => t("regex.size", { size: formatMB(ruleSetBytes(set.value)), max: REGEX_LIMITS.total / 1024 / 1024 }));
+// Cache by the local rule object. Name/find/replacement edits invalidate only that rule;
+// enabled/targets and list moves do not re-encode every large HTML replacement.
+const ruleStates = new WeakMap<RegexRule, ComputedRef<{ bytes: number; issues: ReturnType<typeof validateRule> }>>();
+function stateOf(rule: RegexRule) {
+  let state = ruleStates.get(rule);
+  if (!state) {
+    state = computed(() => ({ bytes: ruleBytes(rule), issues: validateRule(rule) }));
+    ruleStates.set(rule, state);
+  }
+  return state.value;
+}
+const totalBytes = computed(() => set.value.rules.reduce((sum, rule) => sum + stateOf(rule).bytes, 0));
+const invalidRuleIds = computed(() => new Set(set.value.rules.filter(rule => stateOf(rule).issues.length > 0).map(rule => rule.id)));
+const setIssues = computed(() => validateRuleSetLimits(set.value, totalBytes.value));
+const hasIssues = computed(() => setIssues.value.length > 0 || invalidRuleIds.value.size > 0);
+const issueOf = (id: string) => invalidRuleIds.value.has(id);
+const sizeText = computed(() => t("regex.size", { size: formatMB(totalBytes.value), max: REGEX_LIMITS.total / 1024 / 1024 }));
 const findKind = computed(() => {
   if (!selected.value) return "";
   const parsed = parseFind(selected.value.find);
@@ -74,6 +86,7 @@ function toggleTarget(target: RegexMessageTarget, checked: boolean) {
 }
 
 function add() {
+  if (set.value.rules.length >= REGEX_LIMITS.rules) return;
   const rule = makeRule({ name: t("regex.rule.untitled") });
   set.value.rules.push(rule);
   selectedId.value = rule.id;
@@ -95,6 +108,7 @@ function move(rule: RegexRule, delta: number) {
   [rules[from], rules[to]] = [rules[to], rules[from]];
 }
 function done() {
+  if (hasIssues.value) return;
   emit("update:modelValue", JSON.parse(JSON.stringify(set.value)) as RegexRuleSet);
   emit("close");
 }
@@ -125,11 +139,11 @@ watch(selectedId, () => { testScope.value = testScope.value; });
       <header class="rx__head">
         <h2>{{ $t("regex.title") }}</h2>
         <span class="subtle">{{ $t("regex.count", { n: set.rules.length, max: REGEX_LIMITS.rules }) }}</span>
-        <span class="subtle" :class="{ 'rx__over': ruleSetBytes(set) > REGEX_LIMITS.total }">{{ sizeText }}</span>
+        <span class="subtle" :class="{ 'rx__over': totalBytes > REGEX_LIMITS.total }">{{ sizeText }}</span>
         <span v-for="issue in setIssues" :key="issue.key" class="rx__set-issue" role="alert">{{ $t(issue.key, issue.params ?? {}) }}</span>
         <div class="rx__head-acts">
           <button type="button" class="btn btn--sm btn--ghost" @click="cancel">{{ $t("dialog.cancel") }}</button>
-          <button type="button" class="btn btn--sm btn--primary" :disabled="issues.length > 0" @click="done">{{ $t("regex.done") }}</button>
+          <button type="button" class="btn btn--sm btn--primary" :disabled="hasIssues" @click="done">{{ $t("regex.done") }}</button>
         </div>
       </header>
 
@@ -139,17 +153,17 @@ watch(selectedId, () => { testScope.value = testScope.value; });
           <input v-model="query" class="input" type="search" :placeholder="$t('regex.search')" :aria-label="$t('regex.search')" />
           <button type="button" class="btn btn--sm" :disabled="set.rules.length >= REGEX_LIMITS.rules" @click="add">{{ $t("regex.rule.add") }}</button>
           <ul class="rx__rules">
-            <li v-for="rule in filtered" :key="rule.id" class="rx__rule" :class="{ 'rx__rule--on': rule.id === selectedId, 'rx__rule--off': !rule.enabled, 'rx__rule--bad': issueOf(rule.id) }">
+            <li v-for="(rule, index) in filtered" :key="rule.id" v-memo="[rule.name, rule.find, rule.enabled, rule.id === selectedId, issueOf(rule.id), index, rule === set.rules[0], rule === set.rules[set.rules.length - 1], query, $i18n.locale]" class="rx__rule" :class="{ 'rx__rule--on': rule.id === selectedId, 'rx__rule--off': !rule.enabled, 'rx__rule--bad': issueOf(rule.id) }">
               <input type="checkbox" v-model="rule.enabled" :aria-label="$t('regex.rule.enabled')" @click.stop />
               <button type="button" class="rx__rule-name" @click="selectedId = rule.id">
                 <span class="rx__rule-title">{{ rule.name || $t("regex.rule.untitled") }}</span>
                 <span class="subtle rx__rule-find">{{ rule.find }}</span>
               </button>
               <span class="rx__rule-tools">
-                <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-label="$t('list.up')" :title="$t('list.up')" :disabled="set.rules.indexOf(rule) === 0" @click="move(rule, -1)">
+                <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-label="$t('list.up')" :title="$t('list.up')" :disabled="rule === set.rules[0]" @click="move(rule, -1)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" /></svg>
                 </button>
-                <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-label="$t('list.down')" :title="$t('list.down')" :disabled="set.rules.indexOf(rule) === set.rules.length - 1" @click="move(rule, 1)">
+                <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-label="$t('list.down')" :title="$t('list.down')" :disabled="rule === set.rules[set.rules.length - 1]" @click="move(rule, 1)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M18 13l-6 6-6-6" /></svg>
                 </button>
                 <button type="button" class="btn btn--icon btn--sm btn--ghost btn--danger" :aria-label="$t('regex.rule.delete')" :title="$t('regex.rule.delete')" @click="remove(rule)">

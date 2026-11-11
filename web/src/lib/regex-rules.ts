@@ -117,12 +117,8 @@ export function isSandboxChatVersion(v: unknown): boolean {
  * 逐條的提示。現在上游放寬到 32 MB，整份的問題也在標題列講出來（多大、上限多少）。
  */
 export const REGEX_LIMITS = {
-  /**
-   * 條數上限。之前 100：32 MB 的整份上限配 100 條 × 128 KB，實際最多只到約 13 MB，
-   * 條數才是真正的牆；owner 2026-09-11：「把那個 N 改大一點沒關係」。上游沒有條數上限，
-   * 500 條 × 512 KB 已超過整份上限，之後擋人的只剩整份大小那一把尺。
-   */
-  rules: 500,
+  /** 編輯器容量；大小限制仍分別套用，匯入不截斷超量規則。 */
+  rules: 1000,
   name: 40,
   find: 1000,
   /** 單條替換內容（位元組）。 */
@@ -142,7 +138,10 @@ export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).leng
  * 或反過來，都會讓作者摸不著頭緒。同一把尺，這裡放行的上游就收。
  */
 export const ruleSetBytes = (set: RegexRuleSet): number =>
-  set.rules.reduce((n, r) => n + utf8Bytes(r.id) + utf8Bytes(r.name) + utf8Bytes(r.find) + utf8Bytes(r.replace), 0);
+  set.rules.reduce((n, r) => n + ruleBytes(r), 0);
+
+export const ruleBytes = (rule: RegexRule): number =>
+  utf8Bytes(rule.id) + utf8Bytes(rule.name) + utf8Bytes(rule.find) + utf8Bytes(rule.replace);
 
 /** 給人看的 MB：小於 10 MB 留一位小數（1.2 MB），再大就取整。 */
 export const formatMB = (bytes: number): string => (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1);
@@ -215,20 +214,33 @@ export function ruleSetWarnings(set: RegexRuleSet): RuleIssue[] {
   }).map(rule => ({ ruleId: rule.id, key: "regex.warning.largeReplacement" }));
 }
 
-export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
+/** 單條檢查與整份檢查共用，讓編輯器只重算改動的那條。 */
+export function validateRule(rule: RegexRule): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  if (!rule.find.trim()) issues.push({ ruleId: rule.id, key: "regex.issue.emptyFind" });
+  if ([...rule.name].length > REGEX_LIMITS.name) issues.push({ ruleId: rule.id, key: "regex.issue.nameLong", params: { max: REGEX_LIMITS.name } });
+  if ([...rule.find].length > REGEX_LIMITS.find) issues.push({ ruleId: rule.id, key: "regex.issue.findLong", params: { max: REGEX_LIMITS.find } });
+  if (utf8Bytes(rule.replace) > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: rule.id, key: "regex.issue.replaceLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
+  if (parseFind(rule.find) instanceof Error) issues.push({ ruleId: rule.id, key: "regex.issue.badRegex" });
+  return issues;
+}
+
+export function validateRuleSetLimits(set: RegexRuleSet, bytes: number): RuleIssue[] {
   const issues: RuleIssue[] = [];
   if (set.rules.length > REGEX_LIMITS.rules) issues.push({ ruleId: "", key: "regex.issue.tooMany", params: { max: REGEX_LIMITS.rules } });
-  for (const rule of set.rules) {
-    if (!rule.find.trim()) issues.push({ ruleId: rule.id, key: "regex.issue.emptyFind" });
-    if ([...rule.name].length > REGEX_LIMITS.name) issues.push({ ruleId: rule.id, key: "regex.issue.nameLong", params: { max: REGEX_LIMITS.name } });
-    if ([...rule.find].length > REGEX_LIMITS.find) issues.push({ ruleId: rule.id, key: "regex.issue.findLong", params: { max: REGEX_LIMITS.find } });
-    if (utf8Bytes(rule.replace) > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: rule.id, key: "regex.issue.replaceLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
-    if (parseFind(rule.find) instanceof Error) issues.push({ ruleId: rule.id, key: "regex.issue.badRegex" });
-  }
   if ([...set.statusbar].length > REGEX_LIMITS.statusbar) issues.push({ ruleId: "", key: "regex.issue.statusbarLong", params: { max: REGEX_LIMITS.statusbar } });
-  const bytes = ruleSetBytes(set);
   if (bytes > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong", params: { size: formatMB(bytes), max: REGEX_LIMITS.total / 1024 / 1024 } });
   return issues;
+}
+
+export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
+  const limits = validateRuleSetLimits(set, ruleSetBytes(set));
+  // Keep the existing order: count, individual rules, then statusbar/size.
+  return [
+    ...limits.filter(issue => issue.key === "regex.issue.tooMany"),
+    ...set.rules.flatMap(validateRule),
+    ...limits.filter(issue => issue.key !== "regex.issue.tooMany"),
+  ];
 }
 
 // ── 匯入 / 匯出 ─────────────────────────────────────────────────────────
