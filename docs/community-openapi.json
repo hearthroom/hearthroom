@@ -370,7 +370,7 @@
         },
         "responses": {
           "200": {
-            "description": "Existing card submission accepted.",
+            "description": "Existing card submission accepted. rating and ratingDescriptors describe the submitted questionnaire, not the currently published version. status remains the listing status; acceptance does not mean review approval. The public card keeps its previous rating until this submission is approved.",
             "content": {
               "application/json": {
                 "schema": {
@@ -380,7 +380,7 @@
             }
           },
           "201": {
-            "description": "First card submission accepted.",
+            "description": "First card submission accepted. rating and ratingDescriptors describe the submitted questionnaire. Acceptance does not mean review approval; the public rating changes only after approval.",
             "content": {
               "application/json": {
                 "schema": {

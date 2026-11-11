@@ -1514,7 +1514,9 @@ app.post("/v1/cards", async (c) => {
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);
-    return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
+    // This is the submission receipt: its rating describes this questionnaire,
+    // while the public card keeps its previous rating until review approves it.
+    return c.json({...toCard(row,lang(c)),rating:rating.rating,ratingDescriptors:rating.descriptors,status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
 

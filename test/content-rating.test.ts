@@ -116,6 +116,30 @@ describe("送審與上架", () => {
     expect(board.items[0]).not.toHaveProperty("nsfw");
   });
 
+  it("首次送審回覆這次問卷的分級，公開資料在過審前不切換", async () => {
+    const res = await post({ roleId: "role-1", ratingAnswers: GENERAL });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ rating: "G", ratingDescriptors: [], status: "pending" });
+    expect(await card("role-1")).toMatchObject({ rating: null, status: "pending" });
+  });
+
+  it.each([[ADULT, GENERAL], [GENERAL, ADULT], [ADULT, TEEN]])("更新送審與重試回覆新分級，公開版本仍保留舊分級 (%j → %j)", async (previous, answers) => {
+    await post({ roleId: "role-1", ratingAnswers: previous });
+    await approve("role-1");
+    const operationId = crypto.randomUUID();
+    const expected = evaluateRating(answers);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await post({ roleId: "role-1", ratingAnswers: answers, operationId });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ rating: expected.rating, ratingDescriptors: expected.descriptors, status: "approved" });
+    }
+    expect(await card("role-1")).toMatchObject({ rating: evaluateRating(previous).rating, status: "approved" });
+    const submitted = await env.DB.prepare("SELECT rating, rating_answers FROM hosting_versions WHERE operation_id = ?").bind(operationId).first<{ rating: string; rating_answers: string }>();
+    expect(submitted?.rating).toBe(expected.rating);
+    expect(JSON.parse(submitted!.rating_answers)).toEqual(expected.answers);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_submissions WHERE status='pending'").first<{ n: number }>())?.n).toBe(1);
+  });
+
   it("限制級就是成人卡：一般區看不到", async () => {
     await post({ roleId: "role-1", ratingAnswers: ADULT });
     await approve("role-1");
