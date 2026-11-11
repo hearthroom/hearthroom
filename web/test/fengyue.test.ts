@@ -61,7 +61,7 @@ describe("風月匯出檔：網頁這邊的落點", () => {
     const result = fengyueToDraft({ ...raw, custom_css: css }, { language: "zh-Hant" });
     expect(result.regex?.cardCss).toBe(css);
     expect(new TextEncoder().encode(result.regex?.cardCss)).toEqual(new TextEncoder().encode(css));
-    expect(result.regex?.cardCssDialect).toBe("fengyue");
+    expect(result.regex?.cardCssDialect).toBe("fengyue-v2");
   });
 
   it("內置 CSS 在沙箱裝卡時成為常駐樣式", () => {

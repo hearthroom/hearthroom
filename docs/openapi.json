@@ -20413,10 +20413,11 @@
             "enum": [
               "",
               "fengyue",
+              "fengyue-v2",
               "tavern",
               "mmd"
             ],
-            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set."
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
           }
         }
       },
@@ -20538,10 +20539,11 @@
             "enum": [
               "",
               "fengyue",
+              "fengyue-v2",
               "tavern",
               "mmd"
             ],
-            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set."
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
           }
         }
       },
@@ -20627,10 +20629,11 @@
             "enum": [
               "",
               "fengyue",
+              "fengyue-v2",
               "tavern",
               "mmd"
             ],
-            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it."
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
           }
         }
       },
@@ -27683,10 +27686,11 @@
             "enum": [
               "",
               "fengyue",
+              "fengyue-v2",
               "tavern",
               "mmd"
             ],
-            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it."
+            "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted or null preserves the stored hint; an empty string clears it. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
           }
         }
       },
