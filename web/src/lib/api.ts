@@ -1897,3 +1897,13 @@ export async function deleteRoleState(roleId: string, token: string): Promise<{ 
     }),
   );
 }
+
+
+/** Owner-only reference to the currently published immutable content. */
+export interface ApprovedDraft { operationId:string; approvedRoleId:string; approvalRevision:string; policyRevision:string }
+export async function fetchApprovedDraft(roleId:string,token:string):Promise<ApprovedDraft>{
+ return json<ApprovedDraft>(await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/approved`,{headers:authHeaders(token)}));
+}
+export async function saveApprovedDraft(roleId:string,version:ApprovedDraft,token:string):Promise<ApprovedDraft>{
+ return json<ApprovedDraft>(await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/approved`,{method:'POST',headers:{...authHeaders(token),'Content-Type':'application/json'},body:JSON.stringify(version)}));
+}

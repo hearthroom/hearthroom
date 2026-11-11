@@ -16,6 +16,7 @@
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
 import { downloadBlob, safeFileName } from "@/lib/save-file";
+import { bookSnapshot, mergeRevertedBookEdits as mergeBookEdits, type BookSnapshot } from '@/lib/reverted-book-entries';
 import {retentionText} from '@/lib/reward-retention';
 import {hasPublicationOperation} from '@/lib/publication-operation';
 import {fetchWorkVisibility} from '@/lib/work-visibility';
@@ -31,6 +32,9 @@ import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n";
 import {
   createRole,
+  fetchApprovedDraft,
+  saveApprovedDraft,
+  type ApprovedDraft,
   fetchCard,
   fetchFandomLookup,
   registerCardIdentity,
@@ -507,6 +511,7 @@ function onScroll() {
 
 const dirty = computed(
   () =>
+    Boolean(pendingRevert.value) ||
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
     wb.dirty() ||
     memberBooksDirty() ||
@@ -980,6 +985,91 @@ const visibilityToken=()=>session.accessToken();
 function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
 function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'opening');}
 
+
+// A revert is a local edit until Save. Keep both the untouched editor snapshot
+// and the approved baseline so later edits can be applied after the atomic save.
+const copied = <T,>(value:T):T => JSON.parse(JSON.stringify(value));
+function editorSnapshot(){return {draft:cloneDraft(draft.value),tags:tagsText.value,worldShown:worldShown.value,book:bookSnapshot(wb),members:(draft.value.world?.characters??[]).map(c=>bookSnapshot(memberBook(c))),rules:copied(regexSet.value)};}
+type EditorSnapshot = ReturnType<typeof editorSnapshot>;
+function applyEditorSnapshot(state:EditorSnapshot){
+ draft.value=cloneDraft(state.draft);tagsText.value=state.tags;worldShown.value=state.worldShown;
+ Object.assign(wb,{format:undefined},copied(state.book));regexSet.value=copied(state.rules);
+ for(const [i,c] of (draft.value.world?.characters??[]).entries()) if(state.members[i])Object.assign(memberBook(c),{format:undefined},copied(state.members[i]));
+ settleDisclosures();
+}
+const pendingRevert=ref<{version:ApprovedDraft;before:EditorSnapshot;preview:EditorSnapshot;committed:boolean;saveAttempted:boolean}|null>(null);
+const restoreButton=ref<HTMLButtonElement|null>(null);
+const undoButton=ref<HTMLButtonElement|null>(null);
+const mayRevert=computed(()=>visibilityEnabled.value&&workVisibility.value?.syncState==='complete'&&workVisibility.value?.restriction==='none'&&workVisibility.value?.revisionState==='changed'&&workVisibility.value?.review!=='pending'&&workVisibility.value?.update!=='pending');
+async function readEditorSnapshot(source:string,token:string){
+ const book=useWorldbookDraft({untitled:()=>t('wb.entry.untitled'),fallbackName:()=>'',language:()=>draft.value.language});
+ const [raw,asset]=await Promise.all([fetchRoleDetail(source,token),fetchAuthorAsset(source,token),book.loadBound(token,source)]);
+ if(book.loadFailed)throw new Error(t('state.loadFailed'));
+ const next=draftFromRoleDetail(raw,locale.value);
+ const members=await Promise.all((next.world?.characters??[]).map(async c=>{
+  const member=useWorldbookDraft({untitled:()=>t('wb.entry.untitled'),fallbackName:()=>c.name,language:()=>next.language});
+  if(c.lorebookId)await member.load(token,c.lorebookId);
+  if(member.loadFailed)throw new Error(t('state.loadFailed'));
+  return bookSnapshot(member);
+ }));
+ return {state:{draft:next,tags:formatTags(next.roleTag),worldShown:Boolean(next.world),book:bookSnapshot(book),members,rules:ruleSetFromAuthorAsset(asset)} satisfies EditorSnapshot,assetVersion:asset.version};
+}
+function revertReadError(err:unknown){
+ const status=err instanceof ApiError?err.status:0;
+ return t(status===401?'editor.revertSignIn':status===403?'editor.revertForbidden':status===409?'editor.revertChanged':status===503?'editor.revertUnavailable':'editor.revertFailed');
+}
+async function revertPublished(){
+ if(!mayRevert.value||saving.value||loading.value||visibilityBusy.value||booksUnavailable.value)return;
+ const ok=await confirmDialog({title:t('editor.revertTitle'),message:t('editor.revertBody')+'\n\n'+t('editor.revertLibraryNote'),confirmText:t('editor.revertConfirm'),cancelText:t('editor.revertCancel'),focusCancel:true,onConfirm:async()=>{
+  visibilityBusy.value=true;
+  try{
+   const token=await session.accessToken();if(!token)throw new ApiError(401,'');
+   const version=await fetchApprovedDraft(roleId.value,token);
+   const next=await readEditorSnapshot(version.approvedRoleId,token);
+   const latest=await fetchApprovedDraft(roleId.value,token);
+   if(latest.approvalRevision!==version.approvalRevision||latest.policyRevision!==version.policyRevision)throw new ApiError(409,'');
+   const before=editorSnapshot();
+   applyEditorSnapshot(next.state);
+   pendingRevert.value={version,before,preview:editorSnapshot(),committed:false,saveAttempted:false};saved.value=false;
+  }catch(err){throw new Error(revertReadError(err));}finally{visibilityBusy.value=false;}
+ }});
+ if(ok){await nextTick();undoButton.value?.focus();}
+}
+async function undoPublished(){
+ const pending=pendingRevert.value;if(!pending||pending.saveAttempted||saving.value)return;
+ if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
+ applyEditorSnapshot(pending.before);pendingRevert.value=null;
+ await nextTick();restoreButton.value?.focus();
+}
+async function commitPendingRevert(token:string){
+ const pending=pendingRevert.value;if(!pending)return;
+ if(!pending.committed){
+  pending.saveAttempted=true;
+  try{await saveApprovedDraft(roleId.value,pending.version,token);pending.committed=true;}
+  catch(err){if(err instanceof ApiError&&err.status>=400&&err.status<500){pending.saveAttempted=false;throw err;}throw new Error(t('editor.revertSaveUnknown'));}
+ }
+ const baseline=await readEditorSnapshot(roleId.value,token);
+ const edited=editorSnapshot();
+ applyEditorSnapshot(baseline.state);original.value=cloneDraft(draft.value);regexOriginal.value=copied(regexSet.value);regexVersion.value=baseline.assetVersion;savedOpening.value=openingModeOf(regexSet.value);
+ for(const key of Object.keys(edited.draft) as (keyof RoleDraft)[]){
+  if(JSON.stringify(edited.draft[key])!==JSON.stringify(pending.preview.draft[key]))Object.assign(draft.value,{[key]:copied(edited.draft[key])});
+ }
+ tagsText.value=edited.tags;worldShown.value=Boolean(draft.value.world);
+ if(JSON.stringify(edited.rules)!==JSON.stringify(pending.preview.rules))regexSet.value=copied(edited.rules);
+ mergeBookEdits(wb,pending.preview.book,edited.book);
+ for(const c of draft.value.world?.characters??[]){
+  const beforeIndex=pending.preview.draft.world?.characters.findIndex(member=>member.id===c.id)??-1;
+  const editedIndex=edited.draft.world?.characters.findIndex(member=>member.id===c.id)??-1;
+  const baselineIndex=baseline.state.draft.world?.characters.findIndex(member=>member.id===c.id)??-1;
+  const was=pending.preview.members[beforeIndex],now=edited.members[editedIndex],base=baseline.state.members[baselineIndex];
+  const book=memberBook(c);
+  if(base)Object.assign(book,{format:undefined},copied(base));
+  if(was&&now)mergeBookEdits(book,was,now);
+  else if(now)Object.assign(book,{format:undefined},copied(now));
+ }
+ pendingRevert.value=null;
+}
+
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
@@ -990,8 +1080,8 @@ async function save() {
     return;
   }
   // 文件、開場與作者資產是獨立請求；先擋已知無法保存的規則，避免留下只有開場的卡。
-  const regexSnapshot: RegexRuleSet | null = can("regex") && regexDirty.value ? JSON.parse(JSON.stringify(regexSet.value)) : null;
-  const regexSnapshotVersion = regexVersion.value;
+  let regexSnapshot: RegexRuleSet | null = can("regex") && regexDirty.value ? JSON.parse(JSON.stringify(regexSet.value)) : null;
+  let regexSnapshotVersion = regexVersion.value;
   if (regexSnapshot) {
     const issues = validateRuleSet(regexSnapshot);
     if (issues.length) {
@@ -1049,6 +1139,9 @@ async function save() {
     const review = targetRoleId
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
       : {resubmit:false};
+    await commitPendingRevert(token);
+    regexSnapshot=can("regex")&&regexDirty.value?copied(regexSet.value):null;
+    regexSnapshotVersion=regexVersion.value;
     reviewRetry.value = false;
     ratingNeeded.value = false;
     if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
@@ -1427,6 +1520,14 @@ async function exportCard(format: "png" | "json") {
         <div id="editor-phone-nav" class="phone-nav" />
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
+        <p v-if="pendingRevert" class="notice restored" role="status">
+          <span>{{ $t(pendingRevert.saveAttempted&&!pendingRevert.committed?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
+          <button v-if="!pendingRevert.saveAttempted" ref="undoButton" data-approved-undo type="button" class="btn btn--sm btn--ghost" :disabled="saving||visibilityBusy" @click="undoPublished">{{ $t('editor.revertUndo') }}</button>
+        </p>
+        <p v-else-if="mayRevert" class="notice restored" role="status">
+          <span>{{ $t('editor.revertNotice') }}</span>
+          <button ref="restoreButton" data-approved-restore type="button" class="btn btn--sm btn--ghost" :disabled="saving||loading||visibilityBusy||booksUnavailable" @click="revertPublished">{{ $t('editor.revertAction') }}</button>
+        </p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
@@ -2052,7 +2153,12 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 中欄 ---------------------------------------------------------------- */
 .body { min-width: 0; }
 .body__scroll > [role="alert"], .body__scroll > .restored { margin-bottom: var(--s-4); }
-.restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.restored { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.restored > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.restored > .btn { position: relative; }
+.restored > .btn::after { content: ""; position: absolute; inset: -7px 0; }
+:lang(ko) .restored > span { word-break: keep-all; }
+:lang(ja) .restored > span { word-break: auto-phrase; }
 /* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
 /*
    分區一整頁排下來：每區一個標題；錨點捲動要留出站台頁首與黏住的導覽列的高度，
