@@ -45,7 +45,7 @@ Automatic detection only handles bars flush with the screen edge and about 48px 
 | Value | Effect |
 |---|---|
 | `left` / `right` | Treated as a sidebar docked on that side. It need not touch the edge, and the width limit rises to 30% of the message column. |
-| `none` | No space is made for this element. Set it on `:root` to turn off the adjustment for the whole card (SillyTavern-format card styles apply only inside messages, so `:root` has no effect there). |
+| `none` | No space is made for this element. Set it on `:root` to turn off the adjustment for the whole card (display-rule styles on SillyTavern-format cards apply only inside messages, so `:root` has no effect there). |
 
 ```html
 <div id="my-sidebar" style="position: fixed; left: 0; top: 30%; --lt-dock: left;">…</div>
@@ -71,7 +71,9 @@ Any HTML, including `<style>` and `<script>`. The `<style>` blocks from all rule
 
 The editor's **Card styles** field holds CSS for the whole card. Paste CSS directly, without `<style>` tags or a matching pattern; it is installed once when the chat page opens. In a CLI card folder, put the same CSS in `card.css`. The file can contain up to 512 KiB of UTF-8 text.
 
-Authors do not choose a style source. Known Fengyue selectors such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button` map automatically to the bubbles, input box and send button here. Other selectors keep the card's existing policy: MMD/site CSS applies as written, while Tavern CSS is scoped to messages. A single stylesheet can contain Fengyue selectors and site selectors; `.mes` alone is not treated as a Tavern source marker.
+Put CSS written for AI Fengyue in **Card styles**; no style-source selection is needed. Only this field automatically maps known Fengyue selectors such as `#customized-answer-content`, `#ai-chat-input` and `#ai-send-button` to the bubbles, input box and send button here. Other selectors in this field apply as written, so one stylesheet can mix Fengyue and site selectors; `.mes` is not treated as a Tavern source marker.
+
+Display-rule `<style>` blocks keep their original policy: existing `cssDialect` values and compiled style markers stay in effect; otherwise the card format applies (Tavern scopes styles to messages, other formats apply them as written). Display rules do not gain automatic Fengyue selector mapping.
 
 Card styles sit above the platform defaults and theme, and below display-rule styles. Use a display rule when a style needs to override the card's base appearance. Existing imported cards keep their saved style settings and priority; opening and saving them does not require choosing a source or changing those settings.
 
