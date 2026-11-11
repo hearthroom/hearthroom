@@ -10,6 +10,7 @@ import { createApp, nextTick } from "vue";
 import ImportPanel from "../src/components/editor/ImportPanel.vue";
 import { i18n } from "../src/lib/i18n";
 import cases from "./fixtures/fengyue-cases.json";
+import format from "../src/lib/fengyue-format.json";
 import { fengyueToDraft, isFengyueExport } from "../src/lib/fengyue";
 import { installCard, renderContent } from "../../stage/src/sandbox/rules";
 import { stylePolicyFor } from "../../stage/src/common/author-style-policy";
@@ -54,6 +55,14 @@ describe("風月匯出檔：共用用例", () => {
 
 describe("風月匯出檔：網頁這邊的落點", () => {
   const sample = (cases as { cases: Case[] }).cases[0].input;
+
+  it.each(["\n\t#ai-chat-input { background: #bde8f2; }\r\n/* 結尾 */ \t\r\n", " \r\n\t"])("內置 CSS 保留前後空白與原文字節：%j", (css) => {
+    const raw = Object.fromEntries(Object.entries(sample).filter(([key]) => !format.fields.css.includes(key)));
+    const result = fengyueToDraft({ ...raw, custom_css: css }, { language: "zh-Hant" });
+    expect(result.regex?.cardCss).toBe(css);
+    expect(new TextEncoder().encode(result.regex?.cardCss)).toEqual(new TextEncoder().encode(css));
+    expect(result.regex?.cardCssDialect).toBe("fengyue");
+  });
 
   it("內置 CSS 在沙箱裝卡時成為常駐樣式", () => {
     const result = fengyueToDraft(sample, { language: "zh-Hans" });
