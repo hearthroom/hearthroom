@@ -84,6 +84,7 @@ it('all configured targets are safe local landings with attribution', () => {
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code.startsWith('vc-') ? ['vocus', 'blog']
+      : code.startsWith('x-') ? ['x', 'social']
       : code.startsWith('bh-hut-') ? ['bahamut', 'cabin'] : ['bahamut', 'forum'];
     expect(url.searchParams.get('utm_source')).toBe(source);
     expect(url.searchParams.get('utm_medium')).toBe(medium);
@@ -204,6 +205,14 @@ it.each([
   const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override&url=https://evil.test`);
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe(`${path}?ref=${ref}&utm_source=bahamut&utm_medium=forum&utm_campaign=${code}`);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
+});
+
+it('serves the approved X Fengyue import post to the create page with the official code', async () => {
+  const response = await visit('/go/x-fengyue-import?ref=ATTACKER&utm_campaign=override&url=https://evil.test');
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/create?ref=94A9H94Z&utm_source=x&utm_medium=social&utm_campaign=x-fengyue-import-20261111');
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 1');
 });
