@@ -25,8 +25,7 @@ vi.mock('../src/lib/api', async original => ({ ...await original<typeof import('
 let app: ReturnType<typeof createApp> | undefined; let root: HTMLElement | undefined;
 const settle = async () => { for (let i = 0; i < 60; i++) await Promise.resolve(); await nextTick(); };
 const cover = () => root!.querySelector<HTMLElement>('.play-cover');
-// 收的時候有 250ms 淡出；jsdom 不會跑完 CSS 過渡，正在淡出就算收了
-const covered = () => !!cover() && !cover()!.classList.contains('play-cover-leave-active');
+const covered = () => !!cover();
 async function mount(path: string) {
   const pinia = createPinia(); setActivePinia(pinia);
   const session = useSession();
@@ -41,7 +40,7 @@ beforeEach(() => {
   mocks.stage.mockReset().mockResolvedValue({ template: '<div>Fixture player</div>' });
   mocks.card.mockReset().mockResolvedValue({ id: '100194', num: 100194, status: 'approved', name: '露娜', avatarUrl: 'https://img.test/art.webp', landscapeUrl: 'https://img.test/wide.webp' });
 });
-afterEach(() => { app?.unmount(); root?.remove(); document.body.innerHTML = ''; app = undefined; vi.useRealTimers(); });
+afterEach(() => { app?.unmount(); root?.remove(); document.body.innerHTML = ''; app = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it('第一幀就畫卡片頁交過來的卡名與封面', async () => {
   savePlayIntro(['100194'], { name: '約會大作戰', art: 'https://img.test/a.webp', backdrop: 'https://img.test/b.webp' });
@@ -97,4 +96,21 @@ it('載入失敗：收掉，露出錯誤', async () => {
   await settle();
   expect(covered()).toBe(false);
   expect(root!.textContent).toContain(i18n.global.t('play.loadFailed'));
+});
+
+it('hidden documents without animation frames remove the failed-load cover before offering recovery', async () => {
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+  let reject!: (error: Error) => void;
+  mocks.card.mockImplementation(() => new Promise((_resolve, fail) => { reject = fail; }));
+  await mount('/play/100194');await settle();expect(cover()).not.toBeNull();
+  reject(new Error('card unavailable'));await settle();
+  expect(root!.textContent).toContain(i18n.global.t('play.loadFailed'));
+  expect(cover()).toBeNull();
+});
+
+it('content-ready also removes the cover without waiting for an animation frame', async () => {
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+  await mount('/play/100194');await settle();expect(cover()).not.toBeNull();
+  markStageContentReady();await settle();
+  expect(root!.textContent).toContain('Fixture player');expect(cover()).toBeNull();
 });

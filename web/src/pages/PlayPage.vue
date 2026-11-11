@@ -314,9 +314,9 @@ watch(locale, () => { void remergeStageMessages(); });
       <RouterLink v-else class="btn" :to="lp(cardPagePath)">{{ $t("play.backToCard") }}</RouterLink>
       <RouterLink v-if="error && !session.me && !backToReview && isManagedAuth()" class="btn btn--ghost" :to="errorLoginHref">{{ $t('nav.login') }}</RouterLink>
     </div>
-    <Transition name="play-cover">
-      <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
-    </Transition>
+    <!-- Hidden pages may never run the animation frames needed by a CSS leave
+         transition. Once loading ends, remove the input-blocking cover directly. -->
+    <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
     <PlayInfoPanel />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
     <div class="play__toasts" aria-live="polite">
@@ -338,8 +338,6 @@ watch(locale, () => { void remergeStageMessages(); });
 .play__author-hint:lang(ja) { word-break: auto-phrase; }
 .play__recovery-actions { display: grid; gap: var(--s-3); width: min(100%, 320px); }
 @media (min-width: 760px) { .play__recovery-actions { width: 240px; } }
-.play-cover-leave-active { transition: opacity 250ms ease-out; }
-.play-cover-leave-to { opacity: 0; }
 .play__toasts { position: fixed; left: 50%; width: min(calc(100vw - 2 * var(--s-2)), 480px); justify-items: center; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
 .play__toast { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 14px; max-width: 100%; }
 .play__toast:lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }
