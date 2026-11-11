@@ -4748,7 +4748,7 @@
   "editor.cardCss.reference": "可以调整的位置",
   "editor.cardCss.referenceHint": "每个位置的变量与选择器都可以复制到自定义 CSS。",
   "editor.cardCss.directCssHint": "已经直接设置颜色的位置，变量不一定能覆盖。",
-  "editor.cardCss.fengyueHint": "为 AI 风月聊天页写的样式，会自动对应到这些位置。",
+  "editor.cardCss.fengyueHint": "风月写法的 CSS 放在卡片样式会自动对应位置；显示规则保持原卡片格式与已有设置的应用方式。",
   "editor.cardCss.position.ai": "AI 气泡",
   "editor.cardCss.position.user": "玩家气泡",
   "editor.cardCss.position.input": "输入框",
