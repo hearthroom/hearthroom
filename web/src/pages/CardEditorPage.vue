@@ -231,7 +231,8 @@ function memberBook(c: WorldCharacterDraft): WorldbookDraft {
 function memberBooksDirty(): boolean {
   return Boolean(draft.value.world?.characters.some((c) => memberBook(c).dirty()));
 }
-const booksUnavailable = computed(() => wb.loading || wb.loadFailed || Boolean(draft.value.world?.characters.some((c) => {
+const approvedRecoveryBlocked=ref(false);
+const booksUnavailable = computed(() => approvedRecoveryBlocked.value || wb.loading || wb.loadFailed || Boolean(draft.value.world?.characters.some((c) => {
   const book = memberBook(c);
   return book.loading || book.loadFailed;
 })));
@@ -663,6 +664,7 @@ const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
 interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; pendingCreate?: { roleId: string }; visibility?: "private" | "unlisted" }
 function storeDraft() {
+  storeApprovedLocalDraft();
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
   if (!onCreatePage.value || original.value) return;
@@ -708,6 +710,12 @@ function restoreDraft() {
   }
 }
 function discardDraft() {
+  if(recoveredRevert.value && pendingRevert.value && !pendingRevert.value.saveAttempted){
+    applyEditorSnapshot(pendingRevert.value.before);
+    pendingRevert.value=null;recoveredRevert.value=false;restoredDraft.value=false;
+    storeApprovedLocalDraft();
+    return;
+  }
   newCardVisibility.value = "unlisted";
   // 本機草稿可能帶著上次建好、尚未存完的卡號；清空必須連儲存目標一起放掉。
   roleId.value = "";
@@ -782,7 +790,8 @@ onMounted(async () => {
       for (const c of draft.value.world?.characters ?? []) {
         if (c.lorebookId) await memberBook(c).load(token, c.lorebookId).catch(() => {});
       }
-      await loadRegexRules(token);
+      const assetsReady=await loadRegexRules(token);
+      restoreApprovedLocalDraft(assetsReady);
     }
     void loadValidation();
     void visibilityControl.value?.reload();
@@ -803,6 +812,7 @@ onBeforeRouteLeave(
       (!dirty.value || (await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true })))),
 );
 const guard = (e: BeforeUnloadEvent) => {
+  storeDraft();
   if (dirty.value && !deleted.value) e.preventDefault();
 };
 /* Ctrl/⌘+S 存檔：寫長文的人手已經在鍵盤上，不該為了存一次去找按鈕。攔下瀏覽器的「另存網頁」。 */
@@ -826,6 +836,7 @@ onBeforeUnmount(() => {
   if (spyFrame) cancelAnimationFrame(spyFrame);
   clearTimeout(toastTimer);
   clearTimeout(draftTimer);
+  clearTimeout(approvedDraftTimer);
   storeDraft();
 });
 
@@ -914,8 +925,10 @@ async function loadRegexRules(token: string) {
     regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
     regexVersion.value = asset.version;
     savedOpening.value = openingModeOf(regexSet.value);
+    return true;
   } catch {
     // 讀不到就當沒有：舊上游沒這條路，不擋編輯
+    return false;
   }
 }
 
@@ -998,6 +1011,41 @@ function applyEditorSnapshot(state:EditorSnapshot){
  settleDisclosures();
 }
 const pendingRevert=ref<{version:ApprovedDraft;before:EditorSnapshot;preview:EditorSnapshot;committed:boolean;saveAttempted:boolean}|null>(null);
+const recoveredRevert=ref(false);
+let approvedDraftTimer:ReturnType<typeof setTimeout>|undefined;
+function approvedLocalDraftKey(){
+ return roleId.value&&visibilityActor.value&&!onCreatePage.value
+  ? `hearthroom.draft.approved.${editorProvider.value}.${visibilityActor.value}.${roleId.value}` : null;
+}
+function storeApprovedLocalDraft(){
+ if(loading.value||approvedRecoveryBlocked.value)return;
+ const key=approvedLocalDraftKey();if(!key)return;
+ try{
+  const pending=pendingRevert.value;
+  // Once a save starts, reload must read server truth rather than replay an
+  // unconfirmed operation or stage frozen dependencies as an ordinary draft.
+  if(!pending||pending.saveAttempted){localStorage.removeItem(key);return;}
+  localStorage.setItem(key,JSON.stringify({version:pending.version,preview:pending.preview,state:editorSnapshot()}));
+ }catch{/* Match the existing draft cache when browser storage is unavailable. */}
+}
+function restoreApprovedLocalDraft(assetsReady:boolean){
+ const key=approvedLocalDraftKey();if(!key)return;
+ try{
+  const raw=localStorage.getItem(key);if(!raw)return;
+  const stored=JSON.parse(raw) as {version:ApprovedDraft;preview:EditorSnapshot;state:EditorSnapshot};
+  if(!stored.version?.operationId||!stored.preview?.draft||!stored.state?.draft)throw new Error('Invalid draft cache');
+  // Do not let cached success flags erase a failed source baseline. Preserve
+  // the record for a full reload once the source and its dependencies recover.
+  if(booksUnavailable.value||!assetsReady){approvedRecoveryBlocked.value=true;error.value=t('state.loadFailed');return;}
+  const before=editorSnapshot();
+  applyEditorSnapshot(stored.state);
+  pendingRevert.value={version:stored.version,before,preview:stored.preview,committed:false,saveAttempted:false};
+  recoveredRevert.value=true;restoredDraft.value=true;
+ }catch{try{localStorage.removeItem(key);}catch{/* Browser storage may be disabled. */}}
+}
+watch(()=>pendingRevert.value&&!pendingRevert.value.saveAttempted?editorSnapshot():null,()=>{
+ clearTimeout(approvedDraftTimer);approvedDraftTimer=setTimeout(storeApprovedLocalDraft,400);
+},{deep:true});
 const restoreButton=ref<HTMLButtonElement|null>(null);
 const undoButton=ref<HTMLButtonElement|null>(null);
 const mayRevert=computed(()=>visibilityEnabled.value&&workVisibility.value?.syncState==='complete'&&workVisibility.value?.restriction==='none'&&workVisibility.value?.revisionState==='changed'&&workVisibility.value?.review!=='pending'&&workVisibility.value?.update!=='pending');
@@ -1031,20 +1079,23 @@ async function revertPublished(){
    const before=editorSnapshot();
    applyEditorSnapshot(next.state);
    pendingRevert.value={version,before,preview:editorSnapshot(),committed:false,saveAttempted:false};saved.value=false;
+   recoveredRevert.value=false;storeApprovedLocalDraft();
   }catch(err){throw new Error(revertReadError(err));}finally{visibilityBusy.value=false;}
  }});
  if(ok){await nextTick();undoButton.value?.focus();}
 }
 async function undoPublished(){
- const pending=pendingRevert.value;if(!pending||pending.saveAttempted||saving.value)return;
+ const pending=pendingRevert.value;if(!pending||recoveredRevert.value||pending.saveAttempted||saving.value)return;
  if(JSON.stringify(editorSnapshot())!==JSON.stringify(pending.preview)&&!(await confirmDialog({phraseWrap:true,title:t('editor.revertUndoTitle'),message:t('editor.revertUndoBody'),confirmText:t('editor.revertUndoConfirm'),cancelText:t('editor.revertUndoCancel'),focusCancel:true})))return;
  applyEditorSnapshot(pending.before);pendingRevert.value=null;
+ storeApprovedLocalDraft();
  await nextTick();restoreButton.value?.focus();
 }
 async function commitPendingRevert(token:string){
  const pending=pendingRevert.value;if(!pending)return;
  if(!pending.committed){
   pending.saveAttempted=true;
+  storeApprovedLocalDraft();
   try{await saveApprovedDraft(roleId.value,pending.version,token);pending.committed=true;}
   catch(err){if(err instanceof ApiError&&err.status>=400&&err.status<500){pending.saveAttempted=false;throw err;}throw new Error(t('editor.revertSaveUnknown'));}
  }
@@ -1068,6 +1119,7 @@ async function commitPendingRevert(token:string){
   else if(now)Object.assign(book,{format:undefined},copied(now));
  }
  pendingRevert.value=null;
+ recoveredRevert.value=false;restoredDraft.value=false;storeApprovedLocalDraft();
 }
 
 async function save() {
@@ -1520,11 +1572,11 @@ async function exportCard(format: "png" | "json") {
         <div id="editor-phone-nav" class="phone-nav" />
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
-        <p v-if="pendingRevert" class="notice restored" role="status">
+        <p v-if="pendingRevert&&(!recoveredRevert||pendingRevert.saveAttempted)" class="notice restored" role="status">
           <span>{{ $t(pendingRevert.saveAttempted?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
           <button v-if="!pendingRevert.saveAttempted" ref="undoButton" data-approved-undo type="button" class="btn btn--sm btn--ghost" :disabled="saving||visibilityBusy" @click="undoPublished">{{ $t('editor.revertUndo') }}</button>
         </p>
-        <p v-else-if="mayRevert" class="notice restored" role="status">
+        <p v-else-if="!recoveredRevert&&mayRevert" class="notice restored" role="status">
           <span>{{ $t('editor.revertNotice') }}</span>
           <button ref="restoreButton" data-approved-restore type="button" class="btn btn--sm btn--ghost" :disabled="saving||loading||visibilityBusy||booksUnavailable" @click="revertPublished">{{ $t('editor.revertAction') }}</button>
         </p>
@@ -1535,7 +1587,7 @@ async function exportCard(format: "png" | "json") {
           {{ error }}
           <RegexIssueList v-if="regexSaveIssues.length" :set="regexSet" :issues="regexSaveIssues" />
         </div>
-        <p v-else-if="restoredDraft" class="notice restored" role="status">
+        <p v-if="restoredDraft&&(!error||recoveredRevert)&&!pendingRevert?.saveAttempted" class="notice restored" role="status">
           <span>{{ $t("editor.draftRestored") }}</span>
           <button type="button" class="btn btn--sm btn--ghost" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>
         </p>
