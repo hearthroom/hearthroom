@@ -2224,3 +2224,16 @@ it('keeps the same save identity and withholds undo while confirming a lost resp
  expect(api.saveApprovedDraft).toHaveBeenCalledTimes(2);expect(api.saveApprovedDraft.mock.calls[1]).toEqual(firstIdentity);
  expect(root.querySelector('[data-approved-undo]')).toBeNull();
 });
+
+it('keeps save recovery guidance when restore committed but reloading its baseline failed',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ api.fetchRoleDetail.mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved).mockRejectedValueOnce(new Error('baseline unavailable')).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ await submit();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);expect(root.querySelector('[data-approved-undo]')).toBeNull();
+ expect(root.textContent).toContain(i18n.global.t('editor.revertSaveUnknown'));
+ await submit();expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+ expect(root.querySelector('[data-approved-undo]')).toBeNull();
+});

@@ -34,6 +34,8 @@ export interface ConfirmOptions {
   focusCancel?: boolean;
   /** Keep the title/actions visible while a full review reason scrolls. */
   scrollMessage?:boolean;
+  /** Keep Korean words and Japanese phrases together in localized product copy. */
+  phraseWrap?:boolean;
   /** 只有一顆「知道了」，沒有取消 */
   single?: boolean;
   /**
