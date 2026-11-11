@@ -14731,6 +14731,225 @@
           }
         ]
       }
+    },
+    "/open/v1/role/{roleId}/approved": {
+      "get": {
+        "tags": [
+          "Author assets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The mutable agent configuration owned by the caller."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only current approval reference or committed save receipt.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedDraftVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Both role.read and role.write and the actual author are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Configuration not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Approval unavailable/revoked/restricted, stale revisions, or an operation identity reused with another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable; a failed save response may have an unknown outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getApprovedDraftVersion",
+        "summary": "Preview the current approved version of an owned agent configuration",
+        "description": "Requires role.read and role.write. Resolves only the current approved immutable revision and returns opaque approval/draft preconditions plus a fresh operationId. Does not write content. Existing owner-scoped detail, presentation-asset and Lorebook reads can stage that content locally."
+      },
+      "post": {
+        "tags": [
+          "Author assets"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The mutable agent configuration owned by the caller."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only current approval reference or committed save receipt.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedDraftVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Both role.read and role.write and the actual author are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Configuration not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Approval unavailable/revoked/restricted, stale revisions, or an operation identity reused with another request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Temporarily unavailable; a failed save response may have an unknown outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "saveApprovedDraftVersion",
+        "summary": "Save an owned draft from its current approved version",
+        "description": "Requires role.read and role.write and actual authorship. Atomically restores all author content and locale text, presentation assets and editable copies of card-bound Lorebooks. Personal-library Lorebooks restore bindings and retain current contents. Does not change public content, access, review decisions or user conversations. Saves require the preview revisions to match. Repeating the same operationId and revisions reads the committed receipt without reapplying the restore. A configuration already equal to approval is a content no-op. After transport/5xx uncertainty, reuse the same operation identity to confirm the result. Normal community edit preflight is still required to cancel a pending review.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "operationId",
+                  "approvalRevision",
+                  "policyRevision"
+                ],
+                "properties": {
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "approvalRevision": {
+                    "type": "string"
+                  },
+                  "policyRevision": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -28758,6 +28977,39 @@
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
+      },
+      "ApprovedDraftVersion": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "approvedRoleId",
+          "approvalRevision",
+          "policyRevision",
+          "revisionState"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvedRoleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvalRevision": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "type": "string"
+          },
+          "revisionState": {
+            "type": "string",
+            "enum": [
+              "same",
+              "changed"
+            ]
+          }
+        }
       }
     }
   },
