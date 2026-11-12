@@ -29,7 +29,7 @@ const loading = ref(true), failed = ref(false), hasNext = ref(false);
 const managing = ref(false), selected = ref<string[]>([]), locked = ref(false), toast = ref(''), pendingResult = ref(false);
 const errors = ref<Record<string, 'busy'|'error'>>({});
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-let retryPreview: { ids: string; preview: ConversationDeletionPreview } | undefined;
+let retryPreview: { ids: string[]; preview: ConversationDeletionPreview } | undefined;
 const selectedChats = computed(() => chats.value.filter(c => selected.value.includes(c.conversationId)));
 const failedCount = computed(() => Object.keys(errors.value).length);
 const allSelected = computed(() => chats.value.length > 0 && selected.value.length === chats.value.length);
@@ -60,13 +60,13 @@ function selectAll() { if (!locked.value) selected.value = allSelected.value ? [
 async function remove(targets = selectedChats.value) {
   if (locked.value || !targets.length) return;
   locked.value = true;
-  const frozen = [...targets], ids = frozen.map(c => c.conversationId).sort().join('|');
+  const frozen = [...targets], ids = frozen.map(c => c.conversationId).sort();
   const name = (c: ConversationSummary) => c.conversationTitle || displayName(c.roleName, locale.value) || t('library.untitled');
   let outcome: ConversationDeletionResult | undefined, unknown = false, expired = false;
   try {
     const token = await session.accessToken(); if (!token) throw new Error('auth');
-    const preview = retryPreview?.ids === ids ? retryPreview.preview : await previewConversationDeletion(token, frozen);
-    retryPreview = { ids, preview };
+    // A retry may shrink the failed card selection without admitting newer saves.
+    const preview = retryPreview && ids.every(id => retryPreview!.ids.includes(id)) ? retryPreview.preview : await previewConversationDeletion(token, frozen);
     const n = preview.groups.filter(g => frozen.some(c => c.conversationId === g.conversationId)).reduce((sum,g) => sum + g.count,0), one = frozen.length === 1;
     const confirmed = await confirmDialog({
       title: t(n === 0 ? 'library.manage.ghostTitle' : 'library.manage.confirmTitleN', { n }, n),
@@ -76,6 +76,7 @@ async function remove(targets = selectedChats.value) {
       items: one ? undefined : frozen.slice(0,3).map(c => ({ name: name(c), image: c.roleAvatar })),
       moreText: frozen.length > 3 ? t('library.manage.moreItems', { n: frozen.length - 3 }, frozen.length - 3) : undefined,
       onConfirm: async () => {
+        retryPreview = { ids, preview };
         try { outcome = preview.groups.length === frozen.length ? await deleteConversations(token, preview.selectionToken) : await deleteConversations(token, preview.selectionToken, frozen.map(c => c.conversationId)); }
         catch (e) { expired = (e as { code?: string }).code === 'selection_expired'; unknown = !expired; }
       },
@@ -103,7 +104,7 @@ async function remove(targets = selectedChats.value) {
     }
     // Failed snapshots stay frozen for retry, even if another tab starts a new save.
     if (!failed.length) retryPreview = undefined;
-    else { managing.value = true; retryPreview = { ids: failed.map(c => c.conversationId).sort().join('|'), preview }; }
+    else { managing.value = true; retryPreview = { ids: failed.map(c => c.conversationId).sort(), preview }; }
     await load(true);
     // A transient owned-read failure can return an unnamed row. Keep the identity
     // the player confirmed, while retaining every fresh capability/access field.

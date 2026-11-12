@@ -110,8 +110,11 @@ conversationDeleteRoutes.delete('/v1/me/conversations',async c=>{
  for(const group of groups){
   let deletedCount=0;let status:'deleted'|'busy'|'error'='deleted';
   try{
-   // Replay is safe: only the signed, fixed segment set is ever passed to Delete.
-   for(const id of group.ids){await conversationDeletion.remove(c.env,token,id);deletedCount++;}
+   // Keep the owned anchor readable until every other signed segment is gone.
+   // Apply this at consumption too, so previously issued snapshots are safe.
+   const orderedIds=group.ids.filter(id=>id!==group.conversationId);
+   if(group.ids.includes(group.conversationId))orderedIds.push(group.conversationId);
+   for(const id of orderedIds){await conversationDeletion.remove(c.env,token,id);deletedCount++;}
    if(!group.ids.length&&await conversationDeletion.owned(c.env,token,group.conversationId))throw new Error('selection_changed');
    await c.env.DB.batch(group.pointers.map(p=>c.env.DB.prepare("DELETE FROM member_conversations WHERE member_id=? AND provider='harbor' AND role_id=? AND conversation_id=? AND updated_at=?").bind(member.id,p.roleId,p.conversationId,p.updatedAt)));
   }catch(error){status=error instanceof Error&&error.message==='busy'?'busy':'error';}

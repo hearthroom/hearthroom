@@ -84,3 +84,19 @@ it('retries only selected frozen card groups and refuses forged or duplicate gro
  expect((await request('',{selectionToken:p.selectionToken,conversationIds:[]},'DELETE')).status).toBe(400);
  expect(calls).toEqual(['second-current']);
 });
+
+
+it('keeps the owned anchor until every other signed segment is deleted so a fresh preview can recover a partial failure',async()=>{
+ archiveIds=['current','save','later'];rows.set('later',{roleId:'role'});
+ conversationDeletion.archives=async()=>archiveIds.filter(id=>rows.has(id));
+ const p=await preview();expect(p.total).toBe(3);
+ conversationDeletion.remove=async(_env,_token,id)=>{calls.push(id);if(id==='later')throw new Error('upstream unavailable');rows.delete(id);};
+ const r=await request('',{selectionToken:p.selectionToken},'DELETE');expect(r.status).toBe(207);
+ expect(rows.has('current')).toBe(true);expect(rows.has('save')).toBe(false);expect(rows.has('later')).toBe(true);
+ expect(calls).toEqual(['save','later']);
+ const fresh=await preview();expect(fresh.total).toBe(2);expect(fresh.groups[0].count).toBe(2);
+ conversationDeletion.remove=async(_env,_token,id)=>{calls.push(id);rows.delete(id);};
+ expect((await request('',{selectionToken:fresh.selectionToken},'DELETE')).status).toBe(200);
+ expect(calls.slice(2)).toEqual(['later','current']);expect(rows.size).toBe(0);
+ expect(await env.DB.prepare('SELECT 1 FROM member_conversations').first()).toBeNull();
+});

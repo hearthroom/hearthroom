@@ -136,3 +136,39 @@ it('keeps a failed card identifiable when the quiet refresh loses its title, wit
   // Keeping presentation must not turn the fresh denied capability back on.
   expect(el.querySelector('a.conversation')?.classList.contains('conversation--closed')).toBe(true);
 });
+
+
+it('retries a reduced failed selection with the original snapshot instead of admitting new saves', async () => {
+  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
+  mock.remove.mockResolvedValueOnce({ results: [{ roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0 }, { roleId:'role-2',conversationId:'conv-2',status:'error',deletedCount:0 }], deletedCount:0 });
+  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
+  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
+  // Another tab adds a save; an unintended new preview would now admit it.
+  mock.preview.mockResolvedValue({ selectionToken:'expanded',groups:[{roleId:'role-1',conversationId:'conv-1',count:3}],total:3 });
+  options()[1].click(); await settle();
+  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
+  expect(mock.preview).toHaveBeenCalledTimes(1);
+  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
+  mock.remove.mockResolvedValueOnce({ results:[{roleId:'role-1',conversationId:'conv-1',status:'deleted',deletedCount:2}],deletedCount:2 });
+  current=current.filter(r=>r.conversationId!=='conv-1');
+  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
+  expect(mock.remove).toHaveBeenLastCalledWith('fixture','frozen',['conv-1']);
+});
+
+it('keeps the accepted failed snapshot when a different selection preview is cancelled', async () => {
+  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
+  mock.remove.mockResolvedValueOnce({ results:[{roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0},{roleId:'role-2',conversationId:'conv-2',status:'error',deletedCount:0}],deletedCount:0 });
+  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
+  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
+  mock.preview.mockResolvedValue({ selectionToken:'expanded',groups:[{roleId:'role-1',conversationId:'conv-1',count:3},{roleId:'role-2',conversationId:'conv-2',count:2},{roleId:'role-3',conversationId:'conv-3',count:2}],total:7 });
+  options()[2].click(); await settle();
+  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
+  expect(mock.preview).toHaveBeenCalledTimes(2); // A new card selection really does need new consent.
+  expect(document.querySelector('#dlg-title')?.textContent).toContain('7');
+  document.querySelector<HTMLButtonElement>('[data-cancel]')!.click(); await settle();
+  options()[1].click(); await settle(); options()[2].click(); await settle();
+  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
+  expect(mock.preview).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
+  document.querySelector<HTMLButtonElement>('[data-cancel]')!.click(); await settle();
+});
