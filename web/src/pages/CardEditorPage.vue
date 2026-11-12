@@ -1596,7 +1596,7 @@ async function exportCard(format: "png" | "json") {
         <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ $t(legacyState) }}</p>
         <p v-if="visibilityEnabled&&editorVisibilityNotice" class="notice" role="status">{{ editorVisibilityNotice }} <button type="button" class="link visibility-notice-action" @click="visibilityControl?.open()">{{ $t('visibility.adjust') }}</button></p>
         <p v-if="pendingRevert&&(!recoveredRevert||pendingRevert.saveAttempted)" class="notice restored" role="status">
-          <span>{{ $t(pendingRevert.saveAttempted?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
+          <span>{{ $t(saving?'edit.saving':pendingRevert.saveAttempted?'editor.revertSaveUnknown':'editor.revertedNotice') }}</span>
           <button v-if="!pendingRevert.saveAttempted" ref="undoButton" data-approved-undo type="button" class="btn btn--sm btn--ghost" :disabled="saving||visibilityBusy" @click="undoPublished">{{ $t('editor.revertUndo') }}</button>
         </p>
         <p v-else-if="!recoveredRevert&&mayRevert" class="notice restored" role="status">
