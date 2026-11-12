@@ -53,3 +53,32 @@ it('captures only missing publication proof and seeks completed corrections by s
   expect(plan).not.toMatch(/SCAN x\b/);
   expect(plan).toContain('idx_registrations_source_time');
 });
+
+it('bounds the exclusion set after ANALYZE when the retired-account fence is empty', async () => {
+  try {
+    await env.DB.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<4506)
+      INSERT INTO members(id,handle,created_at,account_class)
+      SELECT 'cost-m-'||x,'cost-m-'||x,1,CASE WHEN x<=5 THEN 'test' ELSE 'normal' END FROM n`).run();
+    await env.DB.prepare(`INSERT INTO member_identities(provider,external_id,member_id,linked_at)
+      SELECT 'harbor',CAST(rowid AS TEXT),id,1 FROM members WHERE rowid<=789`).run();
+    await env.DB.prepare(`INSERT INTO member_connections(provider,external_id,owner_member_id,linked_at)
+      SELECT 'harbor',CAST(rowid AS TEXT),id,1 FROM members WHERE rowid<=4500`).run();
+    await env.DB.prepare(`WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<50)
+      INSERT INTO cards(id,provider,source_role_id,author_num_id,registered_at,last_synced_at,status)
+      SELECT 100000+x,'harbor','cost-card-'||x,x,1,1,'approved' FROM n`).run();
+    await env.DB.prepare('ANALYZE').run();
+    const ids=Array.from({length:50},(_,i)=>String(100001+i));
+    let query='',reads=0;
+    const db={prepare(sql:string){query=sql;return {bind(...values:unknown[]){return {async all(){
+      const result=await env.DB.prepare(sql).bind(...values).all();reads=result.meta.rows_read;return result;
+    }};}};}} as unknown as D1Database;
+    expect([...await testCardIds(db,ids)].sort()).toEqual(ids.slice(0,5));
+    const plan=(await env.DB.prepare('EXPLAIN QUERY PLAN '+query).bind(JSON.stringify(ids)).all<{detail:string}>()).results.map(r=>r.detail).join('\n');
+    console.log('analyzed empty-fence reads',reads);
+    expect(plan).not.toMatch(/SCAN m\b/);
+    expect(reads).toBeLessThan(600);
+  } finally {
+    await resetDb();
+    await env.DB.prepare('ANALYZE').run();
+  }
+});
