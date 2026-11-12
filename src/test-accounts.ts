@@ -22,9 +22,10 @@ export async function testCardIds(db:D1Database,ids:string[]):Promise<Set<string
  // Test and retired subjects are a small indexed set. Resolve their identities once,
  // rather than resolving both possible owners again for every card in a page.
  // Both identity paths remain excluded even when a connection overrides display ownership.
+ // Keep the tiny/empty fence outside members even after ANALYZE changes join estimates.
  const rows=await db.prepare(`WITH excluded_members AS MATERIALIZED (
  SELECT id FROM members WHERE account_class='test'
- UNION SELECT m.id FROM legacy_account_fence f JOIN members m ON m.id=f.member_id
+ UNION SELECT m.id FROM legacy_account_fence f CROSS JOIN members m ON m.id=f.member_id
  ), excluded_authors AS MATERIALIZED (
  SELECT i.provider,i.external_id FROM excluded_members em CROSS JOIN member_identities i ON i.member_id=em.id
  UNION SELECT x.provider,x.external_id FROM excluded_members em CROSS JOIN member_connections x ON x.owner_member_id=em.id
