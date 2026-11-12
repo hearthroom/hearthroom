@@ -892,6 +892,8 @@
   "regex.issue.totalLong": "The rule set is {size} MB, over the {max} MB limit. Remove unused rules before saving",
   "play.title": "Play",
   "play.loading": "Loading the stage…",
+  "play.conversationMissing": "This conversation could not be found.",
+  "play.reopenCard": "Reopen card",
   "play.loadFailed": "The stage failed to load. Please try again later.",
   "play.authorDraftHint": "“Play draft” opens the draft version of this card.",
   "play.entering": "Entering the chat…",

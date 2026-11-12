@@ -1,0 +1,20 @@
+import {expect,it,vi} from 'vitest';
+import {createApp} from 'vue';
+import {createPinia,setActivePinia} from 'pinia';
+import {createMemoryHistory,createRouter} from 'vue-router';
+import {i18n} from '../src/lib/i18n';
+import {useSession} from '../src/lib/session';
+const {install}=vi.hoisted(()=>({install:vi.fn(async()=>{})}));
+vi.mock('moonstage/stage',()=>({installMoonStage:install,mergeStageMessages:vi.fn(),browserHost:(o:object)=>({storage:{},clipboard:{},events:{on:vi.fn()},scrollTo(){},...o}),MoonStage:{template:'<div />'}}));
+vi.mock('moonstage/stage.css',()=>({}));
+it('passes a host-absolute player avatar into Stage so an isolated shell cannot rebase it',async()=>{
+ const {ensureStage}=await import('../src/lib/stage-host');
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});await router.push('/play/100001');
+ const player={accountNumId:1,nickName:'Fixture',avatar:'/v1/avatars/abcdefgh/fixture.webp'};
+ await ensureStage({app:createApp({}).use(pinia).use(router).use(i18n),router,session,provider:'harbor',accessToken:async()=> 'fixture',player,currentPath:()=>'/play/100001',lp:p=>p});
+ const options=install.mock.calls[0] as unknown as [unknown,{auth:{user:{avatar:string}}}];
+ expect(options[1].auth.user.avatar).toBe(new URL(player.avatar,window.location.href).href);
+ expect(new URL(options[1].auth.user.avatar,'https://cfixture.sukisuki.ai/sandbox/').origin).toBe(window.location.origin);
+ expect(player.avatar).toBe('/v1/avatars/abcdefgh/fixture.webp');
+});
