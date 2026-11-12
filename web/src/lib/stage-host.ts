@@ -39,6 +39,13 @@ import { useCheckin } from "@/lib/checkin-store";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { whole } from "@/lib/format";
 
+/** The isolated shell resolves relative media against a different origin. */
+function absolutePlayerAvatar(avatar: string): string {
+  if (!avatar) return '';
+  try { return new URL(avatar, window.location.href).href; }
+  catch { return avatar; }
+}
+
 let lastCreditsLoad = 0;
 let lastPlansLoad = 0;
 import type { useSession } from "@/lib/session";
@@ -319,7 +326,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         ...(deps.onSignInRequired ? { onSignInRequired: deps.onSignInRequired } : {}),
         // 畫布送訊息前看的是「有沒有登入的人」；遊客沒有，送出時舞台會叫 onSignInRequired
         user: player
-          ? { id: String(player.accountNumId), nickName: player.nickName, avatar: player.avatar }
+          ? { id: String(player.accountNumId), nickName: player.nickName, avatar: absolutePlayerAvatar(player.avatar) }
           : undefined,
         storageScope,
       },

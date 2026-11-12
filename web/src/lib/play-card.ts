@@ -4,6 +4,18 @@ import { libraryRequest } from './library';
 import type { ProviderId } from './provider';
 import { fetchOwnedHistory, type HistoryAccessReason } from './owned-history';
 
+/** A 404 from the private resume reads, distinct from a missing public card. */
+export class PlayConversationNotFound extends Error {
+  constructor() { super('conversation_not_found'); this.name = 'PlayConversationNotFound'; }
+}
+async function resumeRead<T>(read: Promise<T>): Promise<T> {
+  try { return await read; }
+  catch (error) {
+    if ((error as {status?:unknown})?.status === 404) throw new PlayConversationNotFound();
+    throw error;
+  }
+}
+
 interface PlayCardResolved {
  card: Awaited<ReturnType<typeof fetchCard>> | null; number: string; roleId: string;
  conversationId?: string; readOnly?: boolean; reason?: HistoryAccessReason; title?: string;
@@ -17,11 +29,11 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
     return { card: null, number: String(detail.card.id), roleId: detail.card.roleId };
   }
   // Verify the private pointer and actual Provider ownership before any public read.
-  const previous = resume ? await libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string;canResumeExact?:boolean}>(
-    `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token) : null;
+  const previous = resume ? await resumeRead(libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string;canResumeExact?:boolean}>(
+    `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token)) : null;
   if (previous && resume) {
     if ((String(previous.cardNumber) !== id && previous.roleId !== id) || previous.provider !== provider) throw new Error('conversation_card_mismatch');
-    const owned = await fetchOwnedHistory(provider, resume.id, resume.providerToken ?? resume.token);
+    const owned = await resumeRead(fetchOwnedHistory(provider, resume.id, resume.providerToken ?? resume.token));
     if (owned.conversationId !== resume.id || owned.roleId !== previous.roleId) throw new Error('conversation_card_mismatch');
     if (!owned.canGenerate) return {card:null,number:String(previous.cardNumber ?? previous.roleId),roleId:owned.roleId,
       conversationId:owned.conversationId,readOnly:true,reason:owned.reason ?? 'unavailable',title:owned.title};

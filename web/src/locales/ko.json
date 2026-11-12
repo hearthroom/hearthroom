@@ -892,6 +892,8 @@
   "regex.issue.totalLong": "규칙 전체가 {size} MB로 상한 {max} MB를 넘습니다. 쓰지 않는 규칙을 지우고 저장하세요",
   "play.title": "플레이",
   "play.loading": "무대를 불러오는 중…",
+  "play.conversationMissing": "이 대화를 찾을 수 없어요.",
+  "play.reopenCard": "카드 다시 열기",
   "play.loadFailed": "무대를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
   "play.authorDraftHint": "이 카드의 초안은 ‘초안 플레이’로 열 수 있어요.",
   "play.entering": "대화에 들어가는 중…",
