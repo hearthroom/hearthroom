@@ -743,6 +743,7 @@
   "import.drop.caseSensitive": "{n} 件の大文字小文字設定。ここでは常に区別しません。",
   "import.drop.bookSettings": "世界設定の走査深度と容量。ここでは会話の記憶予算がまとめて管理します。",
   "import.drop.mesExample": "会話例：誰の台詞か判別できず、分割していません。「会話」で自分で足せます。",
+  "import.drop.promptOnlyRules": "プロンプト専用ルール {n} 件は取り込んでいません。表示ルールは画面の表示だけを変更します。",
   "import.drop.extensions": "他クライアントの拡張設定 {n} 件。",
   "import.note.groupGreetings": "グループチャット専用の挨拶 {n} 件を代替の挨拶に統合しました。ここにグループチャットはありませんが、冒頭としては使えます。",
   "import.drop.decorators": "ワールドブック {n} 件のデコレーター（{names}）。挿入位置や頻度はサイト側で決めます。常時有効・無効・追加キーワードの3種は反映済みです。",

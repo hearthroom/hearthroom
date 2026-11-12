@@ -743,6 +743,7 @@
   "import.drop.caseSensitive": "{n} 條的大小寫敏感設定。本站一律不分大小寫。",
   "import.drop.bookSettings": "世界書的掃描深度與容量上限。本站統一由對話的記憶預算控制。",
   "import.drop.mesExample": "對話示例：格式看不出誰說哪句，沒有拆開。可以到「對話」那一區自己補。",
+  "import.drop.promptOnlyRules": "{n} 條只用於提示詞的規則未匯入；顯示規則只改畫面顯示。",
   "import.drop.extensions": "{n} 組其他客戶端的擴充設定。",
   "import.note.groupGreetings": "{n} 條群聊專用的開場白已併進備選開場白。本站沒有群聊，但它們仍能當開場。",
   "import.drop.decorators": "{n} 條世界書條目裡的修飾詞（{names}）。本站由系統決定設定放在哪裡、多常放；常駐、停用、補關鍵詞這三種有照做。",

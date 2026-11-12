@@ -743,6 +743,7 @@
   "import.drop.caseSensitive": "Case sensitivity on {n} entries. Matching here is always case-insensitive.",
   "import.drop.bookSettings": "Lorebook scan depth and budget. Handled here by the conversation's memory budget.",
   "import.drop.mesExample": "Example dialogue: the format didn't say who said what, so nothing was split out. You can add it under Dialogue.",
+  "import.drop.promptOnlyRules": "{n} prompt-only rule skipped; display rules only change what is shown. | {n} prompt-only rules skipped; display rules only change what is shown.",
   "import.drop.extensions": "{n} extension setting(s) from other clients.",
   "import.note.groupGreetings": "{n} group-chat-only greetings were merged into the alternate greetings. There is no group chat here, but they still work as openings.",
   "import.drop.decorators": "Decorators in {n} lorebook entries ({names}). The site decides where and how often entries are inserted; always-on, disabled and extra keywords were honoured.",

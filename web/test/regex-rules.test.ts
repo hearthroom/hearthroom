@@ -31,6 +31,22 @@ describe("applyRules", () => {
 });
 
 describe("匯入匯出", () => {
+  it("規則檔保留略過數量，全部是prompt-only也能說明而非不明格式", () => {
+    const only = [{ findRegex: "x", replaceString: "hidden", promptOnly: true }];
+    expect(ruleSetFromImport(only)).toMatchObject({ set: { rules: [] }, skippedPromptOnly: 1 });
+    expect(ruleSetFromImport([...only, { findRegex: "x", replaceString: "visible", markdownOnly: true }])).toMatchObject({ set: { rules: [expect.objectContaining({ replace: "visible" })] }, skippedPromptOnly: 1 });
+  });
+
+  it("promptOnly不變成顯示規則，markdownOnly與舊規則照常保留", () => {
+    const script = (scriptName: string, flags = {}) => ({ scriptName, findRegex: "x", replaceString: "y", ...flags });
+    const got = rulesFromTavern([
+      script("prompt", { promptOnly: true }), script("both", { promptOnly: true, markdownOnly: true }),
+      script("display", { promptOnly: false, markdownOnly: true }), script("legacy"),
+      script("unrestricted", { promptOnly: false, markdownOnly: false }),
+    ]);
+    expect(got.map(r => r.name)).toEqual(["display", "legacy", "unrestricted"]);
+  });
+
   const meimo = { pageDepth: 1, statusbar: "《美1》《状1》", beginning: "<开局面板>", regex_scripts: [
     { id: -1, scriptName: "替换颜色『』", findRegex: "/『([\\s\\S]*?)』/g", replaceString: '<span style="color:#AB47BC">『$1』</span>' },
     { id: -1, scriptName: "《美1》", findRegex: "《美1》", replaceString: "<style>…</style>" },

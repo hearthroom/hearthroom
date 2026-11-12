@@ -743,6 +743,7 @@
   "import.drop.caseSensitive": "{n}개 항목의 대소문자 설정. 여기서는 항상 구분하지 않습니다.",
   "import.drop.bookSettings": "세계관의 탐색 깊이와 용량. 여기서는 대화의 기억 예산이 함께 관리합니다.",
   "import.drop.mesExample": "대화 예시: 누구의 대사인지 알 수 없어 나누지 않았습니다. 「대화」에서 직접 채울 수 있어요.",
+  "import.drop.promptOnlyRules": "프롬프트 전용 규칙 {n}개는 가져오지 않았어요. 표시 규칙은 화면에 보이는 내용만 바꿔요.",
   "import.drop.extensions": "다른 클라이언트의 확장 설정 {n}개.",
   "import.note.groupGreetings": "그룹 채팅 전용 인사말 {n}개를 대체 인사말에 합쳤습니다. 여기엔 그룹 채팅이 없지만 오프닝으로는 쓸 수 있습니다.",
   "import.drop.decorators": "월드북 항목 {n}개의 데코레이터({names}). 삽입 위치와 빈도는 사이트가 정합니다. 상시 활성·비활성·추가 키워드 세 가지는 반영했습니다.",
