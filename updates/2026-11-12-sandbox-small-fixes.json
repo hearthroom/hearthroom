@@ -8,10 +8,10 @@
     "ko": "새 대화를 시작하면 카드 수치가 초기값으로 돌아가요."
   },
   "body": {
-    "zh-Hant": "作者欄位長按可使用原生文字編輯；酒館匯入會略過只用於提示詞的規則，並在報告中說明。",
-    "zh-Hans": "作者字段长按可使用原生文本编辑；酒馆导入会跳过仅用于提示词的规则，并在报告中说明。",
-    "en": "Long-pressing author fields keeps native text editing. Tavern imports skip prompt-only rules and explain them in the import report.",
-    "ja": "作者の入力欄では、長押しで標準のテキスト編集を使えます。酒場からの取り込みではプロンプト専用ルールを除き、レポートに表示します。",
-    "ko": "작가 입력란을 길게 누르면 기본 텍스트 편집을 사용할 수 있어요. 타번 가져오기는 프롬프트 전용 규칙을 건너뛰고 가져오기 보고서에 알려 줘요."
+    "zh-Hant": "長按卡內可編輯的文字時不再跳出訊息選單，酒館匯入也會略過只用於提示詞的規則並在報告中說明。",
+    "zh-Hans": "长按卡内可编辑的文字时不再弹出消息菜单，酒馆导入也会跳过仅用于提示词的规则并在报告中说明。",
+    "en": "Long-pressing editable card text no longer opens the message menu, and Tavern imports report skipped prompt-only rules.",
+    "ja": "カード内の編集可能な文字を長押ししてもメッセージメニューが開かなくなり、酒場からの取り込みでは除外したプロンプト専用ルールをレポートに表示します。",
+    "ko": "편집할 수 있는 카드 텍스트를 길게 눌러도 메시지 메뉴가 뜨지 않고 타번 가져오기에서 건너뛴 프롬프트 전용 규칙은 보고서에 표시돼요."
   }
 }
