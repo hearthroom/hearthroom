@@ -24,7 +24,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { fetchMeAt } from "@/lib/api";
-import { resolvePlayCard } from "@/lib/play-card";
+import { PlayConversationNotFound, resolvePlayCard } from "@/lib/play-card";
 import { authorPlaytest } from "@/lib/play-recovery";
 import { loginPath } from "@/lib/login-return";
 import { isManagedAuth } from "@/lib/managed-auth";
@@ -56,6 +56,8 @@ const historyBootstrap = shallowRef<{conversationId?:string;readOnly?:boolean;re
 const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
 const authorDraftHref = shallowRef("");
+const conversationMissing = shallowRef(false);
+const reopenCard = computed(() => ({ path: route.path, query: { ...route.query, resume: undefined }, hash: route.hash }));
 const errorLoginHref = computed(() => lp(loginPath(route.fullPath)));
 /** 審核試玩打不開是因為沒領著（含領取過了時效）或這輪已結束：回審核頁就能處理，不是舞台壞了 */
 const backToReview = shallowRef(false);
@@ -195,6 +197,7 @@ onMounted(() => {
     roleId.value = "";
     cardNumber.value = "";
     error.value = "";
+    conversationMissing.value = false;
     authorDraftHref.value = "";
     gated.value = false; gateUnrated.value = false;
     regionBlocked.value = false;
@@ -272,6 +275,11 @@ onMounted(() => {
       // lib/api 的 ApiError：伺服器原文在 code，message 已換成「請求失敗」
       const { status, code, reason } = (err ?? {}) as { status?: number; code?: string; reason?: string };
       // 還沒解析出卡號：門下的「回到卡片」用網址上的 ID，卡片頁自己會換成卡號
+      if (err instanceof PlayConversationNotFound) {
+        conversationMissing.value = true;
+        error.value = t('play.conversationMissing');
+        return;
+      }
       if (isRegionUnavailable(err)) { regionBlocked.value = true; return; }
       if (status === 403 && code === "adult_content") { gateUnrated.value = reason === 'unrated'; gated.value = true; cardNumber.value ||= routeId.value; return; }
       backToReview.value = typeof route.query.review === "string" && (code === "claim this submission first" || status === 410);
@@ -303,7 +311,8 @@ watch(locale, () => { void remergeStageMessages(); });
         <p class="play__error">{{ error }}</p>
         <p v-if="authorDraftHref" class="play__author-hint muted">{{ $t('play.authorDraftHint') }}</p>
       </div>
-      <div v-if="authorDraftHref" class="play__recovery-actions">
+      <RouterLink v-if="conversationMissing" class="btn" :to="reopenCard">{{ $t('play.reopenCard') }}</RouterLink>
+      <div v-else-if="authorDraftHref" class="play__recovery-actions">
         <a class="btn btn--primary btn--lg" :href="authorDraftHref">{{ $t('card.owner.playDraft') }}</a>
         <a v-if="playApp" class="btn btn--lg" :href="cardPageUrl">{{ $t('play.backToCard') }}</a>
         <RouterLink v-else class="btn btn--lg" :to="lp(cardPagePath)">{{ $t('play.backToCard') }}</RouterLink>

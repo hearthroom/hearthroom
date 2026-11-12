@@ -63,3 +63,14 @@ it('does not turn an unavailable community response into exact-version permissio
  card.mockRejectedValue(Object.assign(new Error('unavailable'),{status:503}));
  await expect(resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'})).rejects.toThrow('unavailable');
 });
+
+it.each(['pointer','owned'])('classifies a missing %s as an unavailable conversation before public reads',async location=>{
+ const failure=Object.assign(new Error('not found'),{status:404});
+ if(location==='pointer')pointer.mockRejectedValue(failure);else owned.mockRejectedValue(failure);
+ await expect(resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'})).rejects.toMatchObject({name:'PlayConversationNotFound'});
+ expect(card).not.toHaveBeenCalled();expect(platforms).not.toHaveBeenCalled();
+});
+it('preserves a transient pointer failure instead of classifying it as missing',async()=>{
+ const failure=Object.assign(new Error('temporary'),{status:503});pointer.mockRejectedValue(failure);
+ await expect(resolvePlayCard('100076','harbor','en',false,undefined,{id:'conv',token:'t'})).rejects.toBe(failure);
+});

@@ -892,6 +892,8 @@
   "regex.issue.totalLong": "整份規則 {size} MB，超過上限 {max} MB，刪掉用不到的規則再存",
   "play.title": "對話",
   "play.loading": "舞台載入中⋯",
+  "play.conversationMissing": "找不到這段對話。",
+  "play.reopenCard": "重新開啟卡片",
   "play.loadFailed": "舞台載不進來，請稍後再試。",
   "play.authorDraftHint": "這張卡的草稿可以用「試玩草稿」開啟。",
   "play.entering": "正在進入對話⋯",
