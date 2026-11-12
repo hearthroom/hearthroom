@@ -22,7 +22,7 @@ export const MMD_PARTS: MmdPart[] = ["rules", "book", "definition"];
 
 /** 一個檔案認出來是哪一部分，連同它帶的東西。 */
 export type MmdFile =
-  | { part: "rules"; fileName: string; set: RegexRuleSet; dockOffByDefault?: boolean; welcome: string; roleName: string }
+  | { part: "rules"; fileName: string; set: RegexRuleSet; skippedPromptOnly?: number; dockOffByDefault?: boolean; welcome: string; roleName: string }
   | { part: "book"; fileName: string; book: TavernBook }
   | { part: "definition"; fileName: string; text: string };
 
@@ -74,7 +74,7 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   const imported = ruleSetFromImport(raw);
   if (imported) {
     if (!Array.isArray(raw) && "pageDepth" in obj) imported.set.lowered = loweredFromPageDepth(obj.pageDepth);
-    return { part: "rules", fileName, set: imported.set, dockOffByDefault: (!Array.isArray(obj.rules) || "pageDepth" in obj || "chatVersion" in obj) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
+    return { part: "rules", fileName, set: imported.set, ...(imported.skippedPromptOnly ? { skippedPromptOnly: imported.skippedPromptOnly } : {}), dockOffByDefault: (!Array.isArray(obj.rules) || "pageDepth" in obj || "chatVersion" in obj) && imported.set.format !== "tavern", welcome: imported.welcome, roleName: str(obj.roleName) || str(obj.name) };
   }
   throw new Error("mmd_unknown");
 }
@@ -104,6 +104,7 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
   draft.roleWelcome = rules?.welcome ?? "";
 
   const dropped: DropNote[] = [];
+  if (rules?.skippedPromptOnly) dropped.push({ key: "import.drop.promptOnlyRules", params: { n: rules.skippedPromptOnly } });
   let worldbook: ImportResult["worldbook"] = null;
   if (book) {
     const entries = book.book.entries ?? [];

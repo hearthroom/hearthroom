@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "卡片數值在新對話開始時回到初始值。",
+    "zh-Hans": "卡片数值在新对话开始时恢复初始值。",
+    "en": "Card values return to their initial state when a new conversation starts.",
+    "ja": "新しい会話を始めると、カードの数値が初期値に戻ります。",
+    "ko": "새 대화를 시작하면 카드 수치가 초기값으로 돌아가요."
+  },
+  "body": {
+    "zh-Hant": "作者欄位長按可使用原生文字編輯；酒館匯入會略過只用於提示詞的規則，並在報告中說明。",
+    "zh-Hans": "作者字段长按可使用原生文本编辑；酒馆导入会跳过仅用于提示词的规则，并在报告中说明。",
+    "en": "Long-pressing author fields keeps native text editing. Tavern imports skip prompt-only rules and explain them in the import report.",
+    "ja": "作者の入力欄では、長押しで標準のテキスト編集を使えます。酒場からの取り込みではプロンプト専用ルールを除き、レポートに表示します。",
+    "ko": "작가 입력란을 길게 누르면 기본 텍스트 편집을 사용할 수 있어요. 타번 가져오기는 프롬프트 전용 규칙을 건너뛰고 가져오기 보고서에 알려 줘요."
+  }
+}

@@ -28,6 +28,16 @@ const BOOK = {
 const TXT = "她是酒館的女兒。\n\n【性格】爽朗。";
 
 describe("classifyMmdFile", () => {
+  it("酒館陣列規則匯入保留prompt-only略過報告與可見規則", () => {
+    const script = { findRegex: "x", replaceString: "hidden", promptOnly: true };
+    const mixed = classifyMmdFile('rules.json', JSON.stringify([script, { findRegex: 'x', replaceString: 'visible', markdownOnly: true }]));
+    const result = mergeMmdFiles([mixed], { language: 'en' });
+    expect(result.regex?.rules.map(r => r.replace)).toEqual(['visible']);
+    expect(result.dropped).toContainEqual({ key: 'import.drop.promptOnlyRules', params: { n: 1 } });
+    const only = classifyMmdFile('rules.json', JSON.stringify([script]));
+    expect(mergeMmdFiles([only], { language: 'en' }).dropped).toContainEqual({ key: 'import.drop.promptOnlyRules', params: { n: 1 } });
+  });
+
   it("正則匯出檔：規則、功能欄、降低層級、開場白", () => {
     const got = classifyMmdFile("角色-regex.json", JSON.stringify(EXPORT));
     expect(got.part).toBe("rules");

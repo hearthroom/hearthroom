@@ -931,6 +931,8 @@ function onRegexFile(event: Event) {
     try {
       const imported = ruleSetFromImport(JSON.parse(await file.text()));
       if (!imported) throw new Error("regex_invalid");
+      const skipped = imported.skippedPromptOnly ? t("import.drop.promptOnlyRules", { n: imported.skippedPromptOnly }) : "";
+      if (!imported.set.rules.length && skipped) { error.value = skipped; return; }
       // 舊格式檔沒有聊天頁模式；新卡首次匯入無 chatVersion 的舊檔預設傳統頁（B120），已存卡更新美化時沿用作者目前選擇。
       imported.set.pageMode ??= isNew.value ? "classic" : regexSet.value.pageMode;
       // 規則檔不帶首屏網頁與卡片格式：換規則不能順手把它們洗掉（存檔是整份覆寫）
@@ -946,6 +948,7 @@ function onRegexFile(event: Event) {
       // 不然要等到存檔失敗才知道，而且不知道差多少（2026-09-11 一份 1.18 MB 的檔）。
       const whole = validateRuleSet(imported.set).find((i) => !i.ruleId);
       if (whole) error.value = t("regex.importedButInvalid", { n: imported.set.rules.length, why: t(whole.key, whole.params ?? {}) });
+      else if (skipped) error.value = t("regex.imported", { n: imported.set.rules.length }) + " " + skipped;
       else flash(t("regex.imported", { n: imported.set.rules.length }));
       track("card_import", { detail: "regex" });
     } catch {

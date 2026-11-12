@@ -263,6 +263,8 @@ export interface TavernRegexScript {
   findRegex?: string;
   replaceString?: string;
   disabled?: boolean;
+  promptOnly?: boolean;
+  markdownOnly?: boolean;
   [key: string]: unknown;
 }
 
@@ -277,10 +279,16 @@ function targetsFromTavern(script: TavernRegexScript): RegexMessageTarget[] | un
   return ([1, 2] as const).filter(p => placement.includes(p)).map(p => p === 1 ? "user" : "ai");
 }
 
+/** 提示詞端規則沒有顯示用途，略過並交匯入報告說明。markdownOnly留作顯示規則。 */
+export function promptOnlyRuleCount(scripts: unknown): number {
+  return Array.isArray(scripts) ? scripts.filter(s => s && typeof s === "object" && text(s.findRegex) && s.promptOnly === true).length : 0;
+}
+
 export function rulesFromTavern(scripts: unknown): RegexRule[] {
   if (!Array.isArray(scripts)) return [];
   return (scripts as TavernRegexScript[])
     .filter((s) => s && typeof s === "object" && text(s.findRegex))
+    .filter((s) => s.promptOnly !== true)
     .filter((s) => Array.isArray(s.targets) || targetsFromTavern(s)?.length !== 0)
     .map((s, i) => {
       // 我們自己的匯出檔帶著 cssDialect；別家的檔沒有這個欄位。
@@ -341,7 +349,7 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   return set;
 }
 
-export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: string } | null {
+export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: string; skippedPromptOnly?: number } | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
   // 自己存的形狀：rules 陣列直接讀，不需要走酒館欄位名的對映。
@@ -358,12 +366,13 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!scripts && obj.data && typeof obj.data === "object") scripts = (obj.data as { extensions?: { regex_scripts?: unknown } }).extensions?.regex_scripts;
   if (!scripts && Array.isArray(raw)) scripts = raw;
   const rules = rulesFromTavern(scripts);
-  if (!rules.length) return null;
+  const skippedPromptOnly = promptOnlyRuleCount(scripts);
+  if (!rules.length && !skippedPromptOnly) return null;
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) };
   if (isSandboxChatVersion(obj.chatVersion)) set.pageMode = "sandbox";
   // 魅魔島的正則匯出檔也是酒館的欄位名（regex_scripts），但那是 MMD 卡；只有真的酒館卡才是酒館寫法。
   if (obj.spec === "chara_card_v2" || obj.spec === "chara_card_v3" || Array.isArray(raw)) set.format = "tavern";
-  return { set, welcome: text(obj.beginning) };
+  return { set, welcome: text(obj.beginning), ...(skippedPromptOnly ? { skippedPromptOnly } : {}) };
 }
 
 /**

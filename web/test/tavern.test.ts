@@ -116,6 +116,20 @@ describe("tavern → draft", () => {
     },
   };
 
+  it("酒館匯入報告說明略過提示詞規則，只有可見規則留下", () => {
+    const scripts = [
+      { scriptName: "prompt", findRegex: "x", replaceString: "hidden", promptOnly: true },
+      { scriptName: "both", findRegex: "x", replaceString: "hidden", promptOnly: true, markdownOnly: true },
+      { scriptName: "display", findRegex: "x", replaceString: "visible", markdownOnly: true },
+    ];
+    const result = tavernToDraft({ ...card, data: { ...card.data, extensions: { regex_scripts: scripts } } }, { language: "zh-Hant", labels: LABELS });
+    expect(result.regex?.rules.map(r => r.name)).toEqual(["display"]);
+    expect(result.dropped).toContainEqual({ key: "import.drop.promptOnlyRules", params: { n: 2 } });
+    const only = tavernToDraft({ ...card, data: { ...card.data, extensions: { regex_scripts: scripts.slice(0, 2) } } }, { language: "zh-Hant", labels: LABELS });
+    expect(only.regex).toBeNull();
+    expect(only.dropped).toContainEqual({ key: "import.drop.promptOnlyRules", params: { n: 2 } });
+  });
+
   it("酒館卡帶正則腳本時，規則集宣告酒館格式（聊天頁替 <style> 加訊息層前綴）", () => {
     const withRegex = { ...card, data: { ...card.data, extensions: { regex_scripts: [{ scriptName: "美化", findRegex: "/x/", replaceString: "<style>body{display:flex}</style>" }] } } };
     expect(tavernToDraft(withRegex, { language: "zh-Hant", labels: LABELS }).regex?.format).toBe("tavern");
