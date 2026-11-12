@@ -2621,5 +2621,16 @@
   "d19bf4ba0a3a2": "Requires role.read and role.write. Resolves only the current approved immutable revision and returns opaque approval/draft preconditions plus a fresh operationId. Does not write content. Existing owner-scoped detail, presentation-asset and Lorebook reads can stage that content locally.",
   "d420379603788": "Save an owned draft from its current approved version",
   "dcfb4215a32cb": "Temporarily unavailable; a failed save response may have an unknown outcome.",
-  "d570146031cd7": "The mutable agent configuration owned by the caller."
+  "d570146031cd7": "The mutable agent configuration owned by the caller.",
+  "d706f33e75c9c": "When true, restore the main authored opening and its initial card state in this same conversation. Omit to retain the legacy reset behavior.",
+  "dc7634aaf4fe8": "Select an authored opening before the first user turn",
+  "dbc88d31204a9": "Requires chat.play, ownership, current work access, and an opt-in reselectOpening reset receipt at the current history epoch. Replaces only the authored opening and its initial card state in the same conversation; never trims user messages, clears user data, creates a save or calls AI. Requires the history fence and opaque opening revision from the displayed history. Replay the identical clientOperationID and payload after an unknown response; a replay never edits later history. Refuses an active operation, an advanced timeline, changed opening choices, or any non-opening message. No credit charge.",
+  "dff327957adeb": "Opening committed or receipt replayed; returns conversationId, historyEpoch, nextSeq, startHistoryEpoch, startNextSeq and a fresh firstPage.",
+  "dd3d87d898513": "Invalid or incomplete selection request.",
+  "d0b6b3d7a5c8e": "Authentication or chat.play scope is missing.",
+  "d3d9812eef02c": "Owned conversation or accessible agent configuration not found.",
+  "d147464c7a31f": "Active operation, changed history or opening revision, or first user turn already exists.",
+  "d1ca1a8a74376": "Present only after an opt-in reselectOpening reset or subsequent opening selection, while the same save has multiple authored choices and no user turn or active operation. Legacy opening-only saves do not become selectable.",
+  "da1d34455d270": "Playable authored opening messages with supported name macros expanded; excludes agent instructions.",
+  "dc2489b1a3f82": "Opaque precondition for this set of opening messages and their initial state."
 }
