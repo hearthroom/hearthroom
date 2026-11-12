@@ -2534,6 +2534,16 @@ describe('prompt-only 規則匯入不洗舊規則', () => {
 });
 
 describe('independent card CSS', () => {
+  it.each(['.canvas-root { color: red; }', ''])('imports CSS-only mixed with skipped prompt rules (%s)', async (cardCss) => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.old {color:blue}', cardCssDialect: 'fengyue', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ cardCss, cardCssDialect: 'fengyue-v2', regex_scripts: [{ scriptName: 'Prompt only', findRegex: 'x', replaceString: 'hidden', promptOnly: true }] })], 'styles.json'));
+    expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ cardCss, cardCssDialect: 'fengyue-v2', version: 3 }), 'tok');
+  });
+
   it('keeps card CSS and its compatibility hint when importing a separate rules file', async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
     api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.x {color:red}', cardCssDialect: 'fengyue', status: 'passed', version: 3 } as any);
