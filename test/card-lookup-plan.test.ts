@@ -48,15 +48,15 @@ it('seeks all save versions by card ID after resolving the role', async () => {
   expect(plans[1].join('\n')).not.toMatch(/SCAN (?:v|r|hosting_versions|hosting_replicas)\b/);
 });
 
-it('expands the tag catalog once per count query, with duplicate locale aliases counted once per card', async () => {
+it('aggregates raw tag combinations once, with duplicate locale aliases counted once per card', async () => {
   await resetDb();
   await upsertCard(env.DB, role({ roleId: 'tag-source', tags: ['劇情', '剧情', 'Story'] }), 1);
   const { db, plans } = withPlans();
   expect(await catalogTagCounts(db, { allowNsfw: false })).toMatchObject({ story: 1 });
   expect(plans).toHaveLength(1);
   const plan = plans[0].join('\n');
-  expect(plan).toContain('MATERIALIZE catalog');
-  expect(plan).toMatch(/SEARCH catalog .*\(name=\?\)/);
+  expect(plan).not.toMatch(/MATERIALIZE catalog|SCAN t VIRTUAL TABLE/);
+  expect(plan).toContain('USE TEMP B-TREE FOR GROUP BY');
 });
 
 it('keeps numeric identity, provider preference and legacy tie order on collisions', async () => {

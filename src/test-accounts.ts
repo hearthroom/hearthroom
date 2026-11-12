@@ -9,10 +9,28 @@ export async function assertNormalMember(db:D1Database,...ids:(string|null|undef
 }
 export async function testCardIds(db:D1Database,ids:string[]):Promise<Set<string>>{
  if(!ids.length)return new Set();
- const rows=await db.prepare(`SELECT c.id FROM cards c JOIN members m ON m.id IN(
- (SELECT owner_member_id FROM member_connections WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)),
- (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)))
- WHERE c.id IN(SELECT value FROM json_each(?)) AND (m.account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id))`).bind(JSON.stringify(ids)).all<{id:string}>();
+ // A single-card lookup is cheaper with direct indexed owner seeks. The set-based
+ // query pays off on page-sized batches; keep detail/shortcut checks on the small path.
+ if(ids.length<=8){
+  const rows=await db.prepare(`SELECT c.id FROM cards c JOIN members m ON m.id IN(
+   (SELECT owner_member_id FROM member_connections WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)),
+   (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)))
+   WHERE c.id IN(SELECT value FROM json_each(?)) AND (m.account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id))`)
+   .bind(JSON.stringify(ids)).all<{id:string}>();
+  return new Set(rows.results.map(r=>String(r.id)));
+ }
+ // Test and retired subjects are a small indexed set. Resolve their identities once,
+ // rather than resolving both possible owners again for every card in a page.
+ // Both identity paths remain excluded even when a connection overrides display ownership.
+ const rows=await db.prepare(`WITH excluded_members AS MATERIALIZED (
+ SELECT id FROM members WHERE account_class='test'
+ UNION SELECT m.id FROM legacy_account_fence f JOIN members m ON m.id=f.member_id
+ ), excluded_authors AS MATERIALIZED (
+ SELECT i.provider,i.external_id FROM excluded_members em CROSS JOIN member_identities i ON i.member_id=em.id
+ UNION SELECT x.provider,x.external_id FROM excluded_members em CROSS JOIN member_connections x ON x.owner_member_id=em.id
+ ) SELECT c.id FROM cards c WHERE c.id IN(SELECT value FROM json_each(?))
+ AND (c.provider,CAST(c.author_num_id AS TEXT)) IN(SELECT provider,external_id FROM excluded_authors)`)
+ .bind(JSON.stringify(ids)).all<{id:string}>();
  return new Set(rows.results.map(r=>String(r.id)));
 }
 /** n is always a trusted SQL alias, never request input. */

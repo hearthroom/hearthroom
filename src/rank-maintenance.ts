@@ -27,7 +27,8 @@ async function capturePublications(env:Env,now:number){
  await env.DB.prepare(`INSERT OR IGNORE INTO rank_publications(card_id,published_at,captured_at)
  SELECT id,published_at,? FROM (SELECT c.id,COALESCE(MIN(${first},${early}),${first},${early},
   ${reviewEnabled(env)?'NULL':'c.registered_at'}) AS published_at
- FROM cards c WHERE c.provider='harbor' AND c.status='approved') WHERE published_at IS NOT NULL`).bind(now).run();
+ FROM cards c WHERE c.provider='harbor' AND c.status='approved'
+  AND NOT EXISTS(SELECT 1 FROM rank_publications p WHERE p.card_id=c.id)) WHERE published_at IS NOT NULL`).bind(now).run();
 }
 /** Late community linking never changes payment ownership or an already assigned honor. */
 async function linkUnassignedHonors(env:Env){
