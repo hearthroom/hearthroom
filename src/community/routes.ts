@@ -588,7 +588,9 @@ app.post("/internal/community/:operation", async (c) => {
       .bind(Date.now(), Date.now())
       .all();
     const notifications = await c.env.DB.prepare(
-      `SELECT n.id,n.kind,n.extra,n.card_id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
+      // Keep the small opted-in recipient set outside the notification scan.
+      // CROSS JOIN fixes that loop order without changing eligibility or limits.
+      `SELECT n.id,n.kind,n.extra,n.card_id FROM community_preferences p JOIN discord_links l ON l.member_id=p.member_id AND l.state='active' CROSS JOIN community_notifications n WHERE n.member_id=p.member_id AND p.discord_dm=1 AND p.notifications=1 AND ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
     )
       .bind(Date.now(),Date.now())
       .all<UpdateNoticeRef>();
