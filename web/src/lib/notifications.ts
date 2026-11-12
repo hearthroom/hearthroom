@@ -111,7 +111,11 @@ export function noticeUpdateNote(n:CommunityNotice):string {
 
 /** One line that says who did what to which card; falls back to the plain kind label when the record carries no detail. */
 export function noticeText(n: CommunityNotice): string {
-  const t = i18n.global.t;
+  const t = (key: string, named?: Record<string, unknown>, plural?: number): string => {
+    const label = plural !== undefined ? i18n.global.t(key, named ?? {}, plural)
+      : named ? i18n.global.t(key, named) : i18n.global.t(key);
+    return label === key ? i18n.global.t("notifications.newNotice") : label;
+  };
   const locale = String(i18n.global.locale.value);
   const card = n.card?.name ? quote(locale, n.card.name) : "";
   const actor = n.actor?.name ?? "";
@@ -143,7 +147,5 @@ export function noticeText(n: CommunityNotice): string {
   if (n.kind === "registration_pack" && Number(extra.granted) > 0) return t("community.noticeText.registration_pack", { count: Number(extra.granted) });
   if (n.kind === "review_reminder" && card) return t("community.noticeText.review_reminder", { card });
   if (n.kind === "suki_recall") return extra.variant === "postcard" && card ? t("community.noticeText.suki_postcard", { card }) : t("community.noticeText.suki_hungry");
-  const key = "community.notices." + n.kind;
-  const label = t(key);
-  return label === key ? t("notifications.newNotice") : label;
+  return t("community.notices." + n.kind);
 }
