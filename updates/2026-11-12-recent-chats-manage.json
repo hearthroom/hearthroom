@@ -1,0 +1,11 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "最近對話新增管理功能，方便選取並刪除不再需要的對話與存檔。",
+    "zh-Hans": "最近对话新增管理功能，方便选择并删除不再需要的对话和存档。",
+    "en": "You can now select and delete conversations and saves you no longer need from Recent conversations.",
+    "ja": "最近の会話に管理機能が加わり、不要になった会話とセーブを選んで削除できます。",
+    "ko": "최근 대화에서 더 이상 필요하지 않은 대화와 저장 기록을 선택해 삭제할 수 있어요."
+  }
+}

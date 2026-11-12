@@ -104,6 +104,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
       <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage,'dlg--phrase-wrap':confirmState.current.phraseWrap }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
+        <ul v-if="confirmState.current.items?.length" class="dlg__items"><li v-for="(item,index) in confirmState.current.items" :key="index"><img v-if="item.image" :src="item.image" alt="" /><span>{{ item.name }}</span></li><li v-if="confirmState.current.moreText" class="subtle">{{ confirmState.current.moreText }}</li></ul>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
         <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
@@ -134,7 +135,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
           </button>
           <button class="btn" :class="subdued ? 'dlg__subdued' : confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
                   :disabled="!typedOk" @click="confirm">
-            {{ pending ? t("cardUpdate.update.checkResult") : confirmState.current.confirmText ?? $t("dialog.confirm") }}
+            <span v-if="busy && confirmState.current.busyText" class="dlg__spinner" aria-hidden="true" />{{ busy && confirmState.current.busyText ? confirmState.current.busyText : pending ? t("cardUpdate.update.checkResult") : confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
       </div>
@@ -166,6 +167,13 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 .dlg--publication .dlg__actions { min-width:0; }
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.dlg__items { display:grid; gap:var(--s-2); list-style:none; padding:0; }
+.dlg__items li { display:flex; align-items:center; gap:var(--s-3); min-width:0; }
+.dlg__items img { width:28px; height:36px; object-fit:cover; border-radius:var(--r-sm); flex:none; }
+.dlg__items span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dlg__spinner { width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:var(--r-pill); animation:dlg-spin var(--dur-slow) linear infinite; }
+@keyframes dlg-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .dlg__spinner { animation:none; } }
 .dlg--scroll-message { max-height:calc(100dvh - var(--s-6)); }
 .dlg--scroll-message .dlg__msg { max-height:max(120px,calc(100dvh - 300px));overflow-y:auto;overscroll-behavior:contain;white-space:pre-wrap; }
 .dlg__detail {

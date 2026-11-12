@@ -1,3 +1,4 @@
+import {conversationDeleteRoutes} from './conversation-delete';
 import { readMaintenance } from './maintenance';
 import { authFunnelMetrics } from './auth-funnel';
 import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
@@ -20,7 +21,7 @@ libraryRoutes.use('/v1/me/*', async (c, next) => {
   c.header('Cache-Control', 'private, no-store');
   await next();
   const operation = `${match[1]}_${c.req.method.toLowerCase()}`;
-  const outcome = c.res.status < 400 ? 'success' : c.res.status < 500 ? 'denied' : 'error';
+  const outcome = c.res.status === 207 ? 'error' : c.res.status < 400 ? 'success' : c.res.status < 500 ? 'denied' : 'error';
   c.executionCtx.waitUntil(c.env.DB.prepare('INSERT INTO library_metrics(operation,outcome,value) VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(operation,outcome).run().catch(() => { console.warn('Library request metric unavailable'); }));
 });
 
@@ -41,6 +42,7 @@ libraryRoutes.get('/metrics', async c => {
     ...suki.results.filter(r=>/^(visit|recall_on|recall_off|recall|craving)$/.test(r.operation)&&/^(success|sent|card_error|met|error)$/.test(r.outcome)).map(r=>`hearthroom_suki_operations_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`));
   return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB) + await opsMetrics(c.env.DB) + await authFunnelMetrics(c.env.DB).catch(() => ''), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
+libraryRoutes.route('/',conversationDeleteRoutes);
 const kinds = ["favorites", "following"] as const;
 const offsetOf = (raw?: string) => Math.min(100000, Math.max(0, Math.floor(Number(raw) || 0)));
 

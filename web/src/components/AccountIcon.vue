@@ -1,9 +1,11 @@
 <script setup lang="ts">
-defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refresh' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' | 'spark' | 'news' | 'share' | 'eye' | 'camera' | 'lock' | 'plus' | 'heart' | 'chat' | 'users' | 'upload' | 'person' | 'link' | 'contrast' | 'lifebuoy' }>();
+defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refresh' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' | 'spark' | 'news' | 'share' | 'eye' | 'camera' | 'lock' | 'plus' | 'heart' | 'chat' | 'users' | 'upload' | 'person' | 'link' | 'contrast' | 'lifebuoy' | 'manage' | 'trash' }>();
 </script>
 <template>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <template v-if="name === 'cards'"><rect x="7" y="5" width="13" height="16" rx="2"/><path d="M16 5V3H4v15h3M11 10h5M11 14h3"/></template>
+    <path v-if="name==='manage'" d="m3 6 2 2 3-4M11 6h10M3 13l2 2 3-4M11 13h10M3 20l2 2 3-4M11 20h10" stroke-width="1.75" />
+    <path v-else-if="name==='trash'" d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" stroke-width="1.75" />
+    <template v-else-if="name === 'cards'"><rect x="7" y="5" width="13" height="16" rx="2"/><path d="M16 5V3H4v15h3M11 10h5M11 14h3"/></template>
     <path v-else-if="name === 'folder'" d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7h18"/>
     <template v-else-if="name === 'wallet'"><path d="M20 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h15V8H5a3 3 0 0 1-2-3"/><path d="M20 12h-5v5h5"/></template>
     <template v-else-if="name === 'settings'"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 3v6M16 9v6M10 15v6"/></template>
