@@ -40,7 +40,7 @@ it("preserves a local card-report return path but refuses external redirects", (
   );
   history.replaceState({}, "", "/me#discord_receipt=proof");
   captureDiscordReturn();
-  expect(location.pathname).toBe("/me");
+  expect(location.pathname).toBe("/me/community");
 });
 it("keeps case retry IDs across component reloads without persisting report text", async () => {
   const { communityRequestId, forgetCommunityRequest } = await import(

@@ -53,7 +53,9 @@ it("preserves a same-tab receipt on /me until the community page consumes it", a
   expect(sessionStorage.getItem("community.discord.receipt")).toBeNull();
 });
 it("tells a return without browser proof to finish in the same browser", async () => {
-  history.replaceState({}, "", "/me#discord_receipt=unmatched-receipt"); captureDiscordReturn(); await mount();
+  history.replaceState({}, "", "/me#discord_receipt=unmatched-receipt"); captureDiscordReturn();
+  expect(location.pathname).toBe("/me/community");
+  await mount();
   expect(fixture.request.mock.calls.some(([path]) => path.endsWith("/complete"))).toBe(false);
   expect(host.querySelector('[role="alert"]')?.textContent).toBe(i18n.global.t("community.sameBrowser"));
 });
@@ -98,7 +100,14 @@ it("refuses an external return target saved in browser storage", async () => {
   await start(); const pending = JSON.parse(localStorage.getItem("community.discord.attempt")!);
   localStorage.setItem("community.discord.attempt", JSON.stringify({ ...pending, returnPath: "https://evil.example/receive" }));
   sessionStorage.clear(); history.replaceState({}, "", "/me#discord_receipt=synthetic-receipt"); captureDiscordReturn();
-  expect(location.pathname).toBe("/me"); expect(location.hash).toBe("");
+  expect(location.pathname).toBe("/me/community"); expect(location.hash).toBe("");
+});
+it("does not let an old expired callback in another tab erase the active shared proof", async () => {
+  const nonce = await start(); sessionStorage.clear();
+  history.replaceState({}, "", "/me#discord_error=expired"); captureDiscordReturn(); await mount();
+  app!.unmount(); app = undefined;
+  history.replaceState({}, "", "/me#discord_receipt=valid-current-receipt"); captureDiscordReturn(); await mount();
+  expect(fixture.request).toHaveBeenCalledWith("/me/community/complete", "synthetic-token", "POST", { receipt: "valid-current-receipt", nonce });
 });
 it("removes proof after cancellation so an old receipt cannot reuse it", async () => {
   await start(); history.replaceState({}, "", "/me#discord_error=cancelled"); captureDiscordReturn(); await mount();
