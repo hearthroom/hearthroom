@@ -19988,8 +19988,7 @@
                   },
                   "greetingIndex": {
                     "type": "integer",
-                    "minimum": 0,
-                    "maximum": 19
+                    "minimum": 0
                   },
                   "clientOperationID": {
                     "type": "string",
