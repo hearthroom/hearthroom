@@ -1181,6 +1181,7 @@
   "res.panel.copyFailed": "コピーできませんでした。手動で選択してください。",
   "dialog.close": "閉じる",
   "nav.me": "マイページ",
+  "notifications.newNotice": "新しいお知らせ",
   "notifications.viewAll": "通知をすべて見る",
   "notifications.discordGoSettings": "Discord 通知の設定",
   "notifications.discordGoLink": "Discord を連携",
