@@ -50,9 +50,9 @@ describe("cover honors", () => {
     ["ko", "주", "주간", "상위 3", "상위 10", "주간 3위 이내", "주간 10위 이내"],
   ] as const)("renders all three badge tiers in %s", async (locale, shortPeriod, period, top3, top10, label3, label10) => {
     await applyLocale(locale);
-    for (const [band, expected, label] of [[1, [shortPeriod, "1"], undefined], [3, [period, top3], label3], [10, [period, top10], label10]] as const) {
+    for (const [band, expected, label] of [[1, [shortPeriod, "1"], i18n.global.t("honor.badgeLabel", { window: i18n.global.t("honor.window.week"), band: i18n.global.t("honor.band.1") })], [3, [period, top3], label3], [10, [period, top10], label10]] as const) {
       const root = await mount({ honors: [{ zone: "clean", window: "week", band }] });
-      expect([...root.querySelectorAll(".card__honor text")].map(line => line.textContent)).toEqual(expected);
+      expect([...root.querySelectorAll(".card__marks .card__honor text")].map(line => line.textContent)).toEqual(expected);
       const tier = root.querySelector(".card__honor-tier");
       expect(tier?.textContent).toBe(label);
       if (tier) expect(tier.getAttribute("aria-hidden")).toBe("true");
