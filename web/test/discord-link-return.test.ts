@@ -100,7 +100,8 @@ it("refuses an external return target saved in browser storage", async () => {
   await start(); const pending = JSON.parse(localStorage.getItem("community.discord.attempt")!);
   localStorage.setItem("community.discord.attempt", JSON.stringify({ ...pending, returnPath: "https://evil.example/receive" }));
   sessionStorage.clear(); history.replaceState({}, "", "/me#discord_receipt=synthetic-receipt"); captureDiscordReturn();
-  expect(location.pathname).toBe("/me/community"); expect(location.hash).toBe("");
+  // Reject the external address while retaining the independent display language.
+  expect(location.pathname).toBe("/en/me/community"); expect(location.hash).toBe("");
 });
 it("does not let an old expired callback in another tab erase the active shared proof", async () => {
   const nonce = await start(); sessionStorage.clear();
