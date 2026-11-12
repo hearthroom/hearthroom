@@ -252,6 +252,20 @@ it.each(['sukisuki.ai','sukisuki.chat'])('returns Discord linking to the initiat
 it('returns a cancelled Discord authorization to the original official origin', async () => {
  const m=await makeMember(1), started=await beginLink(e(),m,'n'.repeat(40),'https://sukisuki.chat');
  const response=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(started.state)}&error=access_denied`),e(),createExecutionContext());
- expect(response.headers.get('location')).toBe('https://sukisuki.chat/me#discord_error=oauth');
+ expect(response.headers.get('location')).toBe('https://sukisuki.chat/me#discord_error=cancelled');
  await expect(beginLink(e(),m,'n'.repeat(40),'https://sukisuki.chat.evil.test')).rejects.toThrow('community_input');
+});
+
+it('validates cancellation state and expiry before classifying the OAuth outcome', async () => {
+ const m=await makeMember(1), started=await beginLink(e(),m,'n'.repeat(40),'https://sukisuki.chat');
+ const {discordOAuth}=await import('../src/community/routes');
+ const identify=vi.spyOn(discordOAuth,'identify');
+ const callback=async(state:string,error:string)=>app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(state)}&error=${error}`),e(),createExecutionContext());
+ try {
+  expect((await callback(started.state+'changed','access_denied')).headers.get('location')).toBe('https://hearthroom.club/me#discord_error=expired');
+  expect((await callback(started.state,'server_error')).headers.get('location')).toBe('https://sukisuki.chat/me#discord_error=oauth');
+  await e().DB.prepare('UPDATE discord_link_attempts SET expires=?').bind(Date.now()-1).run();
+  expect((await callback(started.state,'access_denied')).headers.get('location')).toBe('https://hearthroom.club/me#discord_error=expired');
+  expect(identify).not.toHaveBeenCalled();
+ } finally {identify.mockRestore();}
 });

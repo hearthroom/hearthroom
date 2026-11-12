@@ -248,7 +248,8 @@ app.get("/v1/community/discord/callback", async (c) => {
       .first())
   )
     return c.redirect(site(c.env) + "/me#discord_error=expired");
-  if (!code) return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error=oauth");
+  if (!code) return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error="
+    + (c.req.query("error") === "access_denied" ? "cancelled" : "oauth"));
   try {
     const receipt = await acceptIdentity(
       c.env,

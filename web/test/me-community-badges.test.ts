@@ -9,7 +9,7 @@ vi.mock('../src/lib/confirm',()=>({confirmDialog:mock.confirm}));
 // 主頁其他區塊（作者數據、活動、作品）不在這支測試的範圍：給空資料，別真的連網
 vi.mock('../src/lib/api',async original=>({...await original<object>(),fetchAuthor:async()=>({cardCount:0,talkTotal:0}),fetchBoard:async()=>({items:[],total:0,hasNext:false,limit:23,offset:0,sort:'new'})}));
 vi.mock('../src/lib/campaign',async original=>({...await original<object>(),fetchPublicCampaigns:async()=>({items:[]})}));
-vi.mock('../src/lib/session',()=>({useSession:()=>({me:{},displayName:'Fixture',avatarUrl:'',profile:{handle:'fixture',memberSince:0},accessToken:async()=>'fixture'})}));
+vi.mock('../src/lib/session',()=>({useSession:()=>({me:{},displayName:'Fixture',avatarUrl:'',profile:{handle:'fixture',memberSince:0},ensureProfile:async()=>{},accessToken:async()=>'fixture'})}));
 vi.mock('../src/lib/review',()=>({useReviewer:()=>({reviewer:false})}));
 vi.mock('../src/components/ConnectedAccounts.vue',()=>({default:{template:'<div />'}}));
 import MePage from '../src/pages/MePage.vue';

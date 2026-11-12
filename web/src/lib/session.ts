@@ -1,4 +1,5 @@
 import {clearPublicationDrafts} from './confirm';
+import { clearDiscordAttempt } from './discord-attempt';
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { forgetCards } from './card-memory';
@@ -211,6 +212,7 @@ export const useSession = defineStore("session", () => {
 
   async function logout(o: { allRoutes?: boolean } = {}) {
     generation++;
+    clearDiscordAttempt();
     clearPublicationDrafts();
     // 剛登出的網域不靜默登入，否則一登出馬上又被登回去（lib/silent-login.ts）
     markLoggedOut();
