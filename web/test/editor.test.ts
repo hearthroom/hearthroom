@@ -2362,6 +2362,24 @@ describe('restore currently published content',()=>{
  });
 });
 
+it.each(['write', 'read'])('shows saving rather than retry guidance while approved restore %s is pending',async phase=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ let finish!:(value:any)=>void;
+ const pending=new Promise<any>(resolve=>{finish=resolve;});
+ api.fetchRoleDetail.mockResolvedValue(approved).mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ if(phase==='read')api.fetchRoleDetail.mockReturnValueOnce(pending);else api.saveApprovedDraft.mockReturnValueOnce(pending);
+ await submit();
+ expect($<HTMLButtonElement>('button[type=submit]').disabled).toBe(true);
+ expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
+ expect(root.querySelector('.notice.restored')?.textContent).toContain(i18n.global.t('edit.saving'));
+ finish(phase==='read'?approved:{});await flush();await flush();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+ expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
+});
+
 it('saves an unedited revert atomically without writing frozen dependencies',async()=>{
  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
  const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
