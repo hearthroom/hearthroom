@@ -81,7 +81,8 @@ function fitMarks() {
   const prefix = row.querySelector<HTMLElement>('.card__rank, .card__kind');
   const prefixWidth = prefix ? prefix.getBoundingClientRect().width + parseFloat(getComputedStyle(prefix).marginRight || '0') : 0;
   const plus = mirror.querySelector<HTMLElement>('.card__honor-more')!.getBoundingClientRect().width;
-  fit.value = fitCoverHonors(widths, row.clientWidth, parseFloat(getComputedStyle(row).gap) || 0, prefixWidth, plus);
+  // clientWidth rounds fractional cover space up (128.5 → 129), pushing +1 onto a third row.
+  fit.value = fitCoverHonors(widths, row.getBoundingClientRect().width, parseFloat(getComputedStyle(row).gap) || 0, prefixWidth, plus);
 }
 let marksObserver: ResizeObserver | undefined;
 onMounted(() => {
