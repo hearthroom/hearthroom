@@ -9,6 +9,8 @@ import AccountIcon from "./AccountIcon.vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
+import { currentProvider } from "@/lib/provider";
+import { saveDiscordAttempt, takeDiscordAttempt } from "@/lib/discord-attempt";
 import { useLocalePath } from "@/lib/use-locale";
 import { confirmDialog } from "@/lib/confirm";
 import {
@@ -94,14 +96,20 @@ async function run(task: () => Promise<void>) {
 }
 async function connect() {
   await run(async () => {
+    await session.ensureProfile();
+    if (!session.profile?.handle) throw new Error(t("auth.expired"));
+    const scope = currentProvider() + ":" + session.profile.handle;
     const nonce = crypto.randomUUID() + crypto.randomUUID();
-    sessionStorage.setItem("community.discord.nonce", nonce);
-    sessionStorage.setItem("community.discord.return", route.fullPath);
-    const result = await request<{ url: string }>("/link", "POST", { nonce });
-    const url = new URL(result.url);
-    if (url.origin !== "https://discord.com")
-      throw new Error(t("community.failed"));
-    location.assign(url.toString());
+    try {
+      saveDiscordAttempt(scope, nonce, route.fullPath);
+      const result = await request<{ url: string }>("/link", "POST", { nonce });
+      const url = new URL(result.url);
+      if (url.origin !== "https://discord.com") throw new Error(t("community.failed"));
+      location.assign(url.toString());
+    } catch (e) {
+      takeDiscordAttempt(scope);
+      throw e;
+    }
   });
 }
 async function disconnect() {
@@ -222,21 +230,24 @@ async function act(action: string) {
 onMounted(
   () =>
     void run(async () => {
-      const receipt = takeDiscordReceipt(),
-        nonce = sessionStorage.getItem("community.discord.nonce");
+      await session.ensureProfile();
+      if (!alive) return;
+      const receipt = takeDiscordReceipt();
+      const callbackError = sessionStorage.getItem("community.discord.error");
+      sessionStorage.removeItem("community.discord.error");
+      const scope = currentProvider() + ":" + (session.profile?.handle ?? "");
       if (receipt) {
         try {
-          if (!nonce) throw new Error(t("community.expired"));
+          const { nonce, expired } = takeDiscordAttempt(scope);
+          if (!nonce) throw new Error(t(expired ? "community.expired" : "community.sameBrowser"));
           await request("/complete", "POST", { receipt, nonce });
         } catch (e) {
           error.value = e instanceof Error ? e.message : t("community.expired");
-        } finally {
-          sessionStorage.removeItem("community.discord.nonce");
         }
-      }
-      if (sessionStorage.getItem("community.discord.error")) {
-        sessionStorage.removeItem("community.discord.error");
-        error.value = t("community.expired");
+      } else if (callbackError) {
+        takeDiscordAttempt(scope);
+        error.value = t(callbackError === "cancelled" ? "community.linkCancelled"
+          : callbackError === "expired" ? "community.expired" : "community.failed");
       }
       await load();
       timer = setInterval(() => {

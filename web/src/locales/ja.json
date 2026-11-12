@@ -1701,6 +1701,8 @@
   "community.unavailable": "コミュニティ連携は準備中です。",
   "community.conflict": "このサイトまたは Discord アカウントは連携済みか、古いロールの削除中です。",
   "community.expired": "連携が期限切れか中断されました。Discord ともう一度連携してください。",
+  "community.linkCancelled": "Discord の連携をキャンセルしました。",
+  "community.sameBrowser": "Discord の連携は、開始時と同じブラウザーとアカウントで完了する必要があります。",
   "community.rateLimited": "操作が多すぎます。少し待ってからお試しください。",
   "community.reportCard": "カードの問題を報告",
   "community.states.unlinked": "未連携",

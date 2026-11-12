@@ -1701,6 +1701,8 @@
   "community.unavailable": "社区连接尚未开放。",
   "community.conflict": "这个网站或 Discord 账号已有绑定，或仍在清理旧身份组。",
   "community.expired": "连接流程已过期或未完成，请重新连接 Discord。",
+  "community.linkCancelled": "已取消连接 Discord。",
+  "community.sameBrowser": "Discord 连接需在开始连接的同一个浏览器和账号中完成。",
   "community.rateLimited": "请求过多，请稍后重试。",
   "community.reportCard": "反馈卡片问题",
   "community.states.unlinked": "尚未绑定",

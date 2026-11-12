@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "try": "/me/community",
+  "title": {
+    "zh-Hant": "Discord 連結回到同一瀏覽器的新分頁時，不再因分頁切換而顯示過期。",
+    "zh-Hans": "Discord 连接返回同一浏览器的新标签页时，不再因标签页切换而显示过期。",
+    "en": "Discord linking no longer appears expired when authorization returns to a new tab in the same browser.",
+    "ja": "Discord の連携で同じブラウザーの新しいタブに戻っても、期限切れと表示されなくなりました。",
+    "ko": "Discord 연결 후 같은 브라우저의 새 탭으로 돌아와도 탭 전환 때문에 만료됐다고 표시되지 않아요."
+  }
+}

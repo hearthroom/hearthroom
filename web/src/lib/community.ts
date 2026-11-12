@@ -3,6 +3,7 @@ import { COMMUNITY_API } from "./config";
 import { currentProvider } from "./provider";
 import { ApiError } from "./api";
 import { i18n } from "./i18n";
+import { discordReturnPath } from "./discord-attempt";
 export interface CommunityView {
   appearance?: AppearanceView;
   enabled: boolean;
@@ -100,17 +101,20 @@ export function captureDiscordReturn() {
     receipt = hash.get("discord_receipt"),
     error = hash.get("discord_error");
   if (!receipt && !error) return;
+  // A fresh outcome replaces any older outcome waiting on the profile page.
+  sessionStorage.removeItem("community.discord.receipt");
+  sessionStorage.removeItem("community.discord.error");
   if (receipt) sessionStorage.setItem("community.discord.receipt", receipt);
-  if (error) sessionStorage.setItem("community.discord.error", error);
+  else if (error) sessionStorage.setItem("community.discord.error", error);
   let target = location.pathname + location.search;
-  const saved = sessionStorage.getItem("community.discord.return");
+  const saved = discordReturnPath();
   sessionStorage.removeItem("community.discord.return");
   if (saved) {
     try {
       const url = new URL(saved, location.origin);
       if (
         url.origin === location.origin &&
-        /^\/(?:en\/|ja\/|ko\/|zh-Hans\/)?me$/.test(url.pathname)
+        /^\/(?:en\/|ja\/|ko\/|zh-Hans\/)?me(?:\/community)?$/.test(url.pathname)
       )
         target = url.pathname + url.search;
     } catch {

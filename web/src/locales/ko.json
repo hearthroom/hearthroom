@@ -1701,6 +1701,8 @@
   "community.unavailable": "커뮤니티 연결은 아직 제공되지 않습니다.",
   "community.conflict": "이 사이트 또는 Discord 계정은 이미 연결되었거나 이전 역할을 정리 중입니다.",
   "community.expired": "연결이 만료되었거나 중단되었습니다. Discord를 다시 연결하세요.",
+  "community.linkCancelled": "Discord 연결을 취소했어요.",
+  "community.sameBrowser": "Discord 연결은 시작할 때와 같은 브라우저와 계정에서 완료해야 해요.",
   "community.rateLimited": "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
   "community.reportCard": "카드 문제 신고",
   "community.states.unlinked": "연결되지 않음",

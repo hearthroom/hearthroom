@@ -1701,6 +1701,8 @@
   "community.unavailable": "Community linking is not available yet.",
   "community.conflict": "This website or Discord account is already linked, or old roles are still being removed.",
   "community.expired": "The linking attempt expired or was interrupted. Connect Discord again.",
+  "community.linkCancelled": "Discord linking was cancelled.",
+  "community.sameBrowser": "Discord linking must be completed in the same browser and account where it started.",
   "community.rateLimited": "Too many requests. Please try again shortly.",
   "community.reportCard": "Report a card issue",
   "community.states.unlinked": "Not linked",

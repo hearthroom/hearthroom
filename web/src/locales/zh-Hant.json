@@ -1701,6 +1701,8 @@
   "community.unavailable": "社群連結尚未開放。",
   "community.conflict": "這個網站或 Discord 帳號已有綁定，或仍在清理舊身分組。",
   "community.expired": "連結流程已過期或未完成，請重新連結 Discord。",
+  "community.linkCancelled": "已取消連結 Discord。",
+  "community.sameBrowser": "Discord 連結需在開始連結的同一個瀏覽器與帳號完成。",
   "community.rateLimited": "操作太頻繁，請稍後再試。",
   "community.reportCard": "回報卡片問題",
   "community.states.unlinked": "尚未綁定",
