@@ -4701,7 +4701,7 @@
   "editor.revertNotice": "Your draft differs from the published version.",
   "editor.revertAction": "Revert to published version",
   "editor.revertTitle": "Revert to the published version?",
-  "editor.revertBody": "Your draft will be replaced with the published version. You can undo this before saving; the published version stays unchanged.",
+  "editor.revertBody": "Your draft will be replaced with the published version. You can undo this before saving; the published version stays unchanged. If the published version has no card styles, the draft's card styles will also be cleared.",
   "editor.revertLibraryNote": "Linked library Lorebooks will use their current content.",
   "editor.revertConfirm": "Revert draft",
   "editor.revertCancel": "Keep draft",

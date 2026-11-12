@@ -4701,7 +4701,7 @@
   "editor.revertNotice": "下書きは公開済みの版と異なります。",
   "editor.revertAction": "公開済みの版に戻す",
   "editor.revertTitle": "公開済みの版に戻しますか？",
-  "editor.revertBody": "下書きの内容を公開済みの版に戻します。保存前なら取り消せます。公開済みの版は変わりません。",
+  "editor.revertBody": "下書きの内容を公開済みの版に戻します。保存前なら取り消せます。公開済みの版は変わりません。公開済みの版にカードのスタイルがない場合、下書きのスタイルも消去されます。",
   "editor.revertLibraryNote": "ライブラリの Lorebook は現在の内容を使います。",
   "editor.revertConfirm": "下書きを戻す",
   "editor.revertCancel": "下書きを残す",
