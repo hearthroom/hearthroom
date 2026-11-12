@@ -47,18 +47,23 @@ it.each(locales)('retains the card name and comment count in %s', async locale =
     .toBe(digest[locales.indexOf(locale)]);
 });
 
-it('also shields a known kind whose plain copy is missing in every loaded language', async () => {
+it('also shields plain and detailed card comment copy missing in every loaded language', async () => {
   for (const locale of locales) await applyLocale(locale);
   const saved = locales.map(locale => i18n.global.getLocaleMessage(locale));
   try {
     for (const locale of locales) {
       const messages = { ...i18n.global.getLocaleMessage(locale) };
       delete messages['community.notices.comment_reply'];
+      delete messages['community.notices.card_comments'];
+      delete messages['community.noticeText.card_comments'];
       i18n.global.setLocaleMessage(locale, messages);
     }
     for (const locale of locales) {
       await applyLocale(locale);
       expect(noticeText(notice('comment_reply'))).toBe(generic[locales.indexOf(locale)]);
+      expect(noticeText(notice('card_comments'))).toBe(generic[locales.indexOf(locale)]);
+      expect(noticeText({ ...notice('card_comments'), card: { id: 12, name: '合成卡' }, extra: { count: 3 } }))
+        .toBe(generic[locales.indexOf(locale)]);
     }
   } finally {
     locales.forEach((locale, index) => i18n.global.setLocaleMessage(locale, saved[index]));
