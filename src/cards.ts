@@ -296,7 +296,7 @@ const excludeClause = (table: string) => `NOT ${inList(table)}`;
  * 類型列每顆籤後面的張數：跟 listCards 同一組範圍條件（在榜、不是副本、本站、語區、已選類型、不想看的類型、成人門），
  * 每個類型再加上「有這一類」——選了調教，劇情那顆的數字就是兩個都有的卡。沒有命中的類型是 0。
  * 目錄的五語名字整份當一個 JSON 綁進去，理由同 inList（D1 一條語句 100 個變數的上限）。
- * ponytail: 每次掃範圍內所有卡 × 標籤 × 目錄名字，靠榜單快取擋著；卡片上萬時改成預先算好的計數表。
+ * 先彙總相同的原始標籤組合，再依目錄累計；別名只在程式中展開，不讓 D1 逐卡讀目錄。
  */
 type CountScope = { zone?: string; tagGroups?: string[][]; excludeTags?: string[]; allowNsfw: boolean; maxRating?: Rating };
 /** 數量用的範圍條件：跟 listCards 同一組（在榜、不是副本、本站、語區、已選類型、不想看的類型、分級、成人門） */
@@ -333,18 +333,26 @@ export async function ratingCounts(db: D1Database, opts: CountScope): Promise<Re
 
 export async function catalogTagCounts(db: D1Database, opts: CountScope): Promise<Record<string, number>> {
   const { where, binds } = countScope(opts);
-  const names = TAG_CATALOG.flatMap((e) => [...new Set(Object.values(e.names))].map((n) => [e.key, n]));
   const { results } = await db.prepare(
-    `WITH catalog AS MATERIALIZED (
-       SELECT json_extract(value, '$[0]') AS k, json_extract(value, '$[1]') AS name FROM json_each(?)
-     )
-     SELECT catalog.k, COUNT(DISTINCT c.id) AS n
-       FROM cards c CROSS JOIN json_each(c.tags) t CROSS JOIN catalog ON catalog.name = t.value
-      WHERE ${where.join(" AND ")}
-      GROUP BY catalog.k`,
-  ).bind(JSON.stringify(names), ...binds).all<{ k: string; n: number }>();
+    `SELECT c.tags, COUNT(*) AS n FROM cards c WHERE ${where.join(" AND ")} GROUP BY c.tags`,
+  ).bind(...binds).all<{ tags: string; n: number }>();
   const counts: Record<string, number> = Object.fromEntries(TAG_CATALOG.map((e) => [e.key, 0]));
-  for (const row of results) counts[row.k] = row.n;
+  const keysByName = new Map<string, string[]>();
+  for (const entry of TAG_CATALOG) for (const name of new Set(Object.values(entry.names))) {
+    keysByName.set(name, [...(keysByName.get(name) ?? []), entry.key]);
+  }
+  for (const row of results) {
+    let tags: unknown;
+    try { tags = JSON.parse(row.tags); } catch { /* Preserve SQLite JSON support for legacy values below. */ }
+    // Normal writes store arrays. Delegate legacy JSON objects/scalars to the same
+    // json_each semantics as before (including duplicate object keys and invalid JSON errors).
+    if (!Array.isArray(tags)) tags = (await db.prepare('SELECT value FROM json_each(?)').bind(row.tags).all<{ value: unknown }>()).results.map(r => r.value);
+    const keys = new Set<string>();
+    for (const tag of tags as unknown[]) if (typeof tag === 'string') {
+      for (const key of keysByName.get(tag) ?? []) keys.add(key);
+    }
+    for (const key of keys) counts[key] += row.n;
+  }
   return counts;
 }
 
