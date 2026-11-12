@@ -19,12 +19,19 @@ it('4001 entries yield before parsing and a content edit parses only that entry'
   expect(counts.value).toBeNull();
   await vi.runAllTimersAsync();
   expect(counts.value?.total).toBeGreaterThan(2_000_000);
+  // This fixture contains only BMP letters and digits, so its length is an
+  // independent total oracle without parsing the entire book a second time.
+  const initialTotal = entries.reduce((total, row) => total + row.content.length, 0);
+  expect(counts.value?.total).toBe(initialTotal);
+  const previousEntryTotal = worldbookReviewCounts([entries[2000]])!.total;
   segment.mockClear();
   entries[2000] = { ...entries[2000], content: '修改內容' };
   await nextTick(); await vi.runAllTimersAsync();
   expect(segment).toHaveBeenCalledTimes(1);
-  expect(counts.value?.total).toBe(worldbookReviewCounts(entries)?.total);
-});
+  expect(counts.value?.total).toBe(initialTotal - previousEntryTotal + worldbookReviewCounts([entries[2000]])!.total);
+// The budget is yielding and parse count, not total wall time on a shared CI
+// runner. Keep the full 4001-entry fixture while allowing its first count to finish.
+}, 30_000);
 it('metadata changes reuse counts; disabled and constant flags retain shared semantics', async () => {
   const { entries, counts } = setup(3); await vi.runAllTimersAsync();
   const segment = vi.spyOn(Intl.Segmenter.prototype, 'segment');
