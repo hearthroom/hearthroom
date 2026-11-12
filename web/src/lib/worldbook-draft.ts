@@ -7,7 +7,7 @@
  * 綁定是可選的：卡綁的那本存檔時順手綁到卡上（binding），角色的私有書不綁卡，
  * 只把 worldbookId 記進成員設定。
  */
-import { reactive } from "vue";
+import { computed, reactive, type ComputedRef } from "vue";
 import {
   createWorldbook,
   fetchMyWorldbooks,
@@ -48,6 +48,14 @@ const OPS_PER_REQUEST = 100;
 export interface StoredWorldbookDraft { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] }
 
 export function useWorldbookDraft(deps: WorldbookDraftDeps) {
+  // Each row tracks its own nested edits. Repeated dirty checks must not stringify both
+  // entire books (including thousands of unchanged contents) on every keystroke.
+  const encoded = new WeakMap<WorldbookEntryDraft, ComputedRef<string>>();
+  const snapshot = (entry: WorldbookEntryDraft) => {
+    let value = encoded.get(entry);
+    if (!value) { value = computed(() => JSON.stringify(entry)); encoded.set(entry, value); }
+    return value.value;
+  };
   let loadTarget: { roleId: string } | { bookId: string; name: string } | null = null;
   async function readBook(token: string, bookId: string, name: string) {
     const entries = await fetchWorldbookEntries(bookId, token);
@@ -98,7 +106,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
     },
     /** 有沒有沒存的改動。 */
     dirty(): boolean {
-      return JSON.stringify(book.entries) !== JSON.stringify(book.original) || book.pending || book.bindPending || book.metadataChanged()
+      return book.entries.length !== book.original.length || book.entries.some((entry, index) => snapshot(entry) !== snapshot(book.original[index])) || book.pending || book.bindPending || book.metadataChanged()
         || (Boolean(book.boundId) && book.boundId !== book.id);
     },
     hasContent(): boolean {

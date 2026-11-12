@@ -101,8 +101,9 @@ import {
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
+import { useWorldbookCounts } from "@/lib/worldbook-counts";
 import { formatReviewLength } from "@/lib/review-length";
-import { combineReviewLength, personaReviewCount, worldbookReviewCounts } from "@/lib/draft-review-length";
+import { combineReviewLength, personaReviewCount } from "@/lib/draft-review-length";
 import { useOwnReviewLengthExemption } from '@/lib/own-review-length-exemption';
 import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
@@ -536,8 +537,8 @@ const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "r
  */
 const reviewPersona = computed(() => personaReviewCount(draft.value.roleDetailDesc));
 const lengthExempt=useOwnReviewLengthExemption(roleId);
-const wbCounts = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.entries)));
-const reviewConstant = computed(() => (wb.loading || wb.loadFailed ? null : worldbookReviewCounts(wb.reviewEntries())?.constant ?? null));
+const wbCounts = useWorldbookCounts(() => wb.entries, () => wb.reviewEntries(), () => !wb.loading && !wb.loadFailed);
+const reviewConstant = computed(() => wbCounts.value?.reviewConstant ?? null);
 const wbTotalChars = computed(() => (wbCounts.value ? wbCounts.value.total.toLocaleString(String(locale.value)) : null));
 const reviewCount = computed(() => {
   // 空白新卡不顯示送審字數（ui.md §5）：還沒寫任何設定，「還差 3001 字」只是嚇人
@@ -713,8 +714,9 @@ function discardDraft() {
   restoredDraft.value = false;
   localStorage.removeItem(DRAFT_KEY);
 }
+// Existing cards do not use local drafts; do not deep-traverse their entire worldbook.
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch([draft, wb, newCardVisibility], () => {
+watch(() => onCreatePage.value && !original.value ? [draft.value, wb, newCardVisibility.value] : null, () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
