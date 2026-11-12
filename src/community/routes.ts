@@ -83,6 +83,24 @@ app.use("/v1/me/community*", async (c, next) => {
   c.header("Referrer-Policy", "no-referrer");
   await next();
 });
+// A raw Discord response on an account page must reach the same state-verified
+// callback as the advertised redirect URI, rather than becoming an inert SPA query.
+for (const prefix of ["", "/en", "/ja", "/ko", "/zh-Hans"])
+for (const page of ["/me", "/me/community"])
+app.get(prefix + page, async (c, next) => {
+  const query = new URL(c.req.url).searchParams;
+  if (query.get("iss") !== "discord" || !query.get("state") || !(query.get("code") || query.get("error"))) {
+    await next(); return;
+  }
+  const forwarded = new URLSearchParams();
+  for (const key of ["code", "state", "error", "iss"]) {
+    const value = query.get(key);
+    if (value !== null) forwarded.set(key, value);
+  }
+  c.header("Cache-Control", "private, no-store");
+  c.header("Referrer-Policy", "no-referrer");
+  return c.redirect("/v1/community/discord/callback?" + forwarded.toString(), 302);
+});
 app.use(
   "/v1/me/community/*",
   bodyLimit({
