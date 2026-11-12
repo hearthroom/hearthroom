@@ -1,12 +1,6 @@
 <script setup lang="ts">
-/**
- * 頭像／背景。選檔後立刻上傳，欄位存的是上傳回來的網址。
- *
- * 為什麼不等到按儲存才傳：建立中的卡還沒有 id，而上傳本來就不需要 id；等到儲存時再傳，
- * 一次儲存就變成「傳兩張圖 + 寫一次卡」的複合操作，中間任何一步失敗都會留下半成品。
- * 先傳完拿到網址，儲存就退回成一次單純的文字寫入。
- */
-import { ref } from "vue";
+/** Card images keep selected files in memory until a named card can own them. */
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import LibraryPicker from "./LibraryPicker.vue";
 
 const props = defineProps<{
@@ -23,18 +17,38 @@ const props = defineProps<{
   libraryLabel: string;
   /** 有給才出現「生成」：用登入身分生圖，對話框與存放位置由編輯器管。 */
   generateLabel?: string;
+  ready?: boolean;
+  importedFile?: File | null;
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [string];
-  pick: [File, (url: string) => void, (message: string) => void];
+  pick: [File, (url: string) => void, (message: string, kind?: "retry" | "gone" | "stale" | "invalid") => void];
+  adopt: [string, (url: string) => void, (message: string, kind?: "retry" | "gone" | "stale" | "invalid") => void];
+  needsName: [];
+  pending: [boolean];
+  busy: [boolean];
   generate: [];
 }>();
 
 const input = ref<HTMLInputElement | null>(null);
 const busy = ref(false);
+watch(busy, value => emit("busy", value));
 const error = ref("");
 const dragging = ref(false);
+const selected = ref<File | null>(null);
+const selectedAsset = ref("");
+const preview = ref("");
+const failureKind = ref<"retry" | "gone" | "stale" | "invalid" | null>(null);
+const hasPending = computed(() => Boolean(selected.value || selectedAsset.value));
+const canUpload = computed(() => props.ready !== false);
+watch(hasPending, value => emit("pending", value));
+function clearSelection() {
+  if (selected.value && preview.value) URL.revokeObjectURL(preview.value);
+  selected.value = null; selectedAsset.value = ""; preview.value = "";
+  error.value = ""; failureKind.value = null;
+}
+onBeforeUnmount(() => { clearSelection(); emit("pending", false); });
 /** 從資源庫挑：作者的圖多半早就傳過一次了，不必為了換張卡再傳一份。 */
 const picking = ref(false);
 
@@ -53,21 +67,35 @@ function onDrop(event: DragEvent) {
 }
 
 function pick(file: File) {
-  busy.value = true;
-  error.value = "";
-  emit(
-    "pick",
-    file,
-    (url) => {
-      emit("update:modelValue", url);
-      busy.value = false;
-    },
-    (message) => {
-      error.value = message;
-      busy.value = false;
-    },
-  );
+  if (busy.value) return;
+  clearSelection();
+  selected.value = file;
+  preview.value = URL.createObjectURL(file);
+  if (!canUpload.value) { emit("needsName"); return; }
+  send();
 }
+function pickedLibrary(url: string, id: string) {
+  clearSelection(); selectedAsset.value = id; preview.value = url; send();
+}
+function send() {
+  if (busy.value || !hasPending.value || !canUpload.value) return;
+  busy.value = true; error.value = ""; failureKind.value = null;
+  const ok = (url: string) => { clearSelection(); emit("update:modelValue", url); busy.value = false; };
+  const fail = (message: string, kind: "retry" | "gone" | "stale" | "invalid" = "retry") => {
+    error.value = message; failureKind.value = kind; busy.value = false;
+    if (kind === "gone") {
+      if (selected.value && preview.value) URL.revokeObjectURL(preview.value);
+      selected.value = null; selectedAsset.value = ""; preview.value = "";
+    }
+  };
+  if (selected.value) emit("pick", selected.value, ok, fail);
+  else emit("adopt", selectedAsset.value, ok, fail);
+}
+function requestLibrary() { if (!canUpload.value) emit("needsName"); else picking.value = true; }
+function requestGenerate() { if (!canUpload.value) emit("needsName"); else emit("generate"); }
+function remove() { clearSelection(); emit("update:modelValue", ""); }
+function refresh() { window.location.reload(); }
+watch(() => props.importedFile, file => { if (file) pick(file); }, { immediate: true });
 </script>
 
 <template>
@@ -75,10 +103,12 @@ function pick(file: File) {
     <label>{{ label }}</label>
     <div class="shell">
       <!-- 框本身就是選圖的按鈕：點一下開檔、拖一張進來也行；旁邊那顆文字鈕給不知道能點框的人 -->
-      <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy, 'frame--empty': !modelValue }]"
-              :aria-label="pickLabel" :disabled="busy"
+      <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy, 'frame--empty': !modelValue && !preview }]"
+              :aria-label="pickLabel" :aria-busy="busy || undefined" :disabled="busy || hasPending || failureKind === 'gone' || failureKind === 'stale'"
               @click="input?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
-        <img v-if="modelValue" :src="modelValue" alt="" />
+        <img v-if="preview || modelValue" :src="preview || modelValue" alt="" />
+        <span v-if="busy" class="upload-mask" role="status"><span class="upload-spinner" aria-hidden="true"></span><span class="sr-only">{{ uploading }}</span></span>
+        <span v-else-if="hasPending && !error" class="upload-pending">{{ $t("editor.image.pending") }}</span>
         <span v-if="modelValue && safeZone" class="safe" aria-hidden="true"></span>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ph">
@@ -89,22 +119,28 @@ function pick(file: File) {
       </button>
       <div class="side">
         <p v-if="hint" class="subtle">{{ hint }}</p>
+        <template v-if="hasPending && !busy && !error">
+          <p v-if="!canUpload" class="notice" role="status">{{ $t("editor.image.waiting") }}</p>
+          <p class="subtle">{{ $t("editor.image.waitingNote") }}</p>
+        </template>
         <div class="acts">
-          <button type="button" class="btn btn--sm" :disabled="busy" @click="input?.click()">
-            {{ busy ? uploading : pickLabel }}
-          </button>
-          <button type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
-          <button v-if="generateLabel" type="button" class="btn btn--sm" :disabled="busy" @click="emit('generate')">{{ generateLabel }}</button>
-          <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy"
-                  @click="emit('update:modelValue', '')">
-            {{ clearLabel }}
-          </button>
+          <template v-if="hasPending && !busy">
+            <button v-if="!error || failureKind === 'retry'" type="button" class="btn btn--sm" :disabled="!canUpload" :aria-disabled="!canUpload" @click="send">{{ $t(error ? 'resource.retry' : 'editor.image.continueUpload') }}</button>
+            <button type="button" class="btn btn--sm btn--ghost" @click="remove">{{ clearLabel }}</button>
+          </template>
+          <template v-else>
+            <button type="button" class="btn btn--sm" :disabled="busy || failureKind === 'gone' || failureKind === 'stale'" @click="input?.click()">{{ busy ? uploading : pickLabel }}</button>
+            <button type="button" class="btn btn--sm" :disabled="busy || failureKind === 'gone' || failureKind === 'stale'" @click="requestLibrary">{{ libraryLabel }}</button>
+            <button v-if="generateLabel" type="button" class="btn btn--sm" :disabled="busy || failureKind === 'gone' || failureKind === 'stale'" @click="requestGenerate">{{ generateLabel }}</button>
+            <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy" @click="remove">{{ clearLabel }}</button>
+          </template>
+          <button v-if="failureKind === 'stale'" type="button" class="btn btn--sm" @click="refresh">{{ $t('res.refresh') }}</button>
         </div>
-        <p v-if="error" class="subtle err" role="alert">{{ error }}</p>
+        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       </div>
     </div>
     <input ref="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only" @change="choose" />
-    <LibraryPicker v-if="picking" @pick="emit('update:modelValue', $event)" @close="picking = false" />
+    <LibraryPicker v-if="picking" card-copy @pick="pickedLibrary" @close="picking = false" />
   </div>
 </template>
 
@@ -136,5 +172,9 @@ function pick(file: File) {
 .ph { width: 28px; height: 28px; }
 .side { flex: 1 1 180px; min-width: 0; display: grid; gap: var(--s-2); align-content: start; }
 .acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.err { color: var(--danger); }
+.upload-mask { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--surface) 55%, transparent); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.upload-spinner { width: 24px; height: 24px; border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: upload-turn 1s linear infinite; }
+.upload-pending { position: absolute; bottom: var(--s-2); max-width: calc(100% - 16px); padding: 2px 8px; border-radius: var(--r-pill); background: var(--surface); font-size: 12px; }
+@keyframes upload-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .upload-spinner { animation: none; } }
 </style>

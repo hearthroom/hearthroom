@@ -92,6 +92,10 @@
     {
       "name": "Plans",
       "description": "One-time 30-day plans: credits on purchase, then an amount to claim each day. Not a subscription; plans never renew. Sold on the provider's own site; apps read the holding and claim the day."
+    },
+    {
+      "name": "Image generation",
+      "description": "Optional paid image generation and independent result-saving targets."
     }
   ],
   "security": [
@@ -4085,6 +4089,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
         }
       }
     },
@@ -4401,7 +4408,10 @@
             }
           }
         },
-        "description": "With `capabilities.moves`, this moves the files out of the folder to the top level, changing their URLs; `dryRun` and `confirm` work as in folder rename."
+        "description": "With `capabilities.moves`, this moves the files out of the folder to the top level, changing their URLs; `dryRun` and `confirm` work as in folder rename.",
+        "x-harperharbor": {
+          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
+        }
       }
     },
     "/open/v1/image/folder/rename": {
@@ -4512,7 +4522,10 @@
             }
           }
         },
-        "description": "Renames a folder. Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Renaming moves every file and folder below it; pass `path` instead of `folderId` for a directory that only exists as part of longer paths."
+        "description": "Renames a folder. Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Renaming moves every file and folder below it; pass `path` instead of `folderId` for a directory that only exists as part of longer paths.",
+        "x-harperharbor": {
+          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
+        }
       }
     },
     "/open/v1/image/list": {
@@ -4674,6 +4687,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": " New source-bound configuration images are excluded from inventory, totals and quota; capabilities.cardImages advertises their separate workflow."
         }
       }
     },
@@ -4778,6 +4794,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Without roleId this remains a personal-library operation with ordinary ownership, validation and storage quota. Supported formats and file limits are advertised by image/list capabilities. A supplied roleId must identify the caller-owned editable source configuration and routes image bytes into independent card-image storage; it is never silently ignored. A role-less intent completed later with roleId is converted without named-library publication and releases its temporary library reservation. That old intent still required library capacity when created. Prefer role/{roleId}/images/uploadIntent from the start. Legacy images still referenced by configurations or retained versions cannot be replaced at a named library path; use the card-image API for the new image."
         }
       }
     },
@@ -7936,6 +7955,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Image fields accept caller-owned hosted URLs and normalize them into source-bound configuration images through the same adoption service. New external URLs must first be downloaded by the client and uploaded through the card-image API; the server does not fetch arbitrary URLs. Existing external references can be retained unchanged or cleared. roleAvatar aliases roleBackground; an explicit roleBackground, including an empty value, wins. Image references and the resulting content hash change in one transaction."
         }
       }
     },
@@ -9521,7 +9543,7 @@
                   "roleId": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "Optional card to attribute the file to (own card or any public card)."
+                    "description": "HarperHarbor: caller-owned editable source configuration. Image storage is independent from the personal library; other owners and sealed versions are rejected."
                   },
                   "folderIds": {
                     "type": "array",
@@ -9595,6 +9617,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Without roleId this remains a personal-library operation with ordinary ownership, validation and storage quota. Supported formats and file limits are advertised by image/list capabilities. A supplied roleId must identify the caller-owned editable source configuration and routes image bytes into independent card-image storage; it is never silently ignored. A role-less intent completed later with roleId is converted without named-library publication and releases its temporary library reservation. That old intent still required library capacity when created. Prefer role/{roleId}/images/uploadIntent from the start. Legacy images still referenced by configurations or retained versions cannot be replaced at a named library path; use the card-image API for the new image."
         }
       }
     },
@@ -11495,6 +11520,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
         }
       }
     },
@@ -14950,6 +14978,679 @@
           }
         }
       }
+    },
+    "/open/v1/role/provision": {
+      "post": {
+        "operationId": "provisionRoleForImages",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Create a private agent configuration upload target",
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardProvisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardProvisionOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "x-harperharbor": {
+          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/provisionComplete": {
+      "post": {
+        "operationId": "completeRoleProvision",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Complete agent configuration creation",
+        "description": "After all draft sections are saved, atomically apply the final name, original language and private or unlisted access. All five languages are available for this first completion; later language editing retains the ordinary compatibility rules. Identical completion retries are idempotent; changed completion fields conflict.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardProvisionCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardProvisionOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
+          }
+        ],
+        "x-harperharbor": {
+          "description": "After all draft sections are saved, atomically apply the final name, original language and private or unlisted access. All five languages are available for this first completion; later language editing retains the ordinary compatibility rules. Identical completion retries are idempotent; changed completion fields conflict."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/images/uploadIntent": {
+      "post": {
+        "operationId": "createCardImageUploadIntent",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Prepare an agent configuration image upload",
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardImageUploadIntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardImageUploadIntentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
+          }
+        ],
+        "x-harperharbor": {
+          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/images/uploadComplete": {
+      "post": {
+        "operationId": "completeCardImageUpload",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Complete an agent configuration image upload",
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardImageUploadCompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardImageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
+          }
+        ],
+        "x-harperharbor": {
+          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours."
+        }
+      }
+    },
+    "/open/v1/role/{roleId}/images/adopt": {
+      "post": {
+        "operationId": "adoptCardImage",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Copy an owned image to an agent configuration",
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardImageAdoptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardImageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
+          }
+        ],
+        "x-harperharbor": {
+          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint."
+        }
+      }
+    },
+    "/open/v1/trial-cards/{clientKey}/ensure": {
+      "post": {
+        "operationId": "ensureTrialCardImageTarget",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Ensure a private trial configuration upload target",
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialImageEnsureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialImageEnsureResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          }
+        },
+        "x-harperharbor": {
+          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply."
+        },
+        "parameters": [
+          {
+            "name": "clientKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
+            }
+          }
+        ]
+      }
+    },
+    "/open/v1/generations/{id}/save": {
+      "post": {
+        "operationId": "saveGeneratedImages",
+        "tags": [
+          "Image generation"
+        ],
+        "summary": "Save selected generated images",
+        "description": "Optional image-generation capability. Requires media.generate and role.write. A card target saves exactly one selected result directly from the generation cache into source-bound image storage, with a receipt independent from personal-library saves. It requires the same task actor and tenant and an editable source configuration. Unselected images remain in the generation cache until its seven-day expiry. To keep a personal-library copy, send a separate library-target save request after card save; it uses ordinary library quota. Saving the same generated result does not repeat generation or charge another generation fee.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-required-scopes": [
+          "media.generate",
+          "role.write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "directory": {
+                        "type": "string"
+                      },
+                      "folderIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "index"
+                          ]
+                        }
+                      }
+                    },
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "roleId"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "field"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "roleId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "background",
+                          "backgroundLandscape",
+                          "shareImage"
+                        ]
+                      },
+                      "items": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 1,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 0
+                            }
+                          },
+                          "required": [
+                            "index"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "roleId",
+                      "field",
+                      "items"
+                    ],
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "directory"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "folderIds"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "object": {
+                      "type": "string",
+                      "const": "media.saved"
+                    },
+                    "asset_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "assets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "asset_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "asset_id",
+                          "url"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "object",
+                    "asset_ids"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or an unusable source image."
+          },
+          "401": {
+            "description": "Missing, expired or invalid authorization."
+          },
+          "403": {
+            "description": "The authorization lacks the required scope."
+          },
+          "404": {
+            "description": "No editable source configuration, upload or source image is available to this caller."
+          },
+          "409": {
+            "description": "The operation identity conflicts with its earlier request."
+          },
+          "429": {
+            "description": "Card-image admission is rate limited; Retry-After gives the delay in seconds."
+          },
+          "503": {
+            "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
+          },
+          "410": {
+            "description": "The unsaved generation result expired."
+          },
+          "507": {
+            "description": "A separately requested personal-library copy exceeds library quota. It does not undo a successful card-image save."
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -17739,6 +18440,10 @@
                   "moves": {
                     "type": "boolean",
                     "description": "Renaming or moving a folder or file moves its path and URL; see `POST /open/v1/image/move`."
+                  },
+                  "cardImages": {
+                    "type": "boolean",
+                    "description": "Supports source-bound configuration-image provisioning, upload and adoption. These new copies are excluded from personal-library lists and quota; legacy library images retain their prior accounting until migrated."
                   }
                 }
               }
@@ -20379,6 +21084,10 @@
           "state": {
             "$ref": "#/components/schemas/RoleState",
             "description": "Present only on cards with variables. Every reader gets `data` and `panel`; the author also gets `rules`, `open` and `required`."
+          },
+          "provisioning": {
+            "type": "boolean",
+            "description": "Present only to the authorized author. True means a private storage identity exists but first complete creation is pending."
           }
         }
       },
@@ -29074,6 +29783,282 @@
             ]
           }
         }
+      },
+      "CardProvisionRequest": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persist before sending. Retries for this actor and tenant use the same ID and original request fields."
+          },
+          "roleName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh-Hant",
+              "zh-Hans",
+              "en",
+              "ja",
+              "ko"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "description": "Client creation-source label, for example hearthroom."
+          }
+        },
+        "required": [
+          "operationId",
+          "roleName",
+          "language"
+        ]
+      },
+      "CardProvisionCompletionRequest": {
+        "type": "object",
+        "properties": {
+          "roleName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh-Hant",
+              "zh-Hans",
+              "en",
+              "ja",
+              "ko"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "unlisted"
+            ]
+          }
+        },
+        "required": [
+          "roleName",
+          "language",
+          "visibility"
+        ]
+      },
+      "CardProvisionOutput": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RoleOutput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "provisioning": {
+                "type": "boolean",
+                "description": "True until first complete creation. A storage identity alone is not a completed configuration."
+              }
+            },
+            "required": [
+              "provisioning"
+            ]
+          }
+        ]
+      },
+      "CardImageUploadIntentRequest": {
+        "type": "object",
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 104857600
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp",
+              "image/svg+xml"
+            ]
+          }
+        },
+        "required": [
+          "byteSize",
+          "contentType"
+        ]
+      },
+      "CardImageUploadIntentResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "uploadId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "uploadUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "Short-lived staging-only PUT URL. Do not send provider bearer credentials to storage."
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "maxBytes": {
+                "type": "integer",
+                "const": 104857600
+              }
+            },
+            "required": [
+              "uploadId",
+              "uploadUrl",
+              "expiresAt",
+              "contentType",
+              "maxBytes"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "data"
+        ]
+      },
+      "CardImageUploadCompleteRequest": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "uploadId"
+        ]
+      },
+      "CardImageAdoptRequest": {
+        "type": "object",
+        "properties": {
+          "imageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An image owned by this caller in the same tenant. Another configuration or library original is copied; the original is retained."
+          }
+        },
+        "required": [
+          "imageId"
+        ]
+      },
+      "CardImageResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "imageId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "imageUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "byteSize": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "pixelWidth": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pixelHeight": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "imageId",
+              "imageUrl",
+              "byteSize",
+              "mimeType",
+              "pixelWidth",
+              "pixelHeight"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "data"
+        ]
+      },
+      "TrialImageEnsureRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh-Hant",
+              "zh-Hans",
+              "en",
+              "ja",
+              "ko"
+            ]
+          },
+          "evict": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow the existing trial-slot policy to evict the least recently used trial when full."
+          }
+        },
+        "required": [
+          "name",
+          "language"
+        ]
+      },
+      "TrialImageEnsureResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TrialSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "created"
+            ]
+          }
+        ]
       }
     }
   },

@@ -21,7 +21,8 @@ import {
 } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-const emit = defineEmits<{ pick: [string]; close: [] }>();
+const props = defineProps<{ cardCopy?: boolean }>();
+const emit = defineEmits<{ pick: [string, string]; close: [] }>();
 
 const { t } = useI18n();
 const session = useSession();
@@ -83,7 +84,7 @@ const stateLabel = (image: LibraryImage) =>
 
 function choose(image: LibraryImage) {
   if (blocked(image)) return;
-  emit("pick", image.imageUrl);
+  emit("pick", image.imageUrl, String(image.id));
   emit("close");
 }
 </script>
@@ -115,6 +116,7 @@ function choose(image: LibraryImage) {
         </div>
 
         <div class="lp__body">
+          <p v-if="props.cardCopy" class="subtle">{{ $t("editor.image.libraryCopyNote") }}</p>
           <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
           <p v-else-if="!loading && !images.length" class="subtle lp__empty">{{ $t("lib.pick.empty") }}</p>
 

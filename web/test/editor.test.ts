@@ -40,6 +40,9 @@ const api = vi.hoisted(() => ({
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
   fetchEditorCardReference: vi.fn(async () => ({num:100021,provider:"harbor",sourceRoleId:"r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
+  provisionRole: vi.fn(async () => ({ roleId: "r1" })),
+  completeRoleProvision: vi.fn(async () => ({})),
+  adoptCardImage: vi.fn(async () => "https://img.test/card-copy.png"),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
   unpublishRole: vi.fn(async () => ({})),
@@ -688,7 +691,7 @@ describe('mobile editor tool dialog', () => {
     expect(sheet.contains(document.activeElement)).toBe(true);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }));
     await flush();
-    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.provisionRole).not.toHaveBeenCalled();
     document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await flush();
     expect(document.querySelector('.rail--sheet')).toBeNull();
@@ -919,7 +922,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       expect(gen.save).not.toHaveBeenCalled();
       expect(dialog()!.querySelector(".gen__choice img")?.getAttribute("src")).toBe("https://gen.test/3f2a9c1e-tall.png");
       await pick(0);
-      expect(gen.save).toHaveBeenCalledWith("3f2a9c1e-tall", { directory: "Mira" }, [{ index: 0 }]);
+      expect(gen.save).toHaveBeenCalledWith("3f2a9c1e-tall", { roleId: "r1", field: "background" }, [{ index: 0 }]);
       expect(dialog()).toBeNull();
       expect(fieldOf("editor.background").querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/3f2a9c1e-tall.png");
 
@@ -968,10 +971,10 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       expect(gen.create).toHaveBeenLastCalledWith(expect.objectContaining({ n: 2 }), expect.any(String));
       const choices = [...dialog()!.querySelectorAll<HTMLButtonElement>(".gen__choice")];
       expect(choices.map((b) => b.querySelector("img")?.getAttribute("src"))).toEqual(["https://gen.test/1.png", "https://gen.test/2.png"]);
-      expect(dialog()!.textContent).toContain(i18n.global.t("resource.gen.choose", { folder: "Mira" }));
+      expect(dialog()!.textContent).toContain(i18n.global.t("editor.image.genChoose", { field: i18n.global.t("editor.background") }));
       choices[1]!.click();
       await flush();
-      expect(gen.save).toHaveBeenCalledWith("a1b2c3d4-two", { directory: "Mira" }, [{ index: 1 }]);
+      expect(gen.save).toHaveBeenCalledWith("a1b2c3d4-two", { roleId: "r1", field: "background" }, [{ index: 1 }]);
       expect(dialog()).toBeNull();
       expect(field().querySelector("img")?.getAttribute("src")).toBe("https://assets.test/Mira/2.png");
 
@@ -1025,7 +1028,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       btnIn(field, i18n.global.t("editor.image.generate")).click();
       await flush();
       expect(document.querySelector('[aria-labelledby="gen-title"]')).toBeNull();
-      expect(root.querySelector(".editor-status")?.textContent).toBe(i18n.global.t("editor.image.generateNeedsName"));
+      expect(root.querySelector("#f-name")?.parentElement?.textContent).toContain(i18n.global.t("editor.image.generateNeedsName"));
     } finally {
       gen.imageGen = null;
     }
@@ -1084,7 +1087,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     await submit();
 
-    expect(api.createRole).toHaveBeenCalledWith({ roleName: "阿芙拉", language: "zh-Hant", visibility: "unlisted" }, "tok");
+    expect(api.provisionRole).toHaveBeenCalledWith(expect.objectContaining({ roleName: "阿芙拉", language: "zh-Hant", operationId: expect.any(String) }), "tok");
+    expect(api.completeRoleProvision).toHaveBeenCalledWith("r1", { roleName: "阿芙拉", language: "zh-Hant", visibility: "unlisted" }, "tok");
     const [, fields] = api.patchRoleDocument.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(fields).toMatchObject({
       roleName: "阿芙拉",
@@ -1177,7 +1181,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await submit();
     expect($("[role=alert]").textContent).toContain("黑麥鎮");
     expect($("[role=alert]").textContent).toContain("4000");
-    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.provisionRole).not.toHaveBeenCalled();
     expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
   });
 
@@ -1203,7 +1207,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     await submit();
     expect($("[role=alert]").textContent).toContain("12000");
-    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.provisionRole).not.toHaveBeenCalled();
   });
 
   it("PNG 卡：自帶的立繪上傳後當直式背景", async () => {
@@ -1656,8 +1660,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     visibility.dispatchEvent(new Event("change"));
     await flush();
     await submit();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(localStorage.getItem("hearthroom.draft.create")!).pendingCreate).toEqual({ roleId: "r1" });
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem("hearthroom.draft.create")!).pendingCreate).toEqual(expect.objectContaining({ roleId: "r1", operationId: expect.any(String) }));
     expect(JSON.parse(localStorage.getItem("hearthroom.draft.create")!).visibility).toBe("private");
     app!.unmount();
     root.remove();
@@ -1665,17 +1669,19 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await mount("/create");
     byText("清空重來").click();
     await flush();
+    expect(confirmState.current?.danger).toBe(true); settleConfirm(true); await flush();
+    expect(api.deleteRole).toHaveBeenCalledWith("r1", "tok");
     api.beginCardEdit.mockClear();
     api.patchRoleDocument.mockClear();
-    api.createRole.mockResolvedValueOnce({ roleId: "r2" });
+    api.provisionRole.mockResolvedValueOnce({ roleId: "r2" });
     await type($("#f-name"), "全新的卡");
     await submit();
 
-    expect(api.createRole).toHaveBeenCalledTimes(2);
+    expect(api.provisionRole).toHaveBeenCalledTimes(2);
     expect(api.beginCardEdit).not.toHaveBeenCalled();
     expect(api.patchRoleDocument).toHaveBeenCalledWith("r2", expect.objectContaining({ roleName: "全新的卡" }), "tok");
     expect(api.patchRoleDocument.mock.calls.every(([id]) => id !== "r1")).toBe(true);
-    expect(api.createRole).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: "unlisted" }), "tok");
+    expect(api.completeRoleProvision).toHaveBeenLastCalledWith("r2", expect.objectContaining({ visibility: "unlisted" }), "tok");
   });
 
   it("新建入口恢復舊格式草稿只帶入內容，直接儲存不覆寫草稿裡的舊卡", async () => {
@@ -1691,11 +1697,11 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await type($("#f-detail"), "新卡的設定");
     await submit();
 
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
     expect(api.beginCardEdit).not.toHaveBeenCalled();
     expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", expect.objectContaining({ roleName: "作者要新建的卡" }), "tok");
     expect(api.patchRoleDocument.mock.calls.every(([id]) => id !== "previous-card")).toBe(true);
-    expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({ visibility: "private" }), "tok");
+    expect(api.completeRoleProvision).toHaveBeenCalledWith("r1", expect.objectContaining({ visibility: "private" }), "tok");
   });
 
   it("成功建卡後的未儲存修改不再回流到新卡本機草稿", async () => {
@@ -1796,7 +1802,7 @@ describe("建卡成功、內容沒存進去", () => {
     await type($("#f-name"), "半路失敗的卡");
     await type($("#f-detail"), "人設");
     await submit();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
     const notice = root.textContent ?? "";
     expect(notice).toContain("已經建立");
     expect(notice).toContain("812");
@@ -1808,7 +1814,7 @@ describe("建卡成功、內容沒存進去", () => {
     await mount("/create");
     expect($<HTMLInputElement>("#f-name").value).toBe("半路失敗的卡");
     await submit();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
     expect(api.patchRoleDocument).toHaveBeenLastCalledWith("r1", expect.objectContaining({ roleName: "半路失敗的卡" }), "tok");
     expect(window.location.pathname).toBe("/cards/100021/edit");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
@@ -1976,12 +1982,12 @@ describe('new card visibility',()=>{
   expect(root.textContent).toContain(i18n.global.t('visibility.description.unlisted'));
   choice.value='private';choice.dispatchEvent(new Event('change'));await flush();
   await type($<HTMLInputElement>('#f-name'),'Private fixture');await submit();
-  expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({visibility:'private'}),'tok');
+  expect(api.completeRoleProvision).toHaveBeenCalledWith('r1',expect.objectContaining({visibility:'private'}),'tok');
  });
  it('does not offer a create default while editing an existing card',async()=>{
   await mount('/cards/existing/edit');
   expect(root.querySelector('#new-card-visibility')).toBeNull();
-  expect(api.createRole).not.toHaveBeenCalled();
+  expect(api.provisionRole).not.toHaveBeenCalled();
  });
 });
 
@@ -1990,7 +1996,7 @@ it('restores a new draft private choice without applying it to existing cards',a
  await mount('/create');
  expect($<HTMLSelectElement>('#new-card-visibility')?.value).toBe('private');
  await submit();
- expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({visibility:'private'}),'tok');
+ expect(api.completeRoleProvision).toHaveBeenCalledWith('r1',expect.objectContaining({visibility:'private'}),'tok');
 });
 
 it('keeps a length refusal on the editor after the author returns from the submission dialog',async()=>{
@@ -2029,7 +2035,7 @@ describe('匯入正則在寫入前驗證', () => {
     if (path === '/create') await type($('#f-name'), 'Synthetic card');
     await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify(oversized)], 'synthetic.json'));
     await submit();
-    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.provisionRole).not.toHaveBeenCalled();
     expect(api.beginCardEdit).not.toHaveBeenCalled();
     expect(api.patchRoleDocument).not.toHaveBeenCalled();
     expect(api.patchRoleWelcome).not.toHaveBeenCalled();
@@ -2041,7 +2047,7 @@ describe('匯入正則在寫入前驗證', () => {
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
     expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ replace: 'x'.repeat(512 * 1024) })] }), 'tok');
-    expect(api.createRole).toHaveBeenCalledTimes(path === '/create' ? 1 : 0);
+    expect(api.provisionRole).toHaveBeenCalledTimes(path === '/create' ? 1 : 0);
   });
 });
 
@@ -2055,7 +2061,7 @@ describe('正則預檢與保存快照', () => {
  });
  it('保存期間重新匯入不會取代已驗證的規則快照，新修改仍待保存', async () => {
   let complete!: (value: {roleId: string}) => void;
-  api.createRole.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  api.provisionRole.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
   await mount('/create'); await type($('#f-name'), 'Snapshot fixture');
   const file = (replace: string) => new File([JSON.stringify({ beginning: 'snapshot-opening', regex_scripts: [{ id: 'snapshot', scriptName: 'Snapshot', findRegex: 'snapshot-opening', replaceString: replace }] })], 'snapshot.json');
   await pickFile($('.rxbar input[type=file]'), file('verified-before-save'));
@@ -2697,4 +2703,72 @@ describe('owner editor asset reopening', () => {
     } finally {sessionAuth.token='tok';api.fetchRoleDetail.mockReset().mockResolvedValue({});}
   });
 
+});
+
+it('keeps an image selected without a name, then provisions privately without turning the new editor into an existing card', async () => {
+ await mount('/create');
+ const imageField=()=>Array.from(root.querySelectorAll<HTMLElement>('.field')).find(el=>el.querySelector('label')?.textContent===i18n.global.t('editor.background'))!;
+ const png=new File(['synthetic png'],'same.png',{type:'image/png'});
+ await pickFile(imageField().querySelector('input[type=file]')!,png);
+ expect(api.uploadImage).not.toHaveBeenCalled();
+ expect(api.provisionRole).not.toHaveBeenCalled();
+ await type($('#f-name'),'Pending image card');
+ btnIn(imageField(),i18n.global.t('editor.image.continueUpload')).click();await flush();
+ expect(api.provisionRole).toHaveBeenCalledTimes(1);
+ const sent=api.provisionRole.mock.calls[0] as unknown as [Record<string,unknown>,string];
+ expect(sent[0]).toEqual(expect.objectContaining({roleName:'Pending image card',operationId:expect.any(String)}));
+ expect(api.uploadImage).toHaveBeenCalledWith(png,'tok','r1');
+ expect(root.querySelector('h1')?.textContent).toBe(i18n.global.t('editor.title.new'));
+ expect(root.querySelector('.import')).not.toBeNull();
+ expect(api.beginCardEdit).not.toHaveBeenCalled();
+ expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).pendingCreate.roleId).toBe('r1');
+});
+
+it('keeps the card image when an optional generated-image library copy fails', async () => {
+ gen.imageGen={access:'ready',models:[{id:'m',name:'M',credits:35,priced:1,sizes:['1024x1536'],maxImages:1}]};
+ gen.create.mockResolvedValue({id:'selected-card-image',status:'completed',urls:['https://gen.test/one.png'],saved:[]});
+ gen.save.mockImplementation(async (_id:string,target:any)=>{
+  if(target.roleId) return [{index:0,assetId:'card-image',url:'https://assets.test/card-media/card/unique'}];
+  throw new Error('storage full');
+ });
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Mira',roleDetailDesc:'Synthetic settings'});
+ try {
+  await mount('/cards/r1/edit');
+  const field=Array.from(root.querySelectorAll<HTMLElement>('.field')).find(el=>el.querySelector('label')?.textContent===i18n.global.t('editor.background'))!;
+  btnIn(field,i18n.global.t('editor.image.generate')).click();await flush();
+  const dialog=document.querySelector<HTMLFormElement>('[aria-labelledby="gen-title"]')!;
+  const copy=dialog.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+  expect(copy).not.toBeNull();expect(copy.checked).toBe(false);
+  copy.checked=true;copy.dispatchEvent(new Event('change'));
+  dialog.dispatchEvent(new Event('submit',{cancelable:true}));await flush();
+  dialog.querySelector<HTMLButtonElement>('.gen__choice')!.click();await flush();
+  expect(gen.create).toHaveBeenCalledTimes(1);
+  expect(gen.save).toHaveBeenNthCalledWith(1,'selected-card-image',{roleId:'r1',field:'background'},[{index:0}]);
+  expect(gen.save).toHaveBeenNthCalledWith(2,'selected-card-image',{},[{index:0}]);
+  expect(field.querySelector('img')?.getAttribute('src')).toContain('/card-media/');
+  expect(root.textContent).toContain(i18n.global.t('editor.image.libraryCopyFailed',{why:'storage full'}));
+ } finally {gen.imageGen=null;gen.create.mockReset();gen.save.mockReset();}
+});
+
+it('resumes a completed provision after a lost reply without completing it again or losing local edits', async () => {
+ api.completeRoleProvision.mockRejectedValueOnce(new Error('response lost'));
+ await mount('/create');await type($('#f-name'),'Before reply loss');await submit();
+ expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Before reply loss',language:'zh-Hant',provisioning:false});
+ await type($('#f-name'),'Local edit after reply loss');await submit();
+ expect(api.provisionRole).toHaveBeenCalledTimes(1);
+ expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+ expect(api.beginCardEdit).toHaveBeenCalledWith('r1','tok',expect.any(String));
+ expect(api.patchRoleDocument).toHaveBeenLastCalledWith('r1',expect.objectContaining({roleName:'Local edit after reply loss'}),'tok');
+ expect($<HTMLInputElement>('#f-name').value).toBe('Local edit after reply loss');
+});
+
+it('does not delete a completed card when discarding a local draft after a lost completion reply', async () => {
+ api.completeRoleProvision.mockRejectedValueOnce(new Error('response lost'));
+ await mount('/create');await type($('#f-name'),'Completed remotely');await submit();
+ app!.unmount();root.remove();await mount('/create');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Completed remotely',language:'zh-Hant',provisioning:false});
+ byText('清空重來').click();await flush();
+ if(confirmState.current){settleConfirm(true);await flush();}
+ expect(api.deleteRole).not.toHaveBeenCalled();
 });

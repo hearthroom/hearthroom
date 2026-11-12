@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "draft": true,
+  "title": {
+    "zh-Hant": "寫卡新上傳的圖片不再因檔名相同而覆蓋，也不占用資源空間。",
+    "zh-Hans": "写卡新上传的图片不再因文件名相同而覆盖，也不占用资源空间。",
+    "en": "New card images no longer overwrite equal filenames or use personal asset storage.",
+    "ja": "新しくアップロードしたカード画像は同名でも上書きされず、素材容量を使いません。",
+    "ko": "새로 올린 카드 이미지는 파일명이 같아도 덮어쓰지 않고 자료 저장 공간을 사용하지 않습니다."
+  }
+}

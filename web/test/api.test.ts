@@ -169,13 +169,45 @@ describe("uploadImage", () => {
     const { uploadImage } = await import("../src/lib/api");
     stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put", contentType: "application/octet-stream" }) : ok({ imageUrl: "https://cdn.test/a.wav" }));
     const progress: number[] = [];
-    expect(await uploadImage(file, "tok", "role-1", ["f-1"], (f) => progress.push(f))).toBe("https://cdn.test/a.wav");
+    expect(await uploadImage(file, "tok", undefined, ["f-1"], (f) => progress.push(f))).toBe("https://cdn.test/a.wav");
     expect(FakeXHR.instances.map((x) => [x.method, x.url])).toEqual([["PUT", "https://storage.test/put"]]);
     // 型別送上游指定的、不送 file.type：它和大小一起簽在網址裡
     expect(FakeXHR.instances[0].headers["Content-Type"]).toBe("application/octet-stream");
     expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "uploadComplete"]);
-    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", fileName: "a.wav", roleId: "role-1", folderIds: ["f-1"] });
+    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", fileName: "a.wav", folderIds: ["f-1"] });
     expect(progress).toEqual([0.5, 1]);
+  });
+
+  it("card images use the role namespace from intent and never fall back to the personal library", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    const png = new File(["synthetic PNG"], "same.png", { type: "image/png" });
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "card-upload", uploadUrl: "https://storage.test/staging", contentType: "image/png" }) : ok({ imageUrl: "https://cdn.test/card-media/source/unique" }));
+    expect(await uploadImage(png, "tok", "role-1")).toBe("https://cdn.test/card-media/source/unique");
+    expect(calls.map(c => c.url.split("/open/v1/")[1])).toEqual(["role/role-1/images/uploadIntent", "role/role-1/images/uploadComplete"]);
+    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "card-upload" });
+    expect(FakeXHR.instances[0].body).toBe(png);
+
+    stubFetch(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404 }));
+    await expect(uploadImage(png, "tok", "role-1")).rejects.toThrow();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("/role/role-1/images/uploadIntent");
+  });
+
+  it("retries the same card upload ticket after losing the complete response", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    const image = new File(["unique retry fixture"], "retry.png", { type: "image/png" });
+    let intents=0, completes=0;
+    stubFetch(url => {
+      if (url.endsWith("/uploadIntent")) { intents++; return ok({uploadId:"stable-ticket",uploadUrl:"https://storage.test/retry",contentType:"image/png"}); }
+      completes++;
+      if(completes===1) throw new TypeError("reply lost");
+      return ok({imageUrl:"https://cdn.test/card-media/stable"});
+    });
+    await expect(uploadImage(image,"tok","card-retry")).rejects.toThrow("reply lost");
+    expect(await uploadImage(image,"tok","card-retry")).toContain("/card-media/");
+    expect(intents).toBe(1);
+    expect(completes).toBe(2);
+    expect(FakeXHR.instances).toHaveLength(1);
   });
 
   it("意向帶上檔案的型別，SVG 不會被當成 PNG", async () => {
