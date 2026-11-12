@@ -3,10 +3,10 @@
   "audience": "authors",
   "draft": true,
   "title": {
-    "zh-Hant": "寫卡新上傳的圖片不再因檔名相同而覆蓋，也不占用資源空間。",
-    "zh-Hans": "写卡新上传的图片不再因文件名相同而覆盖，也不占用资源空间。",
-    "en": "New card images no longer overwrite equal filenames or use personal asset storage.",
-    "ja": "新しくアップロードしたカード画像は同名でも上書きされず、素材容量を使いません。",
-    "ko": "새로 올린 카드 이미지는 파일명이 같아도 덮어쓰지 않고 자료 저장 공간을 사용하지 않습니다."
+    "zh-Hant": "寫卡新上傳的頭像與封面，同檔名不再互蓋，也不占用資源庫空間。",
+    "zh-Hans": "写卡新上传的头像与封面，同名文件不再互相覆盖，也不占用资源库空间。",
+    "en": "New avatars and covers in the card editor no longer overwrite same-name files or use library storage.",
+    "ja": "新しいアバターとカバーは同名でも上書きされず、素材の保存容量を使いません。",
+    "ko": "새 아바타와 커버는 같은 파일명으로 덮어쓰지 않으며 보관함 용량을 차지하지 않습니다."
   }
 }

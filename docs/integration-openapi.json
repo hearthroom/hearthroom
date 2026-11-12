@@ -4089,9 +4089,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
         }
       }
     },
@@ -4408,10 +4405,7 @@
             }
           }
         },
-        "description": "With `capabilities.moves`, this moves the files out of the folder to the top level, changing their URLs; `dryRun` and `confirm` work as in folder rename.",
-        "x-harperharbor": {
-          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
-        }
+        "description": "With `capabilities.moves`, this moves the files out of the folder to the top level, changing their URLs; `dryRun` and `confirm` work as in folder rename."
       }
     },
     "/open/v1/image/folder/rename": {
@@ -4522,10 +4516,7 @@
             }
           }
         },
-        "description": "Renames a folder. Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Renaming moves every file and folder below it; pass `path` instead of `folderId` for a directory that only exists as part of longer paths.",
-        "x-harperharbor": {
-          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
-        }
+        "description": "Renames a folder. Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Renaming moves every file and folder below it; pass `path` instead of `folderId` for a directory that only exists as part of longer paths."
       }
     },
     "/open/v1/image/list": {
@@ -4687,9 +4678,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": " New source-bound configuration images are excluded from inventory, totals and quota; capabilities.cardImages advertises their separate workflow."
         }
       }
     },
@@ -4794,9 +4782,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": "Without roleId this remains a personal-library operation with ordinary ownership, validation and storage quota. Supported formats and file limits are advertised by image/list capabilities. A supplied roleId must identify the caller-owned editable source configuration and routes image bytes into independent card-image storage; it is never silently ignored. A role-less intent completed later with roleId is converted without named-library publication and releases its temporary library reservation. That old intent still required library capacity when created. Prefer role/{roleId}/images/uploadIntent from the start. Legacy images still referenced by configurations or retained versions cannot be replaced at a named library path; use the card-image API for the new image."
         }
       }
     },
@@ -7955,9 +7940,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": "Image fields accept caller-owned hosted URLs and normalize them into source-bound configuration images through the same adoption service. New external URLs must first be downloaded by the client and uploaded through the card-image API; the server does not fetch arbitrary URLs. Existing external references can be retained unchanged or cleared. roleAvatar aliases roleBackground; an explicit roleBackground, including an empty value, wins. Image references and the resulting content hash change in one transaction."
         }
       }
     },
@@ -9543,7 +9525,7 @@
                   "roleId": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "HarperHarbor: caller-owned editable source configuration. Image storage is independent from the personal library; other owners and sealed versions are rejected."
+                    "description": "Caller-owned editable source configuration. Image storage is independent from the personal library; other owners and sealed versions are rejected."
                   },
                   "folderIds": {
                     "type": "array",
@@ -9617,9 +9599,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": "Without roleId this remains a personal-library operation with ordinary ownership, validation and storage quota. Supported formats and file limits are advertised by image/list capabilities. A supplied roleId must identify the caller-owned editable source configuration and routes image bytes into independent card-image storage; it is never silently ignored. A role-less intent completed later with roleId is converted without named-library publication and releases its temporary library reservation. That old intent still required library capacity when created. Prefer role/{roleId}/images/uploadIntent from the start. Legacy images still referenced by configurations or retained versions cannot be replaced at a named library path; use the card-image API for the new image."
         }
       }
     },
@@ -11520,9 +11499,6 @@
               }
             }
           }
-        },
-        "x-harperharbor": {
-          "description": " An image still attached to a configuration or retained version cannot be moved or renamed, even with confirm=true; this is image_in_use. Existing confirmation for text-only library URL references remains separate."
         }
       }
     },
@@ -14986,7 +14962,7 @@
           "Roles"
         ],
         "summary": "Create a private agent configuration upload target",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed.",
+        "description": "The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed.",
         "security": [
           {
             "userToken": []
@@ -15037,9 +15013,6 @@
           "503": {
             "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
           }
-        },
-        "x-harperharbor": {
-          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed."
         }
       }
     },
@@ -15113,10 +15086,7 @@
             },
             "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
           }
-        ],
-        "x-harperharbor": {
-          "description": "After all draft sections are saved, atomically apply the final name, original language and private or unlisted access. All five languages are available for this first completion; later language editing retains the ordinary compatibility rules. Identical completion retries are idempotent; changed completion fields conflict."
-        }
+        ]
       }
     },
     "/open/v1/role/{roleId}/images/uploadIntent": {
@@ -15126,7 +15096,7 @@
           "Roles"
         ],
         "summary": "Prepare an agent configuration image upload",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId.",
+        "description": "Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId.",
         "security": [
           {
             "userToken": []
@@ -15189,10 +15159,7 @@
             },
             "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
           }
-        ],
-        "x-harperharbor": {
-          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId."
-        }
+        ]
       }
     },
     "/open/v1/role/{roleId}/images/uploadComplete": {
@@ -15202,7 +15169,7 @@
           "Roles"
         ],
         "summary": "Complete an agent configuration image upload",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
+        "description": "Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
         "security": [
           {
             "userToken": []
@@ -15265,10 +15232,7 @@
             },
             "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
           }
-        ],
-        "x-harperharbor": {
-          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours."
-        }
+        ]
       }
     },
     "/open/v1/role/{roleId}/images/adopt": {
@@ -15278,7 +15242,7 @@
           "Roles"
         ],
         "summary": "Copy an owned image to an agent configuration",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint.",
+        "description": "The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint.",
         "security": [
           {
             "userToken": []
@@ -15341,10 +15305,7 @@
             },
             "description": "The caller-owned source agent configuration; sealed versions cannot receive uploads."
           }
-        ],
-        "x-harperharbor": {
-          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint."
-        }
+        ]
       }
     },
     "/open/v1/trial-cards/{clientKey}/ensure": {
@@ -15354,7 +15315,7 @@
           "Roles"
         ],
         "summary": "Ensure a private trial configuration upload target",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
+        "description": "The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
         "security": [
           {
             "userToken": []
@@ -15405,9 +15366,6 @@
           "503": {
             "description": "Storage or the provider is temporarily unavailable; retain the request identity and retry."
           }
-        },
-        "x-harperharbor": {
-          "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply."
         },
         "parameters": [
           {
@@ -30011,7 +29969,8 @@
         "required": [
           "code",
           "data"
-        ]
+        ],
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation."
       },
       "TrialImageEnsureRequest": {
         "type": "object",

@@ -20194,7 +20194,7 @@
           "Roles"
         ],
         "summary": "Create a private agent configuration upload target",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed.",
+        "description": "The identity and operation receipt commit together. A lost response can be retried without another configuration. Reusing the operation with different initial fields conflicts. Unfinished targets remain private and cannot be published or sealed.",
         "security": [
           {
             "userToken": []
@@ -20334,7 +20334,7 @@
           "Roles"
         ],
         "summary": "Prepare an agent configuration image upload",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId.",
+        "description": "Filenames and library folders do not choose the storage object. PUT the exact bytes and returned content type to uploadUrl, then complete using this source role and uploadId.",
         "security": [
           {
             "userToken": []
@@ -20410,7 +20410,7 @@
           "Roles"
         ],
         "summary": "Complete an agent configuration image upload",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
+        "description": "Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
         "security": [
           {
             "userToken": []
@@ -20486,7 +20486,7 @@
           "Roles"
         ],
         "summary": "Copy an owned image to an agent configuration",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint.",
+        "description": "The source revision is read under the owner lock. Copies personal-library images or another owned configuration image; an existing image of this same source configuration is reused. Library deletion or replacement does not modify the configuration copy. Returns an image to attach through the document endpoint.",
         "security": [
           {
             "userToken": []
@@ -20562,7 +20562,7 @@
           "Roles"
         ],
         "summary": "Ensure a private trial configuration upload target",
-        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation. The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
+        "description": "The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
         "security": [
           {
             "userToken": []
@@ -36629,7 +36629,8 @@
         "required": [
           "code",
           "data"
-        ]
+        ],
+        "description": "Available when capabilities.cardImages is true. Agent-configuration images are independent from personal-library inventory and storage quota. Ownership, validation and configuration review rules still apply. Existing library-backed images are not migrated by this operation."
       },
       "TrialImageEnsureRequest": {
         "type": "object",

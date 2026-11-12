@@ -64,7 +64,8 @@ describe("API 規格涵蓋程式碼打的每一條上游路徑", () => {
       const paths = pathsIn(readFileSync(file, "utf8"));
       expect(paths.length).toBeGreaterThanOrEqual(atLeast);
       // /image/{path} 是站台前端的共用小工具，實際子路徑在下面另外逐條看
-      const missing = paths.filter((p) => p !== "/open/v1/image/{path}" && !specHas(p));
+      const helperPaths = new Set(["/open/v1/image/{path}", "/open/v1/role/{roleId}/images/{operation}"]);
+      const missing = paths.filter((p) => !helperPaths.has(p) && !specHas(p));
       expect(missing, `規格缺了這些路徑：\n${missing.join("\n")}`).toEqual([]);
     });
   }
@@ -74,6 +75,14 @@ describe("API 規格涵蓋程式碼打的每一條上游路徑", () => {
     const subs = [...api.matchAll(/libraryPost\("([a-zA-Z/]+)"/g)].map((m) => `/open/v1/image/${m[1]}`);
     expect(subs.length).toBeGreaterThan(0);
     expect(subs.filter((p) => !specHas(p))).toEqual([]);
+  });
+
+  it("卡圖共用上傳工具的具體操作逐條在規格裡", () => {
+    const api = readFileSync(SOURCES["站台前端 api.ts"]!.file, "utf8");
+    const operations = [...api.matchAll(/cardImagePost\([^,]+,\s*"([a-zA-Z]+)"/g)].map(match => match[1]!);
+    expect(new Set(operations).size).toBeGreaterThanOrEqual(3);
+    const paths = operations.map(operation => `/open/v1/role/{roleId}/images/${operation}`);
+    expect(paths.filter(path => !specHas(path))).toEqual([]);
   });
 
   it("每個端點都有摘要、回應，而且參數與請求本體的每個欄位都有型別", () => {
