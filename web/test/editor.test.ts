@@ -2141,3 +2141,27 @@ describe("分類與玩法的展開列", () => {
     expect(row.textContent).toContain(i18n.global.t("editor.tags.picked", { n: 1 }));
   });
 });
+
+
+describe('prompt-only 規則匯入不洗舊規則', () => {
+  const script = { scriptName: 'Hidden prompt rule', findRegex: 'x', replaceString: 'hidden', promptOnly: true };
+  it('整份略過時保留現有規則與開場，顯示明確提示', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Synthetic card', roleWelcome: 'Existing opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [{ id: 'kept', name: 'Kept display', find: 'marker', replace: 'visible', enabled: true }], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', status: 'passed', version: 7 });
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify([script])], 'prompt.json'));
+    expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
+    $<HTMLButtonElement>('.rxbar__acts button').click(); await flush();
+    expect([...document.querySelectorAll<HTMLInputElement>('input')].map(input => input.value)).toContain('Kept display');
+    expect($<HTMLTextAreaElement>('#f-welcome').value).toBe('Existing opening');
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+  });
+  it('混合規則檔只保存顯示規則並保留略過提示', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Synthetic card', roleWelcome: 'Existing opening' });
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify([script, { scriptName: 'Visible imported', findRegex: 'marker', replaceString: 'shown', markdownOnly: true }])], 'mixed.json'));
+    expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ name: 'Visible imported', replace: 'shown' })] }), 'tok');
+  });
+});

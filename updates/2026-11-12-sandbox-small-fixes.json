@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "卡片數值在新對話開始時回到初始值。",
+    "zh-Hans": "卡片数值在新对话开始时恢复初始值。",
+    "en": "Card values return to their initial state when a new conversation starts.",
+    "ja": "新しい会話を始めると、カードの数値が初期値に戻ります。",
+    "ko": "새 대화를 시작하면 카드 수치가 초기값으로 돌아가요."
+  },
+  "body": {
+    "zh-Hant": "長按卡內可編輯的文字時不再跳出訊息選單，酒館匯入也會略過只用於提示詞的規則並在報告中說明。",
+    "zh-Hans": "长按卡内可编辑的文字时不再弹出消息菜单，酒馆导入也会跳过仅用于提示词的规则并在报告中说明。",
+    "en": "Long-pressing editable card text no longer opens the message menu, and Tavern imports report skipped prompt-only rules.",
+    "ja": "カード内の編集可能な文字を長押ししてもメッセージメニューが開かなくなり、酒場からの取り込みでは除外したプロンプト専用ルールをレポートに表示します。",
+    "ko": "편집할 수 있는 카드 텍스트를 길게 눌러도 메시지 메뉴가 뜨지 않고 타번 가져오기에서 건너뛴 프롬프트 전용 규칙은 보고서에 표시돼요."
+  }
+}
