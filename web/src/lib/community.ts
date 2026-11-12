@@ -2,8 +2,8 @@ import type { AppearanceView } from "./community-appearance";
 import { COMMUNITY_API } from "./config";
 import { currentProvider } from "./provider";
 import { ApiError } from "./api";
-import { i18n } from "./i18n";
-import { discordReturnPath } from "./discord-attempt";
+import { i18n, LOCALE_CODES, SOURCE_LOCALE } from "./i18n";
+import { discordReturnPath, takeDiscordReturnLocale } from "./discord-attempt";
 export interface CommunityView {
   appearance?: AppearanceView;
   enabled: boolean;
@@ -108,7 +108,9 @@ export function captureDiscordReturn() {
   else if (error) sessionStorage.setItem("community.discord.error", error);
   // MePage does not mount the callback consumer: even a missing browser proof
   // must reach the community page so it can show recovery guidance.
-  const locale = location.pathname.match(/^\/(en|ja|ko|zh-Hans)(?:\/|$)/)?.[1];
+  const rememberedLocale = takeDiscordReturnLocale();
+  const locale = location.pathname.match(/^\/(en|ja|ko|zh-Hans)(?:\/|$)/)?.[1]
+    ?? (rememberedLocale && LOCALE_CODES.includes(rememberedLocale) && rememberedLocale !== SOURCE_LOCALE ? rememberedLocale : undefined);
   let target = (locale ? "/" + locale : "") + "/me/community";
   const saved = discordReturnPath();
   sessionStorage.removeItem("community.discord.return");
