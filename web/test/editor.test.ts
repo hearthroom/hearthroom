@@ -2530,6 +2530,9 @@ describe('prompt-only 規則匯入不洗舊規則', () => {
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ name: 'Visible imported', replace: 'shown' })] }), 'tok');
 
+  });
+});
+
 describe('independent card CSS', () => {
   it('keeps card CSS and its compatibility hint when importing a separate rules file', async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
