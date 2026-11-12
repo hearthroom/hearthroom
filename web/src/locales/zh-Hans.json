@@ -1146,7 +1146,7 @@
   "editor.image.generatedSaved": "新图片已经放进「{folder}」，从资源库选就能用。",
   "editor.image.promptTall": "{name}的竖版全身立绘，人物居中，9:16。{desc}",
   "editor.image.promptWide": "{name}的横版场景图，画面开阔，16:9。{desc}",
-  "editor.media.lede": "竖图用于卡片、PNG 导出和聊天头像；横版背景选填。两张都能从“我的资源”直接选择。",
+  "editor.media.lede": "竖图用于卡片、PNG 导出和聊天头像；横版背景选填。从“我的资源”选择时，会为这张卡复制一份。",
   "lib.pick.title": "从我的资源挑一张",
   "lib.pick.count": "共 {n} 张",
   "lib.pick.folders": "文件夹",

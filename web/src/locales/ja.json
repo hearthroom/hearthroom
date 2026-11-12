@@ -1146,7 +1146,7 @@
   "editor.image.generatedSaved": "新しい画像を「{folder}」に入れました。素材から選べます。",
   "editor.image.promptTall": "{name}の縦長の全身立ち絵、人物は中央、9:16。{desc}",
   "editor.image.promptWide": "{name}の横長の場景、広がりのある構図、16:9。{desc}",
-  "editor.media.lede": "縦長画像をカード、PNG 書き出し、チャットのアイコンに使います。横長背景は任意です。どちらも「マイ素材」から選べます。",
+  "editor.media.lede": "縦長画像をカード、PNG 書き出し、チャットのアイコンに使います。横長背景は任意です。「マイ素材」から選ぶと、このカード用の独立したコピーを作成します。",
   "lib.pick.title": "マイ素材から選ぶ",
   "lib.pick.count": "全 {n} 枚",
   "lib.pick.folders": "フォルダ",

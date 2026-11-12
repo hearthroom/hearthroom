@@ -1146,7 +1146,7 @@
   "editor.image.generatedSaved": "Your new image is in “{folder}”, ready to pick from the library.",
   "editor.image.promptTall": "Full-body portrait of {name}, vertical 9:16, centered. {desc}",
   "editor.image.promptWide": "Wide scene for {name}, horizontal 16:9, open composition. {desc}",
-  "editor.media.lede": "The portrait is used for the card, PNG export and chat avatar. The landscape background is optional. Pick either image from My resources.",
+  "editor.media.lede": "The portrait is used for the card, PNG export and chat avatar. The landscape background is optional. Choosing an image from My resources makes an independent copy for this card.",
   "lib.pick.title": "Pick from my resources",
   "lib.pick.count": "{n} images",
   "lib.pick.folders": "Folders",

@@ -1146,7 +1146,7 @@
   "editor.image.generatedSaved": "新圖片已經放進「{folder}」，從資源庫選就能用。",
   "editor.image.promptTall": "{name}的直式全身立繪，人物置中，9:16。{desc}",
   "editor.image.promptWide": "{name}的橫式場景圖，畫面開闊，16:9。{desc}",
-  "editor.media.lede": "直圖會用於卡片、PNG 匯出與聊天頭像；橫式背景選填。兩張都能從「我的資源」直接挑。",
+  "editor.media.lede": "直圖會用於卡片、PNG 匯出與聊天頭像；橫式背景選填。從「我的資源」選用時，會複製一份到這張卡。",
   "lib.pick.title": "從我的資源挑一張",
   "lib.pick.count": "共 {n} 張",
   "lib.pick.folders": "資料夾",

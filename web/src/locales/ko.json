@@ -1146,7 +1146,7 @@
   "editor.image.generatedSaved": "새 이미지를 「{folder}」에 넣었어요. 보관함에서 고르면 돼요.",
   "editor.image.promptTall": "{name}의 세로 전신 일러스트, 인물 중앙, 9:16. {desc}",
   "editor.image.promptWide": "{name}의 가로 배경 장면, 탁 트인 구도, 16:9. {desc}",
-  "editor.media.lede": "세로 이미지는 카드, PNG 내보내기, 채팅 프로필 이미지에 사용됩니다. 가로 배경은 선택 사항입니다. 두 이미지 모두 내 자료에서 고를 수 있습니다.",
+  "editor.media.lede": "세로 이미지는 카드, PNG 내보내기, 채팅 프로필 이미지에 사용됩니다. 가로 배경은 선택 사항입니다. 내 자료에서 선택하면 이 카드 전용 사본을 만듭니다.",
   "lib.pick.title": "내 자료에서 고르기",
   "lib.pick.count": "총 {n}장",
   "lib.pick.folders": "폴더",
