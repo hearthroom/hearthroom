@@ -19,6 +19,10 @@ export interface ConfirmOptions {
   valid?:()=>boolean;
   title?: string;
   message: string;
+  /** Destructive selection preview; plain text names and optional cover thumbnails. */
+  items?: { name: string; image?: string }[];
+  moreText?: string;
+  busyText?: string;
   /** 一段要讓人複製的文字（例如網址），畫成可全選的方塊 */
   detail?: string;
   confirmText?: string;

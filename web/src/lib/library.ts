@@ -59,6 +59,33 @@ export async function fetchConversations(token: string, language: string, page =
     `conversations?pageNum=${page}&lang=${encodeURIComponent(language)}`, token);
 }
 
+export interface ConversationDeletionPreview {
+  selectionToken: string;
+  groups: { roleId: string; conversationId: string; count: number }[];
+  total: number;
+}
+export interface ConversationDeletionResult {
+  results: { roleId: string; conversationId: string; status: 'deleted' | 'busy' | 'error'; deletedCount: number }[];
+  deletedCount: number;
+}
+async function deletionRequest<T>(token: string, path: string, method: string, body: unknown): Promise<T> {
+  clearLibraryCache();
+  try {
+    return await read<T>(await fetch(`${COMMUNITY_API}/me/conversations${path}`, {
+      method, cache: 'no-store', headers: { Authorization: `Bearer ${token}`, 'X-Provider': currentProvider(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }));
+  } finally { clearLibraryCache(); }
+}
+export function previewConversationDeletion(token: string, conversations: ConversationSummary[]) {
+  return deletionRequest<ConversationDeletionPreview>(token, '/delete-preview', 'POST', {
+    conversations: conversations.map(({ conversationRoleId, conversationId }) => ({ conversationRoleId, conversationId })),
+  });
+}
+export function deleteConversations(token: string, selectionToken: string, conversationIds?: string[]) {
+  return deletionRequest<ConversationDeletionResult>(token, '', 'DELETE', { selectionToken, ...(conversationIds ? { conversationIds } : {}) });
+}
+
 export async function recordConversation(token: string, provider: ProviderId, roleId: string, conversationId: string): Promise<{ first?: boolean }> {
   clearLibraryCache();
   try { return await read<{ first?: boolean }>(await fetch(`${COMMUNITY_API}/me/conversations`, {
