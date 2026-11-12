@@ -4699,7 +4699,7 @@
   "editor.revertNotice": "초안이 게시된 버전과 달라요.",
   "editor.revertAction": "게시된 버전으로 되돌리기",
   "editor.revertTitle": "게시된 버전으로 되돌릴까요?",
-  "editor.revertBody": "초안 내용을 게시된 버전으로 되돌려요. 저장 전에는 취소할 수 있고, 게시된 버전은 바뀌지 않아요.",
+  "editor.revertBody": "초안 내용을 게시된 버전으로 되돌려요. 저장 전에는 취소할 수 있고, 게시된 버전은 바뀌지 않아요. 게시된 버전에 카드 스타일이 없으면 초안의 스타일도 지워져요.",
   "editor.revertLibraryNote": "라이브러리 Lorebook은 현재 내용을 사용해요.",
   "editor.revertConfirm": "초안 되돌리기",
   "editor.revertCancel": "초안 유지하기",
