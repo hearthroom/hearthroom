@@ -1179,6 +1179,7 @@
   "res.panel.copyFailed": "複製不了，手動選起來吧。",
   "dialog.close": "關閉",
   "nav.me": "我的",
+  "notifications.newNotice": "新通知",
   "notifications.viewAll": "查看全部通知",
   "notifications.discordGoSettings": "Discord 提醒設定",
   "notifications.discordGoLink": "綁定 Discord",
