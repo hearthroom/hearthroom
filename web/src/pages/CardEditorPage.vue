@@ -690,11 +690,29 @@ interface StoredDraft {
   visibility?: "private" | "unlisted";
   authorAsset?: { set: RegexRuleSet; original: RegexRuleSet; version: number; savedOpening: OpeningMode; pendingRead?: boolean; pendingWrite?: { set: RegexRuleSet; version: number } | null };
 }
+function provisionCompletionKey() {
+  return `hearthroom.draft.provision.${editorProvider.value}.${visibilityActor.value}.${roleId.value}`;
+}
+function clearProvisionCompletion() {
+  try { localStorage.removeItem(provisionCompletionKey()); } catch { /* best effort */ }
+}
+function resumeProvisionCompletion() {
+  let completionAttempted = false;
+  try { completionAttempted = JSON.parse(localStorage.getItem(provisionCompletionKey()) || "null")?.completionAttempted === true; } catch { /* ignore invalid local metadata */ }
+  pendingCreate.value = { roleId: roleId.value, provider: editorProvider.value, actor: visibilityActor.value, completionAttempted };
+}
 function storeDraft() {
   storeApprovedLocalDraft();
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
-  if (!onCreatePage.value || original.value) return false;
+  if (original.value) return false;
+  if (!onCreatePage.value) {
+    if (!creationPending.value || !roleId.value || !pendingCreate.value) return false;
+    try {
+      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true }));
+      return true;
+    } catch { return false; }
+  }
   try {
     // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
     const defaultsOnly = !roleId.value && !pendingRegexRead.value && !pendingRegexWrite.value &&
@@ -777,8 +795,9 @@ async function reconcileCompletedProvision(token: string) {
   const remote = draftFromRoleDetail(raw, locale.value);
   original.value = cloneDraft(remote);
   creationPending.value = false;
+  clearProvisionCompletion();
   pendingCreate.value = null;
-  localStorage.removeItem(DRAFT_KEY);
+  if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
   // The first completed save fixed the original language. Keep all local text.
   if (draft.value.language !== remote.language && !(["zh-Hant", "zh-Hans"].includes(draft.value.language) && ["zh-Hant", "zh-Hans"].includes(remote.language))) {
     draft.value.language = remote.language;
@@ -807,6 +826,7 @@ async function discardDraft() {
       await deleteRole(source, token);
     } catch (err) { error.value = err instanceof Error ? err.message : t("state.actionFailed"); return; }
   }
+  clearProvisionCompletion();
   pendingCreate.value = null;
   importedPortrait.value = null;
   imageEpoch.value++;
@@ -827,7 +847,11 @@ async function discardDraft() {
   wb.reset();
   worldShown.value = false;
   restoredDraft.value = false;
-  localStorage.removeItem(DRAFT_KEY);
+  if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
+  if (!onCreatePage.value) {
+    pristine.value = cloneDraft(draft.value);
+    await router.replace(platformPath(lp("/create"), editorProvider.value));
+  }
 }
 // Existing cards do not use local drafts; do not deep-traverse their entire worldbook.
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
@@ -896,6 +920,8 @@ onMounted(async () => {
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     creationPending.value = (raw as { provisioning?: boolean }).provisioning === true;
+    if (creationPending.value) resumeProvisionCompletion();
+    else clearProvisionCompletion();
     original.value = creationPending.value ? null : cloneDraft(draft.value);
     pristine.value = cloneDraft(draft.value);
     worldShown.value = Boolean(draft.value.world);
@@ -1519,6 +1545,7 @@ async function save() {
     if (clearPage && regexSnapshot) delete regexSet.value.openingPage;
     savedOpening.value = mode;
     creationPending.value = false;
+    clearProvisionCompletion();
     pendingCreate.value = null;
     original.value = sent;
     saved.value = true;

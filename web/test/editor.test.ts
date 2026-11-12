@@ -2772,3 +2772,22 @@ it('does not delete a completed card when discarding a local draft after a lost 
  if(confirmState.current){settleConfirm(true);await flush();}
  expect(api.deleteRole).not.toHaveBeenCalled();
 });
+
+it('completes an unfinished card reopened from My cards without a create-page operation', async () => {
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Reopened unfinished card',language:'en',provisioning:true});
+ await mount('/cards/r1/edit');await type($('#f-name'),'Finished reopened card');await submit();
+ expect(api.provisionRole).not.toHaveBeenCalled();
+ expect(api.completeRoleProvision).toHaveBeenCalledWith('r1',expect.objectContaining({roleName:'Finished reopened card',language:'en'}),'tok');
+ expect(root.textContent).not.toContain(i18n.global.t('editor.image.pageOutdated'));
+});
+
+it('recovers a lost completion reply on the unfinished-card edit route', async () => {
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Pending existing route',language:'en',provisioning:true});
+ api.completeRoleProvision.mockRejectedValueOnce(new Error('response lost'));
+ await mount('/cards/r1/edit');await type($('#f-name'),'Completed remotely');await submit();
+ expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Completed remotely',language:'en',provisioning:false});
+ await type($('#f-name'),'Local change after completion');await submit();
+ expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+ expect(api.patchRoleDocument).toHaveBeenLastCalledWith('r1',expect.objectContaining({roleName:'Local change after completion'}),'tok');
+});
