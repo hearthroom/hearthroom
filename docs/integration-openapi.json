@@ -681,6 +681,11 @@
                     "type": "integer",
                     "format": "int64",
                     "minimum": 1
+                  },
+                  "reselectOpening": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, restore the main authored opening and its initial card state in this same conversation. Omit to retain the legacy reset behavior."
                   }
                 }
               }
@@ -8142,7 +8147,7 @@
           "Roles"
         ],
         "summary": "Set the opening message, alternate openings and prologue options",
-        "description": "Writes the opening (`roleWelcome`) of an owned private role. It may be blank only when the card lets the player speak first, that is when its author-asset `openingMode` is `page`, or it has `prologue` entries (sent in this request or already stored) or an author-asset `openingPage`; otherwise it is required and non-blank. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Each list keeps at most 20 non-blank entries (`role_welcome_alternates_too_many` / `role_welcome_prologue_too_many`), and every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
+        "description": "Writes the opening (`roleWelcome`) of an owned private role. It may be blank only when the card lets the player speak first, that is when its author-asset `openingMode` is `page`, or it has `prologue` entries (sent in this request or already stored) or an author-asset `openingPage`; otherwise it is required and non-blank. `alternates` (alternate AI openings the player can pick before the first turn) and `prologue` (player-side first lines offered as choices) are full replacements distinguished by presence: key absent = unchanged, empty array = cleared. Neither list has a fixed item-count limit; blank entries are omitted. Every entry — like `roleWelcome` itself — is bounded by the welcome limit of the card language (8000 chars; 10000 for English cards; `role_welcome_too_long`). The role must be `private` (`public_role_requires_clone`). Limit and visibility violations are surfaced as HTTP 500 by the error mapper.",
         "security": [
           {
             "userToken": []
@@ -8211,7 +8216,7 @@
             }
           },
           "500": {
-            "description": "`record not found`, `public_role_requires_clone`, `role_welcome_too_long`, `role_welcome_alternates_too_many`, `role_welcome_prologue_too_many`, or another unclassified error; `retryable: true`.",
+            "description": "`record not found`, `public_role_requires_clone`, `role_welcome_too_long`, or another unclassified error; `retryable: true`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14732,6 +14737,91 @@
         ]
       }
     },
+    "/open/v1/conversation/select-opening": {
+      "post": {
+        "operationId": "selectConversationOpening",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Select an authored opening before the first user turn",
+        "description": "Requires chat.play, ownership, current work access, and an opt-in reselectOpening reset receipt at the current history epoch. Replaces only the authored opening and its initial card state in the same conversation; never trims user messages, clears user data, creates a save or calls AI. Requires the history fence and opaque opening revision from the displayed history. Replay the identical clientOperationID and payload after an unknown response; a replay never edits later history. Refuses an active operation, an advanced timeline, changed opening choices, or any non-opening message. No credit charge.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "greetingIndex",
+                  "clientOperationID",
+                  "historyEpoch",
+                  "nextSeq",
+                  "openingRevision"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "greetingIndex": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "clientOperationID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "historyEpoch": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0
+                  },
+                  "nextSeq": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 1
+                  },
+                  "openingRevision": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opening committed or receipt replayed; returns conversationId, historyEpoch, nextSeq, startHistoryEpoch, startNextSeq and a fresh firstPage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete selection request."
+          },
+          "401": {
+            "description": "Authentication or chat.play scope is missing."
+          },
+          "404": {
+            "description": "Owned conversation or accessible agent configuration not found."
+          },
+          "409": {
+            "description": "Active operation, changed history or opening revision, or first user turn already exists."
+          }
+        }
+      }
+    },
     "/open/v1/role/{roleId}/approved": {
       "get": {
         "tags": [
@@ -16588,6 +16678,10 @@
             "format": "int64",
             "minimum": 1,
             "description": "next message sequence allocated by the conversation."
+          },
+          "openingSelection": {
+            "$ref": "#/components/schemas/ConversationOpeningSelection",
+            "description": "Present only after an opt-in reselectOpening reset or subsequent opening selection, while the same save has multiple authored choices and no user turn or active operation. Legacy opening-only saves do not become selectable."
           }
         }
       },
@@ -21475,7 +21569,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 20,
             "description": "Alternate AI openings; full replacement when present; `[]` clears. Blank entries dropped."
           },
           "prologue": {
@@ -21483,7 +21576,6 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 20,
             "description": "Player-side first-line options; full replacement when present; `[]` clears."
           },
           "idempotencyKey": {
@@ -28977,6 +29069,32 @@
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
+      },
+      "ConversationOpeningSelection": {
+        "type": "object",
+        "required": [
+          "choices",
+          "index",
+          "revision"
+        ],
+        "properties": {
+          "choices": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            },
+            "description": "Playable authored opening messages with supported name macros expanded; excludes agent instructions."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "string",
+            "description": "Opaque precondition for this set of opening messages and their initial state."
+          }
+        }
       },
       "ApprovedDraftVersion": {
         "type": "object",
