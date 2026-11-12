@@ -4500,6 +4500,7 @@
   "honor.badgeWindow.month": "Month",
   "honor.badgeBand.3": "Top 3",
   "honor.badgeBand.10": "Top 10",
+  "honor.more": "{n} more honor | {n} more honors",
   "honor.badgeLabel": "{window} {band}",
   "honor.name": "{zone} {window} {band}",
   "badgeWall.icon.featured": "Featured card",

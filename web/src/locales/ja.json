@@ -4500,6 +4500,7 @@
   "honor.badgeWindow.month": "月間",
   "honor.badgeBand.3": "3位内",
   "honor.badgeBand.10": "10位内",
+  "honor.more": "ほかに{n}件の表彰",
   "honor.badgeLabel": "{window}{band}",
   "honor.name": "{zone} {window}{band}",
   "badgeWall.icon.featured": "注目カード",

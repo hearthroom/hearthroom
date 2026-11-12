@@ -50,9 +50,9 @@ describe("cover honors", () => {
     ["ko", "주", "주간", "상위 3", "상위 10", "주간 3위 이내", "주간 10위 이내"],
   ] as const)("renders all three badge tiers in %s", async (locale, shortPeriod, period, top3, top10, label3, label10) => {
     await applyLocale(locale);
-    for (const [band, expected, label] of [[1, [shortPeriod, "1"], undefined], [3, [period, top3], label3], [10, [period, top10], label10]] as const) {
+    for (const [band, expected, label] of [[1, [shortPeriod, "1"], i18n.global.t("honor.badgeLabel", { window: i18n.global.t("honor.window.week"), band: i18n.global.t("honor.band.1") })], [3, [period, top3], label3], [10, [period, top10], label10]] as const) {
       const root = await mount({ honors: [{ zone: "clean", window: "week", band }] });
-      expect([...root.querySelectorAll(".card__honor text")].map(line => line.textContent)).toEqual(expected);
+      expect([...root.querySelectorAll(".card__marks .card__honor text")].map(line => line.textContent)).toEqual(expected);
       const tier = root.querySelector(".card__honor-tier");
       expect(tier?.textContent).toBe(label);
       if (tier) expect(tier.getAttribute("aria-hidden")).toBe("true");
@@ -61,6 +61,31 @@ describe("cover honors", () => {
       app = null;
       el = null;
     }
+  });
+
+  it("fits the overflow count within fractional cover space instead of rounded clientWidth", async () => {
+    const actualWidth = 128.5; // 172.5px cover minus 12px edges and 32px R reservation
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const width = this.classList.contains("card__marks") ? actualWidth
+        : this.classList.contains("card__honor-more") ? 28.25
+        : this.classList.contains("card__rank") ? 26 : 121;
+      return new DOMRect(0, 0, width, 26);
+    });
+    const client = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(129);
+    const style = vi.spyOn(window, "getComputedStyle").mockReturnValue({ display: "flex", gap: "4px", marginRight: "2.5px" } as CSSStyleDeclaration);
+    try {
+      const root = await mount({ rating: "R", honors: [
+        { zone: "clean", window: "day", band: 1 },
+        { zone: "all", window: "week", band: 3 },
+        { zone: "all", window: "month", band: 10 },
+      ] }, 4);
+      await nextTick();
+      const row = root.querySelector(".card__marks")!;
+      const labels = row.querySelectorAll<HTMLElement>(".card__honor-mark");
+      expect(labels[2].classList.contains("card__honor-mark--hidden")).toBe(true);
+      expect(parseFloat(labels[0].style.maxWidth) + 26 + 2.5 + 4).toBeLessThanOrEqual(actualWidth);
+      expect(parseFloat(labels[1].style.maxWidth) + 4 + 28.25).toBeLessThanOrEqual(actualWidth);
+    } finally { rect.mockRestore(); client.mockRestore(); style.mockRestore(); }
   });
 
   it("puts the current board rank first in the same row", async () => {

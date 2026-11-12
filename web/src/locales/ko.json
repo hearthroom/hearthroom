@@ -4500,6 +4500,7 @@
   "honor.badgeWindow.month": "월간",
   "honor.badgeBand.3": "상위 3",
   "honor.badgeBand.10": "상위 10",
+  "honor.more": "영예 {n}개 더",
   "honor.badgeLabel": "{window} {band}",
   "honor.name": "{zone} {window} {band}",
   "badgeWall.icon.featured": "추천 카드",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { compact, compactTile, hueFrom, relativeTime } from "@/lib/format";
@@ -12,7 +12,8 @@ import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
 import RankBadge from "./RankBadge.vue";
-import { coverHonors } from "@/lib/honors";
+import { fitCoverHonors } from "@/lib/cover-honor-fit";
+import { coverHonors, HONOR_COLORS } from "@/lib/honors";
 import { ratingName } from "@/lib/rating";
 
 const props = defineProps<{
@@ -68,6 +69,34 @@ const note = computed(() => event.value?.kind === "update" ? event.value.note ??
 
 /** 榜單榮譽：伺服器已挑好每期別最高一枚，這裡再整理一次，舊快取或多給的資料也不會讓封面多出第四枚 */
 const honors = computed(() => coverHonors(props.card.honors ?? []));
+const marks = ref<HTMLElement | null>(null);
+const measure = ref<HTMLElement | null>(null);
+const fit = ref({ shown: 3, firstWidth: 1000, lastWidth: 1000 });
+const hiddenHonors = computed(() => honors.value.length - fit.value.shown);
+function fitMarks() {
+  const row = marks.value, mirror = measure.value;
+  if (!row || !mirror) return;
+  if (getComputedStyle(mirror).display === 'none') { fit.value = { shown: 3, firstWidth: 1000, lastWidth: 1000 }; return; }
+  const widths = [...mirror.querySelectorAll<HTMLElement>('.card__honor-mark')].map(el => el.getBoundingClientRect().width);
+  const prefix = row.querySelector<HTMLElement>('.card__rank, .card__kind');
+  const prefixWidth = prefix ? prefix.getBoundingClientRect().width + parseFloat(getComputedStyle(prefix).marginRight || '0') : 0;
+  const plus = mirror.querySelector<HTMLElement>('.card__honor-more')!.getBoundingClientRect().width;
+  // clientWidth rounds fractional cover space up (128.5 → 129), pushing +1 onto a third row.
+  fit.value = fitCoverHonors(widths, row.getBoundingClientRect().width, parseFloat(getComputedStyle(row).gap) || 0, prefixWidth, plus);
+}
+let marksObserver: ResizeObserver | undefined;
+onMounted(() => {
+  if (typeof ResizeObserver !== "undefined") marksObserver = new ResizeObserver(fitMarks);
+  if (marks.value) marksObserver?.observe(marks.value);
+  if (measure.value) marksObserver?.observe(measure.value);
+  window.addEventListener('resize', fitMarks);
+  void document.fonts?.ready.then(fitMarks);
+  fitMarks();
+});
+onBeforeUnmount(() => { marksObserver?.disconnect(); window.removeEventListener('resize', fitMarks); });
+watch(marks, (el, before) => { if (before) marksObserver?.unobserve(before); if (el) marksObserver?.observe(el); });
+watch([honors, locale, () => props.rank, () => props.card.rating], async () => { await nextTick(); fitMarks(); });
+
 /** 封面上的限制級縮成「R」方塊：文字藥丸約 52 寬，最窄的封面（135）放不下它和左上那一列 */
 const adultLabel = computed(() => ratingName("R", String(locale.value)));
 </script>
@@ -116,14 +145,22 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
         左上先放目前名次或關注動態的事件類別，再按日、週、月排列榜單榮譽。
         手機用單列圖示，寬版封面的級距標籤可另起一列。
       -->
-      <div v-if="rank || (event && !rank) || honors.length" class="card__marks">
+      <div v-if="rank || (event && !rank) || honors.length" ref="marks" class="card__marks">
         <!-- 關注動態不排名，放事件類別。強調色只給新卡：更新比較常出現，是預設態 -->
         <span v-if="event && !rank" class="card__kind" :class="event.kind === 'new' && 'card__kind--new'">{{ $t(event.kind === "new" ? "library.feedKindNew" : "library.feedKindUpdate") }}</span>
         <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
-        <span v-for="honor in honors" :key="honor.window" class="card__honor-mark" :class="{ 'card__honor-mark--tier': honor.band !== 1 }">
+        <span v-for="(honor, index) in honors" :key="honor.window" class="card__honor-mark" :class="{ 'card__honor-mark--first': honor.band === 1, 'card__honor-mark--hidden': index >= fit.shown }" :style="{ '--honor-color': HONOR_COLORS[honor.window], maxWidth: `${index === 0 ? fit.firstWidth : fit.lastWidth}px` }">
           <RankBadge :honor="honor" class="card__honor" />
-          <span v-if="honor.band !== 1" class="card__honor-tier" aria-hidden="true">{{ t('honor.badgeLabel', { window: t(`honor.window.${honor.window}`), band: t(`honor.band.${honor.band}`) }) }}</span>
+          <span class="card__honor-tier" aria-hidden="true">{{ t('honor.badgeLabel', { window: t(`honor.window.${honor.window}`), band: t(`honor.band.${honor.band}`) }) }}</span>
         </span>
+        <span v-if="hiddenHonors > 0" class="card__honor-more" :aria-label="t('honor.more', { n: hiddenHonors }, hiddenHonors)">+{{ hiddenHonors }}</span>
+      </div>
+      <div ref="measure" class="card__honor-measure" aria-hidden="true">
+        <span v-for="honor in honors" :key="honor.window" class="card__honor-mark" :class="{ 'card__honor-mark--first': honor.band === 1 }">
+          <RankBadge :honor="honor" class="card__honor" />
+          <span class="card__honor-tier">{{ t('honor.badgeLabel', { window: t(`honor.window.${honor.window}`), band: t(`honor.band.${honor.band}`) }) }}</span>
+        </span>
+        <span class="card__honor-more">+1</span>
       </div>
     </div>
 
@@ -201,25 +238,31 @@ const adultLabel = computed(() => ratingName("R", String(locale.value)));
 /* 榜單徽章是固定彩色圖示（不隨主題），輕陰影讓它在任何封面圖上都看得見 */
 .card__honor { --rank-badge-h: var(--mark-h); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
 .card__honor-mark { display: flex; align-items: center; flex: none; }
-.card__honor-tier { display: none; }
+.card__honor-tier, .card__honor-more, .card__honor-measure { display: none; }
 
 @media (min-width: 761px) {
   @container (min-width: 151px) {
-    .card__marks:has(.card__honor-mark--tier) {
+    .card__marks:has(.card__honor-mark) {
       right: var(--mark-in); height: auto; flex-wrap: wrap; gap: var(--s-1);
     }
-    .card__flag ~ .card__marks:has(.card__honor-mark--tier) {
+    .card__flag ~ .card__marks:has(.card__honor-mark) {
       right: calc(2 * var(--mark-in) + var(--mark-h));
     }
-    .card__honor-mark--tier {
-      height: var(--mark-h); gap: var(--s-1); padding-inline: var(--s-1) var(--s-2);
+    .card__honor-mark, .card__honor-more {
+      box-sizing: border-box; min-width: 0; max-width: 100%; height: var(--mark-h); gap: var(--s-1); padding-inline: var(--s-1) var(--s-2);
       border-radius: var(--r-pill); background: var(--surface-2); color: var(--text);
       box-shadow: var(--shadow-sm);
     }
-    .card__honor-mark--tier .card__honor {
+    .card__honor-mark .card__honor {
       --rank-badge-h: 18px; --rank-badge-words: none; filter: none;
     }
-    .card__honor-tier { display: block; font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
+    .card__honor-tier { display: block; font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .card__honor-mark--first { border: 1.5px solid var(--honor-color); padding-inline: calc(var(--s-1) - 1.5px) calc(var(--s-2) - 1.5px); font-weight: 800; }
+    .card__honor-mark--first .card__honor-tier { font-weight: 800; }
+    .card__honor-mark--hidden { display: none; }
+    .card__honor-more { display: flex; align-items: center; padding-inline: var(--s-2); font-size: 12px; font-weight: 700; }
+    .card__honor-measure { position: absolute; display: flex; gap: var(--s-1); visibility: hidden; pointer-events: none; width: max-content; }
+    .card__honor-measure .card__honor-mark { max-width: none; }
   }
 }
 

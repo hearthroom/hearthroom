@@ -10,7 +10,7 @@
  * 建立了層疊上下文，position: fixed 會被關在裡面、z-index 只在那個上下文內比大小——
  * 先前那版「鋪滿整頁」就是這樣被右欄的預覽卡壓在下面的。
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
@@ -59,6 +59,133 @@ const visible = computed(() => {
   );
 });
 
+/** Only mount the viewport and a few neighbours. Heights are measured rather than fixed:
+ * constant entries without keywords are shorter, and translated controls can change height. */
+const rowsElement = ref<HTMLElement | null>(null);
+const scrollTop = ref(0);
+const viewportHeight = ref(600);
+const measuredHeights = new WeakMap<WorldbookEntryDraft, number>();
+const measurements = ref(0);
+const GAP = 2;
+const OVERSCAN = 4;
+const dragFrom = ref<number | null>(null);
+const dragOver = ref<number | null>(null);
+const offsets = computed(() => {
+  void measurements.value;
+  const result = [0];
+  for (const { row } of visible.value) result.push(result[result.length - 1] + (measuredHeights.get(row) ?? 48) + GAP);
+  return result;
+});
+function positionAt(y: number) {
+  const ends = offsets.value;
+  let low = 0, high = visible.value.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (ends[middle + 1] <= y) low = middle + 1;
+    else high = middle;
+  }
+  return Math.min(low, Math.max(0, visible.value.length - 1));
+}
+const windowRange = computed(() => {
+  const top = Math.min(scrollTop.value, Math.max(0, offsets.value.at(-1)! - viewportHeight.value));
+  const start = Math.max(0, positionAt(top) - OVERSCAN);
+  const end = Math.min(visible.value.length, positionAt(top + viewportHeight.value) + OVERSCAN + 1);
+  return { start, end };
+});
+const windowRows = computed(() => {
+  const rows = visible.value.slice(windowRange.value.start, windowRange.value.end);
+  // A native drag is cancelled when its source node is removed. Keep that single
+  // keyed node mounted at its book offset while the viewport moves past it.
+  const source = dragFrom.value;
+  if (source !== null && !rows.some(item => item.index === source)) {
+    const item = visible.value.find(item => item.index === source);
+    if (item) { rows.push(item); rows.sort((a, b) => a.index - b.index); }
+  }
+  return rows;
+});
+function pinnedDragStyle(index: number) {
+  if (dragFrom.value !== index) return undefined;
+  const position = visible.value.findIndex(item => item.index === index);
+  if (position >= windowRange.value.start && position < windowRange.value.end) return undefined;
+  return { position: 'absolute' as const, top: `${offsets.value[position]}px`, left: '0', right: '0' };
+}
+const spacerHeights = computed(() => ({
+  before: Math.max(0, offsets.value[windowRange.value.start] - GAP),
+  after: Math.max(0, offsets.value.at(-1)! - GAP - offsets.value[windowRange.value.end]),
+}));
+function onListScroll() {
+  const el = rowsElement.value;
+  if (el) { scrollTop.value = el.scrollTop; viewportHeight.value = el.clientHeight || 600; }
+}
+function revealPosition(position: number) {
+  const el = rowsElement.value;
+  if (!el || position < 0) return;
+  const top = offsets.value[position], bottom = offsets.value[position + 1];
+  if (top < el.scrollTop) el.scrollTop = top;
+  else if (bottom > el.scrollTop + viewportHeight.value) el.scrollTop = bottom - viewportHeight.value;
+  onListScroll();
+}
+async function revealSelected() {
+  await nextTick();
+  revealPosition(visible.value.findIndex(item => item.index === selected.value));
+}
+let observer: ResizeObserver | undefined;
+function observeRows() {
+  const el = rowsElement.value;
+  if (!el) return;
+  observer?.disconnect();
+  observer?.observe(el);
+  for (const child of el.children) observer?.observe(child);
+}
+onMounted(() => {
+  onListScroll();
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(records => {
+      let changed = false;
+      for (const record of records) {
+        if (record.target === rowsElement.value) { onListScroll(); continue; }
+        const index = Number((record.target as HTMLElement).dataset.rowIndex);
+        const row = props.modelValue[index];
+        const height = record.target.getBoundingClientRect().height;
+        if (row && height > 0 && measuredHeights.get(row) !== height) { measuredHeights.set(row, height); changed = true; }
+      }
+      if (changed) measurements.value++;
+    });
+    observeRows();
+  }
+});
+onBeforeUnmount(() => observer?.disconnect());
+watch(windowRows, () => { observeRows(); }, { flush: 'post' });
+watch(query, () => {
+  if (rowsElement.value) rowsElement.value.scrollTop = 0;
+  scrollTop.value = 0;
+});
+/** Native Tab handles mounted rows. At a window edge, mount the adjacent row before
+ * handing focus over so a keyboard user can still reach every control in book order. */
+async function onListKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return;
+  const target = event.target as HTMLElement;
+  const row = target.closest<HTMLElement>('.wbd__row');
+  if (!row) return;
+  const controls = [...row.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')];
+  const forward = !event.shiftKey;
+  if (target !== (forward ? controls.at(-1) : controls[0])) return;
+  const position = visible.value.findIndex(item => item.index === Number(row.dataset.rowIndex));
+  const next = position + (forward ? 1 : -1);
+  if (next < 0 || next >= visible.value.length) return;
+  // Let the browser move between rows already in the DOM.
+  if (next >= windowRange.value.start && next < windowRange.value.end) return;
+  event.preventDefault();
+  await focusPosition(next, forward);
+}
+async function focusPosition(position: number, first: boolean) {
+  revealPosition(position);
+  await nextTick();
+  const mounted = rowsElement.value?.querySelector<HTMLElement>(`[data-row-index="${visible.value[position].index}"]`);
+  const controls = mounted?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
+  (first ? controls?.[0] : controls?.[controls.length - 1])?.focus();
+}
+
 function patch(changes: Partial<WorldbookEntryDraft>) {
   if (selected.value < 0) return;
   const next = props.modelValue.slice();
@@ -86,15 +213,18 @@ function add() {
   ]);
   selected.value = props.modelValue.length;
   query.value = "";
+  void revealSelected();
 }
 
 async function remove(index: number) {
   const row = props.modelValue[index];
   // 已經在上游存在的條目，刪掉是真的會消失；還沒存過的只是移出這份草稿，不必問。
   if (row.entryId && !(await confirmDialog({ message: t("wb.entry.deleteConfirm"), confirmText: t("wb.entry.delete"), danger: true }))) return;
+  const wasSelected = selected.value === index;
   commit(props.modelValue.filter((_, i) => i !== index));
   if (selected.value === index) selected.value = Math.min(index, props.modelValue.length - 2);
   else if (selected.value > index) selected.value -= 1;
+  if (wasSelected) void revealSelected();
 }
 
 /**
@@ -102,14 +232,13 @@ async function remove(index: number) {
  * 過濾中不給拖——畫面上只有一部分條目，放下去要落在哪一格沒有一個誠實的答案。
  */
 const canOrder = computed(() => !query.value.trim() && props.modelValue.length > 1);
-const dragFrom = ref<number | null>(null);
-const dragOver = ref<number | null>(null);
 
 function onDrop(to: number) {
   const from = dragFrom.value;
   dragFrom.value = null;
   dragOver.value = null;
   if (from === null || from === to) return;
+  const wasSelected = selected.value === from;
   const next = props.modelValue.slice();
   const [row] = next.splice(from, 1);
   next.splice(to, 0, row);
@@ -117,17 +246,20 @@ function onDrop(to: number) {
   if (selected.value === from) selected.value = to;
   else if (from < selected.value && to >= selected.value) selected.value -= 1;
   else if (from > selected.value && to <= selected.value) selected.value += 1;
+  if (wasSelected) void revealSelected();
 }
 
 /** 鍵盤也要能換：只有拖放的話，用鍵盤的人等於沒有這個功能。 */
 function move(index: number, delta: number) {
   const target = index + delta;
   if (target < 0 || target >= props.modelValue.length) return;
+  const wasSelected = selected.value === index;
   const next = props.modelValue.slice();
   [next[index], next[target]] = [next[target], next[index]];
   commit(next);
   if (selected.value === index) selected.value = target;
   else if (selected.value === target) selected.value = index;
+  if (wasSelected) void revealSelected();
 }
 
 const splitKeywords = (raw: string) => raw.split(/[、,，]+/).map((k) => k.trim()).filter(Boolean);
@@ -148,6 +280,15 @@ watch(
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === "Escape") emit("close");
+  if (event.key !== 'Tab' || event.defaultPrevented || !visible.value.length) return;
+  const target = event.target as HTMLElement;
+  // Preserve the full DOM tab order even when the list is scrolled: Add → first
+  // entry, and Shift+Tab from the edit form → last entry, rather than window edges.
+  if (!event.shiftKey && target.matches('.wbd__list > button')) {
+    event.preventDefault(); void focusPosition(0, true);
+  } else if (event.shiftKey && target.id === 'wbd-name') {
+    event.preventDefault(); void focusPosition(visible.value.length - 1, false);
+  }
 }
 </script>
 
@@ -177,8 +318,10 @@ function onKeydown(event: KeyboardEvent) {
                    :aria-label="$t('wb.search.placeholder')" />
             <button type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
             <p v-if="canOrder" class="subtle wbd__order-hint">{{ $t("wb.order.hint") }}</p>
-            <ul class="wbd__rows">
-              <li v-for="{ row, index } in visible" :key="row.entryId ?? `new-${index}`" class="wbd__row"
+            <ul ref="rowsElement" class="wbd__rows" @scroll="onListScroll" @keydown="onListKeydown">
+              <li v-if="windowRange.start" aria-hidden="true" :style="{ height: `${spacerHeights.before}px` }" />
+              <li v-for="{ row, index } in windowRows" :key="row.entryId ?? `new-${index}`" class="wbd__row" :data-row-index="index" :style="pinnedDragStyle(index)"
+                  :aria-posinset="index + 1" :aria-setsize="modelValue.length"
                   :class="{ 'wbd__row--on': index === selected, 'wbd__row--off': !row.isEnabled, 'wbd__row--over': dragOver === index }"
                   :draggable="canOrder" @dragstart="dragFrom = index" @dragover.prevent="dragOver = index"
                   @drop="onDrop(index)" @dragend="dragFrom = null; dragOver = null">
@@ -209,6 +352,7 @@ function onKeydown(event: KeyboardEvent) {
                   </button>
                 </span>
               </li>
+              <li v-if="windowRange.end < visible.length" aria-hidden="true" :style="{ height: `${spacerHeights.after}px` }" />
             </ul>
             <p v-if="query.trim() && !visible.length" class="subtle wbd__empty">{{ $t("wb.search.none") }}</p>
             <p v-else-if="!modelValue.length" class="subtle wbd__empty">{{ $t("wb.entries.empty") }}</p>
@@ -346,7 +490,7 @@ function onKeydown(event: KeyboardEvent) {
   padding: var(--s-3); box-shadow: 1px 0 0 var(--line); min-height: 0;
 }
 .wbd__order-hint { margin: 0; }
-.wbd__rows { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
+.wbd__rows { position: relative; list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
 .wbd__row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--r-sm); }
 .wbd__row:hover { background: var(--surface-2); }
 .wbd__row--on { background: var(--accent-tint); box-shadow: inset 2px 0 0 var(--accent); }
