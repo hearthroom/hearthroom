@@ -113,3 +113,26 @@ it('clears selections on page navigation and offers no management on favorites',
   await router.push('/library?tab=favorites'); await settle();
   expect(button('manage')).toBeUndefined(); expect(pageAway.value).toBe(0);
 });
+
+
+it('keeps a failed card identifiable when the quiet refresh loses its title, without restoring its capability', async () => {
+  current = rows.map((row, i) => i === 1 ? { ...row, conversationTitle: '原存檔標題', roleAvatar: '/known-cover.webp' } : row);
+  await router.push('/library?page=2'); await settle();
+  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
+  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
+  // The delete partially fails while the follow-up owned read is unavailable.
+  mock.list.mockResolvedValueOnce({ conversations: [{ ...rows[1], conversationTitle: null, roleName: '', roleAvatar: '', canGenerate: false, reason: 'unavailable' }, rows[2], rows[3]], hasNextPage: true });
+  mock.remove.mockResolvedValueOnce({ results: [{ roleId: 'role-1', conversationId: 'conv-1', status: 'deleted', deletedCount: 2 }, { roleId: 'role-2', conversationId: 'conv-2', status: 'error', deletedCount: 0 }], deletedCount: 2 });
+  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
+  const retained = options()[0];
+  expect(retained.querySelector('h2')?.textContent).toBe('原存檔標題');
+  expect(retained.textContent).toContain('合成卡 2');
+  expect(retained.querySelector('img')?.getAttribute('src')).toBe('/known-cover.webp');
+  expect(retained.getAttribute('aria-selected')).toBe('true');
+  expect(retained.textContent).toContain('刪除未完成');
+  expect(retained.textContent).not.toContain(i18n.global.t('library.historyHint'));
+  expect(retained.classList.contains('conversation--closed')).toBe(false);
+  button('done').click(); await settle();
+  // Keeping presentation must not turn the fresh denied capability back on.
+  expect(el.querySelector('a.conversation')?.classList.contains('conversation--closed')).toBe(true);
+});

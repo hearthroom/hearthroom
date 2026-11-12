@@ -105,8 +105,16 @@ async function remove(targets = selectedChats.value) {
     if (!failed.length) retryPreview = undefined;
     else { managing.value = true; retryPreview = { ids: failed.map(c => c.conversationId).sort().join('|'), preview }; }
     await load(true);
-    // Keep errors reachable even if a concurrently refreshed index omits their rows.
-    for (const c of failed) if (!chats.value.some(row => row.conversationId === c.conversationId)) chats.value.push(c);
+    // A transient owned-read failure can return an unnamed row. Keep the identity
+    // the player confirmed, while retaining every fresh capability/access field.
+    for (const c of failed) {
+      const row = chats.value.find(row => row.conversationId === c.conversationId);
+      if (row) {
+        row.conversationTitle ||= c.conversationTitle;
+        row.roleName ||= c.roleName;
+        row.roleAvatar ||= c.roleAvatar;
+      } else chats.value.push(c);
+    }
     if (!chats.value.length) { if (page.value > 1) void router.push({ query: { tab: 'conversations', ...(page.value > 2 ? { page: String(page.value - 1) } : {}) } }); else managing.value = false; }
   } catch {
     managing.value = true; selected.value = frozen.map(c => c.conversationId);
@@ -167,7 +175,7 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', key); if (managi
 .library__context { display:flex; align-items:center; gap:var(--s-3); justify-content:space-between; padding-block:var(--s-5); font-size:14px; }
 .library__context p { min-width:0; }
 .library__manage,.library__done { flex:none; position:relative; }
-.library__toolbar { position:sticky; top:var(--header-h); z-index:12; display:flex; align-items:center; gap:var(--s-3); min-height:72px; padding-block:var(--s-3); background:var(--bg); border-bottom:1px solid var(--line); margin-bottom:var(--s-3); }
+.library__toolbar { position:sticky; top:var(--header-h); z-index:12; display:flex; align-items:center; gap:var(--s-3); min-height:72px; padding-block:var(--s-3); background:var(--hr-page-bg); border-bottom:1px solid var(--line); margin-bottom:var(--s-3); }
 .library__toolbar .btn { min-height:var(--h-md); }
 .library__all { color:var(--accent-text); white-space:nowrap; }
 .library__count { flex:none; font-size:14px; }
@@ -200,7 +208,7 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', key); if (managi
   .library__count { flex:1; min-width:0; text-align:center; font-size:13px; }
   .library__touch-hint { display:block; font-size:12px; overflow-wrap:anywhere; }
   .library__keys,.library__desktop-delete { display:none; }
-  .library__bottom { display:flex; position:fixed; bottom:0; left:0; right:0; z-index:15; padding:var(--s-3) max(var(--s-4),env(safe-area-inset-right)) calc(var(--s-3) + env(safe-area-inset-bottom)) max(var(--s-4),env(safe-area-inset-left)); border-top:1px solid var(--line); background:color-mix(in srgb,var(--bg) 84%,transparent); backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2); }
+  .library__bottom { display:flex; position:fixed; bottom:0; left:0; right:0; z-index:15; padding:var(--s-3) max(var(--s-4),env(safe-area-inset-right)) calc(var(--s-3) + env(safe-area-inset-bottom)) max(var(--s-4),env(safe-area-inset-left)); border-top:1px solid var(--line); background:color-mix(in srgb,var(--hr-page-bg) 84%,transparent); backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2); }
   .library__bottom .btn { flex:1; }
   .library--manage { padding-bottom:calc(88px + env(safe-area-inset-bottom)); }
 }
