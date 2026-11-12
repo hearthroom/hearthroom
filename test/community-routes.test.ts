@@ -269,3 +269,53 @@ it('validates cancellation state and expiry before classifying the OAuth outcome
   expect(identify).not.toHaveBeenCalled();
  } finally {identify.mockRestore();}
 });
+
+it.each(['/me','/en/me','/me/community','/ja/me/community'])('routes a raw Discord OAuth query on %s through the canonical callback', async path => {
+ const m=await makeMember(1), nonce='n'.repeat(40), started=await beginLink(e(),m,nonce,'https://sukisuki.ai');
+ const {discordOAuth}=await import('../src/community/routes');
+ const identify=vi.spyOn(discordOAuth,'identify').mockResolvedValue({id:'423456789012345678',name:'QA'});
+ try {
+  const input=new URL('https://sukisuki.ai'+path);
+  input.search=new URLSearchParams({code:'synthetic',state:started.state,iss:'discord',unrelated:'must-not-forward'}).toString();
+  const redirect=await app.fetch(new Request(input),e(),createExecutionContext());
+  expect(redirect.status).toBe(302);
+  const canonical=new URL(redirect.headers.get('location')!,input);
+  expect(canonical.origin).toBe(input.origin);
+  expect(canonical.pathname).toBe('/v1/community/discord/callback');
+  expect(canonical.searchParams.get('state')).toBe(started.state);
+  expect(canonical.searchParams.has('unrelated')).toBe(false);
+  expect(redirect.headers.get('referrer-policy')).toBe('no-referrer');
+  expect(redirect.headers.get('cache-control')).toContain('no-store');
+  const completed=await app.fetch(new Request(canonical),e(),createExecutionContext());
+  const result=new URL(completed.headers.get('location')!);
+  const receipt=new URLSearchParams(result.hash.slice(1)).get('discord_receipt')!;
+  expect(receipt).toBeTruthy();expect(identify).toHaveBeenCalledOnce();
+  await expect(completeLink(e(),m,receipt,'wrong-browser')).rejects.toThrow('community_expired');
+  await completeLink(e(),m,receipt,nonce);
+ } finally {identify.mockRestore();}
+});
+
+it('routes raw Discord cancellation but refuses an unknown state before identity exchange', async () => {
+ const {discordOAuth}=await import('../src/community/routes');const identify=vi.spyOn(discordOAuth,'identify');
+ const m=await makeMember(1), started=await beginLink(e(),m,'n'.repeat(40));
+ try {
+  const start=await app.fetch(new Request('https://hearthroom.club/me?'+new URLSearchParams({error:'access_denied',state:started.state,iss:'discord'})),e(),createExecutionContext());
+  expect(start.status).toBe(302);
+  const cancelled=await app.fetch(new Request(new URL(start.headers.get('location')!,'https://hearthroom.club')),e(),createExecutionContext());
+  expect(cancelled.headers.get('location')).toBe('https://hearthroom.club/me#discord_error=cancelled');
+  const invalid=await app.fetch(new Request('https://hearthroom.club/me?code=synthetic&state=unknown&iss=discord'),e(),createExecutionContext());
+  const denied=await app.fetch(new Request(new URL(invalid.headers.get('location')!,'https://hearthroom.club')),e(),createExecutionContext());
+  expect(denied.headers.get('location')).toBe('https://hearthroom.club/me#discord_error=expired');
+  expect(identify).not.toHaveBeenCalled();
+ } finally {identify.mockRestore();}
+});
+
+it.each([
+ '/me?code=synthetic&state=synthetic&iss=other',
+ '/me?code=synthetic&state=synthetic',
+ '/me?iss=discord&state=synthetic',
+ '/search?code=synthetic&state=synthetic&iss=discord',
+])('does not take over an ordinary or different-issuer page: %s', async path => {
+ const response=await app.fetch(new Request('https://hearthroom.club'+path),e(),createExecutionContext());
+ expect(response.headers.get('location')).toBeNull();
+});
