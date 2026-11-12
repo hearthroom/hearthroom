@@ -244,7 +244,7 @@ it.each(['sukisuki.ai','sukisuki.chat'])('returns Discord linking to the initiat
   const denied=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(changed)}&code=synthetic`),e(),createExecutionContext());
   expect(denied.headers.get('location')).toBe('https://hearthroom.club/me#discord_error=expired');
   expect(identify).not.toHaveBeenCalled();
-  const callback=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(state)}&code=synthetic`),e(),createExecutionContext());
+  const callback=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(state)}&code=synthetic&iss=discord`),e(),createExecutionContext());
   expect(callback.headers.get('location')).toMatch(new RegExp(`^https://${root.replaceAll('.', '\\.')}/me#discord_receipt=`));
  } finally {identify.mockRestore();}
 });

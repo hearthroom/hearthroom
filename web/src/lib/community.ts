@@ -106,7 +106,10 @@ export function captureDiscordReturn() {
   sessionStorage.removeItem("community.discord.error");
   if (receipt) sessionStorage.setItem("community.discord.receipt", receipt);
   else if (error) sessionStorage.setItem("community.discord.error", error);
-  let target = location.pathname + location.search;
+  // MePage does not mount the callback consumer: even a missing browser proof
+  // must reach the community page so it can show recovery guidance.
+  const locale = location.pathname.match(/^\/(en|ja|ko|zh-Hans)(?:\/|$)/)?.[1];
+  let target = (locale ? "/" + locale : "") + "/me/community";
   const saved = discordReturnPath();
   sessionStorage.removeItem("community.discord.return");
   if (saved) {
@@ -118,7 +121,7 @@ export function captureDiscordReturn() {
       )
         target = url.pathname + url.search;
     } catch {
-      /* Keep the fixed callback page. */
+      /* Keep the local community page. */
     }
   }
   history.replaceState(history.state, "", target);

@@ -245,7 +245,9 @@ onMounted(
           error.value = e instanceof Error ? e.message : t("community.expired");
         }
       } else if (callbackError) {
-        takeDiscordAttempt(scope);
+        // An unknown/old state in another tab must not invalidate a current
+        // attempt. Expiry is still enforced locally and by the server.
+        if (callbackError !== "expired") takeDiscordAttempt(scope);
         error.value = t(callbackError === "cancelled" ? "community.linkCancelled"
           : callbackError === "expired" ? "community.expired" : "community.failed");
       }
