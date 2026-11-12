@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "重置聊天後，可以重新選擇開場白。",
+    "zh-Hans": "重置聊天后，可以重新选择开场白。",
+    "en": "After resetting a chat, you can choose the opening again.",
+    "ja": "チャットをリセットした後も、オープニングを選び直せます。",
+    "ko": "채팅을 초기화하면 오프닝을 다시 고를 수 있어요."
+  }
+}

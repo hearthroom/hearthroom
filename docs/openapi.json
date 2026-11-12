@@ -734,7 +734,7 @@
           "Conversation"
         ],
         "summary": "Reset this conversation and optionally clear selected user data",
-        "description": "Keeps the earliest assistant opening, when present, and removes later messages with the existing derived-memory rollback rules. Without an assistant opening, removes all messages while retaining the same conversation. Clear flags default to false; unchecked data, manually added memory, persona and agent configuration settings are retained. clearResponseSettings removes conversation overrides and restores current agent configuration/platform defaults. All changes and the durable receipt commit in one transaction. Reuse the same clientOperationID and choices after a lost response; replay never clears later edits. Optionally supply both historyEpoch and nextSeq from the displayed history to reject an unseen timeline change. No AI call or credit charge. Requires the existing authenticated conversation owner.",
+        "description": "Keeps the earliest assistant opening, when present, and removes later messages with the existing derived-memory rollback rules. Without an assistant opening, removes all messages while retaining the same conversation. Clear flags default to false; unchecked data, manually added memory, persona and agent configuration settings are retained. clearResponseSettings removes conversation overrides and restores current agent configuration/platform defaults. All changes and the durable receipt commit in one transaction. Reuse the same clientOperationID and choices after a lost response; replay never clears later edits. Optionally supply both historyEpoch and nextSeq from the displayed history to reject an unseen timeline change. No AI call or credit charge. Requires the existing authenticated conversation owner. With reselectOpening=true, the current authored main opening replaces the retained opening and its initial card state atomically; the conversation ID and unchecked user data stay unchanged. The opening can then be selected again before any user turn.",
         "security": [
           {
             "userToken": []
@@ -781,6 +781,11 @@
                     "type": "integer",
                     "format": "int64",
                     "minimum": 1
+                  },
+                  "reselectOpening": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When true, restore the main authored opening and its initial card state in this same conversation. Omit to retain the legacy reset behavior."
                   }
                 }
               }
@@ -19949,6 +19954,95 @@
         ]
       }
     },
+    "/open/v1/conversation/select-opening": {
+      "post": {
+        "operationId": "selectConversationOpening",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Select an authored opening before the first user turn",
+        "description": "Requires chat.play, ownership, current work access, and an opt-in reselectOpening reset receipt at the current history epoch. Replaces only the authored opening and its initial card state in the same conversation; never trims user messages, clears user data, creates a save or calls AI. Requires the history fence and opaque opening revision from the displayed history. Replay the identical clientOperationID and payload after an unknown response; a replay never edits later history. Refuses an active operation, an advanced timeline, changed opening choices, or any non-opening message. No credit charge.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "greetingIndex",
+                  "clientOperationID",
+                  "historyEpoch",
+                  "nextSeq",
+                  "openingRevision"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "greetingIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 19
+                  },
+                  "clientOperationID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "historyEpoch": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 0
+                  },
+                  "nextSeq": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 1
+                  },
+                  "openingRevision": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opening committed or receipt replayed; returns conversationId, historyEpoch, nextSeq, startHistoryEpoch, startNextSeq and a fresh firstPage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or incomplete selection request."
+          },
+          "401": {
+            "description": "Authentication or chat.play scope is missing."
+          },
+          "404": {
+            "description": "Owned conversation or accessible agent configuration not found."
+          },
+          "409": {
+            "description": "Active operation, changed history or opening revision, or first user turn already exists."
+          }
+        },
+        "x-harperharbor": {
+          "implemented": true
+        }
+      }
+    },
     "/open/v1/role/{roleId}/approved": {
       "get": {
         "tags": [
@@ -21805,6 +21899,10 @@
             "format": "int64",
             "minimum": 1,
             "description": "HarperHarbor: next message sequence allocated by the conversation."
+          },
+          "openingSelection": {
+            "$ref": "#/components/schemas/ConversationOpeningSelection",
+            "description": "Present only after an opt-in reselectOpening reset or subsequent opening selection, while the same save has multiple authored choices and no user turn or active operation. Legacy opening-only saves do not become selectable."
           }
         }
       },
@@ -35602,6 +35700,32 @@
           }
         },
         "description": "Selected Agent turn estimate at current rates. Observed high is a matched 14-day p90; estimated high is a conservative fallback, not a percentile or maximum. Unknown amounts are null. Actual usage, retries, continuation and separate memory work can cost more."
+      },
+      "ConversationOpeningSelection": {
+        "type": "object",
+        "required": [
+          "choices",
+          "index",
+          "revision"
+        ],
+        "properties": {
+          "choices": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            },
+            "description": "Playable authored opening messages with supported name macros expanded; excludes agent instructions."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "string",
+            "description": "Opaque precondition for this set of opening messages and their initial state."
+          }
+        }
       },
       "ApprovedDraftVersion": {
         "type": "object",
