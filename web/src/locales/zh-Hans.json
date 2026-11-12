@@ -4701,7 +4701,7 @@
   "editor.revertNotice": "草稿与已发布的版本不同。",
   "editor.revertAction": "还原已发布版本",
   "editor.revertTitle": "要还原已发布版本吗？",
-  "editor.revertBody": "当前的草稿内容会替换为已发布的版本，保存前可以撤销。已发布的版本不会改变。",
+  "editor.revertBody": "当前的草稿内容会替换为已发布的版本，保存前可以撤销。已发布的版本不会改变。已发布版本没有卡片样式时，草稿的样式也会清空。",
   "editor.revertLibraryNote": "书库世界书会使用当前的内容。",
   "editor.revertConfirm": "还原草稿",
   "editor.revertCancel": "保留草稿",
