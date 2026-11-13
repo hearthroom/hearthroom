@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
@@ -8,6 +8,7 @@ import { useLocalePath } from '@/lib/use-locale';
 import { useI18n } from 'vue-i18n';
 import { siteName } from '../../../shared/site-name';
 import ReviewBadge from '@/components/ReviewBadge.vue';
+import { appealCount, refreshAppealCount } from '@/lib/workshop-moderation';
 const route = useRoute();
 const reviewer = useReviewer();
 const session = useSession();
@@ -36,10 +37,18 @@ onMounted(async () => {
 // 工作台各頁共用的活動列表只活到離開工作台
 onBeforeUnmount(clearCampaignsCache);
 const blog = { key: 'blog', path: '/review/blog' } as const;
+// 「擴充申訴」只給真人 manager／owner：角色要等審核查詢回來才準，所以跟著角色讀待處理數，一般審核人不打這支
+const isManager = computed(() => reviewer.reviewer !== false && (reviewer.role === 'manager' || reviewer.role === 'owner'));
+watch(isManager, async (on) => {
+  if (!on) { appealCount.pending = 0; return; }
+  const token = await session.accessToken();
+  if (token) await refreshAppealCount(token);
+}, { immediate: true });
 // 不是審核人的應用管理員只看得到部落格：分享活動與發放的服務端閘門都要審核人身分，給了分頁也打不開。
 const visible = computed(() => {
   const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
   if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
+  if (isManager.value && list.length) list.splice(list.findIndex((s) => s.key === 'cards') + 1, 0, { key: 'workshopAppeals', path: '/review/workshop-appeals' });
   if (reviewer.blogWriter) list.push(blog);
   return list;
 });
@@ -57,10 +66,11 @@ const brand = computed(() => siteName(String(locale.value)));
     <nav class="management-nav" :aria-label="$t('moderation.title')">
       <RouterLink v-for="section in visible" :key="section.key" :to="lp(section.path)" custom v-slot="{ href, navigate }">
         <a :href="href" class="management-nav__item" :class="{ 'management-nav__item--active': route.meta.managementTab === section.key }" :aria-current="route.meta.managementTab === section.key ? 'page' : undefined" @click="navigate">
-          {{ $t(`moderation.tab.${section.key}`) }}
+          {{ $t(section.key === 'workshopAppeals' ? 'workshop.moderation.tab' : `moderation.tab.${section.key}`) }}
           <ReviewBadge v-if="section.key === 'reviews'" :count="reviewer.pendingReviews" />
           <ReviewBadge v-if="section.key === 'cases'" :count="reviewer.pendingCases" />
           <ReviewBadge v-if="section.key === 'comments'" :count="reviewer.pendingComments" />
+          <ReviewBadge v-if="section.key === 'workshopAppeals'" :count="appealCount.pending" />
         </a>
       </RouterLink>
     </nav>

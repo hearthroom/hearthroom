@@ -127,6 +127,8 @@ const pages: RouteRecordRaw[] = [
       { path: "", component: () => import("./pages/ReviewQueuePage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
       { path: "cases", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cases" } },
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
+      // 擴充申訴：站方（manager／owner）處理製作者對原作者退回／隱藏的申訴；分頁只給他們看，權限由服務端判
+      { path: "workshop-appeals", component: () => import("./pages/ModerationWorkshopAppealsPage.vue"), meta: { managementTab: "workshopAppeals" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },
       {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews',petQuietOnPhone:true}},
       // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判

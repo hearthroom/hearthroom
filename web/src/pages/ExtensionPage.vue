@@ -9,8 +9,9 @@
  * 被隱藏（停用鈕「暫不開放加入」）。能不能加入照伺服器的 availability 畫，網頁不自己判斷；
  * 已加入的玩家伺服器回 open，所以「隱藏」只會出現在沒加入的人面前。
  * 加入、成人門、登入、toast 都走 useExtensionJoin，跟卡片頁工坊分頁同一套。
+ * 站方管理員（manager／owner）在按鈕列下面多一塊「站方管理」：依擴充 id 撤下，不必先有申訴案件（§3.9 ②）。
  */
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
@@ -25,6 +26,7 @@ import ManageDialog from "@/components/workshop/ManageDialog.vue";
 import UndoToast from "@/components/workshop/UndoToast.vue";
 import WorkshopIcon from "@/components/workshop/WorkshopIcon.vue";
 import { ApiError } from "@/lib/api";
+import { confirmState, settleConfirm } from "@/lib/confirm";
 import { cardThumb } from "@/lib/card-thumb";
 import { renderReadme } from "@/lib/card-readme";
 import { cardWorkshop, isJoined, loadCardWorkshop } from "@/lib/card-workshop";
@@ -34,7 +36,9 @@ import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useExtensionJoin } from "@/lib/use-extension-join";
 import { useLocalePath } from "@/lib/use-locale";
+import { useReviewer } from "@/lib/review";
 import { fetchWorkshop, type ExtensionDetail } from "@/lib/workshop";
+import { askRevokeReason, revokeWorkshop } from "@/lib/workshop-moderation";
 
 const route = useRoute();
 const router = useRouter();
@@ -154,6 +158,44 @@ const includes = computed(() => {
     .filter(([, n]) => n > 0)
     .map(([key, n]) => ({ key, icon: ICONS[key], label: t(`workshop.detail.includes.${key}`, { n }, n), desc: t(`workshop.detail.includes.${key}.desc`) }));
 });
+// ── 站方管理：權限來源跟工作台同一個（審核身分的角色），撤下時伺服器再判一次 ──────────────
+const reviewer = useReviewer();
+const staff = computed(() => !!session.me && reviewer.reviewer === true && (reviewer.role === "manager" || reviewer.role === "owner"));
+const revoking = ref(false);
+/** 送出失敗的那一次：保留理由與 operationId，重試原樣再送，伺服器才認得是同一次撤下 */
+const revokeFailed = ref<{ workshopId: string; reason: string; operationId: string } | null>(null);
+let asking = false;
+let left = false;
+async function revoke() {
+  const e = ext.value;
+  if (!e || revoking.value) return;
+  const who = session.me?.accountNumId;
+  asking = true;
+  const reason = await askRevokeReason(shownName.value).finally(() => { asking = false; });
+  // 確認框開著時離開這頁、換了帳號或換了擴充：這次不算
+  if (!reason || left || ext.value?.id !== e.id || session.me?.accountNumId !== who) return;
+  await sendRevoke({ workshopId: e.id, reason, operationId: crypto.randomUUID() });
+}
+onBeforeUnmount(() => { left = true; if (asking && confirmState.current) settleConfirm(false); });
+async function sendRevoke(attempt: { workshopId: string; reason: string; operationId: string }) {
+  if (revoking.value) return;
+  revoking.value = true; revokeFailed.value = null;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await revokeWorkshop(attempt.workshopId, { reason: attempt.reason, operationId: attempt.operationId }, token);
+    toast.value?.say(t("workshop.moderation.toast.revoked"));
+    if (ext.value?.id === attempt.workshopId) void load();
+  } catch (err) {
+    if (left || ext.value?.id !== attempt.workshopId) return;
+    // 4xx 原樣重送也不會過（沒權限、與自己有關、已撤下）：重讀詳情對上現況；只有網路與伺服器錯才給重試
+    const status = err instanceof ApiError ? err.status : 0;
+    if (status >= 400 && status < 500 && status !== 408 && status !== 429) { toast.value?.say(t("state.actionFailed")); void load(); }
+    else revokeFailed.value = attempt;
+  } finally { revoking.value = false; }
+}
+watch(id, () => { revokeFailed.value = null; });
+
 const resident = computed(() => {
   const n = ext.value?.residentChars ?? 0;
   return n > 0 ? t("workshop.detail.resident", { chars: new Intl.NumberFormat(locale.value).format(n) }) : t("workshop.detail.resident.none");
@@ -232,6 +274,16 @@ const resident = computed(() => {
           <button type="button" class="btn btn--lg" disabled data-ext-disabled>{{ $t("workshop.detail.hidden.button") }}</button>
         </template>
       </div>
+
+      <section v-if="staff" class="panel ext__staff" aria-labelledby="ext-staff-h" data-ext-staff>
+        <h2 id="ext-staff-h" class="ext__h2">{{ $t("workshop.moderation.detail.title") }}</h2>
+        <p class="subtle ws-text">{{ $t("workshop.moderation.detail.body") }}</p>
+        <p v-if="revokeFailed" class="notice notice--error ext__error" role="alert">
+          <span class="ws-text">{{ $t("workshop.moderation.error.action") }}</span>
+          <button type="button" class="btn btn--sm" :disabled="revoking" @click="sendRevoke(revokeFailed)">{{ $t("library.retry") }}</button>
+        </p>
+        <div><button type="button" class="btn btn--sm btn--danger" data-ext-revoke :disabled="revoking" @click="revoke">{{ $t("workshop.moderation.revoke") }}</button></div>
+      </section>
 
       <LineTabs class="ext__tabs" :tabs="tabs" :model-value="tab" :label="$t('workshop.detail.tabs')" id-prefix="ext" @update:model-value="setTab" />
 
@@ -324,6 +376,8 @@ const resident = computed(() => {
 .ext__inc-text span { font-size: 13px; line-height: 1.6; color: var(--text-2); }
 .ext__resident { display: flex; align-items: flex-start; gap: var(--s-2); margin: 0; line-height: 1.6; }
 .ext__report { display: flex; justify-content: center; }
+.ext__staff { display: grid; gap: var(--s-2); padding: var(--s-4) var(--s-5); }
+.ext__staff .ext__h2, .ext__staff p { margin: 0; }
 
 @media (max-width: 760px) {
   .ext__section { padding: var(--s-4); }
