@@ -379,6 +379,166 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('new-card author-asset draft recovery', () => {
+  const ruleFile = (replace = 'Retained replacement') => new File([JSON.stringify({
+    beginning: 'recovery-marker', statusbar: 'recovery-marker', pageDepth: 1,
+    regex_scripts: [{ id: 'recovery', scriptName: 'Retained rule', findRegex: 'recovery-marker', replaceString: replace }],
+  })], 'recovery.json');
+  async function reopen() {
+    app!.unmount(); root.remove();
+    await mount('/create');
+  }
+
+  it('autosaves rules even when only rules changed and restores them', async () => {
+    await mount('/create');
+    await type($('#f-name'), 'Recovery fixture');
+    await new Promise(r => setTimeout(r, 450));
+    await pickFile($('.rxbar input[type=file]'), ruleFile());
+    await new Promise(r => setTimeout(r, 450));
+    // Read before unmount: beforeunload must not be the only protection.
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.rules[0].replace).toBe('Retained replacement');
+    await reopen();
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({
+      version: 0, mountTrigger: 'recovery-marker', mountLayer: 'under',
+      rules: [expect.objectContaining({ name: 'Retained rule', replace: 'Retained replacement' })],
+    }), 'tok');
+  });
+
+  it('retains the acknowledged version and later rule edits when a later save step fails', async () => {
+    await mount('/create'); await type($('#f-name'), 'Partial recovery');
+    await pickFile($('.rxbar input[type=file]'), ruleFile());
+    api.patchRoleWelcome.mockRejectedValueOnce(new Error('synthetic welcome failure'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[role=alert]')?.textContent).toContain('synthetic welcome failure');
+    await pickFile($('.rxbar input[type=file]'), ruleFile('Edited after partial save'));
+    await new Promise(r => setTimeout(r, 450));
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.rules[0].replace,
+      root.querySelector('[role=alert]')?.textContent ?? '').toBe('Edited after partial save');
+    await reopen();
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.version).toBe(1);
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.rules[0].replace).toBe('Edited after partial save');
+    await submit();
+    expect(root.querySelector('.body__scroll > .notice--error')).toBeNull();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
+      version: 1, rules: [expect.objectContaining({ replace: 'Edited after partial save' })],
+    }), 'tok');
+    expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+  });
+
+  it('loads the saved asset for legacy partial drafts rather than overwriting it with an empty version zero', async () => {
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({
+      draft: { ...makeDraft('zh-Hant'), roleName: 'Legacy partial', roleWelcome: 'Opening' },
+      tagsText: '', worldbook: null, pendingCreate: { roleId: 'r1' }, savedAt: Date.now(),
+    }));
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [{ id: 'remote', name: 'Saved rule', find: 'x', replace: 'Saved replacement', enabled: true }],
+      mountTrigger: 'x', mountLayer: 'over', pageMode: 'sandbox', status: 'none', version: 7 });
+    await mount('/create');
+    expect(api.fetchAuthorAsset).toHaveBeenCalledWith('r1', 'tok');
+    await submit();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    await pickFile($('.rxbar input[type=file]'), ruleFile('After legacy recovery'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({ version: 7 }), 'tok');
+  });
+
+  it('preserves a rejected local rule and expected version across reload without overwriting a concurrent revision', async () => {
+    await mount('/create'); await type($('#f-name'), 'Conflict recovery');
+    await pickFile($('.rxbar input[type=file]'), ruleFile());
+    const { ApiError } = await import('../src/lib/api');
+    api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(409, 'version_conflict', 'version_conflict'));
+    await submit(); await reopen();
+    api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(409, 'version_conflict', 'version_conflict'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
+      version: 0, rules: [expect.objectContaining({ replace: 'Retained replacement' })],
+    }), 'tok');
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.version).toBe(0);
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains an author-asset-only draft and clears its rules and version when discarded', async () => {
+    await mount('/create');
+    await pickFile($('.rxbar input[type=file]'), ruleFile());
+    await new Promise(r => setTimeout(r, 450));
+    await reopen();
+    expect(root.textContent).toContain('已恢復上次沒儲存的草稿');
+    byText('清空重來').click(); await flush();
+    await type($('#f-name'), 'Fresh after discard');
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ version: 0, rules: [], mountTrigger: '', pageMode: 'sandbox' }), 'tok');
+  });
+
+  it('does not write defaults after a legacy partial asset read fails and preserves a later import on retry', async () => {
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({
+      draft: { ...makeDraft('zh-Hant'), roleName: 'Read recovery', roleWelcome: 'Opening' },
+      tagsText: '', worldbook: null, pendingCreate: { roleId: 'r1' }, savedAt: Date.now(),
+    }));
+    api.fetchAuthorAsset.mockRejectedValueOnce(new Error('synthetic unavailable'));
+    await mount('/create');
+    api.fetchAuthorAsset.mockRejectedValueOnce(new Error('synthetic unavailable'));
+    await submit();
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    await pickFile($('.rxbar input[type=file]'), ruleFile('Imported while offline'));
+    await new Promise(r => setTimeout(r, 450));
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', status: 'none', version: 4 });
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({
+      version: 4, rules: [expect.objectContaining({ replace: 'Imported while offline' })],
+    }), 'tok');
+  });
+
+  it('keeps rule input entered while a pending asset read is in flight', async () => {
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({
+      draft: { ...makeDraft('zh-Hant'), roleName: 'Delayed read', roleWelcome: 'Opening' },
+      tagsText: '', worldbook: null, pendingCreate: { roleId: 'r1' }, savedAt: Date.now(),
+    }));
+    api.fetchAuthorAsset.mockRejectedValueOnce(new Error('synthetic unavailable'));
+    await mount('/create');
+    await pickFile($('.rxbar input[type=file]'), ruleFile('Before read'));
+    await new Promise(r => setTimeout(r, 450));
+    let complete!: (value: any) => void;
+    api.fetchAuthorAsset.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    await submit();
+    await pickFile($('.rxbar input[type=file]'), ruleFile('During read'));
+    await new Promise(r => setTimeout(r, 450));
+    complete({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', status: 'none', version: 4 });
+    await flush(); await flush();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({
+      version: 4, rules: [expect.objectContaining({ replace: 'During read' })],
+    }), 'tok');
+  });
+
+  it.each([true, false])('reconciles a lost write acknowledgement only when the remote asset matches: %s', async matching => {
+    await mount('/create'); await type($('#f-name'), 'Lost acknowledgement');
+    await pickFile($('.rxbar input[type=file]'), ruleFile('Submitted replacement'));
+    await new Promise(r => setTimeout(r, 450));
+    api.saveAuthorAsset.mockImplementationOnce(async (_id, body) => {
+      const saved = { ...body, status: 'none', version: 1 } as any;
+      if (!matching) saved.rules = [{ ...saved.rules[0], replace: 'A different revision' }];
+      api.fetchAuthorAsset.mockResolvedValueOnce(saved);
+      throw new TypeError('synthetic lost acknowledgement');
+    });
+    await submit(); await reopen();
+    expect(api.fetchAuthorAsset).toHaveBeenCalledWith('r1', 'tok');
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    if (matching) {
+      expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+      expect(api.patchRoleWelcome).toHaveBeenCalled();
+      expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+    } else {
+      expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
+        version: 0, rules: [expect.objectContaining({ replace: 'Submitted replacement' })],
+      }), 'tok');
+    }
+  });
+});
+
 describe('bounded author workspace scrolling', () => {
   it.each([114, 230, 160])('keeps a settled anchor and manual adjacent sections aligned at viewport top %i', async (top) => {
     await mount('/create');
