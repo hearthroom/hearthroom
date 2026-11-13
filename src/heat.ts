@@ -41,8 +41,9 @@ export async function syncHeat(env: Env, batchSize = HEAT_BATCH): Promise<{ batc
       continue;
     }
     // 一批一句更新（不是一張卡一句）：上千張同時變動時，整輪的寫入仍只有幾十句。只寫數字真的變了的。
+    // 固定既有封存 id 索引，避免統計未更新時改走 provider 掃描，對每張卡重掃整批 JSON。
     writes.push(
-      env.DB.prepare("UPDATE cards SET heat=j.value FROM json_each(?) j WHERE cards.provider='harbor' AND cards.approved_hosted_role_id=j.key AND cards.heat<>j.value")
+      env.DB.prepare("UPDATE cards INDEXED BY idx_cards_approved_hosted_role SET heat=j.value FROM json_each(?) j WHERE cards.provider='harbor' AND cards.approved_hosted_role_id=j.key AND cards.heat<>j.value")
         .bind(JSON.stringify(Object.fromEntries(chunk.filter((r) => heats[r.hosted] !== undefined).map((r) => [r.hosted, heats[r.hosted]])))),
     );
   }
