@@ -93,3 +93,16 @@ it("an open workshop with nothing yet still shows the tab with an empty state th
   expect(root.textContent).toContain("這張卡還沒有擴充");
   expect(root.textContent).toContain("建立第一個擴充");
 });
+
+it("arriving on ?tab=workshop when the workshop cannot be read keeps the tab with an error and a retry that recovers", async () => {
+  workshop = () => json({ error: "internal" }, 500);
+  const root = await mount("/cards/abc?tab=workshop");
+  expect(root.querySelector("[role=tablist]")).not.toBeNull();
+  expect(root.textContent).toContain("工坊載入失敗");
+  workshop = () => page();
+  [...root.querySelectorAll("button")].find((b) => b.textContent?.includes("重試"))!.click();
+  await flush();
+  expect(root.textContent).not.toContain("工坊載入失敗");
+  expect(root.textContent).toContain("雪夜篇");
+});
+

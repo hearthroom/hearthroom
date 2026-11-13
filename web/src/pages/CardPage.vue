@@ -384,13 +384,20 @@ onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect();
 // 分頁要不要出現看伺服器的 tabVisible（作者開放、或這位使用者還看得到任何已發布的擴充）；讀不到就當沒有，
 // 卡片頁跟原本一樣。分頁記在網址（?tab=workshop），可以分享，手機返回鍵回到原分頁。
 const wsPage = ref<CardWorkshopPage | null>(null);
+/**
+ * 第一次就讀不到工坊：一般進卡片頁時不畫分頁（卡片頁跟原本一樣）；直接開 ?tab=workshop 的人是衝著工坊來的，
+ * 留著分頁、在分頁裡說讀不到並給重試（ui.md §4.1 錯誤態），開始對話不受影響。
+ */
+const wsFailed = ref(false);
+const FAILED_PAGE: CardWorkshopPage = { tabVisible: true, allowNew: false, viewerIsOwner: false, total: 0, page: 1, hasMore: false, items: [] };
+const wsShown = computed<CardWorkshopPage | null>(() => wsPage.value ?? (wsFailed.value && route.query.tab === "workshop" ? FAILED_PAGE : null));
 const wsState = computed(() => (card.value?.roleId && session.me ? cardWorkshop(card.value.roleId, session.me.accountNumId) : null));
 const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));
 const wsRecTier = computed(() => tierLabel(wsState.value?.usage?.recommendedContextTokens));
-const pageTab = computed<"intro" | "workshop">(() => (wsPage.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
+const pageTab = computed<"intro" | "workshop">(() => (wsShown.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
 const pageTabs = computed(() => [
   { key: "intro" as const, label: t("workshop.tab.intro") },
-  { key: "workshop" as const, label: t("workshop.tab.workshop"), count: wsPage.value?.total || null },
+  { key: "workshop" as const, label: t("workshop.tab.workshop"), count: wsShown.value?.total || null },
 ]);
 function setPageTab(next: "intro" | "workshop") {
   if (next === pageTab.value) return;
@@ -405,8 +412,8 @@ async function loadWorkshop() {
   try {
     const token = session.me ? await session.accessToken() : null;
     const got = await fetchCardWorkshop(c.id, { sort: "hot", page: 1 }, token);
-    if (n === wsGeneration && card.value?.id === c.id) wsPage.value = got;
-  } catch { if (n === wsGeneration) wsPage.value = null; }
+    if (n === wsGeneration && card.value?.id === c.id) { wsPage.value = got; wsFailed.value = false; }
+  } catch { if (n === wsGeneration) { wsPage.value = null; wsFailed.value = true; } }
   const s = wsState.value;
   const token = s ? await session.accessToken() : null;
   if (s && token && s.status !== "loading") await loadCardWorkshop(s, token);
@@ -580,9 +587,9 @@ watch(
         </div>
       </header>
 
-      <LineTabs v-if="wsPage?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
-      <WorkshopTab v-if="pageTab === 'workshop' && wsPage" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :initial="wsPage" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
-      <div v-else class="role__body" :id="wsPage?.tabVisible ? 'card-panel' : undefined" :role="wsPage?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsPage?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
+      <LineTabs v-if="wsShown?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
+      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :initial="wsShown" :initial-failed="!wsPage" @retry="loadWorkshop" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
+      <div v-else class="role__body" :id="wsShown?.tabVisible ? 'card-panel' : undefined" :role="wsShown?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsShown?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
         <div class="role__main">
           <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->
           <section v-if="detailsPending && !hasIntro" class="role__intro-wrap" aria-hidden="true">

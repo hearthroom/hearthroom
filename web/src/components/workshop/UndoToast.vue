@@ -29,7 +29,9 @@ defineExpose({ say });
 </template>
 
 <style scoped>
-.ws-toast { display: flex; align-items: center; gap: var(--s-3); max-width: calc(100vw - var(--s-4) * 2); box-sizing: border-box; }
+/* 沒有字時整個收起：[hidden] 會被 display:flex 蓋掉，所以只在顯示時給 flex */
+.ws-toast:not([hidden]) { display: flex; }
+.ws-toast { align-items: center; gap: var(--s-3); max-width: calc(100vw - var(--s-4) * 2); box-sizing: border-box; }
 .ws-toast__undo { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 @media (max-width: 820px) { .ws-toast { bottom: calc(var(--h-lg) + var(--s-3) * 3 + env(safe-area-inset-bottom)); } }
 </style>

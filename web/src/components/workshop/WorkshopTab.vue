@@ -16,8 +16,8 @@ import { useSession } from "@/lib/session";
 import { activeCount, isJoined, type CardWorkshopState } from "@/lib/card-workshop";
 import { fetchCardWorkshop, fetchWorkshopsByIds, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
 
-const props = defineProps<{ cardId: string; cardNum: string; initial: CardWorkshopPage; state: CardWorkshopState | null; joinBusy: string | null }>();
-const emit = defineEmits<{ manage: []; join: [ExtensionSummary] }>();
+const props = defineProps<{ cardId: string; cardNum: string; initial: CardWorkshopPage; initialFailed?: boolean; state: CardWorkshopState | null; joinBusy: string | null }>();
+const emit = defineEmits<{ manage: []; join: [ExtensionSummary]; retry: [] }>();
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -95,9 +95,9 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
 
     <p v-if="!allowNew" class="notice ws-tab__paused"><WorkshopIcon name="lock" />{{ $t("workshop.paused.withExisting") }}</p>
 
-    <p v-if="failed" class="notice notice--error ws-tab__error" role="alert">
+    <p v-if="failed || (initialFailed && filter !== 'joined')" class="notice notice--error ws-tab__error" role="alert">
       {{ $t("workshop.error.load") }}
-      <button type="button" class="btn btn--sm" @click="load">{{ $t("library.retry") }}</button>
+      <button type="button" class="btn btn--sm" @click="failed ? load() : emit('retry')">{{ $t("library.retry") }}</button>
     </p>
     <div v-else-if="loading && !items.length" class="ws-grid" aria-busy="true">
       <div v-for="i in 6" :key="i" class="ghost ws-tab__ghost" />
