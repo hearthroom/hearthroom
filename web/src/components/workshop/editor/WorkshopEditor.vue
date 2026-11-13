@@ -18,7 +18,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, uploadImage } from "@/lib/api";
 import {
-  CONSTANT_CHAR_LIMIT, appealWorkshop, constantChars, deleteWorkshop, fetchDraft, fetchMyWorkshops, publishChecklist,
+  CONSTANT_CHAR_LIMIT, UPDATE_NOTE_MAX, UPDATE_NOTE_MIN, appealWorkshop, constantChars, deleteWorkshop, fetchDraft, fetchMyWorkshops, publishChecklist,
   publishState, saveDraft, submitWorkshop, withdrawWorkshop,
   type AppealState, type DraftWrite, type MineItem, type MineStatus, type OwnerState, type WorkshopDraft,
 } from "@/lib/workshop";
@@ -255,7 +255,8 @@ async function submit() {
     await refreshItem(tk);
   } catch (err) {
     const key = err instanceof ApiError ? SUBMIT_ERRORS[err.code] : undefined;
-    error.value = key ? t(key, { max: new Intl.NumberFormat(String(locale.value)).format(CONSTANT_CHAR_LIMIT) }) : message(err, "state.actionFailed");
+    const params = key === "workshop.editor.error.note" ? { min: UPDATE_NOTE_MIN, max: UPDATE_NOTE_MAX } : { max: new Intl.NumberFormat(String(locale.value)).format(CONSTANT_CHAR_LIMIT) };
+    error.value = key ? t(key, params) : message(err, "state.actionFailed");
   } finally {
     busy.value = false;
   }

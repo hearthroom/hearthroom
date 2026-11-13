@@ -209,7 +209,7 @@ const resident = computed(() => {
         <WorkshopIcon name="lock" /><span class="ws-text">{{ $t("workshop.detail.hidden.note") }}</span>
       </p>
       <p v-else-if="mode === 'removed'" class="notice notice--error ext__notice" role="status" data-ext-note="removed">
-        <WorkshopIcon name="warn" /><span class="ws-text">{{ $t("workshop.detail.removed.note") }}</span>
+        <WorkshopIcon name="warn" /><span class="ws-text">{{ $t(joined ? "workshop.detail.removed.noteAdded" : "workshop.detail.removed.note") }}</span>
       </p>
 
       <div class="ext__actions" :data-ext-mode="mode">

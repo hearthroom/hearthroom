@@ -249,11 +249,13 @@ export function publishChecklist(d: Pick<WorkshopDraft, "name" | "summary" | "co
   if (d.published) items.push({ key: "note", ok: updateNoteValid(d.updateNote) });
   return items;
 }
-/** 更新說明：10–200 個非空白字（跟卡片的更新說明同一套長度，伺服器另驗） */
+/** 更新說明的長度（跟卡片的更新說明同一套，伺服器另驗）：至少 10 個非空白字、全文最多 200 字 */
+export const UPDATE_NOTE_MIN = 10;
+export const UPDATE_NOTE_MAX = 200;
 export function updateNoteValid(note: string): boolean {
   const text = note.replace(/\r\n?/g, "\n").trim();
   const visible = Array.from(text.replace(/\s/g, "")).length;
-  return visible >= 10 && Array.from(text).length <= 200;
+  return visible >= UPDATE_NOTE_MIN && Array.from(text).length <= UPDATE_NOTE_MAX;
 }
 
 /** 擴充沒有封面時的底色（同一個名字永遠同一個顏色），跟卡片的佔位同一套色相 */

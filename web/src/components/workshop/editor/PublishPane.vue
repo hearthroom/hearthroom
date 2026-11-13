@@ -11,6 +11,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { AppealState, ChecklistItem, PublishState, WorkshopDraft } from "@/lib/workshop";
+import { UPDATE_NOTE_MAX, UPDATE_NOTE_MIN } from "@/lib/workshop";
 
 const props = defineProps<{
   state: PublishState;
@@ -124,7 +125,7 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path v-if="c.ok" d="M3.5 8.5l3 3 6-7" /><circle v-else cx="8" cy="8" r="5.5" />
           </svg>
-          <span class="ws-text">{{ $t(CHECK_KEY[c.key]) }}</span>
+          <span class="ws-text">{{ $t(CHECK_KEY[c.key], c.key === "note" ? { min: UPDATE_NOTE_MIN, max: UPDATE_NOTE_MAX } : {}) }}</span>
         </li>
         <li :class="{ ok: tried }" data-check="tried">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
