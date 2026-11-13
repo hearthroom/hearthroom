@@ -211,7 +211,7 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
               <button type="button" class="gen__choice" :disabled="running || failure === 'gone' || failure === 'stale'" :aria-label="$t('resource.gen.chooseOne', { n: i + 1 })" @click="choose(i)">
                 <img :src="u" alt="" />
               </button>
-              <a :href="u" target="_blank" rel="noopener" :download="`image-${i+1}.png`" class="link">{{ $t("resource.gen.downloadOne", { n: i + 1 }) }}</a>
+              <a :href="u" target="_blank" rel="noopener" :download="`image-${i+1}.png`" class="link">{{ $t("studio.image.download") }}</a>
             </li>
           </ul>
           <p v-if="phase === 'saving'" class="notice gen__progress" role="status">

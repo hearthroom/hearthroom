@@ -921,6 +921,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       // 先看再存：生成好還沒進資源庫
       expect(gen.save).not.toHaveBeenCalled();
       expect(dialog()!.querySelector(".gen__choice img")?.getAttribute("src")).toBe("https://gen.test/3f2a9c1e-tall.png");
+      expect(dialog()!.querySelector("a[download]")?.textContent).toBe(i18n.global.t("studio.image.download"));
       await pick(0);
       expect(gen.save).toHaveBeenCalledWith("3f2a9c1e-tall", { roleId: "r1", field: "background" }, [{ index: 0 }]);
       expect(dialog()).toBeNull();
