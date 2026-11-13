@@ -17,6 +17,7 @@ import { useI18n } from "vue-i18n";
 import CommentPanel from "@/components/CommentPanel.vue";
 import PlayInfoDetails from "@/components/PlayInfoDetails.vue";
 import PlayInfoRankings from "@/components/PlayInfoRankings.vue";
+import PlayInfoWorkshop from "@/components/workshop/PlayInfoWorkshop.vue";
 import { fetchCard } from "@/lib/api";
 import { contentLang } from "@/lib/i18n";
 import { PLAY_PANEL_LINKS, playSocial, reloadPlayDetail, type PlayInfoTab } from "@/lib/play-social";
@@ -44,10 +45,12 @@ async function refreshCard() {
 }
 
 const commentsEnabled = computed(() => playSocial.detail?.comments !== false);
-const tabs = computed<PlayInfoTab[]>(() => commentsEnabled.value ? ["info", "comments", "rankings"] : ["info", "rankings"]);
+// 「擴充」分頁只在這場對話有用到擴充時出現（唯讀；調整在卡片頁的工坊）
+const hasWorkshop = computed(() => !!playSocial.workshop?.items.length);
+const tabs = computed<PlayInfoTab[]>(() => [...(commentsEnabled.value ? ["info", "comments", "rankings"] as PlayInfoTab[] : ["info", "rankings"] as PlayInfoTab[]), ...(hasWorkshop.value ? ["workshop" as const] : [])]);
 // 作者關了評論、而上次停在評論：回到資訊
 watch(tabs, (list) => { if (!list.includes(playSocial.tab)) playSocial.tab = "info"; });
-const tabLabel = (tab: PlayInfoTab) => t(tab === "info" ? "play.info.tab.info" : tab === "comments" ? "card.tab.comments" : "play.info.tab.rankings");
+const tabLabel = (tab: PlayInfoTab) => t(tab === "info" ? "play.info.tab.info" : tab === "comments" ? "card.tab.comments" : tab === "workshop" ? "workshop.panel.tab" : "play.info.tab.rankings");
 
 // ── 版面：桌機側欄或手機底部面板（遮罩是固定全頁的一層，用視窗寬就是容器寬） ──
 const wide = typeof matchMedia === "function" ? matchMedia("(min-width: 760px)") : null;
@@ -305,6 +308,9 @@ const overlayStyle = computed(() => desktop.value
           </div>
           <div :ref="(el) => { panes.rankings = el as HTMLElement | null }" id="pip-pane-rankings" v-show="playSocial.tab === 'rankings'" class="pip__pane" role="tabpanel" aria-labelledby="pip-tab-rankings">
             <PlayInfoRankings v-if="card" :key="cardKey" :card="card" />
+          </div>
+          <div v-if="hasWorkshop" :ref="(el) => { panes.workshop = el as HTMLElement | null }" id="pip-pane-workshop" v-show="playSocial.tab === 'workshop'" class="pip__pane" role="tabpanel" aria-labelledby="pip-tab-workshop">
+            <PlayInfoWorkshop :view="playSocial.workshop!" :card-id="String(card?.num ?? playSocial.card.cardId)" />
           </div>
         </section>
       </div>

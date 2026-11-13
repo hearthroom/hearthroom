@@ -203,7 +203,7 @@ export async function json<T>(res: Response): Promise<T> {
       : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
-    throw new ApiError(res.status, said, body.error ?? "", body.detail?.reviewLength, typeof body.reason === "string" ? body.reason : "");
+    throw new ApiError(res.status, said, body.error ?? (body as { code?: string }).code ?? "", body.detail?.reviewLength, typeof body.reason === "string" ? body.reason : "");
   }
   return (await res.json()) as T;
 }
@@ -984,14 +984,15 @@ export interface Comment {
  */
 const commentHeaders = (token?: string) => ({ ...from(), ...(token ? authHeaders(token) : {}) });
 /** 留言掛在哪：本站的卡 id，或一篇部落格文章（文章沒有成人門，不帶 viewerAccess）。 */
-export type CommentOn = string | { postId: string };
+export type CommentOn = string | { postId: string } | { workshopId: string };
 export type CommentSort = "hot" | "new";
 async function commentUrl(on: CommentOn, tail = "", query = ""): Promise<{ url: string; headers: Record<string, string> }> {
-  if (typeof on !== "string") return { url: `${COMMUNITY_API}/blog/posts/${encodeURIComponent(on.postId)}/comments${tail}${query ? `?${query}` : ""}`, headers: {} };
-  const cardId = on;
+  if (typeof on !== "string" && "postId" in on) return { url: `${COMMUNITY_API}/blog/posts/${encodeURIComponent(on.postId)}/comments${tail}${query ? `?${query}` : ""}`, headers: {} };
+  // 卡片與擴充都跟著成人門：看的人開了成人內容才帶權限（擴充的可達性由伺服器照原卡＋擴充一起判）
+  const root = typeof on === "string" ? `${COMMUNITY_API}/cards/${encodeURIComponent(on)}` : `${COMMUNITY_API}/workshops/${encodeURIComponent(on.workshopId)}`;
   const access = await viewerAccess();
   const q = [query, access.param].filter(Boolean).join("&");
-  return { url: `${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
+  return { url: `${root}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
 }
 
 export async function fetchComments(on: CommentOn, page: number, token?: string, sort?: CommentSort) {

@@ -13,11 +13,16 @@
  *
  * 領取與開始審是同一顆按鈕（2026-11-02 體檢 R1）：以前領取不導頁、「查看」又隨時可按，
  * 太早點就撞進「請先領取」。現在只有領成功才進詳情；領取送出中這一列的按鈕都不能按。
+ *
+ * 擴充單（ui.md §3.9 ①）跟卡片混排在同一張清單（伺服器以 subjectKind 分流）。版面沿用卡片列，
+ * 差別只在內容：16:9 橫圖、「擴充」chip 打頭、為《原卡》、首次／新版、常駐字數與三種內容數量
+ * （審核員挑單前要知道讀多少；擴充不套字數門檻，所以沒有字數 chip）、新版多一行更新說明。
  */
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, claimReview, fetchReviewQueue, releaseReview, unholdReview, type ReviewQueueItem } from "@/lib/api";
+import { isWorkshopItem, isWorkshopUpdate, type ReviewQueueEntry } from "@/lib/workshop-review";
 import { submissionTypeKey, submissionTypeOf } from "@/lib/review-type";
 import { relativeTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
@@ -27,6 +32,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { zoneLabel } from "@/lib/i18n";
 import RatingMark from "@/components/RatingMark.vue";
 import ReviewListTabs from "@/components/ReviewListTabs.vue";
+import ExtensionCover from "@/components/workshop/ExtensionCover.vue";
 
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
@@ -34,7 +40,7 @@ const session = useSession();
 const reviewerStore = useReviewer();
 const router = useRouter();
 
-const items = ref<ReviewQueueItem[]>([]);
+const items = ref<ReviewQueueEntry[]>([]);
 const loading = ref(true);
 const error = ref("");
 const busy = ref<string | null>(null);
@@ -51,10 +57,18 @@ const lengthChip = (item: ReviewQueueItem) => {
 };
 
 /** 重送＝同一張卡之前審過至少一次（被駁回後再送，或過審後改內容再送）。
- *  篩選只收窄還沒領的；自己領著的永遠列著，免得忘了手上還有一張。 */
-const resubmittedOnly = ref(false);
-const mine = computed(() => items.value.filter((i) => i.claim === "mine"));
-const others = computed(() => items.value.filter((i) => i.claim !== "mine" && (!resubmittedOnly.value || (i.attempt ?? 1) >= 2)));
+ *  篩選只收窄還沒領的；自己領著的永遠列著，免得忘了手上還有一張。
+ *  「擴充」篩選兩組都收窄：審核員按它就是只想看擴充，領著的卡片單仍在「全部」裡。 */
+const filter = ref<"all" | "resubmitted" | "workshop">("all");
+const resubmittedOnly = computed(() => filter.value === "resubmitted");
+const workshopOnly = computed(() => filter.value === "workshop");
+const mine = computed(() => items.value.filter((i) => i.claim === "mine" && (!workshopOnly.value || isWorkshopItem(i))));
+const others = computed(() => items.value.filter((i) => i.claim !== "mine" && (!resubmittedOnly.value || (i.attempt ?? 1) >= 2) && (!workshopOnly.value || isWorkshopItem(i))));
+const FILTERS = [
+  { id: "all", label: "review.filter.all" },
+  { id: "resubmitted", label: "review.filter.resubmitted" },
+  { id: "workshop", label: "workshop.review.kind" },
+] as const;
 
 async function load() {
   error.value = "";
@@ -72,7 +86,7 @@ async function load() {
   }
 }
 
-async function claim(item: ReviewQueueItem) {
+async function claim(item: ReviewQueueEntry) {
   if (busy.value) return;
   busy.value = item.id;
   error.value = "";
@@ -86,6 +100,11 @@ async function claim(item: ReviewQueueItem) {
     void reviewerStore.refresh();
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
+    // 擴充單被擋（自己的擴充、限制級還沒驗證年齡）：進詳情，那裡有原因與下一步（驗證年齡）
+    if (isWorkshopItem(item) && err instanceof ApiError && err.status === 403) {
+      await router.push(lp(`/review/${item.id}`));
+      return;
+    }
     // 被別人先領走：這一列改成「有人在看」並說明；其他失敗只說沒領成，按鈕照樣可以再按
     const taken = err instanceof ApiError && err.status === 409 && err.code !== "you already reviewed this submission";
     const text = taken ? t("review.claim.taken")
@@ -159,16 +178,40 @@ onMounted(() => {
 
     <template v-else>
       <div class="seg filter" role="group" :aria-label="$t('review.filter.label')">
-        <button class="seg__item" :class="{ 'seg__item--on': !resubmittedOnly }" :aria-pressed="!resubmittedOnly" @click="resubmittedOnly = false">{{ $t("review.filter.all") }}</button>
-        <button class="seg__item" :class="{ 'seg__item--on': resubmittedOnly }" :aria-pressed="resubmittedOnly" @click="resubmittedOnly = true">{{ $t("review.filter.resubmitted") }}</button>
+        <button v-for="f in FILTERS" :key="f.id" class="seg__item" :class="{ 'seg__item--on': filter === f.id }" :aria-pressed="filter === f.id" :data-filter="f.id" @click="filter = f.id">{{ $t(f.label) }}</button>
       </div>
       <ul v-for="(group, gi) in [mine, others]" :key="gi" class="list">
-        <li v-for="item in group" :key="item.id" class="row panel" :class="{ 'row--mine': item.claim === 'mine' }" :data-review-row="item.id">
-          <div class="row__art">
+        <li v-for="item in group" :key="item.id" class="row panel" :class="{ 'row--mine': item.claim === 'mine', 'row--ws': isWorkshopItem(item) }" :data-review-row="item.id" :data-subject="isWorkshopItem(item) ? 'workshop' : 'card'">
+          <!-- 擴充單：16:9 橫圖（96 寬）。名稱、chip、簡介換成擴充自己的；原卡只出現在「為《原卡》」 -->
+          <div v-if="isWorkshopItem(item)" class="row__art row__art--ws" data-ws-cover>
+            <ExtensionCover :src="item.workshop.coverUrl ?? ''" :name="item.workshop.name" />
+          </div>
+          <div v-else class="row__art">
             <img v-if="item.card.avatarUrl" :src="item.card.avatarUrl" alt="" loading="lazy" />
             <div v-else class="row__void" />
           </div>
-          <div class="row__body">
+          <div v-if="isWorkshopItem(item)" class="row__body">
+            <div class="row__top">
+              <span class="row__name">{{ item.workshop.name }}</span>
+              <span class="chip ws-chip--on" data-ws-chip>{{ $t("workshop.review.kind") }}</span>
+              <span v-if="item.card?.name" class="chip" data-ws-for>{{ $t("workshop.detail.forCard", { card: item.card.name }) }}</span>
+              <span class="chip" :class="{ 'ws-chip--warn': isWorkshopUpdate(item) }" data-type-chip>{{ $t(isWorkshopUpdate(item) ? "workshop.review.update" : "review.type.first") }}</span>
+              <span class="chip chip--count" data-resident-chip>{{ $t("workshop.manage.row.resident", { chars: numbers.format(item.workshop.residentChars) }) }}</span>
+              <span class="chip chip--count" data-worldbook-chip>{{ $t("review.queue.worldbook", { n: numbers.format(item.workshop.loreCount) }) }}</span>
+              <span class="chip chip--count" data-regex-chip>{{ $t("review.queue.regex", { n: numbers.format(item.workshop.ruleCount) }) }}</span>
+              <span class="chip chip--count" data-opening-chip>{{ $t("workshop.detail.includes.opening", { n: numbers.format(item.workshop.openingCount) }, item.workshop.openingCount) }}</span>
+              <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
+              <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
+              <span v-if="item.hold" class="chip chip--hold" data-hold-chip>{{ $t("review.hold.chip") }}</span>
+            </div>
+            <p class="row__hook">{{ item.workshop.summary }}</p>
+            <!-- 新版：更新說明一行（省略），全文在詳情 -->
+            <p v-if="isWorkshopUpdate(item) && item.workshop.updateNote" class="row__hook row__note" data-update-note>{{ $t("workshop.review.updateNote", { note: item.workshop.updateNote }) }}</p>
+            <p class="row__meta">{{ item.workshop.authorName ? `${$t("workshop.review.by", { name: item.workshop.authorName })} · ` : "" }}{{ relativeTime(item.submittedAt) }}</p>
+            <p v-if="item.hold" class="row__meta row__hold" data-hold-by>{{ item.hold.byMe ? $t("review.hold.byMe") : $t("review.hold.by", { name: item.hold.holder || $t("review.hold.someone") }) }} · {{ relativeTime(item.hold.at) }}</p>
+            <p v-if="rowError?.id === item.id" class="notice notice--error row__error" role="alert">{{ rowError.text }}</p>
+          </div>
+          <div v-else class="row__body">
             <div class="row__top">
               <span class="row__name">{{ item.card.name }}</span>
               <span class="chip" :class="{ 'chip--re': submissionTypeOf(item) !== 'first' }" data-type-chip :data-reopen-chip="submissionTypeOf(item) === 'reopen' ? '' : undefined">{{ $t(submissionTypeKey(submissionTypeOf(item))) }}</span>
@@ -202,6 +245,10 @@ onMounted(() => {
         </li>
       </ul>
       <div v-if="resubmittedOnly && !others.length" class="empty panel"><p class="empty__title">{{ $t("review.filter.empty") }}</p></div>
+      <div v-if="workshopOnly && !mine.length && !others.length" class="empty panel" data-ws-empty>
+        <p class="empty__title">{{ $t("workshop.review.filterEmpty") }}</p>
+        <p class="subtle">{{ $t("workshop.review.filterEmptyHint") }}</p>
+      </div>
     </template>
   </section>
 </template>
@@ -210,10 +257,13 @@ onMounted(() => {
 .head { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-4); }
 .list { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: grid; gap: var(--s-3); }
 .row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: var(--s-3); padding: var(--s-3); align-items: center; }
+.row--ws { grid-template-columns: 96px minmax(0, 1fr) 150px; }
 .row--mine { box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
 .row__art { display: block; width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
 .row__art img { width: 100%; height: 100%; object-fit: cover; }
 .row__void { width: 100%; height: 100%; }
+.row__art--ws { width: 96px; aspect-ratio: 16 / 9; }
+.row__note { color: var(--text); }
 .row__body { display: grid; gap: 4px; min-width: 0; }
 .row__top { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .row__name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
@@ -237,6 +287,8 @@ onMounted(() => {
 @media (max-width: 600px) {
   .row { grid-template-columns: 48px minmax(0, 1fr); }
   .row__art { width: 48px; }
+  .row--ws { grid-template-columns: 80px minmax(0, 1fr); }
+  .row__art--ws { width: 80px; }
   .row__acts { grid-column: 1 / -1; }
 }
 </style>

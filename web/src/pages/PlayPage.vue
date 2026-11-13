@@ -53,6 +53,15 @@ const { t } = useI18n();
 const routeId = computed(() => String(route.params.roleId || ""));
 const roleId = shallowRef("");
 const historyBootstrap = shallowRef<{conversationId?:string;readOnly?:boolean;reason?:string;title?:string}>({});
+/**
+ * 卡片工坊交給畫布的三個參數（interface-stage.md §6；畫布不讀網址）：
+ *   wsCapacity=trigger  卡片頁放不下時選了「照樣開始」，畫布對這次進頁的對話寫一次容量選擇
+ *   wsTrial、wsOpening  擴充作者從編輯頁開的試玩，只套這一個擴充的草稿
+ * 進頁時記下來交給畫布；wsCapacity 是一次性的，交出去就從網址拿掉，重新整理不會再送（再送也只是同樣的選擇）。
+ */
+const queryText = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const workshopProps = shallowRef({ wsCapacity: queryText(route.query.wsCapacity), wsTrial: queryText(route.query.wsTrial), wsOpening: queryText(route.query.wsOpening) });
+if (workshopProps.value.wsCapacity) void router.replace({ query: { ...route.query, wsCapacity: undefined }, hash: route.hash });
 const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
 const authorDraftHref = shallowRef("");
@@ -303,7 +312,7 @@ watch(locale, () => { void remergeStageMessages(); });
 
 <template>
   <div class="play">
-    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" />
+    <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" :conversation-id="historyBootstrap.conversationId" :read-only="historyBootstrap.readOnly" :access-reason="historyBootstrap.reason" :history-title="historyBootstrap.title" :ws-capacity="workshopProps.wsCapacity" :ws-trial="workshopProps.wsTrial" :ws-opening="workshopProps.wsOpening" />
     <RegionUnavailable v-else-if="regionBlocked" :href="playApp ? homeUrl : undefined" />
     <div v-else-if="error || gated" class="play__state" :class="{ 'play__state--author': authorDraftHref }">
       <AdultGate v-if="gated" :unrated="gateUnrated" @enabled="retry++" />

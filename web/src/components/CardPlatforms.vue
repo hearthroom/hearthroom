@@ -21,7 +21,14 @@ const props = defineProps<{
   pending?: { id: string; request: Promise<CardPlatform[]> } | null;
   /** 卡名與封面：跳去對話頁前先交給它，載入畫面第一幀就畫得出這張卡（lib/play-intro） */
   intro?: PlayIntro | null;
+  /**
+   * 按下開始對話、跳轉之前先問一聲（卡片工坊：常駐放不下時的三選一）。回 false 就不開始；
+   * 回一組參數就帶進對話頁的網址（例如 wsCapacity=trigger）。
+   */
+  beforePlay?: () => Promise<false | Record<string, string>>;
 }>();
+/** 查到能玩的平台時通知卡片頁（工坊要用玩的那一份的 roleId），不必再查一次 */
+const emit = defineEmits<{ platforms: [{ provider: ProviderId; roleId: string; playable: boolean }[]] }>();
 const session = useSession();
 const route = useRoute();
 const { lp } = useLocalePath();
@@ -61,6 +68,7 @@ async function load() {
       : await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
+    emit("platforms", result);
     // 只有一個能玩的平台就直接選它，不讓人多按一步；多個能玩的才讓使用者自己選。
     const playable = result.filter((p) => p.playable);
     if (playable.length === 1) selected.value = playable[0].provider;
@@ -96,12 +104,19 @@ onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 async function play() {
   if (!choice.value || busy.value) return;
   busy.value = true;
+  const extra = props.beforePlay ? await props.beforePlay().catch(() => false as const) : {};
+  if (extra === false || !choice.value) { busy.value = false; return; }
   if (props.intro) savePlayIntro([props.cardId, props.cardNumber], props.intro);
   // 朋友分享的連結帶著情境碼（?share=，lib/play-share）：跟著進遊玩頁，卡片才讀得到
-  const destination = withShareContext(platformPath(
+  let destination = withShareContext(platformPath(
     lp(`/play/${props.cardId}`),
     choice.value.provider
   ), route.query.share);
+  if (Object.keys(extra).length) {
+    const url = new URL(destination, location.origin);
+    for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, v);
+    destination = url.origin === location.origin ? url.pathname + url.search + url.hash : url.href;
+  }
   try {
     if (
       session.me &&

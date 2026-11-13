@@ -22,7 +22,7 @@ import { getActivePinia } from "pinia";
  * 卡片：本站的卡 id（留言掛在本站的卡上，不看這張卡住在哪一家供應商），roleId 只給埋點用。
  * 卡片頁照舊傳 cardId／roleId；文章頁傳 target。文章多了熱門／最新、官方徽章、置頂留言與關閉留言。
  */
-export type CommentTarget = { kind: "card"; cardId: string; roleId: string } | { kind: "post"; postId: string; commentsClosed?: boolean };
+export type CommentTarget = { kind: "card"; cardId: string; roleId: string } | { kind: "post"; postId: string; commentsClosed?: boolean } | { kind: "workshop"; workshopId: string };
 const props = defineProps<{ cardId?: string; roleId?: string; target?: CommentTarget; myScore?: number | null }>();
 const emit = defineEmits<{ count: [n: number] }>();
 
@@ -57,9 +57,10 @@ const MAX = 500;
 
 const on = computed<CommentTarget>(() => props.target ?? { kind: "card", cardId: props.cardId ?? "", roleId: props.roleId ?? "" });
 const isPost = computed(() => on.value.kind === "post");
-const where = computed<CommentOn>(() => (on.value.kind === "post" ? { postId: on.value.postId } : on.value.cardId));
+// 擴充的評論掛在擴充自己身上（不是原卡），同卡的兩個擴充也各一串；沒有星等、沒有排序切換，跟卡片評論一樣
+const where = computed<CommentOn>(() => (on.value.kind === "post" ? { postId: on.value.postId } : on.value.kind === "workshop" ? { workshopId: on.value.workshopId } : on.value.cardId));
 /** 埋點的對象：卡片是 roleId，文章是文章 id */
-const subject = computed(() => (on.value.kind === "post" ? on.value.postId : on.value.roleId));
+const subject = computed(() => (on.value.kind === "post" ? on.value.postId : on.value.kind === "workshop" ? on.value.workshopId : on.value.roleId));
 // ponytail: 文章預設看熱門（讀者先看到大家按讚的），要改預設只動這裡
 const sort = ref<CommentSort>("hot");
 const SORTS: CommentSort[] = ["hot", "new"];
@@ -225,7 +226,7 @@ async function showAllReplies(root: Comment) {
 const repliesOf = (root: Comment) => expanded.value[root.commentId]?.replies ?? root.replies ?? [];
 const moreReplies = (root: Comment) => (expanded.value[root.commentId] ? expanded.value[root.commentId]!.hasMore : root.replyCount > repliesOf(root).length);
 
-const targetKey = computed(() => (on.value.kind === "post" ? `post:${on.value.postId}` : `card:${on.value.cardId}`));
+const targetKey = computed(() => (on.value.kind === "post" ? `post:${on.value.postId}` : on.value.kind === "workshop" ? `workshop:${on.value.workshopId}` : `card:${on.value.cardId}`));
 watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = false; mutedUntil.value = undefined; void load(true); }, { immediate: true });
 </script>
 

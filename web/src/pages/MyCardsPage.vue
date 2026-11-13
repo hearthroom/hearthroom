@@ -23,6 +23,8 @@ import AuthorVisibility from "@/components/AuthorVisibility.vue";
 import {fetchWorkVisibility,type WorkVisibility} from "@/lib/work-visibility";
 import { signedInHint } from "@/lib/signin-hint";
 import { suki } from "@/pet/events";
+import LineTabs from "@/components/workshop/LineTabs.vue";
+import MineExtensions from "@/components/workshop/MineExtensions.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +33,24 @@ const { lp } = useLocalePath();
 const { t, locale } = useI18n();
 
 const visibilityEnabled=useWorkVisibilityCapability();
+/**
+ * 「卡片｜擴充」底線分頁（ui.md §3.6）：分頁記在網址（?tab=workshops），通知與分享直達。
+ * 卡片分頁照舊，也不多打任何請求：擴充分頁第一次打開才掛上（之後用 v-show 留著，切回來不重讀），
+ * 分頁標籤上的數字由它讀完回報；還沒打開過時標籤只寫「擴充」。
+ */
+type MineTab = "cards" | "workshops";
+const tab = computed<MineTab>(() => route.query.tab === "workshops" ? "workshops" : "cards");
+const extensionCount = ref<number | null>(null);
+const workshopsOpened = ref(tab.value === "workshops");
+watch(tab, (value) => { if (value === "workshops") workshopsOpened.value = true; });
+const mineTabs = computed(() => [
+  { key: "cards" as const, label: t("workshop.mine.tab.cards") },
+  { key: "workshops" as const, label: extensionCount.value === null ? t("workshop.panel.tab") : t("workshop.mine.tab.extensions", { n: extensionCount.value }) },
+]);
+function setTab(next: MineTab) {
+  if (next === tab.value) return;
+  void router.push({ query: { ...route.query, tab: next === "workshops" ? "workshops" : undefined } });
+}
 const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 /** 符合目前搜尋與篩選的張數（每家各算） */
 const totals = ref<Partial<Record<ProviderId, number>>>({});
@@ -197,7 +217,7 @@ watch(()=>route.query.fresh, fresh=>{
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
         <!-- 額度從一整張卡收成一行：數字、三格、幾天後重置；週起訖與還剩幾張在提示裡 -->
-        <p class="quota" :class="{ 'quota--full': quotaFull }" :title="quotaHint || undefined" aria-live="polite">
+        <p v-if="tab === 'cards'" class="quota" :class="{ 'quota--full': quotaFull }" :title="quotaHint || undefined" aria-live="polite">
           <template v-if="quota && quotaRange">
             <span class="quota__label">{{ quotaLeft === 0 ? $t("mine.quota.full") : $t("mine.quota.eyebrow") }}</span>
             <span class="quota__num"><strong>{{ quota.used }}</strong>/{{ quota.limit }} {{ $t("mine.quota.unit") }}</span>
@@ -210,7 +230,8 @@ watch(()=>route.query.fresh, fresh=>{
         <CreatorSeasonEntry where="mine" class="head__entry" />
         <AuthorDiscordEntry v-if="can('editor')" where="my-cards" class="head__discord" />
       </div>
-      <div v-if="can('editor')" class="head__actions">
+      <!-- 額度與建立新卡只屬於卡片分頁：擴充分頁的主行動是「建立擴充」 -->
+      <div v-if="can('editor') && tab === 'cards'" class="head__actions">
         <AgentOnboard from="mine" class="head__agent" />
         <RouterLink :to="lp('/create')" class="btn btn--primary head__create">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("mine.create") }}
@@ -218,6 +239,13 @@ watch(()=>route.query.fresh, fresh=>{
       </div>
     </header>
 
+    <LineTabs class="mine-tabs" :tabs="mineTabs" :model-value="tab" :label="$t('workshop.mine.tab.label')" id-prefix="mine" @update:model-value="setTab" />
+
+    <section v-if="workshopsOpened" v-show="tab === 'workshops'" :id="tab === 'workshops' ? 'mine-panel' : undefined" role="tabpanel" aria-labelledby="mine-tab-workshops">
+      <MineExtensions @count="extensionCount = $event" />
+    </section>
+
+    <section v-if="tab === 'cards'" id="mine-panel" role="tabpanel" aria-labelledby="mine-tab-cards">
     <!-- 找卡：搜尋卡名或簡介（繁簡互通）、全部／已提交（含審核中、未通過）／未提交 -->
     <div class="tools">
       <label class="tools__search">
@@ -283,6 +311,7 @@ watch(()=>route.query.fresh, fresh=>{
         <span class="pager__label">{{ $t("pager.next") }}</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5l5 5-5 5" /></svg>
       </button>
     </nav>
+    </section>
   </div>
 </template>
 
@@ -300,6 +329,9 @@ watch(()=>route.query.fresh, fresh=>{
 .head__create svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 /* 兩顆鍵一樣高：膠囊本身是 min-height，主鍵是 height */
 .head__actions .btn, .head__agent :deep(.onboard__pill) { min-height: var(--h-md); }
+
+/* 分頁列在頁首下面，與頁面同寬 */
+.mine-tabs { margin-bottom: var(--s-4); }
 
 /* 本週額度：一行，放不下就整段換行（段與段之間只靠間距分開，換行後下一行開頭不會掛著分隔點）。
    滿了（免費與補充包都沒了）標題轉成提醒色、三格轉灰 */

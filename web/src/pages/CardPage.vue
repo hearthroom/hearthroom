@@ -59,6 +59,16 @@ import CardHonors from "@/components/CardHonors.vue";
 import RankBadge from "@/components/RankBadge.vue";
 import { coverHonors } from "@/lib/honors";
 import type { CommunityCard } from "@/lib/types";
+import LineTabs from "@/components/workshop/LineTabs.vue";
+import WorkshopTab from "@/components/workshop/WorkshopTab.vue";
+import ManageDialog from "@/components/workshop/ManageDialog.vue";
+import CapacityChoiceDialog from "@/components/workshop/CapacityChoiceDialog.vue";
+import UndoToast from "@/components/workshop/UndoToast.vue";
+import WorkshopIcon from "@/components/workshop/WorkshopIcon.vue";
+import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
+import { fetchCardWorkshop, tierLabel, usageState, type CardWorkshopPage } from "@/lib/workshop";
+import { activeCount, cardWorkshop, loadCardWorkshop, switchToRecommended } from "@/lib/card-workshop";
+import { useExtensionJoin } from "@/lib/use-extension-join";
 
 const route = useRoute();
 const router = useRouter();
@@ -370,6 +380,97 @@ watch(side, (el) => {
 });
 onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect(); clearTimeout(scoreToastTimer); });
 
+// ── 工坊（擴充）───────────────────────────────────────────────────────
+// 分頁要不要出現看伺服器的 tabVisible（作者開放、或這位使用者還看得到任何已發布的擴充）；讀不到就當沒有，
+// 卡片頁跟原本一樣。分頁記在網址（?tab=workshop），可以分享，手機返回鍵回到原分頁。
+const wsPage = ref<CardWorkshopPage | null>(null);
+/**
+ * 第一次就讀不到工坊：一般進卡片頁時不畫分頁（卡片頁跟原本一樣）；直接開 ?tab=workshop 的人是衝著工坊來的，
+ * 留著分頁、在分頁裡說讀不到並給重試（ui.md §4.1 錯誤態），開始對話不受影響。
+ */
+const wsFailed = ref(false);
+const FAILED_PAGE: CardWorkshopPage = { tabVisible: true, allowNew: true, viewerIsOwner: false, total: 0, page: 1, hasMore: false, items: [] };
+const wsShown = computed<CardWorkshopPage | null>(() => wsPage.value ?? (wsFailed.value && route.query.tab === "workshop" ? FAILED_PAGE : null));
+/**
+ * 加入清單、字數摘要、切換檔位都用「玩家實際玩的那一份」的 roleId（Harbor 平台的那個版本），不是卡片列上的 roleId：
+ * 兩者可能不同（Worker 的 /platforms 給的是過審託管版），而上下文檔位存在玩的那一份上，畫布讀的也是它。
+ */
+const playRoleId = ref<string | null>(null);
+watch(() => card.value?.id, () => { playRoleId.value = null; });
+function onPlatforms(list: CardPlatform[]) { playRoleId.value = list.find((p) => p.provider === "harbor" && p.playable)?.roleId ?? null; }
+const wsState = computed(() => (playRoleId.value && session.me ? cardWorkshop(playRoleId.value, session.me.accountNumId) : null));
+const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));
+const wsRecTier = computed(() => tierLabel(wsState.value?.usage?.recommendedContextTokens));
+const pageTab = computed<"intro" | "workshop">(() => (wsShown.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
+const pageTabs = computed(() => [
+  { key: "intro" as const, label: t("workshop.tab.intro") },
+  { key: "workshop" as const, label: t("workshop.tab.workshop"), count: wsShown.value?.total || null },
+]);
+function setPageTab(next: "intro" | "workshop") {
+  if (next === pageTab.value) return;
+  // 推一筆歷史：手機返回鍵回到上一個分頁，不是離開卡片頁
+  void router.push({ query: { ...route.query, tab: next === "workshop" ? "workshop" : undefined, ws: undefined, wp: undefined } });
+}
+let wsGeneration = 0;
+async function loadWorkshop() {
+  const c = card.value;
+  const n = ++wsGeneration;
+  if (!c) { wsPage.value = null; return; }
+  try {
+    const token = session.me ? await session.accessToken() : null;
+    const got = await fetchCardWorkshop(c.id, { sort: "hot", page: 1 }, token);
+    if (n === wsGeneration && card.value?.id === c.id) { wsPage.value = got; wsFailed.value = false; }
+  } catch { if (n === wsGeneration) { wsPage.value = null; wsFailed.value = true; } }
+  const s = wsState.value;
+  const token = s ? await session.accessToken() : null;
+  if (s && token && s.status !== "loading") await loadCardWorkshop(s, token);
+}
+watch([() => card.value?.id, confirmed, () => session.me?.accountNumId, playRoleId], ([id, ok]) => { if (id && ok) void loadWorkshop(); });
+
+const toast = ref<InstanceType<typeof UndoToast> | null>(null);
+const say = (text: string, undo?: () => void) => toast.value?.say(text, undo);
+const joiner = useExtensionJoin(() => wsState.value, say);
+const manageOpen = computed(() => route.query.manage === "1" && !!wsState.value);
+function openManage() { void router.push({ query: { ...route.query, manage: "1" } }); }
+// 開管理推了一筆歷史（手機返回鍵關掉它）；從別處直接帶 ?manage=1 進來的（面板的「到工坊管理」開新分頁）沒有上一頁，改成換掉網址
+function closeManage() {
+  if (!route.query.manage) return;
+  if (window.history.state?.back) router.back();
+  else void router.replace({ query: { ...route.query, manage: undefined } });
+}
+
+/** 開始對話前：放不下才問三選一；夠用、只是低於建議都直接開始 */
+const capacityAsk = ref<null | ((choice: "switch" | "manage" | "go" | null) => void)>(null);
+const capacityBusy = ref(false);
+const capacityError = ref("");
+async function beforePlay(): Promise<false | Record<string, string>> {
+  const s = wsState.value;
+  if (!s?.usage || !wsCount.value || usageState(s.usage) !== "over") return {};
+  capacityError.value = "";
+  for (;;) {
+    const choice = await new Promise<"switch" | "manage" | "go" | null>((resolve) => { capacityAsk.value = resolve; });
+    if (choice === "switch") {
+      capacityBusy.value = true;
+      try {
+        const token = await session.accessToken();
+        if (token && await switchToRecommended(s, token)) {
+          capacityAsk.value = null;
+          say(t("workshop.toast.switchedStart", { tier: tierLabel(s.usage?.currentContextTokens) }));
+          return {};
+        }
+        capacityError.value = t("state.actionFailed");
+      } catch (err) {
+        capacityError.value = err instanceof Error ? err.message : t("state.actionFailed");
+      } finally { capacityBusy.value = false; }
+      continue;
+    }
+    capacityAsk.value = null;
+    if (choice === "manage") { openManage(); return false; }
+    if (choice === "go") return { wsCapacity: "trigger" };
+    return false;
+  }
+}
+
 // 開關改了要重讀。身分第一次載好（undefined → 值）只在門已經畫出來時重讀：
 // 讀卡被擋時自己會等身分（見 load），卡已經讀到就不必再讀一次
 watch(() => session.profile?.showNsfw, (now, before) => {
@@ -453,6 +554,7 @@ watch(
               </template>
               <span v-else class="subtle">{{ $t("score.insufficient") }}</span>
             </a>
+            <span v-if="wsPage?.viewerIsOwner" class="chip ws-chip--on">{{ $t("workshop.badge.yours") }}</span>
             <span v-if="card.talkNum" class="subtle">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
             <span v-if="(card.heat ?? 0) > 0" class="subtle role__heat">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>
           </div>
@@ -462,11 +564,17 @@ watch(
           <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
           <div class="role__actions">
             <div class="role__cta">
-              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" />
+              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" :before-play="beforePlay" @platforms="onPlatforms" />
               <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
               <ShareMenu data-tour="card-share" :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
           </div>
+          <!-- 有加入擴充才出現：開始對話會套用幾個、建議用哪一檔，旁邊直接「管理」 -->
+          <p v-if="wsCount" class="role__ws">
+            <WorkshopIcon name="layers" />
+            <span>{{ wsRecTier ? $t("workshop.start.hint", { n: wsCount, tier: wsRecTier }) : $t("workshop.start.hintNoTier", { n: wsCount }) }}</span>
+            <button type="button" class="role__ws-manage" @click="openManage">{{ $t("workshop.strip.manage") }}</button>
+          </p>
           <!-- 分級標示緊貼開始對話（遊戲軟體分級管理辦法第 11、12 條：標識與情節名稱放在說明或起始處旁）。
                評級缺失的舊一般卡不標（owner 2026-10-10），作者下次送審時補上 -->
           <div v-if="card.rating" class="role__grade" data-tour="card-grade">
@@ -486,7 +594,9 @@ watch(
         </div>
       </header>
 
-      <div class="role__body" :aria-busy="revalidating || undefined">
+      <LineTabs v-if="wsShown?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
+      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :initial="wsShown" :initial-failed="!wsPage" @retry="loadWorkshop" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
+      <div v-else class="role__body" :id="wsShown?.tabVisible ? 'card-panel' : undefined" :role="wsShown?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsShown?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
         <div class="role__main">
           <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->
           <section v-if="detailsPending && !hasIntro" class="role__intro-wrap" aria-hidden="true">
@@ -574,6 +684,10 @@ watch(
       </div>
     </template>
 
+    <ManageDialog v-if="manageOpen && wsState" :state="wsState" @close="closeManage" @toast="say" />
+    <CapacityChoiceDialog v-if="capacityAsk && wsState?.usage" :usage="wsState.usage" :busy="capacityBusy" :error="capacityError" @close="capacityAsk(null)" @choose="capacityAsk($event)" />
+    <AdultConsentDialog v-if="joiner.askingAdult.value" @close="joiner.askingAdult.value = null" @done="joiner.adultDone" />
+    <UndoToast ref="toast" />
     <!-- live region 要先存在再改內容，讀屏器才會唸；所以常駐、用 hidden 切 -->
     <div class="toast" role="status" :hidden="!copied">{{ copied ? $t("card.idCopied") : "" }}</div>
     <div v-if="scoreToast" class="toast role__score-toast" role="status">{{ scoreToast }}</div>
@@ -658,6 +772,11 @@ a.role__by:hover { color: var(--accent-text); }
 .role__platforms { width: auto; min-width: 200px; }
 .role__platforms :deep(.btn--primary) { min-width: 200px; }
 .role__grade { display: flex; }
+.role__ws { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--text-2); }
+.role__ws svg { width: 16px; height: 16px; flex: none; color: var(--accent-text); }
+.role__ws-manage { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--accent-text); cursor: pointer; }
+.role__tabs { position: relative; z-index: 1; margin-top: var(--s-5); }
+.role__ws-tab { position: relative; z-index: 1; margin-top: var(--s-5); }
 /* 每一個（含換行後的第二行）都垂直置中、同高（owner 2026-11-03：「至少，它得居中對齊吧？」） */
 .role__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .role__tags > li { display: flex; align-items: center; }
@@ -735,7 +854,7 @@ a.role__author-who:hover { color: var(--accent-text); }
   .role__banner { --banner-h: 230px; top: calc(-1 * var(--s-4)); }
   .role__hero {
     grid-template-columns: 104px minmax(0, 1fr); column-gap: var(--s-4); row-gap: var(--s-3);
-    grid-template-areas: "art name" "meta meta" "tagline tagline" "grade grade" "owner owner" "tags tags";
+    grid-template-areas: "art name" "meta meta" "tagline tagline" "ws ws" "grade grade" "owner owner" "tags tags";
     align-items: end; margin-top: 120px;
   }
   .role__hero--plain { margin-top: 0; }
@@ -748,6 +867,7 @@ a.role__author-who:hover { color: var(--accent-text); }
   /* 動作列整條搬到畫面底部（收藏、分享、開始對話），身分列裡不留一行空的 */
   .role__actions { display: contents; }
   .role__grade { grid-area: grade; }
+  .role__ws { grid-area: ws; }
   .role__hero :deep(.card-owner-actions) { grid-area: owner; }
   .role__tags { grid-area: tags; }
   .role__cta {

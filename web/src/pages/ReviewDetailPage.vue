@@ -11,6 +11,9 @@
  *   - 分頁條黏在頁首下方，低頻的兩格收進「更多」；手機底部固定「前往決定」，桌機右側欄放字數與入口。
  *   - 字數未達標時「通過」不能按（伺服器同樣拒絕）；常用理由一點就接到說明後面，不蓋掉已打的字。
  *   - 送出後決定區換成結果卡（我的決定、目前結果、下一張），重新整理或回頭看也是同一張。
+ *
+ * 擴充單（ui.md §3.9 ①）：同一個網址、同一支詳情端點，回應帶 subjectKind "workshop" 時整頁交給
+ * ReviewWorkshopDetail，卡片單的資料（data）留空，下面卡片專用的分頁、查重、字數都不會跑。
  */
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
@@ -34,6 +37,8 @@ import { ratingLocale } from "@/lib/rating";
 import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
 import { OPENING_ALLOW, OPENING_SANDBOX, createFrameSizer, openingSrcdoc, parseOpeningMessage } from "stage-common/opening-page";
 import { openingModeOf, ruleSetFromAuthorAsset } from "@/lib/regex-rules";
+import { isWorkshopDetail, type ReviewSubjectDetail, type WorkshopReviewDetail } from "@/lib/workshop-review";
+import ReviewWorkshopDetail from "@/components/ReviewWorkshopDetail.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -43,6 +48,8 @@ const session = useSession();
 
 const id = computed(() => String(route.params.id || ""));
 const data = ref<ReviewDetail | null>(null);
+/** 擴充單：跟 data 互斥，有它就不畫卡片的審核頁 */
+const workshopReview = ref<WorkshopReviewDetail | null>(null);
 const lengthParams = computed(()=>data.value?.detail.reviewLength?formatReviewLength(data.value.detail.reviewLength,String(locale.value)):{});
 const loading = ref(true);
 const error = ref("");
@@ -63,7 +70,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;workshopReview.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -308,7 +315,8 @@ async function goNext() {
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
     const ageGate = err instanceof ApiError && err.code === "age_verification_required";
-    if (ageGate) skipped.add(item.id);
+    // 再試也領不到的（要先確認年齡、或是自己的擴充）：「下一張」跳過，不然會一直卡在同一張
+    if (ageGate || (err instanceof ApiError && err.status === 403)) skipped.add(item.id);
     nextError.value = ageGate ? t("error.ageVerificationRequired") : err instanceof ApiError && err.status === 409 ? t("review.claim.taken") : t("review.claim.failed");
     await loadNext();
   } finally { nextBusy.value = false; }
@@ -325,11 +333,17 @@ async function load() {
   const seq=++loadSequence,target=id.value;
   error.value = "";
   correctionError.value = '';
-  loading.value = !data.value;
+  loading.value = !data.value && !workshopReview.value;
   try {
     needsClaim.value=false;
-    const result=await fetchReviewDetail(target, await token());
+    const result:ReviewSubjectDetail=await fetchReviewDetail(target, await token());
     if(!active||seq!==loadSequence||target!==id.value)return;
+    if(isWorkshopDetail(result)){
+      data.value=null;workshopReview.value=result;
+      document.title = pageTitle(`${t("review.detail.title")} · ${result.workshop.name}`);
+      return;
+    }
+    workshopReview.value=null;
     data.value=result;
     void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
@@ -588,7 +602,7 @@ onMounted(() => { void load(); });
 
 <template>
   <section class="review-detail">
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button v-if="data" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button v-if="data || workshopReview" class="btn btn--sm" :disabled="busy" @click="load">{{t('review.correction.reload')}}</button></p>
     <div v-if="claimNote" class="notice" role="status" data-claim-taken>
       <p>{{ claimNote }}</p>
       <RouterLink class="btn btn--primary" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
@@ -999,6 +1013,8 @@ onMounted(() => { void load(); });
       </section>
       </div>
     </div>
+
+    <ReviewWorkshopDetail v-else-if="workshopReview" :review="workshopReview" :reload="load" />
 
     <!-- 手機底部固定列：試玩與前往決定。只在還能決定、決定區還沒進畫面時出現；打字時也收起，免得蓋住說明欄 -->
     <div v-if="data && doc && !loading && canDecide && !decideVisible && !noteFocused" class="dock">

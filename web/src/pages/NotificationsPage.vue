@@ -101,6 +101,7 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
           </a>
           <RouterLink v-else :to="lp(n.path)" class="notices__item" :class="{ 'notices__item--unread': !n.read_at }" @click="pick(n)">
             <span>{{ noticeText(n) }}</span>
+            <span v-if="noticeDetail(n)?.body" class="notices__body">{{ noticeDetail(n)!.body }}</span>
             <small>{{ when(n) }} · {{ t(n.read_at ? "community.read" : "community.unread") }}</small>
           </RouterLink>
           <div v-if="noticeUpdateNote(n)" class="notices__update">

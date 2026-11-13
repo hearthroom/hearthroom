@@ -65,6 +65,7 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
           </a>
           <RouterLink v-else :to="lp(n.path)" class="bell__item" :class="{ 'bell__item--unread': !n.read_at }" @click="pick(n)">
             <span class="bell__text">{{ noticeText(n) }}</span>
+            <span v-if="noticeDetail(n)?.body" class="bell__note">{{ noticeDetail(n)!.body }}</span>
             <span v-if="noticeUpdateNote(n)" class="bell__note">{{ noticeUpdateNote(n) }}</span>
             <small class="bell__when">{{ when(n) }}</small>
           </RouterLink>
