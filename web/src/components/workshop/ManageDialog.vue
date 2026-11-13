@@ -30,6 +30,8 @@ const demoted = computed(() => (level.value === "over" ? firstDemoted(items.valu
 const recTier = computed(() => tierLabel(usage.value?.recommendedContextTokens));
 const curTier = computed(() => tierLabel(usage.value?.currentContextTokens));
 const canSwitch = computed(() => level.value !== "ok" && !!usage.value?.recommendedContextTier && usage.value.recommendedContextTier !== usage.value.currentContextTier);
+// 類型清單照各語言的列舉寫法（中文、日文用頓號，英文、韓文用逗號）
+const kindList = (kinds: string[]) => new Intl.ListFormat(locale.value, { style: "narrow", type: "unit" }).format(kinds.map((k) => t(`workshop.kind.${k}`)));
 const chars = (v: number | undefined) => new Intl.NumberFormat(locale.value).format(v ?? 0);
 
 async function run(job: (token: string) => Promise<unknown>) {
@@ -102,7 +104,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
               <span class="ws-row__text">
                 <strong>{{ item.name }}</strong>
                 <span class="subtle">
-                  <template v-for="(k, j) in item.kinds" :key="k">{{ j ? "、" : "" }}{{ $t(`workshop.kind.${k}`) }}</template>
+                  {{ kindList(item.kinds) }}
                   <template v-if="item.residentChars"> · {{ $t("workshop.manage.row.resident", { chars: chars(item.residentChars) }) }}</template>
                 </span>
                 <span v-if="item.workshopId === demoted" class="chip ws-chip--warn ws-row__flag"><WorkshopIcon name="warn" />{{ $t("workshop.manage.row.demoted") }}</span>

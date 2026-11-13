@@ -150,7 +150,7 @@ async function act(ext: ExtensionSummary, action: "return" | "hide" | "restore")
             <p class="ws-mgr__chips">
               <span v-if="stateOf(ext) === 'returned'" class="chip ws-chip--bad" data-ws-state>{{ $t("workshop.badge.returned") }}</span>
               <span v-else-if="stateOf(ext) === 'hidden'" class="chip ws-chip--warn" data-ws-state>{{ $t("workshop.badge.hidden") }}</span>
-              <span v-else class="chip ws-chip--on" data-ws-state>{{ $t("workshop.status.published") }}</span>
+              <span v-else class="chip ws-chip--ok" data-ws-state>{{ $t("workshop.status.published") }}</span>
               <span v-if="ext.appeal === 'pending'" class="chip ws-chip--warn">{{ $t("workshop.owner.manage.appeal") }}</span>
             </p>
             <p v-if="stateOf(ext) !== 'visible' && ext.ownerReason" class="ws-reason" data-ws-reason>{{ $t("workshop.owner.manage.reason", { reason: ext.ownerReason }) }}</p>
@@ -177,7 +177,7 @@ async function act(ext: ExtensionSummary, action: "return" | "hide" | "restore")
 
 <style scoped>
 .ws-mgr { max-width: 720px; display: grid; gap: var(--s-4); align-content: start; }
-.ws-mgr__back { display: inline-flex; align-items: center; gap: 4px; justify-self: start; font-size: 13.5px; }
+.ws-mgr__back { display: inline-flex; align-items: center; gap: 4px; justify-self: start; font-size: 13.5px; color: var(--text-2); }
 .ws-mgr__back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ws-mgr__title { margin: 0; font-size: clamp(20px, 2.6vw, 24px); }
 .ws-mgr__sub { margin: calc(-1 * var(--s-2)) 0 0; font-size: 14px; }

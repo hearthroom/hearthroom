@@ -209,5 +209,7 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
 .ws-tab .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-3); }
 @media (max-width: 1000px) { .ws-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .ws-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); } .ws-tab__ghost { height: 110px; } }
+/* 390 寬要讓篩選三格＋建立擴充放在同一行（en 最長）：篩選格收窄 */
+@media (max-width: 480px) { .ws-tab__tools .seg__item { padding: 0 10px; } .ws-tab__tools { gap: var(--s-1); } }
 @media (max-width: 820px) { .ws-tab { padding-bottom: 96px; } }
 </style>

@@ -53,7 +53,9 @@ const to = computed(() => lp(`/workshops/${encodeURIComponent(props.ext.id)}`));
 .ext-tile__joined :deep(svg), .ext-tile__joined svg { width: 13px; height: 13px; }
 @media (max-width: 600px) {
   .ext-tile { grid-template-columns: 128px minmax(0, 1fr); grid-template-rows: none; align-items: stretch; }
-  .ext-tile__cover { height: 100%; aspect-ratio: auto; min-height: 96px; }
+  /* 圖片不撐高：格子的高度由右側文字決定，圖片鋪滿左欄（直式的圖也不會把格子拉長） */
+  .ext-tile__cover { position: relative; height: auto; aspect-ratio: auto; min-height: 96px; }
+  .ext-tile__cover :deep(img), .ext-tile__cover :deep(.ext-cover__void) { position: absolute; inset: 0; }
   .ext-tile__name { min-height: 0; font-size: 14px; }
   .ext-tile__foot { flex-wrap: wrap; }
 }

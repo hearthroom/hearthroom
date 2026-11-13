@@ -121,9 +121,9 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
     <div v-if="submitLabel" class="panel pub__checks">
       <h3>{{ $t("workshop.publish.check.title") }}</h3>
       <ul>
-        <li v-for="c in shownChecks" :key="c.key" :class="{ ok: c.ok }" :data-check="c.key" :data-ok="c.ok">
+        <li v-for="c in shownChecks" :key="c.key" :class="{ ok: c.ok, over: !c.ok && c.key === 'constant' }" :data-check="c.key" :data-ok="c.ok">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path v-if="c.ok" d="M3.5 8.5l3 3 6-7" /><circle v-else cx="8" cy="8" r="5.5" />
+            <path v-if="c.ok" d="M3.5 8.5l3 3 6-7" /><path v-else-if="c.key === 'constant'" d="M4.5 4.5l7 7M11.5 4.5l-7 7" /><circle v-else cx="8" cy="8" r="5.5" />
           </svg>
           <span class="ws-text">{{ $t(CHECK_KEY[c.key], c.key === "note" ? { min: UPDATE_NOTE_MIN, max: UPDATE_NOTE_MAX } : {}) }}</span>
         </li>
@@ -177,6 +177,8 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
 .pub__checks li.ok { color: var(--text-2); }
 .pub__checks li svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
 .pub__checks li.ok svg { color: var(--success); }
+/* 常駐超過上限是「錯了」，不是「還沒填」：紅色叉 */
+.pub__checks li.over { color: var(--danger); }
 .pub .field { margin: 0; }
 .pub textarea.input { resize: vertical; min-height: calc(3 * 1.7em + 26px); }
 .count { font-variant-numeric: tabular-nums; }

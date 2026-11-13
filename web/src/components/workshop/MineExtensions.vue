@@ -55,7 +55,7 @@ async function load() {
 // 「我的卡片」是 optimisticAuth：身分可能還在背景確認，等到有人再讀，不然重新整理會先看到一則假的「登入已失效」
 watch(() => session.me?.accountNumId, (id) => { if (id) void load(); }, { immediate: true });
 
-type Chip = { key: string; tone: "" | "on" | "warn" | "bad" };
+type Chip = { key: string; tone: "" | "on" | "ok" | "warn" | "bad" };
 /**
  * 九種發布狀態收成列上的六種 chip（§4.5）。新版審核中（live_pending）寫「審核中」：製作者此刻在等的是審核結果；
  * 已發布有修改（live_changed）還是「已發布」；新版未通過（live_rejected）寫「審核未通過」，公開版照常（意見常駐在下面）。
@@ -65,7 +65,7 @@ function chip(item: MineItem): Chip {
     case "draft": return { key: "workshop.status.draft", tone: "" };
     case "review": case "liveup": return { key: "workshop.status.inReview", tone: "warn" };
     case "rejected": case "liverej": return { key: "workshop.status.rejected", tone: "bad" };
-    case "live": case "livechg": return { key: "workshop.status.published", tone: "on" };
+    case "live": case "livechg": return { key: "workshop.status.published", tone: "ok" };
     case "returned": return { key: "workshop.status.returned", tone: "bad" };
     case "hidden": return { key: "workshop.status.hidden", tone: "warn" };
   }
