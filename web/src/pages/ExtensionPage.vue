@@ -83,7 +83,7 @@ watch(shownName, (name) => { if (name) document.title = pageTitle(name); }, { im
 
 // ── 玩家自己的清單（登入才有）────────────────────────────────────────
 // 跟卡片頁共用同一份（照 roleId 存在模組裡）：在這裡按了加入，回卡片頁不必重讀
-const wsState = computed(() => (ext.value && session.me ? cardWorkshop(ext.value.card.roleId) : null));
+const wsState = computed(() => (ext.value && session.me ? cardWorkshop(ext.value.card.roleId, session.me.accountNumId) : null));
 async function loadSelection() {
   const s = wsState.value;
   if (!s || s.status === "loading" || s.status === "ready") return;

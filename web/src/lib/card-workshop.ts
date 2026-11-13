@@ -24,15 +24,18 @@ export interface CardWorkshopState {
 }
 
 const states = new Map<string, CardWorkshopState>();
-export function cardWorkshop(roleId: string): CardWorkshopState {
-  let s = states.get(roleId);
-  if (!s) { s = reactive<CardWorkshopState>({ roleId, selection: null, usage: null, status: "idle", busy: false }); states.set(roleId, s); }
+/** 清單是個人的：照「帳號＋卡」存，換帳號（不重新載入頁面的登出再登入）不會看到上一位的清單 */
+export function cardWorkshop(roleId: string, account: string | number): CardWorkshopState {
+  const key = `${account}:${roleId}`;
+  let s = states.get(key);
+  if (!s) { s = reactive<CardWorkshopState>({ roleId, selection: null, usage: null, status: "idle", busy: false }); states.set(key, s); }
   return s;
 }
-/** 登出或換帳號時清掉（清單是個人的） */
-export function forgetCardWorkshops(): void { states.clear(); }
 
 /** 已加入且啟用、還能用的件數（「開始對話會套用 N 個擴充」） */
+/** 清空所有快取的清單（測試之間重置用） */
+export function forgetCardWorkshops(): void { states.clear(); }
+
 export function activeCount(s: CardWorkshopState): number {
   return s.selection?.items?.filter((i) => i.enabled && i.availability !== "removed").length ?? 0;
 }
@@ -75,6 +78,22 @@ export function joinExtension(s: CardWorkshopState, workshopId: string, token: s
 }
 export function leaveExtension(s: CardWorkshopState, workshopId: string, token: string): Promise<void> {
   return write(s, token, () => uninstallWorkshop(s.roleId, workshopId, token));
+}
+
+/**
+ * 「復原」剛移除的那一件：重新加入後，把它放回原本的位置、照原本的開關。
+ * before 是移除前的清單順序；重新加入時伺服器把它排在最後、預設啟用。
+ */
+export async function rejoinExtension(s: CardWorkshopState, before: SelectionItem[], workshopId: string, token: string): Promise<void> {
+  await write(s, token, () => installWorkshop(s.roleId, workshopId, token));
+  const was = before.find((i) => i.workshopId === workshopId);
+  const order = before.map((i) => i.workshopId);
+  const sameAsBefore = (items: SelectionItem[]) => items.map((i) => i.workshopId).join() === order.filter((id) => items.some((i) => i.workshopId === id)).join();
+  if (!was || (was.enabled && s.selection && sameAsBefore(s.selection.items))) return;
+  await saveItems(s, token, (items) => {
+    const rank = (id: string) => { const n = order.indexOf(id); return n < 0 ? order.length : n; };
+    return items.map((i) => (i.workshopId === workshopId ? { ...i, enabled: was.enabled } : i)).sort((a, b) => rank(a.workshopId) - rank(b.workshopId));
+  });
 }
 
 /** 換掉清單（排序、開關）：版本對不上就重讀一次，照同樣的意圖再送一次 */

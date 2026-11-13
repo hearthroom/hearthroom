@@ -83,3 +83,15 @@ it("a stale revision re-reads the list and applies the same move again", async (
   expect(retried.revision).toBe(5);
   expect(retried.items.map((i: { workshopId: string }) => i.workshopId)).toEqual(["b", "a", "x"]);
 });
+
+it("undo after removing puts the extension back where it was, with its old switch", async () => {
+  const { rejoinExtension } = await import("../src/lib/card-workshop");
+  const api2 = await import("../src/lib/workshop");
+  const before = [row("a"), row("b", false), row("c")];
+  const state = reactive<CardWorkshopState>({ roleId: "r1", selection: { revision: 2, items: [row("a"), row("c")] }, usage: usage(), status: "ready", busy: false });
+  vi.spyOn(api2, "installWorkshop").mockResolvedValue({ revision: 3, items: [row("a"), row("c"), row("b")] });
+  api.saveSelection.mockImplementation(async (_r: string, s: Selection) => ({ revision: s.revision + 1, items: s.items }));
+  api.fetchUsageSummary.mockResolvedValue(usage());
+  await rejoinExtension(state, before, "b", "tok");
+  expect(state.selection!.items.map((i) => `${i.workshopId}:${i.enabled}`)).toEqual(["a:true", "b:false", "c:true"]);
+});

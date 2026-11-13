@@ -22,7 +22,7 @@ const total = computed(() => new Intl.NumberFormat(locale.value).format(props.us
 
 let restore: HTMLElement | null = null;
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") { e.preventDefault(); emit("close"); return; }
+  if (e.key === "Escape") { e.preventDefault(); if (!props.busy) emit("close"); return; }
   wrapTab(e, box.value);
 }
 onMounted(async () => {
@@ -36,7 +36,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
 
 <template>
   <Teleport to="body">
-    <div class="modal-backdrop" @click.self="emit('close')">
+    <div class="modal-backdrop" @click.self="!busy && emit('close')">
       <section ref="box" class="modal panel ws-cap" role="dialog" aria-modal="true" aria-labelledby="ws-cap-title" aria-describedby="ws-cap-body">
         <h2 id="ws-cap-title" class="modal__title">{{ $t("workshop.capacity.title") }}</h2>
         <p id="ws-cap-body" class="ws-cap__body ws-text">{{ $t("workshop.capacity.body", { total, tier: cur }) }}</p>
@@ -56,7 +56,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
         </div>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <div class="modal__actions">
-          <button type="button" class="btn" data-cancel @click="emit('close')">{{ $t("workshop.capacity.cancel") }}</button>
+          <button type="button" class="btn" data-cancel :disabled="busy" @click="emit('close')">{{ $t("workshop.capacity.cancel") }}</button>
         </div>
       </section>
     </div>

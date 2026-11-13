@@ -384,7 +384,7 @@ onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect();
 // 分頁要不要出現看伺服器的 tabVisible（作者開放、或這位使用者還看得到任何已發布的擴充）；讀不到就當沒有，
 // 卡片頁跟原本一樣。分頁記在網址（?tab=workshop），可以分享，手機返回鍵回到原分頁。
 const wsPage = ref<CardWorkshopPage | null>(null);
-const wsState = computed(() => (card.value?.roleId && session.me ? cardWorkshop(card.value.roleId) : null));
+const wsState = computed(() => (card.value?.roleId && session.me ? cardWorkshop(card.value.roleId, session.me.accountNumId) : null));
 const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));
 const wsRecTier = computed(() => tierLabel(wsState.value?.usage?.recommendedContextTokens));
 const pageTab = computed<"intro" | "workshop">(() => (wsPage.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
@@ -581,7 +581,7 @@ watch(
       </header>
 
       <LineTabs v-if="wsPage?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
-      <WorkshopTab v-if="pageTab === 'workshop' && wsPage" class="role__ws-tab" :card-id="card.id" :initial="wsPage" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
+      <WorkshopTab v-if="pageTab === 'workshop' && wsPage" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :initial="wsPage" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
       <div v-else class="role__body" :id="wsPage?.tabVisible ? 'card-panel' : undefined" :role="wsPage?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsPage?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
         <div class="role__main">
           <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->

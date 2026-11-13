@@ -16,7 +16,7 @@ import { useSession } from "@/lib/session";
 import { activeCount, isJoined, type CardWorkshopState } from "@/lib/card-workshop";
 import { fetchCardWorkshop, fetchWorkshopsByIds, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
 
-const props = defineProps<{ cardId: string; initial: CardWorkshopPage; state: CardWorkshopState | null; joinBusy: string | null }>();
+const props = defineProps<{ cardId: string; cardNum: string; initial: CardWorkshopPage; state: CardWorkshopState | null; joinBusy: string | null }>();
 const emit = defineEmits<{ manage: []; join: [ExtensionSummary] }>();
 const route = useRoute();
 const router = useRouter();
@@ -59,15 +59,16 @@ async function load() {
     if (n === seq) data.value = got;
   } catch { if (n === seq) failed.value = true; } finally { if (n === seq) loading.value = false; }
 }
-watch([filter, page, () => props.cardId], load, { immediate: true });
+// 「已加入」要等清單讀到：直接開 ?ws=joined 的連結時，分頁比清單先到
+watch([filter, page, () => props.cardId, () => (filter.value === "joined" ? props.state?.selection?.items.map((i) => i.workshopId).join(",") : "")], load, { immediate: true });
 watch(() => props.initial, (v) => { if (filter.value === "hot" && page.value === 1) data.value = v; });
 
 const items = computed(() => (filter.value === "joined" ? joinedList.value : data.value.items));
 const owner = computed(() => props.initial.viewerIsOwner);
 const allowNew = computed(() => props.initial.allowNew);
 const count = computed(() => (props.state ? activeCount(props.state) : 0));
-const createTo = computed(() => ({ path: lp("/mine/workshops/new"), query: { card: props.cardId } }));
-const ownerTo = computed(() => lp(`/mine/cards/${encodeURIComponent(props.cardId)}/workshop`));
+const createTo = computed(() => ({ path: lp("/mine/workshops/new"), query: { card: props.cardNum } }));
+const ownerTo = computed(() => lp(`/mine/cards/${encodeURIComponent(props.cardNum)}/workshop`));
 const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.value ? "owner" : "plain"));
 </script>
 

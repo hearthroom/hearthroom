@@ -14,7 +14,7 @@
  * 寫卡頁的元件原樣沿用（世界書、正規表示式、開局、橫式背景圖），不 fork。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, uploadImage } from "@/lib/api";
 import {
@@ -451,8 +451,10 @@ function flash(text: string) {
 }
 
 /* 改到一半離開要問一聲：站內換頁與關分頁都攔；換分區只換 query，不算離開 */
-onBeforeRouteLeave(async () =>
-  deleted.value || !dirty.value || (await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true })));
+const leaveOk = async () => deleted.value || !dirty.value || (await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true }));
+onBeforeRouteLeave(leaveOk);
+// 從一個擴充的編輯頁直接換到另一個（例如點了鈴鐺裡的通知）是同一條路由，換的是 :id，也要問
+onBeforeRouteUpdate(async (to, from) => (to.params.id === from.params.id ? true : await leaveOk()));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value && !deleted.value) e.preventDefault(); };
 /* Ctrl/⌘+S 存檔，跟卡片編輯頁一樣 */
 const onKey = (e: KeyboardEvent) => {

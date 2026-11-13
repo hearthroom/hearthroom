@@ -12,7 +12,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ApiError } from "./api";
 import { needsAdultConsent, viewerAdult } from "./adult-consent";
 import { confirmDialog } from "./confirm";
-import { joinExtension, leaveExtension, type CardWorkshopState } from "./card-workshop";
+import { joinExtension, leaveExtension, rejoinExtension, type CardWorkshopState } from "./card-workshop";
 import { loginPath } from "./login-return";
 import { useSession } from "./session";
 import { useLocalePath } from "./use-locale";
@@ -72,10 +72,17 @@ export function useExtensionJoin(state: () => CardWorkshopState | null, say: (te
     const tk = s && (await token());
     if (!s || !tk) return;
     busy.value = ext.id;
+    const before = s.selection?.items.slice() ?? [];
     try {
       await leaveExtension(s, ext.id, tk);
-      // 移除可逆：給「復原」，不跳確認框
-      say(t("workshop.toast.removed", { name: ext.name }), () => { void doJoin(ext); });
+      // 移除可逆：給「復原」，不跳確認框；復原放回原本的位置與開關
+      say(t("workshop.toast.removed", { name: ext.name }), () => {
+        void (async () => {
+          const again = await token();
+          if (!again) return;
+          try { await rejoinExtension(s, before, ext.id, again); } catch (err) { say(err instanceof Error ? err.message : t("state.actionFailed")); }
+        })();
+      });
     } catch (err) {
       say(err instanceof Error ? err.message : t("state.actionFailed"));
     } finally {
