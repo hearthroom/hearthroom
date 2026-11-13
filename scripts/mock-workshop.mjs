@@ -20,7 +20,7 @@
 const now = Date.now();
 const DAY = 86400e3;
 const TIERS = [{ tier: 1, tokens: 16000 }, { tier: 2, tokens: 32000 }, { tier: 3, tokens: 64000 }, { tier: 4, tokens: 128000 }];
-const cover = (n) => `http://127.0.0.1:8899/img/${n}.png`;
+const cover = (n) => `http://127.0.0.1:${process.env.PORT || 8899}/img/${n}.png`;
 
 const SEED = [
   { id: "w1", name: "雪夜篇：燈塔守望者", summary: "冬季限定的新篇章，燈塔與失蹤的船。", kinds: ["lore", "opening"], joinCount: 1820, version: 3, residentChars: 620, adult: false, author: "霧港", lore: 14, rules: 0, openings: 2 },
