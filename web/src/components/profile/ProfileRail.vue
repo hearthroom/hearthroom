@@ -37,13 +37,12 @@ const discordState = computed(() => {
   return state === 'synced' ? t('profile.linked') : t('community.states.' + state);
 });
 
-/** 完善主頁：五步，順序就是建議做的順序 */
+/** 完善主頁：四步，順序就是建議做的順序 */
 const steps = computed(() => [
   { key: 'avatar', done: !!session.avatarUrl, to: null },
   { key: 'bio', done: !!session.profile?.bio, to: null },
   { key: 'discord', done: linked.value, to: lp('/me/community') },
   { key: 'card', done: (props.author?.cardCount ?? 0) > 0, to: lp('/mine') },
-  { key: 'tips', done: (session.profile?.tipLinks?.length ?? 0) > 0, to: null },
 ]);
 const doneCount = computed(() => steps.value.filter((s) => s.done).length);
 const next = computed(() => steps.value.find((s) => !s.done) ?? null);
