@@ -95,6 +95,8 @@ export function noticeDetail(n: CommunityNotice): { body: string; cta: string } 
     return { body: deadline ? t("enforcement.reason.referral_abuse.notification", { deadline: deadline + t("enforcement.deadlineZone") }) : "", cta: t("enforcement.notification.cta") };
   }
   if (n.kind === "enforcement_result") return { body: t("enforcement.result.notification.body"), cta: "" };
+  const ws = workshopNotice(n);
+  if (ws) return { body: ws.body, cta: "" };
   return null;
 }
 
@@ -110,8 +112,34 @@ export function noticeUpdateNote(n:CommunityNotice):string {
 }
 
 /** One line that says who did what to which card; falls back to the plain kind label when the record carries no detail. */
+/**
+ * 卡片工坊的六種通知（interface-web.md §8）：標題一行＋說明一行。原作者的理由原文放在說明裡，
+ * 但只是預覽；持久落點在「我的卡片」›擴充的那一列與編輯頁的發布分區。
+ */
+function workshopNotice(n: CommunityNotice): { title: string; body: string } | null {
+  if (!n.kind.startsWith("workshop_")) return null;
+  const t = i18n.global.t;
+  const extra = n.extra ?? {};
+  const name = typeof extra.workshopName === "string" ? extra.workshopName : "";
+  const reason = noticeNote(extra.reason) ?? "";
+  const card = n.card?.name ?? "";
+  const by = n.actor?.name ?? "";
+  const pair = (key: string, params: Record<string, string>) => ({ title: t(`notifications.workshop.${key}.title`, params), body: t(`notifications.workshop.${key}.body`, params) });
+  switch (n.kind) {
+    case "workshop_returned": return pair("returned", { name, reason });
+    case "workshop_hidden": return pair("hidden", { name, reason });
+    case "workshop_appeal_result": return pair("appeal", { name });
+    case "workshop_review_result": return pair(extra.status === "rejected" ? "rejected" : "published", { name });
+    case "workshop_published": return pair("newForOwner", { name, by, card });
+    case "workshop_reopened": return pair("reopened", { card, name: typeof extra.draftName === "string" ? extra.draftName : name });
+    default: return null;
+  }
+}
+
 export function noticeText(n: CommunityNotice): string {
   const t = i18n.global.t;
+  const ws = workshopNotice(n);
+  if (ws) return ws.title;
   const locale = String(i18n.global.locale.value);
   const card = n.card?.name ? quote(locale, n.card.name) : "";
   const actor = n.actor?.name ?? "";

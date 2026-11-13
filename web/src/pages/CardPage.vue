@@ -418,7 +418,12 @@ const say = (text: string, undo?: () => void) => toast.value?.say(text, undo);
 const joiner = useExtensionJoin(() => wsState.value, say);
 const manageOpen = computed(() => route.query.manage === "1" && !!wsState.value);
 function openManage() { void router.push({ query: { ...route.query, manage: "1" } }); }
-function closeManage() { if (route.query.manage) router.back(); }
+// 開管理推了一筆歷史（手機返回鍵關掉它）；從別處直接帶 ?manage=1 進來的（面板的「到工坊管理」開新分頁）沒有上一頁，改成換掉網址
+function closeManage() {
+  if (!route.query.manage) return;
+  if (window.history.state?.back) router.back();
+  else void router.replace({ query: { ...route.query, manage: undefined } });
+}
 
 /** 開始對話前：放不下才問三選一；夠用、只是低於建議都直接開始 */
 const capacityAsk = ref<null | ((choice: "switch" | "manage" | "go" | null) => void)>(null);

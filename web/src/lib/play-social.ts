@@ -19,7 +19,18 @@ export interface PlaySocialCard {
   /** PlayPage 開卡時讀到的那份卡片資料：面板一打開就畫得出來，不必等請求 */
   card?: CommunityCard | null;
 }
-export type PlayInfoTab = "info" | "comments" | "rankings";
+export type PlayInfoTab = "info" | "comments" | "rankings" | "workshop";
+/**
+ * 這場對話的擴充（docs studio/tasks/2026-11-13-card-workshop/interface-stage.md §4）。舞台本來就要讀它
+ * 畫開場來源與資訊鍵上的小圓點，讀到就經宿主介面 card.setWorkshop 交過來；面板「擴充」分頁照它畫，不另外請求。
+ */
+export interface WorkshopConversationView {
+  selectionRevision: number;
+  manifestHash: string;
+  openingSource: { kind: "base" | "workshop"; workshopId?: string; workshopName?: string; openingId?: string } | null;
+  items: { workshopId: string; name: string; coverUrl: string; kinds: ("lore" | "display" | "opening")[]; residentChars: number; status: "resident" | "triggered" | "disabled" | "removed" }[];
+  triggeredCount: number;
+}
 /**
  * 卡片資訊面板提供給它重用的元件（含經 Teleport 開出的完整知音榜）：站內連結改開新分頁、指回主站。
  * 同分頁換頁會把遊玩頁與沙盒卸掉；卡片 App 網域上只有對話頁。登入連結不吃這個，照舊同分頁。
@@ -37,7 +48,9 @@ export const playSocial = reactive<{
   detail: PlaySocialDetail | null;
   /** 詳情讀取的狀態：資訊分頁據此畫介紹的骨架，或錯誤與「重新載入」 */
   detailStatus: "idle" | "loading" | "ready" | "failed";
-}>({ card: null, open: false, tab: "info", detail: null, detailStatus: "idle" });
+  /** 這場對話用了哪些擴充；null＝沒有或舞台還沒給 */
+  workshop: WorkshopConversationView | null;
+}>({ card: null, open: false, tab: "info", detail: null, detailStatus: "idle", workshop: null });
 
 export function registerPlayCard(card: PlaySocialCard | null): void {
   playSocial.card = card;
@@ -45,6 +58,7 @@ export function registerPlayCard(card: PlaySocialCard | null): void {
   playSocial.tab = "info";
   playSocial.detail = null;
   playSocial.detailStatus = "idle";
+  playSocial.workshop = null;
 }
 
 /** 讀來源端的卡片詳情（介紹與評論開關）。只有最後一次讀取寫得進來：途中換了卡、或又按了重新載入，舊的那次就不寫。 */
@@ -106,6 +120,10 @@ export function playSocialHost(deps: PlaySocialDeps) {
     /** 同一顆鍵開也收（桌機面板沒有遮罩，頁首入口一直按得到）。 */
     toggleInfo(roleId: string) {
       if (current(roleId)) playSocial.open = !playSocial.open;
+    },
+    /** 舞台讀到（或換存檔後重讀到）這場對話的擴充；別張卡的不收 */
+    setWorkshop(roleId: string, view: WorkshopConversationView | null) {
+      if (current(roleId)) playSocial.workshop = view && Array.isArray(view.items) ? view : null;
     },
     onInfoChange(fn: (open: boolean) => void): () => void {
       return watch(() => playSocial.open, fn);
