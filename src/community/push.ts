@@ -5,6 +5,7 @@ import {eligibleNotification} from '../test-accounts';
 import { SITE_NAME, siteName } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
+import { memberNsfw } from "../members";
 import { updateTitle } from "../updates";
 import { noticeNote } from "../../shared/notice-note";
 import { enforcementDeadline, isEnforcementKind } from "../../shared/enforcement-notice";
@@ -28,7 +29,20 @@ export function pushConfigured(env: Env): boolean {
   return !!(env.PUSH_VAPID_PUBLIC_KEY && env.PUSH_VAPID_PRIVATE_KEY && env.PUSH_VAPID_SUBJECT);
 }
 
-type Row = { card_id:string|number|null; id: string; member_id: string; kind: string; path: string; extra: string | null; actor_name: string | null; actor_handle: string | null; card_names: string | null };
+type Row = {
+  card_id: string | number | null;
+  workshop_id?: string | null;
+  card_rating?: string | null;
+  workshop_rating?: string | null;
+  id: string;
+  member_id: string;
+  kind: string;
+  path: string;
+  extra: string | null;
+  actor_name: string | null;
+  actor_handle: string | null;
+  card_names: string | null;
+};
 type Sub = { id: string; endpoint: string; p256dh: string; auth: string; locale: string | null; failures: number };
 
 const quote = (locale: PushLocale, name: string) => (locale.startsWith("zh") ? `「${name}」` : locale === "ja" ? `『${name}』` : `“${name}”`);
@@ -42,6 +56,11 @@ type Copy = {
   share: Record<"share_needs_info" | "share_approved" | "share_rejected" | "share_paid" | "share_queued", string>;
   /** HarperHarbor 平台的帳號通知：平台口吻（蘇綺不說），標題帶 HarperHarbor；字照 docs/studio/tasks/2026-10-30-enforcement-notice-appeal/copy.md C、E2 */
   enforcement: { title: string; notice: string; zone: string; maintained: string; revoked: string; result: string };
+  workshop: {
+    published: string; publishedPlain: string; reopened: string; reopenedPlain: string;
+    approved: string; rejected: string; rejectedNote: string;
+    returned: string; hidden: string; appealRestored: string; appealUpheld: string;
+  };
 };
 const copy: Record<PushLocale, Copy> = {
   "zh-Hant": {
@@ -58,6 +77,13 @@ const copy: Record<PushLocale, Copy> = {
     sukiTitle: "蘇綺", sukiHungry: "肚子餓了……今晚講一個故事給我聽好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那邊的人在問你什麼時候回去～",
     share: { share_needs_info: "你的分享申請需要補充資料", share_approved: "你的分享申請通過了", share_rejected: "你的分享申請沒有通過", share_paid: "分享獎勵已入帳", share_queued: "分享獎勵排隊發放中" },
     enforcement: { title: "HarperHarbor 帳號處置通知", notice: "你的推薦碼出現異常，我們已採取處置。{deadline}前可以申訴。", zone: "（台北時間）", maintained: "申訴結果：維持原處置", revoked: "申訴結果：處置已撤銷", result: "點開查看我們的回覆。" },
+    workshop: {
+      published: "{actor} 為{card}發佈了擴充{ws}", publishedPlain: "你的卡片有新的工坊擴充",
+      reopened: "{card}已重新開放建立擴充", reopenedPlain: "你關注的卡片已重新開放建立擴充",
+      approved: "擴充{ws}審核通過了", rejected: "擴充{ws}這次沒有通過審核", rejectedNote: "擴充{ws}這次沒有通過審核，審核員說：{note}",
+      returned: "原作者退回了擴充{ws}，點開查看理由", hidden: "原作者隱藏了擴充{ws}，點開查看理由",
+      appealRestored: "擴充{ws}的申訴已通過，恢復公開顯示", appealUpheld: "擴充{ws}的申訴維持原處理",
+    },
   },
   "zh-Hans": {
     title: siteName("zh-Hans"), reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
@@ -73,6 +99,13 @@ const copy: Record<PushLocale, Copy> = {
     sukiTitle: "苏绮", sukiHungry: "肚子饿了……今晚讲一个故事给我听好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那边的人在问你什么时候回去～",
     share: { share_needs_info: "你的分享申请需要补充资料", share_approved: "你的分享申请通过了", share_rejected: "你的分享申请没有通过", share_paid: "分享奖励已到账", share_queued: "分享奖励排队发放中" },
     enforcement: { title: "HarperHarbor 账号处置通知", notice: "你的推荐码出现异常，我们已采取处置。{deadline}前可以申诉。", zone: "（北京时间）", maintained: "申诉结果：维持原处置", revoked: "申诉结果：处置已撤销", result: "点开查看我们的回复。" },
+    workshop: {
+      published: "{actor} 为{card}发布了扩充{ws}", publishedPlain: "你的卡片有新的工坊扩充",
+      reopened: "{card}已重新开放建立扩充", reopenedPlain: "你关注的卡片已重新开放建立扩充",
+      approved: "扩充{ws}审核通过了", rejected: "扩充{ws}这次没有通过审核", rejectedNote: "扩充{ws}这次没有通过审核，审核员说：{note}",
+      returned: "原作者退回了扩充{ws}，点开查看理由", hidden: "原作者隐藏了扩充{ws}，点开查看理由",
+      appealRestored: "扩充{ws}的申诉已通过，恢复公开显示", appealUpheld: "扩充{ws}的申诉维持原处理",
+    },
   },
   en: {
     title: SITE_NAME, reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
@@ -88,6 +121,13 @@ const copy: Record<PushLocale, Copy> = {
     sukiTitle: "Suki", sukiHungry: "I'm hungry… tell me a story tonight?", sukiPostcard: "I took a trip into the world of {card}. Everyone there is asking when you'll be back~",
     share: { share_needs_info: "Your share submission needs more information", share_approved: "Your share submission was approved", share_rejected: "Your share submission was not approved", share_paid: "Your share reward has arrived", share_queued: "Your share reward is in the queue" },
     enforcement: { title: "HarperHarbor account action notice", notice: "We found unusual activity on your referral code and took action. You can appeal until {deadline}.", zone: " (UTC+8)", maintained: "Appeal result: the action stands", revoked: "Appeal result: the action was withdrawn", result: "Open to read our reply." },
+    workshop: {
+      published: "{actor} published an extension {ws} for {card}", publishedPlain: "Your card has a new workshop extension",
+      reopened: "{card} reopened workshop submissions", reopenedPlain: "A card you follow reopened workshop submissions",
+      approved: "Extension {ws} passed review", rejected: "Extension {ws} did not pass review this time", rejectedNote: "Extension {ws} did not pass review this time. The reviewer wrote: {note}",
+      returned: "The card author returned your extension {ws}. Open to read the reason.", hidden: "The card author hid your extension {ws}. Open to read the reason.",
+      appealRestored: "Your appeal for {ws} was approved and public visibility was restored", appealUpheld: "Your appeal for {ws} upheld the original decision",
+    },
   },
   ja: {
     title: SITE_NAME, reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
@@ -103,6 +143,13 @@ const copy: Record<PushLocale, Copy> = {
     sukiTitle: "スキ", sukiHungry: "おなかすいた……今夜、お話ひとつ聞かせてくれる？", sukiPostcard: "{card}の世界をひとまわりしてきたよ。みんな、あなたはいつ戻るのって聞いてた～",
     share: { share_needs_info: "シェアの申請に追加の情報が必要です", share_approved: "シェアの申請が承認されました", share_rejected: "シェアの申請は承認されませんでした", share_paid: "シェア特典が付与されました", share_queued: "シェア特典は順番待ちです" },
     enforcement: { title: "HarperHarbor アカウント対応のお知らせ", notice: "紹介コードに異常が見つかり、対応を行いました。{deadline}まで異議を申し立てられます。", zone: "（UTC+8）", maintained: "異議申し立ての結果：対応は維持されます", revoked: "異議申し立ての結果：対応を取り消しました", result: "タップして回答を確認できます。" },
+    workshop: {
+      published: "{actor} さんが{card}の拡張{ws}を公開しました", publishedPlain: "あなたのカードに新しい工房拡張が公開されました",
+      reopened: "{card}で拡張の作成受付が再開されました", reopenedPlain: "フォロー中のカードで拡張の作成受付が再開されました",
+      approved: "拡張{ws}が審査を通過しました", rejected: "拡張{ws}は今回審査を通過しませんでした", rejectedNote: "拡張{ws}は今回審査を通過しませんでした。審査担当者のコメント：{note}",
+      returned: "原作者が拡張{ws}を差し戻しました。タップして理由を確認してください。", hidden: "原作者が拡張{ws}を非表示にしました。タップして理由を確認してください。",
+      appealRestored: "拡張{ws}の異議申し立てが承認され、公開が再開されました", appealUpheld: "拡張{ws}の異議申し立ての結果、元の対応が維持されました",
+    },
   },
   ko: {
     title: SITE_NAME, reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
@@ -118,6 +165,13 @@ const copy: Record<PushLocale, Copy> = {
     sukiTitle: "스키", sukiHungry: "배고파… 오늘 밤에 이야기 하나 들려줄래?", sukiPostcard: "{card}의 세계에 잠깐 다녀왔어. 다들 너 언제 돌아오냐고 묻더라~",
     share: { share_needs_info: "공유 신청에 추가 자료가 필요해요", share_approved: "공유 신청이 승인되었어요", share_rejected: "공유 신청이 승인되지 않았어요", share_paid: "공유 보상이 지급되었어요", share_queued: "공유 보상이 지급 대기 중이에요" },
     enforcement: { title: "HarperHarbor 계정 조치 안내", notice: "추천 코드에서 이상 징후를 발견해 조치했어요. {deadline}까지 이의를 신청할 수 있어요.", zone: " (UTC+8)", maintained: "이의 신청 결과: 조치 유지", revoked: "이의 신청 결과: 조치 취소", result: "눌러서 답변을 확인하세요." },
+    workshop: {
+      published: "{actor} 님이 {card}에 확장 {ws}을(를) 공개했어요", publishedPlain: "내 카드에 새 공방 확장이 공개되었어요",
+      reopened: "{card}의 확장 등록이 다시 열렸어요", reopenedPlain: "관심 카드의 확장 등록이 다시 열렸어요",
+      approved: "확장 {ws}이(가) 심사를 통과했어요", rejected: "확장 {ws}이(가) 이번 심사를 통과하지 못했어요", rejectedNote: "확장 {ws}이(가) 이번 심사를 통과하지 못했어요. 검토자 의견: {note}",
+      returned: "원작자가 확장 {ws}을(를) 반려했어요. 눌러서 사유를 확인하세요.", hidden: "원작자가 확장 {ws}을(를) 숨김 처리했어요. 눌러서 사유를 확인하세요.",
+      appealRestored: "확장 {ws}의 이의 신청이 승인되어 다시 공개되었어요", appealUpheld: "확장 {ws}의 이의 신청 결과 기존 조치가 유지되었어요",
+    },
   },
 };
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ""));
@@ -170,6 +224,17 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
     const title = updateTitle(extra.entry, locale);
     if (title) return fill(c.shipped, { title: title.replace(/[。.]$/, "") });
   }
+  const ws = typeof extra.workshopName === "string" && extra.workshopName.trim() ? quote(locale, extra.workshopName.trim()) : "";
+  if (row.kind === "workshop_published") return actor && card && ws ? fill(c.workshop.published, { actor, card, ws }) : c.workshop.publishedPlain;
+  if (row.kind === "workshop_reopened") return card ? fill(c.workshop.reopened, { card }) : c.workshop.reopenedPlain;
+  if (row.kind === "workshop_review_result") {
+    if (extra.status !== "rejected") return fill(c.workshop.approved, { ws });
+    const note = noticeNote(extra.note);
+    return note ? fill(c.workshop.rejectedNote, { ws, note }) : fill(c.workshop.rejected, { ws });
+  }
+  if (row.kind === "workshop_returned") return fill(c.workshop.returned, { ws });
+  if (row.kind === "workshop_hidden") return fill(c.workshop.hidden, { ws });
+  if (row.kind === "workshop_appeal_result") return fill(extra.decision === "restored" ? c.workshop.appealRestored : c.workshop.appealUpheld, { ws });
   return c.generic;
 }
 
@@ -216,8 +281,8 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   const now = Date.now();
   const rows = (
     await env.DB.prepare(
-      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,n.card_id,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names
-       FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
+      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,n.card_id,n.workshop_id,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names,COALESCE(c.rating,wc.rating) AS card_rating,w.rating AS workshop_rating
+       FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id
        WHERE ${eligibleNotification()} AND n.push_at IS NULL AND n.created_at>? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=n.member_id)
        ORDER BY n.created_at LIMIT 40`,
     ).bind(now - 86400000).all<Row>()
@@ -227,6 +292,17 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   const visibility=await updateNoticeVisibility(env,rows);
   let sent = 0;
   for (const row of rows) {
+    if ((row.workshop_id || row.kind.startsWith("workshop_")) && (row.workshop_rating === "R" || row.card_rating === "R")) {
+      const nsfw = await memberNsfw(env.DB, row.member_id);
+      const blockedByRegion = nsfw.countryRegion === "CN";
+      const blockedPublicAdult =
+        (row.kind === "workshop_published" || row.kind === "workshop_reopened") &&
+        (!nsfw.showNsfw || !nsfw.ageVerifiedAt || !nsfw.adultConsent);
+      if (blockedByRegion || blockedPublicAdult) {
+        await env.DB.prepare("UPDATE community_notifications SET push_at=? WHERE id=?").bind(now, row.id).run();
+        continue;
+      }
+    }
     if(visibility.newIds.has(row.id)&&!visibility.reachable.has(row.id)){
       if(!visibility.unavailable)await env.DB.prepare('UPDATE community_notifications SET push_at=? WHERE id=?').bind(now,row.id).run();
       continue;

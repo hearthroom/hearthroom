@@ -41,15 +41,17 @@ export interface CommentCard {
   rewardEligible?:boolean;
 }
 
-/** 留言掛在哪裡。文章只帶留言區要用的欄位。 */
+/** 留言掛在哪裡。文章與工坊擴充只帶留言區要用的欄位。 */
 export type CommentTarget =
   | { kind: "card"; card: CommentCard }
-  | { kind: "post"; post: { id: string; commentsClosed: boolean; authorMemberId: string; pinnedCommentId: string | null } };
+  | { kind: "post"; post: { id: string; commentsClosed: boolean; authorMemberId: string; pinnedCommentId: string | null } }
+  | { kind: "workshop"; workshop: { id: string; creatorMemberId: string | null } };
 export type CommentSort = "new" | "hot";
 export const sortOf = (raw: string | undefined): CommentSort => (raw === "hot" ? "hot" : "new");
 /** 熱門：讚多的在前，同讚新的在前。 */
 const ORDER: Record<CommentSort, string> = { new: "c.created_at DESC, c.id DESC", hot: "c.like_count DESC, c.created_at DESC, c.id DESC" };
-const targetOf = (t: CommentTarget) => (t.kind === "card" ? { col: "card_id", id: t.card.id } : { col: "post_id", id: t.post.id });
+const targetOf = (t: CommentTarget) =>
+  t.kind === "card" ? { col: "card_id", id: t.card.id } : t.kind === "post" ? { col: "post_id", id: t.post.id } : { col: "workshop_id", id: t.workshop.id };
 
 /** Current work authority gates social reads and writes before adult checks. */
 export async function commentCard(env:Env, cardId: string): Promise<CommentCard> {
@@ -122,7 +124,13 @@ export type CommentView = ReturnType<typeof view> & { replies?: ReturnType<typeo
 const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at, c.status,
   m.handle, m.display_name, m.avatar_url,
   EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked,
-  ${t.kind === "post" ? `NULL AS score, ${officialSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = CAST(c.card_id AS TEXT) AND s.member_id = c.member_id) AS score"}
+  ${
+    t.kind === "post"
+      ? `NULL AS score, ${officialSql("c.member_id")} AS official`
+      : t.kind === "workshop"
+        ? "NULL AS score"
+        : "(SELECT s.score FROM card_scores s WHERE s.card_id = CAST(c.card_id AS TEXT) AND s.member_id = c.member_id) AS score"
+  }
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
 /** 看得到的留言：公開的（被標記待審的也是）；頂層被移除但還有回覆時留佔位。 */
@@ -132,7 +140,12 @@ const TOP_SHOWN = "((c.deleted_at IS NULL AND c.status = 'visible') OR (c.status
 export async function listTop(
   db: D1Database, target: CommentTarget, viewer: Viewer, page: number, sort: CommentSort = "new",
 ): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean; pinnedCommentId?: string | null; mutedUntil?: number | null }> {
-  const author = target.kind === "card" ? await cardAuthorMemberId(db, target.card) : null;
+  const author =
+    target.kind === "card"
+      ? await cardAuthorMemberId(db, target.card)
+      : target.kind === "workshop"
+        ? target.workshop.creatorMemberId
+        : null;
   const { col, id } = targetOf(target);
   const SELECT = selectFor(target);
   const post = target.kind === "post";
@@ -149,7 +162,7 @@ export async function listTop(
     db.prepare(`SELECT COUNT(*) AS n FROM comments WHERE ${col} = ? AND root_id IS NULL AND ((deleted_at IS NULL AND status = 'visible') OR (status = 'removed' AND reply_count > 0))`).bind(id),
     db.prepare(`${SELECT} WHERE c.${col} = ?2 AND c.root_id IS NULL AND ${TOP_SHOWN} AND c.id <> ?5 ORDER BY ${ORDER[sort]} LIMIT ?3 OFFSET ?4`)
       .bind(me, id, COMMENT_PAGE_SIZE - (p === 1 ? shift : 0), Math.max(0, (p - 1) * COMMENT_PAGE_SIZE - shift), pin?.id ?? ""),
-    ...(!post && isRoleCreator && viewer.memberId
+    ...(target.kind === "card" && isRoleCreator && viewer.memberId
       ? [db.prepare("UPDATE community_notifications SET read_at = ? WHERE event_key = ? AND member_id = ? AND read_at IS NULL").bind(Date.now(), `card_comments:${id}`, viewer.memberId)]
       : []),
   ]);
@@ -177,7 +190,12 @@ export async function listTop(
 }
 
 export async function listReplies(db: D1Database, target: CommentTarget, rootId: string, viewer: Viewer, page: number) {
-  const author = target.kind === "card" ? await cardAuthorMemberId(db, target.card) : null;
+  const author =
+    target.kind === "card"
+      ? await cardAuthorMemberId(db, target.card)
+      : target.kind === "workshop"
+        ? target.workshop.creatorMemberId
+        : null;
   const { col, id } = targetOf(target);
   const offset = (Math.max(1, page) - 1) * COMMENT_PAGE_SIZE;
   const [count, rows] = await db.batch<Row & { n: number }>([
@@ -199,85 +217,126 @@ export async function postComment(
   input: { target: CommentTarget; memberId: string; content: unknown; parentId?: unknown; rootId?: unknown; now: number },
 ): Promise<{ commentId: string; status: "visible" }> {
   const { target } = input;
-  if (target.kind === "post" && target.post.commentsClosed) throw new HttpError(403, "blog_comments_closed");
-  const { col, id: targetId } = targetOf(target);
-  const content = typeof input.content === "string" ? input.content.trim() : "";
-  if (!content) throw new HttpError(400, "comment_required");
-  if ([...content].length > COMMENT_MAX_CHARS) throw new HttpError(400, "comment_too_long");
-  const muted = await mutedUntil(db, input.memberId, input.now);
-  if (muted !== false) throw new HttpError(403, "comment_muted", undefined, { until: muted });
-  const recent = await db
-    .prepare("SELECT COUNT(*) AS n FROM comments WHERE member_id = ? AND created_at > ?")
-    .bind(input.memberId, input.now - RATE_WINDOW_MS)
-    .first<{ n: number }>();
-  if ((recent?.n ?? 0) >= RATE_MAX) throw new HttpError(429, "comment_rate_limited");
-
-  let rootId: string | null = null;
-  let parentId: string | null = null;
-  let replyToName = "";
   const rawRoot = typeof input.rootId === "string" ? input.rootId : "";
   const rawParent = typeof input.parentId === "string" ? input.parentId : "";
-  if (rawRoot || rawParent) {
-    // 回覆：頂層要活著、屬於這張卡（這篇文章）；回的那一則要在同一串裡。客戶端送來的「回給誰」不採信，名字由這裡查。
-    const root = await db
-      .prepare(`SELECT id FROM comments WHERE id = ? AND ${col} = ? AND root_id IS NULL AND deleted_at IS NULL AND status = 'visible'`)
-      .bind(rawRoot || rawParent, targetId)
-      .first<{ id: string }>();
-    if (!root) throw new HttpError(404, "comment not found");
-    rootId = root.id;
-    parentId = rawParent || root.id;
-    const parent = await db
-      .prepare(
-        `SELECT c.id, m.handle, m.display_name FROM comments c JOIN members m ON m.id = c.member_id
-         WHERE c.id = ? AND c.deleted_at IS NULL AND c.status = 'visible' AND (c.id = ? OR c.root_id = ?)`,
-      )
-      .bind(parentId, rootId, rootId)
-      .first<{ id: string; handle: string; display_name: string | null }>();
-    if (!parent) throw new HttpError(404, "comment not found");
-    replyToName = parent.display_name?.trim() || parent.handle;
-  }
+  const isWorkshop = target.kind === "workshop";
+  const wsAction = rawRoot || rawParent ? "reply" : "create";
+  try {
+    if (target.kind === "post" && target.post.commentsClosed) throw new HttpError(403, "blog_comments_closed");
+    const { col, id: targetId } = targetOf(target);
+    const content = typeof input.content === "string" ? input.content.trim() : "";
+    if (!content) throw new HttpError(400, "comment_required");
+    if ([...content].length > COMMENT_MAX_CHARS) throw new HttpError(400, "comment_too_long");
+    const muted = await mutedUntil(db, input.memberId, input.now);
+    if (muted !== false) throw new HttpError(403, "comment_muted", undefined, { until: muted });
+    const recent = await db
+      .prepare("SELECT COUNT(*) AS n FROM comments WHERE member_id = ? AND created_at > ?")
+      .bind(input.memberId, input.now - RATE_WINDOW_MS)
+      .first<{ n: number }>();
+    if ((recent?.n ?? 0) >= RATE_MAX) throw new HttpError(429, "comment_rate_limited");
 
-  const id = crypto.randomUUID();
-  // 先發布、後審核：命中規則只記原因進待審，留言照常公開（comment-moderation.ts）。
-  const reason = await holdReason(db, { memberId: input.memberId, content, now: input.now }, await readSettings(db));
-  const postId = target.kind === "post" ? target.post.id : null;
-  // 文章在讀取之後才關閉留言：條件式 INSERT 寫不進去，後面的寫入用 changes() 串在它後面一起不動。
-  const writes = [
-    db.prepare(
-      `INSERT INTO comments (id, card_id, post_id, member_id, parent_id, root_id, content, reply_to_name, created_at, status, hold_reason)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 WHERE ?3 IS NULL OR EXISTS (SELECT 1 FROM blog_posts WHERE id = ?3 AND comments_closed = 0)`,
-    ).bind(id, target.kind === "card" ? target.card.id : 0, postId, input.memberId, parentId, rootId, content, replyToName, input.now, "visible", reason),
-  ];
-  if (rootId) writes.push(db.prepare("UPDATE comments SET reply_count = reply_count + 1 WHERE id = ? AND changes() > 0").bind(rootId));
-  if (reason) writes.push(auditStmtIfChanged(db, { subjectKind: "comment", subjectId: id, actorMemberId: null, actorKind: "system", action: "flag", reason, after: { status: "visible", holdReason: reason }, operationId: `hold:${id}`, now: input.now }));
-  const results = await db.batch(writes);
-  if (!results[0].meta.changes) throw new HttpError(403, "blog_comments_closed");
-  if (reason) await bumpOp(db, "comment_moderation", "flag", "success");
-  return { commentId: id, status: "visible" };
+    let rootId: string | null = null;
+    let parentId: string | null = null;
+    let replyToName = "";
+    if (rawRoot || rawParent) {
+      // 回覆：頂層要活著、屬於同一個目標；回的那一則要在同一串裡。客戶端送來的「回給誰」不採信，名字由這裡查。
+      const root = await db
+        .prepare(`SELECT id FROM comments WHERE id = ? AND ${col} = ? AND root_id IS NULL AND deleted_at IS NULL AND status = 'visible'`)
+        .bind(rawRoot || rawParent, targetId)
+        .first<{ id: string }>();
+      if (!root) throw new HttpError(404, "comment not found");
+      rootId = root.id;
+      parentId = rawParent || root.id;
+      const parent = await db
+        .prepare(
+          `SELECT c.id, m.handle, m.display_name FROM comments c JOIN members m ON m.id = c.member_id
+           WHERE c.id = ? AND c.deleted_at IS NULL AND c.status = 'visible' AND (c.id = ? OR c.root_id = ?)`,
+        )
+        .bind(parentId, rootId, rootId)
+        .first<{ id: string; handle: string; display_name: string | null }>();
+      if (!parent) throw new HttpError(404, "comment not found");
+      replyToName = parent.display_name?.trim() || parent.handle;
+    }
+
+    const id = crypto.randomUUID();
+    // 先發布、後審核：命中規則只記原因進待審，留言照常公開（comment-moderation.ts）。
+    const reason = await holdReason(db, { memberId: input.memberId, content, now: input.now }, await readSettings(db));
+    const postId = target.kind === "post" ? target.post.id : null;
+    const workshopId = target.kind === "workshop" ? target.workshop.id : null;
+    const writes = [
+      db.prepare(
+        `INSERT INTO comments (id, card_id, post_id, workshop_id, member_id, parent_id, root_id, content, reply_to_name, created_at, status, hold_reason)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12 WHERE ?3 IS NULL OR EXISTS (SELECT 1 FROM blog_posts WHERE id = ?3 AND comments_closed = 0)`,
+      ).bind(id, target.kind === "card" ? target.card.id : 0, postId, workshopId, input.memberId, parentId, rootId, content, replyToName, input.now, "visible", reason),
+    ];
+    if (rootId) writes.push(db.prepare("UPDATE comments SET reply_count = reply_count + 1 WHERE id = ? AND changes() > 0").bind(rootId));
+    if (reason) writes.push(auditStmtIfChanged(db, { subjectKind: "comment", subjectId: id, actorMemberId: null, actorKind: "system", action: "flag", reason, after: { status: "visible", holdReason: reason }, operationId: `hold:${id}`, now: input.now }));
+    const results = await db.batch(writes);
+    if (!results[0].meta.changes) throw new HttpError(403, "blog_comments_closed");
+    if (reason) await bumpOp(db, "comment_moderation", "flag", "success");
+    if (isWorkshop) await bumpOp(db, "workshop_comment", wsAction, "success");
+    return { commentId: id, status: "visible" };
+  } catch (err) {
+    if (isWorkshop) {
+      await bumpOp(db, "workshop_comment", wsAction, err instanceof HttpError && err.status < 500 ? "rejected" : "error");
+    }
+    throw err;
+  }
 }
 
 export async function deleteComment(db: D1Database, commentId: string, viewer: Viewer, now: number): Promise<void> {
   const row = await db
     .prepare(
-      `SELECT c.id, c.member_id, c.root_id, c.status, c.post_id, k.id AS card_id, k.provider, k.author_num_id
-       FROM comments c LEFT JOIN cards k ON k.id = c.card_id WHERE c.id = ? AND c.deleted_at IS NULL AND (k.id IS NOT NULL OR c.post_id IS NOT NULL)`,
+      `SELECT c.id, c.member_id, c.root_id, c.status, c.post_id, c.workshop_id,
+              k.id AS card_id, k.provider, k.author_num_id,
+              w.author_member_id AS ws_author_member_id, w.provider AS ws_provider, w.author_num_id AS ws_author_num_id
+       FROM comments c
+       LEFT JOIN cards k ON k.id = c.card_id
+       LEFT JOIN workshops w ON w.id = c.workshop_id
+       WHERE c.id = ? AND c.deleted_at IS NULL AND (k.id IS NOT NULL OR c.post_id IS NOT NULL OR w.id IS NOT NULL)`,
     )
     .bind(commentId)
-    .first<{ id: string; member_id: string; root_id: string | null; status: string; post_id: string | null; card_id: string; provider: string; author_num_id: number }>();
+    .first<{
+      id: string;
+      member_id: string;
+      root_id: string | null;
+      status: string;
+      post_id: string | null;
+      workshop_id: string | null;
+      card_id: string | null;
+      provider: string | null;
+      author_num_id: number | null;
+      ws_author_member_id: string | null;
+      ws_provider: string | null;
+      ws_author_num_id: number | null;
+    }>();
   if (!row) throw new HttpError(404, "comment not found");
   const isOwner = viewer.memberId === row.member_id;
   // 文章留言只有本人能刪；職員要拿掉別人的留言走審核移除（有理由、有通知）。
   if (row.post_id && !isOwner) throw new HttpError(403, "not allowed to delete this comment");
   let isAuthor = false;
   if (!isOwner && viewer.memberId) {
-    const author = await cardAuthorMemberId(db, { id: row.card_id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, adult: false });
-    isAuthor = author === viewer.memberId;
+    if (row.workshop_id) {
+      const wsAuthor =
+        row.ws_author_member_id ??
+        (row.ws_provider && row.ws_author_num_id
+          ? await cardAuthorMemberId(db, {
+              id: "0",
+              provider: row.ws_provider as ProviderId,
+              authorNumId: row.ws_author_num_id,
+              adult: false,
+            })
+          : null);
+      isAuthor = wsAuthor === viewer.memberId;
+    } else if (row.card_id && row.provider && row.author_num_id) {
+      const author = await cardAuthorMemberId(db, { id: row.card_id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, adult: false });
+      isAuthor = author === viewer.memberId;
+    }
   }
   if (!viewer.moderator && !isOwner && !isAuthor) throw new HttpError(403, "not allowed to delete this comment");
-  // 刪掉的留言（刪頂層連同回覆）上未結的檢舉一起結案，不留在佇列與統計裡。
-  // 之後的寫入用 changes() 串在刪除那條後面（順序不能換）：並發時輸的那一方沒刪到列，稽核與回覆數都不動。
+  const targetKind = row.post_id ? "post" : row.workshop_id ? "workshop" : "card";
   const writes = [
-    db.prepare("UPDATE comment_reports SET resolved_at = ?1, resolution = 'deleted', resolved_by = ?2 WHERE target_kind = ?4 AND resolved_at IS NULL AND comment_id IN (SELECT id FROM comments WHERE id = ?3 OR root_id = ?3)").bind(now, viewer.memberId, row.id, row.post_id ? "post" : "card"),
+    db.prepare("UPDATE comment_reports SET resolved_at = ?1, resolution = 'deleted', resolved_by = ?2 WHERE target_kind = ?4 AND resolved_at IS NULL AND comment_id IN (SELECT id FROM comments WHERE id = ?3 OR root_id = ?3)").bind(now, viewer.memberId, row.id, targetKind),
     db.prepare("UPDATE comments SET deleted_at = ?1, status = 'deleted' WHERE (id = ?2 OR root_id = ?2) AND deleted_at IS NULL").bind(now, row.id),
   ];
   if (!isOwner) {
@@ -285,7 +344,6 @@ export async function deleteComment(db: D1Database, commentId: string, viewer: V
   }
   if (row.root_id && row.status === "visible") writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND changes() > 0").bind(row.root_id));
   const results = await db.batch(writes);
-  // 本人重複刪除當成已完成；別人的並發刪除回衝突（跟審核處理一致）。
   if (!results[1].meta.changes && !isOwner) throw new HttpError(409, "comment already deleted");
 }
 

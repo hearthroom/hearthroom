@@ -129,6 +129,20 @@ const METRICS = {
     operations: ["share_open", "share_link_created", "comment_posted", "comment_removed", "author_reply", "rating_set"],
     outcomes: ["queued", "sent", "rejected", "error", "expired", "dropped"],
   },
+  workshop_comment: {
+    name: "hearthroom_workshop_comment_total",
+    help: "Workshop extension comment writes, reports and moderation decisions.",
+    label: "action",
+    operations: ["create", "reply", "report", "moderate"],
+    outcomes: ["success", "rejected", "error"],
+  },
+  workshop: {
+    name: "hearthroom_workshop_operations_total",
+    help: "Workshop review submissions, approvals, appeal decisions, revocations and outbox sync.",
+    label: "operation",
+    operations: ["submit", "withdraw", "approve", "reject", "appeal_decide", "revoke", "sync"],
+    outcomes: ["success", "denied", "conflict", "error"],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 

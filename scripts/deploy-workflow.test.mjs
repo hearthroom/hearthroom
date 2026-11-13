@@ -129,3 +129,12 @@ test('Harbor account notice callback reaches the Worker instead of the asset lay
  const path='/internal/enforcement/notices';
  assert.ok(patterns.some(p=>p.endsWith('*')?path.startsWith(p.slice(0,-1)):path===p),'enforcement notice POST is swallowed by static assets (405)');
 });
+
+test('Workshop internal sync callbacks and public detail entrypoints reach the Worker instead of static assets',()=>{
+ const config=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+ const routes=/run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1]??'';
+ const patterns=[...routes.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
+ for (const path of ['/internal/workshop/events', '/internal/workshop/sync', '/workshops/ws-example']) {
+  assert.ok(patterns.some(p=>p.endsWith('*')?path.startsWith(p.slice(0,-1)):path===p),`${path} bypasses Worker`);
+ }
+});

@@ -6,6 +6,7 @@ import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle,
 import { badgeCollection } from './community/badges';
 import { quotaForMember, PACK_MAX } from './quota';
 import { pickLocale, HttpError, type Env, type Localized } from './types';
+import { communityAdmin } from './staff';
 import { resolveFandom } from './fandom';
 import { buildSearchName } from './upstream';
 import { boundedSearchPattern } from './search-text';
@@ -49,30 +50,55 @@ moderationRoutes.use('/v1/moderation/*',(c,next)=>/^\/v1\/moderation\/campaigns(
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
- // 留言審核與分享活動有自己的計數（hearthroom_comment_moderation_total、hearthroom_campaign_operations_total）。
- if(/^\/v1\/moderation\/(comment|settings$|members\/[^/]+\/comment-mute$|campaign)/.test(c.req.path))return;
+ // 留言審核、分享活動與工坊審理有自己的計數。
+ if(/^\/v1\/moderation\/(comment|settings$|members\/[^/]+\/comment-mute$|campaign|workshop)/.test(c.req.path))return;
  const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/fandom')?'fandom':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
  const outcome=c.res.status<400?'success':c.res.status<500?'denied':'error';
  try{await c.env.DB.prepare('INSERT INTO moderation_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(op,outcome).run();}catch{console.warn('Moderation request metric unavailable');}
 });
-export async function reviewSummary(db:D1Database,member:{id:string}){
+export async function reviewSummary(db:D1Database,member:{id:string},isAdmin=false){
  if(!await isReviewer(db,member.id))return {reviewer:false,pending:0,cases:0,reviews:0,comments:0};
- const role=await roleOf(db,member.id);const age=(await memberNsfw(db,member.id)).ageVerifiedAt!==null;
+ const role=await roleOf(db,member.id);const nsfw=await memberNsfw(db,member.id);const age=nsfw.ageVerifiedAt!==null;const wsAdult=nsfw.countryRegion!=='CN'&&age;
  const cases=await db.prepare(`SELECT count(*) n FROM moderation_cases k
  LEFT JOIN cards c ON c.provider=k.provider AND c.source_role_id=k.source_role_id
  WHERE k.author_member_id<>? AND (k.rating IS NOT 'R' OR ?) AND k.created_by<>?
  AND NOT EXISTS(SELECT 1 FROM moderation_votes v WHERE v.case_id=k.id AND v.member_id=?)
  AND (k.status='pending' OR (k.status='disputed' AND ?))`).bind(member.id,Number(age),member.id,member.id,Number(role!=='reviewer')).first<{n:number}>();
+ const cutoff=Date.now()-45*60*1000;
  const reviews=await db.prepare(`SELECT count(*) n FROM review_submissions s JOIN cards c ON c.id=s.card_id
  WHERE s.status='pending' AND (s.rating IS NOT 'R' OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
- AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,Date.now()-45*60*1000,member.id,member.id,member.id).first<{n:number}>();
- // 待審留言（卡片與文章）另外算，不混進卡片審核的徽章數（pending）；成人門檻只看卡片留言。
- const comments=await db.prepare("SELECT count(*) n FROM comments c LEFT JOIN cards k ON k.id=c.card_id WHERE c.status='visible' AND c.hold_reason IS NOT NULL AND c.member_id<>? AND (k.id IS NOT NULL OR c.post_id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?)").bind(member.id,Number(age)).first<{n:number}>();
- return {reviewer:true,role,cases:cases?.n??0,reviews:reviews?.n??0,pending:(cases?.n??0)+(reviews?.n??0),comments:comments?.n??0};
+ AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,cutoff,member.id,member.id,member.id).first<{n:number}>();
+ const wsReviews=await db.prepare(`SELECT count(*) n FROM workshop_review_submissions s
+ LEFT JOIN cards c ON c.id=s.card_id
+ LEFT JOIN workshop_review_holds h ON h.workshop_id=s.workshop_id
+ WHERE s.status='pending' AND s.author_member_id<>?1
+ AND (?2 OR (s.rating IS NOT 'R' AND c.rating IS NOT 'R'))
+ AND (h.member_id IS NULL OR h.member_id=?1)
+ AND (s.claimed_by IS NULL OR s.claimed_by=?1 OR s.claimed_at<?3)
+ AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=?1 AND i.provider=s.provider AND i.external_id=CAST(s.author_num_id AS TEXT))
+ AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=?1 AND i.provider=s.provider AND i.external_id=CAST(s.author_num_id AS TEXT))`).bind(member.id,Number(wsAdult),cutoff).first<{n:number}>();
+ const comments=await db.prepare(`SELECT count(*) n FROM comments c
+ LEFT JOIN cards k ON k.id=c.card_id
+ LEFT JOIN workshops w ON w.id=c.workshop_id
+ LEFT JOIN cards wk ON wk.id=w.card_id
+ WHERE c.status='visible' AND c.hold_reason IS NOT NULL AND c.member_id<>?1
+ AND (k.id IS NOT NULL OR c.post_id IS NOT NULL OR w.id IS NOT NULL)
+ AND (c.post_id IS NOT NULL OR ?2 OR (k.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wk.rating IS NOT 'R'))`).bind(member.id,Number(wsAdult)).first<{n:number}>();
+ const totalReviews=(reviews?.n??0)+(wsReviews?.n??0);
+ const appeals=(role!=='reviewer'||isAdmin)
+  ?await db.prepare(`SELECT count(*) n FROM workshop_appeals a
+   LEFT JOIN workshops w ON w.id=a.workshop_id
+   LEFT JOIN cards c ON c.id=a.card_id
+   WHERE a.status='pending' AND COALESCE(a.creator_member_id,'')<>?1
+   AND (?2 OR (w.rating IS NOT 'R' AND c.rating IS NOT 'R'))
+   AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=?1 AND i.provider=a.provider AND i.external_id IN (CAST(a.creator_num_id AS TEXT),CAST(a.card_owner_num_id AS TEXT)))
+   AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=?1 AND i.provider=a.provider AND i.external_id IN (CAST(a.creator_num_id AS TEXT),CAST(a.card_owner_num_id AS TEXT)))`).bind(member.id,Number(wsAdult)).first<{n:number}>()
+  :null;
+ return {reviewer:true,role,cases:cases?.n??0,reviews:totalReviews,pending:(cases?.n??0)+totalReviews,comments:comments?.n??0,...(appeals?{workshopAppeals:appeals.n}:{})};
 }
-moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummary(c.env.DB,await requireMember(c))));
+moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummary(c.env.DB,await requireMember(c),await communityAdmin(c))));
 moderationRoutes.get('/v1/moderation/cases',async c=>{
  const member=await requireReviewer(c);const role=await roleOf(c.env.DB,member.id);const age=(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt!==null;
  const history=c.req.query('history')==='1';const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));

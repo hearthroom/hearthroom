@@ -15,8 +15,8 @@ import { reportCommentRemoved } from "./reward-events";
 export type HoldReason = "keyword" | "new_account_link" | "too_many_links" | "recent_removal";
 
 const DAY = 86_400_000;
-/** 檢舉的目標種類跟著留言本身走：掛在文章上的是 post，其餘是 card。`c` 是 comments 的別名。 */
-const KIND = "IIF(c.post_id IS NULL, 'card', 'post')";
+/** 檢舉的目標種類跟著留言本身走：掛在文章上的是 post、工坊擴充是 workshop、其餘是 card。`c` 是 comments 的別名。 */
+const KIND = "IIF(c.post_id IS NOT NULL, 'post', IIF(c.workshop_id IS NOT NULL, 'workshop', 'card'))";
 const LINK = /\bhttps?:\/\/\S+|\bwww\.\S+/gi;
 
 export function countLinks(text: string): number {
@@ -55,19 +55,26 @@ export async function reportComment(
   input: { commentId: string; reporterId: string; reason: unknown; note: unknown; now: number },
   s: CommunitySettings,
 ): Promise<{ flagged: boolean }> {
-  if (typeof input.reason !== "string" || !(REPORT_REASONS as readonly string[]).includes(input.reason)) throw new HttpError(400, "invalid_report_reason");
-  const note = typeof input.note === "string" ? input.note.trim().slice(0, 300) : "";
-  const c = await db.prepare(`SELECT member_id, status, ${KIND} AS kind FROM comments c WHERE id = ? AND deleted_at IS NULL`).bind(input.commentId).first<{ member_id: string; status: string; kind: "card" | "post" }>();
-  if (!c || c.status === "removed") throw new HttpError(404, "comment not found");
-  if (c.member_id === input.reporterId) throw new HttpError(403, "cannot_report_own_comment");
-  const res = await db.prepare("INSERT OR IGNORE INTO comment_reports (id, target_kind, comment_id, reporter_member_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), c.kind, input.commentId, input.reporterId, input.reason, note, input.now).run();
-  if (!res.meta.changes) return { flagged: false };
-  await bumpOp(db, "comment_moderation", "report", "success");
-  if (c.status !== "visible" || s.commentReportFoldThreshold === null) return { flagged: false };
-  const open = await db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE target_kind = ? AND comment_id = ? AND resolved_at IS NULL").bind(c.kind, input.commentId).first<{ n: number }>();
-  if ((open?.n ?? 0) < s.commentReportFoldThreshold) return { flagged: false };
-  return { flagged: await flagVisible(db, input.commentId, "reports", null, "system", "fold:" + input.commentId, input.now) };
+  const c = await db.prepare(`SELECT member_id, status, ${KIND} AS kind FROM comments c WHERE id = ? AND deleted_at IS NULL`).bind(input.commentId).first<{ member_id: string; status: string; kind: "card" | "post" | "workshop" }>();
+  const isWorkshop = c?.kind === "workshop";
+  try {
+    if (typeof input.reason !== "string" || !(REPORT_REASONS as readonly string[]).includes(input.reason)) throw new HttpError(400, "invalid_report_reason");
+    const note = typeof input.note === "string" ? input.note.trim().slice(0, 300) : "";
+    if (!c || c.status === "removed") throw new HttpError(404, "comment not found");
+    if (c.member_id === input.reporterId) throw new HttpError(403, "cannot_report_own_comment");
+    const res = await db.prepare("INSERT OR IGNORE INTO comment_reports (id, target_kind, comment_id, reporter_member_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), c.kind, input.commentId, input.reporterId, input.reason, note, input.now).run();
+    if (!res.meta.changes) return { flagged: false };
+    await bumpOp(db, "comment_moderation", "report", "success");
+    if (isWorkshop) await bumpOp(db, "workshop_comment", "report", "success");
+    if (c.status !== "visible" || s.commentReportFoldThreshold === null) return { flagged: false };
+    const open = await db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE target_kind = ? AND comment_id = ? AND resolved_at IS NULL").bind(c.kind, input.commentId).first<{ n: number }>();
+    if ((open?.n ?? 0) < s.commentReportFoldThreshold) return { flagged: false };
+    return { flagged: await flagVisible(db, input.commentId, "reports", null, "system", "fold:" + input.commentId, input.now) };
+  } catch (err) {
+    if (isWorkshop) await bumpOp(db, "workshop_comment", "report", err instanceof HttpError && err.status < 500 ? "rejected" : "error");
+    throw err;
+  }
 }
 
 /**
@@ -107,13 +114,19 @@ export async function decide(
   db: D1Database,
   i: { commentId: string; actorId: string; actorKind: "human" | "ai"; action: Decision; reason: string; operationId: string; now: number },
 ): Promise<{ id: string; status: string }> {
-  const c = await db.prepare(`SELECT c.id, c.member_id, c.card_id, c.post_id, c.root_id, c.status, c.hold_reason, k.rating, ${KIND} AS kind
-    FROM comments c LEFT JOIN cards k ON k.id = c.card_id WHERE c.id = ? AND (k.id IS NOT NULL OR c.post_id IS NOT NULL)`)
-    .bind(i.commentId).first<{ id: string; member_id: string; card_id: string; post_id: string | null; root_id: string | null; status: string; hold_reason: string | null; rating: string | null; kind: "card" | "post" }>();
+  const c = await db.prepare(`SELECT c.id, c.member_id, c.card_id, c.post_id, c.workshop_id, c.root_id, c.status, c.hold_reason,
+      k.rating, w.rating AS ws_rating, wk.rating AS ws_card_rating, ${KIND} AS kind
+    FROM comments c
+    LEFT JOIN cards k ON k.id = c.card_id
+    LEFT JOIN workshops w ON w.id = c.workshop_id
+    LEFT JOIN cards wk ON wk.id = w.card_id
+    WHERE c.id = ? AND (k.id IS NOT NULL OR c.post_id IS NOT NULL OR w.id IS NOT NULL)`)
+    .bind(i.commentId).first<{ id: string; member_id: string; card_id: string; post_id: string | null; workshop_id: string | null; root_id: string | null; status: string; hold_reason: string | null; rating: string | null; ws_rating: string | null; ws_card_rating: string | null; kind: "card" | "post" | "workshop" }>();
   if (!c || c.status === "deleted") throw new HttpError(404, "comment not found");
   if (c.member_id === i.actorId) throw new HttpError(403, "moderation_self_review");
-  // 成人門檻只有卡片留言有；文章沒有分級。
-  if (c.post_id === null && c.rating === "R" && (await memberNsfw(db, i.actorId)).ageVerifiedAt === null) throw new HttpError(403, "age_verification_required");
+  if (c.post_id === null && (c.rating === "R" || c.ws_rating === "R" || c.ws_card_rating === "R") && (await memberNsfw(db, i.actorId)).ageVerifiedAt === null) {
+    throw new HttpError(403, "age_verification_required");
+  }
   const auditId = crypto.randomUUID();
   const entry = (action: string, before: unknown, after: unknown): AuditEntry =>
     ({ id: auditId, subjectKind: "comment", subjectId: c.id, actorMemberId: i.actorId, actorKind: i.actorKind, action, reason: i.reason, before, after, operationId: i.operationId, now: i.now });
@@ -124,18 +137,20 @@ export async function decide(
   const replyDown = () =>
     db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND ${MINE}`).bind(c.root_id, auditId);
   const clearFlag = (extra = "") =>
-    // 清掉標記的原因：之後再被標記（例如檢舉達門檻）不會帶著上一次的原因。
     db.prepare(`UPDATE comments SET hold_reason = NULL, moderation_reason = NULL, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible' AND hold_reason IS NOT NULL${extra}`).bind(i.actorId, i.now, c.id);
 
   let writes: D1PreparedStatement[];
   let next: string;
   if (i.action === "flag") {
-    if (c.status === "visible" && (await conflictOnDuplicate(() => flagVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) return { id: c.id, status: "visible" };
-    // 已經有標記、或已移除：只記下 AI 的意見（稽核），不改狀態；待審佇列從稽核讀出這次標記之後的 AI 建議。
+    if (c.status === "visible" && (await conflictOnDuplicate(() => flagVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) {
+      if (c.kind === "workshop") await bumpOp(db, "workshop_comment", "moderate", "success");
+      return { id: c.id, status: "visible" };
+    }
     const now = await db.prepare("SELECT status FROM comments WHERE id = ?").bind(c.id).first<{ status: string }>();
     next = now?.status ?? c.status;
     await conflictOnDuplicate(() => auditStmt(db, entry("flag", { status: next }, { status: next })).run());
     await bumpOp(db, "comment_moderation", "flag", "success");
+    if (c.kind === "workshop") await bumpOp(db, "workshop_comment", "moderate", "success");
     return { id: c.id, status: next };
   } else if (i.action === "release") {
     if (c.status !== "visible" || c.hold_reason === null) throw new HttpError(409, "moderation_conflict");
@@ -144,30 +159,30 @@ export async function decide(
   } else if (i.action === "remove") {
     if (c.status !== "visible") throw new HttpError(409, "moderation_conflict");
     next = "removed";
+    const removedPath = c.post_id ? "/blog/p/" + c.post_id : c.workshop_id ? "/workshops/" + c.workshop_id : "/cards/" + c.card_id;
     writes = [
       db.prepare("UPDATE comments SET status = 'removed', deleted_at = ?, moderated_by = ?, moderated_at = ?, moderation_reason = ? WHERE id = ? AND status = ?").bind(i.now, i.actorId, i.now, i.reason, c.id, c.status),
       auditStmtIfChanged(db, entry("remove", { status: c.status }, { status: "removed" })),
       closeReports("removed", true),
-      db.prepare(`INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, card_id, extra, delivered) SELECT ?, ?, 'comment_removed', ?, ?, ?, json_object('reason', ?), 1 WHERE ${MINE}`)
-        .bind("removed:" + c.id, c.member_id, c.post_id ? "/blog/p/" + c.post_id : "/cards/" + c.card_id, i.now, c.post_id ? null : c.card_id, i.reason, auditId),
+      db.prepare(`INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, card_id, workshop_id, extra, delivered) SELECT ?, ?, 'comment_removed', ?, ?, ?, ?, json_object('reason', ?), 1 WHERE ${MINE}`)
+        .bind("removed:" + c.id, c.member_id, removedPath, i.now, c.post_id || c.workshop_id ? null : c.card_id, c.workshop_id, i.reason, auditId),
     ];
     if (c.root_id) writes.push(replyDown());
   } else if (c.status === "visible" && c.hold_reason === "reports") {
-    // 駁回檢舉：因檢舉達門檻的標記一併清掉。
     next = "visible";
     writes = [clearFlag(" AND hold_reason = 'reports'"), auditStmtIfChanged(db, entry("dismiss", { status: "visible", holdReason: "reports" }, { status: "visible" })), closeReports("dismissed", true)];
   } else {
-    // 只結案檢舉、不改狀態：沒有可輸的條件式更新，稽核直接寫。
     next = c.status;
     await conflictOnDuplicate(() => db.batch([closeReports("dismissed", false), auditStmt(db, entry("dismiss", { status: c.status }, { status: c.status }))]));
     await bumpOp(db, "comment_moderation", "dismiss", "success");
+    if (c.kind === "workshop") await bumpOp(db, "workshop_comment", "moderate", "success");
     return { id: c.id, status: next };
   }
   const results = await conflictOnDuplicate(() => db.batch(writes));
   if (!results[0].meta.changes) throw new HttpError(409, "moderation_conflict");
   await bumpOp(db, "comment_moderation", i.action, "success");
-  // 應用獎勵：被移除的卡片留言報給 Harbor（已發的獎勵不收回，只是之後不再算這則）。留言本身在發表時就報過了，放行不再報。
-  if (i.action === "remove" && !c.post_id) await reportCommentRemoved(db, { cardId: String(c.card_id), memberId: c.member_id, commentId: c.id, now: i.now });
+  if (c.kind === "workshop") await bumpOp(db, "workshop_comment", "moderate", "success");
+  if (i.action === "remove" && !c.post_id && !c.workshop_id) await reportCommentRemoved(db, { cardId: String(c.card_id), memberId: c.member_id, commentId: c.id, now: i.now });
   return { id: c.id, status: next };
 }
 
@@ -235,24 +250,36 @@ const TABS: Record<QueueTab, { where: string; order: string }> = {
 export async function moderationQueue(db: D1Database, viewerId: string, tab: QueueTab, page: number, reason: FlagReason | null = null) {
   const age = Number((await memberNsfw(db, viewerId)).ageVerifiedAt !== null);
   const t = TABS[tab];
-  const from = `FROM comments c LEFT JOIN cards k ON k.id = c.card_id LEFT JOIN blog_posts p ON p.id = c.post_id LEFT JOIN blog_columns col ON col.id = p.column_id
-    JOIN members m ON m.id = c.member_id WHERE ${t.where} AND c.member_id <> ?1 AND (k.id IS NOT NULL OR p.id IS NOT NULL) AND (c.post_id IS NOT NULL OR k.rating IS NOT 'R' OR ?2) AND (?5 IS NULL OR c.hold_reason = ?5)`;
+  const from = `FROM comments c
+    LEFT JOIN cards k ON k.id = c.card_id
+    LEFT JOIN blog_posts p ON p.id = c.post_id
+    LEFT JOIN blog_columns col ON col.id = p.column_id
+    LEFT JOIN workshops w ON w.id = c.workshop_id
+    LEFT JOIN cards wk ON wk.id = w.card_id
+    JOIN members m ON m.id = c.member_id
+    WHERE ${t.where}
+      AND c.member_id <> ?1
+      AND (k.id IS NOT NULL OR p.id IS NOT NULL OR w.id IS NOT NULL)
+      AND (c.post_id IS NOT NULL OR ?2 OR (k.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wk.rating IS NOT 'R'))
+      AND (?5 IS NULL OR c.hold_reason = ?5)`;
   const filter = tab === "held" ? reason : null;
   const [total, rows] = await db.batch([
     db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age, null, null, filter),
-    // ai_reason：這次標記之後（標記時間起算）AI 最近一次的標記理由；只看還有標記的，放行過的舊標記不算。
-    db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason, m.handle, m.display_name, k.names, c.post_id, p.title AS post_title, p.slug AS post_slug, col.slug AS column_slug,
+    db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason,
+      m.handle, m.display_name, k.names,
+      c.post_id, p.title AS post_title, p.slug AS post_slug, col.slug AS column_slug,
+      c.workshop_id, w.name AS workshop_name, w.card_id AS workshop_card_id,
       (SELECT a.reason FROM audit_log a WHERE ${FLAGGED} AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
       (SELECT num FROM card_numbers n WHERE n.provider = k.provider AND n.source_role_id = k.source_role_id) AS card_number,
       (SELECT COUNT(*) FROM comment_reports r WHERE r.target_kind = ${KIND} AND r.comment_id = c.id AND r.resolved_at IS NULL) AS open_reports
       ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE, filter),
   ]);
   type Row = { id: string; card_id: string; content: string; status: string; hold_reason: string | null; created_at: number; moderated_at: number | null; moderation_reason: string | null; ai_reason: string | null; handle: string; display_name: string | null; names: string | null; card_number: number | null;
-    post_id: string | null; post_title: string | null; post_slug: string | null; column_slug: string | null };
+    post_id: string | null; post_title: string | null; post_slug: string | null; column_slug: string | null;
+    workshop_id: string | null; workshop_name: string | null; workshop_card_id: number | null };
   const items = rows.results as Row[];
-  // 待處理的分頁看未結的檢舉；已移除的分頁看當時全部的檢舉。
   const reports = items.length
-    ? (await db.prepare(`SELECT comment_id, reason, COUNT(*) AS n FROM comment_reports WHERE target_kind IN ('card','post') AND comment_id IN (SELECT value FROM json_each(?)) AND (resolved_at IS NULL OR ?) GROUP BY comment_id, reason`)
+    ? (await db.prepare(`SELECT comment_id, reason, COUNT(*) AS n FROM comment_reports WHERE target_kind IN ('card','post','workshop') AND comment_id IN (SELECT value FROM json_each(?)) AND (resolved_at IS NULL OR ?) GROUP BY comment_id, reason`)
         .bind(JSON.stringify(items.map((r) => r.id)), Number(tab === "removed")).all<{ comment_id: string; reason: string; n: number }>()).results
     : [];
   return {
@@ -263,7 +290,9 @@ export async function moderationQueue(db: D1Database, viewerId: string, tab: Que
         id: r.id,
         target: r.post_id
           ? { kind: "post" as const, id: r.post_id, title: r.post_title!, column: r.column_slug!, slug: r.post_slug! }
-          : { kind: "card" as const, id: String(r.card_id), title: pickLocale(JSON.parse(r.names!) as Localized, "zh-Hant"), cardNumber: r.card_number },
+          : r.workshop_id
+            ? { kind: "workshop" as const, id: r.workshop_id, title: r.workshop_name || r.workshop_id, cardId: r.workshop_card_id ? String(r.workshop_card_id) : undefined }
+            : { kind: "card" as const, id: String(r.card_id), title: pickLocale(JSON.parse(r.names!) as Localized, "zh-Hant"), cardNumber: r.card_number },
         author: { handle: r.handle, displayName: r.display_name?.trim() || r.handle },
         content: r.content,
         status: r.status,
