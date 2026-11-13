@@ -417,7 +417,7 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
   if(me.accountClass==='test'){
    c.env=excludeQABrowser(c.env);
    const path=c.req.url?new URL(c.req.url).pathname:'';
-   if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score)|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
+   if(c.req.method&&!['GET','HEAD','OPTIONS'].includes(c.req.method)&&/^\/v1\/(?:cards\/[^/]+\/(?:comments|ratings|rating|score|workshop\/interest)|workshops\/[^/]+\/comments|comments(?:\/|$)|blog\/posts\/[^/]+\/comments|me\/(?:favorites|following|community|push|campaign|workshops)(?:\/|$)|campaigns?(?:\/|$))/.test(path))throw new HttpError(403,'test_account_operation_not_allowed');
   }
   const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now(),me);
   if(member.country_region == null){const defaults=countryRegionDefaults(c.req);await initializeCountryRegion(c.env.DB,member.id,defaults.country,defaults.locale);}

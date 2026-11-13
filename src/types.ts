@@ -80,9 +80,9 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 429 | 502 | 503,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 502 | 503,
     message: string,
-    readonly detail?: import("./sync-error").SyncDetail,
+    readonly detail?: import("./sync-error").SyncDetail | Record<string, unknown>,
     /** 跟 error 並列放進回應本體的欄位（例如禁言的到期時間）。 */
     readonly extra?: Record<string, unknown>,
   ) {

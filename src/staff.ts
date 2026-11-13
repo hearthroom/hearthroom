@@ -4,7 +4,7 @@ import { isReviewAgent, providerOf, requireReviewer } from "./members";
 import { HttpError, type Env } from "./types";
 
 /** 站方身分的共用閘門：留言審核、運營設定、分享活動都用這一份。應用管理員的判斷本身在 community-admin.ts。 */
-type Ctx = Context<{ Bindings: Env }>;
+type Ctx = Pick<Context<{ Bindings: Env }>, "env" | "req">;
 
 export { bearerOf };
 

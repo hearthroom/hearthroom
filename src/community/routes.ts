@@ -296,8 +296,8 @@ app.get("/v1/me/community/notifications", async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
      a.handle AS actor_handle,a.display_name AS actor_name,n.card_id,c.id AS card_num,c.names AS card_names
-     FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
-     WHERE ${eligibleNotification()} AND n.member_id=? AND (? IS NOT 'CN' OR c.rating IS NOT 'R') ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
+     FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id
+     WHERE ${eligibleNotification()} AND n.member_id=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R')) ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
   )
     .bind(Date.now(),Date.now(),m.id,adult.countryRegion)
     .all<{ card_id:string|number|null; id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
@@ -320,7 +320,7 @@ app.get("/v1/me/community/notifications/summary", async (c) => {
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
     await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
-  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND (? IS NOT 'CN' OR c.rating IS NOT 'R')`)
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R'))`)
     .bind(m.id,adult.countryRegion)
     .first<{ unread: number }>();
   return c.json({ unread: row?.unread ?? 0 });
