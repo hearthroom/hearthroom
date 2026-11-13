@@ -322,7 +322,8 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
 .gen__choice:hover:not(:disabled), .gen__choice:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
 .gen__choice img { display: block; width: 100%; height: auto; max-height: 40vh; object-fit: contain; }
 .gen__dl {
-  display: inline-flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
+  width: fit-content; margin-inline: auto;
   min-height: var(--h-sm); min-width: var(--h-sm);
   padding: 0 var(--s-3); border-radius: var(--r-sm);
   color: var(--accent-text); font-size: 13px; font-weight: 500;
