@@ -315,7 +315,8 @@ async function goNext() {
     await router.push(lp(`/review/${item.id}`));
   } catch (err) {
     const ageGate = err instanceof ApiError && err.code === "age_verification_required";
-    if (ageGate) skipped.add(item.id);
+    // 再試也領不到的（要先確認年齡、或是自己的擴充）：「下一張」跳過，不然會一直卡在同一張
+    if (ageGate || (err instanceof ApiError && err.status === 403)) skipped.add(item.id);
     nextError.value = ageGate ? t("error.ageVerificationRequired") : err instanceof ApiError && err.status === 409 ? t("review.claim.taken") : t("review.claim.failed");
     await loadNext();
   } finally { nextBusy.value = false; }

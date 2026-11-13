@@ -1,4 +1,5 @@
 import { fetchCard, fetchCardPlatforms, fetchReviewDetail } from './api';
+import { isWorkshopDetail, type ReviewSubjectDetail } from './workshop-review';
 import { copies } from './distribution';
 import { libraryRequest } from './library';
 import type { ProviderId } from './provider';
@@ -24,9 +25,11 @@ interface PlayCardResolved {
 /** Public URLs identify the work; only the selected host's role ID reaches Stage. */
 export async function resolvePlayCard(id: string, provider: ProviderId, language: string, source = false, review?: { id: string; token: string }, resume?: { id: string; token: string; providerToken?: string }): Promise<PlayCardResolved> {
   if (review) {
-    const detail = await fetchReviewDetail(review.id, review.token);
-    if (String(detail.card.id) !== id) throw new Error('review_card_mismatch');
-    return { card: null, number: String(detail.card.id), roleId: detail.card.roleId };
+    const detail = await fetchReviewDetail(review.id, review.token) as ReviewSubjectDetail;
+    // 擴充的審核單：試玩的是原卡加這個擴充，畫布以原卡開局（伺服器照審核單套上送審的那一版）
+    const base = isWorkshopDetail(detail) ? detail.baseCard : detail.card;
+    if (String(base.id) !== id) throw new Error('review_card_mismatch');
+    return { card: null, number: String(base.id), roleId: base.roleId };
   }
   // Verify the private pointer and actual Provider ownership before any public read.
   const previous = resume ? await resumeRead(libraryRequest<{cardNumber:number;provider:ProviderId;roleId:string;canResumeExact?:boolean}>(

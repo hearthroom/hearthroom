@@ -109,7 +109,7 @@ export async function askRevokeReason(name: string): Promise<string | null> {
 /** 卡片工坊頁在已登入且 allowNew=false 時多帶 viewerInterested */
 export type CardWorkshopPageWithInterest = CardWorkshopPage & { viewerInterested?: boolean };
 /** 選卡彈層的卡：端點目前沒帶 viewerInterested，帶了就照它畫 */
-export type WorkshopCardChoiceWithInterest = WorkshopCardChoice & { viewerInterested?: boolean };
+export type WorkshopCardChoiceWithInterest = WorkshopCardChoice & { viewerInterested?: boolean; viewerIsOwner?: boolean };
 
 export const registerWorkshopInterest = (cardId: string, draftName: string, token: string) =>
   request<{ interested: boolean }>(`/cards/${encodeURIComponent(cardId)}/workshop/interest`, token, "PUT", draftName ? { draftName } : {});

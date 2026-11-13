@@ -275,7 +275,7 @@ const resident = computed(() => {
         </template>
       </div>
 
-      <section v-if="staff" class="panel ext__staff" aria-labelledby="ext-staff-h" data-ext-staff>
+      <section v-if="staff && ext.availability !== 'removed'" class="panel ext__staff" aria-labelledby="ext-staff-h" data-ext-staff>
         <h2 id="ext-staff-h" class="ext__h2">{{ $t("workshop.moderation.detail.title") }}</h2>
         <p class="subtle ws-text">{{ $t("workshop.moderation.detail.body") }}</p>
         <p v-if="revokeFailed" class="notice notice--error ext__error" role="alert">

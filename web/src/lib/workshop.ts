@@ -71,6 +71,8 @@ export interface MineItem extends ExtensionSummary {
 export interface WorkshopCardChoice {
   cardId: string; num: number; name: string; avatarUrl?: string;
   author: { name: string }; roleId: string; allowNew: boolean;
+  /** 已登記「重新開放時通知我」；原作者不能登記自己的卡（interface-web §11） */
+  viewerInterested?: boolean; viewerIsOwner?: boolean;
 }
 
 export interface SelectionItem {

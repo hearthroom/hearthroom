@@ -153,8 +153,8 @@ async function send(attempt: Attempt) {
     if (!alive || who !== identity()) return;
     // 4xx（已被處理、沒權限、與自己有關）原樣重送也不會過：重讀清單讓畫面對上現況；只有網路與伺服器錯才給重試
     const status = e instanceof ApiError ? e.status : 0;
-    if (status === 403) forbidden.value = true;
-    else if (status >= 400 && status < 500 && status !== 408 && status !== 429) { busy.value = false; void load(); }
+    // 這一筆被別人處理過、或這一筆不能由你處理：說一聲、重讀清單（403 只是這一筆，清單留著）
+    if (status >= 400 && status < 500 && status !== 408 && status !== 429) { toast.value?.say(t('workshop.moderation.error.action')); busy.value = false; void load(); }
     else failed.value = attempt;
   } finally {
     if (alive && who === identity()) busy.value = false;

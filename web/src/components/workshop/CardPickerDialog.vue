@@ -136,7 +136,7 @@ onBeforeUnmount(() => { clearTimeout(typing); document.removeEventListener("keyd
               <svg v-if="card.allowNew" class="ws-pick__go" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5l5 5-5 5" /></svg>
               <WorkshopIcon v-else name="lock" class="ws-pick__go" />
             </button>
-            <template v-if="!card.allowNew && session.me">
+            <template v-if="!card.allowNew && session.me && !card.viewerIsOwner">
               <span v-if="interested(card)" class="chip ws-chip--ok ws-pick__interest" :data-ws-pick-interested="card.cardId">{{ $t("workshop.interest.registered") }}</span>
               <button
                 v-else type="button" class="btn btn--sm btn--ghost ws-pick__interest" :data-ws-pick-interest="card.cardId"
