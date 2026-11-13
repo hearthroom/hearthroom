@@ -6,7 +6,7 @@
  *   - 擴充只要 1 章，沒有字數門檻、冷凍、重新審核、改判，所以這裡只有領取、試玩、駁回、通過。
  *   - 詳情不必先領取就讀得到：「未領取」「自己的擴充」「限制級·需驗證年齡」三種狀態都要先看到內容
  *     與原因，後兩種本來就領不了（伺服器在 claim／stamp 再擋一次）。
- *   - 內容是「一行摘要＋展開」：審核員要讀原文，但四類內容攤開會長到找不到動作列。
+ *   - 內容是「一行摘要＋展開」（ReviewWorkshopContent，站方申訴頁共用）：審核員要讀原文，但四類內容攤開會長到找不到動作列。
  *   - 駁回理由必填，原文送給製作者（confirmForm 擋空白）；通過也確認一次，因為一章就定案、立刻發布。
  * 審核試玩沿用卡片的網址：原卡卡號＋review=<審核單 id>，遊玩頁用 play-access 判斷要不要掛上這個擴充。
  */
@@ -18,23 +18,22 @@ import { confirmDialog, confirmForm, confirmState, settleConfirm } from "@/lib/c
 import { dateTime, relativeTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { CONSTANT_CHAR_LIMIT } from "@/lib/workshop";
 import type { WorkshopReviewDetail } from "@/lib/workshop-review";
 import RatingMark from "@/components/RatingMark.vue";
 import ExtensionCover from "@/components/workshop/ExtensionCover.vue";
+import ReviewWorkshopContent from "@/components/ReviewWorkshopContent.vue";
 
 // 年齡驗證窗很少用到，按「驗證年齡」才載入
 const AdultConsentDialog = defineAsyncComponent(() => import("@/components/AdultConsentDialog.vue"));
 
 /** reload：父頁重讀詳情。等它回來才放開按鈕，免得舊狀態還在畫面上又被按一次（重領、重蓋章） */
 const props = defineProps<{ review: WorkshopReviewDetail; reload: () => Promise<unknown> }>();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
 
 /** 說明上限：與卡片審核同一個數（伺服器 REVIEW_NOTE_MAX） */
 const NOTE_MAX = 2000;
-const numbers = computed(() => new Intl.NumberFormat(String(locale.value)));
 const sub = computed(() => props.review.submission);
 const w = computed(() => props.review.workshop);
 const isUpdate = computed(() => sub.value.type === "update");
@@ -54,44 +53,6 @@ const playTo = computed(() => lp(`/play/${props.review.baseCard.id}?review=${enc
 const busy = ref(false);
 const actionError = ref("");
 const asking = ref(false);
-
-/** 內容四類＋介紹：每類一行摘要，展開看原文。沒有內容的類別不給展開，只寫數量 */
-const sections = computed(() => {
-  const ws = w.value;
-  const constant = ws.entries.filter((e) => e.isConstant);
-  const n = (x: number) => numbers.value.format(x);
-  return [
-    {
-      id: "about", title: t("workshop.detail.tab.about"), meta: "", preview: ws.description,
-      items: ws.description.trim() ? [{ key: "about", head: "", chips: [] as string[], body: ws.description, body2: "", off: false }] : [],
-    },
-    {
-      id: "resident", title: t("workshop.editor.resident.title"),
-      meta: t("workshop.review.resident.size", { chars: n(ws.residentChars), max: n(ws.residentMax || CONSTANT_CHAR_LIMIT) }),
-      preview: constant[0]?.content ?? t("workshop.detail.resident.none"),
-      items: constant.map((e) => ({ key: e.entryId, head: e.name || t("wb.entry.untitled"), chips: e.isEnabled ? [] : [t("review.entry.disabled")], body: e.content, body2: "", off: !e.isEnabled })),
-    },
-    {
-      id: "lore", title: t("workshop.detail.includes.lore", { n: n(ws.entries.length) }, ws.entries.length), meta: "",
-      preview: ws.entries.map((e) => e.name || t("wb.entry.untitled")).join(" · "),
-      items: ws.entries.map((e) => ({
-        key: e.entryId, head: e.name || t("wb.entry.untitled"),
-        chips: [...(e.isConstant ? [t("review.entry.constant")] : []), ...(e.isEnabled ? [] : [t("review.entry.disabled")]), ...e.keywords, ...e.secondaryKeywords],
-        body: e.content, body2: "", off: !e.isEnabled,
-      })),
-    },
-    {
-      id: "regex", title: t("workshop.detail.includes.regex", { n: n(ws.rules.length) }, ws.rules.length), meta: "",
-      preview: ws.rules.map((r) => r.name || r.id).join(" · "),
-      items: ws.rules.map((r) => ({ key: r.id, head: r.name || r.id, chips: r.enabled ? [] : [t("review.entry.disabled")], body: r.find, body2: r.replace, off: !r.enabled })),
-    },
-    {
-      id: "opening", title: t("workshop.detail.includes.opening", { n: n(ws.openings.length) }, ws.openings.length), meta: "",
-      preview: ws.openings[0]?.content ?? "",
-      items: ws.openings.map((o) => ({ key: o.id, head: o.title, chips: [] as string[], body: o.content, body2: "", off: false })),
-    },
-  ];
-});
 
 async function token() {
   const tok = await session.accessToken();
@@ -218,28 +179,7 @@ async function verified() {
       <p class="wsr__note">{{ w.updateNote }}</p>
     </section>
 
-    <section class="panel wsr__pane">
-      <h2 class="wsr__lab">{{ $t("workshop.review.content") }}</h2>
-      <template v-for="s in sections" :key="s.id">
-        <details v-if="s.items.length" class="wsr__item" :data-content="s.id">
-          <summary class="wsr__sum">
-            <span class="wsr__sumtop"><strong>{{ s.title }}</strong><span v-if="s.meta" class="subtle">{{ s.meta }}</span></span>
-            <span v-if="s.preview" class="wsr__preview">{{ s.preview }}</span>
-          </summary>
-          <div class="wsr__full">
-            <div v-for="it in s.items" :key="it.key" class="wsr__entry" :class="{ 'wsr__entry--off': it.off }">
-              <p v-if="it.head || it.chips.length" class="wsr__entryhead"><strong v-if="it.head">{{ it.head }}</strong><span v-for="(c, i) in it.chips" :key="i" class="chip">{{ c }}</span></p>
-              <pre class="wsr__text">{{ it.body }}</pre>
-              <pre v-if="it.body2" class="wsr__text wsr__text--mono">{{ it.body2 }}</pre>
-            </div>
-          </div>
-        </details>
-        <div v-else-if="s.id !== 'about'" class="wsr__item wsr__item--empty" :data-content="s.id">
-          <span class="wsr__sumtop"><strong>{{ s.title }}</strong><span v-if="s.meta" class="subtle">{{ s.meta }}</span></span>
-          <span v-if="s.id === 'resident'" class="wsr__preview">{{ s.preview }}</span>
-        </div>
-      </template>
-    </section>
+    <ReviewWorkshopContent :workshop="w" />
 
     <section class="panel wsr__pane">
       <h2 class="wsr__lab">{{ $t("review.stampsList") }}</h2>
@@ -302,19 +242,6 @@ async function verified() {
 .wsr__pane { padding: var(--s-4); display: grid; gap: var(--s-3); min-width: 0; }
 .wsr__lab { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
 .wsr__note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
-.wsr__item { border-top: 1px solid var(--line); padding-top: var(--s-3); min-width: 0; }
-.wsr__lab + .wsr__item { border-top: 0; padding-top: 0; }
-.wsr__item--empty { display: grid; gap: 2px; }
-.wsr__sum { display: grid; gap: 2px; cursor: pointer; min-height: var(--h-md); align-content: center; }
-.wsr__sumtop { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
-.wsr__preview { font-size: 13px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wsr__item[open] .wsr__preview { display: none; }
-.wsr__full { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
-.wsr__entry { display: grid; gap: var(--s-2); min-width: 0; }
-.wsr__entry--off { opacity: 0.6; }
-.wsr__entryhead { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 14px; }
-.wsr__text { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; }
-.wsr__text--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .wsr__stamps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
 .wsr__stamp { display: grid; gap: var(--s-1); }
 .wsr__stamphead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 13px; }

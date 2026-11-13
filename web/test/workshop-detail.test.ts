@@ -32,6 +32,8 @@ vi.mock("../src/lib/workshop", async (original) => ({
 }));
 vi.mock("../src/lib/confirm", async (original) => ({ ...(await original<typeof import("../src/lib/confirm")>()), confirmDialog: api.confirm }));
 vi.mock("../src/lib/session", () => ({ useSession: () => fake.session }));
+// 頁面的站方區塊會問 /review/me；不換掉就真的去連本機伺服器，印一串 ECONNREFUSED。這裡一律當一般玩家
+vi.mock("../src/lib/api", async (original) => ({ ...(await original<object>()), fetchReviewMe: async () => ({ reviewer: false }) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "card", setSurface: () => {} }));
 vi.mock("../src/components/CommentPanel.vue", async () => {
   const { defineComponent: dc, h: hh, onMounted } = await import("vue");

@@ -5076,5 +5076,8 @@
   "workshop.review.rejectTitle": "驳回「{name}」？",
   "workshop.review.rejectBody": "理由会原文发送给制作者，对方可以修改后重新提交审核。",
   "workshop.review.rejectReason": "驳回理由（必填）",
-  "workshop.review.approveBody": "通过后扩展包会发布，制作者会收到通知。"
+  "workshop.review.approveBody": "通过后扩展包会发布，制作者会收到通知。",
+  "workshop.moderation.content.view": "查看",
+  "workshop.moderation.content.hide": "收起",
+  "workshop.moderation.content.error": "扩展包内容加载不了，请重试。"
 }

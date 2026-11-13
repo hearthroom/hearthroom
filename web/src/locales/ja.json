@@ -5076,5 +5076,8 @@
   "workshop.review.rejectTitle": "「{name}」を却下しますか？",
   "workshop.review.rejectBody": "理由はそのまま作成者に届きます。作成者は修正して再提出できます。",
   "workshop.review.rejectReason": "却下の理由（必須）",
-  "workshop.review.approveBody": "承認すると拡張パックが公開され、作成者に通知が届きます。"
+  "workshop.review.approveBody": "承認すると拡張パックが公開され、作成者に通知が届きます。",
+  "workshop.moderation.content.view": "見る",
+  "workshop.moderation.content.hide": "閉じる",
+  "workshop.moderation.content.error": "拡張パックの内容を読み込めませんでした。もう一度お試しください。"
 }

@@ -5076,5 +5076,8 @@
   "workshop.review.rejectTitle": "Reject “{name}”?",
   "workshop.review.rejectBody": "The maker gets your reason word for word and can revise and resubmit.",
   "workshop.review.rejectReason": "Reason (required)",
-  "workshop.review.approveBody": "Once approved, the extension is published and the maker is notified."
+  "workshop.review.approveBody": "Once approved, the extension is published and the maker is notified.",
+  "workshop.moderation.content.view": "View",
+  "workshop.moderation.content.hide": "Hide",
+  "workshop.moderation.content.error": "Couldn’t load this extension’s content. Try again."
 }

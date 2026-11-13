@@ -15,6 +15,7 @@ import { i18n } from "./i18n";
 import { currentProvider } from "./provider";
 import { currentSurface } from "./track";
 import type { CardWorkshopPage, OwnerState, WorkshopCardChoice } from "./workshop";
+import type { WorkshopReviewDetail } from "./workshop-review";
 
 const headers = (token: string, body: boolean): Record<string, string> => ({
   "X-From": currentSurface(), "X-Provider": currentProvider(), ...authHeaders(token),
@@ -68,6 +69,14 @@ export const decideWorkshopAppeal = (id: string, body: { decision: AppealDecisio
   request<unknown>(`/moderation/workshop-appeals/${encodeURIComponent(id)}/decision`, token, "POST", body);
 export const revokeWorkshop = (workshopId: string, body: { reason: string; operationId: string }, token: string) =>
   request<unknown>(`/moderation/workshops/${encodeURIComponent(workshopId)}/revoke`, token, "POST", body);
+
+/**
+ * 站方判申訴時看擴充的完整內容（介紹、常駐、世界書、正規表示式、開場白），形狀與審核詳情的 workshop 相同，
+ * 畫面直接交給 ReviewWorkshopContent。只有人類 manager／owner 打得通（其他人 403），伺服器再判一次；
+ * 申訴的對象正是被原作者退回或隱藏的擴充，所以這支要連這些狀態也讀得到（網頁的提議，主研發寫進契約）。
+ */
+export const fetchWorkshopContent = (workshopId: string, token: string) =>
+  request<WorkshopReviewDetail["workshop"]>(`/moderation/workshops/${encodeURIComponent(workshopId)}/content`, token);
 
 /**
  * 工作台分頁上的待處理數。審核人的摘要（/review/me）沒有這個數，另讀 /moderation/summary；

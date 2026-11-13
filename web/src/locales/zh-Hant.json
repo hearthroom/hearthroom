@@ -5076,5 +5076,8 @@
   "workshop.review.rejectTitle": "駁回「{name}」？",
   "workshop.review.rejectBody": "理由會原文送給製作者，對方可以修改後重新提交審核。",
   "workshop.review.rejectReason": "駁回理由（必填）",
-  "workshop.review.approveBody": "通過後擴充會發布，製作者會收到通知。"
+  "workshop.review.approveBody": "通過後擴充會發布，製作者會收到通知。",
+  "workshop.moderation.content.view": "查看",
+  "workshop.moderation.content.hide": "收起",
+  "workshop.moderation.content.error": "擴充內容載入不了，請重試。"
 }

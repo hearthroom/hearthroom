@@ -9,12 +9,15 @@
  * - 三個動作都要理由（confirmForm 必填）。送出失敗時保留同一份內容與 operationId，重試照原樣再送，
  *   伺服器才認得出是同一次處理；重新開確認框才算新的一次。
  * - 分頁只給 manager／owner；直接打網址的其他人看到伺服器的 403，畫面寫一句說明。
+ * - 「查看」在面板內展開擴充的完整內容，沿用審核詳情的 ReviewWorkshopContent（不另畫一份）。按了才讀，
+ *   內容可能很長、大多數案件看理由就能判；同一案件讀到一次就留著，收起再展開不重讀，失敗才重讀。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ExtensionCover from '@/components/workshop/ExtensionCover.vue';
 import UndoToast from '@/components/workshop/UndoToast.vue';
+import ReviewWorkshopContent from '@/components/ReviewWorkshopContent.vue';
 import { ApiError } from '@/lib/api';
 import { confirmForm, confirmState, settleConfirm } from '@/lib/confirm';
 import { displayName } from '@/lib/display-name';
@@ -24,9 +27,10 @@ import { currentProvider } from '@/lib/provider';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import {
-  appealCount, askRevokeReason, decideWorkshopAppeal, fetchWorkshopAppeals, refreshAppealCount, revokeWorkshop,
+  appealCount, askRevokeReason, decideWorkshopAppeal, fetchWorkshopAppeals, fetchWorkshopContent, refreshAppealCount, revokeWorkshop,
   type AppealDecision, type WorkshopAppeal,
 } from '@/lib/workshop-moderation';
+import type { WorkshopReviewDetail } from '@/lib/workshop-review';
 
 const { t, locale } = useI18n();
 const session = useSession();
@@ -48,6 +52,9 @@ type Attempt = { kind: 'decision'; appealId: string; body: { decision: AppealDec
   | { kind: 'revoke'; workshopId: string; body: { reason: string; operationId: string } };
 const failed = ref<Attempt | null>(null);
 const toast = ref<InstanceType<typeof UndoToast> | null>(null);
+/** 「查看」的內容，依案件 id 記：展開與否、讀取中、失敗、讀到的內容 */
+type Content = { open: boolean; loading: boolean; error: boolean; data: WorkshopReviewDetail['workshop'] | null };
+const contents = ref<Record<string, Content>>({});
 
 const identity = () => `${currentProvider()}:${session.me?.accountNumId ?? ''}`;
 let generation = 0;
@@ -92,7 +99,7 @@ function page(delta: number) {
 
 // 換帳號或換線路：清掉畫面、收掉還開著的確認框，重讀
 watch(identity, () => {
-  generation++; items.value = []; failed.value = null; busy.value = false;
+  generation++; items.value = []; failed.value = null; busy.value = false; contents.value = {};
   if (ownConfirmation && confirmState.current) settleConfirm(false);
   if (session.me) void load();
 });
@@ -154,6 +161,31 @@ async function send(attempt: Attempt) {
   }
 }
 
+function toggleContent(a: WorkshopAppeal) {
+  contents.value[a.id] ??= { open: false, loading: false, error: false, data: null };
+  const c = contents.value[a.id]!;
+  c.open = !c.open;
+  if (c.open && !c.data && !c.loading) void loadContent(a);
+}
+async function loadContent(a: WorkshopAppeal) {
+  const c = contents.value[a.id];
+  if (!c || c.loading) return;
+  const who = identity();
+  // 換帳號時整份換掉；舊的那份回來就不寫進新帳號的畫面
+  const current = () => alive && who === identity() && contents.value[a.id] === c;
+  c.loading = true; c.error = false;
+  try {
+    const access = await token();
+    if (!current()) return;
+    const got = await fetchWorkshopContent(a.workshop.id, access);
+    if (current()) c.data = got;
+  } catch {
+    if (current()) c.error = true;
+  } finally {
+    c.loading = false;
+  }
+}
+
 const pendingLabel = computed(() => t('workshop.moderation.filter.pending', { n: appealCount.pending }));
 const cardPath = (a: WorkshopAppeal) => lp(`/cards/${a.card.num || a.card.id}`);
 </script>
@@ -207,11 +239,27 @@ const cardPath = (a: WorkshopAppeal) => lp(`/cards/${a.card.num || a.card.id}`);
           <p v-if="a.viewerRelation" class="notice wsa__notice" data-wsa-self>
             <span class="ws-text">{{ t(a.viewerRelation === 'maker' ? 'workshop.moderation.self.maker' : 'workshop.moderation.self.owner') }}</span>
           </p>
-          <div v-else-if="a.status === 'pending'" class="wsa__actions">
-            <button type="button" class="btn btn--sm" data-wsa-act="upheld" :disabled="busy" @click="act(a, 'upheld')">{{ t('workshop.moderation.uphold') }}</button>
-            <button type="button" class="btn btn--sm" data-wsa-act="restored" :disabled="busy" @click="act(a, 'restored')">{{ t('workshop.moderation.restore') }}</button>
-            <span class="wsa__spacer" />
-            <button type="button" class="btn btn--sm btn--danger" data-wsa-act="revoke" :disabled="busy" @click="act(a, 'revoke')">{{ t('workshop.moderation.revoke') }}</button>
+          <!-- 「查看」每個案件都有（已處理、與自己有關的也要看得到內容）；處理鈕只在待處理且與自己無關時出現 -->
+          <div class="wsa__actions">
+            <button
+              type="button" class="btn btn--sm" data-wsa-view
+              :aria-expanded="!!contents[a.id]?.open" :aria-controls="`wsa-content-${a.id}`"
+              @click="toggleContent(a)"
+            >{{ t(contents[a.id]?.open ? 'workshop.moderation.content.hide' : 'workshop.moderation.content.view') }}</button>
+            <template v-if="!a.viewerRelation && a.status === 'pending'">
+              <button type="button" class="btn btn--sm" data-wsa-act="upheld" :disabled="busy" @click="act(a, 'upheld')">{{ t('workshop.moderation.uphold') }}</button>
+              <button type="button" class="btn btn--sm" data-wsa-act="restored" :disabled="busy" @click="act(a, 'restored')">{{ t('workshop.moderation.restore') }}</button>
+              <span class="wsa__spacer" />
+              <button type="button" class="btn btn--sm btn--danger" data-wsa-act="revoke" :disabled="busy" @click="act(a, 'revoke')">{{ t('workshop.moderation.revoke') }}</button>
+            </template>
+          </div>
+          <div v-if="contents[a.id]?.open" :id="`wsa-content-${a.id}`" class="wsa__content" data-wsa-content>
+            <p v-if="contents[a.id]!.error" class="notice notice--error wsa__notice" role="alert" data-wsa-content-error>
+              <span class="ws-text">{{ t('workshop.moderation.content.error') }}</span>
+              <button type="button" class="btn btn--sm" @click="loadContent(a)">{{ t('library.retry') }}</button>
+            </p>
+            <ReviewWorkshopContent v-else-if="contents[a.id]!.data" :workshop="contents[a.id]!.data!" />
+            <div v-else class="ghost wsa__content-ghost" aria-busy="true" />
           </div>
         </li>
       </ul>
@@ -246,6 +294,8 @@ const cardPath = (a: WorkshopAppeal) => lp(`/cards/${a.card.num || a.card.id}`);
 .wsa__appeal { box-shadow: inset 3px 0 0 var(--accent); }
 .wsa__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .wsa__spacer { flex: 1; }
+.wsa__content { min-width: 0; }
+.wsa__content-ghost { height: 160px; border-radius: var(--r-lg); }
 .wsa__pager { display: flex; gap: var(--s-2); justify-content: center; }
 @media (max-width: 480px) {
   .wsa__case { padding: var(--s-4); }

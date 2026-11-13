@@ -237,6 +237,70 @@ describe("appeals page", () => {
     expect(row.querySelector("[data-wsa-act]")).toBeNull();
     expect(row.textContent).toContain("製作者的申訴：地圖只是示意圖，沒有劇情。");
   });
+
+  describe("查看 the extension's content", () => {
+    const CONTENT = {
+      id: "w1", releaseId: "r1", name: "霧港地圖", summary: "地圖", description: "港口的手繪地圖。", coverUrl: null,
+      version: "v1", previousVersion: null, updateNote: null, residentChars: 0, residentMax: 2000,
+      entries: [{ entryId: "e1", name: "燈塔", content: "燈塔在港口北側。", keywords: ["燈塔"], secondaryKeywords: [], isEnabled: true, isConstant: false }],
+      rules: [], openings: [],
+    };
+    let failContent = false;
+    beforeEach(() => {
+      failContent = false;
+      const base = route;
+      route = (c) => (c.path === "/v1/moderation/workshops/w1/content" ? (failContent ? { status: 500, body: { error: "internal" } } : { body: CONTENT }) : base(c));
+    });
+    const reads = () => calls.filter((c) => c.method === "GET" && c.path.endsWith("/content"));
+
+    it("reads the content only when 查看 is pressed, opens it in the panel, collapses, and does not read again", async () => {
+      const { root } = await mount(workbench, "/review/workshop-appeals");
+      const view = () => root.querySelector<HTMLButtonElement>('[data-wsa-case="ap1"] [data-wsa-view]')!;
+      expect(reads()).toHaveLength(0);
+      expect(view().getAttribute("aria-expanded")).toBe("false");
+      expect(root.querySelector("[data-wsa-content]")).toBeNull();
+
+      view().click(); await settle();
+      expect(reads().map((c) => c.path)).toEqual(["/v1/moderation/workshops/w1/content"]);
+      expect(view().getAttribute("aria-expanded")).toBe("true");
+      const box = root.querySelector('[data-wsa-case="ap1"] [data-wsa-content]')!;
+      expect(box.querySelector('[data-content="about"]')?.textContent).toContain("港口的手繪地圖。");
+      expect(box.querySelector('[data-content="lore"]')?.textContent).toContain("燈塔在港口北側。");
+
+      view().click(); await settle();
+      expect(view().getAttribute("aria-expanded")).toBe("false");
+      expect(root.querySelector("[data-wsa-content]")).toBeNull();
+
+      view().click(); await settle();
+      expect(root.querySelector('[data-wsa-content] [data-content="lore"]')).not.toBeNull();
+      expect(reads()).toHaveLength(1);
+    });
+
+    it("decided cases and cases the manager is part of can still be viewed", async () => {
+      list = [appeal({ id: "mine", viewerRelation: "maker" })];
+      const { root } = await mount(workbench, "/review/workshop-appeals");
+      root.querySelector<HTMLButtonElement>('[data-wsa-case="mine"] [data-wsa-view]')!.click(); await settle();
+      expect(root.querySelector('[data-wsa-case="mine"] [data-wsa-content] [data-content="lore"]')).not.toBeNull();
+      root.querySelector<HTMLButtonElement>('[data-wsa-status="decided"]')!.click(); await settle();
+      root.querySelector<HTMLButtonElement>('[data-wsa-case="d1"] [data-wsa-view]')!.click(); await settle();
+      expect(root.querySelector('[data-wsa-case="d1"] [data-wsa-content] [data-content="lore"]')).not.toBeNull();
+    });
+
+    it("a failed read says so with a retry, and the retry reads again", async () => {
+      failContent = true;
+      const { root } = await mount(workbench, "/review/workshop-appeals");
+      root.querySelector<HTMLButtonElement>("[data-wsa-view]")!.click(); await settle();
+      const error = root.querySelector("[data-wsa-content-error]")!;
+      expect(error.textContent).toContain("擴充內容載入不了，請重試。");
+      expect(root.querySelector("[data-wsa-content] [data-content]")).toBeNull();
+
+      failContent = false;
+      error.querySelector<HTMLButtonElement>("button")!.click(); await settle();
+      expect(reads()).toHaveLength(2);
+      expect(root.querySelector("[data-wsa-content-error]")).toBeNull();
+      expect(root.querySelector('[data-wsa-content] [data-content="lore"]')).not.toBeNull();
+    });
+  });
 });
 
 // ── 擴充詳情的站方管理 ──────────────────────────────────────────────────
