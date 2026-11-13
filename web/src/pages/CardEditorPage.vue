@@ -1067,7 +1067,12 @@ const genField = ref<GenField | null>(null);
 const genOpen = ref(false);
 const genRunning = ref(false);
 const generationCopyWarning = ref("");
-function generationLibraryFailed(why: string) { generationCopyWarning.value = t("editor.image.libraryCopyFailed", { why }); }
+function generationLibraryFailed(error: unknown) {
+  const why = error instanceof ApiError && error.status === 507
+    ? t("studio.save.storageFull")
+    : error instanceof Error ? error.message : "";
+  generationCopyWarning.value = t("editor.image.libraryCopyFailed", { why });
+}
 // 卡名當路徑用：斜線會多出一層資料夾
 const genFolder = computed(() => draft.value.roleName.trim().replaceAll("/", "-"));
 const genPrompt = computed(() =>

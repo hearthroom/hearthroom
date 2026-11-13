@@ -26,6 +26,7 @@ import { ratingState } from "../src/lib/rating";
 import { makeDraft } from "../src/lib/role-draft";
 import { formatReviewLength } from "../src/lib/review-length";
 import { emptyRuleSet } from "../src/lib/regex-rules";
+import { ApiError } from "../src/lib/api";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -2725,12 +2726,15 @@ it('keeps an image selected without a name, then provisions privately without tu
  expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).pendingCreate.roleId).toBe('r1');
 });
 
-it('keeps the card image when an optional generated-image library copy fails', async () => {
+it.each([null, 507, 503])('keeps the card image and classifies optional library copy failure (%s)', async status => {
+ const generic=i18n.global.t('state.serverBusy');
+ const reason=status===507?i18n.global.t('studio.save.storageFull'):status===503?generic:'storage full';
+ const failure=status===null?new Error('storage full'):new ApiError(status,generic,status===507?'insufficient_quota':'api_error');
  gen.imageGen={access:'ready',models:[{id:'m',name:'M',credits:35,priced:1,sizes:['1024x1536'],maxImages:1}]};
  gen.create.mockResolvedValue({id:'selected-card-image',status:'completed',urls:['https://gen.test/one.png'],saved:[]});
  gen.save.mockImplementation(async (_id:string,target:any)=>{
   if(target.roleId) return [{index:0,assetId:'card-image',url:'https://assets.test/card-media/card/unique'}];
-  throw new Error('storage full');
+  throw failure;
  });
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Mira',roleDetailDesc:'Synthetic settings'});
  try {
@@ -2747,7 +2751,7 @@ it('keeps the card image when an optional generated-image library copy fails', a
   expect(gen.save).toHaveBeenNthCalledWith(1,'selected-card-image',{roleId:'r1',field:'background'},[{index:0}]);
   expect(gen.save).toHaveBeenNthCalledWith(2,'selected-card-image',{},[{index:0}]);
   expect(field.querySelector('img')?.getAttribute('src')).toContain('/card-media/');
-  expect(root.textContent).toContain(i18n.global.t('editor.image.libraryCopyFailed',{why:'storage full'}));
+  expect(root.textContent).toContain(i18n.global.t('editor.image.libraryCopyFailed',{why:reason}));
  } finally {gen.imageGen=null;gen.create.mockReset();gen.save.mockReset();}
 });
 

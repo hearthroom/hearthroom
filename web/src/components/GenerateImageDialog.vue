@@ -26,7 +26,7 @@ const props = defineProps<{
   /** 描述的起點，作者可以改。 */
   initialPrompt?: string;
 }>();
-const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [url: string, folder: string]; kept: []; libraryCopyFailed: [string] }>();
+const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [url: string, folder: string]; kept: []; libraryCopyFailed: [unknown] }>();
 
 const PROMPT_MAX = 4000;
 const TOP_UP = "https://console.harperharbor.com/me/billing";
@@ -119,7 +119,7 @@ async function choose(index: number) {
     const [saved] = await client.save(task.id, props.target, [{ index }]);
     if (cardMode.value && copyToLibrary.value) {
       try { await client.save(task.id, {}, [{ index }]); }
-      catch (err) { emit("libraryCopyFailed", err instanceof Error ? err.message : ""); }
+      catch (err) { emit("libraryCopyFailed", err); }
     }
     track("studio_pick_into_field");
     task = null;
