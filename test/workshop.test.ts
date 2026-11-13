@@ -13,6 +13,7 @@ import {
   restoreUpstream,
   rolesOnMainSite,
 } from "./helpers";
+import { dispatchPush } from "../src/community/push";
 import { opsMetrics } from "../src/ops-metrics";
 import { HttpError } from "../src/types";
 import { workshopUpstream, restoreWorkshopUpstream } from "../src/workshop-gateway";
@@ -1162,5 +1163,83 @@ describe("6. 跨倉契約對齊與邊界回歸（五級分級、UUID／RFC3339�
         })
       ).status,
     ).toBe(404);
+  });
+
+  it("R 級基底卡上的 workshop_reopened（無 workshop_id）與 G 級擴充評論通知（無 card_id）對 CN／未開成人收件者攔截 Web Push 與鈴鐺", async () => {
+    // 將基底卡標為 R 級，上架一個 G 級擴充
+    await env.DB.prepare("UPDATE cards SET rating = 'R' WHERE id = ?").bind(cardId).run();
+    await env.DB.prepare(
+      "UPDATE members SET age_verified_at = ?, show_nsfw = 1, adult_consent_version = '2026-08-01' WHERE id IN (?, ?, ?)",
+    )
+      .bind(Date.now(), memberOf(REVIEWER), memberOf(CREATOR), memberOf(NEW_PLAYER))
+      .run();
+
+    seedDraft({ workshopId: "ws-g-on-r", rating: "G" });
+    const sub = await json(await send("/v1/me/workshops/ws-g-on-r/submit", "creator", "POST", { operationId: op() }));
+    await send(`/v1/review/${sub.submissionId}/claim`, "reviewer", "POST");
+    await send(`/v1/review/${sub.submissionId}/stamp`, "reviewer", "POST", { verdict: "approve" });
+
+    // NEW_PLAYER 在 G 級擴充下留言並由 CREATOR 回覆 → 產生 card_id = NULL, workshop_id = 'ws-g-on-r' 的 comment_reply
+    const c1 = await json(
+      await send("/v1/workshops/ws-g-on-r/comments", "new-player", "POST", { content: "留個言" }),
+    );
+    await send("/v1/workshops/ws-g-on-r/comments", "creator", "POST", {
+      content: "回覆你",
+      rootId: c1.commentId,
+      parentId: c1.commentId,
+    });
+
+    // CREATOR_B（未開啟 show_nsfw）登記重新開放通知並觸發 workshop_reopened（workshop_id = NULL, card_id = R 級卡）
+    await send(
+      "/internal/workshop/events",
+      null,
+      "POST",
+      { events: [{ seq: 201, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 1 }] },
+      { "X-Hosting-Key": "test-hosting-secret" },
+    );
+    await send(`/v1/cards/${cardId}/workshop/interest`, "creator-b", "PUT", { draftName: "草稿" });
+    await send(
+      "/internal/workshop/events",
+      null,
+      "POST",
+      {
+        events: [
+          { seq: 202, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: true, revision: 2, reopened: true },
+        ],
+      },
+      { "X-Hosting-Key": "test-hosting-secret" },
+    );
+
+    // 將 NEW_PLAYER 設為 CN，並為 NEW_PLAYER 與 CREATOR_B 建立訂閱
+    await env.DB.prepare("UPDATE members SET country_region = 'CN' WHERE id = ?").bind(memberOf(NEW_PLAYER)).run();
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO push_subscriptions(id, member_id, endpoint, p256dh, auth, locale, created_at) VALUES ('sub-np', ?, 'https://push.test/np', 'k', 'a', 'zh-Hant', ?)",
+      ).bind(memberOf(NEW_PLAYER), now),
+      env.DB.prepare(
+        "INSERT INTO push_subscriptions(id, member_id, endpoint, p256dh, auth, locale, created_at) VALUES ('sub-cb', ?, 'https://push.test/cb', 'k', 'a', 'zh-Hant', ?)",
+      ).bind(memberOf(CREATOR_B), now),
+    ]);
+
+    const pushEnv = {
+      ...env,
+      PUSH_VAPID_PUBLIC_KEY: "pub",
+      PUSH_VAPID_PRIVATE_KEY: "priv",
+      PUSH_VAPID_SUBJECT: "mailto:test@sukisuki.ai",
+    };
+    const pushed: string[] = [];
+    const sentCount = await dispatchPush(pushEnv, async (sub) => {
+      pushed.push(sub.endpoint);
+      return 201;
+    });
+    expect(sentCount).toBe(0);
+    expect(pushed).toEqual([]);
+
+    // CN 地區 NEW_PLAYER 的站內鈴鐺與未讀數亦不顯示該筆位於 R 級基底卡上的評論回覆通知
+    const cnNotices = await json(await send("/v1/me/community/notifications", "new-player"));
+    expect(cnNotices.items).toHaveLength(0);
+    const cnSummary = await json(await send("/v1/me/community/notifications/summary", "new-player"));
+    expect(cnSummary.unread).toBe(0);
   });
 });

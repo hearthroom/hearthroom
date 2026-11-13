@@ -281,8 +281,8 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   const now = Date.now();
   const rows = (
     await env.DB.prepare(
-      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,n.card_id,n.workshop_id,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names,c.rating AS card_rating,w.rating AS workshop_rating
-       FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id
+      `SELECT n.id,n.member_id,n.kind,n.path,n.extra,n.card_id,n.workshop_id,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names,COALESCE(c.rating,wc.rating) AS card_rating,w.rating AS workshop_rating
+       FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id
        WHERE ${eligibleNotification()} AND n.push_at IS NULL AND n.created_at>? AND EXISTS(SELECT 1 FROM push_subscriptions s WHERE s.member_id=n.member_id)
        ORDER BY n.created_at LIMIT 40`,
     ).bind(now - 86400000).all<Row>()
@@ -292,7 +292,7 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
   const visibility=await updateNoticeVisibility(env,rows);
   let sent = 0;
   for (const row of rows) {
-    if (row.workshop_id && (row.workshop_rating === "R" || row.card_rating === "R")) {
+    if ((row.workshop_id || row.kind.startsWith("workshop_")) && (row.workshop_rating === "R" || row.card_rating === "R")) {
       const nsfw = await memberNsfw(env.DB, row.member_id);
       const blockedByRegion = nsfw.countryRegion === "CN";
       const blockedPublicAdult =
