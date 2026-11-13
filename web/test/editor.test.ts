@@ -24,6 +24,7 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 import { ratingState } from "../src/lib/rating";
 import { makeDraft } from "../src/lib/role-draft";
 import { formatReviewLength } from "../src/lib/review-length";
+import { emptyRuleSet } from "../src/lib/regex-rules";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -388,6 +389,59 @@ describe('new-card author-asset draft recovery', () => {
     app!.unmount(); root.remove();
     await mount('/create');
   }
+
+  it('retains a card CSS draft when no role text or display rules have been entered', async () => {
+    const css = '\n.canvas-root { --lt-canvas-send-bg:#923455 }\n';
+    await mount('/create');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    await type($<HTMLTextAreaElement>('.card-style__custom textarea'), css);
+    await new Promise(r => setTimeout(r, 450));
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.cardCss).toBe(css);
+    await reopen();
+    expect($<HTMLInputElement>('#f-name').value).toBe('');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+    expect(root.textContent).toContain(i18n.global.t('editor.draftRestored'));
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+  });
+
+  it.each(['matching', 'different-css', 'different-hint'] as const)('reconciles a card CSS draft acknowledgement using both CSS fields: %s', async kind => {
+    const css = '\n#ai-chat-input { color:#123456 }\n';
+    const set = { ...emptyRuleSet(), pageMode: 'sandbox', cardCss: css, cardCssDialect: 'fengyue-v2' };
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({
+      draft: { ...makeDraft('zh-Hant'), roleName: 'CSS acknowledgement fixture' },
+      tagsText: '', worldbook: null, savedAt: Date.now(),
+      authorAsset: { set, original: emptyRuleSet(), version: 0, savedOpening: 'greeting' },
+    }));
+    await mount('/create');
+    api.saveAuthorAsset.mockImplementationOnce(async (_id, body) => {
+      const saved = { ...body, status: 'none', version: 1 } as any;
+      if (kind === 'different-css') saved.cardCss = css + '.different { color:red }';
+      if (kind === 'different-hint') saved.cardCssDialect = 'fengyue';
+      api.fetchAuthorAsset.mockResolvedValueOnce(saved);
+      throw new TypeError('synthetic CSS acknowledgement loss');
+    });
+    await submit();
+    const pending = JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.pendingWrite;
+    expect(pending.set.cardCss).toBe(css);
+    expect(pending.set.cardCssDialect).toBe('fengyue-v2');
+    await reopen();
+    if (kind !== 'matching') {
+      const { ApiError } = await import('../src/lib/api');
+      api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(409, 'version_conflict', 'version_conflict'));
+    }
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    if (kind === 'matching') {
+      expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+    } else {
+      expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
+        version: 0, cardCss: css, cardCssDialect: 'fengyue-v2',
+      }), 'tok');
+      expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.version).toBe(0);
+    }
+  });
 
   it('does not persist an untouched new-card default as a recoverable draft', async () => {
     await mount('/create');

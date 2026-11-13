@@ -727,7 +727,8 @@ function restoreDraft() {
     const stored = JSON.parse(raw) as StoredDraft;
     if (!stored?.draft) return;
     if (!stored.draft.roleName && !stored.draft.roleDetailDesc && !stored.draft.roleWelcome &&
-      !stored.authorAsset?.set.rules.length && !stored.authorAsset?.set.openingPage && !stored.authorAsset?.set.statusbar) return;
+      !stored.authorAsset?.set.rules.length && !stored.authorAsset?.set.openingPage && !stored.authorAsset?.set.statusbar &&
+      !stored.authorAsset?.set.cardCss) return;
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
     newCardVisibility.value = stored.visibility === "private" ? "private" : "unlisted";
