@@ -27,6 +27,8 @@ const props = defineProps<{
    */
   beforePlay?: () => Promise<false | Record<string, string>>;
 }>();
+/** 查到能玩的平台時通知卡片頁（工坊要用玩的那一份的 roleId），不必再查一次 */
+const emit = defineEmits<{ platforms: [{ provider: ProviderId; roleId: string; playable: boolean }[]] }>();
 const session = useSession();
 const route = useRoute();
 const { lp } = useLocalePath();
@@ -66,6 +68,7 @@ async function load() {
       : await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
+    emit("platforms", result);
     // 只有一個能玩的平台就直接選它，不讓人多按一步；多個能玩的才讓使用者自己選。
     const playable = result.filter((p) => p.playable);
     if (playable.length === 1) selected.value = playable[0].provider;

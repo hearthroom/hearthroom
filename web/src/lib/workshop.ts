@@ -8,9 +8,9 @@
  * 網頁不自己判斷「分頁要不要出現」「這位玩家能不能加入」「建議用哪一檔」：這些都照伺服器回的欄位畫
  * （tabVisible、availability、usage-summary）。網頁唯一自己算的是編輯頁的常駐字數條，送審仍以伺服器為準。
  */
-import { COMMUNITY_API, UPSTREAM_API } from "./config";
+import { COMMUNITY_API } from "./config";
 import { authHeaders, json } from "./api";
-import { currentProvider } from "./provider";
+import { apiBaseOf, currentProvider } from "./provider";
 import { currentSurface } from "./track";
 import type { WorldbookEntryDraft } from "./role-draft";
 import type { RegexRuleSet } from "./regex-rules";
@@ -125,7 +125,8 @@ async function community<T>(path: string, token?: string | null, method = "GET",
   }));
 }
 async function upstream<T>(path: string, token: string, body?: unknown): Promise<T> {
-  return json<T>(await fetch(UPSTREAM_API + "/open/v1" + path, {
+  // 工坊只在 Harbor：不管看的人目前選哪一家，都打 Harbor
+  return json<T>(await fetch(apiBaseOf("harbor") + "/open/v1" + path, {
     method: body === undefined ? "GET" : "POST", cache: "no-store",
     headers: { ...authHeaders(token), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
     body: body === undefined ? undefined : JSON.stringify(body),

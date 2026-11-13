@@ -391,7 +391,14 @@ const wsPage = ref<CardWorkshopPage | null>(null);
 const wsFailed = ref(false);
 const FAILED_PAGE: CardWorkshopPage = { tabVisible: true, allowNew: true, viewerIsOwner: false, total: 0, page: 1, hasMore: false, items: [] };
 const wsShown = computed<CardWorkshopPage | null>(() => wsPage.value ?? (wsFailed.value && route.query.tab === "workshop" ? FAILED_PAGE : null));
-const wsState = computed(() => (card.value?.roleId && session.me ? cardWorkshop(card.value.roleId, session.me.accountNumId) : null));
+/**
+ * 加入清單、字數摘要、切換檔位都用「玩家實際玩的那一份」的 roleId（Harbor 平台的那個版本），不是卡片列上的 roleId：
+ * 兩者可能不同（Worker 的 /platforms 給的是過審託管版），而上下文檔位存在玩的那一份上，畫布讀的也是它。
+ */
+const playRoleId = ref<string | null>(null);
+watch(() => card.value?.id, () => { playRoleId.value = null; });
+function onPlatforms(list: CardPlatform[]) { playRoleId.value = list.find((p) => p.provider === "harbor" && p.playable)?.roleId ?? null; }
+const wsState = computed(() => (playRoleId.value && session.me ? cardWorkshop(playRoleId.value, session.me.accountNumId) : null));
 const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));
 const wsRecTier = computed(() => tierLabel(wsState.value?.usage?.recommendedContextTokens));
 const pageTab = computed<"intro" | "workshop">(() => (wsShown.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
@@ -418,7 +425,7 @@ async function loadWorkshop() {
   const token = s ? await session.accessToken() : null;
   if (s && token && s.status !== "loading") await loadCardWorkshop(s, token);
 }
-watch([() => card.value?.id, confirmed, () => session.me?.accountNumId], ([id, ok]) => { if (id && ok) void loadWorkshop(); });
+watch([() => card.value?.id, confirmed, () => session.me?.accountNumId, playRoleId], ([id, ok]) => { if (id && ok) void loadWorkshop(); });
 
 const toast = ref<InstanceType<typeof UndoToast> | null>(null);
 const say = (text: string, undo?: () => void) => toast.value?.say(text, undo);
@@ -557,7 +564,7 @@ watch(
           <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
           <div class="role__actions">
             <div class="role__cta">
-              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" :before-play="beforePlay" />
+              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" :before-play="beforePlay" @platforms="onPlatforms" />
               <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
               <ShareMenu data-tour="card-share" :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
