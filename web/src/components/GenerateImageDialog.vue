@@ -211,7 +211,7 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
               <button type="button" class="gen__choice" :disabled="running || failure === 'gone' || failure === 'stale'" :aria-label="$t('resource.gen.chooseOne', { n: i + 1 })" @click="choose(i)">
                 <img :src="u" alt="" />
               </button>
-              <a :href="u" target="_blank" rel="noopener" :download="`image-${i+1}.png`" class="link">{{ $t("studio.image.download") }}</a>
+              <a :href="u" target="_blank" rel="noopener" :download="`image-${i+1}.png`" class="gen__dl">{{ $t("studio.image.download") }}</a>
             </li>
           </ul>
           <p v-if="phase === 'saving'" class="notice gen__progress" role="status">
@@ -321,4 +321,14 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
 }
 .gen__choice:hover:not(:disabled), .gen__choice:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
 .gen__choice img { display: block; width: 100%; height: auto; max-height: 40vh; object-fit: contain; }
+.gen__dl {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--h-sm); min-width: var(--h-sm);
+  padding: 0 var(--s-3); border-radius: var(--r-sm);
+  color: var(--accent-text); font-size: 13px; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 0.18em; text-decoration-thickness: 1px;
+  transition: background var(--dur) var(--ease);
+}
+.gen__dl:hover { background: var(--accent-soft); color: var(--accent-text); }
+@media (max-width: 480px) { .gen__dl { min-height: var(--h-lg); min-width: var(--h-lg); } }
 </style>
