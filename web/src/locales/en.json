@@ -1181,6 +1181,7 @@
   "res.panel.copyFailed": "Could not copy. Select it by hand.",
   "dialog.close": "Close",
   "nav.me": "Me",
+  "notifications.newNotice": "New notification",
   "notifications.viewAll": "See all notifications",
   "notifications.discordGoSettings": "Discord reminder settings",
   "notifications.discordGoLink": "Link Discord",

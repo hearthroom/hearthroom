@@ -1181,6 +1181,7 @@
   "res.panel.copyFailed": "복사하지 못했어요. 직접 선택해 주세요.",
   "dialog.close": "닫기",
   "nav.me": "내 정보",
+  "notifications.newNotice": "새 알림",
   "notifications.viewAll": "알림 전체 보기",
   "notifications.discordGoSettings": "Discord 알림 설정",
   "notifications.discordGoLink": "Discord 연결",
