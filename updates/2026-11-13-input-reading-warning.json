@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "draft": true,
+  "title": {
+    "zh-Hant": "對話可能沒被讀完整時，會提示你換線路再試。",
+    "zh-Hans": "对话可能没被完整读取时，会提示你切换线路后重试。",
+    "en": "Chat now suggests switching lanes when the conversation may not have been read in full.",
+    "ja": "会話が最後まで読み込まれていない可能性があるとき、回線の切り替えをご案内します。",
+    "ko": "대화를 끝까지 읽지 못했을 가능성이 있으면 다른 경로로 바꿔 보도록 안내해요."
+  }
+}
