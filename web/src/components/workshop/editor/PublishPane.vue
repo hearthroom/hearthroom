@@ -137,7 +137,7 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
 
     <div v-if="needsNote" class="field">
       <label for="ws-update-note">{{ $t("workshop.publish.note.label") }}</label>
-      <textarea id="ws-update-note" class="input" rows="3" maxlength="200" :value="draft.updateNote"
+      <textarea id="ws-update-note" autocomplete="off" class="input" rows="3" maxlength="200" :value="draft.updateNote"
                 @input="emit('update:note', ($event.target as HTMLTextAreaElement).value)" />
       <span class="field__foot">
         <span class="subtle ws-text">{{ $t("workshop.publish.note.hint") }}</span>

@@ -989,10 +989,10 @@ export type CommentSort = "hot" | "new";
 async function commentUrl(on: CommentOn, tail = "", query = ""): Promise<{ url: string; headers: Record<string, string> }> {
   if (typeof on !== "string" && "postId" in on) return { url: `${COMMUNITY_API}/blog/posts/${encodeURIComponent(on.postId)}/comments${tail}${query ? `?${query}` : ""}`, headers: {} };
   // 卡片與擴充都跟著成人門：看的人開了成人內容才帶權限（擴充的可達性由伺服器照原卡＋擴充一起判）
-  const base = typeof on === "string" ? `${COMMUNITY_API}/cards/${encodeURIComponent(on)}` : `${COMMUNITY_API}/workshops/${encodeURIComponent(on.workshopId)}`;
+  const root = typeof on === "string" ? `${COMMUNITY_API}/cards/${encodeURIComponent(on)}` : `${COMMUNITY_API}/workshops/${encodeURIComponent(on.workshopId)}`;
   const access = await viewerAccess();
   const q = [query, access.param].filter(Boolean).join("&");
-  return { url: `${base}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
+  return { url: `${root}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
 }
 
 export async function fetchComments(on: CommentOn, page: number, token?: string, sort?: CommentSort) {

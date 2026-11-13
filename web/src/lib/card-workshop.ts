@@ -34,20 +34,25 @@ export function forgetCardWorkshops(): void { states.clear(); }
 
 /** 已加入且啟用、還能用的件數（「開始對話會套用 N 個擴充」） */
 export function activeCount(s: CardWorkshopState): number {
-  return s.selection?.items.filter((i) => i.enabled && i.availability !== "removed").length ?? 0;
+  return s.selection?.items?.filter((i) => i.enabled && i.availability !== "removed").length ?? 0;
 }
 export function isJoined(s: CardWorkshopState, workshopId: string): boolean {
-  return !!s.selection?.items.some((i) => i.workshopId === workshopId);
+  return !!s.selection?.items?.some((i) => i.workshopId === workshopId);
 }
 
 async function refreshUsage(s: CardWorkshopState, token: string): Promise<void> {
-  try { s.usage = await fetchUsageSummary(s.roleId, token); } catch { /* 字數摘要讀不到只是少一行，不擋清單 */ }
+  try {
+    const usage = await fetchUsageSummary(s.roleId, token);
+    s.usage = typeof usage?.totalConstantChars === "number" ? usage : null;
+  } catch { /* 字數摘要讀不到只是少一行，不擋清單 */ }
 }
 
 export async function loadCardWorkshop(s: CardWorkshopState, token: string): Promise<void> {
   s.status = "loading";
   try {
     const [selection] = await Promise.all([fetchSelection(s.roleId, token), refreshUsage(s, token)]);
+    // 回應形狀不對（代理或舊伺服器回了別的東西）就當讀不到，不讓卡片頁跟著壞
+    if (!Array.isArray(selection?.items)) throw new Error("invalid_selection");
     s.selection = selection;
     s.status = "ready";
   } catch {
