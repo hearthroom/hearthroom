@@ -1063,6 +1063,10 @@ async function onAdoptImage(imageId: string, ok: (url: string) => void, fail: (m
 type GenField = "roleBackground" | "roleBackgroundLandscape";
 const { imageGen, generator, probeGeneration, markReauthorizing } = useImageGeneration(() => editorProvider.value);
 onMounted(() => { void probeGeneration(); });
+// 本站 identity 在背景載入；mounted 的早期探測失敗後，身分到達時再探測。
+watch(() => session.profile?.identities?.find(i => i.provider === editorProvider.value)?.externalId, identity => {
+  if (identity) void probeGeneration();
+});
 const genField = ref<GenField | null>(null);
 const genOpen = ref(false);
 const genRunning = ref(false);

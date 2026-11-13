@@ -14,7 +14,7 @@ const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner
  * （建卡頁在 OAuth 後面），所以在這裡把整個元件掛起來測。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick, type App } from "vue";
+import { createApp, nextTick, ref, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
@@ -79,13 +79,15 @@ const api = vi.hoisted(() => ({
   deleteRoleState: vi.fn(async () => ({ state: null })),
 }));
 vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
-vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ profile:platforms.profile, accessToken: async () => sessionAuth.token, me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
-}));
+vi.mock("../src/lib/session", async () => {
+  const { unref } = await import("vue");
+  return { useSession: () => ({ get profile(){return unref(platforms.profile);}, accessToken: async () => sessionAuth.token, me: { accountNumId: 7, nickName: "作者", avatar: "" } }) };
+});
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "create", setSurface: () => {} }));
 // 編輯器裡的「生成」：入口狀態與授權由 use-image-generation 管（資源頁的測試跑的是真的那份）
 const gen = vi.hoisted(() => ({
   imageGen: null as unknown,
+  probe: vi.fn(async (): Promise<unknown> => undefined),
   create: vi.fn(),
   wait: vi.fn(),
   save: vi.fn(),
@@ -93,12 +95,15 @@ const gen = vi.hoisted(() => ({
 vi.mock("../src/lib/use-image-generation", async () => {
   const { ref } = await import("vue");
   return {
-    useImageGeneration: () => ({
-      imageGen: ref(gen.imageGen),
-      generator: async () => ({ create: gen.create, wait: gen.wait, save: gen.save }),
-      probeGeneration: async () => {},
-      markReauthorizing: () => {},
-    }),
+    useImageGeneration: () => {
+      const imageGen = ref(gen.imageGen);
+      return {
+        imageGen,
+        generator: async () => ({ create: gen.create, wait: gen.wait, save: gen.save }),
+        probeGeneration: async () => { const value = await gen.probe(); if(value !== undefined) imageGen.value=value; },
+        markReauthorizing: () => {},
+      };
+    },
   };
 });
 
@@ -372,6 +377,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   platforms.profile=undefined; platforms.saveCopies.mockClear();
+  gen.probe.mockReset();
   for (const fn of Object.values(api)) fn.mockClear();
   // happy-dom 沒有 object URL；預覽用的立繪縮圖走這條
   if (!("createObjectURL" in URL)) {
@@ -622,6 +628,28 @@ describe('new-card author-asset draft recovery', () => {
         version: 0, rules: [expect.objectContaining({ replace: 'Submitted replacement' })],
       }), 'tok');
     }
+  });
+});
+
+describe('generation entry follows provider identity', () => {
+  it.each(['ready', 'late', 'absent'] as const)('handles an identity that is %s', async (timing) => {
+    const profile = ref<any>(timing === 'ready' ? {identities:[{provider:'harbor',externalId:'synthetic-account'}]} : null);
+    platforms.profile = profile;
+    gen.imageGen = null;
+    gen.probe.mockImplementation(async () => profile.value?.identities.length
+      ? {access:'ready',models:[{id:'m',name:'M',credits:1,priced:1,sizes:['1024x1536'],maxImages:1}]}
+      : undefined);
+    const buttons = () => Array.from(root.querySelectorAll('button')).filter(button => button.textContent?.trim() === i18n.global.t('editor.image.generate'));
+    await mount('/create');
+    await flush();
+    if (timing !== 'ready') expect(buttons()).toHaveLength(0);
+    if (timing === 'late') {
+      profile.value = {identities:[{provider:'harbor',externalId:'synthetic-account'}]};
+      await flush();
+      await flush();
+    }
+    if (timing === 'absent') expect(buttons()).toHaveLength(0);
+    else expect(buttons().length).toBeGreaterThan(0);
   });
 });
 
