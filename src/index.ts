@@ -640,6 +640,21 @@ async function ownCardView(c:Context<{Bindings:Env;Variables:{ev:Pending}}>,id:s
  return own;
 }
 
+/** Owner-only identity resolution for authoring; public viewing keeps its adult gate. */
+app.get('/v1/me/cards/:id/author-reference', async c => {
+  if (!bearerOf(c)) throw new HttpError(401, 'missing bearer token');
+  const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
+  const own = await ownCardView(c, link.source?.roleId ?? c.req.param('id'), link.row);
+  if (!own) throw new HttpError(404, 'card not found');
+  c.header('Cache-Control', 'private, no-store');
+  c.header('X-Robots-Tag', 'noindex, nofollow');
+  const metadata = link.row ? toCard(link.row, lang(c)) : null;
+  return c.json({ num: own.num, provider: own.provider, sourceRoleId: own.sourceRoleId ?? own.roleId,
+    ...(metadata?.fandom ? { fandom: metadata.fandom } : {}),
+    ...(metadata?.fandomKey ? { fandomKey: metadata.fandomKey } : {}),
+  });
+});
+
 app.get('/v1/cards/:id/honors',async c=>{
  const row=await getCard(c.env.DB,c.req.param('id'),providerOf(c));
  if(!row||row.public_blocked)throw new HttpError(404,'card not found');

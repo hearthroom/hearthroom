@@ -331,3 +331,19 @@ describe("semantic recall readback", () => {
     expect((await fetchWorldbookEntries("wb-1", "tok")).map(e => e.semanticRecall)).toEqual([false, true]);
   });
 });
+
+
+describe('fetchEditorCardReference', () => {
+  it('uses the authenticated owner lookup instead of the public card route', async () => {
+    const expected={num:100021,provider:'harbor',sourceRoleId:'synthetic-source'};
+    const fetchMock=vi.fn(async()=>Response.json(expected));vi.stubGlobal('fetch',fetchMock);
+    const {fetchEditorCardReference}=await import('../src/lib/api');
+    expect(await fetchEditorCardReference('100021','synthetic-token','harbor')).toEqual(expected);
+    const [url,init]=fetchMock.mock.calls[0] as unknown as [string,RequestInit];
+    expect(new URL(url,'https://fixture.test').pathname).toBe('/v1/me/cards/100021/author-reference');
+    expect(new URL(url,'https://fixture.test').searchParams.get('lang')).toBeTruthy();
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-token');
+    expect(new Headers(init.headers).get('X-Provider')).toBe('harbor');
+    expect(init.method??'GET').toBe('GET');expect(init.body).toBeUndefined();
+  });
+});

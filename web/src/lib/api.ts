@@ -305,6 +305,13 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
   return card;
 }
 
+/** Authoring identity lookup never uses the public card-viewing gate. */
+export async function fetchEditorCardReference(id: string, token: string, provider: ProviderId = currentProvider()): Promise<{num:number;provider:ProviderId;sourceRoleId:string;fandom?:string;fandomKey?:string}> {
+  return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(id)}/author-reference?lang=${encodeURIComponent(String(i18n.global.locale.value))}`, {
+    headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
+  }));
+}
+
 /** 卡片頁「全部榮譽」：這張卡在兩條榜、各期別結算出的全部榮譽，新頒發的在前。看得到卡的人才看得到（成人卡同 fetchCard）。 */
 export async function fetchCardHonors(id: string): Promise<CardHonor[]> {
   const viewer = await viewerAccess();

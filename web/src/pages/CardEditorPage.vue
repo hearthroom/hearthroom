@@ -35,7 +35,7 @@ import {
   fetchApprovedDraft,
   saveApprovedDraft,
   type ApprovedDraft,
-  fetchCard,
+  fetchEditorCardReference,
   fetchFandomLookup,
   registerCardIdentity,
   deleteRole,
@@ -441,6 +441,7 @@ const remoteLimits = ref<FieldLimits | null>(null);
 const limits = computed(() => resolveLimits(remoteLimits.value, draft.value.language));
 const blockers = ref<string[]>([]);
 const loading = ref(!!roleId.value);
+const initializationFailed = ref(false);
 const saving = ref(false);
 /** 世界書分段送出時的進度；沒在送就是 null。 */
 const saveProgress = ref<{ done: number; total: number } | null>(null);
@@ -830,12 +831,13 @@ onMounted(async () => {
     const token = await session.accessToken();
     if(token&&await resumeDeletion(token))return;
     if (/^[1-9]\d*$/.test(roleId.value)) {
-      const card = await fetchCard(roleId.value, locale.value);
+      if (!token) throw new Error(t('auth.expired'));
+      const card = await fetchEditorCardReference(roleId.value, token, editorProvider.value);
       if (card.provider !== editorProvider.value) throw new Error(t('state.loadFailed'));
       cardNumber.value = card.num;
       cardFandom.value = card.fandom ?? "";
       cardFandomId.value = card.fandomKey?.startsWith("wd:") ? card.fandomKey.slice(3) : "";
-      roleId.value = card.sourceRoleId ?? card.roleId;
+      roleId.value = card.sourceRoleId;
     }
     const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
     roleVisibility.value = String((raw as { roleVisibility?: unknown }).roleVisibility ?? "");
@@ -858,6 +860,7 @@ onMounted(async () => {
     void visibilityControl.value?.reload();
     void refreshLegacyState();
   } catch (err) {
+    initializationFailed.value = true;
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
@@ -988,7 +991,9 @@ async function loadRegexRules(token: string) {
     savedOpening.value = openingModeOf(regexSet.value);
     return true;
   } catch {
-    // 讀不到就當沒有：舊上游沒這條路，不擋編輯
+    // Existing author assets are an unknown baseline, not empty data.
+    initializationFailed.value = true;
+    error.value = t("state.loadFailed");
     return false;
   }
 }
@@ -1240,6 +1245,7 @@ async function commitPendingRevert(token:string){
 
 async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
+  if (initializationFailed.value) { error.value = t("state.loadFailed"); return; }
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
   regexSaveIssues.value = [];
   if (cardCssOver.value) {
@@ -2143,7 +2149,7 @@ async function exportCard(format: "png" | "json") {
           @kept="generationKept"
         />
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="loading || booksUnavailable || saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
+          <button class="btn btn--primary" type="submit" :disabled="loading || initializationFailed || booksUnavailable || saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">

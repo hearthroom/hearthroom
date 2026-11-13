@@ -37,6 +37,7 @@ const api = vi.hoisted(() => ({
  fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
   registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
+  fetchEditorCardReference: vi.fn(async () => ({num:100021,provider:"harbor",sourceRoleId:"r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
@@ -1907,7 +1908,7 @@ it('saves Harbor external image URLs directly without creating media assets', as
 
 it('opens a numeric editor URL using the author source, never the published revision', async () => {
  await mount('/cards/100021/edit');
- expect(api.fetchCard).toHaveBeenCalledWith('100021', expect.any(String));
+ expect(api.fetchEditorCardReference).toHaveBeenCalledWith('100021', 'tok', 'harbor');
  expect(api.fetchRoleDetail).toHaveBeenCalledWith('r1','tok');
  expect(api.fetchRoleDetail).not.toHaveBeenCalledWith('frozen-r1','tok');
 });
@@ -2636,5 +2637,50 @@ describe('independent card CSS', () => {
     expect(api.patchRoleDocument).not.toHaveBeenCalled();
     expect(api.saveAuthorAsset).not.toHaveBeenCalled();
     expect($('.side__item[aria-current=true]').textContent).toContain(i18n.global.t('editor.section.advanced'));
+  });
+});
+
+
+describe('owner editor asset reopening', () => {
+  const css = '\n.canvas-root { outline: 3px solid rgb(44,55,66); }';
+  const stored = () => ({rules:[],mountTrigger:'',mountLayer:'over',pageMode:'sandbox',cardFormat:'fengyue',openingMode:'page',cardCss:css,cardCssDialect:'fengyue-v2',status:'none',version:1});
+  it('loads CSS-only assets with status none through the source author path', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockResolvedValueOnce(stored() as any);
+    await mount('/cards/r1/edit');
+
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+    expect($('.chatpage [aria-checked=true]').textContent).toContain(i18n.global.t('editor.chatPage.sandbox'));
+  });
+  it('opens owned numeric cards without requiring access through the public adult gate', async () => {
+    api.fetchCard.mockRejectedValueOnce(new Error('adult_content'));
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockResolvedValueOnce(stored() as any);
+    try {
+      await mount('/cards/100021/edit');
+      expect(api.fetchAuthorAsset).toHaveBeenCalledWith('r1','tok');
+      $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+      expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+      expect(api.fetchCard).not.toHaveBeenCalled();
+    } finally {api.fetchCard.mockReset().mockResolvedValue({id:'100021',num:100021,provider:'harbor',sourceRoleId:'r1',roleId:'frozen-r1'});api.fetchAuthorAsset.mockReset().mockResolvedValue({rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'none',version:0});}
+  });
+  it('blocks all writes after existing-card initialization failed, even when the form is filled', async () => {
+    api.fetchRoleDetail.mockRejectedValueOnce(new Error('unavailable'));
+    await mount('/cards/r1/edit');
+    await type($('#f-name'),'Must not overwrite');await type($('#f-detail'),'SFW');$<HTMLButtonElement>('[data-opening-mode=greeting]').click();await flush();await type($('#f-welcome'),'Opening');
+    await submit();
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($<HTMLButtonElement>('.bar button[type=submit]').disabled).toBe(true);
+  });
+  it('does not write any card fields when author assets cannot be read', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline'));
+    try {
+      await mount('/cards/r1/edit');await type($('#f-name'),'Changed but unread assets');await submit();
+      expect(api.beginCardEdit).not.toHaveBeenCalled();expect(api.patchRoleDocument).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    } finally {api.fetchAuthorAsset.mockReset().mockResolvedValue({rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'none',version:0});}
   });
 });
