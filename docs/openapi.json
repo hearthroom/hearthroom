@@ -20167,6 +20167,1082 @@
           }
         }
       }
+    },
+    "/open/v1/workshop/openings": {
+      "get": {
+        "operationId": "listWorkshopOpenings",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Openings offered by the player's enabled extensions",
+        "description": "Lists the openings of the extensions the caller has enabled for this card, in list order; guests get an empty list. Each item: `workshopId`, `workshopName`, `openingId`, `mode` (`greeting`|`page`), `greeting`, `openingPage`, `prologue[]`. A trial (`workshopTrial=<workshopId>`) lists that extension's draft openings instead, with `openingId` `welcome` or `alt-<n>`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/conversation/start": {
+      "post": {
+        "operationId": "startWorkshopConversation",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Start a new conversation with an extension opening",
+        "description": "Always creates a new conversation (never resumes) with the chosen opening; the response has the same shape as `POST /open/v1/conversation/start`. `opening` is `{kind: base|workshop, workshopId?, openingId}`; optional `saveConversationId`, `firstPageSize`, `trialWorkshopId`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "opening": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "opening"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`workshop_opening_unavailable`: the opening is not in the player's enabled list, was removed, or is not accessible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`workshop_trial_forbidden`: only the extension's author may trial its draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/conversation": {
+      "get": {
+        "operationId": "getWorkshopConversation",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Extensions used by a conversation",
+        "description": "Returns `{selectionRevision, manifestHash, openingSource, items[], triggeredCount}`. `items` follow the conversation's frozen order; each has `workshopId`, `name`, `coverUrl`, `kinds[]`, `residentChars`, `status` (`resident`|`triggered`|`disabled`|`removed`). Empty `items` when no extension applies.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/conversation/capacity": {
+      "post": {
+        "operationId": "saveWorkshopCapacityChoice",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Record a capacity choice for a conversation",
+        "description": "When the resident content does not fit, `choice: trigger` turns the resident content of extensions into keyword-triggered content, from the top of the list down, until it fits; `restore` returns it after the context was raised. Returns `{revision}`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "expectedRevision": {
+                    "type": "integer"
+                  },
+                  "choice": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "conversationId",
+                  "expectedRevision",
+                  "choice"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`capacity_revision_stale`: re-read the advice before choosing again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/selection": {
+      "get": {
+        "operationId": "getWorkshopSelection",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Extensions the player added to a card",
+        "description": "Returns `{revision, items[]}` in list order (lower items win); each item `workshopId`, `enabled`, `name`, `coverUrl`, `kinds[]`, `residentChars`, `availability` (`open`|`hidden`|`removed`).",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/install": {
+      "post": {
+        "operationId": "installWorkshop",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Add an extension to a card",
+        "description": "Appends the extension, enabled, and returns the selection.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "workshopId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "workshopId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`adult_content`: the extension is rated above what the viewer has opted into.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`workshop_unavailable`: hidden, removed or the card is not playable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/uninstall": {
+      "post": {
+        "operationId": "uninstallWorkshop",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Remove an extension from a card",
+        "description": "Removes it from the list for new conversations; existing conversations keep their frozen list. Returns the selection.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "workshopId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "workshopId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/selection/save": {
+      "post": {
+        "operationId": "saveWorkshopSelection",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Reorder or switch extensions",
+        "description": "Replaces order and enabled flags of the already-added extensions. Returns the selection.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "expectedRevision": {
+                    "type": "integer"
+                  },
+                  "items": {
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "expectedRevision",
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`selection_stale`: re-read and apply again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/usage-summary": {
+      "get": {
+        "operationId": "getWorkshopUsageSummary",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Resident characters and recommended context",
+        "description": "Character counts and context advice only, no prices: `baseConstantChars`, `enabledWorkshopConstantChars`, `totalConstantChars`, `items[]`, `currentContextTier/Tokens`, `recommendedContextTier/Tokens` (smallest tier where resident content is at most 35% of the context; null when none fits or no model), `currentTierSufficient`, `requestFits`, `highestAvailableTokens`, `recommendationReason`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/policy": {
+      "get": {
+        "operationId": "getWorkshopPolicy",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Workshop switch and extensions for the card's author",
+        "description": "Card author only. Returns `{allowNew, revision, items[]}` with each extension's `ownerState`, `ownerReason`, `appeal`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the card's author.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/policy/save": {
+      "post": {
+        "operationId": "saveWorkshopPolicy",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Open or pause new extensions",
+        "description": "Pausing only blocks new extensions; existing ones (drafts included) keep working.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  },
+                  "allowNew": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "roleId",
+                  "allowNew",
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the card's author.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/owner-action": {
+      "post": {
+        "operationId": "workshopOwnerAction",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Return, hide or restore an extension",
+        "description": "Card author only. `action` is `return`, `hide` (both need `reason`, 1–200 characters) or `restore`. Players who already added it keep using it. Returns `{ownerState, ownerReason}`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`owner_action_stale`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/appeal": {
+      "post": {
+        "operationId": "appealWorkshop",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Appeal an author's return or hide",
+        "description": "Extension author only, once per action. Returns `{appeal: pending}`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`appeal_exists`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/create": {
+      "post": {
+        "operationId": "createWorkshop",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Create an extension draft for a card",
+        "description": "Returns `{workshopId}`.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "roleId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`workshop_closed`: the card's author paused new extensions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/draft": {
+      "get": {
+        "operationId": "getWorkshopDraft",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Read an extension draft",
+        "description": "Author only. Returns metadata, cover, rating, lorebook entries, display rules, opening, update note, published version and revision.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workshopId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/draft/save": {
+      "post": {
+        "operationId": "saveWorkshopDraft",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Save an extension draft",
+        "description": "Saves even over the resident limit and returns `{revision, errors[]}` (`constant_char_limit` with `actual`, `max: 1500`, `unit: unicode_code_points`).",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string"
+                  },
+                  "expectedRevision": {
+                    "type": "integer"
+                  },
+                  "idempotencyKey": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "expectedRevision",
+                  "idempotencyKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`draft_stale`: the draft changed elsewhere; reload before saving.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/delete": {
+      "post": {
+        "operationId": "deleteWorkshop",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Delete an extension",
+        "description": "Removes it from players' lists; later replies stop applying it, saved conversations stay.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workshopId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
