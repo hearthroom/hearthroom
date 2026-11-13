@@ -37,6 +37,8 @@ const pages: RouteRecordRaw[] = [
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
+  // 卡片工坊：一個擴充的詳情（可分享，跟卡片頁一樣不必登入就看得到）
+  { path: "workshops/:id", component: () => import("./pages/ExtensionPage.vue") },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
   // 作者的全部徽章（唯讀）：和自己的徽章頁同一個元件，看 :handle 決定模式
   { path: "authors/:handle/badges", component: () => import("./pages/BadgesPage.vue") },
@@ -66,6 +68,10 @@ const pages: RouteRecordRaw[] = [
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
   { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true}},
+  // 建立與編輯擴充是同一頁（new 帶 ?card=）；原作者管理別人為自家卡做的擴充
+  { path: "mine/workshops/new", component: () => import("./pages/ExtensionEditorPage.vue"), meta: { auth: true, petAway: true } },
+  { path: "mine/workshops/:id/edit", component: () => import("./pages/ExtensionEditorPage.vue"), meta: { auth: true, petAway: true } },
+  { path: "mine/cards/:cardId/workshop", component: () => import("./pages/CardWorkshopManagePage.vue"), meta: { auth: true } },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuiet: true } },
