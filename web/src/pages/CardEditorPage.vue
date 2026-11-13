@@ -285,6 +285,9 @@ function defaultChatPageForNew() {
 }
 const regexVersion = ref(0);
 const regexOpen = ref(false);
+// 舊版 partial-create 草稿沒有作者資產：讀回前不能把空白預設當成作者要覆寫的內容。
+const pendingRegexRead = ref(false);
+const pendingRegexWrite = ref<{ set: RegexRuleSet; version: number } | null>(null);
 
 /** 右欄那塊面板：對話測試或我的資源，收起來把版面讓回表單。 */
 type Panel = "test" | "res";
@@ -663,7 +666,15 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
-interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; pendingCreate?: { roleId: string }; visibility?: "private" | "unlisted" }
+interface StoredDraft {
+  draft: RoleDraft;
+  tagsText: string;
+  worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null;
+  savedAt: number;
+  pendingCreate?: { roleId: string };
+  visibility?: "private" | "unlisted";
+  authorAsset?: { set: RegexRuleSet; original: RegexRuleSet; version: number; savedOpening: OpeningMode; pendingRead?: boolean; pendingWrite?: { set: RegexRuleSet; version: number } | null };
+}
 function storeDraft() {
   storeApprovedLocalDraft();
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
@@ -679,6 +690,11 @@ function storeDraft() {
       visibility: newCardVisibility.value,
       tagsText: tagsText.value,
       worldbook: wb.stored(),
+      authorAsset: {
+        set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
+        pendingRead: pendingRegexRead.value,
+        pendingWrite: pendingRegexWrite.value,
+      },
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
       ...(roleId.value ? { pendingCreate: { roleId: roleId.value } } : {}),
@@ -694,13 +710,23 @@ function restoreDraft() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return;
     const stored = JSON.parse(raw) as StoredDraft;
-    if (!stored?.draft?.roleName && !stored?.draft?.roleDetailDesc && !stored?.draft?.roleWelcome) return;
+    if (!stored?.draft) return;
+    if (!stored.draft.roleName && !stored.draft.roleDetailDesc && !stored.draft.roleWelcome &&
+      !stored.authorAsset?.set.rules.length && !stored.authorAsset?.set.openingPage && !stored.authorAsset?.set.statusbar) return;
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
     newCardVisibility.value = stored.visibility === "private" ? "private" : "unlisted";
     // 舊格式的 roleId 也可能來自已成功儲存的卡，無法證明是建卡未完成。
     // 舊草稿只恢復內容；只有明確的 partial-create 記錄才允許續存原目標。
     if (typeof stored.pendingCreate?.roleId === "string") roleId.value = stored.pendingCreate.roleId;
+    if (stored.authorAsset) {
+      regexSet.value = stored.authorAsset.set;
+      regexOriginal.value = stored.authorAsset.original;
+      regexVersion.value = stored.authorAsset.version;
+      savedOpening.value = stored.authorAsset.savedOpening;
+      pendingRegexRead.value = stored.authorAsset.pendingRead === true;
+      pendingRegexWrite.value = stored.authorAsset.pendingWrite ?? null;
+    } else pendingRegexRead.value = Boolean(roleId.value);
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
     worldShown.value = Boolean(draft.value.world);
@@ -720,6 +746,13 @@ function discardDraft() {
   newCardVisibility.value = "unlisted";
   // 本機草稿可能帶著上次建好、尚未存完的卡號；清空必須連儲存目標一起放掉。
   roleId.value = "";
+  regexSet.value = emptyRuleSet();
+  regexOriginal.value = emptyRuleSet();
+  regexVersion.value = 0;
+  savedOpening.value = "greeting";
+  pendingRegexRead.value = false;
+  pendingRegexWrite.value = null;
+  defaultChatPageForNew();
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
   wb.reset();
@@ -729,7 +762,7 @@ function discardDraft() {
 }
 // Existing cards do not use local drafts; do not deep-traverse their entire worldbook.
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch(() => onCreatePage.value && !original.value ? [draft.value, wb, newCardVisibility.value] : null, () => {
+watch(() => onCreatePage.value && !original.value ? [draft.value, wb, newCardVisibility.value, regexSet.value, regexOriginal.value, regexVersion.value] : null, () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
@@ -764,6 +797,16 @@ async function loadValidation() {
 onMounted(async () => {
   if (!roleId.value) {
     restoreDraft();
+    if (pendingRegexRead.value || pendingRegexWrite.value) {
+      loading.value = true;
+      try {
+        const token = await session.accessToken();
+        if (!token || (pendingRegexRead.value && !(await recoverPendingRegex(token))) ||
+          (pendingRegexWrite.value && !(await reconcilePendingRegexWrite(token)))) error.value = t("state.loadFailed");
+      } catch {
+        error.value = t("state.loadFailed");
+      } finally { loading.value = false; }
+    }
     defaultChatPageForNew();
     return;
   }
@@ -934,12 +977,60 @@ async function loadRegexRules(token: string) {
   }
 }
 
+async function recoverPendingRegex(token: string) {
+  // 離線時仍可匯入／修規則。補讀只建立遠端基準，不丟掉讀取失敗後的新輸入。
+  try {
+    const asset = await fetchAuthorAsset(roleId.value, token);
+    const local = regexDirty.value ? copied(regexSet.value) : null;
+    regexOriginal.value = ruleSetFromAuthorAsset(asset);
+    regexVersion.value = asset.version;
+    savedOpening.value = openingModeOf(regexOriginal.value);
+    if (local) local.pageMode ??= regexOriginal.value.pageMode;
+    regexSet.value = local ?? copied(regexOriginal.value);
+    pendingRegexRead.value = false;
+    return true;
+  } catch { return false; }
+}
+
+function regexWriteKey(set: RegexRuleSet) {
+  const asset = ruleSetToAuthorAsset(set, 0);
+  asset.pageMode ||= "classic";
+  asset.openingMode ??= openingModeOf(set);
+  return JSON.stringify(asset);
+}
+
+async function reconcilePendingRegexWrite(token: string) {
+  const pending = pendingRegexWrite.value;
+  if (!pending) return true;
+  try {
+    const asset = await fetchAuthorAsset(roleId.value, token);
+    // 只採認「那次送出的整包內容」且恰好進一版的結果；不同版本仍交給 CAS 拒絕，不能強蓋。
+    if (asset.version === pending.version + 1 && regexWriteKey(ruleSetFromAuthorAsset(asset)) === regexWriteKey(pending.set)) {
+      regexVersion.value = asset.version;
+      regexOriginal.value = pending.set;
+    }
+    pendingRegexWrite.value = null;
+    storeDraft();
+    return true;
+  } catch { return false; }
+}
+
 /** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
 async function saveRegex(token: string, targetRoleId: string, snapshot: RegexRuleSet | null, version: number) {
   if (!snapshot) return;
-  const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(snapshot, version), token);
+  pendingRegexWrite.value = { set: snapshot, version };
+  storeDraft();
+  let saved;
+  try {
+    saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(snapshot, version), token);
+  } catch (err) {
+    if (err instanceof ApiError && err.status >= 400 && err.status < 500) pendingRegexWrite.value = null;
+    throw err;
+  }
   regexVersion.value = saved.version;
   regexOriginal.value = snapshot;
+  pendingRegexWrite.value = null;
+  storeDraft();
 }
 
 function onRegexFile(event: Event) {
@@ -1192,6 +1283,10 @@ async function save() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
 
+    if (pendingRegexRead.value) {
+      if (!(await recoverPendingRegex(token))) throw new Error(t("state.loadFailed"));
+    }
+    if (pendingRegexWrite.value && !(await reconcilePendingRegexWrite(token))) throw new Error(t("state.loadFailed"));
     let targetRoleId = roleId.value;
     const review = targetRoleId
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
