@@ -19,6 +19,7 @@ import { handleRewards, mockAccountNumId, walletExtras } from "./mock-rewards.mj
 import { handlePlans, planRecords } from "./mock-plans.mjs";
 import { handlePresets } from "./mock-presets.mjs";
 import { handleDirectives } from "./mock-directives.mjs";
+import { handleWorkshop } from "./mock-workshop.mjs";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
@@ -62,6 +63,8 @@ http.createServer(async (req, res) => {
   if (path === "/__rewards" || /^\/open\/v1\/apps\/[^/]+\/rewards\/plan$/.test(path)) { await handleRewards({ m, path, url, body, json, res }); return; }
   // 月卡：方案清單免登入、情境切換見 mock-plans.mjs 開頭
   if ((path === "/__plans" || path === "/open/v1/plans") && handlePlans({ m, path, url, body, json, res })) return;
+  // 卡片工坊：本站那一半由 vite 轉過來（HEARTHROOM_WORKSHOP_MOCK），有的不必登入，自己判斷
+  if ((path.startsWith("/__workshop") || path.startsWith("/v1/") || path.startsWith("/open/v1/workshop") || path === "/open/v1/player/role-settings/save") && await handleWorkshop({ m, path, url, body, req, json, res })) return;
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   // 長期指令與指令組：形狀與情境見 mock-directives.mjs（路徑含 preset，要排在預設之前）

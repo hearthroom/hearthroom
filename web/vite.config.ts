@@ -47,7 +47,12 @@ export default defineConfig({
     port: 8850,
     // 本地開發時把 /v1 打到 wrangler dev；正式環境同一個 Worker 服務兩者，不需要代理。
     // 同時開兩組（例如假上游一組、接本機 Harbor 一組）時用 HEARTHROOM_WORKER 指到另一個 wrangler dev。
-    proxy: { "/v1": process.env.HEARTHROOM_WORKER || "http://127.0.0.1:8787" },
+    // 卡片工坊的本站端點還沒進 Worker 前，用 HEARTHROOM_WORKSHOP_MOCK 指到假上游（scripts/mock-workshop.mjs）；
+    // 正則鍵要排在 /v1 前面，vite 依序比對。
+    proxy: {
+      ...(process.env.HEARTHROOM_WORKSHOP_MOCK ? { "^/v1/(workshops|me/workshops|me/workshop-cards|cards/[^/]+/workshop)": process.env.HEARTHROOM_WORKSHOP_MOCK } : {}),
+      "/v1": process.env.HEARTHROOM_WORKER || "http://127.0.0.1:8787",
+    },
   },
   build: {
     outDir: "dist", emptyOutDir: true,
