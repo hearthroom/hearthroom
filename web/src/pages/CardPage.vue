@@ -389,7 +389,7 @@ const wsPage = ref<CardWorkshopPage | null>(null);
  * 留著分頁、在分頁裡說讀不到並給重試（ui.md §4.1 錯誤態），開始對話不受影響。
  */
 const wsFailed = ref(false);
-const FAILED_PAGE: CardWorkshopPage = { tabVisible: true, allowNew: false, viewerIsOwner: false, total: 0, page: 1, hasMore: false, items: [] };
+const FAILED_PAGE: CardWorkshopPage = { tabVisible: true, allowNew: true, viewerIsOwner: false, total: 0, page: 1, hasMore: false, items: [] };
 const wsShown = computed<CardWorkshopPage | null>(() => wsPage.value ?? (wsFailed.value && route.query.tab === "workshop" ? FAILED_PAGE : null));
 const wsState = computed(() => (card.value?.roleId && session.me ? cardWorkshop(card.value.roleId, session.me.accountNumId) : null));
 const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));

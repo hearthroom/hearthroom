@@ -99,6 +99,8 @@ it("arriving on ?tab=workshop when the workshop cannot be read keeps the tab wit
   const root = await mount("/cards/abc?tab=workshop");
   expect(root.querySelector("[role=tablist]")).not.toBeNull();
   expect(root.textContent).toContain("工坊載入失敗");
+  // 讀不到不等於作者暫停：不說暫停、不給登記通知
+  expect(root.textContent).not.toContain("作者已暫停");
   workshop = () => page();
   [...root.querySelectorAll("button")].find((b) => b.textContent?.includes("重試"))!.click();
   await flush();
