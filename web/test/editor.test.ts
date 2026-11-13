@@ -389,6 +389,31 @@ describe('new-card author-asset draft recovery', () => {
     await mount('/create');
   }
 
+  it('does not persist an untouched new-card default as a recoverable draft', async () => {
+    await mount('/create');
+    await new Promise(r => setTimeout(r, 450));
+    expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+  });
+
+  it('keeps a cleared draft absent after autosave and reload, while saving the default sandbox for a new card', async () => {
+    await mount('/create'); await type($('#f-name'), 'Discard recovery fixture');
+    await pickFile($('.rxbar input[type=file]'), ruleFile());
+    await new Promise(r => setTimeout(r, 450));
+    await reopen();
+    byText('清空重來').click(); await flush();
+    await new Promise(r => setTimeout(r, 450));
+    expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+    await reopen();
+    await new Promise(r => setTimeout(r, 450));
+    expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+    expect(root.textContent).not.toContain('已恢復上次沒儲存的草稿');
+    await type($('#f-name'), 'New after clear');
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({
+      version: 0, rules: [], pageMode: 'sandbox',
+    }), 'tok');
+  });
+
   it('autosaves rules even when only rules changed and restores them', async () => {
     await mount('/create');
     await type($('#f-name'), 'Recovery fixture');

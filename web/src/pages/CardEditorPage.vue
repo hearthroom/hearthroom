@@ -681,7 +681,13 @@ function storeDraft() {
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
   if (!onCreatePage.value || original.value) return;
   try {
-    if (!dirty.value) {
+    // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
+    const defaultsOnly = !roleId.value && !pendingRegexRead.value && !pendingRegexWrite.value &&
+      newCardVisibility.value === "unlisted" &&
+      JSON.stringify(draft.value) === JSON.stringify(makeDraft(locale.value)) &&
+      !wb.dirty() && !memberBooksDirty() &&
+      regexWriteKey(regexSet.value) === regexWriteKey({ ...emptyRuleSet(), pageMode: "sandbox" });
+    if (!dirty.value || defaultsOnly) {
       localStorage.removeItem(DRAFT_KEY);
       return;
     }
