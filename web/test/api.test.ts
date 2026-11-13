@@ -178,7 +178,7 @@ describe("uploadImage", () => {
     expect(progress).toEqual([0.5, 1]);
   });
 
-  it("card images use the role namespace from intent and never fall back to the personal library", async () => {
+  it.each([404, 426])("card images never fall back to the personal library after status %s", async status => {
     const { uploadImage } = await import("../src/lib/api");
     const png = new File(["synthetic PNG"], "same.png", { type: "image/png" });
     stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "card-upload", uploadUrl: "https://storage.test/staging", contentType: "image/png" }) : ok({ imageUrl: "https://cdn.test/card-media/source/unique" }));
@@ -187,8 +187,8 @@ describe("uploadImage", () => {
     expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "card-upload" });
     expect(FakeXHR.instances[0].body).toBe(png);
 
-    stubFetch(() => new Response(JSON.stringify({ error: "not_found" }), { status: 404 }));
-    await expect(uploadImage(png, "tok", "role-1")).rejects.toThrow();
+    stubFetch(() => new Response(JSON.stringify({ error: status === 404 ? "not_found" : "page_outdated" }), { status }));
+    await expect(uploadImage(png, "tok", "role-1")).rejects.toMatchObject({ status });
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain("/role/role-1/images/uploadIntent");
   });
