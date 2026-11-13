@@ -84,9 +84,37 @@ describe("熱度同步", () => {
     }
     await env.DB.batch(stmts);
     upstream.fetchHeats = async (_env, ids) => Object.fromEntries(ids.map((id) => [id, 7]));
-    expect(await syncHeat(env)).toMatchObject({ batches: 6, failed: 0, updated: 1100 });
+    const writeReads: number[] = [];
+    const db = new Proxy(env.DB, {
+      get(target, key) {
+        if (key === "batch") return async (statements: D1PreparedStatement[]) => {
+          const results = await target.batch(statements);
+          writeReads.push(...results.map((result) => result.meta.rows_read));
+          return results;
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    expect(await syncHeat({ ...env, DB: db })).toMatchObject({ batches: 6, failed: 0, updated: 1100 });
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM cards WHERE heat=7").first<{ n: number }>())!.n).toBe(1100);
+    // A 200-card batch must use hosted IDs to find its targets, without scanning
+    // every Harbor card against every JSON entry. This is a read-row budget, not a timer.
+    expect(writeReads).toHaveLength(6);
+    expect(Math.max(...writeReads)).toBeLessThan(4000);
     // 沒變的不再寫
+    expect(await syncHeat(env)).toMatchObject({ updated: 0 });
+  });
+
+  it("共用封存id仍全部更新、其他provider不動，零熱度可寫且額外回傳不擴大更新", async () => {
+    await card("shared-a", "h-shared", 3);
+    await card("shared-b", "h-shared", 4);
+    await card("other-provider", "h-shared", 5);
+    await env.DB.prepare("UPDATE cards SET provider='lunatalk' WHERE source_role_id='other-provider'").run();
+    await card("not-returned", "h-missing", 6);
+    upstream.fetchHeats = async () => ({ "h-shared": 0, "not-requested": 999 });
+    expect(await syncHeat(env)).toMatchObject({ batches: 1, failed: 0, updated: 2 });
+    expect(await Promise.all(["shared-a", "shared-b", "other-provider", "not-returned"].map(heatOf))).toEqual([0, 0, 5, 6]);
     expect(await syncHeat(env)).toMatchObject({ updated: 0 });
   });
 
