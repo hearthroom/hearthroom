@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "卡片樣式可以直接調整氣泡、輸入框和背景",
+    "zh-Hans": "卡片样式可以直接调整气泡、输入框和背景",
+    "en": "Card styles let you customize bubbles, the input box and background",
+    "ja": "カードのスタイルで吹き出しや入力欄、背景を調整できます",
+    "ko": "카드 스타일에서 말풍선, 입력창, 배경을 바꿀 수 있어요"
+  },
+  "body": {
+    "zh-Hant": "建卡頁的進階區新增卡片樣式，常用外觀可以直接修改，需要更細的調整時也能寫 CSS。",
+    "zh-Hans": "建卡页的高级区新增卡片样式，常用外观可以直接修改，需要更细的调整时也能写 CSS。",
+    "en": "The Advanced section of the card editor now has Card styles, with common appearance settings and custom CSS.",
+    "ja": "カード編集の詳細設定に、よく使う外観設定とカスタム CSS をまとめた「カードのスタイル」が追加されました。",
+    "ko": "카드 편집의 고급 설정에 자주 쓰는 외관 설정과 사용자 CSS를 모은 카드 스타일이 추가됐어요."
+  }
+}

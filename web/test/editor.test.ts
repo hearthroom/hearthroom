@@ -1,6 +1,7 @@
 const rollout=vi.hoisted(()=>({enabled:true}));
 vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
 
+const sessionAuth=vi.hoisted(()=>({token:'tok' as string|null}));
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
 vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
@@ -24,6 +25,7 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 import { ratingState } from "../src/lib/rating";
 import { makeDraft } from "../src/lib/role-draft";
 import { formatReviewLength } from "../src/lib/review-length";
+import { emptyRuleSet } from "../src/lib/regex-rules";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -36,6 +38,7 @@ const api = vi.hoisted(() => ({
  fetchCardDeletion:vi.fn(async():Promise<{deletion:any}>=>({deletion:null})),
   registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
   fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
+  fetchEditorCardReference: vi.fn(async () => ({num:100021,provider:"harbor",sourceRoleId:"r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
@@ -73,7 +76,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
 vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ profile:platforms.profile, accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
+  useSession: () => ({ profile:platforms.profile, accessToken: async () => sessionAuth.token, me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "create", setSurface: () => {} }));
 // 編輯器裡的「生成」：入口狀態與授權由 use-image-generation 管（資源頁的測試跑的是真的那份）
@@ -359,6 +362,7 @@ async function submit() {
 }
 
 beforeEach(() => {
+ sessionAuth.token = "tok";
  api.fetchCardDeletion.mockResolvedValue({deletion:null});
   ratingState.current = null;
   localStorage.clear();
@@ -388,6 +392,59 @@ describe('new-card author-asset draft recovery', () => {
     app!.unmount(); root.remove();
     await mount('/create');
   }
+
+  it('retains a card CSS draft when no role text or display rules have been entered', async () => {
+    const css = '\n.canvas-root { --lt-canvas-send-bg:#923455 }\n';
+    await mount('/create');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    await type($<HTMLTextAreaElement>('.card-style__custom textarea'), css);
+    await new Promise(r => setTimeout(r, 450));
+    expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.cardCss).toBe(css);
+    await reopen();
+    expect($<HTMLInputElement>('#f-name').value).toBe('');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+    expect(root.textContent).toContain(i18n.global.t('editor.draftRestored'));
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+  });
+
+  it.each(['matching', 'different-css', 'different-hint'] as const)('reconciles a card CSS draft acknowledgement using both CSS fields: %s', async kind => {
+    const css = '\n#ai-chat-input { color:#123456 }\n';
+    const set = { ...emptyRuleSet(), pageMode: 'sandbox', cardCss: css, cardCssDialect: 'fengyue-v2' };
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({
+      draft: { ...makeDraft('zh-Hant'), roleName: 'CSS acknowledgement fixture' },
+      tagsText: '', worldbook: null, savedAt: Date.now(),
+      authorAsset: { set, original: emptyRuleSet(), version: 0, savedOpening: 'greeting' },
+    }));
+    await mount('/create');
+    api.saveAuthorAsset.mockImplementationOnce(async (_id, body) => {
+      const saved = { ...body, status: 'none', version: 1 } as any;
+      if (kind === 'different-css') saved.cardCss = css + '.different { color:red }';
+      if (kind === 'different-hint') saved.cardCssDialect = 'fengyue';
+      api.fetchAuthorAsset.mockResolvedValueOnce(saved);
+      throw new TypeError('synthetic CSS acknowledgement loss');
+    });
+    await submit();
+    const pending = JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.pendingWrite;
+    expect(pending.set.cardCss).toBe(css);
+    expect(pending.set.cardCssDialect).toBe('fengyue-v2');
+    await reopen();
+    if (kind !== 'matching') {
+      const { ApiError } = await import('../src/lib/api');
+      api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(409, 'version_conflict', 'version_conflict'));
+    }
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    if (kind === 'matching') {
+      expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+    } else {
+      expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
+        version: 0, cardCss: css, cardCssDialect: 'fengyue-v2',
+      }), 'tok');
+      expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.version).toBe(0);
+    }
+  });
 
   it('does not persist an untouched new-card default as a recoverable draft', async () => {
     await mount('/create');
@@ -1853,7 +1910,7 @@ it('saves Harbor external image URLs directly without creating media assets', as
 
 it('opens a numeric editor URL using the author source, never the published revision', async () => {
  await mount('/cards/100021/edit');
- expect(api.fetchCard).toHaveBeenCalledWith('100021', expect.any(String));
+ expect(api.fetchEditorCardReference).toHaveBeenCalledWith('100021', 'tok', 'harbor');
  expect(api.fetchRoleDetail).toHaveBeenCalledWith('r1','tok');
  expect(api.fetchRoleDetail).not.toHaveBeenCalledWith('frozen-r1','tok');
 });
@@ -1881,9 +1938,11 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
     await mount("/cards/r1/edit");
     expect(root.querySelector('[data-section="world"]')).not.toBeNull();
     expect(root.querySelectorAll(".world-char")).toHaveLength(1);
-    // 世界卡沒有卡片變數，進階那一區不顯示：數目跟單卡一樣是 7，換掉的是「進階」
-    expect(root.querySelector('[data-section="advanced"]')).toBeNull();
-    expect(root.querySelectorAll(".side__item")).toHaveLength(7);
+    // 世界卡可用獨立卡片樣式，但仍不顯示單卡變數。
+    expect(root.querySelector('[data-section="advanced"]')).not.toBeNull();
+    expect(root.querySelector('[data-card-css-panel]')).not.toBeNull();
+    expect(root.querySelector('[data-state-panel]')).toBeNull();
+    expect(root.querySelectorAll(".side__item")).toHaveLength(8);
   });
 });
 
@@ -2059,7 +2118,8 @@ describe("匯入 AI 風月卡 → 建立", () => {
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
     const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { rules: { find: string }[] }];
-    expect(asset.rules.length).toBe(2);
+    expect(asset.rules.length).toBe(1);
+    expect(asset).toMatchObject({ cardCss: expect.any(String), cardCssDialect: 'fengyue-v2' });
     const docs = api.patchWorldbookDocument.mock.calls as unknown as [string, { binding?: unknown; entries: unknown[] }][];
     expect(docs.some(([, doc]) => JSON.stringify(doc.binding ?? null).includes("r1"))).toBe(true);
   });
@@ -2359,6 +2419,24 @@ describe('restore currently published content',()=>{
  });
 });
 
+it.each(['write', 'read'])('shows saving rather than retry guidance while approved restore %s is pending',async phase=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
+ const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
+ let finish!:(value:any)=>void;
+ const pending=new Promise<any>(resolve=>{finish=resolve;});
+ api.fetchRoleDetail.mockResolvedValue(approved).mockResolvedValueOnce({...approved,roleName:'Broken draft'}).mockResolvedValueOnce(approved);
+ await mount('/cards/r1/edit');$<HTMLButtonElement>('[data-approved-restore]').click();await flush();
+ await confirmState.current!.onConfirm!({} as any);settleConfirm(true);await flush();
+ if(phase==='read')api.fetchRoleDetail.mockReturnValueOnce(pending);else api.saveApprovedDraft.mockReturnValueOnce(pending);
+ await submit();
+ expect($<HTMLButtonElement>('button[type=submit]').disabled).toBe(true);
+ expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
+ expect(root.querySelector('.notice.restored')?.textContent).toContain(i18n.global.t('edit.saving'));
+ finish(phase==='read'?approved:{});await flush();await flush();
+ expect(api.saveApprovedDraft).toHaveBeenCalledTimes(1);
+ expect(root.textContent).not.toContain(i18n.global.t('editor.revertSaveUnknown'));
+});
+
 it('saves an unedited revert atomically without writing frozen dependencies',async()=>{
  visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({revisionState:'changed'})});
  const approved={roleName:'Published title',roleWelcome:'Published opening',roleDetailDesc:'Published setting',language:'zh-Hant'};
@@ -2526,5 +2604,97 @@ describe('prompt-only 規則匯入不洗舊規則', () => {
     expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
     await submit();
     expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ rules: [expect.objectContaining({ name: 'Visible imported', replace: 'shown' })] }), 'tok');
+
   });
+});
+
+describe('independent card CSS', () => {
+  it.each(['.canvas-root { color: red; }', ''])('imports CSS-only mixed with skipped prompt rules (%s)', async (cardCss) => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.old {color:blue}', cardCssDialect: 'fengyue', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ cardCss, cardCssDialect: 'fengyue-v2', regex_scripts: [{ scriptName: 'Prompt only', findRegex: 'x', replaceString: 'hidden', promptOnly: true }] })], 'styles.json'));
+    expect(root.textContent).toContain('1 條只用於提示詞的規則未匯入');
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ cardCss, cardCssDialect: 'fengyue-v2', version: 3 }), 'tok');
+  });
+
+  it('keeps card CSS and its compatibility hint when importing a separate rules file', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.x {color:red}', cardCssDialect: 'fengyue', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    await pickFile($('.rxbar input[type=file]'), new File([JSON.stringify({ regex_scripts: [{ scriptName: 'new', findRegex: 'x', replaceString: 'y' }] })], 'rules.json'));
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith('r1', expect.objectContaining({ cardCss: '.x {color:red}', cardCssDialect: 'fengyue', version: 3 }), 'tok');
+  });
+  it('blocks an oversized stylesheet before any card write and opens the advanced section', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: 'Styles', roleWelcome: 'Opening' });
+    api.fetchAuthorAsset.mockResolvedValueOnce({ rules: [], mountTrigger: '', mountLayer: 'over', pageMode: 'sandbox', cardCss: '.x {color:red}', status: 'passed', version: 3 } as any);
+    await mount('/cards/r1/edit');
+    const panel = root.querySelector('[data-card-css-panel]')!;
+    panel.querySelector<HTMLButtonElement>('[data-card-css-toggle]')!.click();
+    await flush();
+    await type(panel.querySelector<HTMLTextAreaElement>('textarea')!, '界'.repeat(174763));
+    await submit();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($('.side__item[aria-current=true]').textContent).toContain(i18n.global.t('editor.section.advanced'));
+  });
+});
+
+
+describe('owner editor asset reopening', () => {
+  const css = '\n.canvas-root { outline: 3px solid rgb(44,55,66); }';
+  const stored = () => ({rules:[],mountTrigger:'',mountLayer:'over',pageMode:'sandbox',cardFormat:'fengyue',openingMode:'page',cardCss:css,cardCssDialect:'fengyue-v2',status:'none',version:1});
+  it('loads CSS-only assets with status none through the source author path', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockResolvedValueOnce(stored() as any);
+    await mount('/cards/r1/edit');
+
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+    expect($('.chatpage [aria-checked=true]').textContent).toContain(i18n.global.t('editor.chatPage.sandbox'));
+  });
+  it('opens owned numeric cards without requiring access through the public adult gate', async () => {
+    api.fetchCard.mockRejectedValueOnce(new Error('adult_content'));
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockResolvedValueOnce(stored() as any);
+    try {
+      await mount('/cards/100021/edit');
+      expect(api.fetchAuthorAsset).toHaveBeenCalledWith('r1','tok');
+      $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+      expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+      expect(api.fetchCard).not.toHaveBeenCalled();
+    } finally {api.fetchCard.mockReset().mockResolvedValue({id:'100021',num:100021,provider:'harbor',sourceRoleId:'r1',roleId:'frozen-r1'});api.fetchAuthorAsset.mockReset().mockResolvedValue({rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'none',version:0});}
+  });
+  it('blocks all writes after existing-card initialization failed, even when the form is filled', async () => {
+    api.fetchRoleDetail.mockRejectedValueOnce(new Error('unavailable'));
+    await mount('/cards/r1/edit');
+    await type($('#f-name'),'Must not overwrite');await type($('#f-detail'),'SFW');$<HTMLButtonElement>('[data-opening-mode=greeting]').click();await flush();await type($('#f-welcome'),'Opening');
+    await submit();
+    expect(api.beginCardEdit).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect($<HTMLButtonElement>('.bar button[type=submit]').disabled).toBe(true);
+  });
+  it('does not write any card fields when author assets cannot be read', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic CSS owner',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    api.fetchAuthorAsset.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline'));
+    try {
+      await mount('/cards/r1/edit');await type($('#f-name'),'Changed but unread assets');await submit();
+      expect(api.beginCardEdit).not.toHaveBeenCalled();expect(api.patchRoleDocument).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    } finally {api.fetchAuthorAsset.mockReset().mockResolvedValue({rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'none',version:0});}
+  });
+  it('blocks a source-ID editor when its login is missing at initialization', async () => {
+    sessionAuth.token=null;
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Public preview only',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    try {
+      await mount('/cards/r1/edit');
+      expect(api.fetchRoleDetail).not.toHaveBeenCalled();
+      await type($('#f-name'),'Must stay blocked');
+      expect($<HTMLButtonElement>('.bar button[type=submit]').disabled).toBe(true);
+      await submit();expect(api.beginCardEdit).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    } finally {sessionAuth.token='tok';api.fetchRoleDetail.mockReset().mockResolvedValue({});}
+  });
+
 });

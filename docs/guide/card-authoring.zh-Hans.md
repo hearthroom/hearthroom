@@ -45,7 +45,7 @@
 | 值 | 效果 |
 |---|---|
 | `left`／`right` | 视为停靠在该侧的侧边栏。不必贴齐边缘，宽度上限放宽到对话栏的 30%。 |
-| `none` | 不为这个元素让出空间。写在 `:root` 上则整张卡都不自动调整（SillyTavern 格式的卡片样式只作用于消息内，`:root` 无效）。 |
+| `none` | 不为这个元素让出空间。写在 `:root` 上则整张卡都不自动调整（SillyTavern 格式卡片的显示规则样式只作用于消息内，`:root` 无效）。 |
 
 ```html
 <div id="my-sidebar" style="position: fixed; left: 0; top: 30%; --lt-dock: left;">…</div>
@@ -67,26 +67,45 @@
 
 任意 HTML，可包含 `<style>` 与 `<script>`。所有规则的 `<style>` 合并为一份样式表应用；每段 `<script>` 每张卡执行一次。
 
-### CSS 写法与层级
+### 卡片样式与层级
 
-含 `<style>` 的规则可以在「CSS 写法」选择这段样式的写法：
+编辑器的「卡片样式」用来设置整张卡的 CSS，直接粘贴 CSS，不必加 `<style>` 标签或填写匹配文字，聊天页打开时只应用一次。CLI 卡片文件夹使用 `card.css`，上限为 512 KiB，按 UTF-8 字节计算。
 
-| 写法 | 应用方式 |
+风月写法的 CSS 放在「卡片样式」，作者不用选择来源。只有这个字段会自动把 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button` 等已知风月选择器对应到本站的气泡、输入框与发送键；字段内的其他选择器按原样生效。同一段 CSS 可以混用风月与本站选择器，`.mes` 不会被当成酒馆来源标记。 想让旧卡使用最新的风月兼容效果，可以重新导入。
+
+显示规则里的 `<style>` 保持原有政策：已有 `cssDialect` 与已编译样式标记继续有效，其余按原卡片格式处理（酒馆只作用在消息内，其他格式按原样生效）。显示规则不新增风月选择器的自动对应。
+
+卡片样式高于平台默认样式与主题，低于显示规则的样式。需要覆盖卡片基本外观时，在显示规则中设置。已有导入卡会保留已保存的样式设置与优先级，打开、保存时不用重新选择来源或改动这些设置。
+
+### 常用外观变量
+
+这些变量在两种聊天页共用；在「卡片样式」的 `.canvas-root` 中设置，就能调整卡片的基本外观。
+
+| 外观 | 变量 |
 |---|---|
-| 默认 | 依卡片来源：酒馆导入的卡同「酒馆」，其他同「MMD」。 |
-| AI 风月 | 写给风月聊天页的样式。风月界面元素（如 `#customized-answer-content`、`#ai-chat-input`、`#ai-send-button`）对应到本站的气泡、输入框与发送键；`.dark` 开头的规则在深色模式生效；`body`、`html`、`:root` 规则不生效（在风月也不生效）；按钮类不应用位置、尺寸、显示方式、变形与外边距；`!important` 会移除。从 AI 风月导入的内置 CSS 自动使用这个写法。 |
-| 酒馆 | 每个选择器前加上 `.mes_text `，只作用在消息内。 |
-| MMD | 照写的生效。 |
+| AI 气泡底色 | `--lt-canvas-bubble-ai-bg` |
+| 气泡文字颜色（AI 与玩家共用） | `--lt-canvas-bubble-fg` |
+| 玩家气泡底色 | `--lt-canvas-bubble-user-bg` |
+| 输入框底色 | `--lt-canvas-composer-field-bg` |
+| 发送键底色 | `--lt-canvas-send-bg` |
+| 强调色 | `--lt-canvas-accent` |
+| 字体（完整的 CSS font-family 列表） | `--lt-canvas-font` |
+| 对话背景色 | `--lt-canvas-bg` |
 
-同一张卡可以混用不同写法的规则。同一个元素被多处设置样式时，层级高的优先：
+```css
+.canvas-root {
+  --lt-canvas-bubble-ai-bg: #243447;
+  --lt-canvas-bubble-fg: #f2f2f5;
+  --lt-canvas-bubble-user-bg: #37465b;
+  --lt-canvas-composer-field-bg: #1e2938;
+  --lt-canvas-send-bg: #355a7c;
+  --lt-canvas-accent: #8fc9ff;
+  --lt-canvas-font: system-ui, sans-serif;
+  --lt-canvas-bg: #121b28;
+}
+```
 
-1. 平台默认样式。
-2. 站点的深浅色与配色；MMD 卡固定深色。
-3. `--chat-*` 变量（见「CSS 变量」），只改平台默认用的颜色。
-4. 「AI 风月」写法的样式。
-5. 其他规则的 `<style>`：不论选择器权重都高于第 4 层；彼此之间依一般 CSS 规则，权重高者优先，权重相同时后面的规则优先。
-
-要盖过风月写法的样式，在另一条规则写一般的 `<style>` 即可，不需要 `!important`。
+已有 MMD 变量仍可使用，包括 `--background-color`、`--primary-font-color` 与 `--input-background-color`。变量只影响使用它的元素；卡片直接指定的 CSS 可能优先。
 
 ### 功能栏
 
@@ -127,7 +146,7 @@
 
 ### CSS 变量
 
-颜色与尺寸由 `--chat-*` 变量定义（如 `--chat-bg`、`--chat-text`、`--chat-accent`、`--chat-bubble-ai-bg`）。在根节点覆盖即可整体换色。
+沙箱另外有 `--chat-*` 变量（如 `--chat-bg`、`--chat-text`、`--chat-accent`），仅适用于沙箱。需要和旧版聊天页共用的样式，请用[常用外观变量](#常用外观变量)。
 
 ### sdk
 

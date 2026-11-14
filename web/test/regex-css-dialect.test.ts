@@ -23,39 +23,28 @@ it('cssDialect survives the author asset round trip; a rule without it stays wit
   expect('cssDialect' in out[2]).toBe(false);
 });
 
-it('the Fengyue importer marks its built-in CSS rule as Fengyue CSS', () => {
+it('the Fengyue importer preserves the hidden compatibility hint on card CSS', () => {
   const result = fengyueToDraft({ title: 'T', pre_prompt: 'p', ai_variable_prompt: 'v', description: 'd', builtInCss: '#ai-chat-input{color:red}' } as any, { language: 'zh-Hant' });
-  const rule = result.regex?.rules.find((r) => r.replace.includes('#ai-chat-input'));
-  expect(rule?.cssDialect).toBe('fengyue');
+  expect(result.regex?.cardCssDialect).toBe('fengyue-v2');
+  expect(result.regex?.cardCss).toContain('#ai-chat-input');
 });
 
-it('the editor shows the CSS dialect only for rules with styles, and saves the choice', async () => {
+it('the editor hides CSS source choices and preserves legacy metadata when saved', async () => {
   const value = emptyRuleSet();
-  value.rules.push({ id: 'plain', name: 'plain', find: 'x', replace: 'y', enabled: true });
-  value.rules.push({ id: 'styled', name: 'styled', find: 'x', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true });
+  value.rules.push({ id: 'styled', name: 'styled', find: 'x', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true, cssDialect: 'fengyue' });
   let saved: RegexRuleSet | undefined;
   root = document.createElement('div'); document.body.append(root);
   app = createApp({ render: () => h(RegexRulesEditor, { modelValue: value, 'onUpdate:modelValue': (v: RegexRuleSet) => { saved = v; } }) }).use(i18n);
   app.mount(root);
-  expect(root.querySelector('[data-rule-dialect]')).toBeNull(); // 第一條沒有樣式
-  const names = [...root.querySelectorAll<HTMLButtonElement>('.rx__rule-name')];
-  names[1].click(); await nextTick();
-  const select = root.querySelector<HTMLSelectElement>('[data-rule-dialect]')!;
-  expect(select).not.toBeNull();
-  expect(select.value).toBe('');
-  select.value = 'fengyue'; select.dispatchEvent(new Event('change', { bubbles: true })); await nextTick();
-  expect(root.querySelector('.rx__dialect .subtle')?.textContent).toBe(i18n.global.t('regex.rule.dialect.fengyue.hint'));
-  select.value = ''; select.dispatchEvent(new Event('change', { bubbles: true })); await nextTick();
-  select.value = 'fengyue'; select.dispatchEvent(new Event('change', { bubbles: true })); await nextTick();
+  await nextTick();
+  expect(root.querySelector('[data-rule-dialect]')).toBeNull();
   root.querySelector<HTMLButtonElement>('.rx__head-acts .btn--primary')!.click();
-  expect(saved?.rules[1].cssDialect).toBe('fengyue');
-  expect('cssDialect' in (saved?.rules[0] ?? {})).toBe(false);
+  expect(saved?.rules[0].cssDialect).toBe('fengyue');
 });
 
-it('the legacy Fengyue CSS rule reads as Fengyue CSS; export and re-import keep the dialect', async () => {
+it('legacy ordinary rules retain their CSS hint through export and re-import', async () => {
   const { rulesToTavern, rulesFromTavern } = await import('../src/lib/regex-rules');
-  const set = ruleSetFromAuthorAsset({ rules: [{ id: 'hearthroom-fengyue-inner-css', name: 'css', find: '/([\\s\\S])$/', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true }] });
-  expect(set.rules[0].cssDialect).toBe('fengyue');
+  const set = ruleSetFromAuthorAsset({ rules: [{ id: 'ordinary', name: 'css', find: '/([\\s\\S])$/', replace: '$1<style>#ai-chat-input{color:red}</style>', enabled: true, cssDialect: 'fengyue' }] });
   const back = rulesFromTavern(rulesToTavern(set.rules));
   expect(back[0].cssDialect).toBe('fengyue');
 });

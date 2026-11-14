@@ -16,7 +16,7 @@
  *   - 開場白選項（玩家點的第一句話，不是 AI 先說的開場）→ 本站的開場選項 prologue；作品用「預設對話」模式時
  *     改取每組預設對話裡那句，問答本身先列進摘要
  *   - 世界書 → 一本酒館格式的書；`value` 是內容，`key` 去掉 `_or_` 前綴
- *   - 內置 CSS → 一條整頁常駐的 `<style>` 顯示規則（MMD 關側邊留白那條同一種寫法）
+ *   - 內置 CSS → 作者資產的 cardCss，整卡只套用一次
  *   - 正則腳本 → 顯示規則
  *   - 詳細介紹 → 作者資產的首屏網頁 openingPage（畫布最上方的作者網頁，只顯示、不送模型）；卡片格式記成 fengyue
  *   - 變量面板：資料骨架 → 卡片變數（plain 寫法）、變量提示詞 → 變數規則、面板皮膚 → 面板皮膚
@@ -24,7 +24,6 @@
  */
 
 import contract from "./fengyue-format.json";
-import cssRuleNames from "../locales/card-defaults/fengyue-css.json";
 import { bookEntriesToDrafts, countSplitEntries, entryContentMax, type DropNote, type ImportResult, type TavernBookEntry } from "./tavern";
 import { fallbackLimits, makeDraft } from "./role-draft";
 import { formatJson, type CardStateDraft } from "./card-state";
@@ -34,8 +33,6 @@ type Field = keyof typeof contract.fields;
 type Raw = Record<string, unknown>;
 
 export const FENGYUE_CSS_RULE_ID = "hearthroom-fengyue-inner-css";
-/** 跟 MMD 關側邊留白那條同一種寫法：每則訊息都匹配到結尾一個字，替換時接上 <style>。 */
-const CSS_FIND = "/([\\s\\S])$/";
 
 export interface FengyueImportResult extends ImportResult {
   spec: "fengyue";
@@ -282,14 +279,10 @@ export function fengyueToDraft(raw: Raw, options: { language: string; limits?: R
   }
 
   const rules = convertRegex(listOf(pick(raw, "regex")).filter(isObj), notes);
-  const css = typeof pick(raw, "css") === "string" ? String(pick(raw, "css")).trim() : "";
-  if (css) {
-    const names = cssRuleNames as Record<string, string>;
-    // 標成風月寫法：畫布把它對準風月介面元素的部分轉到我們的元素上（stage common/rule-css-dialect）。
-    rules.push({ id: FENGYUE_CSS_RULE_ID, name: names[language] ?? names.en, find: CSS_FIND, replace: `$1<style>${css}</style>`, enabled: true, cssDialect: "fengyue" });
-  }
-  const regex: RegexRuleSet | null = rules.length || intro
-    ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}) }
+  // CSS 是作者原文，前後空白與換行也要保留；不能照一般文字欄位 trim。
+  const css = typeof pick(raw, "css") === "string" ? String(pick(raw, "css")) : "";
+  const regex: RegexRuleSet | null = rules.length || intro || css
+    ? { version: 1, rules, statusbar: "", lowered: false, pageMode: "sandbox", format: "fengyue", ...(intro ? { openingPage: intro } : {}), ...(css ? { cardCss: css, cardCssDialect: "fengyue-v2" } : {}) }
     : null;
 
   draft.state = convertVariables(raw, notes);
