@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "Gemini 4 新增按次線路，上下文最高 768K，每輪固定積分。",
+    "zh-Hans": "Gemini 4 新增按次线路，上下文最高 768K，每轮固定积分。",
+    "en": "Gemini 4 gains a per-turn lane with up to 768K of context at a flat price per turn.",
+    "ja": "Gemini 4 に、最大 768K のコンテキストを1ターン定額で使える回線が加わりました。",
+    "ko": "Gemini 4에 최대 768K 컨텍스트를 턴당 고정 요금으로 쓰는 회선이 생겼어요."
+  },
+  "body": {
+    "zh-Hant": "模型選單的上下文容量旁多了「?」，點開就能看到它是什麼。",
+    "zh-Hans": "模型选单的上下文容量旁多了「?」，点开就能看到它是什么。",
+    "en": "A question-mark button next to context capacity in the model menu explains what it means.",
+    "ja": "モデル選択のコンテキスト容量の横に「?」が付き、何を意味するか確認できます。",
+    "ko": "모델 메뉴의 컨텍스트 용량 옆에 「?」가 생겨 무엇인지 바로 볼 수 있어요."
+  }
+}
