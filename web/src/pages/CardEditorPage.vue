@@ -829,9 +829,9 @@ onMounted(async () => {
   }
   try {
     const token = await session.accessToken();
-    if(token&&await resumeDeletion(token))return;
+    if (!token) throw new Error(t('auth.expired'));
+    if(await resumeDeletion(token))return;
     if (/^[1-9]\d*$/.test(roleId.value)) {
-      if (!token) throw new Error(t('auth.expired'));
       const card = await fetchEditorCardReference(roleId.value, token, editorProvider.value);
       if (card.provider !== editorProvider.value) throw new Error(t('state.loadFailed'));
       cardNumber.value = card.num;

@@ -1,6 +1,7 @@
 const rollout=vi.hoisted(()=>({enabled:true}));
 vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(rollout.enabled)};});
 
+const sessionAuth=vi.hoisted(()=>({token:'tok' as string|null}));
 const visibilityMocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn(),operation:vi.fn()}));
 vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:visibilityMocks.read,changeWorkVisibility:visibilityMocks.change,fetchVisibilityOperation:visibilityMocks.operation}));
 vi.mock('../src/lib/share-ref',async original=>({...await original<typeof import('../src/lib/share-ref')>(),currentReferralCode:async()=>null,ownReferralCode:async()=>null}));
@@ -75,7 +76,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/api", async original => ({...api, ApiError:(await original<typeof import("../src/lib/api")>()).ApiError}));
 vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ profile:platforms.profile, accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
+  useSession: () => ({ profile:platforms.profile, accessToken: async () => sessionAuth.token, me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "create", setSurface: () => {} }));
 // 編輯器裡的「生成」：入口狀態與授權由 use-image-generation 管（資源頁的測試跑的是真的那份）
@@ -361,6 +362,7 @@ async function submit() {
 }
 
 beforeEach(() => {
+ sessionAuth.token = "tok";
  api.fetchCardDeletion.mockResolvedValue({deletion:null});
   ratingState.current = null;
   localStorage.clear();
@@ -2683,4 +2685,16 @@ describe('owner editor asset reopening', () => {
       expect(api.beginCardEdit).not.toHaveBeenCalled();expect(api.patchRoleDocument).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
     } finally {api.fetchAuthorAsset.mockReset().mockResolvedValue({rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'none',version:0});}
   });
+  it('blocks a source-ID editor when its login is missing at initialization', async () => {
+    sessionAuth.token=null;
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Public preview only',roleDetailDesc:'SFW',roleWelcome:'Opening'});
+    try {
+      await mount('/cards/r1/edit');
+      expect(api.fetchRoleDetail).not.toHaveBeenCalled();
+      await type($('#f-name'),'Must stay blocked');
+      expect($<HTMLButtonElement>('.bar button[type=submit]').disabled).toBe(true);
+      await submit();expect(api.beginCardEdit).not.toHaveBeenCalled();expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    } finally {sessionAuth.token='tok';api.fetchRoleDetail.mockReset().mockResolvedValue({});}
+  });
+
 });
