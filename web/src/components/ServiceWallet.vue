@@ -57,7 +57,9 @@ const hasMore = computed(() => records.value.length < total.value);
  * 一次消費從兩種以上的來源扣時，那一行可以點開看各來源扣了多少（ui.md §4）。
  * 展開只記在畫面上：重新整理、換語言、重讀都回到收起。
  */
-const partsOf = (r: ScoreRecord) => (r.recordType === "sub" ? ledgerParts(r.parts, r.score) : null);
+// 只有消費才合併：退款收回、帳務調整、到期也是扣，但它們本來就一筆一行（ui.md §3.1）
+const NOT_CONSUMPTION = new Set(["refund", "adjust", "expire"]);
+const partsOf = (r: ScoreRecord) => (r.recordType === "sub" && !NOT_CONSUMPTION.has(r.record) ? ledgerParts(r.parts, r.score) : null);
 const expanded = ref(new Set<string>());
 function togglePart(id: string | number) {
   const key = String(id), next = new Set(expanded.value);
@@ -399,7 +401,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 .row:hover { background: var(--surface-2); }
 /* 多來源的消費：同一個版式，只是整行是一顆鈕（ui.md §4） */
 .row-group { display: grid; }
-.row--toggle { width: calc(100% + 16px); border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.row--toggle { width: calc(100% + 16px); border: 0; background: none; color: inherit; font-family: inherit; text-align: start; cursor: pointer; }
 .row__sources { display: inline-flex; align-items: center; gap: 2px; justify-self: start; font-size: 12px; color: var(--text-2); }
 .row__sources svg { width: 14px; height: 14px; transition: transform var(--dur) var(--ease); }
 .row--toggle[aria-expanded="true"] .row__sources svg { transform: rotate(180deg); }

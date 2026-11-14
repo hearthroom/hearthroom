@@ -32,7 +32,9 @@ export function ledgerParts(parts: readonly LedgerPart[] | undefined, total: num
   if (!parts?.length) return null;
   const sums = new Map<string, number>();
   for (const part of parts) {
-    const amount = Math.abs(Number(part.amount) || 0);
+    const amount = Number(part.amount);
+    // 伺服器給的是正數；負數或不是數字代表資料不對，整列照單列，不畫加起來對不上的組成
+    if (!Number.isFinite(amount) || amount < 0) return null;
     if (!amount) continue;
     const key = NAME[part.source] ?? OTHER;
     sums.set(key, (sums.get(key) ?? 0) + amount);

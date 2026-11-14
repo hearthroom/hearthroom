@@ -17,6 +17,7 @@ const records = [
   { id: "op-one-kind", record: "chat", recordType: "sub", score: 300, createTime: "2026-11-14T02:00:00Z", parts: [{ source: "purchase", amount: 300 }] },
   { id: "op-old", record: "chat", recordType: "sub", score: 50, createTime: "2026-11-14T01:00:00Z" },
   { id: "gift", record: "grant", recordType: "add", score: 100, createTime: "2026-11-14T00:30:00Z", parts: [{ source: "grant", amount: 60 }, { source: "purchase", amount: 40 }] },
+  { id: "clawback", record: "refund", recordType: "sub", score: 80, createTime: "2026-11-14T00:20:00Z", planKind: "daily", parts: [{ source: "plan_daily", amount: 50 }, { source: "purchase", amount: 30 }] },
 ];
 let app: ReturnType<typeof createApp> | undefined;
 beforeEach(() => {
@@ -57,6 +58,7 @@ it("a consumption drawn from several kinds of source is one row that opens to sh
   btn.click(); await settle();
   expect(btn.getAttribute("aria-expanded")).toBe("false");
   // 同一種來源（多批也一樣）、沒有 parts 的舊列、收入列：照原本的單行，沒有「N 個來源」
-  expect(root.querySelectorAll(".ledger li.row")).toHaveLength(3);
+  // 退款收回也是扣，但不是消費：照單列
+  expect(root.querySelectorAll(".ledger li.row")).toHaveLength(4);
   expect(root.textContent?.match(/個來源/g)).toHaveLength(1);
 });

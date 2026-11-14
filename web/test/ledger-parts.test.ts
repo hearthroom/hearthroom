@@ -29,3 +29,7 @@ it("falls back to a plain row when the parts don't add up or are missing", () =>
   expect(ledgerParts(undefined, 25)).toBeNull();
   expect(ledgerParts([], 25)).toBeNull();
 });
+
+it("a negative part means bad data: plain row, even if the absolute values add up", () => {
+  expect(ledgerParts([p("purchase", 250), p("grant", -50)], 300)).toBeNull();
+});
