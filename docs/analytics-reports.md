@@ -26,6 +26,7 @@ Dataset: `hearthroom_events` (the `EVENTS` binding in `wrangler.toml`). One data
 | `blob15` | client: `server`, `beacon` or `bot` |
 | `blob16` | registered promotional `utm_campaign` on a successful GET HTML response; otherwise empty. Added after blob15 so old queries keep their layout. |
 | `double1..4` | duration ms, result count, offset, HTTP status (all 0 for beacon events) |
+| `double5` | `talk_updated`: rows whose talk count changed in a successful `heat_sync` batch; 0 for other events. `resultCount` counts rows with either counter changed. |
 
 The blog and campaign events are beacon events (`POST /v1/e`): they are fired by the browser,
 so `blob15` is `beacon`, or `bot` if the user agent looks like a crawler. Beacon numbers can be

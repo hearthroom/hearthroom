@@ -51,6 +51,8 @@ export interface EventFields {
   resultCount?: number;
   offset?: number;
   status?: number;
+  /** Changed talk-count rows in the heat_sync batch; appended as double5. */
+  talk_updated?: number;
 }
 
 /** blob 的顺序。查询时 blob1..blob16 就照这个数。 */
@@ -59,7 +61,7 @@ const BLOBS: (keyof EventFields)[] = [
   "sortKey", "tag", "term", "subject", "outcome", "cache", "detail", "client",
   "campaign",
 ];
-const DOUBLES: (keyof EventFields)[] = ["durationMs", "resultCount", "offset", "status"];
+const DOUBLES: (keyof EventFields)[] = ["durationMs", "resultCount", "offset", "status", "talk_updated"];
 
 /** 单个 blob 的长度上限。AE 限制是一个数据点所有 blob 合计 5120 字节，逐个截断就不可能超。 */
 const MAX_BLOB = 128;
