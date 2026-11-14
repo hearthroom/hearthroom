@@ -65,7 +65,8 @@ onMounted(async () => {
   restore = document.activeElement as HTMLElement | null;
   document.addEventListener("keydown", onKey);
   await nextTick();
-  box.value?.querySelector<HTMLElement>(".ws-manage__done")?.focus();
+  // 焦點放在關閉鍵（框的頂端）：放在底部「完成」會讓整個框捲到底，標題與用量看不到
+  box.value?.querySelector<HTMLElement>("[data-ws-close]")?.focus();
 });
 onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?.focus?.(); });
 </script>
@@ -76,7 +77,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
       <section ref="box" class="modal panel ws-manage" role="dialog" aria-modal="true" aria-labelledby="ws-manage-title">
         <header class="ws-manage__head">
           <h2 id="ws-manage-title" class="modal__title">{{ $t("workshop.manage.title") }}</h2>
-          <button type="button" class="btn btn--ghost btn--icon" :aria-label="$t('dialog.close')" @click="emit('close')">
+          <button type="button" class="btn btn--ghost btn--icon" data-ws-close :aria-label="$t('dialog.close')" @click="emit('close')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </header>
@@ -136,7 +137,10 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
 </template>
 
 <style scoped>
-.ws-manage { width: min(560px, 100%); gap: var(--s-4); }
+/* 只有清單捲動：標題、規則、用量與建議檔位、完成固定在框裡，清單再長也看得到 */
+.ws-manage { width: min(560px, 100%); gap: var(--s-4); display: flex; flex-direction: column; overflow: hidden; }
+.ws-manage > * { flex: none; }
+.ws-manage__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .ws-manage__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .ws-manage__head .modal__title { margin: 0; }
 .ws-manage__rule { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
