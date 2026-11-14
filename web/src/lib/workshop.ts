@@ -25,6 +25,8 @@ export interface ExtensionSummary {
   coverUrl: string;
   author: ExtensionAuthor;
   joinCount: number;
+  /** 擴充作者就是原卡作者；舊回應沒有這個欄位 */
+  byCardAuthor?: boolean;
   /** 已核准的公開版號 vN；從未上架是 0 */
   version: number;
   updatedAt: number;
@@ -114,6 +116,10 @@ export interface WorkshopDraft {
 }
 export type DraftWrite = Pick<WorkshopDraft, "name" | "summary" | "readme" | "coverUrl" | "rating" | "ratingAnswers" | "worldbook" | "rules" | "opening" | "updateNote">;
 export interface DraftError { code: string; actual?: number; max?: number; unit?: string }
+
+/** 第三方擴充的介面（正規表示式）與開場目前暫停：不是原卡作者做的、又帶這兩類內容，畫面就說明一句 */
+export const displayPaused = (ext: Pick<ExtensionSummary, "byCardAuthor" | "kinds">): boolean =>
+  ext.byCardAuthor === false && ext.kinds.some((k) => k === "display" || k === "opening");
 
 // ---- 請求 ------------------------------------------------------------------
 

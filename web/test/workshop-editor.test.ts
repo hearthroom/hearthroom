@@ -262,3 +262,20 @@ it("a name over 16 characters leaves the basics unchecked and blocks submission"
   expect(document.querySelector("[data-check=basics]")?.getAttribute("data-ok")).toBe("false");
   expect(button("[data-pub-submit]")!.disabled).toBe(true);
 });
+
+it("third-party extension: regex and opening sections say they are paused; the card author's own extension does not", async () => {
+  const notice = () => document.querySelector("[data-display-paused]")?.textContent?.trim();
+  api.fetchDraft.mockResolvedValue(makeDraft());
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
+  await mountAt("/mine/workshops/w1/edit?section=regex");
+  expect(notice()).toBe(t("workshop.displayPaused"));
+  await router.replace({ query: { section: "opening" } }); await settle();
+  expect(notice()).toBe(t("workshop.displayPaused"));
+  await router.replace({ query: { section: "world" } }); await settle();
+  expect(notice()).toBeUndefined();
+  app?.unmount(); app = undefined; document.body.innerHTML = "";
+  api.fetchDraft.mockResolvedValue(makeDraft({ card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: true } }));
+  await mountAt("/mine/workshops/w1/edit?section=regex");
+  expect(notice()).toBeUndefined();
+});
+

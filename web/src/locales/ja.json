@@ -4852,6 +4852,7 @@
   "workshop.empty.added.cta": "人気を見る",
   "workshop.error.load": "ワークショップを読み込めませんでした。会話は通常どおり始められます。",
   "workshop.toast.added": "「{name}」を追加しました",
+  "workshop.displayPaused": "拡張パックの正規表現と書き出しは一時停止しています。",
   "workshop.toast.removed": "「{name}」を外しました",
   "workshop.toast.undo": "元に戻す",
   "workshop.detail.back": "ワークショップに戻る",

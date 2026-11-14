@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "draft": true,
+  "title": {
+    "zh-Hant": "別人做的擴充裡的正規表示式與開場暫時停用，世界書照常。",
+    "zh-Hans": "别人制作的扩展包里的正则与开场暂时停用，世界书照常。",
+    "en": "Regex rules and openings in extensions made by others are paused for now; lorebook entries still work.",
+    "ja": "他の人の拡張パックの正規表現と書き出しは一時停止中です。",
+    "ko": "다른 사람이 만든 확장팩의 정규식과 도입부는 잠시 쓸 수 없어요."
+  }
+}

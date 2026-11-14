@@ -4852,6 +4852,7 @@
   "workshop.empty.added.cta": "看熱門",
   "workshop.error.load": "工坊載入失敗，開始對話不受影響。",
   "workshop.toast.added": "已加入「{name}」",
+  "workshop.displayPaused": "擴充的正規表示式與開場暫時停用。",
   "workshop.toast.removed": "已移除「{name}」",
   "workshop.toast.undo": "復原",
   "workshop.detail.back": "回卡片頁的工坊",

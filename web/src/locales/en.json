@@ -4852,6 +4852,7 @@
   "workshop.empty.added.cta": "Browse popular",
   "workshop.error.load": "Could not load the Workshop. Starting a chat still works.",
   "workshop.toast.added": "Added “{name}”",
+  "workshop.displayPaused": "Regex rules and openings from extensions are paused for now.",
   "workshop.toast.removed": "Removed “{name}”",
   "workshop.toast.undo": "Undo",
   "workshop.detail.back": "Back to Workshop",
