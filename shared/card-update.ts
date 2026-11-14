@@ -1,5 +1,5 @@
 export const UPDATE_NOTE_MIN = 10;
-export const UPDATE_NOTE_MAX = 200;
+export const UPDATE_NOTE_MAX = 500;
 export const UPDATE_COOLDOWN_DAYS = 3;
 export const UPDATE_COOLDOWN_MS = UPDATE_COOLDOWN_DAYS * 86400000;
 export interface UpdateIntent { updateKind: 'minor' | 'major'; updateNote: string }

@@ -23,8 +23,12 @@ it('defaults silent, validates the changelog by code points and clears hidden lo
   expect(confirm.disabled).toBe(true);
   note.value = '😀'.repeat(10); note.dispatchEvent(new Event('input', { bubbles: true })); await tick();
   expect(confirm.disabled).toBe(false);
-  note.value = '字'.repeat(201); note.dispatchEvent(new Event('input', { bubbles: true })); await tick();
+  note.value = '😀'.repeat(500); note.dispatchEvent(new Event('input', { bubbles: true })); await tick();
+  expect(confirm.disabled).toBe(false);
+  expect(document.querySelector('#publication-note-error')).toBeNull();
+  note.value = '字'.repeat(501); note.dispatchEvent(new Event('input', { bubbles: true })); await tick();
   expect(confirm.disabled).toBe(true);
+  expect(document.querySelector('#publication-note-error')?.textContent).toContain('500');
   document.querySelector<HTMLInputElement>('[data-update-choice="minor"]')!.click(); await tick();
   expect(confirm.disabled).toBe(false);
   confirm.click();await tick();expect((await result)?.update).toEqual({updateKind:'minor',updateNote:''});
@@ -84,5 +88,24 @@ it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('omits cooldown copy for 
     expect(text).toContain(i18n.global.t('cardUpdate.update.deliveryHint'));
     expect(document.querySelector('#publication-eligibility')).toBeNull();
     expect(document.querySelector<HTMLInputElement>('[data-update-choice="major"]')?.disabled).toBe(false);
+  } finally {i18n.global.locale.value='zh-Hant';}
+});
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('shows the 500-character changelog limit in %s and accepts 500 while blocking 501',async locale=>{
+  await loadLocale(locale);i18n.global.locale.value=locale;
+  try {
+    void open();await tick();
+    document.querySelector<HTMLInputElement>('[data-update-choice="major"]')!.click();await tick();
+    expect(document.querySelector('#publication-note-hint')?.textContent).toContain(i18n.global.t('cardUpdate.update.noteLength',{min:10,limit:500}));
+    expect(document.querySelector('.publication-count')?.textContent).toBe(i18n.global.t('cardUpdate.update.noteCount',{count:0,limit:500}));
+    const note=document.querySelector<HTMLTextAreaElement>('[data-update-note]')!;
+    const confirm=document.querySelector<HTMLButtonElement>('[data-confirm]')!;
+    note.value='字'.repeat(500);note.dispatchEvent(new Event('input',{bubbles:true}));await tick();
+    expect(confirm.disabled).toBe(false);
+    expect(document.querySelector('#publication-note-error')).toBeNull();
+    expect(document.querySelector('.publication-count')?.textContent).toBe(i18n.global.t('cardUpdate.update.noteCount',{count:500,limit:500}));
+    note.value='字'.repeat(501);note.dispatchEvent(new Event('input',{bubbles:true}));await tick();
+    expect(confirm.disabled).toBe(true);
+    expect(document.querySelector('#publication-note-error')?.textContent).toBe(i18n.global.t('cardUpdate.update.noteTooLong',{min:10,limit:500}));
   } finally {i18n.global.locale.value='zh-Hant';}
 });

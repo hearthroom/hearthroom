@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "送審時的更新日誌上限提高到 500 字。",
+    "zh-Hans": "提交审核时的更新日志上限提高到 500 字。",
+    "en": "Card update changelogs now support up to 500 characters.",
+    "ja": "審査に出すときの更新内容を500文字まで書けるようになりました。",
+    "ko": "심사를 요청할 때 업데이트 내역을 최대 500자까지 적을 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "選擇「更新並通知」時，可以寫下更完整的改動說明。",
+    "zh-Hans": "选择“更新并通知”时，可以写下更完整的改动说明。",
+    "en": "Choosing Update and notify gives you more room to describe what changed.",
+    "ja": "「更新して通知」を選んだときに、変更した内容をより詳しく伝えられます。",
+    "ko": "‘업데이트 후 알림 보내기’를 선택하면 달라진 내용을 더 자세히 적을 수 있어요."
+  }
+}

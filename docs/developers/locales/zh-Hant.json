@@ -2401,7 +2401,7 @@
   "d421c01c85938": "major 修訂版的公開更新日誌，內容已固定；minor 為空。",
   "ddc11475ac3c0": "更新類型或更新日誌無效；major 要求卡片曾經公開。",
   "d2f6155e228a1": "未記錄更新意圖的舊版本一律視為 minor。",
-  "d0e818e3d066e": "公開更新日誌。major 必填：至少 10 個不屬於 White_Space 的 Unicode code points，正規化後全文最多 200 個 code points。將 CRLF/CR 正規化為 LF，並移除前後的 Unicode White_Space。minor 只接受空字串日誌。",
+  "d0e818e3d066e": "公開更新日誌。major 必填：至少 10 個不屬於 White_Space 的 Unicode code points，正規化後全文最多 500 個 code points。將 CRLF/CR 正規化為 LF，並移除前後的 Unicode White_Space。minor 只接受空字串日誌。",
   "dddcffc17e48c": "讀取已公開版本記錄",
   "d575526a85282": "必須通過既有的登入後成人內容同意檢查。",
   "d31b1ce6845bb": "同一卡片的指定已公開修訂版即使不在請求頁內，仍以 target 回傳；不存在或不可見時為 null。",

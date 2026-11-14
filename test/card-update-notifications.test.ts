@@ -45,7 +45,7 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
-it.each([undefined, '', ' \n\t ', '九'.repeat(9), 'a '.repeat(9), '字'.repeat(201), 12])('rejects major with invalid log %j before sealing', async updateNote => {
+it.each([undefined, '', ' \n\t ', '九'.repeat(9), 'a '.repeat(9), '字'.repeat(501), 12])('rejects major with invalid log %j before sealing', async updateNote => {
   const response = await submit({ updateKind: 'major', updateNote });
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({ error: 'update_note_invalid' });
@@ -98,7 +98,11 @@ it('enforces three days but keeps silent updates available and clears only the p
   expect(await detail.json()).toMatchObject({ updateKind: 'minor', updateNote: '' });
   expect((await notices()).results.map(r => JSON.parse(r.extra).note)).toEqual([log, log]);
   await env.DB.prepare("UPDATE card_update_events SET published_at=? WHERE state='published'").bind(Date.now() - 3 * day).run();
-  expect((await submit({ updateKind: 'major', updateNote: '字'.repeat(200) })).status).toBe(200);
+  const maxLog = '😀'.repeat(500);
+  const maxAccepted = await submit({ updateKind: 'major', updateNote: maxLog });
+  expect(maxAccepted.status).toBe(200);
+  await approve(maxAccepted);
+  expect(await (await SELF.fetch('https://c.test/v1/cards/' + card)).json()).toMatchObject({ updateKind: 'major', updateNote: maxLog });
 });
 it('carries a collector-only update through website, Web Push and Discord without exposing R logs on Discord', async () => {
   await approve(await submit({ updateKind: 'major', updateNote: log }));

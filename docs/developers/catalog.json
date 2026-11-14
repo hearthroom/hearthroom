@@ -2401,7 +2401,7 @@
   "d421c01c85938": "Frozen public changelog for a major revision, empty for minor.",
   "ddc11475ac3c0": "Invalid update type or changelog; major requires a previously published card.",
   "d2f6155e228a1": "Legacy versions without a recorded intent are minor.",
-  "d0e818e3d066e": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 200 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note.",
+  "d0e818e3d066e": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 500 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note.",
   "dddcffc17e48c": "Read published version history",
   "d575526a85282": "Requires the existing authenticated adult consent gate.",
   "d31b1ce6845bb": "Return this same-card published revision as target even when it is outside the requested page; null if absent or not visible.",

@@ -2401,7 +2401,7 @@
   "d421c01c85938": "major 修订版本已固定的公开更新日志；minor 为空。",
   "ddc11475ac3c0": "更新类型或更新日志无效；major 要求卡片此前已公开过。",
   "d2f6155e228a1": "没有记录更新意图的旧版本统一视为 minor。",
-  "d0e818e3d066e": "公开更新日志。major 必填：至少 10 个不属于 White_Space 的 Unicode code points，规范化后全文最多 200 个 code points。将 CRLF/CR 规范化为 LF，并移除首尾的 Unicode White_Space。minor 只接受空字符串日志。",
+  "d0e818e3d066e": "公开更新日志。major 必填：至少 10 个不属于 White_Space 的 Unicode code points，规范化后全文最多 500 个 code points。将 CRLF/CR 规范化为 LF，并移除首尾的 Unicode White_Space。minor 只接受空字符串日志。",
   "dddcffc17e48c": "读取已公开的版本记录",
   "d575526a85282": "须通过现有的登录后成人内容同意检查。",
   "d31b1ce6845bb": "即使同一卡片的这个已公开修订版本不在请求页内，也会作为 target 返回；不存在或不可见时为 null。",

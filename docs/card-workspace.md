@@ -123,7 +123,7 @@ An existing published card defaults to a silent update when submitted for review
 The website offers **Silent update** and **Update and notify**. To request the latter
 from the CLI, use `hearthroom card submit <dir> --notify --update-note "…"` only after
 the author chooses to notify readers. The public changelog is required: at least 10
-non-whitespace Unicode code points and at most 200 code points in the whole text.
+non-whitespace Unicode code points and at most 500 code points in the whole text.
 CRLF/CR become LF and surrounding Unicode White_Space is trimmed; internal spaces
 and line breaks count toward the maximum. Text is neither translated nor rendered
 as HTML or Markdown. A note without explicit notification consent is rejected.

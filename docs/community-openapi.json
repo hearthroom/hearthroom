@@ -332,8 +332,8 @@
                   },
                   "updateNote": {
                     "type": "string",
-                    "maxLength": 200,
-                    "description": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 200 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note."
+                    "maxLength": 500,
+                    "description": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 500 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note."
                   }
                 },
                 "required": [
@@ -4543,7 +4543,7 @@
           },
           "updateNote": {
             "type": "string",
-            "maxLength": 200,
+            "maxLength": 500,
             "description": "Current approved-version changelog; empty for a silent version."
           },
           "honors": {
@@ -5431,7 +5431,7 @@
           },
           "updateNote": {
             "type": "string",
-            "maxLength": 200,
+            "maxLength": 500,
             "description": "Frozen public changelog for a major revision, empty for minor."
           }
         }
