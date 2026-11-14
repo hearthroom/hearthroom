@@ -5153,7 +5153,7 @@
   "workshop.moderation.content.view": "View",
   "workshop.moderation.content.hide": "Collapse",
   "workshop.moderation.content.error": "Couldn’t load this extension’s content. Try again.",
-  "wallet.source.purchase": "Purchased",
+  "wallet.source.purchase": "Purchase",
   "wallet.source.other": "Other sources",
   "wallet.sources": "{n} sources"
 }

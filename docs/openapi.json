@@ -28682,6 +28682,44 @@
           },
           "rankHonor": {
             "$ref": "#/components/schemas/LedgerRankHonor"
+          },
+          "parts": {
+            "type": "array",
+            "description": "Only on spending records: what the charge drew from, by kind of credit, largest first. One charge that drew from several credit batches is a single record; the `amount` values add up to its `score`. Omitted when the sources cannot be determined.",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "amount"
+              ],
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "purchase",
+                    "plan_daily",
+                    "plan_bonus",
+                    "checkin",
+                    "task",
+                    "newcomer",
+                    "referral",
+                    "signup",
+                    "campaign",
+                    "grant",
+                    "redeem",
+                    "rebate",
+                    "other"
+                  ],
+                  "description": "Kind of credit. Treat unknown values as `other`."
+                },
+                "amount": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 1,
+                  "description": "Credits drawn from this kind, as a positive number."
+                }
+              }
+            }
           }
         }
       },
