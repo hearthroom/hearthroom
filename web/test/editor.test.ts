@@ -444,7 +444,8 @@ describe('new-card author-asset draft recovery', () => {
       api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(409, 'version_conflict', 'version_conflict'));
     }
     await submit();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.createRole).not.toHaveBeenCalled();
     if (kind === 'matching') {
       expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
       expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
@@ -513,7 +514,8 @@ describe('new-card author-asset draft recovery', () => {
     expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.set.rules[0].replace).toBe('Edited after partial save');
     await submit();
     expect(root.querySelector('.body__scroll > .notice--error')).toBeNull();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.createRole).not.toHaveBeenCalled();
     expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1', expect.objectContaining({
       version: 1, rules: [expect.objectContaining({ replace: 'Edited after partial save' })],
     }), 'tok');
@@ -548,7 +550,8 @@ describe('new-card author-asset draft recovery', () => {
       version: 0, rules: [expect.objectContaining({ replace: 'Retained replacement' })],
     }), 'tok');
     expect(JSON.parse(localStorage.getItem('hearthroom.draft.create')!).authorAsset.version).toBe(0);
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.createRole).not.toHaveBeenCalled();
   });
 
   it('retains an author-asset-only draft and clears its rules and version when discarded', async () => {
@@ -618,7 +621,8 @@ describe('new-card author-asset draft recovery', () => {
     await submit(); await reopen();
     expect(api.fetchAuthorAsset).toHaveBeenCalledWith('r1', 'tok');
     await submit();
-    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.createRole).not.toHaveBeenCalled();
     if (matching) {
       expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
       expect(api.patchRoleWelcome).toHaveBeenCalled();
@@ -2834,6 +2838,21 @@ describe('unfinished card hosted images survive reopening', () => {
     await submit();
     expect(api.patchRoleDocument).toHaveBeenLastCalledWith('r1', expect.objectContaining({roleBackground:replacement, roleBackgroundLandscape:urls[1], roleShareImage:urls[2]}), 'tok');
     expect(Object.keys(localStorage).filter(k=>k.startsWith('hearthroom.draft.provision.'))).toEqual([]);
+  });
+  it('restores author CSS and its expected version together with uploaded pictures on the unfinished route', async () => {
+    const css='.canvas-root { --lt-canvas-send-bg:#923455 }';
+    const image='https://img.test/card-media/r1/with-css.png';
+    await mount('/create'); await type($('#f-name'), 'CSS and picture draft');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    await type($<HTMLTextAreaElement>('.card-style__custom textarea'), css);
+    await selectImage(imageFields[0], image); unmountEditor();
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'CSS and picture draft',provisioning:true});
+    await mount('/cards/r1/edit');
+    $<HTMLButtonElement>('[data-card-css-toggle]').click(); await flush();
+    expect($<HTMLTextAreaElement>('.card-style__custom textarea').value).toBe(css);
+    expect(imageField(imageFields[0]).querySelector('img')?.getAttribute('src')).toBe(image);
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenLastCalledWith('r1',expect.objectContaining({version:0,cardCss:css}),'tok');
   });
   it('keeps a replacement when returning from the unfinished edit route to create', async () => {
     const first='https://img.test/card-media/r1/first.png', latest='https://img.test/card-media/r1/latest.png';

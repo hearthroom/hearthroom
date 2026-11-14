@@ -705,22 +705,35 @@ function clearProvisionCompletion() {
     if (matchesPendingCard(stored?.pendingCreate)) localStorage.removeItem(DRAFT_KEY);
   } catch { /* best effort */ }
 }
+function authorAssetDraft(): NonNullable<StoredDraft["authorAsset"]> {
+  return { set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
+    pendingRead: pendingRegexRead.value, pendingWrite: pendingRegexWrite.value };
+}
+function restoreAuthorAssetDraft(asset: StoredDraft["authorAsset"]) {
+  if (!asset || !Array.isArray(asset.set?.rules) || !Array.isArray(asset.original?.rules) || !Number.isFinite(asset.version)) return false;
+  regexSet.value = asset.set; regexOriginal.value = asset.original; regexVersion.value = asset.version;
+  savedOpening.value = asset.savedOpening; pendingRegexRead.value = asset.pendingRead === true;
+  pendingRegexWrite.value = asset.pendingWrite ?? null;
+  return true;
+}
 function resumeProvisionCompletion() {
-  let local: { completionAttempted?: boolean; images?: ProvisionImages } | null = null;
+  let local: { completionAttempted?: boolean; images?: ProvisionImages; authorAsset?: StoredDraft["authorAsset"] } | null = null;
   try { local = JSON.parse(localStorage.getItem(provisionCompletionKey()) || "null"); } catch { /* ignore invalid local metadata */ }
   const intent = matchesPendingCard(pendingCreate.value ?? undefined) ? pendingCreate.value : null;
   pendingCreate.value = { ...intent, roleId: roleId.value, provider: editorProvider.value, actor: visibilityActor.value, completionAttempted: local?.completionAttempted === true || intent?.completionAttempted === true };
   let images = local?.images;
-  if (!images) {
+  let asset = local?.authorAsset;
+  if (!images || !asset) {
     // Existing create-page drafts predate the per-card image snapshot.
     try {
       const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as StoredDraft | null;
-      if (matchesPendingCard(stored?.pendingCreate)) images = stored?.draft;
+      if (matchesPendingCard(stored?.pendingCreate)) { images ??= stored?.draft; asset ??= stored?.authorAsset; }
     } catch { /* keep the remote skeleton if local storage is unreadable */ }
   }
   if (images && provisionImageFields.every(field => typeof images[field] === "string")) {
     for (const field of provisionImageFields) draft.value[field] = images[field];
   }
+  restoreAuthorAssetDraft(asset);
 }
 function storeDraft() {
   storeApprovedLocalDraft();
@@ -733,7 +746,7 @@ function storeDraft() {
     // image snapshot. Another create-page draft must not replace its pictures.
     if (creationPending.value && roleId.value && pendingCreate.value) {
       const images = Object.fromEntries(provisionImageFields.map(field => [field, draft.value[field]]));
-      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images }));
+      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images, authorAsset: authorAssetDraft() }));
     }
     if (!onCreatePage.value) return creationPending.value && !!roleId.value && !!pendingCreate.value;
     // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
@@ -751,11 +764,7 @@ function storeDraft() {
       visibility: newCardVisibility.value,
       tagsText: tagsText.value,
       worldbook: wb.stored(),
-      authorAsset: {
-        set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
-        pendingRead: pendingRegexRead.value,
-        pendingWrite: pendingRegexWrite.value,
-      },
+      authorAsset: authorAssetDraft(),
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
       ...(pendingCreate.value ? { pendingCreate: { ...pendingCreate.value, ...(roleId.value ? { roleId: roleId.value } : {}) } } : {}),
@@ -791,14 +800,7 @@ function restoreDraft() {
         if (!stored.pendingCreate.operationId) creationPending.value = false;
       }
     }
-    if (stored.authorAsset) {
-      regexSet.value = stored.authorAsset.set;
-      regexOriginal.value = stored.authorAsset.original;
-      regexVersion.value = stored.authorAsset.version;
-      savedOpening.value = stored.authorAsset.savedOpening;
-      pendingRegexRead.value = stored.authorAsset.pendingRead === true;
-      pendingRegexWrite.value = stored.authorAsset.pendingWrite ?? null;
-    } else pendingRegexRead.value = Boolean(roleId.value);
+    if (!restoreAuthorAssetDraft(stored.authorAsset)) pendingRegexRead.value = Boolean(roleId.value);
     if (creationPending.value && matchesPendingCard(pendingCreate.value ?? undefined)) resumeProvisionCompletion();
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
@@ -943,8 +945,7 @@ onMounted(async () => {
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     creationPending.value = (raw as { provisioning?: boolean }).provisioning === true;
-    if (creationPending.value) resumeProvisionCompletion();
-    else clearProvisionCompletion();
+    if (!creationPending.value) clearProvisionCompletion();
     original.value = creationPending.value ? null : cloneDraft(draft.value);
     pristine.value = cloneDraft(draft.value);
     worldShown.value = Boolean(draft.value.world);
@@ -959,6 +960,7 @@ onMounted(async () => {
       const assetsReady=await loadRegexRules(token);
       restoreApprovedLocalDraft(assetsReady);
     }
+    if (creationPending.value) { resumeProvisionCompletion(); settleDisclosures(); }
     void loadValidation();
     void visibilityControl.value?.reload();
     void refreshLegacyState();
