@@ -693,27 +693,49 @@ interface StoredDraft {
 function provisionCompletionKey() {
   return `hearthroom.draft.provision.${editorProvider.value}.${visibilityActor.value}.${roleId.value}`;
 }
+const provisionImageFields = ["roleBackground", "roleBackgroundLandscape", "roleShareImage"] as const;
+type ProvisionImages = Pick<RoleDraft, typeof provisionImageFields[number]>;
+function matchesPendingCard(pending?: PendingCreate) {
+  return pending?.roleId === roleId.value && pending.provider === editorProvider.value && pending.actor === visibilityActor.value;
+}
 function clearProvisionCompletion() {
-  try { localStorage.removeItem(provisionCompletionKey()); } catch { /* best effort */ }
+  try {
+    localStorage.removeItem(provisionCompletionKey());
+    const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as StoredDraft | null;
+    if (matchesPendingCard(stored?.pendingCreate)) localStorage.removeItem(DRAFT_KEY);
+  } catch { /* best effort */ }
 }
 function resumeProvisionCompletion() {
-  let completionAttempted = false;
-  try { completionAttempted = JSON.parse(localStorage.getItem(provisionCompletionKey()) || "null")?.completionAttempted === true; } catch { /* ignore invalid local metadata */ }
-  pendingCreate.value = { roleId: roleId.value, provider: editorProvider.value, actor: visibilityActor.value, completionAttempted };
+  let local: { completionAttempted?: boolean; images?: ProvisionImages } | null = null;
+  try { local = JSON.parse(localStorage.getItem(provisionCompletionKey()) || "null"); } catch { /* ignore invalid local metadata */ }
+  const intent = matchesPendingCard(pendingCreate.value ?? undefined) ? pendingCreate.value : null;
+  pendingCreate.value = { ...intent, roleId: roleId.value, provider: editorProvider.value, actor: visibilityActor.value, completionAttempted: local?.completionAttempted === true || intent?.completionAttempted === true };
+  let images = local?.images;
+  if (!images) {
+    // Existing create-page drafts predate the per-card image snapshot.
+    try {
+      const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as StoredDraft | null;
+      if (matchesPendingCard(stored?.pendingCreate)) images = stored?.draft;
+    } catch { /* keep the remote skeleton if local storage is unreadable */ }
+  }
+  if (images && provisionImageFields.every(field => typeof images[field] === "string")) {
+    for (const field of provisionImageFields) draft.value[field] = images[field];
+  }
 }
 function storeDraft() {
   storeApprovedLocalDraft();
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
   if (original.value) return false;
-  if (!onCreatePage.value) {
-    if (!creationPending.value || !roleId.value || !pendingCreate.value) return false;
-    try {
-      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true }));
-      return true;
-    } catch { return false; }
-  }
+  if (pendingCreate.value?.provider && (pendingCreate.value.provider !== editorProvider.value || pendingCreate.value.actor !== visibilityActor.value)) return false;
   try {
+    // Both /create and a reopened unfinished card need the same card-scoped
+    // image snapshot. Another create-page draft must not replace its pictures.
+    if (creationPending.value && roleId.value && pendingCreate.value) {
+      const images = Object.fromEntries(provisionImageFields.map(field => [field, draft.value[field]]));
+      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images }));
+    }
+    if (!onCreatePage.value) return creationPending.value && !!roleId.value && !!pendingCreate.value;
     // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
     const defaultsOnly = !roleId.value && !pendingRegexRead.value && !pendingRegexWrite.value &&
       newCardVisibility.value === "unlisted" &&
@@ -777,6 +799,7 @@ function restoreDraft() {
       pendingRegexRead.value = stored.authorAsset.pendingRead === true;
       pendingRegexWrite.value = stored.authorAsset.pendingWrite ?? null;
     } else pendingRegexRead.value = Boolean(roleId.value);
+    if (creationPending.value && matchesPendingCard(pendingCreate.value ?? undefined)) resumeProvisionCompletion();
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
     worldShown.value = Boolean(draft.value.world);
@@ -855,7 +878,7 @@ async function discardDraft() {
 }
 // Existing cards do not use local drafts; do not deep-traverse their entire worldbook.
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch(() => onCreatePage.value && !original.value ? [draft.value, wb, newCardVisibility.value, regexSet.value, regexOriginal.value, regexVersion.value] : null, () => {
+watch(() => (onCreatePage.value || creationPending.value) && !original.value ? [draft.value, wb, newCardVisibility.value, regexSet.value, regexOriginal.value, regexVersion.value] : null, () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });

@@ -2806,6 +2806,64 @@ it('does not delete a completed card when discarding a local draft after a lost 
  expect(api.deleteRole).not.toHaveBeenCalled();
 });
 
+describe('unfinished card hosted images survive reopening', () => {
+  const imageFields = ['editor.background', 'editor.backgroundLandscape', 'editor.shareImage'] as const;
+  const imageField = (key: typeof imageFields[number]) => Array.from(root.querySelectorAll<HTMLElement>('.field')).find(el => el.querySelector('label')?.textContent === i18n.global.t(key))!;
+  const unmountEditor = () => { app!.unmount(); root.remove(); app = null; };
+  const selectImage = async (key: typeof imageFields[number], url: string) => {
+    api.uploadImage.mockResolvedValueOnce(url);
+    await pickFile(imageField(key).querySelector('input[type=file]')!, new File(['synthetic png'], 'same.png', {type:'image/png'}));
+    expect(imageField(key).querySelector('img')?.getAttribute('src')).toBe(url);
+  };
+  it('restores all three uploaded slots from My cards and keeps later replacements on that route', async () => {
+    await mount('/create'); await type($('#f-name'), 'Unfinished media');
+    const urls = imageFields.map((_, i) => `https://img.test/card-media/r1/slot-${i}.png`);
+    for (const [i, key] of imageFields.entries()) await selectImage(key, urls[i]!);
+    unmountEditor();
+    // Starting another card must not erase the first card's persisted pictures.
+    localStorage.removeItem('hearthroom.draft.create');
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Unfinished media', provisioning:true});
+    await mount('/cards/r1/edit');
+    for (const [i, key] of imageFields.entries()) expect(imageField(key).querySelector('img')?.getAttribute('src')).toBe(urls[i]);
+    const replacement='https://img.test/card-media/r1/replacement.png';
+    await selectImage(imageFields[0], replacement); unmountEditor();
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Unfinished media', provisioning:true});
+    await mount('/cards/r1/edit');
+    expect(imageField(imageFields[0]).querySelector('img')?.getAttribute('src')).toBe(replacement);
+    expect(imageField(imageFields[1]).querySelector('img')?.getAttribute('src')).toBe(urls[1]);
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenLastCalledWith('r1', expect.objectContaining({roleBackground:replacement, roleBackgroundLandscape:urls[1], roleShareImage:urls[2]}), 'tok');
+    expect(Object.keys(localStorage).filter(k=>k.startsWith('hearthroom.draft.provision.'))).toEqual([]);
+  });
+  it('keeps a replacement when returning from the unfinished edit route to create', async () => {
+    const first='https://img.test/card-media/r1/first.png', latest='https://img.test/card-media/r1/latest.png';
+    await mount('/create'); await type($('#f-name'), 'Route round trip');
+    await selectImage(imageFields[0], first); unmountEditor();
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Route round trip',provisioning:true});
+    await mount('/cards/r1/edit'); await selectImage(imageFields[0], latest); unmountEditor();
+    await mount('/create');
+    expect(imageField(imageFields[0]).querySelector('img')?.getAttribute('src')).toBe(latest);
+  });
+  it('recovers an already-uploaded create-page snapshot from before the scoped image fix', async () => {
+    const image='https://img.test/card-media/r1/previous-upload.png';
+    localStorage.setItem('hearthroom.draft.create', JSON.stringify({draft:{...makeDraft('en'),roleName:'Older unfinished',roleBackground:image},tagsText:'',worldbook:null,savedAt:Date.now(),pendingCreate:{roleId:'r1',provider:'harbor',actor:'7',operationId:'synthetic-existing-operation'}}));
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Older unfinished',language:'en',provisioning:true});
+    await mount('/cards/r1/edit');
+    expect(imageField(imageFields[0]).querySelector('img')?.getAttribute('src')).toBe(image);
+    await submit();
+    expect(localStorage.getItem('hearthroom.draft.create')).toBeNull();
+  });
+  it.each(['other card','other actor','completed card'] as const)('does not restore pictures into an %s', async mode => {
+    await mount('/create'); await type($('#f-name'), 'Scoped unfinished');
+    await selectImage(imageFields[0], 'https://img.test/card-media/r1/private.png'); unmountEditor();
+    if (mode==='other actor') platforms.profile={identities:[{provider:'harbor',externalId:'another-synthetic-actor'}]};
+    const remote='https://img.test/card-media/remote/current.png';
+    api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Remote card', provisioning:mode!=='completed card', roleBackground:remote});
+    await mount(mode==='other card'?'/cards/r2/edit':'/cards/r1/edit');
+    expect(imageField(imageFields[0]).querySelector('img')?.getAttribute('src')).toBe(remote);
+  });
+});
+
 it('completes an unfinished card reopened from My cards without a create-page operation', async () => {
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Reopened unfinished card',language:'en',provisioning:true});
  await mount('/cards/r1/edit');await type($('#f-name'),'Finished reopened card');await submit();
