@@ -49,7 +49,7 @@ const beyond = computed(() => !over.value && Boolean(props.advise) && length.val
               :style="{ minHeight: `calc(${rows} * 1.7em + 26px)` }" />
     <input v-else autocomplete="off" :id="id" v-model="value" class="input" :placeholder="placeholder" />
     <span v-if="hint || max" class="field__foot">
-      <span class="subtle">{{ hint }}</span>
+      <span class="subtle"><slot name="hint">{{ hint }}</slot></span>
       <span v-if="max" class="subtle count" :class="{ over, beyond }">{{ length }} / {{ max }}</span>
     </span>
     <p v-if="beyond && adviseText" class="advise" role="status">{{ adviseText }}</p>

@@ -38,6 +38,8 @@ const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.for
  * （2026-09-07 一位作者存卡失敗，畫面只有「請求失敗」，他以為是名字太長）。
  */
 const CODE_KEY: Record<string, string> = {
+  image_in_use: "editor.image.libraryImagePinned",
+  external_image_upload_required: "editor.image.externalImageUpload",
   media_folder_not_empty: "resource.folderNotEmpty",
   media_folder_exists: "resource.folderExists",
   media_path_taken: "resource.pathTaken",
@@ -1160,6 +1162,19 @@ export async function createRole(draft: { roleName: string; language?: string; v
   );
 }
 
+/** Persist operationId before sending; a lost response reuses the same private card. */
+export async function provisionRole(draft: { operationId: string; roleName: string; language: string }, token: string): Promise<{ roleId?: string; provisioning?: boolean }> {
+  return json(await fetch(`${UPSTREAM_API}/open/v1/role/provision`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ ...draft, origin: "hearthroom" }),
+  }));
+}
+export async function completeRoleProvision(roleId: string, draft: { roleName: string; language: string; visibility: "private" | "unlisted" }, token: string): Promise<unknown> {
+  return json(await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/provisionComplete`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...authHeaders(token) }, body: JSON.stringify(draft),
+  }));
+}
+
 /** 只送有改動的欄位：沒送的區塊上游不會碰，避免空值洗掉原本的內容。 */
 export async function patchRole(roleId: string, patch: RoleDraft, token: string): Promise<unknown> {
   return json<unknown>(
@@ -1426,6 +1441,7 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
  * 擋掉）就改走舊的一次送上去。已經放進儲存但登記失敗**不**備援——那會傳兩次。
  */
 export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = [], onProgress?: (fraction: number) => void): Promise<string> {
+  if (roleId) return uploadCardImage(file, token, roleId, onProgress);
   // 型別要宣稱：不給的話上游當成 PNG，SVG 也就照 PNG 簽進儲存。
   const intentRes = await libraryPost("uploadIntent", { byteSize: file.size, contentType: canonicalType(file) }, token);
   if (intentRes.status === 404) return uploadImageLegacy(file, token, roleId, folderIds);
@@ -1446,6 +1462,56 @@ export async function uploadImage(file: File, token: string, roleId?: string, fo
 }
 
 /** 連儲存都連不上（回應狀態 0）：還沒送出任何位元組，可以安全地改走舊路。 */
+/** Card-owned images never fall back to personal-library storage. */
+type CardUploadTicket = { uploadId: string; uploadUrl: string; contentType: string; expiresAt?: string; uploaded?: boolean; sending?: Promise<void> };
+const cardUploadTickets = new WeakMap<File, Map<string, Promise<CardUploadTicket>>>();
+export async function uploadCardImage(file: File, token: string, roleId: string, onProgress?: (fraction: number) => void): Promise<string> {
+  // Retain the File and ticket together only in memory; never replay another
+  // provider/account's ticket. Losing complete's response must not create a new upload.
+  const identity = `${UPSTREAM_API}\n${roleId}\n${token}`;
+  let tickets = cardUploadTickets.get(file);
+  if (!tickets) cardUploadTickets.set(file, tickets = new Map());
+  let pending = tickets.get(identity);
+  if (!pending) {
+    pending = (async () => {
+      const res = await cardImagePost(roleId, "uploadIntent", { byteSize: file.size, contentType: canonicalType(file) }, token);
+      const ticket = await libraryJson<CardUploadTicket>(res);
+      if (!ticket.uploadId || !ticket.uploadUrl) throw new ApiError(503, i18n.global.t("state.uploadFailed"));
+      return ticket;
+    })();
+    tickets.set(identity, pending);
+  }
+  let ticket: CardUploadTicket;
+  try { ticket = await pending; } catch (err) { tickets.delete(identity); throw err; }
+  if (!ticket.uploaded) {
+    if (ticket.expiresAt && Date.parse(ticket.expiresAt) <= Date.now()) {
+      tickets.delete(identity);
+      return uploadCardImage(file, token, roleId, onProgress);
+    }
+    ticket.sending ??= putToStorage(ticket.uploadUrl, file, ticket.contentType, onProgress);
+    try { await ticket.sending; ticket.uploaded = true; } finally { ticket.sending = undefined; }
+  }
+  const doneRes = await cardImagePost(roleId, "uploadComplete", { uploadId: ticket.uploadId }, token);
+  const done = await libraryJson<{ imageUrl: string }>(doneRes);
+  if (!done.imageUrl) throw new ApiError(503, i18n.global.t("state.uploadFailed"));
+  tickets.delete(identity);
+  onProgress?.(1);
+  return done.imageUrl;
+}
+
+function cardImagePost(roleId: string, operation: "uploadIntent" | "uploadComplete" | "adopt", body: unknown, token: string): Promise<Response> {
+  return fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/images/${operation}`, {
+    method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+
+export async function adoptCardImage(roleId: string, imageId: string, token: string): Promise<string> {
+  const res = await cardImagePost(roleId, "adopt", { imageId }, token);
+  const done = await libraryJson<{ imageUrl: string }>(res);
+  if (!done.imageUrl) throw new ApiError(503, i18n.global.t("state.uploadFailed"));
+  return done.imageUrl;
+}
+
 class StorageUnreachable extends Error {}
 
 /**

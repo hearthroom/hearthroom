@@ -176,7 +176,7 @@ Community publication permits three distinct works per community per UTC week (M
 
 Authors save cards to HarperHarbor. Additional hosting destinations and cross-service
 synchronization are retired. Publication remains a separate community review action.
-Card media and Lorebooks follow Harper ownership, quota and moderation rules.
+Card images follow Harper ownership and card moderation rules. New card-bound images use separate immutable storage, are absent from the personal library and do not consume its quota; existing library-backed images retain their accounting until migration. Body/display assets and Lorebooks retain their existing quota rules. See the OpenAPI card provisioning, image upload/adoption and generation-save contracts.
 Players use their Harper account for both HTTP requests and WebSocket connections.
 Existing authoring grants must approve `chat.play` before playing; refreshing an
 older grant preserves its original OAuth client and scope.

@@ -60,7 +60,7 @@ export interface GenerationPlan {
   credits: number;
 }
 /** 存到哪裡：真的資料夾給 folderIds，只以路徑存在的夾給 directory，根目錄不給。 */
-export type SaveTarget = { folderIds?: string[]; directory?: string };
+export type SaveTarget = { folderIds?: string[]; directory?: string; roleId?: never; field?: never } | { roleId: string; field: "background" | "backgroundLandscape" | "shareImage"; folderIds?: never; directory?: never };
 
 const POLL_MS = 3000;
 

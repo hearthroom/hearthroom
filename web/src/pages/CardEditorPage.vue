@@ -31,7 +31,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } fro
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
-  createRole,
+  provisionRole,
+  completeRoleProvision,
+  adoptCardImage,
   fetchApprovedDraft,
   saveApprovedDraft,
   type ApprovedDraft,
@@ -156,7 +158,8 @@ const ratingAnswers = ref<RatingAnswers | null>(null);
 const ratingResult = computed(() => (ratingAnswers.value ? rate(ratingAnswers.value) : null));
 /** 存完要重送審，但上一版沒有可沿用的分級問卷（問卷上線前送的）：作者得先補 */
 const ratingNeeded = ref(false);
-const isNew = computed(() => !roleId.value);
+const creationPending = ref(!roleId.value);
+const isNew = computed(() => creationPending.value);
 const newCardVisibility = ref<"private" | "unlisted">("unlisted");
 // 已建立的中文卡可以在繁簡之間互換；以載入時的語言決定給不給選，選了之後選單不會消失。
 const scriptOptions = computed(() => scriptChoices(pristine.value.language));
@@ -677,47 +680,100 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
+interface PendingCreate { roleId?: string; operationId?: string; provider?: string; actor?: string; roleName?: string; language?: string; completionAttempted?: boolean }
+const pendingCreate = ref<PendingCreate | null>(null);
 interface StoredDraft {
   draft: RoleDraft;
   tagsText: string;
   worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null;
   savedAt: number;
-  pendingCreate?: { roleId: string };
+  pendingCreate?: PendingCreate;
   visibility?: "private" | "unlisted";
   authorAsset?: { set: RegexRuleSet; original: RegexRuleSet; version: number; savedOpening: OpeningMode; pendingRead?: boolean; pendingWrite?: { set: RegexRuleSet; version: number } | null };
+}
+function provisionCompletionKey() {
+  return `hearthroom.draft.provision.${editorProvider.value}.${visibilityActor.value}.${roleId.value}`;
+}
+const provisionImageFields = ["roleBackground", "roleBackgroundLandscape", "roleShareImage"] as const;
+type ProvisionImages = Pick<RoleDraft, typeof provisionImageFields[number]>;
+function matchesPendingCard(pending?: PendingCreate) {
+  return pending?.roleId === roleId.value && pending.provider === editorProvider.value && pending.actor === visibilityActor.value;
+}
+function clearProvisionCompletion() {
+  try {
+    localStorage.removeItem(provisionCompletionKey());
+    const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as StoredDraft | null;
+    if (matchesPendingCard(stored?.pendingCreate)) localStorage.removeItem(DRAFT_KEY);
+  } catch { /* best effort */ }
+}
+function authorAssetDraft(): NonNullable<StoredDraft["authorAsset"]> {
+  return { set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
+    pendingRead: pendingRegexRead.value, pendingWrite: pendingRegexWrite.value };
+}
+function restoreAuthorAssetDraft(asset: StoredDraft["authorAsset"]) {
+  if (!asset || !Array.isArray(asset.set?.rules) || !Array.isArray(asset.original?.rules) || !Number.isFinite(asset.version)) return false;
+  regexSet.value = asset.set; regexOriginal.value = asset.original; regexVersion.value = asset.version;
+  savedOpening.value = asset.savedOpening; pendingRegexRead.value = asset.pendingRead === true;
+  pendingRegexWrite.value = asset.pendingWrite ?? null;
+  return true;
+}
+function resumeProvisionCompletion() {
+  let local: { completionAttempted?: boolean; images?: ProvisionImages; authorAsset?: StoredDraft["authorAsset"] } | null = null;
+  try { local = JSON.parse(localStorage.getItem(provisionCompletionKey()) || "null"); } catch { /* ignore invalid local metadata */ }
+  const intent = matchesPendingCard(pendingCreate.value ?? undefined) ? pendingCreate.value : null;
+  pendingCreate.value = { ...intent, roleId: roleId.value, provider: editorProvider.value, actor: visibilityActor.value, completionAttempted: local?.completionAttempted === true || intent?.completionAttempted === true };
+  let images = local?.images;
+  let asset = local?.authorAsset;
+  if (!images || !asset) {
+    // Existing create-page drafts predate the per-card image snapshot.
+    try {
+      const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") as StoredDraft | null;
+      if (matchesPendingCard(stored?.pendingCreate)) { images ??= stored?.draft; asset ??= stored?.authorAsset; }
+    } catch { /* keep the remote skeleton if local storage is unreadable */ }
+  }
+  if (images && provisionImageFields.every(field => typeof images[field] === "string")) {
+    for (const field of provisionImageFields) draft.value[field] = images[field];
+  }
+  restoreAuthorAssetDraft(asset);
 }
 function storeDraft() {
   storeApprovedLocalDraft();
   // 成功存檔後只換了 history URL，Vue route 仍可能是 /create。
   // original 已存在表示建卡已完成，後續修改不能再冒充新卡草稿。
-  if (!onCreatePage.value || original.value) return;
+  if (original.value) return false;
+  if (pendingCreate.value?.provider && (pendingCreate.value.provider !== editorProvider.value || pendingCreate.value.actor !== visibilityActor.value)) return false;
   try {
+    // Both /create and a reopened unfinished card need the same card-scoped
+    // image snapshot. Another create-page draft must not replace its pictures.
+    if (creationPending.value && roleId.value && pendingCreate.value) {
+      const images = Object.fromEntries(provisionImageFields.map(field => [field, draft.value[field]]));
+      localStorage.setItem(provisionCompletionKey(), JSON.stringify({ completionAttempted: pendingCreate.value.completionAttempted === true, images, authorAsset: authorAssetDraft() }));
+    }
+    if (!onCreatePage.value) return creationPending.value && !!roleId.value && !!pendingCreate.value;
     // 新卡預設的沙箱模式仍須首次寫入，但不是作者已輸入的草稿；清空後也不能自行復活。
     const defaultsOnly = !roleId.value && !pendingRegexRead.value && !pendingRegexWrite.value &&
       newCardVisibility.value === "unlisted" &&
       JSON.stringify(draft.value) === JSON.stringify(makeDraft(locale.value)) &&
       !wb.dirty() && !memberBooksDirty() &&
       regexWriteKey(regexSet.value) === regexWriteKey({ ...emptyRuleSet(), pageMode: "sandbox" });
-    if (!dirty.value || defaultsOnly) {
+    if (!pendingCreate.value && (!dirty.value || defaultsOnly)) {
       localStorage.removeItem(DRAFT_KEY);
-      return;
+      return true;
     }
     const stored: StoredDraft = {
       draft: draft.value,
       visibility: newCardVisibility.value,
       tagsText: tagsText.value,
       worldbook: wb.stored(),
-      authorAsset: {
-        set: regexSet.value, original: regexOriginal.value, version: regexVersion.value, savedOpening: savedOpening.value,
-        pendingRead: pendingRegexRead.value,
-        pendingWrite: pendingRegexWrite.value,
-      },
+      authorAsset: authorAssetDraft(),
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
-      ...(roleId.value ? { pendingCreate: { roleId: roleId.value } } : {}),
+      ...(pendingCreate.value ? { pendingCreate: { ...pendingCreate.value, ...(roleId.value ? { roleId: roleId.value } : {}) } } : {}),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
+    return true;
   } catch {
+    return false;
     /* 隱私模式寫不進去：那就沒有這層保護，功能照常 */
   }
 }
@@ -728,7 +784,7 @@ function restoreDraft() {
     if (!raw) return;
     const stored = JSON.parse(raw) as StoredDraft;
     if (!stored?.draft) return;
-    if (!stored.draft.roleName && !stored.draft.roleDetailDesc && !stored.draft.roleWelcome &&
+    if (!stored.pendingCreate && !stored.draft.roleName && !stored.draft.roleDetailDesc && !stored.draft.roleWelcome &&
       !stored.authorAsset?.set.rules.length && !stored.authorAsset?.set.openingPage && !stored.authorAsset?.set.statusbar &&
       !stored.authorAsset?.set.cardCss) return;
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
@@ -736,15 +792,17 @@ function restoreDraft() {
     newCardVisibility.value = stored.visibility === "private" ? "private" : "unlisted";
     // 舊格式的 roleId 也可能來自已成功儲存的卡，無法證明是建卡未完成。
     // 舊草稿只恢復內容；只有明確的 partial-create 記錄才允許續存原目標。
-    if (typeof stored.pendingCreate?.roleId === "string") roleId.value = stored.pendingCreate.roleId;
-    if (stored.authorAsset) {
-      regexSet.value = stored.authorAsset.set;
-      regexOriginal.value = stored.authorAsset.original;
-      regexVersion.value = stored.authorAsset.version;
-      savedOpening.value = stored.authorAsset.savedOpening;
-      pendingRegexRead.value = stored.authorAsset.pendingRead === true;
-      pendingRegexWrite.value = stored.authorAsset.pendingWrite ?? null;
-    } else pendingRegexRead.value = Boolean(roleId.value);
+    if (stored.pendingCreate) {
+      pendingCreate.value = stored.pendingCreate;
+      if (typeof stored.pendingCreate.roleId === "string") {
+        roleId.value = stored.pendingCreate.roleId;
+        // Pre-upgrade partial creates used the ordinary role endpoint and have
+        // no provisioning receipt to complete. Preserve their existing edit path.
+        if (!stored.pendingCreate.operationId) creationPending.value = false;
+      }
+    }
+    if (!restoreAuthorAssetDraft(stored.authorAsset)) pendingRegexRead.value = Boolean(roleId.value);
+    if (creationPending.value && matchesPendingCard(pendingCreate.value ?? undefined)) resumeProvisionCompletion();
     wb.restore(stored.worldbook);
     // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
     worldShown.value = Boolean(draft.value.world);
@@ -754,13 +812,52 @@ function restoreDraft() {
     localStorage.removeItem(DRAFT_KEY);
   }
 }
-function discardDraft() {
+// A committed completion may lose its HTTP reply. Read the authoritative
+// state before another completion or a destructive unfinished-draft action.
+async function reconcileCompletedProvision(token: string) {
+  if (!pendingCreate.value?.completionAttempted || !roleId.value) return false;
+  const raw = await fetchRoleDetail(roleId.value, token, draft.value.language, editorProvider.value);
+  if (raw.provisioning !== false) return false;
+  const remote = draftFromRoleDetail(raw, locale.value);
+  original.value = cloneDraft(remote);
+  creationPending.value = false;
+  clearProvisionCompletion();
+  pendingCreate.value = null;
+  if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
+  // The first completed save fixed the original language. Keep all local text.
+  if (draft.value.language !== remote.language && !(["zh-Hant", "zh-Hans"].includes(draft.value.language) && ["zh-Hant", "zh-Hans"].includes(remote.language))) {
+    draft.value.language = remote.language;
+    throw new Error(t("editor.image.pageOutdated"));
+  }
+  return true;
+}
+async function discardDraft() {
+  if (saving.value || imageUploadsBusy.value.size) return;
   if(recoveredRevert.value && pendingRevert.value && !pendingRevert.value.saveAttempted){
     applyEditorSnapshot(pendingRevert.value.before);
     pendingRevert.value=null;recoveredRevert.value=false;restoredDraft.value=false;
     storeApprovedLocalDraft();
     return;
   }
+  if (creationPending.value && (roleId.value || pendingCreate.value?.operationId)) {
+    if (!await confirmDialog({ title: t("editor.image.clearDraftTitle"), message: t("editor.image.clearDraftBody"), confirmText: t("editor.image.clearDraftConfirm"), danger: true })) return;
+    try {
+      const token = await session.accessToken();
+      if (!token) throw new Error(t("auth.expired"));
+      if (await reconcileCompletedProvision(token)) {
+        error.value = t("editor.image.pageOutdated");
+        return;
+      }
+      const source = roleId.value || await ensureCardDraft(token);
+      await deleteRole(source, token);
+    } catch (err) { error.value = err instanceof Error ? err.message : t("state.actionFailed"); return; }
+  }
+  clearProvisionCompletion();
+  pendingCreate.value = null;
+  importedPortrait.value = null;
+  imageEpoch.value++;
+  pendingImages.value = new Set();
+  creationPending.value = true;
   newCardVisibility.value = "unlisted";
   // 本機草稿可能帶著上次建好、尚未存完的卡號；清空必須連儲存目標一起放掉。
   roleId.value = "";
@@ -776,11 +873,15 @@ function discardDraft() {
   wb.reset();
   worldShown.value = false;
   restoredDraft.value = false;
-  localStorage.removeItem(DRAFT_KEY);
+  if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
+  if (!onCreatePage.value) {
+    pristine.value = cloneDraft(draft.value);
+    await router.replace(platformPath(lp("/create"), editorProvider.value));
+  }
 }
 // Existing cards do not use local drafts; do not deep-traverse their entire worldbook.
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch(() => onCreatePage.value && !original.value ? [draft.value, wb, newCardVisibility.value, regexSet.value, regexOriginal.value, regexVersion.value] : null, () => {
+watch(() => (onCreatePage.value || creationPending.value) && !original.value ? [draft.value, wb, newCardVisibility.value, regexSet.value, regexOriginal.value, regexVersion.value] : null, () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
@@ -802,7 +903,7 @@ async function loadValidation() {
   if (!can('validation')) return;
   try {
     const token = await session.accessToken();
-    if (!token || !roleId.value) return;
+    if (!token || !roleId.value || isNew.value) return;
     const report = await fetchRoleValidation(roleId.value, token);
     remoteLimits.value = report.tokenBudget?.limits ?? null;
     blockers.value = report.blockers ?? [];
@@ -844,12 +945,15 @@ onMounted(async () => {
     roleVisibility.value = String((raw as { roleVisibility?: unknown }).roleVisibility ?? "");
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
-    original.value = cloneDraft(draft.value);
+    creationPending.value = (raw as { provisioning?: boolean }).provisioning === true;
+    if (!creationPending.value) clearProvisionCompletion();
+    original.value = creationPending.value ? null : cloneDraft(draft.value);
+    pristine.value = cloneDraft(draft.value);
     worldShown.value = Boolean(draft.value.world);
     settleDisclosures();
     if (token) {
       // 提前做好的評測：讀不到不擋編輯，送審時再填
-      fetchRatingDraft(roleId.value, token, editorProvider.value).then((a) => { ratingAnswers.value = usable(a); }).catch(() => {});
+      if (!isNew.value) fetchRatingDraft(roleId.value, token, editorProvider.value).then((a) => { ratingAnswers.value = usable(a); }).catch(() => {});
       await wb.loadBound(token, roleId.value);
       for (const c of draft.value.world?.characters ?? []) {
         if (c.lorebookId) await memberBook(c).load(token, c.lorebookId).catch(() => {});
@@ -857,6 +961,7 @@ onMounted(async () => {
       const assetsReady=await loadRegexRules(token);
       restoreApprovedLocalDraft(assetsReady);
     }
+    if (creationPending.value) { resumeProvisionCompletion(); settleDisclosures(); }
     void loadValidation();
     void visibilityControl.value?.reload();
     void refreshLegacyState();
@@ -914,14 +1019,67 @@ watch(error, async (message) => {
 
 // ── 圖片 ──────────────────────────────────────────────────────────
 
-async function onPickImage(file: File, ok: (url: string) => void, fail: (message: string) => void) {
+type ImageFailure = "retry" | "gone" | "stale" | "invalid";
+const nameNeeded = ref(false);
+const importedPortrait = ref<File | null>(null);
+const pendingImages = ref(new Set<string>());
+const imageUploadsBusy = ref(new Set<string>());
+const imageEpoch = ref(0);
+function imageBusy(field: string, busy: boolean) { const next = new Set(imageUploadsBusy.value); if (busy) next.add(field); else next.delete(field); imageUploadsBusy.value = next; }
+function imagePending(field: string, pending: boolean) {
+  const next = new Set(pendingImages.value); if (pending) next.add(field); else next.delete(field); pendingImages.value = next;
+}
+function requireImageName() {
+  nameNeeded.value = true;
+  const input = document.querySelector<HTMLInputElement>("#f-name");
+  input?.scrollIntoView({ block: "center" }); input?.focus();
+}
+watch(() => draft.value.roleName, name => { if (name.trim()) nameNeeded.value = false; });
+let provisionInFlight: Promise<string> | null = null;
+async function ensureCardDraft(token: string): Promise<string> {
+  const actor = visibilityActor.value;
+  const intent = pendingCreate.value;
+  if (intent?.provider && (intent.provider !== editorProvider.value || intent.actor !== actor)) throw new Error(t("editor.image.cardUnavailable"));
+  if (roleId.value) return roleId.value;
+  if (provisionInFlight) return provisionInFlight;
+  if (!intent && !draft.value.roleName.trim()) { requireImageName(); throw new Error(t("editor.image.generateNeedsName")); }
+  pendingCreate.value ??= { operationId: crypto.randomUUID(), provider: editorProvider.value, actor, roleName: draft.value.roleName.trim(), language: draft.value.language };
+  // Persist the exact immutable intent before the first network attempt.
+  if (!storeDraft()) throw new Error(t("editor.image.draftStorageUnavailable"));
+  const request = pendingCreate.value;
+  provisionInFlight = (async () => {
+    const created = await provisionRole({ operationId: request.operationId!, roleName: request.roleName!, language: request.language! }, token);
+    if (!created.roleId) throw new Error(t("state.createFailed"));
+    roleId.value = created.roleId;
+    pendingCreate.value = { ...request, roleId: created.roleId };
+    storeDraft();
+    return created.roleId;
+  })();
+  try { return await provisionInFlight; } finally { provisionInFlight = null; }
+}
+function imageFailure(err: unknown): [string, ImageFailure] {
+  if (err instanceof ApiError) {
+    if ([401,403,404].includes(err.status)) return [t("editor.image.cardUnavailable"), "gone"];
+    if (err.code === "page_outdated" || err.status === 426) return [t("editor.image.pageOutdated"), "stale"];
+    if ([400,413,415,422].includes(err.status)) return [err.message, "invalid"];
+  }
+  return [err instanceof Error && !(err instanceof TypeError) ? err.message : t("editor.image.retryUpload"), "retry"];
+}
+async function onPickImage(file: File, ok: (url: string) => void, fail: (message: string, kind?: ImageFailure) => void) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    ok(await uploadImage(file, token, roleId.value || undefined));
-  } catch (err) {
-    fail(err instanceof Error ? err.message : t("state.uploadFailed"));
-  }
+    const source = await ensureCardDraft(token);
+    ok(await uploadImage(file, token, source));
+    storeDraft();
+  } catch (err) { fail(...imageFailure(err)); }
+}
+async function onAdoptImage(imageId: string, ok: (url: string) => void, fail: (message: string, kind?: ImageFailure) => void) {
+  try {
+    const token = await session.accessToken(); if (!token) throw new Error(t("auth.expired"));
+    const source = await ensureCardDraft(token);
+    ok(await adoptCardImage(source, imageId, token)); storeDraft();
+  } catch (err) { fail(...imageFailure(err)); }
 }
 
 // ── 生成圖片 ──────────────────────────────────────────────────────
@@ -931,9 +1089,20 @@ async function onPickImage(file: File, ok: (url: string) => void, fail: (message
 type GenField = "roleBackground" | "roleBackgroundLandscape";
 const { imageGen, generator, probeGeneration, markReauthorizing } = useImageGeneration(() => editorProvider.value);
 onMounted(() => { void probeGeneration(); });
+// 本站 identity 在背景載入；mounted 的早期探測失敗後，身分到達時再探測。
+watch(() => session.profile?.identities?.find(i => i.provider === editorProvider.value)?.externalId, identity => {
+  if (identity) void probeGeneration();
+});
 const genField = ref<GenField | null>(null);
 const genOpen = ref(false);
 const genRunning = ref(false);
+const generationCopyWarning = ref("");
+function generationLibraryFailed(error: unknown) {
+  const why = error instanceof ApiError && error.status === 507
+    ? t("studio.save.storageFull")
+    : error instanceof Error ? error.message : "";
+  generationCopyWarning.value = t("editor.image.libraryCopyFailed", { why });
+}
 // 卡名當路徑用：斜線會多出一層資料夾
 const genFolder = computed(() => draft.value.roleName.trim().replaceAll("/", "-"));
 const genPrompt = computed(() =>
@@ -946,8 +1115,10 @@ const genPrompt = computed(() =>
 );
 const genLabel = (field: GenField) =>
   imageGen.value ? t(genRunning.value && genField.value === field ? "editor.image.generating" : "editor.image.generate") : undefined;
-function openGenerate(field: GenField) {
-  if (!genFolder.value) return flash(t("editor.image.generateNeedsName"));
+async function openGenerate(field: GenField) {
+  if (!genFolder.value) return requireImageName();
+  try { const token = await session.accessToken(); if (!token) throw new Error(t("auth.expired")); await ensureCardDraft(token); }
+  catch (err) { error.value = imageFailure(err)[0]; return; }
   // 還在生成的那張沒存好之前，打開的都是它：一次只生一張，存好才知道要填哪一欄
   if (!genRunning.value) genField.value = field;
   genOpen.value = true;
@@ -963,7 +1134,8 @@ function generated(url: string, folder: string) {
   genField.value = null;
   if (field && url) {
     draft.value[field] = url;
-    flash(t("editor.image.generated", { folder }));
+    flash(t("editor.image.generated", { field: t(field === "roleBackground" ? "editor.background" : "editor.backgroundLandscape") }));
+    storeDraft();
   } else flash(t("editor.image.generatedSaved", { folder }));
 }
 /** 一張都沒挑：圖片留在生圖頁的快取區。 */
@@ -1108,7 +1280,7 @@ function exportRegex() {
 const roleVisibility = ref("");
 const legacyDraft=ref<DraftState|null>(null);
 const legacyState=computed(()=>legacyAuthorStateKey(legacyDraft.value,roleVisibility.value));
-async function refreshLegacyState(){if(visibilityEnabled.value||!roleId.value)return;try{const token=await session.accessToken();if(token)legacyDraft.value=await fetchDraftState(roleId.value,token,editorProvider.value);}catch{/* Status cannot grant visibility actions. */}}
+async function refreshLegacyState(){if(visibilityEnabled.value||!roleId.value||isNew.value)return;try{const token=await session.accessToken();if(token)legacyDraft.value=await fetchDraftState(roleId.value,token,editorProvider.value);}catch{/* Status cannot grant visibility actions. */}}
 
 const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl = ref<InstanceType<typeof AuthorVisibility>|null>(null);
@@ -1245,6 +1417,7 @@ async function commitPendingRevert(token:string){
 }
 
 async function save() {
+  if (pendingImages.value.size > 0) return;
   if (saving.value || loading.value || visibilityBusy.value) return;
   if (initializationFailed.value) { error.value = t("state.loadFailed"); return; }
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
@@ -1307,7 +1480,7 @@ async function save() {
     error.value = t(`editor.state.reject.${stateIssue}`, stateLimitParams());
     return;
   }
-  const wasNew = isNew.value;
+  let wasNew = isNew.value;
   saving.value = true;
   error.value = "";
   saved.value = false;
@@ -1319,8 +1492,10 @@ async function save() {
       if (!(await recoverPendingRegex(token))) throw new Error(t("state.loadFailed"));
     }
     if (pendingRegexWrite.value && !(await reconcilePendingRegexWrite(token))) throw new Error(t("state.loadFailed"));
+    await reconcileCompletedProvision(token);
+    wasNew = isNew.value;
     let targetRoleId = roleId.value;
-    const review = targetRoleId
+    const review = targetRoleId && !wasNew
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
       : {resubmit:false};
     await commitPendingRevert(token);
@@ -1331,13 +1506,7 @@ async function save() {
     if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
     reviewResubmitted.value = !!review.resubmit;
     if (!targetRoleId) {
-      const created = await createRole(
-        { roleName: draft.value.roleName.trim(), language: draft.value.language, visibility: newCardVisibility.value },
-        token,
-      );
-      if (!created.roleId) throw new Error(t("state.createFailed"));
-      targetRoleId = created.roleId;
-      roleId.value = targetRoleId;
+      targetRoleId = await ensureCardDraft(token);
       track("card_create", { subject: targetRoleId });
     }
 
@@ -1352,6 +1521,7 @@ async function save() {
     if (clearGreeting) { sent.roleWelcome = ""; sent.alternates = []; }
     if (clearPage && regexSnapshot) delete regexSnapshot.openingPage;
     const fields = documentPatch(sent, original.value);
+    if (wasNew) fields.language = sent.language;
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
 
     // 作者資產（含開局呈現與網頁內容）先存：開場白留空時，上游要先看到開場網頁、首屏網頁或開場選項才收。
@@ -1399,10 +1569,19 @@ async function save() {
     // Editing cancels this submission. Only the explicit public flow may submit again.
     if (review.resubmit) { reviewRetry.value=false; reviewResubmitted.value=true; }
 
+    if (wasNew) {
+      if (!pendingCreate.value) throw new Error(t("editor.image.pageOutdated"));
+      pendingCreate.value.completionAttempted = true;
+      if (!storeDraft()) throw new Error(t("state.saveFailed"));
+      await completeRoleProvision(targetRoleId, { roleName: sent.roleName.trim(), language: sent.language, visibility: newCardVisibility.value }, token);
+    }
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
     if (clearGreeting) { draft.value.roleWelcome = ""; draft.value.alternates = []; }
     if (clearPage && regexSnapshot) delete regexSet.value.openingPage;
     savedOpening.value = mode;
+    creationPending.value = false;
+    clearProvisionCompletion();
+    pendingCreate.value = null;
     original.value = sent;
     saved.value = true;
     restoredDraft.value = false;
@@ -1486,7 +1665,7 @@ async function editRating(): Promise<RatingAnswers | null> {
   const answers = await askRating(ratingAnswers.value);
   if (!answers) return null;
   ratingAnswers.value = answers;
-  if (roleId.value) {
+  if (roleId.value && !isNew.value) {
     const token = await session.accessToken();
     if (token) await saveRatingDraft(roleId.value, answers, token, editorProvider.value).catch(() => {});
   }
@@ -1534,17 +1713,9 @@ async function publish(expected:WorkVisibility) {
 // ── 匯入 / 匯出 ────────────────────────────────────────────────────
 
 /** 匯入主背景；沒有主背景的 PNG 卡使用內嵌圖片。 */
-async function adoptImage(image: Blob) {
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const ext = image.type === "image/jpeg" ? "jpg" : image.type === "image/webp" ? "webp" : image.type === "image/gif" ? "gif" : "png";
-    const file = new File([image], `card.${ext}`, { type: image.type || "image/png" });
-    const url = await uploadImage(file, token, roleId.value || undefined);
-    if (!draft.value.roleBackground) draft.value.roleBackground = url;
-  } catch {
-    error.value = t("import.avatarFailed");
-  }
+function adoptImage(image: Blob) {
+  const ext = image.type === "image/jpeg" ? "jpg" : image.type === "image/webp" ? "webp" : image.type === "image/gif" ? "gif" : "png";
+  importedPortrait.value = new File([image], `card.${ext}`, { type: image.type || "image/png" });
 }
 
 function applyImport(result: ImportResult) {
@@ -1719,9 +1890,9 @@ async function exportCard(format: "png" | "json") {
           {{ error }}
           <RegexIssueList v-if="regexSaveIssues.length" :set="regexSet" :issues="regexSaveIssues" />
         </div>
-        <p v-if="restoredDraft&&(!error||recoveredRevert)&&!pendingRevert?.saveAttempted" class="notice restored" role="status">
-          <span>{{ $t("editor.draftRestored") }}</span>
-          <button type="button" class="btn btn--sm btn--ghost" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>
+        <p v-if="(restoredDraft || pendingCreate)&&(!error||recoveredRevert)&&!pendingRevert?.saveAttempted" class="notice restored" role="status">
+          <span>{{ $t(restoredDraft ? "editor.draftRestored" : "editor.unsaved") }}</span>
+          <button type="button" class="btn btn--sm btn--ghost" :disabled="saving || imageUploadsBusy.size > 0" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>
         </p>
 
         <div v-if="regexWarnings.length" class="notice regex-warning" role="status">
@@ -1737,7 +1908,7 @@ async function exportCard(format: "png" | "json") {
 
           <div class="row2">
             <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
-                       :placeholder="$t('create.name.placeholder')" />
+                       :placeholder="$t('create.name.placeholder')"><template #hint><span v-if="nameNeeded" role="status">{{ $t("editor.image.generateNeedsName") }}</span></template></FieldText>
             <FieldText id="f-nickname" v-model="draft.nickname" :label="$t('editor.nickname')" :max="NICKNAME_MAX"
                        :hint="$t('editor.nickname.hint')" />
           </div>
@@ -1763,10 +1934,11 @@ async function exportCard(format: "png" | "json") {
             <p class="subtle group__lede">{{ $t("editor.media.lede") }}</p>
             <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
                  所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
-            <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
+            <p v-if="generationCopyWarning" class="notice notice--error" role="alert">{{ generationCopyWarning }} <button type="button" class="btn btn--sm btn--ghost" @click="generationCopyWarning = ''">{{ $t("newcomer.tour.gotIt") }}</button></p>
+            <ImageField :key="'portrait-' + imageEpoch" v-model="draft.roleBackground" :label="$t('editor.background')"
                         :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
                         :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                        :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage"
+                        :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone :imported-file="importedPortrait" @pending="imagePending('roleBackground', $event)" @busy="imageBusy('roleBackground', $event)" @pick="onPickImage" @adopt="onAdoptImage" :ready="!!draft.roleName.trim()" @needs-name="requireImageName"
                         :generate-label="genLabel('roleBackground')" @generate="openGenerate('roleBackground')" />
             <button type="button" class="disclosure" :aria-expanded="mediaMoreOpen" aria-controls="media-more" @click="mediaMoreOpen = !mediaMoreOpen">
               <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
@@ -1774,16 +1946,16 @@ async function exportCard(format: "png" | "json") {
               <span v-if="mediaMoreSet" class="disclosure__state">{{ $t("editor.disclosure.set") }}</span>
             </button>
             <div v-show="mediaMoreOpen" id="media-more" class="group__more">
-              <ImageField v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
+              <ImageField :key="'landscape-' + imageEpoch" v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
                           :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
                           :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                          :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage"
+                          :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pending="imagePending('roleBackgroundLandscape', $event)" @busy="imageBusy('roleBackgroundLandscape', $event)" @pick="onPickImage" @adopt="onAdoptImage" :ready="!!draft.roleName.trim()" @needs-name="requireImageName"
                           :generate-label="genLabel('roleBackgroundLandscape')" @generate="openGenerate('roleBackgroundLandscape')" />
               <!-- 分享圖（選填）：連結預覽的大圖，1.91:1。沒有就用橫式背景，再沒有就用直式背景（src/index.ts 卡片頁 og:image）。 -->
-              <ImageField v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
+              <ImageField :key="'share-' + imageEpoch" v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
                           :hint="$t('editor.shareImage.hint')" :pick-label="$t('editor.image.pick')"
                           :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                          :uploading="$t('editor.image.uploading')" ratio="share" @pick="onPickImage" />
+                          :uploading="$t('editor.image.uploading')" ratio="share" @pending="imagePending('roleShareImage', $event)" @busy="imageBusy('roleShareImage', $event)" @pick="onPickImage" @adopt="onAdoptImage" :ready="!!draft.roleName.trim()" @needs-name="requireImageName" />
             </div>
           </div>
 
@@ -2140,7 +2312,8 @@ async function exportCard(format: "png" | "json") {
           :access="imageGen.access"
           :models="imageGen.models"
           :client="generator"
-          :target="{ directory: genFolder }"
+          :target="{ roleId, field: genField === 'roleBackground' ? 'background' : 'backgroundLandscape' }"
+          :field-label="$t(genField === 'roleBackground' ? 'editor.background' : 'editor.backgroundLandscape')"
           :folder="genFolder"
           :shape="genField === 'roleBackground' ? 'tall' : 'wide'"
           :initial-prompt="genPrompt"
@@ -2148,10 +2321,11 @@ async function exportCard(format: "png" | "json") {
           @reauth="reauthorizeGeneration"
           @running="genRunning = $event"
           @saved="generated"
+          @library-copy-failed="generationLibraryFailed"
           @kept="generationKept"
         />
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="loading || initializationFailed || booksUnavailable || saving || visibilityBusy || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
+          <button class="btn btn--primary" type="submit" :disabled="loading || initializationFailed || booksUnavailable || saving || visibilityBusy || pendingImages.size > 0 || (!dirty && !isNew && !reviewRetry && !unfinishedPublication)">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew&&visibilityEnabled" type="button" class="btn" :disabled="saving" :aria-label="$t('visibility.title')" @click="visibilityControl?.open()">
@@ -2237,7 +2411,7 @@ async function exportCard(format: "png" | "json") {
         </div>
 
         <div v-if="panelOpen || sheetOpen" class="rail__panel">
-          <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :card-number="cardNumber" :provider="editorProvider" :dirty="dirty" :saving="saving" @save="save" />
+          <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="isNew ? '' : roleId" :card-number="cardNumber" :provider="editorProvider" :dirty="dirty" :saving="saving" @save="save" />
           <ResourcePanel v-else />
         </div>
         <span v-if="sheetOpen" class="sr-only" tabindex="0" data-sheet-guard @focus="focusSheetEdge()" />
