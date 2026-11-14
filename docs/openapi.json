@@ -14068,6 +14068,15 @@
                         "minimum": 0
                       },
                       "description": "Map from role id to heat. Only readable cards appear."
+                    },
+                    "talkNum": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0
+                      },
+                      "description": "Map from role id to play-round count, matching `RoleDetail.talkNum` across published versions. Staging versions are excluded. Only readable cards appear."
                     }
                   }
                 }

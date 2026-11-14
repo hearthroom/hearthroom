@@ -2662,5 +2662,6 @@
   "dad766bd4b365": "The stable clientKey identifies a single private trial target. Existing trial text, openings, Lorebook, presentation rules and state are retained unchanged. New registration and configuration creation commit together. Existing trial expiry and slot limits still apply.",
   "d37a04ac8d221": "The unsaved generation result expired.",
   "d195487c26c89": "True until first complete creation. A storage identity alone is not a completed configuration.",
-  "daaf35a8167f1": "Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours."
+  "daaf35a8167f1": "Validates the final published bytes and returns an immutable image URL. Retrying the same completed upload returns the same image. This does not modify any image slot: attach through the document endpoint. Unattached completed uploads may be cleaned up after 24 hours.",
+  "d711cd949eda4": "Map from role id to play-round count, matching `RoleDetail.talkNum` across published versions. Staging versions are excluded. Only readable cards appear."
 }
