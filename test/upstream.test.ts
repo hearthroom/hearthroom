@@ -32,6 +32,13 @@ const mainSiteRole = {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("reads batch talk counts without turning missing or invalid counts into zero", async () => {
+  vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ heat: { a: 8 }, talkNum: { a: 12, zero: 0, negative: -1, text: "3", fraction: 1.5 } })));
+  expect(await upstream.fetchHeats(env, ["a", "zero", "missing"])).toEqual({ heat: { a: 8 }, talkNum: { a: 12, zero: 0 } });
+  vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ heat: { a: 8 } })));
+  expect(await upstream.fetchHeats(env, ["a"])).toEqual({ heat: { a: 8 }, talkNum: {} });
+});
+
 describe("語區判定", () => {
   it("簡繁體併成 zh，其餘三種各自一區", () => {
     expect(projectRole({ ...mainSiteRole, language: "zh-Hans" }).zone).toBe("zh");

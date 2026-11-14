@@ -341,10 +341,11 @@ async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAUL
 }
 
 /**
- * 一批卡的熱度（作者以外的人扣掉的點數），用封存版 id 查。匿名讀；Harbor 只回匿名讀得到的卡，
+ * 一批卡的加權熱度與遊玩回合數，用封存版 id 查。匿名讀；Harbor 只回匿名讀得到的卡，
  * 沒回的就是讀不到（私有、已刪、下架），呼叫端保留原值，下榜由逐張同步決定。
  */
-async function fetchHeats(env: Env, roleIds: string[], provider: ProviderId = DEFAULT_PROVIDER): Promise<Record<string, number>> {
+export interface HeatBatch { heat: Record<string, number>; talkNum: Record<string, number> }
+async function fetchHeats(env: Env, roleIds: string[], provider: ProviderId = DEFAULT_PROVIDER): Promise<HeatBatch> {
   const res = await fetch(apiUrl(env, provider, "/open/v1/role/heat"), {
     method: "POST",
     headers: { "User-Agent": UA, "Content-Type": "application/json" },
@@ -355,7 +356,11 @@ async function fetchHeats(env: Env, roleIds: string[], provider: ProviderId = DE
   for (const [id, n] of Object.entries((body.heat ?? {}) as Record<string, unknown>)) {
     if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[id] = Math.floor(n);
   }
-  return out;
+  const talkNum: Record<string, number> = {};
+  for (const [id, n] of Object.entries((body.talkNum ?? {}) as Record<string, unknown>)) {
+    if (typeof n === "number" && Number.isSafeInteger(n) && n >= 0) talkNum[id] = n;
+  }
+  return { heat: out, talkNum };
 }
 
 /**

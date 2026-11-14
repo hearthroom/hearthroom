@@ -2495,7 +2495,7 @@ export default {
       ctx.waitUntil(
         syncHeat(env).then((r) => {
           console.log("heat sync done", r);
-          emit(env, ctx, { event: "heat_sync", resultCount: r.updated, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed || r.skipped ? "partial" : "ok" });
+          emit(env, ctx, { event: "heat_sync", resultCount: r.updated, talk_updated: r.talk_updated, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed || r.skipped ? "partial" : "ok" });
         }).catch(() => {
           console.warn("heat sync unavailable");
           emit(env, ctx, { event: "heat_sync", client: "server", outcome: "error" });
