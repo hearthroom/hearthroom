@@ -17,6 +17,7 @@ import { usePeriodPlans } from "@/lib/period-plan-store";
 import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan";
 import { useLocalePath } from "@/lib/use-locale";
 import { honorKey, honorName, parseHonorKey } from "@/lib/honors";
+import { ledgerParts } from "@/lib/ledger-parts";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
@@ -34,7 +35,7 @@ const kind = ref<Kind>("all");
 /** 換語言或換帳號會從第一頁重讀；那之前送出、晚到的回應作廢，不接到新的清單後面。 */
 let loadSeq = 0;
 async function load(reset = false) {
-  if (reset) { page.value = 1; records.value = []; }
+  if (reset) { page.value = 1; records.value = []; expanded.value = new Set(); }
   const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
@@ -52,6 +53,17 @@ async function load(reset = false) {
   }
 }
 const hasMore = computed(() => records.value.length < total.value);
+/**
+ * 一次消費從兩種以上的來源扣時，那一行可以點開看各來源扣了多少（ui.md §4）。
+ * 展開只記在畫面上：重新整理、換語言、重讀都回到收起。
+ */
+const partsOf = (r: ScoreRecord) => (r.recordType === "sub" ? ledgerParts(r.parts, r.score) : null);
+const expanded = ref(new Set<string>());
+function togglePart(id: string | number) {
+  const key = String(id), next = new Set(expanded.value);
+  if (!next.delete(key)) next.add(key);
+  expanded.value = next;
+}
 function more() { page.value += 1; load(); }
 
 /** 收入／支出的篩選在手上這批裡做：流水是自己的，量不大，不值得為它多一條 API。 */
@@ -302,14 +314,34 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
             </span>
           </h3>
           <ul class="ledger__rows">
-            <li v-for="r in g.rows" :key="r.id" class="row">
-              <span class="row__dot" :class="r.recordType === 'add' ? 'row__dot--add' : 'row__dot--sub'" aria-hidden="true">{{ r.recordType === "add" ? "+" : "−" }}</span>
-              <span class="row__item" :class="{ 'row__item--off': subOf(r)?.off }"><span class="row__name">{{ itemOf(r) }}</span><small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small></span>
-              <span class="row__value">
-                <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
-                <time class="row__time" :datetime="r.hourStart ?? r.createTime">{{ recordTimeOf(r) }}</time>
-              </span>
-            </li>
+            <template v-for="r in g.rows" :key="r.id">
+              <!-- 多來源的消費：整行是一顆鈕，點開看組成 -->
+              <li v-if="partsOf(r)" class="row-group">
+                <button type="button" class="row row--toggle" :aria-expanded="expanded.has(String(r.id))" :aria-controls="`ledger-parts-${r.id}`" @click="togglePart(r.id)">
+                  <span class="row__dot row__dot--sub" aria-hidden="true">−</span>
+                  <span class="row__item">
+                    <span class="row__name">{{ itemOf(r) }}</span>
+                    <small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small>
+                    <small class="row__sources">{{ $t("wallet.sources", { n: partsOf(r)!.length }, partsOf(r)!.length) }}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></small>
+                  </span>
+                  <span class="row__value">
+                    <span class="row__num">−{{ whole(r.score) }}</span>
+                    <time class="row__time" :datetime="r.createTime">{{ recordTimeOf(r) }}</time>
+                  </span>
+                </button>
+                <ul v-show="expanded.has(String(r.id))" :id="`ledger-parts-${r.id}`" class="row__parts" role="list">
+                  <li v-for="part in partsOf(r)!" :key="part.key" class="row__part"><span class="ws-text">{{ $t(part.key) }}</span><span class="row__part-num">−{{ whole(part.amount) }}</span></li>
+                </ul>
+              </li>
+              <li v-else class="row">
+                <span class="row__dot" :class="r.recordType === 'add' ? 'row__dot--add' : 'row__dot--sub'" aria-hidden="true">{{ r.recordType === "add" ? "+" : "−" }}</span>
+                <span class="row__item" :class="{ 'row__item--off': subOf(r)?.off }"><span class="row__name">{{ itemOf(r) }}</span><small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small></span>
+                <span class="row__value">
+                  <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
+                  <time class="row__time" :datetime="r.hourStart ?? r.createTime">{{ recordTimeOf(r) }}</time>
+                </span>
+              </li>
+            </template>
           </ul>
         </section>
       </div>
@@ -365,6 +397,18 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
   transition: background var(--dur) var(--ease);
 }
 .row:hover { background: var(--surface-2); }
+/* 多來源的消費：同一個版式，只是整行是一顆鈕（ui.md §4） */
+.row-group { display: grid; }
+.row--toggle { width: calc(100% + 16px); border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.row__sources { display: inline-flex; align-items: center; gap: 2px; justify-self: start; font-size: 12px; color: var(--text-2); }
+.row__sources svg { width: 14px; height: 14px; transition: transform var(--dur) var(--ease); }
+.row--toggle[aria-expanded="true"] .row__sources svg { transform: rotate(180deg); }
+/* 來源清單：縮排對齊項目欄（圓點 26 + 間距 12），左邊一條細線接住上面那一行；不加底色、不加框 */
+.row__parts { list-style: none; margin: 0 0 var(--s-1) 12px; padding: 0 0 0 25px; border-left: 2px solid var(--line-strong); }
+.row__part { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: 32px; font-size: 13px; color: var(--text-2); }
+.row__part + .row__part { border-top: 1px solid var(--line); }
+.row__part > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.row__part-num { flex: none; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row__dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; font-size: 14px; font-weight: 700; }
 .row__dot--add { background: var(--success-soft); color: var(--success); }
 .row__dot--sub { background: var(--surface-2); color: var(--text-3); }

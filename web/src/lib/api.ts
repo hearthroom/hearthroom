@@ -1285,6 +1285,8 @@ export interface ScoreRecord {
   laneName?: string;
   /** 記憶壓縮另外扣的點數（和那一輪對話分開記帳） */
   memoryCompaction?: boolean;
+  /** 一次消費從哪幾種積分來源扣、各扣多少（伺服器已合併同一次消費的扣款；見 lib/ledger-parts） */
+  parts?: { source: string; amount: number }[];
 }
 export interface ScoreRecordPage {
   total: number;

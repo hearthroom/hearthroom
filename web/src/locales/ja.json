@@ -5152,5 +5152,8 @@
   "workshop.review.approveBody": "承認すると拡張パックが公開され、制作者に通知が届きます。",
   "workshop.moderation.content.view": "見る",
   "workshop.moderation.content.hide": "閉じる",
-  "workshop.moderation.content.error": "拡張パックの内容を読み込めませんでした。もう一度お試しください。"
+  "workshop.moderation.content.error": "拡張パックの内容を読み込めませんでした。もう一度お試しください。",
+  "wallet.source.purchase": "購入",
+  "wallet.source.other": "その他",
+  "wallet.sources": "内訳 {n} 件"
 }

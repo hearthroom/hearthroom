@@ -5152,5 +5152,8 @@
   "workshop.review.approveBody": "通過後擴充會發布，製作者會收到通知。",
   "workshop.moderation.content.view": "查看",
   "workshop.moderation.content.hide": "收起",
-  "workshop.moderation.content.error": "擴充內容載入不了，請重試。"
+  "workshop.moderation.content.error": "擴充內容載入不了，請重試。",
+  "wallet.source.purchase": "購買",
+  "wallet.source.other": "其他來源",
+  "wallet.sources": "{n} 個來源"
 }

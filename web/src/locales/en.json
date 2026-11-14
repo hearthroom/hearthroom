@@ -5152,5 +5152,8 @@
   "workshop.review.approveBody": "Once approved, the extension is published and the creator is notified.",
   "workshop.moderation.content.view": "View",
   "workshop.moderation.content.hide": "Collapse",
-  "workshop.moderation.content.error": "Couldn’t load this extension’s content. Try again."
+  "workshop.moderation.content.error": "Couldn’t load this extension’s content. Try again.",
+  "wallet.source.purchase": "Purchased",
+  "wallet.source.other": "Other sources",
+  "wallet.sources": "{n} sources"
 }

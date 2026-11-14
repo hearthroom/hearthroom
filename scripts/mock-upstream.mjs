@@ -103,8 +103,10 @@ http.createServer(async (req, res) => {
   // 對話支出：服務依 language 標頭給選單上的模型名與線路名；目錄對不到的舊列兩個都沒有
   const lane = { "zh-Hant": "白露", "zh-Hans": "白露", en: "Dew", ja: "白露", ko: "이슬" }[req.headers.language] ?? "Dew";
   const chatRows = [
-    { id: 5, record: "chat", recordType: "sub", score: 478, createTime: new Date(Date.now() - 60e3).toISOString(), modelName: "Gemini-4-Argon", laneName: lane },
-    { id: 4, record: "chat", recordType: "sub", score: 308, createTime: new Date(Date.now() - 120e3).toISOString(), modelName: "DeepSeek V4.1 Flash", laneName: "DeepInfra" },
+    { id: 5, record: "chat", recordType: "sub", score: 478, createTime: new Date(Date.now() - 60e3).toISOString(), modelName: "Gemini-4-Argon", laneName: lane,
+      // 一次消費從三種來源扣（伺服器合併後的形狀，studio 任務 2026-11-14-ledger-group-per-turn）：錢包那一行可以點開
+      parts: [{ source: "purchase", amount: 212 }, { source: "plan_daily", amount: 150 }, { source: "checkin", amount: 116 }] },
+    { id: 4, record: "chat", recordType: "sub", score: 308, createTime: new Date(Date.now() - 120e3).toISOString(), modelName: "DeepSeek V4.1 Flash", laneName: "DeepInfra", parts: [{ source: "purchase", amount: 308 }] },
     { id: 3, record: "chat", recordType: "sub", score: 349, createTime: new Date(Date.now() - 180e3).toISOString(), modelName: "Claude Opus 5.5", laneName: { "zh-Hant": "凌波", "zh-Hans": "凌波", en: "Ripple", ja: "凌波", ko: "잔물결" }[req.headers.language] ?? "Ripple" },
   ];
   const hourStart = new Date(Math.floor(Date.now() / 3600e3) * 3600e3).toISOString();

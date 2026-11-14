@@ -5152,5 +5152,8 @@
   "workshop.review.approveBody": "승인하면 확장팩이 게시되고 제작자에게 알림이 가요.",
   "workshop.moderation.content.view": "보기",
   "workshop.moderation.content.hide": "접기",
-  "workshop.moderation.content.error": "확장팩 내용을 불러오지 못했어요. 다시 시도해 주세요."
+  "workshop.moderation.content.error": "확장팩 내용을 불러오지 못했어요. 다시 시도해 주세요.",
+  "wallet.source.purchase": "구매",
+  "wallet.source.other": "기타",
+  "wallet.sources": "출처 {n}곳"
 }

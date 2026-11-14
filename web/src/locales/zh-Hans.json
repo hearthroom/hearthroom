@@ -5152,5 +5152,8 @@
   "workshop.review.approveBody": "通过后扩展包会发布，制作者会收到通知。",
   "workshop.moderation.content.view": "查看",
   "workshop.moderation.content.hide": "收起",
-  "workshop.moderation.content.error": "扩展包内容加载不了，请重试。"
+  "workshop.moderation.content.error": "扩展包内容加载不了，请重试。",
+  "wallet.source.purchase": "购买",
+  "wallet.source.other": "其他来源",
+  "wallet.sources": "{n} 个来源"
 }
