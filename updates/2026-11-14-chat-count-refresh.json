@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "卡片上的對話數以前常很久才更新、新卡一直顯示 0，現在約 10 分鐘就會跟上。",
+    "zh-Hans": "卡片上的对话数以前常很久才更新、新卡一直显示 0，现在约 10 分钟就会跟上。",
+    "en": "Chat counts on cards used to lag for a long time and new cards stayed at 0; they now catch up within about 10 minutes.",
+    "ja": "カードの会話数は更新が遅く新しいカードが0のままでしたが、今は約10分で反映されます。",
+    "ko": "카드의 대화 수가 늦게 반영되고 새 카드는 0으로 남던 문제가 고쳐져, 이제 약 10분 안에 반영돼요."
+  }
+}
