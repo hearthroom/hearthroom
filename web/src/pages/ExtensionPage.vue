@@ -14,6 +14,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import AdultGate from "@/components/AdultGate.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -51,18 +52,23 @@ const ext = ref<ExtensionDetail | null>(null);
 const loading = ref(true);
 const missing = ref(false);
 const error = ref("");
+/** 成人內容、而看的人沒登入或沒開：畫跟卡片頁同一道門（AdultGate），不畫成載入失敗 */
+const gated = ref(false);
+const gateUnrated = ref(false);
 const commentCount = ref(0);
 
 // 「加入了沒」「能不能加入」是看人的：身分常在第一幀之後才到，到了要帶 token 重讀一次。
 // 同時可能有好幾次讀取在路上（進頁、身分到、換網址），只認最後一次。
 let generation = 0;
-async function load() {
+/** afterIdentity：身分載好後的那次重讀；再被擋就是真的沒開，畫門（同卡片頁） */
+async function load(afterIdentity = false) {
   const g = ++generation;
   const wid = id.value;
   const shown = ext.value?.id === wid;
   if (!shown) { ext.value = null; loading.value = true; }
   missing.value = false;
   error.value = "";
+  gated.value = false;
   try {
     const token = session.me ? await session.accessToken() : null;
     const got = await fetchWorkshop(wid, token);
@@ -75,6 +81,17 @@ async function load() {
     // 已經畫出來的那份（身分到了的重讀失敗）留著，不換成錯誤
     if (shown && ext.value) return;
     if (err instanceof ApiError && err.status === 404) missing.value = true;
+    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") {
+      // 身分可能還在路上：等它，開著成人內容就再讀一次，確定沒開才畫門（不讓開了的人先看到門閃一下）
+      if (!afterIdentity) {
+        await session.restore();
+        if (g !== generation) return;
+        if (session.profile?.showNsfw) { void load(true); return; }
+      }
+      ext.value = null;
+      gateUnrated.value = err.reason === "unrated";
+      gated.value = true;
+    }
     else error.value = t("workshop.detail.loadFailed");
   } finally {
     if (g === generation) loading.value = false;
@@ -204,6 +221,7 @@ const resident = computed(() => {
 
 <template>
   <NotFoundPage v-if="missing" :title="$t('workshop.detail.notFound.title')" :hint="$t('workshop.detail.notFound.hint')" />
+  <div v-else-if="gated" class="page"><AdultGate :unrated="gateUnrated" @enabled="load()" /></div>
 
   <div v-else class="page ext">
     <!-- 骨架照真的版面畫：返回、橫圖、名稱、資訊、按鈕、分頁 -->
@@ -220,7 +238,7 @@ const resident = computed(() => {
 
     <div v-else-if="error" class="notice notice--error ext__error" role="alert">
       <span class="ws-text">{{ error }}</span>
-      <button type="button" class="btn btn--sm" @click="load">{{ $t("library.retry") }}</button>
+      <button type="button" class="btn btn--sm" @click="load()">{{ $t("library.retry") }}</button>
     </div>
 
     <template v-else-if="ext">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
@@ -54,6 +54,16 @@ const visible = computed(() => {
 });
 const { locale } = useI18n();
 const brand = computed(() => siteName(String(locale.value)));
+// 窄螢幕的分頁列是橫向捲動：作用中的分頁（例如排在後面的「擴充申訴」）要捲進視野，不被右緣切掉
+const navEl = ref<HTMLElement | null>(null);
+watch([() => route.meta.managementTab, () => visible.value.length], async () => {
+  await nextTick();
+  const nav = navEl.value;
+  const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+  if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return;
+  const left = active.offsetLeft - nav.offsetLeft;
+  if (left < nav.scrollLeft || left + active.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, left - (nav.clientWidth - active.offsetWidth) / 2);
+}, { immediate: true });
 </script>
 <template>
   <!-- 卡片審核每天要進出很多次：手機上收起站名、大標與說明，只留分頁條，第一張卡不必捲（2026-11-02 體檢 R6） -->
@@ -63,7 +73,7 @@ const brand = computed(() => siteName(String(locale.value)));
       <h1 class="display">{{ $t('moderation.title') }}</h1>
       <p class="subtle">{{ $t('moderation.intro') }}</p>
     </header>
-    <nav class="management-nav" :aria-label="$t('moderation.title')">
+    <nav ref="navEl" class="management-nav" :aria-label="$t('moderation.title')">
       <RouterLink v-for="section in visible" :key="section.key" :to="lp(section.path)" custom v-slot="{ href, navigate }">
         <a :href="href" class="management-nav__item" :class="{ 'management-nav__item--active': route.meta.managementTab === section.key }" :aria-current="route.meta.managementTab === section.key ? 'page' : undefined" @click="navigate">
           {{ $t(section.key === 'workshopAppeals' ? 'workshop.moderation.tab' : `moderation.tab.${section.key}`) }}

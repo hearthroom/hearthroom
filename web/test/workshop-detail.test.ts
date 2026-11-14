@@ -288,3 +288,14 @@ describe("載入", () => {
     expect(mode(root)).toBe("join");
   });
 });
+
+it("an adult extension the viewer hasn't opted into shows the same age gate as an R-rated card, not a load error", async () => {
+  const { ApiError } = await import("../src/lib/api");
+  fake.session = reactive({ me: { accountNumId: 7 }, profile: { showNsfw: false, ageVerified: false, adultConsent: false }, accessToken: vi.fn(async () => "tok"), restore: vi.fn(async () => {}) });
+  api.fetchWorkshop.mockRejectedValue(new ApiError(403, "forbidden", "adult_content"));
+  const root = await mount("/workshops/w5");
+  await settle();
+  expect(root.querySelector("section.gate")).not.toBeNull();
+  expect(root.textContent).not.toContain("載入不了");
+  expect(root.querySelector("[data-ext-skeleton]")).toBeNull();
+});
