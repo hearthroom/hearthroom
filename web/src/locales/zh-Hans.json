@@ -4852,6 +4852,7 @@
   "workshop.empty.added.cta": "看热门",
   "workshop.error.load": "工坊加载失败，不影响开始对话。",
   "workshop.toast.added": "已添加“{name}”",
+  "workshop.displayPaused": "扩展包的正则与开场暂时停用。",
   "workshop.toast.removed": "已移除“{name}”",
   "workshop.toast.undo": "撤销",
   "workshop.detail.back": "返回工坊",

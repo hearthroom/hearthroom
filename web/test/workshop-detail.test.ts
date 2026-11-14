@@ -299,3 +299,32 @@ it("an adult extension the viewer hasn't opted into shows the same age gate as a
   expect(root.textContent).not.toContain("載入不了");
   expect(root.querySelector("[data-ext-skeleton]")).toBeNull();
 });
+
+describe("第三方擴充的正規表示式與開場暫停", () => {
+  const notice = (root: HTMLElement) => root.querySelector("[data-ext-note=display-paused]")?.textContent?.trim();
+
+  it("不是原卡作者做的、又帶介面或開場：詳情說明暫停，加入後的提示也帶這句", async () => {
+    signIn();
+    api.fetchWorkshop.mockResolvedValue({ ...DETAIL, byCardAuthor: false });
+    const root = await mount();
+    expect(notice(root)).toBe(i18n.global.t("workshop.displayPaused"));
+    root.querySelector<HTMLButtonElement>("[data-ext-join]")!.click();
+    await settle();
+    expect(document.body.textContent).toContain(i18n.global.t("workshop.toast.added", { name: "霧鐘鎮" }));
+    expect(document.body.querySelector(".ws-toast")?.textContent).toContain(i18n.global.t("workshop.displayPaused"));
+  });
+
+  it("原卡作者自己做的，或只有世界書：不說明，加入提示照舊", async () => {
+    signIn();
+    api.fetchWorkshop.mockResolvedValue({ ...DETAIL, byCardAuthor: true });
+    let root = await mount();
+    expect(notice(root)).toBeUndefined();
+    app?.unmount(); app = null; document.body.innerHTML = "";
+    api.fetchWorkshop.mockResolvedValue({ ...DETAIL, byCardAuthor: false, kinds: ["lore"] });
+    root = await mount();
+    expect(notice(root)).toBeUndefined();
+    root.querySelector<HTMLButtonElement>("[data-ext-join]")!.click();
+    await settle();
+    expect(document.body.querySelector(".ws-toast")?.textContent).not.toContain(i18n.global.t("workshop.displayPaused"));
+  });
+});

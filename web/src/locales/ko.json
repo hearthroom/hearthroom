@@ -4852,6 +4852,7 @@
   "workshop.empty.added.cta": "인기 보기",
   "workshop.error.load": "창작마당을 불러오지 못했어요. 대화는 그대로 시작할 수 있어요.",
   "workshop.toast.added": "‘{name}’ 추가됨",
+  "workshop.displayPaused": "확장팩의 정규식과 도입부는 잠시 쓸 수 없어요.",
   "workshop.toast.removed": "‘{name}’ 제거됨",
   "workshop.toast.undo": "되돌리기",
   "workshop.detail.back": "창작마당으로 돌아가기",

@@ -536,6 +536,13 @@ describe("1. 擴充送審校驗、審核佇列與公開發布投影", () => {
     expect(pubDetail.ownerState).toBeUndefined();
     const ownerDetail = await json(await send("/v1/workshops/ws-1", "card-author"));
     expect(ownerDetail.ownerState).toBe("visible");
+    // 擴充作者是不是原卡作者，跟誰在看無關：第三方擴充的介面與開場暫停時，畫面靠它決定要不要說明
+    expect(pubDetail.byCardAuthor).toBe(false);
+    expect(ownerDetail.byCardAuthor).toBe(false);
+    const madeBy = await env.DB.prepare("SELECT author_num_id AS n FROM workshops WHERE id = 'ws-1'").first<{ n: number }>();
+    await env.DB.prepare("UPDATE workshops SET author_num_id = (SELECT author_num_id FROM cards WHERE id = ?) WHERE id = 'ws-1'").bind(cardId).run();
+    expect((await json(await send("/v1/workshops/ws-1", null))).byCardAuthor).toBe(true);
+    await env.DB.prepare("UPDATE workshops SET author_num_id = ? WHERE id = 'ws-1'").bind(madeBy!.n).run();
 
     // v2 送審未填 ≥10 非空白字更新說明回 update_note_required
     const badRe = await send("/v1/me/workshops/ws-1/submit", "creator", "POST", {

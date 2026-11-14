@@ -363,6 +363,8 @@ function formatExtensionSummary(
       ...(row.avatar_url ? { avatar: row.avatar_url } : {}),
     },
     joinCount: row.install_count,
+    // 擴充作者就是原卡作者：第三方擴充的介面與開場暫停時，原卡作者自己的照常，畫面靠它決定要不要說明
+    byCardAuthor: row.provider === card.provider && Number(row.author_num_id) === Number(card.author_num_id),
     version: row.version_no,
     updatedAt: row.published_at ?? row.updated_at,
     kinds: parseJsonArray<WorkshopKind>(row.kinds),

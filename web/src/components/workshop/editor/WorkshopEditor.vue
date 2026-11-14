@@ -572,6 +572,7 @@ watch(error, async (text) => {
           <!-- 正規表示式：照寫卡頁「顯示」分區那一條，按下開整頁彈窗 -->
           <section v-else-if="section === 'regex'" class="pane" data-section="regex">
             <h2 class="pane__title">{{ $t("workshop.editor.section.regex") }}</h2>
+            <p v-if="!draft.card.ownerIsMe" class="notice ws-ed__paused ws-text" data-display-paused>{{ $t("workshop.displayPaused") }}</p>
             <p class="notice ws-text">{{ $t("workshop.editor.regex.hint") }}</p>
             <div class="rxbar">
               <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
@@ -590,6 +591,7 @@ watch(error, async (text) => {
           <!-- 開局：寫卡頁的開局元件原樣 -->
           <section v-else-if="section === 'opening'" class="pane" data-section="opening">
             <h2 class="pane__title">{{ $t("editor.section.opening") }}</h2>
+            <p v-if="!draft.card.ownerIsMe" class="notice ws-ed__paused ws-text" data-display-paused>{{ $t("workshop.displayPaused") }}</p>
             <p class="muted pane__lede ws-text">{{ $t("workshop.editor.opening.hint") }}</p>
             <OpeningEditor v-model:mode="draft.opening.mode" v-model:welcome="draft.opening.welcome" v-model:alternates="draft.opening.alternates"
                            v-model:prologue="draft.opening.prologue" v-model:opening-page="draft.opening.openingPage"
@@ -657,6 +659,7 @@ watch(error, async (text) => {
 .pane { display: grid; gap: var(--s-4); }
 .pane__title { margin: 0; padding-bottom: var(--s-2); font-size: 17px; border-bottom: 1px solid var(--line); }
 .pane__lede { margin: calc(-1 * var(--s-2)) 0 0; }
+.ws-ed__paused { margin: 0; }
 .pane > .notice { margin: 0; }
 .pane :deep(.field) { margin-bottom: 0; gap: 6px; }
 .pane :deep(textarea.input) { field-sizing: content; max-height: 70vh; }
