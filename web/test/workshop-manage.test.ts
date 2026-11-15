@@ -95,3 +95,17 @@ it("undo after removing puts the extension back where it was, with its old switc
   await rejoinExtension(state, before, "b", "tok");
   expect(state.selection!.items.map((i) => `${i.workshopId}:${i.enabled}`)).toEqual(["a:true", "b:false", "c:true"]);
 });
+
+it("a DLC row lists its content kinds with a visible separator in every language", async () => {
+  const dlc = { ...row("d"), kind: "dlc" as const, kinds: ["lore" as const, "display" as const, "opening" as const] };
+  for (const [locale, sep] of [["zh-Hant", "、"], ["ja", "、"], ["en", ", "], ["ko", ", "]] as const) {
+    i18n.global.locale.value = locale;
+    mount({ revision: 1, items: [dlc] }, usage());
+    await settle();
+    const text = document.querySelector(".ws-row__text .subtle")?.textContent ?? "";
+    const t = (k: string) => i18n.global.t(k);
+    expect(text).toContain([t("workshop.kind.lore"), t("workshop.kind.regex"), t("workshop.kind.opening")].join(sep));
+    app?.unmount(); app = undefined; document.body.innerHTML = "";
+  }
+  i18n.global.locale.value = "zh-Hant";
+});
