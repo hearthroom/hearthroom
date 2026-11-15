@@ -1,4 +1,4 @@
-import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout, rememberLoginLanguage } from './managed-auth';
+import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, dropManagedToken, forgetManaged, managedLogout, rememberLoginLanguage } from './managed-auth';
 import { safeReturnTo } from './login-return';
 import { takeSilentFlow } from './silent-login';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
@@ -282,6 +282,25 @@ export function restorePersisted(provider:ProviderId=currentProvider()): TokenPa
     return pair.accessToken && pair.expiresAt > Date.now() ? pair : null;
   } catch {
     return null;
+  }
+}
+
+/** 供應商拒絕了手上這張 access token：只清掉被拒絕的那一張，保留 refresh token 供下次換發。 */
+export function dropPersistedAccess(provider: ProviderId = currentProvider(), rejected?: string): void {
+  if (isManagedAuth()) {
+    dropManagedToken(provider, rejected);
+    return;
+  }
+  try {
+    const raw = readCredential(STORE.access, provider);
+    if (!raw) return;
+    if (rejected !== undefined) {
+      const pair = JSON.parse(raw) as Partial<TokenPair>;
+      if (pair.accessToken !== rejected) return;
+    }
+    removeCredential(STORE.access, provider);
+  } catch {
+    removeCredential(STORE.access, provider);
   }
 }
 

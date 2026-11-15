@@ -5,7 +5,7 @@
  */
 import { defineStore } from "pinia";
 import { ref, shallowRef, watch } from "vue";
-import { claimPeriodPlan, fetchMyPeriodPlans, RewardsError, fetchPeriodPlans, type MyPeriodPlan, type PeriodPlan, type PeriodPlanOutcome } from "./rewards";
+import { claimPeriodPlan, fetchMyPeriodPlans, isRewardsUnauthorized, RewardsError, fetchPeriodPlans, withRewardsToken, type MyPeriodPlan, type PeriodPlan, type PeriodPlanOutcome } from "./rewards";
 import { clearRequestId, requestIdFor } from "./checkin";
 import { todayLine, type TodayLine } from "./period-plan";
 import { useSession } from "./session";
@@ -18,6 +18,7 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
   const mine = shallowRef<MyPeriodPlan | null>(null);
   const loaded = ref(false);
   const failed = ref(false);
+  const unauthorized = ref(false);
   /** 這次簽到回來的代領結果 */
   const outcome = shallowRef<PeriodPlanOutcome | null>(null);
   /** 簽到回應帶回來、還沒揭曉的結果：開箱舞台關掉（settle）才放進 outcome，月卡列不搶在舞台前更新 */
@@ -35,11 +36,7 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
     inflight = (async () => {
       const [rules, own] = await Promise.allSettled([
         fetchPeriodPlans(),
-        (async () => {
-          const token = await session.accessToken();
-          if (!token) throw new Error("signed out");
-          return fetchMyPeriodPlans(token);
-        })(),
+        withRewardsToken((rejected) => session.accessToken(rejected), fetchMyPeriodPlans),
       ]);
       if (rules.status === "fulfilled") offer.value = rules.value.list[0] ?? null;
       if (own.status === "fulfilled") {
@@ -48,7 +45,9 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
         if (mine.value && next?.businessDay !== mine.value.businessDay) { outcome.value = null; missed.value = false; retried = false; pending = null; }
         mine.value = next;
         failed.value = false;
+        unauthorized.value = false;
       } else {
+        if (isRewardsUnauthorized(own.reason)) unauthorized.value = true;
         // 讀過一次之後的重讀失敗（限流、斷網）：留著畫面上那一份，不讓月卡整塊消失（P7 只管一開始就讀不到）
         failed.value = true;
       }
@@ -63,18 +62,19 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
   }
 
   /** 送出今天的領取。ineligible：伺服器說今天沒有卡（例如剛退款），要重讀持卡狀態。 */
-  async function send(): Promise<"ok" | "failed" | "ineligible"> {
+  async function send(): Promise<"ok" | "failed" | "ineligible" | "unauthorized"> {
     const plan = mine.value;
     if (!plan) return "failed";
     const scope = `plan:${plan.id}:${plan.businessDay}`;
+    const reqId = requestIdFor(scope);
     try {
-      const token = await session.accessToken();
-      if (!token) return "failed";
-      const r = await claimPeriodPlan(token, plan.id, requestIdFor(scope));
+      const r = await withRewardsToken((rejected) => session.accessToken(rejected), (token) => claimPeriodPlan(token, plan.id, reqId));
       clearRequestId(scope);
+      unauthorized.value = false;
       outcome.value = { status: r.status, day: r.day, credits: r.credits, bonusCredits: r.bonusCredits, replayed: r.replayed };
       return r.status === "granted" ? "ok" : "ineligible";
     } catch (e) {
+      if (isRewardsUnauthorized(e)) { unauthorized.value = true; return "unauthorized"; }
       if (e instanceof RewardsError && e.code === "not_eligible") { clearRequestId(scope); return "ineligible"; }
       return "failed";
     }
@@ -115,8 +115,8 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
   const line = (checkedIn: boolean | null): TodayLine => todayLine(mine.value, { checkedIn, outcome: outcome.value, missed: missed.value, retrying: retrying.value });
 
   /** 換帳號或登出：上一個人的卡與簽到結果都不能留著 */
-  function reset() { mine.value = null; loaded.value = false; failed.value = false; outcome.value = null; missed.value = false; retried = false; pending = null; }
+  function reset() { mine.value = null; loaded.value = false; failed.value = false; unauthorized.value = false; outcome.value = null; missed.value = false; retried = false; pending = null; }
   watch(() => session.me, (now, before) => { if (before && now !== before) reset(); });
 
-  return { offer, mine, loaded, failed, outcome, missed, claiming, retrying, load, noteCheckin, settle, claim, line, reset };
+  return { offer, mine, loaded, failed, unauthorized, outcome, missed, claiming, retrying, load, noteCheckin, settle, claim, line, reset };
 });

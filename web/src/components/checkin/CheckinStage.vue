@@ -8,16 +8,19 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { buildTrack, type ReelCell } from "@/lib/reel/v1";
 import { newRound, phaseAt, posAt, reactionOf, skipAt, stopSoundOf, times, type Phase, type Round } from "@/lib/reel/timeline";
 import { buzz, canVibrate, hapticOn, playOpen, playShine, playStop, playTick, playTuck, prepareAudio, setHaptic, setSound, soundOn } from "@/lib/reel/audio";
 import { chestTitle } from "@/lib/checkin";
 import { boxKindOf, NEWCOMER_BADGE, poseUrl, preloadPoses, type CheckinPose } from "@/lib/checkin-art";
-import { fetchPlan, type ClaimResult, type RewardPlan } from "@/lib/rewards";
+import { connectionMessage } from "@/lib/connection-ui";
+import { fetchPlan, isRewardsUnauthorized, type ClaimResult, type RewardPlan } from "@/lib/rewards";
 import { isNight } from "@/lib/mascot-home";
 import { monthDayOf, monthDayTime, whole } from "@/lib/format";
 import { wrapTab } from "@/lib/focus-trap";
+import { currentProvider } from "@/lib/provider";
+import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { firstDaily, purchaseLink } from "@/lib/period-plan";
@@ -43,11 +46,15 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [mood: StageMood | null, seen: boolean]; settled: [outcome: StageOutcome] }>();
 const { t } = useI18n();
 const { lp } = useLocalePath();
+const route = useRoute();
+const session = useSession();
 
 type Step = "waiting" | "error" | "recap" | "pending" | "round";
 const step = ref<Step>("waiting");
 const slow = ref(false);
-const errorKind = ref<"network" | "busy">("network");
+const errorKind = ref<"network" | "busy" | "auth">("network");
+const signingIn = ref(false);
+const reloginError = ref("");
 const outcome = shallowRef<StageOutcome | null>(null);
 const rounds = shallowRef<{ claim: ClaimResult; round: Round; plan: RewardPlan; chest: string }[]>([]);
 const idx = ref(0);
@@ -130,11 +137,31 @@ async function send() {
     emit("settled", res);
     await prepareRounds(res);
   } catch (e) {
+    reloginError.value = "";
     const status = (e as { status?: number }).status ?? 0;
-    errorKind.value = status >= 400 && status !== 408 && status !== 429 && status < 500 ? "busy" : status >= 500 ? "busy" : "network";
+    errorKind.value = isRewardsUnauthorized(e) || status === 401
+      ? "auth"
+      : status >= 400 && status !== 408 && status !== 429 && status < 500
+        ? "busy"
+        : status >= 500
+          ? "busy"
+          : "network";
     step.value = "error";
   } finally {
     window.clearTimeout(timer);
+  }
+}
+
+async function relogin() {
+  if (signingIn.value) return;
+  signingIn.value = true;
+  reloginError.value = "";
+  try {
+    await session.login(route.fullPath, { provider: currentProvider() });
+  } catch (e) {
+    reloginError.value = connectionMessage(e);
+  } finally {
+    signingIn.value = false;
   }
 }
 
@@ -438,7 +465,8 @@ defineExpose({ skip });
           <!-- 出錯的是我們：錯誤畫面不放蘇綺（美術總監 r1 擋 2） -->
           <div v-if="step === 'error'" class="st-error" role="alert">
             <strong>{{ t("checkin.stage.error.title") }}</strong>
-            <p>{{ errorKind === "busy" ? t("checkin.stage.error.busy") : t("checkin.stage.error.body") }}</p>
+            <p>{{ errorKind === "auth" ? t("auth.expired") : errorKind === "busy" ? t("checkin.stage.error.busy") : t("checkin.stage.error.body") }}</p>
+            <p v-if="reloginError" class="st-error__sub">{{ reloginError }}</p>
           </div>
 
           <div v-else class="core">
@@ -535,7 +563,8 @@ defineExpose({ skip });
             <div class="btns">
               <template v-if="step === 'error'">
                 <button type="button" class="st-ghost" @click="close">{{ t("checkin.stage.error.later") }}</button>
-                <button ref="mainBtn" type="button" class="st-primary" @click="send">{{ t("checkin.stage.error.retry") }}</button>
+                <button v-if="errorKind === 'auth'" ref="mainBtn" type="button" class="st-primary" :disabled="signingIn" @click="relogin">{{ t("auth.retry") }}</button>
+                <button v-else ref="mainBtn" type="button" class="st-primary" @click="send">{{ t("checkin.stage.error.retry") }}</button>
               </template>
               <button v-else-if="busy" type="button" class="st-ghost" @click="skip">{{ t("checkin.stage.skip") }}</button>
               <button v-else-if="step === 'recap'" ref="mainBtn" type="button" class="st-primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
@@ -692,6 +721,7 @@ button { font:inherit; color:inherit; }
 .st-links { display:flex; gap:var(--s-2); }
 .st-link { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; font-size:13px; color:var(--stage-cream); opacity:.75; text-decoration:underline; text-underline-offset:3px; }
 .st-primary { min-width:200px; height:48px; padding:0 28px; border:0; border-radius:24px; background:var(--stage-rose); color:#fff; font-size:17px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(229,80,110,.35); }
+.st-primary:disabled { opacity:.45; cursor:not-allowed; }
 .st-ghost { height:48px; color:var(--stage-cream); min-width:200px; padding:0 28px; border-radius:24px; border:1px solid rgba(255,246,230,.4); background:transparent; font-size:15px; cursor:pointer; }
 .st-primary, .st-ghost { white-space:nowrap; }
 /* 錯誤時兩顆並排：放不下就各自一列，字不折行 */

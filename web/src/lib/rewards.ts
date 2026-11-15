@@ -8,7 +8,9 @@
 import { deviceToken } from "./reward-device";
 import { UPSTREAM_API } from "./config";
 import { i18n } from "./i18n";
-import { describeApiError } from "./api";
+import { ApiError, describeApiError } from "./api";
+import { dropManagedToken } from "./managed-auth";
+import { currentProvider } from "./provider";
 
 /**
  * 綺夢社在 Harbor 的應用租戶 slug（`/open/v1/apps/{app}/…` 的那一段）。
@@ -146,6 +148,46 @@ export class RewardsError extends Error {
 }
 
 const authHeaders = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
+
+export function isRewardsUnauthorized(error: unknown): boolean {
+  return (
+    (error instanceof RewardsError && (error.status === 401 || error.code === "unauthorized")) ||
+    (error instanceof ApiError && error.status === 401)
+  );
+}
+
+export function unauthorizedRewardsError(): RewardsError {
+  return new RewardsError(401, i18n.global.t("auth.expired"), "unauthorized");
+}
+
+/**
+ * 帶著 access token 呼叫 Harbor 獎勵／方案端點：
+ * 快取憑證被回 401 時丟掉舊憑證並換新重試一次；換不到或重試仍回 401 則統一回傳 unauthorized。
+ */
+export async function withRewardsToken<T>(
+  getToken: (rejected?: string) => Promise<string | null>,
+  run: (token: string) => Promise<T>,
+): Promise<T> {
+  const first = await getToken();
+  if (!first) throw unauthorizedRewardsError();
+  try {
+    return await run(first);
+  } catch (e) {
+    if (!isRewardsUnauthorized(e)) throw e;
+    dropManagedToken(currentProvider(), first);
+    const fresh = await getToken(first);
+    if (!fresh || fresh === first) throw unauthorizedRewardsError();
+    try {
+      return await run(fresh);
+    } catch (retryErr) {
+      if (isRewardsUnauthorized(retryErr)) {
+        dropManagedToken(currentProvider(), fresh);
+        throw unauthorizedRewardsError();
+      }
+      throw retryErr;
+    }
+  }
+}
 
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {

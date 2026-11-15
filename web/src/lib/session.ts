@@ -1,6 +1,6 @@
 import {clearPublicationDrafts} from './confirm';
 import { clearDiscordAttempt } from './discord-attempt';
-import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
+import { managedAuth, managedLogout, dropManagedToken, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { forgetCards } from './card-memory';
 import { clearStageStorage } from './stage-storage';
@@ -20,6 +20,7 @@ import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
   AuthUnavailable,
+  dropPersistedAccess,
   persist,
   refresh,
   restorePersisted,
@@ -66,6 +67,7 @@ export const useSession = defineStore("session", () => {
    */
   const otherLines = ref<string[]>([]);
   const restoreError = ref(false);
+  const authExpired = ref(false);
   watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(','), () => profile.value?.countryRegion], clearLibraryCache, {flush:'sync'});
   // 換了國家／地區：聊天、收藏與記住的卡都要照新地區重讀（中國大陸不提供限制級卡）
   watch(() => profile.value?.countryRegion, (now, before) => { if (before !== undefined && now !== before) forgetCards(); }, {flush:'sync'});
@@ -122,6 +124,7 @@ export const useSession = defineStore("session", () => {
   async function adopt(pair: TokenPair, expected=generation, firstEntry?: "interactive" | "silent") {
     const identity=await fetchMe(pair.accessToken);
     if(expected!==generation)return;
+    authExpired.value = false;
     token.value = pair;
     persist(pair);
     me.value = identity;
@@ -193,25 +196,44 @@ export const useSession = defineStore("session", () => {
     return restore();
   }
 
-  /** 每次用之前檢查有效期，過期就換新的；換不到就是真的登出了。 */
-  async function accessToken(): Promise<string | null> {
-    const expected=generation;
-    if (!isManagedAuth() && token.value && token.value.expiresAt > Date.now()) return token.value.accessToken;
-    // refresh() 自己是單飛的，這裡並發呼叫也只會有一次換發。
-    const pair = await refresh();
-    if(expected!==generation)return null;
-    if (!pair) {
-      token.value = null;
-      if(!isManagedAuth())me.value = null;
-      return null;
+  let renewing: Promise<string | null> | null = null;
+  /** 每次用之前檢查有效期，過期或剛被供應商回 401 拒絕就換新的；換不到就是真的登出了。 */
+  async function accessToken(rejected?: string): Promise<string | null> {
+    const provider = currentProvider();
+    if (rejected) {
+      dropManagedToken(provider, rejected);
+      if (!isManagedAuth()) {
+        if (token.value?.accessToken === rejected) token.value = null;
+        dropPersistedAccess(provider, rejected);
+      }
     }
-    if(isManagedAuth())token.value=pair;
-    else await adopt(pair,expected);
-    return expected===generation?pair.accessToken:null;
+    if (!isManagedAuth() && token.value && token.value.expiresAt > Date.now()) return token.value.accessToken;
+    if (renewing) return renewing;
+    // refresh() 與 adopt() 一起單飛：並發請求同時收到 401 時共用同一趟換發與身分核對。
+    const expected=generation;
+    const task = (async () => {
+      const pair = await refresh(provider);
+      if(expected!==generation)return null;
+      if (!pair) {
+        if (me.value != null) authExpired.value = true;
+        token.value = null;
+        if(!isManagedAuth())me.value = null;
+        return null;
+      }
+      authExpired.value = false;
+      if(isManagedAuth())token.value=pair;
+      else await adopt(pair,expected);
+      return expected===generation?pair.accessToken:null;
+    })();
+    renewing = task;
+    void task.finally(() => { if (renewing === task) renewing = null; }).catch(() => {});
+    return task;
   }
 
   async function logout(o: { allRoutes?: boolean } = {}) {
     generation++;
+    renewing = null;
+    authExpired.value = false;
     clearDiscordAttempt();
     clearPublicationDrafts();
     // 剛登出的網域不靜默登入，否則一登出馬上又被登回去（lib/silent-login.ts）
@@ -250,5 +272,5 @@ export const useSession = defineStore("session", () => {
   function adoptFromCallback(pair: TokenPair, silent: boolean) {
     return adopt(pair, generation, silent ? "silent" : "interactive");
   }
-  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, otherLines, adopt, adoptFromCallback, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, authExpired, otherLines, adopt, adoptFromCallback, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
 });

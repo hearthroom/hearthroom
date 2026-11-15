@@ -17,10 +17,12 @@ import TaskPanel from "@/components/checkin/TaskPanel.vue";
 import { useCheckin } from "@/lib/checkin-store";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { countdown, newcomerView } from "@/lib/checkin";
-import { fetchDraws, RewardsError, type DrawRecord, type RewardTask } from "@/lib/rewards";
+import { fetchDraws, isRewardsUnauthorized, RewardsError, withRewardsToken, type DrawRecord, type RewardTask } from "@/lib/rewards";
+import { connectionMessage } from "@/lib/connection-ui";
 import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
 import { whole } from "@/lib/format";
+import { currentProvider } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { currentReferralCode, withShareRef } from "@/lib/share-ref";
@@ -136,7 +138,8 @@ async function claim(task: RewardTask, quiet = false): Promise<number | null> {
     const amount = c.credits ?? task.reward.credits ?? 0;
     if (!quiet) say(t("task.claimed.toast", { amount: whole(amount) }));
     return amount;
-  } catch {
+  } catch (e) {
+    if (isRewardsUnauthorized(e)) return null;
     failed.value = new Set([...failed.value, task.id]);
     return null;
   } finally {
@@ -168,8 +171,8 @@ async function claimNewcomerDay() {
     const c = await store.claimNewcomer();
     if (c.credits != null) say(t("task.claimed.toast", { amount: whole(c.credits) }));
     await refresh(true);
-  } catch {
-    say(t("task.error.claim"));
+  } catch (e) {
+    if (!isRewardsUnauthorized(e)) say(t("task.error.claim"));
   } finally {
     newcomerClaiming.value = false;
   }
@@ -187,12 +190,14 @@ async function loadDraws(more = false) {
   drawsLoading.value = true;
   drawsError.value = "";
   try {
-    const token = await session.accessToken();
-    if (!token) return;
-    const res = await fetchDraws(token, more ? cursor.value ?? "" : "");
+    const res = await withRewardsToken((rejected) => session.accessToken(rejected), (token) => fetchDraws(token, more ? cursor.value ?? "" : ""));
     draws.value = more ? [...draws.value, ...res.list] : res.list;
     cursor.value = res.nextCursor;
   } catch (e) {
+    if (isRewardsUnauthorized(e)) {
+      store.noteUnauthorized(e);
+      return;
+    }
     drawsError.value = e instanceof Error ? e.message : t("state.loadFailed");
   } finally {
     drawsLoading.value = false;
@@ -227,7 +232,20 @@ const weeklyReset = computed(() => {
   return t("task.reset.days", { n: days }, days);
 });
 const expiring = computed(() => panel.value?.credits?.expiring ?? session.wallet?.expiries ?? []);
-const loadError = computed(() => (!panel.value && store.error ? store.error : null));
+const authExpired = computed(() => isRewardsUnauthorized(store.error) || plans.unauthorized);
+const loadError = computed(() => (!panel.value && store.error && !authExpired.value ? store.error : null));
+const signingIn = ref(false);
+async function relogin() {
+  if (signingIn.value) return;
+  signingIn.value = true;
+  try {
+    await session.login(route.fullPath, { provider: currentProvider() });
+  } catch (e) {
+    say(connectionMessage(e));
+  } finally {
+    signingIn.value = false;
+  }
+}
 function toTop() { window.scrollTo({ top: 0, behavior: "smooth" }); }
 
 onMounted(() => {
@@ -254,9 +272,13 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
 
     <ExpiryStrip class="checkin__wide" :expiring="expiring" :now="now" />
 
-    <div v-if="loadError" class="checkin__wide panel checkin__error">
-      <p class="notice notice--error"><strong>{{ t("checkin.hero.error.title") }}</strong><br />{{ t("checkin.hero.error.body") }}</p>
-      <button type="button" class="btn" @click="refresh()">{{ t("checkin.cta.reload") }}</button>
+    <div v-if="authExpired" class="checkin__wide panel checkin__error">
+      <p class="notice notice--error" role="alert">{{ t("auth.expired") }}</p>
+      <button type="button" class="btn btn--primary btn--lg" :disabled="signingIn" @click="relogin">{{ t("auth.retry") }}</button>
+    </div>
+    <div v-else-if="loadError" class="checkin__wide panel checkin__error">
+      <p class="notice notice--error" role="alert"><strong>{{ t("checkin.hero.error.title") }}</strong><br />{{ t("checkin.hero.error.body") }}</p>
+      <button type="button" class="btn btn--lg" @click="refresh()">{{ t("checkin.cta.reload") }}</button>
     </div>
     <div v-else-if="!panel" class="checkin__wide panel checkin__skel" aria-busy="true">
       <span class="ghost" style="width:40%;height:26px" /><span class="ghost" style="width:70%;height:28px" />
@@ -266,9 +288,9 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
       v-else class="checkin__wide" :panel="panel" :plan="store.plan" :fetched-at="store.fetchedAt" :now="now" :busy="busy || !!stage"
       @open="onOpen" @makeup="onMakeup" @sign-anyway="onSignAnyway"
     />
-    <PlanRow v-if="panel" class="checkin__wide" :checked-in="panel.checkin.todayClaimed" :makeup-left="panel.checkin.makeup.left" />
+    <PlanRow v-if="panel && !authExpired" class="checkin__wide" :checked-in="panel.checkin.todayClaimed" :makeup-left="panel.checkin.makeup.left" />
 
-    <div v-if="panel" class="checkin__cols">
+    <div v-if="panel && !authExpired" class="checkin__cols">
       <div class="checkin__col">
         <NewcomerCard v-if="hasNewcomer && !desk" :panel="panel" :busy="!!stage || newcomerClaiming" @guide="guide" @grand="grand" @claim="claimNewcomerDay" />
         <TaskPanel kind="daily" :tasks="panel.tasks.daily" :chest="panel.tasks.dailyAll" :plan="store.plan" :reset-label="dailyReset" :claiming="claiming" :failed="failed" @claim="claimOne" @claim-all="claimAll" @copy-link="copyShareLink" />

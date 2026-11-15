@@ -5,8 +5,8 @@
 import { defineStore } from "pinia";
 import { computed, ref, shallowRef, watch } from "vue";
 import {
-  checkin as postCheckin, claimNewcomer as postNewcomer, claimTask as postTask, fetchPanel, fetchPlan, forgetCurrentPlan, makeup as postMakeup,
-  RewardsError, type CheckinResponse, type ClaimResult, type RewardPlan, type RewardsPanel, type RewardTask,
+  checkin as postCheckin, claimNewcomer as postNewcomer, claimTask as postTask, fetchPanel, fetchPlan, forgetCurrentPlan, isRewardsUnauthorized, makeup as postMakeup,
+  RewardsError, withRewardsToken, type CheckinResponse, type ClaimResult, type RewardPlan, type RewardsPanel, type RewardTask,
 } from "./rewards";
 import { clearRequestId, requestIdFor } from "./checkin";
 import { useSession } from "./session";
@@ -26,10 +26,24 @@ export const useCheckin = defineStore("checkin", () => {
   watch(() => session.me?.accountNumId, reset, { flush: "sync" });
   let inflight: Promise<void> | null = null;
 
-  async function token(): Promise<string> {
-    const t = await session.accessToken();
-    if (!t) throw new RewardsError(401, "", "unauthorized");
-    return t;
+  async function runAuthed<T>(fn: (tok: string) => Promise<T>): Promise<T> {
+    const epoch = generation;
+    try {
+      return await withRewardsToken((rejected) => session.accessToken(rejected), fn);
+    } catch (e) {
+      if (isRewardsUnauthorized(e) && (epoch === generation || (session.authExpired && epoch + 1 === generation && !inflight))) {
+        panel.value = null;
+        error.value = e as RewardsError;
+      }
+      throw e;
+    }
+  }
+
+  function noteUnauthorized(e: unknown) {
+    if (isRewardsUnauthorized(e)) {
+      panel.value = null;
+      error.value = e as RewardsError;
+    }
   }
 
   async function ensurePlan(version?: number): Promise<RewardPlan> {
@@ -47,7 +61,7 @@ export const useCheckin = defineStore("checkin", () => {
     loading.value = true;
     inflight = (async () => {
       try {
-        const p = await fetchPanel(await token());
+        const p = await runAuthed(fetchPanel);
         if (epoch !== generation) return;
         panel.value = p;
         fetchedAt.value = Date.now();
@@ -55,8 +69,12 @@ export const useCheckin = defineStore("checkin", () => {
         disabled.value = false;
         await ensurePlan(p.planVersion).catch(() => undefined);
       } catch (e) {
-        if (epoch !== generation) return;
+        if (epoch !== generation) {
+          if (isRewardsUnauthorized(e) && session.authExpired && epoch + 1 === generation && !inflight) error.value = e as Error;
+          return;
+        }
         if (e instanceof RewardsError && e.code === "rewards_disabled") disabled.value = true;
+        if (isRewardsUnauthorized(e)) panel.value = null;
         error.value = e as Error;
       } finally {
         if (epoch === generation) { loading.value = false; inflight = null; }
@@ -71,8 +89,9 @@ export const useCheckin = defineStore("checkin", () => {
    */
   async function checkin(): Promise<CheckinResponse & { elsewhere: boolean }> {
     const scope = `checkin:${panel.value?.businessDay ?? "today"}`;
+    const reqId = requestIdFor(scope);
     try {
-      const res = await postCheckin(await token(), requestIdFor(scope));
+      const res = await runAuthed((tok) => postCheckin(tok, reqId));
       clearRequestId(scope);
       if (!res.replayed) track("checkin_claim", { detail: "daily" });
       // replayed：同一個 requestId 之前已經成功（自己斷線後重送），結果照樣播
@@ -89,8 +108,9 @@ export const useCheckin = defineStore("checkin", () => {
 
   async function makeup(day: string): Promise<CheckinResponse> {
     const scope = `makeup:${day}`;
+    const reqId = requestIdFor(scope);
     try {
-      const res = await postMakeup(await token(), requestIdFor(scope), day);
+      const res = await runAuthed((tok) => postMakeup(tok, reqId, day));
       clearRequestId(scope);
       if (!res.replayed) track("checkin_claim", { detail: "daily" });
       return res;
@@ -103,8 +123,9 @@ export const useCheckin = defineStore("checkin", () => {
 
   async function claimTask(task: RewardTask): Promise<ClaimResult> {
     const scope = `task:${task.id}:${task.period}`;
+    const reqId = requestIdFor(scope);
     try {
-      const { claim } = await postTask(await token(), task.id, task.period, requestIdFor(scope));
+      const { claim } = await runAuthed((tok) => postTask(tok, task.id, task.period, reqId));
       clearRequestId(scope);
       if (!claim.duplicate) track("checkin_claim", { detail: "task" });
       return claim;
@@ -117,8 +138,9 @@ export const useCheckin = defineStore("checkin", () => {
 
   async function claimNewcomer(): Promise<ClaimResult> {
     const scope = `newcomer:${panel.value?.businessDay ?? "today"}`;
+    const reqId = requestIdFor(scope);
     try {
-      const { claim } = await postNewcomer(await token(), requestIdFor(scope));
+      const { claim } = await runAuthed((tok) => postNewcomer(tok, reqId));
       clearRequestId(scope);
       if (!claim.duplicate) track("checkin_claim", { detail: "newcomer" });
       return claim;
@@ -143,5 +165,5 @@ export const useCheckin = defineStore("checkin", () => {
     await Promise.all([load(), session.refreshWallet?.()]);
   }
 
-  return { panel, plan, fetchedAt, loading, error, disabled, load, settle, ensurePlan, checkin, makeup, claimTask, claimNewcomer, claimableTasks, canCheckIn, reset };
+  return { panel, plan, fetchedAt, loading, error, disabled, load, settle, ensurePlan, checkin, makeup, claimTask, claimNewcomer, noteUnauthorized, claimableTasks, canCheckIn, reset };
 });
