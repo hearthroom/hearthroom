@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { writePublicKv } from './public-kv-write';
 export const snapshotCache = { namespace: 'public-snapshot-harbor-v2' };
 type Entry<T> = { value:T; expires:number };
 type Context = Pick<ExecutionContext,'waitUntil'>;
@@ -16,7 +17,10 @@ export async function snapshot<T>(env:Env, keyParts:unknown[], ttl:number, load:
  try {const entry=await env.CACHE.get<Entry<T>>(key,'json');if(live(entry)){const write=edgeWrite(entry).catch(()=>{});if(ctx)ctx.waitUntil(write);else await write;return {value:entry.value,layer:'kv'};}}catch{console.warn('Public snapshot KV unavailable');}
  const value=await load();
  const entry={value,expires:Date.now()+ttl*1000};
- const write=Promise.all([edgeWrite(entry),env.CACHE.put(key,JSON.stringify(entry),{expirationTtl:Math.max(60,Math.ceil(ttl))})]).then(()=>{}).catch(()=>{console.warn('Public snapshot write unavailable');});
+ const write=Promise.all([edgeWrite(entry),writePublicKv(env.CACHE,key,{
+  content:JSON.stringify({value}),payload:JSON.stringify(entry),expiresAt:entry.expires,
+  expirationTtl:Math.max(60,Math.ceil(ttl)),
+ })]).then(()=>{}).catch(()=>{console.warn('Public snapshot write unavailable');});
  if(ctx)ctx.waitUntil(write);else await write;
  return {value,layer:'origin'};
 }

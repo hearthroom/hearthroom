@@ -25,3 +25,22 @@ it('does not share different access partitions or revisions',async()=>{
  expect((await snapshot(env,['author',1,true],300,async()=> 'adult')).value).toBe('adult');
  expect((await snapshot(env,['author',2,false],300,async()=> 'changed')).value).toBe('changed');
 });
+
+
+it('coalesces in-flight identical KV writes while keeping origin loads independent',async()=>{
+ const cache=await caches.open(snapshotCache.namespace);
+ vi.spyOn(cache,'match').mockResolvedValue(undefined);
+ vi.spyOn(caches,'open').mockResolvedValue(cache);
+ let release!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve;});
+ const put=vi.fn(async()=>{await gate;});
+ const isolated={...env,CACHE:{get:async()=>null,put}} as unknown as Env;
+ const contexts=[createExecutionContext(),createExecutionContext(),createExecutionContext()];
+ const source=vi.fn(async()=>({count:7}));
+ const results=await Promise.all(contexts.map(ctx=>snapshot(isolated,['same'],300,source,ctx)));
+ const writes=put.mock.calls.length;
+ release();await Promise.all(contexts.map(waitOnExecutionContext));
+ expect(writes).toBe(1);expect(source).toHaveBeenCalledTimes(3);
+ expect(results).toEqual(contexts.map(()=>({value:{count:7},layer:'origin'})));
+ expect(results[0].value).not.toBe(results[1].value);
+});

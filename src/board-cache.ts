@@ -1,4 +1,5 @@
 import type { Env } from "./types";
+import { writePublicKv } from "./public-kv-write";
 
 export const BOARD_TTL = 300;
 export const boardCache = { namespace: "board-official-v4" };
@@ -75,7 +76,9 @@ export function writeBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil
   const entry: Entry = { body, expiresAt: Date.now() + BOARD_TTL * 1000 };
   ctx.waitUntil(Promise.all([
     storeEdge(key, entry).catch(() => { console.warn("Board edge cache write unavailable"); }),
-    ...(opts.edgeOnly ? [] : [env.CACHE.put(key.kv, JSON.stringify(entry), { expirationTtl: BOARD_TTL })
+    ...(opts.edgeOnly ? [] : [writePublicKv(env.CACHE, key.kv, {
+      content: body, payload: JSON.stringify(entry), expiresAt: entry.expiresAt, expirationTtl: BOARD_TTL,
+    })
       .catch(() => { console.warn("Board KV cache write unavailable"); })]),
   ]).then(() => {}));
 }

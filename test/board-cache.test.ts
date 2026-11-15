@@ -75,3 +75,36 @@ it("query keys exclude credentials and canonicalize repeated tag order", async (
   expect(a.edge.url).not.toContain("secret");
   expect(a.edge.url).toContain("_access=adult");
 });
+
+
+it("coalesces concurrent identical public writes without dropping edge writes", async () => {
+  const key = await boardKey(url, 3, false);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const put = vi.fn(async () => { await gate; });
+  const isolated = { ...env, CACHE: { put } } as unknown as Env;
+  const contexts = [createExecutionContext(), createExecutionContext(), createExecutionContext()];
+  for (const ctx of contexts) writeBoardCache(isolated, ctx, key, '{"items":["same"]}');
+  // Let the background KV write start while keeping it pending.
+  await Promise.resolve(); await Promise.resolve();
+  const writes = put.mock.calls.length;
+  release();
+  await Promise.all(contexts.map(waitOnExecutionContext));
+  expect(writes).toBe(1);
+  const edge = await readBoardCache(env, createExecutionContext(), key);
+  expect(edge).toEqual({ body: '{"items":["same"]}', layer: "edge" });
+});
+
+it("keeps typing suggestions edge-only even while a matching KV write is pending", async () => {
+  const key = await boardKey(url, 4, false);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const put = vi.fn(async () => { await gate; });
+  const isolated = { ...env, CACHE: { put } } as unknown as Env;
+  const first = createExecutionContext(), typing = createExecutionContext();
+  writeBoardCache(isolated, first, key, '{"items":[]}');
+  writeBoardCache(isolated, typing, key, '{"items":[]}', { edgeOnly: true });
+  await Promise.resolve(); await Promise.resolve();
+  release(); await Promise.all([waitOnExecutionContext(first), waitOnExecutionContext(typing)]);
+  expect(put).toHaveBeenCalledTimes(1);
+});
