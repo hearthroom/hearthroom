@@ -3,17 +3,17 @@
   "audience": "authors",
   "try": "/create",
   "title": {
-    "zh-Hant": "可以匯入日里的卡、模組與世界書",
-    "zh-Hans": "可以导入日里的卡、模组与世界书",
-    "en": "Import Rili cards, modules, and lorebooks",
-    "ja": "日里のカード・モジュール・ワールドブックを読み込めるように",
-    "ko": "일리의 카드·모듈·로어북 가져오기"
+    "zh-Hant": "寫卡頁現在可以直接匯入日里的卡片、對話設定、模組與世界書了。",
+    "zh-Hans": "写卡页现在可以直接导入日里的卡片、对话设置、模组和世界书了。",
+    "en": "The card editor now imports Rili cards, chat settings, modules, and lorebooks.",
+    "ja": "カード編集画面で日里のカード、会話設定、モジュール、世界設定を読み込めるようになりました。",
+    "ko": "이제 카드 편집기에서 Rili의 카드, 대화 설정, 모듈, 세계관을 바로 가져올 수 있어요."
   },
   "body": {
-    "zh-Hant": "把日里匯出的檔案拖進建卡頁的匯入，提示詞、開場畫面、世界書、正規表示式規則、卡片樣式與變數都會帶進表單，帶不過來的逐項列出。",
-    "zh-Hans": "把日里导出的文件拖进建卡页的导入，提示词、开场画面、世界书、正则、卡片样式与变量都会带进表单，带不过来的逐项列出。",
-    "en": "Drop a Rili export into Import on the new-card page to fill the form with its prompts, opening page, lorebook, regex rules, card styles, and variables, with anything left out listed.",
-    "ja": "日里の書き出しファイルをカード作成の読み込みに入れると、プロンプト、オープニング画面、ワールドブック、正規表現、カードスタイル、変数がフォームに入ります。",
-    "ko": "일리에서 내보낸 파일을 카드 만들기의 가져오기에 넣으면 프롬프트, 첫 화면, 로어북, 정규식, 카드 스타일, 변수가 양식에 채워져요."
+    "zh-Hant": "把日里匯出的檔案拖進匯入區，角色設定、開場網頁、世界書、顯示規則、卡片樣式與卡片變數都會帶進表單，沒能帶過來的項目也會逐條列出。",
+    "zh-Hans": "把日里导出的文件拖进导入区，角色设定、开场网页、世界书、显示规则、卡片样式和卡片变量都会带进表单，没能带过来的项目也会逐条列出。",
+    "en": "Drop a Rili export into the import area to fill in character settings, opening page, lorebook, display rules, card styles, and variables, with anything left out listed item by item.",
+    "ja": "書き出したファイルを読み込み欄に入れると、キャラ設定・最初のページ・世界設定・表示ルール・カードのスタイル・カード変数がフォームに入り、持ち込めない項目も一覧で確認できます。",
+    "ko": "내보낸 파일을 가져오기 영역에 놓으면 캐릭터 설정, 첫 페이지, 세계관, 표시 규칙, 카드 스타일, 카드 변수가 양식에 채워지고 가져오지 못한 항목도 하나씩 안내돼요."
   }
 }
