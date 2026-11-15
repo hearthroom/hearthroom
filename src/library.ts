@@ -194,6 +194,8 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   const page = Math.min(4000, Math.max(1, Math.floor(Number(c.req.query('pageNum')) || 1)));
   // 紀錄一個版本一列；作者更新後玩家玩到新版，同一張卡就有好幾列。續玩一律開目前的版本，
   // 所以每張卡只列最近的那一列。對不到卡號的紀錄各自成一列。
+  // 分開來源／封存版的索引查找，再按卡片主鍵回讀，避免 OR JOIN 只按 provider 掃卡。
+  // UNION 保留定位碰撞時的所有卡片，同一張卡同時符合兩條件則只保留一次。
   const rows = await c.env.DB.prepare(`SELECT * FROM (SELECT c.*, cn.num AS cardNumber, r.provider AS conversationProvider, r.role_id AS conversationRoleId,
     r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt,
     COALESCE(w.source_role_id,c.source_role_id,r.role_id) AS hostRoleId, ms.public_blocked AS moderationBlocked,
@@ -202,7 +204,13 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
     LEFT JOIN hosting_versions hv ON hv.version_id=hr.version_id
     LEFT JOIN works w ON w.id=COALESCE(hv.work_id,cp.work_id)
-    LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
+    LEFT JOIN cards c ON c.id IN (
+      SELECT source_match.id FROM cards source_match
+      WHERE source_match.provider=COALESCE(w.source_provider,r.provider) AND source_match.source_role_id=COALESCE(w.source_role_id,r.role_id)
+      UNION
+      SELECT hosted_match.id FROM cards hosted_match
+      WHERE hosted_match.provider=COALESCE(w.source_provider,r.provider) AND hosted_match.approved_hosted_role_id=r.role_id
+    )
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider)
       AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider)
