@@ -33,31 +33,7 @@ export function reviewPlayAccessRoutes(){
     await assertNormalMember(c.env.DB,row.member_id);
     outcome='allow';return c.json({allowed:true,reviewId:c.req.param('id'),roleId:role,accountNumId:Number(account)});
    }
-   const wsRow=await c.env.DB.prepare(`SELECT s.claimed_by AS member_id,s.rating,s.workshop_id,s.sealed_release_id,k.rating AS card_rating,m.age_verified_at,m.country_region
-    FROM workshop_review_submissions s
-    LEFT JOIN cards k ON k.id=s.card_id
-    JOIN members m ON m.id=s.claimed_by JOIN reviewers r ON r.member_id=m.id AND r.revoked_at IS NULL
-    WHERE s.claimed_by=COALESCE(
-      (SELECT owner_member_id FROM member_connections WHERE provider='harbor' AND external_id=?),
-      (SELECT member_id FROM member_identities WHERE provider='harbor' AND external_id=?))
-     AND s.id=? AND s.provider='harbor' AND s.status='pending'
-     AND (s.source_role_id=? OR k.approved_hosted_role_id=?)
-     AND s.claimed_at IS NOT NULL AND s.claimed_at>? AND s.claimed_at<=?
-     AND NOT EXISTS(SELECT 1 FROM review_agents a WHERE a.member_id=m.id AND a.revoked_at IS NULL)`)
-    .bind(account,account,c.req.param('id'),role,role,now-CLAIM_TTL_MS,now)
-    .first<{member_id:string;rating:string;workshop_id:string;sealed_release_id:string;card_rating:string|null;age_verified_at:number|null;country_region:string|null}>();
-   if(!wsRow||((wsRow.rating==='R'||wsRow.card_rating==='R')&&(wsRow.age_verified_at===null||wsRow.country_region==='CN')))throw new HttpError(403,'review_play_denied');
-   await assertNormalMember(c.env.DB,wsRow.member_id);
-   outcome='allow';
-   return c.json({
-    allowed:true,
-    subjectKind:'workshop',
-    reviewId:c.req.param('id'),
-    workshopId:wsRow.workshop_id,
-    releaseId:wsRow.sealed_release_id,
-    roleId:role,
-    accountNumId:Number(account),
-   });
+   throw new HttpError(403,'review_play_denied');
   }catch(error){if(!(error instanceof HttpError&&error.status===403))outcome='unavailable';throw error;}
   finally{await bumpOp(c.env.DB,'review_play','admission',outcome);}
  });

@@ -41,6 +41,10 @@ export async function ensureOperationUuid(raw: unknown): Promise<string> {
 }
 
 export interface ProviderMineItem {
+ kind:"dlc"|"lorebook";
+ loreCount:number;
+ workshopClosed:boolean;
+ status:"draft"|"live"|"live_changed";
   workshopId: string;
   workId: string;
   sourceRoleId: string;
@@ -65,35 +69,9 @@ export interface ProviderMineItem {
   updatedAt: number | string;
 }
 
-export interface SealedWorkshopRelease {
-  workshopId: string;
-  releaseId: string;
-  operationId: string;
-  workId: string;
-  sourceRoleId: string;
-  authorPublicNo: number;
-  cardOwnerPublicNo?: number;
-  contentHash: string;
-  nextVersionCandidate?: number;
-  publishedVersion?: number;
-  name: string;
-  summary: string;
-  readme: string;
-  coverUrl: string;
-  rating: string;
-  ratingAnswers?: Record<string, unknown>;
-  kinds: WorkshopKind[];
-  contents: { loreCount: number; ruleCount: number; openingCount: number };
-  residentChars?: number;
-  constantChars?: number;
-  worldbook?: Array<{ content?: string; constant?: boolean; isConstant?: boolean; enabled?: boolean; isEnabled?: boolean }>;
-  rules?: unknown[];
-  opening?: { mode?: string; prologue?: string; openingPage?: string } | null;
-  updateNote: string;
-  ownerGeneration?: number;
-}
 
-export interface WorkshopReviewReleaseView {
+
+export interface WorkshopStaffReleaseView {
   workshopId: string;
   releaseId: string;
   workId: string;
@@ -119,19 +97,7 @@ export interface WorkshopReviewReleaseView {
   };
 }
 
-export interface WorkshopCommitReceipt {
-  workshopId: string;
-  releaseId: string;
-  decision: "approved" | "rejected";
-  version: number;
-  publishedAt: number | string | null;
-  moderationState: string;
-  ownerState: string;
-  ownerGeneration: number;
-  joinCount: number;
-  authorPublicNo: number;
-  cardOwnerPublicNo?: number;
-}
+
 
 export interface WorkshopStateItem {
   workshopId: string;
@@ -193,6 +159,10 @@ async function callHosting<T>(
     redirect: "manual",
     signal: AbortSignal.timeout(20_000),
   });
+  return workshopResponse<T>(response);
+}
+
+async function workshopResponse<T>(response:Response):Promise<T> {
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
       error?: string;
@@ -214,59 +184,38 @@ async function callHosting<T>(
   return (await response.json()) as T;
 }
 
+export interface WorkshopPublicationReceipt {
+ workshopId:string;releaseId:string;workId:string;sourceRoleId:string;kind:"dlc"|"lorebook";status:"published";
+ version:number;draftRevision:number;publishedAt:number;contentHash:string;authorPublicNo:number;cardOwnerPublicNo:number;
+ ownerState:string;ownerGeneration:number;residentChars:number;policyVersion:2;publicationRevision:number;
+ sealed:{name:string;summary:string;readme:string;coverUrl:string;rating:string;worldbook?:Array<Record<string,unknown>>;rules?:Record<string,unknown>;opening?:Record<string,unknown>;updateNote?:string};
+}
+
+async function callCreator<T>(env:Env,token:string,path:string,body:unknown,provider:ProviderId):Promise<T>{
+ const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/workshop${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:'manual',signal:AbortSignal.timeout(20_000)});
+ return workshopResponse<T>(response);
+}
 const realUpstream = {
-  mine: (env: Env, token: string, provider: ProviderId = "harbor") =>
+policyGet:(env:Env,token:string,roleId:string,provider:ProviderId='harbor')=>callCreator<Record<string,unknown>>(env,token,`/policy?roleId=${encodeURIComponent(roleId)}`,undefined,provider),
+policySave:(env:Env,token:string,input:{roleId:string;allowNew:boolean;expectedRevision:number},provider:ProviderId='harbor')=>callCreator<Record<string,unknown>>(env,token,'/policy/save',input,provider),
+creatorAction:async(env:Env,token:string,input:{workshopId:string;operationId:string;expectedRevision:number},action:'unpublish'|'discard-changes',provider:ProviderId='harbor')=>{
+ const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/workshop/${action}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(input),redirect:'manual',signal:AbortSignal.timeout(20_000)});
+ return workshopResponse<Record<string,unknown>>(response);
+ },
+publish: async(env:Env,token:string,input:{workshopId:string;operationId:string;expectedRevision:number},provider:ProviderId="harbor")=>{
+  const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/workshop/publish`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(input),redirect:"manual",signal:AbortSignal.timeout(20_000)});
+  return workshopResponse<WorkshopPublicationReceipt>(response);
+ },
+mine: (env: Env, token: string, provider: ProviderId = "harbor") =>
     callHosting<{ items: ProviderMineItem[] }>(env, provider, "/mine", { token }),
-
-  seal: (
-    env: Env,
-    token: string,
-    input: { workshopId: string; operationId: string; updateNote?: string },
-    provider: ProviderId = "harbor",
-  ) => callHosting<SealedWorkshopRelease>(env, provider, "/seal", { body: input, token }),
-
-  withdraw: (
-    env: Env,
-    token: string,
-    input: { workshopId: string; releaseId?: string },
-    provider: ProviderId = "harbor",
-  ) => callHosting<{ withdrawn: boolean; moderationState: "draft" | "approved" }>(env, provider, "/withdraw", { body: input, token }),
-
-  readRelease: (env: Env, releaseId: string, provider: ProviderId = "harbor") =>
-    callHosting<WorkshopReviewReleaseView>(env, provider, `/review/${encodeURIComponent(releaseId)}`),
-
-  commit: (
-    env: Env,
-    input: {
-      workshopId: string;
-      releaseId: string;
-      operationId: string;
-      decision: "approved" | "rejected";
-      note?: string;
-      expectedOwnerGeneration?: number;
-    },
-    provider: ProviderId = "harbor",
-  ) => callHosting<WorkshopCommitReceipt>(env, provider, "/commit", { body: input }),
-
-  moderate: (
+readRelease: (env: Env, releaseId: string, provider: ProviderId = "harbor") =>
+    callHosting<WorkshopStaffReleaseView>(env, provider, `/staff-release/${encodeURIComponent(releaseId)}`),
+moderate: (
     env: Env,
     input: { workshopId: string; action: "revoke" | "restore"; reason?: string; actorPublicNo?: number },
     provider: ProviderId = "harbor",
   ) => callHosting<{ ok?: boolean }>(env, provider, "/moderate", { body: input }),
-
-  appealDecision: (
-    env: Env,
-    input: { workshopId: string; decision: "upheld" | "restored"; note?: string; actorPublicNo?: number },
-    provider: ProviderId = "harbor",
-  ) =>
-    callHosting<{ workshopId: string; decision: "upheld" | "restored"; ownerState: string; ownerGeneration: number }>(
-      env,
-      provider,
-      "/appeal-decision",
-      { body: input },
-    ),
-
-  state: (
+state: (
     env: Env,
     query: { sourceRoleId?: string; workId?: string; workshopIds?: string[] },
     viewerToken?: string | null,
@@ -283,16 +232,14 @@ const realUpstream = {
       { token: viewerToken ?? undefined },
     );
   },
-
-  pullOutbox: (env: Env, afterSeq: number, limit = 100, provider: ProviderId = "harbor") =>
+pullOutbox: (env: Env, afterSeq: number, limit = 100, provider: ProviderId = "harbor") =>
     callHosting<{ events: WorkshopOutboxEvent[] }>(
       env,
       provider,
       `/outbox?afterSeq=${encodeURIComponent(String(afterSeq))}&limit=${encodeURIComponent(String(limit))}`,
     ),
-
-  ackOutbox: (env: Env, uptoSeq: number, provider: ProviderId = "harbor") =>
-    callHosting<{ ok?: boolean }>(env, provider, "/outbox/ack", { body: { uptoSeq } }),
+ackOutbox: (env: Env, uptoSeq: number, provider: ProviderId = "harbor") =>
+    callHosting<{ ok?: boolean }>(env, provider, "/outbox/ack", { body: { uptoSeq } })
 };
 
 export const workshopUpstream = { ...realUpstream };

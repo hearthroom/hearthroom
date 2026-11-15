@@ -8933,7 +8933,7 @@
           "Author assets"
         ],
         "summary": "Read the display rules of a role for rendering",
-        "description": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route.",
+        "description": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route. With operationId and conversationId, Workshop display rules match the immutable admission metadata workshopHash; current consent changes affect the next admission. Original-author DLC shares the base agent configuration trust model; player extensions have no scripts or SDK access.",
         "security": [
           {
             "userToken": []
@@ -8948,6 +8948,16 @@
               "type": "string"
             },
             "description": "Role id."
+          },
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
           }
         ],
         "responses": {
@@ -21436,7 +21446,7 @@
           "Roles"
         ],
         "summary": "Workshop switch and extensions for the card's author",
-        "description": "Card author only. Returns `{allowNew, revision, items[]}` with each extension's `ownerState`, `ownerReason`, `appeal`.",
+        "description": "Original card author only. Workshop defaults off, including legacy automatic allow rows. Returns {workId,sourceRoleId,allowNew,everOpened,revision,items,counts:{dlcPublished,dlcDrafts,lorebookPublished,lorebookDrafts,joinCount}}. Published summaries include canonical kind, loreCount and ownerState.",
         "x-unpublished": true,
         "security": [
           {
@@ -21494,7 +21504,7 @@
           "Roles"
         ],
         "summary": "Open or pause new extensions",
-        "description": "Pausing only blocks new extensions; existing ones (drafts included) keep working.",
+        "description": "Original card author only. Explicit opt-in or close using allowNew and expectedRevision. Closing hides the Workshop page and pauses effective DLC and player extensions, retaining drafts, joins, raw history and saved DLC openings. Reopening restores eligible selections. Returns the complete policy and counts.",
         "x-unpublished": true,
         "security": [
           {
@@ -21568,7 +21578,7 @@
           "Roles"
         ],
         "summary": "Return, hide or restore an extension",
-        "description": "Card author only. `action` is `return`, `hide` (both need `reason`, 1–200 characters) or `restore`. Players who already added it keep using it. Returns `{ownerState, ownerReason}`.",
+        "description": "Original card author only, for player Lorebook extensions. hide protects prior joins while hiding the item from new players; restore reverses that state. No reason, appeal or notification. Ownership and expectedGeneration are verified server-side.",
         "x-unpublished": true,
         "security": [
           {
@@ -21586,7 +21596,11 @@
                     "type": "string"
                   },
                   "action": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "hide",
+                      "restore"
+                    ]
                   }
                 },
                 "required": [
@@ -21620,76 +21634,6 @@
           },
           "409": {
             "description": "`owner_action_stale`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/open/v1/workshop/appeal": {
-      "post": {
-        "operationId": "appealWorkshop",
-        "tags": [
-          "Roles"
-        ],
-        "summary": "Appeal an author's return or hide",
-        "description": "Extension author only, once per action. Returns `{appeal: pending}`.",
-        "x-unpublished": true,
-        "security": [
-          {
-            "userToken": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "workshopId": {
-                    "type": "string"
-                  },
-                  "reason": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "workshopId",
-                  "reason"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "JSON object, shape in the description.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthorized`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`appeal_exists`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21934,6 +21878,240 @@
           },
           "401": {
             "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/publish": {
+      "post": {
+        "operationId": "publishWorkshop",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Publish an author DLC or player Lorebook extension",
+        "description": "Creator only. Requires an open card Workshop and the exact draft revision. Publishes directly without review. Kind is determined from canonical original-author ownership. Only original-author DLC can contain display rules or openings. Returns an immutable release id/version and a monotonic publicationRevision; retries reuse the same version.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "expectedRevision",
+                  "operationId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale draft revision, closed Workshop for publishing, or an unavailable publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/unpublish": {
+      "post": {
+        "operationId": "unpublishWorkshop",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Unpublish an owned Workshop item",
+        "description": "Creator only. Retains the editable draft, prior versions and player joins while removing future effective content. Returns {workshopId,status:draft,draftRevision,publicationRevision}. A repeated operationId returns the original committed receipt.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "expectedRevision",
+                  "operationId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale draft revision, closed Workshop for publishing, or an unavailable publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/discard-changes": {
+      "post": {
+        "operationId": "discardWorkshopChanges",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Restore an owned draft to its published version",
+        "description": "Creator only. Restores draft content from its current immutable published version. Returns DraftView with its new revision. Legacy player display source remains stored but ineffective. Repeated operationId returns the original committed receipt.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "expectedRevision",
+                  "operationId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON object, shape in the description.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale draft revision, closed Workshop for publishing, or an unavailable publication.",
             "content": {
               "application/json": {
                 "schema": {

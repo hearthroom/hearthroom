@@ -1,6 +1,7 @@
+import { applyWorkshopPublication,applyWorkshopUnpublication } from "./workshop-publication";
+import { readWorkshopPolicy } from "./workshop-policy";
 import type { Context } from "hono";
-import { normalizeUpdateNote } from "../shared/card-update";
-import { evaluateRating, isRating, type Rating } from "../shared/content-rating";
+import { isRating, type Rating } from "../shared/content-rating";
 import { isAdult, getCard, type CardRow } from "./cards";
 import { guestAdult, guestAllowsNsfw, siteSessionReader } from "./account-auth";
 import { bearerOf } from "./community-admin";
@@ -18,7 +19,6 @@ import { HttpError, pickLocale, type Env, type Localized } from "./types";
 import {
   toEpochMs,
   workshopUpstream,
-  type SealedWorkshopRelease,
   type WorkshopKind,
   type WorkshopOutboxEvent,
 } from "./workshop-gateway";
@@ -77,71 +77,9 @@ export function normalizeDbOwnerState(state: string | null | undefined): "visibl
   return "visible";
 }
 
-export function countWorkshopConstantChars(
-  worldbook?: Array<{ content?: string; constant?: boolean; isConstant?: boolean; enabled?: boolean; isEnabled?: boolean }>,
-  fallback = 0,
-): number {
-  if (!Array.isArray(worldbook)) return Math.max(0, Math.trunc(fallback));
-  let total = 0;
-  for (const entry of worldbook) {
-    const enabled = (entry.enabled ?? entry.isEnabled ?? true) !== false;
-    const constant = entry.constant === true || entry.isConstant === true;
-    if (enabled && constant && typeof entry.content === "string") {
-      total += [...entry.content].length;
-    }
-  }
-  return total;
-}
 
-export function validateSealedWorkshop(
-  sealed: SealedWorkshopRelease,
-  isReSubmission: boolean,
-): { residentChars: number; updateNote: string; rating: Rating; descriptors: string[]; kinds: WorkshopKind[] } {
-  const actual = countWorkshopConstantChars(sealed.worldbook, sealed.residentChars ?? sealed.constantChars ?? 0);
-  if (actual > MAX_WORKSHOP_CONSTANT_CHARS) {
-    throw new HttpError(422, "constant_char_limit", {
-      actual,
-      max: MAX_WORKSHOP_CONSTANT_CHARS,
-      unit: "unicode_code_points",
-    });
-  }
-  const cover = (sealed.coverUrl ?? "").trim();
-  if (!/^https:\/\/[^\s]{4,1000}$/.test(cover)) {
-    throw new HttpError(422, "cover_required");
-  }
-  const ratingRaw = (sealed.rating ?? "").trim().toUpperCase();
-  if (!isRating(ratingRaw)) {
-    throw new HttpError(422, "rating_required");
-  }
-  let descriptors: string[] = [];
-  if (sealed.ratingAnswers) {
-    try {
-      descriptors = evaluateRating(sealed.ratingAnswers).descriptors;
-    } catch {
-      descriptors = [];
-    }
-  }
-  const loreCount = Number(sealed.contents?.loreCount ?? 0);
-  const ruleCount = Number(sealed.contents?.ruleCount ?? 0);
-  const openingCount = Number(sealed.contents?.openingCount ?? 0);
-  const kinds = (Array.isArray(sealed.kinds) ? sealed.kinds : []).filter(
-    (k): k is WorkshopKind => k === "lore" || k === "display" || k === "opening",
-  );
-  if (loreCount + ruleCount + openingCount <= 0 && kinds.length === 0) {
-    throw new HttpError(422, "content_required");
-  }
-  const updateNote = normalizeUpdateNote(sealed.updateNote ?? "");
-  if ([...updateNote].length > 200) {
-    throw new HttpError(422, "update_note_required");
-  }
-  if (isReSubmission) {
-    const nonWs = [...updateNote.replace(/\s+/gu, "")].length;
-    if (nonWs < 10) {
-      throw new HttpError(422, "update_note_required");
-    }
-  }
-  return { residentChars: actual, updateNote, rating: ratingRaw, descriptors, kinds };
-}
+
+
 
 export async function optionalViewer(c: Ctx): Promise<Member | null> {
   if (bearerOf(c)) {
@@ -273,50 +211,7 @@ export async function memberOwnsExternal(
   return member.provider === provider && member.externalId === externalId;
 }
 
-export async function insertWorkshopNotice(
-  db: D1Database,
-  input: {
-    eventKey: string;
-    recipientMemberId: string;
-    kind:
-      | "workshop_published"
-      | "workshop_reopened"
-      | "workshop_review_result"
-      | "workshop_returned"
-      | "workshop_hidden"
-      | "workshop_appeal_result";
-    path: string;
-    actorMemberId?: string | null;
-    cardId?: number | null;
-    workshopId?: string | null;
-    extra: Record<string, unknown>;
-    now?: number;
-  },
-): Promise<void> {
-  const now = input.now ?? Date.now();
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO community_notifications(
-        event_key, member_id, kind, path, created_at, actor_id, card_id, workshop_id, extra
-      )
-      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
-      WHERE NOT EXISTS (
-        SELECT 1 FROM community_preferences p WHERE p.member_id = ?2 AND p.notifications = 0
-      )`,
-    )
-    .bind(
-      input.eventKey,
-      input.recipientMemberId,
-      input.kind,
-      input.path,
-      now,
-      input.actorMemberId ?? null,
-      input.cardId ?? null,
-      input.workshopId ?? null,
-      JSON.stringify(input.extra),
-    )
-    .run();
-}
+
 
 function parseJsonArray<T>(raw: string | null | undefined): T[] {
   if (!raw) return [];
@@ -332,7 +227,7 @@ function cardAvatarOf(card: CardRow): string {
   return card.background_url || card.landscape_url || card.share_image_url || "";
 }
 
-function cardPlayRoleId(card: CardRow): string {
+export function cardPlayRoleId(card: CardRow): string {
   return card.approved_hosted_role_id || card.source_role_id;
 }
 
@@ -353,6 +248,8 @@ function formatExtensionSummary(
   const authorName = row.display_name || handle || `#${row.author_num_id}`;
   return {
     id: row.id,
+ kind:row.provider===card.provider&&row.author_num_id===card.author_num_id?"dlc":"lorebook",
+ loreCount:row.lore_count,
     cardId: String(row.card_id),
     name: row.name,
     summary: row.summary,
@@ -412,14 +309,9 @@ export async function listCardWorkshops(
     throw new HttpError(gate.countryRegion === "CN" ? 404 : 403, gate.countryRegion === "CN" ? "not_found" : "adult_content");
   }
 
-  const policy = await c.env.DB.prepare(
-    "SELECT allow_new FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-  )
-    .bind(Number(card.id))
-    .first<{ allow_new: number }>();
-
-  const allowNew = policy ? policy.allow_new === 1 : true;
-  const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
+  const {enabled:allowNew}=await readWorkshopPolicy(c.env.DB,Number(card.id));
+  const viewerIsOwner=await memberOwnsExternal(c.env.DB,member,card.provider,card.author_num_id);
+  if(!allowNew) return {tabVisible:false,allowNew:false,viewerIsOwner,total:0,page:1,hasMore:false,items:[]};
 
   const sortSql =
     query.sort === "new"
@@ -456,26 +348,15 @@ export async function listCardWorkshops(
   });
 
   const total = visibleToViewer.length;
-  const tabVisible = allowNew || total > 0;
+  const tabVisible = allowNew;
   const page = Math.max(1, Math.trunc(query.page || 1));
   const start = (page - 1) * WORKSHOP_PAGE_SIZE;
   const slice = visibleToViewer.slice(start, start + WORKSHOP_PAGE_SIZE);
-
-  let viewerInterested: boolean | undefined;
-  if (member && !allowNew && !viewerIsOwner) {
-    const interested = await c.env.DB.prepare(
-      "SELECT 1 FROM card_workshop_interest WHERE card_id = ? AND member_id = ?",
-    )
-      .bind(Number(card.id), member.id)
-      .first();
-    viewerInterested = Boolean(interested);
-  }
 
   return {
     tabVisible,
     allowNew,
     viewerIsOwner,
-    ...(viewerInterested !== undefined ? { viewerInterested } : {}),
     total,
     page,
     hasMore: start + WORKSHOP_PAGE_SIZE < total,
@@ -521,6 +402,7 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
     if (r.rating === "R" && (gate.countryRegion === "CN" || !gate.allowAdult)) continue;
     const card = await getCard(c.env.DB, String(r.card_id));
     if (!card || card.status !== "approved" || card.public_blocked) continue;
+    if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)continue;
     if (isAdult(card) && (gate.countryRegion === "CN" || !gate.allowAdult)) continue;
     const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
     if (r.owner_state !== "visible" && !viewerIsOwner && !accessMap.get(r.id)?.accessible) continue;
@@ -554,6 +436,7 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
     throw new HttpError(404, "not_found");
   }
 
+  if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)throw new HttpError(404,"not_found");
   const member = await optionalViewer(c);
   const gate = await viewerContentGate(c, member);
   if ((isAdult(card) || row.rating === "R") && gate.countryRegion === "CN") {
@@ -672,6 +555,7 @@ export async function commentWorkshopAt(
   if (!card || card.status !== "approved" || card.public_blocked) {
     throw new HttpError(404, "not_found");
   }
+  if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)throw new HttpError(404,"not_found");
   const member = await optionalViewer(c);
   const gate = await viewerContentGate(c, member);
   if ((isAdult(card) || row.rating === "R") && gate.countryRegion === "CN") {
@@ -711,43 +595,16 @@ export async function listMyWorkshops(c: Ctx, lang: string) {
   for (const item of upstreamMine.items ?? []) {
     const resolved = await resolveCardForWork(c.env.DB, member.provider, item.workId, item.sourceRoleId);
     const card = resolved?.card;
-    const latestSub = await c.env.DB.prepare(
-      `SELECT status, note FROM workshop_review_submissions
-       WHERE workshop_id = ?
-       ORDER BY submitted_at DESC LIMIT 1`,
-    )
-      .bind(item.workshopId)
-      .first<{ status: string; note: string }>();
-    const appealRow = await c.env.DB.prepare(
-      `SELECT status FROM workshop_appeals
-       WHERE workshop_id = ?
-       ORDER BY created_at DESC LIMIT 1`,
-    )
-      .bind(item.workshopId)
-      .first<{ status: "pending" | "upheld" | "restored" | "revoked" }>();
-
-    const pubVer = Number(item.publishedVersion ?? 0);
-    const pending = item.hasPendingRelease || item.moderationState === "pending" || latestSub?.status === "pending";
-    const rejected = item.moderationState === "rejected" || latestSub?.status === "rejected";
-    let status: "draft" | "pending" | "rejected" | "live" | "live_changed" | "live_pending" | "live_rejected";
-    if (pubVer > 0) {
-      if (pending) status = "live_pending";
-      else if (rejected) status = "live_rejected";
-      else if (item.changedSincePublish) status = "live_changed";
-      else status = "live";
-    } else {
-      if (pending) status = "pending";
-      else if (rejected) status = "rejected";
-      else status = "draft";
-    }
-
+    const pubVer=Number(item.publishedVersion??0);
+    const status=item.status??(pubVer>0?(item.changedSincePublish?'live_changed':'live'):'draft');
     const cardNum = card ? Number(card.id) : 0;
     const cardName = card ? pickLocale(JSON.parse(card.names || "{}") as Localized, lang) : item.cardName || "";
-    const normalizedAppeal =
-      appealRow?.status === "revoked" ? null : (appealRow?.status ?? item.appeal ?? null);
     const updatedAt = toEpochMs(item.publishedAt) ?? toEpochMs(item.updatedAt, Date.now())!;
     items.push({
       id: item.workshopId,
+      kind:item.kind,
+      loreCount:item.loreCount??0,
+      workshopClosed:item.workshopClosed===true,
       cardId: card ? String(card.id) : "",
       name: item.name,
       summary: item.summary,
@@ -770,10 +627,8 @@ export async function listMyWorkshops(c: Ctx, lang: string) {
         roleId: card ? cardPlayRoleId(card) : item.sourceRoleId,
       },
       status,
-      rejectNote: latestSub?.status === "rejected" ? latestSub.note || item.lastRejectNote : item.lastRejectNote,
       ownerState: normalizeWireOwnerState(item.ownerState),
       ownerReason: item.ownerReason ?? null,
-      appeal: normalizedAppeal,
     });
   }
   return { items };
@@ -788,13 +643,9 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
     await c.env.DB.prepare(
       `SELECT c.*,
               COALESCE(
-                (SELECT p.allow_new FROM workshop_policies p WHERE p.card_id = c.id ORDER BY p.updated_at DESC LIMIT 1),
-                1
+                (SELECT IIF(p.consent_version=2,p.allow_new,0) FROM workshop_policies p WHERE p.card_id = c.id ORDER BY p.updated_at DESC LIMIT 1),
+                0
               ) AS allow_new,
-              EXISTS(
-                SELECT 1 FROM card_workshop_interest cwi
-                WHERE cwi.card_id = c.id AND cwi.member_id = ?3
-              ) AS viewer_interested,
               COALESCE(
                 (SELECT mc.owner_member_id FROM member_connections mc WHERE mc.provider = c.provider AND mc.external_id = CAST(c.author_num_id AS TEXT)),
                 (SELECT mi.member_id FROM member_identities mi WHERE mi.provider = c.provider AND mi.external_id = CAST(c.author_num_id AS TEXT))
@@ -805,8 +656,8 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
        ORDER BY c.heat DESC, c.hot_score DESC
        LIMIT 30`,
     )
-      .bind(like, trimmed, member.id)
-      .all<CardRow & { allow_new: number; viewer_interested: number; owner_member_id: string | null }>()
+      .bind(like, trimmed)
+      .all<CardRow & { allow_new: number; owner_member_id: string | null }>()
   ).results;
 
   const filtered = rows.filter((r) => !(isAdult(r) && (gate.countryRegion === "CN" || !gate.allowAdult)));
@@ -819,7 +670,6 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
       author: { name: r.community_name || r.author_name },
       roleId: cardPlayRoleId(r),
       allowNew: r.allow_new === 1,
-      viewerInterested: Boolean(r.viewer_interested),
       viewerIsOwner: r.owner_member_id
         ? r.owner_member_id === member.id
         : member.provider === r.provider && member.externalId === r.author_num_id,
@@ -827,44 +677,9 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
   };
 }
 
-export async function setCardWorkshopInterest(c: Ctx, cardIdParam: string, draftNameRaw: unknown) {
-  const member = await requireMember(c);
-  const card = await getCard(c.env.DB, cardIdParam);
-  if (!card || card.status !== "approved" || card.public_blocked) {
-    throw new HttpError(404, "not_found");
-  }
-  if (await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id)) {
-    throw new HttpError(400, "owner_cannot_subscribe");
-  }
-  const policy = await c.env.DB.prepare(
-    "SELECT work_id, allow_new FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-  )
-    .bind(Number(card.id))
-    .first<{ work_id: string; allow_new: number }>();
-  if ((policy?.allow_new ?? 1) === 1) {
-    throw new HttpError(409, "workshop_already_open");
-  }
-  const workId = policy?.work_id || (await resolveWorkIdForCard(c.env.DB, card));
-  const draftName = typeof draftNameRaw === "string" ? [...draftNameRaw.trim()].slice(0, 80).join("") : "";
-  await c.env.DB.prepare(
-    `INSERT INTO card_workshop_interest(provider, work_id, card_id, member_id, draft_name, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(provider, work_id, member_id) DO UPDATE SET draft_name = excluded.draft_name`,
-  )
-    .bind(card.provider, workId, Number(card.id), member.id, draftName, Date.now())
-    .run();
-  return { interested: true };
-}
 
-export async function clearCardWorkshopInterest(c: Ctx, cardIdParam: string) {
-  const member = await requireMember(c);
-  const card = await getCard(c.env.DB, cardIdParam);
-  if (!card) throw new HttpError(404, "not_found");
-  await c.env.DB.prepare("DELETE FROM card_workshop_interest WHERE card_id = ? AND member_id = ?")
-    .bind(Number(card.id), member.id)
-    .run();
-  return { interested: false };
-}
+
+
 
 export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[]): Promise<{ applied: number }> {
   let applied = 0;
@@ -888,7 +703,6 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
         : typeof p.policyRevision === "number"
           ? p.policyRevision
           : undefined);
-    const reopenedRaw = ev.reopened !== undefined ? ev.reopened : p.reopened;
     const interestedNosRaw = Array.isArray(ev.interestedPublicNos)
       ? ev.interestedPublicNos
       : Array.isArray(p.interestedPublicNos)
@@ -961,220 +775,49 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       .first();
     if (seen) continue;
 
-    if (ev.kind === "policy_changed" || ev.kind === "policy_saved") {
-      const resolved = await resolveCardForWork(env.DB, provider, workId, sourceRoleId);
-      if (resolved && allowNewRaw !== undefined) {
-        const prev = await env.DB.prepare(
-          "SELECT work_id, allow_new, revision, reopen_generation FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-        )
-          .bind(Number(resolved.card.id))
-          .first<{ work_id: string; allow_new: number; revision: number; reopen_generation: number }>();
-        const targetWorkId = workId || prev?.work_id || resolved.workId;
-        const nextAllow = allowNewRaw === true || allowNewRaw === 1 ? 1 : 0;
-        const nextRev = Number(revisionRaw ?? (prev?.revision ?? 0) + 1);
-        if (!prev || nextRev >= prev.revision) {
-          const reopened = Boolean(reopenedRaw || (prev && prev.allow_new === 0 && nextAllow === 1));
-          const reopenGen = (prev?.reopen_generation ?? 0) + (reopened ? 1 : 0);
-          await env.DB.prepare(
-            `INSERT INTO workshop_policies(provider, work_id, card_id, allow_new, revision, reopen_generation, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(provider, work_id) DO UPDATE SET
-               card_id = excluded.card_id,
-               allow_new = excluded.allow_new,
-               revision = excluded.revision,
-               reopen_generation = excluded.reopen_generation,
-               updated_at = excluded.updated_at`,
-          )
-            .bind(provider, targetWorkId, Number(resolved.card.id), nextAllow, nextRev, reopenGen, now)
-            .run();
-
-          if (reopened) {
-            const ownerMemberId = await findMemberIdByExternal(env.DB, provider, resolved.card.author_num_id);
-            const interestedRows = (
-              await env.DB.prepare(
-                "SELECT member_id, draft_name FROM card_workshop_interest WHERE card_id = ? OR (provider = ? AND work_id = ?)",
-              )
-                .bind(Number(resolved.card.id), provider, targetWorkId)
-                .all<{ member_id: string; draft_name: string }>()
-            ).results;
-            const recipients = new Map<string, string>();
-            for (const r of interestedRows) recipients.set(r.member_id, r.draft_name);
-            for (const pubNo of interestedNosRaw) {
-              if (typeof pubNo === "number" && pubNo > 0) {
-                const mid = await resolveMember(env.DB, provider, pubNo, now);
-                if (!recipients.has(mid)) recipients.set(mid, "");
-              }
-            }
-            for (const [recipientId, draftName] of recipients) {
-              if (recipientId === ownerMemberId) continue;
-              await insertWorkshopNotice(env.DB, {
-                eventKey: `workshop_reopened:${resolved.card.id}:${reopenGen}:${recipientId}`,
-                recipientMemberId: recipientId,
-                kind: "workshop_reopened",
-                path: "/mine?tab=workshops",
-                actorMemberId: ownerMemberId,
-                cardId: Number(resolved.card.id),
-                extra: {
-                  workshopName: draftName,
-                  ...(draftName ? { draftName } : {}),
-                },
-                now,
-              });
-            }
-            await env.DB.prepare("DELETE FROM card_workshop_interest WHERE card_id = ? OR (provider = ? AND work_id = ?)")
-              .bind(Number(resolved.card.id), provider, targetWorkId)
-              .run();
-          }
+    if(ev.kind==="release_published") {
+      if(p.policyVersion!==2||!p.publication||typeof p.publication!=="object") throw new HttpError(502,"invalid_publication");
+      const publication=p.publication as import("./workshop-gateway").WorkshopPublicationReceipt;
+      if(publication.workshopId!==workshopId||publication.workId!==workId)throw new HttpError(502,"invalid_publication");
+      await applyWorkshopPublication(env,provider,publication);
+    } else if(ev.kind==='release_unpublished') {
+     const publication=p.publication as import('./workshop-publication').WorkshopUnpublishReceipt;
+     if(p.policyVersion!==2||!publication||publication.workshopId!==workshopId||publication.workId!==workId)throw new HttpError(502,'invalid_publication');
+     await applyWorkshopUnpublication(env,provider,publication);
+    } else if (ev.kind === "policy_changed" || ev.kind === "policy_saved") {
+      // Unknown/legacy events cannot grant v2 consent or advance its revision.
+      const revision=Number(revisionRaw);
+      if(p.policyVersion===2&&Number.isSafeInteger(revision)&&revision>0&&allowNewRaw!==undefined) {
+        const resolved=await resolveCardForWork(env.DB,provider,workId,sourceRoleId);
+        if(resolved) {
+          const nextAllow=allowNewRaw===true||allowNewRaw===1?1:0;
+          await env.DB.prepare(`INSERT INTO workshop_policies(provider,work_id,card_id,allow_new,revision,consent_version,updated_at)
+            VALUES(?,?,?,?,?,2,?) ON CONFLICT(provider,work_id) DO UPDATE SET
+            card_id=excluded.card_id,allow_new=excluded.allow_new,revision=excluded.revision,
+            consent_version=2,updated_at=excluded.updated_at
+            WHERE excluded.revision>workshop_policies.revision OR
+              (excluded.revision=workshop_policies.revision AND workshop_policies.consent_version<>2)`)
+            .bind(provider,workId||resolved.workId,Number(resolved.card.id),nextAllow,revision,now).run();
         }
       }
-    } else if (ev.kind === "owner_action" && workshopId) {
-      const ws = await env.DB.prepare("SELECT * FROM workshops WHERE id = ?")
-        .bind(workshopId)
-        .first<WorkshopRow>();
-      if (ws && (ownerStateRaw !== undefined || actionRaw !== undefined)) {
-        const gen = Number(ownerGenRaw ?? ws.owner_action_generation + 1);
-        if (gen >= ws.owner_action_generation) {
-          const inferred =
-            ownerStateRaw ??
-            (actionRaw === "hide" ? "hidden" : actionRaw === "return" ? "returned" : "visible");
-          const dbState = normalizeDbOwnerState(inferred);
-          const reason = dbState === "visible" ? null : (reasonRaw ?? null);
-          const actedAt = dbState === "visible" ? null : createdAtMs;
-          await env.DB.prepare(
-            `UPDATE workshops
-             SET owner_state = ?, owner_reason = ?, owner_acted_at = ?, owner_action_generation = ?,
-                 protected_join_cutoff_seq = COALESCE(?, protected_join_cutoff_seq), updated_at = ?
-             WHERE id = ?`,
-          )
-            .bind(dbState, reason, actedAt, gen, cutoffSeqRaw ?? null, now, ws.id)
-            .run();
-
-          const effectiveAction =
-            actionRaw ?? (dbState === "returned" ? "return" : dbState === "hidden_by_owner" ? "hide" : "restore");
-          if (effectiveAction === "return" || effectiveAction === "hide") {
-            const card = await getCard(env.DB, String(ws.card_id));
-            const ownerMemberId = card ? await findMemberIdByExternal(env.DB, ws.provider, card.author_num_id) : null;
-            const creatorMemberId =
-              ws.author_member_id ?? (await resolveMember(env.DB, provider, ws.author_num_id, now));
-            if (creatorMemberId && creatorMemberId !== ownerMemberId) {
-              const kind = effectiveAction === "return" ? "workshop_returned" : "workshop_hidden";
-              await insertWorkshopNotice(env.DB, {
-                eventKey: `${kind}:${ws.id}:${gen}`,
-                recipientMemberId: creatorMemberId,
-                kind,
-                path: `/mine/workshops/${ws.id}/edit?section=publish`,
-                actorMemberId: ownerMemberId,
-                cardId: ws.card_id,
-                workshopId: ws.id,
-                extra: {
-                  workshopName: ws.name,
-                  reason: reason ?? "",
-                },
-                now,
-              });
-            }
-          }
-        }
-      }
-    } else if (ev.kind === "appeal_submitted" && workshopId) {
-      const ws = await env.DB.prepare("SELECT * FROM workshops WHERE id = ?")
-        .bind(workshopId)
-        .first<WorkshopRow>();
-      if (ws) {
-        const creatorNum = Number(authorPubNoRaw ?? ws.author_num_id);
-        const creatorMemberId =
-          ws.author_member_id ?? (creatorNum > 0 ? await resolveMember(env.DB, provider, creatorNum, now) : null);
-        const card = await getCard(env.DB, String(ws.card_id));
-        const appealId = appealIdRaw || crypto.randomUUID();
-        const wireSnap = normalizeWireOwnerState(ownerStateSnapRaw ?? ws.owner_state);
-        const appealOwnerState = wireSnap === "returned" ? "returned" : "hidden";
-        await env.DB.batch([
-          env.DB.prepare(
-            `INSERT OR IGNORE INTO workshop_appeals(
-              id, workshop_id, card_id, provider, work_id, creator_num_id, creator_member_id,
-              card_owner_num_id, owner_state_snapshot, owner_reason_snapshot, owner_acted_at, owner_action_generation,
-              appeal_reason, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-          ).bind(
-            appealId,
-            ws.id,
-            ws.card_id,
-            ws.provider,
-            ws.work_id,
-            creatorNum,
-            creatorMemberId,
-            card?.author_num_id ?? 0,
-            appealOwnerState,
-            ownerReasonSnapRaw ?? ws.owner_reason ?? "",
-            ws.owner_acted_at ?? ws.updated_at,
-            Number(ownerGenRaw ?? ws.owner_action_generation),
-            (reasonRaw ?? "").trim(),
-            createdAtMs,
-          ),
-          env.DB.prepare("UPDATE workshops SET appeal_state = 'pending', updated_at = ? WHERE id = ?").bind(now, ws.id),
-        ]);
-      }
+    } else if (ev.kind === "owner_action" && workshopId && (actionRaw === "hide" || actionRaw === "restore")) {
+      const gen=Number(ownerGenRaw);
+      if(Number.isSafeInteger(gen)&&gen>0)await env.DB.prepare(`UPDATE workshops SET owner_state=?,owner_reason=NULL,owner_action_generation=?,protected_join_cutoff_seq=COALESCE(?,protected_join_cutoff_seq),updated_at=? WHERE id=? AND owner_action_generation<?`).bind(actionRaw==='hide'?'hidden_by_owner':'visible',gen,cutoffSeqRaw??null,now,workshopId,gen).run();
     } else if ((ev.kind === "install_count_changed" || ev.kind === "install_count") && workshopId && typeof joinCountRaw === "number") {
       await env.DB.prepare("UPDATE workshops SET install_count = ?, updated_at = ? WHERE id = ?")
         .bind(Math.max(0, Math.trunc(joinCountRaw)), now, workshopId)
         .run();
-    } else if (ev.kind === "appeal_decided" && workshopId && (decisionRaw === "upheld" || decisionRaw === "restored")) {
-      const ws = await env.DB.prepare("SELECT * FROM workshops WHERE id = ?")
-        .bind(workshopId)
-        .first<WorkshopRow>();
-      if (ws) {
-        const nextGen = Math.max(ws.owner_action_generation, Number(ownerGenRaw ?? ws.owner_action_generation));
-        await env.DB.batch([
-          env.DB.prepare(
-            `UPDATE workshop_appeals
-             SET status = ?, decided_at = COALESCE(decided_at, ?)
-             WHERE workshop_id = ? AND status = 'pending'`,
-          ).bind(decisionRaw, createdAtMs, ws.id),
-          decisionRaw === "restored"
-            ? env.DB.prepare(
-                `UPDATE workshops
-                 SET owner_state = 'visible', owner_reason = NULL, owner_acted_at = NULL,
-                     owner_action_generation = ?, appeal_state = 'restored', updated_at = ?
-                 WHERE id = ?`,
-              ).bind(nextGen, now, ws.id)
-            : env.DB.prepare(
-                `UPDATE workshops
-                 SET appeal_state = 'upheld', owner_action_generation = ?, updated_at = ?
-                 WHERE id = ?`,
-              ).bind(nextGen, now, ws.id),
-        ]);
-      }
-    } else if (ev.kind === "release_committed" && workshopId) {
-      if (typeof joinCountRaw === "number") {
-        await env.DB.prepare("UPDATE workshops SET install_count = ?, updated_at = ? WHERE id = ?")
-          .bind(Math.max(0, Math.trunc(joinCountRaw)), now, workshopId)
-          .run();
-      } else if (decisionRaw === "approved" && typeof versionRaw === "number" && versionRaw > 0) {
-        await env.DB.prepare(
-          "UPDATE workshops SET moderation_state = 'approved', version_no = MAX(version_no, ?), updated_at = ? WHERE id = ? AND moderation_state NOT IN ('revoked', 'deleted')",
-        )
-          .bind(Math.trunc(versionRaw), now, workshopId)
-          .run();
-      }
     } else if ((ev.kind === "workshop_deleted" || ev.kind === "moderated") && workshopId) {
       if (ev.kind === "workshop_deleted") {
         await env.DB.prepare("UPDATE workshops SET moderation_state = 'deleted', updated_at = ? WHERE id = ?")
           .bind(now, workshopId)
           .run();
       } else if (actionRaw === "revoke" || modStateRaw === "revoked") {
-        await env.DB.batch([
-          env.DB.prepare("UPDATE workshops SET moderation_state = 'revoked', updated_at = ? WHERE id = ?").bind(
-            now,
-            workshopId,
-          ),
-          env.DB.prepare(
-            "UPDATE workshop_appeals SET status = 'revoked', decided_at = ? WHERE workshop_id = ? AND status = 'pending'",
-          ).bind(now, workshopId),
-        ]);
+        await env.DB.prepare("UPDATE workshops SET moderation_state='revoked',updated_at=? WHERE id=?").bind(now,workshopId).run();
       } else if (actionRaw === "restore" || modStateRaw === "approved") {
         await env.DB.prepare(
           `UPDATE workshops
-           SET moderation_state = IIF(version_no > 0, 'approved', 'draft'), updated_at = ?
+           SET moderation_state = IIF(approved_release_id IS NOT NULL, 'approved', 'draft'), updated_at = ?
            WHERE id = ? AND moderation_state = 'revoked'`,
         )
           .bind(now, workshopId)
