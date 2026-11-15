@@ -850,28 +850,41 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
   return { applied,rejected };
 }
 
+/**
+ * Events pulled per minute-cron run. Each event costs a handful of D1 queries (dedupe,
+ * card lookups, projection write); a full batch of events whose cards have no community
+ * row measures about 250 queries (test/workshop-outbox-cron.test.ts), well inside the 1000-query-per-invocation limit that the
+ * minute cron shares with rank and badge work. A backlog of a few hundred events clears
+ * in under ten minutes.
+ */
+export const WORKSHOP_OUTBOX_MINUTE_BATCH = 50;
+
 export async function drainProviderWorkshopOutbox(
   env: Env,
   provider: ProviderId = "harbor",
+  limit = 100,
 ): Promise<{ drained: number; applied: number }> {
   const cursor = await env.DB.prepare("SELECT last_seq FROM workshop_outbox_cursor WHERE provider = ?")
     .bind(provider)
     .first<{ last_seq: number }>();
   const afterSeq = cursor?.last_seq ?? 0;
-  const batch = await workshopUpstream.pullOutbox(env, afterSeq, 100, provider);
+  const batch = await workshopUpstream.pullOutbox(env, afterSeq, limit, provider);
   const events = batch.events ?? [];
   if (events.length === 0) return { drained: 0, applied: 0 };
   const res = await applyWorkshopEvents(env, events);
   const maxSeq = events.reduce((m, e) => (typeof e.seq === "number" && e.seq > m ? e.seq : m), afterSeq);
   if (maxSeq > afterSeq) {
-    await env.DB.prepare(
+    // Overlapping drains (minute cron and the internal sync route) apply idempotently by
+    // event key; the cursor only moves forward, and only the run that moved it acknowledges.
+    const moved = await env.DB.prepare(
       `INSERT INTO workshop_outbox_cursor(provider, last_seq, updated_at)
        VALUES (?, ?, ?)
-       ON CONFLICT(provider) DO UPDATE SET last_seq = excluded.last_seq, updated_at = excluded.updated_at`,
+       ON CONFLICT(provider) DO UPDATE SET last_seq = excluded.last_seq, updated_at = excluded.updated_at
+       WHERE excluded.last_seq > workshop_outbox_cursor.last_seq`,
     )
       .bind(provider, maxSeq, Date.now())
       .run();
-    await workshopUpstream.ackOutbox(env, maxSeq, provider).catch(() => {});
+    if (moved.meta.changes > 0) await workshopUpstream.ackOutbox(env, maxSeq, provider).catch(() => {});
   }
   return { drained: events.length, applied: res.applied };
 }

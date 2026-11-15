@@ -8,7 +8,7 @@ import { reviewLengthExemptForCard } from './review-length-exemption';
 import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {workshopRoutes} from './workshop-routes';
-import {commentWorkshopAt, drainProviderWorkshopOutbox} from './workshop';
+import {commentWorkshopAt, drainProviderWorkshopOutbox, WORKSHOP_OUTBOX_MINUTE_BATCH} from './workshop';
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
@@ -2496,6 +2496,9 @@ export default {
       const phase=Math.floor(event.scheduledTime/60000)%3;
       const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
       ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));
+      // 工坊同步每分鐘拉一批（作者開關、發布、隱藏要盡快出現在卡片頁）；跟排行各自 waitUntil、各自接錯，互不阻擋。
+      // 只在這裡拉，每小時那輪不再拉，同一分鐘不會有兩輪重疊。
+      ctx.waitUntil(drainProviderWorkshopOutbox(env,'harbor',WORKSHOP_OUTBOX_MINUTE_BATCH).then((r)=>(r.applied>0?dispatchPush(env):0)).catch(()=>{console.warn('Workshop outbox sync unavailable');}));
       return;
     }
     if (event.cron === '*/5 * * * *') {
@@ -2517,7 +2520,6 @@ export default {
     }
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(reconcileWorkAccess(env).catch(() => { console.warn('Work access recovery unavailable'); }));
-    ctx.waitUntil(drainProviderWorkshopOutbox(env).then((r) => (r.applied > 0 ? dispatchPush(env) : 0)).catch(() => { console.warn('Workshop outbox sync unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     // 蘇綺的召回先寫進通知，同一輪就推出去
