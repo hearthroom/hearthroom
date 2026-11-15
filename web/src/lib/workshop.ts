@@ -185,8 +185,12 @@ export const fetchUsageSummary = (roleId: string, token: string) => upstream<Usa
 /** 切換上下文檔位：跟畫布的模型選單存同一個設定（這張卡的遊玩設定），存好才算數 */
 export const saveContextTier = (roleId: string, context: number, token: string) => upstream<unknown>("/player/role-settings/save", token, { roleId, context });
 export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPolicy>(`/workshop/policy${q({ roleId })}`, token);
-export const savePolicy = (roleId: string, allowNew: boolean, expectedRevision: number, token: string) =>
-  upstream<OwnerPolicy>("/workshop/policy/save", token, { roleId, allowNew, expectedRevision });
+/**
+ * 存作者開關走本站：伺服器存進 Provider 後同步更新公開列表才回成功，卡片頁馬上看得到分頁出現或消失
+ * （不等背景同步）。cardId 可以是卡號。
+ */
+export const savePolicy = (cardId: string, allowNew: boolean, expectedRevision: number, token: string) =>
+  community<OwnerPolicy>(`/cards/${encodeURIComponent(cardId)}/workshop/policy`, token, "POST", { allowNew, expectedRevision });
 /** 原卡作者隱藏／取消隱藏玩家擴充：沒有理由、不通知製作者、沒有申訴 */
 export const ownerAction = (workshopId: string, action: "hide" | "restore", token: string) =>
   upstream<{ ownerState: OwnerState }>("/workshop/owner-action", token, { workshopId, action });

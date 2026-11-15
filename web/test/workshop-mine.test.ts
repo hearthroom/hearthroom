@@ -106,7 +106,7 @@ it("owner switch: off by default; turning it on saves right away and shows both 
   sw().click();
   await settle();
   expect(confirmState.current).toBeNull();
-  expect(ws.savePolicy).toHaveBeenCalledWith("role-1", true, 3, "tok");
+  expect(ws.savePolicy).toHaveBeenCalledWith("100001", true, 3, "tok");
   expect(sw().getAttribute("aria-checked")).toBe("true");
   expect(document.querySelector("[data-ws-owner-dlc]")?.textContent).toContain("還沒有 DLC");
   expect(document.querySelector("[data-ws-owner-ext]")?.textContent).toContain("還沒有玩家擴充");
@@ -133,7 +133,7 @@ it("owner switch: turning off with published content asks first (focus on cancel
   await settle();
   settleConfirm(true);
   await settle();
-  expect(ws.savePolicy).toHaveBeenCalledWith("role-1", false, 3, "tok");
+  expect(ws.savePolicy).toHaveBeenCalledWith("100001", false, 3, "tok");
   expect(sw().getAttribute("aria-checked")).toBe("false");
   expect(document.querySelector("[data-ws-owner-kept]")?.textContent).toContain("3 個 DLC 與 5 個玩家擴充的內容保留");
 
@@ -145,7 +145,7 @@ it("owner switch: turning off with published content asks first (focus on cancel
   sw().click();
   await settle();
   expect(confirmState.current).toBeNull();
-  expect(ws.savePolicy).toHaveBeenCalledWith("role-1", false, 1, "tok");
+  expect(ws.savePolicy).toHaveBeenCalledWith("100001", false, 1, "tok");
 });
 
 it("owner switch: a failed save re-reads the server state and offers a retry", async () => {

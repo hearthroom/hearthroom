@@ -87,7 +87,7 @@ watch(() => props.roleId, (id) => { if (id && !/^[1-9]\d*$/.test(id)) void load(
 
 async function save(next: boolean) {
   const current = policy.value;
-  if (!current || saving.value) return;
+  if (!current || saving.value || !props.cardId) return;
   if (!next && affected.value) {
     const ext = counts.value.lorebookPublished;
     const ok = await confirmDialog({
@@ -100,7 +100,7 @@ async function save(next: boolean) {
   saving.value = true;
   saveFailed.value = false;
   try {
-    policy.value = await savePolicy(props.roleId, next, current.revision, await token());
+    policy.value = await savePolicy(props.cardId, next, current.revision, await token());
   } catch {
     saveFailed.value = true;
     await load();
@@ -117,7 +117,7 @@ function retry() { void save(!open.value); }
       <h2 id="ws-owner-title">{{ $t("workshop.tab.workshop") }}</h2>
       <button
         v-if="policy" type="button" class="ws-switch" role="switch" :aria-checked="open" :aria-label="$t('workshop.owner.switch.label')"
-        :disabled="saving" data-ws-owner-switch @click="save(!open)"
+        :disabled="saving || !cardId" data-ws-owner-switch @click="save(!open)"
       />
     </div>
 
