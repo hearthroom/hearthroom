@@ -30,9 +30,9 @@ const demoted = computed(() => (level.value === "over" ? firstDemoted(items.valu
 const recTier = computed(() => tierLabel(usage.value?.recommendedContextTokens));
 const curTier = computed(() => tierLabel(usage.value?.currentContextTokens));
 const canSwitch = computed(() => level.value !== "ok" && !!usage.value?.recommendedContextTier && usage.value.recommendedContextTier !== usage.value.currentContextTier);
-// 類型清單照各語言的列舉寫法（中文、日文用頓號，英文、韓文用逗號）
+// 類型清單：中文、日文用頓號，英文、韓文用逗號。不用 Intl.ListFormat 的 narrow/unit：它在中日文不加任何分隔，三個詞會黏在一起
 const KIND_LABEL: Record<string, string> = { lore: "workshop.kind.lore", display: "workshop.kind.regex", opening: "workshop.kind.opening" };
-const kindList = (kinds: string[]) => new Intl.ListFormat(locale.value, { style: "narrow", type: "unit" }).format(kinds.filter((k) => KIND_LABEL[k]).map((k) => t(KIND_LABEL[k])));
+const kindList = (kinds: string[]) => kinds.filter((k) => KIND_LABEL[k]).map((k) => t(KIND_LABEL[k])).join(/^(zh|ja)/.test(String(locale.value)) ? "、" : ", ");
 /** 每列先寫是哪一層（作者 DLC／玩家擴充），舊回應沒有 kind 就不寫 */
 const layerOf = (kind?: string) => (kind === "dlc" ? t("workshop.layer.dlc") : kind === "lorebook" ? t("workshop.layer.extChip") : "");
 const chars = (v: number | undefined) => new Intl.NumberFormat(locale.value).format(v ?? 0);
