@@ -658,6 +658,14 @@ describe('generation entry follows provider identity', () => {
 });
 
 describe('bounded author workspace scrolling', () => {
+  it('opens the publication section from the workshop settings destination', async () => {
+    const scroll=vi.spyOn(HTMLElement.prototype,'scrollIntoView');
+    await mount('/cards/r1/edit?section=publish');
+    await nextTick(); await nextTick();
+    expect(scroll.mock.contexts.some(el=>(el as HTMLElement)?.dataset?.section==='publish')).toBe(true);
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    scroll.mockRestore();
+  });
   it.each([114, 230, 160])('keeps a settled anchor and manual adjacent sections aligned at viewport top %i', async (top) => {
     await mount('/create');
     const viewport = $('.body__scroll') as HTMLElement;

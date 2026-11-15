@@ -19,6 +19,16 @@ describe("確認框的預設焦點", () => {
   let unmount: (() => void) | null = null;
   afterEach(() => { settleConfirm(false); unmount?.(); unmount = null; });
 
+  it("policy explanations use a plain-text bullet list without HTML execution", async () => {
+    unmount = await mountDialog();
+    void confirmDialog({ title:"synthetic policy", message:"lead", bullets:["first","<img src=x onerror=probe()>"] } as any);
+    await nextTick(); await nextTick();
+    const bullets=document.querySelectorAll('[data-confirm-bullets] li');
+    expect(bullets).toHaveLength(2);
+    expect(bullets[1].textContent).toBe("<img src=x onerror=probe()>");
+    expect(document.querySelector('[data-confirm-bullets] img')).toBeNull();
+  });
+
   it("一般確認：焦點在確認鍵", async () => {
     unmount = await mountDialog();
     void confirmDialog({ message: "m", confirmText: "ok", cancelText: "back" });

@@ -30,6 +30,7 @@ const phase = ref<"creating" | "closed" | "error">("creating");
 const error = ref("");
 /** 回卡片頁用的卡號：查到才有，沒查到就用網址上帶來的 */
 const cardNum = ref("");
+const ownCard=ref(false);
 let creating = false;
 
 /** 卡號 → 原卡的 roleId（跟卡片頁打工坊端點用的同一個）。先問「能建立擴充的卡」，順便知道有沒有暫停。 */
@@ -39,12 +40,13 @@ async function resolveRole(card: string, token: string): Promise<{ roleId: strin
     const hit = items.find((i) => i.cardId === card || String(i.num) === card);
     if (hit) {
       cardNum.value = String(hit.num || hit.cardId);
+      ownCard.value=!!hit.viewerIsOwner;
       return { roleId: hit.roleId, closed: !hit.allowNew };
     }
   } catch { /* 清單讀不到就直接查卡 */ }
   const found = await fetchCard(card, String(locale.value));
   cardNum.value = String(found.num ?? found.id);
-  return { roleId: found.roleId, closed: false };
+  throw new Error(t("state.loadFailed"));
 }
 
 async function create() {
@@ -54,6 +56,7 @@ async function create() {
   phase.value = "creating";
   error.value = "";
   cardNum.value = card;
+  ownCard.value=false;
   try {
     if (!card) throw new Error(t("state.notFound"));
     const token = await session.accessToken();
@@ -88,9 +91,10 @@ watch([workshopId, cardParam], () => { if (!workshopId.value) void create(); }, 
         <div class="ghost" style="height: 40px" /><div class="ghost" style="height: 200px" />
       </div>
       <div v-else-if="phase === 'closed'" class="panel ws-page__closed" data-closed>
-        <h2 class="ws-text">{{ $t("workshop.mine.pick.closed") }}</h2>
-        <p class="muted ws-text">{{ $t("workshop.paused.closed") }}</p>
-        <RouterLink class="btn" :to="lp(`/cards/${encodeURIComponent(cardNum)}`)">{{ $t("workshop.editor.backToCard") }}</RouterLink>
+        <h2 class="ws-text">{{ $t(ownCard ? "workshop.mine.pick.ownClosed" : "workshop.mine.pick.closed") }}</h2>
+        <p class="muted ws-text">{{ $t(ownCard ? "workshop.paused.ownClosed" : "workshop.paused.closed") }}</p>
+        <RouterLink v-if="ownCard" class="btn" :to="{path:lp(`/cards/${encodeURIComponent(cardNum)}/edit`),query:{section:'publish'}}">{{ $t("workshop.action.goSettings") }}</RouterLink>
+        <RouterLink v-else class="btn" :to="lp(`/cards/${encodeURIComponent(cardNum)}`)">{{ $t("workshop.editor.backToCard") }}</RouterLink>
       </div>
       <div v-else class="notice notice--error ws-page__error" role="alert">
         <span class="ws-text">{{ error }}</span>

@@ -507,6 +507,13 @@ function goto(next: Section) {
   spyHoldUntil = Date.now() + 1200;
   el.scrollIntoView({ block: "start", behavior: "smooth" });
 }
+let linkedSection: string | undefined;
+watch([() => route.query.section, loading], async ([target, busy]) => {
+  if (typeof target !== "string" || !SECTIONS.includes(target as Section)) { linkedSection=undefined; return; }
+  if (busy || linkedSection===target) return;
+  await nextTick();
+  if (paneOf(target as Section)) { linkedSection=target; goto(target as Section); }
+}, { immediate:true, flush:"post" });
 /** 以表單錨點的實際到位位置判定，與 scrollIntoView 的 padding／margin 一致。 */
 let spyFrame = 0;
 function spy() {

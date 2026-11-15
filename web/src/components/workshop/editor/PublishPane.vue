@@ -13,8 +13,10 @@ import { useI18n } from "vue-i18n";
 import type { AppealState, ChecklistItem, PublishState, WorkshopDraft } from "@/lib/workshop";
 import { UPDATE_NOTE_MAX, UPDATE_NOTE_MIN } from "@/lib/workshop";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   state: PublishState;
+  policyReviewCancelled?: boolean;
+  newPlayersVisible?: boolean;
   draft: Pick<WorkshopDraft, "published" | "updateNote" | "card">;
   checklist: ChecklistItem[];
   /** 平台的退件意見（未通過、新版未通過） */
@@ -25,7 +27,7 @@ const props = defineProps<{
   /** 這次編輯期間開過試玩：只是提醒，不擋送審 */
   tried: boolean;
   busy: boolean;
-}>();
+}>(), {newPlayersVisible:true});
 const emit = defineEmits<{
   "update:note": [string];
   submit: [];
@@ -40,6 +42,8 @@ const live = computed(() => props.draft.published?.version ?? 0);
 
 /** 狀態區的標題：已發布系列帶版號，其他用短狀態名 */
 const title = computed(() => {
+  if (props.policyReviewCancelled) return t("workshop.status.reviewCanceled");
+  if (live.value > 0 && props.newPlayersVisible === false) return t("workshop.status.hiddenNewPlayers");
   switch (props.state) {
     case "draft": return t("workshop.status.draft");
     case "review": return t("workshop.status.inReview");
@@ -54,6 +58,8 @@ const title = computed(() => {
   return "";
 });
 const desc = computed(() => {
+  if (props.policyReviewCancelled) return t("workshop.publish.reviewCanceled.desc");
+  if (live.value > 0 && props.newPlayersVisible === false) return t(props.draft.card.ownerIsMe ? "workshop.publish.cardClosedOwn.desc" : "workshop.publish.cardClosedThirdParty.desc");
   switch (props.state) {
     case "draft": return t("workshop.publish.draft.desc");
     case "review": return t("workshop.publish.inReview.desc");
@@ -96,7 +102,7 @@ const CHECK_KEY: Record<ChecklistItem["key"], string> = {
   note: "workshop.publish.check.note",
 };
 const shownChecks = computed(() => props.checklist.filter((c) => c.key !== "note" || needsNote.value));
-const blocked = computed(() => shownChecks.value.some((c) => !c.ok));
+const blocked = computed(() => props.draft.card.canSubmit !== true || shownChecks.value.some((c) => !c.ok));
 const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
 </script>
 
@@ -121,6 +127,7 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
     <div v-if="submitLabel" class="panel pub__checks">
       <h3>{{ $t("workshop.publish.check.title") }}</h3>
       <ul>
+        <li :class="{ok:draft.card.canSubmit===true,over:draft.card.canSubmit!==true}" data-check="cardOpen" :data-ok="draft.card.canSubmit===true"><span class="ws-text">{{ $t(draft.card.canSubmit ? "workshop.publish.check.cardOpen" : ownerIsMe ? "workshop.publish.check.ownCardOpen.blocked" : "workshop.publish.check.cardOpen.blocked") }}</span></li>
         <li v-for="c in shownChecks" :key="c.key" :class="{ ok: c.ok, over: !c.ok && c.key === 'constant' }" :data-check="c.key" :data-ok="c.ok">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path v-if="c.ok" d="M3.5 8.5l3 3 6-7" /><path v-else-if="c.key === 'constant'" d="M4.5 4.5l7 7M11.5 4.5l-7 7" /><circle v-else cx="8" cy="8" r="5.5" />
@@ -146,6 +153,7 @@ const ownerIsMe = computed(() => props.draft.card.ownerIsMe);
       </span>
     </div>
 
+    <p v-if="submitLabel && draft.card.canSubmit!==true" class="notice ws-text" data-policy-submit-blocked>{{ $t(ownerIsMe ? "workshop.publish.ownCardClosedHint" : "workshop.publish.cardNotOpenHint") }}</p>
     <div v-if="submitLabel || canWithdraw || canAppeal" class="pub__acts">
       <button v-if="submitLabel" type="button" class="btn btn--primary btn--lg" :disabled="busy || blocked" data-pub-submit @click="emit('submit')">{{ submitLabel }}</button>
       <button v-if="canWithdraw" type="button" class="btn btn--lg" :disabled="busy" data-pub-withdraw @click="emit('withdraw')">{{ $t("workshop.publish.action.cancelReview") }}</button>

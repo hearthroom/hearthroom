@@ -132,6 +132,9 @@ function apply(d: WorkshopDraft) {
 function applyItem(item: MineItem | undefined) {
   if (!item) return;
   status.value = item.status;
+  policyReviewCancelled.value=!!item.policyReviewCancelled;
+  newPlayersVisible.value=item.newPlayersVisible!==false;
+  if (draft.value && typeof item.canSubmit === "boolean") draft.value.card.canSubmit=item.canSubmit;
   ownerState.value = item.ownerState ?? "visible";
   ownerReason.value = item.ownerReason ?? null;
   rejectNote.value = item.rejectNote ?? null;
@@ -219,6 +222,8 @@ const effectiveStatus = computed<MineStatus>(() =>
   // 已發布而畫面上有未存的修改：當成「有修改尚未提交」，主按鈕直接是「提交新版審核」（送出前會先存）
   status.value === "live" && dirty.value ? "live_changed" : status.value);
 const pubState = computed(() => publishState(effectiveStatus.value, ownerState.value));
+const policyReviewCancelled=ref(false);
+const newPlayersVisible=ref(true);
 /** 名稱上限只有這一頁知道（共用的檢查清單不看長度）：超過就讓「名稱與簡介」不打勾、送不出去 */
 const checklist = computed(() => {
   const d = draft.value;
@@ -231,6 +236,8 @@ const residentUsed = computed(() => (draft.value ? constantChars(draft.value.wor
 const residentOver = computed(() => residentUsed.value > CONSTANT_CHAR_LIMIT);
 
 const SUBMIT_ERRORS: Record<string, string> = {
+  workshop_closed:"workshop.editor.error.cardNotOpen",
+  workshop_unavailable:"workshop.detail.hidden.note",
   cover_required: "workshop.editor.error.cover",
   rating_required: "workshop.editor.error.rating",
   content_required: "workshop.editor.error.content",
@@ -242,6 +249,7 @@ async function submit() {
   const d = draft.value;
   if (!d || busy.value) return;
   if (dirty.value && !(await save())) return;
+  if (d.card.canSubmit !== true) { error.value=t(d.card.ownerIsMe ? "workshop.publish.ownCardClosedHint" : "workshop.editor.error.cardNotOpen"); return; }
   // 畫面上的按鈕已經依檢查清單鎖住；這裡再擋一次，鍵盤或連點也送不出不完整的版本
   const needsNote = Boolean(d.published);
   if (checklist.value.some((c) => !c.ok && (c.key !== "note" || needsNote))) return;
@@ -602,7 +610,7 @@ watch(error, async (text) => {
           <!-- 發布 -->
           <section v-else class="pane" data-section="publish">
             <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
-            <PublishPane :state="pubState" :draft="draft" :checklist="checklist" :reject-note="rejectNote" :owner-reason="ownerReason"
+            <PublishPane :state="pubState" :draft="draft" :policy-review-cancelled="policyReviewCancelled" :new-players-visible="newPlayersVisible" :checklist="checklist" :reject-note="rejectNote" :owner-reason="ownerReason"
                          :appeal="appeal" :tried="tried" :busy="busy || saving || stale" v-model:note="draft.updateNote"
                          @submit="submit" @withdraw="withdraw" @appeal="appealNow" @delete="remove" />
           </section>

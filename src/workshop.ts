@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { effectiveWorkshopPolicy, readWorkshopPolicy, policyAllowsAuthor } from "./workshop-policy";
 import { normalizeUpdateNote } from "../shared/card-update";
 import { evaluateRating, isRating, type Rating } from "../shared/content-rating";
 import { isAdult, getCard, type CardRow } from "./cards";
@@ -282,6 +283,7 @@ export async function insertWorkshopNotice(
       | "workshop_published"
       | "workshop_reopened"
       | "workshop_review_result"
+      | "workshop_review_cancelled"
       | "workshop_returned"
       | "workshop_hidden"
       | "workshop_appeal_result";
@@ -412,13 +414,8 @@ export async function listCardWorkshops(
     throw new HttpError(gate.countryRegion === "CN" ? 404 : 403, gate.countryRegion === "CN" ? "not_found" : "adult_content");
   }
 
-  const policy = await c.env.DB.prepare(
-    "SELECT allow_new FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-  )
-    .bind(Number(card.id))
-    .first<{ allow_new: number }>();
-
-  const allowNew = policy ? policy.allow_new === 1 : true;
+  const { mode } = await readWorkshopPolicy(c.env.DB, Number(card.id));
+  const allowNew = mode === "open";
   const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
 
   const sortSql =
@@ -445,18 +442,19 @@ export async function listCardWorkshops(
   // Strictest adult & region filter: never expose R-rated workshops or counts to CN or non-NSFW viewers.
   const ratingFiltered = rows.filter((r) => !(r.rating === "R" && (gate.countryRegion === "CN" || !gate.allowAdult)));
 
-  const nonVisibleIds = ratingFiltered.filter((r) => r.owner_state !== "visible").map((r) => r.id);
+  const nonVisibleIds = ratingFiltered.filter((r) => r.owner_state !== "visible" || !policyAllowsAuthor(mode, String(r.author_num_id) === String(card.author_num_id))).map((r) => r.id);
   const token = bearerOf(c);
   const accessMap = await checkProviderViewerAccess(c.env, card.provider as ProviderId, nonVisibleIds, token);
 
   const visibleToViewer = ratingFiltered.filter((r) => {
-    if (r.owner_state === "visible") return true;
     if (viewerIsOwner) return true;
-    return accessMap.get(r.id)?.accessible === true;
+    if (r.owner_state === "visible" && policyAllowsAuthor(mode, String(r.author_num_id) === String(card.author_num_id))) return true;
+    const access = accessMap.get(r.id);
+    return access?.accessible === true && (policyAllowsAuthor(mode, String(r.author_num_id) === String(card.author_num_id)) || access.joined);
   });
 
   const total = visibleToViewer.length;
-  const tabVisible = allowNew || total > 0;
+  const tabVisible = total > 0;
   const page = Math.max(1, Math.trunc(query.page || 1));
   const start = (page - 1) * WORKSHOP_PAGE_SIZE;
   const slice = visibleToViewer.slice(start, start + WORKSHOP_PAGE_SIZE);
@@ -473,6 +471,8 @@ export async function listCardWorkshops(
 
   return {
     tabVisible,
+    mode,
+    canCreate: policyAllowsAuthor(mode, viewerIsOwner),
     allowNew,
     viewerIsOwner,
     ...(viewerInterested !== undefined ? { viewerInterested } : {}),
@@ -511,10 +511,11 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
       .all<WorkshopRow & AuthorInfo>()
   ).results;
 
-  const nonVisibleIds = rows.filter((r) => r.owner_state !== "visible").map((r) => r.id);
+  const nonVisibleIds = rows.map((r) => r.id);
   const accessMap = await checkProviderViewerAccess(c.env, "harbor", nonVisibleIds, token);
 
   const out = [];
+  const policyModes = new Map<number, Awaited<ReturnType<typeof readWorkshopPolicy>>>();
   for (const id of cleanIds) {
     const r = rows.find((x) => x.id === id);
     if (!r) continue;
@@ -523,6 +524,9 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
     if (!card || card.status !== "approved" || card.public_blocked) continue;
     if (isAdult(card) && (gate.countryRegion === "CN" || !gate.allowAdult)) continue;
     const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
+    if (!policyModes.has(r.card_id)) policyModes.set(r.card_id, await readWorkshopPolicy(c.env.DB, r.card_id));
+    const mode = policyModes.get(r.card_id)!.mode;
+    if (!viewerIsOwner && !policyAllowsAuthor(mode, String(r.author_num_id) === String(card.author_num_id)) && !(accessMap.get(r.id)?.joined && accessMap.get(r.id)?.accessible)) continue;
     if (r.owner_state !== "visible" && !viewerIsOwner && !accessMap.get(r.id)?.accessible) continue;
     out.push(
       formatExtensionSummary(r, card, {
@@ -563,6 +567,12 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
     throw new HttpError(403, "adult_content");
   }
   const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
+  const { mode } = await readWorkshopPolicy(c.env.DB, Number(card.id));
+  const policyAllowsNew = policyAllowsAuthor(mode, String(row.author_num_id) === String(card.author_num_id));
+  const access = !policyAllowsNew || row.owner_state !== "visible"
+    ? await checkProviderViewerAccess(c.env, card.provider as ProviderId, [row.id], bearerOf(c))
+    : new Map<string, { joined: boolean; accessible: boolean }>();
+  if (!policyAllowsNew && !viewerIsOwner && !(access.get(row.id)?.joined && access.get(row.id)?.accessible)) throw new HttpError(404, "not_found");
 
   if (row.moderation_state === "revoked" || row.moderation_state === "deleted") {
     if (row.version_no <= 0) throw new HttpError(404, "not_found");
@@ -590,8 +600,7 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
 
   let availability: "open" | "hidden" = "open";
   let joined: boolean | undefined;
-  if (row.owner_state !== "visible") {
-    const access = await checkProviderViewerAccess(c.env, card.provider as ProviderId, [row.id], bearerOf(c));
+  if (row.owner_state !== "visible" || !policyAllowsNew) {
     const viewerAccess = access.get(row.id);
     availability = viewerAccess?.accessible ? "open" : "hidden";
     if (viewerAccess) joined = viewerAccess.joined;
@@ -770,6 +779,9 @@ export async function listMyWorkshops(c: Ctx, lang: string) {
         roleId: card ? cardPlayRoleId(card) : item.sourceRoleId,
       },
       status,
+      canSubmit: item.card?.canSubmit === true,
+      newPlayersVisible: card ? policyAllowsAuthor((await readWorkshopPolicy(c.env.DB, Number(card.id))).mode, String(item.authorPublicNo ?? member.externalId) === String(card.author_num_id)) : false,
+      policyReviewCancelled: latestSub?.status === "withdrawn" && latestSub.note === "policy_closed",
       rejectNote: latestSub?.status === "rejected" ? latestSub.note || item.lastRejectNote : item.lastRejectNote,
       ownerState: normalizeWireOwnerState(item.ownerState),
       ownerReason: item.ownerReason ?? null,
@@ -788,9 +800,9 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
     await c.env.DB.prepare(
       `SELECT c.*,
               COALESCE(
-                (SELECT p.allow_new FROM workshop_policies p WHERE p.card_id = c.id ORDER BY p.updated_at DESC LIMIT 1),
-                1
-              ) AS allow_new,
+                (SELECT json_object('access_mode', p.access_mode, 'allow_new', p.allow_new, 'revision', p.revision) FROM workshop_policies p WHERE p.card_id = c.id ORDER BY p.updated_at DESC LIMIT 1),
+                '{}'
+              ) AS policy_json,
               EXISTS(
                 SELECT 1 FROM card_workshop_interest cwi
                 WHERE cwi.card_id = c.id AND cwi.member_id = ?3
@@ -806,7 +818,7 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
        LIMIT 30`,
     )
       .bind(like, trimmed, member.id)
-      .all<CardRow & { allow_new: number; viewer_interested: number; owner_member_id: string | null }>()
+      .all<CardRow & { policy_json: string; viewer_interested: number; owner_member_id: string | null }>()
   ).results;
 
   const filtered = rows.filter((r) => !(isAdult(r) && (gate.countryRegion === "CN" || !gate.allowAdult)));
@@ -818,7 +830,7 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
       avatarUrl: cardAvatarOf(r),
       author: { name: r.community_name || r.author_name },
       roleId: cardPlayRoleId(r),
-      allowNew: r.allow_new === 1,
+      allowNew: policyAllowsAuthor(effectiveWorkshopPolicy(JSON.parse(r.policy_json)), r.owner_member_id ? r.owner_member_id === member.id : member.provider === r.provider && member.externalId === r.author_num_id),
       viewerInterested: Boolean(r.viewer_interested),
       viewerIsOwner: r.owner_member_id
         ? r.owner_member_id === member.id
@@ -836,15 +848,11 @@ export async function setCardWorkshopInterest(c: Ctx, cardIdParam: string, draft
   if (await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id)) {
     throw new HttpError(400, "owner_cannot_subscribe");
   }
-  const policy = await c.env.DB.prepare(
-    "SELECT work_id, allow_new FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-  )
-    .bind(Number(card.id))
-    .first<{ work_id: string; allow_new: number }>();
-  if ((policy?.allow_new ?? 1) === 1) {
+  const policy = await readWorkshopPolicy(c.env.DB, Number(card.id));
+  if (policy.mode === "open") {
     throw new HttpError(409, "workshop_already_open");
   }
-  const workId = policy?.work_id || (await resolveWorkIdForCard(c.env.DB, card));
+  const workId = policy.workId || (await resolveWorkIdForCard(c.env.DB, card));
   const draftName = typeof draftNameRaw === "string" ? [...draftNameRaw.trim()].slice(0, 80).join("") : "";
   await c.env.DB.prepare(
     `INSERT INTO card_workshop_interest(provider, work_id, card_id, member_id, draft_name, created_at)
@@ -881,6 +889,7 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       (typeof ev.workshopId === "string" && ev.workshopId) ||
       (typeof p.workshopId === "string" ? p.workshopId : undefined);
     const allowNewRaw = ev.allowNew !== undefined ? ev.allowNew : p.allowNew;
+    const modeRaw = ev.mode !== undefined ? ev.mode : p.mode;
     const revisionRaw =
       ev.revision ??
       (typeof p.revision === "number"
@@ -961,7 +970,26 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       .first();
     if (seen) continue;
 
-    if (ev.kind === "policy_changed" || ev.kind === "policy_saved") {
+    if (ev.kind === "policy_review_cancelled" && workshopId) {
+      const releaseId = typeof p.releaseId === "string" ? p.releaseId : "";
+      if (!releaseId) throw new HttpError(400, "invalid_workshop_event");
+      await env.DB.prepare("INSERT OR IGNORE INTO workshop_cancelled_releases(provider,workshop_id,release_id,created_at) VALUES (?,?,?,?)").bind(provider,workshopId,releaseId,now).run();
+      const submissions = (await env.DB.prepare(
+        "SELECT id, card_id, author_member_id, name FROM workshop_review_submissions WHERE workshop_id = ? AND sealed_release_id = ? AND publication_state <> 'published' AND status IN ('pending','approved','rejected')",
+      ).bind(workshopId, releaseId).all<{ id: string; card_id: number; author_member_id: string; name: string }>()).results;
+      for (const sub of submissions) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE workshop_review_submissions SET status='withdrawn', publication_state='published', decided_at=?, note='policy_closed' WHERE id=? AND publication_state <> 'published'").bind(now, sub.id),
+          env.DB.prepare("DELETE FROM workshop_review_holds WHERE workshop_id=? AND submission_id=?").bind(workshopId,sub.id),
+          env.DB.prepare("UPDATE workshops SET moderation_state=IIF(version_no>0,'approved','draft'), updated_at=? WHERE id=? AND moderation_state='pending' AND NOT EXISTS (SELECT 1 FROM workshop_review_submissions WHERE workshop_id=? AND status='pending')").bind(now,workshopId,workshopId),
+        ]);
+        await insertWorkshopNotice(env.DB, {
+          eventKey: `workshop_review_cancelled:${sub.id}`, recipientMemberId: sub.author_member_id,
+          kind: "workshop_review_cancelled", path: `/mine/workshops/${workshopId}/edit?section=publish`,
+          cardId: sub.card_id, workshopId, extra: { workshopName: sub.name }, now,
+        });
+      }
+    } else if (ev.kind === "policy_changed" || ev.kind === "policy_saved") {
       const resolved = await resolveCardForWork(env.DB, provider, workId, sourceRoleId);
       if (resolved && allowNewRaw !== undefined) {
         const prev = await env.DB.prepare(
@@ -970,29 +998,33 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
           .bind(Number(resolved.card.id))
           .first<{ work_id: string; allow_new: number; revision: number; reopen_generation: number }>();
         const targetWorkId = workId || prev?.work_id || resolved.workId;
-        const nextAllow = allowNewRaw === true || allowNewRaw === 1 ? 1 : 0;
         const nextRev = Number(revisionRaw ?? (prev?.revision ?? 0) + 1);
-        if (!prev || nextRev >= prev.revision) {
+        const nextMode = effectiveWorkshopPolicy({ access_mode: modeRaw === undefined ? null : String(modeRaw), allow_new: allowNewRaw === true || allowNewRaw === 1 ? 1 : 0, revision: nextRev });
+        const nextAllow = nextMode === "open" ? 1 : 0;
+        if (!prev || nextRev > prev.revision) {
           const reopened = Boolean(reopenedRaw || (prev && prev.allow_new === 0 && nextAllow === 1));
           const reopenGen = (prev?.reopen_generation ?? 0) + (reopened ? 1 : 0);
           await env.DB.prepare(
-            `INSERT INTO workshop_policies(provider, work_id, card_id, allow_new, revision, reopen_generation, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO workshop_policies(provider, work_id, card_id, allow_new, revision, reopen_generation, updated_at, access_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(provider, work_id) DO UPDATE SET
                card_id = excluded.card_id,
                allow_new = excluded.allow_new,
                revision = excluded.revision,
                reopen_generation = excluded.reopen_generation,
-               updated_at = excluded.updated_at`,
+               updated_at = excluded.updated_at,
+               access_mode = excluded.access_mode`,
           )
-            .bind(provider, targetWorkId, Number(resolved.card.id), nextAllow, nextRev, reopenGen, now)
+            .bind(provider, targetWorkId, Number(resolved.card.id), nextAllow, nextRev, reopenGen, now, nextMode)
             .run();
 
           if (reopened) {
             const ownerMemberId = await findMemberIdByExternal(env.DB, provider, resolved.card.author_num_id);
             const interestedRows = (
               await env.DB.prepare(
-                "SELECT member_id, draft_name FROM card_workshop_interest WHERE card_id = ? OR (provider = ? AND work_id = ?)",
+                `SELECT member_id, draft_name FROM card_workshop_interest WHERE card_id = ?1 OR (provider = ?2 AND work_id = ?3)
+                 UNION SELECT author_member_id AS member_id, name AS draft_name FROM workshop_review_submissions WHERE card_id = ?1
+                 UNION SELECT author_member_id AS member_id, name AS draft_name FROM workshops WHERE card_id = ?1 AND author_member_id IS NOT NULL`,
               )
                 .bind(Number(resolved.card.id), provider, targetWorkId)
                 .all<{ member_id: string; draft_name: string }>()

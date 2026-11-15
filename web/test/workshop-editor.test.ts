@@ -31,7 +31,7 @@ const entry = (content: string, isConstant = true) => ({ name: "雪", content, k
 function makeDraft(over: Partial<WorkshopDraft> = {}): WorkshopDraft {
   return {
     workshopId: "w1", revision: 3,
-    card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false },
+    card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false, canSubmit: true },
     name: "雪夜篇", summary: "一場雪", readme: "", coverUrl: "https://img/c.png",
     rating: "G", ratingAnswers: null,
     worldbook: [entry("短短的常駐")],
@@ -212,8 +212,8 @@ it("new: creates for the card, moves to the edit URL, and the leave guard still 
 });
 
 it("new: a card closed to extensions explains why and links back to the card", async () => {
-  api.fetchWorkshopCards.mockResolvedValue({ items: [] });
-  api.createWorkshop.mockRejectedValue(new ApiError(403, "closed", "workshop_closed"));
+  api.fetchWorkshopCards.mockResolvedValue({ items: [{cardId:"100002",num:100002,roleId:"r2",allowNew:true,viewerIsOwner:false}] });
+  api.createWorkshop.mockRejectedValue(new ApiError(409, "closed", "workshop_closed"));
   cards.fetchCard.mockResolvedValue({ id: "100002", num: 100002, roleId: "r2", name: "x" });
   await mountAt("/mine/workshops/new?card=100002");
   await until(() => Boolean(document.querySelector("[data-closed]")));

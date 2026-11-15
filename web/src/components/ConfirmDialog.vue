@@ -104,6 +104,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
       <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage,'dlg--phrase-wrap':confirmState.current.phraseWrap }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
+        <ul v-if="confirmState.current.bullets?.length" class="dlg__bullets" data-confirm-bullets><li v-for="(bullet,index) in confirmState.current.bullets" :key="index">{{ bullet }}</li></ul>
         <ul v-if="confirmState.current.items?.length" class="dlg__items"><li v-for="(item,index) in confirmState.current.items" :key="index"><img v-if="item.image" :src="item.image" alt="" /><span>{{ item.name }}</span></li><li v-if="confirmState.current.moreText" class="subtle">{{ confirmState.current.moreText }}</li></ul>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
         <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
@@ -167,6 +168,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 .dlg--publication .dlg__actions { min-width:0; }
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .dlg__msg { font-size: 14px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.dlg__bullets { display:grid; gap:var(--s-2); margin:0; padding-inline-start:var(--s-5); color:var(--text-2); font-size:14px; line-height:1.6; overflow-wrap:anywhere; }
 .dlg__items { display:grid; gap:var(--s-2); list-style:none; padding:0; }
 .dlg__items li { display:flex; align-items:center; gap:var(--s-3); min-width:0; }
 .dlg__items img { width:28px; height:36px; object-fit:cover; border-radius:var(--r-sm); flex:none; }
@@ -200,8 +202,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 }
 /* 低權重的危險確認在韓文按詞換行（標題、內文）；長 key 仍靠 overflow-wrap: anywhere 斷開 */
 .dlg--danger-subdued:lang(ko) .dlg__title, .dlg--danger-subdued:lang(ko) .dlg__msg { word-break: keep-all; }
-.dlg--phrase-wrap:lang(ko) .dlg__title, .dlg--phrase-wrap:lang(ko) .dlg__msg { word-break: keep-all; }
-.dlg--phrase-wrap:lang(ja) .dlg__title, .dlg--phrase-wrap:lang(ja) .dlg__msg { word-break: auto-phrase; }
+.dlg--phrase-wrap:lang(ko) :is(.dlg__title,.dlg__msg,.dlg__bullets) { word-break: keep-all; }
+.dlg--phrase-wrap:lang(ja) :is(.dlg__title,.dlg__msg,.dlg__bullets) { word-break: auto-phrase; }
 /* 低權重的破壞動作：透明底、警示色字與細框；hover 只加淡色，不變實心紅 */
 .dlg__subdued { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
 .dlg__subdued:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); border-color: var(--danger); }

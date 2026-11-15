@@ -118,6 +118,8 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
+  workshop_closed:"workshop.editor.error.cardNotOpen",
+  workshop_unavailable:"workshop.detail.hidden.note",
   visibility_operation_conflict: "workspace.submitConflict",
   visibility_provider_unavailable: "visibility.loadFailed",
   visibility_sync_pending: "visibility.operation.unknown",

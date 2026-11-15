@@ -50,7 +50,7 @@ async function mount(path: string) {
 beforeEach(() => { i18n.global.locale.value = "zh-Hant"; vi.stubGlobal("fetch", fakeFetch); });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
-const page = (over: object = {}) => json({ tabVisible: true, allowNew: true, viewerIsOwner: false, total: 1, page: 1, hasMore: false, items: [EXT], ...over });
+const page = (over: object = {}) => json({ tabVisible: true, allowNew: true, mode:"open", canCreate:true, viewerIsOwner: false, total: 1, page: 1, hasMore: false, items: [EXT], ...over });
 
 it("no tab when the server says the workshop tab is not visible; the intro stays as it was", async () => {
   workshop = () => page({ tabVisible: false, allowNew: false, total: 0, items: [] });
@@ -81,9 +81,9 @@ it("shows 介紹｜工坊 with the count; the tab is in the URL and the intro is
 });
 
 it("paused by the author: the tab stays with a notice and no create button", async () => {
-  workshop = () => page({ allowNew: false });
+  workshop = () => page({ allowNew:false,mode:"closed",canCreate:false,items:[{...EXT,joined:true}] });
   const root = await mount("/cards/abc?tab=workshop");
-  expect(root.textContent).toContain("作者已暫停新的擴充");
+  expect(root.textContent).toContain("原作者目前沒有開放其他人的擴充");
   expect(root.textContent).not.toContain("建立擴充");
 });
 

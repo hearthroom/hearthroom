@@ -61,6 +61,9 @@ type Chip = { key: string; tone: "" | "on" | "ok" | "warn" | "bad" };
  * 已發布有修改（live_changed）還是「已發布」；新版未通過（live_rejected）寫「審核未通過」，公開版照常（意見常駐在下面）。
  */
 function chip(item: MineItem): Chip {
+  if (item.policyReviewCancelled) return {key:"workshop.status.reviewCanceled",tone:"warn"};
+  if (item.version > 0 && item.newPlayersVisible === false) return {key:"workshop.status.hiddenNewPlayers",tone:"warn"};
+  if (item.version === 0 && item.canSubmit === false) return {key:"workshop.status.submitBlocked",tone:"warn"};
   switch (publishState(item.status, item.ownerState)) {
     case "draft": return { key: "workshop.status.draft", tone: "" };
     case "review": case "liveup": return { key: "workshop.status.inReview", tone: "warn" };
@@ -143,6 +146,9 @@ async function appeal(item: MineItem) {
             <span class="chip" :class="chip(item).tone ? `ws-chip--${chip(item).tone}` : ''" data-ws-status>{{ $t(chip(item).key) }}</span>
             <span v-if="item.appeal === 'pending'" class="chip ws-chip--warn" data-ws-appealing>{{ $t("workshop.status.appeal") }}</span>
           </p>
+          <p v-if="item.policyReviewCancelled" class="ws-reason" data-ws-policy-reason>{{ $t("workshop.mine.row.reviewCanceled") }}</p>
+          <p v-else-if="item.version > 0 && item.newPlayersVisible === false" class="ws-reason" data-ws-policy-reason>{{ $t(item.byCardAuthor ? "workshop.mine.row.hiddenOwnCardClosed" : "workshop.mine.row.hiddenThirdParty") }}</p>
+          <p v-else-if="item.canSubmit === false" class="ws-reason" data-ws-policy-reason>{{ $t("workshop.mine.row.cardNotOpen") }}</p>
           <p v-if="rejectNote(item)" class="ws-reason" data-ws-reason>{{ $t("workshop.mine.row.rejectNote", { note: rejectNote(item) }) }}</p>
           <p v-if="ownerReason(item)" class="ws-reason" data-ws-reason>{{ $t("workshop.publish.ownerReason", { reason: ownerReason(item) }) }}</p>
         </div>

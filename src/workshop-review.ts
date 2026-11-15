@@ -1,3 +1,4 @@
+import { readWorkshopPolicy, policyAllowsAuthor } from "./workshop-policy";
 import type { Context } from "hono";
 import { auditStmt } from "./audit";
 import { getCard, isAdult } from "./cards";
@@ -337,6 +338,12 @@ export async function submitWorkshop(
   )
     .bind(workshopId)
     .first<WorkshopSubmissionRow>();
+  if (existingActive) {
+    const card = await getCard(c.env.DB, String(existingActive.card_id));
+    const policy = await readWorkshopPolicy(c.env.DB, existingActive.card_id);
+    const byCardAuthor = card ? await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id) : false;
+    if (!card || !policyAllowsAuthor(policy.mode, byCardAuthor)) throw new HttpError(403, "workshop_closed");
+  }
   if (existingActive && existingActive.publication_state === "decided") {
     try {
       await finalizeDecidedWorkshopSubmission(c.env, existingActive);
@@ -348,6 +355,7 @@ export async function submitWorkshop(
   }
   if (existingActive && existingActive.status === "pending") {
     if (existingActive.operation_id === operationId && existingActive.author_member_id === member.id) {
+      await workshopUpstream.seal(c.env, token, { workshopId, operationId, updateNote:rawUpdateNote }, member.provider);
       return {
         status: existingActive.kind === "re" ? ("live_pending" as const) : ("pending" as const),
         moderationState: "pending" as const,
@@ -384,17 +392,12 @@ export async function submitWorkshop(
   const publishedVer = Math.max(existingWs?.version_no ?? 0, Number(sealed.publishedVersion ?? 0));
   const kind: "first" | "re" = publishedVer > 0 ? "re" : "first";
 
-  if (kind === "first" && !(await memberOwnsExternal(c.env.DB, member, member.provider, card.author_num_id))) {
-    const policy = await c.env.DB.prepare(
-      "SELECT allow_new FROM workshop_policies WHERE card_id = ? ORDER BY updated_at DESC LIMIT 1",
-    )
-      .bind(Number(card.id))
-      .first<{ allow_new: number }>();
-    if (policy && policy.allow_new === 0) {
-      await workshopUpstream.withdraw(c.env, token, { workshopId, releaseId: sealed.releaseId }, member.provider).catch(() => {});
-      await bumpOp(c.env.DB, "workshop", "submit", "denied");
-      throw new HttpError(403, "workshop_closed");
-    }
+  const { mode } = await readWorkshopPolicy(c.env.DB, Number(card.id));
+  const byCardAuthor = await memberOwnsExternal(c.env.DB, member, member.provider, card.author_num_id);
+  if (!policyAllowsAuthor(mode, byCardAuthor)) {
+    await workshopUpstream.withdraw(c.env, token, { workshopId, releaseId: sealed.releaseId }, member.provider).catch(() => {});
+    await bumpOp(c.env.DB, "workshop", "submit", "denied");
+    throw new HttpError(403, "workshop_closed");
   }
 
   let validated;
@@ -413,7 +416,7 @@ export async function submitWorkshop(
   const openingCount = Number(sealed.contents?.openingCount ?? 0);
   const descriptorsJson = JSON.stringify(validated.descriptors);
 
-  await c.env.DB.batch([
+  try { await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO workshops(
         id, card_id, provider, work_id, source_role_id, author_num_id, author_member_id,
@@ -486,7 +489,14 @@ export async function submitWorkshop(
       Number(sealed.ownerGeneration ?? existingWs?.owner_action_generation ?? 0),
       now,
     ),
-  ]);
+  ]); } catch (err) {
+    const message = err instanceof Error ? `${err.message} ${err.cause instanceof Error ? err.cause.message : ""}` : "";
+    if (message.includes("workshop_policy_closed")) {
+      await bumpOp(c.env.DB, "workshop", "submit", "denied");
+      throw new HttpError(403, "workshop_closed");
+    }
+    throw err;
+  }
 
   await bumpOp(c.env.DB, "workshop", "submit", "success");
   return {

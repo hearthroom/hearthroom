@@ -19,6 +19,8 @@ export interface ConfirmOptions {
   valid?:()=>boolean;
   title?: string;
   message: string;
+  /** Product explanations, rendered as plain text rather than HTML. */
+  bullets?: string[];
   /** Destructive selection preview; plain text names and optional cover thumbnails. */
   items?: { name: string; image?: string }[];
   moreText?: string;

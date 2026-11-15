@@ -45,6 +45,26 @@ const mine = (id: string, over: Partial<MineItem> = {}): MineItem => ({
   ...summary(id), card: { id: "100001", num: 100001, name: "霧港燈塔", roleId: "role-1" },
   status: "live", rejectNote: null, ownerState: "visible", ownerReason: null, appeal: null, ...over,
 });
+
+it("owner explicitly chooses closed/self/open; opening requires confirmation and self never grants third-party access", async () => {
+  ws.fetchPolicy.mockResolvedValue({ mode:"closed", allowNew:false, revision:1, hasThirdParty:false, items:[] });
+  ws.savePolicy.mockResolvedValue({ mode:"self", allowNew:false, revision:2, hasThirdParty:false, items:[] });
+  await mount(OwnerWorkshopBlock,{roleId:"role-1",cardId:"100001"});
+  const radios=()=>Array.from(document.querySelectorAll<HTMLInputElement>('[data-ws-policy-mode]'));
+  expect(radios()).toHaveLength(3);
+  expect(radios().find(input=>input.checked)?.value).toBe("closed");
+  radios().find(input=>input.value==="self")!.click();
+  await settle();
+  expect(ws.savePolicy).toHaveBeenCalledWith("role-1","self",1,"tok");
+  expect(radios().find(input=>input.checked)?.value).toBe("self");
+  radios().find(input=>input.value==="open")!.click();
+  await settle();
+  expect(confirmState.current).not.toBeNull();
+  expect(ws.savePolicy).toHaveBeenCalledTimes(1);
+  settleConfirm(false);
+  await settle();
+  expect(radios().find(input=>input.checked)?.value).toBe("self");
+});
 const row = (id: string) => document.querySelector<HTMLElement>(`[data-ws-mine="${id}"]`)!;
 
 it("my extensions: review feedback and the author's reason stay on the row, not only in a toast", async () => {
@@ -92,7 +112,7 @@ it("card picker: a card closed to extensions is greyed out with its reason and c
   const router = await mount(CardPickerDialog);
   const closed = document.querySelector<HTMLButtonElement>('[data-ws-pick="100003"]')!;
   expect(closed.getAttribute("aria-disabled")).toBe("true");
-  expect(closed.textContent).toContain("這張卡沒有開放擴充");
+  expect(closed.textContent).toContain("原作者沒有開放其他人建立擴充");
   closed.click();
   await settle(); await new Promise((r) => setTimeout(r, 0)); await settle();
   expect(router.currentRoute.value.path).toBe("/mine");
@@ -102,28 +122,35 @@ it("card picker: a card closed to extensions is greyed out with its reason and c
   expect(router.currentRoute.value.query.card).toBe("100002");
 });
 
-it("owner switch: pausing asks first (focus on cancel), re-opening saves right away", async () => {
-  ws.fetchPolicy.mockResolvedValue({ allowNew: true, revision: 3, items: [summary("a")] });
-  ws.savePolicy.mockImplementation(async (_r: string, allowNew: boolean, rev: number) => ({ allowNew, revision: rev + 1, items: [summary("a")] }));
-  await mount(OwnerWorkshopBlock, { roleId: "role-1", cardId: "100001" });
-  const sw = () => document.querySelector<HTMLButtonElement>("[data-ws-owner-switch]")!;
-  expect(sw().getAttribute("aria-checked")).toBe("true");
-
-  sw().click();
-  await settle();
-  expect(confirmState.current?.title).toBe("暫停新的擴充？");
+it("restricting a card with third-party drafts confirms consequences, and every reopening asks again", async () => {
+  ws.fetchPolicy.mockResolvedValue({mode:"open",allowNew:true,revision:3,hasThirdParty:true,items:[]});
+  ws.savePolicy.mockImplementation(async (_r:string,mode:string,rev:number)=>({mode,allowNew:mode==="open",revision:rev+1,hasThirdParty:true,items:[]}));
+  await mount(OwnerWorkshopBlock,{roleId:"role-1",cardId:"100001"});
+  const radio=(mode:string)=>document.querySelector<HTMLInputElement>(`[data-ws-policy-mode][value="${mode}"]`)!;
+  radio("closed").click(); await settle();
   expect(confirmState.current?.focusCancel).toBe(true);
+  expect(confirmState.current?.bullets).toHaveLength(2);
   expect(ws.savePolicy).not.toHaveBeenCalled();
-  settleConfirm(true);
-  await settle();
-  expect(ws.savePolicy).toHaveBeenCalledWith("role-1", false, 3, "tok");
-  expect(sw().getAttribute("aria-checked")).toBe("false");
+  settleConfirm(true); await settle();
+  expect(ws.savePolicy).toHaveBeenCalledWith("role-1","closed",3,"tok");
+  expect(radio("closed").checked).toBe(true);
+  radio("open").click(); await settle();
+  expect(confirmState.current?.title).toBe("開放給其他人？");
+  expect(confirmState.current?.bullets?.[0]).toContain("正則與開場暫停中");
+  expect(ws.savePolicy).toHaveBeenCalledTimes(1);
+  settleConfirm(true); await settle();
+  expect(ws.savePolicy).toHaveBeenLastCalledWith("role-1","open",4,"tok");
+  expect(radio("open").checked).toBe(true);
+});
 
-  sw().click();
-  await settle();
-  expect(confirmState.current).toBeNull();
-  expect(ws.savePolicy).toHaveBeenLastCalledWith("role-1", true, 4, "tok");
-  expect(sw().getAttribute("aria-checked")).toBe("true");
+it("a failed response reads back the policy and never leaves a fictitious selected mode", async () => {
+  ws.fetchPolicy.mockResolvedValue({mode:"closed",allowNew:false,revision:1,items:[]});
+  ws.savePolicy.mockRejectedValue(new Error("network result unknown"));
+  await mount(OwnerWorkshopBlock,{roleId:"role-1",cardId:"100001"});
+  document.querySelector<HTMLInputElement>('[data-ws-policy-mode][value="self"]')!.click(); await settle();
+  expect(ws.fetchPolicy).toHaveBeenCalledTimes(2);
+  expect(document.querySelector<HTMLInputElement>('[data-ws-policy-mode][value="closed"]')!.checked).toBe(true);
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain("設定未儲存");
 });
 
 it("owner switch waits for the real role id (the editor starts with the card number)", async () => {

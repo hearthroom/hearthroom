@@ -41,6 +41,8 @@ export async function ensureOperationUuid(raw: unknown): Promise<string> {
 }
 
 export interface ProviderMineItem {
+  card?: { canSubmit?: boolean };
+  authorPublicNo?: number;
   workshopId: string;
   workId: string;
   sourceRoleId: string;
@@ -142,6 +144,7 @@ export interface WorkshopStateItem {
 }
 
 export interface WorkshopOutboxEvent {
+	mode?: string;
   seq?: number;
   eventKey?: string;
   kind: string;

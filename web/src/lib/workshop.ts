@@ -16,6 +16,7 @@ import type { WorldbookEntryDraft } from "./role-draft";
 import type { RegexRuleSet } from "./regex-rules";
 
 export type WorkshopKind = "lore" | "display" | "opening";
+export type WorkshopPolicyMode = "closed" | "self" | "open";
 export const WORKSHOP_KINDS: WorkshopKind[] = ["lore", "display", "opening"];
 
 export interface ExtensionAuthor { handle: string | null; name: string; avatar?: string }
@@ -45,6 +46,7 @@ export type AppealState = null | "pending" | "upheld" | "restored";
 export type WorkshopSort = "hot" | "new";
 
 export interface CardWorkshopPage {
+  mode?: WorkshopPolicyMode; canCreate?: boolean;
   tabVisible: boolean; allowNew: boolean; viewerIsOwner: boolean;
   total: number; page: number; hasMore: boolean;
   items: ExtensionSummary[];
@@ -63,6 +65,9 @@ export interface ExtensionVersion { version: number; publishedAt: number | null;
 
 export type MineStatus = "draft" | "pending" | "rejected" | "live" | "live_changed" | "live_pending" | "live_rejected";
 export interface MineItem extends ExtensionSummary {
+  canSubmit?: boolean;
+  newPlayersVisible?: boolean;
+  policyReviewCancelled?: boolean;
   card: { id: string; num: number; name: string; roleId: string };
   status: MineStatus;
   rejectNote: string | null;
@@ -97,6 +102,8 @@ export interface UsageSummary {
 }
 
 export interface OwnerPolicy {
+  mode?: WorkshopPolicyMode;
+  hasThirdParty?: boolean;
   allowNew: boolean; revision: number;
   items: ExtensionSummary[];
 }
@@ -104,7 +111,7 @@ export interface OwnerPolicy {
 export interface WorkshopOpening { mode: "greeting" | "page"; welcome: string; alternates: string[]; prologue: string[]; openingPage: string }
 export interface WorkshopDraft {
   workshopId: string; revision: number;
-  card: { roleId: string; cardId: string; num: number; name: string; ownerIsMe: boolean };
+  card: { roleId: string; cardId: string; num: number; name: string; ownerIsMe: boolean; canSubmit?: boolean };
   name: string; summary: string; readme: string; coverUrl: string;
   rating: string | null; ratingAnswers: Record<string, unknown> | null;
   worldbook: WorldbookEntryDraft[];
@@ -173,8 +180,8 @@ export const fetchUsageSummary = (roleId: string, token: string) => upstream<Usa
 /** 切換上下文檔位：跟畫布的模型選單存同一個設定（這張卡的遊玩設定），存好才算數 */
 export const saveContextTier = (roleId: string, context: number, token: string) => upstream<unknown>("/player/role-settings/save", token, { roleId, context });
 export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPolicy>(`/workshop/policy${q({ roleId })}`, token);
-export const savePolicy = (roleId: string, allowNew: boolean, expectedRevision: number, token: string) =>
-  upstream<OwnerPolicy>("/workshop/policy/save", token, { roleId, allowNew, expectedRevision });
+export const savePolicy = (roleId: string, mode: WorkshopPolicyMode, expectedRevision: number, token: string) =>
+  upstream<OwnerPolicy>("/workshop/policy/save", token, { roleId, mode, expectedRevision });
 export const ownerAction = (workshopId: string, action: "return" | "hide" | "restore", reason: string, token: string) =>
   upstream<{ ownerState: OwnerState; ownerReason: string | null }>("/workshop/owner-action", token, { workshopId, action, reason });
 export const appealWorkshop = (workshopId: string, reason: string, token: string) =>

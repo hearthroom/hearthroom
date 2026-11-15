@@ -57,7 +57,7 @@ type Copy = {
   /** HarperHarbor 平台的帳號通知：平台口吻（蘇綺不說），標題帶 HarperHarbor；字照 docs/studio/tasks/2026-10-30-enforcement-notice-appeal/copy.md C、E2 */
   enforcement: { title: string; notice: string; zone: string; maintained: string; revoked: string; result: string };
   workshop: {
-    published: string; publishedPlain: string; reopened: string; reopenedPlain: string;
+    published: string; publishedPlain: string; reopened: string; reopenedPlain: string; reviewCancelled: string;
     approved: string; rejected: string; rejectedNote: string;
     returned: string; hidden: string; appealRestored: string; appealUpheld: string;
   };
@@ -79,7 +79,7 @@ const copy: Record<PushLocale, Copy> = {
     enforcement: { title: "HarperHarbor 帳號處置通知", notice: "你的推薦碼出現異常，我們已採取處置。{deadline}前可以申訴。", zone: "（台北時間）", maintained: "申訴結果：維持原處置", revoked: "申訴結果：處置已撤銷", result: "點開查看我們的回覆。" },
     workshop: {
       published: "{actor} 為{card}發佈了擴充{ws}", publishedPlain: "你的卡片有新的工坊擴充",
-      reopened: "{card}已重新開放建立擴充", reopenedPlain: "你關注的卡片已重新開放建立擴充",
+      reviewCancelled: "{card}停止開放擴充，審核中的{ws}已退回草稿", reopened: "{card}已開放建立擴充", reopenedPlain: "你關注的卡片已開放建立擴充",
       approved: "擴充{ws}審核通過了", rejected: "擴充{ws}這次沒有通過審核", rejectedNote: "擴充{ws}這次沒有通過審核，審核員說：{note}",
       returned: "原作者退回了擴充{ws}，點開查看理由", hidden: "原作者隱藏了擴充{ws}，點開查看理由",
       appealRestored: "擴充{ws}的申訴已通過，恢復公開顯示", appealUpheld: "擴充{ws}的申訴維持原處理",
@@ -101,7 +101,7 @@ const copy: Record<PushLocale, Copy> = {
     enforcement: { title: "HarperHarbor 账号处置通知", notice: "你的推荐码出现异常，我们已采取处置。{deadline}前可以申诉。", zone: "（北京时间）", maintained: "申诉结果：维持原处置", revoked: "申诉结果：处置已撤销", result: "点开查看我们的回复。" },
     workshop: {
       published: "{actor} 为{card}发布了扩充{ws}", publishedPlain: "你的卡片有新的工坊扩充",
-      reopened: "{card}已重新开放建立扩充", reopenedPlain: "你关注的卡片已重新开放建立扩充",
+      reviewCancelled: "{card}停止开放扩展包，审核中的{ws}已退回草稿", reopened: "{card}已开放创建扩展包", reopenedPlain: "你关注的卡片已开放创建扩展包",
       approved: "扩充{ws}审核通过了", rejected: "扩充{ws}这次没有通过审核", rejectedNote: "扩充{ws}这次没有通过审核，审核员说：{note}",
       returned: "原作者退回了扩充{ws}，点开查看理由", hidden: "原作者隐藏了扩充{ws}，点开查看理由",
       appealRestored: "扩充{ws}的申诉已通过，恢复公开显示", appealUpheld: "扩充{ws}的申诉维持原处理",
@@ -123,7 +123,7 @@ const copy: Record<PushLocale, Copy> = {
     enforcement: { title: "HarperHarbor account action notice", notice: "We found unusual activity on your referral code and took action. You can appeal until {deadline}.", zone: " (UTC+8)", maintained: "Appeal result: the action stands", revoked: "Appeal result: the action was withdrawn", result: "Open to read our reply." },
     workshop: {
       published: "{actor} published an extension {ws} for {card}", publishedPlain: "Your card has a new workshop extension",
-      reopened: "{card} reopened workshop submissions", reopenedPlain: "A card you follow reopened workshop submissions",
+      reviewCancelled: "{card} closed extensions, so {ws} was returned to draft", reopened: "{card} is now open to extensions", reopenedPlain: "A card you follow is now open to extensions",
       approved: "Extension {ws} passed review", rejected: "Extension {ws} did not pass review this time", rejectedNote: "Extension {ws} did not pass review this time. The reviewer wrote: {note}",
       returned: "The card author returned your extension {ws}. Open to read the reason.", hidden: "The card author hid your extension {ws}. Open to read the reason.",
       appealRestored: "Your appeal for {ws} was approved and public visibility was restored", appealUpheld: "Your appeal for {ws} upheld the original decision",
@@ -145,7 +145,7 @@ const copy: Record<PushLocale, Copy> = {
     enforcement: { title: "HarperHarbor アカウント対応のお知らせ", notice: "紹介コードに異常が見つかり、対応を行いました。{deadline}まで異議を申し立てられます。", zone: "（UTC+8）", maintained: "異議申し立ての結果：対応は維持されます", revoked: "異議申し立ての結果：対応を取り消しました", result: "タップして回答を確認できます。" },
     workshop: {
       published: "{actor} さんが{card}の拡張{ws}を公開しました", publishedPlain: "あなたのカードに新しい工房拡張が公開されました",
-      reopened: "{card}で拡張の作成受付が再開されました", reopenedPlain: "フォロー中のカードで拡張の作成受付が再開されました",
+      reviewCancelled: "{card}の開放停止により、審査中の{ws}は下書きに戻りました", reopened: "{card}で拡張パックの受付が始まりました", reopenedPlain: "フォロー中のカードで拡張パックの受付が始まりました",
       approved: "拡張{ws}が審査を通過しました", rejected: "拡張{ws}は今回審査を通過しませんでした", rejectedNote: "拡張{ws}は今回審査を通過しませんでした。審査担当者のコメント：{note}",
       returned: "原作者が拡張{ws}を差し戻しました。タップして理由を確認してください。", hidden: "原作者が拡張{ws}を非表示にしました。タップして理由を確認してください。",
       appealRestored: "拡張{ws}の異議申し立てが承認され、公開が再開されました", appealUpheld: "拡張{ws}の異議申し立ての結果、元の対応が維持されました",
@@ -167,7 +167,7 @@ const copy: Record<PushLocale, Copy> = {
     enforcement: { title: "HarperHarbor 계정 조치 안내", notice: "추천 코드에서 이상 징후를 발견해 조치했어요. {deadline}까지 이의를 신청할 수 있어요.", zone: " (UTC+8)", maintained: "이의 신청 결과: 조치 유지", revoked: "이의 신청 결과: 조치 취소", result: "눌러서 답변을 확인하세요." },
     workshop: {
       published: "{actor} 님이 {card}에 확장 {ws}을(를) 공개했어요", publishedPlain: "내 카드에 새 공방 확장이 공개되었어요",
-      reopened: "{card}의 확장 등록이 다시 열렸어요", reopenedPlain: "관심 카드의 확장 등록이 다시 열렸어요",
+      reviewCancelled: "{card} 카드가 닫혀 심사 중이던 {ws} 확장팩이 초안으로 돌아갔어요", reopened: "{card} 카드에서 확장팩을 만들 수 있어요", reopenedPlain: "관심 카드에서 확장팩을 만들 수 있어요",
       approved: "확장 {ws}이(가) 심사를 통과했어요", rejected: "확장 {ws}이(가) 이번 심사를 통과하지 못했어요", rejectedNote: "확장 {ws}이(가) 이번 심사를 통과하지 못했어요. 검토자 의견: {note}",
       returned: "원작자가 확장 {ws}을(를) 반려했어요. 눌러서 사유를 확인하세요.", hidden: "원작자가 확장 {ws}을(를) 숨김 처리했어요. 눌러서 사유를 확인하세요.",
       appealRestored: "확장 {ws}의 이의 신청이 승인되어 다시 공개되었어요", appealUpheld: "확장 {ws}의 이의 신청 결과 기존 조치가 유지되었어요",
@@ -227,6 +227,7 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
   const ws = typeof extra.workshopName === "string" && extra.workshopName.trim() ? quote(locale, extra.workshopName.trim()) : "";
   if (row.kind === "workshop_published") return actor && card && ws ? fill(c.workshop.published, { actor, card, ws }) : c.workshop.publishedPlain;
   if (row.kind === "workshop_reopened") return card ? fill(c.workshop.reopened, { card }) : c.workshop.reopenedPlain;
+  if (row.kind === "workshop_review_cancelled") return fill(c.workshop.reviewCancelled, { card, ws });
   if (row.kind === "workshop_review_result") {
     if (extra.status !== "rejected") return fill(c.workshop.approved, { ws });
     const note = noticeNote(extra.note);

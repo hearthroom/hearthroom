@@ -341,43 +341,12 @@ describe("notify me when reopened", () => {
     route = (c) => (c.path === "/v1/cards/c1/workshop/interest" ? { body: { interested: c.method === "PUT" } } : undefined);
   });
 
-  it("register asks for an optional draft name, then shows the green chip; cancel turns it back", async () => {
-    const { root } = await tab(paused());
-    root.querySelector<HTMLButtonElement>("[data-ws-interest]")!.click(); await settle();
-    expect(confirmState.current?.title).toBe("重新開放時通知我");
-    expect(confirmState.current?.focusCancel).toBe(true);
-    expect(confirmState.current?.field?.required).toBeFalsy();
-    settleConfirm(true, "", "港口祭的番外");
-    await settle();
-    expect(posts("/workshop/interest")).toEqual([{ method: "PUT", path: "/v1/cards/c1/workshop/interest", body: { draftName: "港口祭的番外" } }]);
-    expect(root.querySelector("[data-ws-interested]")?.textContent).toBe("已登記，重新開放時通知你");
-    expect(root.querySelector("[data-ws-interest]")).toBeNull();
-    expect(document.body.textContent).toContain("已登記，重新開放時會通知你。");
-
-    root.querySelector<HTMLButtonElement>("[data-ws-interest-off]")!.click(); await settle();
-    expect(posts("/workshop/interest").map((c) => c.method)).toEqual(["PUT", "DELETE"]);
-    expect(root.querySelector("[data-ws-interested]")).toBeNull();
-    expect(root.querySelector("[data-ws-interest]")).not.toBeNull();
-  });
-
-  it("closing the dialog registers nothing; the server's earlier registration shows as the chip", async () => {
-    let { root } = await tab(paused());
-    root.querySelector<HTMLButtonElement>("[data-ws-interest]")!.click(); await settle();
-    settleConfirm(false); await settle();
-    expect(posts("/workshop/interest")).toHaveLength(0);
-    app!.unmount(); app = null; document.body.innerHTML = "";
-    ({ root } = await tab(paused({ viewerInterested: true })));
-    expect(root.querySelector("[data-ws-interested]")).not.toBeNull();
-  });
-
-  it("stays registered when the tab is mounted again with the page data it first got", async () => {
-    let { root } = await tab(paused());
-    root.querySelector<HTMLButtonElement>("[data-ws-interest]")!.click(); await settle();
-    settleConfirm(true, "", ""); await settle();
-    expect(posts("/workshop/interest")[0]!.body).toEqual({});
-    app!.unmount(); app = null; document.body.innerHTML = "";
-    ({ root } = await tab(paused({ viewerInterested: false })));
-    expect(root.querySelector("[data-ws-interested]")).not.toBeNull();
+  it.each([false,true])("keeps registration in the picker rather than the card tab (already registered=%s)",async(viewerInterested)=>{
+    const {root}=await tab(paused({viewerInterested}));
+    expect(root.querySelector('[data-ws-interest]')).toBeNull();
+    expect(root.querySelector('[data-ws-interested]')).toBeNull();
+    expect(root.querySelector('[data-ws-create]')).toBeNull();
+    expect(posts('/workshop/interest')).toHaveLength(0);
   });
 
   it("is not offered to the card author, signed-out visitors, or while the workshop is open", async () => {

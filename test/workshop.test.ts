@@ -397,6 +397,8 @@ beforeEach(async () => {
   ).first<{ work_id: string }>();
   workId = canonical?.work_id ?? `work:${cardId}`;
   setupFakeWorkshopProvider();
+  // Lifecycle fixtures explicitly opt in; unconfigured-policy cases delete this row.
+  await env.DB.prepare("INSERT INTO workshop_policies(provider,work_id,card_id,allow_new,revision,updated_at,access_mode) VALUES ('harbor',?,?,1,2,?, 'open')").bind(workId,cardId,Date.now()).run();
 });
 
 afterEach(() => {
@@ -405,6 +407,35 @@ afterEach(() => {
 });
 
 describe("1. 擴充送審校驗、審核佇列與公開發布投影", () => {
+  it("政策降權後不能用既有送審 operation replay 繞過", async () => {
+    seedDraft({ workshopId: "ws-policy-replay" });
+    const operationId = op();
+    expect((await send("/v1/me/workshops/ws-policy-replay/submit", "creator", "POST", { operationId })).status).toBe(200);
+    await send("/internal/workshop/events", null, "POST", { events: [{ seq: 300, kind: "policy_changed", workId, sourceRoleId:"role-base", mode:"self", allowNew:false, revision:3 }] }, {"X-Hosting-Key":"test-hosting-secret"});
+    expect((await send("/v1/me/workshops/ws-policy-replay/submit", "creator", "POST", { operationId })).status).toBe(403);
+  });
+
+  it("取消事件先於送審投影到達時，不能復活已取消的 release", async () => {
+    seedDraft({ workshopId: "ws-policy-race" });
+    const original = workshopUpstream.seal;
+    workshopUpstream.seal = async (...args: Parameters<typeof original>) => {
+      const sealed = await original(...args);
+      const event = { seq:301, kind:"policy_review_cancelled", workId, workshopId:sealed.workshopId, payload:{ releaseId:sealed.releaseId } };
+      expect((await send("/internal/workshop/events", null, "POST", {events:[event]}, {"X-Hosting-Key":"test-hosting-secret"})).status).toBe(200);
+      return sealed;
+    };
+    expect((await send("/v1/me/workshops/ws-policy-race/submit", "creator", "POST", {operationId:op()})).status).toBe(403);
+    const pending=await env.DB.prepare("SELECT COUNT(*) AS n FROM workshop_review_submissions WHERE workshop_id='ws-policy-race' AND status='pending'").first<{n:number}>();
+    expect(pending?.n).toBe(0);
+  });
+  it("未經作者設定的卡片預設關閉且沒有工坊分頁", async () => {
+    await env.DB.prepare("DELETE FROM workshop_policies WHERE card_id=?").bind(cardId).run();
+    const response = await send(`/v1/cards/${cardId}/workshop`, null);
+    expect(response.status).toBe(200);
+    expect(await json(response)).toMatchObject({ mode: "closed", tabVisible: false, allowNew: false, total: 0, items: [] });
+    const picker = await json(await send("/v1/me/workshop-cards", "creator"));
+    expect(picker.items.find((item: any) => Number(item.cardId) === cardId)?.allowNew).toBe(false);
+  });
   it("送審校驗：常駐 >1500 Unicode 字碼點、缺封面、缺分級、缺內容、v2 更新說明不足皆精準擋下", async () => {
     // 1) constant_char_limit: enabled && constant 合計 > 1500 code points；非 constant 不計入
     seedDraft({
@@ -577,10 +608,11 @@ describe("1. 擴充送審校驗、審核佇列與公開發布投影", () => {
 });
 
 describe("2. 卡片頁工坊分頁四種顯示狀態、分級遮罩與舊玩家保護", () => {
-  it("精準滿足工坊分頁四種狀態：預設開放含空態、從未開放無分頁、暫停有既存仍顯示、全數下架隱藏分頁", async () => {
-    // 狀態 B：預設開放（尚無 policy 列且 0 個擴充）→ tabVisible: true, allowNew: true
+  it("工坊依明確開放與玩家已加入證據顯示，關閉不向新玩家顯示", async () => {
+    await env.DB.prepare("DELETE FROM workshop_policies WHERE card_id=?").bind(cardId).run();
+    // 無作者設定且無擴充：預設關閉、沒有分頁。
     const defaultOpen = await json(await send(`/v1/cards/${cardId}/workshop`, null));
-    expect(defaultOpen).toMatchObject({ tabVisible: true, allowNew: true, total: 0, items: [] });
+    expect(defaultOpen).toMatchObject({ mode:"closed", tabVisible:false, allowNew:false, total:0, items:[] });
 
     // 狀態 A：從未開放（allow_new = false 且 0 個公開擴充）→ tabVisible: false, allowNew: false
     await send(
@@ -588,7 +620,7 @@ describe("2. 卡片頁工坊分頁四種顯示狀態、分級遮罩與舊玩家�
       null,
       "POST",
       {
-        events: [{ seq: 1, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 1 }],
+        events: [{ seq: 1, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 3 }],
       },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
@@ -601,11 +633,11 @@ describe("2. 卡片頁工坊分頁四種顯示狀態、分級遮罩與舊玩家�
       null,
       "POST",
       {
-        events: [{ seq: 2, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: true, revision: 2, reopened: true }],
+        events: [{ seq: 2, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: true, revision: 4, reopened: true }],
       },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
-    seedDraft({ workshopId: "ws-live" });
+    seedDraft({ workshopId: "ws-live" }).entitledTokens.add("old-player");
     const sub = await json(await send("/v1/me/workshops/ws-live/submit", "creator", "POST", { operationId: op() }));
     await send(`/v1/review/${sub.submissionId}/claim`, "reviewer", "POST");
     await send(`/v1/review/${sub.submissionId}/stamp`, "reviewer", "POST", { verdict: "approve" });
@@ -615,12 +647,14 @@ describe("2. 卡片頁工坊分頁四種顯示狀態、分級遮罩與舊玩家�
       null,
       "POST",
       {
-        events: [{ seq: 3, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 3 }],
+        events: [{ seq: 3, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 5 }],
       },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
     const pausedWithExisting = await json(await send(`/v1/cards/${cardId}/workshop`, null));
-    expect(pausedWithExisting).toMatchObject({ tabVisible: true, allowNew: false, total: 1 });
+    expect(pausedWithExisting).toMatchObject({ tabVisible:false, allowNew:false, total:0 });
+    const joined = await json(await send(`/v1/cards/${cardId}/workshop`, "old-player"));
+    expect(joined).toMatchObject({ tabVisible:true, allowNew:false, total:1 });
 
     // 狀態 D：暫停且既存擴充遭安全撤下（0 個可見）→ tabVisible: false
     const revokeRes = await send("/v1/moderation/workshops/ws-live/revoke", "manager", "POST", {
@@ -762,7 +796,7 @@ describe("4. 六種站內通知與站方申訴裁決入口", () => {
       "/internal/workshop/events",
       null,
       "POST",
-      { events: [{ seq: 20, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 1 }] },
+      { events: [{ seq: 20, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 3 }] },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
     const reg = await send(`/v1/cards/${cardId}/workshop/interest`, "creator-b", "PUT", { draftName: "夏日番外" });
@@ -780,7 +814,7 @@ describe("4. 六種站內通知與站方申訴裁決入口", () => {
             workId,
             sourceRoleId: "role-base",
             allowNew: true,
-            revision: 2,
+            revision: 4,
             reopened: true,
           },
         ],
@@ -971,7 +1005,7 @@ describe("5. 自審阻擋、年齡驗證遮蔽、撤下結案與選卡狀態／�
       "/internal/workshop/events",
       null,
       "POST",
-      { events: [{ seq: 51, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 5 }] },
+      { events: [{ seq: 51, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 7 }] },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
     await send(`/v1/cards/${cardId}/workshop/interest`, "creator-b", "PUT", { draftName: "預約番外" });
@@ -1201,7 +1235,7 @@ describe("6. 跨倉契約對齊與邊界回歸（五級分級、UUID／RFC3339�
       "/internal/workshop/events",
       null,
       "POST",
-      { events: [{ seq: 201, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 1 }] },
+      { events: [{ seq: 201, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: false, revision: 3 }] },
       { "X-Hosting-Key": "test-hosting-secret" },
     );
     await send(`/v1/cards/${cardId}/workshop/interest`, "creator-b", "PUT", { draftName: "草稿" });
@@ -1211,7 +1245,7 @@ describe("6. 跨倉契約對齊與邊界回歸（五級分級、UUID／RFC3339�
       "POST",
       {
         events: [
-          { seq: 202, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: true, revision: 2, reopened: true },
+          { seq: 202, kind: "policy_changed", workId, sourceRoleId: "role-base", allowNew: true, revision: 4, reopened: true },
         ],
       },
       { "X-Hosting-Key": "test-hosting-secret" },
@@ -1249,4 +1283,16 @@ describe("6. 跨倉契約對齊與邊界回歸（五級分級、UUID／RFC3339�
     const cnSummary = await json(await send("/v1/me/community/notifications/summary", "new-player"));
     expect(cnSummary.unread).toBe(0);
   });
+});
+
+it('policy cancellation releases reviewer holds and allows another reviewer after resubmission',async()=>{
+ seedDraft({workshopId:'ws-policy-held'});
+ const first=await json(await send('/v1/me/workshops/ws-policy-held/submit','creator','POST',{operationId:op()}));
+ expect((await send(`/v1/review/${first.submissionId}/hold`,'reviewer','POST',{note:'Synthetic reviewer hold'})).status).toBe(200);
+ const sub=await env.DB.prepare('SELECT sealed_release_id FROM workshop_review_submissions WHERE id=?').bind(first.submissionId).first<{sealed_release_id:string}>();
+ const event={seq:333,kind:'policy_review_cancelled',workId,workshopId:'ws-policy-held',payload:{releaseId:sub!.sealed_release_id}};
+ expect((await send('/internal/workshop/events',null,'POST',{events:[event]},{'X-Hosting-Key':'test-hosting-secret'})).status).toBe(200);
+ expect((await env.DB.prepare("SELECT moderation_state FROM workshops WHERE id='ws-policy-held'").first<{moderation_state:string}>())?.moderation_state).toBe('draft');
+ const second=await json(await send('/v1/me/workshops/ws-policy-held/submit','creator','POST',{operationId:op()}));
+ expect((await send(`/v1/review/${second.submissionId}/claim`,'manager','POST')).status).toBe(200);
 });

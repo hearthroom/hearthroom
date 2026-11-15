@@ -9,17 +9,13 @@
  * - 暫停時，已登入、不是原作者的人在說明右側多一顆「重新開放時通知我」（§3.9 ③）；登記後換成綠 chip＋取消登記。
  */
 import { computed, ref, watch } from "vue";
-import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import ExtensionTile from "./ExtensionTile.vue";
 import WorkshopIcon from "./WorkshopIcon.vue";
-import UndoToast from "./UndoToast.vue";
-import { confirmForm } from "@/lib/confirm";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { activeCount, isJoined, type CardWorkshopState } from "@/lib/card-workshop";
 import { fetchCardWorkshop, fetchWorkshopsByIds, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
-import { cancelWorkshopInterest, knownInterest, registerWorkshopInterest, rememberInterest, type CardWorkshopPageWithInterest } from "@/lib/workshop-moderation";
 
 const props = defineProps<{ cardId: string; cardNum: string; initial: CardWorkshopPage; initialFailed?: boolean; state: CardWorkshopState | null; joinBusy: string | null }>();
 const emit = defineEmits<{ manage: []; join: [ExtensionSummary]; retry: [] }>();
@@ -27,7 +23,6 @@ const route = useRoute();
 const router = useRouter();
 const session = useSession();
 const { lp } = useLocalePath();
-const { t } = useI18n();
 
 type Filter = "hot" | "new" | "joined";
 const FILTERS: Filter[] = ["hot", "new", "joined"];
@@ -70,50 +65,14 @@ watch([filter, page, () => props.cardId, () => (filter.value === "joined" ? prop
 watch(() => props.initial, (v) => { if (filter.value === "hot" && page.value === 1) data.value = v; });
 
 const items = computed(() => (filter.value === "joined" ? joinedList.value : data.value.items));
-const owner = computed(() => props.initial.viewerIsOwner);
-const allowNew = computed(() => props.initial.allowNew);
+const owner = computed(() => data.value.viewerIsOwner);
+const mode = computed(() => data.value.mode ?? "closed");
+const canCreate = computed(() => data.value.canCreate === true);
+const settingsTo = computed(() => ({path:lp(`/cards/${encodeURIComponent(props.cardNum)}/edit`),query:{section:"publish"}}));
+const notice = computed(() => owner.value ? mode.value === "self" ? "workshop.tab.notice.ownerSelf" : mode.value === "closed" ? "workshop.tab.notice.ownerClosed" : "" : mode.value !== "open" && items.value.some(item => !item.byCardAuthor && (item.joined || (props.state?.selection && isJoined(props.state,item.id)))) ? "workshop.tab.notice.joinedHidden" : "");
 const count = computed(() => (props.state ? activeCount(props.state) : 0));
 const createTo = computed(() => ({ path: lp("/mine/workshops/new"), query: { card: props.cardNum } }));
 const ownerTo = computed(() => lp(`/mine/cards/${encodeURIComponent(props.cardNum)}/workshop`));
-// ── 重新開放時通知我 ──────────────────────────────────────────────
-// 伺服器只在已登入、allowNew=false 時帶 viewerInterested；這次瀏覽裡登記過的以 lib 記的為準
-// （分頁切走再切回來，卡片頁給的還是舊的 initial）
-const canInterest = computed(() => !!session.me && !owner.value && !allowNew.value);
-const interested = computed(() => {
-  const me = session.me;
-  if (!me) return false;
-  return knownInterest(me.accountNumId, props.cardId) ?? !!(props.initial as CardWorkshopPageWithInterest).viewerInterested;
-});
-const interestBusy = ref(false);
-const toast = ref<InstanceType<typeof UndoToast> | null>(null);
-async function registerInterest() {
-  if (interestBusy.value) return;
-  const got = await confirmForm({
-    title: t("workshop.interest.title"),
-    message: t("workshop.interest.body"),
-    confirmText: t("workshop.interest.submit"),
-    cancelText: t("dialog.cancel"),
-    focusCancel: true,
-    field: { label: t("workshop.interest.field"), maxlength: 30 },
-  });
-  if (!got) return;
-  await setInterest(true, got.text);
-}
-async function setInterest(on: boolean, draftName = "") {
-  const me = session.me;
-  if (!me || interestBusy.value) return;
-  const cardId = props.cardId;
-  interestBusy.value = true;
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const got = on ? await registerWorkshopInterest(cardId, draftName, token) : await cancelWorkshopInterest(cardId, token);
-    rememberInterest(me.accountNumId, cardId, got.interested);
-    toast.value?.say(t(on ? "workshop.interest.toast.on" : "workshop.interest.toast.off"));
-  } catch {
-    toast.value?.say(t("workshop.interest.error"));
-  } finally { interestBusy.value = false; }
-}
 const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.value ? "owner" : "plain"));
 </script>
 
@@ -127,7 +86,7 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
       </div>
       <span class="ws-tab__spacer" />
       <RouterLink v-if="owner" :to="ownerTo" class="btn btn--sm">{{ $t("workshop.owner.manage") }}</RouterLink>
-      <RouterLink v-if="allowNew" :to="createTo" class="btn btn--sm">
+      <RouterLink v-if="canCreate" :to="createTo" class="btn btn--sm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{{ $t("workshop.create") }}
       </RouterLink>
     </div>
@@ -138,15 +97,9 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
       <button type="button" class="btn btn--sm" @click="emit('manage')">{{ $t("workshop.strip.manage") }}</button>
     </div>
 
-    <div v-if="!allowNew" class="notice ws-tab__paused">
-      <WorkshopIcon name="lock" /><span class="ws-tab__paused-text ws-text">{{ $t("workshop.paused.withExisting") }}</span>
-      <span v-if="canInterest" class="ws-tab__interest">
-        <template v-if="interested">
-          <span class="chip ws-chip--ok" data-ws-interested>{{ $t("workshop.interest.registered") }}</span>
-          <button type="button" class="btn btn--sm btn--ghost" data-ws-interest-off :disabled="interestBusy" @click="setInterest(false)">{{ $t("workshop.interest.cancel") }}</button>
-        </template>
-        <button v-else type="button" class="btn btn--sm" data-ws-interest :disabled="interestBusy" @click="registerInterest">{{ $t("workshop.interest.button") }}</button>
-      </span>
+    <div v-if="notice" class="notice ws-tab__paused">
+      <WorkshopIcon name="lock" /><span class="ws-tab__paused-text ws-text">{{ $t(notice) }}</span>
+      <RouterLink v-if="owner" :to="settingsTo" class="btn btn--sm">{{ $t("workshop.action.goSettings") }}</RouterLink>
     </div>
 
     <p v-if="failed || (initialFailed && filter !== 'joined')" class="notice notice--error ws-tab__error" role="alert">
@@ -166,12 +119,12 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
       <template v-else-if="emptyKind === 'owner'">
         <h3>{{ $t("workshop.empty.owner.title") }}</h3>
         <p class="ws-text">{{ $t("workshop.empty.owner.body") }}</p>
-        <RouterLink v-if="allowNew" :to="createTo" class="btn">{{ $t("workshop.create") }}</RouterLink>
+        <RouterLink v-if="canCreate" :to="createTo" class="btn">{{ $t("workshop.create") }}</RouterLink>
       </template>
       <template v-else>
         <h3>{{ $t("workshop.empty.title") }}</h3>
         <p class="ws-text">{{ $t("workshop.empty.body") }}</p>
-        <RouterLink v-if="allowNew" :to="createTo" class="btn">{{ $t("workshop.empty.cta") }}</RouterLink>
+        <RouterLink v-if="canCreate" :to="createTo" class="btn">{{ $t("workshop.empty.cta") }}</RouterLink>
       </template>
     </div>
     <template v-else>
@@ -184,7 +137,6 @@ const emptyKind = computed(() => (filter.value === "joined" ? "joined" : owner.v
         <button type="button" class="btn btn--sm" :disabled="!data.hasMore" @click="go({ page: page + 1 })">›</button>
       </nav>
     </template>
-    <UndoToast ref="toast" />
   </section>
 </template>
 

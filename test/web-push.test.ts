@@ -100,3 +100,13 @@ it('says which kind of review, publication, grant and claim it was', () => {
  expect(pushLine({ ...row('review_result', { status: 'approved' }), card_names: null }, 'zh-Hant')).toBe('審核結果已更新');
  expect(pushLine({ ...row('comment_reply', null), card_names: null }, 'en')).toBe('Someone replied to your comment');
 });
+
+it('uses the policy cancellation copy and reopens without an empty draft name in all languages',()=>{
+ const row={kind:'workshop_review_cancelled',extra:JSON.stringify({workshopName:'Static Pack'}),actor_name:null,actor_handle:null,card_names:JSON.stringify({zh:'Synthetic',en:'Synthetic',ja:'Synthetic',ko:'Synthetic'})};
+ for(const locale of ['zh-Hant','zh-Hans','en','ja','ko'] as const){
+  const cancelled=pushLine(row,locale);
+  expect(cancelled).toContain('Static Pack');
+  expect(cancelled).toContain('Synthetic');
+  expect(pushLine({...row,kind:'workshop_reopened',extra:JSON.stringify({draftName:''})},locale)).not.toMatch(/「」|“”|『』/);
+ }
+});

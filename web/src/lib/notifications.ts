@@ -128,6 +128,7 @@ function workshopNotice(n: CommunityNotice): { title: string; body: string } | n
     case "workshop_returned": return pair("returned", { name, reason });
     case "workshop_hidden": return pair("hidden", { name, reason });
     case "workshop_appeal_result": return pair("appeal", { name });
+    case "workshop_review_cancelled": return pair("reviewCanceled",{name,card});
     case "workshop_review_result": return pair(extra.status === "rejected" ? "rejected" : "published", { name });
     case "workshop_published": return pair("newForOwner", { name, by, card });
     case "workshop_reopened": return pair("reopened", { card, name: typeof extra.draftName === "string" ? extra.draftName : name });

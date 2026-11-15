@@ -10,7 +10,7 @@
  * 這顆鍵不能放進列的 <button> 裡（按鈕不能套按鈕），所以灰列由外層 li 畫框，列本身與登記鍵並排。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import ExtensionCover from "./ExtensionCover.vue";
 import WorkshopIcon from "./WorkshopIcon.vue";
@@ -131,11 +131,12 @@ onBeforeUnmount(() => { clearTimeout(typing); document.removeEventListener("keyd
               <span class="ws-pick__text">
                 <strong>{{ card.name }}</strong>
                 <span v-if="card.allowNew" class="subtle">{{ card.author.name }} · #{{ card.num }}</span>
-                <span v-else class="subtle ws-text">{{ $t("workshop.mine.pick.closed") }}</span>
+                <span v-else class="subtle ws-text">{{ $t(card.viewerIsOwner ? "workshop.mine.pick.ownClosed" : "workshop.mine.pick.closed") }}</span>
               </span>
               <svg v-if="card.allowNew" class="ws-pick__go" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5l5 5-5 5" /></svg>
               <WorkshopIcon v-else name="lock" class="ws-pick__go" />
             </button>
+            <RouterLink v-if="!card.allowNew && card.viewerIsOwner" :to="{path:lp(`/cards/${encodeURIComponent(card.num)}/edit`),query:{section:'publish'}}" class="btn btn--sm btn--ghost ws-pick__interest" data-ws-pick-settings @click="emit('close')">{{ $t("workshop.action.goSettings") }}</RouterLink>
             <template v-if="!card.allowNew && session.me && !card.viewerIsOwner">
               <span v-if="interested(card)" class="chip ws-chip--ok ws-pick__interest" :data-ws-pick-interested="card.cardId">{{ $t("workshop.interest.registered") }}</span>
               <button
