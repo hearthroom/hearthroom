@@ -222,6 +222,14 @@ export function usageState(s: Pick<UsageSummary, "requestFits" | "currentTierSuf
   return s.currentTierSufficient ? "ok" : "soft";
 }
 
+/**
+ * 開始對話前要不要先問「上下文放不下」：放不下、而且知道目前是哪一檔才問。
+ * 不知道目前檔位時說不出一句完整的話（「目前的 容納不下」），伺服器照樣開始時本來就會降級，不擋。
+ */
+export function needsCapacityChoice(s: Pick<UsageSummary, "requestFits" | "currentTierSufficient" | "currentContextTokens">): boolean {
+  return usageState(s) === "over" && !!s.currentContextTokens;
+}
+
 /** 32000 → 「32K」：檔位一律寫成 K，不寫點數 */
 export function tierLabel(tokens: number | null | undefined): string {
   return tokens && tokens > 0 ? `${Math.round(tokens / 1000)}K` : "";

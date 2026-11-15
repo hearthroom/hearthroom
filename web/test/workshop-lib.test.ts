@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONSTANT_CHAR_LIMIT, constantChars, firstDemoted, moveItem, publishChecklist, publishState, tierLabel, usageState, type SelectionItem, type WorkshopDraft } from "../src/lib/workshop";
+import { CONSTANT_CHAR_LIMIT, constantChars, firstDemoted, moveItem, needsCapacityChoice, publishChecklist, publishState, tierLabel, usageState, type SelectionItem, type WorkshopDraft } from "../src/lib/workshop";
 
 const entry = (content: string, isEnabled = true, isConstant = true) => ({ content, isEnabled, isConstant, name: "", keywords: [], secondaryKeywords: [] });
 
@@ -71,5 +71,17 @@ describe("publishChecklist", () => {
     const opening = { mode: "greeting" as const, welcome: "雪停了", alternates: [], prologue: [], openingPage: "" };
     expect(failed(draft({ kind: "lorebook", worldbook: [], opening }))).toEqual(["content"]);
     expect(failed(draft({ kind: "lorebook" }))).toEqual([]);
+  });
+});
+
+describe("needsCapacityChoice", () => {
+  const u = (over: object) => ({ requestFits: false, currentTierSufficient: false, currentContextTokens: 32000, ...over });
+  it("asks only when the request does not fit at a known current tier", () => {
+    expect(needsCapacityChoice(u({}))).toBe(true);
+    expect(needsCapacityChoice(u({ requestFits: true }))).toBe(false);
+  });
+  it("does not ask when the current tier is unknown (nothing true to say; the server still demotes if needed)", () => {
+    expect(needsCapacityChoice(u({ currentContextTokens: null }))).toBe(false);
+    expect(needsCapacityChoice(u({ currentContextTokens: 0 }))).toBe(false);
   });
 });
