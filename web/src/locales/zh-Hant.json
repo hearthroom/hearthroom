@@ -5035,7 +5035,6 @@
   "workshop.panel.workshopClosed": "原作者已關閉這張卡的工坊，這些擴充暫停套用；重新開啟後會自動恢復。",
   "workshop.panel.row.paused": "暫停",
   "workshop.status.hasUnpublishedChanges": "有未發布的修改",
-  "workshop.publish.check.contentShort": "至少一項內容",
   "workshop.publish.check.contentLore": "至少一條世界書條目",
   "workshop.publish.action.publish": "發布",
   "workshop.publish.action.unpublish": "下架",

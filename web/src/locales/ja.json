@@ -5035,7 +5035,6 @@
   "workshop.panel.workshopClosed": "作者がこのカードのワークショップをオフにしたため、一時停止しています。再開されると自動で戻ります。",
   "workshop.panel.row.paused": "一時停止",
   "workshop.status.hasUnpublishedChanges": "未公開の変更あり",
-  "workshop.publish.check.contentShort": "内容が1つ以上ある",
   "workshop.publish.check.contentLore": "世界設定が1件以上ある",
   "workshop.publish.action.publish": "公開",
   "workshop.publish.action.unpublish": "公開を止める",

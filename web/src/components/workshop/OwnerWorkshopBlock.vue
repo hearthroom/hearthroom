@@ -31,6 +31,8 @@ const failed = ref(false);
 const notOwner = ref(false);
 const saving = ref(false);
 const saveFailed = ref(false);
+/** 存失敗的那一次想要的值：重試照它再送一次；重讀發現伺服器其實已經是它，就當成功 */
+let failedTarget: boolean | null = null;
 
 const open = computed(() => !!policy.value?.allowNew);
 /** 舊回應沒有 counts：用列表裡看得到的已發布項目估 */
@@ -85,10 +87,10 @@ async function load() {
 // 編輯頁一開始的 roleId 可能是網址上的卡號，讀完卡才換成真正的角色 id；卡號查不到開關，等換好再讀
 watch(() => props.roleId, (id) => { if (id && !/^[1-9]\d*$/.test(id)) void load(); }, { immediate: true });
 
-async function save(next: boolean) {
+async function save(next: boolean, confirmed = false) {
   const current = policy.value;
   if (!current || saving.value || !props.cardId) return;
-  if (!next && affected.value) {
+  if (!next && affected.value && !confirmed) {
     const ext = counts.value.lorebookPublished;
     const ok = await confirmDialog({
       title: t("workshop.owner.closeConfirm.title"),
@@ -99,16 +101,19 @@ async function save(next: boolean) {
   }
   saving.value = true;
   saveFailed.value = false;
+  failedTarget = null;
   try {
     policy.value = await savePolicy(props.cardId, next, current.revision, await token());
   } catch {
-    saveFailed.value = true;
     await load();
+    // 回應掉了但其實存進去了：畫面照伺服器，不留錯誤，也不讓重試翻回去
+    if (policy.value?.allowNew !== next) { failedTarget = next; saveFailed.value = true; }
   } finally {
     saving.value = false;
   }
 }
-function retry() { void save(!open.value); }
+/** 重試送的是上次想要的值（已經確認過，不再問一次），不是「目前狀態的相反」 */
+function retry() { if (failedTarget !== null) void save(failedTarget, true); }
 </script>
 
 <template>

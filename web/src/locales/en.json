@@ -5035,7 +5035,6 @@
   "workshop.panel.workshopClosed": "The card author turned off Workshop for this card, so these are paused. They resume if it’s turned back on.",
   "workshop.panel.row.paused": "Paused",
   "workshop.status.hasUnpublishedChanges": "Unpublished edits",
-  "workshop.publish.check.contentShort": "At least one item",
   "workshop.publish.check.contentLore": "At least one lorebook entry",
   "workshop.publish.action.publish": "Publish",
   "workshop.publish.action.unpublish": "Unpublish",

@@ -5035,7 +5035,6 @@
   "workshop.panel.workshopClosed": "原作者已关闭这张卡的工坊，这些扩展包暂停应用；重新开启后会自动恢复。",
   "workshop.panel.row.paused": "暂停",
   "workshop.status.hasUnpublishedChanges": "有未发布的修改",
-  "workshop.publish.check.contentShort": "至少一项内容",
   "workshop.publish.check.contentLore": "至少一条世界书条目",
   "workshop.publish.action.publish": "发布",
   "workshop.publish.action.unpublish": "下架",

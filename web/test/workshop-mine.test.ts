@@ -148,15 +148,36 @@ it("owner switch: turning off with published content asks first (focus on cancel
   expect(ws.savePolicy).toHaveBeenCalledWith("100001", false, 1, "tok");
 });
 
-it("owner switch: a failed save re-reads the server state and offers a retry", async () => {
-  ws.fetchPolicy.mockResolvedValue({ allowNew: false, revision: 3, items: [], counts: counts({ dlcPublished: 0, dlcDrafts: 0, lorebookPublished: 0, joinCount: 0 }) });
-  ws.savePolicy.mockRejectedValue(new Error("boom"));
+it("owner switch: a failed save re-reads the server state; retry sends the same intent again", async () => {
+  const empty = counts({ dlcPublished: 0, dlcDrafts: 0, lorebookPublished: 0, joinCount: 0 });
+  ws.fetchPolicy.mockResolvedValue({ allowNew: false, revision: 3, items: [], counts: empty });
+  ws.savePolicy.mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce({ allowNew: true, revision: 4, items: [], counts: empty });
   await mount(OwnerWorkshopBlock, { roleId: "role-1", cardId: "100001" });
   document.querySelector<HTMLButtonElement>("[data-ws-owner-switch]")!.click();
   await settle();
   expect(ws.fetchPolicy).toHaveBeenCalledTimes(2);
   expect(document.querySelector("[data-ws-owner-switch]")?.getAttribute("aria-checked")).toBe("false");
   expect(document.querySelector("[data-ws-owner-error]")?.textContent).toContain("設定未儲存");
+  document.querySelector<HTMLButtonElement>("[data-ws-owner-error] button")!.click();
+  await settle();
+  expect(ws.savePolicy).toHaveBeenLastCalledWith("100001", true, 3, "tok");
+  expect(document.querySelector("[data-ws-owner-switch]")?.getAttribute("aria-checked")).toBe("true");
+  expect(document.querySelector("[data-ws-owner-error]")).toBeNull();
+});
+
+it("owner switch: if the failed save actually landed, the re-read clears the error and retry never flips it back", async () => {
+  ws.fetchPolicy.mockResolvedValueOnce({ allowNew: true, revision: 3, items: [], counts: counts() })
+    .mockResolvedValueOnce({ allowNew: false, revision: 4, items: [], counts: counts() });
+  ws.savePolicy.mockRejectedValue(new Error("response lost"));
+  await mount(OwnerWorkshopBlock, { roleId: "role-1", cardId: "100001" });
+  document.querySelector<HTMLButtonElement>("[data-ws-owner-switch]")!.click();
+  await settle();
+  settleConfirm(true);
+  await settle();
+  expect(document.querySelector("[data-ws-owner-switch]")?.getAttribute("aria-checked")).toBe("false");
+  expect(document.querySelector("[data-ws-owner-error]")).toBeNull();
+  expect(confirmState.current).toBeNull();
+  expect(ws.savePolicy).toHaveBeenCalledTimes(1);
 });
 
 it("owner switch waits for the real role id (the editor starts with the card number)", async () => {

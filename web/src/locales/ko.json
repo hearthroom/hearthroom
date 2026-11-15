@@ -5035,7 +5035,6 @@
   "workshop.panel.workshopClosed": "원작자가 이 카드의 창작마당을 꺼서 적용이 일시 중지됐어요. 다시 켜면 자동으로 복구돼요.",
   "workshop.panel.row.paused": "일시 중지",
   "workshop.status.hasUnpublishedChanges": "미게시 수정 있음",
-  "workshop.publish.check.contentShort": "내용이 하나 이상 있음",
   "workshop.publish.check.contentLore": "세계관 항목이 하나 이상 있음",
   "workshop.publish.action.publish": "게시",
   "workshop.publish.action.unpublish": "내리기",
