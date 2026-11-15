@@ -555,7 +555,7 @@
   "d983b644b1ad0": "`forbidden` — not the role owner.",
   "dd9232f97e817": "`role_not_found`.",
   "d693a89f45d04": "Read the display rules of a role for rendering",
-  "dc1cfd7afd815": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route.",
+  "dc1cfd7afd815": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route. With operationId and conversationId, Workshop display rules match the immutable admission metadata workshopHash; current consent changes affect the next admission. Original-author DLC shares the base agent configuration trust model; player extensions have no scripts or SDK access.",
   "d6ba965bef068": "Role id.",
   "d7ddce92cb00d": "Player-visible asset.",
   "d34f4a9b418cc": "`invalid_param` — `roleId` missing.",
@@ -2666,5 +2666,6 @@
   "d711cd949eda4": "Map from role id to play-round count, matching `RoleDetail.talkNum` across published versions. Staging versions are excluded. Only readable cards appear.",
   "d13e58c14d99e": "Only on spending records: what the charge drew from, by kind of credit, largest first. One charge that drew from several credit batches is a single record; the `amount` values add up to its `score`. Omitted when the sources cannot be determined.",
   "db98a67008ab7": "Kind of credit. Treat unknown values as `other`.",
-  "da13084075959": "Credits drawn from this kind, as a positive number."
+  "da13084075959": "Credits drawn from this kind, as a positive number.",
+  "d0454fc25d6ec": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
 }

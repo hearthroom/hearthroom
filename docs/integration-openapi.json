@@ -6921,7 +6921,7 @@
           "Author assets"
         ],
         "summary": "Read the display rules of a role for rendering",
-        "description": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route.",
+        "description": "Player-side read of a role's display rules, used by clients to render the chat. Any bearer-authenticated caller may read it for any existing role (no visibility check, matching the role-detail gate). On the `/open/v1` prefix this route is not in the guest allow-list, so a bearer token is required. Only assets with `status: passed` are served; when the asset is missing or not passed, the empty shape (`rules: []`, `status: none`, `version: 0`, `pageMode: classic`) is returned. `rejectReason` is never included on this route. With operationId and conversationId, Workshop display rules match the immutable admission metadata workshopHash; current consent changes affect the next admission. Original-author DLC shares the base agent configuration trust model; player extensions have no scripts or SDK access.",
         "security": [
           {
             "userToken": []
@@ -6936,6 +6936,16 @@
               "type": "string"
             },
             "description": "Role id."
+          },
+          {
+            "name": "operationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
           }
         ],
         "responses": {
