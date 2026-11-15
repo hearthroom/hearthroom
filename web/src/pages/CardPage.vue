@@ -66,7 +66,7 @@ import CapacityChoiceDialog from "@/components/workshop/CapacityChoiceDialog.vue
 import UndoToast from "@/components/workshop/UndoToast.vue";
 import WorkshopIcon from "@/components/workshop/WorkshopIcon.vue";
 import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
-import { fetchCardWorkshop, tierLabel, usageState, type CardWorkshopPage } from "@/lib/workshop";
+import { fetchCardWorkshop, needsCapacityChoice, tierLabel, type CardWorkshopPage } from "@/lib/workshop";
 import { activeCount, cardWorkshop, loadCardWorkshop, switchToRecommended } from "@/lib/card-workshop";
 import { useExtensionJoin } from "@/lib/use-extension-join";
 
@@ -445,7 +445,7 @@ const capacityBusy = ref(false);
 const capacityError = ref("");
 async function beforePlay(): Promise<false | Record<string, string>> {
   const s = wsState.value;
-  if (!s?.usage || !wsCount.value || usageState(s.usage) !== "over") return {};
+  if (!s?.usage || !wsCount.value || !needsCapacityChoice(s.usage)) return {};
   capacityError.value = "";
   for (;;) {
     const choice = await new Promise<"switch" | "manage" | "go" | null>((resolve) => { capacityAsk.value = resolve; });
