@@ -30,6 +30,7 @@ async function openPolicy(){await applyWorkshopEvents(env,[{kind:'policy_changed
 it('publishes directly with the creator token and stores one public version without review',async()=>{
  await openPolicy();const receipt=publication();const calls:any[]=[];
  const gateway=await import('../src/workshop-gateway');(gateway.workshopUpstream as any).publish=async(_env:any,token:any,input:any)=>{calls.push({token,input});return receipt};
+ (gateway.workshopUpstream as any).draftMetadata=async()=>({workshopId:receipt.workshopId,card:{cardId:workId,roleId:'v2-synthetic-card'}});
  const body={expectedRevision:2,operationId:crypto.randomUUID(),kind:'dlc'};
  for(let i=0;i<2;i++){const r=await SELF.fetch(`https://c.test/v1/me/workshops/${receipt.workshopId}/publish`,{method:'POST',headers:{...bearer('creator'),'Content-Type':'application/json'},body:JSON.stringify(body)});expect(r.status).toBe(200);expect(await r.json()).toMatchObject({status:'published',version:1,kind:'lorebook'})}
  expect(calls[0]).toMatchObject({token:'creator',input:{workshopId:receipt.workshopId,expectedRevision:2}});expect(calls[0].input.kind).toBeUndefined();
@@ -90,4 +91,32 @@ it('saving author policy synchronizes D1 before returning success and survives a
  }
  expect(calls).toBe(2);
  const foreign=await SELF.fetch(`https://c.test/v1/cards/${cardId}/workshop/policy`,{method:'POST',headers:{...bearer('creator'),'Content-Type':'application/json'},body:JSON.stringify(body)});expect(foreign.status).toBe(403);expect(calls).toBe(2);
+});
+
+it('quarantines one invalid publication without blocking a later consent closure or acknowledgement',async()=>{
+ await openPolicy();const invalid={...publication(),residentChars:999};
+ const events=[{seq:10,kind:'release_published',eventKey:'poisoned-publication',workId,workshopId:invalid.workshopId,payload:{policyVersion:2,publication:invalid}},{seq:11,kind:'policy_changed',eventKey:'close-after-poison',workId,sourceRoleId:'v2-synthetic-card',payload:{policyVersion:2,revision:3,allowNew:false}}];
+ const gateway=await import('../src/workshop-gateway');let ack=0;gateway.workshopUpstream.pullOutbox=async()=>({events});gateway.workshopUpstream.ackOutbox=async(_env,seq)=>{ack=seq;return {ok:true}};
+ const {drainProviderWorkshopOutbox}=await import('../src/workshop');
+ const result=await drainProviderWorkshopOutbox(env);
+ expect(result).toMatchObject({drained:2,applied:1});expect(ack).toBe(11);expect((await tab()).allowNew).toBe(false);
+ const quarantined=await env.DB.prepare('SELECT reason,event_kind FROM workshop_sync_rejections WHERE event_key=?').bind('poisoned-publication').first();expect(quarantined).toMatchObject({reason:'invalid_publication',event_kind:'release_published'});
+ const metrics=await (await import('../src/ops-metrics')).opsMetrics(env.DB);expect(metrics).toContain('hearthroom_workshop_operations_total{operation="sync",outcome="rejected"} 1');
+});
+
+it('keeps DLC before player extensions on the first page',async()=>{
+ await openPolicy();const {applyWorkshopPublication}=await import('../src/workshop-publication');
+ for(let i=0;i<21;i++){const p=publication();await applyWorkshopPublication(env,'harbor',p as any);await env.DB.prepare('UPDATE workshops SET install_count=100 WHERE id=?').bind(p.workshopId).run()}
+ const dlc={...publication(),kind:'dlc',authorPublicNo:74001};await applyWorkshopPublication(env,'harbor',dlc as any);
+ const rows=(await tab()).items;expect(rows).toHaveLength(20);expect(rows[0]).toMatchObject({id:dlc.workshopId,kind:'dlc'});
+});
+
+it('rejects an unavailable base card before committing a creator publication',async()=>{
+ await openPolicy();const receipt=publication();let writes=0;
+ const gateway=await import('../src/workshop-gateway');
+ (gateway.workshopUpstream as any).draftMetadata=async()=>({workshopId:receipt.workshopId,card:{cardId:workId,roleId:'v2-synthetic-card'}});
+ gateway.workshopUpstream.publish=async()=>{writes++;return receipt as any};
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(cardId).run();
+ const r=await SELF.fetch(`https://c.test/v1/me/workshops/${receipt.workshopId}/publish`,{method:'POST',headers:{...bearer('creator'),'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:2,operationId:crypto.randomUUID()})});
+ expect(r.status).toBe(404);expect(writes).toBe(0);
 });

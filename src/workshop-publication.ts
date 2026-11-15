@@ -87,6 +87,12 @@ export async function publishWorkshop(c: Ctx, workshopId: string, body: unknown)
         throw new HttpError(400, 'invalid_request');
     try {
         const operationId = await ensureOperationUuid(body.operationId);
+        const draft = await workshopUpstream.draftMetadata(c.env, token, workshopId, member.provider);
+        if (draft.workshopId !== workshopId || !draft.card?.cardId || !draft.card?.roleId)
+            throw new HttpError(502, 'invalid_publication');
+        const base = await resolveCardForWork(c.env.DB, member.provider, draft.card.cardId, draft.card.roleId);
+        if (!base || base.card.status !== 'approved' || base.card.public_blocked)
+            throw new HttpError(404, 'not_found');
         const receipt = await workshopUpstream.publish(c.env, token, { workshopId, operationId, expectedRevision: Number(body.expectedRevision) }, member.provider);
         if (receipt.workshopId !== workshopId || !await memberOwnsExternal(c.env.DB, member, member.provider, receipt.authorPublicNo))
             throw new HttpError(403, 'not_the_author');

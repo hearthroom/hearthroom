@@ -2294,7 +2294,7 @@ async function campaignPage(c: Context<{ Bindings: Env; Variables: { ev: Pending
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   // Retired and unknown API routes never fall through to the SPA's success shell.
-  if (SITE_API_PATH.test(url.pathname)) return c.json({error:"not_found"},404,{"Cache-Control":"private, no-store"});
+  if (/^\/v1\/moderation\/workshop-appeals(?:\/|$)/.test(url.pathname)) return c.json({error:"not_found"},404,{"Cache-Control":"private, no-store"});
   const campaignMatch = url.pathname.match(CAMPAIGN_PAGE);
   if (campaignMatch) return campaignPage(c, url, campaignMatch);
   const landing = url.pathname.match(LANDING);

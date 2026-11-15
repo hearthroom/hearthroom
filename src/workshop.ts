@@ -328,9 +328,9 @@ export async function listCardWorkshops(
          (SELECT member_id FROM member_identities mi WHERE mi.provider = w.provider AND mi.external_id = CAST(w.author_num_id AS TEXT))
        )
        WHERE w.card_id = ? AND w.moderation_state = 'approved'
-       ORDER BY ${sortSql}`,
+       ORDER BY CASE WHEN w.provider = ? AND w.author_num_id = ? THEN 0 ELSE 1 END, ${sortSql}`,
     )
-      .bind(Number(card.id))
+      .bind(Number(card.id),card.provider,card.author_num_id)
       .all<WorkshopRow & AuthorInfo>()
   ).results;
 
@@ -681,8 +681,8 @@ export async function listMyWorkshopCards(c: Ctx, q: string, lang: string) {
 
 
 
-export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[]): Promise<{ applied: number }> {
-  let applied = 0;
+export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[]): Promise<{ applied: number; rejected:number }> {
+  let applied = 0,rejected=0;
   const now = Date.now();
   for (const ev of events) {
     const provider: ProviderId = ev.provider ?? "harbor";
@@ -775,7 +775,9 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       .first();
     if (seen) continue;
 
-    if(ev.kind==="release_published") {
+    if(ev.kind==='release_published'||ev.kind==='release_unpublished') {
+     try {
+      if(ev.kind==="release_published") {
       if(p.policyVersion!==2||!p.publication||typeof p.publication!=="object") throw new HttpError(502,"invalid_publication");
       const publication=p.publication as import("./workshop-gateway").WorkshopPublicationReceipt;
       if(publication.workshopId!==workshopId||publication.workId!==workId)throw new HttpError(502,"invalid_publication");
@@ -784,6 +786,19 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
      const publication=p.publication as import('./workshop-publication').WorkshopUnpublishReceipt;
      if(p.policyVersion!==2||!publication||publication.workshopId!==workshopId||publication.workId!==workId)throw new HttpError(502,'invalid_publication');
      await applyWorkshopUnpublication(env,provider,publication);
+
+      }
+     } catch(error) {
+      // Only deterministic receipt validation is quarantined. Storage failures
+      // still stop/ retry the batch, since a durable decision is not yet saved.
+      if(!(error instanceof HttpError&&error.status===502&&error.message==='invalid_publication'))throw error;
+      await env.DB.batch([
+       env.DB.prepare('INSERT OR IGNORE INTO workshop_sync_rejections(event_key,provider,event_kind,reason,event_payload,created_at) VALUES(?,?,?,?,?,?)').bind(eventKey,provider,ev.kind,'invalid_publication',JSON.stringify(ev),now),
+       env.DB.prepare('INSERT OR IGNORE INTO workshop_sync_events(event_key,kind,created_at) VALUES(?,?,?)').bind(eventKey,'rejected',now),
+      ]);
+      await bumpOp(env.DB,'workshop','sync','rejected');
+      rejected++;continue;
+     }
     } else if (ev.kind === "policy_changed" || ev.kind === "policy_saved") {
       // Unknown/legacy events cannot grant v2 consent or advance its revision.
       const revision=Number(revisionRaw);
@@ -831,7 +846,7 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
     applied++;
   }
   await bumpOp(env.DB, "workshop", "sync", "success");
-  return { applied };
+  return { applied,rejected };
 }
 
 export async function drainProviderWorkshopOutbox(
