@@ -129,6 +129,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  }
  if(version?.submission_id){
   if(consent){const previous=await db.prepare('SELECT status FROM review_submissions WHERE id=?').bind(version.submission_id).first<{status:string}>();if(!previous||previous.status==='superseded')throw new HttpError(409,'visibility_operation_conflict');}
+  if(version.card_id)await projectCurrentWorkshopPolicy(env,provider,version.card_id,input.role.roleId,input.token);
   return receiptOf(version);
  }
  const existing=await getCard(db,input.role.roleId,provider);
@@ -219,7 +220,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
     provider,status:'pending',preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
-   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);return receiptOf(retry);}throw error;
+   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);if(retry.card_id)await projectCurrentWorkshopPolicy(env,provider,retry.card_id,input.role.roleId,input.token);return receiptOf(retry);}throw error;
   }
  }
  const stored=await existingOperation();

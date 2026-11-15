@@ -151,12 +151,17 @@ it('stops a non-author before Provider commits a publication on a card that has 
   expect(writes).toBe(0);
 });
 
-it('a closed Provider read under a different work id never hides a tab that is open', async () => {
+// Provider loses data here: when a standalone card is bound, its work id changes from the
+// role id to the bound work, and the policy saved under the old key is left behind, so
+// Provider reads the default "closed" under the new key. That has to be fixed on Provider.
+// This test only pins the Worker side: it must not turn that loss into deleting an open
+// projection that it still holds under the old key.
+it('when Provider re-keys a bound card and reads its default closed policy under the new key, the Worker does not delete the open projection under the old key', async () => {
   up.state = async () => ({ workId: 'canonical-work-later', allowNew: true, revision: 2, policyRevision: 2, items: [] });
   const cardId = await registerLater();
   expect(await tab(cardId)).toMatchObject({ tabVisible: true });
   const { projectCurrentWorkshopPolicy } = await import('../src/workshop-policy');
-  // A default read (closed, revision 1) under another work id inserts nothing.
+  // The default read (closed, revision 1) under the new key inserts nothing.
   up.state = async () => ({ workId: 'other-work-key', allowNew: false, revision: 1, policyRevision: 1, items: [] });
   await projectCurrentWorkshopPolicy(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
   expect(await tab(cardId)).toMatchObject({ tabVisible: true });
@@ -178,4 +183,66 @@ it('lets the author unpublish that DLC again without a public row to update', as
   expect(r.status).toBe(200);
   expect(await r.json()).toMatchObject({ workshopId, status: 'draft' });
   expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshops').first<{ n: number }>())!.n).toBe(0);
+});
+
+it('keeps the original 404 for a card that has a community row but is not publicly listed', async () => {
+  providerPolicy();
+  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider) VALUES(?,?,74101,'{}','{}',1,1,'unshared','harbor')").bind(privateNum, PRIVATE_ROLE).run();
+  const workshopId = crypto.randomUUID();
+  let writes = 0;
+  up.draftMetadata = async () => ({ workshopId, card: { cardId: PRIVATE_ROLE, roleId: PRIVATE_ROLE } });
+  up.publish = async () => { writes++; return dlcReceipt(workshopId); };
+  const r = await publish(workshopId, 'owner');
+  expect(r.status).toBe(404);
+  expect(writes).toBe(0);
+});
+
+it('defers a publication event whose base card is not listed: acknowledged, not projected, not quarantined', async () => {
+  const workshopId = crypto.randomUUID();
+  const event = { seq: 30, kind: 'release_published', eventKey: 'unlisted-base-publish', workId: PRIVATE_ROLE, workshopId, payload: { policyVersion: 2, publication: dlcReceipt(workshopId) } };
+  let ack = 0;
+  up.pullOutbox = async () => ({ events: [event] });
+  up.ackOutbox = async (_e: unknown, seq: number) => { ack = seq; return { ok: true }; };
+  const { drainProviderWorkshopOutbox } = await import('../src/workshop');
+  await drainProviderWorkshopOutbox(env);
+  expect(ack).toBe(30);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshops').first<{ n: number }>())!.n).toBe(0);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshop_sync_rejections').first<{ n: number }>())!.n).toBe(0);
+  const metrics = await (await import('../src/ops-metrics')).opsMetrics(env.DB);
+  expect(metrics).toContain('hearthroom_workshop_operations_total{operation="sync",outcome="deferred"} 1');
+  expect(metrics).not.toContain('hearthroom_workshop_operations_total{operation="sync",outcome="rejected"}');
+});
+
+it('unpublishes by workshop id when a public row exists, even if its card no longer resolves', async () => {
+  const workshopId = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO workshops(id,card_id,provider,work_id,source_role_id,author_num_id,version_no,approved_release_id,moderation_state,publication_revision,published_at,created_at,updated_at) VALUES(?,999999,'harbor',?,?,74101,1,'rel-1','approved',1,1,1,1)").bind(workshopId, PRIVATE_ROLE, PRIVATE_ROLE).run();
+  up.creatorAction = async (_e: unknown, _t: string, input: { workshopId: string }) => ({ workshopId: input.workshopId, workId: PRIVATE_ROLE, sourceRoleId: PRIVATE_ROLE, kind: 'dlc', status: 'draft', version: 1, draftRevision: 3, publicationRevision: 2, authorPublicNo: 74101, cardOwnerPublicNo: 74101, policyVersion: 2 });
+  const r = await SELF.fetch(`https://c.test/v1/me/workshops/${workshopId}/unpublish`, { method: 'POST', headers: { ...bearer('owner'), 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: 3, operationId: crypto.randomUUID() }) });
+  expect(r.status).toBe(200);
+  expect(await env.DB.prepare('SELECT moderation_state,approved_release_id,publication_revision FROM workshops WHERE id=?').bind(workshopId).first())
+    .toEqual({ moderation_state: 'draft', approved_release_id: null, publication_revision: 2 });
+});
+
+it('re-reads the policy with a short timeout, also when a submission retry returns early', async () => {
+  const reads: (number | undefined)[] = [];
+  up.state = async (_e: unknown, _q: unknown, _t: unknown, _p: unknown, timeoutMs?: number) => {
+    reads.push(timeoutMs);
+    return { workId: 'canonical-work-later', allowNew: true, revision: 2, policyRevision: 2, items: [] };
+  };
+  rolesOnMainSite({ roleId: LATER_ROLE, authorNumId: 74101, name: 'Synthetic later card' });
+  const body = JSON.stringify({ roleId: LATER_ROLE, operationId: crypto.randomUUID(), ...ratingBody(false) });
+  for (let i = 0; i < 2; i++) {
+    const r = await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { ...bearer('owner'), 'Content-Type': 'application/json' }, body });
+    expect(r.status).toBeLessThan(300);
+  }
+  expect(reads).toHaveLength(2);
+  expect(reads.every((t) => typeof t === 'number' && t <= 3000)).toBe(true);
+});
+
+it('counts a closed read that changes nothing as a no-op, not a success', async () => {
+  up.state = async () => ({ workId: 'fresh-work', allowNew: false, revision: 1, policyRevision: 1, items: [] });
+  await registerLater();
+  const metrics = await (await import('../src/ops-metrics')).opsMetrics(env.DB);
+  expect(metrics).toContain('hearthroom_workshop_operations_total{operation="policy_backfill",outcome="noop"} 1');
+  expect(metrics).not.toContain('hearthroom_workshop_operations_total{operation="policy_backfill",outcome="success"}');
 });

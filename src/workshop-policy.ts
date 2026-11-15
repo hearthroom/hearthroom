@@ -28,43 +28,59 @@ const ROLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * Fenced write of one v2 policy into the public projection. The key is Provider's
  * canonical work id; a lower revision never replaces a newer one.
  */
-export async function upsertWorkshopPolicyProjection(db: D1Database, provider: ProviderId, workId: string, cardId: number, allowNew: boolean, revision: number, now = Date.now()) {
-    await db.prepare(`INSERT INTO workshop_policies(provider,work_id,card_id,allow_new,revision,consent_version,updated_at)
+export async function upsertWorkshopPolicyProjection(db: D1Database, provider: ProviderId, workId: string, cardId: number, allowNew: boolean, revision: number, now = Date.now()): Promise<number> {
+    const res = await db.prepare(`INSERT INTO workshop_policies(provider,work_id,card_id,allow_new,revision,consent_version,updated_at)
             VALUES(?,?,?,?,?,2,?) ON CONFLICT(provider,work_id) DO UPDATE SET
             card_id=excluded.card_id,allow_new=excluded.allow_new,revision=excluded.revision,
             consent_version=2,updated_at=excluded.updated_at
             WHERE excluded.revision>workshop_policies.revision OR
               (excluded.revision=workshop_policies.revision AND workshop_policies.consent_version<>2)`)
         .bind(provider, workId, cardId, allowNew ? 1 : 0, revision, now).run();
+    return res.meta.changes;
 }
 
+/** A submission waits at most this long for Provider's current workshop state. */
+const BACKFILL_TIMEOUT_MS = 3_000;
+
 /**
- * Called on every hosting submission (the only way a card becomes publicly listed).
+ * Called on every hosting submission (the only way a card becomes publicly listed),
+ * including a retried submission that returns early; the revision fence makes reruns safe.
  * The author may have saved the switch while the card had no community row; the outbox
- * event for that save had nothing to project onto. Read Provider's current policy and
- * project it. An open policy is upserted under Provider's work id; a closed one only
- * updates a row with that same key, so a default "closed" read under a new work id never
- * hides a tab that is open under the old one. Never fails the submission: on error the
- * projection stays as it was until the next policy event.
+ * event for that save had nothing to project onto. Read Provider's current state once and
+ * project it. Never fails the submission: on error or timeout the projection stays as it
+ * was until the next policy event.
+ *
+ * Only the policy is projected today. Publications made while the base was not listed
+ * are acknowledged as deferred by the outbox; once Provider's state carries a publication
+ * receipt per item, project them from the same read here with applyWorkshopPublication.
  */
 export async function projectCurrentWorkshopPolicy(env: Env, provider: ProviderId, cardId: string, roleId: string, token?: string | null): Promise<void> {
     try {
-        const state = await workshopUpstream.state(env, { sourceRoleId: roleId }, token ?? null, provider);
-        const revision = Number(state.policyRevision ?? state.revision);
-        if (typeof state.workId !== 'string' || !state.workId || typeof state.allowNew !== 'boolean' || !Number.isSafeInteger(revision) || revision < 1)
-            throw new HttpError(502, 'invalid_policy');
-        if (state.allowNew)
-            await upsertWorkshopPolicyProjection(env.DB, provider, state.workId, Number(cardId), true, revision);
-        else
-            await env.DB.prepare(`UPDATE workshop_policies SET card_id=?,allow_new=0,revision=?,consent_version=2,updated_at=?
-              WHERE provider=? AND work_id=? AND (revision<? OR (revision=? AND consent_version<>2))`)
-                .bind(Number(cardId), revision, Date.now(), provider, state.workId, revision, revision).run();
-        await bumpOp(env.DB, 'workshop', 'policy_backfill', 'success');
+        const state = await workshopUpstream.state(env, { sourceRoleId: roleId }, token ?? null, provider, BACKFILL_TIMEOUT_MS);
+        const changed = await projectPolicyFromState(env.DB, provider, Number(cardId), state);
+        await bumpOp(env.DB, 'workshop', 'policy_backfill', changed ? 'success' : 'noop');
     }
     catch (error) {
         console.error('workshop_policy_backfill_failed', { code: error instanceof HttpError ? error.message : 'unexpected' });
         await bumpOp(env.DB, 'workshop', 'policy_backfill', 'error');
     }
+}
+
+/**
+ * An open policy is upserted under Provider's work id. A closed one only updates a row
+ * with that same key: a default "closed" read under a newly bound work id must not delete
+ * a tab that is open under the earlier key. Returns whether a row changed.
+ */
+async function projectPolicyFromState(db: D1Database, provider: ProviderId, cardId: number, state: { workId?: string; allowNew?: boolean; revision?: number; policyRevision?: number }): Promise<boolean> {
+    const revision = Number(state.policyRevision ?? state.revision);
+    if (typeof state.workId !== 'string' || !state.workId || typeof state.allowNew !== 'boolean' || !Number.isSafeInteger(revision) || revision < 1)
+        throw new HttpError(502, 'invalid_policy');
+    if (state.allowNew)
+        return (await upsertWorkshopPolicyProjection(db, provider, state.workId, cardId, true, revision)) > 0;
+    const res = await db.prepare(`UPDATE workshop_policies SET card_id=?,allow_new=0,revision=?,consent_version=2,updated_at=?
+      WHERE provider=? AND work_id=? AND (revision<? OR (revision=? AND consent_version<>2))`)
+        .bind(cardId, revision, Date.now(), provider, state.workId, revision, revision).run();
+    return res.meta.changes > 0;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { applyWorkshopPublication,applyWorkshopUnpublication } from "./workshop-publication";
+import { applyWorkshopPublication,applyWorkshopUnpublication,isBaseUnlisted } from "./workshop-publication";
 import { readWorkshopPolicy, upsertWorkshopPolicyProjection } from "./workshop-policy";
 import { applyWorkshopOwnerProjection } from './workshop-owner-projection';
 import type { Context } from "hono";
@@ -790,6 +790,13 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
 
       }
      } catch(error) {
+      // The base card is not listed here yet: nothing to project, nothing wrong with the
+      // receipt. Acknowledge it as deferred, separate from quarantined receipts.
+      if(isBaseUnlisted(error)){
+       await env.DB.prepare('INSERT OR IGNORE INTO workshop_sync_events(event_key,kind,created_at) VALUES(?,?,?)').bind(eventKey,'deferred',now).run();
+       await bumpOp(env.DB,'workshop','sync','deferred');
+       continue;
+      }
       // Only deterministic receipt validation is quarantined. Storage failures
       // still stop/ retry the batch, since a durable decision is not yet saved.
       if(!(error instanceof HttpError&&error.status===502&&error.message==='invalid_publication'))throw error;

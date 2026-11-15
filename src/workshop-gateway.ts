@@ -143,7 +143,7 @@ async function callHosting<T>(
   env: Env,
   provider: ProviderId,
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; token?: string | null } = {},
+  options: { method?: "GET" | "POST"; body?: unknown; token?: string | null; timeoutMs?: number } = {},
 ): Promise<T> {
   const key = hostingKey(env, provider);
   if (!key) throw new HttpError(503, "hosting_unavailable");
@@ -157,7 +157,7 @@ async function callHosting<T>(
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     redirect: "manual",
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
   });
   return workshopResponse<T>(response);
 }
@@ -222,6 +222,7 @@ state: (
     query: { sourceRoleId?: string; workId?: string; workshopIds?: string[] },
     viewerToken?: string | null,
     provider: ProviderId = "harbor",
+    timeoutMs?: number,
   ) => {
     const qs = new URLSearchParams();
     if (query.sourceRoleId) qs.set("sourceRoleId", query.sourceRoleId);
@@ -231,7 +232,7 @@ state: (
       env,
       provider,
       `/state?${qs.toString()}`,
-      { token: viewerToken ?? undefined },
+      { token: viewerToken ?? undefined, timeoutMs },
     );
   },
 pullOutbox: (env: Env, afterSeq: number, limit = 100, provider: ProviderId = "harbor") =>

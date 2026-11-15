@@ -1,7 +1,6 @@
 import type { Context } from 'hono';
 import { isRating } from '../shared/content-rating';
 import { bearerOf } from './community-admin';
-import type { CardRow } from './cards';
 import { requireMember, type Member } from './members';
 import { bumpOp } from './ops-metrics';
 import type { ProviderId } from './providers';
@@ -52,10 +51,19 @@ function publicationShape(p: WorkshopPublicationReceipt) {
         kinds.push('opening');
     return { resident, lore, ruleCount, openingCount, kinds };
 }
+/**
+ * The base card is not publicly listed here (no community row, not approved, or blocked).
+ * Not an invalid receipt: there is simply no public page to project onto yet. The outbox
+ * acknowledges such events as deferred instead of quarantining them.
+ */
+export const BASE_UNLISTED = 'workshop_base_unlisted';
+export const isBaseUnlisted = (error: unknown) => error instanceof HttpError && error.message === BASE_UNLISTED;
 export async function applyWorkshopPublication(env: Env, provider: ProviderId, p: WorkshopPublicationReceipt) {
     const content = publicationShape(p);
     const resolved = await resolveCardForWork(env.DB, provider, p.workId, p.sourceRoleId);
-    if (!resolved || resolved.card.status !== 'approved' || resolved.card.public_blocked || resolved.card.author_num_id !== p.cardOwnerPublicNo)
+    if (!resolved || resolved.card.status !== 'approved' || resolved.card.public_blocked)
+        throw new HttpError(409, BASE_UNLISTED);
+    if (resolved.card.author_num_id !== p.cardOwnerPublicNo)
         throw new HttpError(502, 'invalid_publication');
     const current = await env.DB.prepare('SELECT provider,work_id,author_num_id,version_no,approved_release_id FROM workshops WHERE id=?').bind(p.workshopId).first<{
         provider: string;
@@ -80,13 +88,11 @@ export async function applyWorkshopPublication(env: Env, provider: ProviderId, p
     ]);
 }
 /**
- * Whether the caller is the author of a base card that has no public listing. A community
- * row (blocked cards excluded) is checked locally; without one, Provider decides with the
- * caller's bearer: only the canonical card author can read the card's workshop policy.
+ * Whether the caller is the author of a base card that has no community row. Provider
+ * decides with the caller's bearer: only the canonical card author can read the card's
+ * workshop policy.
  */
-async function authorOfUnlistedBase(c: Ctx, member: Member, token: string, card: CardRow | null, roleId: string): Promise<boolean> {
-    if (card)
-        return !card.public_blocked && await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
+async function authorOfUnregisteredBase(c: Ctx, member: Member, token: string, roleId: string): Promise<boolean> {
     try {
         await workshopUpstream.policyGet(c.env, token, roleId, member.provider);
         return true;
@@ -111,10 +117,11 @@ export async function publishWorkshop(c: Ctx, workshopId: string, body: unknown)
             throw new HttpError(502, 'invalid_publication');
         const base = await resolveCardForWork(c.env.DB, member.provider, draft.card.cardId, draft.card.roleId);
         const listed = !!base && base.card.status === 'approved' && !base.card.public_blocked;
-        // A card that is not publicly listed (private, unlisted or not registered here) has no
-        // public workshop page. Only its own author may publish there: the author's DLC still
-        // takes effect on Provider, and nothing is projected into the public listing.
-        if (!listed && !await authorOfUnlistedBase(c, member, token, base?.card ?? null, draft.card.roleId))
+        // A card with a community row that is not listed (pending, unlisted, unshared, blocked)
+        // keeps the 404. A card with no community row at all (private, never registered) has
+        // no public workshop page: only its own author may publish there, the DLC takes effect
+        // on Provider, and nothing is projected into the public listing.
+        if (!listed && (base || !await authorOfUnregisteredBase(c, member, token, draft.card.roleId)))
             throw new HttpError(404, 'not_found');
         const receipt = await workshopUpstream.publish(c.env, token, { workshopId, operationId, expectedRevision: Number(body.expectedRevision) }, member.provider);
         if (receipt.workshopId !== workshopId || !await memberOwnsExternal(c.env.DB, member, member.provider, receipt.authorPublicNo))
@@ -147,9 +154,6 @@ export interface WorkshopUnpublishReceipt {
 export async function applyWorkshopUnpublication(env: Env, provider: ProviderId, p: WorkshopUnpublishReceipt) {
     if (!p || p.status !== 'draft' || p.policyVersion !== 2 || !Number.isSafeInteger(p.publicationRevision) || p.publicationRevision < 1 || !Number.isSafeInteger(p.version) || p.version < 1 || !Number.isSafeInteger(p.draftRevision) || p.draftRevision < 1 || !Number.isSafeInteger(p.authorPublicNo) || p.authorPublicNo < 1 || !Number.isSafeInteger(p.cardOwnerPublicNo) || p.cardOwnerPublicNo < 1 || p.kind !== (p.authorPublicNo === p.cardOwnerPublicNo ? 'dlc' : 'lorebook'))
         throw new HttpError(502, 'invalid_publication');
-    const resolved = await resolveCardForWork(env.DB, provider, p.workId, p.sourceRoleId);
-    if (!resolved || resolved.card.author_num_id !== p.cardOwnerPublicNo)
-        throw new HttpError(502, 'invalid_publication');
     const current = await env.DB.prepare('SELECT provider,work_id,author_num_id FROM workshops WHERE id=?').bind(p.workshopId).first<{
         provider: string;
         work_id: string;
@@ -158,6 +162,18 @@ export async function applyWorkshopUnpublication(env: Env, provider: ProviderId,
     if (current && (current.provider !== provider || current.work_id !== p.workId || current.author_num_id !== p.authorPublicNo))
         throw new HttpError(502, 'invalid_publication');
     const now = Date.now();
+    // A public row exists: take it down by workshop id, whether or not its card still resolves.
+    if (current) {
+        await env.DB.prepare(`UPDATE workshops SET approved_release_id=NULL,published_at=NULL,moderation_state='draft',version_no=MAX(version_no,?),publication_revision=?,updated_at=?
+ WHERE id=? AND publication_revision<? AND moderation_state NOT IN('revoked','deleted')`).bind(p.version, p.publicationRevision, now, p.workshopId, p.publicationRevision).run();
+        return;
+    }
+    // No row yet: leave a draft tombstone on the card so a late publication retry cannot list it.
+    const resolved = await resolveCardForWork(env.DB, provider, p.workId, p.sourceRoleId);
+    if (!resolved)
+        throw new HttpError(409, BASE_UNLISTED);
+    if (resolved.card.author_num_id !== p.cardOwnerPublicNo)
+        throw new HttpError(502, 'invalid_publication');
     const member = await findMemberIdByExternal(env.DB, provider, p.authorPublicNo);
     await env.DB.prepare(`INSERT INTO workshops(id,card_id,provider,work_id,source_role_id,author_num_id,author_member_id,version_no,publication_revision,moderation_state,created_at,updated_at)
  VALUES(?,?,?,?,?,?,?,?,?,'draft',?,?) ON CONFLICT(id) DO UPDATE SET approved_release_id=NULL,published_at=NULL,moderation_state='draft',version_no=MAX(workshops.version_no,excluded.version_no),publication_revision=excluded.publication_revision,updated_at=excluded.updated_at
@@ -178,11 +194,12 @@ export async function workshopCreatorAction(c: Ctx, workshopId: string, body: un
         const p = receipt as unknown as WorkshopUnpublishReceipt;
         if (!await memberOwnsExternal(c.env.DB, member, member.provider, p.authorPublicNo))
             throw new HttpError(403, 'not_the_author');
-        // The author's DLC on a card with no community row was never listed here; Provider
-        // has already taken it down, and there is no public row to update.
-        const unlisted = p.kind === 'dlc' && p.authorPublicNo === p.cardOwnerPublicNo && !await resolveCardForWork(c.env.DB, member.provider, p.workId, p.sourceRoleId);
-        if (!unlisted)
-            await applyWorkshopUnpublication(c.env, member.provider, p);
+        // Provider has already taken it down. With no public row and no card to leave a
+        // tombstone on, there is nothing to update here.
+        await applyWorkshopUnpublication(c.env, member.provider, p).catch((error) => {
+            if (!isBaseUnlisted(error))
+                throw error;
+        });
     }
     await bumpOp(c.env.DB, 'workshop', action === 'unpublish' ? 'unpublish' : 'discard', 'success');
     return receipt;

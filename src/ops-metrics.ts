@@ -141,7 +141,7 @@ const METRICS = {
     help: "Workshop direct publication, creator actions, takedown, outbox sync and author-policy backfill on card submission.",
     label: "operation",
     operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync", "policy_backfill"],
-    outcomes: ["success", "denied", "conflict", "error", "rejected"],
+    outcomes: ["success", "denied", "conflict", "error", "rejected", "deferred", "noop"],
   },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
