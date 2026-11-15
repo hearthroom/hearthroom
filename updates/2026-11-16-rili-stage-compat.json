@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "日里卡的開場按鈕、訊息選項與自訂樣式能在對話中使用了。",
+    "zh-Hans": "日里卡的开场按钮、消息选项和自定义样式现在能在对话中使用了。",
+    "en": "Rili cards now support opening buttons, message options and custom styles in chat.",
+    "ja": "日里カードの開幕ボタン、メッセージ内の選択肢、独自スタイルに対応しました。",
+    "ko": "이제 대화에서 Rili 카드의 시작 버튼, 메시지 선택지, 사용자 지정 스타일을 사용할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "點選卡片選項可填入或補上輸入框內容，送出前仍可修改。",
+    "zh-Hans": "点击卡片选项可填入或补充输入框内容，发送前仍可修改。",
+    "en": "Card options can fill or add to your draft, which you can still edit before sending.",
+    "ja": "カードの選択肢で入力欄に文を入れたり追記したりでき、送信前に編集できます。",
+    "ko": "카드 선택지로 입력란에 내용을 넣거나 덧붙일 수 있고, 보내기 전에 수정할 수 있어요."
+  }
+}

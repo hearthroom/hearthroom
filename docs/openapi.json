@@ -22368,6 +22368,7 @@
             "enum": [
               "",
               "fengyue",
+              "rili",
               "fengyue-v2",
               "tavern",
               "mmd"
@@ -22494,6 +22495,7 @@
             "enum": [
               "",
               "fengyue",
+              "rili",
               "fengyue-v2",
               "tavern",
               "mmd"
@@ -22584,6 +22586,7 @@
             "enum": [
               "",
               "fengyue",
+              "rili",
               "fengyue-v2",
               "tavern",
               "mmd"
@@ -29687,6 +29690,7 @@
             "enum": [
               "",
               "fengyue",
+              "rili",
               "fengyue-v2",
               "tavern",
               "mmd"
