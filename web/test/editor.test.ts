@@ -2188,6 +2188,40 @@ describe("匯入 AI 風月卡 → 建立", () => {
   });
 });
 
+describe("匯入日里卡 → 建立", () => {
+  it("再次匯入無正則／無首屏／無樣式的日里卡時，清空上一份殘留資產並保持沙箱與開場網頁模式", async () => {
+    const cases = (await import("./fixtures/rili-cases.json")).default.cases;
+    await mount("/create");
+    // 先匯入帶首屏、樣式與正則的整卡
+    await pickFile($("input[type=file]"), new File([JSON.stringify(cases[0].input)], "full.json", { type: "application/json" }));
+    byText("套用到表單").click();
+    await flush();
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toContain("TEST-INTRO-TITLE");
+
+    // 再匯入無正則／無首屏／無樣式的日里匯出檔（Case 4）
+    await pickFile($("input[type=file]"), new File([JSON.stringify(cases[4].input)], "minimal.json", { type: "application/json" }));
+    byText("套用到表單").click();
+    await flush();
+
+    expect($('[data-opening-mode="page"]').getAttribute("aria-checked")).toBe("true");
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("");
+    await type($("#f-opening-page"), "<div>補上首屏</div>");
+    await submit();
+
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(asset).toMatchObject({
+      rules: [],
+      cardFormat: "fengyue",
+      pageMode: "sandbox",
+      openingMode: "page",
+      openingPage: "<div>補上首屏</div>",
+    });
+    expect(asset.cardCss).toBeUndefined();
+    expect(asset.cardCssDialect).toBeUndefined();
+  });
+});
+
 describe("卡片變數", () => {
   const DETAIL = {
     roleName: "合成變數卡", roleDetailDesc: "合成設定", roleWelcome: "合成開場", language: "zh-Hant",

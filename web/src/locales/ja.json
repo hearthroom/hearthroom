@@ -5068,6 +5068,7 @@
   "import.kind.rili": "日里",
   "import.rili.noWelcome": "オープニング画面も書き出しも空です。適用後にどちらかを入れてから保存してください。",
   "import.rili.memoryInvalid": "作業メモリの定義が有効な JSON ではありません。「カード変数」にそのまま入れたので、直してから保存してください。",
+  "import.rili.memoryLimit": "作業メモリが上限を超えました。「カード変数」で直してから保存してください。",
   "import.rili.entryRegion": "システムや記憶欄を走査するワールドブック {n} 件は、会話メッセージを対象に変えました。",
   "import.rili.entryWeighted": "重み付きワールドブック {n} 件は 1 つにまとめ、一致時に全文が入るようにしました。",
   "import.rili.entryBlacklistOnAnd": "AND 条件と除外語が両方あるワールドブック {n} 件は、AND 条件だけを残しました。",

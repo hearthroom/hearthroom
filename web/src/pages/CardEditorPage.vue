@@ -1732,8 +1732,13 @@ function applyImport(result: ImportResult) {
     result.regex.pageMode ??= "classic";
     regexSet.value = result.regex;
   } else {
-    // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容
-    regexSet.value.pageMode = result.spec === "fengyue" || result.spec === "rili" ? "sandbox" : "classic";
+    const isWebCard = result.spec === "fengyue" || result.spec === "rili";
+    // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容；同時清掉上一份草稿殘留的規則、首屏與樣式
+    regexSet.value = {
+      ...emptyRuleSet(),
+      pageMode: isWebCard ? "sandbox" : "classic",
+      ...(isWebCard ? { format: "fengyue" } : {}),
+    };
   }
   // 風月與日里卡以開場網頁開局：歸開場網頁；其他照開場白（owner 2026-11-10）
   regexSet.value.openingMode =

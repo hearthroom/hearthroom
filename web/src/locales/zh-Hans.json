@@ -5068,6 +5068,7 @@
   "import.kind.rili": "日里",
   "import.rili.noWelcome": "开场页和开场白都是空的，应用后请先补上开场白或开场网页才能保存。",
   "import.rili.memoryInvalid": "工作记忆结构不是有效的 JSON，已原样放进「卡片变量」，修正后才能保存。",
+  "import.rili.memoryLimit": "工作记忆转成卡片变量后超过上限，请到「卡片变量」改到上限内再保存。",
   "import.rili.entryRegion": "{n} 条世界书原本扫系统或记忆区，已改成扫对话消息。",
   "import.rili.entryWeighted": "{n} 条世界书的分段随机内容已合并成同一条，命中时整段带入。",
   "import.rili.entryBlacklistOnAnd": "{n} 条世界书同时有「全部命中」和黑名单词，已保留全部命中，黑名单未带入。",

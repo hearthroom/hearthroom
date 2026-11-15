@@ -20,7 +20,7 @@ import {
   type TavernBookEntry,
 } from "./tavern";
 import { fallbackLimits, makeDraft } from "./role-draft";
-import { formatJson, type CardStateDraft } from "./card-state";
+import { formatJson, STATE_LIMITS, stateProblem, type CardStateDraft } from "./card-state";
 import type { RegexMessageTarget, RegexRule, RegexRuleSet } from "./regex-rules";
 
 type Raw = Record<string, unknown>;
@@ -507,28 +507,65 @@ function convertMemorySchema(raw: Raw, notes: DropNote[]): CardStateDraft | null
     return { convention: "plain", dataText: rawSchema, rulesText: "", template };
   }
 
-  if (!isObj(parsed) || (parsed.type !== undefined && str(parsed.type) !== "object")) {
+  if (
+    !isObj(parsed) ||
+    ("type" in parsed && (typeof parsed.type !== "string" || parsed.type.trim() !== "object"))
+  ) {
     notes.push({ key: "import.rili.memoryInvalid", level: "block" });
     if (template && usesSuggestions) notes.push({ key: "import.rili.templateSuggestions", level: "changed" });
-    return { convention: "plain", dataText: rawSchema, rulesText: "", template };
+    return {
+      convention: "plain",
+      dataText: isObj(parsed) ? JSON.stringify(rawSchema) : rawSchema,
+      rulesText: "",
+      template,
+    };
   }
 
   const pathRules: Record<string, string> = {};
-  const data = buildSchemaTree(parsed, "", pathRules) as Record<string, unknown>;
-  const rulesText = str(parsed.description);
+  const built = buildSchemaTree(parsed, "", pathRules);
+  if (!isObj(built)) {
+    notes.push({ key: "import.rili.memoryInvalid", level: "block" });
+    if (template && usesSuggestions) notes.push({ key: "import.rili.templateSuggestions", level: "changed" });
+    return { convention: "plain", dataText: JSON.stringify(rawSchema), rulesText: "", template };
+  }
 
-  notes.push({ key: "import.rili.memoryConverted", level: "changed" });
+  const utf8Bytes = (s: string) => new TextEncoder().encode(s).length;
+  let rulesText = str(parsed.description);
+  let activePathRules: Record<string, string> | undefined = Object.keys(pathRules).length ? pathRules : undefined;
+  if (activePathRules) {
+    let pathBytes = 0;
+    for (const [k, v] of Object.entries(activePathRules)) {
+      const trimmed = v.trim();
+      if (trimmed) pathBytes += utf8Bytes(k) + utf8Bytes(trimmed);
+    }
+    if (pathBytes > STATE_LIMITS.rulePathBytes) {
+      const lines = Object.entries(activePathRules)
+        .filter(([, v]) => v.trim())
+        .map(([k, v]) => `${k}: ${v.trim()}`)
+        .join("\n");
+      rulesText = !lines ? rulesText : rulesText ? `${rulesText}\n\n${lines}` : lines;
+      activePathRules = undefined;
+    }
+  }
+
+  const candidate: CardStateDraft = {
+    convention: "plain",
+    dataText: formatJson(built),
+    rulesText,
+    template,
+    ...(activePathRules ? { pathRules: activePathRules } : {}),
+  };
+
+  if (stateProblem(candidate)) {
+    notes.push({ key: "import.rili.memoryLimit", level: "block" });
+  } else {
+    notes.push({ key: "import.rili.memoryConverted", level: "changed" });
+  }
   if (template && usesSuggestions) {
     notes.push({ key: "import.rili.templateSuggestions", level: "changed" });
   }
 
-  return {
-    convention: "plain",
-    dataText: formatJson(data),
-    rulesText,
-    template,
-    ...(Object.keys(pathRules).length ? { pathRules } : {}),
-  };
+  return candidate;
 }
 
 function hasNonEmptyContent(value: unknown): boolean {

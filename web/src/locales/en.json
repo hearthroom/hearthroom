@@ -5068,6 +5068,7 @@
   "import.kind.rili": "Rili",
   "import.rili.noWelcome": "Both the opening page and greeting are empty. Add one after applying before you can save.",
   "import.rili.memoryInvalid": "The working memory schema is not valid JSON. Fix it under Variables before saving.",
+  "import.rili.memoryLimit": "Working memory exceeds the Variables limits; adjust it under Variables before saving.",
   "import.rili.entryRegion": "Lorebook entries scanning system or memory fields ({n}) now scan chat messages.",
   "import.rili.entryWeighted": "Weighted lorebook entries ({n}) were merged so all segments load together on match.",
   "import.rili.entryBlacklistOnAnd": "Lorebook entries with both AND keys and blocklist words ({n}) kept AND keys only.",

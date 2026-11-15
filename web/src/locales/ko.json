@@ -5068,6 +5068,7 @@
   "import.kind.rili": "Rili",
   "import.rili.noWelcome": "오프닝 화면과 도입부가 모두 비어 있어요. 적용 후 둘 중 하나를 채워야 저장할 수 있습니다.",
   "import.rili.memoryInvalid": "작업 메모리 구조가 올바른 JSON이 아니에요. '카드 변수'에서 고친 뒤 저장해 주세요.",
+  "import.rili.memoryLimit": "작업 메모리가 한도를 넘었어요. '카드 변수'에서 고쳐 저장해 주세요.",
   "import.rili.entryRegion": "시스템이나 메모리 영역을 보던 로어북 {n}개는 대화 메시지를 보도록 바꿨어요.",
   "import.rili.entryWeighted": "가중치 로어북 항목 {n}개는 하나로 합쳐 키워드가 맞으면 전체가 들어갑니다.",
   "import.rili.entryBlacklistOnAnd": "AND 조건과 제외어가 함께 있는 로어북 {n}개는 AND 조건만 남겼어요.",

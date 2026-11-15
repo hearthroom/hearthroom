@@ -191,7 +191,54 @@ describe("日里匯出檔：網頁落點與變數驗證", () => {
     }
   });
 
-  it("所有新增與調整的五語文案齊全，且分段按鈕與平台名符合 ui.md §5 寬度預算", async () => {
+  it.each([
+    ['{"type":123}', "type 不是字串"],
+    ['{"type":["object"]}', "type 是陣列"],
+    ['{"items":{"type":"string"}}', "根節點實際為陣列 schema"],
+    ['{"type":"object","default":"not-an-object"}', "根節點無 properties 且 default 非物件"],
+  ])("memorySchema 根節點非物件 schema（%s：%s）時標記 memoryInvalid（block）且擋存檔", (rawSchema) => {
+    const result = riliToDraft(
+      { ...sampleA, enableMemorySchema: true, memorySchema: rawSchema },
+      { language: "zh-Hant" },
+    );
+    expect(result.draft.state).not.toBeNull();
+    expect(stateProblem(result.draft.state)).toBe("data");
+    expect(result.draft.state?.dataText).toContain("type");
+    expect(result.dropped).toContainEqual({ key: "import.rili.memoryInvalid", level: "block" });
+    expect(result.dropped.some((n) => n.key === "import.rili.memoryConverted")).toBe(false);
+  });
+
+  it("memorySchema 轉出超過卡片變數上限（包含逐值規則 > 8 KB 轉入變數規則）時標記 memoryLimit（block）且規則可編輯", () => {
+    const props: Record<string, unknown> = {};
+    for (let i = 0; i < 60; i++) {
+      props[`field_${i}`] = { type: "number", default: i, description: "規".repeat(60) };
+    }
+    const overPathRules = riliToDraft(
+      { ...sampleA, enableMemorySchema: true, memorySchema: JSON.stringify({ type: "object", properties: props }) },
+      { language: "zh-Hant" },
+    );
+    expect(overPathRules.draft.state?.pathRules).toBeUndefined();
+    expect(overPathRules.draft.state?.rulesText).toContain("field_0:");
+    expect(stateProblem(overPathRules.draft.state)).toBe("rules_text_size");
+    expect(overPathRules.dropped).toContainEqual({ key: "import.rili.memoryLimit", level: "block" });
+    expect(overPathRules.dropped.some((n) => n.key === "import.rili.memoryConverted")).toBe(false);
+
+    const overString = riliToDraft(
+      {
+        ...sampleA,
+        enableMemorySchema: true,
+        memorySchema: JSON.stringify({
+          type: "object",
+          properties: { bio: { type: "string", default: "長".repeat(900) } },
+        }),
+      },
+      { language: "zh-Hant" },
+    );
+    expect(stateProblem(overString.draft.state)).toBe("string_size");
+    expect(overString.dropped).toContainEqual({ key: "import.rili.memoryLimit", level: "block" });
+  });
+
+  it("所有新增與調整的五語文案齊全，且分段按鈕、平台名與摘要長度符合 ui.md §5 寬度預算", async () => {
     const locales = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
     const keys = [
       "import.kind.json",
@@ -201,6 +248,7 @@ describe("日里匯出檔：網頁落點與變數驗證", () => {
       "wb.import.error",
       "import.rili.noWelcome",
       "import.rili.memoryInvalid",
+      "import.rili.memoryLimit",
       "import.rili.entryRegion",
       "import.rili.entryWeighted",
       "import.rili.entryBlacklistOnAnd",
