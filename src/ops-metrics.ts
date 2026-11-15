@@ -140,7 +140,7 @@ const METRICS = {
     name: "hearthroom_workshop_operations_total",
     help: "Workshop direct publication, creator actions, takedown and outbox sync.",
     label: "operation",
-    operations: ["publish", "unpublish", "discard", "revoke", "sync"],
+    operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync"],
     outcomes: ["success", "denied", "conflict", "error", "rejected"],
   },
 } as const;
