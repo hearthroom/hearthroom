@@ -99,3 +99,25 @@ it('keeps one full minute batch within the D1 query budget even when no event re
   // Workers allow 1000 D1 queries per invocation; the minute cron shares it with rank work.
   expect(recorded.queries.length).toBeLessThanOrEqual(400);
 });
+
+it('keeps one minute run (a rank phase plus a full batch of listed publications) inside the D1 query limit', async () => {
+  // Resolvable publications on the approved fixture card: the most expensive event kind to apply.
+  // Three full batches, so every rank phase runs next to a full drain.
+  outbox = Array.from({ length: 3 * WORKSHOP_OUTBOX_MINUTE_BATCH }, (_, i) => {
+    const workshopId = crypto.randomUUID();
+    const publication = { workshopId, releaseId: crypto.randomUUID(), workId: 'work:100001', sourceRoleId: 'rank-source', kind: 'lorebook', status: 'published', publicationRevision: 1, version: 1, draftRevision: 2, publishedAt: at, contentHash: `budget-${i}`, authorPublicNo: 12, cardOwnerPublicNo: 11, ownerState: 'visible', ownerGeneration: 0, residentChars: 0, policyVersion: 2, sealed: { name: `Synthetic lore ${i}`, summary: '', readme: '', coverUrl: '', rating: 'G', worldbook: [], rules: { rules: [] }, opening: { mode: 'greeting' }, updateNote: '' } };
+    return { seq: 9 + i, kind: 'release_published', eventKey: `budget-publish-${i}`, workId: 'work:100001', workshopId, payload: { policyVersion: 2, publication } };
+  });
+  const perPhase: number[] = [];
+  for (let phase = 0; phase < 3; phase++) {
+    const recorded = recordD1(env.DB);
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController({ cron: RANK_RETRY_CRON, scheduledTime: at + 3 * 86400000 + phase * 60000 }), { ...env, DB: recorded.db }, ctx);
+    await waitOnExecutionContext(ctx);
+    perPhase.push(recorded.queries.length);
+  }
+  // Workers Paid allows 1000 D1 queries per invocation; leave headroom.
+  expect(Math.max(...perPhase), `D1 queries per phase: ${perPhase.join(",")}`).toBeLessThanOrEqual(800);
+  expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM workshops WHERE moderation_state='approved'").first<{ n: number }>())!.n).toBe(3 * WORKSHOP_OUTBOX_MINUTE_BATCH);
+  expect(payments).toBe(2); expect(refreshes).toBe(1);
+});

@@ -852,10 +852,11 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
 
 /**
  * Events pulled per minute-cron run. Each event costs a handful of D1 queries (dedupe,
- * card lookups, projection write); a full batch of events whose cards have no community
- * row measures about 250 queries (test/workshop-outbox-cron.test.ts), well inside the 1000-query-per-invocation limit that the
- * minute cron shares with rank and badge work. A backlog of a few hundred events clears
- * in under ten minutes.
+ * card lookups, projection write). Measured in test/workshop-outbox-cron.test.ts: a full
+ * batch of unresolvable policy events is about 250 queries, and a whole minute run (rank
+ * phase + badge backfill + a full batch of listed publications) is about 520, inside the
+ * Workers Paid limit of 1000 D1 queries per invocation. A backlog of a few hundred events
+ * clears in under ten minutes.
  */
 export const WORKSHOP_OUTBOX_MINUTE_BATCH = 50;
 
