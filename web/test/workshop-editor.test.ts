@@ -205,6 +205,8 @@ it("player extension hidden by the card author, or a closed card workshop: a chi
   expect(document.querySelector("[data-pub-hidden-note]")?.textContent).toBe(t("workshop.mine.row.hiddenByOwner"));
   expect(document.querySelector("[data-pub-closed]")?.textContent).toBe(t("workshop.status.cardWorkshopClosed"));
   expect(button("[data-pub-unpublish]")).not.toBeNull();
+  // 新玩家加不了：不再說「已上架，玩家可以加入」
+  expect(document.body.textContent).not.toContain(t("workshop.publish.published.desc"));
 });
 
 it("publishing into a closed workshop explains it and keeps the draft", async () => {

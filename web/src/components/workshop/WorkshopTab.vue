@@ -148,7 +148,7 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
         </div>
         <div v-else class="panel ws-sect__empty" data-ws-empty="dlc">
           <p class="muted ws-text">{{ $t("workshop.dlc.empty") }}</p>
-          <RouterLink :to="createTo" class="btn btn--sm btn--primary">{{ $t("workshop.dlc.empty.cta") }}</RouterLink>
+          <RouterLink :to="createTo" class="btn btn--sm">{{ $t("workshop.dlc.empty.cta") }}</RouterLink>
         </div>
       </section>
 
@@ -167,7 +167,7 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
         </div>
         <div v-else class="panel ws-sect__empty" data-ws-empty="ext">
           <p class="muted ws-text">{{ $t("workshop.ext.empty") }}</p>
-          <RouterLink v-if="!owner" :to="createTo" class="btn btn--sm btn--primary">{{ $t("workshop.empty.cta") }}</RouterLink>
+          <RouterLink v-if="!owner" :to="createTo" class="btn btn--sm">{{ $t("workshop.empty.cta") }}</RouterLink>
         </div>
       </section>
 

@@ -58,7 +58,7 @@ const extSummary = computed(() => counts.value.lorebookPublished
   : t("workshop.owner.ext.empty"));
 /** 關閉會影響到誰：有已發布的內容或有人加入 */
 const affected = computed(() => counts.value.dlcPublished + counts.value.lorebookPublished + counts.value.joinCount > 0);
-const keptNote = computed(() => !open.value && dlcAll.value + counts.value.lorebookPublished > 0);
+const keptNote = computed(() => !open.value && counts.value.dlcPublished + counts.value.lorebookPublished > 0);
 
 const createTo = computed(() => (props.cardId ? lp(`/mine/workshops/new?card=${encodeURIComponent(props.cardId)}`) : ""));
 const tabTo = computed(() => (props.cardId ? lp(`/cards/${encodeURIComponent(props.cardId)}?tab=workshop`) : ""));
@@ -139,7 +139,7 @@ function retry() { if (failedTarget !== null) void save(failedTarget, true); }
         <button type="button" class="btn btn--sm" :disabled="saving" @click="retry">{{ $t("library.retry") }}</button>
       </div>
       <p v-if="keptNote" class="notice ws-text" data-ws-owner-kept>
-        {{ $t("workshop.owner.offKeptNote", { dlc: dlcAll, ext: counts.lorebookPublished }, counts.lorebookPublished) }}
+        {{ $t("workshop.owner.offKeptNote", { dlc: counts.dlcPublished, ext: counts.lorebookPublished }, counts.lorebookPublished) }}
       </p>
 
       <div v-if="open" class="ws-owner__layers" data-ws-owner-layers>

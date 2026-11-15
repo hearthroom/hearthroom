@@ -90,10 +90,13 @@ it("conversation panel: rows say which layer they come from", async () => {
 
 it("conversation panel: when the author turns the workshop off, a line explains and every row is paused", async () => {
   const items = view().items.map((i) => ({ ...i, status: "disabled" as const, reason: "workshop_closed" }));
+  items.push({ workshopId: "off", name: "自己關掉的", coverUrl: "", kind: "lorebook", kinds: ["lore"], residentChars: 0, status: "disabled", reason: "player_disabled" });
   const root = await mount(PlayInfoWorkshop, { view: view({ workshopClosed: true, manifestHash: "", items }), cardId: "100001" });
   expect(root.querySelector("[data-pip-closed]")?.textContent).toContain("原作者已關閉這張卡的工坊");
   expect(root.querySelectorAll("[data-pip-paused]").length).toBe(2);
-  expect(root.querySelectorAll(".pip-ws__row--off").length).toBe(2);
+  expect(root.querySelectorAll(".pip-ws__row--off").length).toBe(3);
+  // 玩家自己關掉的那一列照舊是「已關閉」，不混成「暫停」
+  expect(root.querySelectorAll(".pip-ws__row")[2].textContent).toContain(i18n.global.t("workshop.panel.row.off"));
   // 工坊頁不在了，不給到工坊管理的連結
   expect(root.querySelector(".pip-ws__manage")).toBeNull();
 });

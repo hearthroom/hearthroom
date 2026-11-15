@@ -33,15 +33,16 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const live = computed(() => props.draft.published?.version ?? 0);
+const hidden = computed(() => props.kind === "lorebook" && props.ownerState === "hidden");
 const desc = computed(() => {
   switch (props.state) {
     case "draft": return t("workshop.publish.draft.desc");
-    case "live": return t("workshop.publish.published.desc");
+    // 被隱藏或工坊關閉時新玩家加不了：不說「玩家可以加入」，由下面那一行說明
+    case "live": return hidden.value || props.workshopClosed ? "" : t("workshop.publish.published.desc");
     case "livechg": return t("workshop.publish.dirty.desc", { ver: live.value ? `v${live.value}` : "" });
   }
   return "";
 });
-const hidden = computed(() => props.kind === "lorebook" && props.ownerState === "hidden");
 const own = computed(() => props.draft.card.ownerIsMe);
 
 const CHECK_KEY: Record<ChecklistItem["key"], string> = {

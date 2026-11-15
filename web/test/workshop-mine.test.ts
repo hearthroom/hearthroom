@@ -135,7 +135,7 @@ it("owner switch: turning off with published content asks first (focus on cancel
   await settle();
   expect(ws.savePolicy).toHaveBeenCalledWith("100001", false, 3, "tok");
   expect(sw().getAttribute("aria-checked")).toBe("false");
-  expect(document.querySelector("[data-ws-owner-kept]")?.textContent).toContain("3 個 DLC 與 5 個玩家擴充的內容保留");
+  expect(document.querySelector("[data-ws-owner-kept]")?.textContent).toContain("2 個 DLC 與 5 個玩家擴充的內容保留");
 
   app?.unmount(); app = undefined; document.body.innerHTML = ""; vi.clearAllMocks();
   const none = counts({ dlcPublished: 0, dlcDrafts: 1, lorebookPublished: 0, joinCount: 0 });

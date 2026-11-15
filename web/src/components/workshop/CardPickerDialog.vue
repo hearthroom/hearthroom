@@ -162,5 +162,8 @@ onBeforeUnmount(() => { clearTimeout(typing); document.removeEventListener("keyd
   /* 手機：從底部升起的 sheet，頂角 24（圓角表外唯一的例外） */
   .ws-pick-backdrop { padding: 0; }
   .ws-pick { width: 100%; max-height: 88dvh; border-radius: 24px 24px 0 0; padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom)); }
+  /* 灰列的「前往設定」換到下一行靠右，卡名不被擠掉 */
+  .ws-pick__item--off .ws-pick__row { flex-basis: 100%; }
+  .ws-pick__item--off .ws-pick__row + .ws-pick__interest { margin-top: 0; }
 }
 </style>

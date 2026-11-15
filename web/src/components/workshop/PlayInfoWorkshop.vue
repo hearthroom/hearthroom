@@ -27,7 +27,8 @@ const STATUS = { resident: "workshop.panel.row.inUse", triggered: "workshop.pane
 const CHIP = { resident: "", triggered: "ws-chip--warn", disabled: "", removed: "ws-chip--bad" } as const;
 type Item = WorkshopConversationView["items"][number];
 const closed = computed(() => !!props.view.workshopClosed);
-const paused = (item: Item) => closed.value && item.status !== "removed";
+/** 玩家自己關掉的那一列照舊寫「已關閉」，其他列標「暫停」 */
+const paused = (item: Item) => closed.value && item.status !== "removed" && !(item.status === "disabled" && item.reason && item.reason !== "workshop_closed");
 const layer = (item: Item) => (item.kind === "dlc" ? t("workshop.layer.dlc") : item.kind === "lorebook" ? t("workshop.layer.extChip") : "");
 </script>
 
