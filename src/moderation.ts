@@ -70,15 +70,6 @@ export async function reviewSummary(db:D1Database,member:{id:string},isAdmin=fal
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
  AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,cutoff,member.id,member.id,member.id).first<{n:number}>();
- const wsReviews=await db.prepare(`SELECT count(*) n FROM workshop_review_submissions s
- LEFT JOIN cards c ON c.id=s.card_id
- LEFT JOIN workshop_review_holds h ON h.workshop_id=s.workshop_id
- WHERE s.status='pending' AND s.author_member_id<>?1
- AND (?2 OR (s.rating IS NOT 'R' AND c.rating IS NOT 'R'))
- AND (h.member_id IS NULL OR h.member_id=?1)
- AND (s.claimed_by IS NULL OR s.claimed_by=?1 OR s.claimed_at<?3)
- AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=?1 AND i.provider=s.provider AND i.external_id=CAST(s.author_num_id AS TEXT))
- AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=?1 AND i.provider=s.provider AND i.external_id=CAST(s.author_num_id AS TEXT))`).bind(member.id,Number(wsAdult),cutoff).first<{n:number}>();
  const comments=await db.prepare(`SELECT count(*) n FROM comments c
  LEFT JOIN cards k ON k.id=c.card_id
  LEFT JOIN workshops w ON w.id=c.workshop_id
@@ -86,17 +77,8 @@ export async function reviewSummary(db:D1Database,member:{id:string},isAdmin=fal
  WHERE c.status='visible' AND c.hold_reason IS NOT NULL AND c.member_id<>?1
  AND (k.id IS NOT NULL OR c.post_id IS NOT NULL OR w.id IS NOT NULL)
  AND (c.post_id IS NOT NULL OR ?2 OR (k.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wk.rating IS NOT 'R'))`).bind(member.id,Number(wsAdult)).first<{n:number}>();
- const totalReviews=(reviews?.n??0)+(wsReviews?.n??0);
- const appeals=(role!=='reviewer'||isAdmin)
-  ?await db.prepare(`SELECT count(*) n FROM workshop_appeals a
-   LEFT JOIN workshops w ON w.id=a.workshop_id
-   LEFT JOIN cards c ON c.id=a.card_id
-   WHERE a.status='pending' AND COALESCE(a.creator_member_id,'')<>?1
-   AND (?2 OR (w.rating IS NOT 'R' AND c.rating IS NOT 'R'))
-   AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=?1 AND i.provider=a.provider AND i.external_id IN (CAST(a.creator_num_id AS TEXT),CAST(a.card_owner_num_id AS TEXT)))
-   AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=?1 AND i.provider=a.provider AND i.external_id IN (CAST(a.creator_num_id AS TEXT),CAST(a.card_owner_num_id AS TEXT)))`).bind(member.id,Number(wsAdult)).first<{n:number}>()
-  :null;
- return {reviewer:true,role,cases:cases?.n??0,reviews:totalReviews,pending:(cases?.n??0)+totalReviews,comments:comments?.n??0,...(appeals?{workshopAppeals:appeals.n}:{})};
+ const totalReviews=reviews?.n??0;
+ return {reviewer:true,role,cases:cases?.n??0,reviews:totalReviews,pending:(cases?.n??0)+totalReviews,comments:comments?.n??0};
 }
 moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummary(c.env.DB,await requireMember(c),await communityAdmin(c))));
 moderationRoutes.get('/v1/moderation/cases',async c=>{

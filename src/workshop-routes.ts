@@ -1,3 +1,5 @@
+import { saveWorkshopPolicy } from './workshop-policy';
+import { publishWorkshop,workshopCreatorAction } from "./workshop-publication";
 import { Hono, type Context } from "hono";
 import { countTop, listReplies, listTop, postComment, sortOf, type Viewer } from "./comments";
 import { queuePush } from "./community/push";
@@ -6,7 +8,6 @@ import { HttpError, type Env } from "./types";
 import {
   applyWorkshopEvents,
   batchGetWorkshops,
-  clearCardWorkshopInterest,
   commentWorkshopAt,
   drainProviderWorkshopOutbox,
   getWorkshopDetail,
@@ -14,17 +15,9 @@ import {
   listMyWorkshopCards,
   listMyWorkshops,
   listWorkshopVersions,
-  setCardWorkshopInterest,
 } from "./workshop";
 import type { WorkshopOutboxEvent } from "./workshop-gateway";
-import {
-  decideWorkshopAppeal,
-  getModerationWorkshopContent,
-  listWorkshopAppeals,
-  revokeWorkshopByStaff,
-  submitWorkshop,
-  withdrawWorkshop,
-} from "./workshop-review";
+import { getModerationWorkshopContent,revokeWorkshopByStaff } from "./workshop-staff";
 
 const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor(Number(raw)) || 1));
 
@@ -69,16 +62,7 @@ workshopRoutes.get("/v1/cards/:cardId/workshop", async (c) => {
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
 });
 
-workshopRoutes.put("/v1/cards/:cardId/workshop/interest", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { draftName?: unknown };
-  const res = await setCardWorkshopInterest(c, c.req.param("cardId"), body.draftName);
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
-});
 
-workshopRoutes.delete("/v1/cards/:cardId/workshop/interest", async (c) => {
-  const res = await clearCardWorkshopInterest(c, c.req.param("cardId"));
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
-});
 
 workshopRoutes.get("/v1/workshops", async (c) => {
   const raw = c.req.query("ids") ?? "";
@@ -148,41 +132,20 @@ workshopRoutes.get("/v1/me/workshops", async (c) => {
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
 });
 
-workshopRoutes.post("/v1/me/workshops/:id/submit", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { operationId?: unknown; updateNote?: unknown };
-  const res = await submitWorkshop(c, c.req.param("id"), body);
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
+workshopRoutes.post("/v1/me/workshops/:id/publish",async(c)=>{
+ const body=await c.req.json().catch(()=>null);
+ const result=await publishWorkshop(c,c.req.param("id"),body);
+ return c.json(result,200,{"Cache-Control":"private, no-store"});
 });
 
-workshopRoutes.post("/v1/me/workshops/:id/withdraw", async (c) => {
-  const res = await withdrawWorkshop(c, c.req.param("id"));
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
-});
+
 
 workshopRoutes.get("/v1/me/workshop-cards", async (c) => {
   const res = await listMyWorkshopCards(c, c.req.query("q") ?? "", langOf(c));
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
 });
 
-workshopRoutes.get("/v1/moderation/workshop-appeals", async (c) => {
-  const res = await listWorkshopAppeals(
-    c,
-    c.req.query("status") ?? "pending",
-    Number(c.req.query("offset") ?? 0),
-    langOf(c),
-  );
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
-});
 
-workshopRoutes.post("/v1/moderation/workshop-appeals/:id/decision", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as {
-    decision?: unknown;
-    reason?: unknown;
-    operationId?: unknown;
-  };
-  const res = await decideWorkshopAppeal(c, c.req.param("id"), body);
-  return c.json(res, 200, { "Cache-Control": "private, no-store" });
-});
 
 workshopRoutes.post("/v1/moderation/workshops/:id/revoke", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown; operationId?: unknown };
@@ -230,3 +193,9 @@ async function handleInternalWorkshopSync(c: Context<{ Bindings: Env }>) {
 
 workshopRoutes.post("/internal/workshop/events", handleInternalWorkshopEvents);
 workshopRoutes.post("/internal/workshop/sync", handleInternalWorkshopSync);
+
+for(const action of ['unpublish','discard-changes'] as const){
+ workshopRoutes.post(`/v1/me/workshops/:id/${action}`,async c=>c.json(await workshopCreatorAction(c,c.req.param('id'),await c.req.json().catch(()=>null),action),200,{'Cache-Control':'private, no-store'}));
+}
+
+workshopRoutes.post('/v1/cards/:cardId/workshop/policy',async c=>c.json(await saveWorkshopPolicy(c,c.req.param('cardId'),await c.req.json().catch(()=>null)),200,{'Cache-Control':'private, no-store'}));

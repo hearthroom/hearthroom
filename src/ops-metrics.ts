@@ -138,10 +138,10 @@ const METRICS = {
   },
   workshop: {
     name: "hearthroom_workshop_operations_total",
-    help: "Workshop review submissions, approvals, appeal decisions, revocations and outbox sync.",
+    help: "Workshop direct publication, creator actions, takedown and outbox sync.",
     label: "operation",
-    operations: ["submit", "withdraw", "approve", "reject", "appeal_decide", "revoke", "sync"],
-    outcomes: ["success", "denied", "conflict", "error"],
+    operations: ["publish", "unpublish", "discard", "revoke", "sync"],
+    outcomes: ["success", "denied", "conflict", "error", "rejected"],
   },
 } as const;
 export type OpsMetric = keyof typeof METRICS;

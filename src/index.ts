@@ -9,17 +9,6 @@ import { reviewLength } from './review-length';
 import {spendLeaderboardRoutes} from './spend-leaderboard';
 import {workshopRoutes} from './workshop-routes';
 import {commentWorkshopAt, drainProviderWorkshopOutbox} from './workshop';
-import {
-  isWorkshopSubmission,
-  listWorkshopQueueItems,
-  claimWorkshopSubmission,
-  releaseWorkshopSubmission,
-  holdWorkshopSubmission,
-  unholdWorkshopSubmission,
-  stampWorkshopSubmission,
-  workshopSubmissionDetail,
-  reconcilePendingWorkshopCommits,
-} from './workshop-review';
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
@@ -1658,19 +1647,12 @@ app.get("/v1/review/queue", async (c) => {
   const member = await requireReviewer(c);
   const now = Date.now();
   const locale = lang(c);
-  const [cardItems, wsItems] = await Promise.all([
-    listQueue(c.env.DB, member.id, now, locale),
-    listWorkshopQueueItems(c.env.DB, member, locale, now),
-  ]);
-  const items = [...cardItems, ...wsItems].sort((a, b) => a.submittedAt - b.submittedAt);
+  const items = await listQueue(c.env.DB, member.id, now, locale);
   note(c, { event: "review_queue", resultCount: items.length });
   return c.json({ items, claimTtlMs: 45 * 60 * 1000 }, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.post("/v1/review/:id/claim", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    return c.json(await claimWorkshopSubmission(c, c.req.param("id")), 200, { "Cache-Control": "private, no-store" });
-  }
   const member = await requireReviewer(c);
   // 審核人也是人：宣告為成人內容的單，要驗過年齡才能領。看的是驗證，不是展示開關——審核是職責，不是偏好。
   const pending = await getSubmission(c.env.DB, c.req.param("id"));
@@ -1683,11 +1665,6 @@ app.post("/v1/review/:id/claim", async (c) => {
 });
 
 app.post("/v1/review/:id/release", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    const body = (await c.req.json().catch(() => ({}))) as { generation?: unknown };
-    await releaseWorkshopSubmission(c, c.req.param("id"), body);
-    return c.body(null, 204);
-  }
   const member = await requireReviewer(c);
   const body=await c.req.json().catch(()=>({})) as {generation?:unknown};
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
@@ -1696,10 +1673,6 @@ app.post("/v1/review/:id/release", async (c) => {
 });
 
 app.post("/v1/review/:id/stamp", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?: unknown };
-    return c.json(await stampWorkshopSubmission(c, c.req.param("id"), body), 200, { "Cache-Control": "private, no-store" });
-  }
   const member = await requireReviewer(c);
   const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown };
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
@@ -1728,10 +1701,6 @@ app.post("/v1/review/:id/stamp", async (c) => {
  * 只有冷凍人能解凍，管理員也能解（要寫理由）。規則見 src/review.ts hold／unhold。
  */
 app.post("/v1/review/:id/hold", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    const body = (await c.req.json().catch(() => ({}))) as { generation?: unknown };
-    return c.json(await holdWorkshopSubmission(c, c.req.param("id"), body), 200, { "Cache-Control": "private, no-store" });
-  }
   const member = await requireReviewer(c);
   const body = (await c.req.json().catch(() => ({}))) as { generation?: unknown };
   if (typeof body.generation !== "string" || !body.generation) throw new HttpError(409, "claim changed");
@@ -1782,9 +1751,6 @@ app.post("/v1/review/:id/withdraw", async (c) => {
 });
 
 app.post("/v1/review/:id/unhold", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    return c.json(await unholdWorkshopSubmission(c, c.req.param("id")), 200, { "Cache-Control": "private, no-store" });
-  }
   const member = await requireReviewer(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
   try {
@@ -1891,9 +1857,6 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
 }
 
 app.get("/v1/review/:id/detail", async (c) => {
-  if (await isWorkshopSubmission(c.env.DB, c.req.param("id"))) {
-    return c.json(await workshopSubmissionDetail(c, c.req.param("id"), lang(c)), 200, { "Cache-Control": "private, no-store" });
-  }
   const { member, s, stampedByMe } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
   // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後就不再讀（只給公開資料）。
@@ -2330,6 +2293,8 @@ async function campaignPage(c: Context<{ Bindings: Env; Variables: { ev: Pending
 
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
+  // Retired and unknown API routes never fall through to the SPA's success shell.
+  if (/^\/v1\/moderation\/workshop-appeals(?:\/|$)/.test(url.pathname)) return c.json({error:"not_found"},404,{"Cache-Control":"private, no-store"});
   const campaignMatch = url.pathname.match(CAMPAIGN_PAGE);
   if (campaignMatch) return campaignPage(c, url, campaignMatch);
   const landing = url.pathname.match(LANDING);
@@ -2552,7 +2517,6 @@ export default {
     }
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(reconcileWorkAccess(env).catch(() => { console.warn('Work access recovery unavailable'); }));
-    ctx.waitUntil(reconcilePendingWorkshopCommits(env).catch(() => { console.warn('Workshop review commit recovery unavailable'); }));
     ctx.waitUntil(drainProviderWorkshopOutbox(env).then((r) => (r.applied > 0 ? dispatchPush(env) : 0)).catch(() => { console.warn('Workshop outbox sync unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
