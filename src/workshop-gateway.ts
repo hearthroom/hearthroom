@@ -101,6 +101,8 @@ export interface WorkshopStaffReleaseView {
 
 export interface WorkshopStateItem {
   workshopId: string;
+  /** Provider's full publication receipt while the item is published and not revoked; absent or null otherwise. */
+  publication?: WorkshopPublicationReceipt | null;
   moderationState: string;
   ownerState: string;
   viewerJoined?: boolean;

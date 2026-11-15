@@ -135,47 +135,49 @@ export async function resolveWorkIdForCard(db: D1Database, card: CardRow): Promi
   return byWork?.id ?? `work:${card.id}`;
 }
 
+/**
+ * The community card a Provider workshop event or receipt belongs to. Provider's workId is
+ * a stable workshop group id and need not equal any community works.id, so the card is
+ * resolved by its source role. Only events without a source role (older payloads) fall
+ * back to the work id: first this projection's own policy rows, then works.id.
+ */
 export async function resolveCardForWork(
   db: D1Database,
   provider: ProviderId,
   workId?: string,
   sourceRoleId?: string,
 ): Promise<{ card: CardRow; workId: string } | null> {
-  if (workId) {
-    const byPolicy = await db
-      .prepare("SELECT card_id FROM workshop_policies WHERE provider = ? AND work_id = ? LIMIT 1")
-      .bind(provider, workId)
-      .first<{ card_id: number }>();
-    if (byPolicy) {
-      const card = await getCard(db, String(byPolicy.card_id));
-      if (card) return { card, workId };
-    }
-    const byWork = await db
-      .prepare("SELECT id, source_provider, source_role_id FROM works WHERE id = ?")
-      .bind(workId)
-      .first<{ id: string; source_provider: string; source_role_id: string }>();
-    if (byWork) {
-      const byRole = await db
-        .prepare("SELECT id FROM cards WHERE provider = ? AND source_role_id = ?")
-        .bind(byWork.source_provider, byWork.source_role_id)
-        .first<{ id: number }>();
-      if (byRole) {
-        const card = await getCard(db, String(byRole.id));
-        if (card) return { card, workId: byWork.id };
-      }
-    }
-  }
   if (sourceRoleId) {
     const byRole = await db
       .prepare("SELECT id FROM cards WHERE provider = ? AND (source_role_id = ? OR approved_hosted_role_id = ?)")
       .bind(provider, sourceRoleId, sourceRoleId)
       .first<{ id: number }>();
+    if (!byRole) return null;
+    const card = await getCard(db, String(byRole.id));
+    if (!card) return null;
+    return { card, workId: workId || (await resolveWorkIdForCard(db, card)) };
+  }
+  if (!workId) return null;
+  const byPolicy = await db
+    .prepare("SELECT card_id FROM workshop_policies WHERE provider = ? AND work_id = ? LIMIT 1")
+    .bind(provider, workId)
+    .first<{ card_id: number }>();
+  if (byPolicy) {
+    const card = await getCard(db, String(byPolicy.card_id));
+    if (card) return { card, workId };
+  }
+  const byWork = await db
+    .prepare("SELECT id, source_provider, source_role_id FROM works WHERE id = ?")
+    .bind(workId)
+    .first<{ id: string; source_provider: string; source_role_id: string }>();
+  if (byWork) {
+    const byRole = await db
+      .prepare("SELECT id FROM cards WHERE provider = ? AND source_role_id = ?")
+      .bind(byWork.source_provider, byWork.source_role_id)
+      .first<{ id: number }>();
     if (byRole) {
       const card = await getCard(db, String(byRole.id));
-      if (card) {
-        const resolvedWorkId = workId || (await resolveWorkIdForCard(db, card));
-        return { card, workId: resolvedWorkId };
-      }
+      if (card) return { card, workId: byWork.id };
     }
   }
   return null;
@@ -813,7 +815,7 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       if(p.policyVersion===2&&Number.isSafeInteger(revision)&&revision>0&&allowNewRaw!==undefined) {
         // A card without a community row has nothing to project onto; the event is
         // still acknowledged (one outbox cursor), and each hosting submission re-reads
-        // Provider's current policy instead (projectCurrentWorkshopPolicy).
+        // Provider's current state instead (projectCurrentWorkshopState).
         const resolved=await resolveCardForWork(env.DB,provider,workId,sourceRoleId);
         if(resolved) {
           await upsertWorkshopPolicyProjection(env.DB,provider,workId||resolved.workId,Number(resolved.card.id),allowNewRaw===true||allowNewRaw===1,revision,now);

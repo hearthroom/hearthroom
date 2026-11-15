@@ -58,10 +58,16 @@ function publicationShape(p: WorkshopPublicationReceipt) {
  */
 export const BASE_UNLISTED = 'workshop_base_unlisted';
 export const isBaseUnlisted = (error: unknown) => error instanceof HttpError && error.message === BASE_UNLISTED;
-export async function applyWorkshopPublication(env: Env, provider: ProviderId, p: WorkshopPublicationReceipt) {
+/**
+ * Project one Provider publication receipt into the public listing. By default the base
+ * card must be listed (approved, not blocked). The submission backfill passes
+ * `submittedBase`: the card has just been submitted (pending review), and its receipts may
+ * be stored ahead of approval because every public reader still requires an approved card.
+ */
+export async function applyWorkshopPublication(env: Env, provider: ProviderId, p: WorkshopPublicationReceipt, opts: { submittedBase?: boolean } = {}) {
     const content = publicationShape(p);
     const resolved = await resolveCardForWork(env.DB, provider, p.workId, p.sourceRoleId);
-    if (!resolved || resolved.card.status !== 'approved' || resolved.card.public_blocked)
+    if (!resolved || resolved.card.public_blocked || (resolved.card.status !== 'approved' && !opts.submittedBase))
         throw new HttpError(409, BASE_UNLISTED);
     if (resolved.card.author_num_id !== p.cardOwnerPublicNo)
         throw new HttpError(502, 'invalid_publication');

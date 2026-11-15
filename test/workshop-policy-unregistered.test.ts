@@ -160,15 +160,15 @@ it('when Provider re-keys a bound card and reads its default closed policy under
   up.state = async () => ({ workId: 'canonical-work-later', allowNew: true, revision: 2, policyRevision: 2, items: [] });
   const cardId = await registerLater();
   expect(await tab(cardId)).toMatchObject({ tabVisible: true });
-  const { projectCurrentWorkshopPolicy } = await import('../src/workshop-policy');
+  const { projectCurrentWorkshopState } = await import('../src/workshop-policy');
   // The default read (closed, revision 1) under the new key inserts nothing.
   up.state = async () => ({ workId: 'other-work-key', allowNew: false, revision: 1, policyRevision: 1, items: [] });
-  await projectCurrentWorkshopPolicy(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
+  await projectCurrentWorkshopState(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
   expect(await tab(cardId)).toMatchObject({ tabVisible: true });
   expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshop_policies WHERE card_id=?').bind(cardId).first<{ n: number }>())!.n).toBe(1);
   // A newer closed read under the same key does close it.
   up.state = async () => ({ workId: 'canonical-work-later', allowNew: false, revision: 3, policyRevision: 3, items: [] });
-  await projectCurrentWorkshopPolicy(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
+  await projectCurrentWorkshopState(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
   expect(await tab(cardId)).toMatchObject({ tabVisible: false });
 });
 
@@ -245,4 +245,67 @@ it('counts a closed read that changes nothing as a no-op, not a success', async 
   const metrics = await (await import('../src/ops-metrics')).opsMetrics(env.DB);
   expect(metrics).toContain('hearthroom_workshop_operations_total{operation="policy_backfill",outcome="noop"} 1');
   expect(metrics).not.toContain('hearthroom_workshop_operations_total{operation="policy_backfill",outcome="success"}');
+});
+
+// ---- Provider work lifecycle: one stable workshop group id, publications in HostingState ----
+
+function laterReceipt(workshopId: string, over: Record<string, unknown> = {}) {
+  return { ...dlcReceipt(workshopId), workId: 'group-later', sourceRoleId: LATER_ROLE, ...over };
+}
+const listed = async (cardId: number) => {
+  const r = await SELF.fetch(`https://c.test/v1/cards/${cardId}/workshop`, { headers: bearer('other') });
+  return (await r.json() as { items: { id: string; version?: number }[] }).items;
+};
+
+it('opening the switch on a private card and then submitting keeps one work id: the tab is open after approval', async () => {
+  // Provider keeps the workshop group id across binding, so the save and the later read share it.
+  const policy = { allowNew: false, revision: 1 };
+  up.policySave = async (_e: unknown, _t: string, input: { allowNew: boolean; expectedRevision: number }) => {
+    policy.allowNew = input.allowNew; policy.revision++;
+    return { workId: 'group-later', sourceRoleId: LATER_ROLE, allowNew: policy.allowNew, revision: policy.revision, items: [] };
+  };
+  up.state = async () => ({ workId: 'group-later', allowNew: policy.allowNew, revision: policy.revision, policyRevision: policy.revision, items: [] });
+  await env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES('harbor',?)").bind(LATER_ROLE).run();
+  const opened = await save(LATER_ROLE, 'owner', { allowNew: true, expectedRevision: 1 });
+  expect(opened.status).toBe(200);
+  expect(await publicRows()).toMatchObject({ cards: 0, policies: 0 });
+  const cardId = await registerLater();
+  expect(await tab(cardId)).toMatchObject({ tabVisible: true, allowNew: true });
+  expect(await env.DB.prepare('SELECT work_id FROM workshop_policies WHERE card_id=?').bind(cardId).first()).toEqual({ work_id: 'group-later' });
+});
+
+it('a DLC published while the card was not listed appears in the list once the submitted card is approved', async () => {
+  const live = crypto.randomUUID(), unpublished = crypto.randomUUID();
+  up.state = async () => ({ workId: 'group-later', allowNew: true, revision: 2, policyRevision: 2, items: [
+    { workshopId: live, workId: 'group-later', sourceRoleId: LATER_ROLE, publication: laterReceipt(live) },
+    { workshopId: unpublished, workId: 'group-later', sourceRoleId: LATER_ROLE, publication: null },
+    { workshopId: crypto.randomUUID(), workId: 'group-later', sourceRoleId: LATER_ROLE },
+  ] });
+  const cardId = await registerLater();
+  const items = await listed(cardId);
+  expect(items.map((i) => i.id)).toEqual([live]);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshops').first<{ n: number }>())!.n).toBe(1);
+  expect(await env.DB.prepare('SELECT work_id,source_role_id,card_id FROM workshops WHERE id=?').bind(live).first()).toEqual({ work_id: 'group-later', source_role_id: LATER_ROLE, card_id: cardId });
+});
+
+it('an older publication read never replaces a newer listed version', async () => {
+  const id = crypto.randomUUID();
+  let receipt = laterReceipt(id, { version: 2, publicationRevision: 3, releaseId: crypto.randomUUID(), sealed: { ...dlcReceipt(id).sealed, name: 'Version two' } });
+  up.state = async () => ({ workId: 'group-later', allowNew: true, revision: 2, policyRevision: 2, items: [{ workshopId: id, publication: receipt }] });
+  const cardId = await registerLater();
+  receipt = laterReceipt(id, { version: 1, publicationRevision: 1, releaseId: crypto.randomUUID(), sealed: { ...dlcReceipt(id).sealed, name: 'Version one' } });
+  const { projectCurrentWorkshopState } = await import('../src/workshop-policy');
+  await projectCurrentWorkshopState(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
+  expect(await env.DB.prepare('SELECT name,version_no FROM workshops WHERE id=?').bind(id).first()).toEqual({ name: 'Version two', version_no: 2 });
+});
+
+it('resolves the card of a projection by source role, not by a work id that matches another card', async () => {
+  up.state = async () => ({ workId: 'group-later', allowNew: false, revision: 1, policyRevision: 1, items: [] });
+  const cardId = await registerLater();
+  // Another listed card whose community work id happens to equal the event's workshop group id.
+  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider) VALUES(990001,'other-source',74102,'{}','{}',1,1,'approved','harbor')").run();
+  await env.DB.prepare("INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES('group-misleading',(SELECT id FROM members LIMIT 1),'harbor','other-source',1)").run();
+  await applyWorkshopEvents(env, [{ kind: 'policy_changed', eventKey: 'by-source-role', workId: 'group-misleading', payload: { policyVersion: 2, revision: 2, allowNew: true, sourceRoleId: LATER_ROLE } }]);
+  expect(await tab(cardId)).toMatchObject({ tabVisible: true });
+  expect(await tab(990001)).toMatchObject({ tabVisible: false });
 });

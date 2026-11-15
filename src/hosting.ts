@@ -13,7 +13,7 @@ import { isTransferHeld } from './draft-transfer-gate';
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
-import { projectCurrentWorkshopPolicy } from './workshop-policy';
+import { projectCurrentWorkshopState } from './workshop-policy';
 import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
@@ -129,7 +129,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  }
  if(version?.submission_id){
   if(consent){const previous=await db.prepare('SELECT status FROM review_submissions WHERE id=?').bind(version.submission_id).first<{status:string}>();if(!previous||previous.status==='superseded')throw new HttpError(409,'visibility_operation_conflict');}
-  if(version.card_id)await projectCurrentWorkshopPolicy(env,provider,version.card_id,input.role.roleId,input.token);
+  if(version.card_id)await projectCurrentWorkshopState(env,provider,version.card_id,input.role.roleId,input.token);
   return receiptOf(version);
  }
  const existing=await getCard(db,input.role.roleId,provider);
@@ -220,7 +220,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
     provider,status:'pending',preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
-   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);if(retry.card_id)await projectCurrentWorkshopPolicy(env,provider,retry.card_id,input.role.roleId,input.token);return receiptOf(retry);}throw error;
+   const retry=await existingOperation();if(retry?.submission_id){checkVersion(retry);if(retry.card_id)await projectCurrentWorkshopState(env,provider,retry.card_id,input.role.roleId,input.token);return receiptOf(retry);}throw error;
   }
  }
  const stored=await existingOperation();
@@ -228,7 +228,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  // 送審是卡片走向公開的唯一入口。作者在卡還沒有本站列（或還沒綁定）時存的工坊開關，
  // 當時的同步事件沒有卡可投影；這裡以作者身分向 Provider 讀現況、照 revision 補投影，
  // 過審後卡片頁的工坊分頁才會跟作者的設定一致。讀不到不擋送審（之後的開關事件會補）。
- if(stored.card_id)await projectCurrentWorkshopPolicy(env,provider,String(stored.card_id),input.role.roleId,input.token);
+ if(stored.card_id)await projectCurrentWorkshopState(env,provider,String(stored.card_id),input.role.roleId,input.token);
  return receiptOf(stored);
  } catch(error) {
   if(isTransferHeld(error))throw error;

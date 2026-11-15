@@ -19,6 +19,7 @@ import type { ProviderId } from './providers';
 import { HttpError, type Env } from './types';
 import { applyWorkshopEvents, memberOwnsExternal, cardPlayRoleId } from './workshop';
 import { workshopUpstream } from './workshop-gateway';
+import { applyWorkshopPublication } from './workshop-publication';
 type Ctx = Pick<Context<{
     Bindings: Env;
 }>, 'env' | 'req' | 'executionCtx'>;
@@ -44,21 +45,39 @@ const BACKFILL_TIMEOUT_MS = 3_000;
 
 /**
  * Called on every hosting submission (the only way a card becomes publicly listed),
- * including a retried submission that returns early; the revision fence makes reruns safe.
- * The author may have saved the switch while the card had no community row; the outbox
- * event for that save had nothing to project onto. Read Provider's current state once and
- * project it. Never fails the submission: on error or timeout the projection stays as it
- * was until the next policy event.
- *
- * Only the policy is projected today. Publications made while the base was not listed
- * are acknowledged as deferred by the outbox; once Provider's state carries a publication
- * receipt per item, project them from the same read here with applyWorkshopPublication.
+ * including a retried submission that returns early; the fences make reruns safe.
+ * While the card had no community row (or was not listed), the outbox events for the
+ * author's switch and DLC publications had nothing to project onto and were acknowledged
+ * as deferred. One read of Provider's current state replaces replaying them:
+ * - the policy, under the same revision fence as the events;
+ * - every item that carries a publication receipt (still published, not revoked), through
+ *   applyWorkshopPublication with its version / publicationRevision / ownerGeneration
+ *   fences. Items without a receipt are not written.
+ * Never fails the submission: on error or timeout the projection stays as it was until
+ * the next event.
  */
-export async function projectCurrentWorkshopPolicy(env: Env, provider: ProviderId, cardId: string, roleId: string, token?: string | null): Promise<void> {
+export async function projectCurrentWorkshopState(env: Env, provider: ProviderId, cardId: string, roleId: string, token?: string | null): Promise<void> {
     try {
         const state = await workshopUpstream.state(env, { sourceRoleId: roleId }, token ?? null, provider, BACKFILL_TIMEOUT_MS);
-        const changed = await projectPolicyFromState(env.DB, provider, Number(cardId), state);
-        await bumpOp(env.DB, 'workshop', 'policy_backfill', changed ? 'success' : 'noop');
+        let changed = await projectPolicyFromState(env.DB, provider, Number(cardId), state);
+        let failed = false;
+        for (const item of state.items ?? []) {
+            const receipt = item.publication;
+            if (!receipt || typeof receipt !== 'object')
+                continue;
+            try {
+                await applyWorkshopPublication(env, provider, receipt, { submittedBase: true });
+                changed = true;
+            }
+            catch (error) {
+                // One unusable receipt does not stop the policy or the other items.
+                if (!(error instanceof HttpError && error.status < 500))
+                    throw error;
+                console.warn('workshop_publication_backfill_skipped', { code: error.message });
+                failed = true;
+            }
+        }
+        await bumpOp(env.DB, 'workshop', 'policy_backfill', failed ? 'error' : changed ? 'success' : 'noop');
     }
     catch (error) {
         console.error('workshop_policy_backfill_failed', { code: error instanceof HttpError ? error.message : 'unexpected' });
