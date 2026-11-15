@@ -21,7 +21,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { fetchPolicy, savePolicy, type OwnerPolicy, type OwnerPolicyCounts } from "@/lib/workshop";
 
 const props = defineProps<{ roleId: string; cardId?: string }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const session = useSession();
 const { lp } = useLocalePath();
 
@@ -94,7 +94,8 @@ async function save(next: boolean, confirmed = false) {
     const ext = counts.value.lorebookPublished;
     const ok = await confirmDialog({
       title: t("workshop.owner.closeConfirm.title"),
-      message: `${t("workshop.owner.closeConfirm.body", { dlc: counts.value.dlcPublished, ext }, ext)}\n${t("workshop.owner.closeConfirm.keep")}`,
+      // 兩句接成同一段：中日文句號後不留空格，英韓文留一個（確認框不換行，\n 會變成多出來的空格）
+      message: [t("workshop.owner.closeConfirm.body", { dlc: counts.value.dlcPublished, ext }, ext), t("workshop.owner.closeConfirm.keep")].join(/^(zh|ja)/.test(String(locale.value)) ? "" : " "),
       confirmText: t("workshop.owner.closeConfirm.confirm"), cancelText: t("dialog.cancel"), focusCancel: true, phraseWrap: true,
     });
     if (!ok) return;

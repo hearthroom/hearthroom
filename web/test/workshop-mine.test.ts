@@ -125,6 +125,8 @@ it("owner switch: turning off with published content asks first (focus on cancel
   await settle();
   expect(confirmState.current?.title).toBe("關閉工坊？");
   expect(confirmState.current?.message).toContain("2 個 DLC 與 5 個玩家擴充停用");
+  // 兩句接在同一段：中文不留半形空格（\n 在確認框裡會變成一個空格）
+  expect(confirmState.current?.message).toContain("不受影響。內容與加入紀錄");
   expect(confirmState.current?.focusCancel).toBe(true);
   settleConfirm(false);
   await settle();
