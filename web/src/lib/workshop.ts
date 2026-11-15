@@ -5,7 +5,7 @@
  * 兩層：原卡作者的「作者 DLC」（世界書、正則、開場）與任何玩家的「玩家擴充」（只有世界書），都是發布即上架，
  * 沒有審核、申訴、分潤；契約見 server provider/docs/workshop-v2-api.md「v2 client DTO contract」。
  * 本站（/v1，Worker）管列表、詳情、版本、評論、我的擴充、發布／下架／放棄修改；
- * Provider（/open/v1/workshop）管加入與排序、字數與建議檔位、草稿、原作者開關與隱藏。
+ * Provider（/open/v1/workshop）管加入與排序、字數與建議檔位、草稿、讀取作者開關；存作者開關與隱藏走本站。
  * 哪一層（kind）由伺服器依原卡作者身分判定，網頁只照著畫，從不送出。
  *
  * 網頁不自己判斷「分頁要不要出現」「這位玩家能不能加入」「建議用哪一檔」：這些都照伺服器回的欄位畫
@@ -191,9 +191,12 @@ export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPoli
  */
 export const savePolicy = (cardId: string, allowNew: boolean, expectedRevision: number, token: string) =>
   community<OwnerPolicy>(`/cards/${encodeURIComponent(cardId)}/workshop/policy`, token, "POST", { allowNew, expectedRevision });
-/** 原卡作者隱藏／取消隱藏玩家擴充：沒有理由、不通知製作者、沒有申訴 */
+/**
+ * 原卡作者隱藏／取消隱藏玩家擴充：沒有理由、不通知製作者、沒有申訴。
+ * 走本站：伺服器先更新公開列表才回成功，重新整理不會跳回去（跟作者開關同一個做法）。
+ */
 export const ownerAction = (workshopId: string, action: "hide" | "restore", token: string) =>
-  upstream<{ ownerState: OwnerState }>("/workshop/owner-action", token, { workshopId, action });
+  community<{ ownerState: OwnerState; generation?: number }>(`/workshops/${encodeURIComponent(workshopId)}/owner-action`, token, "POST", { action });
 export const createWorkshop = (roleId: string, token: string) => upstream<{ workshopId: string }>("/workshop/create", token, { roleId });
 export const fetchDraft = (workshopId: string, token: string) => upstream<WorkshopDraft>(`/workshop/draft${q({ workshopId })}`, token);
 export const saveDraft = (workshopId: string, expectedRevision: number, idempotencyKey: string, fields: DraftWrite, token: string) =>
