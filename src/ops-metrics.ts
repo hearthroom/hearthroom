@@ -138,9 +138,9 @@ const METRICS = {
   },
   workshop: {
     name: "hearthroom_workshop_operations_total",
-    help: "Workshop direct publication, creator actions, takedown and outbox sync.",
+    help: "Workshop direct publication, creator actions, takedown, outbox sync and policy backfill at card registration.",
     label: "operation",
-    operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync"],
+    operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync", "policy_backfill"],
     outcomes: ["success", "denied", "conflict", "error", "rejected"],
   },
 } as const;

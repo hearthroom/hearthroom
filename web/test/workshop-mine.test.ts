@@ -182,6 +182,19 @@ it("owner switch: if the failed save actually landed, the re-read clears the err
   expect(ws.savePolicy).toHaveBeenCalledTimes(1);
 });
 
+it("owner switch saves by role id when the editor has no card number yet (a card that is not listed here)", async () => {
+  ws.fetchPolicy.mockResolvedValue({ allowNew: false, revision: 1, items: [], counts: counts({ dlcPublished: 0, dlcDrafts: 0, lorebookPublished: 0, joinCount: 0 }) });
+  ws.savePolicy.mockImplementation(async (_r: string, allowNew: boolean, rev: number) => ({ allowNew, revision: rev + 1, items: [], counts: counts({ dlcPublished: 0, dlcDrafts: 0, lorebookPublished: 0, joinCount: 0 }) }));
+  await mount(OwnerWorkshopBlock, { roleId: "6f1b6a52-6c1e-4f43-9f43-1b7c1a000001" });
+  const sw = document.querySelector<HTMLButtonElement>("[data-ws-owner-switch]")!;
+  expect(sw.disabled).toBe(false);
+  sw.click();
+  await settle();
+  expect(ws.savePolicy).toHaveBeenCalledWith("6f1b6a52-6c1e-4f43-9f43-1b7c1a000001", true, 1, "tok");
+  expect(document.querySelector("[data-ws-owner-error]")).toBeNull();
+  expect(document.querySelector<HTMLAnchorElement>("[data-ws-owner-create]")?.getAttribute("href")).toContain("card=6f1b6a52-6c1e-4f43-9f43-1b7c1a000001");
+});
+
 it("owner switch waits for the real role id (the editor starts with the card number)", async () => {
   ws.fetchPolicy.mockResolvedValue({ allowNew: true, revision: 1, items: [] });
   await mount(OwnerWorkshopBlock, { roleId: "100001" });

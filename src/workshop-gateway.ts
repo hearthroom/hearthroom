@@ -227,7 +227,7 @@ state: (
     if (query.sourceRoleId) qs.set("sourceRoleId", query.sourceRoleId);
     if (query.workId) qs.set("workId", query.workId);
     if (query.workshopIds?.length) qs.set("workshopIds", query.workshopIds.join(","));
-    return callHosting<{ allowNew?: boolean; policyRevision?: number; items: WorkshopStateItem[] }>(
+    return callHosting<{ workId?: string; allowNew?: boolean; revision?: number; policyRevision?: number; items: WorkshopStateItem[] }>(
       env,
       provider,
       `/state?${qs.toString()}`,

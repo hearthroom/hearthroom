@@ -60,7 +60,9 @@ const extSummary = computed(() => counts.value.lorebookPublished
 const affected = computed(() => counts.value.dlcPublished + counts.value.lorebookPublished + counts.value.joinCount > 0);
 const keptNote = computed(() => !open.value && counts.value.dlcPublished + counts.value.lorebookPublished > 0);
 
-const createTo = computed(() => (props.cardId ? lp(`/mine/workshops/new?card=${encodeURIComponent(props.cardId)}`) : ""));
+/** 存開關與建立 DLC 用的卡：有卡號用卡號；卡還沒有本站卡號（私卡、用角色 id 開的編輯頁）就用角色 id，伺服器向 Provider 認原作者 */
+const cardRef = computed(() => props.cardId || props.roleId);
+const createTo = computed(() => (cardRef.value ? lp(`/mine/workshops/new?card=${encodeURIComponent(cardRef.value)}`) : ""));
 const tabTo = computed(() => (props.cardId ? lp(`/cards/${encodeURIComponent(props.cardId)}?tab=workshop`) : ""));
 
 async function token() {
@@ -89,7 +91,7 @@ watch(() => props.roleId, (id) => { if (id && !/^[1-9]\d*$/.test(id)) void load(
 
 async function save(next: boolean, confirmed = false) {
   const current = policy.value;
-  if (!current || saving.value || !props.cardId) return;
+  if (!current || saving.value || !cardRef.value) return;
   if (!next && affected.value && !confirmed) {
     const ext = counts.value.lorebookPublished;
     const ok = await confirmDialog({
@@ -104,7 +106,7 @@ async function save(next: boolean, confirmed = false) {
   saveFailed.value = false;
   failedTarget = null;
   try {
-    policy.value = await savePolicy(props.cardId, next, current.revision, await token());
+    policy.value = await savePolicy(cardRef.value, next, current.revision, await token());
   } catch {
     await load();
     // 回應掉了但其實存進去了：畫面照伺服器，不留錯誤，也不讓重試翻回去
@@ -123,7 +125,7 @@ function retry() { if (failedTarget !== null) void save(failedTarget, true); }
       <h2 id="ws-owner-title">{{ $t("workshop.tab.workshop") }}</h2>
       <button
         v-if="policy" type="button" class="ws-switch" role="switch" :aria-checked="open" :aria-label="$t('workshop.owner.switch.label')"
-        :disabled="saving || !cardId" data-ws-owner-switch @click="save(!open)"
+        :disabled="saving" data-ws-owner-switch @click="save(!open)"
       />
     </div>
 

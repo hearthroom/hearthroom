@@ -1,5 +1,5 @@
 import { applyWorkshopPublication,applyWorkshopUnpublication } from "./workshop-publication";
-import { readWorkshopPolicy } from "./workshop-policy";
+import { readWorkshopPolicy, upsertWorkshopPolicyProjection } from "./workshop-policy";
 import { applyWorkshopOwnerProjection } from './workshop-owner-projection';
 import type { Context } from "hono";
 import { isRating, type Rating } from "../shared/content-rating";
@@ -804,16 +804,12 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       // Unknown/legacy events cannot grant v2 consent or advance its revision.
       const revision=Number(revisionRaw);
       if(p.policyVersion===2&&Number.isSafeInteger(revision)&&revision>0&&allowNewRaw!==undefined) {
+        // A card without a community row has nothing to project onto; the event is
+        // still acknowledged (one outbox cursor), and registration re-reads Provider's
+        // current policy instead (projectCurrentWorkshopPolicy).
         const resolved=await resolveCardForWork(env.DB,provider,workId,sourceRoleId);
         if(resolved) {
-          const nextAllow=allowNewRaw===true||allowNewRaw===1?1:0;
-          await env.DB.prepare(`INSERT INTO workshop_policies(provider,work_id,card_id,allow_new,revision,consent_version,updated_at)
-            VALUES(?,?,?,?,?,2,?) ON CONFLICT(provider,work_id) DO UPDATE SET
-            card_id=excluded.card_id,allow_new=excluded.allow_new,revision=excluded.revision,
-            consent_version=2,updated_at=excluded.updated_at
-            WHERE excluded.revision>workshop_policies.revision OR
-              (excluded.revision=workshop_policies.revision AND workshop_policies.consent_version<>2)`)
-            .bind(provider,workId||resolved.workId,Number(resolved.card.id),nextAllow,revision,now).run();
+          await upsertWorkshopPolicyProjection(env.DB,provider,workId||resolved.workId,Number(resolved.card.id),allowNewRaw===true||allowNewRaw===1,revision,now);
         }
       }
     } else if (ev.kind === "owner_action" && workshopId && (actionRaw === "hide" || actionRaw === "restore")) {

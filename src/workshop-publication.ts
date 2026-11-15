@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
 import { isRating } from '../shared/content-rating';
 import { bearerOf } from './community-admin';
-import { requireMember } from './members';
+import type { CardRow } from './cards';
+import { requireMember, type Member } from './members';
 import { bumpOp } from './ops-metrics';
 import type { ProviderId } from './providers';
 import { HttpError, type Env } from './types';
@@ -78,6 +79,24 @@ export async function applyWorkshopPublication(env: Env, provider: ProviderId, p
         env.DB.prepare(`INSERT INTO workshop_versions(workshop_id,version_no,release_id,submission_id,update_note,rating,published_at,created_at) VALUES(?,?,?,NULL,?,?,?,?) ON CONFLICT(workshop_id,release_id) DO NOTHING`).bind(p.workshopId, p.version, p.releaseId, p.sealed.updateNote ?? '', p.sealed.rating, p.publishedAt, now),
     ]);
 }
+/**
+ * Whether the caller is the author of a base card that has no public listing. A community
+ * row (blocked cards excluded) is checked locally; without one, Provider decides with the
+ * caller's bearer: only the canonical card author can read the card's workshop policy.
+ */
+async function authorOfUnlistedBase(c: Ctx, member: Member, token: string, card: CardRow | null, roleId: string): Promise<boolean> {
+    if (card)
+        return !card.public_blocked && await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
+    try {
+        await workshopUpstream.policyGet(c.env, token, roleId, member.provider);
+        return true;
+    }
+    catch (error) {
+        if (error instanceof HttpError && error.status < 500)
+            return false;
+        throw error;
+    }
+}
 export async function publishWorkshop(c: Ctx, workshopId: string, body: unknown) {
     const member = await requireMember(c);
     const token = bearerOf(c);
@@ -91,12 +110,19 @@ export async function publishWorkshop(c: Ctx, workshopId: string, body: unknown)
         if (draft.workshopId !== workshopId || !draft.card?.cardId || !draft.card?.roleId)
             throw new HttpError(502, 'invalid_publication');
         const base = await resolveCardForWork(c.env.DB, member.provider, draft.card.cardId, draft.card.roleId);
-        if (!base || base.card.status !== 'approved' || base.card.public_blocked)
+        const listed = !!base && base.card.status === 'approved' && !base.card.public_blocked;
+        // A card that is not publicly listed (private, unlisted or not registered here) has no
+        // public workshop page. Only its own author may publish there: the author's DLC still
+        // takes effect on Provider, and nothing is projected into the public listing.
+        if (!listed && !await authorOfUnlistedBase(c, member, token, base?.card ?? null, draft.card.roleId))
             throw new HttpError(404, 'not_found');
         const receipt = await workshopUpstream.publish(c.env, token, { workshopId, operationId, expectedRevision: Number(body.expectedRevision) }, member.provider);
         if (receipt.workshopId !== workshopId || !await memberOwnsExternal(c.env.DB, member, member.provider, receipt.authorPublicNo))
             throw new HttpError(403, 'not_the_author');
-        await applyWorkshopPublication(c.env, member.provider, receipt);
+        if (!listed && (receipt.kind !== 'dlc' || receipt.authorPublicNo !== receipt.cardOwnerPublicNo))
+            throw new HttpError(403, 'not_the_author');
+        if (listed)
+            await applyWorkshopPublication(c.env, member.provider, receipt);
         await bumpOp(c.env.DB, 'workshop', 'publish', 'success');
         return { workshopId: receipt.workshopId, releaseId: receipt.releaseId, status: 'published', kind: receipt.kind, version: receipt.version };
     }

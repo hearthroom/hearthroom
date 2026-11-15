@@ -22,9 +22,11 @@ it("ownerAction posts hide/restore to the site's workshop owner-action route wit
   expect((calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
 });
 
-it("savePolicy posts to the site's card workshop policy route by card number", async () => {
+it("savePolicy posts to the site's card workshop policy route by card number or role id", async () => {
   const calls = capture({ allowNew: true, revision: 2, items: [] });
   await savePolicy("100001", true, 1, "tok");
   expect(calls[0].url).toBe(`${COMMUNITY_API}/cards/100001/workshop/policy`);
   expect(JSON.parse(String(calls[0].init.body))).toEqual({ allowNew: true, expectedRevision: 1 });
+  await savePolicy("6f1b6a52-6c1e-4f43-9f43-1b7c1a000001", false, 2, "tok");
+  expect(calls[1].url).toBe(`${COMMUNITY_API}/cards/6f1b6a52-6c1e-4f43-9f43-1b7c1a000001/workshop/policy`);
 });

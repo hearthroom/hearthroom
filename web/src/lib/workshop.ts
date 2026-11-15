@@ -187,7 +187,7 @@ export const saveContextTier = (roleId: string, context: number, token: string) 
 export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPolicy>(`/workshop/policy${q({ roleId })}`, token);
 /**
  * 存作者開關走本站：伺服器存進 Provider 後同步更新公開列表才回成功，卡片頁馬上看得到分頁出現或消失
- * （不等背景同步）。cardId 可以是卡號。
+ * （不等背景同步）。cardId 可以是卡號；卡還沒有本站列時也可以是角色 id，原作者由 Provider 認定，不會因此登記或公開這張卡。
  */
 export const savePolicy = (cardId: string, allowNew: boolean, expectedRevision: number, token: string) =>
   community<OwnerPolicy>(`/cards/${encodeURIComponent(cardId)}/workshop/policy`, token, "POST", { allowNew, expectedRevision });

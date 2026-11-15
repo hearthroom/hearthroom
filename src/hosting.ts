@@ -13,6 +13,7 @@ import { isTransferHeld } from './draft-transfer-gate';
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
+import { projectCurrentWorkshopPolicy } from './workshop-policy';
 import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
@@ -223,6 +224,10 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  }
  const stored=await existingOperation();
  if(!stored?.submission_id)throw new HttpError(409,'submission_pending');
+ // 送審是卡片走向公開的唯一入口。作者在卡還沒有本站列（或還沒綁定）時存的工坊開關，
+ // 當時的同步事件沒有卡可投影；這裡以作者身分向 Provider 讀現況、照 revision 補投影，
+ // 過審後卡片頁的工坊分頁才會跟作者的設定一致。讀不到不擋送審（之後的開關事件會補）。
+ if(stored.card_id)await projectCurrentWorkshopPolicy(env,provider,String(stored.card_id),input.role.roleId,input.token);
  return receiptOf(stored);
  } catch(error) {
   if(isTransferHeld(error))throw error;
