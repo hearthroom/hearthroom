@@ -196,6 +196,7 @@ async function callCreator<T>(env:Env,token:string,path:string,body:unknown,prov
  return workshopResponse<T>(response);
 }
 const realUpstream = {
+ownerAction:(env:Env,token:string,input:{workshopId:string;action:'hide'|'restore'},provider:ProviderId='harbor')=>callCreator<{ownerState:string;generation:number}>(env,token,'/owner-action',input,provider),
 draftMetadata:(env:Env,token:string,workshopId:string,provider:ProviderId='harbor')=>callCreator<{workshopId:string;card:{cardId:string;roleId:string}}>(env,token,`/draft?workshopId=${encodeURIComponent(workshopId)}`,undefined,provider),
 policyGet:(env:Env,token:string,roleId:string,provider:ProviderId='harbor')=>callCreator<Record<string,unknown>>(env,token,`/policy?roleId=${encodeURIComponent(roleId)}`,undefined,provider),
 policySave:(env:Env,token:string,input:{roleId:string;allowNew:boolean;expectedRevision:number},provider:ProviderId='harbor')=>callCreator<Record<string,unknown>>(env,token,'/policy/save',input,provider),

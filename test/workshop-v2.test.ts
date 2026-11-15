@@ -120,3 +120,23 @@ it('rejects an unavailable base card before committing a creator publication',as
  const r=await SELF.fetch(`https://c.test/v1/me/workshops/${receipt.workshopId}/publish`,{method:'POST',headers:{...bearer('creator'),'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:2,operationId:crypto.randomUUID()})});
  expect(r.status).toBe(404);expect(writes).toBe(0);
 });
+
+it('synchronizes an authenticated card-owner hide or restore before returning success',async()=>{
+ await openPolicy();const p=publication();await (await import('../src/workshop-publication')).applyWorkshopPublication(env,'harbor',p as any);
+ const gateway=await import('../src/workshop-gateway');let calls=0;
+ (gateway.workshopUpstream as any).ownerAction=async(_env:any,token:string,input:any)=>{expect(token).toBe('owner');expect(input.workshopId).toBe(p.workshopId);calls++;return {ownerState:input.action==='hide'?'hidden':'visible',generation:calls}};
+ gateway.workshopUpstream.state=async()=>({items:[]});
+ const request=(actor:string,action:string)=>SELF.fetch(`https://c.test/v1/workshops/${p.workshopId}/owner-action`,{method:'POST',headers:{...bearer(actor),'Content-Type':'application/json'},body:JSON.stringify({action})});
+ expect((await request('creator','hide')).status).toBe(403);expect(calls).toBe(0);
+ expect((await request('owner','hide')).status).toBe(200);
+ expect((await env.DB.prepare('SELECT owner_state,owner_action_generation FROM workshops WHERE id=?').bind(p.workshopId).first())).toMatchObject({owner_state:'hidden_by_owner',owner_action_generation:1});
+ expect((await tab()).items).toHaveLength(0);
+ expect((await request('owner','restore')).status).toBe(200);expect((await tab()).items).toHaveLength(1);
+ await applyWorkshopEvents(env,[{kind:'owner_action',eventKey:'late-hide',workshopId:p.workshopId,payload:{action:'hide',generation:1}}]);
+ expect((await tab()).items).toHaveLength(1);
+ expect((await request('owner','return')).status).toBe(400);expect(calls).toBe(2);
+ const metrics=await (await import('../src/ops-metrics')).opsMetrics(env.DB);
+ expect(metrics).toContain('hearthroom_workshop_operations_total{operation="owner_action",outcome="success"} 2');
+ (gateway.workshopUpstream as any).ownerAction=async()=>{throw new (await import('../src/types')).HttpError(403,'not_the_author')};
+ expect((await request('owner','hide')).status).toBe(403);expect((await tab()).items).toHaveLength(1);
+});

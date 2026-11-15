@@ -1,4 +1,5 @@
 import { saveWorkshopPolicy } from './workshop-policy';
+import { workshopOwnerAction } from './workshop-owner';
 import { publishWorkshop,workshopCreatorAction } from "./workshop-publication";
 import { Hono, type Context } from "hono";
 import { countTop, listReplies, listTop, postComment, sortOf, type Viewer } from "./comments";
@@ -52,6 +53,10 @@ function assertHostingServiceKey(c: Context<{ Bindings: Env }>): void {
 }
 
 export const workshopRoutes = new Hono<{ Bindings: Env }>();
+
+workshopRoutes.post('/v1/workshops/:id/owner-action', async c => {
+  return c.json(await workshopOwnerAction(c, c.req.param('id'), await c.req.json()));
+});
 
 workshopRoutes.get("/v1/cards/:cardId/workshop", async (c) => {
   const res = await listCardWorkshops(c, c.req.param("cardId"), {
