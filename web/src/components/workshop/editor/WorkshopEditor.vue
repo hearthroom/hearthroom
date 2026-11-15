@@ -317,7 +317,7 @@ async function remove() {
   const name = d.name.trim() || untitled.value;
   const ok = await confirmDialog({
     title: t("workshop.delete.title", { name }),
-    message: joinCount.value > 0 ? t("workshop.delete.body", { count: compact(joinCount.value) }) : t("workshop.delete.bodyNone"),
+    message: joinCount.value > 0 ? t("workshop.delete.body", { count: compact(joinCount.value) }, joinCount.value) : t("workshop.delete.bodyNone"),
     confirmText: t("workshop.delete.confirm"), cancelText: t("dialog.cancel"), danger: true, phraseWrap: true,
   });
   if (!ok) return;

@@ -45,7 +45,7 @@ const workshopsOpened = ref(tab.value === "workshops");
 watch(tab, (value) => { if (value === "workshops") workshopsOpened.value = true; });
 const mineTabs = computed(() => [
   { key: "cards" as const, label: t("workshop.mine.tab.cards") },
-  { key: "workshops" as const, label: extensionCount.value === null ? t("workshop.panel.tab") : t("workshop.mine.tab.extensions", { n: extensionCount.value }) },
+  { key: "workshops" as const, label: extensionCount.value === null ? t("workshop.mine.tab.extensionsIdle") : t("workshop.mine.tab.extensions", { n: extensionCount.value }) },
 ]);
 function setTab(next: MineTab) {
   if (next === tab.value) return;
