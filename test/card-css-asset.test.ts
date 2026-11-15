@@ -13,7 +13,7 @@ describe('card CSS review snapshot', () => {
     }
     expect(fields).toBe(4);
   });
-  it.each(['fengyue', 'fengyue-v2'])('retains card CSS and hidden %s hint even without display rules', (dialect) => {
+  it.each(['fengyue', 'fengyue-v2', 'rili'])('retains card CSS and hidden %s hint even without display rules', (dialect) => {
     const asset = canonicalAsset({ cardCss: '.canvas-root { color:red }', cardCssDialect: dialect });
     expect(asset).toMatchObject({ cardCss: '.canvas-root { color:red }', cardCssDialect: dialect });
     expect(hasAsset(asset)).toBe(true);
@@ -25,4 +25,13 @@ describe('card CSS review snapshot', () => {
     const asset = canonicalAsset({ rules: [{ id: 'hearthroom-fengyue-inner-css', find: '/([\\s\\S])$/', replace: '$1<style>.x{color:red}</style>', enabled: true }], cardCss: '' });
     expect(asset).toHaveProperty('cardCss', '');
   });
+});
+
+it('rili is a card-only schema dialect', () => {
+  for (const schema of Object.values(api.components.schemas)) {
+    for (const [name, field] of Object.entries((schema as any).properties ?? {})) {
+      if (name === 'cardCssDialect') expect((field as any).enum).toContain('rili');
+      if (name === 'cssDialect') expect((field as any).enum).not.toContain('rili');
+    }
+  }
 });

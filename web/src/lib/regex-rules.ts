@@ -30,8 +30,8 @@ const LEGACY_FENGYUE_CSS_RULE_ID = "hearthroom-fengyue-inner-css";
 export const cssDialectFrom = (v: unknown): CssDialect | undefined => (CSS_DIALECTS as readonly string[]).includes(String(v)) ? (v as CssDialect) : undefined;
 
 /** 整卡樣式的新版原站底樣式提示，不擴大顯示規則的寫法清單。 */
-export type CardCssDialect = CssDialect | "fengyue-v2";
-const cardCssDialectFrom = (v: unknown): CardCssDialect | undefined => v === "fengyue-v2" ? v : cssDialectFrom(v);
+export type CardCssDialect = CssDialect | "fengyue-v2" | "rili";
+const cardCssDialectFrom = (v: unknown): CardCssDialect | undefined => (v === "fengyue-v2" || v === "rili") ? v : cssDialectFrom(v);
 
 export interface RegexRule {
   id: string;
