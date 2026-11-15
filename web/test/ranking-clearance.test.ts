@@ -40,3 +40,13 @@ it('keeps card comments and version actions protected when the compact ranking i
  commentTop=950;versionTop=170;expect(rankingClearance()?.obstacles.some(r=>r.top===170&&r.bottom===290)).toBe(true);
  versionTop=950;expect(rankingClearance()).toBeNull();
 });
+it('keeps the workshop tab section actions (Create DLC) clear on the desktop card page',()=>{
+ // QA 2026-11-15：1280×800，原作者的「建立 DLC」在 DLC 區標題列（不在任何 .panel 裡），桌寵站在右下壓住它
+ vi.stubGlobal('innerHeight',800);
+ document.body.innerHTML='<main class="page role"><section data-ws-sect="dlc"><div class="ws-sect__head"><h2>作者 DLC</h2><a class="btn" data-ws-create-dlc href="/x">建立 DLC</a></div></section></main>';
+ document.querySelector<HTMLElement>('.ws-sect__head')!.getBoundingClientRect=()=>({left:296,right:1208,top:575,bottom:605,width:912,height:30} as DOMRect);
+ const clearance=rankingClearance();expect(clearance).not.toBeNull();
+ const y=nearestClearPetY({...clearance!,left:1101,right:1247,height:220,original:572,current:572});
+ expect(y).not.toBe(572);
+ expect(y===null||y+220+8<=575||y>=605+8).toBe(true);
+});
