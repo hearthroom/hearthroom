@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "draft": true,
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "作者可以替自己的卡發布作者 DLC，玩家可以為開啟工坊的卡做世界書擴充。",
+    "zh-Hans": "作者可以为自己的卡发布作者 DLC，玩家可以为开启工坊的卡制作世界书扩展包。",
+    "en": "Authors can publish Author DLC for their cards, and players can add lorebook extensions to cards with Workshop on.",
+    "ja": "作者は自分のカードで作者DLCを公開でき、プレイヤーは世界設定の拡張をすぐ公開できます。",
+    "ko": "작가는 자기 카드에 작가 DLC를, 플레이어는 세계관 확장팩을 바로 게시할 수 있어요."
+  }
+}

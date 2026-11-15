@@ -381,7 +381,7 @@ watch(side, (el) => {
 onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect(); clearTimeout(scoreToastTimer); });
 
 // ── 工坊（擴充）───────────────────────────────────────────────────────
-// 分頁要不要出現看伺服器的 tabVisible（作者開放、或這位使用者還看得到任何已發布的擴充）；讀不到就當沒有，
+// 分頁要不要出現看伺服器的 tabVisible（原卡作者開啟了工坊才是 true）；讀不到就當沒有，
 // 卡片頁跟原本一樣。分頁記在網址（?tab=workshop），可以分享，手機返回鍵回到原分頁。
 const wsPage = ref<CardWorkshopPage | null>(null);
 /**
@@ -554,7 +554,7 @@ watch(
               </template>
               <span v-else class="subtle">{{ $t("score.insufficient") }}</span>
             </a>
-            <span v-if="wsPage?.viewerIsOwner" class="chip ws-chip--on">{{ $t("workshop.badge.yours") }}</span>
+            <span v-if="wsPage?.viewerIsOwner && wsPage.tabVisible" class="chip ws-chip--on">{{ $t("workshop.badge.yours") }}</span>
             <span v-if="card.talkNum" class="subtle">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
             <span v-if="(card.heat ?? 0) > 0" class="subtle role__heat">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>
           </div>
@@ -569,8 +569,8 @@ watch(
               <ShareMenu data-tour="card-share" :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
           </div>
-          <!-- 有加入擴充才出現：開始對話會套用幾個、建議用哪一檔，旁邊直接「管理」 -->
-          <p v-if="wsCount" class="role__ws">
+          <!-- 有加入擴充、且作者開著工坊才出現：開始對話會套用幾個、建議用哪一檔，旁邊直接「管理」 -->
+          <p v-if="wsCount && wsPage?.tabVisible" class="role__ws">
             <WorkshopIcon name="layers" />
             <span>{{ wsRecTier ? $t("workshop.start.hint", { n: wsCount, tier: wsRecTier }) : $t("workshop.start.hintNoTier", { n: wsCount }) }}</span>
             <button type="button" class="role__ws-manage" @click="openManage">{{ $t("workshop.strip.manage") }}</button>

@@ -28,8 +28,15 @@ export interface WorkshopConversationView {
   selectionRevision: number;
   manifestHash: string;
   openingSource: { kind: "base" | "workshop"; workshopId?: string; workshopName?: string; openingId?: string } | null;
-  items: { workshopId: string; name: string; coverUrl: string; kinds: ("lore" | "display" | "opening")[]; residentChars: number; status: "resident" | "triggered" | "disabled" | "removed" }[];
+  items: {
+    workshopId: string; name: string; coverUrl: string; kind?: "dlc" | "lorebook"; kinds: ("lore" | "display" | "opening")[]; residentChars: number;
+    status: "resident" | "triggered" | "disabled" | "removed";
+    /** status 為 disabled 的原因；原卡作者關了工坊是 workshop_closed */
+    reason?: string;
+  }[];
   triggeredCount: number;
+  /** 原卡作者關了這張卡的工坊：清單與開場來源照留，之後的回覆不再套用，重新開啟就恢復 */
+  workshopClosed?: boolean;
 }
 /**
  * 卡片資訊面板提供給它重用的元件（含經 Teleport 開出的完整知音榜）：站內連結改開新分頁、指回主站。

@@ -70,19 +70,6 @@ describe("錯誤訊息給人看", () => {
     } finally { i18n.global.locale.value=initial; }
   });
 
-  it("第三方擴充的正規表示式與開場暫停時，存檔與送審被拒都講同一句，五種語言都有", async () => {
-    const { describeApiError } = await import("../src/lib/api");
-    const { i18n, loadLocale, LOCALE_CODES } = await import("../src/lib/i18n");
-    const initial=i18n.global.locale.value;
-    try {
-      for(const locale of LOCALE_CODES){
-        await loadLocale(locale);i18n.global.locale.value=locale as never;
-        expect(i18n.global.te("workshop.displayPaused")).toBe(true);
-        expect(describeApiError(422, "invalid_request", { reason: "third_party_display_paused", index: 0, name: "" })).toBe(i18n.global.t("workshop.displayPaused"));
-      }
-    } finally { i18n.global.locale.value=initial; }
-  });
-
   it("認得的錯誤碼各有一句人話；不認得的碼附在後面；伺服器寫給人看的句子原樣講", async () => {
     const { describeApiError } = await import("../src/lib/api");
     const { i18n } = await import("../src/lib/i18n");

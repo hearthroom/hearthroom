@@ -16,7 +16,7 @@ import { joinExtension, leaveExtension, rejoinExtension, type CardWorkshopState 
 import { loginPath } from "./login-return";
 import { useSession } from "./session";
 import { useLocalePath } from "./use-locale";
-import { displayPaused, type ExtensionSummary } from "./workshop";
+import type { ExtensionSummary } from "./workshop";
 
 export function useExtensionJoin(state: () => CardWorkshopState | null, say: (text: string, undo?: () => void) => void) {
   const session = useSession();
@@ -35,14 +35,14 @@ export function useExtensionJoin(state: () => CardWorkshopState | null, say: (te
     return tk;
   }
 
-  async function doJoin(ext: Pick<ExtensionSummary, "id" | "name" | "kinds" | "byCardAuthor">) {
+  async function doJoin(ext: Pick<ExtensionSummary, "id" | "name">) {
     const s = state();
     const tk = s && (await token());
     if (!s || !tk) return;
     busy.value = ext.id;
     try {
       await joinExtension(s, ext.id, tk);
-      say(displayPaused(ext) ? `${t("workshop.toast.added", { name: ext.name })} ${t("workshop.displayPaused")}` : t("workshop.toast.added", { name: ext.name }));
+      say(t("workshop.toast.added", { name: ext.name }));
     } catch (err) {
       if (err instanceof ApiError && err.code === "adult_content") { askingAdult.value = ext as ExtensionSummary; return; }
       say(err instanceof Error ? err.message : t("state.actionFailed"));

@@ -38,7 +38,7 @@ import { useSession } from "@/lib/session";
 import { useExtensionJoin } from "@/lib/use-extension-join";
 import { useLocalePath } from "@/lib/use-locale";
 import { useReviewer } from "@/lib/review";
-import { displayPaused, fetchWorkshop, type ExtensionDetail } from "@/lib/workshop";
+import { fetchWorkshop, type ExtensionDetail } from "@/lib/workshop";
 import { askRevokeReason, revokeWorkshop } from "@/lib/workshop-moderation";
 
 const route = useRoute();
@@ -167,8 +167,6 @@ const readmeHtml = computed(() => {
   const source = ext.value?.readme ?? "";
   return source.trim() ? displayHtml(renderReadme(source), locale.value) : "";
 });
-// 第三方擴充的介面與開場暫停：加入前先說，免得加了之後找不到
-const paused = computed(() => !!ext.value && displayPaused(ext.value));
 const ICONS = { lore: "book", regex: "ui", opening: "open" } as const;
 const includes = computed(() => {
   const c = ext.value?.contents;
@@ -267,9 +265,6 @@ const resident = computed(() => {
         <svg class="ext__card-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
       </RouterLink>
 
-      <p v-if="paused && mode !== 'removed'" class="notice ext__notice" data-ext-note="display-paused">
-        <WorkshopIcon name="info" /><span class="ws-text">{{ $t("workshop.displayPaused") }}</span>
-      </p>
       <p v-if="mode === 'hidden'" class="notice ext__notice" role="status" data-ext-note="hidden">
         <WorkshopIcon name="lock" /><span class="ws-text">{{ $t("workshop.detail.hidden.note") }}</span>
       </p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONSTANT_CHAR_LIMIT, constantChars, firstDemoted, moveItem, publishChecklist, publishState, tierLabel, updateNoteValid, usageState, type SelectionItem, type WorkshopDraft } from "../src/lib/workshop";
+import { CONSTANT_CHAR_LIMIT, constantChars, firstDemoted, moveItem, publishChecklist, publishState, tierLabel, usageState, type SelectionItem, type WorkshopDraft } from "../src/lib/workshop";
 
 const entry = (content: string, isEnabled = true, isConstant = true) => ({ content, isEnabled, isConstant, name: "", keywords: [], secondaryKeywords: [] });
 
@@ -41,45 +41,35 @@ it("firstDemoted is the top-most enabled, still-available extension that has res
 });
 
 describe("publishState", () => {
-  it("maps every review status", () => {
-    expect(publishState("draft", "visible")).toBe("draft");
-    expect(publishState("pending", "visible")).toBe("review");
-    expect(publishState("rejected", "visible")).toBe("rejected");
-    expect(publishState("live", "visible")).toBe("live");
-    expect(publishState("live_changed", "visible")).toBe("livechg");
-    expect(publishState("live_pending", "visible")).toBe("liveup");
-    expect(publishState("live_rejected", "visible")).toBe("liverej");
-  });
-  it("owner hide wins; a return shows until the maker resubmits", () => {
-    expect(publishState("live", "hidden")).toBe("hidden");
-    expect(publishState("live_changed", "returned")).toBe("returned");
-    expect(publishState("live_pending", "returned")).toBe("liveup");
+  it("has three states: draft, live, live with unpublished edits", () => {
+    expect(publishState("draft")).toBe("draft");
+    expect(publishState("live")).toBe("live");
+    expect(publishState("live_changed")).toBe("livechg");
   });
 });
 
 describe("publishChecklist", () => {
   const draft = (over: Partial<WorkshopDraft> = {}) => ({
-    name: "雪夜篇", summary: "冬天的支線", coverUrl: "https://x/c.png", rating: "G",
-    worldbook: [entry("燈塔")], rules: { version: 1 as const, rules: [], statusbar: "", lowered: false },
+    kind: "dlc" as WorkshopDraft["kind"], name: "雪夜篇", summary: "冬天的支線", rating: "G",
+    worldbook: [entry("燈塔")], rules: { version: 1 as const, rules: [], statusbar: "", lowered: false } as unknown as WorkshopDraft["rules"],
     opening: { mode: "greeting" as const, welcome: "", alternates: [], prologue: [], openingPage: "" },
-    published: null, updateNote: "", ...over,
+    ...over,
   });
   const failed = (d: ReturnType<typeof draft>) => publishChecklist(d).filter((i) => !i.ok).map((i) => i.key);
-  it("passes a complete first version without an update note", () => {
+  it("passes without a cover or an update note (both optional)", () => {
     expect(failed(draft())).toEqual([]);
+    expect(publishChecklist(draft()).map((i) => i.key)).toEqual(["basics", "rating", "content", "constant"]);
   });
-  it("blocks missing cover, rating, content and over-limit resident text", () => {
-    expect(failed(draft({ coverUrl: "", rating: null, worldbook: [] }))).toEqual(["cover", "rating", "content"]);
+  it("blocks missing rating, content and over-limit resident text", () => {
+    expect(failed(draft({ rating: null, worldbook: [] }))).toEqual(["rating", "content"]);
     expect(failed(draft({ worldbook: [entry("一".repeat(CONSTANT_CHAR_LIMIT + 1))] }))).toEqual(["constant"]);
   });
-  it("needs an update note once published", () => {
-    expect(failed(draft({ published: { version: 3 }, updateNote: "短" }))).toEqual(["note"]);
-    expect(failed(draft({ published: { version: 3 }, updateNote: "新增三條世界書條目，修正手機換行" }))).toEqual([]);
+  it("an author DLC counts regex or an opening as content", () => {
+    expect(failed(draft({ worldbook: [], opening: { mode: "greeting", welcome: "雪停了", alternates: [], prologue: [], openingPage: "" } }))).toEqual([]);
   });
-});
-
-it("updateNoteValid needs 10 visible characters and at most 200", () => {
-  expect(updateNoteValid("  一二三四五 六七八九  ")).toBe(false);
-  expect(updateNoteValid("一二三四五六七八九十")).toBe(true);
-  expect(updateNoteValid("一".repeat(201))).toBe(false);
+  it("a player extension counts only lorebook entries, even if old regex or openings are still stored", () => {
+    const opening = { mode: "greeting" as const, welcome: "雪停了", alternates: [], prologue: [], openingPage: "" };
+    expect(failed(draft({ kind: "lorebook", worldbook: [], opening }))).toEqual(["content"]);
+    expect(failed(draft({ kind: "lorebook" }))).toEqual([]);
+  });
 });

@@ -1,15 +1,16 @@
 <script setup lang="ts">
-/** 擴充帶了哪幾類內容：世界書、介面（正規表示式）、開場。比簡介更快看出「它給我什麼」。 */
+/** 作者 DLC 帶了哪幾類內容：世界書、正則、開場。比簡介更快看出「它給我什麼」。線上的 "display" 就是正則。 */
 import WorkshopIcon from "./WorkshopIcon.vue";
 import type { WorkshopKind } from "@/lib/workshop";
 
 defineProps<{ kinds: WorkshopKind[] }>();
 const ICON = { lore: "book", display: "ui", opening: "open" } as const;
+const LABEL = { lore: "workshop.kind.lore", display: "workshop.kind.regex", opening: "workshop.kind.opening" } as const;
 </script>
 
 <template>
   <ul class="kind-chips">
-    <li v-for="k in kinds" :key="k" class="chip kind-chips__chip"><WorkshopIcon :name="ICON[k]" />{{ $t(`workshop.kind.${k}`) }}</li>
+    <li v-for="k in kinds" :key="k" class="chip kind-chips__chip"><WorkshopIcon :name="ICON[k]" />{{ $t(LABEL[k]) }}</li>
   </ul>
 </template>
 

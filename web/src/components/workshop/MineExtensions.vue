@@ -1,25 +1,22 @@
 <script setup lang="ts">
 /**
- * 「我的卡片」›擴充分頁（ui.md §3.6、§3.8 製作者端、§4.5）。
+ * 「我的卡片」›擴充分頁（docs studio/tasks/2026-11-15-workshop-v2-dlc-and-lorebook/ui.md §3.5）。
  *
- *   右上「建立擴充」（這一屏的主行動）→ 選卡彈層；列：橫圖、名稱、為《卡》・版本・人數、狀態 chip、「編輯擴充」。
+ *   右上「建立擴充」（這一屏的主行動）→ 選卡彈層；列：橫圖、名稱、為《卡》・版本・人數、類型 chip＋狀態 chip、「編輯」。
  *
- * 審核意見與原作者的理由是關鍵結果，所以常駐在列上（不只在通知或 toast 裡），直到狀態改變。
- * 被原作者退回／隱藏、還沒申訴時多一顆「申訴」；送出後換成「申訴中」chip，不能重複送。
+ * 狀態只有草稿｜已發布。原卡作者關了工坊、或原作者隱藏了這個玩家擴充，是另外的標記：列上一個 chip 加一行說明，
+ * 不是處分、沒有申訴，所以沒有動作。
  * 這個元件在「卡片」分頁時也掛著（v-show），好讓分頁標籤上的數字不必另打一次請求。
  */
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import ExtensionCover from "./ExtensionCover.vue";
-import UndoToast from "./UndoToast.vue";
 import CardPickerDialog from "./CardPickerDialog.vue";
-import { ApiError } from "@/lib/api";
-import { confirmForm } from "@/lib/confirm";
 import { compact } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { appealWorkshop, fetchMyWorkshops, publishState, type MineItem } from "@/lib/workshop";
+import { fetchMyWorkshops, type MineItem } from "@/lib/workshop";
 
 const emit = defineEmits<{ count: [number] }>();
 const { t } = useI18n();
@@ -29,10 +26,7 @@ const { lp } = useLocalePath();
 const items = ref<MineItem[]>([]);
 const loading = ref(true);
 const failed = ref(false);
-const actionError = ref("");
-const busy = ref<string | null>(null);
 const picking = ref(false);
-const toast = ref<InstanceType<typeof UndoToast> | null>(null);
 
 let seq = 0;
 async function load() {
@@ -55,56 +49,22 @@ async function load() {
 // 「我的卡片」是 optimisticAuth：身分可能還在背景確認，等到有人再讀，不然重新整理會先看到一則假的「登入已失效」
 watch(() => session.me?.accountNumId, (id) => { if (id) void load(); }, { immediate: true });
 
-type Chip = { key: string; tone: "" | "on" | "ok" | "warn" | "bad" };
-/**
- * 九種發布狀態收成列上的六種 chip（§4.5）。新版審核中（live_pending）寫「審核中」：製作者此刻在等的是審核結果；
- * 已發布有修改（live_changed）還是「已發布」；新版未通過（live_rejected）寫「審核未通過」，公開版照常（意見常駐在下面）。
- */
-function chip(item: MineItem): Chip {
-  switch (publishState(item.status, item.ownerState)) {
-    case "draft": return { key: "workshop.status.draft", tone: "" };
-    case "review": case "liveup": return { key: "workshop.status.inReview", tone: "warn" };
-    case "rejected": case "liverej": return { key: "workshop.status.rejected", tone: "bad" };
-    case "live": case "livechg": return { key: "workshop.status.published", tone: "ok" };
-    case "returned": return { key: "workshop.status.returned", tone: "bad" };
-    case "hidden": return { key: "workshop.status.hidden", tone: "warn" };
-  }
-}
-// 理由照資料畫，不照 chip：新版未通過的列 chip 是「審核未通過」，但被退回的列也可能同時帶著舊的審核意見
-const rejectNote = (item: MineItem) => ((item.status === "rejected" || item.status === "live_rejected") && item.rejectNote ? item.rejectNote : "");
-const ownerReason = (item: MineItem) => (item.ownerState !== "visible" && item.ownerReason ? item.ownerReason : "");
-const canAppeal = (item: MineItem) => item.ownerState !== "visible" && !item.appeal;
+const isDlc = (item: MineItem) => item.kind === "dlc";
+const published = (item: MineItem) => item.status !== "draft";
+/** 原卡作者關了工坊：只在已發布的列上標（草稿本來就沒有在套用） */
+const closedNote = (item: MineItem) => (item.workshopClosed && published(item)
+  ? isDlc(item)
+    ? { chip: "workshop.status.ownWorkshopClosed", line: "workshop.mine.row.ownWorkshopClosed" }
+    : { chip: "workshop.status.cardWorkshopClosed", line: "workshop.mine.row.cardWorkshopClosed" }
+  : null);
+const hiddenByOwner = (item: MineItem) => !isDlc(item) && item.ownerState === "hidden";
 const meta = (item: MineItem) => item.version > 0
   ? t("workshop.mine.row.meta", { card: item.card.name, ver: `v${item.version}`, count: compact(item.joinCount) })
   : t("workshop.mine.row.metaDraft", { card: item.card.name });
-const displayName = (item: MineItem) => item.name.trim() || t("workshop.mine.row.untitled");
+const displayName = (item: MineItem) => item.name.trim() || t(isDlc(item) ? "workshop.mine.row.untitledDlc" : "workshop.mine.row.untitled");
 const editTo = (item: MineItem) => lp(`/mine/workshops/${encodeURIComponent(item.id)}/edit`);
 const hasItems = computed(() => items.value.length > 0);
 const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.value);
-
-async function appeal(item: MineItem) {
-  actionError.value = "";
-  const answer = await confirmForm({
-    title: t("workshop.appeal.title"), message: t("workshop.appeal.body"), confirmText: t("workshop.appeal.submit"),
-    focusCancel: true, phraseWrap: true,
-    field: { label: t("workshop.appeal.label"), required: true, multiline: true, maxlength: 500 },
-  });
-  if (!answer) return;
-  busy.value = item.id;
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const got = await appealWorkshop(item.id, answer.text, token);
-    item.appeal = got.appeal ?? "pending";
-    toast.value?.say(t("workshop.appeal.toast"));
-  } catch (err) {
-    // 已經申訴過（例如另一個分頁送過）：列上照實改成申訴中，不再給按鈕
-    if (err instanceof ApiError && err.code === "appeal_exists") item.appeal = "pending";
-    else actionError.value = err instanceof Error ? err.message : t("state.actionFailed");
-  } finally {
-    busy.value = null;
-  }
-}
 </script>
 
 <template>
@@ -115,8 +75,6 @@ async function appeal(item: MineItem) {
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("workshop.create") }}
       </button>
     </div>
-
-    <p v-if="actionError" class="notice notice--error" role="alert">{{ actionError }}</p>
 
     <div v-if="loading && !hasItems" class="mine-ws__list" aria-hidden="true">
       <div v-for="i in 3" :key="i" class="ghost mine-ws__ghost" />
@@ -140,21 +98,21 @@ async function appeal(item: MineItem) {
           <h3 class="mine-ws__name">{{ displayName(item) }}</h3>
           <p class="subtle mine-ws__meta">{{ meta(item) }}</p>
           <p class="mine-ws__chips">
-            <span class="chip" :class="chip(item).tone ? `ws-chip--${chip(item).tone}` : ''" data-ws-status>{{ $t(chip(item).key) }}</span>
-            <span v-if="item.appeal === 'pending'" class="chip ws-chip--warn" data-ws-appealing>{{ $t("workshop.status.appeal") }}</span>
+            <span class="chip ws-chip--on" data-ws-kind>{{ isDlc(item) ? $t("workshop.layer.dlc") : $t("workshop.layer.extChip") }}</span>
+            <span class="chip" :class="{ 'ws-chip--ok': published(item) }" data-ws-status>{{ published(item) ? $t("workshop.status.published") : $t("workshop.status.draft") }}</span>
+            <span v-if="closedNote(item)" class="chip ws-chip--warn" data-ws-closed>{{ $t(closedNote(item)!.chip) }}</span>
+            <span v-if="hiddenByOwner(item)" class="chip ws-chip--warn" data-ws-hidden>{{ $t("workshop.status.hiddenByOwner") }}</span>
           </p>
-          <p v-if="rejectNote(item)" class="ws-reason" data-ws-reason>{{ $t("workshop.mine.row.rejectNote", { note: rejectNote(item) }) }}</p>
-          <p v-if="ownerReason(item)" class="ws-reason" data-ws-reason>{{ $t("workshop.publish.ownerReason", { reason: ownerReason(item) }) }}</p>
+          <p v-if="closedNote(item)" class="subtle ws-text mine-ws__note" data-ws-closed-note>{{ $t(closedNote(item)!.line) }}</p>
+          <p v-if="hiddenByOwner(item)" class="subtle ws-text mine-ws__note" data-ws-hidden-note>{{ $t("workshop.mine.row.hiddenByOwner") }}</p>
         </div>
         <div class="mine-ws__actions">
           <RouterLink :to="editTo(item)" class="btn btn--sm">{{ $t("workshop.mine.edit") }}</RouterLink>
-          <button v-if="canAppeal(item)" type="button" class="btn btn--sm btn--ghost" data-ws-appeal :disabled="busy === item.id" @click="appeal(item)">{{ $t("workshop.mine.appeal") }}</button>
         </div>
       </li>
     </ul>
 
     <CardPickerDialog v-if="picking" @close="picking = false" />
-    <UndoToast ref="toast" />
   </div>
 </template>
 
@@ -172,6 +130,7 @@ async function appeal(item: MineItem) {
 .mine-ws__name { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mine-ws__meta { margin: 0; overflow-wrap: anywhere; }
 .mine-ws__chips { display: flex; flex-wrap: wrap; gap: var(--s-1); margin: 0; }
+.mine-ws__note { margin: 0; line-height: 1.5; }
 .mine-ws__actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-2); }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-3); justify-items: center; }
 .empty__title { margin: 0; font-size: 16px; font-weight: 600; }

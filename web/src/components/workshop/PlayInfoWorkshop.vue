@@ -3,7 +3,8 @@
  * 對話頁資訊面板的「擴充」分頁（ui.md §3.5）：這場對話用了哪些擴充，唯讀。
  *
  * - 開場來自擴充時頂部一句；常駐因為上下文放不下而改成關鍵詞觸發時一條警示（舞台的資訊鍵上同時有小圓點）。
- * - 清單照這場對話定格的順序；每列標使用中／改為關鍵詞觸發／已關閉／已下架。
+ * - 清單照這場對話定格的順序；每列標類型（作者 DLC／玩家擴充）與使用中／改為關鍵詞觸發／已關閉／已下架。
+ * - 原卡作者關了工坊：頂端一句說明，各列淡掉標「暫停」；不推播、不刪加入紀錄，重新開啟就恢復（ui.md §3.3）。
  * - 調整只影響新對話，所以面板裡不能改；「到工坊管理」開新分頁（面板裡不放會換掉這一頁的連結，換頁會卸載沙盒）。
  */
 import { computed } from "vue";
@@ -24,25 +25,34 @@ const fmt = (n: number) => new Intl.NumberFormat(locale.value).format(n);
 // 已下架那一列的 chip 只寫「已下架」，「之後的回覆不再套用」放在名稱下面（整句放進 chip 會被截掉）
 const STATUS = { resident: "workshop.panel.row.inUse", triggered: "workshop.panel.row.demoted", disabled: "workshop.panel.row.off", removed: "workshop.manage.row.removed" } as const;
 const CHIP = { resident: "", triggered: "ws-chip--warn", disabled: "", removed: "ws-chip--bad" } as const;
+type Item = WorkshopConversationView["items"][number];
+const closed = computed(() => !!props.view.workshopClosed);
+const paused = (item: Item) => closed.value && item.status !== "removed";
+const layer = (item: Item) => (item.kind === "dlc" ? t("workshop.layer.dlc") : item.kind === "lorebook" ? t("workshop.layer.extChip") : "");
 </script>
 
 <template>
   <div class="pip-ws">
     <p v-if="opening" class="notice pip-ws__opening ws-text"><WorkshopIcon name="open" />{{ t("workshop.panel.openingFrom", { name: opening }) }}</p>
-    <p v-if="view.triggeredCount > 0" class="notice pip-ws__warn ws-text" role="status"><WorkshopIcon name="warn" />{{ t("workshop.panel.demoted", { n: view.triggeredCount }) }}</p>
+    <p v-if="closed" class="notice pip-ws__closed ws-text" data-pip-closed><WorkshopIcon name="lock" />{{ t("workshop.panel.workshopClosed") }}</p>
+    <p v-else-if="view.triggeredCount > 0" class="notice pip-ws__warn ws-text" role="status"><WorkshopIcon name="warn" />{{ t("workshop.panel.demoted", { n: view.triggeredCount }) }}</p>
     <ol class="pip-ws__list">
-      <li v-for="item in view.items" :key="item.workshopId" class="pip-ws__row" :class="{ 'pip-ws__row--off': item.status === 'disabled' || item.status === 'removed' }">
+      <li v-for="item in view.items" :key="item.workshopId" class="pip-ws__row" :class="{ 'pip-ws__row--off': item.status === 'disabled' || item.status === 'removed' || paused(item) }">
         <ExtensionCover class="pip-ws__ico" :src="item.coverUrl" :name="item.name" square />
         <span class="pip-ws__text">
           <strong>{{ item.name }}</strong>
           <span v-if="item.status === 'removed'" class="subtle ws-text">{{ t("workshop.panel.row.removed") }}</span>
-          <span v-else-if="item.residentChars" class="subtle">{{ t("workshop.manage.row.resident", { chars: fmt(item.residentChars) }) }}</span>
+          <span v-else-if="layer(item) || item.residentChars" class="subtle pip-ws__meta">
+            <span v-if="layer(item)">{{ layer(item) }}</span>
+            <span v-if="item.residentChars">{{ t("workshop.manage.row.resident", { chars: fmt(item.residentChars) }) }}</span>
+          </span>
         </span>
-        <span class="chip pip-ws__chip" :class="CHIP[item.status]">{{ t(STATUS[item.status]) }}</span>
+        <span v-if="paused(item)" class="chip pip-ws__chip" data-pip-paused>{{ t("workshop.panel.row.paused") }}</span>
+        <span v-else class="chip pip-ws__chip" :class="CHIP[item.status]">{{ t(STATUS[item.status]) }}</span>
       </li>
     </ol>
     <p class="subtle ws-text">{{ t("workshop.panel.readonly") }}</p>
-    <a class="btn pip-ws__manage" :href="manageUrl" target="_blank" rel="noopener noreferrer">{{ t("workshop.panel.manageLink") }}<span aria-hidden="true">↗</span><span class="sr-only">（{{ t("play.info.newTab") }}）</span></a>
+    <a v-if="!closed" class="btn pip-ws__manage" :href="manageUrl" target="_blank" rel="noopener noreferrer">{{ t("workshop.panel.manageLink") }}<span aria-hidden="true">↗</span><span class="sr-only">（{{ t("play.info.newTab") }}）</span></a>
   </div>
 </template>
 
@@ -52,6 +62,7 @@ const CHIP = { resident: "", triggered: "ws-chip--warn", disabled: "", removed: 
 .pip-ws .notice { display: flex; align-items: flex-start; gap: var(--s-2); line-height: 1.6; }
 .pip-ws .notice svg { width: 16px; height: 16px; flex: none; margin-top: 3px; }
 .pip-ws__opening { background: var(--accent-tint); color: var(--text); }
+.pip-ws__meta > span + span::before { content: " · "; }
 .pip-ws__warn { background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); color: var(--text); }
 .pip-ws__list { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
 .pip-ws__row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }

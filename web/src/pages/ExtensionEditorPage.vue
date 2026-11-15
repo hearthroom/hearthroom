@@ -4,7 +4,7 @@
  *
  * - /mine/workshops/new?card=<卡號>：替那張卡建立一個空的擴充，成功就換到它的編輯網址。
  *   建立沒有冪等鍵，所以同一時間只送一次，失敗只從按鈕重試，不自動重送（重送可能多出一個空擴充）。
- *   原作者暫停了新的擴充（workshop_closed）時說明並給回卡片頁。
+ *   原卡作者沒開工坊（workshop_closed）時說明並給回卡片頁；是自己的卡就給「前往設定」。
  * - /mine/workshops/:id/edit：交給 WorkshopEditor。以 workshopId 當 key：兩條路由用同一個頁面元件，
  *   從 new 換到 edit 時 Vue 可能沿用這個實例，編輯器得是全新的一個（離開確認、載入都跟著它）。
  */
@@ -30,6 +30,8 @@ const phase = ref<"creating" | "closed" | "error">("creating");
 const error = ref("");
 /** 回卡片頁用的卡號：查到才有，沒查到就用網址上帶來的 */
 const cardNum = ref("");
+/** 關閉的是自己的卡：說明與按鈕換成「前往設定」 */
+const ownCard = ref(false);
 let creating = false;
 
 /** 卡號 → 原卡的 roleId（跟卡片頁打工坊端點用的同一個）。先問「能建立擴充的卡」，順便知道有沒有暫停。 */
@@ -39,6 +41,7 @@ async function resolveRole(card: string, token: string): Promise<{ roleId: strin
     const hit = items.find((i) => i.cardId === card || String(i.num) === card);
     if (hit) {
       cardNum.value = String(hit.num || hit.cardId);
+      ownCard.value = !!hit.viewerIsOwner;
       return { roleId: hit.roleId, closed: !hit.allowNew };
     }
   } catch { /* 清單讀不到就直接查卡 */ }
@@ -54,6 +57,7 @@ async function create() {
   phase.value = "creating";
   error.value = "";
   cardNum.value = card;
+  ownCard.value = false;
   try {
     if (!card) throw new Error(t("state.notFound"));
     const token = await session.accessToken();
@@ -88,9 +92,16 @@ watch([workshopId, cardParam], () => { if (!workshopId.value) void create(); }, 
         <div class="ghost" style="height: 40px" /><div class="ghost" style="height: 200px" />
       </div>
       <div v-else-if="phase === 'closed'" class="panel ws-page__closed" data-closed>
-        <h2 class="ws-text">{{ $t("workshop.mine.pick.closed") }}</h2>
-        <p class="muted ws-text">{{ $t("workshop.paused.closed") }}</p>
-        <RouterLink class="btn" :to="lp(`/cards/${encodeURIComponent(cardNum)}`)">{{ $t("workshop.editor.backToCard") }}</RouterLink>
+        <template v-if="ownCard">
+          <h2 class="ws-text">{{ $t("workshop.mine.pick.ownClosed") }}</h2>
+          <p class="muted ws-text">{{ $t("workshop.paused.ownClosed") }}</p>
+          <RouterLink class="btn" :to="lp(`/cards/${encodeURIComponent(cardNum)}/edit`)" data-go-settings>{{ $t("workshop.action.goSettings") }}</RouterLink>
+        </template>
+        <template v-else>
+          <h2 class="ws-text">{{ $t("workshop.mine.pick.closed") }}</h2>
+          <p class="muted ws-text">{{ $t("workshop.paused.closed") }}</p>
+          <RouterLink class="btn" :to="lp(`/cards/${encodeURIComponent(cardNum)}`)">{{ $t("workshop.editor.backToCard") }}</RouterLink>
+        </template>
       </div>
       <div v-else class="notice notice--error ws-page__error" role="alert">
         <span class="ws-text">{{ error }}</span>

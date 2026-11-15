@@ -1,9 +1,12 @@
 /**
  * 卡片工坊（擴充）的資料層：型別、請求與幾個畫面要用的純函式。
  *
- * 端點形狀照 docs studio/tasks/2026-11-13-card-workshop/interface-web.md（2026-11-14 與 provider-api、
- * hearthroom-worker、stage 議定）。本站（/v1，Worker）管列表、詳情、版本、評論、我的擴充、送審與通知；
- * Provider（/open/v1/workshop）管加入與排序、字數與建議檔位、草稿、原作者開關與打回／隱藏、申訴。
+ * 端點形狀照 docs studio/tasks/2026-11-13-card-workshop/interface-web.md（2026-11-14 議定），v2（2026-11-15）改成
+ * 兩層：原卡作者的「作者 DLC」（世界書、正則、開場）與任何玩家的「玩家擴充」（只有世界書），都是發布即上架，
+ * 沒有審核、申訴、分潤；契約見 server provider/docs/workshop-v2-api.md「v2 client DTO contract」。
+ * 本站（/v1，Worker）管列表、詳情、版本、評論、我的擴充、發布／下架／放棄修改；
+ * Provider（/open/v1/workshop）管加入與排序、字數與建議檔位、草稿、原作者開關與隱藏。
+ * 哪一層（kind）由伺服器依原卡作者身分判定，網頁只照著畫，從不送出。
  *
  * 網頁不自己判斷「分頁要不要出現」「這位玩家能不能加入」「建議用哪一檔」：這些都照伺服器回的欄位畫
  * （tabVisible、availability、usage-summary）。網頁唯一自己算的是編輯頁的常駐字數條，送審仍以伺服器為準。
@@ -15,7 +18,10 @@ import { currentSurface } from "./track";
 import type { WorldbookEntryDraft } from "./role-draft";
 import type { RegexRuleSet } from "./regex-rules";
 
+/** 內容類型；"display" 是正則（介面規則），字面沿用線上契約，畫面寫「正則」 */
 export type WorkshopKind = "lore" | "display" | "opening";
+/** 兩層：作者 DLC／玩家擴充 */
+export type ExtensionLayer = "dlc" | "lorebook";
 export const WORKSHOP_KINDS: WorkshopKind[] = ["lore", "display", "opening"];
 
 export interface ExtensionAuthor { handle: string | null; name: string; avatar?: string }
@@ -25,9 +31,10 @@ export interface ExtensionSummary {
   coverUrl: string;
   author: ExtensionAuthor;
   joinCount: number;
-  /** 擴充作者就是原卡作者；舊回應沒有這個欄位 */
-  byCardAuthor?: boolean;
-  /** 已核准的公開版號 vN；從未上架是 0 */
+  kind: ExtensionLayer;
+  /** 世界書條數（玩家擴充格寫「世界書 N 條」）；舊回應沒有就只寫「世界書」 */
+  loreCount?: number;
+  /** 公開版號 vN；從未上架是 0 */
   version: number;
   updatedAt: number;
   kinds: WorkshopKind[];
@@ -35,13 +42,10 @@ export interface ExtensionSummary {
   /** 分級高於原卡：加入前要先確認年齡 */
   adult: boolean;
   joined?: boolean;
-  /** 原作者看自己的卡時才有 */
+  /** 原作者看自己的卡時才有：玩家擴充是否被他隱藏 */
   ownerState?: OwnerState;
-  ownerReason?: string | null;
-  appeal?: AppealState;
 }
-export type OwnerState = "visible" | "returned" | "hidden";
-export type AppealState = null | "pending" | "upheld" | "restored";
+export type OwnerState = "visible" | "hidden";
 export type WorkshopSort = "hot" | "new";
 
 export interface CardWorkshopPage {
@@ -61,25 +65,26 @@ export interface ExtensionDetail extends ExtensionSummary {
 }
 export interface ExtensionVersion { version: number; publishedAt: number | null; note: string }
 
-export type MineStatus = "draft" | "pending" | "rejected" | "live" | "live_changed" | "live_pending" | "live_rejected";
+export type MineStatus = "draft" | "live" | "live_changed";
 export interface MineItem extends ExtensionSummary {
   card: { id: string; num: number; name: string; roleId: string };
   status: MineStatus;
-  rejectNote: string | null;
   ownerState: OwnerState;
-  ownerReason: string | null;
-  appeal: AppealState;
+  /** 原卡作者關了這張卡的工坊：已發布的也暫停套用 */
+  workshopClosed: boolean;
 }
 export interface WorkshopCardChoice {
   cardId: string; num: number; name: string; avatarUrl?: string;
   author: { name: string }; roleId: string; allowNew: boolean;
-  /** 已登記「重新開放時通知我」；原作者不能登記自己的卡（interface-web §11） */
-  viewerInterested?: boolean; viewerIsOwner?: boolean;
+  viewerIsOwner?: boolean;
 }
 
+/** 已加入清單多一種：原卡作者關了工坊（closed），加入與開關都保留，重新開啟就恢復 */
+export type SelectionAvailability = Availability | "closed";
 export interface SelectionItem {
   workshopId: string; enabled: boolean; name: string; coverUrl: string;
-  kinds: WorkshopKind[]; residentChars: number; availability: Availability;
+  kind?: ExtensionLayer;
+  kinds: WorkshopKind[]; residentChars: number; availability: SelectionAvailability;
 }
 export interface Selection { revision: number; items: SelectionItem[] }
 
@@ -96,14 +101,17 @@ export interface UsageSummary {
   recommendationReason: string;
 }
 
+export interface OwnerPolicyCounts { dlcPublished: number; dlcDrafts: number; lorebookPublished: number; lorebookDrafts: number; joinCount: number }
 export interface OwnerPolicy {
-  allowNew: boolean; revision: number;
+  allowNew: boolean; everOpened?: boolean; revision: number;
+  counts?: OwnerPolicyCounts;
   items: ExtensionSummary[];
 }
 
 export interface WorkshopOpening { mode: "greeting" | "page"; welcome: string; alternates: string[]; prologue: string[]; openingPage: string }
 export interface WorkshopDraft {
   workshopId: string; revision: number;
+  kind: ExtensionLayer;
   card: { roleId: string; cardId: string; num: number; name: string; ownerIsMe: boolean };
   name: string; summary: string; readme: string; coverUrl: string;
   rating: string | null; ratingAnswers: Record<string, unknown> | null;
@@ -114,12 +122,9 @@ export interface WorkshopDraft {
   published: { version: number } | null;
   changedSincePublish: boolean;
 }
-export type DraftWrite = Pick<WorkshopDraft, "name" | "summary" | "readme" | "coverUrl" | "rating" | "ratingAnswers" | "worldbook" | "rules" | "opening" | "updateNote">;
+/** 玩家擴充不送 rules／opening（伺服器拒收非空的正則與開場）；作者 DLC 一律帶 */
+export type DraftWrite = Pick<WorkshopDraft, "name" | "summary" | "readme" | "coverUrl" | "rating" | "ratingAnswers" | "worldbook" | "updateNote"> & Partial<Pick<WorkshopDraft, "rules" | "opening">>;
 export interface DraftError { code: string; actual?: number; max?: number; unit?: string }
-
-/** 第三方擴充的介面（正規表示式）與開場目前暫停：不是原卡作者做的、又帶這兩類內容，畫面就說明一句 */
-export const displayPaused = (ext: Pick<ExtensionSummary, "byCardAuthor" | "kinds">): boolean =>
-  ext.byCardAuthor === false && ext.kinds.some((k) => k === "display" || k === "opening");
 
 // ---- 請求 ------------------------------------------------------------------
 
@@ -156,10 +161,17 @@ export const fetchWorkshop = (id: string, token?: string | null) => community<Ex
 export const fetchWorkshopVersions = (id: string, page = 1, token?: string | null) =>
   community<{ items: ExtensionVersion[]; hasMore: boolean }>(`/workshops/${encodeURIComponent(id)}/versions${q({ page })}`, token);
 export const fetchMyWorkshops = (token: string) => community<{ items: MineItem[] }>("/me/workshops", token);
-export const submitWorkshop = (id: string, updateNote: string, token: string) =>
-  community<{ status: MineStatus }>(`/me/workshops/${encodeURIComponent(id)}/submit`, token, "POST", { updateNote });
-export const withdrawWorkshop = (id: string, token: string) =>
-  community<{ status: MineStatus }>(`/me/workshops/${encodeURIComponent(id)}/withdraw`, token, "POST", {});
+/**
+ * 發布／下架／放棄修改：同一個使用者意圖用同一個 operationId（重試沿用），版本對不上由伺服器回 stale。
+ * 發布即上架；下架回到草稿；放棄修改回整份目前的草稿（已還原成線上版）。
+ */
+export interface PublishBody { expectedRevision: number; operationId: string }
+export const publishWorkshop = (id: string, body: PublishBody, token: string) =>
+  community<{ workshopId: string; releaseId: string; status: "published"; kind: ExtensionLayer; version: number }>(`/me/workshops/${encodeURIComponent(id)}/publish`, token, "POST", body);
+export const unpublishWorkshop = (id: string, body: PublishBody, token: string) =>
+  community<{ workshopId: string; status: "draft"; draftRevision: number }>(`/me/workshops/${encodeURIComponent(id)}/unpublish`, token, "POST", body);
+export const discardWorkshopChanges = (id: string, body: PublishBody, token: string) =>
+  community<WorkshopDraft>(`/me/workshops/${encodeURIComponent(id)}/discard-changes`, token, "POST", body);
 export const fetchWorkshopCards = (query: string, token: string) =>
   community<{ items: WorkshopCardChoice[] }>(`/me/workshop-cards${q({ q: query.trim() })}`, token);
 
@@ -175,10 +187,9 @@ export const saveContextTier = (roleId: string, context: number, token: string) 
 export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPolicy>(`/workshop/policy${q({ roleId })}`, token);
 export const savePolicy = (roleId: string, allowNew: boolean, expectedRevision: number, token: string) =>
   upstream<OwnerPolicy>("/workshop/policy/save", token, { roleId, allowNew, expectedRevision });
-export const ownerAction = (workshopId: string, action: "return" | "hide" | "restore", reason: string, token: string) =>
-  upstream<{ ownerState: OwnerState; ownerReason: string | null }>("/workshop/owner-action", token, { workshopId, action, reason });
-export const appealWorkshop = (workshopId: string, reason: string, token: string) =>
-  upstream<{ appeal: AppealState }>("/workshop/appeal", token, { workshopId, reason });
+/** 原卡作者隱藏／取消隱藏玩家擴充：沒有理由、不通知製作者、沒有申訴 */
+export const ownerAction = (workshopId: string, action: "hide" | "restore", token: string) =>
+  upstream<{ ownerState: OwnerState }>("/workshop/owner-action", token, { workshopId, action });
 export const createWorkshop = (roleId: string, token: string) => upstream<{ workshopId: string }>("/workshop/create", token, { roleId });
 export const fetchDraft = (workshopId: string, token: string) => upstream<WorkshopDraft>(`/workshop/draft${q({ workshopId })}`, token);
 export const saveDraft = (workshopId: string, expectedRevision: number, idempotencyKey: string, fields: DraftWrite, token: string) =>
@@ -223,49 +234,32 @@ export function moveItem<T>(items: readonly T[], index: number, delta: -1 | 1): 
  * 伺服器實際降幾件以它為準；管理視窗只預告最上面那一件。
  */
 export function firstDemoted(items: readonly SelectionItem[]): string | null {
-  return items.find((i) => i.enabled && i.availability !== "removed" && i.residentChars > 0)?.workshopId ?? null;
+  return items.find((i) => i.enabled && i.availability !== "removed" && i.availability !== "closed" && i.residentChars > 0)?.workshopId ?? null;
 }
 
-/** 編輯頁「發布」分區要畫哪一種狀態（ui.md §4.6 的九種，加上申訴中） */
-export type PublishState = "draft" | "review" | "rejected" | "live" | "livechg" | "liveup" | "liverej" | "returned" | "hidden";
-export function publishState(status: MineStatus, ownerState: OwnerState): PublishState {
-  if (ownerState === "hidden") return "hidden";
-  if (ownerState === "returned" && status !== "pending" && status !== "live_pending") return "returned";
-  switch (status) {
-    case "draft": return "draft";
-    case "pending": return "review";
-    case "rejected": return "rejected";
-    case "live": return "live";
-    case "live_changed": return "livechg";
-    case "live_pending": return "liveup";
-    case "live_rejected": return "liverej";
-  }
+/** 編輯頁「發布」分區的三種狀態：草稿｜已發布｜已發布但有未發布的修改 */
+export type PublishState = "draft" | "live" | "livechg";
+export function publishState(status: MineStatus): PublishState {
+  return status === "live" ? "live" : status === "live_changed" ? "livechg" : "draft";
 }
 
-/** 送審前的檢查清單（「已試玩」只是提醒，不擋送審） */
-export interface ChecklistItem { key: "basics" | "cover" | "rating" | "content" | "constant" | "note"; ok: boolean }
-export function publishChecklist(d: Pick<WorkshopDraft, "name" | "summary" | "coverUrl" | "rating" | "worldbook" | "rules" | "opening" | "published" | "updateNote">): ChecklistItem[] {
+/** 發布前的檢查清單；玩家擴充的內容只算世界書，背景圖與更新說明都選填 */
+export interface ChecklistItem { key: "basics" | "rating" | "content" | "constant"; ok: boolean }
+export function publishChecklist(d: Pick<WorkshopDraft, "kind" | "name" | "summary" | "rating" | "worldbook" | "rules" | "opening">): ChecklistItem[] {
   const hasLore = d.worldbook.some((e) => e.isEnabled !== false && (e.content ?? "").trim());
-  const hasRule = d.rules.rules.length > 0 || !!d.rules.statusbar.trim();
-  const hasOpening = d.opening.mode === "page" ? !!d.opening.openingPage.trim() : !!d.opening.welcome.trim() || d.opening.alternates.some((a) => a.trim());
-  const items: ChecklistItem[] = [
+  const dlc = d.kind === "dlc";
+  const hasRule = dlc && (d.rules?.rules?.length > 0 || !!d.rules?.statusbar?.trim());
+  const op = d.opening;
+  const hasOpening = dlc && !!op && (op.mode === "page" ? !!op.openingPage?.trim() : !!op.welcome?.trim() || (op.alternates ?? []).some((a) => a.trim()));
+  return [
     { key: "basics", ok: !!d.name.trim() && !!d.summary.trim() },
-    { key: "cover", ok: !!d.coverUrl },
     { key: "rating", ok: !!d.rating },
     { key: "content", ok: hasLore || hasRule || hasOpening },
     { key: "constant", ok: constantChars(d.worldbook) <= CONSTANT_CHAR_LIMIT },
   ];
-  if (d.published) items.push({ key: "note", ok: updateNoteValid(d.updateNote) });
-  return items;
 }
-/** 更新說明的長度（跟卡片的更新說明同一套，伺服器另驗）：至少 10 個非空白字、全文最多 200 字 */
-export const UPDATE_NOTE_MIN = 10;
+/** 更新說明選填，只限長度（跟卡片的更新說明同一個上限，伺服器另驗） */
 export const UPDATE_NOTE_MAX = 200;
-export function updateNoteValid(note: string): boolean {
-  const text = note.replace(/\r\n?/g, "\n").trim();
-  const visible = Array.from(text.replace(/\s/g, "")).length;
-  return visible >= UPDATE_NOTE_MIN && Array.from(text).length <= UPDATE_NOTE_MAX;
-}
 
 /** 擴充沒有封面時的底色（同一個名字永遠同一個顏色），跟卡片的佔位同一套色相 */
 export { hueFrom as coverHue } from "./format";

@@ -31,7 +31,10 @@ const recTier = computed(() => tierLabel(usage.value?.recommendedContextTokens))
 const curTier = computed(() => tierLabel(usage.value?.currentContextTokens));
 const canSwitch = computed(() => level.value !== "ok" && !!usage.value?.recommendedContextTier && usage.value.recommendedContextTier !== usage.value.currentContextTier);
 // 類型清單照各語言的列舉寫法（中文、日文用頓號，英文、韓文用逗號）
-const kindList = (kinds: string[]) => new Intl.ListFormat(locale.value, { style: "narrow", type: "unit" }).format(kinds.map((k) => t(`workshop.kind.${k}`)));
+const KIND_LABEL: Record<string, string> = { lore: "workshop.kind.lore", display: "workshop.kind.regex", opening: "workshop.kind.opening" };
+const kindList = (kinds: string[]) => new Intl.ListFormat(locale.value, { style: "narrow", type: "unit" }).format(kinds.filter((k) => KIND_LABEL[k]).map((k) => t(KIND_LABEL[k])));
+/** 每列先寫是哪一層（作者 DLC／玩家擴充），舊回應沒有 kind 就不寫 */
+const layerOf = (kind?: string) => (kind === "dlc" ? t("workshop.layer.dlc") : kind === "lorebook" ? t("workshop.layer.extChip") : "");
 const chars = (v: number | undefined) => new Intl.NumberFormat(locale.value).format(v ?? 0);
 
 async function run(job: (token: string) => Promise<unknown>) {
@@ -99,13 +102,13 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
           </div>
 
           <ol class="ws-manage__list">
-            <li v-for="(item, i) in items" :key="item.workshopId" class="ws-row" :class="{ 'ws-row--off': !item.enabled || item.availability === 'removed' }" :data-ws-row="item.workshopId">
+            <li v-for="(item, i) in items" :key="item.workshopId" class="ws-row" :class="{ 'ws-row--off': !item.enabled || item.availability === 'removed' || item.availability === 'closed' }" :data-ws-row="item.workshopId">
               <span class="ws-row__n">{{ i + 1 }}</span>
               <ExtensionCover class="ws-row__ico" :src="item.coverUrl" :name="item.name" square />
               <span class="ws-row__text">
                 <strong>{{ item.name }}</strong>
                 <span class="subtle">
-                  {{ kindList(item.kinds) }}
+                  <template v-if="layerOf(item.kind)">{{ layerOf(item.kind) }} · </template>{{ kindList(item.kinds) }}
                   <template v-if="item.residentChars"> · {{ $t("workshop.manage.row.resident", { chars: chars(item.residentChars) }) }}</template>
                 </span>
                 <span v-if="item.workshopId === demoted" class="chip ws-chip--warn ws-row__flag"><WorkshopIcon name="warn" />{{ $t("workshop.manage.row.demoted") }}</span>

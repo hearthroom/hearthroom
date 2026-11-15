@@ -32,12 +32,12 @@ export function cardWorkshop(roleId: string, account: string | number): CardWork
   return s;
 }
 
-/** 已加入且啟用、還能用的件數（「開始對話會套用 N 個擴充」） */
 /** 清空所有快取的清單（測試之間重置用） */
 export function forgetCardWorkshops(): void { states.clear(); }
 
+/** 已加入且啟用、還能用的件數（「開始對話會套用 N 個擴充」）；工坊關閉時不算 */
 export function activeCount(s: CardWorkshopState): number {
-  return s.selection?.items?.filter((i) => i.enabled && i.availability !== "removed").length ?? 0;
+  return s.selection?.items?.filter((i) => i.enabled && i.availability !== "removed" && i.availability !== "closed").length ?? 0;
 }
 export function isJoined(s: CardWorkshopState, workshopId: string): boolean {
   return !!s.selection?.items?.some((i) => i.workshopId === workshopId);

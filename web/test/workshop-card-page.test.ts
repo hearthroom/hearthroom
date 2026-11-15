@@ -19,7 +19,8 @@ const CARD = {
   avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" },
   talkNum: 12, followNum: 3, trending: 0, registeredAt: 1, syncedAt: 1, provider: "harbor", rating: null, status: "approved",
 };
-const EXT = { id: "w1", cardId: "abc", name: "雪夜篇", summary: "", coverUrl: "", author: { handle: null, name: "霧港" }, joinCount: 12, version: 2, updatedAt: 1763000000000, kinds: ["lore"], rating: "G", adult: false };
+const EXT = { id: "w1", cardId: "abc", name: "雪夜篇", summary: "", coverUrl: "", author: { handle: null, name: "霧港" }, joinCount: 12, version: 2, updatedAt: 1763000000000, kinds: ["lore"], kind: "lorebook", loreCount: 12, rating: "G", adult: false };
+const DLC = { ...EXT, id: "d1", name: "雨夜篇", author: { handle: null, name: "月光" }, kinds: ["lore", "display", "opening"], kind: "dlc", loreCount: 4 };
 let workshop: () => Promise<Response>;
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
@@ -80,18 +81,39 @@ it("shows 介紹｜工坊 with the count; the tab is in the URL and the intro is
   expect(root.textContent).toContain("雪夜篇");
 });
 
-it("paused by the author: the tab stays with a notice and no create button", async () => {
-  workshop = () => page({ allowNew: false });
+it("players see author DLC above player extensions; DLC lists its content kinds, extensions only the lore count", async () => {
+  workshop = () => page({ total: 2, items: [EXT, DLC] });
   const root = await mount("/cards/abc?tab=workshop");
-  expect(root.textContent).toContain("作者已暫停新的擴充");
-  expect(root.textContent).not.toContain("建立擴充");
+  const sections = [...root.querySelectorAll<HTMLElement>("[data-ws-sect]")].map((el) => el.dataset.wsSect);
+  expect(sections).toEqual(["dlc", "ext"]);
+  const dlc = root.querySelector("[data-ws-sect=dlc]")!;
+  expect(dlc.textContent).toContain("作者 DLC");
+  expect(dlc.textContent).toContain("雨夜篇");
+  expect(dlc.textContent).toContain("正則");
+  expect(dlc.textContent).toContain("開場");
+  const ext = root.querySelector("[data-ws-sect=ext]")!;
+  expect(ext.textContent).toContain("玩家擴充");
+  expect(ext.textContent).toContain("世界書 12 條");
+  expect(ext.textContent).toContain("建立擴充");
+  expect(ext.textContent).not.toContain("隱藏");
+  // 審核、暫停、通知我的殘留都不在
+  expect(root.textContent).not.toMatch(/暫停新的擴充|通知我|管理擴充/);
 });
 
-it("an open workshop with nothing yet still shows the tab with an empty state that invites the first one", async () => {
+it("no DLC yet: players see only the player extensions section, with an empty state inviting the first one", async () => {
   workshop = () => page({ total: 0, items: [] });
   const root = await mount("/cards/abc?tab=workshop");
-  expect(root.textContent).toContain("這張卡還沒有擴充");
+  expect(root.querySelector("[data-ws-sect=dlc]")).toBeNull();
+  expect(root.querySelector("[data-ws-empty=ext]")?.textContent).toContain("還沒有玩家擴充。");
   expect(root.textContent).toContain("建立第一個擴充");
+});
+
+it("the card author sees the DLC section with the only create entry, and no create button for player extensions", async () => {
+  workshop = () => page({ viewerIsOwner: true, total: 1, items: [EXT] });
+  const root = await mount("/cards/abc?tab=workshop");
+  expect(root.querySelector("[data-ws-empty=dlc]")?.textContent).toContain("建立第一個 DLC");
+  expect(root.querySelector("[data-ws-sect=ext]")?.textContent).not.toContain("建立擴充");
+  expect(root.querySelector("[data-ext-hide]")?.textContent).toBe("隱藏");
 });
 
 it("arriving on ?tab=workshop when the workshop cannot be read keeps the tab with an error and a retry that recovers", async () => {

@@ -3,11 +3,11 @@ import { createApp, h, nextTick, type App } from "vue";
 import { RouterView, createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 import { ApiError } from "../src/lib/api";
-import type { MineItem, MineStatus, OwnerState, WorkshopDraft } from "../src/lib/workshop";
+import type { MineItem, MineStatus, WorkshopDraft } from "../src/lib/workshop";
 
 const api = vi.hoisted(() => ({
-  fetchDraft: vi.fn(), saveDraft: vi.fn(), fetchMyWorkshops: vi.fn(), submitWorkshop: vi.fn(), withdrawWorkshop: vi.fn(),
-  appealWorkshop: vi.fn(), deleteWorkshop: vi.fn(), createWorkshop: vi.fn(), fetchWorkshopCards: vi.fn(),
+  fetchDraft: vi.fn(), saveDraft: vi.fn(), fetchMyWorkshops: vi.fn(), publishWorkshop: vi.fn(), unpublishWorkshop: vi.fn(),
+  discardWorkshopChanges: vi.fn(), deleteWorkshop: vi.fn(), createWorkshop: vi.fn(), fetchWorkshopCards: vi.fn(),
 }));
 const dialogs = vi.hoisted(() => ({ confirmDialog: vi.fn(), confirmForm: vi.fn() }));
 const cards = vi.hoisted(() => ({ fetchCard: vi.fn() }));
@@ -30,8 +30,8 @@ afterEach(() => { app?.unmount(); app = undefined; document.body.innerHTML = "";
 const entry = (content: string, isConstant = true) => ({ name: "雪", content, keywords: ["雪"], secondaryKeywords: [], isEnabled: true, isConstant });
 function makeDraft(over: Partial<WorkshopDraft> = {}): WorkshopDraft {
   return {
-    workshopId: "w1", revision: 3,
-    card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false },
+    workshopId: "w1", revision: 3, kind: "dlc",
+    card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: true },
     name: "雪夜篇", summary: "一場雪", readme: "", coverUrl: "https://img/c.png",
     rating: "G", ratingAnswers: null,
     worldbook: [entry("短短的常駐")],
@@ -43,9 +43,9 @@ function makeDraft(over: Partial<WorkshopDraft> = {}): WorkshopDraft {
 }
 const mineItem = (status: MineStatus, over: Partial<MineItem> = {}): MineItem => ({
   id: "w1", cardId: "100001", name: "雪夜篇", summary: "", coverUrl: "", author: { handle: null, name: "我" }, joinCount: 12,
-  version: 3, updatedAt: 0, kinds: ["lore"], rating: "G", adult: false,
+  version: 3, updatedAt: 0, kinds: ["lore"], rating: "G", adult: false, kind: "dlc",
   card: { id: "100001", num: 100001, name: "雪國", roleId: "r1" },
-  status, rejectNote: null, ownerState: "visible", ownerReason: null, appeal: null, ...over,
+  status, ownerState: "visible", workshopClosed: false, ...over,
 } as MineItem);
 
 async function mountAt(path: string) {
@@ -70,101 +70,151 @@ async function mountAt(path: string) {
 const button = (sel: string) => document.querySelector<HTMLButtonElement>(sel);
 function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) { el.value = value; el.dispatchEvent(new Event("input")); }
 
-it("blocks submission while resident lore is over the 1,500-character limit", async () => {
+it("blocks publishing while resident lore is over the 1,500-character limit", async () => {
   api.fetchDraft.mockResolvedValue(makeDraft({ worldbook: [entry("雪".repeat(1200)), entry("夜".repeat(301)), entry("不算".repeat(900), false)] }));
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
   await mountAt("/mine/workshops/w1/edit?section=world");
   expect(document.querySelector("[data-resident-count]")?.textContent).toContain("1,501 / 1,500");
   expect(document.querySelector("[data-resident]")?.classList.contains("is-over")).toBe(true);
-  expect(document.querySelector("[data-resident-over]")?.textContent).toBe(t("workshop.editor.resident.over"));
 
   await router.replace({ query: { section: "publish" } }); await settle();
   expect(document.querySelector("[data-check=constant]")?.getAttribute("data-ok")).toBe("false");
-  const submit = button("[data-pub-submit]")!;
-  expect(submit.textContent).toContain(t("workshop.publish.action.submit"));
-  expect(submit.disabled).toBe(true);
-  submit.click(); await settle();
-  expect(api.submitWorkshop).not.toHaveBeenCalled();
+  const publish = button("[data-pub-publish]")!;
+  expect(publish.textContent?.trim()).toBe(t("workshop.publish.action.publish"));
+  expect(publish.disabled).toBe(true);
+  publish.click(); await settle();
+  expect(api.publishWorkshop).not.toHaveBeenCalled();
 });
 
-// 九種狀態：主按鈕與狀態字（publishState 用真的）
-const STATES: [string, MineStatus, OwnerState, { title: string; submit?: string; withdraw?: boolean; appeal?: boolean; note?: boolean; reason?: boolean }][] = [
-  ["draft", "draft", "visible", { title: t("workshop.status.draft"), submit: "workshop.publish.action.submit" }],
-  ["review", "pending", "visible", { title: t("workshop.status.inReview"), withdraw: true }],
-  ["rejected", "rejected", "visible", { title: t("workshop.status.rejected"), submit: "workshop.publish.action.resubmit", reason: true }],
-  ["live", "live", "visible", { title: t("workshop.publish.published.title", { ver: "v3" }) }],
-  ["livechg", "live_changed", "visible", { title: t("workshop.publish.dirty.title", { ver: "v3" }), submit: "workshop.publish.action.submitUpdate", note: true }],
-  ["liveup", "live_pending", "visible", { title: t("workshop.publish.updateInReview.title", { ver: "v4" }), withdraw: true }],
-  ["liverej", "live_rejected", "visible", { title: t("workshop.publish.updateRejected.title", { ver: "v4" }), submit: "workshop.publish.action.resubmit", note: true, reason: true }],
-  ["returned", "live", "returned", { title: t("workshop.status.returned"), submit: "workshop.publish.action.resubmit", appeal: true, note: true, reason: true }],
-  ["hidden", "live", "hidden", { title: t("workshop.status.hidden"), appeal: true, reason: true }],
+// 三種狀態：主按鈕與狀態字（publishState 用真的）
+const STATES: [string, MineStatus, { publish?: string; unpublish?: boolean; discard?: boolean; note?: boolean; changed?: boolean }][] = [
+  ["draft", "draft", { publish: "workshop.publish.action.publish" }],
+  ["live", "live", { unpublish: true }],
+  ["livechg", "live_changed", { publish: "workshop.publish.action.publishUpdate", discard: true, note: true, changed: true }],
 ];
-it.each(STATES)("publish state %s: status text and actions", (state, status, owner, want) => {
-  const pubState = publishState(status, owner);
+it.each(STATES)("publish state %s: status text and actions", (state, status, want) => {
+  const pubState = publishState(status);
   expect(pubState).toBe(state);
-  const published = status === "draft" || status === "pending" || status === "rejected" ? null : { version: 3 };
-  const draft = makeDraft({ published, updateNote: "這次加了三條雪夜的條目" });
+  const published = status === "draft" ? null : { version: 3 };
+  const draft = makeDraft({ published });
   const root = document.createElement("div"); document.body.append(root);
   app = createApp({ render: () => h(PublishPane, {
-    state: pubState, draft, checklist: publishChecklist(draft), rejectNote: "介面規則超出分級", ownerReason: "跟原作設定衝突",
-    appeal: null, tried: false, busy: false,
+    state: pubState, kind: "dlc", draft, checklist: publishChecklist(draft), ownerState: "visible", workshopClosed: false, busy: false,
   }) });
   app.use(i18n); app.mount(root);
-  expect(root.querySelector("[data-pub-title]")?.textContent).toBe(want.title);
-  const submit = root.querySelector<HTMLButtonElement>("[data-pub-submit]");
-  if (want.submit) { expect(submit?.textContent).toBe(t(want.submit)); expect(submit?.disabled).toBe(false); }
-  else expect(submit).toBeNull();
-  expect(Boolean(root.querySelector("[data-pub-withdraw]"))).toBe(Boolean(want.withdraw));
-  expect(Boolean(root.querySelector("[data-pub-appeal-btn]"))).toBe(Boolean(want.appeal));
+  expect(root.querySelector("[data-pub-title]")?.textContent?.trim()).toBe(state === "draft" ? t("workshop.status.draft") : `${t("workshop.status.published")} · v3`);
+  const publish = root.querySelector<HTMLButtonElement>("[data-pub-publish]");
+  if (want.publish) { expect(publish?.textContent?.trim()).toBe(t(want.publish)); expect(publish?.disabled).toBe(false); }
+  else expect(publish).toBeNull();
+  expect(Boolean(root.querySelector("[data-pub-unpublish]"))).toBe(Boolean(want.unpublish));
+  expect(Boolean(root.querySelector("[data-pub-discard]"))).toBe(Boolean(want.discard));
   expect(Boolean(root.querySelector("#ws-update-note"))).toBe(Boolean(want.note));
-  const reasons = root.querySelector("[data-pub-reject]") ?? root.querySelector("[data-pub-owner-reason]");
-  expect(Boolean(reasons)).toBe(Boolean(want.reason));
-  // 每種狀態最多一個主按鈕
+  expect(Boolean(root.querySelector("[data-pub-changed]"))).toBe(Boolean(want.changed));
+  // 沒有審核、申訴的殘留
+  expect(root.textContent).not.toMatch(/審核|申訴|分潤/);
   expect(root.querySelectorAll(".btn--primary").length).toBeLessThanOrEqual(1);
 });
 
-it("published with changes: an update note under 10 characters cannot be submitted; a valid one saves first, then submits", async () => {
-  api.fetchDraft.mockResolvedValue(makeDraft({ published: { version: 3 }, changedSincePublish: true }));
-  // 伺服器的狀態跟著送審走：送出前是有修改，送出後是新版審核中
-  api.fetchMyWorkshops.mockImplementation(async () => ({ items: [mineItem(api.submitWorkshop.mock.calls.length ? "live_pending" : "live_changed")] }));
+it("draft: publishing saves pending edits first, then publishes with the saved revision and a fresh operation id", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft());
+  api.fetchMyWorkshops.mockImplementation(async () => ({ items: [mineItem(api.publishWorkshop.mock.calls.length ? "live" : "draft")] }));
   api.saveDraft.mockResolvedValue({ revision: 4, errors: [] });
-  api.submitWorkshop.mockResolvedValue({ status: "live_pending" });
-  await mountAt("/mine/workshops/w1/edit?section=publish");
-  const submit = () => button("[data-pub-submit]")!;
-  expect(submit().textContent).toBe(t("workshop.publish.action.submitUpdate"));
-  expect(submit().disabled).toBe(true);
-  type(document.querySelector<HTMLTextAreaElement>("#ws-update-note")!, "修了錯字");
-  await settle();
-  expect(submit().disabled).toBe(true);
-  submit().click(); await settle();
-  expect(api.submitWorkshop).not.toHaveBeenCalled();
-
-  type(document.querySelector<HTMLTextAreaElement>("#ws-update-note")!, "新增三條雪夜的世界書條目");
-  await settle();
-  expect(submit().disabled).toBe(false);
-  submit().click(); await settle();
+  api.publishWorkshop.mockResolvedValue({ workshopId: "w1", releaseId: "rel1", status: "published", kind: "dlc", version: 1 });
+  await mountAt("/mine/workshops/w1/edit?section=basic");
+  type(document.querySelector<HTMLInputElement>("#ws-name")!, "雪夜篇・改");
+  await router.replace({ query: { section: "publish" } }); await settle();
+  button("[data-pub-publish]")!.click(); await settle();
   expect(api.saveDraft).toHaveBeenCalledTimes(1);
-  expect(api.saveDraft.mock.calls[0][1]).toBe(3);
-  expect(api.saveDraft.mock.calls[0][3].updateNote).toBe("新增三條雪夜的世界書條目");
-  expect(api.submitWorkshop).toHaveBeenCalledWith("w1", "新增三條雪夜的世界書條目", "tok");
-  expect(document.querySelector("[data-pub-title]")?.textContent).toBe(t("workshop.publish.updateInReview.title", { ver: "v4" }));
+  expect(api.publishWorkshop).toHaveBeenCalledTimes(1);
+  const [id, body] = api.publishWorkshop.mock.calls[0];
+  expect(id).toBe("w1");
+  expect(body.expectedRevision).toBe(4);
+  expect(typeof body.operationId).toBe("string");
+  expect(document.querySelector("[data-pub-title]")?.textContent?.trim()).toBe(`${t("workshop.status.published")} · v1`);
+  expect(button("[data-pub-unpublish]")).not.toBeNull();
 });
 
-it("hidden by the card author: no submit button, the reason stays visible, and an appeal replaces the appeal button with a pending chip", async () => {
-  api.fetchDraft.mockResolvedValue(makeDraft({ published: { version: 3 } }));
-  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("live", { ownerState: "hidden", ownerReason: "跟原作設定衝突" })] });
-  dialogs.confirmForm.mockResolvedValue({ text: "設定都有出處" });
-  api.appealWorkshop.mockResolvedValue({ appeal: "pending" });
+it("a failed publish retried for the same draft revision reuses the operation id", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft());
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
+  api.publishWorkshop.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce({ workshopId: "w1", releaseId: "rel1", status: "published", kind: "dlc", version: 1 });
   await mountAt("/mine/workshops/w1/edit?section=publish");
-  expect(document.querySelector("[data-pub-title]")?.textContent).toBe(t("workshop.status.hidden"));
-  expect(button("[data-pub-submit]")).toBeNull();
-  expect(document.querySelector("[data-pub-owner-reason]")?.textContent).toBe(t("workshop.publish.ownerReason", { reason: "跟原作設定衝突" }));
-  button("[data-pub-appeal-btn]")!.click(); await settle();
-  expect(dialogs.confirmForm.mock.calls[0][0].field.required).toBe(true);
-  expect(api.appealWorkshop).toHaveBeenCalledWith("w1", "設定都有出處", "tok");
-  expect(button("[data-pub-appeal-btn]")).toBeNull();
-  expect(document.querySelector("[data-pub-appeal]")?.textContent).toBe(t("workshop.status.appeal"));
-  expect(document.body.textContent).toContain(t("workshop.publish.appeal.pending"));
+  button("[data-pub-publish]")!.click(); await settle();
+  expect(document.querySelector("[data-error]")?.textContent).toBe("network");
+  button("[data-pub-publish]")!.click(); await settle();
+  expect(api.publishWorkshop).toHaveBeenCalledTimes(2);
+  expect(api.publishWorkshop.mock.calls[1][1].operationId).toBe(api.publishWorkshop.mock.calls[0][1].operationId);
+});
+
+it("published: unpublish asks first and moves back to draft", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ published: { version: 3 } }));
+  api.fetchMyWorkshops.mockImplementation(async () => ({ items: [mineItem(api.unpublishWorkshop.mock.calls.length ? "draft" : "live")] }));
+  api.unpublishWorkshop.mockResolvedValue({ workshopId: "w1", status: "draft", draftRevision: 4 });
+  dialogs.confirmDialog.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  await mountAt("/mine/workshops/w1/edit?section=publish");
+  button("[data-pub-unpublish]")!.click(); await settle();
+  expect(api.unpublishWorkshop).not.toHaveBeenCalled();
+  expect(dialogs.confirmDialog.mock.calls[0][0].message).toBe(t("workshop.unpublish.body"));
+  button("[data-pub-unpublish]")!.click(); await settle();
+  expect(api.unpublishWorkshop).toHaveBeenCalledWith("w1", expect.objectContaining({ expectedRevision: 3 }), "tok");
+  expect(document.querySelector("[data-pub-title]")?.textContent?.trim()).toBe(t("workshop.status.draft"));
+});
+
+it("published with edits: the update note is optional, and discard restores the published draft", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ published: { version: 3 }, changedSincePublish: true, name: "雪夜篇改" }));
+  api.fetchMyWorkshops.mockImplementation(async () => ({ items: [mineItem(api.discardWorkshopChanges.mock.calls.length ? "live" : "live_changed")] }));
+  api.discardWorkshopChanges.mockResolvedValue(makeDraft({ published: { version: 3 }, revision: 5, name: "雪夜篇" }));
+  dialogs.confirmDialog.mockResolvedValue(true);
+  await mountAt("/mine/workshops/w1/edit?section=publish");
+  expect(button("[data-pub-publish]")?.textContent?.trim()).toBe(t("workshop.publish.action.publishUpdate"));
+  expect(button("[data-pub-publish]")!.disabled).toBe(false);
+  button("[data-pub-discard]")!.click(); await settle();
+  expect(api.discardWorkshopChanges).toHaveBeenCalledWith("w1", expect.objectContaining({ expectedRevision: 3 }), "tok");
+  expect(button("[data-pub-unpublish]")).not.toBeNull();
+  await router.replace({ query: { section: "basic" } }); await settle();
+  expect(document.querySelector<HTMLInputElement>("#ws-name")!.value).toBe("雪夜篇");
+});
+
+it("player extension: only basics, lorebook and publish; saving never sends regex or openings", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
+  api.saveDraft.mockResolvedValue({ revision: 4, errors: [] });
+  await mountAt("/mine/workshops/w1/edit?section=regex");
+  const tabs = [...document.querySelectorAll<HTMLElement>("[data-section-tab]")].map((el) => el.dataset.sectionTab);
+  expect(tabs).toEqual(["basic", "world", "publish"]);
+  // 舊連結指到正則：落回基本資料，不畫正則與開局
+  expect(document.querySelector("[data-section=basic]")).not.toBeNull();
+  expect(document.querySelector("[data-section=regex]")).toBeNull();
+  expect(document.querySelector("[data-layer-chip]")?.textContent).toBe(t("workshop.layer.extChip"));
+  type(document.querySelector<HTMLInputElement>("#ws-name")!, "雪夜篇・玩家");
+  await settle();
+  button("[data-save]")!.click(); await settle();
+  const payload = api.saveDraft.mock.calls[0][3];
+  expect(payload).not.toHaveProperty("rules");
+  expect(payload).not.toHaveProperty("opening");
+  await router.replace({ query: { section: "publish" } }); await settle();
+  expect(document.querySelector("[data-check=content]")?.textContent?.trim()).toBe(t("workshop.publish.check.contentLore"));
+  expect(document.body.textContent).not.toContain(t("workshop.editor.section.regex"));
+});
+
+it("player extension hidden by the card author, or a closed card workshop: a chip and a line, no appeal", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", published: { version: 3 }, card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("live", { kind: "lorebook", ownerState: "hidden", workshopClosed: true })] });
+  await mountAt("/mine/workshops/w1/edit?section=publish");
+  expect(document.querySelector("[data-pub-hidden]")?.textContent).toBe(t("workshop.status.hiddenByOwner"));
+  expect(document.querySelector("[data-pub-hidden-note]")?.textContent).toBe(t("workshop.mine.row.hiddenByOwner"));
+  expect(document.querySelector("[data-pub-closed]")?.textContent).toBe(t("workshop.status.cardWorkshopClosed"));
+  expect(button("[data-pub-unpublish]")).not.toBeNull();
+});
+
+it("publishing into a closed workshop explains it and keeps the draft", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
+  api.publishWorkshop.mockRejectedValue(new ApiError(409, "closed", "workshop_closed"));
+  await mountAt("/mine/workshops/w1/edit?section=publish");
+  button("[data-pub-publish]")!.click(); await settle();
+  expect(document.querySelector("[data-error]")?.textContent).toBe(t("workshop.editor.error.workshopClosed"));
+  expect(button("[data-pub-publish]")).toBeNull();
 });
 
 it("draft_stale keeps the edits, stops saving, and reloads only when asked", async () => {
@@ -222,13 +272,13 @@ it("new: a card closed to extensions explains why and links back to the card", a
   expect(document.querySelector<HTMLAnchorElement>("[data-closed] a")?.getAttribute("href")).toBe("/cards/100002");
 });
 
-it("trial: options use the base opening, welcome and alt-<n>, and starting marks the checklist", async () => {
+it("trial: a DLC offers the base opening, welcome and alt-<n>; a player extension only the base opening", async () => {
   api.fetchDraft.mockResolvedValue(makeDraft());
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
   await mountAt("/mine/workshops/w1/edit?section=publish");
   button("[data-trial-open]")!.click(); await settle();
-  const keys = [...document.querySelectorAll<HTMLInputElement>("[data-trial-option]")].map((i) => i.value);
-  expect(keys).toEqual(["base", "welcome", "alt-1"]);
+  const keys = () => [...document.querySelectorAll<HTMLInputElement>("[data-trial-option]")].map((i) => i.value);
+  expect(keys()).toEqual(["base", "welcome", "alt-1"]);
   document.querySelector<HTMLInputElement>("[data-trial-option=alt-1]")!.click(); await settle();
   const start = document.querySelector<HTMLAnchorElement>("[data-trial-start]")!;
   expect(start.getAttribute("href")).toBe("/play/100001?wsTrial=w1&wsOpening=alt-1");
@@ -236,46 +286,33 @@ it("trial: options use the base opening, welcome and alt-<n>, and starting marks
   start.addEventListener("click", (e) => e.preventDefault());
   start.click(); await settle();
   expect(document.querySelector("[data-trial-start]")).toBeNull();
-  expect(document.querySelector("[data-check=tried]")?.classList.contains("ok")).toBe(true);
+  app?.unmount(); app = undefined; document.body.innerHTML = "";
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook" }));
+  await mountAt("/mine/workshops/w1/edit?section=publish");
+  button("[data-trial-open]")!.click(); await settle();
+  expect(keys()).toEqual(["base"]);
 });
 
-it("published: editing makes it submittable as a new version, and it stays so after saving even if the list still says live", async () => {
+it("published: editing makes it publishable as an update, and it stays so after saving even if the list still says live", async () => {
   api.fetchDraft.mockResolvedValue(makeDraft({ published: { version: 3 } }));
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("live")] });
   api.saveDraft.mockResolvedValue({ revision: 4, errors: [] });
   await mountAt("/mine/workshops/w1/edit?section=publish");
-  expect(button("[data-pub-submit]")).toBeNull();
+  expect(button("[data-pub-publish]")).toBeNull();
   await router.replace({ query: { section: "basic" } }); await settle();
   type(document.querySelector<HTMLInputElement>("#ws-name")!, "雪夜篇二");
   await router.replace({ query: { section: "publish" } }); await settle();
-  expect(button("[data-pub-submit]")?.textContent).toBe(t("workshop.publish.action.submitUpdate"));
+  expect(button("[data-pub-publish]")?.textContent?.trim()).toBe(t("workshop.publish.action.publishUpdate"));
   expect(document.querySelector("#ws-update-note")).not.toBeNull();
   button("[data-save]")!.click(); await settle();
   expect(api.saveDraft).toHaveBeenCalledTimes(1);
-  expect(button("[data-pub-submit]")?.textContent).toBe(t("workshop.publish.action.submitUpdate"));
+  expect(button("[data-pub-publish]")?.textContent?.trim()).toBe(t("workshop.publish.action.publishUpdate"));
 });
 
-it("a name over 16 characters leaves the basics unchecked and blocks submission", async () => {
+it("a name over 16 characters leaves the basics unchecked and blocks publishing", async () => {
   api.fetchDraft.mockResolvedValue(makeDraft({ name: "雪".repeat(17) }));
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
   await mountAt("/mine/workshops/w1/edit?section=publish");
   expect(document.querySelector("[data-check=basics]")?.getAttribute("data-ok")).toBe("false");
-  expect(button("[data-pub-submit]")!.disabled).toBe(true);
+  expect(button("[data-pub-publish]")!.disabled).toBe(true);
 });
-
-it("third-party extension: regex and opening sections say they are paused; the card author's own extension does not", async () => {
-  const notice = () => document.querySelector("[data-display-paused]")?.textContent?.trim();
-  api.fetchDraft.mockResolvedValue(makeDraft());
-  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft")] });
-  await mountAt("/mine/workshops/w1/edit?section=regex");
-  expect(notice()).toBe(t("workshop.displayPaused"));
-  await router.replace({ query: { section: "opening" } }); await settle();
-  expect(notice()).toBe(t("workshop.displayPaused"));
-  await router.replace({ query: { section: "world" } }); await settle();
-  expect(notice()).toBeUndefined();
-  app?.unmount(); app = undefined; document.body.innerHTML = "";
-  api.fetchDraft.mockResolvedValue(makeDraft({ card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: true } }));
-  await mountAt("/mine/workshops/w1/edit?section=regex");
-  expect(notice()).toBeUndefined();
-});
-

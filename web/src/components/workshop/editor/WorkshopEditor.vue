@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
- * 擴充編輯器（ui.md §3.6、§3.8 製作者端、§4.6）。骨架照卡片編輯頁：分區導覽（桌機在左、手機在頂端一排）、
- * 表單、底部黏著的工具列「試玩｜儲存」。分區只有五個：基本資料、世界書、正規表示式、開局、發布。
+ * 擴充編輯器（docs studio/tasks/2026-11-15-workshop-v2-dlc-and-lorebook/ui.md §3.4）。骨架照卡片編輯頁：
+ * 分區導覽（桌機在左、手機在頂端一排）、表單、底部黏著的工具列「試玩｜儲存」。
+ * 作者 DLC 五個分區（基本資料、世界書、正規表示式、開局、發布）；玩家擴充只有三個（基本資料、世界書、發布）：
+ * 正則與開局不顯示也不停用，存檔時也不送這兩個欄位（伺服器拒收玩家的正則與開場）。哪一層由伺服器判定（draft.kind）。
  *
  * 跟卡片編輯頁不同的地方與理由：
- * - 一次只顯示一個分區，分區記在網址 ?section=：通知（被退回、被隱藏、審核結果）要能直達「發布」，
+ * - 一次只顯示一個分區，分區記在網址 ?section=：連結要能直達「發布」，
  *   而「發布分區時儲存降為次要」也要有一個明確的「現在在哪一區」。
  * - 整份草稿一次存（Provider 一支 draft/save），帶 expectedRevision 與 idempotencyKey：
  *   別處改過就回 draft_stale，這時保留畫面上的修改、停掉儲存，只在作者按「重新載入」時才換成伺服器那份，
@@ -18,9 +20,9 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vu
 import { useI18n } from "vue-i18n";
 import { ApiError, uploadImage } from "@/lib/api";
 import {
-  CONSTANT_CHAR_LIMIT, UPDATE_NOTE_MAX, UPDATE_NOTE_MIN, appealWorkshop, constantChars, deleteWorkshop, fetchDraft, fetchMyWorkshops, publishChecklist,
-  publishState, saveDraft, submitWorkshop, withdrawWorkshop,
-  type AppealState, type DraftWrite, type MineItem, type MineStatus, type OwnerState, type WorkshopDraft,
+  CONSTANT_CHAR_LIMIT, constantChars, deleteWorkshop, discardWorkshopChanges, fetchDraft, fetchMyWorkshops, publishChecklist,
+  publishState, publishWorkshop, saveDraft, unpublishWorkshop,
+  type DraftWrite, type MineItem, type MineStatus, type OwnerState, type WorkshopDraft,
 } from "@/lib/workshop";
 import { emptyRuleSet, ruleSetFromImport, ruleSetToExport, type OpeningMode } from "@/lib/regex-rules";
 import { fallbackLimits, type WorldbookEntryDraft } from "@/lib/role-draft";
@@ -28,7 +30,7 @@ import { worldbookToExport } from "@/lib/tavern";
 import { downloadBlob, safeFileName } from "@/lib/save-file";
 import { askRating, rate, usable } from "@/lib/rating";
 import { isRating, type RatingAnswers } from "../../../../../shared/content-rating";
-import { confirmDialog, confirmForm } from "@/lib/confirm";
+import { confirmDialog } from "@/lib/confirm";
 import { compact } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -53,8 +55,9 @@ const { t } = useI18n();
 /** 擴充名稱上限（ui.md §7：格子上兩行放得下） */
 const NAME_MAX = 16;
 
-const SECTIONS = ["basic", "world", "regex", "opening", "publish"] as const;
-type Section = (typeof SECTIONS)[number];
+const ALL_SECTIONS = ["basic", "world", "regex", "opening", "publish"] as const;
+type Section = (typeof ALL_SECTIONS)[number];
+const LORE_SECTIONS: readonly Section[] = ["basic", "world", "publish"];
 const SECTION_LABEL: Record<Section, string> = {
   basic: "workshop.editor.section.basic",
   world: "editor.section.worldbook",
@@ -64,7 +67,7 @@ const SECTION_LABEL: Record<Section, string> = {
 };
 const section = computed<Section>(() => {
   const q = route.query.section;
-  return typeof q === "string" && (SECTIONS as readonly string[]).includes(q) ? (q as Section) : "basic";
+  return typeof q === "string" && (SECTIONS.value as readonly string[]).includes(q) ? (q as Section) : "basic";
 });
 const formTop = ref<HTMLElement | null>(null);
 async function go(next: Section) {
@@ -86,10 +89,11 @@ const baseline = ref("");
 const savedOpening = ref<OpeningMode>("greeting");
 const status = ref<MineStatus>("draft");
 const ownerState = ref<OwnerState>("visible");
-const ownerReason = ref<string | null>(null);
-const rejectNote = ref<string | null>(null);
-const appeal = ref<AppealState>(null);
+const workshopClosed = ref(false);
 const joinCount = ref(0);
+/** 作者 DLC 或玩家擴充；載入前當玩家擴充（較少的分區），不先畫出正則與開局 */
+const isDlc = computed(() => draft.value?.kind === "dlc");
+const SECTIONS = computed<readonly Section[]>(() => (isDlc.value ? ALL_SECTIONS : LORE_SECTIONS));
 
 const saving = ref(false);
 const busy = ref(false);
@@ -102,10 +106,11 @@ const trialOpen = ref(false);
 const readmeTab = ref<"write" | "preview">("write");
 
 function writable(d: WorkshopDraft): DraftWrite {
-  return {
+  const base: DraftWrite = {
     name: d.name, summary: d.summary, readme: d.readme, coverUrl: d.coverUrl, rating: d.rating, ratingAnswers: d.ratingAnswers,
-    worldbook: d.worldbook, rules: d.rules, opening: d.opening, updateNote: d.updateNote,
+    worldbook: d.worldbook, updateNote: d.updateNote,
   };
+  return d.kind === "dlc" ? { ...base, rules: d.rules, opening: d.opening } : base;
 }
 const dirty = computed(() => Boolean(draft.value) && JSON.stringify(writable(draft.value!)) !== baseline.value);
 
@@ -133,12 +138,10 @@ function applyItem(item: MineItem | undefined) {
   if (!item) return;
   status.value = item.status;
   ownerState.value = item.ownerState ?? "visible";
-  ownerReason.value = item.ownerReason ?? null;
-  rejectNote.value = item.rejectNote ?? null;
-  appeal.value = item.appeal ?? null;
+  workshopClosed.value = !!item.workshopClosed;
   joinCount.value = item.joinCount ?? 0;
 }
-/** 狀態只住在「我的擴充」：存檔可能取消送審、讓已發布變成「有修改」，存完都要重讀 */
+/** 狀態只住在「我的擴充」：存檔會讓已發布變成「有修改」，存完都要重讀 */
 async function refreshItem(token: string) {
   try {
     const mine = await fetchMyWorkshops(token);
@@ -164,7 +167,6 @@ async function load() {
     // 剛建立的擴充可能還不在清單裡：當草稿看，不擋編輯
     if (!mine?.items.some((i) => i.id === props.workshopId)) status.value = d.published ? (d.changedSincePublish ? "live_changed" : "live") : "draft";
     applyItem(mine?.items.find((i) => i.id === props.workshopId));
-    tried.value = readTried();
   } catch (err) {
     loadError.value = message(err, "state.loadFailed");
   } finally {
@@ -197,8 +199,8 @@ async function save(): Promise<boolean> {
     pendingSave = null;
     flash(t("workshop.editor.toast.saved"));
     await refreshItem(tk);
-    // 草稿存在 Provider、狀態清單在本站：清單還沒跟上時，已發布又存了修改就是「有修改尚未提交」，
-    // 不然存完 dirty 歸零，「提交新版審核」會消失，存下的修改送不出去
+    // 草稿存在 Provider、狀態清單在本站：清單還沒跟上時，已發布又存了修改就是「有未發布的修改」，
+    // 不然存完 dirty 歸零，「發布更新」會消失，存下的修改發布不出去
     if (wasLive && status.value === "live") status.value = "live_changed";
     return true;
   } catch (err) {
@@ -216,10 +218,10 @@ function reload() { void load(); }
 // ── 發布 ──────────────────────────────────────────────────────────
 
 const effectiveStatus = computed<MineStatus>(() =>
-  // 已發布而畫面上有未存的修改：當成「有修改尚未提交」，主按鈕直接是「提交新版審核」（送出前會先存）
+  // 已發布而畫面上有未存的修改：當成「有未發布的修改」，主按鈕直接是「發布更新」（送出前會先存）
   status.value === "live" && dirty.value ? "live_changed" : status.value);
-const pubState = computed(() => publishState(effectiveStatus.value, ownerState.value));
-/** 名稱上限只有這一頁知道（共用的檢查清單不看長度）：超過就讓「名稱與簡介」不打勾、送不出去 */
+const pubState = computed(() => publishState(effectiveStatus.value));
+/** 名稱上限只有這一頁知道（共用的檢查清單不看長度）：超過就讓「名稱與簡介」不打勾、發布不出去 */
 const checklist = computed(() => {
   const d = draft.value;
   if (!d) return [];
@@ -230,83 +232,89 @@ const residentUsed = computed(() => (draft.value ? constantChars(draft.value.wor
 // 跟伺服器同口徑（啟用＋常駐條目的字元數），存檔回的 constant_char_limit 不另外記：改少之後要立刻轉綠
 const residentOver = computed(() => residentUsed.value > CONSTANT_CHAR_LIMIT);
 
-const SUBMIT_ERRORS: Record<string, string> = {
-  cover_required: "workshop.editor.error.cover",
-  rating_required: "workshop.editor.error.rating",
-  content_required: "workshop.editor.error.content",
-  constant_char_limit: "workshop.editor.resident.over",
-  update_note_required: "workshop.editor.error.note",
-};
+function publishError(err: unknown): string {
+  const code = err instanceof ApiError ? err.code : "";
+  switch (code) {
+    case "rating_required": return t("workshop.editor.error.rating");
+    case "content_required": return t(isDlc.value ? "workshop.editor.error.content" : "workshop.editor.error.contentLore");
+    case "constant_char_limit": return t("workshop.editor.resident.over", { max: new Intl.NumberFormat(String(locale.value)).format(CONSTANT_CHAR_LIMIT) });
+    case "workshop_closed": workshopClosed.value = true; return t("workshop.editor.error.workshopClosed");
+  }
+  return message(err, "state.actionFailed");
+}
+/** 同一個意圖（同一份草稿版本、同一個動作）重試沿用同一個 operationId；換了版本或動作就換新的 */
+let pendingOp: { action: string; revision: number; id: string } | null = null;
+function operationId(action: string): string {
+  if (!pendingOp || pendingOp.action !== action || pendingOp.revision !== revision.value) pendingOp = { action, revision: revision.value, id: newKey() };
+  return pendingOp.id;
+}
+async function act(action: "publish" | "unpublish" | "discard", run: (tk: string, body: { expectedRevision: number; operationId: string }) => Promise<void>) {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = "";
+  try {
+    const tk = await token();
+    await run(tk, { expectedRevision: revision.value, operationId: operationId(action) });
+    pendingOp = null;
+    await refreshItem(tk);
+  } catch (err) {
+    if (err instanceof ApiError && (err.code === "draft_stale" || err.code === "publish_stale")) stale.value = true;
+    else error.value = publishError(err);
+  } finally {
+    busy.value = false;
+  }
+}
 
-async function submit() {
+async function publish() {
   const d = draft.value;
   if (!d || busy.value) return;
   if (dirty.value && !(await save())) return;
   // 畫面上的按鈕已經依檢查清單鎖住；這裡再擋一次，鍵盤或連點也送不出不完整的版本
-  const needsNote = Boolean(d.published);
-  if (checklist.value.some((c) => !c.ok && (c.key !== "note" || needsNote))) return;
-  busy.value = true;
-  error.value = "";
-  try {
-    const tk = await token();
-    const res = await submitWorkshop(props.workshopId, needsNote ? d.updateNote.trim() : "", tk);
-    status.value = res.status;
-    flash(t("workshop.publish.toast.submitted"));
-    await refreshItem(tk);
-  } catch (err) {
-    const key = err instanceof ApiError ? SUBMIT_ERRORS[err.code] : undefined;
-    const params = key === "workshop.editor.error.note" ? { min: UPDATE_NOTE_MIN, max: UPDATE_NOTE_MAX } : { max: new Intl.NumberFormat(String(locale.value)).format(CONSTANT_CHAR_LIMIT) };
-    error.value = key ? t(key, params) : message(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function withdraw() {
-  if (busy.value) return;
-  busy.value = true;
-  error.value = "";
-  try {
-    const tk = await token();
-    const res = await withdrawWorkshop(props.workshopId, tk);
-    status.value = res.status;
-    flash(t("workshop.publish.toast.canceled"));
-  } catch (err) {
-    error.value = message(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function appealNow() {
-  if (busy.value) return;
-  const answer = await confirmForm({
-    title: t("workshop.appeal.title"), message: t("workshop.appeal.body"), phraseWrap: true,
-    confirmText: t("workshop.appeal.submit"), cancelText: t("dialog.cancel"), focusCancel: true,
-    field: { label: t("workshop.appeal.label"), required: true, multiline: true, maxlength: 500 },
+  if (checklist.value.some((c) => !c.ok)) return;
+  const update = Boolean(d.published);
+  await act("publish", async (tk, body) => {
+    const res = await publishWorkshop(props.workshopId, body, tk);
+    status.value = "live";
+    if (draft.value) { draft.value.published = { version: res.version }; draft.value.updateNote = ""; baseline.value = JSON.stringify(writable(draft.value)); }
+    flash(t(update ? "workshop.publish.toast.updated" : "workshop.publish.toast.published"));
   });
-  const reason = answer?.text.trim();
-  if (!reason) return;
-  busy.value = true;
-  error.value = "";
-  try {
-    const tk = await token();
-    const res = await appealWorkshop(props.workshopId, reason, tk);
-    appeal.value = res.appeal ?? "pending";
-    flash(t("workshop.appeal.toast"));
-  } catch (err) {
-    // 已經送過一次：照實畫成申訴中，不再給按鈕
-    if (err instanceof ApiError && err.code === "appeal_exists") appeal.value = "pending";
-    else error.value = message(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
 }
 
+async function unpublish() {
+  const d = draft.value;
+  if (!d || busy.value) return;
+  const ok = await confirmDialog({
+    title: t("workshop.unpublish.title", { name: d.name.trim() || untitled.value }), message: t("workshop.unpublish.body"),
+    confirmText: t("workshop.unpublish.confirm"), cancelText: t("dialog.cancel"), focusCancel: true, phraseWrap: true,
+  });
+  if (!ok) return;
+  await act("unpublish", async (tk, body) => {
+    const res = await unpublishWorkshop(props.workshopId, body, tk);
+    status.value = "draft";
+    if (typeof res.draftRevision === "number") revision.value = res.draftRevision;
+    flash(t("workshop.publish.toast.unpublished"));
+  });
+}
+
+async function discard() {
+  if (!draft.value || busy.value) return;
+  const ok = await confirmDialog({
+    title: t("workshop.discard.title"), message: t("workshop.discard.body"),
+    confirmText: t("workshop.discard.confirm"), cancelText: t("dialog.cancel"), danger: true, phraseWrap: true,
+  });
+  if (!ok) return;
+  await act("discard", async (tk, body) => {
+    apply(await discardWorkshopChanges(props.workshopId, body, tk));
+    status.value = "live";
+    flash(t("workshop.publish.toast.discarded"));
+  });
+}
+
+const untitled = computed(() => t(isDlc.value ? "workshop.mine.row.untitledDlc" : "workshop.mine.row.untitled"));
 async function remove() {
   const d = draft.value;
   if (!d || busy.value) return;
-  const name = d.name.trim() || t("workshop.mine.row.untitled");
+  const name = d.name.trim() || untitled.value;
   const ok = await confirmDialog({
     title: t("workshop.delete.title", { name }),
     message: joinCount.value > 0 ? t("workshop.delete.body", { count: compact(joinCount.value) }) : t("workshop.delete.bodyNone"),
@@ -408,11 +416,6 @@ const openingCount = computed(() => {
 
 // ── 試玩 ──────────────────────────────────────────────────────────
 
-const TRIED_KEY = (id: string) => `hearthroom.workshop.tried.${id}`;
-const tried = ref(false);
-function readTried(): boolean {
-  try { return localStorage.getItem(TRIED_KEY(props.workshopId)) === "1"; } catch { return false; }
-}
 /** 開場還沒有 id（stage 的開場 id 由伺服器發），試玩用位置代號：主開場 welcome、備選 alt-<第幾個，從 1 起> */
 const excerpt = (text: string) => {
   const line = text.replace(/<[^>]*>/g, " ").split("\n").map((s) => s.trim()).find(Boolean) ?? "";
@@ -421,10 +424,10 @@ const excerpt = (text: string) => {
 const trialOptions = computed<TrialOption[]>(() => {
   const d = draft.value;
   const list: TrialOption[] = [{ key: "base", label: t("workshop.test.baseOpening") }];
-  if (!d) return list;
+  if (!d || d.kind !== "dlc") return list;
   const o = d.opening;
   if (o.mode === "page") {
-    if (o.openingPage.trim()) list.push({ key: "welcome", label: t("workshop.test.thisOpening", { name: d.name.trim() || t("workshop.mine.row.untitled") }) });
+    if (o.openingPage.trim()) list.push({ key: "welcome", label: t("workshop.test.thisOpening", { name: d.name.trim() || untitled.value }) });
   } else {
     if (o.welcome.trim()) list.push({ key: "welcome", label: t("workshop.test.thisOpening", { name: excerpt(o.welcome) }) });
     o.alternates.forEach((a, i) => { if (a.trim()) list.push({ key: `alt-${i + 1}`, label: t("workshop.test.thisOpening", { name: excerpt(a) }) }); });
@@ -434,8 +437,6 @@ const trialOptions = computed<TrialOption[]>(() => {
 const trialHref = (key: string) =>
   router.resolve({ path: lp(`/play/${draft.value?.card.num ?? ""}`), query: { wsTrial: props.workshopId, wsOpening: key } }).href;
 function trialStarted() {
-  tried.value = true;
-  try { localStorage.setItem(TRIED_KEY(props.workshopId), "1"); } catch { /* 記不住只是清單上少一個勾 */ }
   trialOpen.value = false;
   flash(t("workshop.test.toast"));
 }
@@ -479,7 +480,10 @@ watch(error, async (text) => {
     <header class="ws-ed__head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ $t("workshop.mine.edit") }}</h1>
-      <span v-if="draft" class="chip ws-chip--on ws-ed__for" data-for-card><WorkshopIcon name="layers" />{{ $t("workshop.editor.forChip", { card: draft.card.name }) }}</span>
+      <span v-if="draft" class="ws-ed__chips">
+        <span class="chip ws-chip--on" data-layer-chip>{{ isDlc ? $t("workshop.layer.dlc") : $t("workshop.layer.extChip") }}</span>
+        <span class="chip ws-ed__for" data-for-card><WorkshopIcon name="layers" />{{ $t("workshop.editor.forChip", { card: draft.card.name }) }}</span>
+      </span>
     </header>
 
     <div v-if="loading" class="ws-ed__ghosts" aria-hidden="true">
@@ -570,9 +574,8 @@ watch(error, async (text) => {
           </section>
 
           <!-- 正規表示式：照寫卡頁「顯示」分區那一條，按下開整頁彈窗 -->
-          <section v-else-if="section === 'regex'" class="pane" data-section="regex">
+          <section v-else-if="section === 'regex' && isDlc" class="pane" data-section="regex">
             <h2 class="pane__title">{{ $t("workshop.editor.section.regex") }}</h2>
-            <p v-if="!draft.card.ownerIsMe" class="notice ws-ed__paused ws-text" data-display-paused>{{ $t("workshop.displayPaused") }}</p>
             <p class="notice ws-text">{{ $t("workshop.editor.regex.hint") }}</p>
             <div class="rxbar">
               <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
@@ -589,9 +592,8 @@ watch(error, async (text) => {
           </section>
 
           <!-- 開局：寫卡頁的開局元件原樣 -->
-          <section v-else-if="section === 'opening'" class="pane" data-section="opening">
+          <section v-else-if="section === 'opening' && isDlc" class="pane" data-section="opening">
             <h2 class="pane__title">{{ $t("editor.section.opening") }}</h2>
-            <p v-if="!draft.card.ownerIsMe" class="notice ws-ed__paused ws-text" data-display-paused>{{ $t("workshop.displayPaused") }}</p>
             <p class="muted pane__lede ws-text">{{ $t("workshop.editor.opening.hint") }}</p>
             <OpeningEditor v-model:mode="draft.opening.mode" v-model:welcome="draft.opening.welcome" v-model:alternates="draft.opening.alternates"
                            v-model:prologue="draft.opening.prologue" v-model:opening-page="draft.opening.openingPage"
@@ -602,9 +604,9 @@ watch(error, async (text) => {
           <!-- 發布 -->
           <section v-else class="pane" data-section="publish">
             <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
-            <PublishPane :state="pubState" :draft="draft" :checklist="checklist" :reject-note="rejectNote" :owner-reason="ownerReason"
-                         :appeal="appeal" :tried="tried" :busy="busy || saving || stale" v-model:note="draft.updateNote"
-                         @submit="submit" @withdraw="withdraw" @appeal="appealNow" @delete="remove" />
+            <PublishPane :state="pubState" :kind="draft.kind" :draft="draft" :checklist="checklist" :owner-state="ownerState"
+                         :workshop-closed="workshopClosed" :busy="busy || saving || stale" v-model:note="draft.updateNote"
+                         @publish="publish" @unpublish="unpublish" @discard="discard" @delete="remove" />
           </section>
         </div>
       </div>
@@ -623,7 +625,7 @@ watch(error, async (text) => {
     </template>
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
-    <RegexRulesEditor v-if="regexOpen && draft" v-model="draft.rules" @close="regexOpen = false" />
+    <RegexRulesEditor v-if="regexOpen && draft && isDlc" v-model="draft.rules" @close="regexOpen = false" />
     <TrialPanel v-if="trialOpen && draft" :options="trialOptions" :href="trialHref" :stale="dirty" @close="trialOpen = false" @started="trialStarted" />
   </div>
 </template>
@@ -633,6 +635,7 @@ watch(error, async (text) => {
 .ws-ed__head { display: grid; gap: var(--s-1); justify-items: start; }
 .ws-ed__head h1 { margin: 0; font-size: 22px; }
 .ws-ed__head .eyebrow { margin: 0; }
+.ws-ed__chips { display: flex; flex-wrap: wrap; gap: var(--s-2); max-width: 100%; min-width: 0; }
 .ws-ed__for { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-ed__for svg { width: 14px; height: 14px; flex: none; }
 .ws-ed__ghosts { display: grid; gap: var(--s-4); }
@@ -659,7 +662,6 @@ watch(error, async (text) => {
 .pane { display: grid; gap: var(--s-4); }
 .pane__title { margin: 0; padding-bottom: var(--s-2); font-size: 17px; border-bottom: 1px solid var(--line); }
 .pane__lede { margin: calc(-1 * var(--s-2)) 0 0; }
-.ws-ed__paused { margin: 0; }
 .pane > .notice { margin: 0; }
 .pane :deep(.field) { margin-bottom: 0; gap: 6px; }
 .pane :deep(textarea.input) { field-sizing: content; max-height: 70vh; }
