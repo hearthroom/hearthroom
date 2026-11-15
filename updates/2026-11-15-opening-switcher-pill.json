@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "draft": true,
+  "title": {
+    "zh-Hant": "多開場白切換器的右箭頭不再超出底色。",
+    "zh-Hans": "多开场白切换器的右箭头不再超出背景。",
+    "en": "The right arrow in the opening selector now stays inside its background.",
+    "ja": "オープニング切り替えの右矢印が背景からはみ出さなくなりました。",
+    "ko": "도입부 선택기의 오른쪽 화살표가 배경 밖으로 벗어나지 않아요."
+  }
+}
