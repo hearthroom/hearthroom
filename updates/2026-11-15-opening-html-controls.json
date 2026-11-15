@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "draft": true,
+  "title": {
+    "zh-Hant": "部分開場白裡的輸入框與按鈕會變成原始文字，現在能正常顯示。",
+    "zh-Hans": "部分开场白里的输入框和按钮会变成原始文字，现在可以正常显示。",
+    "en": "Opening input boxes and buttons that appeared as raw text now display correctly.",
+    "ja": "一部の開始メッセージで文字として表示されていた入力欄とボタンが正しく表示されます。",
+    "ko": "일부 시작 메시지에서 코드로 보이던 입력란과 버튼이 정상적으로 표시됩니다."
+  }
+}
