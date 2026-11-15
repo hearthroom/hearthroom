@@ -10,10 +10,10 @@
     "ko": "카드 페이지에 창작마당 탭이 생겨 좋아하는 카드의 확장팩을 만들거나 추가할 수 있어요."
   },
   "body": {
-    "zh-Hant": "作者 DLC 能加上世界書、介面或開場，玩家擴充能補充世界書，加入後新開的對話就會套用。",
-    "zh-Hans": "作者 DLC 能加上世界书、界面或开场，玩家扩展包能补充世界书，添加后新开的对话就会应用。",
-    "en": "Author DLC can add lorebook entries, interface changes, or openings, and player extensions add lorebook entries to new chats.",
-    "ja": "作者DLCは世界設定や画面、書き出しを、プレイヤー拡張は世界設定を新しい会話に加えられます。",
-    "ko": "작가 DLC는 세계관, 화면, 도입부를, 플레이어 확장팩은 세계관을 새 대화에 더할 수 있어요."
+    "zh-Hant": "擴充能加上新的世界書、介面或開場，加入後新開的對話就會套用；原作者可以在卡片編輯頁管理自己卡的工坊。",
+    "zh-Hans": "扩展包能加上新的世界书、界面或开场，添加后新开的对话就会套用；原作者可以在卡片编辑页管理自己卡的工坊。",
+    "en": "Extensions can bring new Lorebook entries, interface changes or openings to new chats, and original authors manage their card's Workshop from the card editor.",
+    "ja": "拡張パックは世界設定や画面、書き出しを新しい会話に加えられ、元の作者はカード編集ページから自分のカードのワークショップを管理できます。",
+    "ko": "확장팩은 새 대화에 세계관, 화면, 도입부를 더할 수 있고, 원작자는 카드 편집 페이지에서 자기 카드의 창작마당을 관리할 수 있어요."
   }
 }

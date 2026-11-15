@@ -109,3 +109,12 @@ it("a DLC row lists its content kinds with a visible separator in every language
   }
   i18n.global.locale.value = "zh-Hant";
 });
+
+it("without a known current tier the status chip is left out instead of printing an empty tier", async () => {
+  i18n.global.locale.value = "zh-Hant";
+  mount({ revision: 1, items: [row("a")] }, usage({ currentContextTier: null, currentContextTokens: null, currentTierSufficient: false }));
+  await settle();
+  const tier = document.querySelector(".ws-manage__tier");
+  expect(tier?.querySelector(".chip")).toBeNull();
+  expect(tier?.textContent ?? "").not.toMatch(/目前\s*[，,]/);
+});

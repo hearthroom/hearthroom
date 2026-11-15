@@ -92,9 +92,12 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey); restore?
             <p class="ws-text">{{ $t("workshop.manage.usage", { extChars: chars(usage.enabledWorkshopConstantChars), cardChars: chars(usage.baseConstantChars), total: chars(usage.totalConstantChars) }) }}</p>
             <div class="ws-manage__tier">
               <strong v-if="recTier">{{ $t("workshop.manage.recommend", { tier: recTier }) }}</strong>
-              <span v-if="level === 'ok'" class="chip ws-chip--ok">{{ $t("workshop.manage.status.ok", { tier: curTier }) }}</span>
-              <span v-else-if="level === 'soft'" class="chip">{{ $t("workshop.manage.status.low", { tier: curTier }) }}</span>
-              <span v-else class="chip ws-chip--warn">{{ $t("workshop.manage.status.over", { tier: curTier }) }}</span>
+              <!-- 不知道目前檔位時不畫狀態（不然會印出「目前 ，放不下」這種缺字的句子） -->
+              <template v-if="curTier">
+                <span v-if="level === 'ok'" class="chip ws-chip--ok">{{ $t("workshop.manage.status.ok", { tier: curTier }) }}</span>
+                <span v-else-if="level === 'soft'" class="chip">{{ $t("workshop.manage.status.low", { tier: curTier }) }}</span>
+                <span v-else class="chip ws-chip--warn">{{ $t("workshop.manage.status.over", { tier: curTier }) }}</span>
+              </template>
               <button v-if="canSwitch" type="button" class="btn btn--sm ws-manage__switch" :disabled="state.busy" @click="switchTier">{{ $t("workshop.manage.switch", { tier: recTier }) }}</button>
             </div>
             <p v-if="level === 'soft'" class="subtle ws-text">{{ $t("workshop.manage.low.note") }}</p>
