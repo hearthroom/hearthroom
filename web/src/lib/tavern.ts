@@ -28,6 +28,7 @@ import { promptOnlyRuleCount, rulesFromTavern, rulesToTavern, type RegexRuleSet 
 import { unzipSync } from "fflate";
 import { deepMerge, formatJson, type CardStateDraft } from "./card-state";
 import { parseRelaxedJson } from "./relaxed-json";
+import { riliBookFromRaw, type RiliEntryMeta } from "./rili";
 
 export interface TavernBookEntry {
   scan_depth?: number;
@@ -102,6 +103,7 @@ export interface TavernCard {
 export interface DropNote {
   key: string;
   params?: Record<string, string | number>;
+  level?: "block" | "changed" | "info";
 }
 
 export interface ImportResult {
@@ -421,6 +423,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: numb
     const decorated = parseDecorators(text(entry.content));
     const content = decorated.content.trim();
     if (!content) return;
+    const riliMeta = entry.extensions?.__rili as RiliEntryMeta | undefined;
     // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
     const baseName = text(entry.name) || text(entry.comment) || keyList(entry.keys)[0] || `#${index + 1}`;
     const keywords = entryKeywords(entry, [...keyList(entry.keys), ...decorated.additionalKeys]);
@@ -436,6 +439,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: numb
         secondaryKeywords: entryKeywords(entry, keyList(entry.secondary_keys)),
         isEnabled: entry.enabled !== false && !decorated.dontActivate,
         isConstant: entry.constant === true || decorated.activate,
+        ...(riliMeta ? { triggerRegion: riliMeta.triggerRegion } : {}),
         ...(typeof (entry.extensions?.harperharbor as Record<string, unknown> | undefined)?.semanticRecall === "boolean" ? { semanticRecall: (entry.extensions!.harperharbor as Record<string, unknown>).semanticRecall as boolean } : {}),
         matchOptions: { ...options, ...(groupId ? { groupId, groupOrder: parts.length > 1 ? i : options.groupOrder ?? 0 } : {}) },
       });
@@ -450,7 +454,8 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: numb
  */
 export function entryMatchOptions(entry: TavernBookEntry): WorldbookMatchOptions {
   const logic = Number(entry.selective_logic ?? 0);
-  const extension = entry.extensions ?? {};
+  const rawExtension = entry.extensions ?? {};
+  const { __rili: _rili, ...extension } = rawExtension;
   const group = extension.harperharbor && typeof extension.harperharbor === "object" ? extension.harperharbor as Record<string, unknown> : {};
   return {
     ...(typeof entry.selective === "boolean" ? { selective: entry.selective } : {}),
@@ -479,6 +484,8 @@ export function countSplitEntries(entries: TavernBookEntry[], language = ""): nu
  */
 export function worldInfoToBook(raw: unknown): TavernBook | null {
   if (!raw || typeof raw !== "object") return null;
+  const riliBook = riliBookFromRaw(raw);
+  if (riliBook) return riliBook;
   const obj = raw as Record<string, unknown>;
   // 傳進來的是一張卡：直接拿它的世界書
   if (obj.data && typeof obj.data === "object") {
@@ -580,7 +587,15 @@ export function worldbookToExport(name: string, entries: WorldbookEntryDraft[]) 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 export function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
   // 次要關鍵詞、大小寫、整詞、次要邏輯現在都有落點（上游的酒館匹配規則），不再進報告。
-  const counts = { position: 0, decorators: 0 };
+  const counts = {
+    position: 0,
+    decorators: 0,
+    riliRegion: 0,
+    riliWeighted: 0,
+    riliBlacklistOnAnd: 0,
+    riliPosition: 0,
+    riliProbability: 0,
+  };
   const names = new Set<string>();
   for (const entry of entries) {
     if (text(entry.position)) counts.position++;
@@ -589,10 +604,23 @@ export function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
       counts.decorators++;
       unsupported.forEach((n) => names.add(`@@${n}`));
     }
+    const rili = entry.extensions?.__rili as RiliEntryMeta | undefined;
+    if (rili) {
+      if (rili.region) counts.riliRegion++;
+      if (rili.weighted) counts.riliWeighted++;
+      if (rili.blacklistOnAnd) counts.riliBlacklistOnAnd++;
+      if (rili.position) counts.riliPosition++;
+      if (rili.probability) counts.riliProbability++;
+    }
   }
   const notes: DropNote[] = [];
   if (counts.position) notes.push({ key: "import.drop.position", params: { n: counts.position } });
   if (counts.decorators) notes.push({ key: "import.drop.decorators", params: { n: counts.decorators, names: [...names].join(", ") } });
+  if (counts.riliRegion) notes.push({ key: "import.rili.entryRegion", params: { n: counts.riliRegion }, level: "changed" });
+  if (counts.riliWeighted) notes.push({ key: "import.rili.entryWeighted", params: { n: counts.riliWeighted }, level: "changed" });
+  if (counts.riliBlacklistOnAnd) notes.push({ key: "import.rili.entryBlacklistOnAnd", params: { n: counts.riliBlacklistOnAnd }, level: "changed" });
+  if (counts.riliPosition) notes.push({ key: "import.fengyue.entryPosition", params: { n: counts.riliPosition }, level: "info" });
+  if (counts.riliProbability) notes.push({ key: "import.fengyue.entryProbability", params: { n: counts.riliProbability }, level: "info" });
   return notes;
 }
 

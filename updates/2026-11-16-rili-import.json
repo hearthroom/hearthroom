@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "可以匯入日里的卡、模組與世界書",
+    "zh-Hans": "可以导入日里的卡、模组与世界书",
+    "en": "Import Rili cards, modules, and lorebooks",
+    "ja": "日里のカード・モジュール・ワールドブックを読み込めるように",
+    "ko": "일리의 카드·모듈·로어북 가져오기"
+  },
+  "body": {
+    "zh-Hant": "把日里匯出的檔案拖進建卡頁的匯入，提示詞、開場畫面、世界書、正規表示式規則、卡片樣式與變數都會帶進表單，帶不過來的逐項列出。",
+    "zh-Hans": "把日里导出的文件拖进建卡页的导入，提示词、开场画面、世界书、正则、卡片样式与变量都会带进表单，带不过来的逐项列出。",
+    "en": "Drop a Rili export into Import on the new-card page to fill the form with its prompts, opening page, lorebook, regex rules, card styles, and variables, with anything left out listed.",
+    "ja": "日里の書き出しファイルをカード作成の読み込みに入れると、プロンプト、オープニング画面、ワールドブック、正規表現、カードスタイル、変数がフォームに入ります。",
+    "ko": "일리에서 내보낸 파일을 카드 만들기의 가져오기에 넣으면 프롬프트, 첫 화면, 로어북, 정규식, 카드 스타일, 변수가 양식에 채워져요."
+  }
+}

@@ -1,0 +1,924 @@
+{
+  "cases": [
+    {
+      "name": "real Sample A: whole card TEST-TALKAICC-CARD.json",
+      "input": {
+        "id": "c01b42f5-f18c-4e1d-a23e-7698cd43cc9c",
+        "authorId": "<REDACTED_AUTHOR_ID>",
+        "title": "TEST-TALKAICC-CARD",
+        "description": "TEST-CARD-DESCRIPTION",
+        "background": "jknjh9pn7ke2d4kc4rlfpwsk.webp",
+        "backgroundWidth": 32,
+        "backgroundHeight": 32,
+        "cover": "fplwg2n3qx01n7pxtjmth2w9.webp",
+        "coverWidth": 32,
+        "coverHeight": 32,
+        "introPage": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif;padding:16px}</style></head><body><h1>TEST-INTRO-TITLE</h1><p>TEST-INTRO-BODY</p><button id=\"test-open-btn\" onclick=\"parent.postMessage({type:'rili-set-input',value:'TEST-OPENING-INPUT-1'},'*')\">TEST-OPENING-BUTTON</button></body></html>",
+        "changelog": null,
+        "createdAt": "2026-11-15T14:10:37.426Z",
+        "updatedAt": "2026-11-15T14:42:14.845Z",
+        "initPublicAt": null,
+        "prompt": {
+          "systemPrompt": "You are a test harness assistant. Always reply in 1 short line containing [TEST-AI-REPLY] and <span class=\"test-badge\" data-action=\"set-textinput\" data-value=\"TEST-INLINE-ACTION\">TEST-BADGE</span>. Populate working memory testHp=88 and testLocation=\"TEST-LOC-A\".",
+          "headPrompt": "TEST-HEAD-PROMPT",
+          "rearPrompt": "TEST-REAR-PROMPT",
+          "suggestionsPrompt": "Generate exactly 3 short test strings in format { suggestions: ['TEST-OPT-1', 'TEST-OPT-2', 'TEST-OPT-3'] }",
+          "lorebook": [
+            {
+              "enabled": true,
+              "triggerWords": [
+                "TEST-KEY-ALPHA",
+                "TEST-KEY-BETA"
+              ],
+              "triggerWordsType": "AND",
+              "blackListWords": [
+                "TEST-BLOCK-WORD"
+              ],
+              "blackListWordsType": "OR",
+              "folder": "TEST-FOLDER-MAIN",
+              "priority": 10,
+              "probability": 100,
+              "scanDepth": 5,
+              "triggerRange": [
+                "user",
+                "assistant",
+                "working-memory"
+              ],
+              "impactRange": [
+                "system",
+                "headPrompt"
+              ],
+              "contentMethod": "single",
+              "content": "TEST-LOREBOOK-SINGLE-CONTENT"
+            },
+            {
+              "enabled": true,
+              "triggerWords": [
+                "/TEST-REGEX-TRIGGER/i"
+              ],
+              "triggerWordsType": "OR",
+              "blackListWords": [],
+              "blackListWordsType": "OR",
+              "folder": "TEST-FOLDER-SUB",
+              "priority": 20,
+              "probability": 80,
+              "scanDepth": 0,
+              "triggerRange": [
+                "system",
+                "model-name"
+              ],
+              "impactRange": [
+                "rearPrompt"
+              ],
+              "contentMethod": "weighted",
+              "content": "",
+              "contents": [
+                {
+                  "content": "TEST-LOREBOOK-WEIGHTED-A",
+                  "probability": 60
+                },
+                {
+                  "content": "TEST-LOREBOOK-WEIGHTED-B",
+                  "probability": 40
+                }
+              ]
+            }
+          ]
+        },
+        "promptSizeBytes": 1315,
+        "renderTemplate": {
+          "content": "<div class=\"test-memory-bar\">HP: {{workingMemory.testHp}} | LOC: {{workingMemory.testLocation}}</div>",
+          "injectWorkingMemory": false,
+          "injectSuggestions": false
+        },
+        "assistantRegexReplace": [
+          {
+            "enabled": true,
+            "applyMode": "front-end",
+            "messageRole": "assistant",
+            "regex": "\\[TEST-AI-REPLY\\]",
+            "replaceString": "<strong class=\"test-replaced\">[TEST-AI-REPLACED]</strong>"
+          },
+          {
+            "enabled": true,
+            "applyMode": "backend",
+            "messageRole": "all",
+            "regex": "TEST-BACKEND-SRC",
+            "replaceString": "TEST-BACKEND-DST"
+          }
+        ],
+        "assistantRegexReplaceSizeBytes": 297,
+        "enableMemorySchema": true,
+        "memorySchema": "{\"type\":\"object\",\"properties\":{\"testHp\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100,\"description\":\"TEST-HP-DESCRIPTION\"},\"testLocation\":{\"type\":\"string\",\"enum\":[\"TEST-LOC-A\",\"TEST-LOC-B\"],\"description\":\"TEST-LOC-DESCRIPTION\"}},\"required\":[\"testHp\",\"testLocation\"]}",
+        "injectStyles": ".custom-styles .test-badge, .custom-styles .test-memory-bar { border: 1px solid #caa86a; padding: 2px 6px; border-radius: 4px; }",
+        "injectStylesSizeBytes": 128,
+        "options": {
+          "items": [
+            {
+              "order": 0,
+              "label": "TEST-PRESET-1",
+              "type": "SET-INPUT",
+              "value": "TEST-PRESET-VALUE-1"
+            },
+            {
+              "order": 1,
+              "label": "TEST-PRESET-2",
+              "type": "SET-INPUT",
+              "value": "TEST-PRESET-VALUE-2"
+            }
+          ]
+        },
+        "language": "zh",
+        "containsNSFW": false,
+        "publicAccess": false,
+        "deletedAt": null,
+        "isAnonymous": true,
+        "enableSafeguard": true,
+        "defaultModelSettings": {
+          "model": "tomato_deepseek/deepseek-v4.1-flash",
+          "contextWindow": 12,
+          "modelSettings": {
+            "topP": 0.9,
+            "temperature": 0.7,
+            "frequencyPenalty": 0.2,
+            "presencePenalty": 0.1
+          }
+        },
+        "totalConversations": 0,
+        "totalPlayedUsers": 0,
+        "deeplyPlayed": 0,
+        "maxNonAuthorPlayCount": 0,
+        "fixedPromptLength": 294,
+        "lorebookLength": 76,
+        "cardsTags": [
+          {
+            "tag": {
+              "name": "开放世界",
+              "cardsCount": 3221
+            }
+          },
+          {
+            "tag": {
+              "name": "自由探索",
+              "cardsCount": 2845
+            }
+          }
+        ],
+        "cardsVoices": []
+      },
+      "expect": {
+        "rili": true,
+        "name": "TEST-TALKAICC-CARD",
+        "summary": "TEST-CARD-DESCRIPTION",
+        "tags": [
+          "开放世界",
+          "自由探索"
+        ],
+        "definition": "You are a test harness assistant. Always reply in 1 short line containing [TEST-AI-REPLY] and <span class=\"test-badge\" data-action=\"set-textinput\" data-value=\"TEST-INLINE-ACTION\">TEST-BADGE</span>. Populate working memory testHp=88 and testLocation=\"TEST-LOC-A\".",
+        "outputContract": "TEST-HEAD-PROMPT",
+        "custom": "TEST-REAR-PROMPT",
+        "intro": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif;padding:16px}</style></head><body><h1>TEST-INTRO-TITLE</h1><p>TEST-INTRO-BODY</p><button id=\"test-open-btn\" onclick=\"parent.postMessage({type:'rili-set-input',value:'TEST-OPENING-INPUT-1'},'*')\">TEST-OPENING-BUTTON</button></body></html>",
+        "css": ".custom-styles .test-badge, .custom-styles .test-memory-bar { border: 1px solid #caa86a; padding: 2px 6px; border-radius: 4px; }",
+        "cssDialect": "rili",
+        "lorebook": [
+          {
+            "name": "[TEST-FOLDER-MAI] #1",
+            "content": "TEST-LOREBOOK-SINGLE-CONTENT",
+            "keywords": [
+              "TEST-KEY-ALPHA"
+            ],
+            "secondaryKeywords": [
+              "TEST-KEY-BETA"
+            ],
+            "selective": true,
+            "selectiveLogic": 3,
+            "scanDepth": 5,
+            "order": 10,
+            "triggerRegion": "",
+            "enabled": true
+          },
+          {
+            "name": "[TEST-FOLDER-SUB] #2",
+            "content": "TEST-LOREBOOK-WEIGHTED-A\n\nTEST-LOREBOOK-WEIGHTED-B",
+            "keywords": [
+              "/TEST-REGEX-TRIGGER/i"
+            ],
+            "secondaryKeywords": [],
+            "selective": false,
+            "selectiveLogic": 0,
+            "scanDepth": 0,
+            "order": 20,
+            "triggerRegion": "",
+            "enabled": true
+          }
+        ],
+        "rules": [
+          {
+            "name": "#1",
+            "find": "/\\\\\\[TEST-AI-REPLY\\\\\\]/g",
+            "replace": "<strong class=\"test-replaced\">[TEST-AI-REPLACED]</strong>",
+            "enabled": true,
+            "targets": [
+              "ai"
+            ]
+          }
+        ],
+        "state": {
+          "convention": "plain",
+          "data": {
+            "testHp": 0,
+            "testLocation": "TEST-LOC-A"
+          },
+          "rulesText": "",
+          "template": "<div class=\"test-memory-bar\">HP: {{testHp}} | LOC: {{testLocation}}</div>",
+          "pathRules": {
+            "testHp": "TEST-HP-DESCRIPTION (integer, min: 0, max: 100)",
+            "testLocation": "TEST-LOC-DESCRIPTION (enum: \"TEST-LOC-A\" | \"TEST-LOC-B\")"
+          }
+        },
+        "notes": [
+          "entryBlacklistOnAnd",
+          "entryPosition",
+          "entryProbability",
+          "entryRegion",
+          "entryWeighted",
+          "images",
+          "memoryConverted",
+          "modelSettings",
+          "presetOptions",
+          "regexBackend",
+          "safeguard",
+          "suggestionsPrompt"
+        ]
+      }
+    },
+    {
+      "name": "real Sample B: standalone lorebook.json",
+      "input": {
+        "prompt": {
+          "lorebook": [
+            {
+              "enabled": true,
+              "triggerWords": [
+                "TEST-KEY-ALPHA",
+                "TEST-KEY-BETA"
+              ],
+              "triggerWordsType": "AND",
+              "blackListWords": [
+                "TEST-BLOCK-WORD"
+              ],
+              "blackListWordsType": "OR",
+              "folder": "TEST-FOLDER-MAIN",
+              "priority": 10,
+              "probability": 100,
+              "scanDepth": 5,
+              "triggerRange": [
+                "user",
+                "assistant",
+                "working-memory"
+              ],
+              "impactRange": [
+                "system",
+                "headPrompt"
+              ],
+              "contentMethod": "single",
+              "content": "TEST-LOREBOOK-SINGLE-CONTENT"
+            },
+            {
+              "enabled": true,
+              "triggerWords": [
+                "/TEST-REGEX-TRIGGER/i"
+              ],
+              "triggerWordsType": "OR",
+              "blackListWords": [],
+              "blackListWordsType": "OR",
+              "folder": "TEST-FOLDER-SUB",
+              "priority": 20,
+              "probability": 80,
+              "scanDepth": 0,
+              "triggerRange": [
+                "system",
+                "model-name"
+              ],
+              "impactRange": [
+                "rearPrompt"
+              ],
+              "contentMethod": "weighted",
+              "content": "",
+              "contents": [
+                {
+                  "content": "TEST-LOREBOOK-WEIGHTED-A",
+                  "probability": 60
+                },
+                {
+                  "content": "TEST-LOREBOOK-WEIGHTED-B",
+                  "probability": 40
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "rili": false,
+        "riliLorebook": true,
+        "lorebook": [
+          {
+            "name": "[TEST-FOLDER-MAI] #1",
+            "content": "TEST-LOREBOOK-SINGLE-CONTENT",
+            "keywords": [
+              "TEST-KEY-ALPHA"
+            ],
+            "secondaryKeywords": [
+              "TEST-KEY-BETA"
+            ],
+            "selective": true,
+            "selectiveLogic": 3,
+            "scanDepth": 5,
+            "order": 10,
+            "triggerRegion": "",
+            "enabled": true
+          },
+          {
+            "name": "[TEST-FOLDER-SUB] #2",
+            "content": "TEST-LOREBOOK-WEIGHTED-A\n\nTEST-LOREBOOK-WEIGHTED-B",
+            "keywords": [
+              "/TEST-REGEX-TRIGGER/i"
+            ],
+            "secondaryKeywords": [],
+            "selective": false,
+            "selectiveLogic": 0,
+            "scanDepth": 0,
+            "order": 20,
+            "triggerRegion": "",
+            "enabled": true
+          }
+        ],
+        "notes": [
+          "entryBlacklistOnAnd",
+          "entryPosition",
+          "entryProbability",
+          "entryRegion",
+          "entryWeighted"
+        ]
+      }
+    },
+    {
+      "name": "chat settings override rili-chat-settings",
+      "input": {
+        "prompt": {
+          "systemPrompt": "TEST-OVERRIDE-SYSTEM",
+          "headPrompt": "TEST-OVERRIDE-HEAD",
+          "rearPrompt": "TEST-OVERRIDE-REAR",
+          "suggestionsPrompt": "",
+          "lorebook": []
+        },
+        "assistantRegexReplace": [],
+        "injectStyles": ".test-override { color: #caa86a; }",
+        "model": "tomato_deepseek/deepseek-v4.1-flash",
+        "contextWindow": 12,
+        "modelSettings": {
+          "topP": 0.9,
+          "temperature": 0.7,
+          "frequencyPenalty": 0,
+          "presencePenalty": 0
+        },
+        "enableMemorySchema": false,
+        "memorySchema": "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"string\"}}}",
+        "renderTemplate": {
+          "content": "<p>{{workingMemory.x}}</p>",
+          "injectWorkingMemory": true,
+          "injectSuggestions": false
+        },
+        "assistantPrefill": "（旁白："
+      },
+      "expect": {
+        "rili": true,
+        "name": "",
+        "summary": "",
+        "tags": [],
+        "definition": "TEST-OVERRIDE-SYSTEM",
+        "outputContract": "TEST-OVERRIDE-HEAD",
+        "custom": "TEST-OVERRIDE-REAR",
+        "intro": "",
+        "css": ".test-override { color: #caa86a; }",
+        "cssDialect": "rili",
+        "lorebook": [],
+        "rules": [],
+        "state": null,
+        "notes": [
+          "assistantPrefill",
+          "memoryDisabled",
+          "modelSettings",
+          "noWelcome",
+          "variablesTemplateOnly"
+        ]
+      }
+    },
+    {
+      "name": "regex slash vs literal, messageRole user/all, applyMode all, blacklist OR/AND, triggerRange user/ai",
+      "input": {
+        "title": "測試規則與黑名單",
+        "description": "",
+        "introPage": "<div>intro</div>",
+        "prompt": {
+          "systemPrompt": "SYS",
+          "headPrompt": "",
+          "rearPrompt": "",
+          "suggestionsPrompt": "",
+          "lorebook": [
+            {
+              "enabled": true,
+              "triggerWords": [
+                "劍"
+              ],
+              "triggerWordsType": "OR",
+              "blackListWords": [
+                "斷劍",
+                "/壞掉/i"
+              ],
+              "blackListWordsType": "OR",
+              "folder": "",
+              "priority": 5,
+              "probability": 100,
+              "scanDepth": 0,
+              "triggerRange": [
+                "user"
+              ],
+              "impactRange": [
+                "system"
+              ],
+              "contentMethod": "single",
+              "content": "一把鐵劍。"
+            },
+            {
+              "enabled": false,
+              "triggerWords": [
+                "盾"
+              ],
+              "triggerWordsType": "OR",
+              "blackListWords": [
+                "火",
+                "雷"
+              ],
+              "blackListWordsType": "AND",
+              "folder": "",
+              "priority": 8,
+              "probability": 100,
+              "scanDepth": 3,
+              "triggerRange": [
+                "assistant"
+              ],
+              "impactRange": [
+                "system"
+              ],
+              "contentMethod": "single",
+              "content": "一面木盾。"
+            }
+          ]
+        },
+        "assistantRegexReplace": [
+          {
+            "enabled": true,
+            "applyMode": "front-end",
+            "messageRole": "user",
+            "regex": "/\\[HP:(\\d+)\\]/gi",
+            "replaceString": "<b>HP $1</b>"
+          },
+          {
+            "enabled": false,
+            "applyMode": "all",
+            "messageRole": "all",
+            "regex": "a.b+c/d?($1)",
+            "replaceString": "LITERAL"
+          }
+        ],
+        "injectStyles": "",
+        "enableMemorySchema": false,
+        "memorySchema": null
+      },
+      "expect": {
+        "rili": true,
+        "name": "測試規則與黑名單",
+        "summary": "",
+        "tags": [],
+        "definition": "SYS",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<div>intro</div>",
+        "css": "",
+        "cssDialect": "",
+        "lorebook": [
+          {
+            "name": "#1",
+            "content": "一把鐵劍。",
+            "keywords": [
+              "劍"
+            ],
+            "secondaryKeywords": [
+              "斷劍",
+              "/壞掉/i"
+            ],
+            "selective": true,
+            "selectiveLogic": 2,
+            "scanDepth": 0,
+            "order": 5,
+            "triggerRegion": "user_only",
+            "enabled": true
+          },
+          {
+            "name": "#2",
+            "content": "一面木盾。",
+            "keywords": [
+              "盾"
+            ],
+            "secondaryKeywords": [
+              "火",
+              "雷"
+            ],
+            "selective": true,
+            "selectiveLogic": 1,
+            "scanDepth": 3,
+            "order": 8,
+            "triggerRegion": "ai_only",
+            "enabled": false
+          }
+        ],
+        "rules": [
+          {
+            "name": "#1",
+            "find": "/\\[HP:(\\d+)\\]/gi",
+            "replace": "<b>HP $1</b>",
+            "enabled": true,
+            "targets": [
+              "user"
+            ]
+          },
+          {
+            "name": "#2",
+            "find": "/a\\.b\\+c\\/d\\?\\(\\$1\\)/g",
+            "replace": "LITERAL",
+            "enabled": false,
+            "targets": [
+              "ai",
+              "user"
+            ]
+          }
+        ],
+        "state": null,
+        "notes": [
+          "regexHistory"
+        ]
+      }
+    },
+    {
+      "name": "nested memorySchema: objects, arrays, booleans, positive minimum, dotted keys, suggestions template",
+      "input": {
+        "title": "狀態嵌套測試",
+        "description": "",
+        "introPage": "",
+        "prompt": {
+          "systemPrompt": "SYS",
+          "headPrompt": "",
+          "rearPrompt": "",
+          "suggestionsPrompt": "",
+          "lorebook": []
+        },
+        "enableMemorySchema": true,
+        "memorySchema": "{\"type\":\"object\",\"description\":\"全域狀態說明\",\"properties\":{\"stats\":{\"type\":\"object\",\"properties\":{\"atk\":{\"type\":\"number\",\"minimum\":10,\"maximum\":999,\"description\":\"攻擊力\"}}},\"flags\":{\"type\":\"object\",\"properties\":{\"is.awake\":{\"type\":\"boolean\",\"default\":true,\"description\":\"清醒狀態\"}}},\"bag\":{\"type\":\"array\",\"description\":\"背包清單\",\"items\":{\"type\":\"string\",\"enum\":[\"藥水\",\"鑰匙\"],\"description\":\"道具名稱\"}},\"openMap\":{\"type\":\"object\",\"description\":\"動態關係表\"}}}",
+        "renderTemplate": {
+          "content": "{{#with workingMemory}}ATK={{stats.atk}}{{/with}}{{#each suggestions}}<span>{{this}}</span>{{/each}}",
+          "injectWorkingMemory": true,
+          "injectSuggestions": true
+        },
+        "injectStyles": ""
+      },
+      "expect": {
+        "rili": true,
+        "name": "狀態嵌套測試",
+        "summary": "",
+        "tags": [],
+        "definition": "SYS",
+        "outputContract": "",
+        "custom": "",
+        "intro": "",
+        "css": "",
+        "cssDialect": "",
+        "lorebook": [],
+        "rules": [],
+        "state": {
+          "convention": "plain",
+          "data": {
+            "stats": {
+              "atk": 10
+            },
+            "flags": {
+              "is.awake": true
+            },
+            "bag": [],
+            "openMap": {}
+          },
+          "rulesText": "全域狀態說明",
+          "template": "{{#with .}}ATK={{stats.atk}}{{/with}}{{#each suggestions}}<span>{{this}}</span>{{/each}}",
+          "pathRules": {
+            "stats.atk": "攻擊力 (min: 10, max: 999)",
+            "flags[\"is.awake\"]": "清醒狀態",
+            "bag": "背包清單; items: 道具名稱 (enum: \"藥水\" | \"鑰匙\")",
+            "openMap": "動態關係表"
+          }
+        },
+        "notes": [
+          "memoryConverted",
+          "noWelcome",
+          "templateSuggestions"
+        ]
+      }
+    },
+    {
+      "name": "rili-mod module file",
+      "input": {
+        "format": "rili-mod",
+        "formatVersion": 1,
+        "payload": {
+          "prompt": {
+            "systemPrompt": "TEST-MOD-SYSTEM",
+            "headPrompt": "TEST-MOD-HEAD",
+            "rearPrompt": "TEST-MOD-REAR",
+            "lorebook": []
+          },
+          "assistantRegexReplace": []
+        },
+        "injectedStyles": ".test-mod { color: #caa86a; }"
+      },
+      "expect": {
+        "rili": true,
+        "name": "",
+        "summary": "",
+        "tags": [],
+        "definition": "TEST-MOD-SYSTEM",
+        "outputContract": "TEST-MOD-HEAD",
+        "custom": "TEST-MOD-REAR",
+        "intro": "",
+        "css": ".test-mod { color: #caa86a; }",
+        "cssDialect": "rili",
+        "lorebook": [],
+        "rules": [],
+        "state": null,
+        "notes": [
+          "modFile",
+          "noWelcome"
+        ]
+      }
+    },
+    {
+      "name": "collision guard: Rili card with manual name, voices, >10 tags, unknown field",
+      "input": {
+        "name": "WRONG-TAVERN-V1-NAME",
+        "title": "REAL-RILI-TITLE",
+        "description": "REAL-RILI-SUMMARY",
+        "introPage": "<p>intro</p>",
+        "prompt": {
+          "systemPrompt": "REAL-RILI-SYSTEM",
+          "headPrompt": "",
+          "rearPrompt": "",
+          "suggestionsPrompt": "",
+          "lorebook": []
+        },
+        "injectStyles": "",
+        "cardsTags": [
+          {
+            "tag": {
+              "name": "標籤1",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤2",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤3",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤4",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤5",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤6",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤7",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤8",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤9",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤10",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤11",
+              "cardsCount": 10
+            }
+          },
+          {
+            "tag": {
+              "name": "標籤12",
+              "cardsCount": 10
+            }
+          }
+        ],
+        "cardsVoices": [
+          {
+            "speaker": "蘇綺",
+            "voiceId": "voice-01"
+          }
+        ],
+        "mysteryExtraFeature": {
+          "enabled": true,
+          "payload": "some unknown feature data"
+        }
+      },
+      "expect": {
+        "rili": true,
+        "name": "REAL-RILI-TITLE",
+        "summary": "REAL-RILI-SUMMARY",
+        "tags": [
+          "標籤1",
+          "標籤2",
+          "標籤3",
+          "標籤4",
+          "標籤5",
+          "標籤6",
+          "標籤7",
+          "標籤8",
+          "標籤9",
+          "標籤10"
+        ],
+        "definition": "REAL-RILI-SYSTEM",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<p>intro</p>",
+        "css": "",
+        "cssDialect": "",
+        "lorebook": [],
+        "rules": [],
+        "state": null,
+        "notes": [
+          "otherFields",
+          "tags",
+          "voices"
+        ]
+      }
+    },
+    {
+      "name": "invalid memorySchema JSON keeps raw text for author fix",
+      "input": {
+        "title": "壞掉的工作記憶",
+        "description": "",
+        "introPage": "<p>intro</p>",
+        "prompt": {
+          "systemPrompt": "SYS",
+          "headPrompt": "",
+          "rearPrompt": "",
+          "suggestionsPrompt": "",
+          "lorebook": []
+        },
+        "enableMemorySchema": true,
+        "memorySchema": "{bad json",
+        "renderTemplate": {
+          "content": "<div>{{workingMemory.hp}}</div>",
+          "injectWorkingMemory": true,
+          "injectSuggestions": false
+        },
+        "injectStyles": ""
+      },
+      "expect": {
+        "rili": true,
+        "name": "壞掉的工作記憶",
+        "summary": "",
+        "tags": [],
+        "definition": "SYS",
+        "outputContract": "",
+        "custom": "",
+        "intro": "<p>intro</p>",
+        "css": "",
+        "cssDialect": "",
+        "lorebook": [],
+        "rules": [],
+        "state": {
+          "convention": "plain",
+          "data": "{bad json",
+          "rulesText": "",
+          "template": "<div>{{hp}}</div>",
+          "pathRules": {}
+        },
+        "notes": [
+          "memoryInvalid"
+        ]
+      }
+    },
+    {
+      "name": "negative: SillyTavern V2 card",
+      "input": {
+        "spec": "chara_card_v2",
+        "spec_version": "2.0",
+        "data": {
+          "name": "Alice",
+          "description": "desc",
+          "first_mes": "Hello"
+        }
+      },
+      "expect": {
+        "rili": false
+      }
+    },
+    {
+      "name": "negative: SillyTavern V1 card",
+      "input": {
+        "name": "Alice",
+        "description": "desc",
+        "personality": "kind",
+        "first_mes": "Hello"
+      },
+      "expect": {
+        "rili": false
+      }
+    },
+    {
+      "name": "negative: SillyTavern World Info",
+      "input": {
+        "entries": {
+          "0": {
+            "uid": 0,
+            "key": [
+              "sword"
+            ],
+            "content": "A sharp blade."
+          }
+        }
+      },
+      "expect": {
+        "rili": false
+      }
+    },
+    {
+      "name": "negative: AI Fengyue export",
+      "input": {
+        "ai_v_json": "",
+        "nm": "x",
+        "pre_pt": "y",
+        "abs_txt": "z",
+        "sq": [
+          "a"
+        ]
+      },
+      "expect": {
+        "rili": false
+      }
+    },
+    {
+      "name": "negative: arbitrary JSON with prompt object",
+      "input": {
+        "prompt": {
+          "text": "hello",
+          "temperature": 0.7
+        }
+      },
+      "expect": {
+        "rili": false
+      }
+    }
+  ]
+}

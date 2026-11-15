@@ -205,7 +205,7 @@ describe("匯入面板認得風月的檔", () => {
       expect(text).toContain(i18n.global.t("import.landed.custom", { n: [..."TEST-POST-TEXT 后置词"].length }));
       expect(el.querySelector('[data-import-card-css]')).not.toBeNull();
       expect(text).toContain(i18n.global.t("import.fengyue.shortcuts", { n: 1 }));
-      expect(el.querySelector(".seg__item--on")?.textContent?.trim()).toBe(tab === 0 ? i18n.global.t("import.kind.tavern") : i18n.global.t("import.kind.fengyue"));
+      expect(el.querySelector(".seg__item--on")?.textContent?.trim()).toBe(tab === 0 ? i18n.global.t("import.kind.tavern") : i18n.global.t("import.kind.json"));
       done();
     });
   }

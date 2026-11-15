@@ -1722,7 +1722,9 @@ function applyImport(result: ImportResult) {
   const language = draft.value.language;
   draft.value = { ...result.draft, language };
   tagsText.value = formatTags(draft.value.roleTag);
-  track("card_import", { detail: result.spec === "mmd" || result.spec === "fengyue" ? result.spec : result.image ? "png" : "json" });
+  track("card_import", {
+    detail: result.spec === "mmd" || result.spec === "fengyue" || result.spec === "rili" ? result.spec : result.image ? "png" : "json",
+  });
   if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
@@ -1730,11 +1732,12 @@ function applyImport(result: ImportResult) {
     result.regex.pageMode ??= "classic";
     regexSet.value = result.regex;
   } else {
-    // 風月卡本來就是新的網頁玩法，沒有舊版聊天頁要相容
-    regexSet.value.pageMode = result.spec === "fengyue" ? "sandbox" : "classic";
+    // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容
+    regexSet.value.pageMode = result.spec === "fengyue" || result.spec === "rili" ? "sandbox" : "classic";
   }
-  // 風月卡一直是玩家點選項開局（點了直接送出）：歸開場網頁；其他照開場白（owner 2026-11-10）
-  regexSet.value.openingMode = result.spec === "fengyue" || regexSet.value.format === "fengyue" ? "page" : "greeting";
+  // 風月與日里卡以開場網頁開局：歸開場網頁；其他照開場白（owner 2026-11-10）
+  regexSet.value.openingMode =
+    result.spec === "fengyue" || result.spec === "rili" || regexSet.value.format === "fengyue" ? "page" : "greeting";
   savedOpening.value = openingMode.value;
   defaultChatPageForNew();
   settleDisclosures();

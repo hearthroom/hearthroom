@@ -14,9 +14,10 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
+import { parseTavernFile, tavernToDraft, type DropNote, type ImportResult, type TavernCard } from "@/lib/tavern";
 import { isPng } from "@/lib/png-chunks";
 import { fengyueToDraft, readFengyueFile } from "@/lib/fengyue";
+import { readRiliFile, readRiliLorebookFile, riliToDraft } from "@/lib/rili";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
 import { ruleSetWarnings, validateRuleSet } from "@/lib/regex-rules";
 import { stateLeafCount, stateValues } from "@/lib/card-state";
@@ -89,12 +90,29 @@ function build() {
 async function read(file: File) {
   error.value = "";
   preview.value = null;
+  if (await readRiliLorebookFile(file)) {
+    raw.value = null;
+    rawImage.value = null;
+    rawBackground.value = null;
+    kind.value = "mmd";
+    await addMmd([file]);
+    return;
+  }
   const fengyue = await readFengyueFile(file);
   if (fengyue) {
     raw.value = null;
     rawImage.value = null;
     rawBackground.value = null;
     preview.value = fengyueToDraft(fengyue, { language: props.language });
+    return;
+  }
+  const rili = await readRiliFile(file);
+  if (rili) {
+    kind.value = "fengyue";
+    raw.value = null;
+    rawImage.value = null;
+    rawBackground.value = null;
+    preview.value = riliToDraft(rili, { language: props.language });
     return;
   }
   try {
@@ -132,8 +150,13 @@ async function addMmd(files: File[]) {
       await read(file);
       return;
     }
-    // 風月的匯出檔也是單一 JSON，不是三件套的一部分：切到風月那條路
+    // 風月與日里的整卡匯出都是單一 JSON，不是三件套的一部分：切到第 3 格那條路
     if (await readFengyueFile(file)) {
+      kind.value = "fengyue";
+      await read(file);
+      return;
+    }
+    if (await readRiliFile(file)) {
       kind.value = "fengyue";
       await read(file);
       return;
@@ -189,6 +212,19 @@ watch(current, (now, before) => {
 });
 const regexWarnings = computed(() => current.value?.regex ? ruleSetWarnings(current.value.regex) : []);
 const regexIssues = computed(() => current.value?.regex ? validateRuleSet(current.value.regex) : []);
+const noteLevel = (note: DropNote): "block" | "changed" | "info" => {
+  if (note.level) return note.level;
+  if (note.key.startsWith("import.fengyue.tooLong.")) return "block";
+  return "info";
+};
+const blockNotes = computed(() => (current.value?.dropped ?? []).filter((n) => noteLevel(n) === "block"));
+const otherNotes = computed(() => {
+  const list = current.value?.dropped ?? [];
+  return [
+    ...list.filter((n) => noteLevel(n) === "changed"),
+    ...list.filter((n) => noteLevel(n) === "info"),
+  ];
+});
 
 function reset() {
   preview.value = null;
@@ -220,7 +256,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
     <div class="seg import__kind" role="radiogroup" :aria-label="$t('import.kind')">
       <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'tavern' }" role="radio" :aria-checked="kind === 'tavern'" @click="kind = 'tavern'">{{ $t("import.kind.tavern") }}</button>
       <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'mmd' }" role="radio" :aria-checked="kind === 'mmd'" @click="kind = 'mmd'">{{ $t("import.kind.mmd") }}</button>
-      <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'fengyue' }" role="radio" :aria-checked="kind === 'fengyue'" @click="kind = 'fengyue'">{{ $t("import.kind.fengyue") }}</button>
+      <button type="button" class="seg__item" :class="{ 'seg__item--on': kind === 'fengyue' }" role="radio" :aria-checked="kind === 'fengyue'" @click="kind = 'fengyue'">{{ $t("import.kind.json") }}</button>
     </div>
 
     <div
@@ -261,7 +297,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <img v-if="thumb && kind === 'tavern'" :src="thumb" alt="" class="review__thumb" />
         <div>
           <h3>{{ $t("import.review.title", { name: current.draft.roleName || $t("import.review.unnamed") }) }}</h3>
-          <p class="subtle">{{ $t("import.review.spec", { spec: current.spec === "mmd" || current.spec === "fengyue" ? $t(`import.kind.${current.spec}`) : current.spec }) }}</p>
+          <p class="subtle">{{ $t("import.review.spec", { spec: current.spec === "mmd" || current.spec === "fengyue" || current.spec === "rili" ? $t(`import.kind.${current.spec}`) : current.spec }) }}</p>
         </div>
       </div>
 
@@ -273,7 +309,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <li v-if="current.draft.prologue.length">{{ $t("import.landed.prologue", { n: current.draft.prologue.length }) }}</li>
         <li v-if="current.regex?.openingPage">{{ $t("import.landed.openingPage", { n: [...current.regex.openingPage].length }) }}</li>
         <li v-if="current.regex?.cardCss" data-import-card-css>{{ $t("editor.cardCss.title") }}</li>
-        <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
+        <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue' && current.spec !== 'rili'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
         <li v-if="current.worldbook">{{ $t("import.landed.worldbook", { n: current.worldbook.entries.length }) }}</li>
         <li v-if="stateCount !== null">{{ $t("import.landed.state", { n: stateCount }) }}</li>
@@ -293,10 +329,14 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <RegexIssueList :set="current.regex" :issues="regexWarnings" />
       </div>
 
-      <div v-if="current.dropped.length" class="dropped">
+      <ul v-if="blockNotes.length" class="notice notice--error import__block" role="alert">
+        <li v-for="(note, i) in blockNotes" :key="i">{{ $t(note.key, note.params ?? {}) }}</li>
+      </ul>
+
+      <div v-if="otherNotes.length" class="dropped">
         <p class="subtle strong">{{ $t("import.dropped.title") }}</p>
         <ul>
-          <li v-for="(note, i) in current.dropped" :key="i" class="subtle">{{ $t(note.key, note.params ?? {}) }}</li>
+          <li v-for="(note, i) in otherNotes" :key="i" class="subtle">{{ $t(note.key, note.params ?? {}) }}</li>
         </ul>
       </div>
 
@@ -312,6 +352,9 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
 
 <style scoped>
 .import__kind { margin-bottom: var(--s-3); }
+@media (max-width: 480px) {
+  .import__kind .seg__item { padding-inline: 10px; }
+}
 .drop {
   display: grid; justify-items: center; gap: var(--s-2);
   padding: var(--s-5) var(--s-4); text-align: center;
@@ -335,6 +378,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
 .review__thumb { width: 48px; height: 64px; object-fit: cover; border-radius: var(--r-sm); flex: none; box-shadow: 0 0 0 1px var(--line); }
 .review h3 { margin: 0; font-size: 16px; }
 .landed { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
+.import__block { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; }
 .dropped ul { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 .strong { font-weight: 600; color: var(--text-2); }
 .acts { display: flex; gap: var(--s-2); }
