@@ -67,6 +67,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   HARBOR_REWARDS_CLIENT_SECRET?: string;
   HARBOR_CARD_REWARDS_CLIENT_ID?: string;
   HARBOR_CARD_REWARDS_CLIENT_SECRET?: string;
+  /** "true" 才放行 10/17 以前舊卡榜單補發榮譽的積分撥款（預設關閉，只發榮譽徽章）。 */
+  RANK_PRE_LAUNCH_PAYOUTS_ENABLED?: string;
   /** 分享連結訪客雜湊的鑰匙（每週由它衍生一把）；沒設就用 isolate 內的隨機鑰匙 */
   SHARE_VISITOR_SECRET?: string;
   ANALYTICS_ENABLED?: string;

@@ -1,7 +1,7 @@
 import {env,createExecutionContext,createScheduledController,waitOnExecutionContext} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {resetDb,makeMember,restoreUpstream} from './helpers';
-import {rankMaintenance,rankPaymentMaintenance,rankTransport,RANK_CRON} from '../src/rank-maintenance';
+import {rankMaintenance,rankPaymentMaintenance,releaseHeldRankPayouts,rankTransport,RANK_CRON} from '../src/rank-maintenance';
 import worker from '../src/index';
 import {upstream} from '../src/upstream';
 import {badgeStatsTransport} from '../src/badge-stats';
@@ -100,4 +100,66 @@ it('excludes explicitly unavailable works but holds a missing score with no visi
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_settlements').first('n')).toBe(2);
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards').first('n')).toBe(0);
  const snapshot=await env.DB.prepare('SELECT snapshot FROM rank_settlements LIMIT 1').first<string>('snapshot');expect(JSON.parse(snapshot!).excludedCardIds).toEqual([100001]);
+});
+
+it('settles native Harbor day and week cohorts from 2026-09-24 with held payouts, skips pre-09/24 and September month, and includes early October cards in October month',async()=>{
+ const sep7=Date.parse('2026-09-07T02:00:00+08:00'),sep17=Date.parse('2026-09-17T12:00:00+08:00'),sep25=Date.parse('2026-09-25T12:00:00+08:00'),oct8=Date.parse('2026-10-08T12:00:00+08:00'),oct31=Date.parse('2026-10-31T12:00:00+08:00');
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,rating) VALUES(100050,'sep7-no-pub',11,'{}','{}',?,1,'approved','harbor','G'),(100060,'sep17-lt',11,'{}','{}',?,1,'approved','harbor','G'),(100076,'sep25-r',11,'{}','{}',?,1,'approved','harbor','R'),(100088,'oct8-g',11,'{}','{}',?,1,'approved','harbor','G'),(100099,'oct31-g',11,'{}','{}',?,1,'approved','harbor','G')").bind(sep7,sep17,sep25,oct8,oct31).run();
+ await env.DB.prepare('INSERT INTO rank_publications(card_id,published_at,captured_at) VALUES(100060,?,?),(100076,?,?),(100088,?,?),(100099,?,?)').bind(sep17,sep17,sep25,sep25,oct8,oct8,oct31,oct31).run();
+ rankTransport.heats=async(_env,windows)=>windows.map(w=>({...w,heat:w.roleId==='sep25-r'?31804:w.roleId==='oct8-g'?500:100,complete:true}));
+ const nov15=Date.parse('2026-11-15T12:00:00+08:00');
+ for(let i=0;i<3;i++)await rankMaintenance(env,nov15+i*60000);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards WHERE card_id IN(100050,100060)').first('n')).toBe(0);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_settlements WHERE window='month' AND period='2026-09-01'").first('n')).toBe(0);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_settlements WHERE window='month' AND period='2026-10-01'").first('n')).toBe(0);
+ const c76=(await env.DB.prepare('SELECT zone,window,period,band,payout_hold FROM rank_awards WHERE card_id=100076 ORDER BY window').all()).results;
+ expect(c76).toEqual([
+  {zone:'all',window:'day',period:'2026-09-25',band:1,payout_hold:1},
+  {zone:'all',window:'week',period:'2026-09-21',band:1,payout_hold:1},
+ ]);
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_awards WHERE card_id=100088 AND payout_hold=1').first('n')).toBe(4);
+ const dec2=Date.parse('2026-12-02T00:00:00+08:00');
+ await rankMaintenance(env,dec2);
+ const octMonth=(await env.DB.prepare("SELECT card_id,zone,band,payout_hold FROM rank_awards WHERE window='month' AND period='2026-10-01' ORDER BY zone").all()).results;
+ expect(octMonth).toEqual([
+  {card_id:100088,zone:'all',band:1,payout_hold:0},
+  {card_id:100088,zone:'clean',band:1,payout_hold:0},
+ ]);
+});
+
+it('supplements cross-boundary week 2026-10-12, skips held payouts during payment runs, and reserves a one-time idempotent payout release',async()=>{
+ const preAuthor=await makeMember(22),oct16=Date.parse('2026-10-16T12:00:00+08:00'),nov15=Date.parse('2026-11-15T12:00:00+08:00');
+ const postCards=Array.from({length:10},(_,i)=>({id:100011+i,heat:100-i,talkNum:5,registeredAt:at+1000+i,adult:true,memberId:member,accountNo:11}));
+ for(const c of postCards){
+  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,rating) VALUES(?,?,11,'{}','{}',?,1,'approved','harbor','R')").bind(c.id,`post-${c.id}`,c.registeredAt).run();
+  await env.DB.prepare('INSERT INTO rank_publications(card_id,published_at,captured_at) VALUES(?,?,?)').bind(c.id,c.registeredAt,c.registeredAt).run();
+  await env.DB.prepare("INSERT INTO rank_window_scores(card_id,window,from_at,to_at,heat,scored_at,excluded) VALUES(?,'week',?,?,?,?,'0')").bind(c.id,c.registeredAt,c.registeredAt+7*86400000,c.heat,nov15).run();
+ }
+ for(const zone of ['clean','all']as const)await settleRankSnapshot(env,{zone,window:'week',period:'2026-10-12',now:nov15-86400000,cards:postCards});
+ await env.DB.prepare("UPDATE rank_awards SET status='paid',paid_at=?").bind(nov15-86400000).run();
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,rating) VALUES(100070,'pre-hit',22,'{}','{}',?,1,'approved','harbor','R'),(100071,'pre-miss',22,'{}','{}',?,1,'approved','harbor','R')").bind(oct16,oct16+1000).run();
+ await env.DB.prepare('INSERT INTO rank_publications(card_id,published_at,captured_at) VALUES(100070,?,?),(100071,?,?)').bind(oct16,oct16,oct16+1000,oct16+1000).run();
+ let heatCalls=0,payCalls=0;
+ rankTransport.heats=async(_env,windows)=>{heatCalls++;return windows.map(w=>({...w,heat:w.roleId==='pre-hit'?95:10,complete:true}))};
+ rankTransport.pay=async(_env,_token,input)=>{payCalls++;return input};
+ expect((await releaseHeldRankPayouts(env,nov15)).status).toBe('settlement_incomplete');
+ for(let i=0;i<3;i++)await rankMaintenance(env,nov15+i*60000);
+ const callsAfterSettle=heatCalls;
+ await rankMaintenance(env,nov15+300000);
+ expect(heatCalls).toBe(callsAfterSettle);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_awards WHERE window='week' AND period='2026-10-12' AND status='paid'").first('n')).toBe(10);
+ expect(await env.DB.prepare("SELECT rank,band,amount,payout_hold FROM rank_awards WHERE card_id=100070 AND window='week'").first()).toEqual({rank:7,band:10,amount:10000,payout_hold:1});
+ expect(await env.DB.prepare("SELECT rank,band,amount,payout_hold FROM rank_awards WHERE card_id=100070 AND window='day'").first()).toEqual({rank:1,band:1,amount:5000,payout_hold:1});
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM community_awards WHERE member_id=? AND source='rank-v1'").bind(preAuthor).first('n')).toBe(2);
+ const plan=(await env.DB.prepare("EXPLAIN QUERY PLAN SELECT id FROM rank_awards WHERE status='pending' AND payout_hold=0 AND (attempted_at IS NULL OR attempted_at<=?) ORDER BY attempted_at IS NOT NULL,attempted_at,awarded_at,id LIMIT 5").bind(nov15).all<{detail:string}>()).results.map(r=>r.detail).join('\n');
+ expect(plan).toContain('rank_awards_payable');
+ await rankPaymentMaintenance(env,nov15+360000);
+ await rankPaymentMaintenance(env,nov15+420000);
+ await rankPaymentMaintenance(env,nov15+480000);
+ expect(payCalls).toBe(10);
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_awards WHERE card_id=100070 AND status='pending' AND payout_hold=1").first('n')).toBe(2);
+ await rankPaymentMaintenance({...env,RANK_PRE_LAUNCH_PAYOUTS_ENABLED:'true'},nov15+540000);
+ expect(payCalls).toBe(12);
+ expect(await releaseHeldRankPayouts(env,nov15+600000)).toEqual({status:'already_released',awardCount:2,totalAmount:15000});
+ expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_awards WHERE card_id=100070 AND status='paid'").first('n')).toBe(2);
 });

@@ -20,7 +20,7 @@ export async function resetDb(): Promise<void> {
   statements.push(env.DB.prepare('DELETE FROM review_length_exemptions'));
   statements.push(env.DB.prepare('DELETE FROM badge_stats_backfill_members'));
   statements.push(env.DB.prepare("UPDATE badge_stats_backfill_runs SET completed_at=NULL,outcome='running' WHERE job_key='invite-source-v2'"));
-  statements.push(...['badge_qualification_refresh','badge_qualifications','rank_window_scores','rank_attempts','rank_awards','rank_settlements','rank_publications'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
+  statements.push(...['badge_qualification_refresh','badge_qualifications','rank_payout_releases','rank_settlement_supplements','rank_window_scores','rank_attempts','rank_awards','rank_settlements','rank_publications'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
   statements.push(env.DB.prepare('DELETE FROM leaderboard_privacy_operations'));
   statements.push(env.DB.prepare('DELETE FROM leaderboard_privacy'));
   frozenFixtureRoles.clear();hostedFixture();
