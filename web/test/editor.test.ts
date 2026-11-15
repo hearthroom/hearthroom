@@ -2220,6 +2220,79 @@ describe("匯入日里卡 → 建立", () => {
     expect(asset.cardCss).toBeUndefined();
     expect(asset.cardCssDialect).toBeUndefined();
   });
+
+  it("已填角色名稱與設定時拖入獨立 lorebook.json：只填進三件套世界書槽、不出整卡預覽、不覆蓋已填欄位", async () => {
+    const cases = (await import("./fixtures/rili-cases.json")).default.cases;
+    await mount("/create");
+    await type($("#f-name"), "保留我的名字");
+    await type($("#f-detail"), "保留我的設定");
+    await type($("#f-welcome"), "保留我的開場");
+
+    root.querySelectorAll<HTMLButtonElement>(".import__kind button")[2].click();
+    await flush();
+    await pickFile(
+      $(".import input[type=file]"),
+      new File([JSON.stringify(cases[1].input)], "lorebook.json", { type: "application/json" }),
+    );
+
+    expect($(".import .seg__item--on").textContent?.trim()).toBe(i18n.global.t("import.kind.mmd"));
+    const onRows = root.querySelectorAll(".import .parts__row--on");
+    expect(onRows).toHaveLength(1);
+    expect(onRows[0].textContent).toContain("lorebook.json");
+    expect(root.querySelector(".import .review")).toBeNull();
+    expect($<HTMLInputElement>("#f-name").value).toBe("保留我的名字");
+    expect($<HTMLTextAreaElement>("#f-detail").value).toBe("保留我的設定");
+    expect($<HTMLTextAreaElement>("#f-welcome").value).toBe("保留我的開場");
+  });
+
+  it.each(["tavern", "mmd"] as const)("%s 無正則匯入時保留編輯器既有的顯示規則與自訂樣式", async (mode) => {
+    await mount("/create");
+    await pickFile(
+      $(".rxbar input[type=file]"),
+      new File(
+        [JSON.stringify([{ scriptName: "既有顯示規則", findRegex: "foo", replaceString: "<b>bar</b>" }])],
+        "existing-rules.json",
+        { type: "application/json" },
+      ),
+    );
+    $<HTMLButtonElement>("[data-card-css-toggle]").click();
+    await flush();
+    await type($(".card-style__custom textarea"), ".keep-me { color: green; }");
+
+    if (mode === "tavern") {
+      const card = {
+        spec: "chara_card_v2",
+        spec_version: "2.0",
+        data: { name: "酒館新卡", description: "酒館設定", first_mes: "酒館開場" },
+      };
+      await pickFile(
+        $(".import input[type=file]"),
+        new File([JSON.stringify(card)], "tavern.json", { type: "application/json" }),
+      );
+      byText("套用到表單").click();
+      await flush();
+    } else {
+      root.querySelectorAll<HTMLButtonElement>(".import__kind button")[1].click();
+      await flush();
+      await pickFile(
+        $(".import input[type=file]"),
+        new File(["MMD 角色設定"], "莉亞.txt", { type: "text/plain" }),
+      );
+      byText("套用到表單").click();
+      await flush();
+      await type($("#f-welcome"), "補上開場");
+    }
+
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    const [, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(asset).toMatchObject({
+      rules: [expect.objectContaining({ name: "既有顯示規則", find: "foo", replace: "<b>bar</b>" })],
+      cardCss: ".keep-me { color: green; }",
+      pageMode: "classic",
+      openingMode: "greeting",
+    });
+  });
 });
 
 describe("卡片變數", () => {

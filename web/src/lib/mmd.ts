@@ -93,12 +93,13 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
 
   const dockCopy = (mmdDockCopy as Record<string, { name: string; description: string }>)[options.language] ?? mmdDockCopy.en;
   const draft = makeDraft(options.language);
-  // 名字：匯出檔裡帶的 > 設定檔的檔名 > 世界書名 > 任一檔的檔名
+  const nonBook = files.find((f) => f.part !== "book");
+  // 名字：匯出檔裡帶的 > 設定檔的檔名 > 世界書名 > 非世界書檔的檔名 > 任一檔的檔名
   draft.roleName =
     rules?.roleName ||
     (definition ? stemOf(definition.fileName) : "") ||
     str(book?.book.name) ||
-    (files[0] ? stemOf(files[0].fileName) : "");
+    (nonBook ? stemOf(nonBook.fileName) : files[0] ? stemOf(files[0].fileName) : "");
   draft.roleDetailDesc = definition?.text ?? "";
   // 整卡匯入：開場白直接用匯出檔的 beginning，不看表單裡原本有沒有
   draft.roleWelcome = rules?.welcome ?? "";

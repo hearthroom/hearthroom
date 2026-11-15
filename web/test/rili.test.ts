@@ -347,13 +347,24 @@ describe("匯入面板 UI（ui.md D1–D7）", () => {
       done();
     });
 
-    it(`${label}拖入獨立 lorebook.json：自動切到 MMD 三件套分頁並填入世界書槽位`, async () => {
+    it(`${label}拖入獨立 lorebook.json：只切到 MMD 三件套並填入世界書槽位、不出整卡預覽；補上設定檔後才合併出預覽`, async () => {
       const { el, done } = await dropInTab(tab, all[1].input, "lorebook.json");
       expect(el.querySelector(".import__error")).toBeNull();
       expect(el.querySelector(".seg__item--on")?.textContent?.trim()).toBe(i18n.global.t("import.kind.mmd"));
       const onRows = el.querySelectorAll(".parts__row--on");
       expect(onRows.length).toBe(1);
       expect(onRows[0].textContent).toContain("lorebook.json");
+      expect(el.querySelector(".review")).toBeNull();
+
+      const input = el.querySelector<HTMLInputElement>('input[type="file"]')!;
+      const txt = new File(["合成角色設定內容"], "莉亞.txt", { type: "text/plain" });
+      Object.defineProperty(input, "files", { value: [txt], configurable: true });
+      input.dispatchEvent(new Event("change"));
+      await new Promise((r) => setTimeout(r, 0));
+      await nextTick();
+
+      expect(el.querySelectorAll(".parts__row--on").length).toBe(2);
+      expect(el.querySelector(".review")?.textContent).toContain("莉亞");
       expect(el.querySelector(".review")?.textContent).toContain(i18n.global.t("import.landed.worldbook", { n: 2 }));
       done();
     });

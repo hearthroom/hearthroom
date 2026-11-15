@@ -1731,14 +1731,16 @@ function applyImport(result: ImportResult) {
   if (result.regex) {
     result.regex.pageMode ??= "classic";
     regexSet.value = result.regex;
-  } else {
-    const isWebCard = result.spec === "fengyue" || result.spec === "rili";
+  } else if (result.spec === "fengyue" || result.spec === "rili") {
     // 風月與日里卡都是新的網頁玩法，沒有舊版聊天頁要相容；同時清掉上一份草稿殘留的規則、首屏與樣式
     regexSet.value = {
       ...emptyRuleSet(),
-      pageMode: isWebCard ? "sandbox" : "classic",
-      ...(isWebCard ? { format: "fengyue" } : {}),
+      pageMode: "sandbox",
+      format: "fengyue",
     };
+  } else {
+    // 酒館／MMD 未帶規則時沿用編輯器既有的顯示規則與樣式，只把聊天頁切回傳統頁
+    regexSet.value.pageMode = "classic";
   }
   // 風月與日里卡以開場網頁開局：歸開場網頁；其他照開場白（owner 2026-11-10）
   regexSet.value.openingMode =

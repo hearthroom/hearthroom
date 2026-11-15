@@ -130,8 +130,11 @@ async function read(file: File) {
 
 // ── 三件套 ────────────────────────────────────────────────────────────
 const mmdFiles = ref<MmdFile[]>([]);
+// 單獨一本世界書不是一張卡（沒有名字、設定與開場白），只填上槽位等正則或設定檔合用，不出整卡預覽（ui.md D5）
 const mmdPreview = computed<MmdImportResult | null>(() =>
-  mmdFiles.value.length ? mergeMmdFiles(mmdFiles.value, { language: props.language }) : null,
+  mmdFiles.value.some((f) => f.part !== "book")
+    ? mergeMmdFiles(mmdFiles.value, { language: props.language })
+    : null,
 );
 const partFile = (part: MmdPart) => mmdFiles.value.find((f) => f.part === part) ?? null;
 const detailTooLong = computed(() => {
