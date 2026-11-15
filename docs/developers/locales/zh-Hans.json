@@ -555,7 +555,7 @@
   "d983b644b1ad0": "`forbidden` — 非角色拥有者。",
   "dd9232f97e817": "`role_not_found`。",
   "d693a89f45d04": "读取角色显示规则以供渲染",
-  "dc1cfd7afd815": "玩家端读取角色显示规则，供客户端渲染聊天使用。任何通过 bearer 验证的调用方，都可读取任何存在角色的规则（不检查可见性，与角色详情的访问条件相同）。在 `/open/v1` 前缀下，此路由不在访客允许列表，故需要 bearer 令牌。仅提供 `status: passed` 的素材；素材不存在或未通过时，返回空结构（`rules: []`、`status: none`、`version: 0`、`pageMode: classic`）。此路由绝不包含 `rejectReason`。 同时提供 operationId 与 conversationId 时，工坊显示规则会对应该回合固定的 admission metadata workshopHash；当前的作者开关变更从下一次 admission 起生效。原作者 DLC 与原卡 agent configuration 使用相同信任模型；玩家扩充没有脚本或 SDK 访问权限。",
+  "dc1cfd7afd815": "玩家端读取角色显示规则，供客户端渲染聊天使用。任何通过 bearer 验证的调用方，都可读取任何存在角色的规则（不检查可见性，与角色详情的访问条件相同）。在 `/open/v1` 前缀下，此路由不在访客允许列表，故需要 bearer 令牌。仅提供 `status: passed` 的素材；素材不存在或未通过时，返回空结构（`rules: []`、`status: none`、`version: 0`、`pageMode: classic`）。此路由绝不包含 `rejectReason`。一并提供 operationId 与 conversationId 时，工坊显示规则会对应不可变的操作接受元数据 workshopHash；当前的工坊启用设置变更自下一次操作接受起生效。原作者 DLC 与基础智能体配置共用相同信任模型；玩家扩展不具备脚本或 SDK 访问权限。",
   "d6ba965bef068": "角色 id。",
   "d7ddce92cb00d": "玩家可见素材。",
   "d34f4a9b418cc": "`invalid_param` — 缺少 `roleId`。",
@@ -2667,5 +2667,5 @@
   "d13e58c14d99e": "仅出现在支出记录：这笔扣点出自哪些种类的积分，金额大的在前。一次扣点即使从多个积分批次扣除，也只算一条记录；各项 `amount` 加总等于该条的 `score`。无法判定来源时省略。",
   "db98a67008ab7": "积分种类。无法识别的值视同 `other`。",
   "da13084075959": "从此种类扣除的积分，为正数。",
-  "d0454fc25d6ec": "与 conversationId 一并提供时，返回此账号所属回合确定采用的工坊显示投影。其他账号的回合或不匹配的回合无法访问。"
+  "d0454fc25d6ec": "与 conversationId 一并提供时，返回此本人拥有操作在接受时确定的工坊显示投影。非本人拥有或不匹配的操作无法访问。"
 }

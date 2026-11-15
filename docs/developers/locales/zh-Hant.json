@@ -555,7 +555,7 @@
   "d983b644b1ad0": "`forbidden` — 非角色擁有者。",
   "dd9232f97e817": "`role_not_found`。",
   "d693a89f45d04": "讀取角色顯示規則以供轉譯",
-  "dc1cfd7afd815": "玩家端讀取角色顯示規則，供用戶端轉譯聊天使用。任何通過 bearer 驗證的呼叫端，都可讀取任何存在角色的規則（不檢查可見性，與角色詳情的存取條件相同）。在 `/open/v1` 前綴下，此路由不在訪客允許清單，故需要 bearer 權杖。僅提供 `status: passed` 的素材；素材不存在或未通過時，回傳空結構（`rules: []`、`status: none`、`version: 0`、`pageMode: classic`）。此路由絕不包含 `rejectReason`。 同時提供 operationId 與 conversationId 時，工坊顯示規則會對應該回合固定的 admission metadata workshopHash；目前的作者開關變更從下一次 admission 起生效。原作者 DLC 與原卡 agent configuration 使用相同信任模型；玩家擴充沒有腳本或 SDK 存取權。",
+  "dc1cfd7afd815": "玩家端讀取角色顯示規則，供用戶端轉譯聊天使用。任何通過 bearer 驗證的呼叫端，都可讀取任何存在角色的規則（不檢查可見性，與角色詳情的存取條件相同）。在 `/open/v1` 前綴下，此路由不在訪客允許清單，故需要 bearer 權杖。僅提供 `status: passed` 的素材；素材不存在或未通過時，回傳空結構（`rules: []`、`status: none`、`version: 0`、`pageMode: classic`）。此路由絕不包含 `rejectReason`。一併提供 operationId 與 conversationId 時，工坊顯示規則會對應不可變的操作接納中繼資料 workshopHash；目前的工坊啟用設定變更自下一次操作接納起生效。原作者 DLC 與基礎智慧體設定共用相同信任模型；玩家擴充不具備腳本或 SDK 存取權。",
   "d6ba965bef068": "角色 id。",
   "d7ddce92cb00d": "玩家可見素材。",
   "d34f4a9b418cc": "`invalid_param` — 缺少 `roleId`。",
@@ -2667,5 +2667,5 @@
   "d13e58c14d99e": "僅出現在支出紀錄：這筆扣點出自哪些種類的積分，金額大的在前。一次扣點即使從多個積分批次扣除，也只算一筆紀錄；各項 `amount` 加總等於該筆的 `score`。無法判定來源時省略。",
   "db98a67008ab7": "積分種類。無法辨識的值視同 `other`。",
   "da13084075959": "從此種類扣除的積分，為正數。",
-  "d0454fc25d6ec": "與 conversationId 一併提供時，傳回此帳號所屬回合確定採用的工坊顯示投影。其他帳號的回合或不相符的回合無法存取。"
+  "d0454fc25d6ec": "與 conversationId 一併提供時，回傳此本人擁有操作在接納時確定的工坊顯示投影。非本人擁有或不相符的操作無法存取。"
 }
