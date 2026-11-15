@@ -1,5 +1,6 @@
 import { applyWorkshopPublication,applyWorkshopUnpublication } from "./workshop-publication";
 import { readWorkshopPolicy } from "./workshop-policy";
+import { applyWorkshopOwnerProjection } from './workshop-owner-projection';
 import type { Context } from "hono";
 import { isRating, type Rating } from "../shared/content-rating";
 import { isAdult, getCard, type CardRow } from "./cards";
@@ -817,7 +818,7 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       }
     } else if (ev.kind === "owner_action" && workshopId && (actionRaw === "hide" || actionRaw === "restore")) {
       const gen=Number(ownerGenRaw);
-      if(Number.isSafeInteger(gen)&&gen>0)await env.DB.prepare(`UPDATE workshops SET owner_state=?,owner_reason=NULL,owner_action_generation=?,protected_join_cutoff_seq=COALESCE(?,protected_join_cutoff_seq),updated_at=? WHERE id=? AND owner_action_generation<?`).bind(actionRaw==='hide'?'hidden_by_owner':'visible',gen,cutoffSeqRaw??null,now,workshopId,gen).run();
+      if(Number.isSafeInteger(gen)&&gen>0)await applyWorkshopOwnerProjection(env.DB,provider,workshopId,actionRaw,gen,cutoffSeqRaw);
     } else if ((ev.kind === "install_count_changed" || ev.kind === "install_count") && workshopId && typeof joinCountRaw === "number") {
       await env.DB.prepare("UPDATE workshops SET install_count = ?, updated_at = ? WHERE id = ?")
         .bind(Math.max(0, Math.trunc(joinCountRaw)), now, workshopId)

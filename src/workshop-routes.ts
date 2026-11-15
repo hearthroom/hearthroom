@@ -55,7 +55,8 @@ function assertHostingServiceKey(c: Context<{ Bindings: Env }>): void {
 export const workshopRoutes = new Hono<{ Bindings: Env }>();
 
 workshopRoutes.post('/v1/workshops/:id/owner-action', async c => {
-  return c.json(await workshopOwnerAction(c, c.req.param('id'), await c.req.json()));
+  c.header('Cache-Control','private, no-store');
+  return c.json(await workshopOwnerAction(c, c.req.param('id'), await c.req.json().catch(()=>null)));
 });
 
 workshopRoutes.get("/v1/cards/:cardId/workshop", async (c) => {
