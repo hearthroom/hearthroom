@@ -3,6 +3,7 @@ import {env} from 'cloudflare:test';
 import {hostGateway} from '../src/hosting';
 import {upstream,type UpstreamRole} from '../src/upstream';
 import {claim,stamp} from '../src/review';
+import {workshopUpstream} from '../src/workshop-gateway';
 export const frozenFixtureRoles=new Map<string,UpstreamRole>();
 const originalGateway={...hostGateway};
 export function hostedFixture(){
@@ -15,6 +16,8 @@ export function hostedFixture(){
   return {workId,versionId,hostedRevisionId};
  };
  upstream.readForReview=async()=>({document:{roleDetailDesc:'Private fixture'.repeat(300)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ // Submissions read the author's current workshop policy; never reach a real Provider from tests.
+ workshopUpstream.state=async()=>({workId:'fixture-work',allowNew:false,revision:1,policyRevision:1,items:[]});
 }
 export function restoreHostedFixture(){
  restoreLegacyPolicyFixture();

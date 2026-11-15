@@ -138,7 +138,7 @@ const METRICS = {
   },
   workshop: {
     name: "hearthroom_workshop_operations_total",
-    help: "Workshop direct publication, creator actions, takedown, outbox sync and policy backfill at card registration.",
+    help: "Workshop direct publication, creator actions, takedown, outbox sync and author-policy backfill on card submission.",
     label: "operation",
     operations: ["publish", "unpublish", "discard", "owner_action", "revoke", "sync", "policy_backfill"],
     outcomes: ["success", "denied", "conflict", "error", "rejected"],

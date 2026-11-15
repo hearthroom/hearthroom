@@ -178,7 +178,11 @@ export async function workshopCreatorAction(c: Ctx, workshopId: string, body: un
         const p = receipt as unknown as WorkshopUnpublishReceipt;
         if (!await memberOwnsExternal(c.env.DB, member, member.provider, p.authorPublicNo))
             throw new HttpError(403, 'not_the_author');
-        await applyWorkshopUnpublication(c.env, member.provider, p);
+        // The author's DLC on a card with no community row was never listed here; Provider
+        // has already taken it down, and there is no public row to update.
+        const unlisted = p.kind === 'dlc' && p.authorPublicNo === p.cardOwnerPublicNo && !await resolveCardForWork(c.env.DB, member.provider, p.workId, p.sourceRoleId);
+        if (!unlisted)
+            await applyWorkshopUnpublication(c.env, member.provider, p);
     }
     await bumpOp(c.env.DB, 'workshop', action === 'unpublish' ? 'unpublish' : 'discard', 'success');
     return receipt;

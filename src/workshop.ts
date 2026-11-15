@@ -805,8 +805,8 @@ export async function applyWorkshopEvents(env: Env, events: WorkshopOutboxEvent[
       const revision=Number(revisionRaw);
       if(p.policyVersion===2&&Number.isSafeInteger(revision)&&revision>0&&allowNewRaw!==undefined) {
         // A card without a community row has nothing to project onto; the event is
-        // still acknowledged (one outbox cursor), and registration re-reads Provider's
-        // current policy instead (projectCurrentWorkshopPolicy).
+        // still acknowledged (one outbox cursor), and each hosting submission re-reads
+        // Provider's current policy instead (projectCurrentWorkshopPolicy).
         const resolved=await resolveCardForWork(env.DB,provider,workId,sourceRoleId);
         if(resolved) {
           await upsertWorkshopPolicyProjection(env.DB,provider,workId||resolved.workId,Number(resolved.card.id),allowNewRaw===true||allowNewRaw===1,revision,now);

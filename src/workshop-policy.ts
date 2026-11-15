@@ -39,10 +39,13 @@ export async function upsertWorkshopPolicyProjection(db: D1Database, provider: P
 }
 
 /**
- * A card that just got its community row may already have a saved author switch
- * (saved while it had no row; the outbox event for it had nothing to project onto).
- * Read Provider's current policy once and project it. Never fails the registration:
- * on error the projection stays closed until the next policy event.
+ * Called on every hosting submission (the only way a card becomes publicly listed).
+ * The author may have saved the switch while the card had no community row; the outbox
+ * event for that save had nothing to project onto. Read Provider's current policy and
+ * project it. An open policy is upserted under Provider's work id; a closed one only
+ * updates a row with that same key, so a default "closed" read under a new work id never
+ * hides a tab that is open under the old one. Never fails the submission: on error the
+ * projection stays as it was until the next policy event.
  */
 export async function projectCurrentWorkshopPolicy(env: Env, provider: ProviderId, cardId: string, roleId: string, token?: string | null): Promise<void> {
     try {
@@ -50,7 +53,12 @@ export async function projectCurrentWorkshopPolicy(env: Env, provider: ProviderI
         const revision = Number(state.policyRevision ?? state.revision);
         if (typeof state.workId !== 'string' || !state.workId || typeof state.allowNew !== 'boolean' || !Number.isSafeInteger(revision) || revision < 1)
             throw new HttpError(502, 'invalid_policy');
-        await upsertWorkshopPolicyProjection(env.DB, provider, state.workId, Number(cardId), state.allowNew, revision);
+        if (state.allowNew)
+            await upsertWorkshopPolicyProjection(env.DB, provider, state.workId, Number(cardId), true, revision);
+        else
+            await env.DB.prepare(`UPDATE workshop_policies SET card_id=?,allow_new=0,revision=?,consent_version=2,updated_at=?
+              WHERE provider=? AND work_id=? AND (revision<? OR (revision=? AND consent_version<>2))`)
+                .bind(Number(cardId), revision, Date.now(), provider, state.workId, revision, revision).run();
         await bumpOp(env.DB, 'workshop', 'policy_backfill', 'success');
     }
     catch (error) {

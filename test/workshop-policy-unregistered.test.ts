@@ -150,3 +150,32 @@ it('stops a non-author before Provider commits a publication on a card that has 
   expect(r.status).toBe(404);
   expect(writes).toBe(0);
 });
+
+it('a closed Provider read under a different work id never hides a tab that is open', async () => {
+  up.state = async () => ({ workId: 'canonical-work-later', allowNew: true, revision: 2, policyRevision: 2, items: [] });
+  const cardId = await registerLater();
+  expect(await tab(cardId)).toMatchObject({ tabVisible: true });
+  const { projectCurrentWorkshopPolicy } = await import('../src/workshop-policy');
+  // A default read (closed, revision 1) under another work id inserts nothing.
+  up.state = async () => ({ workId: 'other-work-key', allowNew: false, revision: 1, policyRevision: 1, items: [] });
+  await projectCurrentWorkshopPolicy(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
+  expect(await tab(cardId)).toMatchObject({ tabVisible: true });
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshop_policies WHERE card_id=?').bind(cardId).first<{ n: number }>())!.n).toBe(1);
+  // A newer closed read under the same key does close it.
+  up.state = async () => ({ workId: 'canonical-work-later', allowNew: false, revision: 3, policyRevision: 3, items: [] });
+  await projectCurrentWorkshopPolicy(env, 'harbor', String(cardId), LATER_ROLE, 'owner');
+  expect(await tab(cardId)).toMatchObject({ tabVisible: false });
+});
+
+it('lets the author unpublish that DLC again without a public row to update', async () => {
+  providerPolicy();
+  const workshopId = crypto.randomUUID();
+  up.creatorAction = async (_e: unknown, token: string, input: { workshopId: string }) => {
+    expect(token).toBe('owner');
+    return { workshopId: input.workshopId, workId: PRIVATE_ROLE, sourceRoleId: PRIVATE_ROLE, kind: 'dlc', status: 'draft', version: 1, draftRevision: 3, publicationRevision: 2, authorPublicNo: 74101, cardOwnerPublicNo: 74101, policyVersion: 2 };
+  };
+  const r = await SELF.fetch(`https://c.test/v1/me/workshops/${workshopId}/unpublish`, { method: 'POST', headers: { ...bearer('owner'), 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: 3, operationId: crypto.randomUUID() }) });
+  expect(r.status).toBe(200);
+  expect(await r.json()).toMatchObject({ workshopId, status: 'draft' });
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM workshops').first<{ n: number }>())!.n).toBe(0);
+});
