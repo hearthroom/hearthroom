@@ -36,7 +36,7 @@ const layer = (item: Item) => (item.kind === "dlc" ? t("workshop.layer.dlc") : i
   <div class="pip-ws">
     <p v-if="opening" class="notice pip-ws__opening ws-text"><WorkshopIcon name="open" />{{ t("workshop.panel.openingFrom", { name: opening }) }}</p>
     <p v-if="closed" class="notice pip-ws__closed ws-text" data-pip-closed><WorkshopIcon name="lock" />{{ t("workshop.panel.workshopClosed") }}</p>
-    <p v-else-if="view.triggeredCount > 0" class="notice pip-ws__warn ws-text" role="status"><WorkshopIcon name="warn" />{{ t("workshop.panel.demoted", { n: view.triggeredCount }) }}</p>
+    <p v-else-if="view.triggeredCount > 0" class="notice pip-ws__warn ws-text" role="status"><WorkshopIcon name="warn" />{{ t("workshop.panel.demoted", { n: view.triggeredCount }, view.triggeredCount) }}</p>
     <ol class="pip-ws__list">
       <li v-for="item in view.items" :key="item.workshopId" class="pip-ws__row" :class="{ 'pip-ws__row--off': item.status === 'disabled' || item.status === 'removed' || paused(item) }">
         <ExtensionCover class="pip-ws__ico" :src="item.coverUrl" :name="item.name" square />

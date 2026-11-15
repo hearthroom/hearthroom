@@ -1,13 +1,19 @@
 {
   "tier": "feature",
-  "audience": "authors",
-  "draft": true,
-  "try": "/mine",
+  "audience": "everyone",
+  "try": "/mine?tab=workshops",
   "title": {
-    "zh-Hant": "作者可以替自己的卡發布作者 DLC，玩家可以為開啟工坊的卡做世界書擴充。",
-    "zh-Hans": "作者可以为自己的卡发布作者 DLC，玩家可以为开启工坊的卡制作世界书扩展包。",
-    "en": "Authors can publish Author DLC for their cards, and players can add lorebook extensions to cards with Workshop on.",
-    "ja": "作者は自分のカードで作者DLCを公開でき、プレイヤーは世界設定の拡張をすぐ公開できます。",
-    "ko": "작가는 자기 카드에 작가 DLC를, 플레이어는 세계관 확장팩을 바로 게시할 수 있어요."
+    "zh-Hant": "工坊分成「作者 DLC」與「玩家擴充」，發布後直接上架。",
+    "zh-Hans": "工坊分成“作者 DLC”与“玩家扩展包”，发布后直接上架。",
+    "en": "Workshop now splits into Author DLC and Player extensions, and publishes right away.",
+    "ja": "ワークショップが「作者DLC」と「プレイヤー拡張」に分かれ、すぐ公開できます。",
+    "ko": "창작마당이 ‘작가 DLC’와 ‘플레이어 확장팩’으로 나뉘고 게시하면 바로 올라가요."
+  },
+  "body": {
+    "zh-Hant": "開啟工坊後，作者可為自己的卡加上世界書、介面與開場，玩家也能為這張卡補充世界書擴充。",
+    "zh-Hans": "开启工坊后，作者可为自己的卡加上世界书、界面与开场，玩家也能为这张卡补充世界书扩展包。",
+    "en": "Once Workshop is turned on for a card, the author can add lorebook entries, interface changes, and openings, while players can share lorebook extensions.",
+    "ja": "カードのワークショップをオンにすると、作者は世界設定・画面・書き出しを、プレイヤーは世界設定の拡張パックを公開できます。",
+    "ko": "카드의 창작마당을 켜면 작가는 세계관·화면·도입부를 담은 DLC를, 플레이어는 세계관 확장팩을 게시할 수 있어요."
   }
 }

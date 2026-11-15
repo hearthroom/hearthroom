@@ -328,8 +328,9 @@ const overlayStyle = computed(() => desktop.value
 }
 .pip__panel:focus { outline: none; }
 .pip__head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); flex: none; }
-.pip__tabs { flex: 1; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-.pip__tab { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 0 6px; }
+/* 各格照字寬分配（不是等寬）：四格的字總寬放得下，等寬反而把長的那格截掉 */
+.pip__tabs { flex: 1; min-width: 0; display: flex; }
+.pip__tab { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 0 6px; }
 .pip__tab-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pip__count { flex: none; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .pip__close {

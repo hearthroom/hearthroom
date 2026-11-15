@@ -71,7 +71,7 @@ const canPublish = computed(() => props.state !== "live" && !props.workshopClose
         <span v-if="hidden" class="chip ws-chip--warn" data-pub-hidden>{{ $t("workshop.status.hiddenByOwner") }}</span>
       </p>
       <p v-if="desc" class="muted pub__desc ws-text">{{ desc }}</p>
-      <p v-if="workshopClosed" class="muted pub__desc ws-text" data-pub-closed-note>{{ own ? $t("workshop.mine.row.ownWorkshopClosed") : $t("workshop.editor.error.workshopClosed") }}</p>
+      <p v-if="workshopClosed" class="muted pub__desc ws-text" data-pub-closed-note>{{ own ? $t("workshop.mine.row.ownWorkshopClosed") : state === "live" ? $t("workshop.mine.row.cardWorkshopClosed") : $t("workshop.editor.error.workshopClosed") }}</p>
       <p v-if="hidden" class="muted pub__desc ws-text" data-pub-hidden-note>{{ $t("workshop.mine.row.hiddenByOwner") }}</p>
     </div>
 
