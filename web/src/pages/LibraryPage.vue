@@ -67,7 +67,7 @@ async function remove(chat:ConversationSummary){
  const roleName=displayName(chat.roleName,locale.value);
  const subject=roleName?[roleName,chat.conversationTitle||t('library.recent.currentSegment')].join(' · '):chat.conversationTitle||t('library.untitled');
  try{
-  const token=await session.accessToken();if(!token)throw new Error('auth');preview=await previewConversationDeletion(token,[chat],'current');
+  const token=await session.accessToken();if(!token)throw new Error('auth');preview=await previewConversationDeletion(token,[chat],'current');clearFailure();
   const ok=await confirmDialog({title:t('library.recent.confirmTitle'),subject,message:t('library.recent.deleteIncludes'),consequences:[t('library.recent.deleteMessages'),t('library.recent.deleteMemory')],warning:t('library.recent.deleteWarning'),hint:t('library.recent.deleteAlternative'),confirmText:t('library.recent.confirmDelete'),cancelText:t('dialog.cancel'),danger:true,dangerAppearance:'subdued',busyText:t('library.manage.deleting'),pendingText:t('library.recent.resultPending'),retryText:t('library.retry'),pendingConfirmText:t('library.recent.checkResult'),onPending:async()=>{await load(true);settleConfirm(false);notice.value=t('library.recent.resultPending');retry.value=()=>load(true);},onConfirm:async()=>{
    // Expiry changes consent, never expand the selected segment silently.
    if(!preview)preview=await previewConversationDeletion(token,[chat],'current');
