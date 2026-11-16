@@ -11,6 +11,7 @@ import type { GenerationClient, GenerationModel, GenerationTask, SaveTarget } fr
 import { wrapTab } from "@/lib/focus-trap";
 import { fitSize } from "@/lib/studio";
 import { track } from "@/lib/track";
+import { topUpUrl } from "@/lib/topup";
 
 const props = defineProps<{
   open: boolean;
@@ -29,7 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; reauth: []; running: [boolean]; saved: [url: string, folder: string]; kept: []; libraryCopyFailed: [unknown] }>();
 
 const PROMPT_MAX = 4000;
-const TOP_UP = "https://console.harperharbor.com/me/billing";
+
 const prompt = ref(props.initialPrompt ?? "");
 const modelId = ref(props.models[0]?.id ?? "");
 const model = computed(() => props.models.find((m) => m.id === modelId.value));
@@ -274,7 +275,7 @@ const action = computed(() => (failure.value === "interrupted" ? "resource.gen.r
           </p>
           <div v-if="failure" class="notice notice--error gen__error" role="alert">
             <p>{{ $t("resource.gen.error." + failure) }}</p>
-            <a v-if="failure === 'credits'" class="btn btn--sm" :href="TOP_UP" target="_blank" rel="noopener" @click="track('topup_click')">
+            <a v-if="failure === 'credits'" class="btn btn--sm" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">
               {{ $t("wallet.topUp") }} ↗
             </a>
             <button v-else-if="failure === 'reauth'" type="button" class="btn btn--sm" @click="emit('reauth')">

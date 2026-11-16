@@ -192,7 +192,7 @@ export function createGa4() {
     checkoutUrl(href: string): string {
       try {
         const url = new URL(href);
-        if (url.origin !== "https://console.harperharbor.com" || url.pathname !== "/me/billing") return href;
+        if (url.origin !== "https://console.harperharbor.com" || !["/me/billing", "/pay/hearthroom"].includes(url.pathname)) return href;
         url.searchParams.delete("ga_client_id"); url.searchParams.delete("ga_source_app");
         url.searchParams.delete("ga_session_id");
         if (allowed() && clientId) {

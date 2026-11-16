@@ -10,6 +10,7 @@ import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { whole } from '@/lib/format';
 import { track } from '@/lib/track';
+import { topUpUrl } from '@/lib/topup';
 
 const session = useSession();
 const { lp } = useLocalePath();
@@ -25,7 +26,7 @@ const balance = computed(() => (session.wallet ? whole(session.wallet.score + se
     </div>
     <p class="wallet__balance"><strong>{{ balance }}</strong><span>{{ $t('profile.wallet.unit') }}</span></p>
     <div class="wallet__actions">
-      <a class="wallet__topup" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t('wallet.topUp') }}<AccountIcon name="external" /></a>
+      <a class="wallet__topup" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t('wallet.topUp') }}<AccountIcon name="external" /></a>
       <RouterLink :to="lp('/me/referral')" class="wallet__invite"><AccountIcon name="gift" />{{ $t('profile.wallet.invite') }}</RouterLink>
     </div>
   </section>

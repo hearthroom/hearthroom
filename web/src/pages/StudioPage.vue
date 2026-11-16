@@ -23,11 +23,12 @@ import { useSession } from "@/lib/session";
 import { defaultName, extensionOf, fitSize, recipeOf, rememberRecipe, splitCount, type Recipe } from "@/lib/studio";
 import { track } from "@/lib/track";
 import { useImageGeneration } from "@/lib/use-image-generation";
+import { topUpUrl } from "@/lib/topup";
 
 const { t, locale } = useI18n();
 const route = useRoute();
 const session = useSession();
-const TOP_UP = "https://console.harperharbor.com/me/billing";
+
 const { imageGen, generator, probeGeneration, markReauthorizing } = useImageGeneration(() => "harbor");
 const composer = ref<InstanceType<typeof StudioComposer> | null>(null);
 
@@ -494,7 +495,7 @@ const nameFor = (entry: Entry, index: number) => defaultName(entry.recipe?.promp
           <div v-if="tab === 'unsaved' && entry.failure" class="notice notice--error run__error" role="alert">
             <p>{{ $t("resource.gen.error." + entry.failure) }}</p>
             <div class="run__actions">
-              <a v-if="entry.failure === 'credits'" class="btn btn--sm" :href="TOP_UP" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+              <a v-if="entry.failure === 'credits'" class="btn btn--sm" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
               <button v-else-if="entry.failure === 'reauth'" type="button" class="btn btn--sm" @click="reauthorize">{{ $t("resource.gen.reauthAction") }}</button>
               <button v-else-if="entry.failure === 'interrupted'" type="button" class="btn btn--sm" @click="retry(entry)">{{ $t("resource.gen.resume") }}</button>
               <button v-if="entry.recipe" type="button" class="btn btn--sm btn--ghost" @click="again(entry)">{{ $t("studio.results.again") }}</button>

@@ -60,6 +60,8 @@ it("waits for bounded analytics readiness before sending and redirecting", async
 it("top-up shortfall landing records topup and decorates the Console destination", async () => {
   const {spy, replace} = await visit("/go/topup?from=canvas_shortfall");
   expect(JSON.parse(await beacons(spy)[0]!.text())[0]).toMatchObject({event:"credits_shortfall_click", detail:"topup"});
-  expect(ga.checkout).toHaveBeenCalledWith("https://console.harperharbor.com/me/billing");
-  expect(replace).toHaveBeenCalledWith("https://console.harperharbor.com/me/billing");
+  // 充值去綺夢社自己的付款頁，付完回到這個站的首頁（這一頁只是轉址，不是回來的地方）。
+  const payPage = `https://console.harperharbor.com/pay/hearthroom?back=${encodeURIComponent(`${location.origin}/`)}`;
+  expect(ga.checkout).toHaveBeenCalledWith(payPage);
+  expect(replace).toHaveBeenCalledWith(payPage);
 });
