@@ -65,12 +65,16 @@ it.each(['harbor','harbor'] as const)('HTTP submits a private %s draft and expos
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:10001}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'字'.repeat(3001)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const headers={Authorization:'Bearer author','X-Provider':provider,'Content-Type':'application/json'};
- const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:JSON.stringify({roleId:'private-draft',...ratingBody(false),operationId:crypto.randomUUID()})});
+ const submissionBody=JSON.stringify({roleId:'private-draft',...ratingBody(false),operationId:crypto.randomUUID()});
+ const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:submissionBody});
  expect(response.status).toBe(201);
  expect(upstream.fetchRole).not.toHaveBeenCalled();
  const result=await response.json() as {versionId:string};
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
+ expect(result).toMatchObject({submissionId:sub!.id,submissionStatus:'pending'});
  for(const memberId of ['a','b']){await claim(env.DB,sub!.id,memberId,Date.now());if((await stamp(env.DB,{submissionId:sub!.id,memberId,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;}
+ const replay=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:submissionBody});
+ expect(replay.status).toBe(200);expect(await replay.json()).toMatchObject({submissionId:sub!.id,submissionStatus:'approved',versionId:result.versionId});
  const decision=await SELF.fetch('https://c.test/v1/hosting/versions/'+result.versionId+'/decision');
  expect(decision.headers.get('cache-control')).toContain('no-store');
  const receipt=await decision.json() as {hostedRevisionId:string};

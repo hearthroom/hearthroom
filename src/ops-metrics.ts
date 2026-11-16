@@ -6,6 +6,7 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  review_status:{name:'hearthroom_review_status_reads_total',help:'Author-only review summary reads.',label:'operation',operations:['read'],outcomes:['success','denied','error']},
   comment_pin:{name:'hearthroom_comment_pins_total',help:'Card author pin and unpin requests by bounded result.',label:'action',operations:['pin','unpin'],outcomes:['ok','limit','forbidden','error']},
   promo_redirect: {name:'hearthroom_promo_redirects_total',help:'Temporary promotion redirects by bounded outcome; no campaign or referral identifiers.',label:'operation',operations:['redirect'],outcomes:['success','unknown','invalid']},
   score_admission: {name:'hearthroom_score_admissions_total',help:'Verified card rating qualification before score writes.',label:'operation',operations:['set'],outcomes:['allowed','denied','unavailable']},

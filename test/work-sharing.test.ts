@@ -5,6 +5,7 @@ import {getCard,upsertCard} from '../src/cards';
 import {identitiesFor,makeMember,resetDb,restoreUpstream,role,ratingBody} from './helpers';
 import {reconcileWorkAccess} from '../src/work-reconcile';
 import {hostGateway} from '../src/hosting';
+import {opsMetrics} from '../src/ops-metrics';
 import {unregister} from '../src/cards';
 import {upstream} from '../src/upstream';
 
@@ -631,4 +632,55 @@ it('offers submission for a delisted public update while keeping restore and sus
  await env.DB.prepare('UPDATE cards SET public_blocked=1 WHERE id=?').bind(card.id).run();
  const blocked=await(await request(`/v1/me/cards/${card.id}/visibility`)).json() as {workVisibility:{actions:string[]}};
  expect(blocked.workVisibility.actions).not.toContain('submit_update');
+});
+
+
+it('reads only the latest author review with version metadata and no reviewer or private content',async()=>{
+ const {source,work,member,card,current}=await fixture();
+ current.access='public';await env.DB.prepare("UPDATE managed_work_access SET access='public' WHERE work_id=?").bind(work).run();
+ const publicVersion=(await env.DB.prepare('SELECT approved_version_id AS id FROM cards WHERE id=?').bind(card.id).first<{id:string}>())!.id;
+ let latest='';
+ for(const [status,at] of [['approved',10],['rejected',20],['pending',20]] as const){
+  latest=crypto.randomUUID();const version=crypto.randomUUID(),hosted=crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,note,claimed_by) VALUES(?,?,'harbor',?,'re',?,?,?,?)").bind(latest,card.id,hosted,status,at,'Author-visible rejection','private-reviewer').run();
+  await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,hosted_revision_id,card_id,submission_id,state,created_at,update_kind,public_role) VALUES(?,?,?,?,?,'harbor',?,?,?,?,?,'minor',?)").bind(version,work,member,crypto.randomUUID(),source,hosted,card.id,latest,status,at,JSON.stringify({privateInstructions:'secret'})).run();
+ }
+ const res=await request(`/v1/me/cards/${card.id}/review-status`,'readOnly');
+ expect(res.status).toBe(200);expect(res.headers.get('Cache-Control')).toContain('private, no-store');
+ const body=await res.json();
+ expect(body).toMatchObject({publicVersionId:publicVersion,latestSubmission:{id:latest,kind:'re',status:'pending',submittedAt:20,updateKind:'minor',silentUpdate:true,rejectionReason:null}});
+ expect(Object.keys(body as object).sort()).toEqual(['latestSubmission','publicVersionId']);
+ const text=JSON.stringify(body);expect(text).not.toContain('private-reviewer');expect(text).not.toContain('secret');expect(text).not.toContain(member);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_review_status_reads_total{operation="read",outcome="success"} 1');
+ expect((await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_status' AND operation='read' AND outcome='success'").first<{value:number}>())?.value).toBe(1);
+ // A rejected result keeps the same author's reason.
+ await env.DB.prepare("UPDATE review_submissions SET status='rejected' WHERE id=?").bind(latest).run();
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toMatchObject({latestSubmission:{status:'rejected',rejectionReason:'Author-visible rejection',silentUpdate:true}});
+ const major=crypto.randomUUID();
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'re','approved',21)").bind(major,card.id,source).run();
+ await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,hosted_revision_id,card_id,submission_id,state,created_at,update_kind,update_note) VALUES(?,?,?,?,?,'harbor',?,?,?,'approved',21,'major','New opening and choices')").bind(crypto.randomUUID(),work,member,crypto.randomUUID(),source,crypto.randomUUID(),card.id,major).run();
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toMatchObject({latestSubmission:{id:major,status:'approved',silentUpdate:false,updateKind:'major',rejectionReason:null}});
+ await env.DB.prepare('UPDATE cards SET public_blocked=1 WHERE id=?').bind(card.id).run();
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toMatchObject({publicVersionId:null,latestSubmission:{id:major}});
+ await env.DB.prepare('UPDATE cards SET public_blocked=0 WHERE id=?').bind(card.id).run();
+ await env.DB.prepare("UPDATE managed_work_access SET sync_state='changing' WHERE work_id=?").bind(work).run();
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toMatchObject({publicVersionId:null});
+
+
+});
+
+it('review status rejects anonymous and other authors and returns explicit empty history',async()=>{
+ const {source}=await fixture(true);
+ expect((await request(`/v1/me/cards/${source}/review-status`,'')).status).toBe(401);
+ expect((await request(`/v1/me/cards/${source}/review-status`,'reader')).status).toBe(403);
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toEqual({publicVersionId:null,latestSubmission:null});
+ expect((await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_status' AND operation='read' AND outcome='denied'").first<{value:number}>())?.value).toBe(2);
+});
+
+it('returns unknown metadata for legacy reviews and counts unavailable owner authority',async()=>{
+ const {source,network}=await fixture();
+ expect(await(await request(`/v1/me/cards/${source}/review-status`)).json()).toMatchObject({publicVersionId:null,latestSubmission:{versionId:null,updateKind:null,silentUpdate:null,status:'approved'}});
+ network.mockRejectedValue(new Error('fixture unavailable'));
+ expect((await request(`/v1/me/cards/${source}/review-status`)).status).toBe(503);
+ expect((await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_status' AND operation='read' AND outcome='error'").first<{value:number}>())?.value).toBe(1);
 });

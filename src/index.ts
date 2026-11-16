@@ -38,6 +38,7 @@ import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import {workSharingRoutes} from './work-sharing';
+import {reviewStatusRoutes,submissionReceipt} from './review-status';
 import {workSharingCommandRoutes} from './work-sharing-commands';
 import {workSubmissionRoutes} from './work-submission';
 import {registerLegacyShare} from './work-share-registration';
@@ -265,6 +266,7 @@ app.use('/v1/*',async(c,next)=>{
 });
 app.route("/", accountAuthRoutes);
 app.route('/',workSharingRoutes);
+app.route('/',reviewStatusRoutes);
 app.route('/',workSharingCommandRoutes);
 app.route('/',workSubmissionRoutes);
 app.route("/", analyticsRoutes);
@@ -1551,7 +1553,7 @@ app.post("/v1/cards", async (c) => {
     queuePush(c);
     // This is the submission receipt: its rating describes this questionnaire,
     // while the public card keeps its previous rating until review approves it.
-    return c.json({...toCard(row,lang(c)),rating:rating.rating,ratingDescriptors:rating.descriptors,status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
+    return c.json({...toCard(row,lang(c)),rating:rating.rating,ratingDescriptors:rating.descriptors,status:row.status,versionId:receipt.versionId,...await submissionReceipt(c.env.DB,receipt.versionId)},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
 

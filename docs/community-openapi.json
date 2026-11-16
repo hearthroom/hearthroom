@@ -374,7 +374,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Card"
+                  "$ref": "#/components/schemas/SubmissionReceipt"
                 }
               }
             }
@@ -384,7 +384,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Card"
+                  "$ref": "#/components/schemas/SubmissionReceipt"
                 }
               }
             }
@@ -759,7 +759,12 @@
             "name": "nsfw",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "enum": ["1"] },
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
             "description": "Requires the existing authenticated adult consent gate."
           },
           {
@@ -4464,6 +4469,55 @@
           }
         }
       }
+    },
+    "/v1/me/cards/{id}/review-status": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Read your latest card review",
+        "description": "Author-only summary using role.read. Returns publicVersionId and latestSubmission separately; publicVersionId is null without a current public approval. Legacy review version and update metadata may be null. No reviewer identities or private card content are returned.",
+        "operationId": "getCardReviewStatus",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Author review summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardReviewStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Actual author role.read required; mutations additionally require role.write."
+          },
+          "404": {
+            "description": "card_not_found or owned operation not found."
+          },
+          "503": {
+            "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5626,6 +5680,127 @@
             "const": "500"
           }
         }
+      },
+      "CardReviewStatus": {
+        "type": "object",
+        "required": [
+          "publicVersionId",
+          "latestSubmission"
+        ],
+        "properties": {
+          "publicVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestSubmission": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "id",
+                  "versionId",
+                  "submittedAt",
+                  "kind",
+                  "status",
+                  "rejectionReason",
+                  "updateKind",
+                  "silentUpdate"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "versionId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "submittedAt": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Unix milliseconds."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "description": "first is a new review; re is an update review. Legacy values are preserved."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "approved",
+                      "rejected",
+                      "superseded"
+                    ]
+                  },
+                  "rejectionReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Author-visible rejection reason; null for other states."
+                  },
+                  "updateKind": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "minor",
+                      "major",
+                      null
+                    ]
+                  },
+                  "silentUpdate": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SubmissionReceipt": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Card"
+          },
+          {
+            "type": "object",
+            "required": [
+              "versionId",
+              "submissionId",
+              "submissionStatus"
+            ],
+            "properties": {
+              "versionId": {
+                "type": "string"
+              },
+              "submissionId": {
+                "type": "string"
+              },
+              "submissionStatus": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "superseded"
+                ],
+                "description": "Initially pending. An idempotent replay returns the current submission status; status remains the listing status."
+              }
+            }
+          }
+        ]
       }
     }
   }

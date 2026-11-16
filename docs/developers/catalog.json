@@ -2676,5 +2676,11 @@
   "dd82cfac61d3c": "Identity-only workshop metadata.",
   "d986c5d7c89e1": "Published version number; 0 for an unpublished author trial draft.",
   "d59f37791399a": "Zero-based position in the conversation player ordering. Disabled entries can leave gaps.",
-  "d3a2791d63d89": "Request rejected."
+  "d3a2791d63d89": "Request rejected.",
+  "db73e7edc40e8": "Read your latest card review",
+  "d7fe5a5458feb": "Author-only summary using role.read. Returns publicVersionId and latestSubmission separately; publicVersionId is null without a current public approval. Legacy review version and update metadata may be null. No reviewer identities or private card content are returned.",
+  "d3f371775d47e": "Author review summary.",
+  "d8eca8019bdf6": "first is a new review; re is an update review. Legacy values are preserved.",
+  "df44a4d68f261": "Author-visible rejection reason; null for other states.",
+  "d6c60ea267126": "Initially pending. An idempotent replay returns the current submission status; status remains the listing status."
 }
