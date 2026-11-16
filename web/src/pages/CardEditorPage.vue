@@ -133,7 +133,7 @@ import { CARD_CSS_MAX_BYTES } from "@/lib/card-appearance";
 import { stateChanged, stateEmpty, stateLimitParams, statePayload, stateProblem } from "@/lib/card-state";
 import { readStateTable } from "@/lib/card-state-table";
 import TagPicker from "@/components/editor/TagPicker.vue";
-import { TAG_CATALOG } from "../../../shared/tag-catalog";
+import { countPresetTags } from "../../../shared/tag-catalog";
 import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
 
@@ -357,7 +357,10 @@ function sheetFrameKey(event: KeyboardEvent) {
   }, 0);
 }
 function sheetFrameLoad(event: Event) {
-  if ((event.target as Element | null)?.tagName === 'IFRAME') connectSheetFrame(event.target as HTMLIFrameElement);
+  if ((event.target as Element | null)?.tagName === 'IFRAME') {
+    connectSheetFrame(event.target as HTMLIFrameElement);
+    scheduleReclaimRailFrameFocus();
+  }
 }
 function connectSheetFrame(frame: HTMLIFrameElement) {
   if (!sheetOpen.value) return;
@@ -570,13 +573,13 @@ const reviewCount = computed(() => {
   return length && { eligible: length.eligible, n: formatReviewLength(length, String(locale.value)) };
 });
 
-/** 各分區缺哪個必填。導覽上的紅點與發布前的清單都看這個。 */
-const REQUIRED_OF = computed<Partial<Record<Section, string>>>(() => ({
-  basic: "roleName",
-  persona: "roleDetailDesc",
-  opening: openingMode.value === "page" ? "prologue" : "roleWelcome",
+/** 各分區缺哪幾個必填。導覽上的紅點與發布前的清單都看這個。 */
+const REQUIRED_OF = computed<Partial<Record<Section, readonly string[]>>>(() => ({
+  basic: ["roleName", "presetTag"],
+  persona: ["roleDetailDesc"],
+  opening: [openingMode.value === "page" ? "prologue" : "roleWelcome"],
 }));
-const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key] && missing.value.includes(REQUIRED_OF.value[key] as string));
+const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key]?.some((k) => missing.value.includes(k)));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
 const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
@@ -614,7 +617,7 @@ function disableState() {
 }
 /** 這一區已經有東西了。給導覽畫一個勾，作者才知道自己走到哪。 */
 const filled = computed<Record<Section, boolean>>(() => ({
-  basic: Boolean(draft.value.roleName.trim()),
+  basic: !lacks("basic"),
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   world: Boolean(draft.value.world),
   opening: !lacks("opening"),
@@ -642,14 +645,78 @@ const stateSummary = computed(() => {
  */
 const mediaMoreOpen = ref(false);
 const personaMoreOpen = ref(false);
-const tagsOpen = ref(false);
+const tagsOpen = ref(true);
+const tagsPrompted = ref(false);
+const serverTagsRejected = ref(false);
+const tagsDisclosureBtn = ref<HTMLButtonElement | null>(null);
+const tagPickerWrap = ref<HTMLElement | null>(null);
+const tagPickerRef = ref<InstanceType<typeof TagPicker> | null>(null);
 function settleDisclosures() {
   mediaMoreOpen.value = Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage);
   personaMoreOpen.value = Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim());
-  tagsOpen.value = catalogPicked.value > 0;
+  tagsOpen.value = true;
 }
-/** 分類與玩法亮起幾個：只數目錄裡的分類，手打的其他標籤不算（ui-review K）。 */
-const catalogPicked = computed(() => TAG_CATALOG.filter((entry) => Object.values(entry.names).some((name) => draft.value.roleTag.includes(name))).length);
+/** 分類與玩法亮起幾個：與伺服器送審／公開判定共用同一函式（shared/tag-catalog）。 */
+const catalogPicked = computed(() => countPresetTags(draft.value.roleTag));
+const tagsAlerted = computed(() => tagsPrompted.value && (!catalogPicked.value || serverTagsRejected.value));
+watch(() => draft.value.roleTag, () => {
+  serverTagsRejected.value = false;
+  if (catalogPicked.value > 0) tagsPrompted.value = false;
+});
+function focusCustomTagsInput() {
+  const input = document.querySelector<HTMLInputElement>("#f-tags");
+  input?.scrollIntoView({ block: "center", behavior: "smooth" });
+  input?.focus();
+}
+let guardedFocusEl: HTMLElement | null = null;
+let guardedFocusUntil = 0;
+let guardedFocusTimer: ReturnType<typeof setTimeout> | undefined;
+function clearGuardedFocus() {
+  guardedFocusEl = null;
+  guardedFocusUntil = 0;
+  clearTimeout(guardedFocusTimer);
+}
+watch(
+  tagsOpen,
+  (open) => {
+    if (open) return;
+    clearGuardedFocus();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && tagPickerWrap.value?.contains(active)) {
+      tagsDisclosureBtn.value?.focus({ preventScroll: true });
+    }
+  },
+  { flush: "sync" },
+);
+function reclaimRailFrameFocus() {
+  if (!guardedFocusEl || Date.now() >= guardedFocusUntil || sheetOpen.value) return;
+  if (!guardedFocusEl.isConnected || (!tagsOpen.value && tagPickerWrap.value?.contains(guardedFocusEl))) {
+    clearGuardedFocus();
+    return;
+  }
+  const active = document.activeElement;
+  if (active && active.tagName === "IFRAME" && sheetRail.value?.contains(active)) {
+    window.focus?.();
+    guardedFocusEl.focus({ preventScroll: true });
+  }
+}
+function scheduleReclaimRailFrameFocus() {
+  reclaimRailFrameFocus();
+  if (!guardedFocusEl || Date.now() >= guardedFocusUntil) return;
+  clearTimeout(guardedFocusTimer);
+  guardedFocusTimer = setTimeout(reclaimRailFrameFocus, 0);
+}
+async function focusPresetTags(opts: { prompt?: boolean; serverRejected?: boolean } = {}) {
+  goto("basic");
+  tagsOpen.value = true;
+  if (opts.serverRejected) serverTagsRejected.value = true;
+  if (opts.prompt !== false && (!catalogPicked.value || opts.serverRejected)) tagsPrompted.value = true;
+  await nextTick();
+  document.querySelector<HTMLElement>("[aria-controls='tag-picker']")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  tagPickerRef.value?.focusFirst();
+  guardedFocusEl = document.activeElement instanceof HTMLElement && body.value?.contains(document.activeElement) ? document.activeElement : null;
+  guardedFocusUntil = guardedFocusEl ? Date.now() + 8000 : 0;
+}
 const mediaMoreSet = computed(() => Boolean(draft.value.roleBackgroundLandscape || draft.value.roleShareImage));
 const personaMoreSet = computed(() => Boolean(draft.value.roleOutputContract.trim() || draft.value.jailbreak.trim()));
 
@@ -870,6 +937,8 @@ async function discardDraft() {
   defaultChatPageForNew();
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
+  tagsPrompted.value = false;
+  serverTagsRejected.value = false;
   wb.reset();
   worldShown.value = false;
   restoredDraft.value = false;
@@ -913,6 +982,18 @@ async function loadValidation() {
 }
 
 
+async function applyRouteDeepLink() {
+  const sec = typeof route.query.section === "string" ? route.query.section : "";
+  if (sec && (SECTIONS as readonly string[]).includes(sec) && sections.value.includes(sec as Section)) {
+    await nextTick();
+    goto(sec as Section);
+  }
+  if (route.query.focus === "tags") {
+    await nextTick();
+    await focusPresetTags({ prompt: true });
+  }
+}
+
 onMounted(async () => {
   if (!roleId.value) {
     restoreDraft();
@@ -927,6 +1008,7 @@ onMounted(async () => {
       } finally { loading.value = false; }
     }
     defaultChatPageForNew();
+    await applyRouteDeepLink();
     return;
   }
   try {
@@ -971,6 +1053,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  if (!initializationFailed.value && !deleted.value) await applyRouteDeepLink();
 });
 
 /* 改到一半離開要問一聲：站內換頁與關分頁都攔。儲存中不放行——鍵盤也走得到返回連結，
@@ -997,11 +1080,22 @@ onMounted(() => {
   window.addEventListener("beforeunload", guard);
   window.addEventListener("keydown", onKey);
   window.addEventListener('resize', fitSheetToViewport);
+  window.addEventListener("pointerdown", clearGuardedFocus, true);
+  window.addEventListener("keydown", clearGuardedFocus, true);
+  window.addEventListener("blur", scheduleReclaimRailFrameFocus);
+  document.addEventListener("focusin", scheduleReclaimRailFrameFocus, true);
+  document.addEventListener("focusout", scheduleReclaimRailFrameFocus, true);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", guard);
   window.removeEventListener("keydown", onKey);
   window.removeEventListener('resize', fitSheetToViewport);
+  window.removeEventListener("pointerdown", clearGuardedFocus, true);
+  window.removeEventListener("keydown", clearGuardedFocus, true);
+  window.removeEventListener("blur", scheduleReclaimRailFrameFocus);
+  document.removeEventListener("focusin", scheduleReclaimRailFrameFocus, true);
+  document.removeEventListener("focusout", scheduleReclaimRailFrameFocus, true);
+  clearGuardedFocus();
   releaseSheetBackground();
   if (spyFrame) cancelAnimationFrame(spyFrame);
   clearTimeout(toastTimer);
@@ -1290,7 +1384,34 @@ const visibilityActor = computed(()=>String(session.profile?.identities.find(i=>
 const editorVisibilityNotice = computed(()=>{const v=workVisibility.value;if(!v)return '';if(v.syncState!=='complete')return t(v.syncState==='unavailable'?'visibility.operation.unknown':'visibility.operation.updating');if(v.access==='private'&&v.review==='none'&&v.restriction==='none')return v.everPublic&&!v.restorable?t(v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):'';return t(visibilityStateKey(v,true),{note:v.reviewNote??'',reason:v.restrictionNote??''});});
 const visibilityToken=()=>session.accessToken();
 function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
-function visibilityMissing(){goto(missing.value.includes('roleName')?'basic':missing.value.includes('roleDetailDesc')?'persona':'opening');}
+function jumpToMissing(target?: string) {
+  const key = target ?? (missing.value.includes("roleName") ? "roleName" : (missing.value.includes("presetTag") || serverTagsRejected.value) ? "presetTag" : missing.value.includes("roleDetailDesc") ? "roleDetailDesc" : "opening");
+  if (key === "roleName") {
+    goto("basic");
+    void nextTick(() => {
+      const input = document.querySelector<HTMLInputElement>("#f-name");
+      input?.scrollIntoView({ block: "center", behavior: "smooth" });
+      input?.focus();
+    });
+    return;
+  }
+  if (key === "presetTag") {
+    void focusPresetTags({ prompt: true, ...(serverTagsRejected.value ? { serverRejected: true } : {}) });
+    return;
+  }
+  if (key === "roleDetailDesc") {
+    goto("persona");
+    return;
+  }
+  goto("opening");
+}
+function visibilityMissing(reason?: "presetTag") {
+  if (reason === "presetTag") {
+    void focusPresetTags({ prompt: true, serverRejected: true });
+    return;
+  }
+  jumpToMissing();
+}
 
 
 // A revert is a local edit until Save. Keep both the untouched editor snapshot
@@ -1683,6 +1804,7 @@ async function publish(expected:WorkVisibility) {
     // 打作品名去 Wikidata 找候選，點了就對上編號；找不到照打，當自由文字
     field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q:string) => fetchFandomLookup(q) },
   };
+  let missingPresetTag=false;
   const send=async(answer:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
     if(!valid())return;saving.value=true;error.value='';
     try{
@@ -1690,15 +1812,24 @@ async function publish(expected:WorkVisibility) {
       if(!token)throw new Error(t('auth.expired'));
       if(expected.everPublic)await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected,answer.update);
       else await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected);
-    }catch(e){if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;throw e;}finally{if(valid())saving.value=false;}
+    }catch(e){
+      if(valid()&&e instanceof ApiError&&e.code==='preset_tag_required'){missingPresetTag=true;return;}
+      if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;
+      throw e;
+    }finally{if(valid())saving.value=false;}
   };
   try{
     if(expected.everPublic){
       const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
         publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
           reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
+      if(missingPresetTag){if(valid())await focusPresetTags({prompt:true,serverRejected:true});return;}
       if(!ok||!valid())return;
-    }else{const answer=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});if(!answer||!valid())return;}
+    }else{
+      const answer=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});
+      if(missingPresetTag){if(valid())await focusPresetTags({prompt:true,serverRejected:true});return;}
+      if(!answer||!valid())return;
+    }
     if(valid())await router.push(lp('/mine?fresh=1'));
   }catch(err){
     if(!valid())return;
@@ -1746,6 +1877,8 @@ function applyImport(result: ImportResult) {
   regexSet.value.openingMode =
     result.spec === "fengyue" || result.spec === "rili" || regexSet.value.format === "fengyue" ? "page" : "greeting";
   savedOpening.value = openingMode.value;
+  tagsPrompted.value = false;
+  serverTagsRejected.value = false;
   defaultChatPageForNew();
   settleDisclosures();
   goto("basic");
@@ -2014,14 +2147,14 @@ async function exportCard(format: "png" | "json") {
               <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
                 <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
               </ul>
-              <!-- 站內榜單認得的分類：收在一列裡，有已選時預設打開；點了就加進標籤，跟手打的是同一條 -->
-              <button type="button" class="disclosure" :aria-expanded="tagsOpen" aria-controls="tag-picker" @click="tagsOpen = !tagsOpen">
+              <!-- 站內榜單認得的分類：預設展開（必選項不藏起來）；點了就加進標籤，跟手打的是同一條 -->
+              <button ref="tagsDisclosureBtn" type="button" class="disclosure" :aria-expanded="tagsOpen" aria-controls="tag-picker" @click="tagsOpen = !tagsOpen">
                 <svg class="disclosure__chev" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4" /></svg>
-                <span class="disclosure__label">{{ $t("editor.tags.pick") }}</span>
-                <span v-if="catalogPicked" class="disclosure__state">{{ $t("editor.tags.picked", { n: catalogPicked }) }}</span>
+                <span class="disclosure__head"><span class="disclosure__label">{{ $t("editor.tags.pick") }}</span><span class="req" aria-hidden="true">*</span></span>
+                <span class="disclosure__state" :class="{ 'is-alert': tagsAlerted }">{{ catalogPicked ? $t("editor.tags.picked", { n: catalogPicked }) : $t("editor.tags.pickNeed") }}</span>
               </button>
-              <div v-show="tagsOpen" id="tag-picker">
-                <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
+              <div ref="tagPickerWrap" v-show="tagsOpen" id="tag-picker" :inert="!tagsOpen">
+                <TagPicker ref="tagPickerRef" :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" required :prompted="tagsPrompted" :force-alert="serverTagsRejected" @toggle="toggleTag" @edit-custom="focusCustomTagsInput" />
               </div>
             </div>
           </div>
@@ -2248,7 +2381,7 @@ async function exportCard(format: "png" | "json") {
             </select>
             <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
           </div>
-          <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="missing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
+          <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="(serverTagsRejected&&!missing.includes('presetTag')?[...missing,'presetTag']:missing).map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
           <SharedStatePanel v-if="!isNew && roleId" :role-id="roleId" :provider="editorProvider" :card-name="draft.roleName" :token="visibilityToken" />
           <OwnerWorkshopBlock v-if="!isNew && roleId" :role-id="roleId" :card-id="cardNumber ? String(cardNumber) : undefined" />
@@ -2257,8 +2390,10 @@ async function exportCard(format: "png" | "json") {
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul v-if="missing.length">
               <li v-for="key in required.filter((k) => missing.includes(k))" :key="key">
-                <span aria-hidden="true">○</span>
-                {{ $t(`editor.required.${key}`) }}
+                <button type="button" class="checklist__jump" :class="{ 'is-alert': key === 'presetTag' && tagsAlerted }" @click="jumpToMissing(key)">
+                  <span aria-hidden="true">○</span>
+                  {{ $t(`editor.required.${key}`) }}
+                </button>
               </li>
             </ul>
             <p v-else class="checklist__done">{{ $t("editor.checklist.done") }}</p>
@@ -2349,13 +2484,21 @@ async function exportCard(format: "png" | "json") {
           </RouterLink>
           <ul class="bar__check">
             <li v-for="key in required" :key="key"
-                :class="{ ok: !missing.includes(key) }">
-              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round">
-                <path v-if="!missing.includes(key)" d="M3.5 8.5l3 3 6-7" />
-                <circle v-else cx="8" cy="8" r="5.5" />
-              </svg>
-              {{ $t(`editor.required.${key}`) }}
+                :class="{ ok: !missing.includes(key), 'is-alert': key === 'presetTag' && tagsAlerted }">
+              <button v-if="missing.includes(key)" type="button" class="bar__jump" @click="jumpToMissing(key)">
+                <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="8" r="5.5" />
+                </svg>
+                {{ $t(`editor.required.${key}`) }}
+              </button>
+              <template v-else>
+                <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3.5 8.5l3 3 6-7" />
+                </svg>
+                {{ $t(`editor.required.${key}`) }}
+              </template>
             </li>
           </ul>
           <span v-if="dirty" class="subtle">{{ $t("editor.unsaved") }}</span>
@@ -2554,9 +2697,13 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .disclosure__chev { width: 14px; height: 14px; flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
 .disclosure[aria-expanded="true"] .disclosure__chev { transform: rotate(90deg); }
 .disclosure__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.disclosure__head { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; }
+.disclosure__head > .disclosure__label { flex: 0 1 auto; }
+.req { flex: none; color: var(--danger); margin-left: 2px; }
 /* 分類選單收在展開列裡，展開列本身就是標題：選單自帶的小標不再重複一次 */
 #tag-picker :deep(.picker > .eyebrow) { display: none; }
 .disclosure__state { flex: none; font-size: 13px; color: var(--text-2); font-weight: 400; }
+.disclosure__state.is-alert { color: var(--danger); font-weight: 600; }
 /* 送審字數一行：貼在角色設定欄下面 */
 .persona-detail { display: grid; gap: var(--s-2); }
 .review-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--s-2); margin: 0; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -2639,6 +2786,12 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .panel .btn { justify-self: start; }
 .checklist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--text-3); }
 .checklist li.ok { color: var(--text-2); }
+.checklist__jump, .bar__jump {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--h-sm);
+  padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
+}
+.checklist__jump:hover, .bar__jump:hover { color: var(--text); }
+.checklist__jump.is-alert, .bar__check li.is-alert, .bar__check li.is-alert .bar__jump:hover { color: var(--danger); font-weight: 600; }
 /*
    動作列在表單可視區外：儲存、送審、檢查清單、未存提示都在這裡，不佔右欄高度。
    z-index 壓過表單內容但低於浮層分層（§3.2 的 10–19 那一階）。

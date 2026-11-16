@@ -2399,7 +2399,7 @@
   "ddf9fd826fe92": "Current card access and individual historical adult ratings apply. Cache-Control is private, no-store. Timestamps labelled review are approval dates, not asserted exact publication instants; unknown is null, never created_at. target uses the same visibility checks and does not scan client-side pages.",
   "d6bf11d2a52c8": "Earliest next notified-update time (UTC ms), zero if no previous notified update. Private author readback.",
   "d421c01c85938": "Frozen public changelog for a major revision, empty for minor.",
-  "ddc11475ac3c0": "Invalid update type or changelog; major requires a previously published card.",
+  "ddc11475ac3c0": "Invalid input, update type or changelog (major requires a previously published card), rating_required, review_length_insufficient, or preset_tag_required (public publication requires at least one preset tag display name from GET /v1/tags/catalog in roleTag).",
   "d2f6155e228a1": "Legacy versions without a recorded intent are minor.",
   "d0e818e3d066e": "Public changelog. Required with major: at least 10 non-White_Space Unicode code points, at most 500 code points in the whole normalized text. Normalize CRLF/CR to LF and trim Unicode White_Space. minor accepts only an empty note.",
   "dddcffc17e48c": "Read published version history",
@@ -2667,5 +2667,8 @@
   "d13e58c14d99e": "Only on spending records: what the charge drew from, by kind of credit, largest first. One charge that drew from several credit batches is a single record; the `amount` values add up to its `score`. Omitted when the sources cannot be determined.",
   "db98a67008ab7": "Kind of credit. Treat unknown values as `other`.",
   "da13084075959": "Credits drawn from this kind, as a positive number.",
-  "d0454fc25d6ec": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
+  "d0454fc25d6ec": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable.",
+  "dd708c84a5ff3": "List platform preset category and play-style tags",
+  "d31b4428d6980": "Returns the fixed catalog of preset category and play-style tags grouped by category. Public card publication requires at least one tag whose localized display name in names appears in the card's tags (custom tags do not count; store a display name from names, not the URL key).",
+  "dcc5a8d450282": "Invalid command or preset_tag_required when restoring public access for a version without any preset tag from GET /v1/tags/catalog."
 }

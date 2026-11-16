@@ -6,6 +6,7 @@
  * 每個欄位都得在畫面裡再解一次。草稿是表單的形狀，進出各轉一次，轉換邏輯只有這一份。
  */
 
+import { hasPresetTag } from "../../../shared/tag-catalog";
 import { readState, type CardStateDraft } from "./card-state";
 
 export interface TalkExampleEntry {
@@ -245,14 +246,14 @@ export const makeDraft = (language: string): RoleDraft => ({
  * 送審前一定要有的東西。跟上游 validate_role 的阻斷項對齊，但在本地先算一次——
  * 作者不該填到最後一步才知道第一步漏了什麼。上游仍是最終權威。
  */
-export type RequiredKey = "roleName" | "roleWelcome" | "prologue" | "roleDetailDesc";
+export type RequiredKey = "roleName" | "presetTag" | "roleWelcome" | "prologue" | "roleDetailDesc";
 
 /**
- * 必填三項：名稱、開局、角色設定。開局看作者選的呈現：開場白要有開場白；開場網頁要有至少一個
- * 第一句選項（網頁本身可以留空，玩家只看到選項）。
+ * 必填四項：名稱、分類與玩法、角色設定、開局（照表單順序）。開局看作者選的呈現：開場白要有開場白；
+ * 開場網頁要有至少一個第一句選項（網頁本身可以留空，玩家只看到選項）。
  */
 export function requiredKeys(openingMode: "greeting" | "page" = "greeting"): RequiredKey[] {
-  return ["roleName", "roleDetailDesc", openingMode === "page" ? "prologue" : "roleWelcome"];
+  return ["roleName", "presetTag", "roleDetailDesc", openingMode === "page" ? "prologue" : "roleWelcome"];
 }
 
 /**
@@ -261,7 +262,11 @@ export function requiredKeys(openingMode: "greeting" | "page" = "greeting"): Req
  */
 export function missingRequired(draft: RoleDraft, extras: { openingMode?: "greeting" | "page" } = {}): RequiredKey[] {
   return requiredKeys(extras.openingMode).filter((key) =>
-    key === "prologue" ? !draft.prologue.some((p) => p.trim()) : !String(draft[key] ?? "").trim());
+    key === "presetTag"
+      ? !hasPresetTag(draft.roleTag)
+      : key === "prologue"
+        ? !draft.prologue.some((p) => p.trim())
+        : !String(draft[key] ?? "").trim());
 }
 
 /**

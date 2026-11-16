@@ -5085,5 +5085,11 @@
   "import.rili.assistantPrefill": "AI 返信の先頭指定は未対応のため、必要なら「出力の形式」に書いてください。",
   "import.rili.memoryDisabled": "作業メモリが元のカードでオフのため、「カード変数」は有効にしていません。",
   "import.rili.modFile": "RiliAIモジュールの内容を反映しましたので、適用後にキャラクター名を入れてください。",
-  "import.rili.otherFields": "ほかのRiliAI設定（{n} 件）は対応先がないため取り込んでいません。"
+  "import.rili.otherFields": "ほかのRiliAI設定（{n} 件）は対応先がないため取り込んでいません。",
+  "editor.tags.pickNeed": "1つ以上選択",
+  "editor.tags.pickHint": "自由入力のタグは対象外のため、公開には下から1つ以上選んでください。",
+  "editor.tags.pickFull": "タグが上限のため、自由入力のタグを1つ外すと分類を選べます。",
+  "editor.tags.pickFullAction": "タグを編集",
+  "editor.required.presetTag": "分類がある",
+  "error.presetTagRequired": "公開するには「分類とプレイスタイル」から1つ以上選んでください。"
 }

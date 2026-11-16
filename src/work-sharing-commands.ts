@@ -3,7 +3,7 @@ import {assertNormalMember} from './test-accounts';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCard,upsertCard,finishManagedWithdrawal,type CardRow} from './cards';
-import {hostGateway} from './hosting';
+import {hostGateway,assertPresetTag,parseStoredTags} from './hosting';
 import {requireMember,resolveMember} from './members';
 import {ownerCardSource,readOwnerVisibility} from './work-sharing';
 import {managedWork,policyOperationId,workPolicyCommandHash,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkOwnerView} from './work-policy';
@@ -161,6 +161,7 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/visibility',bodyLimit({maxSize:4
   const action:WorkPolicyCommand['action']=command.action==='cancel_review'?'cancel':command.targetAccess==='public'?'restore':command.targetAccess!;
   if((view.workVisibility.restriction==='suspended'&&action!=='private')||(action==='restore'&&view.workVisibility.restriction!=='none'))throw new HttpError(409,'visibility_restricted');
   if(action==='restore'&&(!view.workVisibility.restorable||!row.approved_version_id||!row.approved_hosted_role_id))throw new HttpError(409,'review_required');
+  if(action==='restore')await assertPresetTag(c.env.DB,parseStoredTags(row.tags),'restore');
   const pending=await c.env.DB.prepare("SELECT g.operation_id FROM work_publication_permits g JOIN hosting_versions v ON v.version_id=g.version_id JOIN review_submissions s ON s.id=v.submission_id WHERE v.work_id=? AND s.status='pending' AND g.state IN ('prepared','published') ORDER BY v.created_at DESC LIMIT 1").bind(p.work_id).first<{operation_id:string}>();
   const providerOperation=await policyOperationId('author:'+member.id+':'+command.operationId);
   const pg:WorkPolicyCommand={workId:p.work_id,operationId:providerOperation,expectedEpoch:view.provider.epoch,expectedOwnerRevision:view.provider.policyRevision,action,...(pending?{permitId:pending.operation_id}:{})};

@@ -2399,7 +2399,7 @@
   "ddf9fd826fe92": "适用卡片当前的访问权限和各历史版本的成人分级。Cache-Control 为 private, no-store。标记为 review 的时间戳是审核通过时间，不保证是精确的公开时刻；unknown 为 null，绝不使用 created_at 代替。target 遵守相同的可见性检查，不会在客户端逐页扫描。",
   "d6bf11d2a52c8": "最早可再次发送更新通知的时间（UTC ms）；从未发送过更新通知时为 0，仅供作者私下查询。",
   "d421c01c85938": "major 修订版本已固定的公开更新日志；minor 为空。",
-  "ddc11475ac3c0": "更新类型或更新日志无效；major 要求卡片此前已公开过。",
+  "ddc11475ac3c0": "输入、更新类型或更新日志无效（major 要求卡片此前已公开过），或为 rating_required、review_length_insufficient、preset_tag_required（公开发布时，roleTag 至少要有一个来自 GET /v1/tags/catalog 的预设分类显示名称）。",
   "d2f6155e228a1": "没有记录更新意图的旧版本统一视为 minor。",
   "d0e818e3d066e": "公开更新日志。major 必填：至少 10 个不属于 White_Space 的 Unicode code points，规范化后全文最多 500 个 code points。将 CRLF/CR 规范化为 LF，并移除首尾的 Unicode White_Space。minor 只接受空字符串日志。",
   "dddcffc17e48c": "读取已公开的版本记录",
@@ -2667,5 +2667,8 @@
   "d13e58c14d99e": "仅出现在支出记录：这笔扣点出自哪些种类的积分，金额大的在前。一次扣点即使从多个积分批次扣除，也只算一条记录；各项 `amount` 加总等于该条的 `score`。无法判定来源时省略。",
   "db98a67008ab7": "积分种类。无法识别的值视同 `other`。",
   "da13084075959": "从此种类扣除的积分，为正数。",
-  "d0454fc25d6ec": "与 conversationId 一并提供时，返回此本人拥有操作在接受时确定的工坊显示投影。非本人拥有或不匹配的操作无法访问。"
+  "d0454fc25d6ec": "与 conversationId 一并提供时，返回此本人拥有操作在接受时确定的工坊显示投影。非本人拥有或不匹配的操作无法访问。",
+  "dd708c84a5ff3": "列出平台预设分类与玩法标签",
+  "d31b4428d6980": "返回按分类分组的固定预设分类与玩法标签目录。公开发布卡片时，卡片的 tags 里至少要有一个出现在 names 中的多语言显示名称（自定义标签不算；请写入 names 里的显示名称，不要写入网址 key）。",
+  "dcc5a8d450282": "指令无效，或在恢复公开的版本不含任何 GET /v1/tags/catalog 预设分类标签时返回 preset_tag_required。"
 }

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {retentionText} from '@/lib/reward-retention';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
-const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string}>(),{dirty:false,quotaFull:false});
+const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false});
 const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[]}>();
 const {t}=useI18n();const uid=useId();
 const selected=ref<WorkAccess|null>(null),cancel=ref(false),copied=ref(false),copyFailed=ref(false);
@@ -14,6 +14,7 @@ watch(()=>[props.value,props.phase,props.resumeAction] as const,([v,phase,action
  selected.value=phase==='retryable'?(action==='private'?'private':action==='link'?'unlisted':action==='restore'?'public':v?.access??null):v?.access??null;
  cancel.value=phase==='retryable'&&action==='cancelReview';
 },{immediate:true});
+watch(()=>props.selectPublic,n=>{if(n){selected.value='public';cancel.value=false;}});
 const update=computed(()=>selected.value==='public'&&props.value?.access==='public'&&props.value.actions.includes('submit_update'));
 const changed=computed(()=>selected.value!==props.value?.access||cancel.value||update.value);
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));

@@ -5085,5 +5085,11 @@
   "import.rili.assistantPrefill": "AI 回覆預填開頭未帶入，需要固定開頭可寫進「輸出格式」。",
   "import.rili.memoryDisabled": "工作記憶在原卡未啟用，因此沒有開啟「卡片變數」。",
   "import.rili.modFile": "RiliAI 模組檔已帶入設定、世界書、正則與樣式，套用後請補上角色名稱。",
-  "import.rili.otherFields": "另外 {n} 項 RiliAI 設定在本站沒有對應位置，未帶入。"
+  "import.rili.otherFields": "另外 {n} 項 RiliAI 設定在本站沒有對應位置，未帶入。",
+  "editor.tags.pickNeed": "至少選一個",
+  "editor.tags.pickHint": "自訂標籤不算，公開發布要從下方至少選一個。",
+  "editor.tags.pickFull": "標籤已滿，先移除一個自訂標籤才能選分類。",
+  "editor.tags.pickFullAction": "編輯標籤",
+  "editor.required.presetTag": "有分類與玩法",
+  "error.presetTagRequired": "公開發布前，請先在「分類與玩法」至少選一個分類。"
 }

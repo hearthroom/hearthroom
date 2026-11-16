@@ -85,7 +85,7 @@ describe("登記", () => {
     const res = await register({ roleId: "role-1", name: "我自己填的假名", summary: "假簡介", tags: ["假標籤"] });
     const card = (await res.json()) as any;
     expect(card.name).toBe("上游的真名");
-    expect(card.tags).toEqual(["推理"]);
+    expect(card.tags).toEqual(["懸疑"]);
   });
 
   it("上游回應裡的作者詳細設定不會進社群", async () => {

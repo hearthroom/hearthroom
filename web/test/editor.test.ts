@@ -18,6 +18,7 @@ import { createApp, nextTick, ref, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
+import enMessages from "../src/locales/en.json";
 import { embedIntoPng, parseTavernFile, type TavernCard } from "../src/lib/tavern";
 import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
@@ -27,6 +28,7 @@ import { makeDraft } from "../src/lib/role-draft";
 import { formatReviewLength } from "../src/lib/review-length";
 import { emptyRuleSet } from "../src/lib/regex-rules";
 import { ApiError } from "../src/lib/api";
+import { VisibilityError } from "../src/lib/work-visibility";
 
 const GENERAL = { version: 1, topics: {}, other: "other.none" };
 const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
@@ -1110,8 +1112,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect($<HTMLInputElement>("#f-tags").value.split("、")).toHaveLength(10);
     const regexButton = [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(i18n.global.t("regex.open")))!;
     expect(regexButton.querySelector(".chip")?.textContent?.trim()).toBe("1");
-    // 左欄：三個必填都有了，不該再有紅點
-    expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
+    // 左欄：人設與開場必填都有了，只剩基本資訊還缺預設分類（10 個自訂標籤不算）
+    expect(root.querySelectorAll(".side__dot")).toHaveLength(1);
+    expect(root.querySelector(".side__item:first-child .side__dot")).not.toBeNull();
     // 右欄不再是卡片預覽（它既不是對話測試也不是發布）：換成對話測試與我的資源兩塊面板
     expect(root.querySelector(".rail__tile")).toBeNull();
     expect($(".rail__tabs").textContent).toContain("對話測試");
@@ -1891,7 +1894,7 @@ describe("建卡成功、內容沒存進去", () => {
 it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosting destination chooser',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
  platforms.profile={identities:[{provider:'harbor',externalId:7},{provider:'harbor',externalId:8}]};
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleAvatar:'https://img.test/avatar.png'});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演'],roleAvatar:'https://img.test/avatar.png'});
  await mount('/cards/r1/edit');
  byText('發布').click();await flush();
  const publicOption=root.querySelector<HTMLInputElement>('input[value=public]')!;publicOption.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
@@ -1911,7 +1914,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
 });
 
 it('submits a private HarperHarbor draft to the same immutable community review',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');
  expect(root.textContent).not.toContain(i18n.global.t('workspace.editHint'));
  expect(root.querySelector<HTMLInputElement>('input[value=private]')?.checked).toBe(true);
@@ -2019,7 +2022,7 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
 beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockReset();visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
 it('scrolls from publication guidance to the missing character setting section',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic name',roleWelcome:'Synthetic greeting'});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic name',roleWelcome:'Synthetic greeting',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');await nextTick();
  const section=root.querySelector<HTMLElement>('[data-section="persona"]')!;
  const scroll=vi.spyOn(section,'scrollIntoView');
@@ -2064,7 +2067,7 @@ it('restores a new draft private choice without applying it to existing cards',a
 });
 
 it('keeps a length refusal on the editor after the author returns from the submission dialog',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Short draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Short draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');byText('發布').click();await flush();
  root.querySelector<HTMLInputElement>('input[value=public]')!.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
  ratingState.current!.resolve(GENERAL);await flush();await flush();
@@ -2205,8 +2208,9 @@ describe("匯入 AI 風月卡 → 建立", () => {
     expect($('[data-opening-mode="page"]').getAttribute("aria-checked")).toBe("true");
     expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe("<div>TEST-INTRO-HTML</div>");
     expect(root.querySelector("#f-welcome")).toBeNull();
-    // 開場網頁有第一句選項就不缺
-    expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
+    // 開場網頁有第一句選項就不缺（只剩基本資訊缺預設分類）
+    expect(byText(i18n.global.t("editor.section.opening")).closest(".side__item")?.querySelector(".side__dot")).toBeNull();
+    expect(root.querySelectorAll(".side__dot")).toHaveLength(1);
     const order: string[] = [];
     api.saveAuthorAsset.mockImplementationOnce(async () => { order.push("asset"); return { rules: [], mountTrigger: "", mountLayer: "over", pageMode: "sandbox", cardFormat: "fengyue", openingPage: "<div>TEST-INTRO-HTML</div>", status: "passed", version: 1 }; });
     api.patchRoleWelcome.mockImplementationOnce(async () => { order.push("welcome"); return {}; });
@@ -3037,4 +3041,158 @@ it('recovers a lost completion reply on the unfinished-card edit route', async (
  await type($('#f-name'),'Local change after completion');await submit();
  expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
  expect(api.patchRoleDocument).toHaveBeenLastCalledWith('r1',expect.objectContaining({roleName:'Local change after completion'}),'tok');
+});
+
+describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）', () => {
+  it('未選・剛進來：展開列預設打開、帶 * 與「至少選一個」（非紅字）、基本分區亮紅點、公開被擋但存檔不擋', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '舊卡無分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
+    await mount('/cards/r1/edit');
+    const row = $<HTMLButtonElement>('[aria-controls="tag-picker"]');
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(row.querySelector('.disclosure__head > .req')?.getAttribute('aria-hidden')).toBe('true');
+    expect(row.querySelector('.disclosure__label .req')).toBeNull();
+    expect(enMessages['editor.tags.pickNeed']).toBe('Pick one');
+    expect(row.textContent).toContain(i18n.global.t('editor.tags.pickNeed'));
+    expect(row.querySelector('.disclosure__state')?.classList.contains('is-alert')).toBe(false);
+    expect($('.side__item:first-child .side__dot')).toBeTruthy();
+    expect($('[data-checklist]').textContent).toContain(i18n.global.t('editor.required.presetTag'));
+    expect($('.bar__check').textContent).toContain(i18n.global.t('editor.required.presetTag'));
+    expect($<HTMLInputElement>('input[value="public"]').disabled).toBe(true);
+    expect($('.visibility-missing').textContent).toContain(i18n.global.t('editor.required.presetTag'));
+    expect(root.querySelector('#tag-picker [role="alert"]')).toBeNull();
+
+    // 不擋草稿存檔
+    await type($('#f-name'), '舊卡無分類（改）');
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalledWith('r1', expect.objectContaining({ roleName: '舊卡無分類（改）' }), 'tok');
+  });
+
+  it('點「還缺」：展開被手動收起的分類列、進入已提示狀態並聚焦第一個分類籤；選中任一分類即恢復可公開', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '待補分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
+    await mount('/cards/r1/edit');
+    const row = $<HTMLButtonElement>('[aria-controls="tag-picker"]');
+    row.click();
+    await flush();
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+
+    $<HTMLButtonElement>('.visibility-missing').click();
+    await flush();
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(row.querySelector('.disclosure__state')?.classList.contains('is-alert')).toBe(true);
+    expect(root.querySelector('#tag-picker [role="alert"]')?.textContent).toContain(i18n.global.t('editor.tags.pickHint'));
+    expect(document.activeElement).toBe(root.querySelector('#tag-picker .chip:not(:disabled)'));
+
+    // 收起分類列時，焦點不得停留在已隱藏的分類籤上，應回到展開列按鈕
+    row.click();
+    await flush();
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('#tag-picker')?.hasAttribute('inert')).toBe(true);
+    expect(document.activeElement).toBe(row);
+
+    // 重新展開並選中第一個預設分類後立即清除提示並允許選公開
+    row.click();
+    await flush();
+    $<HTMLButtonElement>('#tag-picker .chip:not(:disabled)').click();
+    await flush();
+    expect(root.querySelector('#tag-picker [role="alert"]')).toBeNull();
+    expect(row.textContent).toContain(i18n.global.t('editor.tags.picked', { n: 1 }));
+    expect(root.querySelector('.side__item:first-child .side__dot')).toBeNull();
+    // 存檔後公開選項解鎖
+    await submit();
+    expect($<HTMLInputElement>('input[value="public"]').disabled).toBe(false);
+  });
+
+  it('標籤滿 10 個且零分類：點「編輯標籤」聚焦自訂標籤輸入框 #f-tags', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({
+      roleName: '滿十個自訂',
+      roleDetailDesc: '設定',
+      roleWelcome: '開場',
+      roleTag: Array.from({ length: 10 }, (_, i) => `自訂${i + 1}`),
+    });
+    await mount('/cards/r1/edit');
+    const action = [...root.querySelectorAll<HTMLButtonElement>('#tag-picker button.btn')].find(
+      (b) => b.textContent?.trim() === i18n.global.t('editor.tags.pickFullAction'),
+    )!;
+    expect(action).toBeTruthy();
+    action.click();
+    await flush();
+    expect(document.activeElement).toBe($('#f-tags'));
+  });
+
+  it('深連結 ?section=basic&focus=tags 與伺服器回 preset_tag_required 都進已提示狀態並聚焦分類籤', async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '深連結卡', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: [] });
+    await mount('/cards/r1/edit?section=basic&focus=tags');
+    expect(root.querySelector('#tag-picker [role="alert"]')).not.toBeNull();
+    const firstChip = root.querySelector<HTMLButtonElement>('#tag-picker .chip:not(:disabled)')!;
+    expect(document.activeElement).toBe(firstChip);
+
+    // 桌機右側試聊 iframe 非同步載入後搶走焦點時，自動拉回第一個分類籤；使用者主動按鍵後不再攔截
+    const frame = root.querySelector<HTMLIFrameElement>('.rail iframe.ct__frame')!;
+    expect(frame).toBeTruthy();
+    frame.tabIndex = 0;
+    frame.focus();
+    window.dispatchEvent(new Event('blur'));
+    frame.dispatchEvent(new Event('load'));
+    await flush();
+    expect(document.activeElement).toBe(firstChip);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    frame.focus();
+    window.dispatchEvent(new Event('blur'));
+    await flush();
+    expect(document.activeElement).toBe(frame);
+
+    app!.unmount();
+    root.remove();
+    // 本地草稿已有分類（例如過期草稿），但伺服器最後送審回 preset_tag_required：關彈層、不顯示頂部錯誤、跳分類區並提示
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '過期草稿', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
+    await mount('/cards/r1/edit');
+    byText('發布').click();
+    await flush();
+    $<HTMLInputElement>('input[value=public]').click();
+    await flush();
+    $<HTMLButtonElement>('[data-visibility-apply]').click();
+    await flush();
+    ratingState.current!.resolve(GENERAL);
+    await flush();
+    await flush();
+    api.registerCard.mockRejectedValueOnce(new ApiError(400, i18n.global.t('error.presetTagRequired'), 'preset_tag_required'));
+    await confirmState.current!.onConfirm!({ text: '', update: { updateKind: 'minor', updateNote: '' } });
+    settleConfirm(false);
+    await flush();
+    expect(root.querySelector('.body__scroll > .notice--error')).toBeNull();
+    expect(root.querySelector('#tag-picker [role="alert"]')).not.toBeNull();
+    expect(router.currentRoute.value.path).toBe('/cards/r1/edit');
+    expect(document.activeElement).toBe(root.querySelector('#tag-picker .chip:not(:disabled)'));
+  });
+
+  it('編輯頁內嵌 restore_public 被伺服器回 preset_tag_required 時（本地已有分類但舊核准版缺分類），跳回「基本」分類籤並進入已提示狀態而非跳到開局', async () => {
+    visibilityMocks.read.mockResolvedValueOnce({
+      workVisibility: visibilityPolicy({
+        access: 'private',
+        everPublic: true,
+        revisionState: 'same',
+        restorable: true,
+        restoreReason: 'none',
+        approvalRevision: 'a1',
+        actions: ['set_private', 'set_unlisted', 'restore_public'],
+      }),
+    });
+    visibilityMocks.change.mockRejectedValueOnce(new VisibilityError(400, { error: 'preset_tag_required' }));
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '恢復公開被拒', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
+    await mount('/cards/r1/edit');
+    byText('發布').click();
+    await flush();
+    $<HTMLInputElement>('input[value=public]').click();
+    await flush();
+    $<HTMLButtonElement>('[data-visibility-apply]').click();
+    await flush();
+    await flush();
+
+    expect($('.side__item[aria-current="true"]').textContent).toContain(i18n.global.t('editor.section.basic'));
+    expect(root.querySelector('#tag-picker [role="alert"]')).not.toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('#tag-picker .chip:not(:disabled)'));
+    expect($('.visibility-missing').textContent).toContain(i18n.global.t('editor.required.presetTag'));
+    expect($<HTMLInputElement>('input[value=public]').disabled).toBe(true);
+  });
 });

@@ -8,14 +8,62 @@ beforeEach(()=>resetManagedAuthForTest(false));
 // 失效——整套測試會紅得像產品壞了，其實只是儲存不見了。
 //
 // 這裡補一份最小的 Storage，行為跟瀏覽器一致：存得進去、讀得回來、清得掉。
-class MemoryStorage implements Storage {
-  private data = new Map<string, string>();
-  get length() { return this.data.size; }
-  clear() { this.data.clear(); }
-  getItem(key: string) { return this.data.has(key) ? this.data.get(key)! : null; }
-  key(index: number) { return [...this.data.keys()][index] ?? null; }
-  removeItem(key: string) { this.data.delete(key); }
-  setItem(key: string, value: string) { this.data.set(key, String(value)); }
+const STORAGE_METHODS = new Set<PropertyKey>([
+  "length",
+  "clear",
+  "getItem",
+  "key",
+  "removeItem",
+  "setItem",
+]);
+
+function createMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  const base: Storage = {
+    get length() { return data.size; },
+    clear() { data.clear(); },
+    getItem(key: string) { return data.has(key) ? data.get(key)! : null; },
+    key(index: number) { return [...data.keys()][index] ?? null; },
+    removeItem(key: string) { data.delete(String(key)); },
+    setItem(key: string, value: string) { data.set(String(key), String(value)); },
+  };
+  return new Proxy(base, {
+    get(target, prop) {
+      if (typeof prop === "symbol" || STORAGE_METHODS.has(prop) || prop in Object.prototype) {
+        const val = Reflect.get(target, prop, target);
+        return typeof val === "function" ? val.bind(target) : val;
+      }
+      return data.has(prop) ? data.get(prop) : undefined;
+    },
+    set(target, prop, value) {
+      if (typeof prop === "symbol" || STORAGE_METHODS.has(prop)) {
+        return Reflect.set(target, prop, value);
+      }
+      data.set(prop, String(value));
+      return true;
+    },
+    deleteProperty(_target, prop) {
+      if (typeof prop === "string" && !STORAGE_METHODS.has(prop)) {
+        data.delete(prop);
+      }
+      return true;
+    },
+    has(target, prop) {
+      if (typeof prop === "symbol" || STORAGE_METHODS.has(prop) || prop in Object.prototype) {
+        return Reflect.has(target, prop);
+      }
+      return data.has(prop);
+    },
+    ownKeys() {
+      return [...data.keys()];
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === "string" && data.has(prop)) {
+        return { value: data.get(prop), writable: true, enumerable: true, configurable: true };
+      }
+      return undefined;
+    },
+  });
 }
 
 function usable(candidate: unknown): boolean {
@@ -23,7 +71,7 @@ function usable(candidate: unknown): boolean {
     const store = candidate as Storage | undefined;
     if (!store) return false;
     store.setItem("__probe__", "1");
-    const ok = store.getItem("__probe__") === "1";
+    const ok = store.getItem("__probe__") === "1" && Object.keys(store).includes("__probe__");
     store.removeItem("__probe__");
     return ok;
   } catch {
@@ -33,7 +81,7 @@ function usable(candidate: unknown): boolean {
 
 for (const name of ["localStorage", "sessionStorage"] as const) {
   if (usable((globalThis as Record<string, unknown>)[name])) continue;
-  const store = new MemoryStorage();
+  const store = createMemoryStorage();
   Object.defineProperty(globalThis, name, { value: store, configurable: true, writable: true });
   if (typeof window !== "undefined") {
     Object.defineProperty(window, name, { value: store, configurable: true, writable: true });

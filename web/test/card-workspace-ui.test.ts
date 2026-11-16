@@ -327,3 +327,25 @@ it('keeps keyboard focus in the modal when a successful mutation removes its app
  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();
  expect(document.querySelector('[role="dialog"]')).toBeNull();expect(document.activeElement).toBe(trigger);
 });
+
+it('keeps the MyCards visibility dialog open with visibility-missing and deep-links to editor tags when restore_public lacks a preset tag',async()=>{
+ const {VisibilityError}=await import('../src/lib/work-visibility');
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'unlisted',effectiveAccess:'link',everPublic:true,restorable:true,actions:['set_private','set_unlisted','restore_public']})});
+ visibilityMocks.change.mockRejectedValueOnce(new VisibilityError(400,{error:'preset_tag_required'}));
+ const router=await mountAt('/mine');
+ root.querySelector<HTMLButtonElement>('.card__more-btn')!.click();await settle();
+ document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click();await settle();
+ const dialog=document.querySelector<HTMLElement>('[role="dialog"]')!;
+ dialog.querySelector<HTMLInputElement>('input[value="public"]')!.click();await settle();
+ dialog.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await settle();
+ expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+ expect(root.querySelector('[role="alert"]')).toBeNull();
+ expect(dialog.querySelector<HTMLInputElement>('input[value="public"]')!.checked).toBe(true);
+ expect(dialog.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.disabled).toBe(true);
+ const missing=dialog.querySelector<HTMLButtonElement>('.visibility-missing')!;
+ expect(missing.textContent).toBe(i18n.global.t('visibility.missing',{fields:i18n.global.t('editor.required.presetTag')}));
+ missing.click();await settle();
+ expect(document.querySelector('[role="dialog"]')).toBeNull();
+ expect(router.currentRoute.value.path).toBe('/cards/100021/edit');
+ expect(router.currentRoute.value.query).toMatchObject({section:'basic',focus:'tags',provider:'harbor'});
+});

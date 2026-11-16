@@ -56,7 +56,7 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
   }catch(e){
    if(e instanceof VisibilityError&&e.status>=400&&e.status<500&&!e.result.operation){
     // These are definitive command rejections. Refresh succeeds before any retry is offered.
-    try{await latest(await token());if(value.value?.syncState!=='complete'){phase.value='unknown';return;}clear();phase.value='ready';message.value=e.code==='review_required'?'review_required':e.status===409?'conflict':'denied';}
+    try{await latest(await token());if(value.value?.syncState!=='complete'){phase.value='unknown';return;}clear();phase.value='ready';message.value=e.code==='review_required'?'review_required':e.code==='preset_tag_required'?'preset_tag_required':e.status===409?'conflict':'denied';}
     catch{phase.value='unknown';}
    }else await check();
   }

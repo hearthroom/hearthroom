@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "公開發布卡片現在要在「分類與玩法」至少選一個分類，讓玩家更容易找到你的卡。",
+    "zh-Hans": "公开发布卡片现在要在“分类与玩法”至少选一个分类，让玩家更容易找到你的卡。",
+    "en": "Publishing a card publicly now requires picking at least one option under Categories & play styles.",
+    "ja": "カードを公開するときは「分類とプレイスタイル」から1つ以上選ぶようになりました。",
+    "ko": "카드를 공개할 때는 '분류와 플레이 스타일'에서 하나 이상 고르도록 바뀌었어요."
+  },
+  "body": {
+    "zh-Hant": "自訂標籤仍可自由新增，存草稿、試玩與連結分享不受影響，已公開的舊卡也會保留到下次發布更新才需補選。",
+    "zh-Hans": "自定义标签仍可自由添加，存草稿、试玩和链接分享不受影响，已公开的旧卡也会保留到下次发布更新才需补选。",
+    "en": "Custom tags remain optional, drafts, trial cards, and link sharing are unaffected, and cards already public stay listed until their next published update.",
+    "ja": "自由入力のタグはそのまま追加でき、下書き・お試し・リンク共有には影響せず、公開済みのカードも次の更新まで掲載されたままです。",
+    "ko": "직접 쓰는 태그는 그대로 추가할 수 있고 초안·체험·링크 공유에는 영향이 없으며, 이미 공개된 카드도 다음 업데이트 전까지 유지돼요."
+  }
+}

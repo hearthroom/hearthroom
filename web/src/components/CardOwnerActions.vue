@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError, fetchDraftState, type DraftState, fetchRatingDraft, registerCard, saveRatingDraft } from '@/lib/api';
@@ -58,21 +58,31 @@ async function submit(expected=visibility.value) {
     message: t(p === 'harbor' ? 'workspace.reviewConsent' : 'mine.consent.message'),
     confirmText: t('mine.consent.confirm'),
   };
+  let missingPresetTag=false;
   const send=async(value?:{update:import('../../../shared/card-update').UpdateIntent})=>{
     if(!valid())return;busy.value=true;error.value='';
     try{
       void saveRatingDraft(source,answers,token!,p).catch(()=>{});
       if(expected.everPublic)await registerCard(source,token!,answers,[],p,undefined,undefined,expected,value?.update);
       else await registerCard(source,token!,answers,[],p,undefined,undefined,expected);
-    }catch(e){if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;throw e;}finally{if(valid())busy.value=false;}
+    }catch(e){
+      if(valid()&&e instanceof ApiError&&e.code==='preset_tag_required'){missingPresetTag=true;return;}
+      if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;
+      throw e;
+    }finally{if(valid())busy.value=false;}
   };
   try {
     if(expected.everPublic){
       const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
         publication:{key:`${p}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
           reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token!,p);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
+      if(missingPresetTag){if(valid()){await nextTick();await visibilityControl.value?.showPresetTagMissing();}return;}
       if(!ok||!valid())return;
-    }else{if(!await confirmDialog({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send})||!valid())return;}
+    }else{
+      const ok=await confirmDialog({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});
+      if(missingPresetTag){if(valid()){await nextTick();await visibilityControl.value?.showPresetTagMissing();}return;}
+      if(!ok||!valid())return;
+    }
     if(!valid())return;await visibilityControl.value?.reload();if(valid())emit('submitted');
   } catch (err) {
     if(valid())error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'

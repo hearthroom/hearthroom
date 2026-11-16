@@ -405,7 +405,7 @@
             "description": "Current authority unavailable or operation outcome unknown; read the original key before retrying."
           },
           "400": {
-            "description": "Invalid update type or changelog; major requires a previously published card.",
+            "description": "Invalid input, update type or changelog (major requires a previously published card), rating_required, review_length_insufficient, or preset_tag_required (public publication requires at least one preset tag display name from GET /v1/tags/catalog in roleTag).",
             "content": {
               "application/json": {
                 "schema": {
@@ -425,6 +425,29 @@
                           "eligible": false,
                           "welcome": 100
                         }
+                      }
+                    }
+                  },
+                  "presetTagRequired": {
+                    "value": {
+                      "error": "preset_tag_required",
+                      "detail": {
+                        "field": "roleTag",
+                        "hint": "Public publication requires at least one platform preset category or play-style tag in roleTag (custom tags do not count). Add a preset tag's display name from names (not its URL key); see GET /v1/tags/catalog.",
+                        "catalogEndpoint": "/v1/tags/catalog",
+                        "presets": [
+                          {
+                            "key": "roleplay",
+                            "group": "play",
+                            "names": {
+                              "zh-Hans": "角色扮演",
+                              "zh-Hant": "角色扮演",
+                              "en": "Roleplay",
+                              "ja": "ロールプレイ",
+                              "ko": "롤플레이"
+                            }
+                          }
+                        ]
                       }
                     }
                   }
@@ -526,6 +549,71 @@
             "description": "Use 0 to avoid counting a card-detail view."
           }
         ]
+      }
+    },
+    "/v1/tags/catalog": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "List platform preset category and play-style tags",
+        "description": "Returns the fixed catalog of preset category and play-style tags grouped by category. Public card publication requires at least one tag whose localized display name in names appears in the card's tags (custom tags do not count; store a display name from names, not the URL key).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "groups",
+                    "items"
+                  ],
+                  "properties": {
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "play",
+                          "setting",
+                          "character",
+                          "kink"
+                        ]
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "key",
+                          "group",
+                          "names"
+                        ],
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "group": {
+                            "type": "string"
+                          },
+                          "names": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/tags": {
@@ -3420,6 +3508,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid command or preset_tag_required when restoring public access for a version without any preset tag from GET /v1/tags/catalog."
           },
           "401": {
             "description": "Authentication required."

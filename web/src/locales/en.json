@@ -5085,5 +5085,11 @@
   "import.rili.assistantPrefill": "Assistant prefill text was not imported; add any required opening format under Reply format.",
   "import.rili.memoryDisabled": "Working memory was turned off on the source card, so Variables stayed off.",
   "import.rili.modFile": "RiliAI module settings, lorebook, regex, and styles were loaded; add a character name after applying.",
-  "import.rili.otherFields": "Other RiliAI settings with no matching place here ({n}) were not imported."
+  "import.rili.otherFields": "Other RiliAI settings with no matching place here ({n}) were not imported.",
+  "editor.tags.pickNeed": "Pick one",
+  "editor.tags.pickHint": "Custom tags don't count; pick at least one below to publish.",
+  "editor.tags.pickFull": "Tags are full; remove a custom tag above to pick a category.",
+  "editor.tags.pickFullAction": "Edit tags",
+  "editor.required.presetTag": "Has a category",
+  "error.presetTagRequired": "Pick at least one option under Categories & play styles before publishing."
 }

@@ -21,6 +21,7 @@ import { indexStatements } from './originality';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
 import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
+import { hasPresetTag, PRESET_TAG_CATALOG } from '../shared/tag-catalog';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
@@ -146,6 +147,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   throw new HttpError(409,'submission_pending');
  }
  if(!version){
+  await assertPresetTag(db,input.role.tags,'draft');
   try{await assertReviewLength(db,await upstream.readForReview(env,input.token,input.role.roleId,provider),'draft',provider,input.role.roleId);}
   catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_sync_pending');}
  }
@@ -190,6 +192,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const receipt=await hostGateway.seal(env,input.token,input.role.roleId,work.id,version.version_id,provider);
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
+ await assertPresetTag(db,sealed.tags,'sealed');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
  const length=await assertReviewLength(db,settings,'sealed',provider,input.role.roleId);
  settings.reviewLength=length;
@@ -268,4 +271,18 @@ async function assertReviewLength(db:D1Database,settings:Record<string,unknown>,
  await bumpOp(db,'review_length',phase,exempt?'exempt':length.eligible?'eligible':'insufficient');
  if(!length.eligible&&!exempt)throw new HttpError(400,'review_length_insufficient',undefined,{detail:{reviewLength:length}});
  return length;
+}
+
+const PRESET_TAG_HINT='Public publication requires at least one platform preset category or play-style tag in roleTag (custom tags do not count). Add a preset tag\'s display name from names (not its URL key); see GET /v1/tags/catalog.';
+
+export function parseStoredTags(raw:string|null|undefined):string[]{
+ if(!raw)return [];
+ try{const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed.filter((v):v is string=>typeof v==='string'):[];}
+ catch{return [];}
+}
+
+export async function assertPresetTag(db:D1Database,tags:readonly string[],phase:'draft'|'sealed'|'restore'):Promise<void>{
+ const eligible=hasPresetTag(tags);
+ await bumpOp(db,'preset_tag',phase,eligible?'eligible':'missing');
+ if(!eligible)throw new HttpError(400,'preset_tag_required',undefined,{detail:{field:'roleTag',hint:PRESET_TAG_HINT,catalogEndpoint:'/v1/tags/catalog',presets:PRESET_TAG_CATALOG}});
 }

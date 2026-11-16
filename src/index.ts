@@ -91,7 +91,7 @@ import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
-import { tagNamesFor } from "../shared/tag-catalog";
+import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,type VisibilityReadSurface} from './work-read';
@@ -546,6 +546,9 @@ app.get("/v1/tags/counts", async (c) => {
   writeBoardCache(c.env, c.executionCtx, key, body);
   return boardResponse(body, allowNsfw, "origin", moderation.timing);
 });
+
+/** 平台預設分類與玩法固定目錄（四組＋五語顯示名）：公開上架至少需命中其中一項的顯示名。 */
+app.get("/v1/tags/catalog", (c) => c.json({ groups: TAG_GROUPS, items: PRESET_TAG_CATALOG }));
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。標籤分佈變得慢，快取久一點。 */
 app.get("/v1/tags", (c) =>

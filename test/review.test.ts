@@ -184,7 +184,7 @@ describe("審核佇列", () => {
     const listed = async () => ((await (await SELF.fetch("https://c.test/v1/cards")).json()) as { items: { tags: string[] }[] }).items;
     expect((await listed())[0].tags).toEqual(["推理", "倫理"]);
     const event = await env.DB.prepare("SELECT action, reason, before_value, after_value FROM moderation_events WHERE source_role_id='role-1'").first();
-    expect(event).toMatchObject({ action: "tags", reason: "review", before_value: JSON.stringify(["推理"]), after_value: JSON.stringify(["推理", "倫理"]) });
+    expect(event).toMatchObject({ action: "tags", reason: "review", before_value: JSON.stringify(["懸疑"]), after_value: JSON.stringify(["推理", "倫理"]) });
     // 定案後不能再改；不留站方覆蓋值
     expect((await tags(id, "rev-a", { tags: ["推理"] })).status).toBe(410);
     expect(await env.DB.prepare("SELECT tags_override FROM moderation_state WHERE source_role_id='role-1'").first()).toBeNull();
@@ -195,9 +195,9 @@ describe("審核佇列", () => {
     const next = (await queue("rev-b")).body.items[0].id as string;
     await act(next, "claim", "rev-b");
     const reviewed = (await (await SELF.fetch(`https://c.test/v1/review/${next}/detail`, { headers: bearer("rev-b") })).json()) as any;
-    expect(reviewed.card.tags).toEqual(["推理"]);
+    expect(reviewed.card.tags).toEqual(["懸疑"]);
     await act(next, "stamp", "rev-b", { verdict: "approve" });
-    expect((await listed())[0].tags).toEqual(["推理"]);
+    expect((await listed())[0].tags).toEqual(["懸疑"]);
   });
 
   it("蓋過章的審核人回頭看：不必再領，唯讀；定案後只剩公開資料，作者只在 author 一欄；沒蓋過的人看不到", async () => {

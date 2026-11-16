@@ -2399,7 +2399,7 @@
   "ddf9fd826fe92": "套用卡片目前的存取權限及各歷史版本的成人分級。Cache-Control 為 private, no-store。標記為 review 的時間戳是審核通過時間，不保證等於精確的公開時刻；unknown 為 null，絕不以 created_at 代替。target 遵守相同的可見性檢查，不會在客戶端逐頁掃描。",
   "d6bf11d2a52c8": "下次最早可發出更新通知的時間（UTC ms）；未曾通知更新時為 0，僅供作者私下讀回。",
   "d421c01c85938": "major 修訂版的公開更新日誌，內容已固定；minor 為空。",
-  "ddc11475ac3c0": "更新類型或更新日誌無效；major 要求卡片曾經公開。",
+  "ddc11475ac3c0": "輸入、更新類型或更新日誌無效（major 要求卡片曾經公開），或為 rating_required、review_length_insufficient、preset_tag_required（公開發布時，roleTag 至少要有一個來自 GET /v1/tags/catalog 的預設分類顯示名稱）。",
   "d2f6155e228a1": "未記錄更新意圖的舊版本一律視為 minor。",
   "d0e818e3d066e": "公開更新日誌。major 必填：至少 10 個不屬於 White_Space 的 Unicode code points，正規化後全文最多 500 個 code points。將 CRLF/CR 正規化為 LF，並移除前後的 Unicode White_Space。minor 只接受空字串日誌。",
   "dddcffc17e48c": "讀取已公開版本記錄",
@@ -2667,5 +2667,8 @@
   "d13e58c14d99e": "僅出現在支出紀錄：這筆扣點出自哪些種類的積分，金額大的在前。一次扣點即使從多個積分批次扣除，也只算一筆紀錄；各項 `amount` 加總等於該筆的 `score`。無法判定來源時省略。",
   "db98a67008ab7": "積分種類。無法辨識的值視同 `other`。",
   "da13084075959": "從此種類扣除的積分，為正數。",
-  "d0454fc25d6ec": "與 conversationId 一併提供時，回傳此本人擁有操作在接納時確定的工坊顯示投影。非本人擁有或不相符的操作無法存取。"
+  "d0454fc25d6ec": "與 conversationId 一併提供時，回傳此本人擁有操作在接納時確定的工坊顯示投影。非本人擁有或不相符的操作無法存取。",
+  "dd708c84a5ff3": "列出平台預設分類與玩法標籤",
+  "d31b4428d6980": "回傳依分類分組的固定預設分類與玩法標籤目錄。公開發布卡片時，卡片的 tags 裡至少要有一個出現在 names 中的多語顯示名稱（自訂標籤不算；請寫入 names 裡的顯示名稱，不要寫入網址 key）。",
+  "dcc5a8d450282": "指令無效，或在恢復公開的版本不含任何 GET /v1/tags/catalog 預設分類標籤時回傳 preset_tag_required。"
 }

@@ -151,7 +151,7 @@ export function role(f: RoleFixture): UpstreamRole {
     avatarUrl: "https://assets.harperharbor.com/cover.png",
     backgroundUrl: "https://assets.harperharbor.com/bg.png",
     slug: null,
-    tags: f.tags ?? ["推理"],
+    tags: f.tags ?? ["懸疑"],
     welcome: f.welcome ?? "",
     talkNum: f.talkNum ?? 0,
     followNum: f.followNum ?? 0,

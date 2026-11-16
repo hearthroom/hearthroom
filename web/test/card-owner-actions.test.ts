@@ -8,22 +8,24 @@ const visibilityPolicy=(extra:any={})=>({access:'private',effectiveAccess:'owner
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, type App } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
-import { createMemoryHistory, createRouter } from 'vue-router';
+import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import CardOwnerActions from '../src/components/CardOwnerActions.vue';
+import { ApiError } from '../src/lib/api';
+import { VisibilityError } from '../src/lib/work-visibility';
 const mocks=vi.hoisted(()=>({draft:vi.fn(),register:vi.fn(),token:vi.fn(),confirm:vi.fn(),ask:vi.fn(),ratingDraft:vi.fn(),saveRating:vi.fn()}));
 const TEEN={version:1,topics:{romance:'romance.dating'},other:'other.none'};
 vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchDraftState:mocks.draft,registerCard:mocks.register,fetchRatingDraft:mocks.ratingDraft,saveRatingDraft:mocks.saveRating}));
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token}));
-vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.confirm}));
+vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.confirm,confirmPublication:mocks.confirm}));
 vi.mock('../src/lib/rating',async original=>({...await original<typeof import('../src/lib/rating')>(),askRating:mocks.ask}));
-let app:App;let root:HTMLElement;
+let app:App;let root:HTMLElement;let currentRouter:Router;
 const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();await nextTick();};
 const card={id:'100021',num:100021,provider:'harbor',roleId:'sealed',sourceRoleId:'draft',status:'approved',author:{accountNumId:22,name:'Fixture'}} as any;
 beforeEach(()=>{vi.clearAllMocks();mocks.token.mockResolvedValue('token-harbor');mocks.confirm.mockImplementation(async options=>{await options.onConfirm?.({text:'',update:{updateKind:'minor',updateNote:''}});return true;});mocks.ratingDraft.mockResolvedValue(TEEN);mocks.ask.mockImplementation(async(a:unknown)=>a);mocks.saveRating.mockResolvedValue(undefined);mocks.register.mockImplementation(async()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',update:'pending',actions:['cancel_review']})});return {status:'approved'};});});
-afterEach(()=>{app?.unmount();root?.remove();});
-async function mount(c=card,me=22){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});await router.push('/cards/100021');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:me,nickName:'F',avatar:''};session.profile={identities:[{provider:'harbor',externalId:me}]} as any;root=document.createElement('div');document.body.append(root);app=createApp({render:()=>h(CardOwnerActions,{card:c})}).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
+afterEach(()=>{app?.unmount();root?.remove();document.body.innerHTML='';});
+async function mount(c=card,me=22){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});currentRouter=router;await router.push('/cards/100021');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:22,nickName:'F',avatar:''};if(me!==22)session.me={accountNumId:me,nickName:'F',avatar:''};session.profile={identities:[{provider:'harbor',externalId:me}]} as any;root=document.createElement('div');document.body.append(root);app=createApp({render:()=>h(CardOwnerActions,{card:c})}).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 const text=(key:string)=>i18n.global.t(key);
 const button=(key:string)=>[...root.querySelectorAll('button')].find(b=>b.textContent?.trim()===text(key));
 // owner 2026-10-08：改了卡、卡片頁沒說，按遊玩玩到的還是過審那一版
@@ -77,4 +79,36 @@ it.each([
  rollout.enabled=false;mocks.draft.mockResolvedValue(draft);await mount();
  expect(root.textContent).toContain(text(key));expect(root.querySelector('.author-visibility')).toBeNull();
  expect(visibilityMocks.read).not.toHaveBeenCalled();expect(mocks.register).not.toHaveBeenCalled();
+});
+
+it('shows visibility-missing in the visibility dialog without an error banner when submit_update or restore_public lacks a preset tag, and deep-links to editor tags',async()=>{
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',everPublic:true,draftChanged:true,actions:['set_private','set_unlisted','submit_update']})});
+ mocks.register.mockRejectedValueOnce(new ApiError(400,text('error.presetTagRequired'),'preset_tag_required'));
+ await mount();
+ button('card.owner.submitUpdate')!.click();await settle();
+ expect(root.querySelector('[role=alert]')).toBeNull();
+ const dialog=document.querySelector<HTMLElement>('[role="dialog"]')!;
+ expect(dialog).not.toBeNull();
+ expect(dialog.querySelector<HTMLInputElement>('input[value="public"]')!.checked).toBe(true);
+ expect(dialog.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.disabled).toBe(true);
+ const missing=dialog.querySelector<HTMLButtonElement>('.visibility-missing')!;
+ expect(missing.textContent).toBe(i18n.global.t('visibility.missing',{fields:text('editor.required.presetTag')}));
+ missing.click();await settle();
+ expect(document.querySelector('[role="dialog"]')).toBeNull();
+ expect(currentRouter.currentRoute.value.path).toBe('/cards/100021/edit');
+ expect(currentRouter.currentRoute.value.query).toMatchObject({section:'basic',focus:'tags',provider:'harbor'});
+
+ app.unmount();root.remove();
+ visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'unlisted',effectiveAccess:'link',everPublic:true,restorable:true,actions:['set_private','set_unlisted','restore_public']})});
+ visibilityMocks.change.mockRejectedValueOnce(new VisibilityError(400,{error:'preset_tag_required'}));
+ await mount();
+ root.querySelector<HTMLButtonElement>('.author-visibility > button')!.click();await settle();
+ const restoreDlg=document.querySelector<HTMLElement>('[role="dialog"]')!;
+ restoreDlg.querySelector<HTMLInputElement>('input[value="public"]')!.click();await settle();
+ restoreDlg.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await settle();
+ expect(document.querySelector('[role="dialog"]')).toBe(restoreDlg);
+ expect(restoreDlg.querySelector('[role="alert"]')).toBeNull();
+ expect(restoreDlg.querySelector<HTMLInputElement>('input[value="public"]')!.checked).toBe(true);
+ expect(restoreDlg.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.disabled).toBe(true);
+ expect(restoreDlg.querySelector('.visibility-missing')?.textContent).toBe(i18n.global.t('visibility.missing',{fields:text('editor.required.presetTag')}));
 });

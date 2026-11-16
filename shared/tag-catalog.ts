@@ -103,3 +103,43 @@ export function tagNamesFor(key: string): string[] | null {
 export function tagLabel(entry: TagEntry, locale: string): string {
   return entry.names[locale as TagLocale] ?? entry.names["zh-Hans"];
 }
+
+/** 伺服器投影卡片標籤時的儲存上限（與 projectRole / normalizeTags 一致）。 */
+export const STORED_TAGS_MAX = 20;
+
+export interface PresetTagCatalogItem {
+  key: string;
+  group: TagGroup;
+  names: Record<TagLocale, string>;
+}
+
+export const PRESET_TAG_CATALOG: PresetTagCatalogItem[] = TAG_CATALOG.map((entry) => ({
+  key: entry.key,
+  group: tagGroupOf(entry.key)!,
+  names: entry.names,
+}));
+
+function candidateStoredTags(tags: readonly string[]): Set<string> {
+  const out = new Set<string>();
+  let seen = 0;
+  for (const raw of tags) {
+    if (typeof raw !== "string") continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    out.add(trimmed);
+    if (++seen >= STORED_TAGS_MAX) break;
+  }
+  return out;
+}
+
+/** 儲存標籤（前 20 個非空白字串）裡命中了幾個平台預設分類（五語顯示名任一命中即算）。 */
+export function countPresetTags(tags: readonly string[]): number {
+  const candidates = candidateStoredTags(tags);
+  if (candidates.size === 0) return 0;
+  return TAG_CATALOG.filter((entry) => Object.values(entry.names).some((name) => candidates.has(name))).length;
+}
+
+/** 是否至少勾選了一個平台預設分類／玩法標籤。 */
+export function hasPresetTag(tags: readonly string[]): boolean {
+  return countPresetTags(tags) > 0;
+}

@@ -55,3 +55,15 @@ it('keeps the server length details and clears a definitely rejected new intent 
  await expect(submit('length-refusal','revised')).rejects.toMatchObject({code:'review_length_insufficient'});
  expect(posts).toHaveLength(2);expect(posts[0]).not.toBe(posts[1]);
 });
+
+it('translates preset_tag_required and clears the operation fence so retry after adding a preset tag gets a new operationId',async()=>{
+ const posts:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(_url:string,init:RequestInit)=>{
+  expect(init.method).toBe('POST');posts.push(JSON.parse(String(init.body)).operationId);
+  return Response.json({error:'preset_tag_required',detail:{field:'roleTag'}},{status:400});
+ }));
+ await expect(submit('preset-tag-refusal','old')).rejects.toMatchObject({status:400,code:'preset_tag_required',message:i18n.global.t('error.presetTagRequired')});
+ expect(localStorage.getItem('hearthroom:publication:harbor:preset-tag-refusal')).toBeNull();
+ await expect(submit('preset-tag-refusal','revised')).rejects.toMatchObject({code:'preset_tag_required'});
+ expect(posts).toHaveLength(2);expect(posts[0]).not.toBe(posts[1]);
+});

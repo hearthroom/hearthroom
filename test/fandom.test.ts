@@ -236,7 +236,7 @@ describe("搜尋建議", () => {
     const a = await author("sug-a", { roleId: "sug-a", name: "崩壞三 琪亞娜", tags: ["崩壞", "同人"] });
     await a.submit({ fandom: "崩壞三" });
     await a.approve();
-    const b = await author("sug-b", { roleId: "sug-b", name: "崩壞 成人卡", tags: ["崩壞"] });
+    const b = await author("sug-b", { roleId: "sug-b", name: "崩壞 成人卡", tags: ["崩壞", "同人"] });
     await b.submit({ fandom: "崩壞三", adult: true });
     await b.approve();
     const res = await SELF.fetch("https://c.test/v1/suggest?zone=zh&q=崩坏");

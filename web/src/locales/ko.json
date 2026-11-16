@@ -5085,5 +5085,11 @@
   "import.rili.assistantPrefill": "AI 답변 첫머리 지정은 지원하지 않으니 '출력 형식'에 적어 주세요.",
   "import.rili.memoryDisabled": "작업 메모리가 원래 카드에서 꺼져 있어 '카드 변수'를 켜지 않았어요.",
   "import.rili.modFile": "RiliAI 모듈 내용을 불러왔으니 적용 후 캐릭터 이름을 입력해 주세요.",
-  "import.rili.otherFields": "그 밖의 RiliAI 설정 {n}개는 넣을 자리가 없어 가져오지 않았어요."
+  "import.rili.otherFields": "그 밖의 RiliAI 설정 {n}개는 넣을 자리가 없어 가져오지 않았어요.",
+  "editor.tags.pickNeed": "하나 이상 선택",
+  "editor.tags.pickHint": "공개 시 직접 쓴 태그 외에 아래서 1개 이상 고르세요.",
+  "editor.tags.pickFull": "태그가 다 차서 직접 쓴 태그를 하나 지워야 고를 수 있어요.",
+  "editor.tags.pickFullAction": "태그 편집",
+  "editor.required.presetTag": "분류가 있음",
+  "error.presetTagRequired": "공개하려면 '분류와 플레이 스타일'에서 하나 이상 골라 주세요."
 }

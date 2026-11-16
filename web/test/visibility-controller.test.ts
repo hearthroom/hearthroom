@@ -72,3 +72,12 @@ it.each([
  const c=setup();await c.load();mocks.read.mockResolvedValue({workVisibility:policy(extra as any)});await c.apply('unlisted');
  expect(c.phase.value).toBe('unknown');await c.resume();expect(mocks.change).toHaveBeenCalledTimes(1);
 });
+
+it('records preset_tag_required as a distinct message on restore_public rejection without locking the controller',async()=>{
+ mocks.read.mockResolvedValue({workVisibility:policy({everPublic:true,restorable:true,actions:['set_private','set_unlisted','restore_public']})});
+ mocks.change.mockRejectedValueOnce(new VisibilityError(400,{error:'preset_tag_required'}));
+ const c=setup();await c.load();await c.apply('public');
+ expect(c.phase.value).toBe('ready');
+ expect(c.message.value).toBe('preset_tag_required');
+ expect(localStorage.getItem('hr.visibility.v1:harbor:22:source')).toBeNull();
+});
