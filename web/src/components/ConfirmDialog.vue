@@ -209,7 +209,9 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
   /* 低權重的危險確認：取消在上、破壞動作在下，不讓它成為最上方最醒目的按鈕 */
   .dlg--danger-subdued .dlg__actions { flex-direction: column; }
 }
-/* 低權重的危險確認在韓文按詞換行（標題、內文）；長 key 仍靠 overflow-wrap: anywhere 斷開 */
+/* 危險確認的標題、說明、後果與結果提示一併按語言換行。 */
+.dlg--danger-subdued:lang(ko){word-break:keep-all}
+.dlg--danger-subdued:lang(ja){word-break:auto-phrase}
 .dlg--danger-subdued:lang(ko) .dlg__title, .dlg--danger-subdued:lang(ko) .dlg__msg { word-break: keep-all; }
 .dlg--phrase-wrap:lang(ko) .dlg__title, .dlg--phrase-wrap:lang(ko) .dlg__msg { word-break: keep-all; }
 .dlg--phrase-wrap:lang(ja) .dlg__title, .dlg--phrase-wrap:lang(ja) .dlg__msg { word-break: auto-phrase; }

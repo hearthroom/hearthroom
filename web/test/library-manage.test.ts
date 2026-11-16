@@ -1,3 +1,7 @@
+import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {createApp,h,nextTick,type App} from 'vue';
 import {createMemoryHistory,createRouter,RouterView,type Router} from 'vue-router';
@@ -83,3 +87,52 @@ it('clears an obsolete preview failure after retry opens a valid confirmation',a
  await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');expect(el.querySelector('.library__failure')).not.toBeNull();
  await click('.library__failure button');expect(confirmState.current).not.toBeNull();expect(el.querySelector('.library__failure')).toBeNull();
 });
+
+it('clears pending deletion feedback when a successful list check no longer contains the segment',async()=>{
+ mock.remove.mockRejectedValueOnce(new TypeError('offline'));
+ await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');
+ mock.list.mockResolvedValue({conversations:[],hasNextPage:false});await click('[data-confirm]');
+ expect(confirmState.current).toBeNull();expect(el.querySelector('.library__empty')).not.toBeNull();
+ expect(el.querySelector('.library__failure')).toBeNull();expect(mock.remove).toHaveBeenCalledOnce();
+});
+it('rechecks a pending segment from the banner without keeping stale feedback or deleting twice',async()=>{
+ mock.remove.mockRejectedValueOnce(new TypeError('offline'));
+ await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');await click('[data-confirm]');
+ expect(el.querySelector('.library__failure')?.textContent).toContain(i18n.global.t('library.recent.resultPending'));
+ mock.list.mockRejectedValueOnce(new Error('offline'));await click('.library__failure button');
+ expect(el.querySelector('.library__failure')).not.toBeNull();
+ let finish!:(value:unknown)=>void;mock.list.mockImplementationOnce(()=>new Promise(r=>{finish=r;}));await click('.library__failure button');
+ expect(el.querySelector<HTMLButtonElement>('.library__failure button')!.disabled).toBe(true);
+ finish({conversations:[],hasNextPage:false});await settle();
+ expect(el.querySelector('.library__failure')).toBeNull();expect(mock.remove).toHaveBeenCalledOnce();
+});
+
+it('keeps the selected count on one line with reachable actions across five mobile locales in Chrome',async()=>{
+ const chrome=process.env.CHROME_BIN||['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/usr/bin/google-chrome','/usr/bin/chromium'].find(existsSync);
+ expect(chrome,'Chrome is required for actual selection-bar layout').toBeTruthy();
+ mock.other.mockResolvedValue({items:Array.from({length:24},(_,n)=>({unavailable:true,bookmarkId:String(n)})),hasNext:false});
+ await router.push('/library?tab=favorites');await settle();await click('[data-favorite-select]');
+ await click('[role="checkbox"]');await click('[role="checkbox"]:nth-child(2)');
+ const styles=['src/styles/tokens.css','src/styles/base.css','src/pages/LibraryPage.vue'].map(file=>{const text=readFileSync(file,'utf8');return file.endsWith('.css')?text:[...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n');}).join('\n');
+ const frames:string[]=[];
+ for(const n of [2,24]){
+  if(n===24)await click('[data-favorite-all]');
+  for(const loc of ['zh-Hant','zh-Hans','en','ja','ko']){
+   await applyLocale(loc);await nextTick();
+   const html=el.querySelector('.library__bottom')!.outerHTML;
+   for(const width of [320,390]){
+    const doc=`<!doctype html><html lang="${loc}"><meta charset="utf-8"><style>${styles}</style><body>${html}</body></html>`;
+    frames.push(`<iframe width="${width}" height="300" srcdoc="${doc.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" onload="const d=this.contentDocument,b=d.querySelector('.library__bottom'),s=b.querySelector('[role=status]'),r=s.getBoundingClientRect();window.results.push({label:'${loc}-${width}-${n}',oneLine:r.height<=parseFloat(this.contentWindow.getComputedStyle(s).lineHeight)+1,overflow:d.documentElement.scrollWidth>${width},actions:[...b.querySelectorAll('button')].every(e=>{const q=e.getBoundingClientRect();return q.height>=44&&q.left>=0&&q.right<=${width}&&e.scrollWidth<=e.clientWidth+1})});document.querySelector('#result').textContent=JSON.stringify(window.results)"></iframe>`);
+   }
+  }
+ }
+ const dir=mkdtempSync(join(tmpdir(),'library-mobile-layout-'));
+ try{
+  const file=join(dir,'fixture.html');writeFileSync(file,`<!doctype html><script>window.results=[]</script>${frames.join('')}<pre id="result"></pre>`);
+  const run=spawnSync(chrome!,['--headless=new','--no-sandbox','--no-first-run','--no-default-browser-check',`--user-data-dir=${join(dir,'profile')}`,'--dump-dom','--virtual-time-budget=2000',`file://${file}`],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
+  expect(run.error,run.stderr).toBeUndefined();expect(run.status,run.stderr).toBe(0);
+  const json=run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];expect(json,'Expected actual Chrome geometry').toBeTruthy();
+  const results=JSON.parse(json!);expect(results).toHaveLength(20);
+  for(const r of results){expect(r.oneLine,r.label+': selected count').toBe(true);expect(r.overflow,r.label+': overflow').toBe(false);expect(r.actions,r.label+': reachable actions').toBe(true);}
+ }finally{rmSync(dir,{recursive:true,force:true});await applyLocale('zh-Hant');}
+},40000);
