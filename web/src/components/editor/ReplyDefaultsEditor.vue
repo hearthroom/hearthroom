@@ -25,7 +25,7 @@ function select(axis:ReplyAxis,event:Event){
 function text(key:string,event:Event){const value=(event.target as HTMLTextAreaElement).value;set(key,value.trim()?value:undefined)}
 function issue(field:string){return checked.value?issues.value.find(i=>i.field===field):undefined}
 function errorText(field:string){const found=issue(field);return found?t(`editor.reply.${found.key}`,{max:found.max}):''}
-function hint(axis:ReplyAxis){const option=replyOption(axis,values.value[axis]);if(!option || !(replyOptions[axis] as readonly string[]).includes(option))return '';return t(`editor.reply.hint.${axis}.${axis==='length'&&option==='target'?zone.value:option}`)}
+function hint(axis:ReplyAxis){const option=replyOption(axis,values.value[axis]);if(!option)return t('editor.reply.unset.hint',{name:t(`editor.reply.option.${axis}.${replyPlatform[axis]}`)});if(!(replyOptions[axis] as readonly string[]).includes(option))return '';return t(`editor.reply.hint.${axis}.${axis==='length'&&option==='target'?zone.value:option}`)}
 async function clear(){
  if(Object.entries(values.value).some(([key,value])=>(key==='customStyle'||key.endsWith('Note'))&&value.trim()) && !(await confirmDialog({title:t('editor.reply.clear.title'),message:t('editor.reply.clear.body'),confirmText:t('editor.reply.clear.confirm'),cancelText:t('editor.reply.clear.cancel'),danger:true,dangerAppearance:'subdued'})))return;
  emit('update:modelValue',{});checked.value=false;notes.value={};
@@ -51,12 +51,12 @@ defineExpose({validate, errorMessage:()=>{const first=issues.value[0];if(!first)
    <p v-if="checked&&issues.some(i=>i.key==='unknown.warn')" class="reply-error" role="alert">{{ t('editor.reply.unknown.warn') }}</p>
    <fieldset v-for="axis in replyAxes" :key="axis" class="reply-axis" :disabled="disabled">
     <label :for="`reply-${axis}`">{{ t(`editor.reply.axis.${axis}`) }}</label>
-    <select :id="`reply-${axis}`" class="input" :data-reply-axis="axis" :value="replyOption(axis,values[axis])" :aria-invalid="!!issue(axis)" :aria-describedby="`reply-error-${axis}`" @change="select(axis,$event)">
-     <option value="">{{ t('editor.reply.unset',{name:t(`editor.reply.option.${axis}.${replyPlatform[axis]}`)}) }}</option>
+    <select :id="`reply-${axis}`" class="input" :class="{'reply-unset':!values[axis]}" :data-reply-axis="axis" :value="replyOption(axis,values[axis])" :aria-invalid="!!issue(axis)" :aria-describedby="hint(axis)?`reply-hint-${axis} reply-error-${axis}`:`reply-error-${axis}`" @change="select(axis,$event)">
+     <option value="">{{ t('editor.reply.unset') }}</option>
      <option v-if="values[axis]&&!(replyOptions[axis] as readonly string[]).includes(replyOption(axis,values[axis]))" :value="values[axis]">{{ t('editor.reply.unsupported',{value:values[axis]}) }}</option>
      <option v-for="option in replyOptions[axis]" :key="option" :value="option">{{ t(`editor.reply.option.${axis}.${option}`) }}</option>
     </select>
-    <p v-if="hint(axis)" class="subtle">{{ hint(axis) }}</p>
+    <p v-if="hint(axis)" :id="`reply-hint-${axis}`" class="subtle">{{ hint(axis) }}</p>
     <p :id="`reply-error-${axis}`" class="reply-error">{{ errorText(axis) }}</p>
     <div v-if="axis==='style'&&values.style==='custom'" class="reply-text">
      <label for="reply-customStyle">{{ t('editor.reply.customStyle.label') }}</label>
@@ -66,7 +66,7 @@ defineExpose({validate, errorMessage:()=>{const first=issues.value[0];if(!first)
     <div v-if="axis==='length'&&values.length==='target'" class="reply-length">
      <label for="reply-lengthTarget">{{ t('editor.reply.lengthTarget.value',{count:values.lengthTarget??800}) }}</label>
      <input id="reply-lengthTarget" type="range" min="0" :max="replyLengthTargets.length-1" step="1" :value="replyLengthTargets.indexOf(Number(values.lengthTarget))" :aria-label="t('editor.reply.lengthTarget.label')" :aria-valuetext="t('editor.reply.lengthTarget.value',{count:values.lengthTarget})" @input="set('lengthTarget',String(replyLengthTargets[Number(($event.target as HTMLInputElement).value)]))" />
-     <div class="reply-zones"><span v-for="z in ['brief','balanced','detailed','long']" :key="z">{{ t(`editor.reply.zone.${z}`) }}</span></div>
+     <div class="reply-zones"><span v-for="z in ['brief','balanced','detailed','long']" :key="z" :class="{active:z===zone}" :aria-current="z===zone?'true':undefined">{{ t(`editor.reply.zone.${z}`) }}</span></div>
     </div>
     <button type="button" class="btn btn--ghost reply-note-toggle" :aria-expanded="!!(notes[axis]??values[replyNote(axis)])" :aria-controls="`reply-note-${axis}`" @click="notes[axis]=!(notes[axis]??!!values[replyNote(axis)])">{{ t(notes[axis]??values[replyNote(axis)]?'editor.reply.note.hide':'editor.reply.note.add') }}</button>
     <div v-show="notes[axis]??values[replyNote(axis)]" :id="`reply-note-${axis}`" class="reply-text">
@@ -80,5 +80,8 @@ defineExpose({validate, errorMessage:()=>{const first=issues.value[0];if(!first)
  </div>
 </template>
 <style scoped>
+.reply-axis>select.reply-unset,.reply-axis>select option[value=""]{color:var(--text-3)}
+.reply-axis>select option:not([value=""]){color:var(--text)}
+.reply-zones .active{color:var(--accent-text);font-weight:600}
 .reply-defaults{gap:var(--s-3);min-width:0}.reply-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);flex-wrap:wrap}.reply-title{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap;min-width:0}.reply-title h3{margin:0;font-size:15px}.reply-toggle{min-height:var(--h-sm)}.reply-body{padding-top:var(--s-2);border-top:1px solid var(--line)}.reply-body p{overflow-wrap:anywhere}.reply-notice{padding:var(--s-3);background:var(--surface-2);border-radius:var(--r-sm);font-size:13px;color:var(--text-2)}.reply-axis{border:0;border-top:1px solid var(--line);padding:var(--s-4) 0;margin:0;min-width:0}.reply-axis>label,.reply-text>label{display:block;font-weight:600;margin-bottom:var(--s-2)}.reply-axis>select{max-width:400px;min-height:var(--h-lg);text-overflow:ellipsis}.reply-text{display:grid;gap:var(--s-1);max-width:560px}.reply-text textarea{width:100%}.reply-length{max-width:400px;display:grid;gap:var(--s-2)}.reply-length input{width:100%;min-height:var(--h-lg);accent-color:var(--accent)}.reply-zones{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);gap:var(--s-2)}.reply-note-toggle{margin-top:var(--s-2);min-height:var(--h-lg)}.reply-clear{display:flex;justify-content:flex-end}.reply-clear .btn{min-height:var(--h-lg)}.reply-error{color:var(--danger);font-size:13px}.reply-error:empty{display:none}[aria-invalid=true]{border-color:var(--danger)}@media(max-width:760px){.reply-toggle{min-height:var(--h-lg)}}:lang(ko) p{word-break:keep-all}:lang(ja) p{word-break:auto-phrase}
 </style>

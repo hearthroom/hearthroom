@@ -1,9 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createApp, nextTick } from 'vue';
+import { createApp, nextTick, reactive } from 'vue';
 import { i18n } from '../src/lib/i18n';
 import ReplyDefaultsEditor from '../src/components/editor/ReplyDefaultsEditor.vue';
 let close: (()=>void)|undefined;
-afterEach(()=>{close?.();document.body.innerHTML=''});
+const originalLocale=i18n.global.locale.value;
+afterEach(()=>{close?.();document.body.innerHTML='';i18n.global.locale.value=originalLocale});
 async function mount(values:Record<string,string>={}) {
  const update=vi.fn();const host=document.createElement('div');document.body.append(host);
  const app=createApp(ReplyDefaultsEditor,{modelValue:values,'onUpdate:modelValue':update});app.use(i18n);
@@ -56,4 +57,31 @@ it('clears blank notes without changing unrelated sparse values',async()=>{
 
 it.each([{length:'target',lengthTarget:'8e2'},{length:'target',lengthTarget:'800.0'},{style:''},{paceNote:'   '},{style:'card',customStyle:''}])('rejects imported wire values the Provider rejects: %j',async values=>{
  const {vm}=await mount(values);expect(vm.validate()).toBe(false);
+});
+
+it.each(['zh-Hant','zh-Hans','en','ja','ko'] as const)('keeps the platform default in a separate associated hint in %s',async locale=>{
+ i18n.global.locale.value=locale;
+ const values=reactive<Record<string,string>>({});const {host,update}=await mount(values);
+ const select=host.querySelector<HTMLSelectElement>('[data-reply-axis="agency"]')!;
+ const hint=host.querySelector('#reply-hint-agency');
+ expect(hint?.textContent).toBe(i18n.global.t('editor.reply.unset.hint',{name:i18n.global.t('editor.reply.option.agency.coauthor')}));
+ expect(select.getAttribute('aria-describedby')?.split(' ')).toContain('reply-hint-agency');
+ expect(select.classList.contains('reply-unset')).toBe(true);
+ expect(select.options[0].textContent).toBe(i18n.global.t('editor.reply.unset'));
+ expect(select.options[0].textContent).not.toContain(i18n.global.t('editor.reply.option.agency.coauthor'));
+ expect(update).not.toHaveBeenCalled();
+ values.agency='protect';await nextTick();
+ expect(select.classList.contains('reply-unset')).toBe(false);
+ expect(host.querySelector('#reply-hint-agency')?.textContent).toBe(i18n.global.t('editor.reply.hint.agency.protect'));
+ delete values.agency;await nextTick();
+ expect(select.classList.contains('reply-unset')).toBe(true);
+});
+
+it('marks the current length zone as the target changes',async()=>{
+ const values=reactive<Record<string,string>>({length:'target',lengthTarget:'400'});const {host}=await mount(values);
+ for(const [target,zone] of [['400','brief'],['800','balanced'],['1500','detailed'],['10000','long']]){
+  values.lengthTarget=target;await nextTick();
+  const active=host.querySelectorAll('.reply-zones [aria-current="true"]');
+  expect(active).toHaveLength(1);expect(active[0].textContent).toBe(i18n.global.t(`editor.reply.zone.${zone}`));
+ }
 });
