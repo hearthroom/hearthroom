@@ -95,7 +95,37 @@ const UPDATED_AT = `COALESCE((SELECT COALESCE(v.published_at, r.decided_at, v.cr
 const LATEST_ANNOUNCED_UPDATE = `(SELECT MAX(e.published_at) FROM works w JOIN card_update_events e ON e.work_id=w.id AND e.state='published' WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id)`;
 const FEED_EVENT_AT = `MAX(c.registered_at, COALESCE(${LATEST_ANNOUNCED_UPDATE}, 0))`;
 
-const CARD_COLUMNS = COVER_HONORS+" AS honors, c.*, (SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_METADATA = "(SELECT update_kind FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_kind, (SELECT update_note FROM hosting_versions WHERE version_id=c.approved_version_id) AS update_note, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = COVER_HONORS + " AS honors, c.*, " + CARD_METADATA;
+// Capture card content and the visibility binding together, without presentation joins.
+const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
+  'provider','source_role_id','approved_version_id','approved_hosted_role_id','zone',
+  'author_num_id','author_name','author_avatar','names','summaries','background_url',
+  'share_image_url','landscape_url','slug','tags','talk_num','follow_num','talk_num_prev',
+  'hot_score','heat','registered_at','board_hidden','public_blocked','last_synced_at',
+  'status','reviewed_hash','featured_at','rating','rating_descriptors','fandom','fandom_key','fandom_qid',
+].map(column => `c.${column}`).join(', ');
+
+export async function listCardRowsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
+ if(!ids.length)return [];
+ return (await db.prepare(`SELECT ${LIST_CARD_COLUMNS} FROM cards c WHERE c.id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<CardRow>()).results;
+}
+
+/** Decorate only displayed rows. Never reload card content after its access proof. */
+export async function decorateCardRows(db:D1Database,rows:CardRow[]):Promise<CardRow[]>{
+ if(!rows.length)return [];
+ const captured=rows.map(({id,provider,source_role_id,author_num_id,fandom_qid,approved_version_id,registered_at})=>({id,provider,source_role_id,author_num_id,fandom_qid,approved_version_id,registered_at}));
+ const metadata=await db.prepare(`WITH c AS (
+  SELECT CAST(json_extract(value,'$.id') AS INTEGER) AS id,
+   json_extract(value,'$.provider') AS provider,json_extract(value,'$.source_role_id') AS source_role_id,
+   json_extract(value,'$.author_num_id') AS author_num_id,json_extract(value,'$.fandom_qid') AS fandom_qid,
+   json_extract(value,'$.approved_version_id') AS approved_version_id,json_extract(value,'$.registered_at') AS registered_at
+  FROM json_each(?)
+ ) SELECT ${COVER_HONORS} AS honors, ${CARD_METADATA} FROM c ${AUTHOR_JOIN}`)
+  .bind(JSON.stringify(captured)).all<Partial<CardRow>&{id:string}>();
+ const byId=new Map(metadata.results.map(row=>[row.id,row]));
+ return rows.map(row=>({...row,...byId.get(row.id)}));
+}
 
 /** Presentation rows only; callers must apply current access before returning. */
 export async function cardsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
@@ -367,6 +397,15 @@ const PRIOR_MEAN = 3;
 const BAYES_SCORE = `(SELECT CASE WHEN COUNT(*) >= ${MIN_SCORE_COUNT} THEN (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) ELSE ${PRIOR_MEAN} END FROM card_scores s WHERE s.card_id = CAST(c.id AS TEXT) AND EXISTS(SELECT 1 FROM members m WHERE m.id=s.member_id AND m.account_class='normal'))`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
+  return listCardRows<CardRow>(db,opts,CARD_COLUMNS);
+}
+
+/** Same filters, ordering, fallback and counts; no discarded presentation work. */
+export async function listCardIds(db:D1Database,opts:ListOptions){
+  return listCardRows<Pick<CardRow,'id'>>(db,opts,'CAST(c.id AS TEXT) AS id');
+}
+
+async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   const where: string[] = opts.anyStatus ? ["1=1"] : [listed(!!opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   if(opts.submittedOnly)where.push(SUBMITTED_CARD);
   const binds: unknown[] = [];
@@ -491,9 +530,9 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     } else orderBy = "c.heat DESC, c.talk_num DESC, c.registered_at DESC";
     // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
     return db
-      .prepare(`SELECT ${CARD_COLUMNS} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .prepare(`SELECT ${columns} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .bind(...binds, ...(search?.binds ?? []), ...orderBinds, opts.limit + 1, opts.offset)
-      .all<CardRow>();
+      .all<T>();
   };
   let probe = await run("and");
   // 幾個詞全部命中的一張也沒有：退一步列任一命中的，並標 partial 讓畫面說清楚這不是全部符合。
