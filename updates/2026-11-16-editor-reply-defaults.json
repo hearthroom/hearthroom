@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "title": {
+    "zh-Hant": "寫卡頁現在可以設定卡片預設的回覆偏好，例如文風、視角與篇幅。",
+    "zh-Hans": "写卡页现在可以设定卡片默认的回复偏好，例如文风、视角和篇幅。",
+    "en": "The card editor now lets you set a card’s default response preferences, such as style, perspective, and length.",
+    "ja": "カード編集画面で、文体・視点・文章量など、カードの返信の初期設定を決められるようになりました。",
+    "ko": "이제 카드 편집기에서 문체, 시점, 분량 같은 카드의 기본 답변 취향을 정할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "在「進階」區設定後，玩家沒自己調整的項目會照卡片的預設回覆，調整過的以玩家的選擇為準。",
+    "zh-Hans": "在“进阶”区设定后，玩家没自己调整的项目会按卡片的默认回复，调整过的以玩家的选择为准。",
+    "en": "Set them under Advanced; anything a player hasn’t adjusted follows the card, and anything they have adjusted follows the player’s choice.",
+    "ja": "「詳細設定」で設定すると、プレイヤーが調整していない項目はカードの設定どおりに返信し、調整した項目はプレイヤーの選択が優先されます。",
+    "ko": "‘고급’ 영역에서 정하면 플레이어가 바꾸지 않은 항목은 카드 설정을 따르고, 바꾼 항목은 플레이어의 선택을 따라요."
+  }
+}

@@ -65,6 +65,7 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
 import OpeningEditor from "@/components/editor/OpeningEditor.vue";
+import ReplyDefaultsEditor from "@/components/editor/ReplyDefaultsEditor.vue";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import RegexIssueList from "@/components/editor/RegexIssueList.vue";
 import { can } from "@/lib/provider";
@@ -172,6 +173,7 @@ const onCreatePage = computed(() => route.path.endsWith("/create"));
 
 // 預設跟介面語言：看英文介面的人，第一張卡多半也是英文的
 const draft = ref<RoleDraft>(makeDraft(locale.value));
+const replyDefaultsEditor = ref<InstanceType<typeof ReplyDefaultsEditor>|null>(null);
 /**
  * 上次成功寫入的樣子。null＝還沒存過，於是 documentPatch 會把所有欄位都送出去。
  *
@@ -483,13 +485,14 @@ const worldShown = ref(false);
 // 多角色的入口先藏起來（owner 2026-11-10），已經是世界卡的照舊顯示它那一區。
 const sections = computed(() => SECTIONS.filter((key) =>
   key === "world" ? can("world") && worldShown.value
-  : key === "advanced" ? can("regex") || (can("state") && !draft.value.world)
   : key === "worldbook" ? can("worldbook")
   : true));
 /** 卡片變數那一塊：預設收起（多數卡用不到），按「加入」或存檔被擋在變數上時才打開。 */
 const stateOpen = ref(false);
 /** 存檔被擋在卡片變數上：進階亮紅點，直到作者再改變數或存成功（ui.md §2）。 */
 const stateBlocked = ref(false);
+const replyBlocked = ref(false);
+watch(() => draft.value.responseDefaults, () => { replyBlocked.value = false; }, { deep: true });
 watch(() => draft.value.state, () => { stateBlocked.value = false; }, { deep: true });
 const body = ref<HTMLElement | null>(null);
 const scrollBody = ref<HTMLElement | null>(null);
@@ -581,7 +584,7 @@ const REQUIRED_OF = computed<Partial<Record<Section, readonly string[]>>>(() => 
   persona: ["roleDetailDesc"],
   opening: [openingMode.value === "page" ? "prologue" : "roleWelcome"],
 }));
-const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key]?.some((k) => missing.value.includes(k)));
+const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || replyBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key]?.some((k) => missing.value.includes(k)));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
 const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleBackground: "editor.background", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
@@ -1559,6 +1562,13 @@ async function save() {
   if (saving.value || loading.value || visibilityBusy.value) return;
   if (initializationFailed.value) { error.value = t("state.loadFailed"); return; }
   if (booksUnavailable.value) { error.value = t("state.loadFailed"); return; }
+  if (replyDefaultsEditor.value && !replyDefaultsEditor.value.validate()) {
+    error.value = replyDefaultsEditor.value.errorMessage();
+    replyBlocked.value = true;
+    goto("advanced");
+    return;
+  }
+  replyBlocked.value = false;
   regexSaveIssues.value = [];
   if (cardCssOver.value) {
     section.value = "advanced";
@@ -2051,6 +2061,7 @@ async function exportCard(format: "png" | "json") {
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
         <div v-if="error" class="notice notice--error" role="alert">
           {{ error }}
+          <button v-if="replyBlocked" type="button" class="btn btn--sm btn--ghost" @click="goto('advanced'); replyDefaultsEditor?.validate()">{{ $t("editor.reply.title") }}</button>
           <RegexIssueList v-if="regexSaveIssues.length" :set="regexSet" :issues="regexSaveIssues" />
         </div>
         <p v-if="(restoredDraft || pendingCreate)&&(!error||recoveredRevert)&&!pendingRevert?.saveAttempted" class="notice restored" role="status">
@@ -2237,6 +2248,7 @@ async function exportCard(format: "png" | "json") {
             </div>
           </div>
 
+
           <!-- 多數卡留空的兩欄收在一列裡；任一有內容就打開，列尾寫「已填寫」 -->
           <div class="group">
             <button type="button" class="disclosure" :aria-expanded="personaMoreOpen" aria-controls="persona-more" @click="personaMoreOpen = !personaMoreOpen">
@@ -2388,6 +2400,7 @@ async function exportCard(format: "png" | "json") {
               </div>
             </div>
           </div>
+          <ReplyDefaultsEditor ref="replyDefaultsEditor" v-model="draft.responseDefaults" :disabled="saving" :language="draft.language" />
         </section>
 
         <!-- 發布 -->

@@ -101,6 +101,8 @@ export interface RoleDraft {
   roleOutputContract: string;
   jailbreak: string;
   cardMeta: CardMeta;
+  /** Sparse author defaults; absent axes inherit the platform defaults. */
+  responseDefaults: Record<string, string>;
   /** 世界模式的成員；null＝普通單卡。世界觀是 roleDetailDesc、世界級世界書是綁卡的那本，都不在這裡。 */
   world: WorldDraft | null;
   /** 卡片變數（好感度、背包、任務這類每輪更新的數值）；null＝沒有。世界卡不用。 */
@@ -239,6 +241,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleOutputContract: "",
   jailbreak: "",
   cardMeta: {},
+  responseDefaults: {},
   world: null,
   state: null,
 });
@@ -393,11 +396,18 @@ export function readCardMeta(raw: unknown): CardMeta {
 }
 
 /** 上游的角色詳情 → 草稿。 */
+/** API values are strings. Copy the object so editing never mutates the readback. */
+export function readResponseDefaults(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
 export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLanguage: string): RoleDraft {
   const draft = makeDraft(str(raw.language) || fallbackLanguage);
   draft.roleName = str(raw.roleName);
   draft.nickname = str(raw.nickname);
   draft.cardMeta = readCardMeta(raw.cardMeta);
+  draft.responseDefaults = readResponseDefaults(raw.responseDefaults);
   draft.userName = str(raw.userName);
   draft.roleSex = str(raw.roleSex);
   draft.roleDesc = str(raw.roleDesc);
@@ -436,6 +446,7 @@ export interface RoleDocumentFields {
   jailbreak?: string;
   nickname?: string;
   cardMeta?: CardMeta;
+  responseDefaults?: Record<string, string> | null;
   /** 只有繁體與簡體可以互換；其他語言建立後不改。 */
   language?: string;
 }
@@ -475,6 +486,14 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
   // 新卡沒有附帶資料就不送：上游本來就是空的，送一個 {} 只是多一次寫入
   if (original ? JSON.stringify(draft.cardMeta) !== JSON.stringify(original.cardMeta) : Object.keys(draft.cardMeta).length > 0) {
     patch.cardMeta = draft.cardMeta;
+  }
+  // Compare sparse maps by value: do not freeze platform defaults on an untouched card.
+  const defaults = draft.responseDefaults ?? {};
+  const previous = original?.responseDefaults ?? {};
+  const defaultsChanged = Object.keys(defaults).length !== Object.keys(previous).length ||
+    Object.entries(defaults).some(([key, value]) => previous[key] !== value);
+  if (original ? defaultsChanged : Object.keys(defaults).length > 0) {
+    patch.responseDefaults = Object.keys(defaults).length ? { ...defaults } : null;
   }
   // 卡片語言跟著建卡送；建立之後只在繁簡互換時送。
   if (original && draft.language !== original.language) patch.language = draft.language;

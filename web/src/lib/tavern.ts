@@ -23,7 +23,7 @@
 
 import { isPng, readTextChunk, replaceTextChunks, base64FromUtf8, utf8FromBase64 } from "./png-chunks";
 import type { CardMeta, RoleDraft, TalkExampleEntry, WorldbookEntryDraft, WorldbookMatchOptions } from "./role-draft";
-import { makeDraft } from "./role-draft";
+import { makeDraft, readResponseDefaults } from "./role-draft";
 import { promptOnlyRuleCount, rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules";
 import { unzipSync } from "fflate";
 import { deepMerge, formatJson, type CardStateDraft } from "./card-state";
@@ -641,6 +641,7 @@ export function tavernToDraft(
   const data = card.data ?? {};
   const dropped: DropNote[] = [];
   const draft = makeDraft(options.language);
+  draft.responseDefaults = readResponseDefaults(data.extensions?.hearthroom_response_defaults);
 
   draft.roleName = text(data.name);
   draft.nickname = text(data.nickname);
@@ -689,7 +690,7 @@ export function tavernToDraft(
   if (promptOnly) dropped.push({ key: "import.drop.promptOnlyRules", params: { n: promptOnly } });
   // 酒館卡：規則裡的 <style> 是酒館寫法，聊天頁要照酒館的方式落地（訊息層前綴）。
   const regex: RegexRuleSet | null = regexRules.length ? { version: 1, rules: regexRules, statusbar: "", lowered: false, format: "tavern" } : null;
-  const rest = extensions.filter((k) => k !== "regex_scripts").length;
+  const rest = extensions.filter((k) => k !== "regex_scripts" && k !== "hearthroom_response_defaults").length;
   if (rest) dropped.push({ key: "import.drop.extensions", params: { n: rest } });
 
   let worldbook: ImportResult["worldbook"] = null;
@@ -853,7 +854,10 @@ export function draftToTavern(
     creator: cardMeta.creator ?? meta.creator ?? "",
     character_version: cardMeta.characterVersion ?? "",
     // 正則規則寫回酒館認得的位置，別的客戶端拿到卡就能用同一套顯示規則
-    extensions: meta.regex?.rules.length ? { regex_scripts: rulesToTavern(meta.regex.rules) } : {},
+    extensions: {
+      ...(meta.regex?.rules.length ? { regex_scripts: rulesToTavern(meta.regex.rules) } : {}),
+      ...(Object.keys(draft.responseDefaults ?? {}).length ? { hearthroom_response_defaults: { ...draft.responseDefaults } } : {}),
+    },
     // V3
     nickname: draft.nickname ?? "",
     group_only_greetings: [],

@@ -25290,6 +25290,30 @@
             ],
             "default": "on",
             "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. The default depends on the selected model; most models default to on. World-mode turns always return content incrementally."
+          },
+          "authorContent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "customStyle": {
+                "type": "boolean"
+              },
+              "agencyNote": {
+                "type": "boolean"
+              },
+              "styleNote": {
+                "type": "boolean"
+              },
+              "perspectiveNote": {
+                "type": "boolean"
+              },
+              "lengthNote": {
+                "type": "boolean"
+              },
+              "paceNote": {
+                "type": "boolean"
+              }
+            }
           }
         }
       },

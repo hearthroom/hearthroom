@@ -403,3 +403,11 @@ it("keeps semantic recall off in first-party Lorebook extensions through export 
  expect(restored[0].semanticRecall).toBe(false);
  expect(restored[0].matchOptions?.groupId).toBe("whole");
 });
+
+it('round-trips sparse author reply defaults in the Hearthroom extension',()=>{
+ const draft=makeDraft('en');draft.responseDefaults={style:'custom',customStyle:'Noir',agencyNote:'Leave choices to me'};
+ const exported=draftToTavern(draft);
+ const imported=tavernToDraft(exported,{language:'en',labels:LABELS});
+ expect(imported.draft.responseDefaults).toEqual(draft.responseDefaults);
+ expect(imported.dropped.some(item=>item.key==='import.drop.extensions')).toBe(false);
+});
