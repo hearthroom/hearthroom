@@ -113,7 +113,7 @@ async function restoreFavorites(tokens:{id:string;token:string}[]){
 }
 function key(e:KeyboardEvent){if(e.key==='Escape'&&managing.value&&!locked.value&&!confirmState.current){e.preventDefault();finish();}}
 const petAway=computed(()=>tab.value==='conversations'||managing.value);
-watch(petAway,on=>{pageAway.value+=on?1:-1;},{flush:'sync',immediate:true});
+watch(petAway,(on,before)=>{if(on)pageAway.value++;else if(before)pageAway.value--;},{flush:'sync',immediate:true});
 watch([tab,page],()=>{managing.value=false;selected.value=[];toast.value=undefined;clearFailure();});
 watch([tab,page,locale,()=>session.me,()=>session.profile?.showNsfw,()=>session.profile?.hiddenTags?.join(',')],()=>{void load();},{immediate:true});
 onMounted(()=>document.addEventListener('keydown',key));onBeforeRouteLeave(()=>!locked.value);onBeforeRouteUpdate(()=>!locked.value);
