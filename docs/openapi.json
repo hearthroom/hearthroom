@@ -11821,7 +11821,7 @@
           "Conversation"
         ],
         "summary": "Connect an authenticated conversation stream",
-        "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model and thinking depth from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
+        "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model and thinking depth from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API. Optional chat-frame `tool` selects one private declared terminal tool (CardToolTurnOption). A native one-shot response may contain prose and one terminal `toolCall`; validation failure returns inert raw args with valid:false, without retry. Fixed-turn and dynamic usage billing retain their existing rules.",
         "x-harperharbor": {
           "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model and thinking depth from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
           "security": [],
@@ -23312,6 +23312,26 @@
           "cardState": {
             "$ref": "#/components/schemas/CardStateView",
             "description": "Card variables after this reply's turn, on assistant rows whose turn recorded them and on the opening row (opening values, `seq` 0). A row without it keeps the latest earlier values."
+          },
+          "toolCall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardToolCall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Terminal inert tool result, or null with a fixed reason. Declarations and private request snapshots are never returned."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unsupported",
+              "interrupted",
+              "missing",
+              "multiple_calls"
+            ]
           }
         }
       },
@@ -23517,6 +23537,34 @@
           "cardState": {
             "$ref": "#/components/schemas/CardStateView",
             "description": "Card variables this turn settled; only on finished turns that recorded them."
+          },
+          "toolCall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardToolCall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Terminal inert tool result, or null with a fixed reason. Declarations and private request snapshots are never returned."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unsupported",
+              "interrupted",
+              "missing",
+              "multiple_calls"
+            ]
+          },
+          "settled": {
+            "type": "boolean"
+          },
+          "chargeCredits": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Final credits charged when settled=true; zero can include exemptions."
           }
         }
       },
@@ -25876,6 +25924,21 @@
           "estSampleCount": {
             "type": "integer",
             "description": "0 for formula."
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ModelCapabilities"
+          },
+          "capabilitiesMeasuredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Measurement time when matching route evidence exists; no private evidence or supplier details are returned."
+          },
+          "capabilitiesByThinkingDepth": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelCapabilities"
+            },
+            "description": "Exact thinking-setting capability projections. Use this entry for an explicitly selected depth."
           }
         }
       },
@@ -27737,6 +27800,14 @@
           "provisioning": {
             "type": "boolean",
             "description": "Present only to the authorized author. True means a private storage identity exists but first complete creation is pending."
+          },
+          "tools": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CardToolDefinition"
+            },
+            "description": "Private author declaration. Omit on write to preserve; [] clears. Available only through authorized author detail reads, never public detail or presentation assets."
           }
         }
       },
@@ -28394,6 +28465,14 @@
               }
             ],
             "description": "Replaces the whole object; send `null` or `{}` to clear. Absent leaves it untouched. Validated as a whole: one invalid value rejects the request."
+          },
+          "tools": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CardToolDefinition"
+            },
+            "description": "Private author declaration. Omit on write to preserve; [] clears. Available only through authorized author detail reads, never public detail or presentation assets."
           }
         }
       },
@@ -35824,6 +35903,26 @@
               "null"
             ],
             "description": "For an AI reply, the verifiable triggering user message's opaque history id in this conversation, possibly on another page. Null for user messages, openings, deleted targets or unverifiable links (including older or copied fork messages). Regeneration points to the new user id; manual AI edits preserve the link. Never infer adjacency."
+          },
+          "toolCall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardToolCall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only for a requested terminal tool. Null means no usable terminal call; inspect reason. No tool declaration is returned. Omitted when content=false, streaming or moderated; metadata-only pages never contain arguments."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unsupported",
+              "interrupted",
+              "missing",
+              "multiple_calls"
+            ]
           }
         }
       },
@@ -38183,6 +38282,136 @@
             ]
           }
         ]
+      },
+      "CardToolDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "schema"
+        ],
+        "description": "Author-only terminal output declaration for an agent configuration. The platform validates inert output and never executes the tool. Supports a bounded JSON Schema 2020-12 subset; no remote or cyclic references.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "description": {
+            "type": "string",
+            "description": "At most 2 KiB of UTF-8 text."
+          },
+          "schema": {
+            "type": "object",
+            "description": "Root type must be object; at most 32 KiB, depth 32, local references only. The complete declaration is limited to 128 KiB."
+          }
+        }
+      },
+      "CardToolCall": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "args",
+              "valid"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "args": {
+                "type": "object"
+              },
+              "valid": {
+                "const": true
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "args",
+              "valid"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "args": {
+                "type": "string",
+                "description": "Original inert model argument bytes decoded as text; never execute or render as HTML."
+              },
+              "valid": {
+                "const": false
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invalid_json",
+                  "invalid_schema",
+                  "unknown_tool",
+                  "arguments_limit"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ModelCapabilities": {
+        "type": "object",
+        "required": [
+          "tools",
+          "forcedTools",
+          "jsonSchema",
+          "imageInput"
+        ],
+        "description": "Measured capability on the actual Provider route and request shape. Unknown is not a support claim. Agent eligibility is independent. Strict native response-format support and image input require their own end-to-end probes.",
+        "properties": {
+          "tools": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "forcedTools": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "jsonSchema": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "imageInput": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "CardToolTurnOption": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+            "description": "Optional WebSocket chat-frame field selecting one declared terminal tool. Unknown name or effective Agent/world mode is rejected before spending. Missing measured force support uses the same model text path with toolCall:null and reason:unsupported. No schema override, execution loop or automatic retry."
+          }
+        }
       }
     }
   },

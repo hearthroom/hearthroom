@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "draft": true,
+  "title": {
+    "zh-Hant": "卡片現在可以宣告工具，讓模型的決定交給卡片自己處理。",
+    "zh-Hans": "卡片现在可以声明工具，让模型的决定交给卡片自己处理。",
+    "en": "Cards can now declare tools, so a model's decision is handled by the card itself.",
+    "ja": "カードがツールを宣言でき、モデルの判断をカード側で処理できるようになりました。",
+    "ko": "이제 카드가 도구를 선언해 모델의 판단을 카드에서 직접 처리할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "每一輪可指定一個工具，卡片會拿到經過檢查的結果來畫自己的面板；不支援工具的線路會照一般文字回覆。",
+    "zh-Hans": "每一轮可指定一个工具，卡片会拿到经过检查的结果来绘制自己的面板；不支持工具的线路会照常回复文字。",
+    "en": "Pick one tool per turn and the card gets a checked result to drive its own panel, while lanes without tool support reply with ordinary text.",
+    "ja": "1ターンにつきツールを1つ指定でき、検証済みの結果でカード独自のパネルを動かせ、非対応の回線は通常のテキストで返信します。",
+    "ko": "한 턴에 도구를 하나 지정하면 검증된 결과로 카드가 자기 패널을 그릴 수 있고, 도구를 지원하지 않는 회선은 일반 텍스트로 답해요."
+  }
+}
