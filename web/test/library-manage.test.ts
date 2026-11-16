@@ -3,6 +3,7 @@ import {createApp,h,nextTick,type App} from 'vue';
 import {createMemoryHistory,createRouter,RouterView,type Router} from 'vue-router';
 import {i18n,applyLocale} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
+import {pageAway} from '../src/pet/enabled';
 const mock=vi.hoisted(()=>({list:vi.fn(),preview:vi.fn(),remove:vi.fn(),other:vi.fn(),visibility:vi.fn(),restoreBookmarks:vi.fn()}));
 vi.mock('../src/lib/session',()=>({useSession:()=>({me:{accountNumId:1},accessToken:async()=> 'fixture'})}));
 vi.mock('../src/lib/use-locale',async()=>{const{ref}=await import('vue');return{useLocalePath:()=>({locale:ref('zh-Hant'),lp:(path:string)=>path})};});
@@ -68,4 +69,12 @@ it('gives the second consecutive hidden row its own complete Undo window even wi
  await clickFake('[data-conversation-menu="conv-1"]');await clickFake('[data-action="hide"]');await vi.advanceTimersByTimeAsync(5000);
  await clickFake('[data-conversation-menu="conv-2"]');await clickFake('[data-action="hide"]');await vi.advanceTimersByTimeAsync(5999);
  expect(el.querySelector('[data-toast-action]')).not.toBeNull();await vi.advanceTimersByTimeAsync(1);expect(el.querySelector('[data-toast-action]')).toBeNull();
+});
+it('keeps the pet away from recent-chat controls and restores it outside management',async()=>{
+ expect(pageAway.value).toBeGreaterThan(0);
+ mock.other.mockResolvedValue({items:[{unavailable:true,bookmarkId:'1'}],hasNext:false});await router.push('/library?tab=favorites');await settle();expect(pageAway.value).toBe(0);
+ await click('[data-favorite-select]');expect(pageAway.value).toBeGreaterThan(0);
+ await click('[data-favorite-select]');expect(pageAway.value).toBe(0);
+ await router.push('/library');await settle();expect(pageAway.value).toBeGreaterThan(0);
+ app.unmount();expect(pageAway.value).toBe(0);
 });
