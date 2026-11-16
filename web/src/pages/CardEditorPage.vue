@@ -541,10 +541,12 @@ const dirty = computed(
 );
 
 
-const missing = computed<string[]>(() => missingRequired(draft.value, { openingMode: openingMode.value }));
+const coverAlerted = ref(false);
+const serverCoverRejected = ref(false);
+const missing = computed<string[]>(() => missingRequired(draft.value, { openingMode: openingMode.value, openingPage: openingPageText.value }));
 /** 底部列與「還缺什麼」的三項：開局那一項跟著呈現換（開場白／第一句選項）。 */
 const required = computed(() => requiredKeys(openingMode.value));
-const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
+const canPublish = computed(() => !isNew.value && !missing.value.length && !serverCoverRejected.value && !dirty.value);
 
 /** 有字數上限的欄位：欄位、標籤文案鍵、所在分區。存檔前逐一對上限，超過就點名。 */
 const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "roleWelcome" | "roleOutputContract" | "jailbreak", string, Section]> = [
@@ -575,13 +577,13 @@ const reviewCount = computed(() => {
 
 /** 各分區缺哪幾個必填。導覽上的紅點與發布前的清單都看這個。 */
 const REQUIRED_OF = computed<Partial<Record<Section, readonly string[]>>>(() => ({
-  basic: ["roleName", "presetTag"],
+  basic: ["roleName", "roleBackground", "presetTag"],
   persona: ["roleDetailDesc"],
   opening: [openingMode.value === "page" ? "prologue" : "roleWelcome"],
 }));
 const lacks = (key: Section) => (key === "advanced" && (stateBlocked.value || cardCssOver.value)) || Boolean(REQUIRED_OF.value[key]?.some((k) => missing.value.includes(k)));
 // 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
-const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
+const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleBackground: "editor.background", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome", prologue: "editor.opening.choices" };
 watch(loading, (now, before) => {
   if (!before || now || isNew.value || !missing.value.length) return;
   const names = missing.value.map((f) => FIELD_LABEL[f] ? t(FIELD_LABEL[f]) : "").filter(Boolean).join(t("mascot.pet.listSep"));
@@ -988,6 +990,7 @@ async function applyRouteDeepLink() {
     await nextTick();
     goto(sec as Section);
   }
+  if (route.query.focus === "cover") await focusCover();
   if (route.query.focus === "tags") {
     await nextTick();
     await focusPresetTags({ prompt: true });
@@ -1384,8 +1387,20 @@ const visibilityActor = computed(()=>String(session.profile?.identities.find(i=>
 const editorVisibilityNotice = computed(()=>{const v=workVisibility.value;if(!v)return '';if(v.syncState!=='complete')return t(v.syncState==='unavailable'?'visibility.operation.unknown':'visibility.operation.updating');if(v.access==='private'&&v.review==='none'&&v.restriction==='none')return v.everPublic&&!v.restorable?t(v.revisionState==='changed'?'visibility.state.reviewChanged':'visibility.state.reviewUnknown'):'';return t(visibilityStateKey(v,true),{note:v.reviewNote??'',reason:v.restrictionNote??''});});
 const visibilityToken=()=>session.accessToken();
 function visibilityChanged(value:WorkVisibility){workVisibility.value=value;}
+async function focusCover(alert = true, serverRejected = false) {
+  goto("basic");
+  if (alert) coverAlerted.value = true;
+  if (serverRejected) serverCoverRejected.value = true;
+  await nextTick();
+  const frame = document.querySelector<HTMLButtonElement>("[data-cover-field] .frame");
+  frame?.scrollIntoView({block:"center",behavior:"smooth"});
+  frame?.focus({preventScroll:true});
+}
+watch(() => draft.value.roleBackground, () => { coverAlerted.value = false; serverCoverRejected.value = false; });
+const previewImagesMissing = computed(() => ![draft.value.roleBackground,draft.value.roleBackgroundLandscape,draft.value.roleShareImage].some(v=>v.trim()));
+const publicationMissing = computed(() => [...new Set([...missing.value,...(serverCoverRejected.value ? ['roleBackground'] : []),...(serverTagsRejected.value ? ['presetTag'] : [])])]);
 function jumpToMissing(target?: string) {
-  const key = target ?? (missing.value.includes("roleName") ? "roleName" : (missing.value.includes("presetTag") || serverTagsRejected.value) ? "presetTag" : missing.value.includes("roleDetailDesc") ? "roleDetailDesc" : "opening");
+  const key = target ?? (missing.value.includes("roleName") ? "roleName" : (missing.value.includes("roleBackground") || serverCoverRejected.value) ? "roleBackground" : (missing.value.includes("presetTag") || serverTagsRejected.value) ? "presetTag" : missing.value.includes("roleDetailDesc") ? "roleDetailDesc" : "opening");
   if (key === "roleName") {
     goto("basic");
     void nextTick(() => {
@@ -1395,6 +1410,7 @@ function jumpToMissing(target?: string) {
     });
     return;
   }
+  if (key === "roleBackground") { void focusCover(); return; }
   if (key === "presetTag") {
     void focusPresetTags({ prompt: true, ...(serverTagsRejected.value ? { serverRejected: true } : {}) });
     return;
@@ -1405,7 +1421,8 @@ function jumpToMissing(target?: string) {
   }
   goto("opening");
 }
-function visibilityMissing(reason?: "presetTag") {
+function visibilityMissing(reason?: "presetTag" | "roleBackground") {
+  if (reason === "roleBackground") { void focusCover(true,true); return; }
   if (reason === "presetTag") {
     void focusPresetTags({ prompt: true, serverRejected: true });
     return;
@@ -1804,7 +1821,7 @@ async function publish(expected:WorkVisibility) {
     // 打作品名去 Wikidata 找候選，點了就對上編號；找不到照打，當自由文字
     field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q:string) => fetchFandomLookup(q) },
   };
-  let missingPresetTag=false;
+  let missingPresetTag=false,missingCover=false;
   const send=async(answer:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
     if(!valid())return;saving.value=true;error.value='';
     try{
@@ -1813,6 +1830,7 @@ async function publish(expected:WorkVisibility) {
       if(expected.everPublic)await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected,answer.update);
       else await registerCard(source,token,rated,[],provider,answer.text,answer.id,expected);
     }catch(e){
+      if(valid()&&e instanceof ApiError&&e.code==='cover_required'){missingCover=true;return;}
       if(valid()&&e instanceof ApiError&&e.code==='preset_tag_required'){missingPresetTag=true;return;}
       if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;
       throw e;
@@ -1823,10 +1841,12 @@ async function publish(expected:WorkVisibility) {
       const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
         publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
           reloadEligibility:async()=>{const token=await session.accessToken();if(!token||!valid())throw new Error(t('auth.expired'));const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
+      if(missingCover){if(valid())await focusCover(true,true);return;}
       if(missingPresetTag){if(valid())await focusPresetTags({prompt:true,serverRejected:true});return;}
       if(!ok||!valid())return;
     }else{
       const answer=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});
+      if(missingCover){if(valid())await focusCover(true,true);return;}
       if(missingPresetTag){if(valid())await focusPresetTags({prompt:true,serverRejected:true});return;}
       if(!answer||!valid())return;
     }
@@ -2078,7 +2098,7 @@ async function exportCard(format: "png" | "json") {
             <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
                  所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
             <p v-if="generationCopyWarning" class="notice notice--error" role="alert">{{ generationCopyWarning }} <button type="button" class="btn btn--sm btn--ghost" @click="generationCopyWarning = ''">{{ $t("newcomer.tour.gotIt") }}</button></p>
-            <ImageField :key="'portrait-' + imageEpoch" v-model="draft.roleBackground" :label="$t('editor.background')"
+            <ImageField data-cover-field :required-label="$t('editor.cover.required')" :required-hint="$t('editor.cover.hint')" :alert="coverAlerted" :key="'portrait-' + imageEpoch" v-model="draft.roleBackground" :label="$t('editor.background')"
                         :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
                         :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
                         :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone :imported-file="importedPortrait" @pending="imagePending('roleBackground', $event)" @busy="imageBusy('roleBackground', $event)" @pick="onPickImage" @adopt="onAdoptImage" :ready="!!draft.roleName.trim()" @needs-name="requireImageName"
@@ -2380,8 +2400,9 @@ async function exportCard(format: "png" | "json") {
               <option value="private">{{ $t('visibility.option.private') }}</option>
             </select>
             <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
+            <p v-if="newCardVisibility === 'unlisted' && previewImagesMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ $t('visibility.cover.previewHint') }} <button type="button" class="link" @click="focusCover(false)">{{ $t('editor.cover.upload') }}</button></p>
           </div>
-          <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="(serverTagsRejected&&!missing.includes('presetTag')?[...missing,'presetTag']:missing).map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
+          <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="publicationMissing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :preview-missing="previewImagesMissing" @cover="focusCover(false)" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
           <SharedStatePanel v-if="!isNew && roleId" :role-id="roleId" :provider="editorProvider" :card-name="draft.roleName" :token="visibilityToken" />
           <OwnerWorkshopBlock v-if="!isNew && roleId" :role-id="roleId" :card-id="cardNumber ? String(cardNumber) : undefined" />
@@ -2390,7 +2411,7 @@ async function exportCard(format: "png" | "json") {
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul v-if="missing.length">
               <li v-for="key in required.filter((k) => missing.includes(k))" :key="key">
-                <button type="button" class="checklist__jump" :class="{ 'is-alert': key === 'presetTag' && tagsAlerted }" @click="jumpToMissing(key)">
+                <button type="button" class="checklist__jump" :class="{ 'is-alert': (key === 'presetTag' && tagsAlerted) || (key === 'roleBackground' && coverAlerted && !pendingImages.has('roleBackground')) }" @click="jumpToMissing(key)">
                   <span aria-hidden="true">○</span>
                   {{ $t(`editor.required.${key}`) }}
                 </button>
@@ -2484,7 +2505,7 @@ async function exportCard(format: "png" | "json") {
           </RouterLink>
           <ul class="bar__check">
             <li v-for="key in required" :key="key"
-                :class="{ ok: !missing.includes(key), 'is-alert': key === 'presetTag' && tagsAlerted }">
+                :class="{ ok: !missing.includes(key), 'is-alert': (key === 'presetTag' && tagsAlerted) || (key === 'roleBackground' && coverAlerted && !pendingImages.has('roleBackground')) }">
               <button v-if="missing.includes(key)" type="button" class="bar__jump" @click="jumpToMissing(key)">
                 <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
                      stroke-linecap="round" stroke-linejoin="round">

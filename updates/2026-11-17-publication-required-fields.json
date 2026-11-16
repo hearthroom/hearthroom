@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "draft": true,
+  "title": {
+    "zh-Hant": "公開前的檢查會提醒你補齊直式封面與開場。",
+    "zh-Hans": "公开前的检查会提醒你补齐竖版封面与开场。",
+    "en": "Publication checks help you complete portrait covers and openings before review.",
+    "ja": "公開前のチェックで、縦長カバーと導入の不足がわかるようになりました。",
+    "ko": "공개 전 확인 단계에서 세로 커버와 도입의 누락을 알려줘요."
+  },
+  "body": {
+    "zh-Hant": "送審或恢復公開前，請儲存名稱、分類、角色設定、直式封面與至少一種開場。",
+    "zh-Hans": "提交审核或恢复公开前，请保存名称、分类、角色设定、竖版封面与至少一种开场。",
+    "en": "Save a name, category, character definition, portrait cover and at least one opening before submitting or restoring public access.",
+    "ja": "審査への提出や再公開の前に、名前、分類、キャラクター設定、縦長カバー、いずれかの導入を保存してください。",
+    "ko": "검토 요청이나 재공개 전에 이름, 분류, 캐릭터 설정, 세로 커버와 한 가지 이상의 도입을 저장해 주세요."
+  }
+}

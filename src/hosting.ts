@@ -1,3 +1,5 @@
+import { hasPublicationCover } from '../shared/publication-cover';
+import { missingPublicationFields } from '../shared/publication-fields';
 import { reviewCounts } from './review';
 import { reviewLength } from './review-length';
 import { reviewLengthExempt } from './review-length-exemption';
@@ -148,7 +150,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  }
  if(!version){
   await assertPresetTag(db,input.role.tags,'draft');
-  try{await assertReviewLength(db,await upstream.readForReview(env,input.token,input.role.roleId,provider),'draft',provider,input.role.roleId);}
+ await assertPublicationCover(db,input.role.backgroundUrl || input.role.avatarUrl,'draft');
+  try{const settings=await upstream.readForReview(env,input.token,input.role.roleId,provider);assertPublicationFields(settings);await assertReviewLength(db,settings,'draft',provider,input.role.roleId);}
   catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'visibility_sync_pending');}
  }
  await adoptRetiredWork(db,provider,input.role.roleId);
@@ -193,7 +196,9 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  await assertPresetTag(db,sealed.tags,'sealed');
+ await assertPublicationCover(db,sealed.backgroundUrl || sealed.avatarUrl,'sealed');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
+ assertPublicationFields(settings);
  const length=await assertReviewLength(db,settings,'sealed',provider,input.role.roleId);
  settings.reviewLength=length;
  const counts=reviewCounts(settings);
@@ -285,4 +290,15 @@ export async function assertPresetTag(db:D1Database,tags:readonly string[],phase
  const eligible=hasPresetTag(tags);
  await bumpOp(db,'preset_tag',phase,eligible?'eligible':'missing');
  if(!eligible)throw new HttpError(400,'preset_tag_required',undefined,{detail:{field:'roleTag',hint:PRESET_TAG_HINT,catalogEndpoint:'/v1/tags/catalog',presets:PRESET_TAG_CATALOG}});
+}
+
+export function assertPublicationFields(settings: Record<string, unknown>): void {
+ const missing=missingPublicationFields(settings);
+ if(missing.length)throw new HttpError(422,'publication_fields_required',undefined,{detail:{missing}});
+}
+
+export async function assertPublicationCover(db:D1Database,portrait:unknown,phase:'draft'|'sealed'|'restore'):Promise<void>{
+ const present=hasPublicationCover(portrait);
+ await bumpOp(db,'publication_cover',phase,present?'present':'missing');
+ if(!present)throw new HttpError(422,'cover_required',undefined,{detail:{field:'roleBackground'}});
 }

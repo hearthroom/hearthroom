@@ -15,7 +15,7 @@ export function hostedFixture(){
   if(!frozenFixtureRoles.has(hostedRevisionId))frozenFixtureRoles.set(hostedRevisionId,{...await hostGateway.read(e,token,id,provider),roleId:hostedRevisionId});
   return {workId,versionId,hostedRevisionId};
  };
- upstream.readForReview=async()=>({document:{roleDetailDesc:'Private fixture'.repeat(300)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ upstream.readForReview=async()=>({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'Private fixture'.repeat(300)},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  // Submissions read the author's current workshop policy; never reach a real Provider from tests.
  workshopUpstream.state=async()=>({workId:'fixture-work',allowNew:false,revision:1,policyRevision:1,items:[]});
 }

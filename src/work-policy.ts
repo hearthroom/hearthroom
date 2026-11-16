@@ -1,3 +1,4 @@
+import { isPublicationRefusal, publicationRefusalDetail } from '../shared/publication-fields';
 import {assertPublicSource} from './test-accounts';
 import {type Env,HttpError} from './types';
 import {apiBaseOf,type ProviderId} from './providers';
@@ -46,6 +47,10 @@ async function call(env:Env,provider:ProviderId,source:string,suffix:string,body
  if(preserveAuth&&response.status===401)throw new HttpError(401,'missing bearer token');
  if(preserveAuth&&response.status===403)throw new HttpError(403,'not_the_author');
  if(response.status===409){const body=await response.json().catch(()=>null) as {error?:string;publicUntil?:string;publicDays?:number;requiredCredits?:number}|null;if(body?.error==='card_reward_public_locked')throw new HttpError(409,body.error,undefined,{publicUntil:body.publicUntil,publicDays:body.publicDays,requiredCredits:body.requiredCredits});throw new HttpError(409,'visibility_operation_conflict');}
+ if(response.status===422){
+  const refusal=await response.json().catch(()=>null) as {error?:string;detail?:unknown}|null;
+  if(isPublicationRefusal(refusal?.error))throw new HttpError(422,refusal!.error!,publicationRefusalDetail(refusal!.detail));
+ }
  if(!response.ok)throw new HttpError(503,'visibility_provider_unavailable');
  return response.json();
 }
@@ -129,7 +134,10 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
  const inserted=await (await workPolicyIntentStatement(env,provider,source,command,rootOperation)).run();
  const op=await db.prepare('SELECT intent_hash,command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(command.workId,command.operationId).first<Operation>();
  if(!op||op.intent_hash!==intent)throw new HttpError(409,'visibility_operation_conflict');
- if(op.state==='conflict')throw new HttpError(409,'visibility_operation_conflict');
+ if(op.state==='conflict'){
+  if(op.receipt){const refusal=JSON.parse(op.receipt);if(isPublicationRefusal(refusal.error))throw new HttpError(422,refusal.error,publicationRefusalDetail(refusal.detail));}
+  throw new HttpError(409,'visibility_operation_conflict');
+ }
  if(op.state==='complete'&&op.receipt){
   await bumpOp(db,'work_access',command.action,'replay');
   return checked(JSON.parse(op.receipt),source,command.workId,command.operationId);
@@ -142,9 +150,10 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
   await bumpOp(db,'work_access',command.action,recovered?'replay':'confirmed');
   return receipt;
  }catch(error){
-  const conflict=error instanceof HttpError&&error.status===409;
-  await db.prepare("UPDATE visibility_operations SET state=?,updated_at=? WHERE work_id=? AND operation_id=? AND state IN ('intent','pending')")
-   .bind(conflict?'conflict':'pending',Date.now(),command.workId,command.operationId).run();
+  const publicationRefusal=error instanceof HttpError&&error.status===422&&isPublicationRefusal(error.message);
+  const conflict=error instanceof HttpError&&error.status===409||publicationRefusal;
+  await db.prepare("UPDATE visibility_operations SET state=?,receipt=COALESCE(?,receipt),updated_at=? WHERE work_id=? AND operation_id=? AND state IN ('intent','pending')")
+   .bind(conflict?'conflict':'pending',publicationRefusal?JSON.stringify({error:error.message,detail:publicationRefusalDetail(error.detail??error.extra?.detail)}):null,Date.now(),command.workId,command.operationId).run();
   await bumpOp(db,'work_access',command.action,conflict?'conflict':'pending');
   if(conflict)throw error;
   throw new HttpError(503,'visibility_sync_pending',undefined,{operationId:command.operationId,state:'pending'});

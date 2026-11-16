@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {retentionText} from '@/lib/reward-retention';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
-const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false});
-const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[]}>();
+const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false});
+const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[];cover:[]}>();
 const {t}=useI18n();const uid=useId();
 const selected=ref<WorkAccess|null>(null),cancel=ref(false),copied=ref(false),copyFailed=ref(false);
 const options:WorkAccess[]=['private','unlisted','public'];
@@ -61,6 +61,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
      </svg>
      <span class="visibility-option__body"><span class="visibility-option__title">{{ t(`visibility.option.${access}`) }} <span v-if="value?.access===access&&phase==='ready'" class="chip">{{ t('visibility.current') }}</span><span v-if="access==='public'&&value&&value.restriction!=='none'" class="chip visibility-option__restriction">{{ t(`visibility.badge.${value.restriction}`) }}</span></span>
       <span :id="`${uid}-${access}`" class="visibility-option__description">{{ t(access==='public'&&delistedReview?'visibility.description.delisted':`visibility.description.${access}`) }}</span>
+      <span v-if="access==='unlisted'&&previewMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ t('visibility.cover.previewHint') }} <button type="button" class="link" @click.prevent="emit('cover')">{{ t('editor.cover.upload') }}</button></span>
       <template v-if="access==='public'&&value">
        <span v-if="value.restriction!=='none'" class="visibility-option__reason">{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[0] }}<a :href="appealUrl" target="_blank" rel="noopener">Discord</a>{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[1] }}</span>
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>

@@ -32,13 +32,13 @@ async function visibilityRequest(path: string, token = "owner", body?: unknown) 
   return response;
 }
 
-async function managedVisibilityFixture(tags: string[], unmanaged = false) {
+async function managedVisibilityFixture(tags: string[], unmanaged = false, portrait = "https://assets.test/cover.png", approvedPortrait = portrait) {
   const source = crypto.randomUUID();
   const work = crypto.randomUUID();
   const approved = crypto.randomUUID();
   const member = await makeMember(11);
   identitiesFor({ harbor: { owner: 11 } });
-  await upsertCard(env.DB, role({ roleId: source, authorNumId: 11, tags }), Date.now(), { status: "unshared" });
+  await upsertCard(env.DB, {...role({ roleId: source, authorNumId: 11, tags }),backgroundUrl:portrait,avatarUrl:portrait}, Date.now(), { status: "unshared" });
   const card = (await getCard(env.DB, source))!;
   await env.DB.prepare("UPDATE cards SET approved_hosted_role_id=?,approved_version_id=? WHERE id=?").bind(approved, crypto.randomUUID(), card.id).run();
   await env.DB.prepare("INSERT INTO works VALUES(?,?,?,?,?)").bind(work, member, "harbor", source, Date.now()).run();
@@ -63,6 +63,7 @@ async function managedVisibilityFixture(tags: string[], unmanaged = false) {
   };
   const receipts = new Map<string, Record<string, unknown>>();
   const behavior = { commands: 0 };
+  vi.spyOn(hostGateway, "read").mockImplementation(async (_e,_t,id)=>({...role({roleId:id,authorNumId:11,tags}),backgroundUrl:approvedPortrait,avatarUrl:approvedPortrait}));
   if (unmanaged) {
     await env.DB.prepare("DELETE FROM managed_work_access").run();
     await env.DB.prepare("DELETE FROM review_submissions").run();
@@ -214,7 +215,7 @@ describe("server preset tag enforcement", () => {
     }));
     vi.spyOn(hostGateway, "read").mockResolvedValue({ ...draft, roleId: "sealed-tag-race", tags: ["自訂"] });
     vi.spyOn(upstream, "readForReview").mockResolvedValue({
-      document: { roleDetailDesc: "字".repeat(3001) },
+      document: { roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc: "字".repeat(3001) },greetings:{welcome:"Welcome",alternates:[],prologue:[]},
       hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: "" },
     });
 
@@ -247,7 +248,7 @@ describe("server preset tag enforcement", () => {
     }));
     vi.spyOn(hostGateway, "read").mockImplementation(async (_env, _token, id) => ({ ...initial, roleId: id, tags: currentSealedTags }));
     vi.spyOn(upstream, "readForReview").mockResolvedValue({
-      document: { roleDetailDesc: "字".repeat(3001) },
+      document: { roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc: "字".repeat(3001) },greetings:{welcome:"Welcome",alternates:[],prologue:[]},
       hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: "" },
     });
 
@@ -329,4 +330,26 @@ describe("server preset tag enforcement", () => {
     expect((await visibilityRequest(`/v1/me/cards/${valid.card.id}/visibility`, "owner", okRestore)).status).toBe(200);
     expect(await opsMetrics(env.DB)).toContain('hearthroom_preset_tag_checks_total{phase="restore",outcome="eligible"} 1');
   });
+});
+
+it('refuses public restoration without a portrait before creating an operation',async()=>{
+ const f=await managedVisibilityFixture(['Roleplay'],false,'');
+ const current=await visibilityRequest(`/v1/me/cards/${f.source}/visibility`);
+ const body=await current.json() as {workVisibility:{policyRevision:string;approvalRevision:string}};
+ const response=await visibilityRequest(`/v1/me/cards/${f.source}/visibility`,'owner',{operationId:crypto.randomUUID(),targetAccess:'public',expectedPolicyRevision:body.workVisibility.policyRevision,expectedApprovalRevision:body.workVisibility.approvalRevision});
+ expect(response.status).toBe(422);
+ expect(await response.json()).toMatchObject({error:'cover_required'});
+ expect(await env.DB.prepare('SELECT COUNT(*) n FROM author_visibility_operations').first('n')).toBe(0);
+});
+
+it.each([
+ ['stale-present','https://assets.test/stale.png','',422],
+ ['stale-empty','','https://assets.test/approved.png',200],
+] as const)('checks the immutable approved portrait instead of the %s index',async(_case,indexPortrait,approvedPortrait,status)=>{
+ const f=await managedVisibilityFixture(['Roleplay'],false,indexPortrait,approvedPortrait);
+ const current=await visibilityRequest(`/v1/me/cards/${f.source}/visibility`);
+ const body=await current.json() as {workVisibility:{policyRevision:string;approvalRevision:string}};
+ const response=await visibilityRequest(`/v1/me/cards/${f.source}/visibility`,'owner',{operationId:crypto.randomUUID(),targetAccess:'public',expectedPolicyRevision:body.workVisibility.policyRevision,expectedApprovalRevision:body.workVisibility.approvalRevision});
+ expect(response.status).toBe(status);
+ if(status===422){expect(await response.json()).toMatchObject({error:'cover_required'});expect(f.behavior.commands).toBe(0);}
 });

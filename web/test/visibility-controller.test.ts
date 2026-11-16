@@ -81,3 +81,19 @@ it('records preset_tag_required as a distinct message on restore_public rejectio
  expect(c.message.value).toBe('preset_tag_required');
  expect(localStorage.getItem('hr.visibility.v1:harbor:22:source')).toBeNull();
 });
+
+it('keeps cover_required distinct after a definitive public restore rejection',async()=>{
+ mocks.read.mockResolvedValue({workVisibility:policy({everPublic:true,restorable:true,actions:['set_private','set_unlisted','restore_public']})});
+ mocks.change.mockRejectedValueOnce(new VisibilityError(422,{error:'cover_required'}));
+ const c=setup();await c.load();await c.apply('public');
+ expect(c.phase.value).toBe('ready');expect(c.message.value).toBe('cover_required');
+ expect(localStorage.getItem('hr.visibility.v1:harbor:22:source')).toBeNull();
+});
+
+it('keeps the cover reason when a pending operation resolves to a durable conflict',async()=>{
+ mocks.change.mockRejectedValueOnce(new Error('response lost'));
+ mocks.operation.mockImplementation(async(_id,key)=>{throw new VisibilityError(409,{error:'cover_required',operation:{operationId:key,state:'conflict'}});});
+ const controller=setup();await controller.load();await controller.apply('unlisted');
+ expect(controller.phase.value).toBe('ready');
+ expect(controller.message.value).toBe('cover_required');
+});

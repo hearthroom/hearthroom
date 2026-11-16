@@ -161,6 +161,8 @@ const SITE_CODE_KEY: Record<string, string> = {
   rating_required: "error.ratingRequired",
   rating_answers_invalid: "error.ratingRequired",
   rating_version_outdated: "error.ratingOutdated",
+  cover_required: "error.coverRequired",
+  publication_fields_required: "error.publicationFieldsRequired",
   preset_tag_required: "error.presetTagRequired",
   birthdate_required: "error.birthdateRequired",
   invalid_birthdate: "error.invalidBirthdate",
@@ -476,7 +478,7 @@ export async function registerCard(
     }),
   );
   }catch(error){
-    if(error instanceof ApiError&&['preset_tag_required','review_length_insufficient','update_notification_cooldown','update_note_invalid','update_kind_invalid','update_notification_unavailable'].includes(error.code)&&publicationOperations.get(key)===operationId)clearPublicationOperation(key);
+    if(error instanceof ApiError&&['publication_fields_required','cover_required','preset_tag_required','review_length_insufficient','update_notification_cooldown','update_note_invalid','update_kind_invalid','update_notification_unavailable'].includes(error.code)&&publicationOperations.get(key)===operationId)clearPublicationOperation(key);
     throw error;
   }
   clearPublicationOperation(key);
