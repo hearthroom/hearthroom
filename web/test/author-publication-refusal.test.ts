@@ -1,0 +1,28 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {createApp,nextTick,type App} from 'vue';
+import {createMemoryHistory,createRouter} from 'vue-router';
+import {i18n} from '../src/lib/i18n';
+import AuthorVisibility from '../src/components/AuthorVisibility.vue';
+import {VisibilityError} from '../src/lib/work-visibility';
+const mocks=vi.hoisted(()=>({read:vi.fn(),change:vi.fn()}));
+vi.mock('../src/lib/work-visibility-capability',async()=>{const {ref}=await import('vue');return {useWorkVisibilityCapability:()=>ref(true)};});
+vi.mock('../src/lib/share-ref',()=>({ownReferralCode:async()=>null,withShareRef:(url:string)=>url}));
+vi.mock('../src/lib/work-visibility',async original=>({...await original<typeof import('../src/lib/work-visibility')>(),fetchWorkVisibility:mocks.read,changeWorkVisibility:mocks.change}));
+let app:App,root:HTMLElement;
+afterEach(()=>{app?.unmount();root?.remove();localStorage.clear();vi.clearAllMocks();});
+const flush=async()=>{for(let n=0;n<12;n++)await nextTick();};
+it('keeps a refused public restoration visible and accessible inside the open author dialog',async()=>{
+ const policy={access:'private',effectiveAccess:'owner',review:'none',update:'none',everPublic:true,revisionState:'unchanged',restorable:true,restoreReason:'ready',draftChanged:false,restriction:'none',policyRevision:'1',approvalRevision:'1',actions:['set_private','set_unlisted','restore_public'],syncState:'complete'};
+ mocks.read.mockResolvedValue({workVisibility:policy});
+ mocks.change.mockRejectedValue(new VisibilityError(422,{error:'publication_fields_required'}));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});await router.push('/mine');
+ root=document.createElement('div');root.id='app';document.body.append(root);
+ app=createApp(AuthorVisibility,{id:'source',provider:'harbor',actor:'22',name:'Synthetic card',token:async()=>'test-token',dialogOnly:true}).use(router).use(i18n);
+ const view=app.mount(root) as unknown as {open:()=>Promise<void>};await flush();await view.open();await flush();
+ document.querySelector<HTMLInputElement>('.visibility-dialog input[value="public"]')!.click();await nextTick();
+ document.querySelector<HTMLButtonElement>('.visibility-dialog [data-visibility-apply]')!.click();await flush();
+ expect(mocks.change).toHaveBeenCalledOnce();
+ const dialog=document.querySelector('.visibility-dialog')!;
+ expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(i18n.global.t('error.publicationFieldsRequired'));
+ expect(root.querySelector('[role="alert"]')).toBeNull();
+});
