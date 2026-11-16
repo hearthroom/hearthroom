@@ -92,4 +92,6 @@ onBeforeUnmount(()=>{document.removeEventListener('keydown',key);window.removeEv
 @media(max-width:700px){.conversation__continue{display:none}.conversation__avatar{width:52px;height:64px}.conversation__link{gap:var(--s-3)}.conversation__heading{flex-wrap:wrap;gap:var(--s-1)}.conversation time{font-size:12px}}
 @media(max-width:480px){.conversation-menu-backdrop{background:color-mix(in srgb,var(--text) 24%,transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}.conversation-menu{left:0!important;top:auto!important;bottom:0;width:100%;border-radius:24px 24px 0 0;padding:var(--s-4) var(--s-4) calc(var(--s-4) + env(safe-area-inset-bottom))}.conversation-menu__cancel{display:flex;width:100%;min-height:44px;margin-top:var(--s-3)}}
 @media(prefers-reduced-motion:reduce){.conversation-row-leave-active{transition:none}}
+.conversation-menu:lang(ko){word-break:keep-all}
+.conversation-menu:lang(ja){word-break:auto-phrase}
 </style>
