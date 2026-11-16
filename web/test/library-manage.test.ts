@@ -136,3 +136,12 @@ it('keeps the selected count on one line with reachable actions across five mobi
   for(const r of results){expect(r.oneLine,r.label+': selected count').toBe(true);expect(r.overflow,r.label+': overflow').toBe(false);expect(r.actions,r.label+': reachable actions').toBe(true);}
  }finally{rmSync(dir,{recursive:true,force:true});await applyLocale('zh-Hant');}
 },40000);
+it('does not subtract a pet retreat on a cold favorites entry before selection starts',async()=>{
+ app.unmount();expect(pageAway.value).toBe(0);
+ mock.other.mockResolvedValue({items:[{unavailable:true,bookmarkId:'1'}],hasNext:false});
+ await router.push('/library?tab=favorites');
+ app=createApp({render:()=>[h(RouterView),h(ConfirmDialog)]}).use(router).use(i18n);app.mount(el);await settle();
+ expect(pageAway.value).toBe(0);await click('[data-favorite-select]');expect(pageAway.value).toBe(1);
+ await click('[data-favorite-select]');expect(pageAway.value).toBe(0);
+ await router.push('/library');await settle();expect(pageAway.value).toBe(1);
+});
