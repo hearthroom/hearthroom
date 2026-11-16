@@ -57,12 +57,15 @@ describe("今天那一行", () => {
 });
 
 describe("買卡", () => {
-  it("連結照方案給的網址，不加來源參數（Console 不回連應用）", () => {
-    expect(purchaseLink(offer)).toBe("https://console.example/me/billing?plan=month");
+  // 月卡也在綺夢社自己的付款頁買（Console 的 /pay/hearthroom），打開月卡分頁，付完回到買的那一頁。
+  const payPage = (link: string) => { const u = new URL(link); return { page: u.origin + u.pathname, plan: u.searchParams.get("plan"), back: u.searchParams.get("back") }; };
+  it("連結去綺夢社的付款頁月卡分頁，付完回到這一頁", () => {
+    expect(payPage(purchaseLink(offer))).toEqual({ page: "https://console.harperharbor.com/pay/hearthroom", plan: "month", back: location.href });
+    expect(payPage(purchaseLink(offer, "https://sukisuki.ai/")).back).toBe("https://sukisuki.ai/");
   });
 
-  it("拿不到方案時用帳單頁的固定網址", () => {
-    expect(purchaseLink(null)).toBe("https://console.harperharbor.com/me/billing?plan=month");
+  it("拿不到方案時一樣去付款頁的月卡分頁", () => {
+    expect(payPage(purchaseLink(null))).toEqual({ page: "https://console.harperharbor.com/pay/hearthroom", plan: "month", back: location.href });
   });
 
   it("第一張每天的量是每日加上加倍的那一份", () => {

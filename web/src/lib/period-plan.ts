@@ -4,9 +4,8 @@
  * 月卡不是箱子：這裡算的是確定的入帳，和開箱舞台、機率無關（ui.md §0.1）。
  */
 import type { MyPeriodPlan, PeriodPlan, PeriodPlanOutcome } from "./rewards";
+import { planUrl } from "./topup";
 
-/** 拿不到方案清單時的買卡網址（ui.md §4.4） */
-export const FALLBACK_PURCHASE_URL = "https://console.harperharbor.com/me/billing?plan=month";
 
 export type TodayLine =
   | { kind: "hidden" }
@@ -44,7 +43,8 @@ export function todayLine(plan: MyPeriodPlan | null | undefined, ctx: TodayConte
 }
 
 /** 連到 Console 帳單頁的月卡分段。網址照方案給的用，不加來源參數：Console 不提也不回連任何應用（ui.md v1.2 §4.4）。 */
-export const purchaseLink = (plan: Pick<PeriodPlan, "purchaseUrl"> | null | undefined): string => plan?.purchaseUrl || FALLBACK_PURCHASE_URL;
+/** 買卡去綺夢社自己的付款頁（月卡分頁），付完回到 back；拿不到方案清單時就是 month（ui.md §4.4）。 */
+export const purchaseLink = (plan: Pick<PeriodPlan, "id"> | null | undefined, back?: string): string => planUrl(plan?.id ?? "month", back);
 
 /** 第一張月卡每天的總量（每日＋加倍的那一份）。 */
 export const firstDaily = (plan: Pick<PeriodPlan, "dailyCredits" | "firstBonusDailyCredits">): number => plan.dailyCredits + (plan.firstBonusDailyCredits || 0);

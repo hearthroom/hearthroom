@@ -19,7 +19,7 @@ onMounted(async () => {
   await waitForGa4();
   if (route.query.from === SHORTFALL_FROM) trackNow("credits_shortfall_click", { detail: topup ? "topup" : "plan" });
   // 這一頁只是轉址，付完回到站台首頁。
-  location.replace(ga4CheckoutUrl(topup ? topUpUrl(`${location.origin}/`) : purchaseLink(plan)));
+  location.replace(ga4CheckoutUrl(topup ? topUpUrl(`${location.origin}/`) : purchaseLink(plan, `${location.origin}/`)));
 });
 </script>
 

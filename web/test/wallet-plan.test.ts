@@ -14,6 +14,7 @@ import { forgetPeriodPlans } from "../src/lib/rewards";
 const flat = (t: string | null | undefined) => (t ?? "").replace(/\u00a0/g, " ");
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+import { purchaseLink } from "../src/lib/period-plan";
 const offer = { id: "month", onSale: true, priceMicro: 5_000_000, currency: "USD", credits: 30000, days: 30, dailyCredits: 500, firstBonusDailyCredits: 500, maxDays: 180, makeupPerMonth: 3, purchaseUrl: "https://console.example/me/billing?plan=month" };
 const holder = { id: "month", businessDay: "2026-10-20", nextResetAt: "2026-10-20T20:00:00Z", active: true, endsOn: "2026-11-11", remainingDays: 23,
   today: { status: "claimed", credits: 1000, bonusCredits: 500 }, canPurchase: true, purchaseBlockedReason: null, firstBonus: { status: "active", dailyCredits: 500 }, makeupPerMonth: 3 };
@@ -59,7 +60,7 @@ it("持卡：剩幾天、最後一天、今天已領的總數、首張加贈、�
   expect(flat(block.textContent)).toContain("最後一天");
   expect(flat(block.textContent)).toContain("今天已領 +1,000 積分");
   expect(flat(block.textContent)).toContain("其中 500 是首購加贈");
-  expect(block.querySelector("a.plan__more")?.getAttribute("href")).toBe(offer.purchaseUrl);
+  expect(block.querySelector("a.plan__more")?.getAttribute("href")).toBe(purchaseLink(offer));
   expect(root.querySelector("[data-testid=wallet-plan-pitch]")).toBeNull();
 });
 
@@ -72,7 +73,7 @@ it("沒卡、從沒買過：前往儲值下方一行入口，寫組成（立即�
   expect(flat(pitch.textContent)).toContain("1,000");
   expect(flat(pitch.textContent)).not.toMatch(/最多|60,000/);
   expect(flat(pitch.textContent)).not.toMatch(/角色對話/);
-  expect(pitch.getAttribute("href")).toBe(offer.purchaseUrl);
+  expect(pitch.getAttribute("href")).toBe(purchaseLink(offer));
 });
 
 it("積分記錄：月卡每日、首張加贈與退回各有自己的名字；月卡入帳不寫到期", async () => {
