@@ -10,6 +10,7 @@ import { purchaseLink } from "@/lib/period-plan";
 import { SHORTFALL_FROM } from "@/lib/credits-recovery";
 import { trackNow } from "@/lib/track";
 import { ga4CheckoutUrl, waitForGa4 } from "@/lib/ga4";
+import { topUpUrl } from "@/lib/topup";
 
 const route = useRoute();
 onMounted(async () => {
@@ -17,7 +18,8 @@ onMounted(async () => {
   const plan = topup ? undefined : await fetchPeriodPlans().then((r) => r.list[0]).catch(() => undefined);
   await waitForGa4();
   if (route.query.from === SHORTFALL_FROM) trackNow("credits_shortfall_click", { detail: topup ? "topup" : "plan" });
-  location.replace(ga4CheckoutUrl(topup ? "https://console.harperharbor.com/me/billing" : purchaseLink(plan)));
+  // 這一頁只是轉址，付完回到站台首頁。
+  location.replace(ga4CheckoutUrl(topup ? topUpUrl(`${location.origin}/`) : purchaseLink(plan)));
 });
 </script>
 

@@ -68,4 +68,21 @@ public class WebPolicyTest {
         assertFalse(WebPolicy.canDownload(WebPolicy.HOME, "content://private/secret"));
         assertTrue(WebPolicy.canDownload(WebPolicy.HOME, "https://downloads.hearthroom.club/latest.apk"));
     }
+    // 付款頁（支付寶收銀台、微信）要把付款交給對方的 App；只放行這兩個 App，別的 scheme 與 intent 一律不開。
+    @Test public void paymentLinksOpenOnlyTheirOwnPaymentApp() {
+        String alipay = "com.eg.android.AlipayGphone", wechat = "com.tencent.mm";
+        assertEquals(alipay, WebPolicy.paymentApp("alipays://platformapi/startapp?saId=10000007&qrcode=x"));
+        assertEquals(alipay, WebPolicy.paymentApp("alipay://alipayclient/?x=1"));
+        assertEquals(wechat, WebPolicy.paymentApp("weixin://wap/pay?prepayid=1"));
+        assertEquals(alipay, WebPolicy.paymentApp("intent://platformapi/startapp?x=1#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;end"));
+        assertEquals(alipay, WebPolicy.paymentApp("INTENT://x#Intent;package=com.eg.android.AlipayGphone;scheme=alipays;S.browser_fallback_url=https%3A%2F%2Fds.alipay.com;end"));
+        for (String bad : new String[]{null, "", "https://render.alipay.com/p/s/i", "javascript:alert(1)", "tel:123", "market://details?id=x",
+            "intent://x#Intent;scheme=alipays;package=com.evil.app;end",
+            "intent://x#Intent;scheme=https;package=com.eg.android.AlipayGphone;end",
+            "intent://x#Intent;scheme=alipays;end",
+            "intent://x#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;component=com.evil/.A;end",
+            "intent://x#Intent;scheme=alipays;package=com.eg.android.AlipayGphone;SEL;scheme=https;end",
+            "alipaysx://y", "weixinx://y"})
+            assertNull(bad, WebPolicy.paymentApp(bad));
+    }
 }

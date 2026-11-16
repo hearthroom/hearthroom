@@ -149,6 +149,9 @@ describe("GA4 runtime", () => {
     (get[3] as (id: unknown) => void)("1234.5678");
     expect(synchronized).toHaveBeenCalledWith("1234.5678");
     expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing")).toContain("ga_client_id=1234.5678");
+    const pay = new URL(ga.checkoutUrl("https://console.harperharbor.com/pay/hearthroom?back=https%3A%2F%2Fsukisuki.ai%2F"));
+    expect(pay.searchParams.get("ga_client_id")).toBe("1234.5678");
+    expect(pay.searchParams.get("back")).toBe("https://sukisuki.ai/");
   });
   it("restores the Worker ID when Google rejects a stale linker and waits before emitting", () => {
     const ga = createGa4(); const synchronized = vi.fn();

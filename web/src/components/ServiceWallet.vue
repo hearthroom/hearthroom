@@ -18,6 +18,7 @@ import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan
 import { useLocalePath } from "@/lib/use-locale";
 import { honorKey, honorName, parseHonorKey } from "@/lib/honors";
 import { ledgerParts } from "@/lib/ledger-parts";
+import { topUpUrl } from "@/lib/topup";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
@@ -262,7 +263,7 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
           <p v-if="checkin.panel" class="plan__sub">{{ $t("plan.row.makeup", { left: whole(checkin.panel.checkin.makeup.left) }, checkin.panel.checkin.makeup.left) }}</p>
           <a v-if="mine.canPurchase" class="link plan__more" :href="planLink" target="_blank" rel="noopener" @click="track('plan_click', { detail: 'wallet' })">{{ $t("plan.wallet.buyMore") }}</a>
         </div>
-        <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+        <a class="btn btn--primary btn--lg balance__cta" :href="topUpUrl()" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
         <a v-if="pitch" class="link plan__pitch" data-testid="wallet-plan-pitch" :href="planLink" target="_blank" rel="noopener" @click="track('plan_click', { detail: 'wallet' })">{{ pitch }}</a>
       </section>
 

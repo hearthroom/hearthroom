@@ -25,6 +25,7 @@
     <string name="web_closed">The page closed unexpectedly. Try opening it again.</string>
     <string name="web_open_browser">Open in browser</string>
     <string name="web_no_browser">No browser is available. Install a compatible browser or update your system.</string>
+    <string name="web_payment_app_missing">This payment app isn’t installed on your phone. Pick another payment method.</string>
     <string name="web_file_failed">The file could not be saved or selected. Try again; downloads must be 32 MB or smaller.</string>
     <string name="web_saved">File saved.</string>
     <string name="shortcut_webview">Open inside app</string>

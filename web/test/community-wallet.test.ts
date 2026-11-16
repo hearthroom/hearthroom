@@ -124,7 +124,9 @@ it.each(['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const)('top up opens Console
     const page = await mountWallet();
     const topUp = page.querySelector<HTMLAnchorElement>('.balance__cta')!;
     expect(topUp.textContent).toContain(t('wallet.topUp'));
-    expect(topUp.href).toBe('https://console.harperharbor.com/me/billing');
+    const pay = new URL(topUp.href);
+    expect(pay.origin + pay.pathname).toBe('https://console.harperharbor.com/pay/hearthroom');
+    expect(pay.searchParams.get('back')).toBe(location.href);
     expect(topUp.target).toBe('_blank');
     expect(topUp.relList.contains('noopener')).toBe(true);
   } finally {

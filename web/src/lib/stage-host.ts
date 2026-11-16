@@ -38,6 +38,7 @@ import { creditsRecovery, noteShortfallShown } from "@/lib/credits-recovery";
 import { useCheckin } from "@/lib/checkin-store";
 import { usePeriodPlans } from "@/lib/period-plan-store";
 import { whole } from "@/lib/format";
+import { topUpUrl } from "@/lib/topup";
 
 /** The isolated shell resolves relative media against a different origin. */
 function absolutePlayerAvatar(avatar: string): string {
@@ -236,7 +237,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           if (deps.session.me && Date.now() - lastPlansLoad > 60_000) { lastPlansLoad = Date.now(); void plans.load(); }
           return creditsRecovery(checkin.panel, shortfall, {
             origin: site.origin, lp: site.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
-            topUp: "https://console.harperharbor.com/me/billing",
+            topUp: topUpUrl(`${site.origin}/`),
             plan: { offer: plans.offer, canPurchase: plans.loaded && !plans.failed ? (plans.mine?.canPurchase ?? true) : null },
           });
         },

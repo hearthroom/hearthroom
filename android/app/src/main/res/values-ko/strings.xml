@@ -25,6 +25,7 @@
     <string name="web_closed">페이지가 예기치 않게 닫혔습니다. 다시 열어 주세요.</string>
     <string name="web_open_browser">브라우저에서 열기</string>
     <string name="web_no_browser">사용할 수 있는 브라우저가 없습니다. 호환되는 브라우저를 설치하거나 시스템을 업데이트해 주세요.</string>
+    <string name="web_payment_app_missing">이 결제 앱이 설치되어 있지 않습니다. 다른 결제 수단을 선택해 주세요.</string>
     <string name="web_file_failed">파일을 저장하거나 선택하지 못했습니다. 다시 시도해 주세요. 다운로드는 32 MB 이하여야 합니다.</string>
     <string name="web_saved">파일을 저장했습니다.</string>
     <string name="shortcut_webview">앱 안에서 열기</string>

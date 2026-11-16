@@ -25,6 +25,7 @@
     <string name="web_closed">页面意外关闭，请重新打开。</string>
     <string name="web_open_browser">用浏览器打开</string>
     <string name="web_no_browser">手机没有可用的浏览器，请安装兼容的浏览器或更新系统。</string>
+    <string name="web_payment_app_missing">手机上没有安装这个付款 App，请换一种付款方式。</string>
     <string name="web_file_failed">文件无法保存或选择，请重试；下载文件不能超过 32 MB。</string>
     <string name="web_saved">文件已保存。</string>
     <string name="shortcut_webview">在 App 内打开</string>

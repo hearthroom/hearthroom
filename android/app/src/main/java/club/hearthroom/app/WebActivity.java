@@ -84,7 +84,8 @@ public final class WebActivity extends Activity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
             settings.setGeolocationEnabled(false);
             settings.setMediaPlaybackRequiresUserGesture(true);
-            settings.setUserAgentString(settings.getUserAgentString() + " HearthroomApp/" + BuildConfig.VERSION_NAME);
+            // HearthroomPay/1：這一版能把付款交給支付寶／微信 App，付款頁據此才顯示支付寶（舊版會停在收銀台逾時）。
+            settings.setUserAgentString(settings.getUserAgentString() + " HearthroomApp/" + BuildConfig.VERSION_NAME + " HearthroomPay/1");
             settings.setSupportMultipleWindows(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -129,7 +130,10 @@ public final class WebActivity extends Activity {
             if (url.startsWith("blob:") && WebPolicy.canDownload(view.getUrl(), url)) return false;
             String scheme = request.getUrl().getScheme();
             if (request.hasGesture() && ("mailto".equals(scheme) || "tel".equals(scheme))) openExternal(request.getUrl());
-            return true; // No intent:, javascript:, local file or content navigation.
+            // 支付寶收銀台、微信付款會自己跳到對方 App（不一定有手勢）；只交給那兩個 App，其他 intent 照樣擋。
+            String payApp = WebPolicy.paymentApp(url);
+            if (payApp != null) openPaymentApp(url, payApp);
+            return true; // No other intent:, javascript:, local file or content navigation.
         }
         @Override public void onPageStarted(WebView view, String url, Bitmap icon) {
             pageFailed = false;
@@ -323,6 +327,14 @@ public final class WebActivity extends Activity {
             intent.setPackage(choices.get(0).activityInfo.packageName);
         }
         try { startActivity(intent); } catch (ActivityNotFoundException e) { toast(R.string.web_no_browser); }
+    }
+    private void openPaymentApp(String url, String pkg) {
+        try {
+            Intent intent = url.regionMatches(true, 0, "intent:", 0, 7) ? Intent.parseUri(url, Intent.URI_INTENT_SCHEME) : new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.setSelector(null);
+            intent.addCategory(Intent.CATEGORY_BROWSABLE).setComponent(null).setPackage(pkg);
+            startActivity(intent);
+        } catch (java.net.URISyntaxException | ActivityNotFoundException e) { toast(R.string.web_payment_app_missing); }
     }
     private void toast(int text) { Toast.makeText(this, text, Toast.LENGTH_LONG).show(); }
     private void exitFullscreen() {

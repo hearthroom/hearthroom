@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "儲值改到綺夢社自己的付款頁，先選好微信、支付寶或信用卡再付款。",
+    "zh-Hans": "充值改到绮梦社自己的付款页，先选好微信、支付宝或银行卡再付款。",
+    "en": "Top-ups now open SukiSuki’s own payment page, where you pick WeChat Pay, Alipay, or a card before paying.",
+    "ja": "チャージがSukiSuki専用の支払いページになり、支払い方法を先に選べます。",
+    "ko": "충전이 SukiSuki 전용 결제 페이지로 바뀌어 결제 수단을 먼저 고를 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "更新 Android App 後，選支付寶會直接開啟支付寶付款，不會再停在收銀台；付款頁也寫明了 7 天退款規則和聯絡信箱。",
+    "zh-Hans": "更新安卓 App 后，选支付宝会直接打开支付宝付款，不会再停在收银台；付款页也写明了 7 天退款规则和联系邮箱。",
+    "en": "After updating the Android app, choosing Alipay opens the Alipay app instead of stalling on the checkout page, and the payment page spells out the 7-day refund rule and a billing contact.",
+    "ja": "Androidアプリを更新すると、Alipayを選んだときにAlipayアプリが開いてそのまま支払え、支払いページには7日間の返金ルールと連絡先も載っています。",
+    "ko": "Android 앱을 업데이트하면 Alipay를 고를 때 Alipay 앱이 열려 바로 결제할 수 있고, 결제 페이지에 7일 환불 규칙과 문의 이메일도 안내돼요."
+  }
+}
