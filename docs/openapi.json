@@ -22122,6 +22122,178 @@
           }
         }
       }
+    },
+    "/open/v1/workshop/conversation/metadata": {
+      "get": {
+        "operationId": "getWorkshopConversationMetadata",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Enabled workshop identities for a conversation",
+        "description": "Read-only identity metadata for an owned conversation, requiring chat.play. Returns only resident or triggered workshop identities, current versions, author-derived kind and player order, plus the selected opening identity. No authored content, formatting rules, Lorebook entries, names, opening HTML, greetings or suggested prompts are returned. Closed workshops and player-disabled or unavailable items are excluded. Opening identity identifies the opening selected when the conversation began; it is not a release-content read capability.",
+        "x-harperharbor": {
+          "implemented": true
+        },
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Identity-only workshop metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "items",
+                    "openingSource"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "workshopId",
+                          "version",
+                          "kind",
+                          "order"
+                        ],
+                        "properties": {
+                          "workshopId": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Published version number; 0 for an unpublished author trial draft."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "dlc",
+                              "lorebook"
+                            ]
+                          },
+                          "order": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Zero-based position in the conversation player ordering. Disabled entries can leave gaps."
+                          }
+                        }
+                      }
+                    },
+                    "openingSource": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "kind",
+                            "index"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "base"
+                              ]
+                            },
+                            "index": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "kind",
+                            "workshopId",
+                            "openingId"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "workshop"
+                              ]
+                            },
+                            "workshopId": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "openingId": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
