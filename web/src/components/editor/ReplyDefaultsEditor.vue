@@ -80,6 +80,11 @@ defineExpose({validate, errorMessage:()=>{const first=issues.value[0];if(!first)
  </div>
 </template>
 <style scoped>
+.reply-text,.reply-length{margin-block-start:var(--s-2)}
+.reply-text textarea{min-height:0;height:calc(2lh + 2 * var(--s-3) + 2px)}
+.reply-text #reply-customStyle{height:calc(3lh + 2 * var(--s-3) + 2px)}
+.reply-note-toggle{margin-inline-start:calc(-1 * var(--s-4))}
+@media(max-width:760px){.reply-text textarea{height:calc(3lh + 2 * var(--s-3) + 2px)}.reply-text #reply-customStyle{height:calc(4lh + 2 * var(--s-3) + 2px)}}
 .reply-axis>select.reply-unset,.reply-axis>select option[value=""]{color:var(--text-3)}
 .reply-axis>select option:not([value=""]){color:var(--text)}
 .reply-zones .active{color:var(--accent-text);font-weight:600}
