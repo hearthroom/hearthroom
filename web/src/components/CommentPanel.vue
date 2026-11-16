@@ -399,6 +399,7 @@ a.cmt__name:hover { color: var(--accent-text); }
 .cmt__to { color: var(--accent-text); }
 .cmt__actions { display: flex; gap: var(--s-3); margin-top: 2px; }
 .cmt--card .cmt__actions { flex-wrap: wrap; row-gap: 2px; }
+.cmt--card .cmt__act { min-height: var(--h-sm); min-width: var(--h-sm); white-space: nowrap; }
 .cmt--card > .toast { width: max-content; max-width: calc(100vw - var(--s-4) - var(--s-4)); }
 .cmt__act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; font-size: 12.5px; color: var(--text-3); cursor: pointer; }
 .cmt__act svg { width: 14px; height: 14px; }
