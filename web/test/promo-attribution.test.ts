@@ -10,6 +10,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
+  'bh-jinyong',
 ];
 
 it('every configured landing sends the original campaign and saves the referral', () => {
@@ -21,7 +22,7 @@ it('every configured landing sends the original campaign and saves the referral'
       campaign_name: url.searchParams.get('utm_campaign'),
     });
     rememberShareRef(refFromQuery(url.searchParams.get('ref'))!);
-    const expectedRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
+    const expectedRef = ['bh-fate-tm', 'bh-fate-fgo', 'bh-limbus'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     expect(pendingShareRef()?.code).toBe(expectedRef);
