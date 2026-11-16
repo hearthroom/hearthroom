@@ -1,0 +1,7 @@
+{
+  "zh-Hant": "在 App 裡選支付寶付款時，會直接開啟支付寶完成付款。\n手機沒有安裝支付寶或微信時，會提示你換一種付款方式。",
+  "zh-Hans": "在 App 里选支付宝付款时，会直接打开支付宝完成付款。\n手机没有安装支付宝或微信时，会提示你换一种付款方式。",
+  "en": "Choosing Alipay in the app now opens the Alipay app to finish paying.\nIf Alipay or WeChat isn’t installed, the app asks you to pick another payment method.",
+  "ja": "アプリでAlipayを選ぶと、Alipayアプリが開いてそのまま支払えます。\nAlipayやWeChatが入っていない場合は、別の支払い方法を選ぶよう案内します。",
+  "ko": "앱에서 Alipay를 고르면 Alipay 앱이 열려 바로 결제할 수 있어요.\nAlipay나 WeChat이 설치되어 있지 않으면 다른 결제 수단을 고르도록 안내해요."
+}
