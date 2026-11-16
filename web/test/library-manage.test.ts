@@ -1,174 +1,71 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createApp, h, nextTick, type App } from 'vue';
-import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
-import { i18n, applyLocale } from '../src/lib/i18n';
-import { confirmState, settleConfirm } from '../src/lib/confirm';
-const mock = vi.hoisted(() => ({ list: vi.fn(), preview: vi.fn(), remove: vi.fn(), other: vi.fn() }));
-vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 1 }, accessToken: async () => 'fixture' }) }));
-vi.mock('../src/lib/use-locale', async () => { const { ref } = await import('vue'); return { useLocalePath: () => ({ locale: ref('zh-Hant'), lp: (path: string) => path }) }; });
-vi.mock('../src/lib/display-name', () => ({ displayName: (name: string) => name }));
-vi.mock('../src/components/CardGrid.vue', () => ({ default: { template: '<div />' } }));
-vi.mock('../src/components/FavoriteGrid.vue', () => ({ default: { template: '<div />' } }));
-vi.mock('../src/lib/library', async original => ({ ...await original<object>(), fetchConversations: mock.list, previewConversationDeletion: mock.preview, deleteConversations: mock.remove, libraryRequest: mock.other }));
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {createApp,h,nextTick,type App} from 'vue';
+import {createMemoryHistory,createRouter,RouterView,type Router} from 'vue-router';
+import {i18n,applyLocale} from '../src/lib/i18n';
+import {confirmState,settleConfirm} from '../src/lib/confirm';
+const mock=vi.hoisted(()=>({list:vi.fn(),preview:vi.fn(),remove:vi.fn(),other:vi.fn(),visibility:vi.fn(),restoreBookmarks:vi.fn()}));
+vi.mock('../src/lib/session',()=>({useSession:()=>({me:{accountNumId:1},accessToken:async()=> 'fixture'})}));
+vi.mock('../src/lib/use-locale',async()=>{const{ref}=await import('vue');return{useLocalePath:()=>({locale:ref('zh-Hant'),lp:(path:string)=>path})};});
+vi.mock('../src/lib/display-name',()=>({displayName:(name:string)=>name}));
+vi.mock('../src/lib/library',async original=>({...await original<object>(),fetchConversations:mock.list,previewConversationDeletion:mock.preview,deleteConversations:mock.remove,libraryRequest:mock.other,setConversationHidden:mock.visibility,restoreFavoriteBookmarks:mock.restoreBookmarks}));
 import LibraryPage from '../src/pages/LibraryPage.vue';
 import ConfirmDialog from '../src/components/ConfirmDialog.vue';
-import { pageAway } from '../src/pet/enabled';
-
-let app: App, el: HTMLDivElement, router: Router;
-const rows = [1, 2, 3, 4].map(n => ({ provider: 'harbor', conversationRoleId: `role-${n}`, conversationId: `conv-${n}`, cardNumber: n, conversationTitle: null, roleName: `合成卡 ${n}`, roleAvatar: '', canGenerate: n !== 4 }));
-let current = [...rows];
-const settle = async () => { await nextTick(); await new Promise(r => setTimeout(r, 0)); await nextTick(); };
-const button = (key: string) => [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === i18n.global.t(`library.manage.${key}`))!;
-const options = () => [...el.querySelectorAll<HTMLElement>('[role="option"]')];
-const selected = () => options().map(e => e.getAttribute('aria-selected'));
-beforeEach(async () => {
-  vi.clearAllMocks(); await applyLocale('zh-Hant'); current = [...rows];
-  mock.list.mockImplementation(async () => ({ conversations: [...current], hasNextPage: true }));
-  mock.other.mockResolvedValue({ items: [], hasNext: false });
-  mock.preview.mockImplementation(async (_token, chats) => ({ selectionToken: 'frozen', groups: chats.map((c: typeof rows[number]) => ({ roleId: c.conversationRoleId, conversationId: c.conversationId, count: 2 })), total: chats.length * 2 }));
-  mock.remove.mockImplementation(async () => ({ results: [{ roleId: 'role-1', conversationId: 'conv-1', status: 'deleted', deletedCount: 2 }], deletedCount: 2 }));
-  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/library', component: LibraryPage }] });
-  await router.push('/library'); el = document.createElement('div'); document.body.append(el);
-  app = createApp({ render: () => [h(RouterView), h(ConfirmDialog)] }).use(router).use(i18n); app.mount(el); await settle();
+let app:App,el:HTMLDivElement,router:Router;
+const rows=[1,2].map(n=>({provider:'harbor',conversationRoleId:`role-${n}`,conversationId:`conv-${n}`,cardNumber:n,conversationTitle:`存檔 ${n}`,roleName:`合成卡 ${n}`,roleAvatar:'',canGenerate:n===1}));
+const settle=async()=>{await nextTick();await new Promise(r=>setTimeout(r,0));await nextTick();};
+const click=async(selector:string)=>{const b=document.querySelector<HTMLButtonElement>(selector);expect(b,selector).not.toBeNull();b!.click();await settle();};
+beforeEach(async()=>{vi.clearAllMocks();await applyLocale('zh-Hant');mock.list.mockResolvedValue({conversations:[...rows],hasNextPage:false});mock.other.mockReset().mockResolvedValue({items:[],hasNext:false});mock.restoreBookmarks.mockResolvedValue({restoredIds:['1','2']});mock.visibility.mockResolvedValue({hidden:true});mock.preview.mockResolvedValue({selectionToken:'frozen-one',groups:[{roleId:'role-1',conversationId:'conv-1',count:1}],total:1});mock.remove.mockResolvedValue({results:[{roleId:'role-1',conversationId:'conv-1',status:'deleted',deletedCount:1}],deletedCount:1});router=createRouter({history:createMemoryHistory(),routes:[{path:'/library',component:LibraryPage}]});await router.push('/library');el=document.createElement('div');document.body.append(el);app=createApp({render:()=>[h(RouterView),h(ConfirmDialog)]}).use(router).use(i18n);app.mount(el);await settle();});
+afterEach(()=>{settleConfirm(false);app?.unmount();el.remove();document.body.innerHTML='';vi.useRealTimers();});
+it('offers separate hide/delete actions for closed cards and restores menu focus',async()=>{await click('[data-conversation-menu="conv-2"]');expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(2);expect(document.activeElement?.getAttribute('data-action')).toBe('hide');document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();expect(document.querySelector('[role="menu"]')).toBeNull();expect(document.activeElement?.getAttribute('data-conversation-menu')).toBe('conv-2');expect(router.currentRoute.value.path).toBe('/library');});
+it('keeps failed hides visible and supports retry then undo without deleting content',async()=>{mock.visibility.mockRejectedValueOnce(new Error('offline'));await click('[data-conversation-menu="conv-1"]');await click('[data-action="hide"]');expect(el.querySelectorAll('.conversation:not(.conversation-row-leave-active)')).toHaveLength(2);expect(mock.remove).not.toHaveBeenCalled();await click('[data-toast-action]');expect(el.querySelectorAll('.conversation:not(.conversation-row-leave-active)')).toHaveLength(1);expect(mock.visibility).toHaveBeenLastCalledWith('fixture',rows[0],true);mock.visibility.mockResolvedValue({hidden:false});await click('[data-toast-action]');expect(mock.visibility).toHaveBeenLastCalledWith('fixture',rows[0],false);expect(el.querySelectorAll('.conversation:not(.conversation-row-leave-active)')).toHaveLength(2);});
+it('confirms one segment, keeps failure in the dialog and retries the frozen capability',async()=>{await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');expect(mock.preview).toHaveBeenCalledWith('fixture',[rows[0]],'current');expect(document.activeElement?.hasAttribute('data-cancel')).toBe(true);mock.remove.mockResolvedValueOnce({results:[{roleId:'role-1',conversationId:'conv-1',status:'busy',deletedCount:0}],deletedCount:0});await click('[data-confirm]');expect(confirmState.current).not.toBeNull();expect(document.querySelector('[role="alert"]')).not.toBeNull();mock.list.mockResolvedValue({conversations:[rows[1]],hasNextPage:false});await click('[data-confirm]');expect(mock.preview).toHaveBeenCalledTimes(1);expect(mock.remove).toHaveBeenLastCalledWith('fixture','frozen-one');expect(confirmState.current).toBeNull();expect(el.querySelectorAll('.conversation:not(.conversation-row-leave-active)')).toHaveLength(1);expect(el.querySelector('[data-toast-action]')).toBeNull();});
+it('locks cancel and Escape while a delete request is pending',async()=>{let finish!:(value:unknown)=>void;mock.remove.mockImplementationOnce(()=>new Promise(r=>{finish=r;}));await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');expect(document.querySelector<HTMLButtonElement>('[data-cancel]')!.disabled).toBe(true);document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await settle();expect(confirmState.current).not.toBeNull();finish({results:[{roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0}],deletedCount:0});await settle();expect(confirmState.current).not.toBeNull();});
+it('cancels only selected favorites, retains failed selection and retries only failures',async()=>{
+ const favorites=[{unavailable:true,bookmarkId:'1'},{unavailable:true,bookmarkId:'2'}];
+ mock.other.mockImplementation(async(path:string,_token:string,method='GET')=>{if(method==='GET')return{items:favorites,hasNext:false};if(path==='favorites/1')return{active:false,restoreToken:'undo-one'};throw new Error('offline');});
+ await router.push('/library?tab=favorites');await settle();await click('[data-favorite-select]');await click('[data-favorite-all]');
+ expect(el.querySelectorAll('[aria-checked="true"]')).toHaveLength(2);
+ await click('[data-favorite-cancel]');expect(el.querySelectorAll('[role="checkbox"]')).toHaveLength(1);expect(el.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('true');expect(el.querySelector('[role="alert"]')).not.toBeNull();
+ mock.other.mockClear();mock.other.mockResolvedValue({active:false,restoreToken:'undo-two'});await click('[data-favorite-cancel]');
+ expect(mock.other).toHaveBeenCalledOnce();expect(mock.other).toHaveBeenCalledWith('favorites/2','fixture','DELETE');expect(el.querySelectorAll('[role="checkbox"]')).toHaveLength(0);
 });
-afterEach(() => { settleConfirm(false); app?.unmount(); el.remove(); document.body.innerHTML = ''; });
-
-it('toggles, extends and clears page selection without following resume links; hides the pet only while managing', async () => {
-  expect(el.querySelectorAll('a.conversation')).toHaveLength(4);
-  button('manage').click(); await settle();
-  expect(pageAway.value).toBeGreaterThan(0); expect(options()).toHaveLength(4);
-  expect(el.querySelector('a.conversation')).toBeNull();
-  options()[0].click(); await settle(); options()[2].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); await settle();
-  expect(selected()).toEqual(['true','true','true','false']);
-  options()[1].dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true })); await settle();
-  expect(selected()).toEqual(['true','false','true','false']);
-  options()[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles:true, ctrlKey:true, cancelable:true })); await settle();
-  expect(selected()).toEqual(['true','true','true','false']);
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true, cancelable: true })); await settle();
-  expect(selected()).toEqual(['true','true','true','true']);
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await settle();
-  expect(options()).toHaveLength(0); expect(pageAway.value).toBe(0);
+it('restores cancelled unavailable favorites using only issued capabilities and clears selection on paging',async()=>{
+ const favorites=[{unavailable:true,bookmarkId:'1'},{unavailable:true,bookmarkId:'2'}];
+ mock.other.mockImplementation(async(path:string,_token:string,method='GET')=>method==='GET'?{items:favorites,hasNext:true}:{active:false,restoreToken:`undo-${path.split('/')[1]}`});
+ await router.push('/library?tab=favorites');await settle();await click('[data-favorite-select]');await click('[data-favorite-all]');await click('[data-favorite-cancel]');
+ await click('[data-toast-action]');expect(mock.restoreBookmarks).toHaveBeenCalledWith('fixture',['undo-1','undo-2']);
+ await click('[data-favorite-select]');await click('[data-favorite-all]');await router.push('/library?tab=favorites&page=2');await settle();
+ expect(el.querySelector('[data-favorite-cancel]')).toBeNull();await click('[data-favorite-select]');expect(el.querySelectorAll('[aria-checked="true"]')).toHaveLength(0);
 });
-
-it('previews the segment count, focuses Keep and cancels without a deletion', async () => {
-  button('manage').click(); await settle(); options()[0].click(); await settle();
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledWith('fixture', [rows[0]]);
-  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
-  expect(document.querySelector('#dlg-msg')?.textContent).toContain('無法復原');
-  expect(document.activeElement?.hasAttribute('data-cancel')).toBe(true);
-  expect([...el.querySelectorAll<HTMLButtonElement>('.pager button')].every(b => b.disabled)).toBe(true);
-  document.querySelector<HTMLButtonElement>('[data-cancel]')!.click(); await settle();
-  expect(mock.remove).not.toHaveBeenCalled(); expect(selected()[0]).toBe('true');
+it('keeps the undo action when hiding the last row automatically returns to a previous page',async()=>{
+ mock.list.mockImplementation(async(_token,_lang,n)=>({conversations:n===2?[rows[0]]:[rows[1]],hasNextPage:false}));
+ await router.push('/library?page=2');await settle();await click('[data-conversation-menu="conv-1"]');await click('[data-action="hide"]');await settle();
+ expect(router.currentRoute.value.query.page).toBeUndefined();expect(el.querySelector('[data-toast-action]')).not.toBeNull();
 });
-
-it('keeps the confirmation locked while deleting and retains only failed selections with a durable error', async () => {
-  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  let finish!: (value: unknown) => void;
-  mock.remove.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
-  expect(mock.remove).toHaveBeenCalledWith('fixture', 'frozen');
-  expect(document.querySelector<HTMLButtonElement>('[data-cancel]')!.disabled).toBe(true);
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle();
-  expect(confirmState.current).not.toBeNull();
-  current = current.filter(r => r.conversationId !== 'conv-1');
-  finish({ results: [{ roleId:'role-1',conversationId:'conv-1',status:'deleted',deletedCount:2 }, { roleId:'role-2',conversationId:'conv-2',status:'busy',deletedCount:0 }], deletedCount:2 });
-  await settle(); await settle();
-  expect(confirmState.current).toBeNull();
-  expect(options()).toHaveLength(3); expect(selected()).toEqual(['true','false','false']);
-  expect(el.querySelector('[role="alert"]')?.textContent).toContain('已保留選取');
-  expect(options()[0].textContent).toContain('正在回覆');
-  expect(el.querySelector('.toast')?.textContent).toContain('2');
-  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(1);
-  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
-  mock.remove.mockResolvedValueOnce({ results: [{ roleId:'role-2',conversationId:'conv-2',status:'deleted',deletedCount:2 }], deletedCount:2 });
-  current = current.filter(r => r.conversationId !== 'conv-2');
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
-  expect(mock.remove).toHaveBeenLastCalledWith('fixture','frozen',['conv-2']);
-  expect(el.querySelector('[role="alert"]')).toBeNull();
+it('checks the list after an uncertain delete without submitting another destructive request',async()=>{
+ mock.remove.mockRejectedValueOnce(new TypeError('offline'));
+ await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');
+ expect(document.querySelector('[data-confirm]')?.textContent).toContain(i18n.global.t('library.recent.checkResult'));
+ expect(document.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('library.recent.resultPending'));
+ mock.list.mockClear();await click('[data-confirm]');expect(mock.remove).toHaveBeenCalledOnce();expect(mock.list).toHaveBeenCalled();expect(confirmState.current).toBeNull();
 });
-
-it('keeps an uncertain result for an idempotent retry and obtains new consent after a confirmed expiry', async () => {
-  button('manage').click(); await settle(); options()[0].click(); await settle();
-  mock.remove.mockRejectedValueOnce(new TypeError('offline'));
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
-  expect(el.querySelector('[role="alert"]')?.textContent).toContain('尚待確認');
-  expect(selected()[0]).toBe('true');
-  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(1);
-  mock.remove.mockRejectedValueOnce({ code:'selection_expired' });
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
-  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(2);
-  expect(confirmState.current).not.toBeNull();
+it('does not promise content is retained when the Worker returns an uncertain segment result',async()=>{
+ mock.remove.mockResolvedValueOnce({results:[{roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0}],deletedCount:0});
+ await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');
+ expect(document.querySelector('[role="alert"]')?.textContent).toContain(i18n.global.t('library.recent.resultPending'));
+ expect(document.querySelector('[role="alert"]')?.textContent).not.toContain(i18n.global.t('library.recent.deleteFailed'));
 });
-
-it('clears selections on page navigation and offers no management on favorites', async () => {
-  button('manage').click(); await settle(); options()[3].click(); await settle();
-  await router.push('/library?page=2'); await settle();
-  expect(selected()).toEqual(['false','false','false','false']);
-  await router.push('/library?tab=favorites'); await settle();
-  expect(button('manage')).toBeUndefined(); expect(pageAway.value).toBe(0);
+it('labels a pending result check as a check while its read is in flight',async()=>{
+ mock.remove.mockRejectedValueOnce(new TypeError('offline'));await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');await click('[data-confirm]');
+ let finish!:(value:unknown)=>void;mock.list.mockImplementationOnce(()=>new Promise(r=>{finish=r;}));await click('[data-confirm]');
+ expect(document.querySelector('[data-confirm]')?.textContent).toContain(i18n.global.t('library.recent.checkResult'));
+ expect(document.querySelector('[data-confirm]')?.textContent).not.toContain(i18n.global.t('library.manage.deleting'));
+ finish({conversations:rows,hasNextPage:false});await settle();
 });
-
-
-it('keeps a failed card identifiable when the quiet refresh loses its title, without restoring its capability', async () => {
-  current = rows.map((row, i) => i === 1 ? { ...row, conversationTitle: '原存檔標題', roleAvatar: '/known-cover.webp' } : row);
-  await router.push('/library?page=2'); await settle();
-  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  // The delete partially fails while the follow-up owned read is unavailable.
-  mock.list.mockResolvedValueOnce({ conversations: [{ ...rows[1], conversationTitle: null, roleName: '', roleAvatar: '', canGenerate: false, reason: 'unavailable' }, rows[2], rows[3]], hasNextPage: true });
-  mock.remove.mockResolvedValueOnce({ results: [{ roleId: 'role-1', conversationId: 'conv-1', status: 'deleted', deletedCount: 2 }, { roleId: 'role-2', conversationId: 'conv-2', status: 'error', deletedCount: 0 }], deletedCount: 2 });
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
-  const retained = options()[0];
-  expect(retained.querySelector('h2')?.textContent).toBe('原存檔標題');
-  expect(retained.textContent).toContain('合成卡 2');
-  expect(retained.querySelector('img')?.getAttribute('src')).toBe('/known-cover.webp');
-  expect(retained.getAttribute('aria-selected')).toBe('true');
-  expect(retained.textContent).toContain('刪除未完成');
-  expect(retained.textContent).not.toContain(i18n.global.t('library.historyHint'));
-  expect(retained.classList.contains('conversation--closed')).toBe(false);
-  button('done').click(); await settle();
-  // Keeping presentation must not turn the fresh denied capability back on.
-  expect(el.querySelector('a.conversation')?.classList.contains('conversation--closed')).toBe(true);
-});
-
-
-it('retries a reduced failed selection with the original snapshot instead of admitting new saves', async () => {
-  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
-  mock.remove.mockResolvedValueOnce({ results: [{ roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0 }, { roleId:'role-2',conversationId:'conv-2',status:'error',deletedCount:0 }], deletedCount:0 });
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
-  // Another tab adds a save; an unintended new preview would now admit it.
-  mock.preview.mockResolvedValue({ selectionToken:'expanded',groups:[{roleId:'role-1',conversationId:'conv-1',count:3}],total:3 });
-  options()[1].click(); await settle();
-  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(1);
-  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
-  mock.remove.mockResolvedValueOnce({ results:[{roleId:'role-1',conversationId:'conv-1',status:'deleted',deletedCount:2}],deletedCount:2 });
-  current=current.filter(r=>r.conversationId!=='conv-1');
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle();
-  expect(mock.remove).toHaveBeenLastCalledWith('fixture','frozen',['conv-1']);
-});
-
-it('keeps the accepted failed snapshot when a different selection preview is cancelled', async () => {
-  button('manage').click(); await settle(); options()[0].click(); await settle(); options()[1].click(); await settle();
-  mock.remove.mockResolvedValueOnce({ results:[{roleId:'role-1',conversationId:'conv-1',status:'error',deletedCount:0},{roleId:'role-2',conversationId:'conv-2',status:'error',deletedCount:0}],deletedCount:0 });
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  document.querySelector<HTMLButtonElement>('[data-confirm]')!.click(); await settle(); await settle();
-  mock.preview.mockResolvedValue({ selectionToken:'expanded',groups:[{roleId:'role-1',conversationId:'conv-1',count:3},{roleId:'role-2',conversationId:'conv-2',count:2},{roleId:'role-3',conversationId:'conv-3',count:2}],total:7 });
-  options()[2].click(); await settle();
-  el.querySelector<HTMLButtonElement>('[data-delete-selected]')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(2); // A new card selection really does need new consent.
-  expect(document.querySelector('#dlg-title')?.textContent).toContain('7');
-  document.querySelector<HTMLButtonElement>('[data-cancel]')!.click(); await settle();
-  options()[1].click(); await settle(); options()[2].click(); await settle();
-  el.querySelector<HTMLButtonElement>('.library__failure button')!.click(); await settle();
-  expect(mock.preview).toHaveBeenCalledTimes(2);
-  expect(document.querySelector('#dlg-title')?.textContent).toContain('2');
-  document.querySelector<HTMLButtonElement>('[data-cancel]')!.click(); await settle();
+it('gives the second consecutive hidden row its own complete Undo window even with identical text',async()=>{
+ vi.useFakeTimers();
+ const clickFake=async(selector:string)=>{const b=document.querySelector<HTMLButtonElement>(selector);expect(b,selector).not.toBeNull();b!.click();await nextTick();await vi.advanceTimersByTimeAsync(0);await nextTick();};
+ await clickFake('[data-conversation-menu="conv-1"]');await clickFake('[data-action="hide"]');await vi.advanceTimersByTimeAsync(5000);
+ await clickFake('[data-conversation-menu="conv-2"]');await clickFake('[data-action="hide"]');await vi.advanceTimersByTimeAsync(5999);
+ expect(el.querySelector('[data-toast-action]')).not.toBeNull();await vi.advanceTimersByTimeAsync(1);expect(el.querySelector('[data-toast-action]')).toBeNull();
 });
