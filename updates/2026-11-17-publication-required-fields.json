@@ -15,6 +15,5 @@
     "en": "An opening message, alternate opening, first-line choice, or opening page all count, landscape images stay optional, private and link-shared cards are unaffected, and cards already public stay listed until their next update.",
     "ja": "最初のメッセージ・別の書き出し・最初の選択肢・最初のページのいずれかがあればよく、自分のみとリンク共有には影響せず、公開済みのカードも次の更新までそのまま掲載されます。",
     "ko": "첫 메시지, 대체 도입부, 첫마디 선택지, 첫 페이지 중 하나만 있으면 되고, 나만 보기와 링크 공유에는 영향이 없으며 이미 공개된 카드도 다음 업데이트 전까지 유지돼요."
-  },
-  "draft": true
+  }
 }
