@@ -78,3 +78,8 @@ it('keeps the pet away from recent-chat controls and restores it outside managem
  await router.push('/library');await settle();expect(pageAway.value).toBeGreaterThan(0);
  app.unmount();expect(pageAway.value).toBe(0);
 });
+it('clears an obsolete preview failure after retry opens a valid confirmation',async()=>{
+ mock.preview.mockRejectedValueOnce(new Error('unavailable'));
+ await click('[data-conversation-menu="conv-1"]');await click('[data-action="delete"]');expect(el.querySelector('.library__failure')).not.toBeNull();
+ await click('.library__failure button');expect(confirmState.current).not.toBeNull();expect(el.querySelector('.library__failure')).toBeNull();
+});
