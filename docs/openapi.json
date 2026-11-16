@@ -25931,7 +25931,7 @@
           "capabilitiesMeasuredAt": {
             "type": "string",
             "format": "date-time",
-            "description": "Measurement time when matching route evidence exists; no private evidence or supplier details are returned."
+            "description": "Measurement time when matching lane evidence exists; no private evidence or supplier details are returned."
           },
           "capabilitiesByThinkingDepth": {
             "type": "object",
@@ -38266,7 +38266,7 @@
           "description",
           "schema"
         ],
-        "description": "Author-only terminal output declaration for an agent configuration. The platform validates inert output and never executes the tool. Supports a bounded JSON Schema 2020-12 subset; no remote or cyclic references.",
+        "description": "Author-only final output declaration for an agent configuration. The platform validates inert output and never executes the tool. Supports a bounded JSON Schema 2020-12 subset; no remote or cyclic references.",
         "properties": {
           "name": {
             "type": "string",
@@ -38342,7 +38342,7 @@
           "jsonSchema",
           "imageInput"
         ],
-        "description": "Measured capability on the actual Provider route and request shape. Unknown is not a support claim. Agent eligibility is independent. Strict native response-format support and image input require their own end-to-end probes.",
+        "description": "Measured capability on the actual server lane and request shape. Unknown is not a support claim. Agent eligibility is independent. Strict native response-format support and image input require their own end-to-end probes.",
         "properties": {
           "tools": {
             "type": "string",
