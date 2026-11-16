@@ -7,6 +7,7 @@
  */
 
 import { hasPresetTag } from "../../../shared/tag-catalog";
+import { hasPublicationOpening } from "../../../shared/publication-fields";
 import { readState, type CardStateDraft } from "./card-state";
 
 export interface TalkExampleEntry {
@@ -246,26 +247,24 @@ export const makeDraft = (language: string): RoleDraft => ({
  * 送審前一定要有的東西。跟上游 validate_role 的阻斷項對齊，但在本地先算一次——
  * 作者不該填到最後一步才知道第一步漏了什麼。上游仍是最終權威。
  */
-export type RequiredKey = "roleName" | "presetTag" | "roleWelcome" | "prologue" | "roleDetailDesc";
+export type RequiredKey = "roleName" | "roleBackground" | "presetTag" | "roleWelcome" | "prologue" | "roleDetailDesc";
 
 /**
- * 必填四項：名稱、分類與玩法、角色設定、開局（照表單順序）。開局看作者選的呈現：開場白要有開場白；
- * 開場網頁要有至少一個第一句選項（網頁本身可以留空，玩家只看到選項）。
+ * 公開必填依表單順序呈現，開局接受任一種已有內容的開場格式。
  */
 export function requiredKeys(openingMode: "greeting" | "page" = "greeting"): RequiredKey[] {
-  return ["roleName", "presetTag", "roleDetailDesc", openingMode === "page" ? "prologue" : "roleWelcome"];
+  return ["roleName", "roleBackground", "presetTag", "roleDetailDesc", openingMode === "page" ? "prologue" : "roleWelcome"];
 }
 
 /**
- * 開場白的卡就算有選項或首屏網頁，缺開場白仍然列出來（舊卡打開來亮紅點、提醒作者補），但這只擋送審、
- * 不擋儲存——上游照舊收這種卡的空開場白（見 playerSpeaksFirst）。
+ * 開場白、備選、舊卡選項與首屏網頁任一有內容即可。呈現模式本身不算內容。
  */
-export function missingRequired(draft: RoleDraft, extras: { openingMode?: "greeting" | "page" } = {}): RequiredKey[] {
+export function missingRequired(draft: RoleDraft, extras: { openingMode?: "greeting" | "page"; openingPage?: string } = {}): RequiredKey[] {
   return requiredKeys(extras.openingMode).filter((key) =>
     key === "presetTag"
       ? !hasPresetTag(draft.roleTag)
-      : key === "prologue"
-        ? !draft.prologue.some((p) => p.trim())
+      : key === "prologue" || key === "roleWelcome"
+        ? !hasPublicationOpening({ welcome: draft.roleWelcome, alternates: draft.alternates, prologue: draft.prologue, openingPage: extras.openingPage })
         : !String(draft[key] ?? "").trim());
 }
 

@@ -1914,7 +1914,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
 });
 
 it('submits a private HarperHarbor draft to the same immutable community review',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleBackground:"https://images.test/cover.png",roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');
  expect(root.textContent).not.toContain(i18n.global.t('workspace.editHint'));
  expect(root.querySelector<HTMLInputElement>('input[value=private]')?.checked).toBe(true);
@@ -2022,7 +2022,7 @@ describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
 beforeEach(()=>{rollout.enabled=true;visibilityMocks.read.mockReset();visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy()});visibilityMocks.change.mockReset();visibilityMocks.operation.mockReset();});
 
 it('scrolls from publication guidance to the missing character setting section',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic name',roleWelcome:'Synthetic greeting',roleTag:['角色扮演']});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleBackground:"https://images.test/cover.png",roleName:'Synthetic name',roleWelcome:'Synthetic greeting',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');await nextTick();
  const section=root.querySelector<HTMLElement>('[data-section="persona"]')!;
  const scroll=vi.spyOn(section,'scrollIntoView');
@@ -2067,7 +2067,7 @@ it('restores a new draft private choice without applying it to existing cards',a
 });
 
 it('keeps a length refusal on the editor after the author returns from the submission dialog',async()=>{
- api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Short draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
+ api.fetchRoleDetail.mockResolvedValueOnce({roleBackground:"https://images.test/cover.png",roleName:'Short draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleTag:['角色扮演']});
  await mount('/cards/r1/edit');byText('發布').click();await flush();
  root.querySelector<HTMLInputElement>('input[value=public]')!.click();await flush();root.querySelector<HTMLButtonElement>('[data-visibility-apply]')!.click();await flush();
  ratingState.current!.resolve(GENERAL);await flush();await flush();
@@ -2526,10 +2526,10 @@ describe("開局：開場白與開場網頁二選一（ui.md §3）", () => {
     expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", { roleWelcome: "", alternates: [], prologue: ["出發"] }, "tok");
   });
 
-  it("開場白的舊卡只有選項沒有開場白：亮紅點，但照樣存得下（上游照舊收）", async () => {
+  it("舊卡只有開場選項也滿足開場必填，並可照常儲存", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "舊卡", roleDetailDesc: "設定", roleWelcome: "", rolePrologue: ["我推開門。"] });
     await mount("/cards/r1/edit");
-    expect($('.side__item:nth-child(3) .side__dot')).toBeTruthy();
+    expect($('.side__item:nth-child(3) .side__dot')).toBeNull();
     expect(root.querySelector("#f-welcome")).not.toBeNull();
     await type($("#f-detail"), "設定改了");
     await submit();
@@ -3045,7 +3045,7 @@ it('recovers a lost completion reply on the unfinished-card edit route', async (
 
 describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）', () => {
   it('未選・剛進來：展開列預設打開、帶 * 與「至少選一個」（非紅字）、基本分區亮紅點、公開被擋但存檔不擋', async () => {
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '舊卡無分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png", roleName: '舊卡無分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
     await mount('/cards/r1/edit');
     const row = $<HTMLButtonElement>('[aria-controls="tag-picker"]');
     expect(row.getAttribute('aria-expanded')).toBe('true');
@@ -3068,7 +3068,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
   });
 
   it('點「還缺」：展開被手動收起的分類列、進入已提示狀態並聚焦第一個分類籤；選中任一分類即恢復可公開', async () => {
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '待補分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png", roleName: '待補分類', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['自訂標籤'] });
     await mount('/cards/r1/edit');
     const row = $<HTMLButtonElement>('[aria-controls="tag-picker"]');
     row.click();
@@ -3103,7 +3103,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
   });
 
   it('標籤滿 10 個且零分類：點「編輯標籤」聚焦自訂標籤輸入框 #f-tags', async () => {
-    api.fetchRoleDetail.mockResolvedValueOnce({
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png",
       roleName: '滿十個自訂',
       roleDetailDesc: '設定',
       roleWelcome: '開場',
@@ -3120,7 +3120,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
   });
 
   it('深連結 ?section=basic&focus=tags 與伺服器回 preset_tag_required 都進已提示狀態並聚焦分類籤', async () => {
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '深連結卡', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: [] });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png", roleName: '深連結卡', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: [] });
     await mount('/cards/r1/edit?section=basic&focus=tags');
     expect(root.querySelector('#tag-picker [role="alert"]')).not.toBeNull();
     const firstChip = root.querySelector<HTMLButtonElement>('#tag-picker .chip:not(:disabled)')!;
@@ -3145,7 +3145,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
     app!.unmount();
     root.remove();
     // 本地草稿已有分類（例如過期草稿），但伺服器最後送審回 preset_tag_required：關彈層、不顯示頂部錯誤、跳分類區並提示
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '過期草稿', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png", roleName: '過期草稿', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
     await mount('/cards/r1/edit');
     byText('發布').click();
     await flush();
@@ -3167,7 +3167,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
   });
 
   it('編輯頁內嵌 restore_public 被伺服器回 preset_tag_required 時（本地已有分類但舊核准版缺分類），跳回「基本」分類籤並進入已提示狀態而非跳到開局', async () => {
-    visibilityMocks.read.mockResolvedValueOnce({
+    visibilityMocks.read.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png",
       workVisibility: visibilityPolicy({
         access: 'private',
         everPublic: true,
@@ -3179,7 +3179,7 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
       }),
     });
     visibilityMocks.change.mockRejectedValueOnce(new VisibilityError(400, { error: 'preset_tag_required' }));
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: '恢復公開被拒', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleBackground: "https://images.test/cover.png", roleName: '恢復公開被拒', roleDetailDesc: '設定', roleWelcome: '開場', roleTag: ['角色扮演'] });
     await mount('/cards/r1/edit');
     byText('發布').click();
     await flush();
@@ -3195,4 +3195,35 @@ describe('發布前至少選一個分類與玩法（ui.md D1–D8, §2, §4）',
     expect($('.visibility-missing').textContent).toContain(i18n.global.t('editor.required.presetTag'));
     expect($<HTMLInputElement>('input[value=public]').disabled).toBe(true);
   });
+});
+
+it('blocks only public for a missing portrait, focuses upload without opening a picker, and clears the alert after upload',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Portrait boundary',roleDetailDesc:'Persona',roleWelcome:'Opening',roleTag:['Roleplay'],roleBackgroundLandscape:'https://images.test/landscape.png',roleShareImage:'https://images.test/share.png'});
+ await mount('/cards/r1/edit');
+ expect($('[data-checklist]').textContent).toContain(i18n.global.t('editor.required.roleBackground'));
+ expect($<HTMLInputElement>('input[value="public"]').disabled).toBe(true);
+ expect($<HTMLInputElement>('input[value="private"]').disabled).toBe(false);
+ expect($<HTMLInputElement>('input[value="unlisted"]').disabled).toBe(false);
+ const field=$<HTMLElement>('[data-cover-field]');
+ expect(field.classList.contains('is-alert')).toBe(false);
+ const frame=field.querySelector<HTMLButtonElement>('.frame')!;
+ const picker=vi.spyOn(field.querySelector<HTMLInputElement>('input[type=file]')!,'click');
+ const jump=[...root.querySelectorAll<HTMLButtonElement>('.checklist__jump')].find(b=>b.textContent?.includes(i18n.global.t('editor.required.roleBackground')))!;
+ jump.click();await flush();
+ expect(document.activeElement).toBe(frame);expect(picker).not.toHaveBeenCalled();
+ expect(field.classList.contains('is-alert')).toBe(true);
+ expect(field.querySelector('[role=alert]')).not.toBeNull();
+ await pickFile(field.querySelector<HTMLInputElement>('input[type=file]')!,new File(['synthetic png'],'cover.png',{type:'image/png'}));
+ expect(field.classList.contains('is-alert')).toBe(false);
+ expect(field.querySelector('[role=alert]')).toBeNull();
+ expect($<HTMLInputElement>('input[value="public"]').disabled).toBe(true);
+ await submit();
+ expect($<HTMLInputElement>('input[value="public"]').disabled).toBe(false);
+});
+
+it('deep-links to a missing portrait without launching a file picker',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Deep link',roleDetailDesc:'Persona',roleWelcome:'Opening',roleTag:['Roleplay']});
+ await mount('/cards/r1/edit?section=basic&focus=cover');
+ expect(document.activeElement).toBe($('[data-cover-field] .frame'));
+ expect($('[data-cover-field]').classList.contains('is-alert')).toBe(true);
 });

@@ -25,7 +25,7 @@ export interface WorkVisibility {
  syncState: 'complete' | 'changing' | 'unavailable';
 }
 export interface VisibilityOperation { operationId: string; state: 'pending' | 'complete' | 'conflict'; error?: string }
-export interface VisibilityResult { workVisibility?: WorkVisibility; operation?: VisibilityOperation }
+export interface VisibilityResult { error?: string; detail?: {missing?:string[];field?:string}; workVisibility?: WorkVisibility; operation?: VisibilityOperation }
 export type VisibilityRevision = Pick<WorkVisibility, 'policyRevision' | 'approvalRevision'>;
 export type VisibilityCommand = {
  operationId: string; expectedPolicyRevision: string; expectedApprovalRevision: string;

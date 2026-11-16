@@ -1,3 +1,4 @@
+import { isPublicationRefusal } from '../../../shared/publication-fields';
 import { computed, ref } from 'vue';
 import { fetchWorkVisibility, changeWorkVisibility, fetchVisibilityOperation, VisibilityError, type WorkAccess, type WorkVisibility, type VisibilityCommand, type VisibilityResult } from './work-visibility';
 import type { ProviderId } from './provider';
@@ -28,7 +29,7 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
    // A receipt can describe an older command. Always read current policy before rendering completion.
    await latest(t);
    if((result.operation?.state==='complete'||result.operation?.state==='conflict')&&value.value?.syncState==='complete'){
-    message.value=result.operation.state==='conflict'?'conflict':'';clear();phase.value='ready';
+    message.value=result.operation.state==='conflict'?(isPublicationRefusal(result.error)?result.error!:'conflict'):'';clear();phase.value='ready';
    }else phase.value='pending';
   }catch{phase.value='unknown';}
  }
@@ -56,7 +57,7 @@ export function createVisibilityController(options:{id:string;provider:ProviderI
   }catch(e){
    if(e instanceof VisibilityError&&e.status>=400&&e.status<500&&!e.result.operation){
     // These are definitive command rejections. Refresh succeeds before any retry is offered.
-    try{await latest(await token());if(value.value?.syncState!=='complete'){phase.value='unknown';return;}clear();phase.value='ready';message.value=e.code==='review_required'?'review_required':e.code==='preset_tag_required'?'preset_tag_required':e.status===409?'conflict':'denied';}
+    try{await latest(await token());if(value.value?.syncState!=='complete'){phase.value='unknown';return;}clear();phase.value='ready';message.value=e.code==='review_required'?'review_required':e.code==='preset_tag_required'?'preset_tag_required':isPublicationRefusal(e.code)?e.code:e.status===409?'conflict':'denied';}
     catch{phase.value='unknown';}
    }else await check();
   }

@@ -19,16 +19,16 @@ describe("開局呈現", () => {
 
   it("必填的開局項跟著呈現換：開場白要開場白，開場網頁要至少一個第一句選項；且必含一個預設分類", () => {
     // 順序跟表單一樣：名字 → 分類與玩法 → 角色設定 → 開局
-    expect(requiredKeys("greeting")).toEqual(["roleName", "presetTag", "roleDetailDesc", "roleWelcome"]);
-    expect(requiredKeys("page")).toEqual(["roleName", "presetTag", "roleDetailDesc", "prologue"]);
-    const draft = { ...makeDraft("zh-Hant"), roleName: "卡", roleTag: ["角色扮演"], roleDetailDesc: "設定" };
+    expect(requiredKeys("greeting")).toEqual(["roleName", "roleBackground", "presetTag", "roleDetailDesc", "roleWelcome"]);
+    expect(requiredKeys("page")).toEqual(["roleName", "roleBackground", "presetTag", "roleDetailDesc", "prologue"]);
+    const draft = { ...makeDraft("zh-Hant"), roleName: "卡", roleBackground: "https://images.test/cover.png", roleTag: ["角色扮演"], roleDetailDesc: "設定" };
     expect(missingRequired(draft, { openingMode: "page" })).toEqual(["prologue"]);
     expect(missingRequired({ ...draft, prologue: [" ", "我推開門。"] }, { openingMode: "page" })).toEqual([]);
     // 自訂標籤或網址 key 不算預設分類；五語顯示名任一命中（含第 10 個之後）即算
     expect(missingRequired({ ...draft, roleTag: ["自訂標籤", "roleplay"], prologue: ["我推開門。"] }, { openingMode: "page" })).toEqual(["presetTag"]);
     expect(missingRequired({ ...draft, roleTag: [...Array.from({ length: 11 }, (_, i) => `自訂${i}`), "Roleplay"], prologue: ["我推開門。"] }, { openingMode: "page" })).toEqual([]);
-    // 開場白的卡只有選項也照樣列缺開場白（舊卡亮紅點，但不擋儲存）
-    expect(missingRequired({ ...draft, prologue: ["我推開門。"] }, { openingMode: "greeting" })).toEqual(["roleWelcome"]);
+    // 舊卡的開場選項也滿足至少一種開場。
+    expect(missingRequired({ ...draft, prologue: ["我推開門。"] }, { openingMode: "greeting" })).toEqual([]);
   });
 
   it("開場白可以留空：開場網頁，或是有選項、首屏網頁的舊卡（跟上游 PATCH /welcome 一致）", () => {

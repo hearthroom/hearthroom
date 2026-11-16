@@ -1,9 +1,11 @@
+import { upstream } from './upstream';
+import { isPublicationRefusal, publicationRefusalDetail } from '../shared/publication-fields';
 import {apiBaseOf} from './providers';
 import {assertNormalMember} from './test-accounts';
 import {Hono} from 'hono';
 import {bodyLimit} from 'hono/body-limit';
 import {getCard,upsertCard,finishManagedWithdrawal,type CardRow} from './cards';
-import {hostGateway,assertPresetTag,parseStoredTags} from './hosting';
+import {hostGateway,assertPublicationCover,assertPublicationFields,assertPresetTag} from './hosting';
 import {requireMember,resolveMember} from './members';
 import {ownerCardSource,readOwnerVisibility} from './work-sharing';
 import {managedWork,policyOperationId,workPolicyCommandHash,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkOwnerView} from './work-policy';
@@ -102,7 +104,42 @@ async function authorConflict(env:Env,op:AuthorOperation):Promise<'conflict'>{
  await env.DB.prepare("UPDATE author_visibility_operations SET state='conflict',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending'").bind(Date.now(),op.member_id,op.operation_id).run();
  return 'conflict';
 }
-export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string):Promise<AuthorOperation['state']>{
+// A publication refusal commits no Provider mutation. Clear only the original fence
+// after fresh owner authority and an absent operation receipt prove its old CAS.
+async function settlePublicationRefusal(env:Env,op:AuthorOperation,command:WorkPolicyCommand,token?:string):Promise<AuthorOperation['state']>{
+ if(!token)return 'pending';
+ const policy=await managedWork(env.DB,'harbor',op.source_role_id);
+ if(!policy||policy.sync_state!=='changing'||policy.sync_operation_id!==op.provider_operation_id
+  ||policy.epoch!==command.expectedEpoch||policy.moderation_revision!==policy.confirmed_moderation_revision)return 'pending';
+ let owner:WorkOwnerView,receipt:WorkPolicyReceipt|null;
+ try{
+  [owner,receipt]=await Promise.all([
+   workPolicyGateway.owner(env,'harbor',op.source_role_id,token,true),
+   workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id),
+  ]);
+ }catch{return 'pending';}
+ if(receipt||!owner.managed||owner.workId!==op.work_id||owner.epoch!==command.expectedEpoch
+  ||!command.expectedOwnerRevision||owner.policyRevision!==command.expectedOwnerRevision
+  ||owner.access!==policy.access||owner.restriction!==policy.restriction
+  ||owner.approvedRoleId!==(policy.approved_role_id??''))return 'pending';
+ const sameFence="work_id=? AND source_role_id=? AND epoch=? AND sync_operation_id=? AND sync_state='changing' AND moderation_revision=? AND confirmed_moderation_revision=? AND access=? AND restriction=? AND approved_role_id IS ?";
+ const args=[op.work_id,op.source_role_id,policy.epoch,op.provider_operation_id,policy.moderation_revision,policy.confirmed_moderation_revision,policy.access,policy.restriction,policy.approved_role_id];
+ const refused="EXISTS(SELECT 1 FROM visibility_operations WHERE work_id=? AND operation_id=? AND state='conflict' AND json_extract(receipt,'$.error') IN ('cover_required','publication_fields_required'))";
+ const results=await env.DB.batch([
+  env.DB.prepare(`UPDATE author_visibility_operations SET state='conflict',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending' AND EXISTS(SELECT 1 FROM managed_work_access WHERE ${sameFence}) AND ${refused}`)
+   .bind(Date.now(),op.member_id,op.operation_id,...args,op.work_id,op.provider_operation_id),
+  env.DB.prepare(`UPDATE managed_work_access SET sync_state='complete',sync_operation_id=NULL WHERE ${sameFence} AND EXISTS(SELECT 1 FROM author_visibility_operations WHERE member_id=? AND operation_id=? AND state='conflict') AND ${refused}`)
+   .bind(...args,op.member_id,op.operation_id,op.work_id,op.provider_operation_id),
+ ]);
+ return results[1].meta.changes?'conflict':'pending';
+}
+async function authorConflictResult(env:Env,op:AuthorOperation):Promise<{error:string;detail?:Record<string,unknown>}>{
+ const row=await env.DB.prepare("SELECT receipt FROM visibility_operations WHERE work_id=? AND operation_id=? AND state='conflict'").bind(op.work_id,op.provider_operation_id).first<{receipt:string|null}>();
+ const refusal=JSON.parse(row?.receipt??'{}') as {error?:string;detail?:unknown};
+ if(!isPublicationRefusal(refusal.error))return {error:'visibility_operation_conflict'};
+ return {error:refusal.error!,detail:publicationRefusalDetail(refusal.detail)};
+}
+export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:string,options:{allowTransmit?:boolean}={}):Promise<AuthorOperation['state']>{
  await assertNormalMember(env.DB,op.member_id);
  const latest=await findOperation(env,op.member_id,op.operation_id);if(!latest)throw new HttpError(404,'card_not_found');
  if(latest.state!=='pending')return latest.state;
@@ -117,13 +154,14 @@ export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:
  const command=JSON.parse(op.command) as WorkPolicyCommand;
  // An explicit Provider CAS refusal is terminal even if the process stopped
  // after persisting the lower-level refusal and before updating this aggregate.
- const intent=await env.DB.prepare('SELECT state FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(op.work_id,op.provider_operation_id).first<{state:string}>();
- if(intent?.state==='conflict')return authorConflict(env,op);
+ const intent=await env.DB.prepare("SELECT state,json_extract(receipt,'$.error') AS error FROM visibility_operations WHERE work_id=? AND operation_id=?").bind(op.work_id,op.provider_operation_id).first<{state:string;error:string|null}>();
+ if(intent?.state==='conflict')return isPublicationRefusal(intent.error)?settlePublicationRefusal(env,op,command,token):authorConflict(env,op);
  let receipt:WorkPolicyReceipt|null;
  try{
   receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
-  if(!receipt){if(!token)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+  if(!receipt){if(!token||options.allowTransmit===false)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
  }catch(error){
+  if(error instanceof HttpError&&error.status===422&&isPublicationRefusal(error.message))return settlePublicationRefusal(env,op,command,token);
   if(error instanceof HttpError&&error.status===409)return authorConflict(env,op);
   throw error;
  }
@@ -161,7 +199,12 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/visibility',bodyLimit({maxSize:4
   const action:WorkPolicyCommand['action']=command.action==='cancel_review'?'cancel':command.targetAccess==='public'?'restore':command.targetAccess!;
   if((view.workVisibility.restriction==='suspended'&&action!=='private')||(action==='restore'&&view.workVisibility.restriction!=='none'))throw new HttpError(409,'visibility_restricted');
   if(action==='restore'&&(!view.workVisibility.restorable||!row.approved_version_id||!row.approved_hosted_role_id))throw new HttpError(409,'review_required');
-  if(action==='restore')await assertPresetTag(c.env.DB,parseStoredTags(row.tags),'restore');
+  if(action==='restore'){
+   const approved=await hostGateway.read(c.env,token,row.approved_hosted_role_id!,'harbor');
+   await assertPresetTag(c.env.DB,approved.tags,'restore');
+   await assertPublicationCover(c.env.DB,approved.backgroundUrl||approved.avatarUrl,'restore');
+   assertPublicationFields(await upstream.readForReview(c.env,token,row.approved_hosted_role_id!,'harbor'));
+  }
   const pending=await c.env.DB.prepare("SELECT g.operation_id FROM work_publication_permits g JOIN hosting_versions v ON v.version_id=g.version_id JOIN review_submissions s ON s.id=v.submission_id WHERE v.work_id=? AND s.status='pending' AND g.state IN ('prepared','published') ORDER BY v.created_at DESC LIMIT 1").bind(p.work_id).first<{operation_id:string}>();
   const providerOperation=await policyOperationId('author:'+member.id+':'+command.operationId);
   const pg:WorkPolicyCommand={workId:p.work_id,operationId:providerOperation,expectedEpoch:view.provider.epoch,expectedOwnerRevision:view.provider.policyRevision,action,...(pending?{permitId:pending.operation_id}:{})};
@@ -177,7 +220,7 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/visibility',bodyLimit({maxSize:4
  let state=op.state;
  try{state=await recoverAuthorVisibility(c.env,op,token);}catch(error){if(error instanceof HttpError&&error.status===409)throw error;state='pending';}
  if(state==='pending')return c.json({operation:{operationId:op.operation_id,state}},202);
- if(state==='conflict')return c.json({error:'visibility_operation_conflict',operation:{operationId:op.operation_id,state}},409);
+ if(state==='conflict')return c.json({...await authorConflictResult(c.env,op),operation:{operationId:op.operation_id,state}},409);
  const latest=await readOwnerVisibility(c.env,source,token,await getCard(c.env.DB,source,'harbor'));
  return c.json({workVisibility:latest.workVisibility,operation:{operationId:op.operation_id,state}},200);
 });
@@ -186,9 +229,9 @@ workSharingCommandRoutes.get('/v1/me/cards/:id/visibility/operations/:operationI
  const {source,row}=await ownerCardSource(c.env,c.req.param('id'));const token=c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
  await workPolicyGateway.owner(c.env,'harbor',source,token);
  const op=await findOperation(c.env,member.id,c.req.param('operationId'));if(!op||op.source_role_id!==source)throw new HttpError(404,'visibility_operation_not_found');
- let state=op.state;try{state=await recoverAuthorVisibility(c.env,op);}catch{state='pending';}
+ let state=op.state;try{state=await recoverAuthorVisibility(c.env,op,token,{allowTransmit:false});}catch{state='pending';}
  if(state==='pending')return c.json({operation:{operationId:op.operation_id,state}},202);
- if(state==='conflict')return c.json({error:'visibility_operation_conflict',operation:{operationId:op.operation_id,state}},409);
+ if(state==='conflict')return c.json({...await authorConflictResult(c.env,op),operation:{operationId:op.operation_id,state}},409);
  const latest=await readOwnerVisibility(c.env,source,token,await getCard(c.env.DB,source,'harbor'));
  return c.json({workVisibility:latest.workVisibility,operation:{operationId:op.operation_id,state}},200);
 });

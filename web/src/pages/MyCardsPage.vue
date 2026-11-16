@@ -166,7 +166,7 @@ async function submitReview(expected:WorkVisibility){
   const token=await cardToken(card);if(!valid())return;const saved=await fetchRatingDraft(source,token,provider).catch(()=>null);
   const answers=await askRating(saved);if(!answers||!valid())return;
   const options={title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:(q:string)=>fetchFandomLookup(q)}};
-  let missingPresetTag=false;
+  let missingPresetTag=false,missingCover=false;
   const send=async(value:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
    if(!valid())return;busy.value=key;error.value='';
    try{
@@ -174,7 +174,8 @@ async function submitReview(expected:WorkVisibility){
     if(expected.everPublic)await registerCard(source,token,answers,[],provider,value.text,value.id,expected,value.update);
     else await registerCard(source,token,answers,[],provider,value.text,value.id,expected);
    }catch(e){
-    if(valid()&&e instanceof ApiError&&e.code==='preset_tag_required'){missingPresetTag=true;return;}
+    if(valid()&&e instanceof ApiError&&e.code==='cover_required'){missingCover=true;return;}
+      if(valid()&&e instanceof ApiError&&e.code==='preset_tag_required'){missingPresetTag=true;return;}
     if(valid()&&e instanceof ApiError&&e.code==='review_length_insufficient')error.value=e.message;
     throw e;
    }finally{if(valid())busy.value=null;}
@@ -183,11 +184,13 @@ async function submitReview(expected:WorkVisibility){
    const ok=await confirmPublication({...options,confirmText:t('cardUpdate.update.submit'),cancelText:t('cardUpdate.update.back'),valid,
     publication:{key:`${provider}:${actor}:${source}:${expected.approvalRevision}`,nextMajorUpdateAt:expected.nextMajorUpdateAt,updateCooldownExempt:expected.updateCooldownExempt,
       reloadEligibility:async()=>{const state=await fetchWorkVisibility(source,token,provider);if(!valid()||typeof state.workVisibility?.nextMajorUpdateAt!=='number')throw new Error(t('state.actionFailed'));return {nextMajorUpdateAt:state.workVisibility.nextMajorUpdateAt,updateCooldownExempt:state.workVisibility.updateCooldownExempt};}},onConfirm:send});
-   if(missingPresetTag){if(valid()){await nextTick();await visibilityDialog.value?.showPresetTagMissing();}return;}
+   if(missingCover){if(valid()){await nextTick();await visibilityDialog.value?.showCoverMissing();}return;}
+      if(missingPresetTag){if(valid()){await nextTick();await visibilityDialog.value?.showPresetTagMissing();}return;}
    if(!ok||!valid())return;
   }else{
    const consent=await confirmForm({...options,cancelText:t('cardUpdate.update.back'),valid,onConfirm:send});
-   if(missingPresetTag){if(valid()){await nextTick();await visibilityDialog.value?.showPresetTagMissing();}return;}
+   if(missingCover){if(valid()){await nextTick();await visibilityDialog.value?.showCoverMissing();}return;}
+      if(missingPresetTag){if(valid()){await nextTick();await visibilityDialog.value?.showPresetTagMissing();}return;}
    if(!consent||!valid())return;
   }
   await visibilityDialog.value?.reload();if(valid())await load(true);

@@ -13,7 +13,7 @@ it('rejects a new short submission before sealing or writing a review', async ()
   const seal = vi.spyOn(hostGateway, 'seal').mockImplementation(async (_env, _token, _role, workId, versionId) => ({workId, versionId, hostedRevisionId: 'sealed-short'}));
   vi.spyOn(hostGateway, 'read').mockResolvedValue({...draft, roleId: 'sealed-short'});
   vi.spyOn(upstream, 'readForReview').mockResolvedValue({
-    document: {roleDetailDesc: '字'.repeat(2999)},
+    document: {roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc: '字'.repeat(2999)},
     greetings: {welcome: '開'.repeat(5000)},
     worldbooks: [{entries: [{content: '不計'.repeat(5000), isEnabled: true, isConstant: false}]}],
     hashes: {card: '', welcome: '', worldbook: '', authorAsset: '', content: ''},
@@ -29,7 +29,7 @@ it('returns the exact counts over HTTP and emits the low-cardinality insufficien
   const { SELF } = await import('cloudflare:test');
   const { bearer, identities, rolesOnMainSite, ratingBody } = await import('./helpers');
   identities({author: 10001}); rolesOnMainSite({roleId: 'http-short', authorNumId: 10001});
-  vi.spyOn(upstream, 'readForReview').mockResolvedValue({document: {roleDetailDesc: '字'.repeat(2000)}, worldbooks: [{entries: [{content: '常'.repeat(1000), isConstant: true}]}], hashes: {card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+  vi.spyOn(upstream, 'readForReview').mockResolvedValue({document: {roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc: '字'.repeat(2000)}, greetings:{prologue:["Enter"]}, worldbooks: [{entries: [{content: '常'.repeat(1000), isConstant: true}]}], hashes: {card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
   const response = await SELF.fetch('https://c.test/v1/cards', {method:'POST',headers:{...bearer('author'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'http-short',...ratingBody(false),operationId:crypto.randomUUID()})});
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({error:'review_length_insufficient',detail:{reviewLength:{persona:2000,constantWorldbook:1000,total:3000,required:3001,remaining:1,eligible:false,welcome:0}}});
@@ -41,7 +41,7 @@ it('checks the immutable revision even if the draft passes preflight', async () 
   const memberId=await makeMember(10001), draft=role({roleId:'race-draft',authorNumId:10001});
   vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-race'}));
   vi.spyOn(hostGateway,'read').mockResolvedValue({...draft,roleId:'sealed-race'});
-  vi.spyOn(upstream,'readForReview').mockImplementation(async(_env,_token,id)=>({document:{roleDetailDesc:'字'.repeat(id==='race-draft'?3001:3000)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}}));
+  vi.spyOn(upstream,'readForReview').mockImplementation(async(_env,_token,id)=>({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'字'.repeat(id==='race-draft'?3001:3000)},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}}));
   await expect(submitHosted(env,{memberId,account:10001,role:draft,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()})).rejects.toMatchObject({status:400,message:'review_length_insufficient'});
   expect(await env.DB.prepare('SELECT count(*) AS n FROM review_submissions').first('n')).toBe(0);
   const {opsMetrics}=await import('../src/ops-metrics');
@@ -53,7 +53,8 @@ it('admits interrupted markup in draft and sealed settings and records eligible 
   vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-markup'}));
   vi.spyOn(hostGateway,'read').mockResolvedValue({...draft,roleId:'sealed-markup'});
   vi.spyOn(upstream,'readForReview').mockResolvedValue({
-    document:{roleDetailDesc:'<cfg rule=，\n'+'字'.repeat(2000)+'\n<section>後</section>'},
+    document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'<cfg rule=，\n'+'字'.repeat(2000)+'\n<section>後</section>'},
+    greetings:{prologue:["Enter"]},
     worldbooks:[{entries:[{content:'<cfg rule=，\n'+'常'.repeat(1000)+'\n<section>後</section>',isEnabled:true,isConstant:true}]}],
     hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''},
   });
@@ -71,7 +72,7 @@ it('accepts 3001 mixed persona and constant characters, persists counts, replays
   const memberId=await makeMember(10001), draft=role({roleId:'valid-draft',authorNumId:10001});
   vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
   vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...draft,roleId:id}));
-  const read=vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'a'.repeat(2000)},worldbooks:[{entries:[{content:'字'.repeat(1001),isConstant:true}]}],hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+  const read=vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'a'.repeat(2000)},greetings:{prologue:["Enter"]},worldbooks:[{entries:[{content:'字'.repeat(1001),isConstant:true}]}],hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
   const input={memberId,account:10001,role:draft,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
   const receipt=await submitHosted(env,input);
   const submission=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
@@ -81,7 +82,7 @@ it('accepts 3001 mixed persona and constant characters, persists counts, replays
   await claim(env.DB,submission!.id,'reviewer',Date.now());
   await stamp(env.DB,{submissionId:submission!.id,memberId:'reviewer',verdict:'approve',note:'',now:Date.now()},env);
   const before=await env.DB.prepare("SELECT * FROM cards WHERE source_role_id='valid-draft'").first();
-  read.mockResolvedValue({document:{roleDetailDesc:'短'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+  read.mockResolvedValue({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'短'},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
   const reads=read.mock.calls.length;
   expect(await submitHosted(env,input)).toEqual(receipt);
   expect(read).toHaveBeenCalledTimes(reads);

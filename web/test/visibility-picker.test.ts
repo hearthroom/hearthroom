@@ -117,3 +117,13 @@ it('shows the retained reward deadline and disables both narrower access options
  expect(root.querySelector('[data-reward-retention]')).not.toBeNull();
  expect(root.textContent).toContain('2030');
 });
+
+it('shows an actionable preview reminder without blocking unlisted or private',async()=>{
+ const cover=vi.fn();await mount({previewMissing:true,missing:'Portrait cover',onCover:cover});
+ expect(root.querySelector<HTMLInputElement>('input[value="public"]')!.disabled).toBe(true);
+ const link=root.querySelector<HTMLInputElement>('input[value="unlisted"]')!;
+ expect(link.disabled).toBe(false);
+ const reminder=root.querySelector('[data-cover-reminder]');expect(reminder).not.toBeNull();
+ reminder!.querySelector<HTMLButtonElement>('button')!.click();expect(cover).toHaveBeenCalledOnce();
+ expect(root.querySelector<HTMLInputElement>('input[value="private"]')!.disabled).toBe(false);
+});

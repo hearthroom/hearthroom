@@ -5,6 +5,9 @@ import LibraryPicker from "./LibraryPicker.vue";
 
 const props = defineProps<{
   label: string;
+  requiredLabel?: string;
+  requiredHint?: string;
+  alert?: boolean;
   modelValue: string;
   hint?: string;
   pickLabel: string;
@@ -41,6 +44,7 @@ const selectedAsset = ref("");
 const preview = ref("");
 const failureKind = ref<"retry" | "gone" | "stale" | "invalid" | null>(null);
 const hasPending = computed(() => Boolean(selected.value || selectedAsset.value));
+const alerted = computed(() => props.alert && !props.modelValue && !hasPending.value);
 const canUpload = computed(() => props.ready !== false);
 watch(hasPending, value => emit("pending", value));
 function clearSelection() {
@@ -99,8 +103,8 @@ watch(() => props.importedFile, file => { if (file) pick(file); }, { immediate: 
 </script>
 
 <template>
-  <div class="field">
-    <label>{{ label }}</label>
+  <div class="field" :class="{'is-alert': alerted}">
+    <div class="image-label"><label>{{ label }}</label><span v-if="requiredLabel" class="chip image-required">{{ requiredLabel }}</span></div>
     <div class="shell">
       <!-- 框本身就是選圖的按鈕：點一下開檔、拖一張進來也行；旁邊那顆文字鈕給不知道能點框的人 -->
       <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy, 'frame--empty': !modelValue && !preview }]"
@@ -119,6 +123,7 @@ watch(() => props.importedFile, file => { if (file) pick(file); }, { immediate: 
       </button>
       <div class="side">
         <p v-if="hint" class="subtle">{{ hint }}</p>
+        <p v-if="requiredHint && !modelValue && !hasPending" class="subtle image-required-hint" :role="alerted ? 'alert' : undefined">{{ requiredHint }}</p>
         <template v-if="hasPending && !busy && !error">
           <p v-if="!canUpload" class="notice" role="status">{{ $t("editor.image.waiting") }}</p>
           <p class="subtle">{{ $t("editor.image.waitingNote") }}</p>
@@ -145,6 +150,10 @@ watch(() => props.importedFile, file => { if (file) pick(file); }, { immediate: 
 </template>
 
 <style scoped>
+.image-label { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-2); }
+.image-required { color:var(--text-3); }
+.is-alert .image-required, .is-alert .image-required-hint { color:var(--danger); }
+.is-alert .frame { border:2px dashed var(--danger); }
 /* 框是固定寬的，說明與按鈕擠不下時就掉到框下面；不然 grid 裡的最小內容寬會把整欄撐出手機螢幕 */
 .shell { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-start; }
 .frame {
