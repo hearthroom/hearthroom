@@ -2670,5 +2670,11 @@
   "d0454fc25d6ec": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable.",
   "dd708c84a5ff3": "List platform preset category and play-style tags",
   "d31b4428d6980": "Returns the fixed catalog of preset category and play-style tags grouped by category. Public card publication requires at least one tag whose localized display name in names appears in the card's tags (custom tags do not count; store a display name from names, not the URL key).",
-  "dcc5a8d450282": "Invalid command or preset_tag_required when restoring public access for a version without any preset tag from GET /v1/tags/catalog."
+  "dcc5a8d450282": "Invalid command or preset_tag_required when restoring public access for a version without any preset tag from GET /v1/tags/catalog.",
+  "d0e95ef39a120": "Enabled workshop identities for a conversation",
+  "d7389f885eea2": "Read-only identity metadata for an owned conversation, requiring chat.play. Returns only resident or triggered workshop identities, current versions, author-derived kind and player order, plus the selected opening identity. No authored content, formatting rules, Lorebook entries, names, opening HTML, greetings or suggested prompts are returned. Closed workshops and player-disabled or unavailable items are excluded. Opening identity identifies the opening selected when the conversation began; it is not a release-content read capability.",
+  "dd82cfac61d3c": "Identity-only workshop metadata.",
+  "d986c5d7c89e1": "Published version number; 0 for an unpublished author trial draft.",
+  "d59f37791399a": "Zero-based position in the conversation player ordering. Disabled entries can leave gaps.",
+  "d3a2791d63d89": "Request rejected."
 }
