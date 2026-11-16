@@ -105,7 +105,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
 .visibility-option__description,.visibility-option__reason{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
 .visibility-missing{border:0;background:none;padding:0;font:inherit;font-size:13px;line-height:1.6;text-align:start;cursor:pointer;overflow-wrap:anywhere;min-height:var(--h-lg)}
-.cover-upload{border:0;background:none;padding:0;font:inherit;cursor:pointer;min-height:var(--h-sm)}
+.cover-upload{border:0;background:none;padding:0;color:var(--accent-text);font:inherit;cursor:pointer;min-height:var(--h-sm)}
 .visibility-option__restriction{color:var(--danger);cursor:default;max-width:100%}
 .visibility-option__restriction::before{content:"";flex:none;width:var(--s-1);height:var(--s-1);border-radius:var(--r-pill);background:currentColor}
 .visibility-skeleton{height:72px;border-radius:var(--r-sm);margin-bottom:var(--s-2)}
