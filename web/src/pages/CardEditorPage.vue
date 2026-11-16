@@ -2599,7 +2599,7 @@ async function exportCard(format: "png" | "json") {
 
 <style scoped>
 .visibility-notice-action{background:transparent;border:0;color:var(--accent-text);font:inherit;min-height:var(--h-sm);padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
-.cover-upload{border:0;background:none;padding:0;font:inherit;cursor:pointer;min-height:var(--h-sm)}
+.cover-upload{border:0;background:none;padding:0;color:var(--accent-text);font:inherit;cursor:pointer;min-height:var(--h-sm)}
 /*
    並排欄位對齊（owner 2026-11-10，ui.md §2.0）：同一列的欄位上緣對齊、不被較高的那欄拉伸；
    標籤固定一行；單行輸入框與下拉一律 --h-md；說明、字數、錯誤都在輸入框下方，不補空白佔位。
