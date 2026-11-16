@@ -1,202 +1,179 @@
-## What your agent can do
+## Build a playable first draft
 
-Your agent works from Hearthroom's card-writing skills: it works out what you want (asking only when different readings would produce different cards), writes the card as a folder, pushes it as a trial card, checks and plays it, then tells you what could be better. Each item comes with a prompt you can enter as it is.
+Once your agent is connected through the steps above, you don't need to learn any file formats. Hand it a character idea or an exported card file and you'll get a private playtest link back in a few minutes. Your agent follows the official card-writing skills and only stops to ask when two interpretations would produce genuinely different cards.
 
-### Write a whole card from an idea
+If you are running into a specific snag, jump straight to the matching section:
 
-> "A cultivation card: I'm the disciple the sect expelled, my senior sister helps me in secret, and the tension is that she will be caught the moment she acts. Track my cultivation only. Make it a trial card first and tell me the weakest layer."
+- Only have a vague genre so far: [Ask for directions before drafting when the idea is still loose](#ask-for-directions-before-drafting-when-the-idea-is-still-loose)
+- Drafts come out generic and predictable: [Give the player's situation and the tension, not just a trope](#give-the-players-situation-and-the-tension-not-just-a-trope), [Give one real line of dialogue instead of a pile of adjectives](#give-one-real-line-of-dialogue-instead-of-a-pile-of-adjectives)
+- Adapting canon material, lore notes, or a card you admire: [Hand over source notes and reference cards directly](#hand-over-source-notes-and-reference-cards-directly)
+- Wrong dialect, register, or way of addressing the player: [Spell out language, register, and how the character addresses the player](#spell-out-language-register-and-how-the-character-addresses-the-player)
+- Status bars and choice buttons get in the way of the story: [Say whether you want quiet prose or a stat-driven screen, and name the defaults to skip](#say-whether-you-want-quiet-prose-or-a-stat-driven-screen-and-name-the-defaults-to-skip)
+- Agent stops to ask for permission at every tiny step: [Define what "done" looks like and what it can decide on its own](#define-what-done-looks-like-and-what-it-can-decide-on-its-own)
+- Agent says it tested the card, yet it stalls by turn three: [Have the agent run 10 to 20 turns across models and check its work log](#have-the-agent-run-10-to-20-turns-across-models-and-check-its-work-log)
+- Revisions make the card worse or touch things you liked: [Describe what happened in play instead of prescribing which paragraph to cut](#describe-what-happened-in-play-instead-of-prescribing-which-paragraph-to-cut), [Change one thing per revision](#change-one-thing-per-revision)
+- Asked a question and the agent immediately rewrote your files: [Say up front when you only want advice](#say-up-front-when-you-only-want-advice)
+- Picking up where you left off in a fresh session: [Resume in a new session or alongside the web editor](#resume-in-a-new-session-or-alongside-the-web-editor)
 
-A vague idea is fine. It works out the setting, the characters, the relationship and the opening with you before it writes.
+### Ask for directions before drafting when the idea is still loose
 
-### Fix a card you already have
+When all you have is a setting ("post-apocalyptic", "cultivation", "noir"), saying "surprise me" hands every creative choice to the model and gets you the most average version of the genre. Asking for a finished card right away also wastes a full draft if you don't like the angle. Have the agent pitch a few concrete setups before creating any files:
 
-> "Import this SillyTavern card, tell me why it runs out of things to say after three turns, and fix it."
+> I want to make a post-apocalyptic card, not sure what relationship dynamic to play yet. Don't build the card yet. Pitch me three distinct angles, one or two sentences each on who I am and what's unresolved between us, and let me pick one first.
 
-SillyTavern PNG, JSON and CHARX cards and MMD three-file sets import directly.
+### Give the player's situation and the tension, not just a trope
 
-### Build status bars, themes or a full custom page
+"Write a good maid card" only names a costume, so the agent falls back on stock setups and stock openings. What makes a card hold up past the greeting is who the player is right now and what unresolved problem sits between the two of you. Before writing files, the agent states how this trope usually plays out and how your card will depart from it. If that angle feels off, redirect it right there before a full draft is written:
 
-> "Add a status bar that shows affection and location, and render the opening for me."
+> Build a manor housekeeper card. I'm a distant relative who just inherited an old country house, and she's the head housekeeper left behind by the late owner, the only person who knows the ugly things buried on the estate. The more she trusts me, the more she hands over what she's hiding, except every secret she gives up leaves her one fewer reason to stay. Before you write anything, tell me how maid and housekeeper cards usually go and how you plan to make this one play differently.
 
-When the screen matters it uses the toolkit's own sandbox kit (a status panel drawn from a block the model writes, choice buttons, a theme), checks the folder with `hearthroom card check`, and looks at the result with `hearthroom card preview` and `card render`. With no rule at all, the page itself draws a reply's closing [status] and [choices] blocks as a panel and buttons; the kit is for a look, theme or pinned bar of your own.
+### Give one real line of dialogue instead of a pile of adjectives
 
-The chat page itself is open source (`hearthroom/moonstage`, the `stage` submodule of this site): the skills' sandbox contract is generated from its `src/sandbox/`, and the facts sheet names the files to read when something is undocumented.
+Words like "natural dialogue", "sharp-tongued", or "aloof but caring" mean ten different voices to ten different people. One actual line the character would say pins down sentence length, formality, and how much she leaves unsaid far better than adjectives do. One or two sample lines are plenty; if you give three or more, the agent starts cloning sentence shapes instead of capturing voice:
 
-### Playtest and find problems
+> Anchor her voice on this line: "The key to the east landing, sir? I doubt you have any need of it tonight." Polite, clipped, never volunteers an explanation, stops talking as soon as she's made her point. Draft three sample lines in different situations for me to check before you write the rest of the card.
 
-> "Play ten turns with the second opening and tell me at which turn a player would lose interest, and why."
+### Hand over source notes and reference cards directly
 
-### Check before you publish
+Canon details, your own worldbuilding notes, and cards whose pacing you love aren't things an agent should reconstruct from memory. Asking for "someone like that quiet senior from that anime" invites guesswork. Drop the notes file into the prompt and state what is locked versus what you are changing. If you attach another card as a reference, name the specific quality you want (opening rhythm, dialogue density) so the agent doesn't copy its setting too:
 
-> "Check whether this card is ready for review and list what still needs fixing."
+> I'm writing a Fern card from Frieren, and my character notes are in `notes/fern.md`. Keep her calling Stark "Mister Stark" and her habit of pouting in silence when she's mad, and set it in the days right after the First-Class Mage Exam wraps up. Also look at `sample.json` on my desktop. I like how its opening drops a small immediate problem in the player's lap right away, so borrow that pacing and ignore its setting.
 
-## How your agent writes a card
+### Spell out language, register, and how the character addresses the player
 
-1. **A folder of files**: long text in Markdown files, and the Lorebook, rules and images in their own files. You can open and edit them too.
-2. **A trial card**: only you can see it. It expires three days after the last update, and you can have five at a time.
-3. **Checks and renders**: lengths and content are checked against the platform's rules, and the opening is rendered with the rules applied to confirm the status bar and layout.
-4. **A real turn**: it chats with the character once to see whether the replies hold up and a player can keep going.
-5. **Revisions**: it changes what didn't work, then pushes and plays again until you're happy.
-6. **Keeping it**: once you're happy it saves a private card that appears in My cards. Submitting for review and publishing stay with you on the site.
+Your agent won't guess regional spelling, formality, or whether the player character already has a name unless you tell it. Putting those rules in the first prompt saves a round of cleanup across every file later:
 
-## Prompting guide
+> Write the whole card in natural American English, casual modern phrasing, no stiff purple prose. Have her call me "you" rather than a baked-in nickname, and leave the player's name open to the player's own persona instead of inventing one in the card.
 
-Your agent works from the official skills, so you do not need to explain how a card is written. What it needs from you is what the skills cannot contain: the player's situation, the character's voice, the screen you want, what counts as done, and what the agent may decide on its own. This section is organised by situation. Each part explains why the agent behaves as it does, what to write, and gives a prompt you can copy and adapt. Start with the section that matches what you see:
+### Import and fix an existing card
 
-- The card reads like every other card: [Give the situation and the tension, not only a genre](#give-the-situation-and-the-tension-not-only-a-genre), [Use one line of dialogue instead of adjectives](#use-one-line-of-dialogue-instead-of-adjectives)
-- The status bar and buttons overshadow the story: [Say which kind of screen you want and which defaults you do not](#say-which-kind-of-screen-you-want-and-which-defaults-you-do-not)
-- The agent asks often and waits for confirmation at every step: [State what counts as done and what the agent may decide](#state-what-counts-as-done-and-what-the-agent-may-decide)
-- The idea is not clear yet: [Ask for directions before a card](#ask-for-directions-before-a-card)
-- You have a source, setting notes or a card you like: [Hand over the material](#hand-over-the-material)
-- The language, register or forms of address are wrong: [State the language and forms of address](#state-the-language-and-forms-of-address)
-- The agent changed content you did not ask about: [One change per version](#one-change-per-version)
-- The agent reports a test, but the card runs dry after three turns: [Ask for a full playtest and read the working record](#ask-for-a-full-playtest-and-read-the-working-record)
-- A change made the card worse: [Report what you saw, not the edit](#report-what-you-saw-not-the-edit)
-- You asked a question and the agent made changes: [Say when you only want an opinion](#say-when-you-only-want-an-opinion)
-- A new conversation should continue earlier work: [Continue earlier work](#continue-earlier-work)
+If you already have a SillyTavern card (PNG, JSON, or CHARX), an MMD three-file set, or an AI Fengyue or RiliAI export, hand the file path to your agent. It imports the card, flags any source-specific fields that need attention, and can diagnose why an older card runs out of steam after a few turns:
 
-### Give the situation and the tension, not only a genre
+> Import `~/Downloads/silverwolf.png` for me. Right now conversations with her stall out after three or four turns and she just loops back to asking if I want to play arcade games. Figure out whether the definition or the greeting is boxing her in, fix it, and push a trial card so I can test it.
 
-A prompt such as "write me a fun maid card" gives the agent a genre and nothing else, so it writes the most common card in that genre: the usual setting, the usual relationship, the usual opening. The skills guarantee the card's structure; they cannot decide what makes this card worth playing. That comes from two things: who the player is and what they face (the situation), and what is left unresolved (the tension). Before writing, the agent states how the genre is usually written and how this card will differ; object at that step rather than after the card is written.
+### What the agent runs behind the scenes
 
-Write something like:
+Once you give it a brief, the agent works through six steps between your machine and Hearthroom:
 
-```text
-A maid card. The player has just inherited an old house; she is the housekeeper the previous owner left behind and knows every secret the house keeps. Tension: she hands those secrets over one at a time as the player earns her trust, and each one she gives up is one less reason for her to stay. First tell me how you intend to differ from the usual maid card, then start.
-```
+1. **Writes a local folder**: long prose lives in Markdown files while the Lorebook, display rules, and images sit in separate files you can open or edit yourself anytime.
+2. **Pushes to a private trial card**: visible only to you, expiring 3 days after its last push, up to 5 active trial cards per account (you can evict the oldest when full).
+3. **Validates and renders**: checks field character limits and syntax against platform rules, then runs your display rules over the opening to verify panels and markup.
+4. **Playtests**: sends real turns to make sure the character stays in voice and gives the player something to push against.
+5. **Iterates**: revises the files from those findings, pushes again, and re-tests.
+6. **Saves as an owned card**: only when you ask to keep it does the card move into **My cards**; submitting for review and going public remain your call.
 
-The last sentence does the work: it makes the agent state the usual version first, so you can change direction before anything is written.
+## Go deeper with Lorebooks, variables, sandbox screens, and art
 
-### Use one line of dialogue instead of adjectives
+Once the basic conversation feels right, you can ask your agent to layer in Hearthroom's native features for long-form memory, exact stat tracking, custom visual-novel layouts, or matching character art.
 
-Descriptions such as "natural dialogue", "with personality" or "tsundere" mean different things to different people, and the agent can only apply the most common reading. One line of dialogue in the voice you want defines the register, sentence length, forms of address and how much the character withholds, more precisely than any adjective.
+### Pack deep lore into a Lorebook without early spoilers
 
-Write something like:
+Stuffing seven suspects, a town map, and faction rules into the character definition eats context on every single turn. Ask your agent to split background knowledge into a **Lorebook**: Hearthroom matches keywords and also runs **semantic recall** by default to pull relevant entries into the turn within budget. For twists or late-game secrets that shouldn't surface just because a topic is vaguely related, tell the agent to turn semantic recall off on those entries so they fire strictly on exact keywords:
 
-```text
-Her voice follows this line: "The key to that door, sir, I believe you do not need yet." Short sentences, formal address, no explanations, and she stops when she has said it. Write three lines in this voice for three different moments and show me before writing the card.
-```
+> The seven suspect profiles and the manor floor plan are getting way too long, so split them into a Lorebook. Turn off semantic recall on the butler's real cause of death and the cellar passage so the AI only sees them when the player actually mentions the pocket watch or searches the basement, with no accidental hints on turn two.
 
-One sample line is enough; with three or more, the agent starts copying sentence shapes instead of the voice.
+### Say whether you want quiet prose or a stat-driven screen, and name the defaults to skip
 
-### Say which kind of screen you want and which defaults you do not
+Cards generally fall into two shapes: story-first cards where clean reading comes first, and system-driven RPG, stat-raising, or survival cards where stats and choices are the game. Left unspecified, an agent will often reach for popular defaults such as an affection meter, two to four choice buttons under every reply, or moods turned into numbers. Saying "don't make it feel robotic" doesn't tell it which piece to cut; naming the exact defaults to skip does. Keep in mind too that Hearthroom natively renders trailing `[status]` and `[choices]` blocks as panels and buttons even with zero display rules, so whether you want UI panels and whether you need custom regex rules are separate choices.
 
-A card's screen is one of two kinds: the story leads and the screen assists, or the play is bound to values and the screen is central. Without a statement, the agent applies the genre's common pattern: an affection meter, two to four buttons after every reply, feelings turned into numbers. "Not too AI-like" does not map to any specific pattern, so the agent cannot tell which one you mean; naming the defaults you do not want is what works. Note that even without display rules, the platform draws the [status] and [choices] blocks at the end of a reply as a panel and buttons; whether you want a screen and whether you need rules are separate questions.
+For a quiet story or companion card, say it plainly:
 
-Write something like:
+> This is a slice-of-life companion card, and I want the focus on the conversation so it reads cleanly even as plain text. Skip affection bars, skip choice buttons at the end of replies, and don't turn her mood into a percentage. Just keep a single quiet line at the bottom of each reply with where she is and the time of night.
 
-```text
-This is a companion card. The story leads, and it must remain readable with the screen off. No affection meter, no option buttons after every reply, no feelings as numbers. Keep one line at the end of each reply: where she is and what time it is.
-```
+For a survival, management, or RPG card, every stat on screen should have a player action that can move it. When numbers like gold, rations, or inventory have to stay exact across long runs, ask the agent to use native **card variables**, which update automatically each turn and roll back cleanly whenever a player regenerates or rewinds a message:
 
-For a card whose play is bound to values, state the opposite:
+> Set up card variables for this island survival card. Only track fresh water, rations, and stamina, and make sure every one of those three has player actions that raise or drain it, with no decorative stats the player can't affect. Put two or three action choices at the end of each turn and keep the status panel compact.
 
-```text
-This is a survival card and the screen is central. Show only three values: water level, food, fuel, each of which the player can change by an action. End every turn with two to four options. Do not show any value the player cannot change.
-```
+### Custom sandbox screens, opening pages, and cross-player features
 
-### State what counts as done and what the agent may decide
+When a card needs full-page styling, light and dark themes, or a pinned bar, new cards run inside Hearthroom's isolated sandbox chat page by default. Your agent builds interfaces with the skill's built-in sandbox kit (turning model status blocks into panels, choice buttons, drawers, pinned bars, and dark/light themes) and validates rules and markers locally with `hearthroom card check`. It then runs `hearthroom card preview` and `card render` against the site's real sandbox shell to capture dark- and light-mode screenshots at phone and desktop widths, checking font sizes and overflow on its own. The chat page itself is open source (`hearthroom/moonstage`, the site's `stage` submodule): the sandbox contract is generated straight from `src/sandbox/`, and the skill's reference docs point the agent to the exact source files for edge cases not covered in the guide.
 
-The agent stops to ask not because the task is hard but because it does not know what finished looks like or which actions need no confirmation. "Show me the setting first, then the characters, then the opening" makes it stop at every step. State the completion criteria and what it may decide on its own, including a credit limit, and leave the rest to it.
+Beyond themes and status panels, you can ask your agent for an **opening page** at the top of every new chat (like a title screen where players pick a background or route), multi-slot save/load menus, **shared polls and co-op counters** across everyone playing the card, or **context-carrying share links** so a friend opening your link picks up from the choice you made:
 
-Write something like:
+> Give this underground-idol management card a dark neon look. Put an opening page at the top of new chats where the player picks between starting as a rookie talent scout or a washed-up former producer. Also wire up a shared support counter across all players, and show me phone and desktop preview screenshots in both dark and light mode when it's ready.
 
-```text
-Done means: pushed as a trial card, played by you for ten turns, and the weakest layer reported to me. Pushing and editing the trial card need no confirmation. Spend up to 50 credits at your discretion; ask before going over. Ask me only about submitting for review, publishing, or a choice that would produce a completely different card.
-```
+### Generate banners and expression sprites from one reference portrait
 
-This also makes the agent less likely to ask about ambiguous requests; if you want more check-ins, remove the last sentence.
+If you have a single portrait you love and still need a widescreen banner or expression variants, your agent can call Hearthroom's image models and pass that portrait as a reference image so the face, hair, and outfit stay consistent across new scenes. Image generation spends purchased credits (blocked prompts and failed runs cost nothing), and your agent checks model pricing and asks before spending:
 
-### Ask for directions before a card
+> Use the current portrait as a reference image to generate a 16:9 rainy neon street banner, plus two waist-up expression variants (one smirking, one looking away blushing) and wire them into the card's assets. Check model prices and tell me the purchased-credit cost before you run them.
 
-When the idea is not clear yet, "use your judgement" hands every decision over, and what comes back is usually the genre's most common version; asking for a finished card before you have seen a direction wastes a whole draft. Ask the agent for a few directions, each in one sentence on what the player does and where the tension is, and choose one.
+## Let the agent finish the job without stopping at every step
 
-Write something like:
+When an agent pauses after every single file to ask "looks good?", it usually isn't stuck. Most of the time, it just doesn't know what counts as finished or how many credits it is allowed to spend testing.
 
-```text
-Post-apocalyptic. Give me three directions first, one sentence each on what the player does and where the tension is. Do not write the card. I will pick one, then you start.
-```
+### Define what "done" looks like and what it can decide on its own
 
-### Hand over the material
+Prompting "show me the setting first, then the persona, then the greeting" trains the agent to halt after every paragraph. To let it run end to end, tell it the finish line, give it a small credit ceiling for playtesting, and name the few decisions that still require your sign-off:
 
-The source of a fan work, your own setting notes and cards you like are information the agent cannot produce. "Like that cold senior girl from that anime" asks it to rebuild the character from impressions, and the result drifts; hand over the material and say what must be kept and what may change. When you attach a card you like, say which part you want (the pacing, the opening, the density of dialogue); otherwise the agent imitates the subject as well.
+> Take this all the way to a pushed trial card, playtest ten turns yourself, and come back with what still feels stiff. Don't stop to ask before editing files or re-pushing the trial card, and you can spend up to 50 credits on playtest turns without asking first. Only check with me before saving an owned card, submitting for review, or making a change that turns it into a different story.
 
-Write something like:
+If you prefer tight back-and-forth check-ins instead, leave that last sentence out.
 
-```text
-The source is [character] from [title]; the setting notes follow. Must keep: how she addresses her juniors, her habit of acting first. May change: move the timeline to the first year after graduation. A card I like is attached; what I want from it is the pacing of its opening, not its subject.
-```
+### Five quick checks before sending a big prompt
 
-### State the language and forms of address
+Before kicking off a new card or a revision pass, scan your message for five things:
 
-The card's language, its register and how the character addresses the player are not something the agent knows on its own; "write it in English" says nothing about spelling, formality or names. State them at the start and save field-by-field corrections later.
+- For a new card, did you include who the player is and what situation they're walking into, rather than just a genre label?
+- For voice, did you give one or two actual lines of dialogue instead of abstract personality adjectives?
+- Did you say whether the screen should stay clean text or carry stats and choice buttons, and name any default panels to leave out?
+- Did you state what counts as done and what credit budget the agent can use for testing?
+- If you're revising an existing draft, does this prompt focus on fixing one problem at a time?
 
-Write something like:
+## Playtest, fix pacing issues, and pick up across sessions
 
-```text
-The whole card in English, British spelling. The character addresses the player by first name, never "sir" or "ma'am". The player's name is theirs to fill in; do not preset one.
-```
+Two quick turns only prove the greeting renders. Real cracks usually show up around turn ten, when a character warms up way too fast, starts repeating phrases, or loses track of the premise.
 
-### One change per version
+### Have the agent run 10 to 20 turns across models and check its work log
 
-"The opening is too long, she warms up too fast, the world is thin, and change her name" makes the agent change several things at once; afterwards it is not possible to tell which change helped, and content you did not mention tends to move too. Specify one item per version and ask the agent to list the rest without touching it.
+Asking "did you test it?" almost always gets a "yes", even if the agent only sent two lines. Ask it to test a specific alternate opening across both a cheaper lightweight model (where weak cards break first) and a frontier model for 10 to 20 turns. Real turns spend credits, so it will quote the cost first. Afterward, alongside its summary, check `README.md` inside the card folder: that is the agent's local work log recording what changed in each revision, what approaches were ruled out, and the transcript evidence it saw (it is never uploaded to the server):
 
-Write something like:
+> Run 15 fresh turns on the second alternate opening, once on a budget model and once on a top-tier model. Tell me around which turn the conversation starts looping or runs out of momentum and why, log the findings in `README.md`, and tell me the estimated credit cost before you start.
 
-```text
-This version addresses only "she warms up too fast". List the other problems you notice and leave them unchanged. When done, tell me which files you modified and what changed in each.
-```
+### Describe what happened in play instead of prescribing which paragraph to cut
 
-### Ask for a full playtest and read the working record
+Telling the agent "shorten paragraph two of the definition" guesses at the fix from the outside; what looks like a persona bug is just as often caused by the greeting's tone, an example turn, or a reply-format rule. Report what you saw as a player, ask it to find the cause, and have it replay the same messages against the previous version so you can compare both replies side by side:
 
-"Did you test it?" is usually answered with "yes", and two turns played by the agent only confirm that the opening works; whether a card holds up shows after ten turns, and weaker models fail first. A full playtest consumes credits, and the agent states the cost in advance. Afterwards, read the `README.md` in the card folder as well as the summary: it is the agent's working record, with the decisions, rejected directions and evidence for each version.
+> I just played three turns and she was already confessing her feelings. I want a much slower burn where we're still wary of each other ten turns in. Track down what's making her fold so fast, fix it, and run the exact three lines I sent so I can compare the new replies against the old ones.
 
-Write something like:
+### Change one thing per revision
 
-```text
-Play 10–20 turns on a weaker model and on a stronger one, each in a fresh conversation. Report at which turn the card stops holding up and why, and record the results in README.md. State the credit cost before starting.
-```
+Bundling "the greeting is too long, she warms up too fast, the lore feels thin, and rename the sidekick" makes the agent touch every file at once. When something breaks, neither of you can tell which edit caused it, and good lines get collateral damage. Fix one issue per pass and have it list everything else without touching the files yet:
 
-### Report what you saw, not the edit
+> For this pass, only fix how fast she warms up to the player. List any other issues you spot without editing files for them yet, and tell me which files you changed and what you changed in each one when you're done.
 
-"Shorten the second paragraph of the definition" prescribes the edit. You see the effect in play; the agent sees the structure of the whole card, and the cause is often not in the paragraph you suspect. Describe what you observed, ask it to find the cause, and ask for a comparison with the previous version using the same conversation rather than a report that the issue is fixed.
+### Say up front when you only want advice
 
-Write something like:
+"Should this card be a branching mystery instead?" looks like a question, but agents often treat open-ended questions as instructions to start rewriting. Lead with "don't edit any files yet" whenever you just want trade-offs:
 
-```text
-By turn three she is already making advances; I want this much slower. Find the cause before changing anything, then compare the revised version with the previous one using the same conversation.
-```
+> Don't edit any files yet. Would this card hold up better as a slow-burn single route or split into three separate chapters? Walk me through the trade-offs of each and wait for my call.
 
-### Say when you only want an opinion
+### Resume in a new session or alongside the web editor
 
-"Should this card take the story route?" looks like a question, but the agent cannot tell whether you are asking or requesting a change; when the two are combined it chooses to act. When you only want an opinion, say so explicitly.
+A fresh terminal session has no memory of yesterday's chat, so "keep working on that card" forces guesswork. Point the agent at the card folder's `README.md` first so it picks up the exact state and to-do list:
 
-Write something like:
+> Pick up `cards/night-diner`. Read `README.md` in that folder first, tell me where the last pass stopped and what's still open, then wait for my go-ahead.
 
-```text
-Do not change any file yet. What are the trade-offs of the story route versus the companion route for this card? Explain, then wait for my decision.
-```
+If you tweaked prose or Lorebook entries in the web editor in the meantime, tell the agent to pull the latest remote version before making local edits; if you're actively editing persona text in the browser while asking the agent to add a few Lorebook entries, it can use single-entry Lorebook commands that stop on version conflicts instead of overwriting your browser saves.
 
-### Continue earlier work
+## Keep the card, share a private link, or publish
 
-In a new conversation the agent does not remember the last one; "keep working on that card" makes it guess from scratch. The `README.md` in the card folder is its working record; ask it to read that before changing anything.
+Trial cards expire automatically 3 days after their last push. Once a card is worth keeping, sharing with friends, or publishing for creator rebates and leaderboard prizes, ask your agent to save it as an owned card or run a pre-review check.
 
-Write something like:
+### Save as an owned card and pick visibility
 
-```text
-Continue the card in cards/maid. Read the folder's README.md first, tell me where the last version stopped and what is still open, then start.
-```
+Ask your agent to save the trial card as an owned card and it moves into **My cards** with no expiration. New owned cards default to **Anyone with the link**: they stay out of the **Board**, rankings, and search and don't require review, while anyone you hand the link to can play your latest saved changes right away. If you want the card strictly for yourself, ask the agent to set visibility to **Only me**.
 
-### A check before you send
+### Check review readiness before going public
 
-- Does the prompt say who the player is and what they face, or only name a genre?
-- Is the character's voice given as a sample line, or only as adjectives?
-- Does it say which kind of screen you want and which defaults you do not?
-- Does it state what counts as done and what the agent may decide, including a credit limit?
-- Does this prompt ask for one thing?
+Switching a card to **Public** lists it on the **Board** and in search, earns credit rebates when other players chat on it, and enters daily, weekly, and monthly leaderboard prize pools. To qualify, a card needs three things: at least one official preset category or play-style tag, more than **3,000 counted characters** combined across **Character definition** and enabled **Always on** Lorebook entries, and a completed content-rating questionnaire. Counted characters require at least 3,001 Unicode letters and digits (counted per character rather than per word, excluding spaces, punctuation, openings, example dialogue, standing reminders, and non-always-on Lorebook entries). Have your agent audit everything before submitting:
 
-## Credits and boundaries
+> Don't submit yet. Check whether this card is ready for public review right now, including the counted character total, preset tags, and any missing fields, and list anything left to fix.
 
-- Drafting, pushing, checking and rendering cost no credits.
-- A playtest turn spends your credits, and your agent asks before it starts.
-- It only touches trial cards and your own private cards, and never submits or publishes for you.
+After a card is public, later pushes update your draft (which you can test via the draft play link) while players stay on the approved version until you submit an update and it passes review. Updates publish silently by default; followers and bookmarkers are only notified when you ask to send an update notice with a changelog (at most once every 3 days per card).
+
+### Credits and boundaries
+
+- Drafting, editing files, local rule checks, offline sandbox previews, opening renders, and pushing cards spend zero platform credits.
+- Only real conversation turns (`play -m` / `play --continue`) and image generation (`media generate`, paid from purchased credits only) spend credits; both require an explicit spend flag, and your agent always asks before spending.
+- Your agent only edits trial cards and cards you ask it to work on. It never submits for review, sends update notifications, or makes a card public unless you ask.

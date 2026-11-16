@@ -122,9 +122,10 @@ describe('the guide page', () => {
   it('shows how to direct the agent under the agent path, not the field reference', async () => {
     await mount(GuidePage, 'en');
     const headings = [...root.querySelectorAll('h2')].map(h => h.textContent);
-    expect(headings).toContain('What your agent can do');
-    expect(headings).toContain('Credits and boundaries');
-    expect(headings).not.toContain('Card fields');
+    expect(headings).toContain('Build a playable first draft');
+    expect(headings).toContain('Keep the card, share a private link, or publish');
+    expect([...root.querySelectorAll('h3')].map(h => h.textContent)).toContain('Credits and boundaries');
+    expect(headings).not.toContain('What each editor section does');
   });
 
   it('switches to the web editor with its own next steps and the field reference', async () => {
@@ -136,8 +137,8 @@ describe('the guide page', () => {
     const web = root.querySelector('[role="tabpanel"]')!;
     expect(web.querySelector('a[href="/en/create"]')).not.toBeNull();
     const headings = [...root.querySelectorAll('h2')].map(h => h.textContent);
-    expect(headings).toContain('Card fields');
-    expect(headings).not.toContain('What your agent can do');
+    expect(headings).toContain('What each editor section does');
+    expect(headings).not.toContain('Build a playable first draft');
     // 「各欄位怎麼寫」指向參考的第一節，不論語言都要找得到
     const field = web.querySelector<HTMLAnchorElement>('a[href^="#"]')!;
     expect(root.querySelector(field.getAttribute('href')!)).not.toBeNull();
@@ -149,7 +150,7 @@ describe('the guide page', () => {
     await mount(GuidePage, 'en', {}, '?way=web');
     const tabs = [...root.querySelectorAll('[role="tab"]')];
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('true');
-    expect([...root.querySelectorAll('h2')].map(h => h.textContent)).toContain('Card fields');
+    expect([...root.querySelectorAll('h2')].map(h => h.textContent)).toContain('What each editor section does');
   });
 
   it('lists the start section first in the contents, and every entry resolves, on both paths', async () => {
@@ -159,7 +160,11 @@ describe('the guide page', () => {
         const links = [...root.querySelectorAll<HTMLAnchorElement>('.toc__link')];
         expect(links[0]!.getAttribute('href'), locale).toBe('#start');
         expect(links.length, `${locale}${search}`).toBeGreaterThan(3);
-        for (const a of links) expect(root.querySelector(a.getAttribute('href')!), `${locale}${search} ${a.textContent}`).not.toBeNull();
+        for (const a of links) {
+          const id = decodeURIComponent(a.getAttribute('href')!.slice(1));
+          // HTML fragments can start with a digit; they are not CSS selectors.
+          expect([...root.querySelectorAll('[id]')].some(node => node.id === id), `${locale}${search} ${a.textContent}`).toBe(true);
+        }
         app!.unmount(); root.remove(); app = undefined;
       }
     }
