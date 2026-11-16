@@ -1,6 +1,8 @@
 package club.hearthroom.app;
 
 import java.net.URI;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 final class WebPolicy {
@@ -51,5 +53,29 @@ final class WebPolicy {
         if (!url.startsWith("blob:")) return false;
         String inner = url.substring(5);
         return isHttps(inner) && URI.create(source).getHost().equals(URI.create(inner).getHost());
+    }
+    static final String ALIPAY = "com.eg.android.AlipayGphone";
+    static final String WECHAT = "com.tencent.mm";
+    private static final Map<String, String> PAYMENT_SCHEMES = Map.of("alipays", ALIPAY, "alipay", ALIPAY, "weixin", WECHAT);
+    /**
+     * 付款頁要把付款交給支付寶或微信 App 時（alipays://、weixin://，或指名這兩個 App 的 intent://），回那個 App 的套件名。
+     * 只認這兩個 App；指定 component、selector 或別的套件一律回 null，WebView 照舊擋下。
+     */
+    static String paymentApp(String url) {
+        if (url == null) return null;
+        int colon = url.indexOf(':');
+        if (colon <= 0) return null;
+        String scheme = url.substring(0, colon).toLowerCase(Locale.ROOT);
+        if (PAYMENT_SCHEMES.containsKey(scheme)) return PAYMENT_SCHEMES.get(scheme);
+        if (!"intent".equals(scheme)) return null;
+        int start = url.indexOf("#Intent;");
+        if (start < 0 || !url.endsWith(";end")) return null;
+        String pkg = null, target = null;
+        for (String part : url.substring(start + 8, url.length() - 4).split(";")) {
+            if (part.startsWith("package=")) pkg = part.substring(8);
+            else if (part.startsWith("scheme=")) target = part.substring(7).toLowerCase(Locale.ROOT);
+            else if (part.startsWith("component=") || part.equals("SEL") || part.startsWith("selector")) return null;
+        }
+        return pkg != null && target != null && pkg.equals(PAYMENT_SCHEMES.get(target)) ? pkg : null;
     }
 }

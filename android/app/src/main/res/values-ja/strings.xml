@@ -25,6 +25,7 @@
     <string name="web_closed">ページが予期せず閉じました。もう一度開いてください。</string>
     <string name="web_open_browser">ブラウザーで開く</string>
     <string name="web_no_browser">利用できるブラウザーがありません。対応ブラウザーをインストールするか、システムを更新してください。</string>
+    <string name="web_payment_app_missing">この支払いアプリがインストールされていません。別の支払い方法を選んでください。</string>
     <string name="web_file_failed">ファイルを保存または選択できませんでした。再試行してください。ダウンロードは 32 MB 以下にしてください。</string>
     <string name="web_saved">ファイルを保存しました。</string>
     <string name="shortcut_webview">アプリ内で開く</string>
