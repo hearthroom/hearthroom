@@ -386,6 +386,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
 .cmt__item { display: flex; gap: var(--s-3); padding: var(--s-4) 0; box-shadow: 0 -1px 0 var(--line); }
 .cmt__item:first-child { box-shadow: none; padding-top: 0; }
 .cmt__item.cmt__item--pinned { padding: var(--s-4); border-radius: var(--r-sm); background: var(--surface-2); box-shadow: none; margin-bottom: var(--s-2); }
+.cmt__item--pinned .cmt__face { background: var(--surface); }
 .cmt__badge--author-pin { display: inline-flex; align-items: center; gap: var(--s-1); white-space: nowrap; }
 .cmt__badge--author-pin svg { width: 11px; height: 11px; flex: none; }
 .cmt__body { flex: 1; min-width: 0; display: grid; gap: 4px; }
