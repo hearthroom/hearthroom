@@ -94,10 +94,10 @@ describe("風月匯出檔：網頁這邊的落點", () => {
   });
 
   it("超過本站上限的欄位整段保留並列出，不截斷", () => {
-    const long = { ...sample, posttxt: "長".repeat(600) };
+    const long = { ...sample, posttxt: "長".repeat(2001) };
     const result = fengyueToDraft(long, { language: "zh-Hans" });
-    expect([...result.draft.jailbreak].length).toBe(600);
-    expect(result.dropped).toContainEqual({ key: "import.fengyue.tooLong.custom", params: { n: 600, max: 500 } });
+    expect([...result.draft.jailbreak].length).toBe(2001);
+    expect(result.dropped).toContainEqual({ key: "import.fengyue.tooLong.custom", params: { n: 2001, max: 2000 } });
   });
 
   it("世界書條目太長時拆開，不丟字", () => {

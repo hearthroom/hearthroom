@@ -275,14 +275,14 @@ export function playerSpeaksFirst(draft: Pick<RoleDraft, "prologue">, extras: { 
 /**
  * 欄位上限。這份只是「還沒問過上游時的預設」——真正的上限由 GET /role/validate 的
  * tokenBudget.limits 回來覆蓋。新卡還沒有 roleId、問不到上游，所以這張表要跟上游的
- * 語區表一致（server LimitsForRoleLanguage）：英文卡預算大得多，中文卡的額外指示只有 500。
- * 寫成一個數會在建卡頁顯示 4000、存成卡後變 500 這種前後矛盾。
+ * 語區表一致（Provider internal/service/role/limits.go）：非英文卡的額外指示／回覆格式
+ * 為 2000／4000，英文卡為 4000／8000；不要沿用舊 LunaTalk 的欄位上限。
  */
 export function fallbackLimits(language = ""): Record<string, number> {
   const lang = language.toLowerCase();
-  const base = { roleName: 60, roleOutputContract: 2000 };
-  if (lang.startsWith("en")) return { ...base, roleDesc: 2500, roleReadme: 40000, roleDetailDesc: 50000, roleWelcome: 10000, jailbreak: 1500 };
-  return { ...base, roleDesc: 500, roleReadme: 20000, roleDetailDesc: 10000, roleWelcome: 8000, jailbreak: lang.startsWith("zh") ? 500 : 1500 };
+  const base = { roleName: 60 };
+  if (lang.startsWith("en")) return { ...base, roleDesc: 2500, roleReadme: 40000, roleDetailDesc: 50000, roleWelcome: 10000, jailbreak: 4000, roleOutputContract: 8000 };
+  return { ...base, roleDesc: 500, roleReadme: 20000, roleDetailDesc: 10000, roleWelcome: 8000, jailbreak: 2000, roleOutputContract: 4000 };
 }
 
 export interface FieldLimits {

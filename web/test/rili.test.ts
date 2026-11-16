@@ -133,14 +133,14 @@ describe("日里匯出檔：網頁落點與變數驗證", () => {
     const result = riliToDraft(
       {
         ...sampleA,
-        prompt: { ...(sampleA.prompt as Record<string, unknown>), rearPrompt: "長".repeat(600) },
+        prompt: { ...(sampleA.prompt as Record<string, unknown>), rearPrompt: "長".repeat(2001) },
       },
       { language: "zh-Hans" },
     );
-    expect([...result.draft.jailbreak].length).toBe(600);
+    expect([...result.draft.jailbreak].length).toBe(2001);
     expect(result.dropped).toContainEqual({
       key: "import.fengyue.tooLong.custom",
-      params: { n: 600, max: 500 },
+      params: { n: 2001, max: 2000 },
       level: "block",
     });
   });
@@ -373,7 +373,7 @@ describe("匯入面板 UI（ui.md D1–D7）", () => {
   it("擋存檔項目（noWelcome / memoryInvalid / tooLong）獨立渲染於紅框 alert，不重複進 dropped 清單", async () => {
     const { el, done } = await dropInTab(2, {
       ...all[2].input,
-      prompt: { ...(all[2].input.prompt as Record<string, unknown>), rearPrompt: "超".repeat(600) },
+      prompt: { ...(all[2].input.prompt as Record<string, unknown>), rearPrompt: "超".repeat(2001) },
       enableMemorySchema: true,
       memorySchema: "{broken",
     });
@@ -383,7 +383,7 @@ describe("匯入面板 UI（ui.md D1–D7）", () => {
     const blockText = block?.textContent ?? "";
     expect(blockText).toContain(i18n.global.t("import.rili.noWelcome"));
     expect(blockText).toContain(i18n.global.t("import.rili.memoryInvalid"));
-    expect(blockText).toContain(i18n.global.t("import.fengyue.tooLong.custom", { n: 600, max: 500 }));
+    expect(blockText).toContain(i18n.global.t("import.fengyue.tooLong.custom", { n: 2001, max: 2000 }));
 
     const droppedText = el.querySelector(".dropped")?.textContent ?? "";
     expect(droppedText).not.toContain(i18n.global.t("import.rili.noWelcome"));

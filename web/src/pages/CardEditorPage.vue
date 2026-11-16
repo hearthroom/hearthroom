@@ -908,7 +908,7 @@ async function loadValidation() {
     remoteLimits.value = report.tokenBudget?.limits ?? null;
     blockers.value = report.blockers ?? [];
   } catch {
-    // 上限拿不到就用保守預設。這只影響字數提示，不影響能不能存。
+    // 上限拿不到就沿用 Provider 的預設表，供字數提示與存檔前檢查使用。
   }
 }
 

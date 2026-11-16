@@ -1829,6 +1829,36 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
 // 2026-09-11 一位作者：按儲存顯示失敗，上游卻多了一張只有名字的空卡；重試幾次就多幾張。
 // 建卡與寫內容是兩步，第一步成功第二步失敗時，卡已經有編號——要記住它、講清楚，下次存回同一張。
+describe("Provider 欄位上限的存檔邊界", () => {
+  it.each([501, 550, 2000, 2001])("中文新卡額外指示 %i 字：2000 內送存，2001 擋下", async (n) => {
+    await mount("/create");
+    await type($("#f-name"), "合成邊界卡");
+    await type($("#f-detail"), "合成角色設定");
+    await type($("#f-jb"), "字".repeat(n));
+    await type($("#f-contract"), "格".repeat(4000));
+    await submit();
+    if (n <= 2000) {
+      expect(api.provisionRole).toHaveBeenCalledTimes(1);
+      expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", expect.objectContaining({ jailbreak: "字".repeat(n), roleOutputContract: "格".repeat(4000) }), "tok");
+    } else {
+      expect(api.provisionRole).not.toHaveBeenCalled();
+      expect(api.patchRoleDocument).not.toHaveBeenCalled();
+      expect(root.textContent).toContain(i18n.global.t("editor.fieldTooLong", { label: i18n.global.t("editor.jailbreak"), n, max: 2000 }));
+    }
+  });
+
+  it("中文新卡回覆格式 4001 字時，在建立卡片前擋下", async () => {
+    await mount("/create");
+    await type($("#f-name"), "合成格式邊界卡");
+    await type($("#f-detail"), "合成角色設定");
+    await type($("#f-contract"), "格".repeat(4001));
+    await submit();
+    expect(api.provisionRole).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(root.textContent).toContain(i18n.global.t("editor.fieldTooLong", { label: i18n.global.t("editor.contract"), n: 4001, max: 4000 }));
+  });
+});
+
 describe("建卡成功、內容沒存進去", () => {
   it("講清楚卡已建立；重開頁面草稿帶著卡號回來，再存是同一張卡，不再建新的", async () => {
     api.patchRoleDocument.mockRejectedValueOnce(new Error("額外指示 812 字，超過上限 500 字。"));
