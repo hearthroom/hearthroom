@@ -77,13 +77,30 @@ async function deletionRequest<T>(token: string, path: string, method: string, b
     }));
   } finally { clearLibraryCache(); }
 }
-export function previewConversationDeletion(token: string, conversations: ConversationSummary[]) {
+export function previewConversationDeletion(token: string, conversations: ConversationSummary[], scope?: 'current' | 'all') {
   return deletionRequest<ConversationDeletionPreview>(token, '/delete-preview', 'POST', {
+    ...(scope ? { scope } : {}),
     conversations: conversations.map(({ conversationRoleId, conversationId }) => ({ conversationRoleId, conversationId })),
   });
 }
 export function deleteConversations(token: string, selectionToken: string, conversationIds?: string[]) {
   return deletionRequest<ConversationDeletionResult>(token, '', 'DELETE', { selectionToken, ...(conversationIds ? { conversationIds } : {}) });
+}
+
+export function setConversationHidden(token:string, conversation:ConversationSummary, hidden:boolean) {
+  return deletionRequest<{hidden:boolean}>(token, hidden?'/hide':'/restore', 'POST', {
+    conversationRoleId:conversation.conversationRoleId, conversationId:conversation.conversationId,
+  });
+}
+
+export async function restoreFavoriteBookmarks(token:string, tokens:string[]) {
+  clearLibraryCache();
+  try {
+    return await read<{restoredIds:string[]}>(await fetch(`${COMMUNITY_API}/me/favorites/restore`, {
+      method:'POST', cache:'no-store', headers:{Authorization:`Bearer ${token}`,'X-Provider':currentProvider(),'Content-Type':'application/json'},
+      body:JSON.stringify({tokens}),
+    }));
+  } finally {clearLibraryCache();}
 }
 
 export async function recordConversation(token: string, provider: ProviderId, roleId: string, conversationId: string): Promise<{ first?: boolean }> {

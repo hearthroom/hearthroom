@@ -67,7 +67,8 @@ conversationDeleteRoutes.post('/v1/me/conversations/delete-preview',async c=>{
  const member=await requireMember(c);const token=c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1];
  if(!token||member.provider!=='harbor')throw new HttpError(401,'unauthorized');
  await key(c.env);
- const b=await c.req.json().catch(()=>null) as {conversations?:{conversationRoleId:string;conversationId:string}[]}|null;
+ const b=await c.req.json().catch(()=>null) as {scope?:unknown;conversations?:{conversationRoleId:string;conversationId:string}[]}|null;
+ if(b?.scope!==undefined&&b.scope!=='current'&&b.scope!=='all')throw new HttpError(400,'invalid_selection');
  if(!Array.isArray(b?.conversations)||!b.conversations.length||b.conversations.length>24||b.conversations.some(v=>!valid(v?.conversationRoleId)||!valid(v?.conversationId)))throw new HttpError(400,'invalid_selection');
  const groups:Group[]=[];const seen=new Set<string>();
  for(const item of b.conversations){
@@ -81,7 +82,7 @@ conversationDeleteRoutes.post('/v1/me/conversations/delete-preview',async c=>{
    if(capability){
     const bound=await bindOwnedHistory(c.env,item.conversationRoleId,item.conversationId,{conversationId:item.conversationId,roleId:capability.roleId,canGenerate:false});
     if(!bound)throw new HttpError(404,'not_found');
-    ids=await conversationDeletion.archives(c.env,token,capability.roleId);
+    ids=b.scope==='current'?[item.conversationId]:await conversationDeletion.archives(c.env,token,capability.roleId);
     if(!ids.includes(item.conversationId))throw new HttpError(409,'selection_changed');
    }else ids=[];
   }catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'conversation_delete_unavailable');}
