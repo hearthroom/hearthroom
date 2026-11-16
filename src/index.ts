@@ -977,7 +977,7 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
  * 來源放在自己的網域上，轉換設定的「來源」只需允許本網域。只轉發白名單上的來源與路徑形狀，而且必須是圖。
  */
 const ART_SOURCES: Record<string, { origin: string; path: RegExp }> = {
-  harbor: { origin: "https://assets.harperharbor.com", path: /^(?:versions|media)\/[A-Za-z0-9-]{1,80}$/ },
+  harbor: { origin: "https://assets.harperharbor.com", path: /^(?:(?:versions|media)\/[A-Za-z0-9-]{1,80}|card-media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i },
   lunatalk: { origin: "https://objects.lunatalk.ai", path: /^hosting\/[A-Za-z0-9-]{1,80}$/ },
 };
 app.get("/v1/art/:source/*", async (c) => {

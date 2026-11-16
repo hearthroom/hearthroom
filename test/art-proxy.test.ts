@@ -83,3 +83,31 @@ it("沒超過上限的動圖照舊轉發原圖，不去要縮小版", async () =
   expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   expect(calls).toHaveLength(1);
 });
+
+const roleId = "01a0dc2c-1437-757e-bf0c-1642b26fa778";
+const mediaId = "01a0c91e-04d1-778e-a222-1642b26fa779";
+it("card-media 的封面、背景與分享圖使用同一條嚴格圖檔代理", async () => {
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(new Uint8Array([71, 73, 70]), { headers: { "content-type": "image/gif" } }));
+  const res = await SELF.fetch(`https://c.test/v1/art/harbor/card-media/${roleId}/${mediaId}`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toBe("image/gif");
+  expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(fetchSpy).toHaveBeenCalledWith(`https://assets.harperharbor.com/card-media/${roleId}/${mediaId}`, expect.anything());
+});
+it("card-media 不放行缺少 UUID、額外路徑、編碼分隔符或任意來源", async () => {
+  const spy = vi.spyOn(globalThis, "fetch");
+  for (const path of [
+    `card-media/${roleId}`, `card-media/${roleId}/abc`, `card-media/abc/${mediaId}`,
+    `card-media/${roleId}/${mediaId}/extra`, `card-media/${roleId}/${mediaId}.png`,
+    `card-media/${roleId}%2f${mediaId}`, `card-media/${roleId}/${mediaId}%2fextra`,
+    `card-media/https:/${mediaId}`, `card-media/${roleId}/${mediaId}/`,
+  ]) expect((await SELF.fetch(`https://c.test/v1/art/harbor/${path}`)).status, path).toBe(404);
+  expect(spy).not.toHaveBeenCalled();
+});
+it("card-media 的非圖片與不存在圖片仍回 404", async () => {
+  const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>", { headers: { "content-type": "text/html" } }));
+  expect((await SELF.fetch(`https://c.test/v1/art/harbor/card-media/${roleId}/${mediaId}`)).status).toBe(404);
+  expect(spy).toHaveBeenCalledTimes(1);
+  spy.mockResolvedValue(new Response(null, { status: 404 }));
+  expect((await SELF.fetch(`https://c.test/v1/art/harbor/card-media/${roleId}/${mediaId}`)).status).toBe(404);
+});
