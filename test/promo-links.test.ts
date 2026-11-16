@@ -72,6 +72,7 @@ const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
   'bh-hut-fanren', 'vc-fanren', 'bh-fanren-indie', 'dcard-fanren',
+  'bh-jinyong',
 ];
 
 it('all configured targets are safe local landings with attribution', () => {
@@ -79,7 +80,7 @@ it('all configured targets are safe local landings with attribution', () => {
     expect(promoTarget(value)).toBe(value);
     const url = new URL(value, 'https://sukisuki.ai');
     expect(url.origin).toBe('https://sukisuki.ai');
-    const authorRef = ['bh-fate-tm', 'bh-fate-fgo'].includes(code) ? 'UVTEJ3N6'
+    const authorRef = ['bh-fate-tm', 'bh-fate-fgo', 'bh-limbus'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
     expect(url.searchParams.get('ref')).toBe(authorRef);
