@@ -1031,7 +1031,8 @@ export async function setCardCommentPin(cardId:string,commentId:string,pin:boole
 }
 
 export async function deleteComment(commentId: string, token: string): Promise<void> {
-  await json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", headers: commentHeaders(token) }));
+  const res = await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", headers: commentHeaders(token) });
+  if (res.status !== 204) await json(res);
 }
 
 export async function likeComment(commentId: string, like: boolean, token: string): Promise<void> {
