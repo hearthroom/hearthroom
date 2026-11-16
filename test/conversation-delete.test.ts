@@ -18,6 +18,18 @@ beforeEach(async()=>{
 });
 afterEach(()=>{vi.unstubAllGlobals();Object.assign(conversationDeletion,original);restoreUpstream();});
 const preview=async()=>{const r=await request('/delete-preview',{conversations:[{conversationRoleId:'role',conversationId:'current'}]});expect(r.status).toBe(200);return await r.json() as any;};
+it('limits current scope to the exact confirmed segment and keeps sibling saves and their pointers',async()=>{
+ await put('role-alias','save');
+ const r=await request('/delete-preview',{scope:'current',conversations:[{conversationRoleId:'role',conversationId:'current'}]});
+ expect(r.status).toBe(200);const p=await r.json() as any;expect(p.total).toBe(1);
+ expect((await request('',{selectionToken:p.selectionToken},'DELETE')).status).toBe(200);
+ expect(calls).toEqual(['current']);expect(rows.has('save')).toBe(true);
+ expect(await env.DB.prepare("SELECT conversation_id AS id FROM member_conversations WHERE role_id='role-alias'").first()).toEqual({id:'save'});
+});
+it('rejects unknown deletion scopes before producing any destructive capability',async()=>{
+ expect((await request('/delete-preview',{scope:'everything',conversations:[{conversationRoleId:'role',conversationId:'current'}]})).status).toBe(400);
+ expect(calls).toEqual([]);
+});
 it('freezes exact segments, deletes through the shared service and removes only unchanged own pointers',async()=>{
  const p=await preview();expect(p.total).toBe(2);expect(p.groups).toEqual([{roleId:'role',conversationId:'current',count:2}]);
  archiveIds.push('new');rows.set('new',{roleId:'role'});await put('role','new');

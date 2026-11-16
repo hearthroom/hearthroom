@@ -23,6 +23,16 @@ export interface ConfirmOptions {
   items?: { name: string; image?: string }[];
   moreText?: string;
   busyText?: string;
+  subject?: string;
+  consequences?: string[];
+  warning?: string;
+  hint?: string;
+  failureText?: string;
+  pendingText?: string;
+  retryText?: string;
+  pendingConfirmText?: string;
+  /** A read-only result check after an uncertain write, when resubmission is inappropriate. */
+  onPending?: () => Promise<void>;
   /** 一段要讓人複製的文字（例如網址），畫成可全選的方塊 */
   detail?: string;
   confirmText?: string;
