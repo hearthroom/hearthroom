@@ -105,8 +105,11 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
       <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage,'dlg--phrase-wrap':confirmState.current.phraseWrap }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
         <p v-if="confirmState.current.subject" class="dlg__subject">{{confirmState.current.subject}}</p>
-        <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
-        <ul v-if="confirmState.current.consequences" class="dlg__consequences"><li v-for="item in confirmState.current.consequences" :key="item">{{item}}</li></ul>
+        <div v-if="confirmState.current.consequences" class="dlg__scope">
+          <p id="dlg-msg" class="dlg__msg">{{confirmState.current.message}}</p>
+          <ul class="dlg__consequences"><li v-for="item in confirmState.current.consequences" :key="item">{{item}}</li></ul>
+        </div>
+        <p v-else-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
         <p v-if="confirmState.current.warning"><strong>{{confirmState.current.warning}}</strong></p>
         <p v-if="confirmState.current.hint" class="subtle">{{confirmState.current.hint}}</p>
         <ul v-if="confirmState.current.items?.length" class="dlg__items"><li v-for="(item,index) in confirmState.current.items" :key="index"><img v-if="item.image" :src="item.image" alt="" /><span>{{ item.name }}</span></li><li v-if="confirmState.current.moreText" class="subtle">{{ confirmState.current.moreText }}</li></ul>
@@ -188,7 +191,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
   overflow-wrap: anywhere; user-select: all; cursor: text;
 }
 .dlg__subject{padding:var(--s-3);background:var(--surface-2);border-radius:var(--r-sm);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
-.dlg__consequences{padding-left:var(--s-5);font-size:14px;line-height:1.7}
+.dlg__scope{display:grid;gap:var(--s-2)}
+.dlg__consequences{margin:0;padding-left:var(--s-5);font-size:14px;line-height:1.7}
 .dlg__typed { display: grid; gap: 6px; }
 .dlg__typed-hint { font-size: 12.5px; color: var(--text-3); }
 .dlg__typed .input { width: 100%; }
