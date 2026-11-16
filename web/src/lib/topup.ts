@@ -10,3 +10,11 @@ export function topUpUrl(back: string = location.href): string {
   url.searchParams.set("back", back);
   return url.href;
 }
+
+/** 月卡也在同一個付款頁買：plan 打開月卡分頁。 */
+export function planUrl(plan: string, back: string = location.href): string {
+  const url = new URL(PAY_PAGE);
+  url.searchParams.set("plan", plan);
+  url.searchParams.set("back", back);
+  return url.href;
+}

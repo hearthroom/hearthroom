@@ -37,16 +37,18 @@ async function visit(path: string) {
   return { order, spy, replace };
 }
 
+// 月卡在綺夢社自己的付款頁買：打開月卡分頁，付完回到站台首頁（這一頁只是轉址）。
+const planPage = () => { const u = new URL("https://console.harperharbor.com/pay/hearthroom"); u.searchParams.set("plan", "month"); u.searchParams.set("back", `${location.origin}/`); return u.href; };
 it("從積分不夠那張卡來：先送出點擊，再轉去月卡的購買頁", async () => {
   const { order, spy } = await visit("/go/plan?from=canvas_shortfall");
-  expect(order).toEqual(["beacon", "replace:https://console.example/me/billing?plan=month"]);
+  expect(order).toEqual(["beacon", `replace:${planPage()}`]);
   const sent = JSON.parse(await beacons(spy)[0]!.text());
   expect(sent).toEqual([expect.objectContaining({ event: "credits_shortfall_click", detail: "plan" })]);
 });
 
 it("不是從那張卡來：不記，照樣轉址，網址不帶任何應用參數", async () => {
   const { order } = await visit("/go/plan");
-  expect(order).toEqual(["replace:https://console.example/me/billing?plan=month"]);
+  expect(order).toEqual([`replace:${planPage()}`]);
 });
 
 it("waits for bounded analytics readiness before sending and redirecting", async () => {
