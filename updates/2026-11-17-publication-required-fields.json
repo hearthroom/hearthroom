@@ -2,19 +2,19 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/mine",
-  "draft": true,
   "title": {
-    "zh-Hant": "公開前的檢查會提醒你補齊直式封面與開場。",
-    "zh-Hans": "公开前的检查会提醒你补齐竖版封面与开场。",
-    "en": "Publication checks help you complete portrait covers and openings before review.",
-    "ja": "公開前のチェックで、縦長カバーと導入の不足がわかるようになりました。",
-    "ko": "공개 전 확인 단계에서 세로 커버와 도입의 누락을 알려줘요."
+    "zh-Hant": "公開發布卡片現在需要直式封面與至少一種開場，讓玩家看得到封面也能直接開局。",
+    "zh-Hans": "公开发布卡片现在需要竖版封面和至少一种开场，让玩家看得到封面也能直接开局。",
+    "en": "Publishing a card publicly now requires a portrait cover and at least one opening.",
+    "ja": "カードを公開するときは、縦長カバーといずれかのオープニングが必要になりました。",
+    "ko": "카드를 공개할 때는 세로 커버와 하나 이상의 오프닝이 필요하도록 바뀌었어요."
   },
   "body": {
-    "zh-Hant": "送審或恢復公開前，請儲存名稱、分類、角色設定、直式封面與至少一種開場。",
-    "zh-Hans": "提交审核或恢复公开前，请保存名称、分类、角色设定、竖版封面与至少一种开场。",
-    "en": "Save a name, category, character definition, portrait cover and at least one opening before submitting or restoring public access.",
-    "ja": "審査への提出や再公開の前に、名前、分類、キャラクター設定、縦長カバー、いずれかの導入を保存してください。",
-    "ko": "검토 요청이나 재공개 전에 이름, 분류, 캐릭터 설정, 세로 커버와 한 가지 이상의 도입을 저장해 주세요."
-  }
+    "zh-Hant": "開場白、備選開場白、第一句選項或開場網頁任填一種即可，橫式背景選填，私人與連結分享不受影響，已公開的舊卡也會保留到下次送審更新才需補齊。",
+    "zh-Hans": "开场白、备选开场白、第一句选项或开场网页任填一种即可，横版背景选填，私人和链接分享不受影响，已公开的旧卡也会保留到下次提交更新才需补齐。",
+    "en": "An opening message, alternate opening, first-line choice, or opening page all count, landscape images stay optional, private and link-shared cards are unaffected, and cards already public stay listed until their next update.",
+    "ja": "最初のメッセージ・別の書き出し・最初の選択肢・最初のページのいずれかがあればよく、自分のみとリンク共有には影響せず、公開済みのカードも次の更新までそのまま掲載されます。",
+    "ko": "첫 메시지, 대체 도입부, 첫마디 선택지, 첫 페이지 중 하나만 있으면 되고, 나만 보기와 링크 공유에는 영향이 없으며 이미 공개된 카드도 다음 업데이트 전까지 유지돼요."
+  },
+  "draft": true
 }
