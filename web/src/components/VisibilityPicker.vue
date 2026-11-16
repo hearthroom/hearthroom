@@ -61,7 +61,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
      </svg>
      <span class="visibility-option__body"><span class="visibility-option__title">{{ t(`visibility.option.${access}`) }} <span v-if="value?.access===access&&phase==='ready'" class="chip">{{ t('visibility.current') }}</span><span v-if="access==='public'&&value&&value.restriction!=='none'" class="chip visibility-option__restriction">{{ t(`visibility.badge.${value.restriction}`) }}</span></span>
       <span :id="`${uid}-${access}`" class="visibility-option__description">{{ t(access==='public'&&delistedReview?'visibility.description.delisted':`visibility.description.${access}`) }}</span>
-      <span v-if="access==='unlisted'&&previewMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ t('visibility.cover.previewHint') }} <button type="button" class="link" @click.prevent="emit('cover')">{{ t('editor.cover.upload') }}</button></span>
+      <span v-if="access==='unlisted'&&previewMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ t('visibility.cover.previewHint') }} <button type="button" class="link cover-upload" @click.prevent="emit('cover')">{{ t('editor.cover.upload') }}</button></span>
       <template v-if="access==='public'&&value">
        <span v-if="value.restriction!=='none'" class="visibility-option__reason">{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[0] }}<a :href="appealUrl" target="_blank" rel="noopener">Discord</a>{{ t(`visibility.restriction.${value.restriction}`,{reason:value.restrictionNote??''}).split('Discord')[1] }}</span>
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>
@@ -105,6 +105,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
 .visibility-option__description,.visibility-option__reason{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
 .visibility-missing{border:0;background:none;padding:0;font:inherit;font-size:13px;line-height:1.6;text-align:start;cursor:pointer;overflow-wrap:anywhere;min-height:var(--h-lg)}
+.cover-upload{border:0;background:none;padding:0;font:inherit;cursor:pointer;min-height:var(--h-sm)}
 .visibility-option__restriction{color:var(--danger);cursor:default;max-width:100%}
 .visibility-option__restriction::before{content:"";flex:none;width:var(--s-1);height:var(--s-1);border-radius:var(--r-pill);background:currentColor}
 .visibility-skeleton{height:72px;border-radius:var(--r-sm);margin-bottom:var(--s-2)}

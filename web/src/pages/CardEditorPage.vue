@@ -2400,7 +2400,7 @@ async function exportCard(format: "png" | "json") {
               <option value="private">{{ $t('visibility.option.private') }}</option>
             </select>
             <p id="new-card-visibility-description" class="subtle">{{ $t(`visibility.description.${newCardVisibility}`) }}</p>
-            <p v-if="newCardVisibility === 'unlisted' && previewImagesMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ $t('visibility.cover.previewHint') }} <button type="button" class="link" @click="focusCover(false)">{{ $t('editor.cover.upload') }}</button></p>
+            <p v-if="newCardVisibility === 'unlisted' && previewImagesMissing" class="subtle" data-cover-reminder><span aria-hidden="true">ⓘ </span>{{ $t('visibility.cover.previewHint') }} <button type="button" class="link cover-upload" @click="focusCover(false)">{{ $t('editor.cover.upload') }}</button></p>
           </div>
           <AuthorVisibility v-if="visibilityEnabled&&!isNew" ref="visibilityControl" class="panel" :id="roleId" :card-id="String(cardNumber||roleId)" :provider="editorProvider" :actor="visibilityActor" :name="draft.roleName" :token="visibilityToken" inline editor :dirty="dirty" :missing="publicationMissing.map(k=>$t(`editor.required.${k}`)).join($t('mascot.pet.listSep'))" :preview-missing="previewImagesMissing" @cover="focusCover(false)" :disabled="saving" @changed="visibilityChanged" @submit="publish" @missing="visibilityMissing" @busy="visibilityBusy=$event" />
           <!-- 玩家投票與計數：立即生效，跟內容儲存分開；沒宣告或平台沒開時整塊不顯示（元件自己判斷） -->
@@ -2599,6 +2599,7 @@ async function exportCard(format: "png" | "json") {
 
 <style scoped>
 .visibility-notice-action{background:transparent;border:0;color:var(--accent-text);font:inherit;min-height:var(--h-sm);padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.cover-upload{border:0;background:none;padding:0;font:inherit;cursor:pointer;min-height:var(--h-sm)}
 /*
    並排欄位對齊（owner 2026-11-10，ui.md §2.0）：同一列的欄位上緣對齊、不被較高的那欄拉伸；
    標籤固定一行；單行輸入框與下拉一律 --h-md；說明、字數、錯誤都在輸入框下方，不補空白佔位。
