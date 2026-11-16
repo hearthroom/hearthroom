@@ -104,11 +104,12 @@ async function restoreFavorites(tokens:{id:string;token:string}[]){
  catch(error){if((error as {code?:string}).code==='restoration_expired'){notice.value=t('library.favoritesBulk.restoreExpired');retry.value=undefined;feedback(notice.value);}else failure(t('library.favoritesBulk.restoreFailed'),()=>restoreFavorites(tokens));}finally{locked.value=false;}
 }
 function key(e:KeyboardEvent){if(e.key==='Escape'&&managing.value&&!locked.value&&!confirmState.current){e.preventDefault();finish();}}
-watch(managing,on=>{pageAway.value+=on?1:-1;},{flush:'sync'});
+const petAway=computed(()=>tab.value==='conversations'||managing.value);
+watch(petAway,on=>{pageAway.value+=on?1:-1;},{flush:'sync',immediate:true});
 watch([tab,page],()=>{managing.value=false;selected.value=[];toast.value=undefined;clearFailure();});
 watch([tab,page,locale,()=>session.me,()=>session.profile?.showNsfw,()=>session.profile?.hiddenTags?.join(',')],()=>{void load();},{immediate:true});
 onMounted(()=>document.addEventListener('keydown',key));onBeforeRouteLeave(()=>!locked.value);onBeforeRouteUpdate(()=>!locked.value);
-onBeforeUnmount(()=>{document.removeEventListener('keydown',key);if(managing.value)pageAway.value--;sequence++;});
+onBeforeUnmount(()=>{document.removeEventListener('keydown',key);if(petAway.value)pageAway.value--;sequence++;});
 </script>
 <template>
  <div class="page library" :class="{'library--manage':managing}">
