@@ -1,4 +1,4 @@
-import {cardsByIds,listCards,toCard,type CardRow,type ListOptions} from './cards';
+import {listCardRowsByIds,decorateCardRows,listCardIds,toCard,type CardRow,type ListOptions} from './cards';
 import {hostingKey} from './hosting';
 import {type Env,HttpError} from './types';
 import {filterPublicRows,WORK_READ_BUDGET,type VisibilityReadSurface} from './work-read';
@@ -43,7 +43,7 @@ export async function publicPosition(env:Env,url:string,rank:number,adult:boolea
  }catch{throw new HttpError(400,'invalid_cursor');}
 }
 export async function publicCandidates(env:Env,opts:ListOptions,rawOffset:number):Promise<PublicCandidates>{
- const result=await listCards(env.DB,{...opts,limit:WORK_READ_BUDGET,offset:rawOffset});
+ const result=await listCardIds(env.DB,{...opts,limit:WORK_READ_BUDGET,offset:rawOffset});
  const filtered=!!(opts.favoritedBy!==undefined||opts.followedBy!==undefined||opts.q||opts.fandom||opts.tags?.length||opts.tagGroups?.length||opts.authorMemberId!==undefined||opts.since!==undefined||opts.maxRating);
  return {version:1,ids:result.rows.map(r=>String(r.id)),rawOffset,more:result.hasNext,total:result.total,filtered,...(result.partial?{partial:true}:{})};
 }
@@ -58,7 +58,7 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
  const proven:{row:CardRow;raw:number}[]=[],seen=new Set<string>();
  let batch=candidates;
  for(;;){
-  const result=await cardsByIds(env.DB,batch.ids);
+  const result=await listCardRowsByIds(env.DB,batch.ids);
   const found=new Map(result.filter(r=>r.status==='approved'&&!r.board_hidden&&!r.public_blocked).map(r=>[String(r.id),r]));
   const ordered=batch.ids.map(id=>found.get(id)).filter((r):r is CardRow=>!!r&&(opts.allowNsfw||r.rating!=='R'));
   const visible=await filterPublicRows(env,ordered,opts.surface??'list');
@@ -78,5 +78,6 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
  const nextCursor=hasNext?await encode(env,{...common,raw:nextRaw,rank:opts.offset+opts.limit,trail:[...position.trail,position.raw]}):undefined;
  if(hasNext&&nextRaw!==opts.offset+opts.limit&&!nextCursor)throw new HttpError(503,'visibility_provider_unavailable');
  const previousCursor=position.trail.length?await encode(env,{...common,raw:position.trail.at(-1)!,rank:Math.max(0,opts.offset-opts.limit),trail:position.trail.slice(0,-1)}):undefined;
- return {items:rows.map(r=>toCard(r,opts.lang)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
+ const presented=await decorateCardRows(env.DB,rows);
+ return {items:presented.map(r=>toCard(r,opts.lang)),total:managed||candidates.filtered&&hasNext?null:candidates.total,hasNext,limit:opts.limit,offset:opts.offset,...(batch.partial?{partial:true}:{}),...(nextCursor?{nextCursor}:{}),...(previousCursor?{previousCursor}:{})};
 }
