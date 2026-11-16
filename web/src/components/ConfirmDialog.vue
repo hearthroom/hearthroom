@@ -47,6 +47,7 @@ async function confirm() {
   if(cur.onConfirm){
    busy.value=true;submitError.value='';
    try{
+    if(pending.value&&cur.onPending){await cur.onPending();return;}
     await cur.onConfirm({text:text.trim(),...(id?{id}:{}),update:intent});
     if(confirmState.current!==cur)return;
     if(cur.valid&&!cur.valid()){settleConfirm(false);return;}
@@ -56,7 +57,7 @@ async function confirm() {
     const e=error as {status?:number;code?:string;message?:string};
     pending.value=error instanceof TypeError||!!e.status&&e.status>=500;
     if(cur.publication)publicationDrafts.set(cur.publication.key,{...update.value,pending:pending.value});
-    submitError.value=pending.value?t('cardUpdate.update.resultPending'):e.code==='update_notification_cooldown'?t('cardUpdate.update.noticeLimit'):e.message||t('cardUpdate.update.submitFailed');
+    submitError.value=pending.value?(cur.pendingText??t('cardUpdate.update.resultPending')):e.code==='update_notification_cooldown'?t('cardUpdate.update.noticeLimit'):cur.failureText??(e.message||t('cardUpdate.update.submitFailed'));
     if(e.code==='update_notification_cooldown')await retryEligibility();
     return;
    }finally{if(confirmState.current===cur)busy.value=false;}
@@ -103,10 +104,14 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
     <div v-if="confirmState.current" class="dlg-backdrop" @click.self="!busy && settleConfirm(false)">
       <div ref="box" class="dlg panel" :class="{ 'dlg--danger-subdued': subdued, 'dlg--publication': !!confirmState.current.publication,'dlg--scroll-message':confirmState.current.scrollMessage,'dlg--phrase-wrap':confirmState.current.phraseWrap }" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg">
         <h2 id="dlg-title" class="dlg__title">{{ confirmState.current.title ?? confirmState.current.message }}</h2>
+        <p v-if="confirmState.current.subject" class="dlg__subject">{{confirmState.current.subject}}</p>
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg" :tabindex="confirmState.current.scrollMessage?0:undefined">{{ confirmState.current.message }}</p>
+        <ul v-if="confirmState.current.consequences" class="dlg__consequences"><li v-for="item in confirmState.current.consequences" :key="item">{{item}}</li></ul>
+        <p v-if="confirmState.current.warning"><strong>{{confirmState.current.warning}}</strong></p>
+        <p v-if="confirmState.current.hint" class="subtle">{{confirmState.current.hint}}</p>
         <ul v-if="confirmState.current.items?.length" class="dlg__items"><li v-for="(item,index) in confirmState.current.items" :key="index"><img v-if="item.image" :src="item.image" alt="" /><span>{{ item.name }}</span></li><li v-if="confirmState.current.moreText" class="subtle">{{ confirmState.current.moreText }}</li></ul>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
-        <p v-if="submitError" class="notice notice--error" role="status">{{ submitError }}</p>
+        <p v-if="submitError" class="notice notice--error" role="alert">{{ submitError }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
         <code v-if="confirmState.current.detail" class="dlg__detail" tabindex="0" @click="($event.target as HTMLElement).ownerDocument.getSelection()?.selectAllChildren($event.target as Node)">{{ confirmState.current.detail }}</code>
         <!-- 要照打的字：打對了確認鍵才亮；Enter 也只在打對時算數 -->
@@ -135,7 +140,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
           </button>
           <button class="btn" :class="subdued ? 'dlg__subdued' : confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
                   :disabled="!typedOk" @click="confirm">
-            <span v-if="busy && confirmState.current.busyText" class="dlg__spinner" aria-hidden="true" />{{ busy && confirmState.current.busyText ? confirmState.current.busyText : pending ? t("cardUpdate.update.checkResult") : confirmState.current.confirmText ?? $t("dialog.confirm") }}
+            <span v-if="busy && confirmState.current.busyText" class="dlg__spinner" aria-hidden="true" />{{ pending && confirmState.current.onPending ? confirmState.current.pendingConfirmText ?? t("cardUpdate.update.checkResult") : busy && confirmState.current.busyText ? confirmState.current.busyText : pending ? confirmState.current.pendingConfirmText ?? t("cardUpdate.update.checkResult") : submitError && confirmState.current.retryText ? confirmState.current.retryText : confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
       </div>
@@ -182,6 +187,8 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
   font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
   overflow-wrap: anywhere; user-select: all; cursor: text;
 }
+.dlg__subject{padding:var(--s-3);background:var(--surface-2);border-radius:var(--r-sm);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.dlg__consequences{padding-left:var(--s-5);font-size:14px;line-height:1.7}
 .dlg__typed { display: grid; gap: 6px; }
 .dlg__typed-hint { font-size: 12.5px; color: var(--text-3); }
 .dlg__typed .input { width: 100%; }

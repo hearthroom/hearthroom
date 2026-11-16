@@ -1,4 +1,6 @@
 import {conversationDeleteRoutes} from './conversation-delete';
+import { recentConversationRoutes } from './recent-conversations';
+import { favoriteRestoreRoutes, removeFavorite } from './favorite-restore';
 import { readMaintenance } from './maintenance';
 import { authFunnelMetrics } from './auth-funnel';
 import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagination';
@@ -17,10 +19,12 @@ import { HttpError, pickLocale, type Env, type Localized } from "./types";
 export const libraryRoutes = new Hono<{ Bindings: Env }>();
 libraryRoutes.use('/v1/me/*', async (c, next) => {
   const match = /^\/v1\/me\/(favorites|following|feed|conversations)(?:\/[^/]+)?$/.exec(c.req.path);
-  if (!match || !['GET', 'PUT', 'DELETE'].includes(c.req.method)) return next();
+  const recentAction = /^\/v1\/me\/conversations\/(hide|restore)$/.exec(c.req.path)?.[1];
+  const favoriteRestore = c.req.path === '/v1/me/favorites/restore';
+  if (!match || (!['GET', 'PUT', 'DELETE'].includes(c.req.method) && !(c.req.method === 'POST' && (recentAction || favoriteRestore)))) return next();
   c.header('Cache-Control', 'private, no-store');
   await next();
-  const operation = `${match[1]}_${c.req.method.toLowerCase()}`;
+  const operation = c.req.method === 'POST' ? favoriteRestore ? 'favorites_restore' : `conversations_${recentAction}` : `${match[1]}_${c.req.method.toLowerCase()}`;
   const outcome = c.res.status === 207 ? 'error' : c.res.status < 400 ? 'success' : c.res.status < 500 ? 'denied' : 'error';
   c.executionCtx.waitUntil(c.env.DB.prepare('INSERT INTO library_metrics(operation,outcome,value) VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(operation,outcome).run().catch(() => { console.warn('Library request metric unavailable'); }));
 });
@@ -28,7 +32,7 @@ libraryRoutes.use('/v1/me/*', async (c, next) => {
 libraryRoutes.get('/metrics', async c => {
   const rows = await c.env.DB.prepare('SELECT operation,outcome,value FROM library_metrics ORDER BY operation,outcome').all<{ operation: string; outcome: string; value: number }>();
   const maintenance = await readMaintenance(c.env.DB);
-  const lines = rows.results.filter(r => /^(favorites|following|feed|conversations)_(get|put|delete)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))
+  const lines = rows.results.filter(r => /^(?:(favorites|following|feed|conversations)_(get|put|delete)|conversations_(hide|restore)|favorites_restore)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))
     .map(r => `hearthroom_library_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
   const community = await c.env.DB.prepare('SELECT operation,outcome,value FROM community_metrics').all<{operation:string;outcome:string;value:number}>();
   const communityLines=community.results.filter(r=>/^(member|bridge|oauth|media|badge_read|badge_write|badge_admin|official_admin)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_community_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
@@ -43,6 +47,8 @@ libraryRoutes.get('/metrics', async c => {
   return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB) + await opsMetrics(c.env.DB) + await authFunnelMetrics(c.env.DB).catch(() => ''), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
 libraryRoutes.route('/',conversationDeleteRoutes);
+libraryRoutes.route('/',recentConversationRoutes);
+libraryRoutes.route('/',favoriteRestoreRoutes);
 const kinds = ["favorites", "following"] as const;
 const offsetOf = (raw?: string) => Math.min(100000, Math.max(0, Math.floor(Number(raw) || 0)));
 
@@ -80,8 +86,8 @@ for (const kind of kinds) {
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
     } else if (c.req.method === "DELETE") {
+      if(kind==='favorites') return c.json(await removeFavorite(c.env,member,target));
       await c.env.DB.prepare(`DELETE FROM ${table} WHERE member_id=? AND ${column}=?`).bind(member.id, target).run();
-      if(kind==='favorites')return c.json({active:false});
     }
     const row = await c.env.DB.prepare(`SELECT 1 FROM ${table} WHERE member_id=? AND ${column}=?`).bind(member.id, target).first();
     const count = kind === "favorites" ? await c.env.DB.prepare("SELECT COUNT(*) AS n FROM member_favorites WHERE card_id=?").bind(target).first<{ n: number }>() : null;
@@ -181,6 +187,8 @@ libraryRoutes.put('/v1/me/conversations', bodyLimit({ maxSize: 2048 }), async c 
     db.prepare(`INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at)
       VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,provider,role_id) DO UPDATE SET conversation_id=excluded.conversation_id,updated_at=excluded.updated_at`)
       .bind(member.id, member.provider, body.roleId, body.conversationId, now, now),
+    db.prepare('DELETE FROM member_conversation_hides WHERE member_id=? AND provider=? AND role_id=?')
+      .bind(member.id, member.provider, body.roleId),
     db.prepare("UPDATE campaign_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL AND ?=1").bind(now, member.id, publicActivity),
     db.prepare("INSERT OR IGNORE INTO campaign_active_days (member_id, day) SELECT ?, ? WHERE ?=1 AND EXISTS (SELECT 1 FROM campaign_attributions WHERE member_id = ?)")
       .bind(member.id, Math.floor(now / 86_400_000), publicActivity, member.id),
@@ -216,8 +224,11 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider)
       AND ms.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     WHERE r.member_id=? AND r.provider='harbor' AND (?=0 OR (c.rating IS NOT 'R' AND hv.rating IS NOT 'R'
-      AND NOT EXISTS(SELECT 1 FROM hosting_versions rv WHERE rv.provider=r.provider AND rv.hosted_revision_id=r.role_id AND rv.rating='R')))) WHERE cardRank=1 ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
-    .bind(member.id, access.countryRegion==='CN'?1:0, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
+      AND NOT EXISTS(SELECT 1 FROM hosting_versions rv WHERE rv.provider=r.provider AND rv.hosted_revision_id=r.role_id AND rv.rating='R')))) AS recent WHERE cardRank=1
+      AND NOT EXISTS(SELECT 1 FROM member_conversation_hides h WHERE h.member_id=? AND h.provider=recent.conversationProvider
+        AND h.role_id=recent.conversationRoleId AND h.conversation_id=recent.conversationId AND h.pointer_updated_at=recent.updatedAt)
+      ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
+    .bind(member.id, access.countryRegion==='CN'?1:0, member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
   const lang = c.req.query('lang') || 'zh-Hant';
   const conversations=await Promise.all(rows.results.slice(0,24).map(async row => {
     const token = c.req.header('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1] || '';

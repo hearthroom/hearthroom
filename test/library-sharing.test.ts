@@ -37,7 +37,8 @@ it('does not create a new private bookmark from a stale approved community row',
 });
 it('removes an own private bookmark without exposing the global favorite count',async()=>{
  const {card}=await fixture();const response=await request('favorites/'+card.id,'DELETE');
- expect(await response.json()).toEqual({active:false});expect(await(await request('favorites')).json()).toMatchObject({items:[]});
+ const result=await response.json() as {active:boolean;restoreToken:string};
+ expect(result.active).toBe(false);expect(typeof result.restoreToken).toBe('string');expect(Object.keys(result).sort()).toEqual(['active','restoreToken']);expect(await(await request('favorites')).json()).toMatchObject({items:[]});
 });
 it('keeps provider failure distinct from an authors private decision',async()=>{
  const {current}=await fixture();current.offline=true;expect((await request('favorites')).status).toBe(503);

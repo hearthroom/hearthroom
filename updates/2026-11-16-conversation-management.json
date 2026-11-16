@@ -1,0 +1,18 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "「對話與收藏」頁現在可以單獨整理最近對話，也能一次取消收藏多張卡片了。",
+    "zh-Hans": "“对话与收藏”页现在可以单独整理最近对话，也能一次取消收藏多张卡片了。",
+    "en": "My library now lets you manage individual recent chats and unsave multiple cards at once.",
+    "ja": "「マイライブラリ」で最近の会話を個別に整理したり、保存したカードをまとめて解除したりできます。",
+    "ko": "이제 '내 보관함'에서 최근 대화를 하나씩 정리하고 저장한 카드도 여러 장 한꺼번에 취소할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "「最近對話」每列可選擇只從清單移除或永久刪除這段對話與記憶，「收藏卡片」也能多選取消收藏並立即復原。",
+    "zh-Hans": "“最近对话”每行可选择只从列表移除或永久删除这段对话和记忆，“收藏卡片”也能多选取消收藏并立即撤销。",
+    "en": "Each row in Recent chats can either be removed from your list or permanently deleted with its memory, while Saved cards supports multi-select unsave with Undo.",
+    "ja": "「最近の会話」では一覧から外すか現在の会話と記憶を完全に削除するかを選べて、「保存したカード」では複数選択して解除したあとも元に戻せます。",
+    "ko": "'최근 대화'에서는 목록에서만 빼거나 현재 대화와 기억을 영구 삭제할 수 있고, '저장한 카드'에서는 여러 장을 선택해 취소한 뒤 되돌릴 수도 있어요."
+  }
+}
