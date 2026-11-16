@@ -402,13 +402,26 @@ export async function listCards(db: D1Database, opts: ListOptions) {
 
 /** Same filters, ordering, fallback and counts; no discarded presentation work. */
 export async function listCardIds(db:D1Database,opts:ListOptions){
-  return listCardRows<Pick<CardRow,'id'>>(db,opts,'CAST(c.id AS TEXT) AS id');
+  return listCardRows<Pick<CardRow,'id'>>(db,opts,'CAST(c.id AS TEXT) AS id',true);
 }
 
-async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
+async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string,idsOnly=false){
+  const authorHeat=idsOnly&&opts.authorMemberId!==undefined&&!opts.anyStatus&&!opts.submittedOnly
+    &&!opts.q&&!opts.zone&&!opts.fandom&&!opts.tags?.length&&!opts.tagGroups?.length&&!opts.excludeTags?.length
+    &&opts.favoritedBy===undefined&&opts.followedBy===undefined&&opts.since===undefined&&!opts.maxRating
+    &&(opts.sort===undefined||opts.sort==='hot');
   const where: string[] = opts.anyStatus ? ["1=1"] : [listed(!!opts.allowNsfw), NOT_A_COPY("c"), "c.provider = 'harbor'"];
   if(opts.submittedOnly)where.push(SUBMITTED_CARD);
   const binds: unknown[] = [];
+  if(authorHeat){
+    // Reject unrelated integer authors before the correlated visibility checks.
+    // The original am.id join remains authoritative, including connected owners.
+    // Non-integer legacy values retain the original text-join behavior.
+    where.unshift(`(typeof(c.author_num_id)<>'integer' OR c.author_num_id IN(
+      SELECT external_id FROM member_identities WHERE member_id=?
+      UNION SELECT external_id FROM member_connections WHERE owner_member_id=?))`);
+    binds.push(opts.authorMemberId,opts.authorMemberId);
+  }
   if (opts.provider) {
     where.push("c.provider = ?");
     binds.push(opts.provider);
@@ -530,7 +543,9 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
     } else orderBy = "c.heat DESC, c.talk_num DESC, c.registered_at DESC";
     // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
     return db
-      .prepare(`SELECT ${columns} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      // Keep the ordered LIMIT path for prolific authors; an author-index seek
+      // would otherwise collect and sort their entire catalog first.
+      .prepare(`SELECT ${columns} FROM ${search?.from ?? (authorHeat?"cards c INDEXED BY idx_cards_heat":"cards c")} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
       .bind(...binds, ...(search?.binds ?? []), ...orderBinds, opts.limit + 1, opts.offset)
       .all<T>();
   };
