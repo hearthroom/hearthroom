@@ -52,3 +52,15 @@ it('does not resurrect an invalidated in-flight private read',async()=>{
  const old=libraryRequest('favorites','inflight');clearLibraryCache();finish(new Response('{"items":["old"]}'));await old;
  expect(await libraryRequest('favorites','inflight')).toEqual({items:[]});expect(fetcher).toHaveBeenCalledTimes(2);
 });
+
+it('sends single-segment consent and private visibility writes without sharing credentials',async()=>{
+ const {previewConversationDeletion,setConversationHidden,restoreFavoriteBookmarks}=await import('../src/lib/library');
+ const fetcher=vi.fn().mockImplementation(async()=>Response.json({hidden:true,groups:[],restoredIds:[]}));vi.stubGlobal('fetch',fetcher);
+ const chat={conversationId:'synthetic-chat',conversationRoleId:'synthetic-role'} as any;
+ await previewConversationDeletion('fixture',[chat],'current');
+ expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({scope:'current',conversations:[chat]});
+ await setConversationHidden('fixture',chat,true);await setConversationHidden('fixture',chat,false);
+ expect(fetcher.mock.calls[1][0]).toContain('/me/conversations/hide');expect(fetcher.mock.calls[2][0]).toContain('/me/conversations/restore');
+ await restoreFavoriteBookmarks('fixture',['synthetic-undo']);
+ expect(fetcher.mock.calls[3][0]).toContain('/me/favorites/restore');expect(fetcher.mock.calls[3][1]).toMatchObject({cache:'no-store',headers:{Authorization:'Bearer fixture','X-Provider':'harbor'}});
+});
