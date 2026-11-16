@@ -98,7 +98,7 @@ it('LE05 rolls back audit on state failure and succeeds after removing the fault
 function shortSettings(){
   vi.spyOn(hostGateway,'seal').mockImplementation(async(_e,_t,_r,workId,versionId)=>({workId,versionId,hostedRevisionId:'frozen-'+versionId}));
   vi.spyOn(hostGateway,'read').mockImplementation(async(_e,_t,id)=>role({roleId:id,authorNumId:10001}));
-  vi.spyOn(upstream,'readForReview').mockImplementation(async(_e,_t,id)=>({document:{roleDetailDesc:id.startsWith('frozen-')?'字'.repeat(2):'字'.repeat(3)},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}}));
+  vi.spyOn(upstream,'readForReview').mockImplementation(async(_e,_t,id)=>({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:id.startsWith('frozen-')?'字'.repeat(2):'字'.repeat(3)},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}}));
 }
 const submit=()=>submitHosted(env,{memberId:'member-10001',account:10001,role:role({roleId:'short-draft',authorNumId:10001}),token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
 

@@ -16,20 +16,21 @@ import type { ProviderId } from '@/lib/provider';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import VisibilityPicker from './VisibilityPicker.vue';
 import CreatorSeasonEntry from './CreatorSeasonEntry.vue';
-const props=withDefaults(defineProps<{id:string;provider:ProviderId;actor:string;name:string;token:()=>Promise<string|null>;cardId?:string;inline?:boolean;editor?:boolean;dirty?:boolean;missing?:string;quotaFull?:boolean;disabled?:boolean;dialogOnly?:boolean}>(),{inline:false,editor:false});
+const props=withDefaults(defineProps<{id:string;provider:ProviderId;actor:string;name:string;token:()=>Promise<string|null>;cardId?:string;inline?:boolean;editor?:boolean;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;disabled?:boolean;dialogOnly?:boolean}>(),{inline:false,editor:false});
 const visibilityEnabled=useWorkVisibilityCapability();
-const emit=defineEmits<{changed:[value:WorkVisibility];submit:[value:WorkVisibility];missing:[reason?:'presetTag'];busy:[value:boolean]}>();
+const emit=defineEmits<{changed:[value:WorkVisibility];submit:[value:WorkVisibility];missing:[reason?:'presetTag'|'roleBackground'];cover:[];busy:[value:boolean]}>();
 const {t}=useI18n(),{lp}=useLocalePath(),router=useRouter();
 const controller=shallowRef<ReturnType<typeof createVisibilityController>|null>(null);
 const value=computed(()=>controller.value?.value.value??null),phase=computed(()=>controller.value?.phase.value??'ready');
 const openDialog=ref(false),box=ref<HTMLElement|null>(null),shareDone=ref(false),refCode=ref<string|null>(null),invite=ref('');
+const serverMissingCover=ref(false);
 const serverMissingPresetTag=ref(false),presetTagPromptSeq=ref(0);
-const effectiveMissing=computed(()=>props.missing||(!props.editor&&serverMissingPresetTag.value?t('editor.required.presetTag'):''));
+const effectiveMissing=computed(()=>props.missing||(!props.editor?[...(serverMissingCover.value?[t('editor.required.roleBackground')]:[]),...(serverMissingPresetTag.value?[t('editor.required.presetTag')]:[])].join(t('mascot.pet.listSep')):''));
 let previous:HTMLElement|null=null;let generation=0;const localQuotaFull=ref(false);
 const fullQuota=computed(()=>props.quotaFull??localQuotaFull.value);
 async function readQuota(){if(props.quotaFull!==undefined||!value.value||value.value.everPublic)return;try{const token=await props.token();if(!token)return;const {quota}=await fetchMyCards(token,{provider:props.provider,page:1,pageSize:1});localQuotaFull.value=!!quota&&remaining(quota)===0&&(quota.packRemaining??0)===0;}catch{/* Mutations still enforce quota on the server. */}}
 watch(()=>[props.id,props.provider,props.actor,visibilityEnabled.value] as const,async()=>{
- const g=++generation;controller.value=null;refCode.value=null;invite.value='';serverMissingPresetTag.value=false;presetTagPromptSeq.value=0;
+ const g=++generation;controller.value=null;refCode.value=null;invite.value='';serverMissingPresetTag.value=false;serverMissingCover.value=false;presetTagPromptSeq.value=0;
  if(!visibilityEnabled.value||!props.id||!props.actor)return;
  const c=createVisibilityController({id:props.id,provider:props.provider,actor:props.actor,token:props.token});controller.value=c;await c.load();
  if(g!==generation)return;
@@ -55,6 +56,10 @@ function keyboard(e:KeyboardEvent){if(e.key==='Escape'){e.preventDefault();close
 async function apply(access:WorkAccess){
  shareDone.value=false;
  const was=value.value?.access;await controller.value?.apply(access);
+ if(controller.value?.message.value==='cover_required'){
+  if(props.editor){if(openDialog.value)dismiss();emit('missing','roleBackground');return;}
+  await showCoverMissing();return;
+ }
  if(controller.value?.message.value==='preset_tag_required'){
   if(props.editor){if(openDialog.value)dismiss();emit('missing','presetTag');return;}
   serverMissingPresetTag.value=true;presetTagPromptSeq.value++;await nextTick();focusDialog();return;
@@ -68,28 +73,36 @@ async function showPresetTagMissing(){
  presetTagPromptSeq.value++;
  await nextTick();focusDialog();
 }
+async function showCoverMissing(){
+ serverMissingCover.value=true;
+ if(!openDialog.value)await open();
+ presetTagPromptSeq.value++;
+ await nextTick();focusDialog();
+}
+function onCover(){if(openDialog.value)dismiss();if(props.editor){emit('cover');return;}void router.push(platformPath(lp(`/cards/${props.cardId??props.id}/edit?section=basic&focus=cover`),props.provider));}
 function onMissing(){
  if(openDialog.value)dismiss();
- if(props.editor){emit('missing');return;}
- void router.push(platformPath(lp(`/cards/${props.cardId??props.id}/edit?section=basic&focus=tags`),props.provider));
+ if(props.editor){emit('missing',serverMissingCover.value?'roleBackground':undefined);return;}
+ void router.push(platformPath(lp(`/cards/${props.cardId??props.id}/edit?section=basic&focus=${serverMissingCover.value?'cover':'tags'}`),props.provider));
 }
 function submit(){if(!value.value)return;if(openDialog.value)dismiss();emit('submit',value.value);}
 async function reload(){await controller.value?.load();}
-defineExpose({open,reload,value,showPresetTagMissing});
+defineExpose({open,reload,value,showPresetTagMissing,showCoverMissing});
 onBeforeUnmount(()=>{generation++;clearTimeout(poll);if(openDialog.value){const app=document.getElementById('app');if(app)app.inert=appInert;}});
 </script>
 <template>
  <div v-if="visibilityEnabled" class="author-visibility" :class="{'author-visibility--inline':inline}">
   <template v-if="inline"><h2>{{ t('visibility.title') }}</h2>
-   <VisibilityPicker :value="value" :resume-action="controller?.resumeAction.value" :phase="disabled?'saving':phase" :new-card="!id" :dirty="dirty" :missing="effectiveMissing" :select-public="presetTagPromptSeq" :quota-full="fullQuota" :share-url="shareUrl" :appeal-url="invite||lp('/me/community')" @apply="apply" @submit="submit" @cancel-review="controller?.cancelReview()" @check="controller?.check()" @resume="controller?.resume()" @reload="reload" @missing="onMissing"><CreatorSeasonEntry v-if="value&&!value.everPublic" where="editor" /></VisibilityPicker>
+   <VisibilityPicker :value="value" :resume-action="controller?.resumeAction.value" :phase="disabled?'saving':phase" :new-card="!id" :dirty="dirty" :missing="effectiveMissing" :preview-missing="previewMissing" @cover="onCover" :select-public="presetTagPromptSeq" :quota-full="fullQuota" :share-url="shareUrl" :appeal-url="invite||lp('/me/community')" @apply="apply" @submit="submit" @cancel-review="controller?.cancelReview()" @check="controller?.check()" @resume="controller?.resume()" @reload="reload" @missing="onMissing"><CreatorSeasonEntry v-if="value&&!value.everPublic" where="editor" /></VisibilityPicker>
   </template>
   <template v-else-if="!dialogOnly"><p v-if="value" class="muted author-visibility__state" role="status">{{ state }}</p><button type="button" class="btn" :disabled="disabled||!id" :aria-label="`${t('visibility.title')}: ${label}`" @click="open">{{ t('visibility.title') }} <span v-if="value" class="author-visibility__short">{{ label }}</span></button></template>
   <p v-if="controller?.message.value==='conflict'" class="notice" role="status">{{ t('visibility.conflict') }}</p>
   <p v-if="controller?.message.value==='denied'" class="notice notice--error" role="alert">{{ t('state.forbidden') }}</p>
+  <p v-if="controller?.message.value==='publication_fields_required'" class="notice notice--error" role="alert">{{ t('error.publicationFieldsRequired') }}</p>
   <Teleport to="body"><div v-if="openDialog" class="modal-backdrop visibility-backdrop" @click.self="close" @keydown="keyboard"><section ref="box" class="modal panel visibility-dialog" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="visibility-dialog-title">
    <header><h2 id="visibility-dialog-title">{{ t(shareDone?'visibility.share.title':'visibility.title') }}</h2><button type="button" class="btn btn--icon" :disabled="busy" :aria-label="t('visibility.close')" @click="close">×</button></header><p class="visibility-dialog__name" :title="name">{{ name }}</p>
    <p v-if="shareDone" class="muted" role="status">{{ t('visibility.share.hint') }}</p>
-   <VisibilityPicker :value="value" :resume-action="controller?.resumeAction.value" :phase="disabled?'saving':phase" :dirty="dirty" :missing="effectiveMissing" :select-public="presetTagPromptSeq" :quota-full="fullQuota" :share-url="shareUrl" :appeal-url="invite||lp('/me/community')" primary @apply="apply" @submit="submit" @cancel-review="controller?.cancelReview()" @check="controller?.check()" @resume="controller?.resume()" @reload="reload" @missing="onMissing"><CreatorSeasonEntry v-if="value&&!value.everPublic" where="editor" /></VisibilityPicker>
+   <VisibilityPicker :value="value" :resume-action="controller?.resumeAction.value" :phase="disabled?'saving':phase" :dirty="dirty" :missing="effectiveMissing" :preview-missing="previewMissing" @cover="onCover" :select-public="presetTagPromptSeq" :quota-full="fullQuota" :share-url="shareUrl" :appeal-url="invite||lp('/me/community')" primary @apply="apply" @submit="submit" @cancel-review="controller?.cancelReview()" @check="controller?.check()" @resume="controller?.resume()" @reload="reload" @missing="onMissing"><CreatorSeasonEntry v-if="value&&!value.everPublic" where="editor" /></VisibilityPicker>
    <div class="modal__actions"><button type="button" class="btn" :disabled="busy" @click="close">{{ t(shareDone?'visibility.done':'visibility.close') }}</button></div>
   </section></div></Teleport>
  </div>

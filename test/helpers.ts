@@ -72,23 +72,28 @@ export function reviewOn(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_E
 export function reviewOff(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "false"; }
 
 const blankSettings = (roleId: string) => ({
-  document: { roleName: roleId },
+  document: { roleName: roleId, roleTag:["Roleplay"], roleDetailDesc:"Synthetic character definition" },
+  greetings: {welcome:"Welcome",alternates:[],prologue:[]},
   worldbooks: [{entries:[{content:"Synthetic constant setting ".repeat(150),isConstant:true,isEnabled:true}]}],
   hashes: { card: "c", welcome: "w", worldbook: "", authorAsset: "a", content: `sha256:${roleId}` },
 });
 
 export function reviewUpstream(detailFor: (roleId: string) => Record<string, unknown> = blankSettings): void {
+  const settingsFor = (roleId: string) => {
+    const base = blankSettings(roleId), overrides = detailFor(roleId);
+    return {...base,...overrides,document:{...base.document,...(overrides.document as Record<string,unknown>??{})}} as Awaited<ReturnType<typeof real.readForReview>>;
+  };
   settingsReads.length = 0;
   upstream.readForReview = async (_env, token, roleId, provider) => {
     settingsReads.push({ token, roleId, provider });
-    const settings = { ...blankSettings(roleId), ...detailFor(roleId) } as Awaited<ReturnType<typeof real.readForReview>>;
+    const settings = settingsFor(roleId);
     if (!sealed.has(roleId)) sealed.set(roleId, structuredClone(settings));
     return settings;
   };
   sealedReads.length = 0;
   upstream.readSealedForReview = async (_env, roleId, provider) => {
     sealedReads.push({ roleId, provider });
-    return structuredClone(sealed.get(roleId) ?? { ...blankSettings(roleId), ...detailFor(roleId) }) as Awaited<ReturnType<typeof real.readSealedForReview>>;
+    return structuredClone(sealed.get(roleId) ?? settingsFor(roleId)) as Awaited<ReturnType<typeof real.readSealedForReview>>;
   };
 }
 

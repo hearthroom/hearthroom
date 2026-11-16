@@ -23,7 +23,8 @@ async function fixture(unmanaged=false){
  const current={sourceRoleId:source,workId:work,managed:true,access:'private',epoch:2,restriction:'none',state:'complete',replayed:false,
   revisionState:'same',restorable:true,restoreReason:'same',approvalRevision:'approved-opaque-revision',policyRevision:'policy-opaque-revision',providerRestriction:'none',approvedRoleId:approved};
  const receipts=new Map<string,Record<string,unknown>>();
- const behavior={lostReply:false,unavailable:false,commands:0};
+ const behavior={lostReply:false,unavailable:false,commands:0,refusalCode:"cover_required",refusalDetail:undefined as Record<string,unknown>|undefined,coverRefusal:false,advanceAfterCoverRefusal:false,ownerUnavailable:false,loseCoverReadback:false};
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_e,_t,id)=>role({roleId:id,authorNumId:11}));
  if(unmanaged){
   await env.DB.prepare('DELETE FROM managed_work_access').run();await env.DB.prepare('DELETE FROM review_submissions').run();await env.DB.prepare('DELETE FROM cards').run();await env.DB.prepare('DELETE FROM works').run();
   current.managed=false;current.workId='00000000-0000-0000-0000-000000000000';current.epoch=0;current.restorable=false;current.revisionState='unknown';current.restoreReason='not_approved';
@@ -40,6 +41,7 @@ async function fixture(unmanaged=false){
    const receipt=receipts.get(path.split('/').at(-1)!);return receipt?Response.json(receipt):Response.json({error:'not_found'},{status:404});
   }
   if(path!==`/open/v1/hosting/work-access/${source}`)throw new Error('Unexpected owner fixture request');
+  if((init?.method??'GET')==='GET'&&behavior.ownerUnavailable)return Response.json({error:'unavailable'},{status:503});
   if((init?.method??'GET')==='GET'&&!new URL(String(input)).searchParams.has('include'))return Response.json(current);
   const bearer=new Headers(init?.headers).get('Authorization');
   const issuerPrepare=init?.method==='POST'&&JSON.parse(String(init.body)).action==='prepare'&&new Headers(init?.headers).get('X-Hosting-Key')==='fixture-issuer';
@@ -47,6 +49,11 @@ async function fixture(unmanaged=false){
   if(bearer==='Bearer readOnly'&&(new URL(String(input)).searchParams.get('intent')==='write'||init?.method==='POST'))return Response.json({error:'insufficient_scope'},{status:403});
   if(init?.method==='POST'){
    if(behavior.unavailable)return Response.json({error:'hosting_unavailable'},{status:503});
+   if(behavior.coverRefusal){
+    if(behavior.advanceAfterCoverRefusal){current.epoch++;current.policyRevision='newer-owner-revision';}
+    if(behavior.loseCoverReadback)behavior.ownerUnavailable=true;
+    return Response.json({error:behavior.refusalCode,detail:behavior.refusalDetail},{status:422});
+   }
    const command=JSON.parse(String(init.body)) as {operationId:string;workId:string;expectedEpoch:number;expectedOwnerRevision?:string;action:string;access?:string;versionRoleId?:string};
    const prior=receipts.get(command.operationId);if(prior)return Response.json({...prior,replayed:true});
    if(command.expectedEpoch!==current.epoch||command.expectedOwnerRevision!==current.policyRevision)return Response.json({error:'work_access_conflict'},{status:409});
@@ -683,4 +690,66 @@ it('returns unknown metadata for legacy reviews and counts unavailable owner aut
  network.mockRejectedValue(new Error('fixture unavailable'));
  expect((await request(`/v1/me/cards/${source}/review-status`)).status).toBe(503);
  expect((await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='review_status' AND operation='read' AND outcome='error'").first<{value:number}>())?.value).toBe(1);
+});
+
+it.each(['cover_required','publication_fields_required'])('recovers an older pending restore rejected by %s without leaving its author fence',async code=>{
+ const {work,card,behavior}=await fixture();
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ const intent=await command(card.id,'public');
+ behavior.unavailable=true;
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(202);
+ behavior.unavailable=false;behavior.coverRefusal=true;behavior.refusalCode=code;
+ if(code==='publication_fields_required')behavior.refusalDetail={missing:['opening'],unexpected:'synthetic private value'};
+ const response=await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ expect(response.status).toBe(409);
+ const body=await response.json();
+ expect(body).toMatchObject({error:code,operation:{state:'conflict'}});
+ if(code==='publication_fields_required'){
+  expect(body).toMatchObject({detail:{missing:['opening']}});
+  const readback=await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`);
+  expect(await readback.json()).toMatchObject({error:code,detail:{missing:['opening']}});
+  expect(JSON.stringify(body)).not.toContain('synthetic private value');
+ }
+ expect(await env.DB.prepare('SELECT access,sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({access:'private',sync_state:'complete',sync_operation_id:null});
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations WHERE operation_id=?').bind(intent.operationId).first('state')).toBe('conflict');
+ expect(behavior.commands).toBe(0);
+});
+
+it('keeps a refused restore fenced when owner authority advanced after the refusal',async()=>{
+ const {work,card,current,behavior}=await fixture();
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ const intent=await command(card.id,'public');
+ behavior.unavailable=true;await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ behavior.unavailable=false;behavior.coverRefusal=true;behavior.advanceAfterCoverRefusal=true;
+ const response=await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ expect(response.status).toBe(202);expect(current.epoch).toBe(3);
+ expect(await env.DB.prepare('SELECT sync_state FROM managed_work_access WHERE work_id=?').bind(work).first('sync_state')).toBe('changing');
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations WHERE operation_id=?').bind(intent.operationId).first('state')).toBe('pending');
+ expect(behavior.commands).toBe(0);
+});
+
+it('finishes the same refused operation after a temporarily unavailable owner readback',async()=>{
+ const {work,card,behavior}=await fixture();
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ const intent=await command(card.id,'public');
+ behavior.unavailable=true;await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent);
+ behavior.unavailable=false;behavior.coverRefusal=true;behavior.loseCoverReadback=true;
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(202);
+ behavior.ownerUnavailable=false;
+ const response=await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`);
+ expect(response.status).toBe(409);expect(await response.json()).toMatchObject({error:'cover_required',operation:{state:'conflict'}});
+ expect(await env.DB.prepare('SELECT sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({sync_state:'complete',sync_operation_id:null});
+ expect(behavior.commands).toBe(0);
+});
+
+it('keeps authenticated operation GET checks read-only while a restore is pending',async()=>{
+ const {card,behavior}=await fixture();
+ await env.DB.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(card.id).run();
+ const intent=await command(card.id,'public');
+ behavior.unavailable=true;
+ expect((await request(`/v1/me/cards/${card.id}/visibility`,'owner',intent)).status).toBe(202);
+ behavior.unavailable=false;
+ const response=await request(`/v1/me/cards/${card.id}/visibility/operations/${intent.operationId}`);
+ expect(response.status).toBe(202);
+ expect(behavior.commands).toBe(0);
 });
