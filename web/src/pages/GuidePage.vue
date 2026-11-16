@@ -113,6 +113,7 @@ onBeforeUnmount(() => observer?.disconnect());
 
 <style scoped>
 .page--doc { max-width: 1180px; }
+.page--doc:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
 .doc-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--s-7); align-items: start; }
 .toc { position: sticky; top: calc(var(--header-h) + var(--s-4)); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; }
 .toc__fold > summary { list-style: none; cursor: default; }
