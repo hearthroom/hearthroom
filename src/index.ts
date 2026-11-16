@@ -1,3 +1,4 @@
+import {setCardCommentPin} from './card-comment-pin';
 import {parseCountryRegion, updateCountryRegion} from './country-region';
 import { promoCampaign } from './promo-attribution';
 import {viewerCountryRegion, assertRegionCard, viewerAllowsAdultContent, normalizeHiddenTags, confirmAdult} from './members';
@@ -1322,6 +1323,14 @@ app.get("/v1/cards/:id/comments", async (c) => {
   const card = await commentCardFor(c);
   const res = await listTop(c.env.DB, { kind: "card", card }, await commentViewer(c), pageOf(c.req.query("page")), sortOf(c.req.query("sort")));
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
+});
+
+for (const method of ['put','delete'] as const) app[method]('/v1/cards/:id/comments/:commentId/pin', async c => {
+ const member=await requireMember(c);
+ const card=await commentCardFor(c);
+ const result=await setCardCommentPin(c.env.DB,card,c.req.param('commentId'),member.id,method==='put',Date.now());
+ queuePush(c);
+ return c.json(result);
 });
 
 app.get("/v1/cards/:id/comments/count", async (c) => {

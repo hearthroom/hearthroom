@@ -81,7 +81,7 @@ export async function cardAuthorMemberId(db: D1Database, card: CommentCard): Pro
 interface Row {
   id: string; card_id: string; member_id: string; parent_id: string | null; root_id: string | null;
   content: string; reply_to_name: string; like_count: number; reply_count: number; created_at: number; status: string;
-  handle: string; display_name: string | null; avatar_url: string; liked: number; score: number | null; official?: number;
+  handle: string; display_name: string | null; avatar_url: string; liked: number; score: number | null; official?: number; pinned_at: number | null;
 }
 
 export interface Viewer {
@@ -91,7 +91,7 @@ export interface Viewer {
 }
 
 /** 回應形狀沿用前端既有的欄位名（留言面板不用改版面）；留言者用本站的公開 ID，不帶任何供應商身分。 */
-function view(r: Row, viewer: Viewer, authorMemberId: string | null, post: boolean) {
+function view(r: Row, viewer: Viewer, authorMemberId: string | null, post: boolean, card = false) {
   const mine = !!viewer.memberId && viewer.memberId === r.member_id;
   const removed = r.status === "removed" || r.status === "deleted";
   // 被移除的佔位只說「這裡有過一則留言」，不留是誰寫的、評了幾星、多少讚。
@@ -115,13 +115,14 @@ function view(r: Row, viewer: Viewer, authorMemberId: string | null, post: boole
     /** 留言者給這張卡的星數（card_scores）；沒評過是 null */
     score: removed ? null : r.score ?? null,
     canDelete: !removed && (mine || (!post && (viewer.moderator || (!!viewer.memberId && viewer.memberId === authorMemberId)))),
+    ...(card && { isPinned: !removed && r.pinned_at != null, canPin: !removed && !r.root_id && !r.parent_id && !!viewer.memberId && viewer.memberId === authorMemberId }),
     /** 文章留言：留言者有寫作權限（官方） */
     ...(post && { official: !removed && r.official === 1 }),
   };
 }
 export type CommentView = ReturnType<typeof view> & { replies?: ReturnType<typeof view>[] };
 
-const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at, c.status,
+const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at, c.status, c.pinned_at,
   m.handle, m.display_name, m.avatar_url,
   EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked,
   ${
@@ -155,19 +156,21 @@ export async function listTop(
   const pin = pinId
     ? await db.prepare(`${SELECT} WHERE c.id = ?2 AND c.post_id = ?3 AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible'`).bind(me, pinId, id).first<Row>()
     : null;
+  const pins = target.kind === "card" ? (await db.prepare(`${SELECT} WHERE c.card_id=?2 AND c.root_id IS NULL AND c.parent_id IS NULL AND ${SHOWN} AND c.pinned_at IS NOT NULL ORDER BY c.pinned_at,c.id`).bind(me,id).all<Row>()).results : pin ? [pin] : [];
   const p = Math.max(1, page);
-  const shift = pin ? 1 : 0;
+  const shift = pins.length;
+  const excluded = target.kind === "card" ? "c.pinned_at IS NULL" : "c.id <> ?5";
   const isRoleCreator = !!viewer.memberId && viewer.memberId === author;
   const [count, tops] = await db.batch<Row & { n: number }>([
     db.prepare(`SELECT COUNT(*) AS n FROM comments WHERE ${col} = ? AND root_id IS NULL AND ((deleted_at IS NULL AND status = 'visible') OR (status = 'removed' AND reply_count > 0))`).bind(id),
-    db.prepare(`${SELECT} WHERE c.${col} = ?2 AND c.root_id IS NULL AND ${TOP_SHOWN} AND c.id <> ?5 ORDER BY ${ORDER[sort]} LIMIT ?3 OFFSET ?4`)
-      .bind(me, id, COMMENT_PAGE_SIZE - (p === 1 ? shift : 0), Math.max(0, (p - 1) * COMMENT_PAGE_SIZE - shift), pin?.id ?? ""),
+    db.prepare(`${SELECT} WHERE c.${col} = ?2 AND c.root_id IS NULL AND ${TOP_SHOWN} AND ${excluded} ORDER BY ${ORDER[sort]} LIMIT ?3 OFFSET ?4`)
+      .bind(me, id, COMMENT_PAGE_SIZE - (p === 1 ? shift : 0), Math.max(0, (p - 1) * COMMENT_PAGE_SIZE - shift), ...(target.kind === "card" ? [] : [pin?.id ?? ""])),
     ...(target.kind === "card" && isRoleCreator && viewer.memberId
       ? [db.prepare("UPDATE community_notifications SET read_at = ? WHERE event_key = ? AND member_id = ? AND read_at IS NULL").bind(Date.now(), `card_comments:${id}`, viewer.memberId)]
       : []),
   ]);
-  const rows = [...(pin && p === 1 ? [pin] : []), ...(tops!.results as Row[])];
-  const comments: CommentView[] = rows.map((r) => view(r, viewer, author, post));
+  const rows = [...(p === 1 ? pins : []), ...(tops!.results as Row[])];
+  const comments: CommentView[] = rows.map((r) => view(r, viewer, author, post, target.kind === "card"));
   // 回覆預覽：讚多的在前，同讚先到先排。一次查完這一頁所有頂層的回覆再分組，不逐則查。
   // 登入的人還要查自己被攔下的回覆（不計入 reply_count），所以登入時整頁都查；訪客只查有公開回覆的。
   const withReplies = rows.filter((r) => viewer.memberId || r.reply_count > 0).map((r) => r.id);
@@ -179,7 +182,7 @@ export async function listTop(
       .all<Row>();
     for (const c of comments) {
       const mine = replies.results.filter((r) => r.root_id === c.commentId).slice(0, REPLY_PREVIEW);
-      if (mine.length) c.replies = mine.map((r) => view(r, viewer, author, post));
+      if (mine.length) c.replies = mine.map((r) => view(r, viewer, author, post, target.kind === "card"));
     }
   }
   const total = (count!.results[0] as { n: number }).n;
@@ -203,7 +206,7 @@ export async function listReplies(db: D1Database, target: CommentTarget, rootId:
     db.prepare(`${selectFor(target)} WHERE c.${col} = ?2 AND c.root_id = ?3 AND ${SHOWN} ORDER BY c.created_at ASC, c.id ASC LIMIT ?4 OFFSET ?5`)
       .bind(viewer.memberId ?? "", id, rootId, COMMENT_PAGE_SIZE, offset),
   ]);
-  return { total: (count!.results[0] as { n: number }).n, replies: (rows!.results as Row[]).map((r) => view(r, viewer, author, target.kind === "post")) };
+  return { total: (count!.results[0] as { n: number }).n, replies: (rows!.results as Row[]).map((r) => view(r, viewer, author, target.kind === "post", target.kind === "card")) };
 }
 
 export async function countTop(db: D1Database, target: CommentTarget): Promise<number> {

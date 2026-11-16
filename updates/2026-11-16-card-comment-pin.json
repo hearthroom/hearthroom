@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "卡片作者現在可以把評論置頂在評論區最上方。",
+    "zh-Hans": "卡片作者现在可以把评论置顶在评论区最上方。",
+    "en": "Card authors can now pin comments to the top of their comment section.",
+    "ja": "カードの作者がコメント欄の一番上にコメントを固定できるようになりました。",
+    "ko": "이제 카드 작가가 댓글창 맨 위에 댓글을 고정할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "置頂的評論會標示「作者置頂」，方便讀者先看到補充說明或精選心得，留言者也會收到通知。",
+    "zh-Hans": "置顶的评论会标有“作者置顶”，方便读者先看到补充说明或精选心得，评论者也会收到通知。",
+    "en": "Pinned comments carry a “Pinned by author” badge so readers see notes or standout reviews first, and commenters get notified.",
+    "ja": "固定されたコメントには「作者が固定」と表示され、補足や感想が最初に目に入るほか、投稿者にも通知が届きます。",
+    "ko": "고정된 댓글에는 ‘작가 고정’ 배지가 붙어 안내나 추천 후기를 먼저 볼 수 있고, 댓글 작성자에게도 알림이 가요."
+  }
+}
