@@ -3,11 +3,11 @@
   "audience": "everyone",
   "try": "/library",
   "title": {
-    "zh-Hant": "日里卡的開場按鈕、訊息選項與自訂樣式能在對話中使用了。",
-    "zh-Hans": "日里卡的开场按钮、消息选项和自定义样式现在能在对话中使用了。",
-    "en": "Rili cards now support opening buttons, message options and custom styles in chat.",
-    "ja": "日里カードの開幕ボタン、メッセージ内の選択肢、独自スタイルに対応しました。",
-    "ko": "이제 대화에서 Rili 카드의 시작 버튼, 메시지 선택지, 사용자 지정 스타일을 사용할 수 있어요."
+    "zh-Hant": "RiliAI 卡的開場按鈕、訊息選項與自訂樣式能在對話中使用了。",
+    "zh-Hans": "RiliAI 卡的开场按钮、消息选项和自定义样式现在能在对话中使用了。",
+    "en": "RiliAI cards now support opening buttons, message options and custom styles in chat.",
+    "ja": "RiliAIカードの開幕ボタン、メッセージ内の選択肢、独自スタイルに対応しました。",
+    "ko": "이제 대화에서 RiliAI 카드의 시작 버튼, 메시지 선택지, 사용자 지정 스타일을 사용할 수 있어요."
   },
   "body": {
     "zh-Hant": "點選卡片選項可填入或補上輸入框內容，送出前仍可修改。",

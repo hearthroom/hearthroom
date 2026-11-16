@@ -267,12 +267,13 @@ describe("日里匯出檔：網頁落點與變數驗證", () => {
       "import.rili.modFile",
       "import.rili.otherFields",
     ];
+    // RiliAI 是統一平台名；字元上限同步名稱，實際 390px 寬度另由瀏覽器驗證。
     const kindJsonBudget: Record<(typeof locales)[number], number> = {
-      "zh-Hant": 7,
-      "zh-Hans": 7,
-      en: 12,
-      ja: 7,
-      ko: 8,
+      "zh-Hant": 9,
+      "zh-Hans": 9,
+      en: 14,
+      ja: 9,
+      ko: 9,
     };
     const kindRiliBudget: Record<(typeof locales)[number], number> = {
       "zh-Hant": 6,
