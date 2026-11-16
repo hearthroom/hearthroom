@@ -979,6 +979,7 @@ export interface Comment {
   isOwner: boolean;
   isCreator: boolean;
   isPinned?: boolean;
+  canPin?: boolean;
   canDelete: boolean;
   /** 留言者給這張卡的星數；沒評過是 null。舊版回應沒有這一欄。 */
   score?: number | null;
@@ -1022,6 +1023,11 @@ export async function createComment(on: CommentOn, body: { content: string; pare
   return json<{ commentId: string; status: "visible" }>(
     await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }),
   );
+}
+
+/** Card-author action; the server validates ownership and the public root target. */
+export async function setCardCommentPin(cardId:string,commentId:string,pin:boolean,token:string):Promise<{isPinned:boolean}> {
+ return json(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/comments/${encodeURIComponent(commentId)}/pin`, {method:pin?'PUT':'DELETE',headers:commentHeaders(token)}));
 }
 
 export async function deleteComment(commentId: string, token: string): Promise<void> {

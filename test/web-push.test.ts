@@ -100,3 +100,15 @@ it('says which kind of review, publication, grant and claim it was', () => {
  expect(pushLine({ ...row('review_result', { status: 'approved' }), card_names: null }, 'zh-Hant')).toBe('審核結果已更新');
  expect(pushLine({ ...row('comment_reply', null), card_names: null }, 'en')).toBe('Someone replied to your comment');
 });
+
+it('keeps card pin notifications on site even for a browser subscriber', async () => {
+ const e=configured();
+ await saveSubscription(e,fan,{...sub(8),locale:'en'});
+ const id=await say('fan','pick this comment');
+ const res=await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments/${id}/pin`,{method:'PUT',headers:bearer('author')});
+ expect(res.status).toBe(200);
+ expect(await env.DB.prepare("SELECT kind,delivered FROM community_notifications WHERE event_key=?").bind('comment-pin:'+id).first()).toEqual({kind:'comment_pinned',delivered:1});
+ const sends:unknown[]=[];
+ await dispatchPush(e,async(_sub,data)=>{sends.push(data);return 201;});
+ expect(sends).toEqual([]);
+});

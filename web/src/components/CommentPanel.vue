@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { CARD_PIN_LIMIT } from "../../../shared/card-comment-pin";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import ReportCommentDialog from "@/components/ReportCommentDialog.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import { ApiError, createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment, type CommentOn, type CommentSort } from "@/lib/api";
+import { ApiError, setCardCommentPin, createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment, type CommentOn, type CommentSort } from "@/lib/api";
 import { dateTime, hueFrom, relativeTime } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -77,7 +78,41 @@ const blocked = computed(() => closed.value || mutedUntil.value !== undefined);
 const canPin = computed(() => isPost.value && reviewer.blogWriter);
 const pinning = ref(false);
 async function togglePin(c: Comment) {
-  if (on.value.kind !== "post" || pinning.value) return;
+  if (pinning.value) return;
+  if (on.value.kind === "card") {
+    if (!c.canPin) return;
+    const pin = !c.isPinned;
+    if (pin && comments.value.filter(item => item.isPinned).length >= CARD_PIN_LIMIT) {
+      say(t('comment.pinLimit', {limit:CARD_PIN_LIMIT}));
+      return;
+    }
+    pinning.value = true;
+    try {
+      const token = await session.accessToken();
+      if (!token) throw new Error(t('auth.expired'));
+      await setCardCommentPin(on.value.cardId,c.commentId,pin,token);
+      c.isPinned = pin;
+      if (pin) {
+        const rest = comments.value.filter(item => item.commentId !== c.commentId);
+        const firstNormal = rest.findIndex(item => !item.isPinned);
+        rest.splice(firstNormal < 0 ? rest.length : firstNormal,0,c);
+        comments.value = rest;
+      } else if (hasMore.value) {
+        // The unpinned comment may belong beyond the loaded prefix. Reset offsets.
+        await load(true);
+      } else {
+        comments.value.sort((a,b) => Number(!!b.isPinned)-Number(!!a.isPinned) || (a.isPinned && b.isPinned ? 0 : Date.parse(b.createTime)-Date.parse(a.createTime) || b.commentId.localeCompare(a.commentId)));
+      }
+      say(t(pin ? 'comment.pinSuccess' : 'comment.unpinSuccess'));
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'comment_pin_limit') {
+        say(t('comment.pinLimit', {limit:CARD_PIN_LIMIT}));
+        await load(true);
+      } else say(t('comment.pinFailed'));
+    } finally { pinning.value = false; }
+    return;
+  }
+  if (on.value.kind !== "post") return;
   pinning.value = true;
   error.value = "";
   try {
@@ -231,7 +266,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
 </script>
 
 <template>
-  <section class="cmt">
+  <section class="cmt" :class="{ 'cmt--card': on.kind === 'card' }">
     <!-- 發表區：登入才能寫；沒登入放一顆登入鍵，不藏 -->
     <p v-if="closed" class="notice cmt__closed">{{ $t("comment.closed") }}</p>
     <p v-else-if="mutedUntil !== undefined" class="notice cmt__closed" data-muted>{{ mutedText }}</p>
@@ -257,7 +292,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
     <p v-else-if="!comments.length" class="cmt__empty muted">{{ $t("comment.empty") }}</p>
 
     <ul v-else class="cmt__list">
-      <li v-for="c in comments" :key="c.commentId" class="cmt__item">
+      <li v-for="c in comments" :key="c.commentId" class="cmt__item" :class="{ 'cmt__item--pinned': on.kind === 'card' && c.isPinned }">
         <CommunityAvatar v-if="!c.removed" :handle="c.handle" :src="c.accountAvatar" :name="c.accountNickName" class="cmt__face" />
         <div class="cmt__body">
           <!-- 被移除的頂層只留一行說明；底下的回覆照常 -->
@@ -267,7 +302,8 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
             <CommunityName :handle="c.handle" :name="c.accountNickName" class="cmt__name" />
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.official" class="cmt__badge">{{ $t("comment.official") }}</span>
-            <span v-if="c.isPinned || (pinnedId && c.commentId === pinnedId)" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
+            <span v-if="on.kind === 'card' && c.isPinned" class="cmt__badge cmt__badge--author-pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m15 3 6 6-3 1-4 4v4l-2 2-3-5-5-3 2-2h4l4-4 1-3Z"/><path d="m8 16-5 5"/></svg>{{ $t("comment.authorPinned") }}</span>
+            <span v-if="on.kind === 'post' && (c.isPinned || (pinnedId && c.commentId === pinnedId))" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
             <span v-if="c.score" class="cmt__stars" role="img" :aria-label="$t('score.stars', { n: c.score })">{{ "★".repeat(c.score) }}<span class="cmt__stars-off">{{ "★".repeat(5 - c.score) }}</span></span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
           </div>
@@ -278,7 +314,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
               {{ c.likeCount || "" }}
             </button>
             <button v-if="session.me && !blocked" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
-            <button v-if="canPin" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t(pinnedId === c.commentId ? "comment.unpin" : "comment.pin") }}</button>
+            <button v-if="canPin || (on.kind === 'card' && c.canPin)" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t((on.kind === 'card' ? c.isPinned : pinnedId === c.commentId) ? "comment.unpin" : "comment.pin") }}</button>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
             <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
           </div>
@@ -349,6 +385,9 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
 .cmt__list, .cmt__replies { list-style: none; margin: 0; padding: 0; display: grid; }
 .cmt__item { display: flex; gap: var(--s-3); padding: var(--s-4) 0; box-shadow: 0 -1px 0 var(--line); }
 .cmt__item:first-child { box-shadow: none; padding-top: 0; }
+.cmt__item.cmt__item--pinned { padding: var(--s-4); border-radius: var(--r-sm); background: var(--surface-2); box-shadow: none; margin-bottom: var(--s-2); }
+.cmt__badge--author-pin { display: inline-flex; align-items: center; gap: var(--s-1); white-space: nowrap; }
+.cmt__badge--author-pin svg { width: 11px; height: 11px; flex: none; }
 .cmt__body { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .cmt__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cmt__name { font-size: 13.5px; font-weight: 600; }
@@ -359,6 +398,8 @@ a.cmt__name:hover { color: var(--accent-text); }
 .cmt__text { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 .cmt__to { color: var(--accent-text); }
 .cmt__actions { display: flex; gap: var(--s-3); margin-top: 2px; }
+.cmt--card .cmt__actions { flex-wrap: wrap; row-gap: 2px; }
+.cmt--card > .toast { width: max-content; max-width: calc(100vw - var(--s-4) - var(--s-4)); }
 .cmt__act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; font-size: 12.5px; color: var(--text-3); cursor: pointer; }
 .cmt__act svg { width: 14px; height: 14px; }
 .cmt__act:hover { color: var(--text); }

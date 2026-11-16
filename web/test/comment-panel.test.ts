@@ -11,6 +11,7 @@ const base = { parentId: "", rootId: "", replyToNickName: "", likeCount: 0, repl
 const comment = (id: string, extra: Record<string, unknown> = {}) => ({ ...base, commentId: id, content: `text ${id}`, accountNickName: `name ${id}`, handle: `h${id}`, isOwner: false, canDelete: false, status: "visible", removed: false, ...extra });
 
 const api = vi.hoisted(() => ({
+  setCardCommentPin: vi.fn(async () => ({isPinned:true})),
   list: [] as unknown[],
   fetchComments: vi.fn(),
   fetchReplies: vi.fn(async () => ({ total: 0, replies: [] })),
@@ -51,6 +52,44 @@ async function mount(props: Record<string, unknown> = { cardId: "1", roleId: "r1
 }
 const t = (k: string) => i18n.global.t(k);
 const buttons = (root: ParentNode, text: string) => [...root.querySelectorAll("button")].filter((b) => b.textContent?.trim() === text);
+
+it("pins an authorized card comment in place and preserves the composer", async () => {
+  api.list=[comment('first'),comment('older',{canPin:true})];
+  await mount();
+  expect(buttons(host,t('comment.pin'))).toHaveLength(1);
+  const requests=api.fetchComments.mock.calls.length;
+  const draft=host.querySelector<HTMLTextAreaElement>('.cmt__composer textarea')!;
+  draft.value='keep draft';draft.dispatchEvent(new Event('input'));await nextTick();
+  buttons(host,t('comment.pin'))[0]!.click();
+  await vi.waitFor(()=>expect(api.setCardCommentPin).toHaveBeenCalledWith('1','older',true,'synthetic'));
+  await vi.waitFor(()=>expect(host.querySelector('.cmt__item .cmt__text')?.textContent).toBe('text older'));
+  expect(api.fetchComments).toHaveBeenCalledTimes(requests);
+  expect(draft.value).toBe('keep draft');
+  expect(host.querySelector('.cmt__item--pinned')?.textContent).toContain(t('comment.authorPinned'));
+  expect(host.querySelector('[role=status]')?.textContent).toBe(t('comment.pinSuccess'));
+  buttons(host,t('comment.unpin'))[0]!.click();
+  await vi.waitFor(()=>expect(api.setCardCommentPin).toHaveBeenLastCalledWith('1','older',false,'synthetic'));
+  await vi.waitFor(()=>expect(host.querySelector('.cmt__item--pinned')).toBeNull());
+});
+
+it("explains the pin cap without disabling the button or sending a request", async () => {
+  api.list=[comment('p1',{isPinned:true,canPin:true}),comment('p2',{isPinned:true,canPin:true}),comment('p3',{isPinned:true,canPin:true}),comment('fourth',{canPin:true})];
+  await mount();
+  const n=api.setCardCommentPin.mock.calls.length;
+  const b=buttons(host,t('comment.pin'))[0]!;
+  expect(b.disabled).toBe(false);b.click();await nextTick();
+  expect(api.setCardCommentPin).toHaveBeenCalledTimes(n);
+  expect(host.querySelector('[role=status]')?.textContent).toBe(i18n.global.t('comment.pinLimit',{limit:3}));
+});
+
+it("keeps the list unchanged and shows a status message when pinning fails", async () => {
+  api.list=[comment('first'),comment('other',{canPin:true})];
+  api.setCardCommentPin.mockRejectedValueOnce(new Error('network'));
+  await mount();buttons(host,t('comment.pin'))[0]!.click();
+  await vi.waitFor(()=>expect(host.querySelector('[role=status]')?.textContent).toBe(t('comment.pinFailed')));
+  expect(host.querySelector('.cmt__item .cmt__text')?.textContent).toBe('text first');
+  expect(host.querySelector('.notice--error')).toBeNull();
+});
 
 it("shows a new comment right away with the usual actions and no review badge (rules only flag it for moderators)", async () => {
   await mount();
