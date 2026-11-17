@@ -85,6 +85,7 @@ jobs:
         working-directory: stage
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+          NATIVE_BROWSER_TRACE: "1"
         run: |
           npm test
           npm run i18n:check

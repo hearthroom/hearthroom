@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node scripts/i18n-check.mjs && vitest run",
+    "test": "node scripts/i18n-check.mjs && node ../stage/scripts/run-tests.mjs --dir test",
     "typecheck": "vue-tsc --noEmit",
     "i18n": "node scripts/i18n-check.mjs",
     "i18n:unused": "node scripts/i18n-unused.mjs"
