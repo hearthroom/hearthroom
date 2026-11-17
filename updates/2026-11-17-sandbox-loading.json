@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "自訂畫面的卡片開啟得更快了。",
+    "zh-Hans": "自定义画面的卡片打开得更快了。",
+    "en": "Cards with a custom page now open faster.",
+    "ja": "画面を自作したカードの表示が速くなりました。",
+    "ko": "화면을 직접 꾸민 카드가 더 빠르게 열려요."
+  }
+}
