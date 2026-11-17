@@ -65,7 +65,7 @@ let router: Router;
 beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); resetInlineBoardForTest(); document.getElementById("board-inline")?.remove(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; empty = new Set(); hotIncludesDay = false; });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
-async function open(path = "/", position?: number) {
+async function open(path = "/", position?: number, state: "loaded" | "loading" = "loaded") {
   el = document.createElement("div");
   document.body.appendChild(el);
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: BoardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
@@ -78,9 +78,14 @@ async function open(path = "/", position?: number) {
   app.provide(boardListEndKey, listEndAllowed);
   app.mount(el);
   // 跟正式站一樣：頁面先開始讀榜，身分之後才到
-  void useSession().restore();
-  await later(200, () => null);
-  await nextTick();
+  await useSession().restore();
+  // A restored identity can trigger another board load. Observe its real loading
+  // state; the individual tests still decide whether the returned cards are right.
+  await vi.waitUntil(async () => {
+    await nextTick();
+    const loading = !!el!.querySelector('[data-board-tail] > .sr-only[role="status"]');
+    return loading === (state === "loading");
+  }, { timeout: 4000, interval: 10 });
 }
 
 describe("首頁第一次讀榜", () => {
@@ -92,6 +97,8 @@ describe("首頁第一次讀榜", () => {
 
   it("第一次拿到的跟開關對不上（伺服器沒認出來）：身分到了照舊重讀一次", async () => {
     cookieAdult = false;
+    // The first response deliberately arrives after the former 200ms setup sleep.
+    boardDelay = 260;
     await open();
     expect(el!.textContent).toContain("day（成人版）");
     expect(landingCalls(), boardCalls.join("\n")).toHaveLength(2);
@@ -264,6 +271,6 @@ describe("桌寵到底台詞的清單事實", () => {
     empty = new Set(['day', 'week', 'month', 'hot']); await open(); expect(listEndAllowed.value).toBe(false);
   });
   it("仍在載入不允許", async () => {
-    boardDelay = 600; await open(); expect(listEndAllowed.value).toBe(false);
+    boardDelay = 600; await open("/", undefined, "loading"); expect(listEndAllowed.value).toBe(false);
   });
 });
