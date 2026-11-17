@@ -1,10 +1,10 @@
 {
   "tier": "fix",
   "title": {
-    "zh-Hant": "沙箱卡片與聊天記錄載入時更順暢。",
-    "zh-Hans": "沙箱卡片和聊天记录加载时更流畅。",
-    "en": "Sandbox cards and chat history now load more smoothly.",
-    "ja": "サンドボックスカードとチャット履歴をよりスムーズに読み込めるようになりました。",
-    "ko": "샌드박스 카드와 대화 기록을 더 부드럽게 불러와요."
+    "zh-Hant": "沙箱卡片的介面與聊天記錄載入時更順暢。",
+    "zh-Hans": "沙箱卡片的界面和聊天记录加载时更流畅。",
+    "en": "Sandbox cards now load their interface and chat history more smoothly.",
+    "ja": "サンドボックスカードの画面とチャット履歴をよりスムーズに読み込めるようになりました。",
+    "ko": "샌드박스 카드의 화면과 대화 기록을 더 부드럽게 불러와요."
   }
 }
