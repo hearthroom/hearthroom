@@ -360,6 +360,9 @@ app.get("/v1/image", async (c) => {
   if (hit) return hit;
 
   const res = await fetch(target.toString(), { headers: { "User-Agent": "Hearthroom/0.1 (image export)" } });
+  // 圖本來就不存在（上游 404／410）是呼叫端給了壞網址，不是我們的上游壞了：照實回 404，
+  // 不然探測不存在的圖會把 5xx 告警灌滿（2026-11-17 一個來源在 20 分鐘內打出 200 多筆 502）。
+  if (res.status === 404 || res.status === 410) throw new HttpError(404, "image not found");
   if (!res.ok) throw new HttpError(502, `image fetch failed with ${res.status}`);
   const type = res.headers.get("content-type") ?? "";
   if (!type.startsWith("image/")) throw new HttpError(502, "not an image");
