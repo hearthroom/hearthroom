@@ -64,6 +64,16 @@ describe("圖片代抓（匯出 PNG 卡用）", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it.each([404, 410])("上游說這張圖不存在（%i）：回 404，不包成 502", async (status) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("gone", { status })));
+    expect((await get("/v1/image?u=" + encodeURIComponent("https://assets.harperharbor.com/missing.png"))).status).toBe(404);
+  });
+
+  it.each([403, 500, 503])("上游自己出問題（%i）：仍回 502", async (status) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status })));
+    expect((await get("/v1/image?u=" + encodeURIComponent("https://assets.harperharbor.com/a.png"))).status).toBe(502);
+  });
+
   it("上游回的不是圖就不轉：這條路不能變成任意內容的代理", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>", { headers: { "content-type": "text/html" } })));
     expect((await get("/v1/image?u=" + encodeURIComponent("https://assets.harperharbor.com/x"))).status).toBe(502);
