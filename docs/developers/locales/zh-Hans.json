@@ -715,7 +715,7 @@
   "d296d5684a2ef": "`upload_missing`（未 PUT 任何数据至签名 URL，或已被消耗）。",
   "d55c088b5af20": "`file_too_large`。",
   "db2fa962be7bb": "连接已验证身份的对话流",
-  "d8cae82000dee": "需要 chat.play。签发随机、一次性且有效 30 秒的票证。连接 /open/v1/conversation/ws?protocolVersion=2，第一个帧发送 {\"type\":\"auth\",\"ticket\":\"...\"}。等待 ready 后再发送。第一回合包含 conversationId、message 与稳定的 clientOperationId；operationKind 为 send。从服务目录选择可用模型与思考深度。以 rewrite 重新生成最新助理回合；以 retry_generation 与 resumeFromOperationId 接续中断的 Agent 准备。仍不支持续写回复。SSE 格式 WebSocket 帧包含 streamMeta、accepted、messageMeta、answer／thinking 增量、operationStatus、done。重新连接时使用 resumeStreamId 与 lastEventId 重放持久保存的区块；mode=tryResume 加 conversationId 可寻找活动操作。重复使用 clientOperationId 却提供不同输入会返回冲突。bearer 与票证都不可放在 URL。Agent 模式采已保存的 /player/agent-mode 偏好，或逐回合的 agentMode 覆盖。请检查所选模型的 runtimeEnabled 与 modelSupported。具工具能力的付费模型会产生持久化 prepStep 进度与 agentTurn=true 操作状态。准备中断会提供 reasonCode=agent_progress_preserved、state=failed_retryable，且 allowedActions 包含 continue。30 天内使用新的 clientOperationId、相同消息、以及 resumeFromOperationId 接续；不会创建第二则 USER 消息。也可以改送另一个模型：已保存的进度会在该模型上接着跑，剩余工作按该模型计费。过期或不符的接续会安全拒绝；空白 resumeFromOperationId 表示新回合。编辑历史记录会使接续失效。点数逐步预留；每次运行只结算一次实际输入／输出／缓存总用量，包含用户停止或上游失败前的用量。内部持久化失败不收费。接续只收取添加的上游工作费用。一般 /v1/chat/completions 仍是调用方管理的工具 API。",
+  "d8cae82000dee": "需要 chat.play。签发随机、一次性且有效 30 秒的票证。连接 /open/v1/conversation/ws?protocolVersion=2，第一个帧发送 {\"type\":\"auth\",\"ticket\":\"...\"}。等待 ready 后再发送。第一回合包含 conversationId、message 与稳定的 clientOperationId；operationKind 为 send。从服务目录选择可用模型与思考深度。以 rewrite 重新生成最新助理回合；以 retry_generation 与 resumeFromOperationId 接续中断的 Agent 准备。仍不支持续写回复。SSE 格式 WebSocket 帧包含 streamMeta、accepted、messageMeta、answer／thinking 增量、operationStatus、done。重新连接时使用 resumeStreamId 与 lastEventId 重放持久保存的区块；mode=tryResume 加 conversationId 可寻找活动操作。重复使用 clientOperationId 却提供不同输入会返回冲突。bearer 与票证都不可放在 URL。Agent 模式采已保存的 /player/agent-mode 偏好，或逐回合的 agentMode 覆盖。请检查所选模型的 runtimeEnabled 与 modelSupported。具工具能力的付费模型会产生持久化 prepStep 进度与 agentTurn=true 操作状态。准备中断会提供 reasonCode=agent_progress_preserved、state=failed_retryable，且 allowedActions 包含 continue。30 天内使用新的 clientOperationId、相同消息、以及 resumeFromOperationId 接续；不会创建第二则 USER 消息。也可以改送另一个模型：已保存的进度会在该模型上接着跑，剩余工作按该模型计费。过期或不符的接续会安全拒绝；空白 resumeFromOperationId 表示新回合。编辑历史记录会使接续失效。点数逐步预留；每次运行只结算一次实际输入／输出／缓存总用量，包含用户停止或上游失败前的用量。内部持久化失败不收费。接续只收取添加的上游工作费用。一般 /v1/chat/completions 仍是调用方管理的工具 API。对话帧的可选字段 `tool` 可选择一个作者私下声明的最终工具调用（CardToolTurnOption）。原生单次回复可包含文字与一个最终 `toolCall`；验证失败时会返回不会被执行的原始参数与 valid:false，且不会重试。固定回合价与按用量计费的规则保持不变。",
   "ddcab3b45c479": "WebSocket 已升级。请在第一个验证帧发送票证。",
   "d3de2702f79ea": "不支持的协定版本。",
   "dcad07f484b4b": "来源不获允许。",
@@ -2682,5 +2682,17 @@
   "d3f371775d47e": "作者送审摘要。",
   "d8eca8019bdf6": "first 表示首次送审；re 表示更新复审。旧记录保留原值。",
   "df44a4d68f261": "作者可见的驳回理由；其他状态为 null。",
-  "d6c60ea267126": "初始为 pending。同一操作重试时返回送审的当前状态；status 仍表示上架状态。"
+  "d6c60ea267126": "初始为 pending。同一操作重试时返回送审的当前状态；status 仍表示上架状态。",
+  "dcb65bbe02440": "各思考设置的精确能力对应。明确指定思考深度时，请使用此条目。",
+  "d542d253c60b8": "有对应线路的实测证据时才会有测量时间；不会返回私有证据或供应商细节。",
+  "d44b7e09145ec": "根节点类型必须是 object；最大 32 KiB、深度 32，只允许本地引用。整份声明上限为 128 KiB。",
+  "da2d4a1e5d95a": "settled=true 时最终收取的点数；为零可能包含免收的情况。",
+  "dd47b0bf20db4": "在实际服务器线路与请求形式上实测的能力。未知（unknown）不代表支持。Agent 资格另行独立判定。严格原生响应格式与图片输入各自需要端到端探测。",
+  "db6dfbd1065db": "WebSocket 对话帧的可选字段，用来选择一个已声明的最终工具调用。未知名称，或实际生效的 Agent／世界模式，会在花费前被拒绝。没有实测的强制调用支持时，改走同一模型的文字路径，返回 toolCall:null 与 reason:unsupported。不能覆盖 schema，也没有执行循环或自动重试。",
+  "d2959125620e9": "智能体配置的作者专用最终工具声明。平台只验证不会被执行的输出，绝不执行该工具。支持有界的 JSON Schema 2020-12 子集，不支持远程或循环引用。",
+  "d79db0b10cfb8": "UTF-8 文本最多 2 KiB。",
+  "daf8e283d3cc9": "作者私有声明。写入时省略表示保留原值，传 [] 表示清除。只能通过已授权的作者详情读取获得，绝不会出现在公开详情或呈现资源中。",
+  "d7b9eb855b07e": "模型原始参数的字节解码成的文本。请勿执行，也不要当作 HTML 渲染。",
+  "da0ba7d9267af": "仅在请求了最终工具调用时出现。null 表示没有可用的最终调用，请查看 reason。不会返回工具声明。content=false、流式传输中或经内容审核时不会出现；只含元数据的页面一律不含参数。",
+  "d199a6d74dc5d": "最终工具结果（不会被执行），或附固定原因的 null。不会返回声明与私有请求快照。"
 }
