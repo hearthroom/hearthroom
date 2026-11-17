@@ -1,11 +1,11 @@
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 
-it('gives the fixed toast its available viewport width without covering the sandbox opening at phone and desktop sizes', () => {
+it('gives the fixed toast its available viewport width without covering the sandbox opening at phone and desktop sizes', async () => {
   const chrome = process.env.CHROME_BIN || [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
@@ -17,6 +17,7 @@ it('gives the fixed toast its available viewport width without covering the sand
   const base = readFileSync('src/styles/base.css', 'utf8');
   const text = JSON.parse(readFileSync('../stage/src/locale/en.json', 'utf8'))['canvas.modelPreferenceFallback'];
   const dir = mkdtempSync(join(tmpdir(), 'play-toast-width-'));
+    let clean = false;
   try {
     const widths = [320, 390, 1440];
     const frames = widths.map(width => {
@@ -30,7 +31,9 @@ it('gives the fixed toast its available viewport width without covering the sand
     }).join('');
     const file = join(dir, 'fixture.html');
     writeFileSync(file, `<script>window.results=[]</script>${frames}<pre id="result"></pre>`);
-    const run = spawnSync(chrome!, ['--headless=new', '--no-sandbox', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${join(dir, 'profile')}`, '--dump-dom', '--virtual-time-budget=1000', `file://${file}`], { encoding: 'utf8', timeout: 20000, maxBuffer: 2 * 1024 * 1024 });
+    clean = false;
+      const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
+      clean = true;
     expect(run.error, run.stderr).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];
@@ -44,5 +47,5 @@ it('gives the fixed toast its available viewport width without covering the sand
       expect(row.hit).toBe('none');
       expect(row.shortWidth, 'short feedback stays compact').toBeLessThan(160);
     }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { if (clean) rmSync(dir, { recursive: true, force: true }); }
 }, 30000);

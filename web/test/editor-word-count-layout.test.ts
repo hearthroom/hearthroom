@@ -1,3 +1,4 @@
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick } from 'vue';
@@ -269,6 +270,7 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
     }
 
     const dir = mkdtempSync(join(tmpdir(), 'editor-word-count-layout-'));
+    let clean = false;
     const shotsDir = process.env.CAPTURE_SHOTS_DIR;
     if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 
@@ -325,20 +327,9 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
 
       const fixture = join(dir, 'fixture.html');
       writeFileSync(fixture, `<!doctype html><meta charset="utf-8"><script>window.results=[]</script>${frames.join('')}<pre id="result"></pre>`);
-      const run = spawnSync(
-        chrome!,
-        [
-          '--headless=new',
-          '--no-sandbox',
-          '--no-first-run',
-          '--no-default-browser-check',
-          `--user-data-dir=${join(dir, 'profile')}`,
-          '--dump-dom',
-          '--virtual-time-budget=2000',
-          `file://${fixture}`,
-        ],
-        { encoding: 'utf8', timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
-      );
+      clean = false;
+      const run = await readNativeFixture(chrome!, fixture, { profile: join(dir, 'profile'), ready: "(()=>{try{return JSON.parse(document.querySelector('#result')?.textContent||'[]').length>=20}catch{return false}})()", timeout: 30000 });
+      clean = true;
       expect(run.error, run.stderr).toBeUndefined();
       expect(run.status, run.stderr).toBe(0);
       const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];
@@ -390,6 +381,7 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
           const outPng = join(shotsDir, sc.name);
           const winW = Math.max(sc.width, 500);
           const winH = sc.height + 160;
+          clean = false;
           const shotRun = spawnSync(
             chrome!,
             [
@@ -407,13 +399,14 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
             { encoding: 'utf8', timeout: 20000 },
           );
           expect(shotRun.status, shotRun.stderr).toBe(0);
+          clean = true;
           const cropped = cropPngTopLeft(readFileSync(rawPng), sc.width, sc.height);
           writeFileSync(outPng, cropped);
           expect(existsSync(outPng), `Expected screenshot ${outPng}`).toBe(true);
         }
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      if (clean) rmSync(dir, { recursive: true, force: true });
       await applyLocale('zh-Hant');
     }
   }, 60000);

@@ -1,17 +1,18 @@
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 
-it('keeps a fitted edge popup inside its safe area throughout the real entrance animation', () => {
+it('keeps a fitted edge popup inside its safe area throughout the real entrance animation', async () => {
   const chrome = process.env.CHROME_BIN || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync);
   expect(chrome, 'Chrome is required for CSS animation composition').toBeTruthy();
   const source = readFileSync('src/components/SukiPet.vue', 'utf8');
   const styles = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
   const tokens = readFileSync('src/styles/tokens.css', 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'pet-popup-animation-'));
+    let clean = false;
   try {
     const frames = [1440, 2560].flatMap(width => ['left', 'right'].map(side => {
       const x = side === 'left' ? -91 : width - 55, shift = side === 'left' ? 120 : -400;
@@ -21,7 +22,9 @@ it('keeps a fitted edge popup inside its safe area throughout the real entrance 
     })).join('');
     const file = join(dir, 'fixture.html');
     writeFileSync(file, `<script>window.rows=[]</script>${frames}<pre id="result"></pre>`);
-    const run = spawnSync(chrome!, ['--headless=new', '--no-sandbox', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${join(dir, 'profile')}`, '--dump-dom', '--virtual-time-budget=1000', `file://${file}`], { encoding: 'utf8', timeout: 20000, maxBuffer: 2 * 1024 * 1024 });
+    clean = false;
+      const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
+      clean = true;
     expect(run.error, run.stderr).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];
@@ -32,5 +35,5 @@ it('keeps a fitted edge popup inside its safe area throughout the real entrance 
       expect(row.left, JSON.stringify(row)).toBeGreaterThanOrEqual(8);
       expect(row.right, JSON.stringify(row)).toBeLessThanOrEqual(row.side === 'right' ? row.width - 312 : row.width - 8);
     }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { if (clean) rmSync(dir, { recursive: true, force: true }); }
 }, 30000);

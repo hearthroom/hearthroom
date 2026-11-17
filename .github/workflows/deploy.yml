@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CAN_DEPLOY: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      NATIVE_BROWSER_TRACE: "1"
       VITE_HARBOR_API_TRANSPORT: ${{ vars.HARBOR_API_TRANSPORT || 'direct' }}
       VITE_HARBOR_PROXY_HOSTS: ${{ vars.HARBOR_PROXY_HOSTS }}
     steps:
@@ -85,7 +86,6 @@ jobs:
         working-directory: stage
         env:
           NODE_OPTIONS: --max-old-space-size=6144
-          NATIVE_BROWSER_TRACE: "1"
         run: |
           npm test
           npm run i18n:check

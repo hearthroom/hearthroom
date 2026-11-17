@@ -1,3 +1,4 @@
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computed, createApp, h, nextTick, ref, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
@@ -381,6 +382,7 @@ describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage an
     }
 
     const dir = mkdtempSync(join(tmpdir(), "author-discord-layout-"));
+    let clean = false;
     const shotsDir = process.env.CAPTURE_SHOTS_DIR;
     if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 
@@ -462,20 +464,9 @@ describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage an
 
       const fixture = join(dir, "fixture.html");
       writeFileSync(fixture, `<!doctype html><meta charset="utf-8"><script>window.results=[]</script>${frames.join("")}<pre id="result"></pre>`);
-      const run = spawnSync(
-        chrome!,
-        [
-          "--headless=new",
-          "--no-sandbox",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          "--dump-dom",
-          "--virtual-time-budget=2000",
-          `file://${fixture}`,
-        ],
-        { encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
-      );
+      clean = false;
+      const run = await readNativeFixture(chrome!, fixture, { profile: join(dir, "profile"), ready: "(()=>{try{return JSON.parse(document.querySelector('#result')?.textContent||'[]').length>=40}catch{return false}})()", timeout: 30000 });
+      clean = true;
       expect(run.error, run.stderr).toBeUndefined();
       expect(run.status, run.stderr).toBe(0);
       const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];
@@ -515,6 +506,7 @@ describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage an
             `<!doctype html><html style="margin:0;padding:0;overflow:hidden"><body style="margin:0;padding:0;overflow:hidden;background:#000"><iframe style="border:0;width:${sc.width}px;height:${sc.height}px;display:block" srcdoc="${escapedInner}"></iframe></body></html>`,
           );
           const outPng = join(shotsDir, sc.name);
+          clean = false;
           const shotRun = spawnSync(
             chrome!,
             [
@@ -532,11 +524,12 @@ describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage an
             { encoding: "utf8", timeout: 20000 },
           );
           expect(shotRun.status, shotRun.stderr).toBe(0);
+          clean = true;
           expect(existsSync(outPng), `Expected screenshot ${outPng}`).toBe(true);
         }
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      if (clean) rmSync(dir, { recursive: true, force: true });
       await applyLocale("zh-Hant");
     }
   }, 60000);

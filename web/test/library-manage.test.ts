@@ -1,7 +1,7 @@
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import {existsSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {spawnSync} from 'node:child_process';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {createApp,h,nextTick,type App} from 'vue';
 import {createMemoryHistory,createRouter,RouterView,type Router} from 'vue-router';
@@ -127,14 +127,17 @@ it('keeps the selected count on one line with reachable actions across five mobi
   }
  }
  const dir=mkdtempSync(join(tmpdir(),'library-mobile-layout-'));
+    let clean = false;
  try{
   const file=join(dir,'fixture.html');writeFileSync(file,`<!doctype html><script>window.results=[]</script>${frames.join('')}<pre id="result"></pre>`);
-  const run=spawnSync(chrome!,['--headless=new','--no-sandbox','--no-first-run','--no-default-browser-check',`--user-data-dir=${join(dir,'profile')}`,'--dump-dom','--virtual-time-budget=2000',`file://${file}`],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
+  clean = false;
+      const run = await readNativeFixture(chrome!, file, { profile: join(dir,'profile'), ready: "(()=>{try{return JSON.parse(document.querySelector('#result')?.textContent||'[]').length>=20}catch{return false}})()", timeout: 30000 });
+      clean = true;
   expect(run.error,run.stderr).toBeUndefined();expect(run.status,run.stderr).toBe(0);
   const json=run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];expect(json,'Expected actual Chrome geometry').toBeTruthy();
   const results=JSON.parse(json!);expect(results).toHaveLength(20);
   for(const r of results){expect(r.oneLine,r.label+': selected count').toBe(true);expect(r.overflow,r.label+': overflow').toBe(false);expect(r.actions,r.label+': reachable actions').toBe(true);}
- }finally{rmSync(dir,{recursive:true,force:true});await applyLocale('zh-Hant');}
+ }finally{if (clean) rmSync(dir,{recursive:true,force:true});await applyLocale('zh-Hant');}
 },40000);
 it('does not subtract a pet retreat on a cold favorites entry before selection starts',async()=>{
  app.unmount();expect(pageAway.value).toBe(0);
