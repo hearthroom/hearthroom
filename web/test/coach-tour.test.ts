@@ -85,6 +85,27 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); app = undefined; vi.restoreAllMocks(); });
 
 describe("走一遍", () => {
+  it("未啟用導覽時不輪詢 DOM，也不在 scroll／resize 做量測", async () => {
+    await mount("/play/100999");
+    const query = vi.spyOn(document, "querySelector");
+    await wait(450);
+    window.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("resize"));
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("離開進行中導覽的頁面便停止量測，回來仍會定位並顯示", async () => {
+    await mount();
+    await router.push("/play/100999"); await settle();
+    const query = vi.spyOn(document, "querySelector");
+    await wait(450);
+    window.dispatchEvent(new Event("scroll"));
+    expect(query).not.toHaveBeenCalled();
+    query.mockRestore();
+    await router.push("/"); await settle();
+    expect(title()).toBe(t("tour.card.title"));
+  });
+
   it("一般卡：框入門卡 → 下一步跳卡片頁 → 分級 → 介紹 → 評分 → 開始對話 → 下一步跳對話頁 → 開場 → 開場選項 → 完成", async () => {
     await mount();
     expect(title()).toBe(t("tour.card.title"));

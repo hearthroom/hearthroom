@@ -180,17 +180,25 @@ function measure() {
   }
   rect.value = el.getBoundingClientRect();
 }
-// 輪詢接頁面內容的變化；捲動要當格跟上（瀏覽器每格畫面最多送一次 scroll），只靠輪詢框會一跳一跳地追，整片遮罩跟著閃
-onMounted(() => {
-  measure(); timer = setInterval(measure, 200);
-  addEventListener("scroll", measure, { capture: true, passive: true });
-  addEventListener("resize", measure);
-});
-onBeforeUnmount(() => {
+const measuring = computed(() => !!tourState.step && page.value === PAGE_OF[tourState.step]);
+function stopMeasuring() {
   clearInterval(timer);
+  timer = undefined;
   removeEventListener("scroll", measure, { capture: true });
   removeEventListener("resize", measure);
-});
+}
+function syncMeasurement() {
+  stopMeasuring();
+  if (!measuring.value) { rect.value = null; dialogOpen.value = false; return; }
+  measure();
+  timer = setInterval(measure, 200);
+  addEventListener("scroll", measure, { capture: true, passive: true });
+  addEventListener("resize", measure);
+}
+// 輪詢接頁面內容的變化；捲動要當格跟上（瀏覽器每格畫面最多送一次 scroll），只靠輪詢框會一跳一跳地追，整片遮罩跟著閃
+watch(measuring, syncMeasurement, { flush: "post" });
+onMounted(syncMeasurement);
+onBeforeUnmount(stopMeasuring);
 
 const visible = computed(() => !!tourState.step && page.value === PAGE_OF[tourState.step] && !dialogOpen.value
   && (TARGET_OF[tourState.step] === null || !!rect.value));
