@@ -39,6 +39,8 @@ body::before {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to { transform: translate3d(-3%, 2.5%, 0) scale(1.07); }
 }
+/* 遊玩畫布有自己的背景；被蓋住的站台色暈不應繼續佔用合成層。 */
+body:has(.play)::before { animation: none; will-change: auto; }
 
 a { color: inherit; text-decoration: none; }
 /* 內文裡的超連結：站內連結預設不帶樣式（導覽、卡片整塊可點），嵌在句子裡的字要看得出能點 */

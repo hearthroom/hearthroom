@@ -3,7 +3,7 @@
  * 新手七日每天的引導：長相沿用首次引導（CoachSpot），步驟見 lib/newcomer-tour.ts。
  * 掛在 App 上，跨頁接著走；確認框、登入框開著時先收起來。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import CoachSpot from "@/components/CoachSpot.vue";
@@ -42,13 +42,24 @@ function measure() {
   if (scrolledFor !== s!.id) { scrolledFor = s!.id; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   rect.value = el.getBoundingClientRect();
 }
-onMounted(() => {
+const measuring = computed(() => !!step.value);
+function stopMeasuring() {
+  clearInterval(timer);
+  timer = undefined;
+  removeEventListener("scroll", measure, { capture: true });
+  removeEventListener("resize", measure);
+}
+function syncMeasurement() {
+  stopMeasuring();
+  if (!measuring.value) { rect.value = null; clearRect.value = null; dialogOpen.value = false; return; }
   measure();
   timer = setInterval(measure, 200);
   addEventListener("scroll", measure, { capture: true, passive: true });
   addEventListener("resize", measure);
-});
-onBeforeUnmount(() => { clearInterval(timer); removeEventListener("scroll", measure, { capture: true }); removeEventListener("resize", measure); });
+}
+watch(measuring, syncMeasurement, { flush: "post" });
+onMounted(syncMeasurement);
+onBeforeUnmount(stopMeasuring);
 
 // 不在那一頁（卡片頁、遊玩畫布不知道是哪一張，帶不過去）：泡泡照樣出現、貼在頁首底下講，不會按了沒反應
 const visible = computed(() => !!step.value && !dialogOpen.value);

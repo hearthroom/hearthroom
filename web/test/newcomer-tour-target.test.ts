@@ -33,6 +33,18 @@ beforeEach(async () => {
 });
 afterEach(() => { app.unmount(); root.remove(); newcomerTour.day = 0; newcomerTour.index = 0; vi.restoreAllMocks(); vi.useRealTimers(); });
 
+it("stops measuring when the tour ends and resumes positioning when it starts again", async () => {
+  newcomerTour.day = 0; await nextTick();
+  const query = vi.spyOn(document, "querySelector");
+  await vi.advanceTimersByTimeAsync(1000);
+  window.dispatchEvent(new Event("scroll"));
+  window.dispatchEvent(new Event("resize"));
+  expect(query).not.toHaveBeenCalled();
+  newcomerTour.day = 2; await nextTick();
+  top = 100; await vi.advanceTimersByTimeAsync(200);
+  expect(document.querySelector<HTMLElement>(".coach__hole")?.style.transform).toBe("translate(132px, 92px)");
+});
+
 it("frames the visible library link and follows scroll and a phone-to-desktop resize", async () => {
   const hole = () => document.querySelector<HTMLElement>(".coach__hole");
   expect(hole()?.style.transform).toBe("translate(132px, 52px)");
