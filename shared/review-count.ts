@@ -18,15 +18,27 @@ const emoji = /[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Regional_Indic
 const text = (v: unknown): string => typeof v === 'string' ? v : '';
 const record = (v: unknown): Record<string, unknown> => v && typeof v === 'object' ? v as Record<string, unknown> : {};
 
+/**
+ * Template variables ({{char}}, ${user}, {{getvar::mood}}) are short and sit on one line. A stray opener whose
+ * closer is on a later line, or that holds another opener first, is literal text: pairing it with a distant
+ * closer would drop every word in between. Next-occurrence lookups are cached so the scan stays linear.
+ */
 function withoutVariables(input:string):string{
+  const nextOf=(token:string)=>{
+    let at=-2;
+    return (from:number)=>{ if(at!==-1&&at<from)at=input.indexOf(token,from); return at; };
+  };
+  const nextNewline=nextOf('\n'),nextBraces=nextOf('}}'),nextBrace=nextOf('}'),nextDouble=nextOf('{{'),nextDollar=nextOf('${');
   const parts:string[]=[];
   let cursor=0;
   for(let i=0;i<input.length;){
-    const close=input.startsWith('{{',i)?'}}':input.startsWith('${',i)?'}':null;
-    if(!close){i++;continue;}
-    const end=input.indexOf(close,i+2);
-    if(end<0)break;
-    parts.push(input.slice(cursor,i));cursor=end+close.length;i=cursor;
+    const double=input.startsWith('{{',i);
+    if(!double&&!input.startsWith('${',i)){i++;continue;}
+    const end=double?nextBraces(i+2):nextBrace(i+2);
+    if(end<0){i+=2;continue;}
+    const before=(at:number)=>at>=0&&at<end;
+    if(before(nextNewline(i+2))||before(nextDouble(i+2))||before(nextDollar(i+2))){i++;continue;}
+    parts.push(input.slice(cursor,i));cursor=end+(double?2:1);i=cursor;
   }
   parts.push(input.slice(cursor));return parts.join('');
 }
@@ -103,6 +115,7 @@ export function effectiveCharacters(value: unknown): number {
       let content='';
       for (const child of token.children ?? []) {
         if (child.type === 'text') content+=child.content; // Markdown already decoded entities once.
+        else if (child.type === 'softbreak' || child.type === 'hardbreak') content+='\n'; // keeps a stray opener from pairing across lines
         else if (child.type === 'code_inline') content+=decodeHTML(child.content);
         // image alt text, URLs, delimiter tokens and all markup are excluded.
       }
