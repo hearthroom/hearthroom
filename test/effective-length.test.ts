@@ -69,3 +69,15 @@ it('handles many unterminated template starts in bounded time',()=>{
   expect(effectiveCharacters('${'.repeat(10000))).toBe(0);
   expect(performance.now()-start).toBeLessThan(1000);
 });
+
+it('counts prose after a stray template opener instead of treating everything up to a distant closer as a variable',()=>{
+  const prose='每次回覆都以角色視角敘述。';
+  const rules=Array(50).fill(prose).join('\n');
+  expect(effectiveCharacters(`格式示例 {{ 開始\n${rules}\n結束 }}`)).toBe(4+2+12*50+2);
+  expect(effectiveCharacters(`變數 \${user 說明\n${rules}\n}`)).toBe(2+4+2+12*50);
+  expect(effectiveCharacters('示例 {{ 後面沒有閉合')).toBe(8);
+  expect(effectiveCharacters('{{ 同一行成對 }}')).toBe(0);
+  expect(effectiveCharacters(`前{{char}}後 \${user}文 {{getvar::mood}}`)).toBe(3);
+  const result=reviewLength({document:{roleDetailDesc:`示例：{{\n${'字'.repeat(3001)}\n}}`}});
+  expect(result).toMatchObject({persona:3003,eligible:true});
+});
