@@ -14285,6 +14285,13 @@
                         "to": {
                           "type": "string",
                           "format": "date-time"
+                        },
+                        "formula": {
+                          "type": "string",
+                          "enum": [
+                            "v1",
+                            "v2"
+                          ]
                         }
                       }
                     }
@@ -14338,6 +14345,13 @@
                           "complete": {
                             "type": "boolean",
                             "description": "False when retained historical events lack original settlement time or the weighted-heat rollout is not active. Never settle a cohort using incomplete scores."
+                          },
+                          "formula": {
+                            "type": "string",
+                            "enum": [
+                              "v1",
+                              "v2"
+                            ]
                           }
                         }
                       }
@@ -14364,6 +14378,13 @@
                           "to": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "formula": {
+                            "type": "string",
+                            "enum": [
+                              "v1",
+                              "v2"
+                            ]
                           }
                         }
                       }
