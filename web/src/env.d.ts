@@ -50,6 +50,8 @@ declare module "moonstage/stage" {
       respond(roleId: string, option: string): Promise<unknown>;
       results(roleId: string): Promise<unknown>;
     };
+    /** 這一頁是作者本人試玩這張卡（lib/play-author.ts，擁有權已驗過）；舞台據此開 ?sdkDebug=1 的除錯面板。 */
+    authorPlaytest?(roleId: string): boolean;
   }
   export interface StageI18n {
     getLocaleMessage(locale: string): Record<string, unknown>;
