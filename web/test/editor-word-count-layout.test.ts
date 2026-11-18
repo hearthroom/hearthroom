@@ -1,4 +1,5 @@
 import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
+import { nativeBrowserFlags } from '../../stage/src/test-support/native-browser';
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick } from 'vue';
@@ -385,6 +386,7 @@ describe('card editor word count layout across 5 locales, phone & desktop, light
           const shotRun = spawnSync(
             chrome!,
             [
+              ...nativeBrowserFlags,
               '--headless=new',
               '--no-sandbox',
               '--no-first-run',

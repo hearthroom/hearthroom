@@ -1,4 +1,5 @@
 import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
+import { nativeBrowserFlags } from '../../stage/src/test-support/native-browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computed, createApp, h, nextTick, ref, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
@@ -510,6 +511,7 @@ describe("AuthorDiscordEntry (.btn--discord + .join__hint) across MyCardsPage an
           const shotRun = spawnSync(
             chrome!,
             [
+              ...nativeBrowserFlags,
               "--headless=new",
               "--no-sandbox",
               "--no-first-run",

@@ -109,6 +109,11 @@ npm run dev:web             # Vite on :8850, proxies /v1 to :8787
 | `npm run i18n -w web` | Reports translation coverage per locale and lists untranslated strings in components |
 | `npm run sync:stage` | Pulls the stage's upstream `main`, runs its tests, rebuilds, and updates the submodule pointer (not committed) |
 
+Web tests run unit files first, then native Chrome fixtures serially. For a focused
+check, use `npm run test -w web -- --native` or `--unit`; advanced Vitest options use
+`npx vitest run <file>` from `web/`. Set `NATIVE_BROWSER_TRACE=1` to inspect lifecycle
+timings. The fixtures use the pinned Stage helper and retain failed synthetic profiles.
+
 ### Editor without a provider account
 
 The editor requires OAuth with the provider, which does not work against `localhost`. `scripts/mock-upstream.mjs` is an in-memory stand-in for the provider that accepts any bearer token:
