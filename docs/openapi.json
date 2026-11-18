@@ -8958,6 +8958,18 @@
               "format": "uuid"
             },
             "description": "Together with conversationId, return this owned operation's exact admitted Workshop display projection. Foreign or mismatched operations are unavailable."
+          },
+          {
+            "name": "includeFeatures",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cardContexts"
+              ]
+            },
+            "description": "Pass `cardContexts` to add `features.cardContexts` to the response. Without it the response is unchanged."
           }
         ],
         "responses": {
@@ -22297,6 +22309,83 @@
           }
         }
       }
+    },
+    "/open/v1/role/context-preflight": {
+      "post": {
+        "operationId": "preflightCardContexts",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Check card contexts before saving",
+        "description": "Author-only check for a card's declared contexts before anything is written. Requires `role.write`. Send the card fields the CLI would push (`contexts`, `main`, and `tools` when the contexts name them) and any named Lorebook documents. Each preset is compiled with the same compiler that will run it. The response gives, for every context, the size of its fixed prefix in tokens, which materials it includes, and a provider estimate of its cost. Fixed material that exceeds the context's budget is rejected without trimming. Nothing is saved or charged, and no model is called. When the platform has not enabled contexts, the request is rejected. Clients show the estimate as an estimate and never price it themselves.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardContextPreflightRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One report and one estimate per declared context.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardContextPreflightResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_arguments` — malformed body, an invalid declaration, an unresolved reference, fixed material over budget, or contexts not enabled on this platform.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied` — the card belongs to someone else.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — the estimate cannot be produced right now. Nothing was written; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -22549,6 +22638,16 @@
               "mmd"
             ],
             "description": "Compatibility metadata retained by importers and legacy migration; takes precedence over automatic selector mapping. Authors do not need to set it. Existing values round-trip unchanged. Omitted when never set. New Fengyue imports use fengyue-v2 to include source-platform base styles. Legacy hints retain their rendering; reimport an old Fengyue card to get the latest compatibility. This version is not accepted as a display-rule cssDialect."
+          },
+          "features": {
+            "type": "object",
+            "description": "Platform-wide feature switches, present only when requested with `includeFeatures`. A provider that does not know a feature leaves it out; read that as off.",
+            "properties": {
+              "cardContexts": {
+                "type": "boolean",
+                "description": "Whether the platform currently allows cards to declare and run contexts. The same value for every card."
+              }
+            }
           }
         }
       },
@@ -38410,6 +38509,125 @@
             "type": "string",
             "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
             "description": "Optional WebSocket chat-frame field selecting one declared terminal tool. Unknown name or effective Agent/world mode is rejected before spending. Missing measured force support uses the same model text path with toolCall:null and reason:unsupported. No schema override, execution loop or automatic retry."
+          }
+        }
+      },
+      "CardContextPreflightRequest": {
+        "type": "object",
+        "required": [
+          "fields"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An owned card to check against. Omit to check a card that has not been created yet."
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The card fields being checked. `contexts` is the declaration array, `main` the optional `{assembly}` object, and `tools` the card tools those contexts may name. Preset documents travel inside each declaration."
+          },
+          "worldbooks": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Named Lorebook documents keyed by their stable source id. Omit to use the books already bound to the card."
+          }
+        }
+      },
+      "CardContextPreflightResponse": {
+        "type": "object",
+        "required": [
+          "contexts",
+          "contextQuotes"
+        ],
+        "properties": {
+          "contexts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardContextPreflightReport"
+            }
+          },
+          "contextQuotes": {
+            "type": "array",
+            "description": "One cost estimate per context, in the same order, each with the context `id`. Whole credits: `expectedCharge` may be null when there is not enough data (not free), `maxCharge` is an admission estimate that includes possible compaction, and the final charge follows actual usage.",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "maxCharge"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Context id."
+                },
+                "model": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "expectedCharge": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "maxCharge": {
+                  "type": "integer"
+                },
+                "requestMaxCharge": {
+                  "type": "integer"
+                },
+                "compactionMaxCharge": {
+                  "type": "integer"
+                },
+                "generatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CardContextPreflightReport": {
+        "type": "object",
+        "required": [
+          "id",
+          "fixedPrefixTokens",
+          "materials"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Context id from the declaration."
+          },
+          "fixedPrefixTokens": {
+            "type": "integer",
+            "description": "Size of the part of every request that does not change between calls, in tokens."
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "preset",
+                "character",
+                "examples",
+                "lorebook",
+                "player"
+              ]
+            },
+            "description": "Which materials the context's requests include."
           }
         }
       }
