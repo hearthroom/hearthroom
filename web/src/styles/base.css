@@ -3,7 +3,11 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { background: var(--hr-page-bg); }
+/*
+ * 手機 Chrome 點任何可點的東西都會蓋一層系統的藍色半透明框，像把那塊選取起來（2026-11-19 玩家回報）。
+ * 這個屬性會繼承，寫在 html 一條就蓋到整站與一般模式的遊玩畫布；按下的回饋改由各控件自己的 :active 給。
+ */
+html { background: var(--hr-page-bg); -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
   font-family: var(--font);
@@ -67,6 +71,9 @@ button { font: inherit; color: inherit; }
 h1, h2, h3, p, dl, dd { margin: 0; }
 
 ::selection { background: var(--accent-soft); }
+/* 控件與卡名長按不選取文字：選起來的字會反白，看起來像點錯了。輸入框、內文、對話照舊能選。
+   :where() 歸零特異度，user-select: all/text 的那幾處（複製用的網址、代碼）照舊贏；畫布裡的東西歸舞台自己管。 */
+:where(button, .btn, .chip, .seg__item, [role="tab"], .card__link):where(:not(.ms-stage *)) { -webkit-user-select: none; user-select: none; }
 /* 舞台（/play）裡的東西不套站台的焦點框：畫布有自己的一套，而這條會打到它的輸入框——
    2px 的框畫在輸入框盒子外面，比圓角容器還寬，看起來像輸入框變形（owner 2026-09-07 截圖）。
    :where() 讓 :not 不加特異度，下面 .input:focus 那條照舊贏。 */
@@ -255,7 +262,7 @@ select.input { height: var(--h-md); }
   white-space: nowrap; cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.seg__item:hover { color: var(--text); }
+.seg__item:hover, .seg__item:active { color: var(--text); }
 .seg__item--on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); }
 
 .chip {
@@ -266,7 +273,7 @@ select.input { height: var(--h-md); }
   cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.chip:hover { color: var(--text); background: var(--border); }
+.chip:hover, .chip:active { color: var(--text); background: var(--border); }
 
 .notice {
   padding: var(--s-3) var(--s-4);

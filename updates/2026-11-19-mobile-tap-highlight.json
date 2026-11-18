@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "用手機點卡片或按鈕時，不會再閃出一塊藍色反白了。",
+    "zh-Hans": "用手机点卡片或按钮时，不会再闪出一块蓝色高亮了。",
+    "en": "Tapping a card or button on your phone no longer flashes a blue highlight.",
+    "ja": "スマホでカードやボタンをタップしても、青いハイライトが出なくなりました。",
+    "ko": "휴대폰에서 카드나 버튼을 눌러도 파란색 하이라이트가 더 이상 깜빡이지 않아요."
+  }
+}
