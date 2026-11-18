@@ -2704,7 +2704,7 @@
   "d09c5cb9e7c75": "An owned card to check against. Omit to check a card that has not been created yet.",
   "d1a37c4bbc854": "The card fields being checked, as the CLI would push them. `contexts` is the declaration array, `main` the optional `{assembly}` object, and `tools` the card tools those contexts may name; preset documents travel inside each declaration. Card text fields such as `roleName`, `roleDetailDesc`, `talkExample`, `roleOutputContract` and `customInstructions` count toward the fixed prefix; omitted ones use the saved card's values, or are empty without `roleId`.",
   "d5c805a77b536": "Named Lorebook documents keyed by their stable source id. Omit to use the books already bound to the card.",
-  "dae2fc543d560": "One cost estimate per context, in the same order, each with the context `id`. Whole credits: `expectedCharge` may be null when there is not enough data (not free), `maxCharge` is an admission estimate that includes possible compaction, and the final charge follows actual usage.",
+  "dae2fc543d560": "One cost estimate per context, in the same order, each with the context `id`. In author preflight, `expectedCharge` prices the declared context and output budgets at uncached rates. `maxCharge` also carries the possible compaction allowance. An instance quote uses its current history and request to determine whether compaction needs to be reserved. The final charge follows actual usage.",
   "d43be52ee3c00": "Context id.",
   "d2935a30e2aed": "Context id from the declaration.",
   "d6a8260c8c568": "Size in tokens of the part of every request that does not change between calls, not counting the player's persona.",

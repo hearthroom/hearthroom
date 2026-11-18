@@ -2704,7 +2704,7 @@
   "d09c5cb9e7c75": "作為檢查基準的自有卡片；若檢查尚未建立的新卡片可省略。",
   "d1a37c4bbc854": "待檢查的卡片欄位，格式與 CLI 推送內容一致。`contexts` 為宣告陣列，`main` 為選填的 `{assembly}` 物件，`tools` 為各上下文可引用的卡片工具，而預設文件則隨附於各筆宣告內。`roleName`、`roleDetailDesc`、`talkExample`、`roleOutputContract`、`customInstructions` 等卡片文字欄位都會計入固定前綴；省略的欄位會沿用已儲存卡片的值，未指定 `roleId` 時則視為空白。",
   "d5c805a77b536": "以穩定來源 ID 為鍵的具名 Lorebook 文件；省略時沿用目前已綁定至該卡片的 Lorebook。",
-  "dae2fc543d560": "依宣告順序回傳每個上下文的費用估算，每筆皆附帶該上下文的 `id`，單位為整數點數。樣本不足時 `expectedCharge` 可能為 null（不代表免費）；`maxCharge` 為納入潛在記憶整理費用的准入估算，實際扣點仍依最終用量結算。",
+  "dae2fc543d560": "依宣告順序回傳每個上下文的費用估算，每筆皆附上下文的 `id`。作者預檢的 `expectedCharge` 按無快取費率估算宣告的上下文與輸出預算。`maxCharge` 另含可能的整理預留。實例報價依目前歷史與本次請求判斷是否要預留整理費用。最後按實際用量結算。",
   "d43be52ee3c00": "上下文 ID。",
   "d2935a30e2aed": "宣告中定義的上下文 ID。",
   "d6a8260c8c568": "每次呼叫之間維持不變的請求固定前綴 token 數（不含玩家的 persona）。",
