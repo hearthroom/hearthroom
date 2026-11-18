@@ -13,6 +13,9 @@ const MALIANG_CODES = [
   'bh-jinyong',
 ];
 
+// 巴哈 AI 應用 85831 版不帶推薦碼：只驗 GA 歸因，不寫入推薦。
+const NOREF_CODES = ['bh-dnd-ai-noref-20261118', 'bh-limbus-ai-noref-20261116'];
+
 it('every configured landing sends the original campaign and saves the referral', () => {
   for (const [code, path] of Object.entries(links)) {
     const url = new URL(path, 'https://sukisuki.ai');
@@ -21,6 +24,7 @@ it('every configured landing sends the original campaign and saves the referral'
       campaign_medium: url.searchParams.get('utm_medium'),
       campaign_name: url.searchParams.get('utm_campaign'),
     });
+    if (NOREF_CODES.includes(code)) { expect(url.searchParams.has('ref')).toBe(false); continue; }
     rememberShareRef(refFromQuery(url.searchParams.get('ref'))!);
     const expectedRef = ['bh-fate-tm', 'bh-fate-fgo', 'bh-limbus'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'

@@ -68,6 +68,9 @@ it.each(['https://evil.test/', '//evil.test/', '/\\evil.test', '/%2f%2fevil.test
   expect(promoTarget(value)).toBeNull();
 });
 
+// 巴哈 AI 應用 85831 版按 owner 裁定不帶推薦碼：落點保留 utm，沒有 ref。
+const NOREF_CODES = ['bh-dnd-ai-noref-20261118', 'bh-limbus-ai-noref-20261116'];
+
 const MALIANG_CODES = [
   'bh-maple-85994', 'bh-hut-maple', 'vc-maple', 'bh-maple-gal',
   'bh-sanguo-6331', 'bh-hut-sanguo', 'vc-sanguo', 'bh-sanguo-indie',
@@ -83,7 +86,8 @@ it('all configured targets are safe local landings with attribution', () => {
     const authorRef = ['bh-fate-tm', 'bh-fate-fgo', 'bh-limbus'].includes(code) ? 'UVTEJ3N6'
       : ['bh-trpg-dnd', 'bh-dnd-2206', 'bh-dnd-bg3', 'bh-dnd-indie', 'bh-dnd-trpg-actions-20261113', 'bh-dnd-ai-start-20261118', 'cabin-dnd-actions-20261113', 'vocus-dnd-actions-20261113'].includes(code) ? 'H2DG5Q6Y'
       : MALIANG_CODES.includes(code) ? '6M9ZV5FS' : '94A9H94Z';
-    expect(url.searchParams.get('ref')).toBe(authorRef);
+    if (NOREF_CODES.includes(code)) expect(url.searchParams.has('ref')).toBe(false);
+    else expect(url.searchParams.get('ref')).toBe(authorRef);
     const [source, medium] = code === 'vocus-dnd-actions-20261113' ? ['vocus', 'social']
       : code.startsWith('vc-') ? ['vocus', 'blog']
       : code.startsWith('x-') ? ['x', 'social']
@@ -240,4 +244,13 @@ it.each([
     expect(response.headers.get('cache-control')).toBe('no-store');
   }
   expect(await opsMetrics(env.DB)).toContain('hearthroom_promo_redirects_total{operation="redirect",outcome="success"} 2');
+});
+
+it.each([
+  ['bh-dnd-ai-noref-20261118', '/cards/100192?utm_source=bahamut&utm_medium=forum&utm_campaign=bh-dnd-ai-start-20261118'],
+  ['bh-limbus-ai-noref-20261116', '/cards/100498?utm_source=bahamut&utm_medium=forum&utm_campaign=bh-limbus-20261116'],
+])('redirects %s without any referral code even when the visitor adds one', async (code, location) => {
+  const response = await visit(`/go/${code}?ref=ATTACKER&utm_campaign=override`);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(location);
 });
