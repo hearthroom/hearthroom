@@ -81,3 +81,18 @@ it('counts prose after a stray template opener instead of treating everything up
   const result=reviewLength({document:{roleDetailDesc:`示例：{{\n${'字'.repeat(3001)}\n}}`}});
   expect(result).toMatchObject({persona:3003,eligible:true});
 });
+
+it.each(['`<script>`','<script>','`<style>`','<style type="text/css">','`<!--`','&lt;script&gt;','&lt;!--'])(
+  'counts prose after an unclosed %s mention instead of dropping the rest of the text',opener=>{
+  const rules=Array(50).fill('每次回覆都以角色視角敘述。').join('\n');
+  expect(effectiveCharacters(`腳本寫在 ${opener} 裡。\n\n${rules}`)).toBe(5+12*50);
+  const result=reviewLength({document:{roleDetailDesc:`${'字'.repeat(1500)}\n說明 ${opener}\n${'字'.repeat(1500)}`}});
+  expect(result).toMatchObject({persona:3002,eligible:true});
+});
+it('handles many unclosed script, style and comment openers in bounded time',()=>{
+  const start=performance.now();
+  expect(effectiveCharacters('<script>文'.repeat(10000))).toBe(10000);
+  expect(effectiveCharacters('<style>文'.repeat(10000))).toBe(10000);
+  expect(effectiveCharacters('<!--文'.repeat(10000))).toBe(10000);
+  expect(performance.now()-start).toBeLessThan(1000);
+});

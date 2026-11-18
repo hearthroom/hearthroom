@@ -60,14 +60,19 @@ function withoutMarkup(input:string):string{
     }
     return -1;
   };
+  // Once a closer is missing from some point on, it is missing from every later point; remember that so
+  // repeated unclosed openers do not rescan the tail.
+  const unclosed=new Set<string>();
   let cursor=0;
   while(cursor<input.length){
     const open=input.indexOf('<',cursor);
     if(open<0){parts.push(input.slice(cursor));break;}
     parts.push(input.slice(cursor,open));
     if(input.startsWith('<!--',open)){
-      const close=input.indexOf('-->',open+4);
-      cursor=close<0?input.length:close+3;continue;
+      // An unclosed comment opener is a mention, not a comment: drop the opener and keep counting.
+      const close=unclosed.has('-->')?-1:input.indexOf('-->',open+4);
+      if(close<0)unclosed.add('-->');
+      cursor=close<0?open+4:close+3;continue;
     }
     let nameStart=open+1;
     const closing=input[nameStart]==='/';
@@ -89,9 +94,10 @@ function withoutMarkup(input:string):string{
     const name=lower.slice(nameStart,nameEnd);
     cursor=end;
     if(!closing&&(name==='script'||name==='style')){
-      let close=lower.indexOf('</'+name,cursor);
+      let close=unclosed.has(name)?-1:lower.indexOf('</'+name,cursor);
       while(close>=0&&!/[\s>]/.test(input[close+name.length+2]??''))close=lower.indexOf('</'+name,close+2);
-      if(close<0){cursor=input.length;continue;}
+      // No closer: the opener is a mention in prose, so only the tag itself is dropped.
+      if(close<0){unclosed.add(name);continue;}
       const closeEnd=endOfTag(close+name.length+2);
       cursor=closeEnd===-2?close+name.length+2:closeEnd<0?input.length:closeEnd;
     }
