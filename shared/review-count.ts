@@ -43,8 +43,63 @@ function withoutVariables(input:string):string{
   parts.push(input.slice(cursor));return parts.join('');
 }
 
+/**
+ * Stands in for a dropped unclosed opener. It counts nothing and is not a tag start, but its '<' still stops an
+ * earlier stray tag (`<cfg rule=… <script> … >`) from pairing with a later '>' when markup is stripped again.
+ */
+const KEEP_BOUNDARY='< ';
+
+type Ranges=ReadonlyArray<readonly [number,number]>;
+
+/**
+ * Backtick code in raw Markdown: ``` / ~~~ fences (an unclosed fence runs to the end, as in CommonMark) and inline
+ * spans (a run of N backticks closed by the next run of exactly N in the same paragraph). Authors quote <script>,
+ * <style> and <!-- there as examples, so inside these ranges those openers do not start an excluded section.
+ */
+function backtickRanges(input:string):Ranges{
+  const ranges:[number,number][]=[];
+  const runs:{at:number;len:number;para:number}[]=[];
+  let para=0,fence:{ch:string;len:number;start:number}|null=null;
+  for(let start=0;start<=input.length;){
+    let end=input.indexOf('\n',start);
+    if(end<0)end=input.length;
+    const line=input.slice(start,end);
+    if(fence){
+      const close=/^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
+      if(close&&close[1][0]===fence.ch&&close[1].length>=fence.len){ranges.push([fence.start,end]);fence=null;para++;}
+    }else{
+      const open=/^ {0,3}(`{3,}|~{3,})/.exec(line);
+      if(open&&!(open[1][0]==='`'&&line.indexOf('`',open[0].length)>=0)){fence={ch:open[1][0],len:open[1].length,start};para++;}
+      else if(!line.trim())para++;
+      else for(let i=line.indexOf('`');i>=0;){
+        let j=i;
+        while(line[j]==='`')j++;
+        if(line[i-1]!=='\\')runs.push({at:start+i,len:j-i,para});
+        i=line.indexOf('`',j);
+      }
+    }
+    start=end+1;
+  }
+  if(fence)ranges.push([fence.start,input.length]);
+  // Next run of the same length in the same paragraph, built right to left so matching stays linear.
+  const next=new Array<number>(runs.length).fill(-1);
+  const last=new Map<number,number>();
+  for(let k=runs.length-1;k>=0;k--){
+    if(k<runs.length-1&&runs[k+1].para!==runs[k].para)last.clear();
+    next[k]=last.get(runs[k].len)??-1;
+    last.set(runs[k].len,k);
+  }
+  for(let k=0;k<runs.length;){
+    const m=next[k];
+    if(m<0){k++;continue;}
+    ranges.push([runs[k].at,runs[m].at+runs[m].len]);
+    k=m+1;
+  }
+  return ranges.sort((a,b)=>a[0]-b[0]);
+}
+
 /** Single forward scan: malformed or unterminated tags must not trigger regexp backtracking. */
-function withoutMarkup(input:string):string{
+function withoutMarkup(input:string,code:Ranges=[]):string{
   const parts:string[]=[];
   // ASCII folding preserves offsets even when the document contains expanding Unicode case folds.
   const lower=input.replace(/[A-Z]/g,ch=>ch.toLowerCase());
@@ -63,16 +118,22 @@ function withoutMarkup(input:string):string{
   // Once a closer is missing from some point on, it is missing from every later point; remember that so
   // repeated unclosed openers do not rescan the tail.
   const unclosed=new Set<string>();
+  // Openers are visited in increasing order, so one pointer walks the sorted code ranges.
+  let range=0;
+  const inCode=(at:number)=>{
+    while(range<code.length&&code[range][1]<=at)range++;
+    return range<code.length&&code[range][0]<=at;
+  };
   let cursor=0;
   while(cursor<input.length){
     const open=input.indexOf('<',cursor);
     if(open<0){parts.push(input.slice(cursor));break;}
     parts.push(input.slice(cursor,open));
     if(input.startsWith('<!--',open)){
-      // An unclosed comment opener is a mention, not a comment: drop the opener and keep counting.
-      const close=unclosed.has('-->')?-1:input.indexOf('-->',open+4);
-      if(close<0)unclosed.add('-->');
-      cursor=close<0?open+4:close+3;continue;
+      // An unclosed or quoted comment opener is a mention, not a comment: drop the opener and keep counting.
+      const close=unclosed.has('-->')||inCode(open)?-1:input.indexOf('-->',open+4);
+      if(close<0){if(!inCode(open))unclosed.add('-->');parts.push(KEEP_BOUNDARY);cursor=open+4;continue;}
+      cursor=close+3;continue;
     }
     let nameStart=open+1;
     const closing=input[nameStart]==='/';
@@ -94,10 +155,12 @@ function withoutMarkup(input:string):string{
     const name=lower.slice(nameStart,nameEnd);
     cursor=end;
     if(!closing&&(name==='script'||name==='style')){
+      // Quoted in backticks it is an example tag, not a script or stylesheet.
+      if(inCode(open)){parts.push(KEEP_BOUNDARY);continue;}
       let close=unclosed.has(name)?-1:lower.indexOf('</'+name,cursor);
       while(close>=0&&!/[\s>]/.test(input[close+name.length+2]??''))close=lower.indexOf('</'+name,close+2);
       // No closer: the opener is a mention in prose, so only the tag itself is dropped.
-      if(close<0){unclosed.add(name);continue;}
+      if(close<0){unclosed.add(name);parts.push(KEEP_BOUNDARY);continue;}
       const closeEnd=endOfTag(close+name.length+2);
       cursor=closeEnd===-2?close+name.length+2:closeEnd<0?input.length:closeEnd;
     }
@@ -107,11 +170,12 @@ function withoutMarkup(input:string):string{
 
 /** Strip markup before decoding so entity names and HTML attributes cannot inflate the count. */
 export function effectiveCharacters(value: unknown): number {
-  const plain = withoutVariables(withoutMarkup(text(value)));
+  const raw = text(value);
+  const plain = withoutVariables(withoutMarkup(raw, backtickRanges(raw)));
   let count = 0;
-  const countText = (s: string) => {
+  const countText = (s: string, code: Ranges = []) => {
     graphemes ??= new Intl.Segmenter('und',{granularity:'grapheme'});
-    for(const {segment} of graphemes.segment(withoutVariables(withoutMarkup(s)).normalize('NFC'))){
+    for(const {segment} of graphemes.segment(withoutVariables(withoutMarkup(s, code)).normalize('NFC'))){
       if(emoji.test(segment))continue;
       for(const ch of segment)if(/[\p{L}\p{N}]/u.test(ch))count++;
     }
@@ -119,14 +183,22 @@ export function effectiveCharacters(value: unknown): number {
   for (const token of markdown.parse(plain, {})) {
     if (token.type === 'inline') {
       let content='';
+      const code:[number,number][]=[];
       for (const child of token.children ?? []) {
         if (child.type === 'text') content+=child.content; // Markdown already decoded entities once.
         else if (child.type === 'softbreak' || child.type === 'hardbreak') content+='\n'; // keeps a stray opener from pairing across lines
-        else if (child.type === 'code_inline') content+=decodeHTML(child.content);
+        else if (child.type === 'code_inline') {
+          const decoded=decodeHTML(child.content);
+          code.push([content.length,content.length+decoded.length]);
+          content+=decoded;
+        }
         // image alt text, URLs, delimiter tokens and all markup are excluded.
       }
-      countText(content);
-    } else if (token.type === 'code_block' || token.type === 'fence') countText(decodeHTML(token.content));
+      countText(content, code);
+    } else if (token.type === 'fence') {
+      const decoded=decodeHTML(token.content);
+      countText(decoded, [[0,decoded.length]]);
+    } else if (token.type === 'code_block') countText(decodeHTML(token.content));
   }
   return count;
 }

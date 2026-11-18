@@ -96,3 +96,40 @@ it('handles many unclosed script, style and comment openers in bounded time',()=
   expect(effectiveCharacters('<!--文'.repeat(10000))).toBe(10000);
   expect(performance.now()-start).toBeLessThan(1000);
 });
+
+it('still excludes a closed block after an unclosed mention, and keeps the mention from widening an earlier stray tag',()=>{
+  expect(effectiveCharacters('前 `<!--` 中 <script>x()</script> 後')).toBe(3);
+  expect(effectiveCharacters('前 `<script>` 中 <style>.x{}</style> 後')).toBe(3);
+  expect(effectiveCharacters('<script>文</scriptx 後 </scripts> 尾')).toBe(10);
+  expect(effectiveCharacters('<SCRIPT>大寫 後')).toBe(3);
+  expect(effectiveCharacters('<cfg rule=設定很長很長的說明 `<script>` >')).toBe(16);
+  expect(effectiveCharacters('```\n<div class="x"\n很長的程式碼說明\n<script>\n>\n```')).toBe(17);
+  const start=performance.now();
+  expect(effectiveCharacters('<script>'+'</scriptx'.repeat(20000))).toBe(20000*7);
+  expect(performance.now()-start).toBeLessThan(1000);
+});
+
+it('treats script, style and comment tags quoted in backticks as examples, not excluded sections',()=>{
+  expect(effectiveCharacters('前 `<script>` 中間說明 `</script>` 後')).toBe(6);
+  expect(effectiveCharacters('前 `<style>\n中` 後')).toBe(3);
+  expect(effectiveCharacters('```html\n<script>\nconst 狀態 = 1;\n</script>\n```\n說明')).toBe(10);
+  expect(effectiveCharacters('~~~\n<!-- 註解 -->\n~~~')).toBe(2);
+  expect(effectiveCharacters('```\n<style>.x{}</style>\n說明沒有結尾的區塊')).toBe(10);
+  expect(effectiveCharacters('`&lt;script&gt;` 說明 `&lt;/script&gt;` 後')).toBe(3);
+  // Outside backticks the sections are still excluded; an unmatched backtick is plain text.
+  expect(effectiveCharacters('`<script>` 前 <script>x()</script> 後')).toBe(2);
+  expect(effectiveCharacters('說明 \\` <style>.x{}</style> 後')).toBe(3);
+  expect(effectiveCharacters('說明 ` <script>x()</script> 後')).toBe(3);
+  const rules=Array(50).fill('每次回覆都以角色視角敘述。').join('\n');
+  const result=reviewLength({document:{roleDetailDesc:`用 \`<script>\` 開頭：\n\n${rules}\n\n最後用 \`</script>\` 結束。`}});
+  expect(result.persona).toBe(3+600+5);
+});
+
+it('finds backtick code in bounded time',()=>{
+  const start=performance.now();
+  expect(effectiveCharacters('`'.repeat(50000))).toBe(0);
+  expect(effectiveCharacters('`<script>`文'.repeat(10000))).toBe(10000);
+  expect(effectiveCharacters('`a` ``b`` '.repeat(10000))).toBe(20000);
+  expect(effectiveCharacters('```\n'.repeat(5000))).toBe(0);
+  expect(performance.now()-start).toBeLessThan(1000);
+});
