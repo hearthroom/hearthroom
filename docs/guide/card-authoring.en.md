@@ -167,7 +167,7 @@ The sandbox shell also has `--chat-*` variables (for example `--chat-bg`, `--cha
 | `sdk.generation.act(action)` | Presses one of that card's buttons (an `action` from `outcome.actions`), exactly like the player tapping the platform's card: a retry reuses the same line and does not send it twice. Call it only while the player is clicking (otherwise `UNAUTHORIZED`, with no prompt); a button the card does not offer is `INVALID_ARGS`; while generating `BUSY`; 3 per minute. Returns a Promise. |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | The platform's conversation saves (up to 20 per card, the current one included, across devices). `open` loads a save (the current progress stays in the list as it is); `save` keeps a named copy of the current progress and returns `{id, current}`; `fork` starts a new save from one message (a bubble's `serverId`); `start` begins a new save (0 = the main opening, 1.. = alternates); `list` returns `{items, count, limit}` with `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`. Call the changing ones inside the player's click and confirm with your own screen; outside a click the page asks the player first. |
 | `sdk.on(event, handler)` | Subscribe to an event. |
-| `sdk.debug.log(...args)` | Write to the debug panel. Append `?sdkDebug=1` to the URL to show the panel. |
+| `sdk.debug.log(...args)` | Write to the debug panel. Open the chat from **Play draft** on the card page and append `?sdkDebug=1` to the URL to show the panel. The panel only appears when you play your own card. |
 
 ### Events
 
@@ -232,7 +232,7 @@ After importing, check the result in "Try it out", then save and publish.
 |---|---|
 | Blank screen for ten-odd seconds after opening the card | The sandbox page's resources load slowly the first time; later opens are served from cache. If it stays blank past 20 seconds a notice appears; reload the page. |
 | The card's tour or overlay covers the screen and blocks scrolling | This is the card's own tutorial layer. Press its skip button. |
-| Scripts do nothing | Append `?sdkDebug=1` to the URL to open the debug panel, which shows script errors and `sdk.debug.log` output. |
+| Scripts do nothing | Open the chat from **Play draft** and append `?sdkDebug=1` to the URL to open the debug panel, which shows script errors and `sdk.debug.log` output. |
 | Saves fail | Check that keys contain only letters, digits, `_` and `-`, that the value is under 64 KB, and that the card has fewer than 10 keys. |
 | Messages are narrower than expected | An element flush with the screen edge was detected as a sidebar. Add `--lt-dock: none` to that element. |
 

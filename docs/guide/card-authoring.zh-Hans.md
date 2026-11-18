@@ -167,7 +167,7 @@
 | `sdk.generation.act(action)` | 按那张卡上的一个按键（`outcome.actions` 里的 `action`），效果跟玩家点平台那张卡一样：重试沿用同一句，不会多发一条。只能在玩家点击的当下调用（否则 `UNAUTHORIZED`，不会询问）；卡上没有这个按键 `INVALID_ARGS`；生成中 `BUSY`；每分钟 3 次。返回 Promise。 |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 平台的对话存档（每张卡最多 20 段，含当前这段，跨设备）。`open` 读档（原本的进度原样留在列表里）；`save` 把当前进度留一份并命名，返回 `{id, current}`；`fork` 从某一条（气泡的 `serverId`）另开一段；`start` 另开新档（0＝主开场、1..＝替代开场）；`list` 返回 `{items, count, limit}`，每行有 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`。会改变存档的操作请在玩家点击当下调用，用卡片自己的确认画面；不在点击当下调用时，页面会先问玩家。 |
 | `sdk.on(event, handler)` | 订阅事件。 |
-| `sdk.debug.log(...args)` | 写入调试面板。在网址加上 `?sdkDebug=1` 可显示面板。 |
+| `sdk.debug.log(...args)` | 写入调试面板。从卡片页的「试玩草稿」打开对话后，在网址加上 `?sdkDebug=1` 可显示面板；面板只在作者本人试玩时出现。 |
 
 ### 事件
 
@@ -232,7 +232,7 @@
 |---|---|
 | 打开卡片后画面空白十余秒 | 首次加载沙箱页的资源较慢，之后由缓存加速。超过 20 秒仍空白时会出现提示，刷新即可。 |
 | 卡片的导览或遮罩覆盖画面、无法滚动 | 这是卡片自带的教学层，点它的“跳过”。 |
-| 脚本没有反应 | 在网址加上 `?sdkDebug=1` 打开调试面板，查看脚本错误与 `sdk.debug.log` 的输出。 |
+| 脚本没有反应 | 从「试玩草稿」打开对话，在网址加上 `?sdkDebug=1` 打开调试面板，查看脚本错误与 `sdk.debug.log` 的输出。 |
 | 存档失败 | 确认 key 只含字母数字、`_`、`-`，单值未超过 64 KB，且该卡的 key 数未达 10 个。 |
 | 消息两侧比预期窄 | 卡片中贴齐边缘的元素被判定为侧边栏。在该元素加上 `--lt-dock: none`。 |
 

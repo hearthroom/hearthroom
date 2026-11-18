@@ -33,6 +33,7 @@ import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
 import { resolveShareToken, setPlayShare, setPlayShareRef, shareContextOf, shareTokenOf } from "@/lib/play-share";
+import { setAuthorPlaytest } from "@/lib/play-author";
 import { currentReferralCode } from "@/lib/share-ref";
 import PlayInfoPanel from "@/components/PlayInfoPanel.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
@@ -136,6 +137,8 @@ async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, prov
   historyBootstrap.value = {conversationId:resolved.conversationId,readOnly:resolved.readOnly,reason:resolved.reason,title:resolved.title};
   if (resolved.card && !intro.value) intro.value = { name: displayName(resolved.card.name ?? "", locale.value), art: resolved.card.avatarUrl ?? "", backdrop: resolved.card.landscapeUrl ?? "" };
   roleId.value = resolved.roleId;
+  // 作者本人試玩（擁有權已驗過）才讓舞台開 ?sdkDebug=1 的除錯面板
+  setAuthorPlaytest(resolved.authorSource ? resolved.roleId : null);
   // 頁首的收藏與卡片資訊只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
     && (!resolved.card.status || resolved.card.status === "approved");
@@ -213,6 +216,7 @@ onMounted(() => {
     backToReview.value = false;
     registerPlayCard(null);
     setPlayShare(null);
+    setAuthorPlaytest(null);
     let recoveryProvider: ProviderId | null = null;
     try {
       void preloadStage();

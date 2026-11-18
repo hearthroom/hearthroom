@@ -33,6 +33,7 @@ import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
 import { playShareHost } from "@/lib/play-share";
 import { playSharedHost } from "@/lib/play-shared";
+import { isAuthorPlaytest } from "@/lib/play-author";
 import { markStageContentReady } from "@/lib/stage-ready";
 import { creditsRecovery, noteShortfallShown } from "@/lib/credits-recovery";
 import { useCheckin } from "@/lib/checkin-store";
@@ -286,6 +287,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       share: playShareHost({ links: () => mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp }) }),
       // 卡片的共用狀態與分享回流（sdk.shared／stage.shared）：打本站 Worker，token 與供應商照這一局（lib/play-shared）
       shared: playSharedHost({ links: () => mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp }) }),
+      // ?sdkDebug=1 的除錯面板只給作者本人試玩（lib/play-author，PlayPage 驗過擁有權才設）
+      authorPlaytest: (roleId: string) => isAuthorPlaytest(roleId),
     });
     const player = deps.player === undefined ? deps.session.me : deps.player;
     // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。

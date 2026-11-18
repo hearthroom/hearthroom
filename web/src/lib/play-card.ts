@@ -19,6 +19,8 @@ async function resumeRead<T>(read: Promise<T>): Promise<T> {
 interface PlayCardResolved {
  card: Awaited<ReturnType<typeof fetchCard>> | null; number: string; roleId: string;
  conversationId?: string; readOnly?: boolean; reason?: HistoryAccessReason; title?: string;
+ /** 作者試玩：擁有權已由 copies() 驗過（lib/play-author）。 */
+ authorSource?: true;
 }
 
 /** Public URLs identify the work; only the selected host's role ID reaches Stage. */
@@ -70,5 +72,5 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
     : platformRequest && number === id ? await platformRequest : await fetchCardPlatforms(number);
   const copy = platforms.find(p => p.provider === provider && p.playable && p.roleId);
   if (!copy?.roleId) throw new Error('card_host_unavailable');
-  return { card, number, roleId: copy.roleId };
+  return source ? { card, number, roleId: copy.roleId, authorSource: true } : { card, number, roleId: copy.roleId };
 }
