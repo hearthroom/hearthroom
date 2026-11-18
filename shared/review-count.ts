@@ -53,7 +53,7 @@ type Ranges=ReadonlyArray<readonly [number,number]>;
 
 /**
  * Backtick code in raw Markdown: ``` / ~~~ fences (an unclosed fence runs to the end, as in CommonMark) and inline
- * spans (a run of N backticks closed by the next run of exactly N in the same paragraph). Authors quote <script>,
+ * spans (a run of N backticks closed by the next run of exactly N in the same block). Authors quote <script>,
  * <style> and <!-- there as examples, so inside these ranges those openers do not start an excluded section.
  */
 function backtickRanges(input:string):Ranges{
@@ -71,17 +71,24 @@ function backtickRanges(input:string):Ranges{
       const open=/^ {0,3}(`{3,}|~{3,})/.exec(line);
       if(open&&!(open[1][0]==='`'&&line.indexOf('`',open[0].length)>=0)){fence={ch:open[1][0],len:open[1].length,start};para++;}
       else if(!line.trim())para++;
-      else for(let i=line.indexOf('`');i>=0;){
-        let j=i;
-        while(line[j]==='`')j++;
-        if(line[i-1]!=='\\')runs.push({at:start+i,len:j-i,para});
-        i=line.indexOf('`',j);
+      else{
+        // A list item, heading or block quote starts a new block, and a heading is only one line, so a lone
+        // backtick cannot pair across them.
+        const heading=/^ {0,3}#{1,6}(?: |$)/.test(line);
+        if(heading||/^ {0,3}([-*+] |\d{1,9}[.)] |>)/.test(line))para++;
+        for(let i=line.indexOf('`');i>=0;){
+          let j=i;
+          while(line[j]==='`')j++;
+          if(line[i-1]!=='\\')runs.push({at:start+i,len:j-i,para});
+          i=line.indexOf('`',j);
+        }
+        if(heading)para++;
       }
     }
     start=end+1;
   }
   if(fence)ranges.push([fence.start,input.length]);
-  // Next run of the same length in the same paragraph, built right to left so matching stays linear.
+  // Next run of the same length in the same block, built right to left so matching stays linear.
   const next=new Array<number>(runs.length).fill(-1);
   const last=new Map<number,number>();
   for(let k=runs.length-1;k>=0;k--){

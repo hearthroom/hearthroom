@@ -120,6 +120,8 @@ it('treats script, style and comment tags quoted in backticks as examples, not e
   expect(effectiveCharacters('`<script>` 前 <script>x()</script> 後')).toBe(2);
   expect(effectiveCharacters('說明 \\` <style>.x{}</style> 後')).toBe(3);
   expect(effectiveCharacters('說明 ` <script>x()</script> 後')).toBe(3);
+  expect(effectiveCharacters('- 不要用 ` 符號\n- 用 `<script>` 開頭\n- 中間說明文字\n- 用 `</script>` 結束')).toBe(17);
+  expect(effectiveCharacters('# 標題 `\n用 `<script>` 開頭 中間說明 `</script>` 結束')).toBe(11);
   const rules=Array(50).fill('每次回覆都以角色視角敘述。').join('\n');
   const result=reviewLength({document:{roleDetailDesc:`用 \`<script>\` 開頭：\n\n${rules}\n\n最後用 \`</script>\` 結束。`}});
   expect(result.persona).toBe(3+600+5);
