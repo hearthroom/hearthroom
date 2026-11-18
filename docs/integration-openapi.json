@@ -15820,7 +15820,7 @@
           "Roles"
         ],
         "summary": "Check card contexts before saving",
-        "description": "Author-only check for a card's declared contexts before anything is written. Requires `role.write`. Send the card fields the CLI would push (`contexts`, `main`, and `tools` when the contexts name them) and any named Lorebook documents. Each preset is compiled with the same compiler that will run it. The response gives, for every context, the size of its fixed prefix in tokens, which materials it includes, and a provider estimate of its cost. A context whose fixed material plus output allowance exceeds its budget is rejected without trimming. Nothing is saved or charged, and no model is called. When the platform has not enabled contexts, the request is rejected. Clients show the estimate as an estimate and never price it themselves.",
+        "description": "Author-only check for a card's declared contexts before anything is written. Requires `role.write`. Send the card fields the CLI would push and any named Lorebook documents. Each preset is compiled with the same compiler that will run it. The response gives, for every context, the size of its fixed prefix in tokens, which materials it includes, and a provider estimate of its cost. A context whose fixed material plus output allowance exceeds its budget is rejected without trimming. Nothing is saved or charged, and no model is called. When the platform has not enabled contexts, the request is rejected. Clients show the estimate as an estimate and never price it themselves.",
         "security": [
           {
             "userToken": []
@@ -30625,7 +30625,7 @@
           "fields": {
             "type": "object",
             "additionalProperties": true,
-            "description": "The card fields being checked. `contexts` is the declaration array, `main` the optional `{assembly}` object, and `tools` the card tools those contexts may name. Preset documents travel inside each declaration."
+            "description": "The card fields being checked, as the CLI would push them. `contexts` is the declaration array, `main` the optional `{assembly}` object, and `tools` the card tools those contexts may name; preset documents travel inside each declaration. Card text fields such as `roleName`, `roleDetailDesc`, `talkExample`, `roleOutputContract` and `customInstructions` count toward the fixed prefix; omitted ones use the saved card's values, or are empty without `roleId`."
           },
           "worldbooks": {
             "type": "object",
@@ -30712,7 +30712,7 @@
           },
           "fixedPrefixTokens": {
             "type": "integer",
-            "description": "Size of the part of every request that does not change between calls, in tokens."
+            "description": "Size in tokens of the part of every request that does not change between calls, not counting the player's persona."
           },
           "materials": {
             "type": "array",
