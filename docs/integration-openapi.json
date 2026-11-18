@@ -15820,7 +15820,7 @@
           "Roles"
         ],
         "summary": "Check card contexts before saving",
-        "description": "Author-only check for a card's declared contexts before anything is written. Requires `role.write`. Send the card fields the CLI would push (`contexts`, `main`, and `tools` when the contexts name them) and any named Lorebook documents. Each preset is compiled with the same compiler that will run it. The response gives, for every context, the size of its fixed prefix in tokens, which materials it includes, and a provider estimate of its cost. Fixed material that exceeds the context's budget is rejected without trimming. Nothing is saved or charged, and no model is called. When the platform has not enabled contexts, the request is rejected. Clients show the estimate as an estimate and never price it themselves.",
+        "description": "Author-only check for a card's declared contexts before anything is written. Requires `role.write`. Send the card fields the CLI would push (`contexts`, `main`, and `tools` when the contexts name them) and any named Lorebook documents. Each preset is compiled with the same compiler that will run it. The response gives, for every context, the size of its fixed prefix in tokens, which materials it includes, and a provider estimate of its cost. A context whose fixed material plus output allowance exceeds its budget is rejected without trimming. Nothing is saved or charged, and no model is called. When the platform has not enabled contexts, the request is rejected. Clients show the estimate as an estimate and never price it themselves.",
         "security": [
           {
             "userToken": []
@@ -15877,8 +15877,18 @@
               }
             }
           },
+          "404": {
+            "description": "`role_not_found` — `roleId` does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "503": {
-            "description": "`temporarily_unavailable` — the estimate cannot be produced right now. Nothing was written; retry later.",
+            "description": "`temporarily_unavailable` — this provider cannot produce the estimate right now. Nothing was written.",
             "content": {
               "application/json": {
                 "schema": {
@@ -30606,9 +30616,6 @@
       },
       "CardContextPreflightRequest": {
         "type": "object",
-        "required": [
-          "fields"
-        ],
         "properties": {
           "roleId": {
             "type": "string",
