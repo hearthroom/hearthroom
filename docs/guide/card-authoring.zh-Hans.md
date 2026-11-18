@@ -189,6 +189,8 @@
 | `generation:phase` | 这一轮等待的阶段变了。载荷是 `{phase, since}`；不补发，晚到的脚本请调用 `get()`。 |
 | `generation:outcome` | 上一轮的结局变了（失败卡出现、玩家重试后收起）。载荷同 `sdk.generation.get().outcome`，可能是 `null`；不补发。 |
 
+主线使用卡片工具时，服务器受理后 `sdk.message.send()` 就会完成。请从 `message:done` 读取本轮结果。模型线路暂时不可用时，事件会同时带有 `reasonCode: "service_unavailable"`、`reason: "interrupted"` 和 `toolCall: null`。普通中断只带 `reason: "interrupted"`，省略 `reasonCode`。事件的 `content` 可能为空。工具不受支持而改用普通文本时，如果同样遇到线路不可用，事件会保留 `reason: "unsupported"`。两种情况的处理方式见[卡片工具指南](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)。
+
 ### 运行规则
 
 - 打开页面时，每条既有消息依次触发 `message:new`、`message:mount`、`message:done`，最后触发 `ready`。

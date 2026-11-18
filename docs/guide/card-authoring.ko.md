@@ -189,6 +189,8 @@
 | `generation:phase` | 대기 단계가 바뀜. 페이로드는 `{phase, since}`. 다시 보내지 않으므로 늦게 실행되는 스크립트는 `get()`을 호출하세요. |
 | `generation:outcome` | 지난 턴의 결과가 바뀜(실패 카드가 나타나거나 다시 시도 후 사라짐). 페이로드는 `sdk.generation.get().outcome`과 같으며 `null`일 수 있음. 다시 보내지 않음. |
 
+메인 대화에서 카드 도구를 사용하면 서버가 턴을 수락할 때 `sdk.message.send()`가 완료됩니다. 턴의 결과는 `message:done`에서 확인하세요. 모델 연결 경로를 일시적으로 사용할 수 없으면 이벤트에 `reasonCode: "service_unavailable"`, `reason: "interrupted"`, `toolCall: null`이 함께 포함됩니다. 일반 중단은 `reason: "interrupted"`로 표시되며 `reasonCode`는 생략됩니다. 이벤트의 `content`는 비어 있을 수 있습니다. 지원되지 않는 도구 대신 일반 텍스트를 생성하다가 같은 문제가 발생하면 `reason: "unsupported"`가 유지됩니다. 두 경우의 처리 방법은 [카드 도구 가이드](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)에 나와 있습니다.
+
 ### 실행 모델
 
 - 페이지를 열면 기존 각 메시지에 대해 `message:new`, `message:mount`, `message:done`이 순서대로 발생하고, 마지막에 `ready`가 발생합니다.
