@@ -176,7 +176,7 @@ onBeforeUnmount(() => listen(false));
 
 .card__art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
 .card__art img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
-.card:hover .card__art img { transform: scale(1.04); }
+.card:hover .card__art img, .card:active .card__art img { transform: scale(1.04); }
 /* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */
 .card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }

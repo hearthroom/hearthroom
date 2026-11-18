@@ -167,6 +167,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
 .toolbar__manage svg { width: 14px; height: 14px; }
 .seg { display: flex; flex: none; padding: 3px; border-radius: var(--r-pill); background: var(--surface-2); }
 .seg__item { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: none; font: inherit; font-size: 13px; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.seg__item:not(.seg__item--on):is(:hover, :active) { color: var(--text); }
 .seg__item--on { background: var(--text); color: var(--surface); }
 /* 主欄比整頁窄：照容器寬度排欄，不照視窗 */
 .works :deep(.grid) { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
