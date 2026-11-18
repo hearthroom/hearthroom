@@ -157,6 +157,8 @@ describe('the guide page', () => {
     for (const locale of Object.keys(LOCALES)) {
       for (const search of ['', '?way=web']) {
         await mount(GuidePage, locale, {}, search);
+        const renderedText = root.querySelector('.doc--md')!.textContent!;
+        expect(renderedText, `${locale}${search}: unparsed bold delimiter`).not.toContain('**');
         const links = [...root.querySelectorAll<HTMLAnchorElement>('.toc__link')];
         expect(links[0]!.getAttribute('href'), locale).toBe('#start');
         expect(links.length, `${locale}${search}`).toBeGreaterThan(3);
