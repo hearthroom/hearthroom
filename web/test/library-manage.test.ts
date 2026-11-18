@@ -127,12 +127,12 @@ it('keeps the selected count on one line with reachable actions across five mobi
   }
  }
  const dir=mkdtempSync(join(tmpdir(),'library-mobile-layout-'));
-    let clean = false;
+ let clean = false;
  try{
   const file=join(dir,'fixture.html');writeFileSync(file,`<!doctype html><script>window.results=[]</script>${frames.join('')}<pre id="result"></pre>`);
   clean = false;
-      const run = await readNativeFixture(chrome!, file, { profile: join(dir,'profile'), ready: "(()=>{try{return JSON.parse(document.querySelector('#result')?.textContent||'[]').length>=20}catch{return false}})()", timeout: 30000 });
-      clean = true;
+  const run = await readNativeFixture(chrome!, file, { profile: join(dir,'profile'), ready: "(()=>{try{return JSON.parse(document.querySelector('#result')?.textContent||'[]').length>=20}catch{return false}})()", timeout: 30000 });
+  clean = true;
   expect(run.error,run.stderr).toBeUndefined();expect(run.status,run.stderr).toBe(0);
   const json=run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];expect(json,'Expected actual Chrome geometry').toBeTruthy();
   const results=JSON.parse(json!);expect(results).toHaveLength(20);

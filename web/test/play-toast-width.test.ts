@@ -1,5 +1,5 @@
-import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +17,7 @@ it('gives the fixed toast its available viewport width without covering the sand
   const base = readFileSync('src/styles/base.css', 'utf8');
   const text = JSON.parse(readFileSync('../stage/src/locale/en.json', 'utf8'))['canvas.modelPreferenceFallback'];
   const dir = mkdtempSync(join(tmpdir(), 'play-toast-width-'));
-    let clean = false;
+  let clean = false;
   try {
     const widths = [320, 390, 1440];
     const frames = widths.map(width => {
@@ -32,8 +32,8 @@ it('gives the fixed toast its available viewport width without covering the sand
     const file = join(dir, 'fixture.html');
     writeFileSync(file, `<script>window.results=[]</script>${frames}<pre id="result"></pre>`);
     clean = false;
-      const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
-      clean = true;
+    const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
+    clean = true;
     expect(run.error, run.stderr).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];

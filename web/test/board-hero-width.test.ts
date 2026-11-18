@@ -1,5 +1,5 @@
-import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +15,7 @@ it('keeps the hero at the original page width while the feed uses wide screens',
   const parent = board.slice(board.indexOf('<template>'), board.indexOf('<BoardCarousel'));
   const wrapped = /class="board-hero"/.test(parent);
   const dir = mkdtempSync(join(tmpdir(), 'board-hero-width-'));
-    let clean = false;
+  let clean = false;
   try {
     for (const width of [390, 640, 641, 768, 1079, 1440, 1920, 2560]) {
       const file = join(dir, `fixture-${width}.html`);

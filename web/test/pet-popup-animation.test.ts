@@ -1,5 +1,5 @@
-import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,7 @@ it('keeps a fitted edge popup inside its safe area throughout the real entrance 
   const styles = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
   const tokens = readFileSync('src/styles/tokens.css', 'utf8');
   const dir = mkdtempSync(join(tmpdir(), 'pet-popup-animation-'));
-    let clean = false;
+  let clean = false;
   try {
     const frames = [1440, 2560].flatMap(width => ['left', 'right'].map(side => {
       const x = side === 'left' ? -91 : width - 55, shift = side === 'left' ? 120 : -400;
@@ -23,8 +23,8 @@ it('keeps a fitted edge popup inside its safe area throughout the real entrance 
     const file = join(dir, 'fixture.html');
     writeFileSync(file, `<script>window.rows=[]</script>${frames}<pre id="result"></pre>`);
     clean = false;
-      const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
-      clean = true;
+    const run = await readNativeFixture(chrome!, file, { profile: join(dir, 'profile'), ready: "!!document.querySelector('#result')?.textContent", timeout: 20000 });
+    clean = true;
     expect(run.error, run.stderr).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     const json = run.stdout.match(/<pre id="result">([^<]+)<\/pre>/)?.[1];

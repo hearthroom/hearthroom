@@ -1,5 +1,5 @@
-import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 // @vitest-environment node
+import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +15,7 @@ it('passes clipped transparent areas to page links while keeping the peek and me
   for (let y = 0; y < 10; y++) for (let x = 4; x < 6; x++) pixels[(y * 10 + x) * 4 + 3] = 255;
   const path = silhouettePath(pixels, 10, 10, { sx: 10, sy: 10, mirror: false, step: 1, gap: 0 });
   const dir = mkdtempSync(join(tmpdir(), 'pet-desktop-hit-'));
-    let clean = false;
+  let clean = false;
   try {
     for (const mobile of [false, true]) {
       const file = join(dir, `${mobile}.html`);

@@ -1,6 +1,6 @@
+// @vitest-environment happy-dom
 import { readNativeFixture } from '../../stage/src/test-support/native-fixture';
 import { nativeBrowserFlags } from '../../stage/src/test-support/native-browser';
-// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
