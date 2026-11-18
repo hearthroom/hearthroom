@@ -189,6 +189,8 @@ The sandbox shell also has `--chat-*` variables (for example `--chat-bg`, `--cha
 | `generation:phase` | The phase of the current wait changed. Payload is `{phase, since}`; not replayed, so a late script calls `get()`. |
 | `generation:outcome` | The last turn's outcome changed (a failure card appeared, or went away after a retry). Payload as `sdk.generation.get().outcome`, possibly `null`; not replayed. |
 
+For a main turn sent with a card tool, `sdk.message.send()` resolves when the server accepts the turn. Read `message:done` for the result. When the model lane is temporarily unavailable, the event includes `reasonCode: "service_unavailable"`, `reason: "interrupted"` and `toolCall: null`. An ordinary interruption has `reason: "interrupted"` and no `reasonCode`. The event can have empty `content`. If the text fallback for an unsupported tool encounters the same outage, the event keeps `reason: "unsupported"`. The [card tools guide](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md) shows how to handle both cases.
+
 ### Execution model
 
 - On open, each existing message fires `message:new`, `message:mount` and `message:done` in order; `ready` fires last.

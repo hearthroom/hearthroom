@@ -189,6 +189,8 @@
 | `generation:phase` | 待ちの段階が変わった。ペイロードは `{phase, since}`。再送はないので、後から動くスクリプトは `get()` を呼んでください。 |
 | `generation:outcome` | 前のターンの結果が変わった（失敗のカードが出た、再試行で消えた）。ペイロードは `sdk.generation.get().outcome` と同じで、`null` のこともあります。再送はありません。 |
 
+メインの会話でカードツールを使うと、サーバーがターンを受理した時点で `sdk.message.send()` が完了します。ターンの結果は `message:done` で確認できます。モデルの接続先が一時的に利用できない場合、イベントには `reasonCode: "service_unavailable"`、`reason: "interrupted"`、`toolCall: null` が含まれます。通常の中断は `reason: "interrupted"` で、`reasonCode` は省略されます。イベントの `content` は空の場合があります。未対応のツールから通常のテキスト生成に切り替わった場合は、同じ接続障害が起きても `reason: "unsupported"` が維持されます。処理の例は[カードツールガイド](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)を参照してください。
+
 ### 実行モデル
 
 - ページを開くと、既存の各メッセージについて `message:new`、`message:mount`、`message:done` が順に発火し、最後に `ready` が発火します。
