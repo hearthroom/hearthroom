@@ -38578,11 +38578,12 @@
           },
           "contextQuotes": {
             "type": "array",
-            "description": "One cost estimate per context, in the same order, each with the context `id`. Whole credits: `expectedCharge` may be null when there is not enough data (not free), `maxCharge` is an admission estimate that includes possible compaction, and the final charge follows actual usage.",
+            "description": "One cost estimate per context, in the same order, each with the context `id`. In author preflight, `expectedCharge` prices the declared context and output budgets at uncached rates. `maxCharge` also carries the possible compaction allowance. An instance quote uses its current history and request to determine whether compaction needs to be reserved. The final charge follows actual usage.",
             "items": {
               "type": "object",
               "required": [
                 "id",
+                "expectedCharge",
                 "maxCharge"
               ],
               "properties": {
@@ -38602,8 +38603,7 @@
                   }
                 },
                 "expectedCharge": {
-                  "type": "integer",
-                  "nullable": true
+                  "type": "integer"
                 },
                 "maxCharge": {
                   "type": "integer"
