@@ -976,14 +976,14 @@ app.get("/v1/authors/:handle", async (c) => {
   });
 });
 
-/** 作者的關注／粉絲名單：作者設成公開名單才給，每一條關注要雙方都同意公開（src/follow-visibility.ts）。 */
+/** 作者的關注／粉絲名單：由作者對應的公開設定決定能否查看（src/follow-visibility.ts）。 */
 for (const kind of ["following", "followers"] as const) {
   app.get(`/v1/authors/:handle/${kind}`, async (c) => {
     c.header("Cache-Control", "no-store");
     return c.json(await countedFollowList(c, kind, () => followList(c.env.DB, { handle: c.req.param("handle") }, kind, listOffset(c))));
   });
 }
-/** 作者本人看自己的粉絲：不看自己的設定，粉絲那一方的同意照樣要。 */
+/** 作者本人可以查看自己的粉絲名單。 */
 app.get("/v1/me/followers", async (c) => {
   c.header("Cache-Control", "private, no-store");
   const member = await requireMember(c);

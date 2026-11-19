@@ -126,10 +126,9 @@ export interface Author {
 export type FollowingVisibility = "list" | "count" | "hidden";
 /** 他人看粉絲：list 數字＋名單／count 只有數字（粉絲數一律公開） */
 export type FollowersVisibility = "list" | "count";
-/** 關注／粉絲名單一頁：total 是完整人數，unlisted 是對方沒公開、不列出的人數 */
+/** 關注／粉絲名單一頁。total 是完整人數，包含不具公開名單資格的成員。 */
 export interface FollowListPage {
   total: number;
-  unlisted: number;
   items: { handle: string; name: string; avatar: string }[];
   hasNext: boolean;
   offset: number;

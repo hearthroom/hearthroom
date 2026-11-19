@@ -2,9 +2,7 @@
 /**
  * 關注／粉絲名單彈層（任務 2026-11-19-profile-visibility ui.md §3.4）。桌機置中 modal，手機（≤480）從底部升起。
  *
- * 名單只列「雙方都公開」的關注；人數是完整人數，沒列出的差額放在標題列下那一條說明，一打開就看得到，
- * 不然看到標題寫 3,420、下面只有十幾列，會以為壞了。人數不是 0、卻一列都沒有（上線初期最常見），
- * 是「都沒有公開」，不是空態。開著的時候作者改成不公開，伺服器回 403，這裡說明並通知外層重讀數字。
+ * 開著的時候作者改成不公開，伺服器回 403，這裡說明並通知外層重讀數字。
  *
  * 打開時推一筆歷史，手機返回鍵先關彈層、不離開頁面；用別的方式關掉時把那一筆退回去。
  */
@@ -44,14 +42,11 @@ const titleId = 'follow-list-' + Math.random().toString(36).slice(2);
 let generation = 0;
 
 const total = computed(() => page.value?.total ?? props.total);
-const unlisted = computed(() => page.value?.unlisted ?? 0);
 const state = computed(() => {
   if (notPublic.value) return 'notPublic';
   if (failed.value) return 'error';
   if (!page.value) return showSkeleton.value ? 'loading' : 'pending';
-  if (page.value.total === 0) return 'empty';
-  if (!items.value.length) return 'allUnlisted';
-  return 'list';
+  return items.value.length ? 'list' : 'empty';
 });
 
 async function load(more = false) {
@@ -149,7 +144,6 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </header>
-        <p v-if="state === 'list' && unlisted > 0" class="fl__unlisted"><AccountIcon name="eyeOff" />{{ $t('profile.list.partialHidden', { n: fmt(unlisted) }, unlisted) }}</p>
 
         <div class="fl__body" :aria-busy="loading">
           <ul v-if="state === 'loading'" class="fl__list" aria-hidden="true">
@@ -179,9 +173,8 @@ onBeforeUnmount(() => {
           </template>
 
           <div v-else-if="state !== 'pending'" class="fl__state" :role="state === 'error' ? 'alert' : undefined">
-            <AccountIcon :name="state === 'empty' ? (kind === 'followers' ? 'heart' : 'users') : state === 'error' ? 'refresh' : 'eyeOff'" class="fl__state-icon" :class="{ 'fl__state-icon--strong': state === 'allUnlisted' || state === 'notPublic' }" />
+            <AccountIcon :name="state === 'empty' ? (kind === 'followers' ? 'heart' : 'users') : state === 'error' ? 'refresh' : 'eyeOff'" class="fl__state-icon" :class="{ 'fl__state-icon--strong': state === 'notPublic' }" />
             <template v-if="state === 'empty'"><strong>{{ $t(kind === 'followers' ? 'profile.list.emptyFollowers.title' : 'profile.list.emptyFollowing.title') }}</strong><p>{{ $t(kind === 'followers' ? 'profile.list.emptyFollowers.hint' : 'profile.list.emptyFollowing.hint') }}</p></template>
-            <template v-else-if="state === 'allUnlisted'"><strong>{{ $t('profile.list.allHidden.title', { n: fmt(total) }, total) }}</strong><p>{{ $t('profile.list.allHidden.hint') }}</p></template>
             <template v-else-if="state === 'notPublic'"><strong>{{ $t('profile.list.closed') }}</strong></template>
             <template v-else><strong>{{ $t('profile.list.error.title') }}</strong><p>{{ $t('profile.list.error.hint') }}</p><button type="button" class="btn btn--sm" @click="load()">{{ $t('library.retry') }}</button></template>
           </div>
@@ -198,8 +191,6 @@ onBeforeUnmount(() => {
 .fl__title { display: flex; align-items: baseline; gap: var(--s-2); flex: 1; min-width: 0; margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; outline: none; }
 .fl__count { font-size: 13px; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .fl__close svg { width: 16px; height: 16px; }
-.fl__unlisted { display: flex; align-items: center; gap: var(--s-2); margin: 0; padding: var(--s-2) var(--s-5); background: var(--surface-2); box-shadow: inset 0 -1px 0 var(--line); font-size: 13px; line-height: 1.6; color: var(--text-2); }
-.fl__unlisted svg { width: 16px; height: 16px; flex: none; }
 .fl__body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .fl__list { list-style: none; margin: 0; padding: var(--s-2) 0; }
 .fl__row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); min-height: 56px; padding: var(--s-2) var(--s-5); color: inherit; transition: background var(--dur) var(--ease); }
@@ -227,8 +218,8 @@ onBeforeUnmount(() => {
 .fl__state .btn { margin-top: var(--s-2); }
 .fl__state-icon { width: 28px; height: 28px; color: var(--text-3); }
 .fl__state-icon--strong { color: var(--text-2); }
-:lang(ko) .fl__state, :lang(ko) .fl__unlisted { word-break: keep-all; }
-:lang(ja) .fl__state, :lang(ja) .fl__unlisted { word-break: auto-phrase; }
+:lang(ko) .fl__state { word-break: keep-all; }
+:lang(ja) .fl__state { word-break: auto-phrase; }
 @media (max-width: 480px) {
   .fl { width: 100%; max-height: 82dvh; border-radius: 24px; padding-bottom: env(safe-area-inset-bottom); }
   .fl__grab { display: block; position: absolute; top: 8px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: var(--r-pill); background: var(--border-strong); }

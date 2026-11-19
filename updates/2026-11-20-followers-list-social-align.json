@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/settings/profile",
+  "title": {
+    "zh-Hant": "公開粉絲列表現在也會顯示隱藏自己關注列表的人。",
+    "zh-Hans": "公开粉丝列表现在也会显示隐藏自己关注列表的人。",
+    "en": "Public follower lists now include people who keep their own following lists private.",
+    "ja": "公開フォロワー一覧に、フォロー中の一覧を非公開にしている人も表示されるようになりました。",
+    "ko": "이제 공개 팔로워 목록에 자신의 팔로잉 목록을 숨긴 사람도 표시돼요."
+  },
+  "body": {
+    "zh-Hant": "你的關注和粉絲公開設定只影響自己的主頁。",
+    "zh-Hans": "你的关注和粉丝公开设置只影响自己的主页。",
+    "en": "Your following and follower visibility settings apply only to your profile.",
+    "ja": "フォロー中とフォロワーの公開設定は、自分のプロフィールにだけ適用されます。",
+    "ko": "팔로잉과 팔로워 공개 설정은 내 프로필에만 적용돼요."
+  }
+}

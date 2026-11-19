@@ -1,6 +1,6 @@
 /**
  * 作者主頁的關注／粉絲可見度與名單（任務 2026-11-19-profile-visibility）。
- * 他人看得到什麼由作者自己的設定決定；名單裡的每一條關注要雙方都同意公開。
+ * 他人能開哪份名單由主頁作者的設定決定。
  * 隱藏的數字不能出現在任何回應裡，快取暖著也一樣。
  */
 import { SELF, env } from 'cloudflare:test';
@@ -87,26 +87,43 @@ it('refuses lists the author keeps to counts, without any number', async () => {
   expect((await get('/v1/authors/zzzzzzzz/followers')).status).toBe(404);
 });
 
-it('lists only relations both sides made public and reports the rest as unlisted', async () => {
-  const { fanIds, followedIds } = await graph(3, 3);
+it('lists public profiles regardless of their own list settings', async () => {
+  const { fanIds, followedIds } = await graph(3, 2);
   await setVis(author, 'list', 'list');
-  await setVis(fanIds[0], 'list', 'count');    // 公開了自己的關注 → 列入
-  await setVis(fanIds[1], 'hidden', 'list');   // 關注不公開 → 不列
-  await setVis(followedIds[2], 'count', 'list'); // 公開了自己的粉絲 → 列入
+  await setVis(fanIds[0], 'list', 'count');
+  await setVis(fanIds[1], 'hidden', 'list');
+  await setVis(followedIds[0], 'count', 'list');
+
   const followers = await json(`/v1/authors/${AUTHOR}/followers`);
-  expect(followers).toMatchObject({ total: 3, unlisted: 2, hasNext: false, offset: 0, limit: 30 });
-  expect(followers.items).toEqual([{ handle: testHandle(501), name: testHandle(501), avatar: '' }]);
+  expect(followers).toMatchObject({ total: 3, unlisted: 0, hasNext: false, offset: 0, limit: 30 });
+  expect(followers.items).toEqual([503, 502, 501].map((n) => ({ handle: testHandle(n), name: testHandle(n), avatar: '' })));
+
   const following = await json(`/v1/authors/${AUTHOR}/following`);
-  expect(following).toMatchObject({ total: 3, unlisted: 2 });
-  expect(following.items.map((i: any) => i.handle)).toEqual([testHandle(803)]);
-  // 只回公開身分，不回內部 id
-  expect(JSON.stringify(followers) + JSON.stringify(following)).not.toMatch(/member-/);
+  expect(following).toMatchObject({ total: 2, unlisted: 0 });
+  expect(following.items).toEqual([802, 801].map((n) => ({ handle: testHandle(n), name: testHandle(n), avatar: '' })));
+});
+
+it('still excludes non-public account classes from both lists', async () => {
+  const { fanIds, followedIds } = await graph(2, 2);
+  await setVis(author, 'list', 'list');
+  for (const id of [fanIds[1], followedIds[1]]) {
+    await setVis(id, 'list', 'list');
+    await env.DB.prepare("UPDATE members SET account_class='test', test_generation=1 WHERE id=?").bind(id).run();
+  }
+  await setVis(fanIds[0], 'list', 'list');
+  await setVis(followedIds[0], 'list', 'list');
+
+  const followers = await json(`/v1/authors/${AUTHOR}/followers`);
+  const following = await json(`/v1/authors/${AUTHOR}/following`);
+  expect(followers).toMatchObject({ total: 2, unlisted: 1, items: [{ handle: testHandle(501) }] });
+  expect(following).toMatchObject({ total: 2, unlisted: 1, items: [{ handle: testHandle(801) }] });
 });
 
 it('pages thirty at a time, newest first', async () => {
   const { fanIds } = await graph(32, 0);
   await setVis(author, 'count', 'list');
-  for (const id of fanIds) await setVis(id, 'list', 'count');
+  await setVis(fanIds[0], 'hidden', 'count');
+  await setVis(fanIds[31], 'hidden', 'count');
   const p1 = await json(`/v1/authors/${AUTHOR}/followers`);
   expect(p1.items).toHaveLength(30);
   expect(p1.items[0].handle).toBe(testHandle(532));
@@ -116,13 +133,13 @@ it('pages thirty at a time, newest first', async () => {
   expect(p2).toMatchObject({ hasNext: false, total: 32, unlisted: 0 });
 });
 
-it('lets the author open their own followers whatever their setting, still honouring each fan', async () => {
+it('lets the author open their own followers regardless of either side’s list settings', async () => {
   const { fanIds } = await graph(2, 0);
-  await setVis(fanIds[1], 'list', 'count');
+  await setVis(fanIds[1], 'hidden', 'count');
   expect((await get('/v1/me/followers')).status).toBe(401);
   const own = await json('/v1/me/followers', bearer('valid'));
-  expect(own).toMatchObject({ total: 2, unlisted: 1 });
-  expect(own.items.map((i: any) => i.handle)).toEqual([testHandle(502)]);
+  expect(own).toMatchObject({ total: 2, unlisted: 0 });
+  expect(own.items.map((i: any) => i.handle)).toEqual([testHandle(502), testHandle(501)]);
   expect((await get(`/v1/authors/${AUTHOR}/followers`)).status).toBe(403);
 });
 

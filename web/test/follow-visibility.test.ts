@@ -58,25 +58,18 @@ it('replaces a hidden following count with the eye icon and only opens lists tha
   ]);
 });
 
-it('explains unlisted members above the list and the all-unlisted state apart from empty', async () => {
-  api.list.mockResolvedValueOnce(page({ total: 3420, unlisted: 3418, items: [person(1), person(2)], hasNext: true }));
-  let body = await mount(FollowListDialog, { kind: 'followers', handle: 'writer01', total: 3420 });
+it('renders eligible followers and omits the other member’s visibility notice', async () => {
+  api.list.mockResolvedValueOnce(page({ total: 3, unlisted: 1, items: [person(1), person(2)] }));
+  const body = await mount(FollowListDialog, { kind: 'followers', handle: 'writer01', total: 3 });
   expect(api.list).toHaveBeenCalledWith('writer01', 'followers', 0);
-  const note = body.querySelector('.fl__unlisted')!;
-  expect(note.textContent).toContain('3,418');
-  expect(note.nextElementSibling?.classList.contains('fl__body')).toBe(true);
   expect(body.querySelectorAll('.fl__row')).toHaveLength(2);
-  expect(body.textContent).not.toContain('writer01-internal');
-  app!.unmount(); app = null; document.body.innerHTML = '';
+  expect(body.querySelector('.fl__count')?.textContent).toBe('3');
+  expect(body.querySelector('.fl__unlisted')).toBeNull();
+});
 
-  api.list.mockResolvedValueOnce(page({ total: 3420, unlisted: 3420 }));
-  body = await mount(FollowListDialog, { kind: 'following', handle: 'writer01', total: 3420 });
-  expect(body.textContent).toContain(t('profile.list.allHidden.title', { n: '3,420' }, 3420));
-  expect(body.textContent).not.toContain(t('profile.list.emptyFollowing.title'));
-  app!.unmount(); app = null; document.body.innerHTML = '';
-
-  api.list.mockResolvedValueOnce(page({ total: 0 }));
-  body = await mount(FollowListDialog, { kind: 'following', handle: 'writer01', total: 0 });
+it.each([0, 1])('uses the standard empty state when there are no eligible profiles (total %i)', async (total) => {
+  api.list.mockResolvedValueOnce(page({ total, unlisted: total }));
+  const body = await mount(FollowListDialog, { kind: 'following', handle: 'writer01', total });
   expect(body.textContent).toContain(t('profile.list.emptyFollowing.title'));
 });
 

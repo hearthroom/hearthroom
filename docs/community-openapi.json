@@ -885,7 +885,7 @@
         ],
         "summary": "List authors an author follows",
         "security": [],
-        "description": "Available when the author makes this list public. A follow is listed only when the follower makes their following public and the followed author makes their followers public; others count toward unlisted.",
+        "description": "Available when the author makes this list public. Members' own list settings only apply to their own profiles.",
         "parameters": [
           {
             "name": "handle",
@@ -923,7 +923,7 @@
                     },
                     "unlisted": {
                       "type": "integer",
-                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                      "description": "Members counted in total who are ineligible for public follow lists."
                     },
                     "items": {
                       "type": "array",
@@ -987,7 +987,7 @@
         ],
         "summary": "List an author's followers",
         "security": [],
-        "description": "Available when the author makes this list public. A follow is listed only when the follower makes their following public and the followed author makes their followers public; others count toward unlisted.",
+        "description": "Available when the author makes this list public. Members' own list settings only apply to their own profiles.",
         "parameters": [
           {
             "name": "handle",
@@ -1025,7 +1025,7 @@
                     },
                     "unlisted": {
                       "type": "integer",
-                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                      "description": "Members counted in total who are ineligible for public follow lists."
                     },
                     "items": {
                       "type": "array",
@@ -2610,7 +2610,7 @@
             "memberToken": []
           }
         ],
-        "description": "Your followers regardless of your own followers visibility. A follower is listed only when they make their following public; others count toward unlisted.",
+        "description": "Your eligible followers, regardless of your own list settings or theirs.",
         "parameters": [
           {
             "name": "offset",
@@ -2639,7 +2639,7 @@
                     },
                     "unlisted": {
                       "type": "integer",
-                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                      "description": "Members counted in total who are ineligible for public follow lists."
                     },
                     "items": {
                       "type": "array",

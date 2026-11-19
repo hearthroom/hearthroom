@@ -7,10 +7,7 @@ import { HttpError } from "./types";
  * - 關注：list（數字＋他人可開名單）／count（只有數字）／hidden（連數字都不回）。
  * - 粉絲：list／count；粉絲數不能藏。
  *
- * 名單規則：一條關注 A→B 只有在 A 的關注＝list 且 B 的粉絲＝list 時才公開——同一條件同時決定它
- * 出不出現在 A 的關注名單與 B 的粉絲名單。A 把關注設成不公開，卻從 B 的粉絲名單被看到，等於設定沒用。
- * 作者看自己的粉絲名單時，作者自己的設定不算，但粉絲那一方仍要是 list（同一個理由）。
- * 人數永遠是真實的總數；沒列出的差額另外回 unlisted，讓畫面說明「另有 N 位未公開」，而不是像壞掉。
+ * 名單由主頁作者對應的設定決定。列出的成員須為一般帳號；各成員的公開設定只控制自己的主頁。
  *
  * 可見度與人數都在快取之外即時讀：作者頁快照與作者榜快取有五分鐘，剛改成隱藏的數字不能再被送出去。
  */
@@ -78,6 +75,7 @@ export async function updateFollowVisibility(db: D1Database, memberId: string, n
 
 export interface FollowListPage {
   total: number;
+  /** 計入總數、但不具公開名單資格的人數，保留既有 API 欄位。 */
   unlisted: number;
   items: { handle: string; name: string; avatar: string }[];
   hasNext: boolean;
@@ -87,7 +85,7 @@ export interface FollowListPage {
 
 /**
  * 名單一頁。kind＝following：owner 關注的人；followers：關注 owner 的人。
- * 以 memberId 指定＝作者本人看自己的名單：略過作者自己的設定，對方那一方的同意照樣要。
+ * 以 memberId 指定＝作者本人看自己的名單：略過作者自己的設定。
  * 作者自己的設定不是 list（且不是本人）時回 403 list_not_public，不回任何人數。
  */
 export async function followList(db: D1Database, owner_: { handle: string } | { memberId: string }, kind: "following" | "followers", offset: number): Promise<FollowListPage> {
@@ -100,16 +98,13 @@ export async function followList(db: D1Database, owner_: { handle: string } | { 
   if (!owner) throw new HttpError(404, "author not found");
   const setting = kind === "following" ? owner.following_visibility : owner.followers_visibility;
   if (!own && setting !== "list") throw new HttpError(403, "list_not_public");
-  // following：owner→other，對方要 followers=list；followers：other→owner，對方要 following=list
-  const [ownerCol, otherCol, otherConsent] = kind === "following"
-    ? ["member_id", "author_id", "o.followers_visibility='list'"]
-    : ["author_id", "member_id", "o.following_visibility='list'"];
+  const [ownerCol, otherCol] = kind === "following" ? ["member_id", "author_id"] : ["author_id", "member_id"];
   const [counts, page] = await db.batch<{ total: number; listed: number } | { handle: string; name: string; avatar: string }>([
-    db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN o.account_class='normal' AND ${otherConsent} THEN 1 ELSE 0 END),0) AS listed
+    db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN o.account_class='normal' THEN 1 ELSE 0 END),0) AS listed
       FROM member_follows f JOIN members o ON o.id=f.${otherCol} WHERE f.${ownerCol}=?`).bind(owner.id),
     db.prepare(`SELECT o.handle, COALESCE(o.display_name,o.handle) AS name, o.avatar_url AS avatar
       FROM member_follows f JOIN members o ON o.id=f.${otherCol}
-      WHERE f.${ownerCol}=? AND o.account_class='normal' AND ${otherConsent}
+      WHERE f.${ownerCol}=? AND o.account_class='normal'
       ORDER BY f.created_at DESC, o.handle LIMIT ? OFFSET ?`).bind(owner.id, FOLLOW_LIST_PAGE + 1, offset),
   ]);
   const c = counts.results[0] as { total: number; listed: number };
