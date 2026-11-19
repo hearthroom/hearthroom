@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 const mocks=vi.hoisted(()=>({preload:vi.fn(async()=>{}),restore:vi.fn(async()=>{}),me:null as null|{accountNumId:number}}));
-vi.mock('../src/lib/stage-preload',()=>({preloadStage:mocks.preload}));
+vi.mock('@stage-site', async importOriginal => {
+ const actual = await importOriginal<typeof import('@stage-site')>();
+ return { ...actual, stageSite: { ...actual.stageSite, preload: mocks.preload } };
+});
 vi.mock('../src/lib/session',()=>({useSession:()=>mocks}));
 vi.mock('../src/lib/track',()=>({track:()=>{},currentSurface:()=>'',setSurface:()=>{}}));
 vi.mock('../src/lib/i18n',()=>({LOCALE_CODES:['zh-Hant','zh-Hans','en','ja','ko'],SOURCE_LOCALE:'zh-Hant',applyLocale:async()=>{},detectLocale:()=> 'zh-Hant',pageTitle:()=> 'Fixture',updateHreflang:()=>{}}));
