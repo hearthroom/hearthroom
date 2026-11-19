@@ -7,7 +7,7 @@ import { createApp, h, nextTick, type App } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 
-const api = vi.hoisted(() => ({ list: vi.fn(), own: vi.fn(), settings: vi.fn(), author: vi.fn() }));
+const api = vi.hoisted(() => ({ list: vi.fn(), own: vi.fn(), settings: vi.fn(), author: vi.fn(), board: vi.fn() }));
 import { reactive } from 'vue';
 const session = reactive({
   profile: { handle: 'writer01', followingVisibility: 'count', followersVisibility: 'count', followers: 12, following: 4 } as Record<string, unknown>,
@@ -16,7 +16,7 @@ const session = reactive({
 vi.mock('../src/lib/session', () => ({ useSession: () => session }));
 vi.mock('../src/lib/api', async (original) => ({
   ...(await original<object>()),
-  fetchFollowList: api.list, fetchOwnFollowers: api.own, updateSiteSettings: api.settings, fetchAuthor: api.author,
+  fetchFollowList: api.list, fetchOwnFollowers: api.own, updateSiteSettings: api.settings, fetchAuthor: api.author, fetchBoard: api.board,
 }));
 
 import { ApiError } from '../src/lib/api';
@@ -24,13 +24,15 @@ import ProfileStats from '../src/components/profile/ProfileStats.vue';
 import FollowListDialog from '../src/components/profile/FollowListDialog.vue';
 import SettingsProfile from '../src/components/settings/SettingsProfile.vue';
 import AuthorList from '../src/components/AuthorList.vue';
+import AuthorPage from '../src/pages/AuthorPage.vue';
 
 const t = i18n.global.t;
 let app: App | null = null, root: HTMLElement | null = null;
 afterEach(() => { app?.unmount(); root?.remove(); app = null; root = null; document.body.innerHTML = ''; vi.clearAllMocks(); });
-async function mount(component: object, props: Record<string, unknown> = {}) {
+async function mount(component: object, props: Record<string, unknown> = {}, at = '/') {
   root = document.createElement('div'); document.body.append(root);
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { render: () => null } }] });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/authors/:handle', component: { render: () => null } }, { path: '/:p(.*)*', component: { render: () => null } }] });
+  await router.push(at);
   app = createApp({ render: () => h(component, props) }).use(i18n).use(router);
   app.mount(root);
   await router.isReady();
@@ -120,4 +122,22 @@ it('shows works, following and followers in author search results, hiding a priv
   expect(rows[0].textContent).toContain('5');
   expect(rows[1].querySelector('[role="img"]')!.getAttribute('aria-label')).toBe(t('profile.stat.followingHidden'));
   expect(rows[1].textContent).toContain('7');
+});
+
+it('writes counts under ten thousand in full and previews openable lists without making them clickable', async () => {
+  const body = await mount(ProfileStats, { works: 5, chats: 12000, followers: 3420, following: 128, followersOpen: true, preview: true });
+  expect(body.textContent).toContain((3420).toLocaleString(i18n.global.locale.value));
+  expect(body.querySelectorAll('button')).toHaveLength(0);
+  expect(body.querySelectorAll('.pstats__more')).toHaveLength(1);
+});
+
+it('shows the loaded author header with its stats row and no leftover skeleton', async () => {
+  api.author.mockResolvedValue({ handle: 'writeraa', accountNumId: 1, name: '作者', avatar: '', bio: '', cardCount: 3, talkTotal: 40, joinedAt: 0, cover: '', followers: 7, following: null, followersVisibility: 'list', followingVisibility: 'hidden' });
+  api.board.mockResolvedValue({ items: [], hasNext: false, limit: 24, offset: 0, total: 0 });
+  const body = await mount(AuthorPage, {}, '/authors/writeraa');
+  for (let i = 0; i < 6; i++) { await nextTick(); await Promise.resolve(); }
+  expect(body.querySelector('header.who')).not.toBeNull();
+  expect(body.querySelector('.who--ghost')).toBeNull();
+  expect(body.querySelector('.who__stats [role="img"]')).not.toBeNull();
+  expect(body.querySelectorAll('.who__stats button')).toHaveLength(1);
 });

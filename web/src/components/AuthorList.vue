@@ -6,7 +6,7 @@
  */
 import { RouterLink } from "vue-router";
 import AccountIcon from "@/components/AccountIcon.vue";
-import { compact, hueFrom } from "@/lib/format";
+import { hueFrom, statCount } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import type { Author } from "@/lib/types";
 
@@ -25,14 +25,14 @@ const { lp } = useLocalePath();
           <span v-if="a.handle" class="al__id">@{{ a.handle }}</span>
         </span>
         <span class="al__nums">
-          <span class="al__num"><strong>{{ compact(a.cardCount) }}</strong><span>{{ $t("profile.stat.works") }}</span></span>
+          <span class="al__num"><strong>{{ statCount(a.cardCount) }}</strong><span>{{ $t("profile.stat.works") }}</span></span>
           <span class="al__num">
             <span v-if="a.following === null" class="al__hidden" role="img" :aria-label="$t('profile.stat.followingHidden')" :title="$t('profile.stat.followingHidden')"><AccountIcon name="eyeOff" /></span>
-            <strong v-else>{{ compact(a.following ?? 0) }}</strong>
+            <strong v-else>{{ statCount(a.following ?? 0) }}</strong>
             <span>{{ $t("profile.stat.following") }}</span>
           </span>
-          <span class="al__num"><strong>{{ compact(a.followers ?? 0) }}</strong><span>{{ $t("profile.stat.followers") }}</span></span>
-          <span class="al__num al__num--soft"><strong>{{ compact(a.talkTotal) }}</strong><span>{{ $t("profile.stat.chats") }}</span></span>
+          <span class="al__num"><strong>{{ statCount(a.followers ?? 0) }}</strong><span>{{ $t("profile.stat.followers") }}</span></span>
+          <span class="al__num al__num--soft"><strong>{{ statCount(a.talkTotal) }}</strong><span>{{ $t("profile.stat.chats") }}</span></span>
         </span>
         <svg class="al__arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </component>

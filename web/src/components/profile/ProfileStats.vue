@@ -10,7 +10,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import AccountIcon from '@/components/AccountIcon.vue';
-import { compact } from '@/lib/format';
+import { statCount } from '@/lib/format';
 
 type Kind = 'following' | 'followers';
 const props = defineProps<{
@@ -21,16 +21,18 @@ const props = defineProps<{
   following: number | null;
   followingOpen?: boolean;
   followersOpen?: boolean;
+  /** 設定頁的預覽：照他人看到的樣子畫出 ›，但不能點 */
+  preview?: boolean;
 }>();
 const emit = defineEmits<{ open: [kind: Kind, from: HTMLElement] }>();
 const { t, locale } = useI18n();
 
 const cells = computed(() => [
-  { key: 'works', icon: 'cards' as const, value: props.works, open: false },
-  { key: 'following', icon: 'users' as const, value: props.following, open: !!props.followingOpen && props.following !== null },
-  { key: 'followers', icon: 'heart' as const, value: props.followers, open: !!props.followersOpen },
-  { key: 'chats', icon: 'chat' as const, value: props.chats, open: false },
-]);
+  { key: 'works', icon: 'cards' as const, value: props.works, allowed: false },
+  { key: 'following', icon: 'users' as const, value: props.following, allowed: !!props.followingOpen && props.following !== null },
+  { key: 'followers', icon: 'heart' as const, value: props.followers, allowed: !!props.followersOpen },
+  { key: 'chats', icon: 'chat' as const, value: props.chats, allowed: false },
+].map((c) => ({ ...c, open: c.allowed && !props.preview, shown: c.allowed && props.preview })));
 const label = (key: string) => t('profile.stat.' + key);
 </script>
 
@@ -48,12 +50,14 @@ const label = (key: string) => t('profile.stat.' + key);
           <span class="pstats__label"><AccountIcon :name="c.icon" /><span class="pstats__text">{{ label(c.key) }}</span>
             <svg class="pstats__more" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
           </span>
-          <strong>{{ compact(c.value ?? 0) }}</strong>
+          <strong>{{ statCount(c.value ?? 0) }}</strong>
         </button>
         <div v-else class="pstats__stat">
-          <span class="pstats__label"><AccountIcon :name="c.icon" /><span class="pstats__text">{{ label(c.key) }}</span></span>
+          <span class="pstats__label"><AccountIcon :name="c.icon" /><span class="pstats__text">{{ label(c.key) }}</span>
+            <svg v-if="c.shown" class="pstats__more" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </span>
           <span v-if="c.value === null" class="pstats__hidden" role="img" :aria-label="$t('profile.stat.followingHidden')" :title="$t('profile.stat.followingHidden')"><AccountIcon name="eyeOff" /></span>
-          <strong v-else>{{ compact(c.value) }}</strong>
+          <strong v-else>{{ statCount(c.value) }}</strong>
         </div>
       </div>
     </div>

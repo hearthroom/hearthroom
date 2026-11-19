@@ -112,6 +112,9 @@ onBeforeUnmount(() => clearTimeout(savedTimer));
       :chats="author?.talkTotal ?? 0"
       :followers="session.profile.followers ?? 0"
       :following="following === 'hidden' ? null : session.profile.following ?? 0"
+      :following-open="following === 'list'"
+      :followers-open="followers === 'list'"
+      preview
     />
   </section>
 

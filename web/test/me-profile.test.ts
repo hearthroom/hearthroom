@@ -26,7 +26,7 @@ vi.mock('../src/lib/api', async (o) => ({ ...(await o<object>()), fetchAuthor: a
 vi.mock('../src/lib/campaign', async (o) => ({ ...(await o<object>()), fetchPublicCampaigns: async () => ({ items: [] }) }));
 vi.mock('../src/lib/connections', () => ({ accountToken: async () => null, connectAccount: vi.fn() }));
 import MePage from '../src/pages/MePage.vue';
-import { compact } from '../src/lib/format';
+import { statCount } from '../src/lib/format';
 
 let app: App | null = null, el: HTMLDivElement | null = null;
 const settle = async () => { for (let i = 0; i < 6; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); } };
@@ -69,7 +69,7 @@ it('does not poll the community status (the profile no longer redraws every 15 s
 it('always shows the owner real counts and says what others see', async () => {
   const root = await mount();
   const stats = root.querySelector('.hero__stats')!;
-  expect(stats.textContent).toContain(compact(3700));
+  expect(stats.textContent).toContain(statCount(3700));
   expect(stats.textContent).toContain(i18n.global.t('profile.stat.followers'));
   // 本人看到真實的關注數，即使對他人隱藏；兩格都能點
   expect([...stats.querySelectorAll('strong')].map((n) => n.textContent)).toEqual(expect.arrayContaining(['2', '3']));

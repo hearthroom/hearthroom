@@ -130,6 +130,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
         @open="openList"
       />
     </header>
+    <div v-else-if="!error" class="ghost who--ghost" aria-hidden="true" />
     <FollowListDialog
       v-if="list && author?.handle"
       :kind="list.kind"
@@ -139,7 +140,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       @close="list = null"
       @not-public="refreshCounts"
     />
-    <div v-else-if="!error" class="ghost who--ghost" aria-hidden="true" />
 
     <CardGrid
       :cards="page?.items ?? []"

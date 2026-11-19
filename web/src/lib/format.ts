@@ -14,6 +14,11 @@ export function compact(n: number): string {
   return new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
+/** 主頁數據與作者列表的人數：未滿一萬寫全數（3,420），一萬以上才縮寫，跟名單彈層標題的寫法一致。 */
+export function statCount(n: number): string {
+  return Math.abs(n) < 10_000 ? new Intl.NumberFormat(locale()).format(n) : compact(n);
+}
+
 /**
  * 卡片磚上的縮寫：跟 compact 一樣，但整數部分到三位數以上就不帶小數（1235萬、124万；1.2M 不變）。
  * 磚很窄，大數字多一位小數只會把作者名擠掉，卻不多帶資訊。
