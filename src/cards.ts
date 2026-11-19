@@ -38,7 +38,7 @@ export interface CardRow {
   follow_num: number;
   talk_num_prev: number;
   hot_score: number;
-  /** 熱度（0074 起）：作者以外的人在這張卡上扣掉的點數，每 10 分鐘從 Harbor 批次同步。 */
+  /** 熱度（0074 起）：Harbor 算好的作品熱度（2026-12-01 起是 v2），每 10 分鐘批次同步，這裡不再換算。 */
   heat: number;
   registered_at: number;
   board_hidden: number;
