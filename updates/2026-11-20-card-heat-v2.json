@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片熱度改依其他玩家實際消耗的積分、遊玩回合與參與人數計算。",
+    "zh-Hans": "卡片热度改按其他玩家实际消耗的积分、游玩回合和参与人数计算。",
+    "en": "Card heat now reflects actual credits spent by other players, play turns, and unique players.",
+    "ja": "カードの熱量が、他プレイヤーの消費ポイント・ターン数・参加人数で決まるようになりました。",
+    "ko": "카드 화력이 다른 플레이어의 사용 포인트, 대화 턴 수, 참여 인원으로 계산돼요."
+  },
+  "body": {
+    "zh-Hant": "同一玩家聊越久、越多人玩都有加成，作者、測試與受處置帳號不計入，日榜自11/19、週榜自11/16那週、月榜自11月起整期與即時榜都用新熱度，之前各期照原算法。",
+    "zh-Hans": "同一玩家聊越久、越多人玩都有加成，作者、测试和受处置账号不计入，日榜自11/19、周榜自11/16那周、月榜自11月起整期与实时榜都用新热度，之前各期照原算法。",
+    "en": "Longer play and more players add bonuses, authors and test or penalized accounts are excluded, and live rankings plus full periods from Nov 19 daily, the Nov 16 week, and Nov monthly onward use the new heat, with earlier ones unchanged.",
+    "ja": "同じ人が長く遊ぶほど、遊ぶ人が多いほど加算され、作者・テスト・措置対象アカウントは除かれ、日間11/19・週間11/16週・月間11月以降の全期間と並び順は新しい熱量になり、それ以前は変わりません。",
+    "ko": "한 사람이 오래 대화하고 참여자가 많을수록 보너스가 붙으며, 제작자·테스트·조치된 계정은 제외되고 일간 11/19·주간 11/16주·월간 11월부터의 전 기간과 실시간 순위는 새 화력을 쓰고 이전 기간은 그대로예요."
+  }
+}

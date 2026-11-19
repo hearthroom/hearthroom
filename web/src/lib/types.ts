@@ -53,7 +53,7 @@ export interface CommunityCard {
   followNum: number;
   favoriteCount?: number;
   trending: number;
-  /** 熱度：作者以外的玩家在這張卡上的對話量，每輪都加、用越貴的模型加越多、退款不扣（任務 2026-11-02-heat-weighted-turns）；部署過渡期的舊伺服器沒有。 */
+  /** 熱度：2026-12-01 起是 v2（任務 2026-11-19-card-heat-v2）：作者以外玩家的實扣，加回合與人數加成；被處置的帳號會拿掉，所以可能下降。部署過渡期的舊伺服器沒有。 */
   heat?: number;
   registeredAt: number;
   /** 目前上線那一版過審的時刻（卡片上的「幾天前更新」）；舊伺服器沒有 */
