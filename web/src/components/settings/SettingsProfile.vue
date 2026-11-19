@@ -6,7 +6,7 @@
  * 選了就存，沒有儲存鈕；連續點選以最後一次為準，失敗時選項彈回伺服器上的值。
  * 選項卡跟卡片「公開範圍」是同一套樣式（base.css .visibility-option），同一個產品裡「誰看得到」只有一種長相。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import AccountIcon from "@/components/AccountIcon.vue";
@@ -68,11 +68,11 @@ async function choose(key: "following" | "followers", value: string) {
 
 // ---- 他人看到的樣子：作品數與被聊過從公開作者頁來，關注與粉絲用本人的真實數字套上設定 ----
 const author = ref<Author | null>(null);
-onMounted(async () => {
-  const handle = session.profile?.handle;
+// 直接開這一頁時身分可能比畫面晚到：等公開 ID 有了再讀
+watch(() => session.profile?.handle, async (handle) => {
   if (!handle) return;
   try { author.value = await fetchAuthor(handle); } catch { /* 預覽的作品數拿不到就寫 0，不擋設定 */ }
-});
+}, { immediate: true });
 onBeforeUnmount(() => clearTimeout(savedTimer));
 </script>
 

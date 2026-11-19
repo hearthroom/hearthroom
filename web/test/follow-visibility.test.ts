@@ -141,3 +141,15 @@ it('shows the loaded author header with its stats row and no leftover skeleton',
   expect(body.querySelector('.who__stats [role="img"]')).not.toBeNull();
   expect(body.querySelectorAll('.who__stats button')).toHaveLength(1);
 });
+
+it('reads the preview numbers once the signed-in profile arrives after the page', async () => {
+  const handle = session.profile.handle;
+  session.profile.handle = '';
+  api.author.mockResolvedValue({ cardCount: 9, talkTotal: 40 });
+  const body = await mount(SettingsProfile);
+  expect(api.author).not.toHaveBeenCalled();
+  session.profile.handle = handle;
+  for (let i = 0; i < 4; i++) { await nextTick(); await Promise.resolve(); }
+  expect(api.author).toHaveBeenCalledWith(handle);
+  expect(body.querySelector('.profile-vis__preview')!.textContent).toContain('9');
+});

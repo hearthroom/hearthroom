@@ -89,8 +89,13 @@ async function load(more = false) {
   }
 }
 
-let closed = false, pushed = false, overflow = '', background: HTMLElement | null = null, previousInert = false;
-function onPop() { pushed = false; close(); }
+let closed = false, pushed = false, openedAt = '', overflow = '', background: HTMLElement | null = null, previousInert = false;
+// 彈層推的那一筆被退掉時，路由也會收到同一個網址的 popstate（它的監聽先註冊，攔不下來）。
+// 實測（2026-11-19，本機真 Worker）：同頁換頁不會捲動、頁面瀏覽事件對同一路徑去重，焦點也照樣還給數據格，所以不另外處理。
+function onPop() {
+  pushed = false;
+  close();
+}
 function close() {
   if (closed) return;
   closed = true;
@@ -109,6 +114,7 @@ function keydown(e: KeyboardEvent) {
 }
 onMounted(async () => {
   // 帶著路由自己的 state 推一筆，返回時路由看到的是同一個位置，不會換頁
+  openedAt = location.href;
   history.pushState({ ...(history.state ?? {}) }, '', location.href);
   pushed = true;
   window.addEventListener('popstate', onPop);
@@ -121,11 +127,13 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   generation++;
+  // 外層拿掉彈層但還在同一頁時，把推的那一筆退回去；已經換頁就不動歷史
   window.removeEventListener('popstate', onPop);
+  if (pushed && location.href === openedAt) history.back();
+  pushed = false;
   document.removeEventListener('keydown', keydown);
   document.documentElement.style.overflow = overflow;
   if (background) background.inert = previousInert;
-  if (pushed) { pushed = false; history.back(); }
   props.opener?.focus();
 });
 </script>
