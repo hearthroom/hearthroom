@@ -4,6 +4,8 @@ import worker from '../src/index';
 import {getCard,upsertCard} from '../src/cards';
 import {identitiesFor,makeMember,resetDb,restoreUpstream,role} from './helpers';
 import {upstream,type MyRole} from '../src/upstream';
+import {opsMetrics} from '../src/ops-metrics';
+import {policyOperationId} from '../src/work-policy';
 
 beforeEach(resetDb);afterEach(()=>{vi.restoreAllMocks();restoreUpstream();});
 async function fixture(count=30){
@@ -23,6 +25,39 @@ async function request(query='',enabled=true){
  const context=createExecutionContext();const res=await worker.fetch(new Request('https://c.test/v1/me/cards'+query,{headers:{Authorization:'Bearer owner'}}),{...env,HOSTING_SERVICE_KEY:'fixture-issuer',WORK_SHARING_ENABLED:enabled?'true':'false'},context);
  await waitOnExecutionContext(context);return res;
 }
+it('keeps the unfiltered inventory available while a first publication bind is unconfirmed', async () => {
+  const {member, roles, network} = await fixture(2);
+  const draft = roles[0];
+  const work = crypto.randomUUID();
+  const version = crypto.randomUUID();
+  const operation = await policyOperationId('submission-enroll:' + version);
+  await upsertCard(env.DB, role({roleId:draft.roleId, authorNumId:11}), 0, {status:'unlisted'});
+  await env.DB.prepare('INSERT INTO works VALUES(?,?,?,?,?)').bind(work, member, 'harbor', draft.roleId, 0).run();
+  await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,created_at,visibility_consent) VALUES(?,?,?,?,?,'harbor',?,?)")
+    .bind(version, work, member, crypto.randomUUID(), draft.roleId, Date.now() - 86400000, JSON.stringify({providerEpoch:0,providerRevision:'fixture-revision',initialAccess:'private'})).run();
+  await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,sync_state,sync_operation_id) VALUES(?,'harbor',?,'private',0,'none','changing',?)")
+    .bind(work, draft.roleId, operation).run();
+
+  const response = await request('?fresh=1');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  expect(await response.json()).toMatchObject({total:2, items:[
+    {roleId:draft.roleId, workVisibility:{syncState:'unavailable', effectiveAccess:'unavailable', restorable:false, actions:[]}},
+    {roleId:roles[1].roleId, workVisibility:{syncState:'complete', effectiveAccess:'owner'}},
+  ]});
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="owner_inventory",outcome="unavailable"} 1');
+  const filtered = await request('?fresh=1&access=private');
+  expect(filtered.status).toBe(503);
+  expect(await filtered.json()).toEqual({error:'visibility_provider_unavailable'});
+  expect(network.mock.calls.every(([target]) => String(target).endsWith('/owner-batch'))).toBe(true);
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM visibility_operations').first()).toEqual({n:0});
+  expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first())
+    .toEqual({epoch:0,sync_state:'changing'});
+
+  await env.DB.prepare('UPDATE managed_work_access SET epoch=1 WHERE work_id=?').bind(work).run();
+  expect((await request('?fresh=1')).status).toBe(503);
+});
+
 it('filters author access before pagination and batches the current full projection',async()=>{
  const {roles,network}=await fixture();
  const res=await request('?access=unlisted&pageSize=3&page=2');expect(res.status).toBe(200);

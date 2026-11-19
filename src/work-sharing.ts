@@ -6,6 +6,7 @@ import {managedWork,workPolicyGateway,type WorkAccess,type WorkOwnerView,type Ma
 import {type Env,HttpError} from './types';
 import {refreshWorkAccess} from './work-refresh';
 import {WORK_READ_BUDGET} from './work-read';
+import {bumpOp} from './ops-metrics';
 
 export interface WorkVisibility {
  nextMajorUpdateAt?:number;
@@ -90,16 +91,16 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
 
 // Provider validates each source's actual author and read scope in one RPC.
 // D1 facts are set queries rather than per-card network/database round trips.
-export async function readOwnerVisibilities(env:Env,sources:string[],token:string):Promise<Map<string,WorkVisibility>>{
+export async function readOwnerVisibilities(env:Env,sources:string[],token:string,options:{allowUnconfirmedFirstBind?:boolean}={}):Promise<Map<string,WorkVisibility>>{
  if(new Set(sources).size!==sources.length)throw new HttpError(503,'visibility_read_budget_exceeded');
  const out=new Map<string,WorkVisibility>();
  for(let offset=0;offset<sources.length;offset+=WORK_READ_BUDGET){
-  const batch=await ownerVisibilityBatch(env,sources.slice(offset,offset+WORK_READ_BUDGET),token);
+  const batch=await ownerVisibilityBatch(env,sources.slice(offset,offset+WORK_READ_BUDGET),token,options.allowUnconfirmedFirstBind===true);
   for(const [source,value] of batch)out.set(source,value);
  }
  return out;
 }
-async function ownerVisibilityBatch(env:Env,sources:string[],token:string):Promise<Map<string,WorkVisibility>>{
+async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowUnconfirmedFirstBind:boolean):Promise<Map<string,WorkVisibility>>{
  let provider=await workPolicyGateway.owners(env,'harbor',sources,token);
  const ids=JSON.stringify(sources);
  const before=await env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>();
@@ -129,11 +130,24 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string):Promi
  const reviewMap=new Map(reviews.results.map(r=>[r.source,r])),moderationMap=new Map(moderation.results.map(r=>[r.source_role_id,r]));
  const times=await sourceUpdateEligibility(env.DB,sources);
  const out=new Map<string,WorkVisibility>();
+ let unconfirmedFirstBind=false;
  for(const [i,source] of sources.entries()){
   const p=policyMap.get(source)??null,r=provider[i],review=reviewMap.get(source)??null;
-  if(p&&(!r.managed||r.workId!==p.work_id))throw new HttpError(503,'visibility_provider_unavailable');
-  out.set(source,{...await projectOwnerVisibility(r,p,cardMap.get(source)??null,review,review?.ever_public===1,moderationMap.get(source)??null),...(times.get(source)??{nextMajorUpdateAt:0,updateCooldownExempt:false})});
+  const mismatched=!!p&&(!r.managed||r.workId!==p.work_id);
+  // Harbor has verified the author for every item. The ordinary inventory can
+  // show this draft as unavailable while its first policy is being established.
+  // Visibility-filtered and individual reads still require decisive authority.
+  if(mismatched&&!(allowUnconfirmedFirstBind&&p.epoch===0&&p.sync_state==='changing'&&p.sync_operation_id&&!r.managed&&r.epoch===0)){
+   throw new HttpError(503,'visibility_provider_unavailable');
+  }
+  const visibility=await projectOwnerVisibility(r,p,cardMap.get(source)??null,review,review?.ever_public===1,moderationMap.get(source)??null);
+  if(mismatched){
+   visibility.syncState='unavailable';
+   unconfirmedFirstBind=true;
+  }
+  out.set(source,{...visibility,...(times.get(source)??{nextMajorUpdateAt:0,updateCooldownExempt:false})});
  }
+ if(unconfirmedFirstBind)await bumpOp(env.DB,'visibility_read','owner_inventory','unavailable');
  return out;
 }
 

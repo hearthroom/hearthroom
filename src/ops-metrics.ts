@@ -49,7 +49,7 @@ const METRICS = {
     name:'hearthroom_visibility_reads_total',
     help:'Current work policy checks before returning data; adult and social rules apply separately.',
     label:'surface',
-    operations:['list','detail','social','library','metadata','aggregate','private_detail','private_metadata'],
+    operations:['list','detail','social','library','metadata','aggregate','private_detail','private_metadata','owner_inventory'],
     outcomes:['allow','denied','unavailable'],
   },
   visibility_provider_failure: {

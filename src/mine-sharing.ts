@@ -12,7 +12,7 @@ export async function loadSharingMine(env:Env,token:string,me:ProviderIdentity,o
  const account=me.accountNumId;
  if(!opts.access){
   const result=await loadMine({...env,WORK_SHARING_ENABLED:'false'},token,me,{...opts,provider:'harbor'});
-  const projections=await readOwnerVisibilities(env,result.body.items.map(r=>r.roleId),token);
+  const projections=await readOwnerVisibilities(env,result.body.items.map(r=>r.roleId),token,{allowUnconfirmedFirstBind:true});
   return {...result,body:{...result.body,items:result.body.items.map(r=>({...r,...(projections.get(r.roleId)!.access==='unlisted'?{rating:null}:{}),workVisibility:projections.get(r.roleId)!,draftChanged:projections.get(r.roleId)!.draftChanged}))}};
  }
  const all:MyRole[]=[],seen=new Set<string>();let source:MineResult['source']='hit';
