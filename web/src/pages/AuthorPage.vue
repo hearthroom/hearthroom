@@ -6,6 +6,9 @@ import WornBadges from "@/components/WornBadges.vue";
 import { usePublicAppearance } from "@/lib/community-appearance";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import TipPlatformIcon from "@/components/TipPlatformIcon.vue";
+import AccountIcon from "@/components/AccountIcon.vue";
+import ProfileStats from "@/components/profile/ProfileStats.vue";
+import FollowListDialog from "@/components/profile/FollowListDialog.vue";
 import { tipPlatform } from "../../../shared/tip-links";
 import { profileCover, profileCoverUrl } from "../../../shared/profile-covers";
 import { track } from "@/lib/track";
@@ -15,7 +18,7 @@ import { useRoute, useRouter } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError, fetchAuthor, fetchBoard } from "@/lib/api";
-import { compact, hueFrom, relativeTime } from "@/lib/format";
+import { dateOnly } from "@/lib/format";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -57,10 +60,21 @@ async function load() {
     loading.value = false;
   }
 }
+// ---- 關注／粉絲名單：作者公開名單才可點；開著時作者改成不公開，名單通知後重讀數字 ----
+const list = ref<{ kind: "following" | "followers"; from: HTMLElement } | null>(null);
+function openList(kind: "following" | "followers", from: HTMLElement) { list.value = { kind, from }; }
+async function refreshCounts() {
+  const handle = author.value?.handle;
+  if (!handle) return;
+  try { const fresh = await fetchAuthor(handle); if (author.value?.handle === handle) author.value = { ...author.value, ...fresh }; } catch { /* 名單裡已經說明了，數字等下次開頁 */ }
+}
+function followChanged(active: boolean) {
+  if (author.value) author.value = { ...author.value, followers: Math.max(0, (author.value.followers ?? 0) + (active ? 1 : -1)) };
+}
 function go(offset: number,cursor?:string) {
   router.push({ query: {...(offset>0?{offset:String(offset)}:{}),...(cursor?{cursor}:{})} });
 }
-watch(() => route.params.handle, () => { author.value = null; page.value = null; load(); }, { immediate: true });
+watch(() => route.params.handle, () => { author.value = null; page.value = null; list.value = null; load(); }, { immediate: true });
 watch([() => route.query.offset,() =>route.query.cursor], load);
 function reloadViewer(){if(route.query.cursor!==undefined||offset.value)go(0);else void load();}
 watch(locale,reloadViewer);
@@ -91,6 +105,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
           <CommunityBadgeList v-if="level !== null" :badges="[]" :level="level" class="who__level" />
+          <span class="who__joined"><AccountIcon name="calendar" />{{ $t("me.since", { date: dateOnly(Math.floor(author.joinedAt / 1000)) }) }}</span>
         </p>
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <!-- 打賞連結：每一條直接連到那個平台，錢在那邊付 -->
@@ -102,13 +117,28 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
           </li>
         </ul>
       </div>
-      <LibraryToggle v-if="author.handle && author.handle !== session.profile?.handle" kind="following" :target="author.handle" />
-      <dl class="who__stats">
-        <div class="stat"><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
-        <div class="stat"><dt>{{ $t("author.stat.talk") }}</dt><dd>{{ compact(author.talkTotal) }}</dd></div>
-        <div class="stat"><dt>{{ $t("author.stat.joined") }}</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
-      </dl>
+      <LibraryToggle v-if="author.handle && author.handle !== session.profile?.handle" kind="following" :target="author.handle" @changed="followChanged" />
+      <!-- 整個頁首的摘要，獨占最後一列：不打斷作者自己選的簡介與打賞（ui.md §3.2） -->
+      <ProfileStats
+        class="who__stats"
+        :works="author.cardCount"
+        :chats="author.talkTotal"
+        :followers="author.followers ?? 0"
+        :following="author.following === undefined ? 0 : author.following"
+        :following-open="author.followingVisibility === 'list'"
+        :followers-open="author.followersVisibility === 'list'"
+        @open="openList"
+      />
     </header>
+    <FollowListDialog
+      v-if="list && author?.handle"
+      :kind="list.kind"
+      :handle="author.handle"
+      :total="(list.kind === 'followers' ? author.followers : author.following) ?? 0"
+      :opener="list.from"
+      @close="list = null"
+      @not-public="refreshCounts"
+    />
     <div v-else-if="!error" class="ghost who--ghost" aria-hidden="true" />
 
     <CardGrid
@@ -146,7 +176,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 :deep(.who__worn) { flex: 1 1 16rem; min-width: 0; }
 /* 名字最多兩行，再長就省略：CommunityName 外層是 inline-flex，省略要加在名字文字那一層 */
 .who__name :deep(.community-name > span:first-child) { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.who__level { display: inline-flex; vertical-align: middle; margin-left: var(--s-2); }
+.who__level { display: inline-flex; vertical-align: middle; }
 /* 社群等級在作者頁是次要資訊：和展示徽章同高同字級的中性標籤，不用強調色（美術總監 2026-11-03） */
 .who__level :deep(.community-badge--level) { height: 28px; min-height: 28px; padding: 0 10px 0 7px; gap: 5px; background: var(--surface-2); color: var(--text-2); border-color: var(--line-strong); font-size: 12.5px; font-weight: 600; line-height: 1; }
 .who__level :deep(.community-badge--level svg) { width: 16px; height: 16px; }
@@ -160,8 +190,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .who__tip-icon { width: 28px; height: 28px; }
 .who__text { min-width: 0; margin-right: auto; flex: 1 1 20rem; }
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
-.who__id { margin: 4px 0 0; }
-.who__stats { display: flex; gap: var(--s-6); }
+.who__id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s-3); margin: 4px 0 0; }
+.who__joined { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.who__joined svg { width: 15px; height: 15px; }
+.who__stats { flex: 1 0 100%; }
 .cover { position: relative; height: 160px; margin-bottom: calc(var(--s-6) * -1); border-radius: var(--r-lg) var(--r-lg) 0 0; overflow: hidden; }
 .cover img { width: 100%; height: 100%; object-fit: cover; object-position: right 40%; }
 .cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, hsl(var(--hue) 44% 89%) 85%, transparent) 90%, hsl(var(--hue) 44% 89%)); }
@@ -182,6 +214,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .who__bio { margin: 0; }
   .who > .library-toggle { grid-column: 1 / -1; }
   .who > .library-toggle :deep(.btn) { width: 100%; }
-  .who__stats { grid-column: 1 / -1; justify-content: space-between; gap: var(--s-3); }
+  .who__joined { flex-basis: 100%; }
+  .who__stats { grid-column: 1 / -1; margin-top: var(--s-4); }
 }
 </style>

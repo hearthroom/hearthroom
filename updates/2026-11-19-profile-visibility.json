@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/settings/profile",
+  "title": {
+    "zh-Hant": "個人主頁現在可以分開設定關注與粉絲的公開方式。",
+    "zh-Hans": "个人主页现在可以分开设置关注和粉丝的公开方式。",
+    "en": "You can now choose separately how your following and followers appear on your profile.",
+    "ja": "プロフィールでフォロー中とフォロワーの公開方法を別々に設定できるようになりました。",
+    "ko": "이제 프로필에서 팔로잉과 팔로워의 공개 방식을 각각 설정할 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "作者主頁與搜尋結果都會依設定顯示作品、關注與粉絲，雙方都公開列表時也能直接點開查看。",
+    "zh-Hans": "作者主页和搜索结果都会按设置显示作品、关注和粉丝，双方都公开列表时也能直接点开查看。",
+    "en": "Author pages and search results now show works, following, and followers based on these settings, and lists open when both sides make them public.",
+    "ja": "作者ページと検索結果に作品・フォロー中・フォロワーが設定どおり表示され、双方が公開している一覧は開いて確認できます。",
+    "ko": "작가 페이지와 검색 결과에 작품, 팔로잉, 팔로워가 설정에 따라 표시되며, 양쪽이 모두 공개한 목록은 눌러서 볼 수 있어요."
+  }
+}

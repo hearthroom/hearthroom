@@ -94,15 +94,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
  </div>
 </template>
 <style scoped>
-.visibility-options{display:grid;gap:var(--s-2)}
-.visibility-option{display:flex;align-items:flex-start;gap:var(--s-3);padding:var(--s-3);min-height:56px;border:1.5px solid var(--border-strong);border-radius:var(--r-sm);cursor:pointer;color:var(--text)}
-.visibility-option--selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
-.visibility-option--disabled{cursor:default}
-.visibility-option svg{width:20px;height:20px;flex-shrink:0;margin-top:var(--s-1)}
-.visibility-option input{accent-color:var(--accent);flex-shrink:0;width:20px;height:20px;margin-top:var(--s-1)}
-.visibility-option__body{min-width:0;flex:1;display:grid;gap:var(--s-1)}
-.visibility-option__title{font-size:15px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2)}
-.visibility-option__description,.visibility-option__reason{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
+.visibility-option__reason{font-size:13px;overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
 .visibility-missing{border:0;background:none;padding:0;font:inherit;font-size:13px;line-height:1.6;text-align:start;cursor:pointer;overflow-wrap:anywhere;min-height:var(--h-lg)}
 .cover-upload{border:0;background:none;padding:0;color:var(--accent-text);font:inherit;cursor:pointer;min-height:var(--h-sm)}

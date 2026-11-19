@@ -14,7 +14,7 @@ import { dateTime } from "./format";
 import { canonicalType } from "./media-type";
 import { stateLimitParams, type StatePayload } from "./card-state";
 import { rememberCard, rememberCards } from "./card-memory";
-import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
+import type { Author, AuthorSort, CardPage, CommunityCard, FollowersVisibility, FollowingVisibility, FollowListPage, MyRole, Sort, Zone } from "./types";
 import type { CardHonor, Honor } from "./honors";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
@@ -383,6 +383,16 @@ export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sor
   return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
+/** 作者的關注／粉絲名單（作者公開名單才有；不公開回 403 list_not_public）。 */
+export async function fetchFollowList(handle: string, kind: "following" | "followers", offset = 0): Promise<FollowListPage> {
+  return json<FollowListPage>(await fetch(`${COMMUNITY_API}/authors/${encodeURIComponent(handle)}/${kind}?offset=${offset}`, { headers: from() }));
+}
+
+/** 本人看自己的粉絲（不受自己的設定影響）。 */
+export async function fetchOwnFollowers(token: string, offset = 0): Promise<FollowListPage> {
+  return json<FollowListPage>(await fetch(`${COMMUNITY_API}/me/followers?offset=${offset}`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
 export async function fetchAuthor(handle: string): Promise<Author> {
   const viewer = await viewerAccess();
   const q = viewer.param ? `?${viewer.param}` : "";
@@ -748,20 +758,22 @@ export interface SiteMe {
   countryRegion?: string;
   /** 主頁封面（shared/profile-covers.ts 的 id）；空字串＝用預設那張。舊回應沒有這欄 */
   cover?: string;
-  /** 自己的主頁顯示作品數、被對話、粉絲、關注（預設關） */
-  showStats?: boolean;
+  /** 他人看我的關注／粉絲；舊回應沒有這兩欄 */
+  followingVisibility?: FollowingVisibility;
+  followersVisibility?: FollowersVisibility;
+  /** 本人看的真實人數 */
   followers?: number;
   following?: number;
 }
 
-export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[]; showStats?: boolean; countryRegion?: string }
+export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[]; followingVisibility?: FollowingVisibility; followersVisibility?: FollowersVisibility; countryRegion?: string }
 
 /**
  * 本站的個人設定，可以只送其中一樣：成人內容開關（第一次開要帶生日 YYYY-MM-DD，伺服器只看一眼、不存；
  * 沒同意過目前這一版聲明要帶 consentVersion）、
  * 不想看的類型（完整清單，整份換掉）。回應永遠是三樣齊的現況。
  */
-export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number; hiddenTags?: string[]; showStats?: boolean; countryRegion?: string }, token: string): Promise<SiteSettings> {
+export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number; hiddenTags?: string[]; followingVisibility?: FollowingVisibility; followersVisibility?: FollowersVisibility; countryRegion?: string }, token: string): Promise<SiteSettings> {
   return json(
     await fetch(`${COMMUNITY_API}/me/settings`, {
       method: "POST",

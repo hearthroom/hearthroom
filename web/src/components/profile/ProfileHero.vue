@@ -17,6 +17,8 @@ import CommunityIcon from '@/components/CommunityIcon.vue';
 import TipLinksField, { type TipRow } from '@/components/TipLinksField.vue';
 import WornBadges from '@/components/WornBadges.vue';
 import AvatarCropper from './AvatarCropper.vue';
+import FollowListDialog from './FollowListDialog.vue';
+import ProfileStats from './ProfileStats.vue';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { headerOverlaysKey } from '@/lib/site-links';
@@ -24,7 +26,7 @@ import { confirmDialog } from '@/lib/confirm';
 import { updateSiteProfile } from '@/lib/api';
 import { isAnimatedImage } from '@/lib/avatar-crop';
 import { clearAppearanceCache } from '@/lib/community-appearance';
-import { compact, dateOnly } from '@/lib/format';
+import { dateOnly } from '@/lib/format';
 import type { CommunityView } from '@/lib/community';
 import type { Author } from '@/lib/types';
 import { PROFILE_COVERS, profileCover, profileCoverUrl } from '../../../../shared/profile-covers';
@@ -51,13 +53,14 @@ const draftCover = ref('');
 const coverId = computed(() => (editing.value ? draftCover.value : profile.value?.cover ?? '') || '');
 const cover = computed(() => profileCover(coverId.value));
 
-// ---- 數據（預設關，設定頁或這裡都能開） ------------------------------------------
-const stats = computed(() => [
-  { key: 'works', value: props.author?.cardCount ?? 0, icon: 'cards' as const, tab: 'works' },
-  { key: 'chats', value: props.author?.talkTotal ?? 0, icon: 'chat' as const, tab: '' },
-  { key: 'followers', value: profile.value?.followers ?? 0, icon: 'heart' as const, tab: '' },
-  { key: 'following', value: profile.value?.following ?? 0, icon: 'users' as const, tab: 'following' },
-]);
+// ---- 數據：本人看真實數字；關注切到「關注」分頁（那裡能取消關注），粉絲開名單 ------------------
+// 下面一句說明他人看到什麼（關注 3 種 × 粉絲 2 種，五語各寫完整句，不拼接）
+const visibilityNote = computed(() => `profile.visibility.summary.${profile.value?.followingVisibility ?? 'count'}_${profile.value?.followersVisibility ?? 'count'}`);
+const followers = ref<HTMLElement | null>(null);
+function openStat(kind: 'following' | 'followers', from: HTMLElement) {
+  if (kind === 'following') emit('tab', 'following');
+  else followers.value = from;
+}
 
 // ---- 分享 ------------------------------------------------------------------------
 const shared = ref(false);
@@ -264,12 +267,20 @@ defineExpose({ begin });
         <slot name="aside" />
       </div>
 
-      <div v-if="!editing && profile?.showStats" class="hero__stats" role="list" :aria-label="$t('profile.statsLabel')">
-        <component :is="s.tab ? 'button' : 'div'" v-for="s in stats" :key="s.key" role="listitem" class="hero__stat" :type="s.tab ? 'button' : undefined" @click="s.tab && emit('tab', s.tab)">
-          <span class="hero__stat-label"><AccountIcon :name="s.icon" />{{ $t('profile.stat.' + s.key) }}</span>
-          <strong>{{ compact(s.value) }}</strong>
-        </component>
-      </div>
+      <template v-if="!editing && profile">
+        <ProfileStats
+          class="hero__stats"
+          :works="author?.cardCount ?? 0"
+          :chats="author?.talkTotal ?? 0"
+          :followers="profile.followers ?? 0"
+          :following="profile.following ?? 0"
+          following-open
+          followers-open
+          @open="openStat"
+        />
+        <p class="hero__visibility"><AccountIcon name="eye" />{{ $t(visibilityNote) }} <RouterLink :to="lp('/settings/profile')" class="hero__adjust">{{ $t('profile.visibility.editLink') }}</RouterLink></p>
+      </template>
+      <FollowListDialog v-if="followers" kind="followers" :total="profile?.followers ?? 0" :opener="followers" @close="followers = null" />
       <p v-if="error" ref="errorBox" class="notice notice--error hero__error" role="alert">{{ error }}</p>
     </div>
 
@@ -339,14 +350,12 @@ defineExpose({ begin });
 .hero__add-bio svg { width: 15px; height: 15px; flex: none; }
 
 
-.hero__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: var(--s-5); border-radius: var(--r-md); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
-.hero__stat { display: grid; gap: 6px; padding: var(--s-4) var(--s-5); border: 0; background: none; font: inherit; color: inherit; text-align: start; }
-.hero__stat + .hero__stat { box-shadow: inset 1px 0 0 var(--line); }
-button.hero__stat { cursor: pointer; }
-button.hero__stat:hover { background: var(--surface-2); }
-.hero__stat-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--text-2); white-space: nowrap; }
-.hero__stat-label svg { width: 16px; height: 16px; color: var(--text-3); }
-.hero__stat strong { font-size: 24px; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.hero__stats { margin-top: var(--s-5); }
+.hero__visibility { margin: var(--s-3) 0 0; font-size: 13px; line-height: 1.6; color: var(--text-3); }
+.hero__visibility > svg { display: inline; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
+.hero__adjust { color: var(--accent-text); white-space: nowrap; }
+:lang(ko) .hero__visibility { word-break: keep-all; }
+:lang(ja) .hero__visibility { word-break: auto-phrase; }
 
 .hero__form { gap: var(--s-3); }
 .field { display: grid; gap: 4px; }
@@ -387,9 +396,6 @@ button.hero__stat:hover { background: var(--surface-2); }
   .hero__name { font-size: 24px; }
   .hero__info { flex-basis: 100%; }
   /* 徽章整排橫向滑動：展示中的幾枚跟徽章牆入口排在同一條，不互相蓋住 */
-  .hero__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hero__stat:nth-child(3) { box-shadow: inset 0 1px 0 var(--line); }
-  .hero__stat:nth-child(4) { box-shadow: inset 1px 1px 0 var(--line); }
   .hero__unsaved { display: none; }
   .savebar { left: 16px; right: 16px; transform: none; max-width: none; }
   .savebar__state { flex: 1; min-width: 0; font-size: 12px; white-space: normal; }

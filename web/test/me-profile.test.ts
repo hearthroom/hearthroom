@@ -13,7 +13,7 @@ const fixture = vi.hoisted(() => ({
   community: vi.fn(),
   session: {
     me: { accountNumId: 7 }, ready: true, displayName: 'Author', avatarUrl: '', wallet: { score: 48238, tempScore: 0, plans: [] },
-    profile: { handle: 'author01', memberSince: 0, bio: '', cover: '', showStats: false, followers: 3, following: 2, tipLinks: [], identities: [{ provider: 'harbor', externalId: 7, linkedAt: 0 }] },
+    profile: { handle: 'author01', memberSince: 0, bio: '', cover: '', followingVisibility: 'hidden', followersVisibility: 'count', followers: 3, following: 2, tipLinks: [], identities: [{ provider: 'harbor', externalId: 7, linkedAt: 0 }] },
     accessToken: async () => 'tok', logout: vi.fn(),
   } as any,
 }));
@@ -42,7 +42,7 @@ async function mount() {
   app.mount(el); await settle();
   return el;
 }
-afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.restoreAllMocks(); fixture.session.profile.showStats = false; });
+afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.restoreAllMocks(); });
 const hrefs = (root: Element) => [...root.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');
 
 it('keeps every entry the old profile page had', async () => {
@@ -66,13 +66,13 @@ it('does not poll the community status (the profile no longer redraws every 15 s
   expect(fixture.community.mock.calls.filter(([path]) => path === '/me/community')).toHaveLength(1);
 });
 
-it('hides profile stats until the owner turns them on', async () => {
-  let root = await mount();
-  expect(root.querySelector('.hero__stats')).toBeNull();
-  app!.unmount(); el!.remove();
-  fixture.session.profile.showStats = true;
-  root = await mount();
+it('always shows the owner real counts and says what others see', async () => {
+  const root = await mount();
   const stats = root.querySelector('.hero__stats')!;
   expect(stats.textContent).toContain(compact(3700));
   expect(stats.textContent).toContain(i18n.global.t('profile.stat.followers'));
+  // 本人看到真實的關注數，即使對他人隱藏；兩格都能點
+  expect([...stats.querySelectorAll('strong')].map((n) => n.textContent)).toEqual(expect.arrayContaining(['2', '3']));
+  expect(stats.querySelectorAll('button')).toHaveLength(2);
+  expect(root.querySelector('.hero__visibility')!.textContent).toContain(i18n.global.t('profile.visibility.summary.hidden_count'));
 });

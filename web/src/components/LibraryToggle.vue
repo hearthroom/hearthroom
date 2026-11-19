@@ -8,7 +8,7 @@ import { loginPath } from '@/lib/login-return';
 import { useI18n } from 'vue-i18n';
 import { suki } from '@/pet/events';
 const props = withDefaults(defineProps<{ kind: 'favorites' | 'following'; target: string; initialActive?: boolean }>(), { initialActive: undefined });
-const emit = defineEmits<{ count: [value: number] }>();
+const emit = defineEmits<{ count: [value: number]; changed: [active: boolean] }>();
 const session = useSession();
 const { lp } = useLocalePath();
 const route = useRoute();
@@ -39,6 +39,8 @@ async function toggle() {
     const result = await libraryRequest<{ active: boolean; count?: number }>(`${props.kind}/${encodeURIComponent(props.target)}`, token, active.value ? 'DELETE' : 'PUT');
     // 關注數記在登入者的資料上，首頁「關注」分頁靠它分辨「還沒關注」與「關注了但沒動態」；資料只在登入時讀一次，這裡跟著加減
     if (props.kind === 'following' && session.profile?.following !== undefined && result.active !== was) session.profile.following = Math.max(0, session.profile.following + (result.active ? 1 : -1));
+    // 作者頁的粉絲數跟著加減，不必整頁重讀
+    if (result.active !== was) emit('changed', result.active);
     if (seq === sequence) { active.value = result.active; if (result.count !== undefined) emit('count', result.count); }
     if (result.active && props.kind === 'favorites') suki({ type: 'favorite' });
   } catch { if (seq === sequence) error.value = t('library.saveFailed'); }

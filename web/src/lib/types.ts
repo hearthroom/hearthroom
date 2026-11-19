@@ -114,6 +114,26 @@ export interface Author {
   tips?: TipLink[];
   /** 主頁封面（shared/profile-covers.ts 的 id）；只有單人主頁帶，空字串＝預設 */
   cover?: string;
+  /** 粉絲數（一律公開） */
+  followers?: number;
+  /** 關注數；null＝作者設成不公開 */
+  following?: number | null;
+  /** 他人能不能打開名單；只有單人主頁帶 */
+  followersVisibility?: FollowersVisibility;
+  followingVisibility?: FollowingVisibility;
+}
+/** 他人看關注：list 數字＋名單／count 只有數字／hidden 不公開 */
+export type FollowingVisibility = "list" | "count" | "hidden";
+/** 他人看粉絲：list 數字＋名單／count 只有數字（粉絲數一律公開） */
+export type FollowersVisibility = "list" | "count";
+/** 關注／粉絲名單一頁：total 是完整人數，unlisted 是對方沒公開、不列出的人數 */
+export interface FollowListPage {
+  total: number;
+  unlisted: number;
+  items: { handle: string; name: string; avatar: string }[];
+  hasNext: boolean;
+  offset: number;
+  limit: number;
 }
 export type AuthorSort = "talk" | "cards" | "hot";
 

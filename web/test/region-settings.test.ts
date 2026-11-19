@@ -31,7 +31,7 @@ import { pageAway } from "../src/pet/enabled";
 const server = { region: "TW", sessionRegion: "TW", wantsNsfw: true, cardRegionBlocked: false };
 /** 設定頁補讀 GET /v1/me 的回應：有值時先擋著，等測試放行（模擬網路慢） */
 let holdMe: Promise<void> | null = null;
-const view = () => ({ showNsfw: server.region !== "CN" && server.wantsNsfw, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false, countryRegion: server.region });
+const view = () => ({ showNsfw: server.region !== "CN" && server.wantsNsfw, ageVerified: true, adultConsent: true, hiddenTags: [], followingVisibility: "count", followersVisibility: "count", countryRegion: server.region });
 const profile = (region: string) => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [{ provider: "harbor", externalId: 7, linkedAt: 0 }], ...view(), countryRegion: region });
 const requests: { method: string; url: string; headers: Headers; body?: string }[] = [];
 

@@ -371,6 +371,18 @@ select.input { height: var(--h-md); }
 .toast:not([hidden]) { animation: toast var(--dur-slow) var(--ease) both; }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* ---- 「誰看得到」的選項卡：卡片公開範圍（VisibilityPicker）與主頁關注／粉絲可見度（SettingsProfile）共用 ----
+   整張卡是 label，右側原生 radio；選中＝accent 框＋5% accent 底。 */
+.visibility-options{display:grid;gap:var(--s-2)}
+.visibility-option{display:flex;align-items:flex-start;gap:var(--s-3);padding:var(--s-3);min-height:56px;border:1.5px solid var(--border-strong);border-radius:var(--r-sm);cursor:pointer;color:var(--text)}
+.visibility-option--selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.visibility-option--disabled{cursor:default}
+.visibility-option svg{width:20px;height:20px;flex-shrink:0;margin-top:var(--s-1)}
+.visibility-option input{accent-color:var(--accent);flex-shrink:0;width:20px;height:20px;margin-top:var(--s-1)}
+.visibility-option__body{min-width:0;flex:1;display:grid;gap:var(--s-1)}
+.visibility-option__title{font-size:15px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2)}
+.visibility-option__description{font-size:13px;color:var(--text-2);overflow-wrap:anywhere;line-height:1.6}
+
 /* ---- 帶表單的對話框（檢舉留言、移除原因、禁言）：跟確認框同一個樣子，窄螢幕從底部升起 ---- */
 
 .modal-backdrop {

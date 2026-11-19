@@ -15,7 +15,7 @@ const session = vi.hoisted(() => ({
   me: { accountNumId: 7, nickName: "月光", avatar: "" },
   profile: {
     handle: "kxxoxfyb", memberSince: 0, reviewer: false, identities: [] as unknown[],
-    showNsfw: false, ageVerified: true, adultConsent: true, showStats: false, hiddenTags: [] as string[],
+    showNsfw: false, ageVerified: true, adultConsent: true, followingVisibility: "count", followersVisibility: "count", hiddenTags: [] as string[],
   },
   accessToken: async () => "tok",
 }));
@@ -179,10 +179,12 @@ describe("第一層列表", () => {
 });
 
 describe("各區的設定都還在", () => {
-  it("個人資料：編輯資料、主頁數據、榜單隱私", async () => {
+  it("個人資料：編輯資料、關注與粉絲可見度、榜單隱私", async () => {
     const { el } = await mount("/settings/profile");
     expect(el.querySelector('a[href="/me?edit=1"]')).not.toBeNull();
-    expect(el.textContent).toContain(t("settings.profile.stats"));
+    expect(el.textContent).toContain(t("settings.profile.following.hidden.title"));
+    expect(el.querySelectorAll('input[type="radio"][name="profile-vis-following"]')).toHaveLength(3);
+    expect(el.querySelectorAll('input[type="radio"][name="profile-vis-followers"]')).toHaveLength(2);
     expect(el.querySelector("#leaderboard-privacy")).not.toBeNull();
   });
 
