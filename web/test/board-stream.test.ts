@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../src/lib/api";
 import { createBoardStream } from "../src/lib/board-stream";
 import type { CardPage, CommunityCard } from "../src/lib/types";
 
@@ -6,6 +7,9 @@ const card = (id: string) => ({ id, name: id }) as CommunityCard;
 const page = (ids: string[], offset = 0, hasNext = false, nextCursor?: string): CardPage => ({
   items: ids.map(card), total: null, offset, limit: 2, hasNext, nextCursor, sort: "day", adult: false,
 });
+const invalidCursor = () => new ApiError(400, "Localized message", "invalid_cursor");
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("continuous board stream", () => {
   it("finishes every day page before hot; preserves filters and deduplicates both segments", async () => {
@@ -116,6 +120,74 @@ describe("continuous board stream", () => {
     expect(stream.state.error).toBeTruthy();
     expect(stream.state.done).toBe(false);
     expect(stream.state.first?.items.map(c => c.id)).toEqual(["a"]);
+  });
+
+  it("automatically rebuilds an expired week cursor without replaying day or duplicating cards", async () => {
+    const read = vi.fn().mockResolvedValueOnce(page(["a"]))
+      .mockResolvedValueOnce(page(["b", "c"], 0, true, "expired"))
+      .mockRejectedValueOnce(invalidCursor())
+      .mockResolvedValueOnce(page(["b", "c"], 0, true, "fresh"))
+      .mockResolvedValueOnce(page(["c", "d"], 2, true, "week3"));
+    const stream = createBoardStream(read);
+    stream.reset({ sort: "day", zone: "en", tag: ["story"], rating: "PG12" }, true);
+    await stream.next();
+    await stream.next();
+    expect(read.mock.calls.map(([q]) => [q.sort, q.offset, q.cursor])).toEqual([
+      ["day", 0, undefined], ["week", 0, undefined], ["week", 2, "expired"],
+      ["week", 0, undefined], ["week", 2, "fresh"],
+    ]);
+    expect(read.mock.calls[3][0]).toMatchObject({ zone: "en", tag: ["story"], rating: "PG12" });
+    expect(stream.state.first?.items.map(c => c.id)).toEqual(["a"]);
+    expect(stream.state.week?.items.map(c => c.id)).toEqual(["b", "c", "d"]);
+    expect(stream.state.error).toBe("");
+  });
+
+  it("lets the user retry the replay when its first page fails", async () => {
+    const read = vi.fn().mockResolvedValueOnce(page(["a", "b"], 0, true, "expired"))
+      .mockRejectedValueOnce(invalidCursor())
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(page(["a", "b"], 0, true, "fresh"))
+      .mockResolvedValueOnce(page(["c"], 2));
+    const stream = createBoardStream(read);
+    stream.reset({ sort: "hot" });
+    await stream.next();
+    await stream.next();
+    expect(stream.state.error).toBe("offline");
+    expect(stream.state.first?.items.map(c => c.id)).toEqual(["a", "b"]);
+    await stream.next();
+    expect(read.mock.calls.map(([q]) => [q.offset, q.cursor])).toEqual([
+      [0, undefined], [2, "expired"], [0, undefined], [0, undefined], [2, "fresh"],
+    ]);
+    expect(stream.state.error).toBe("");
+    expect(stream.state.first?.items.map(c => c.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("checks cursor age on foreground return, preserves it across restore and shares the in-flight refresh", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(100);
+    const read = vi.fn().mockResolvedValueOnce(page(["a", "b"], 0, true, "old"))
+      .mockResolvedValueOnce(page(["a", "b"], 0, true, "fresh"))
+      .mockResolvedValueOnce(page(["c"], 2));
+    let active = true;
+    const stream = createBoardStream(read, () => active);
+    stream.reset({ sort: "hot" });
+    await stream.next();
+    const saved = stream.snapshot();
+    now.mockReturnValue(100 + 54 * 60_000);
+    stream.restore({ sort: "hot" }, saved);
+    await stream.refreshIfStale();
+    now.mockReturnValue(100 + 55 * 60_000);
+    active = false;
+    await stream.refreshIfStale();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    active = true;
+    await Promise.all([stream.refreshIfStale(), stream.refreshIfStale(), stream.next()]);
+    expect(read.mock.calls.map(([q]) => [q.offset, q.cursor])).toEqual([[0, undefined], [0, undefined]]);
+    expect(stream.state.first?.items.map(c => c.id)).toEqual(["a", "b"]);
+    expect(stream.state.error).toBe("");
+    await stream.next();
+    expect(read.mock.calls.at(-1)?.[0].cursor).toBe("fresh");
+    expect(stream.state.first?.items.map(c => c.id)).toEqual(["a", "b", "c"]);
   });
 
   it("ignores a previous viewer response after reset", async () => {

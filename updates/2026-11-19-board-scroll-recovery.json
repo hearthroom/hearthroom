@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "首頁榜單放久了也能繼續往下看，毋須重新整理。",
+    "zh-Hans": "首页榜单打开很久后，仍可继续往下看，无需刷新。",
+    "en": "You can keep scrolling the home rankings without reloading after leaving the page open.",
+    "ja": "ホームのランキングを開いたまま時間がたっても、再読み込みせずに続きを見られます。",
+    "ko": "홈 순위 페이지를 오래 열어 둬도 새로고침 없이 이어서 볼 수 있어요."
+  }
+}
