@@ -3,8 +3,8 @@ export const RANK_WINDOWS:RankWindow[]=['day','week','month'];
 export const RANK_DURATION:Record<RankWindow,number>={day:86400000,week:7*86400000,month:30*86400000};
 export const RANK_REWARDS:Record<RankWindow,Record<RankBand,number>>={day:{1:5000,3:2500,10:1000},week:{1:50000,3:25000,10:10000},month:{1:100000,3:50000,10:20000}};
 const TAIPEI=8*3600000;
-/** Heat v2 starts with the first whole period of each window (Taipei); periods already running keep v1. */
-export const RANK_HEAT_V2_FROM:Record<RankWindow,number>={day:Date.parse('2026-12-01T00:00:00+08:00'),week:Date.parse('2026-12-07T00:00:00+08:00'),month:Date.parse('2026-12-01T00:00:00+08:00')};
+/** Heat v2 scores every period not yet settled when v2 shipped (Taipei): day 11-19, the week of 11-16 and November onward; settled periods keep their v1 scores. */
+export const RANK_HEAT_V2_FROM:Record<RankWindow,number>={day:Date.parse('2026-11-19T00:00:00+08:00'),week:Date.parse('2026-11-16T00:00:00+08:00'),month:Date.parse('2026-11-01T00:00:00+08:00')};
 /** The heat formula a card's window is scored with: decided by its cohort, so one period never mixes formulas. */
 export function heatFormulaOf(publishedAt:number,window:RankWindow):'v2'|undefined{return cohortOf(publishedAt,window).at>=RANK_HEAT_V2_FROM[window]?'v2':undefined}
 /** Calendar membership is Taipei-based; each card's scoring interval has fixed duration. */

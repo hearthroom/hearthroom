@@ -29,12 +29,15 @@ it('uses the next Taipei day after the actual last entrant matures, including ex
  expect(cohortOf(at('2026-10-12T12:00:00'),'week').due).toBe(at('2026-10-20T00:00:00'));
  expect(cohortOf(at('2026-10-01T00:00:00'),'month').due).toBe(at('2026-11-01T00:00:00'));
 });
-it('switches heat to v2 from the first whole period of each window, never inside one',()=>{
- // 2026-12-01 is a Tuesday: its week began on Monday 11-30, so that week stays v1.
- expect(heatFormulaOf(at('2026-11-30T23:59:00'),'day')).toBeUndefined();
- expect(heatFormulaOf(at('2026-12-01T00:00:00'),'day')).toBe('v2');
- expect(heatFormulaOf(at('2026-12-06T23:59:00'),'week')).toBeUndefined();
- expect(heatFormulaOf(at('2026-12-07T00:00:00'),'week')).toBe('v2');
- expect(heatFormulaOf(at('2026-11-30T23:59:00'),'month')).toBeUndefined();
- expect(heatFormulaOf(at('2026-12-01T00:00:00'),'month')).toBe('v2');
+it('switches heat to v2 for every period not yet settled when v2 ships, never inside one',()=>{
+ // Day 11-18 and the week of 11-09 settle before v2 ships; 11-19, the week of 11-16 and November do not.
+ expect(heatFormulaOf(at('2026-11-18T23:59:00'),'day')).toBeUndefined();
+ expect(heatFormulaOf(at('2026-11-19T00:00:00'),'day')).toBe('v2');
+ expect(heatFormulaOf(at('2026-11-15T23:59:00'),'week')).toBeUndefined();
+ expect(heatFormulaOf(at('2026-11-16T00:00:00'),'week')).toBe('v2');
+ // A card first published mid-week belongs to its Monday-start week.
+ expect(heatFormulaOf(at('2026-11-18T12:00:00'),'week')).toBe('v2');
+ expect(heatFormulaOf(at('2026-10-31T23:59:00'),'month')).toBeUndefined();
+ expect(heatFormulaOf(at('2026-11-01T00:00:00'),'month')).toBe('v2');
+ expect(heatFormulaOf(at('2026-11-30T23:59:00'),'month')).toBe('v2');
 });
