@@ -146,9 +146,10 @@ function adoptShown() {
 }
 
 let shownKey: string | null = null;
-async function loadMore() {
+function loadMore() { return finishLoad(stream.next()); }
+async function finishLoad(request: Promise<void>) {
   const id = loadId;
-  await stream.next();
+  await request;
   if (id !== loadId) return;
   if (recheckAfterLoad && session.profile && page.value) {
     recheckAfterLoad = false;
@@ -190,14 +191,26 @@ async function load() {
 // leave the sentinel intersecting, which does not produce another observer transition.
 let observer: IntersectionObserver | undefined;
 let frame = 0;
+let foregroundPending = false;
 function checkTail() {
   frame = 0;
-  if (!mounted || mode.value !== "cards" || feed.loading || feed.done || feed.error || !canLoad()) return;
+  if (!mounted || mode.value !== "cards" || feed.loading || feed.done || !canLoad()) return;
+  if (foregroundPending) {
+    foregroundPending = false;
+    const request = stream.refreshIfStale();
+    if (request) { void finishLoad(request); return; }
+  }
+  if (feed.error) return;
   if (sentinel.value && sentinel.value.getBoundingClientRect().top < window.innerHeight + 400) void loadMore();
 }
 function scheduleCheck() {
   wide.value = window.innerWidth >= 1080;
   if (mounted && !frame) frame = requestAnimationFrame(checkTail);
+}
+function onForeground() {
+  if (document.visibilityState === "hidden" || mode.value !== "cards") return;
+  foregroundPending = true;
+  scheduleCheck();
 }
 onMounted(() => {
   mounted = true;
@@ -207,10 +220,11 @@ onMounted(() => {
   }
   window.addEventListener("scroll", scheduleCheck, { passive: true });
   window.addEventListener("resize", scheduleCheck);
-  document.addEventListener("visibilitychange", scheduleCheck);
+  document.addEventListener("visibilitychange", onForeground);
+  window.addEventListener("focus", onForeground);
   document.addEventListener("click", scheduleCheck);
   document.addEventListener("keydown", scheduleCheck);
-  scheduleCheck();
+  onForeground();
 });
 onBeforeRouteLeave(() => {
   if (shownKey && page.value) {
@@ -226,7 +240,8 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(frame);
   window.removeEventListener("scroll", scheduleCheck);
   window.removeEventListener("resize", scheduleCheck);
-  document.removeEventListener("visibilitychange", scheduleCheck);
+  document.removeEventListener("visibilitychange", onForeground);
+  window.removeEventListener("focus", onForeground);
   document.removeEventListener("click", scheduleCheck);
   document.removeEventListener("keydown", scheduleCheck);
 });
@@ -387,7 +402,7 @@ const ratingOptions = computed(() => {
           <p>{{ $t((page?.items.length || more.length) ? 'home.appendError' : 'home.firstError') }}</p>
           <button class="btn" @click="loadMore">{{ $t('home.retry') }}</button>
         </div>
-        <template v-else-if="loading">
+        <template v-else-if="loading && !feed.refreshing">
           <p class="sr-only" role="status">{{ $t('home.loading') }}</p>
           <div v-if="page" class="tail-skeleton" aria-hidden="true"><div v-for="i in 8" :key="i" class="ghost" /></div>
         </template>
