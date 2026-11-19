@@ -4,6 +4,7 @@ import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } f
 import { tagNamesFor } from "../shared/tag-catalog";
 import { readTipLinks } from "../shared/tip-links";
 import { type Env, HttpError } from "./types";
+import type { FollowersVisibility, FollowingVisibility } from "./follow-visibility";
 import { upstream, type ProviderIdentity } from "./upstream";
 import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { guestAdult, guestAllowsNsfw, siteSessionIdentity, siteSessionReader } from "./account-auth";
@@ -141,9 +142,11 @@ export interface MemberProfile {
   tipLinks: string[];
   /** 主頁封面（shared/profile-covers.ts 的 id）；空字串＝沒選過 */
   cover: string;
-  /** 自己的主頁要不要顯示作品數、被對話、粉絲、關注（預設關） */
-  showStats: boolean;
-  /** 關注我的人數、我關注的作者數 */
+  /** 他人看我的關注：list 可開名單／count 只有數字／hidden 不公開（src/follow-visibility.ts） */
+  followingVisibility: FollowingVisibility;
+  /** 他人看我的粉絲：list／count（粉絲數一律公開） */
+  followersVisibility: FollowersVisibility;
+  /** 關注我的人數、我關注的作者數（本人看的是真實數字，不受上面兩個設定影響） */
   followers: number;
   following: number;
 }
@@ -171,10 +174,10 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string, defaults?:{country:string;locale:string}): Promise<MemberProfile | null> {
-  type ProfileRow = { country_region:string|null; handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; show_stats: number; followers: number; following: number };
+  type ProfileRow = { country_region:string|null; handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; following_visibility: FollowingVisibility; followers_visibility: FollowersVisibility; followers: number; following: number };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
-    db.prepare("SELECT country_region, handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links, cover, show_stats, (SELECT COUNT(*) FROM member_follows WHERE author_id = members.id) AS followers, (SELECT COUNT(*) FROM member_follows WHERE member_id = members.id) AS following FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT country_region, handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links, cover, following_visibility, followers_visibility, (SELECT COUNT(*) FROM member_follows WHERE author_id = members.id) AS followers, (SELECT COUNT(*) FROM member_follows WHERE member_id = members.id) AS following FROM members WHERE id = ?").bind(memberId),
     db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
     db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
   ]);
@@ -200,7 +203,8 @@ export async function memberProfile(db: D1Database, memberId: string, defaults?:
     hiddenTags: parseHiddenTags(m.hidden_tags),
     tipLinks: readTipLinks(m.tip_links).map((l) => l.url),
     cover: m.cover,
-    showStats: m.show_stats === 1,
+    followingVisibility: m.following_visibility,
+    followersVisibility: m.followers_visibility,
     followers: m.followers,
     following: m.following,
   };
@@ -463,12 +467,6 @@ function safeAvatar(value: unknown): string {
 export async function isReviewAgent(db: D1Database, memberId: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS ok FROM review_agents a JOIN reviewers r ON r.member_id = a.member_id WHERE a.member_id = ? AND a.revoked_at IS NULL AND r.revoked_at IS NULL").bind(memberId).first<{ ok: number }>();
   return !!row;
-}
-
-/** 自己主頁的數據開關；回傳存完的值。 */
-export async function updateMemberShowStats(db: D1Database, memberId: string, on: boolean): Promise<boolean> {
-  await db.prepare("UPDATE members SET show_stats = ? WHERE id = ?").bind(on ? 1 : 0, memberId).run();
-  return on;
 }
 
 /** Fresh persisted policy; never infer the chosen region from the request IP. */

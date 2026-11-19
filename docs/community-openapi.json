@@ -878,6 +878,210 @@
         ]
       }
     },
+    "/v1/authors/{handle}/following": {
+      "get": {
+        "tags": [
+          "Authors"
+        ],
+        "summary": "List authors an author follows",
+        "security": [],
+        "description": "Available when the author makes this list public. A follow is listed only when the follower makes their following public and the followed author makes their followers public; others count toward unlisted.",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 30."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "description": "All members in this list, listed or not."
+                    },
+                    "unlisted": {
+                      "type": "integer",
+                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "handle": {
+                            "type": "string",
+                            "description": "Public member handle."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avatar": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The author does not make this list public.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/authors/{handle}/followers": {
+      "get": {
+        "tags": [
+          "Authors"
+        ],
+        "summary": "List an author's followers",
+        "security": [],
+        "description": "Available when the author makes this list public. A follow is listed only when the follower makes their following public and the followed author makes their followers public; others count toward unlisted.",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 30."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "description": "All members in this list, listed or not."
+                    },
+                    "unlisted": {
+                      "type": "integer",
+                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "handle": {
+                            "type": "string",
+                            "description": "Public member handle."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avatar": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The author does not make this list public.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/me": {
       "get": {
         "tags": [
@@ -2393,6 +2597,93 @@
             "description": "Pagination offset; page size is 24."
           }
         ]
+      }
+    },
+    "/v1/me/followers": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "List your followers",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "description": "Your followers regardless of your own followers visibility. A follower is listed only when they make their following public; others count toward unlisted.",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 30."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "description": "All members in this list, listed or not."
+                    },
+                    "unlisted": {
+                      "type": "integer",
+                      "description": "Members counted in total but not listed, because one side keeps the relation private."
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "handle": {
+                            "type": "string",
+                            "description": "Public member handle."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avatar": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/me/community/notifications": {
@@ -4728,6 +5019,17 @@
           "joinedAt": {
             "type": "integer",
             "description": "Unix milliseconds."
+          },
+          "followers": {
+            "type": "integer",
+            "description": "Followers count; always public."
+          },
+          "following": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Following count; null when the author keeps it private."
           }
         }
       },
@@ -4766,6 +5068,34 @@
           "cover": {
             "type": "string",
             "description": "Profile cover scene id; empty means the default scene."
+          },
+          "followers": {
+            "type": "integer",
+            "description": "Followers count; always public."
+          },
+          "following": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Following count; null when the author keeps it private."
+          },
+          "followersVisibility": {
+            "type": "string",
+            "enum": [
+              "list",
+              "count"
+            ],
+            "description": "Followers visibility: list (count and list) or count (count only)."
+          },
+          "followingVisibility": {
+            "type": "string",
+            "enum": [
+              "list",
+              "count",
+              "hidden"
+            ],
+            "description": "Following visibility: list (count and list), count (count only) or hidden (neither)."
           }
         }
       },
@@ -4949,9 +5279,22 @@
             "type": "string",
             "description": "Profile cover scene id from the built-in catalog (shared/profile-covers.ts); empty means the default scene."
           },
-          "showStats": {
-            "type": "boolean",
-            "description": "Whether the member's own profile shows works, chats, followers and following. Off by default."
+          "followingVisibility": {
+            "type": "string",
+            "enum": [
+              "list",
+              "count",
+              "hidden"
+            ],
+            "description": "Following visibility: list (count and list), count (count only) or hidden (neither)."
+          },
+          "followersVisibility": {
+            "type": "string",
+            "enum": [
+              "list",
+              "count"
+            ],
+            "description": "Followers visibility: list (count and list) or count (count only)."
           },
           "followers": {
             "type": "integer",

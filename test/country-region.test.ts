@@ -55,12 +55,12 @@ it('uses the interface query locale for the first region default',async()=>{
 it('does not partially save a region or preferences when enabling adult content is rejected',async()=>{
  const setting=(body:unknown)=>SELF.fetch('https://c.test/v1/me/settings',{method:'POST',headers:{...bearer('viewer'),'Content-Type':'application/json'},body:JSON.stringify(body)});
  expect((await setting({countryRegion:'TW'})).status).toBe(200);
- const invalid=await setting({countryRegion:'CN',hiddenTags:['unknown-region-fixture-tag'],showStats:true});
+ const invalid=await setting({countryRegion:'CN',hiddenTags:['unknown-region-fixture-tag'],followingVisibility:'hidden'});
  expect(invalid.status).toBe(400);
- const rejected=await setting({countryRegion:'CN',showNsfw:true,showStats:true});
+ const rejected=await setting({countryRegion:'CN',showNsfw:true,followingVisibility:'hidden'});
  expect(rejected.status).toBe(403);
  const me=await (await SELF.fetch('https://c.test/v1/me',{headers:bearer('viewer')})).json() as any;
- expect(me).toMatchObject({countryRegion:'TW',showStats:false,showNsfw:false});
+ expect(me).toMatchObject({countryRegion:'TW',followingVisibility:'count',showNsfw:false});
  const metrics=await(await SELF.fetch('https://c.test/metrics')).text();
  expect(metrics).toContain('hearthroom_country_region_operations_total{operation="save",outcome="denied"} 1');
  expect(metrics).not.toContain('hearthroom_country_region_operations_total{operation="admission",outcome="denied"}');

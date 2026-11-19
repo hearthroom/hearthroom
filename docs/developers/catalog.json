@@ -1960,7 +1960,6 @@
   "d0f148ca7626c": "Members following this member.",
   "d15366316d5e6": "Profile cover scene id from the built-in catalog (shared/profile-covers.ts); empty means the default scene.",
   "d0a25aed9d0f3": "Profile cover scene id; empty means the default scene.",
-  "df86fabf7ee9d": "Whether the member's own profile shows works, chats, followers and following. Off by default.",
   "d33ca01d1c1b3": "Daily check-in, chests and tasks that pay credits from an app's campaign pool to its users.",
   "d3071bd2e5284": "Read an app's reward plan",
   "df13694856190": "Returns the reward rules of the app named by `app`: chest prizes and their odds, the pity guarantee, the check-in track and the business-day clock. No sign-in needed. Odds are in basis points and add up to 10000 in each chest. Without `version` the current version is returned; pass the `planVersion` of a claim or draw to see the prizes as they were then. Show these values instead of hard-coding prizes or odds: each new version can change them. The response holds no account data and can be cached.",
@@ -2712,5 +2711,18 @@
   "d40daff0e8cec": "Which materials the context's requests include.",
   "d1c3d10fd2922": "Platform-wide feature switches, present only when requested with `includeFeatures`. A provider that does not know a feature leaves it out; read that as off.",
   "d4f837ae047d6": "Whether the platform currently allows cards to declare and run contexts. The same value for every card.",
-  "dd25d07192184": "`role_not_found` — `roleId` does not exist."
+  "dd25d07192184": "`role_not_found` — `roleId` does not exist.",
+  "d6070015614a6": "All members in this list, listed or not.",
+  "de885aaaa62c5": "Available when the author makes this list public. A follow is listed only when the follower makes their following public and the followed author makes their followers public; others count toward unlisted.",
+  "d4da7b21877ca": "Followers count; always public.",
+  "dcb2333eba90d": "Followers visibility: list (count and list) or count (count only).",
+  "da590b04b08a1": "Following count; null when the author keeps it private.",
+  "d7a86d90ed94f": "Following visibility: list (count and list), count (count only) or hidden (neither).",
+  "de31e0a6b9bf3": "List an author's followers",
+  "da506e729998d": "List authors an author follows",
+  "dac5d3f43dbc0": "List your followers",
+  "d39b1a8d084a7": "Members counted in total but not listed, because one side keeps the relation private.",
+  "d2af53d0f5fe2": "Pagination offset; page size is 30.",
+  "d5e24bdb91f16": "The author does not make this list public.",
+  "d71525e8ff9bb": "Your followers regardless of your own followers visibility. A follower is listed only when they make their following public; others count toward unlisted."
 }

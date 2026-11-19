@@ -40,6 +40,11 @@ const METRICS = {
     help:'Site maintenance admission blocks and status read failures.',
     label:'surface', operations:['page','api','status'], outcomes:['blocked','error'],
   },
+  follow_list: {
+    name:'hearthroom_follow_list_reads_total',
+    help:'Author following/followers list reads; not_public means the author keeps that list to a count.',
+    label:'kind', operations:['following','followers','own_followers'], outcomes:['success','not_public','not_found','error'],
+  },
   visibility_read: {
     name:'hearthroom_visibility_reads_total',
     help:'Current work policy checks before returning data; adult and social rules apply separately.',

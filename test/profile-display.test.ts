@@ -1,6 +1,6 @@
 /**
- * 主頁的顯示設定：封面（站內場景圖）、要不要在自己的主頁顯示數據，以及粉絲／關注數。
- * 封面只收目錄裡的場景；數據開關預設關（owner 2026-10-19）。
+ * 主頁的顯示設定：封面（站內場景圖），以及粉絲／關注數。
+ * 封面只收目錄裡的場景。他人看到的關注／粉絲可見度見 follow-visibility.test.ts。
  */
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -17,13 +17,10 @@ afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 const me = async () => (await (await SELF.fetch('https://c.test/v1/me', { headers: bearer('valid') })).json()) as any;
 const saveProfile = (body: Record<string, unknown>) =>
   SELF.fetch('https://c.test/v1/me/profile', { method: 'PUT', headers: { ...bearer('valid'), 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: 'Name', bio: '', ...body }) });
-const settings = (body: Record<string, unknown>) =>
-  SELF.fetch('https://c.test/v1/me/settings', { method: 'POST', headers: { ...bearer('valid'), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-it('starts with no cover, stats hidden and zero follow counts', async () => {
+it('starts with no cover and zero follow counts', async () => {
   const profile = await me();
   expect(profile.cover).toBe('');
-  expect(profile.showStats).toBe(false);
   expect(profile.followers).toBe(0);
   expect(profile.following).toBe(0);
 });
@@ -53,18 +50,6 @@ it('shows the chosen cover on the public author page', async () => {
   await saveProfile({ cover: 'snow-day' });
   const again = (await (await SELF.fetch('https://c.test/v1/authors/' + profile.handle)).json()) as any;
   expect(again.cover).toBe('snow-day');
-});
-
-it('turns the profile stats on and off on its own', async () => {
-  const on = await settings({ showStats: true });
-  expect(on.status).toBe(200);
-  expect(((await on.json()) as any).showStats).toBe(true);
-  expect((await me()).showStats).toBe(true);
-  // 其他設定不動
-  expect((await me()).showNsfw).toBe(false);
-  expect(((await (await settings({ showStats: false })).json()) as any).showStats).toBe(false);
-  expect((await me()).showStats).toBe(false);
-  expect((await settings({ showStats: 'yes' })).status).toBe(400);
 });
 
 it('counts followers and followed authors', async () => {

@@ -97,7 +97,8 @@ import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catal
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
 import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,type VisibilityReadSurface} from './work-read';
-import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags, updateMemberShowStats } from "./members";
+import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
@@ -404,7 +405,7 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
 }
 
 /** Aggregate lists share a five-minute internal cache, partitioned by verified access. */
-async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: boolean } = {}) {
+async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: boolean; fresh?: (body: string) => Promise<string> } = {}) {
   if(['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'].includes(c.req.path))await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
   const moderation = await moderationRevision(c);
   const allowNsfw = opts.allowNsfw ?? false;
@@ -412,11 +413,12 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
   const started = performance.now();
   const hit = await readBoardCache(c.env, c.executionCtx, key);
   const cacheTiming = `${moderation.timing}, cache;dur=${(performance.now() - started).toFixed(1)}`;
-  if (hit) return boardResponse(hit.body, allowNsfw, hit.layer, cacheTiming);
+  // fresh：快取裡放不得的欄位（作者的關注／粉絲可見度），每次讀時另外補上
+  if (hit) return boardResponse(opts.fresh ? await opts.fresh(hit.body) : hit.body, allowNsfw, hit.layer, cacheTiming);
   const queryStarted = performance.now();
   const body = JSON.stringify(await compute());
   writeBoardCache(c.env, c.executionCtx, key, body, opts);
-  return boardResponse(body, allowNsfw, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
+  return boardResponse(opts.fresh ? await opts.fresh(body) : body, allowNsfw, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 }
 
 /** 榜單與搜尋。匿名可讀。 */
@@ -632,7 +634,16 @@ app.get("/v1/authors", async (c) => {
       sort, limit, offset, allowNsfw,
     });
     return { items: rows.map(toAuthor), hasNext, limit, offset, sort };
-  }, { allowNsfw });
+  }, { allowNsfw, fresh: async (body) => {
+    const page = JSON.parse(body) as { items: { handle: string | null }[] };
+    const stats = await publicFollowStats(c.env.DB, page.items.map((a) => a.handle ?? ""));
+    // 沒有成員列的作者（只有上游身分）不能被關注：人數 0
+    page.items = page.items.map((a) => {
+      const s = a.handle ? stats.get(a.handle) : undefined;
+      return { ...a, followers: s?.followers ?? 0, following: s ? s.following : 0 };
+    });
+    return JSON.stringify(page);
+  } });
 });
 
 /** Owner fallback for host-private legacy assets; never forwards credentials to a guessed provider. */
@@ -944,6 +955,8 @@ app.get("/v1/authors/:handle", async (c) => {
   if (!author) throw new HttpError(404, "author has no registered cards");
   note(c, { event: "author_view", subject: handle, resultCount: author.card_count });
   if (allowNsfw) c.header("Cache-Control", "private, no-store");
+  // 可見度與人數不進快照：剛改成隱藏、剛被關注，下一次讀就要反映
+  const follows = author.handle ? (await publicFollowStats(c.env.DB, [author.handle])).get(author.handle) : undefined;
   return c.json({
     handle: author.handle,
     official: author.is_official === 1,
@@ -956,8 +969,39 @@ app.get("/v1/authors/:handle", async (c) => {
     joinedAt: author.joined_at,
     providers: author.providers,
     cover: author.cover ?? "",
+    followers: follows?.followers ?? 0,
+    following: follows ? follows.following : 0,
+    followersVisibility: follows?.followersVisibility ?? "count",
+    followingVisibility: follows?.followingVisibility ?? "count",
   });
 });
+
+/** 作者的關注／粉絲名單：作者設成公開名單才給，每一條關注要雙方都同意公開（src/follow-visibility.ts）。 */
+for (const kind of ["following", "followers"] as const) {
+  app.get(`/v1/authors/:handle/${kind}`, async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await countedFollowList(c, kind, () => followList(c.env.DB, c.req.param("handle"), kind, listOffset(c))));
+  });
+}
+/** 作者本人看自己的粉絲：不看自己的設定，粉絲那一方的同意照樣要。 */
+app.get("/v1/me/followers", async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  const member = await requireMember(c);
+  const handle = (await c.env.DB.prepare("SELECT handle FROM members WHERE id=?").bind(member.id).first<{ handle: string }>())!.handle;
+  return c.json(await countedFollowList(c, "own_followers", () => followList(c.env.DB, handle, "followers", listOffset(c), true)));
+});
+const listOffset = (c: Context) => Math.min(100000, Math.max(0, Math.floor(Number(c.req.query("offset")) || 0)));
+async function countedFollowList<T>(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, kind: "following" | "followers" | "own_followers", read: () => Promise<T>): Promise<T> {
+  try {
+    const page = await read();
+    c.executionCtx.waitUntil(bumpOp(c.env.DB, "follow_list", kind, "success"));
+    return page;
+  } catch (error) {
+    const outcome = error instanceof HttpError && error.status === 403 ? "not_public" : error instanceof HttpError && error.status === 404 ? "not_found" : "error";
+    c.executionCtx.waitUntil(bumpOp(c.env.DB, "follow_list", kind, outcome));
+    throw error;
+  }
+}
 
 /**
  * 登入者在本站的身分：公開 ID、加入時間、連結了哪些供應商帳號、是不是審核人。
@@ -1177,15 +1221,15 @@ app.get("/v1/me", async (c) => {
  *     未滿 18 回 403 underage，什麼都不存。還要同意目前這一版聲明：沒同意過或同意的是舊版，
  *     要帶 consentVersion（shared/adult-consent.ts），不符回 400 consent_required。關只關開關，驗證與同意留著。
  *   - hiddenTags 不想看的類型：完整清單（目錄鍵），整份換掉。
- *   - showStats 自己的主頁要不要顯示作品數、被對話、粉絲、關注（owner 2026-10-19，預設關）。
- * 都沒給回 400。回應永遠是完整的現況（showNsfw、ageVerified、adultConsent、hiddenTags、showStats）。
+ *   - followingVisibility（list／count／hidden）、followersVisibility（list／count）：他人看主頁時的關注與粉絲（src/follow-visibility.ts）。
+ * 都沒給回 400。回應永遠是完整的現況（showNsfw、ageVerified、adultConsent、hiddenTags、followingVisibility、followersVisibility）。
  */
 app.post("/v1/me/settings", async (c) => {
   const member = await requireMember(c);
-  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown; showStats?: unknown; countryRegion?:unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown; followingVisibility?: unknown; followersVisibility?: unknown; countryRegion?:unknown };
   if(body.countryRegion !== undefined)parseCountryRegion(body.countryRegion);
-  if (body.showStats !== undefined && typeof body.showStats !== "boolean") throw new HttpError(400, "showStats_invalid");
-  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && body.showStats === undefined && body.countryRegion === undefined) throw new HttpError(400, "showNsfw_required");
+  const follow = parseFollowVisibility(body);
+  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && follow.following === undefined && follow.followers === undefined && body.countryRegion === undefined) throw new HttpError(400, "showNsfw_required");
   // Validate the combined request before saving any preferences. In particular,
   // a rejected CN + adult-enable request must not silently switch the region.
   if(body.hiddenTags!==undefined)normalizeHiddenTags(body.hiddenTags);
@@ -1195,13 +1239,11 @@ app.post("/v1/me/settings", async (c) => {
     confirmAdult(current,{birthdate:typeof body.birthdate==='string'?body.birthdate:undefined,consentVersion:typeof body.consentVersion==='number'?body.consentVersion:undefined},Date.now());
   }
   if(body.countryRegion!==undefined)await updateCountryRegion(c.env.DB,member.id,body.countryRegion);
-  let showStats: boolean;
-  if (typeof body.showStats === "boolean") {
-    showStats = await updateMemberShowStats(c.env.DB, member.id, body.showStats);
-    note(c, { event: "settings", detail: showStats ? "stats_on" : "stats_off" });
-  } else {
-    showStats = (await c.env.DB.prepare("SELECT show_stats FROM members WHERE id = ?").bind(member.id).first<{ show_stats: number }>())?.show_stats === 1;
+  if (follow.following !== undefined || follow.followers !== undefined) {
+    await updateFollowVisibility(c.env.DB, member.id, follow);
+    note(c, { event: "settings", detail: [follow.following && `following_${follow.following}`, follow.followers && `followers_${follow.followers}`].filter(Boolean).join(",") });
   }
+  const visibility = await ownFollowVisibility(c.env.DB, member.id);
   let hiddenTags: string[];
   if (body.hiddenTags !== undefined) {
     hiddenTags = await updateMemberHiddenTags(c.env.DB, member.id, body.hiddenTags);
@@ -1219,7 +1261,7 @@ app.post("/v1/me/settings", async (c) => {
     const current = await memberNsfw(c.env.DB, member.id);
     nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
-  return c.json({ ...nsfw, hiddenTags, showStats, countryRegion:await viewerCountryRegion(c) }, 200, { "Cache-Control": "no-store" });
+  return c.json({ ...nsfw, hiddenTags, ...visibility, countryRegion:await viewerCountryRegion(c) }, 200, { "Cache-Control": "no-store" });
 });
 
 /**
