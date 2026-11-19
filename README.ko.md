@@ -91,6 +91,8 @@ API와 웹 앱은 하나의 Worker가 제공합니다. `/v1/*`는 Hono가 처리
 
 Node 22와 npm이 필요합니다. 웹 테스트는 Node 26에서 실행되지 않습니다(내장 `localStorage` 전역 때문).
 
+공개 저장소만으로 탐색, 검색, 카드 상세를 개발하려면 [공개 사이트 개발 가이드](docs/public-development.md)를 참고하세요. 아래 명령은 전체 빌드용입니다.
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom

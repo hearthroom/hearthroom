@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { platformPath } from "@/lib/distribution";
 import { compact } from "@/lib/format";
@@ -156,7 +157,7 @@ onBeforeUnmount(() => listen(false));
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
       <div class="card__actions">
         <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
-        <a class="btn card__act" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? sourceId}?mode=source`),source)">{{ $t("mine.action.play") }}</a>
+        <a v-if="stageAvailable" class="btn card__act" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? sourceId}?mode=source`),source)">{{ $t("mine.action.play") }}</a>
         <!-- 有修改沒送審時「編輯」換成主色：送審就在編輯頁 -->
         <a v-if="can('editor',source)" class="btn card__act" :class="{ 'btn--primary': card.draftChanged }" :href="platformPath(lp(`/cards/${card.num ?? card.detailId ?? sourceId}/edit`),source)">{{ $t("mine.action.edit") }}</a>
       </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 新手七日（ui.md §5）：七個圓點是「完成的第幾個日子」，不是月曆；14 天內做滿 7 天就好。
  * 今天的目標由蘇綺帶著講，按「帶我去」開當天的引導；第 7 天換成開新住民寶箱。
@@ -50,7 +51,7 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
           <button v-if="view.grand" type="button" class="btn btn--primary nc__cta" :disabled="busy" @click="emit('grand')">{{ t("newcomer.cta.grand") }}</button>
           <!-- 目標做到了還沒領：跟任務列一樣用「領取」鈕（Harbor 要領取才入帳） -->
           <button v-else-if="view.claimable" type="button" class="btn btn--primary nc__cta" :disabled="busy" @click="emit('claim')">{{ t("task.cta.claim") }}</button>
-          <button v-else type="button" class="btn nc__cta" @click="emit('guide', view.day)">{{ t("newcomer.cta.go") }}</button>
+          <button v-else-if="stageAvailable" type="button" class="btn nc__cta" @click="emit('guide', view.day)">{{ t("newcomer.cta.go") }}</button>
         </template>
         <span v-else-if="view.day < n.stages.length" class="nc__tomorrow">{{ t("newcomer.tomorrow", { goal: goalOf(view.day + 1) }) }}</span>
       </div>

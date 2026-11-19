@@ -1,6 +1,7 @@
 node_modules/
 .wrangler/
 dist/
+dist-public/
 *.log
 .dev.vars
 

@@ -1,3 +1,5 @@
+import { stageAvailable } from "@stage-site";
+
 import { PRIMARY_HOST, siteRootOf } from "../../../shared/site-hosts";
 
 /**
@@ -18,6 +20,6 @@ export function cliSiteUrl(hostname = location.hostname): string {
 }
 
 /** 寫卡指南的兩條路。網址 ?way=web 是網頁編輯器；預設（不帶）是 AI Agent。 */
-export const GUIDE_WAYS = ["agent", "web"] as const;
-export type GuideWay = (typeof GUIDE_WAYS)[number];
-export const guideWayOf = (raw: unknown): GuideWay => (raw === "web" ? "web" : "agent");
+export type GuideWay = "agent" | "web";
+export const GUIDE_WAYS: readonly GuideWay[] = stageAvailable ? ["agent", "web"] : ["agent"];
+export const guideWayOf = (raw: unknown): GuideWay => (stageAvailable && raw === "web" ? "web" : "agent");

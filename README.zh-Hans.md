@@ -91,6 +91,8 @@ API 与前端由同一个 Worker 提供：`/v1/*` 由 Hono 处理，其余路径
 
 需要 Node 22 与 npm。前端测试无法在 Node 26 运行，因为它内置了 `localStorage` 全局对象。
 
+使用公开源代码开发浏览、搜索和卡片详情，请参阅[公开网站开发指南](docs/public-development.md)。下方命令适用于完整构建。
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom

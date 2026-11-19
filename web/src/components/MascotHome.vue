@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 已登入首頁頂端的蘇綺面板（設定集 docs/design/hearthroom-mascot；畫板「首頁（桌機・已登入）」）。
  *
@@ -108,6 +109,10 @@ const resumes = computed(() => shown.value.slice(0, 3).map((c) => ({
 })));
 
 async function loadChats() {
+  if (!stageAvailable) {
+    chats.value = [];
+    return;
+  }
   try {
     const token = await session.accessToken();
     if (!token) { chats.value = []; return; }

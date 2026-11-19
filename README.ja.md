@@ -91,6 +91,8 @@ API と web アプリは 1 つの Worker が配信します。`/v1/*` は Hono �
 
 Node 22 と npm が必要です。web のテストは Node 26 では動きません（組み込みの `localStorage` グローバルのため）。
 
+公開リポジトリだけで閲覧・検索・カード詳細を開発する場合は、[公開サイトの開発ガイド](docs/public-development.md)を参照してください。以下のコマンドは完全版のビルド用です。
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom

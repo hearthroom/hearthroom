@@ -26,7 +26,7 @@ const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   if (url.includes("/workshop?")) return workshop();
-  if (url.includes("/platforms")) return json({ platforms: [] });
+  if (url.includes("/platforms")) return json({ platforms: [{ provider: "harbor", roleId: "role-abc", playable: true }] });
   if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
   if (url.includes("/versions?")) return json({ items: [], page: 1, hasMore: false });
   if (/\/v1\/cards\/abc(\?|$)/.test(url)) return json(CARD);
@@ -52,6 +52,15 @@ beforeEach(() => { i18n.global.locale.value = "zh-Hant"; vi.stubGlobal("fetch", 
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 const page = (over: object = {}) => json({ tabVisible: true, allowNew: true, viewerIsOwner: false, total: 1, page: 1, hasMore: false, items: [EXT], ...over });
+
+it("self-host hides Start Chat and the full build keeps it", async () => {
+  workshop = () => page({ tabVisible: false });
+  const root = await mount("/cards/abc");
+  expect(root.querySelector("h1")?.textContent).toContain(CARD.name);
+  const play = root.querySelector<HTMLButtonElement>('[data-tour="card-play"]');
+  if (import.meta.env.MODE === "public-site") expect(play).toBeNull();
+  else expect(play?.disabled).toBe(false);
+});
 
 it("no tab when the server says the workshop tab is not visible; the intro stays as it was", async () => {
   workshop = () => page({ tabVisible: false, allowNew: false, total: 0, items: [] });

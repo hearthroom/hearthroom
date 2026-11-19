@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 發卡獎勵活動（創作季）頁的中段：規則卡、我的進度（登入才有）、怎麼參加、參加前看一下。
  * 頁頭在 CampaignPage（跟分享季共用）；這個元件的根節點是 display: contents，裡面的區塊直接排進活動頁的格線：
@@ -94,17 +95,17 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
             </template>
           </template>
           <template v-else-if="c.phase === 'upcoming'">
-            <RouterLink class="btn btn--primary btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
+            <RouterLink v-if="stageAvailable" class="btn btn--primary btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
             <p class="creator__cap">{{ t("creator.say.upcoming", { start }) }}</p>
           </template>
           <!-- 額度用完：主按鈕換成從我的卡片送審（位置不變），一行說明在它下面，再接寫一張新卡 -->
           <template v-else-if="quotaFull">
             <RouterLink class="btn btn--primary btn--lg" :to="lp('/mine')">{{ t("creator.cta.fromMine") }}</RouterLink>
             <p class="creator__full" data-quota-full>{{ t("creator.cta.quotaFull", { reset: resetText }) }}</p>
-            <RouterLink class="btn btn--ghost btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
+            <RouterLink v-if="stageAvailable" class="btn btn--ghost btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
           </template>
           <template v-else>
-            <RouterLink class="btn btn--primary btn--lg" data-write :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
+            <RouterLink v-if="stageAvailable" class="btn btn--primary btn--lg" data-write :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
             <RouterLink class="btn btn--lg" :to="lp('/mine')">{{ t("creator.cta.fromMine") }}</RouterLink>
           </template>
         </div>
@@ -187,12 +188,12 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           <div v-if="empty" class="creator__empty" data-empty>
             <img src="/mascot/home/pose-write-1.webp" alt="" width="96" height="120" loading="lazy" decoding="async" />
             <p class="creator__bubble"><span class="creator__who">{{ t("mascot.name") }}</span>{{ t("creator.say.empty") }}</p>
-            <RouterLink v-if="c.phase !== 'ended'" class="btn btn--primary btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
+            <RouterLink v-if="stageAvailable && c.phase !== 'ended'" class="btn btn--primary btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
           </div>
           <template v-else>
             <ul class="creator__items">
               <li v-for="i in items" :key="i.cardId">
-                <RouterLink class="creator__item" :to="lp(`/cards/${i.cardId}/edit`)" :data-card="i.cardId">
+                <component :is="stageAvailable ? RouterLink : 'div'" class="creator__item" :to="stageAvailable ? lp(`/cards/${i.cardId}/edit`) : undefined" :data-card="i.cardId">
                   <img v-if="i.avatarUrl" class="creator__thumb" :src="i.avatarUrl" alt="" width="40" height="40" loading="lazy" decoding="async" />
                   <span
                     v-else class="creator__thumb creator__mono" aria-hidden="true"
@@ -206,7 +207,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
                     <span class="creator__status" :class="`creator__status--${statusOf(i)}`" data-status>{{ t(`creator.mine.status.${statusOf(i)}`) }}</span>
                     <span v-if="statusOf(i) === 'paid'" class="creator__amount num">+{{ formatNumber(i.reward!.amount) }}</span>
                   </span>
-                </RouterLink>
+                </component>
               </li>
             </ul>
             <button v-if="!showAll && progress.items.length > SHOWN" type="button" class="btn creator__all" @click="showAll = true">

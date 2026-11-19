@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 卡片頁的「工坊」分頁（docs studio/tasks/2026-11-15-workshop-v2-dlc-and-lorebook/ui.md §3.2）：
  * 篩選（熱門｜最新｜已加入）、已啟用提示條，下面兩區上下排：作者 DLC 在上、玩家擴充在下，分頁器。
@@ -141,21 +142,21 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
       <section v-if="showDlc" class="ws-sect" aria-labelledby="ws-sect-dlc" data-ws-sect="dlc">
         <div class="ws-sect__head">
           <h2 id="ws-sect-dlc">{{ $t("workshop.layer.dlc") }}</h2>
-          <RouterLink v-if="owner && dlcItems.length" :to="createTo" class="btn btn--sm" data-ws-create-dlc>{{ $t("workshop.owner.dlc.create") }}</RouterLink>
+          <RouterLink v-if="stageAvailable && owner && dlcItems.length" :to="createTo" class="btn btn--sm" data-ws-create-dlc>{{ $t("workshop.owner.dlc.create") }}</RouterLink>
         </div>
         <div v-if="dlcItems.length" class="ws-grid" :aria-busy="loading || undefined">
           <ExtensionTile v-for="ext in dlcItems" :key="ext.id" :ext="ext" :joined="joinedOf(ext)" :busy="joinBusy === ext.id" @join="emit('join', $event)" />
         </div>
         <div v-else class="panel ws-sect__empty" data-ws-empty="dlc">
           <p class="muted ws-text">{{ $t("workshop.dlc.empty") }}</p>
-          <RouterLink :to="createTo" class="btn btn--sm">{{ $t("workshop.dlc.empty.cta") }}</RouterLink>
+          <RouterLink v-if="stageAvailable" :to="createTo" class="btn btn--sm">{{ $t("workshop.dlc.empty.cta") }}</RouterLink>
         </div>
       </section>
 
       <section v-if="showExt" class="ws-sect" aria-labelledby="ws-sect-ext" data-ws-sect="ext">
         <div class="ws-sect__head">
           <h2 id="ws-sect-ext">{{ $t("workshop.layer.ext") }}</h2>
-          <RouterLink v-if="!owner && extItems.length" :to="createTo" class="btn btn--sm" data-ws-create-ext>
+          <RouterLink v-if="stageAvailable && !owner && extItems.length" :to="createTo" class="btn btn--sm" data-ws-create-ext>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{{ $t("workshop.create") }}
           </RouterLink>
         </div>
@@ -167,7 +168,7 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
         </div>
         <div v-else class="panel ws-sect__empty" data-ws-empty="ext">
           <p class="muted ws-text">{{ $t("workshop.ext.empty") }}</p>
-          <RouterLink v-if="!owner" :to="createTo" class="btn btn--sm">{{ $t("workshop.empty.cta") }}</RouterLink>
+          <RouterLink v-if="stageAvailable && !owner" :to="createTo" class="btn btn--sm">{{ $t("workshop.empty.cta") }}</RouterLink>
         </div>
       </section>
 

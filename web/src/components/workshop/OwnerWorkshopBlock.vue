@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 卡片編輯頁「發布」分區裡原作者的工坊塊（docs studio/tasks/2026-11-15-workshop-v2-dlc-and-lorebook/ui.md §3.1）。
  *
@@ -151,7 +152,7 @@ function retry() { if (failedTarget !== null) void save(failedTarget, true); }
             <strong>{{ $t("workshop.layer.dlc") }}</strong>
             <span class="subtle ws-text">{{ dlcSummary }}</span>
           </span>
-          <RouterLink v-if="createTo" :to="createTo" class="btn btn--sm" data-ws-owner-create>{{ $t("workshop.owner.dlc.create") }}</RouterLink>
+          <RouterLink v-if="stageAvailable && createTo" :to="createTo" class="btn btn--sm" data-ws-owner-create>{{ $t("workshop.owner.dlc.create") }}</RouterLink>
         </div>
         <div class="ws-owner__layer" data-ws-owner-ext>
           <span class="ws-owner__text">

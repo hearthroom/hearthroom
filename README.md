@@ -91,6 +91,8 @@ Design notes and the reasoning behind individual decisions are in [docs/architec
 
 Node 22 and npm are required. The web tests do not run on Node 26 because of its built-in `localStorage` global.
 
+For browsing, search and card details with a plain clone, see [public site development](docs/public-development.md). The commands below are for the full build.
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom

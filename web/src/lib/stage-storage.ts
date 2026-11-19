@@ -1,4 +1,4 @@
-import { deleteAuthorRuleStore } from 'stage-author-rules/store';
+import { stageSite } from "@stage-site";
 import type { ProviderId } from './provider';
 
 /**
@@ -35,7 +35,7 @@ export function onStageSignOut(fn: () => unknown): () => void {
 export async function clearStageStorage(timeoutMs = 2000): Promise<void> {
   const work = Promise.allSettled([
     ...Array.from(hooks, (fn) => Promise.resolve().then(fn)),
-    deleteAuthorRuleStore({ timeoutMs }),
+    ...(stageSite ? [stageSite.clearRuleStore({ timeoutMs })] : []),
   ]);
   let timer: ReturnType<typeof setTimeout> | undefined;
   await Promise.race([work, new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); })]);

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
@@ -336,8 +337,8 @@ const ratingOptions = computed(() => {
     <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
     <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
     <div class="board-hero">
-    <NewcomerStrip v-if="offset === 0" />
-    <NewcomerNudge v-if="offset === 0" />
+    <NewcomerStrip v-if="stageAvailable && offset === 0" />
+    <NewcomerNudge v-if="stageAvailable && offset === 0" />
     <BoardCarousel :hero="hasHero" :campaigns="offset === 0" :tour-hero="tourHero">
       <MascotWelcome />
       <MascotHome v-if="showHome" @discover="toNewCards" />

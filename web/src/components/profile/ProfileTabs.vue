@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 主頁分區。「作品」只放已發布的卡——就是訪客看到的樣子；草稿、審核、額度、編輯都留在「我的卡片」
  * （owner 2026-10-19：主頁不是第二個我的卡片）。收藏、最近對話、關注只有自己看得到，標一把鎖。
@@ -30,8 +31,9 @@ const { t } = useI18n();
 
 const TABS = ['works', 'saved', 'recent', 'following'] as const;
 type Tab = (typeof TABS)[number];
+const availableTabs: readonly Tab[] = stageAvailable ? TABS : TABS.filter(key => key !== 'recent');
 const PRIVATE: Tab[] = ['saved', 'recent', 'following'];
-const tab = computed<Tab>(() => (TABS.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'works'));
+const tab = computed<Tab>(() => (availableTabs.includes(route.query.tab as Tab) ? (route.query.tab as Tab) : 'works'));
 const page = computed(() => Math.max(1, Math.floor(Number(route.query.page) || 1)));
 const sort = computed(() => (route.query.sort === 'hot' ? 'hot' : 'new'));
 /** 作品頁第一格放「建立新卡」，一頁 23 張卡＋它＝24 格，欄數 2／3／4／6 都排得滿 */
@@ -88,7 +90,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
 <template>
   <section ref="area" class="tabs-area" :aria-label="$t('profile.tabs.label')">
     <div role="tablist" class="tabbar" :aria-label="$t('profile.tabs.label')">
-      <button v-for="k in TABS" :key="k" role="tab" type="button" class="tab" :class="{ 'tab--on': tab === k }" :aria-selected="tab === k" @click="go({ tab: k })">
+      <button v-for="k in availableTabs" :key="k" role="tab" type="button" class="tab" :class="{ 'tab--on': tab === k }" :aria-selected="tab === k" @click="go({ tab: k })">
         <span class="tab__icon"><AccountIcon :name="k === 'works' ? 'cards' : k === 'saved' ? 'heart' : k === 'recent' ? 'chat' : 'users'" /></span>
         {{ $t('profile.tabs.' + k) }}
         <span v-if="count(k) !== null" class="tab__count">{{ count(k) }}</span>

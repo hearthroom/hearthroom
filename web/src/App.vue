@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 import SearchSuggest from "@/components/SearchSuggest.vue";
 import SessionConnectionGate from "@/components/SessionConnectionGate.vue";
 import { communityRequest } from "./lib/community";
@@ -237,8 +238,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <CheckinHint v-if="onBoardPage && session.me && !route.meta.bare" />
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
   <main id="main" tabindex="-1" :inert="headerOverlays.size > 0" :class="{ 'site-main': !route.meta.bare, 'site-main--workspace': route.meta.workspace, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
-  <CoachTour />
-  <NewcomerTour />
+  <CoachTour v-if="stageAvailable" />
+  <NewcomerTour v-if="stageAvailable" />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
   <SukiPet :list-end-allowed="!onBoardPage || ['following', 'authors'].includes(String(route.query.mode)) || boardListEnd" :inert="headerOverlays.size > 0" v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
   <ConfirmDialog />

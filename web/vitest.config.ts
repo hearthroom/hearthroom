@@ -5,12 +5,13 @@ import { defineConfig } from "vitest/config";
 const STAGE_SRC = fileURLToPath(new URL("../stage/src/", import.meta.url));
 const WEB_SRC = fileURLToPath(new URL("./src/", import.meta.url));
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   resolve: {
     // 陣列形式：順序即優先序。舞台原始碼（../stage/src）裡的 @/ 要解析回舞台自己的 src，本站的 @/ 才是本站 src；
     // 這樣舞台的面板元件（模型選單、人設、長期指令、存檔列表、彈層）能原樣在本站編譯，遊戲頁直接複用，不另寫一套。
     alias: [
+      { find: "@stage-site", replacement: fileURLToPath(new URL(mode === "public-site" ? "./src/lib/stage-site.public.ts" : "./src/lib/stage-site.ts", import.meta.url)) },
       { find: "@/utils/display-rule-engine.js", replacement: fileURLToPath(new URL("../stage/src/utils/display-rule-engine.js", import.meta.url)) },
       { find: "@/common/card-format", replacement: fileURLToPath(new URL("../stage/src/common/card-format.ts", import.meta.url)) },
       { find: "stage-canvas/rule-engine-core", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine-core.ts", import.meta.url)) },
@@ -43,4 +44,4 @@ export default defineConfig({
     // setup-storage 說明了為什麼需要它：Node 自己帶的 localStorage 會蓋過 happy-dom 的。
     setupFiles: ["./test/setup-storage.ts"],
   },
-});
+}));

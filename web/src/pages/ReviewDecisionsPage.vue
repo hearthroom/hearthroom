@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * /review/decisions — 我處理過的審核，新的在前。
  *
@@ -59,13 +60,13 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
   <ul v-else class="list">
    <li v-for="item in items" :key="item.id" class="panel row">
     <div class="row__body">
-     <p class="row__title"><RouterLink class="row__name" :to="lp(`/review/${item.id}`)">{{item.card.name}}</RouterLink> <span class="subtle num">#{{item.card.id}}</span></p>
+     <p class="row__title"><RouterLink v-if="stageAvailable" class="row__name" :to="lp(`/review/${item.id}`)">{{item.card.name}}</RouterLink><span v-else class="row__name">{{item.card.name}}</span> <span class="subtle num">#{{item.card.id}}</span></p>
      <p>{{t('review.confirm.version')}} · {{dateTime(item.submittedAt)}}</p>
      <p>{{t('review.history.myDecision')}} · {{t(`review.action.${item.verdict}`)}}</p>
      <p>{{t('review.history.currentResult')}} · {{item.corrected?t('review.history.corrected'):item.status==='pending'?t('review.history.pending'):t(`review.history.status.${item.status==='approved'?'approved':'rejected'}`)}}</p>
      <p class="subtle">{{t('review.history.reviewedAt')}} · {{dateTime(item.at)}}</p>
     </div>
-    <RouterLink class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>
+    <RouterLink v-if="stageAvailable" class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>
    </li>
   </ul>
   <!-- 載入下一頁時按鈕留著、停用並寫「載入中…」：版面不跳、不會重複點，也看得出正在載（團隊負責人 2026-11-02 裁定） -->

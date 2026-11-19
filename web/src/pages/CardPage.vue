@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 卡片頁：還沒開始對話之前看到的那一頁（2026-10-11 改版，owner 確認過版面模擬）。
  *
@@ -346,7 +347,7 @@ async function copyId() {
 const platformsRequest = ref<{ id: string; request: Promise<CardPlatform[]> } | null>(null);
 watch(() => route.params.id, () => {
   const id = String(route.params.id ?? "");
-  platformsRequest.value = /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
+  platformsRequest.value = stageAvailable && /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
   platformsRequest.value?.request.catch(() => {});
   card.value = null; readme.value = ""; detailsPending.value = false; more.value = []; artStep.value = 0; bannerStep.value = 0; editedAt.value = null;
   commentCount.value = null; showComments.value = true; score.value = null; introOpen.value = false; confirmed.value = false;
@@ -356,7 +357,7 @@ watch(locale, () => load());
 
 // 加到主畫面：每張卡在卡片 App 網域上各自是一個 App（lib/site.ts），安裝要在那個網域的頁面上做，
 // 所以按下去先過去那張卡的對話頁（帶 install=1，那邊會把提示卡拿出來）。
-const installable = canInstall();
+const installable = stageAvailable && canInstall();
 function addToHome() {
   const c = card.value;
   if (!c) return;
@@ -564,13 +565,13 @@ watch(
           <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
           <div class="role__actions">
             <div class="role__cta">
-              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" :before-play="beforePlay" @platforms="onPlatforms" />
+              <CardPlatforms v-if="stageAvailable" class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" :before-play="beforePlay" @platforms="onPlatforms" />
               <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
               <ShareMenu data-tour="card-share" :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
           </div>
           <!-- 有加入擴充、且作者開著工坊才出現：開始對話會套用幾個、建議用哪一檔，旁邊直接「管理」 -->
-          <p v-if="wsCount && wsPage?.tabVisible" class="role__ws">
+          <p v-if="stageAvailable && wsCount && wsPage?.tabVisible" class="role__ws">
             <WorkshopIcon name="layers" />
             <span>{{ wsRecTier ? $t("workshop.start.hint", { n: wsCount, tier: wsRecTier }) : $t("workshop.start.hintNoTier", { n: wsCount }) }}</span>
             <button type="button" class="role__ws-manage" @click="openManage">{{ $t("workshop.strip.manage") }}</button>
@@ -627,7 +628,7 @@ watch(
         <aside ref="side" class="role__side">
           <CardScore v-if="listed && score" id="score" class="role__score-box" :score="score" :own="own" :busy="scoreBusy" @rate="rate" @write="writeReview" />
 
-          <CardSpendLeaderboard v-if="card.provider==='harbor'" :key="card.id" :card-id="card.id" :play-url="playAppUrl(String(card.num??card.id),locale,{provider:card.provider})" />
+          <CardSpendLeaderboard v-if="card.provider==='harbor'" :key="card.id" :card-id="card.id" :play-url="stageAvailable ? playAppUrl(String(card.num ?? card.id), locale, { provider: card.provider }) : undefined" />
 
           <section class="panel role__info" :aria-label="$t('card.info')">
             <dl class="role__stats">

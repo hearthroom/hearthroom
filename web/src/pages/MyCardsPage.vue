@@ -246,7 +246,7 @@ watch(()=>route.query.fresh, fresh=>{
       <!-- 額度與建立新卡只屬於卡片分頁：擴充分頁的主行動是「建立擴充」 -->
       <div v-if="can('editor') && tab === 'cards'" class="head__actions">
         <AgentOnboard from="mine" class="head__agent" />
-        <RouterLink :to="lp('/create')" class="btn btn--primary head__create">
+        <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary head__create">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("mine.create") }}
         </RouterLink>
       </div>

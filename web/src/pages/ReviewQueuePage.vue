@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * /review — 社群審核的共享佇列。
  *
@@ -73,7 +74,7 @@ async function load() {
 }
 
 async function claim(item: ReviewQueueItem) {
-  if (busy.value) return;
+  if (!stageAvailable || busy.value) return;
   busy.value = item.id;
   error.value = "";
   rowError.value = null;
@@ -188,12 +189,12 @@ onMounted(() => {
           </div>
           <div class="row__acts">
             <template v-if="item.claim === 'mine'">
-              <RouterLink class="btn btn--primary row__main" :to="lp(`/review/${item.id}`)">{{ $t("review.action.continue") }}</RouterLink>
+              <RouterLink v-if="stageAvailable" class="btn btn--primary row__main" :to="lp(`/review/${item.id}`)">{{ $t("review.action.continue") }}</RouterLink>
               <button class="btn btn--ghost row__minor" :disabled="busy === item.id" @click="release(item)">{{ $t("review.action.release") }}</button>
             </template>
-            <RouterLink v-else-if="item.stampedByMe" class="btn row__main" :to="lp(`/review/${item.id}`)">{{ $t("review.action.open") }}</RouterLink>
+            <RouterLink v-else-if="stageAvailable && item.stampedByMe" class="btn row__main" :to="lp(`/review/${item.id}`)">{{ $t("review.action.open") }}</RouterLink>
             <button v-else-if="item.claim === 'other'" class="btn row__main" disabled>{{ $t("review.claim.other") }}</button>
-            <button v-else class="btn btn--primary row__main" :disabled="!!busy" :aria-busy="busy === item.id" @click="claim(item)">
+            <button v-else-if="stageAvailable" class="btn btn--primary row__main" :disabled="!!busy" :aria-busy="busy === item.id" @click="claim(item)">
               {{ busy === item.id ? $t("review.action.claiming") : $t(item.hold ? "review.action.claimHeld" : "review.action.claim") }}
             </button>
             <!-- 冷凍人自己解凍；管理員解別人的要寫理由，在審核頁 -->

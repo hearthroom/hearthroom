@@ -1,4 +1,5 @@
 import { shallowRef } from "vue";
+import { stageAvailable, stageSite } from "@stage-site";
 
 /**
  * 卡片標題、簡介與介紹照玩家的介面字形顯示：簡體介面看繁體卡轉簡體，正體介面看簡體卡轉繁體。
@@ -10,7 +11,7 @@ import { shallowRef } from "vue";
  *
  * 只轉顯示的字；介紹先經 Markdown 渲染，再轉可見文字節點。依標題算出的東西（佔位色）、搜尋、分享出去的標題都用原文。
  */
-type ScriptApi = typeof import("moonstage/display-script");
+type ScriptApi = Awaited<ReturnType<typeof stageSite.loadDisplayScript>>;
 type Direction = "s2t" | "t2s";
 
 const api = shallowRef<ScriptApi | null>(null);
@@ -62,7 +63,8 @@ function whenPageSettled(): Promise<void> {
 }
 
 function load(): Promise<void> {
-  pending ??= whenPageSettled().then(() => import("moonstage/display-script")).then(
+  if (!stageAvailable) return Promise.resolve();
+  pending ??= whenPageSettled().then(stageSite.loadDisplayScript).then(
     (mod) => { api.value = mod; },
     () => { failed = true; },
   );
@@ -108,7 +110,7 @@ function mayConvert(name: string, locale: string): boolean | null {
 }
 
 function converterFor(name: string, locale: string): ((text: string) => string) | null {
-  if (!name || !/^zh/i.test(locale) || !HAS_HAN.test(name) || failed) return null;
+  if (!stageAvailable || !name || !/^zh/i.test(locale) || !HAS_HAN.test(name) || failed) return null;
   const mod = api.value;
   if (!mod) {
     if (mayConvert(name, locale)) void load();

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 import { computed, nextTick, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -97,9 +98,9 @@ async function submit(expected=visibility.value) {
   <div v-if="owner" class="card-owner-actions">
     <p v-if="!visibilityEnabled&&legacyState" class="notice" role="status">{{ t(legacyState) }}</p>
     <AuthorVisibility v-if="visibilityEnabled" ref="visibilityControl" :id="sourceId" :card-id="String(card.num??card.id)" :provider="provider" :actor="String(card.author.accountNumId)" :name="card.name" :token="ownerToken" :disabled="busy" @changed="visibility=$event" @submit="submit" />
-    <RouterLink class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
+    <RouterLink v-if="stageAvailable" class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
     <!-- 作者試玩自己的草稿（mode=source）；公開的「遊玩」仍開過審那一版，作者也看得到玩家看到的樣子 -->
-    <a class="btn" :href="platformPath(lp(`/play/${card.num ?? card.id}?mode=source`), provider)">{{ t('card.owner.playDraft') }}</a>
+    <a v-if="stageAvailable" class="btn" :href="platformPath(lp(`/play/${card.num ?? card.id}?mode=source`), provider)">{{ t('card.owner.playDraft') }}</a>
     <button v-if="visibilityEnabled&&canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit()">{{ t('card.owner.submitUpdate') }}</button>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
   </div>

@@ -2,17 +2,19 @@ import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import { llmsDocsPlugin } from "./build/llms-docs";
+import { publicSite } from "./build/public-site";
 
 const STAGE_SRC = fileURLToPath(new URL("../stage/src/", import.meta.url));
 const WEB_SRC = fileURLToPath(new URL("./src/", import.meta.url));
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // llmsDocsPlugin：給 AI agent 讀的 /guide.md、/developers.md、/llms-full.txt 等原文（web/build/llms-docs.ts）
-  plugins: [vue(), llmsDocsPlugin()],
+  plugins: [vue(), llmsDocsPlugin(), ...(mode === "public-site" ? [publicSite()] : [])],
   resolve: {
     // 陣列形式：順序即優先序。舞台原始碼（../stage/src）裡的 @/ 要解析回舞台自己的 src，本站的 @/ 才是本站 src；
     // 這樣舞台的面板元件（模型選單、人設、長期指令、存檔列表、彈層）能原樣在本站編譯，遊戲頁直接複用，不另寫一套。
     alias: [
+      { find: "@stage-site", replacement: fileURLToPath(new URL(mode === "public-site" ? "./src/lib/stage-site.public.ts" : "./src/lib/stage-site.ts", import.meta.url)) },
       { find: "@/utils/display-rule-engine.js", replacement: fileURLToPath(new URL("../stage/src/utils/display-rule-engine.js", import.meta.url)) },
       { find: "@/common/card-format", replacement: fileURLToPath(new URL("../stage/src/common/card-format.ts", import.meta.url)) },
       // 建卡頁「玩家看到的」開場白預覽：只要規則套用本身（core 不帶 Web Worker 那層）。放在 rule-engine 之前，前綴才不會被它先吃掉。
@@ -55,7 +57,9 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist", emptyOutDir: true,
+    outDir: mode === "public-site" ? "dist-public" : "dist",
+    copyPublicDir: mode !== "public-site",
+    emptyOutDir: true,
     rollupOptions: { output: { manualChunks(id) {
       // Preserve the library's data-only boundaries when rebundling it for the site.
       if (/\/stage\/dist-stage\/chinese-dictionary-[^/]+\.mjs$/.test(id)) return "chinese-dictionary";
@@ -63,4 +67,4 @@ export default defineConfig({
       if (locale) return `stage-locale-${locale}`;
     } } },
   },
-});
+}));

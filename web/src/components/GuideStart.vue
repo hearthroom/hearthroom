@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 寫卡指南開頭的「開始寫卡」：兩條路挑一條，照三四步做完。
  *
@@ -84,7 +85,7 @@ function onKey(e: KeyboardEvent) {
       <ol v-else class="steps">
         <li class="step">
           <h3 class="step__title">{{ $t("guide.start.web.open") }}</h3>
-          <div class="step__body"><RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink></div>
+          <div v-if="stageAvailable" class="step__body"><RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink></div>
         </li>
         <li class="step">
           <h3 class="step__title">{{ $t("guide.start.web.fill") }}</h3>

@@ -1,0 +1,1581 @@
+{
+  "name": "hearthroom-sandbox-contract",
+  "protocolVersion": 1,
+  "sdkVersion": "1",
+  "supportedProtocols": [
+    1,
+    2,
+    3
+  ],
+  "sdk": {
+    "keys": [
+      "archive",
+      "batch",
+      "cache",
+      "capabilities",
+      "composer",
+      "context",
+      "debug",
+      "generation",
+      "history",
+      "input",
+      "main",
+      "message",
+      "model",
+      "on",
+      "role",
+      "save",
+      "share",
+      "shared",
+      "stage",
+      "state",
+      "text",
+      "user",
+      "version",
+      "workshop"
+    ],
+    "capabilities": [
+      "archive.fork",
+      "archive.list",
+      "archive.open",
+      "archive.remove",
+      "archive.rename",
+      "archive.save",
+      "archive.start",
+      "batch.close",
+      "batch.open",
+      "cache.get",
+      "cache.remove",
+      "cache.set",
+      "capabilities",
+      "composer.hide",
+      "composer.show",
+      "composer.visible",
+      "context.instances",
+      "context.list",
+      "context.models",
+      "context.quote",
+      "context.quoteMany",
+      "context.run",
+      "context.setModel",
+      "context.stop",
+      "context.truncate",
+      "debug.log",
+      "generation.act",
+      "generation.get",
+      "history.capabilities",
+      "history.list",
+      "history.onChange",
+      "input.add",
+      "input.blur",
+      "input.clear",
+      "input.focus",
+      "input.get",
+      "input.getCursor",
+      "input.insert",
+      "input.set",
+      "input.setCursor",
+      "main.onCompose",
+      "message.capabilities",
+      "message.edit",
+      "message.send",
+      "model.get",
+      "on",
+      "role.get",
+      "save.get",
+      "save.keys",
+      "save.remove",
+      "save.set",
+      "share.link",
+      "share.qr",
+      "share.respond",
+      "share.results",
+      "share.tallyLink",
+      "shared.add",
+      "shared.leaderboard",
+      "shared.read",
+      "shared.vote",
+      "stage.close",
+      "stage.el",
+      "stage.open",
+      "stage.visible",
+      "state.get",
+      "state.of",
+      "state.set",
+      "text.convert",
+      "text.ready",
+      "user.get",
+      "version",
+      "workshop.list"
+    ],
+    "async": [
+      "workshop.list",
+      "message.send",
+      "message.edit",
+      "save.set",
+      "save.remove",
+      "text.ready",
+      "archive.list",
+      "archive.save",
+      "archive.fork",
+      "archive.open",
+      "archive.start",
+      "archive.rename",
+      "archive.remove",
+      "generation.act",
+      "share.qr",
+      "history.list",
+      "shared.read",
+      "shared.vote",
+      "shared.add",
+      "shared.leaderboard",
+      "share.tallyLink",
+      "share.respond",
+      "share.results",
+      "state.set",
+      "context.run",
+      "context.stop",
+      "context.list",
+      "context.instances",
+      "context.truncate",
+      "context.quote",
+      "context.quoteMany",
+      "context.models",
+      "context.setModel",
+      "batch.open",
+      "batch.close"
+    ],
+    "notProvided": [
+      "sdk.off",
+      "sdk.once",
+      "sdk.vars",
+      "vars:change",
+      "<abc_vars>"
+    ],
+    "role": {
+      "get": [
+        "name",
+        "avatarUrl"
+      ]
+    },
+    "user": {
+      "get": [
+        "nickname",
+        "avatarUrl",
+        "locale"
+      ]
+    },
+    "model": {
+      "get": [
+        "name",
+        "cost",
+        "capabilities"
+      ],
+      "capabilities": [
+        "tools",
+        "forcedTools",
+        "jsonSchema",
+        "imageInput"
+      ],
+      "capabilityStates": [
+        "supported",
+        "unsupported",
+        "unknown"
+      ],
+      "changeEvent": "model:change; includes capability-only changes",
+      "missingEvidence": "unknown; both tools and forcedTools must be supported before selecting a tool"
+    },
+    "generation": {
+      "get": [
+        "phase",
+        "since",
+        "outcome"
+      ],
+      "phases": [
+        "idle",
+        "preparing",
+        "summarizing",
+        "thinking",
+        "writing"
+      ],
+      "outcome": [
+        "kind",
+        "label",
+        "sub",
+        "actions"
+      ],
+      "outcomeKinds": [
+        "model-error",
+        "network-error",
+        "server-error",
+        "rate-limit",
+        "quota",
+        "filtered",
+        "length-cap",
+        "stopped",
+        "compact-retryable",
+        "outcome-unconfirmed",
+        "interrupted"
+      ],
+      "actions": [
+        "retry",
+        "continue",
+        "switch-model",
+        "model-settings",
+        "capacity",
+        "refresh",
+        "retry-stream-off",
+        "edit-message",
+        "switch-lane",
+        "resend-traditional"
+      ],
+      "outcomeIsNullWhile": "a reply is being generated, or the last turn ended normally",
+      "labelsAre": "the same player-language text as the platform card under that row",
+      "act": {
+        "gestureOnly": "UNAUTHORIZED outside a trusted click (no dialog)",
+        "unknownAction": "INVALID_ARGS",
+        "whileGenerating": "BUSY",
+        "withoutSend": "NOT_SUPPORTED",
+        "rateLimit": "generation.act 3/min"
+      }
+    },
+    "archive": {
+      "item": [
+        "id",
+        "title",
+        "isCurrent",
+        "messageCount",
+        "lastMessage",
+        "createTime",
+        "lastUpdateTime"
+      ],
+      "list": [
+        "items",
+        "count",
+        "limit"
+      ],
+      "limitError": {
+        "code": "LIMIT_REACHED",
+        "data": [
+          "count",
+          "limit"
+        ]
+      },
+      "gesture": "save/fork/open/start/rename/remove run directly inside a user gesture; outside one the shell asks first",
+      "rateLimit": "archive.write 10/min"
+    },
+    "history": {
+      "featureVersion": 1,
+      "requiresProtocol": 2,
+      "classic": "stage.history",
+      "capabilities": [
+        "version",
+        "available",
+        "reason"
+      ],
+      "page": [
+        "conversationKey",
+        "revision",
+        "items",
+        "complete",
+        "cursor"
+      ],
+      "item": [
+        "id",
+        "order",
+        "role",
+        "kind",
+        "state",
+        "complete",
+        "contentVersion",
+        "content?",
+        "toolCall?",
+        "reason?",
+        "reasonCode?"
+      ],
+      "changes": [
+        "conversationKey",
+        "previousRevision",
+        "revision",
+        "kind",
+        "changes",
+        "part",
+        "final"
+      ],
+      "streamContent": false,
+      "rawIdentities": false,
+      "subscribeReturnsUnsubscribe": true,
+      "pageLimit": 200,
+      "contentPageBytes": 524288,
+      "foregroundPollMs": 15000,
+      "revisions": "decimal strings; stale continuation rejects; only the final page is complete",
+      "lifecycle": "independent of mount/unmount; switch/dispose fences old responses"
+    },
+    "share": {
+      "properties": [
+        "enabled",
+        "context",
+        "audience",
+        "poll"
+      ],
+      "contextPattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "param": "share",
+      "audiences": [
+        "author",
+        "link",
+        "public"
+      ],
+      "link": {
+        "sync": true,
+        "invalidContext": "SHARE_CONTEXT_INVALID",
+        "withoutHost": "HOST_DENIED",
+        "whenDisabled": "returns the card link without the context (no error)",
+        "keepsReferral": true
+      },
+      "qr": {
+        "maxChars": 1024,
+        "returns": [
+          "size",
+          "path"
+        ],
+        "pathIs": "SVG path in a size x size viewBox",
+        "invalidText": "INVALID_ARGS",
+        "withoutHost": "HOST_DENIED"
+      },
+      "contextIsNullWhile": "the page was not opened from a link with a valid context, the platform switch is off, or the player is viewing a past conversation",
+      "neverSentToTheModel": true,
+      "changeEvent": "share:change",
+      "poll": {
+        "shape": [
+          "key",
+          "options"
+        ],
+        "maxOptions": 12,
+        "isNullWhile": "the page was not opened from a platform share-response link, the platform switch is off, or the player is viewing a past conversation",
+        "tokenVisibleToCard": false
+      },
+      "tally": {
+        "requiresProtocol": 2,
+        "tallyLink": {
+          "args": [
+            "context",
+            "pollKey"
+          ],
+          "returns": "url with ?share=~TOKEN and the sharer referral",
+          "async": true,
+          "prepareBeforeClick": true
+        },
+        "respond": {
+          "args": [
+            "option"
+          ],
+          "returns": [
+            "ok"
+          ],
+          "ownLink": "NOT_ELIGIBLE"
+        },
+        "results": {
+          "item": [
+            "context",
+            "pollKey",
+            "total",
+            "counts",
+            "updatedAt"
+          ],
+          "countsAreNullBelow": 3,
+          "countsUpdate": "daily",
+          "totalIsLive": true,
+          "ownerOnly": true
+        }
+      }
+    },
+    "context": {
+      "requiresProtocol": 2,
+      "capability": "contexts",
+      "classic": null,
+      "negotiation": "sdk.capabilities().contexts; without it every context/batch/state.set/main.onCompose call and any new message.send option throws NOT_SUPPORTED (never sent as plain text)",
+      "idPattern": "^[A-Za-z0-9_-]{1,64}$",
+      "idReserved": [
+        "main"
+      ],
+      "instancePattern": "^[A-Za-z0-9_-]{1,64}$",
+      "source": "omitted or \"card\" for the card itself; a workshopId from sdk.workshop.list() (kind dlc) for a DLC",
+      "varsMaxBytes": 65536,
+      "labelMaxChars": 24,
+      "worldbooksMax": 64,
+      "idempotencyKeyPattern": "^[A-Za-z0-9_.:-]{1,128}$",
+      "listLimitMax": 100,
+      "quoteManyMax": 16,
+      "quoteManyMaxBytes": 2097152,
+      "quoteAcceptsMessages": true,
+      "retryAfterOn": [
+        "PAUSED",
+        "RATE_LIMITED"
+      ],
+      "run": {
+        "resolvesOn": "terminal",
+        "statuses": [
+          "complete",
+          "interrupted",
+          "stopped",
+          "failed",
+          "moderated",
+          "discarded"
+        ],
+        "returns": [
+          "callId",
+          "status",
+          "text",
+          "toolCall?",
+          "reason?",
+          "reasonCode?",
+          "charged",
+          "settled"
+        ],
+        "toolResultShape": "toolCall/reason (card tools); unavailable upstream uses reason service_unavailable; a tool reply cut off by the output limit has toolCall:null, reason interrupted and reasonCode output_limit, with any partial text",
+        "options": [
+          "instance",
+          "source",
+          "label",
+          "worldbooks",
+          "batch",
+          "messages",
+          "tool",
+          "idempotencyKey",
+          "onDelta",
+          "signal"
+        ],
+        "unknownOption": "INVALID_ARGS"
+      },
+      "clientMessages": {
+        "roles": [
+          "user",
+          "assistant"
+        ],
+        "max": 1000,
+        "maxBytes": 1048576,
+        "lastMustBe": "non-empty user"
+      },
+      "stateSetMaxBytes": 16384,
+      "messageSendOptions": [
+        "as",
+        "from",
+        "batch",
+        "messages"
+      ],
+      "noListing": "no call lists or describes declarations, lorebooks, presets or tools",
+      "errors": [
+        "NOT_SUPPORTED",
+        "INVALID_ARGS",
+        "CONTEXT_UNAVAILABLE",
+        "CONFLICT",
+        "BUSY",
+        "LIMIT_REACHED",
+        "INSUFFICIENT",
+        "CHARGE_LIMIT",
+        "PAUSED",
+        "RATE_LIMITED",
+        "MODEL_UNSUPPORTED",
+        "BATCH_CLOSED",
+        "NETWORK"
+      ]
+    },
+    "shared": {
+      "requiresProtocol": 2,
+      "classic": "stage.shared",
+      "keyPattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "read": {
+        "args": "key or list of keys",
+        "maxKeys": 16,
+        "undeclaredKeys": "omitted",
+        "poll": [
+          "kind",
+          "counts",
+          "total",
+          "mine?"
+        ],
+        "counter": [
+          "kind",
+          "total",
+          "mine?",
+          "goal?",
+          "reachedAt?",
+          "previous?"
+        ]
+      },
+      "vote": {
+        "args": [
+          "key",
+          "option"
+        ],
+        "returns": [
+          "mine"
+        ]
+      },
+      "add": {
+        "args": [
+          "key",
+          "delta"
+        ],
+        "deltaRange": [
+          1,
+          1000
+        ],
+        "returns": [
+          "total",
+          "mine",
+          "reachedAt"
+        ]
+      },
+      "leaderboard": {
+        "args": [
+          "key",
+          "{ limit? }"
+        ],
+        "defaultLimit": 10,
+        "maxLimit": 50,
+        "item": [
+          "rank",
+          "name",
+          "value"
+        ],
+        "mine": [
+          "rank",
+          "value"
+        ]
+      },
+      "errors": [
+        "SHARED_DISABLED",
+        "NOT_DECLARED",
+        "OPTION_INVALID",
+        "NOT_ELIGIBLE",
+        "RATE_LIMITED",
+        "LIMIT_REACHED",
+        "HOST_DENIED",
+        "UNAUTHORIZED",
+        "INVALID_ARGS",
+        "NETWORK",
+        "SHARE_CONTEXT_INVALID"
+      ],
+      "writesWhileViewingHistory": "HOST_DENIED",
+      "withoutHost": "HOST_DENIED",
+      "neverSentToTheModel": true
+    },
+    "stage": {
+      "modes": [
+        "content",
+        "full"
+      ],
+      "unknownModeBecomes": "content",
+      "elReturnsNodeWhenClosed": true,
+      "ownCloseDoesNotEmitStageClose": true
+    },
+    "input": {
+      "writesThrowWhileComposing": "INVALID_ARGS"
+    },
+    "message": {
+      "cardTools": {
+        "requiresProtocol": 3,
+        "capability": "message.capabilities().tools",
+        "send": "message.send(text,{tool:name})",
+        "selection": "one server-declared tool; no per-turn schema",
+        "terminal": [
+          "toolCall",
+          "reason?",
+          "reasonCode?"
+        ],
+        "validArgs": "object",
+        "invalidArgs": "raw inert string; valid:false",
+        "missing": "toolCall:null with fixed reason",
+        "streaming": "prose only; arguments delivered at terminal",
+        "retries": 0,
+        "execution": "card owns execution and writes results in the next turn text",
+        "agentAndWorld": "reject before spending",
+        "edit": "manual prose edit clears toolCall"
+      },
+      "sendBusy": "BUSY",
+      "sendWithoutCapability": "NOT_SUPPORTED",
+      "editWithoutCapability": "HOST_DENIED",
+      "confirmOutsideGesture": true,
+      "declinedCode": "UNAUTHORIZED",
+      "editIdIs": "serverId (data-msg-id)"
+    }
+  },
+  "save": {
+    "keyPattern": "^[A-Za-z0-9_-]{1,64}$",
+    "maxKeys": 10,
+    "maxValueBytes": 65536,
+    "valueMeasuredAs": "UTF-8 bytes of JSON.stringify(value)",
+    "syncReadBeforeLoad": "HOST_DENIED",
+    "crossDevice": true
+  },
+  "cache": {
+    "quotaBytes": 1048576,
+    "overQuota": "INVALID_ARGS",
+    "lifetime": "page load"
+  },
+  "rateLimits": {
+    "save.set": {
+      "count": 20,
+      "windowMs": 60000
+    },
+    "message.send.gesture": {
+      "count": 3,
+      "windowMs": 60000
+    },
+    "message.send.auto": {
+      "count": 3,
+      "windowMs": 60000
+    },
+    "message.edit": {
+      "count": 10,
+      "windowMs": 60000
+    },
+    "archive.write": {
+      "count": 10,
+      "windowMs": 60000
+    },
+    "generation.act": {
+      "count": 3,
+      "windowMs": 60000
+    }
+  },
+  "errorCodes": [
+    "UNAUTHORIZED",
+    "RATE_LIMITED",
+    "INVALID_ARGS",
+    "HOST_DENIED",
+    "NETWORK",
+    "NOT_SUPPORTED",
+    "BUSY",
+    "UNKNOWN_CAPABILITY",
+    "LIMIT_REACHED",
+    "SHARE_CONTEXT_INVALID",
+    "SHARED_DISABLED",
+    "NOT_DECLARED",
+    "OPTION_INVALID",
+    "NOT_ELIGIBLE",
+    "HISTORY_UNAVAILABLE",
+    "HISTORY_STALE",
+    "HISTORY_CURSOR_INVALID",
+    "HISTORY_LIMIT",
+    "CONTEXT_UNAVAILABLE",
+    "CONFLICT",
+    "INSUFFICIENT",
+    "CHARGE_LIMIT",
+    "PAUSED",
+    "MODEL_UNSUPPORTED",
+    "BATCH_CLOSED"
+  ],
+  "events": {
+    "names": [
+      "ready",
+      "message:new",
+      "message:done",
+      "message:stream",
+      "message:mount",
+      "message:unmount",
+      "input:change",
+      "conversation:switch",
+      "theme:change",
+      "back",
+      "stage:close",
+      "dispose",
+      "model:change",
+      "generation:phase",
+      "generation:outcome",
+      "share:change",
+      "state:change"
+    ],
+    "replayedToLateSubscribers": [
+      "message:mount",
+      "message:done"
+    ],
+    "latestReplayedToLateSubscribers": [
+      "state:change"
+    ],
+    "stateReset": {
+      "on": "conversation.switch",
+      "requiresInitialValues": true,
+      "messageId": null,
+      "changes": [],
+      "data": "initial values",
+      "replayedToLateSubscribers": true
+    },
+    "readyReplayed": false,
+    "coldStartOrder": [
+      "message:new",
+      "message:mount",
+      "message:done",
+      "…",
+      "ready"
+    ],
+    "payload": {
+      "message:new": [
+        "content",
+        "id",
+        "role",
+        "serverId"
+      ],
+      "message:mount": [
+        "content",
+        "id",
+        "role",
+        "serverId"
+      ],
+      "message:done": [
+        "content",
+        "id",
+        "role",
+        "serverId"
+      ],
+      "message:stream": [
+        "content",
+        "id",
+        "role"
+      ],
+      "message:unmount": [
+        "content",
+        "id",
+        "role",
+        "serverId"
+      ],
+      "input:change": "string",
+      "theme:change": "none",
+      "model:change": [
+        "cost",
+        "name"
+      ],
+      "generation:phase": [
+        "phase",
+        "since"
+      ],
+      "generation:outcome": [
+        "actions",
+        "kind",
+        "label",
+        "sub"
+      ],
+      "share:change": "none",
+      "state:change": [
+        "changes",
+        "data",
+        "messageId"
+      ],
+      "conversation:switch": [
+        "conversationId"
+      ],
+      "others": "none"
+    },
+    "roles": [
+      "user",
+      "ai"
+    ],
+    "systemRowsEmitNoEvents": true,
+    "handlerArity": 1,
+    "unknownEventNeverFires": true,
+    "handlerErrorsIsolated": true,
+    "doneOncePerMessage": true,
+    "terminalCardToolFields": {
+      "optional": [
+        "toolCall",
+        "reason"
+      ],
+      "appliesTo": [
+        "message:new",
+        "message:mount",
+        "message:done",
+        "message:unmount"
+      ],
+      "doneReasonCode": "service_unavailable for an unavailable upstream, output_limit for an output cutoff; toolCall:null, the existing reason (interrupted or unsupported) and any partial content are preserved",
+      "historyContentFalse": "omits tool result, raw arguments and reasonCode",
+      "legacySDK": "feature-detect message.capabilities before using options; old code may ignore extra arguments"
+    },
+    "virtualisation": "bubbles about two screen heights away are destroyed (message:unmount) and rebuilt (message:mount again); done is not repeated; streaming and the last two stay mounted",
+    "querySelectorScope": "inside a handler and inside user-event handlers, document.querySelector* and getElementById search the current bubble first and never other bubbles; outside handlers the whole document (Element.querySelector is not patched)",
+    "idStability": "id is a host-local id (l1, l2…) that changes across reloads; serverId is null for user messages and the greeting; persist on serverId or on content"
+  },
+  "nodes": {
+    "dataChat": [
+      "author-css",
+      "author-script",
+      "author-stage",
+      "composer",
+      "composer-row",
+      "context-tabs",
+      "header",
+      "header-actions",
+      "header-back",
+      "header-title",
+      "input",
+      "list",
+      "list-spacer",
+      "message",
+      "message-avatar",
+      "message-body",
+      "message-frame",
+      "messages",
+      "more",
+      "panels",
+      "root",
+      "sdk-debug",
+      "send"
+    ],
+    "dataSlot": [
+      "header-extra",
+      "left",
+      "right",
+      "statusbar",
+      "toolbar"
+    ],
+    "root": {
+      "attributes": [
+        "data-theme",
+        "data-lt-theme",
+        "data-composer",
+        "data-chrome",
+        "data-busy",
+        "data-context-view"
+      ],
+      "classes": [
+        "canvas-root",
+        "chat"
+      ],
+      "mmdFormatOnlyClasses": [
+        "lt-format-mmd"
+      ]
+    },
+    "message": {
+      "attributes": [
+        "data-from",
+        "data-state",
+        "data-msg-id"
+      ],
+      "from": [
+        "ai",
+        "user",
+        "system"
+      ],
+      "state": [
+        "pending",
+        "streaming",
+        "done"
+      ],
+      "body": {
+        "generatingAttribute": "data-generating"
+      }
+    },
+    "statusbarSlotOnlyWhenFunctionBarNonEmpty": true,
+    "stage": {
+      "attribute": "data-stage",
+      "states": [
+        "closed",
+        "content",
+        "full"
+      ]
+    },
+    "chrome": [
+      "standard",
+      "host",
+      "shell"
+    ],
+    "legacySelectorsAlsoPresent": [
+      ".mes",
+      ".mes_text",
+      "#msglistview",
+      "#scrollview",
+      ".chat-scope-box",
+      "#chat"
+    ],
+    "prologue": {
+      "scope": ".prologue-scope[data-lt=\"prologue\"]",
+      "item": ".prologue-content"
+    },
+    "standardComposer": {
+      "mmdSandboxSelectors": [
+        "[data-chat=\"composer\"] textarea",
+        ".composer-shortcut-wrap",
+        "[data-chat=\"shortcut\"]",
+        ".composer-row",
+        "[data-chat=\"assistant\"][data-action=\"assistant\"]",
+        ".chat-input-scope.composer-field",
+        ".composer-field [data-chat=\"input\"]",
+        ".composer-field [data-chat=\"model-chip\"][data-action=\"model\"]",
+        ".composer-field [data-chat=\"send\"]",
+        ".composer-tools",
+        ".composer-row > .more-options-scope [data-action=\"more\"]",
+        ".composer-row > .assistant-anchor > [data-chat=\"assistant\"]",
+        "[data-chat=\"more-panel\"]"
+      ],
+      "absent": [
+        "[data-chat=instruction-bar]",
+        "[data-chat=instruction-chip]",
+        "[data-chat=instruction-back]",
+        "[data-chat=assistant-tip]"
+      ],
+      "differences": [
+        "shortcut, assistant, send, model-chip and more are div[role=button], not <button>: button[...] and :disabled do not match",
+        "shortcut buttons carry the platform feature key in data-shortcut, so [data-action=model] is only the model chip",
+        ".composer-field sits inside .uni-textarea, the textarea two levels below .composer-field, more inside .more-options-scope: child and sibling combinators from MMD miss",
+        "model-chip and send exist twice (collapsed and expanded rows); querySelector returns the collapsed one",
+        ".assistant-anchor is display: contents until the card gives it a display",
+        "in the sandbox shell the assistant node stays mounted; while read-only or without assist it has .is-off (display: none)"
+      ]
+    }
+  },
+  "nativeBlocks": {
+    "blocks": [
+      "[status]…[/status]",
+      "[choices]…[/choices]"
+    ],
+    "closerOptional": true,
+    "stopsBeforeTheOtherBlock": true,
+    "appliesWhen": "the card's own display rules left the marker in an AI reply (a rule that consumes it wins); never for player lines",
+    "stage": "after display rules, before Markdown and the sanitizer, on both render paths (shell and host)",
+    "statusLine": "one key: value per line, ;; also separates; full-width punctuation normalised; a line without a colon is kept as text",
+    "valueLadder": [
+      "number",
+      "n% or a/b → bar",
+      "name|a/b → level",
+      "k:v|k:v → list",
+      "k:v k:v → stats",
+      "name=number,… → entity chips",
+      "a, b → tags",
+      "a > b → path",
+      "text"
+    ],
+    "drawnClasses": [
+      "lt-status",
+      "lt-status__row",
+      "lt-status__k",
+      "lt-status__v",
+      "lt-bar",
+      "lt-bar__fill",
+      "lt-chips",
+      "lt-chip",
+      "lt-kvlist",
+      "lt-stats",
+      "lt-path",
+      "lt-level",
+      "lt-choices",
+      "lt-choice",
+      "lt-choice--own"
+    ],
+    "choices": "drawn as buttons (at most 8) plus a ✎ button; a tap puts the option into the composer and focuses it, never sends",
+    "css": "canvas.css inside @layer lt-base, --chat-* variables only; an unlayered author stylesheet overrides it"
+  },
+  "functionBar": {
+    "field": "mountTrigger",
+    "renderedOnceAtLoad": true,
+    "rulesRunOver": "the function bar text itself, never a reply",
+    "scriptsInsideDropped": "two paths: when the shell renders the bar itself (previews, offline harness) a <script> in the bar text is dropped by the sanitizer; when the play page host renders it (statusbarHtml) its scripts run once after mount; <img onerror> boots run on both; scripts belong in a rule",
+    "imgOnerrorBootRuns": true,
+    "slotExistsOnlyWhenNonEmpty": true,
+    "dynamicContentNeedsScript": true
+  },
+  "css": {
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "chatVars": [
+      "--chat-bg",
+      "--chat-surface",
+      "--chat-text",
+      "--chat-text-muted",
+      "--chat-border",
+      "--chat-accent",
+      "--chat-bubble-user-bg",
+      "--chat-bubble-ai-bg",
+      "--chat-bubble-text",
+      "--chat-share-pick-bg",
+      "--chat-composer-bg",
+      "--chat-composer-text",
+      "--chat-shortcut-bg",
+      "--chat-shortcut-text",
+      "--chat-input-bg",
+      "--chat-input-text",
+      "--chat-input-placeholder",
+      "--chat-input-border",
+      "--chat-modal-bg",
+      "--chat-modal-surface",
+      "--chat-modal-text",
+      "--chat-modal-muted",
+      "--chat-modal-accent",
+      "--chat-modal-input-bg",
+      "--chat-modal-input-text",
+      "--chat-modal-cancel-bg",
+      "--chat-modal-btn-bg",
+      "--chat-modal-btn-border",
+      "--chat-more-item-bg"
+    ],
+    "chatVarAliases": [
+      "--chat-bubble-user-bg",
+      "--chat-bubble-ai-bg",
+      "--chat-bubble-text",
+      "--chat-more-item-bg"
+    ],
+    "chatVarsInline": [
+      "--chat-viewport-height"
+    ],
+    "rpx": {
+      "base": "calc(100vw / 750)",
+      "desktopMinWidth": 961,
+      "desktop": "calc(375px / 750)"
+    },
+    "layer": "lt-base",
+    "zIndex": {
+      "platformNodes": "auto",
+      "stageContent": 2000,
+      "stageFull": 3000,
+      "shellAlert": 9000,
+      "authorBand": [
+        3500,
+        7999
+      ]
+    }
+  },
+  "cardFormat": {
+    "default": "mmd",
+    "mmd": {
+      "styleScope": null,
+      "theme": "dark",
+      "fencedDocument": "inline",
+      "note": "locked to dark: theme:change never fires for this format"
+    },
+    "tavern": {
+      "styleScope": ".mes_text",
+      "theme": "host",
+      "fencedDocument": "iframe",
+      "note": "<style> selectors are prefixed with \".mes_text \""
+    },
+    "fengyue": {
+      "styleScope": null,
+      "theme": "host",
+      "fencedDocument": "inline",
+      "note": "imported from AI Fengyue: page-wide styles that follow the host theme; tapping an opening choice sends it"
+    }
+  },
+  "openingPage": {
+    "source": "author asset openingPage (display only, never sent to the model)",
+    "position": "above the message list at the start of a conversation, in both the classic page and the sandbox shell",
+    "frameSandbox": "allow-scripts allow-forms allow-pointer-lock",
+    "paper": "light (#fff background, #1f1f1f text) regardless of the host theme",
+    "api": {
+      "hearthroom.fill(text)": "puts text into the player input",
+      "hearthroom.send(text)": "sends text as the player message right after the player clicked the page; otherwise fills"
+    },
+    "clipboardCopyFills": true,
+    "textMaxChars": 8000
+  },
+  "cardCss": {
+    "source": "author asset cardCss (raw CSS, display only, never sent to the model)",
+    "whenMissingHint": "only this new field adapts known Fengyue ID selectors individually; native selectors remain as written",
+    "maxBytes": 524288,
+    "mount": "one style per page in both the classic page and sandbox shell; independent of messages",
+    "layer": "lt-card-css",
+    "order": [
+      "platform defaults (lt-base)",
+      "new card CSS (lt-card-css, declaration important removed)",
+      "display rules"
+    ],
+    "compiledSampleUsesLayer": true,
+    "legacyHint": "cardCssDialect preserves the existing fengyue/tavern/mmd translation and precedence; authors do not select it",
+    "currentImportHint": "new Fengyue imports write fengyue-v2 for source-platform base styles; raw CSS bytes are preserved; legacy hints and migrated carriers are not upgraded; reimport an old Fengyue card for current compatibility",
+    "legacyCarrier": "hearthroom-fengyue-inner-css: only one enabled, unchanged importer-generated carrier with no other enabled style/script peers is moved; otherwise its rule order is preserved; explicit cardCss empty clears the unchanged carrier",
+    "managedAppearanceVariables": [
+      "--lt-canvas-bubble-ai-bg",
+      "--lt-canvas-bubble-user-bg",
+      "--lt-canvas-bubble-fg",
+      "--lt-canvas-composer-field-bg",
+      "--lt-canvas-send-bg",
+      "--lt-canvas-accent",
+      "--lt-canvas-font",
+      "--lt-canvas-bg"
+    ],
+    "appearanceMarker": "/* lt-card-appearance:start */ ... /* lt-card-appearance:end */",
+    "managedAppearancePrecedence": "native root variables at the card CSS layer; host inline aliases yield and ordinary display-rule declarations can override them",
+    "nativeRootVariables": "without a legacy hint, the same eight variables explicitly declared on unconditional .canvas-root selectors also make host inline aliases yield; conditional rules are not inferred"
+  },
+  "rules": {
+    "findForms": [
+      "literal (all occurrences)",
+      "/pattern/flags"
+    ],
+    "flags": "gimsuy",
+    "gAlwaysAdded": true,
+    "replaceTokens": {
+      "captures": "$1…$99 (missing group stays literal)",
+      "fieldTable": "$name reads capture 1 shaped key::value;;key::value",
+      "random": "{{random:a::b}}",
+      "macros": [
+        "{{user}}",
+        "{{char}}"
+      ]
+    },
+    "fieldTable": {
+      "pairSeparator": "::",
+      "entrySeparator": ";;",
+      "requiresBoth": true
+    },
+    "budget": {
+      "min": 262144,
+      "inputMultiplier": 4
+    },
+    "rollbackReasons": [
+      "bad_regex",
+      "empty_match",
+      "replacement_alone",
+      "volume",
+      "timeout"
+    ],
+    "timeoutOnlyOnProvider": true,
+    "relativeMediaSrcNeutralisedTo": "data:,",
+    "chineseVariantClasses": true,
+    "userMessagesAlsoPassThroughRules": true,
+    "streaming": "rules run on the streamed text too; a half-open trailing tag is hidden until the result settles"
+  },
+  "cssDialect": {
+    "field": "cssDialect on each display rule",
+    "values": [
+      "fengyue",
+      "tavern",
+      "mmd"
+    ],
+    "whenMissing": "display rules keep the existing card-format policy (cardFormat section); no automatic selector adaptation",
+    "legacyRuleIdTreatedAsFengyue": "hearthroom-fengyue-inner-css",
+    "appliesTo": "<style> inside the rule replacement, outside code fences; both the classic page and the sandbox shell",
+    "tavern": "selectors prefixed with \".mes_text \"",
+    "mmd": "as written",
+    "fengyue": {
+      "layer": "lt-author-fengyue",
+      "layers": [
+        "platform defaults (lt-base)",
+        "site theme and source-platform conditions",
+        "--chat-* variables",
+        "fengyue CSS (lt-author-fengyue)",
+        "every other author <style> (unlayered, wins regardless of selector weight)"
+      ],
+      "importantStripped": true,
+      "deadSelectors": [
+        "body",
+        "html",
+        ":root"
+      ],
+      "darkBranch": ".dark / html.dark → [data-lt-theme=\"dark\"] on the chat root",
+      "unknownFengyueIdsDropped": true,
+      "authorContentIdsKept": true,
+      "buttons": "position, size, display, transform and margin declarations are dropped; colour, border, radius, shadow, font and padding stay"
+    }
+  },
+  "sanitizer": {
+    "shellPath": {
+      "appliesWhen": "the shell renders a body itself (no host-provided view: standalone shell, function bar, previews)",
+      "allowedTags": [
+        "a",
+        "audio",
+        "b",
+        "blockquote",
+        "br",
+        "button",
+        "canvas",
+        "caption",
+        "circle",
+        "clipPath",
+        "code",
+        "defs",
+        "del",
+        "details",
+        "div",
+        "ellipse",
+        "em",
+        "font",
+        "g",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "hr",
+        "i",
+        "img",
+        "input",
+        "label",
+        "li",
+        "line",
+        "linearGradient",
+        "mark",
+        "meter",
+        "ol",
+        "option",
+        "p",
+        "path",
+        "polygon",
+        "polyline",
+        "pre",
+        "progress",
+        "radialGradient",
+        "rect",
+        "s",
+        "script",
+        "select",
+        "small",
+        "source",
+        "span",
+        "stop",
+        "strong",
+        "style",
+        "sub",
+        "summary",
+        "sup",
+        "svg",
+        "table",
+        "tbody",
+        "td",
+        "text",
+        "textarea",
+        "tfoot",
+        "th",
+        "thead",
+        "title",
+        "tr",
+        "tspan",
+        "u",
+        "ul",
+        "use",
+        "user",
+        "video"
+      ],
+      "unwrapTags": [
+        "base",
+        "embed",
+        "form",
+        "iframe",
+        "link",
+        "meta",
+        "noscript",
+        "object",
+        "template"
+      ],
+      "dropTags": [
+        "script",
+        "style"
+      ],
+      "unknownTagsStrippedKeepText": true,
+      "cjkAngleTagsStripped": true,
+      "backtickRegionsProtected": true,
+      "removedAttributes": [
+        "data-*",
+        "aria-*",
+        "role"
+      ],
+      "inlineHandlersKeptOnHtml": true,
+      "inlineHandlersRemovedInsideSvg": true,
+      "urlAttributes": [
+        "href",
+        "src",
+        "xlink:href",
+        "action",
+        "formaction",
+        "poster"
+      ],
+      "blockedUrlSchemes": [
+        "javascript:",
+        "vbscript:",
+        "data:text/html"
+      ],
+      "unsafeAttributeValueDropsWholeAttribute": [
+        "--!?>",
+        "]>",
+        "</style",
+        "</script",
+        "</title",
+        "</xmp",
+        "</textarea",
+        "</noscript",
+        "</iframe",
+        "</noembed",
+        "</noframes"
+      ]
+    },
+    "hostPath": {
+      "appliesWhen": "the host computes message HTML with the ordinary card pipeline and sends it as view.html (the normal play page)",
+      "standardHtmlTagsKept": [
+        "a",
+        "abbr",
+        "address",
+        "area",
+        "article",
+        "aside",
+        "audio",
+        "b",
+        "base",
+        "bdi",
+        "bdo",
+        "blockquote",
+        "body",
+        "br",
+        "button",
+        "canvas",
+        "caption",
+        "center",
+        "cite",
+        "code",
+        "col",
+        "colgroup",
+        "custom-style",
+        "data",
+        "datalist",
+        "dd",
+        "del",
+        "details",
+        "dfn",
+        "dialog",
+        "div",
+        "dl",
+        "dt",
+        "em",
+        "embed",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "font",
+        "footer",
+        "form",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "head",
+        "header",
+        "hgroup",
+        "hr",
+        "html",
+        "i",
+        "iframe",
+        "img",
+        "input",
+        "ins",
+        "kbd",
+        "label",
+        "legend",
+        "li",
+        "link",
+        "main",
+        "map",
+        "mark",
+        "marquee",
+        "math",
+        "menu",
+        "meta",
+        "meter",
+        "nav",
+        "noscript",
+        "object",
+        "ol",
+        "optgroup",
+        "option",
+        "output",
+        "p",
+        "param",
+        "picture",
+        "pre",
+        "progress",
+        "q",
+        "rp",
+        "rt",
+        "ruby",
+        "s",
+        "samp",
+        "script",
+        "search",
+        "section",
+        "select",
+        "slot",
+        "small",
+        "source",
+        "span",
+        "strike",
+        "strong",
+        "style",
+        "sub",
+        "summary",
+        "sup",
+        "svg",
+        "table",
+        "tbody",
+        "td",
+        "template",
+        "textarea",
+        "tfoot",
+        "th",
+        "thead",
+        "time",
+        "title",
+        "tr",
+        "track",
+        "tt",
+        "u",
+        "ul",
+        "user",
+        "var",
+        "video",
+        "wbr"
+      ],
+      "hyphenatedCustomElementsKept": true,
+      "nonStandardTagsStrippedKeepText": true,
+      "dataAttributesStripped": null,
+      "dataAttributesNote": "not established from source; observed stripped on the play page; treat author data-* as stripped on every path",
+      "dialogueQuotesWrapped": "<font color=\"#DC8333\">"
+    },
+    "order": [
+      "macros",
+      "display rules",
+      "strip unknown tags",
+      "markdown (html:true, breaks:true, indented code off)",
+      "sanitize",
+      "dialogue quotes",
+      "chinese script conversion of text nodes"
+    ]
+  },
+  "scripts": {
+    "extractedAtInstall": "every <style> and <script> in every enabled rule, matched or not; fenced code blocks protected",
+    "runsOncePerCard": true,
+    "runsBeforeDom": true,
+    "runsAfterFunctionBarMounted": true,
+    "inlineScriptsRunAsScriptElements": "top-level declarations become globals; a SyntaxError (top-level return) is retried wrapped in a function",
+    "externalScripts": {
+      "httpsOnly": true,
+      "orderedNotAwaited": true,
+      "dedupedByUrl": true,
+      "typeModuleKept": true,
+      "nomoduleSkipped": true
+    },
+    "messageBodyScripts": "run once per distinct code string after the message is done; code already run at install does not run again",
+    "moduleScripts": "type=\"module\" is kept for src and inline scripts: they run as ES modules (import, import()) after every inline classic script; external module scripts keep rule order with the other external scripts, inline module scripts run once their imports load; a nomodule script does not run",
+    "documentCurrentScript": "the running <script> element for an inline classic rule script (they run as real script elements); null in module scripts and in the wrapped-function fallback",
+    "previewRerunsScripts": "the card editor preview re-runs scripts on every edit: boot must be idempotent",
+    "gestureRequired": [
+      "message.send outside a trusted click asks the player",
+      "message.edit outside a trusted click asks the player",
+      "send/continue/assist/favorite/rewrite/system-card buttons ignore synthetic clicks"
+    ],
+    "csp": {
+      "connectSrc": "'self' https://assets.harperharbor.com",
+      "frameSrc": "'self' about: blob:",
+      "scriptSrc": "'self' 'unsafe-inline' 'unsafe-eval' https:",
+      "styleSrc": "'self' 'unsafe-inline' https:",
+      "imgSrc": "'self' data: blob: https:",
+      "fontSrc": "'self' data: https:",
+      "formAction": "'none'",
+      "baseUri": "'none'"
+    },
+    "assetsLibrary": {
+      "origin": "https://assets.harperharbor.com",
+      "fetch": "connect-src: fetch JSON, WASM (WebAssembly.instantiateStreaming) and other files",
+      "scripts": "script-src https:: <script src>, <script type=\"module\" src>, import()"
+    },
+    "links": "http(s) links in author HTML are intercepted and opened by the host in a new tab",
+    "localStorage": "available, scoped to the card subdomain; author rule output is cached in IndexedDB keyed by storageScope"
+  },
+  "provider": {
+    "replaceMaxBytes": 524288,
+    "totalMaxBytes": 33554432,
+    "bytesAre": "UTF-8 (find + replace + name per rule)",
+    "findMustNotBeBlank": true,
+    "maxRuleCount": null,
+    "mountLayer": [
+      "under",
+      "over",
+      "cover"
+    ],
+    "pageMode": [
+      "classic",
+      "immersive",
+      "sandbox"
+    ],
+    "pageModeDefaultWhenEmpty": "classic",
+    "cardFormat": [
+      "",
+      "mmd",
+      "tavern",
+      "fengyue"
+    ],
+    "ruleCssDialect": [
+      "",
+      "fengyue",
+      "tavern",
+      "mmd"
+    ],
+    "openingPageMaxBytes": 524288,
+    "cardCssMaxBytes": 524288,
+    "render": {
+      "endpoint": "GET /open/v1/role/render",
+      "executesScripts": false,
+      "runsSanitizer": false,
+      "runsMarkdown": false,
+      "ruleStatuses": [
+        "applied",
+        "unmatched",
+        "disabled",
+        "empty",
+        "rolled_back"
+      ],
+      "unsupportedScan": {
+        "classicOnly": [
+          "sdk.save",
+          "sdk.cache",
+          "sdk.stage",
+          "sdk.message",
+          "sdk.input",
+          "sdk.composer",
+          "sdk.role",
+          "sdk.user",
+          "sdk.on(",
+          "sdk.debug",
+          "[data-chat",
+          "[data-slot",
+          "--chat-"
+        ],
+        "everywhere": [
+          "sdk.vars",
+          "<abc_vars"
+        ]
+      }
+    }
+  },
+  "import": {
+    "mmdSixKey": {
+      "keys": [
+        "chatVersion",
+        "pageDepth",
+        "statusbar",
+        "beginning",
+        "personality",
+        "regex_scripts"
+      ],
+      "chatVersion1": "pageMode: sandbox",
+      "pageDepth": {
+        "1|0|under|below": "mountLayer under",
+        "2|missing": "mountLayer over"
+      },
+      "statusbar": "mountTrigger",
+      "beginning": "welcome.md",
+      "personality": "not read by the CLI importer (persona comes from the separate TXT)",
+      "droppedRegexFields": [
+        "trimStrings",
+        "markdownOnly",
+        "promptOnly",
+        "runOnEdit",
+        "substituteRegex",
+        "minDepth",
+        "maxDepth",
+        "id"
+      ]
+    }
+  },
+  "stageCommit": "63a7768414952cdb371ac60ac4bfedc789aa08f8"
+}

@@ -1,6 +1,6 @@
 import { nextTick } from "vue";
 import { boardScrollPosition } from "./lib/board-memory";
-import { preloadStage } from "./lib/stage-preload";
+import { stageSite } from "@stage-site";
 import { createRouter, createWebHistory, type LocationQuery, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
@@ -36,7 +36,7 @@ const pages: RouteRecordRaw[] = [
   { path: "", component: BoardPage, meta: { board: true } },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
-  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
+  ...(stageSite ? [{ path: "cards/:roleId/edit", component: stageSite.loadEditor, meta: { auth: true, feature: "editor", workspace: true, petAway: true } }] : []),
   // 卡片工坊：一個擴充的詳情（可分享，跟卡片頁一樣不必登入就看得到）
   { path: "workshops/:id", component: () => import("./pages/ExtensionPage.vue"), meta: { petQuietOnPhone: true } },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
@@ -69,12 +69,12 @@ const pages: RouteRecordRaw[] = [
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true, petQuietOnPhone: true } },
   { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true}},
   // 建立與編輯擴充是同一頁（new 帶 ?card=）
-  { path: "mine/workshops/new", component: () => import("./pages/ExtensionEditorPage.vue"), meta: { auth: true, petAway: true } },
-  { path: "mine/workshops/:id/edit", component: () => import("./pages/ExtensionEditorPage.vue"), meta: { auth: true, petAway: true } },
+  ...(stageSite ? [{ path: "mine/workshops/new", component: stageSite.loadWorkshopEditor, meta: { auth: true, petAway: true } }] : []),
+  ...(stageSite ? [{ path: "mine/workshops/:id/edit", component: stageSite.loadWorkshopEditor, meta: { auth: true, petAway: true } }] : []),
   // 舊的原作者擴充管理頁（工坊 v2 拿掉）：通知與舊書籤還指著這裡，轉到那張卡的編輯頁（網址上的 cardId 是本站卡號，編輯頁收卡號）
   { path: "mine/cards/:cardId/workshop", redirect: (to) => ({ path: withLocale(`/cards/${encodeURIComponent(String(to.params.cardId))}/edit`, localeOf(to)), query: to.query, hash: to.hash }) },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
-  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor", workspace: true, petAway: true } },
+  ...(stageSite ? [{ path: "create", component: stageSite.loadEditor, meta: { auth: true, feature: "editor", workspace: true, petAway: true } }] : []),
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuiet: true } },
   // 簽到相關頁：手機上桌寵不說話，泡泡會壓在軌道與里程碑上（ui.md §6.13）
   // petAway：這一頁的蘇綺是頁面插圖，桌寵整頁退場（美術總監最終 r1 H1）
@@ -119,7 +119,7 @@ const pages: RouteRecordRaw[] = [
   { path: "campaigns", component: () => import("./pages/CampaignsPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
-  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
+  ...(stageSite ? [{ path: "play/:roleId", component: stageSite.loadPlay, meta: { bare: true, preloadStage: true } }] : []),
   // 社群管理共用工作台；資格與個別操作的權限由服務端檢查。
   {
     path: "review", component: () => import("./pages/CommunityManagementLayout.vue"), meta: { auth: true },
@@ -149,7 +149,7 @@ const pages: RouteRecordRaw[] = [
       // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著
       { path: "blog/:id", component: () => import("./pages/ReviewBlogEditorPage.vue"), meta: { managementTab: "blog" } },
       { path: "manage", redirect: (to) => ({ path: withLocale("/review/cases", localeOf(to)), query: to.query, hash: to.hash }) },
-      { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true, petAway: true } },
+      ...(stageSite ? [{ path: ":id", component: stageSite.loadReview, meta: { managementTab: "reviews", petQuietOnPhone: true, petAway: true } }] : []),
     ],
   },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
@@ -168,7 +168,7 @@ const pages: RouteRecordRaw[] = [
 const playAppPages = [
   { path: "/login", component: () => import("./pages/LoginPage.vue"), meta: { bare: true } },
   { path: "/auth/callback", component: () => import("./pages/CallbackPage.vue"), meta: { bare: true } },
-  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, playApp: true, preloadStage: true } },
+  ...(stageSite ? [{ path: "/:roleId([^/]+)", component: stageSite.loadPlay, meta: { bare: true, playApp: true, preloadStage: true } }] : []),
   { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue"), meta: { bare: true } },
 ];
 
@@ -289,7 +289,7 @@ router.beforeEach(async (to) => {
 
   // Static assets are public. Start before locale/session waits; the auth gate and
   // player installation still run in their original order.
-  if (to.meta.preloadStage) void preloadStage();
+  if (to.meta.preloadStage) void stageSite?.preload();
   // 這一頁的程式碼跟語言包同時下載。原本要等語言包與整串守衛跑完，vue-router 才開始抓頁面，
   // 冷開首頁時頁面程式碼晚了約 0.6 s 才出發（2026-09-26 實測）。同一個 import 之後再呼叫會拿到同一份。
   for (const record of to.matched) {

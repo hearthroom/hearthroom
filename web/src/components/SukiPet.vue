@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 桌寵兼嚮導蘇綺（設定集 docs/design/hearthroom-mascot「桌寵」各節）。
  *
@@ -84,7 +85,7 @@ function search() {
 
 function menu(): MenuItem[] {
   const items: MenuItem[] = [];
-  if (session.me) items.push({ label: line("menu.resume"), run: resume });
+  if (stageAvailable && session.me) items.push({ label: line("menu.resume"), run: resume });
   items.push({ label: line("menu.roll"), run: roll });
   items.push({ label: line("menu.search"), run: search });
   if (notifications.unread > 0) items.push({ label: line("menu.notifications"), run: () => router.push(lp("/me/notifications")) });
@@ -186,7 +187,7 @@ async function start() {
       if (push === "on" || dm) pet.value?.say(line("recallOn"));
       else pet.value?.on({ type: "hint", text: line("recallNeedsChannel"), action: { label: line("go.look"), run: () => router.push(lp("/me/notifications")) } });
     },    nickname: () => session.me?.nickName?.trim() || null,
-    resume: { label: line("menu.resume"), run: resume },
+    resume: stageAvailable ? { label: line("menu.resume"), run: resume } : undefined,
     menuLabel: () => line("menu.off"),
     onOff: dismissPet,
   });

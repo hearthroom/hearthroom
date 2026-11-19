@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 import {computed,onBeforeUnmount,onMounted,ref,shallowRef,watch} from 'vue';
 import {useRoute,useRouter,onBeforeRouteLeave,onBeforeRouteUpdate} from 'vue-router';
 import {useI18n} from 'vue-i18n';
@@ -18,8 +19,9 @@ import MascotSay from '@/components/MascotSay.vue';
 import ConversationRows from '@/components/ConversationRows.vue';
 import ActionToast from '@/components/ActionToast.vue';
 const session=useSession(),route=useRoute(),router=useRouter(),{locale,lp}=useLocalePath(),{t}=useI18n();
-const tabs=['conversations','favorites','following'] as const;
-const tab=computed(()=>tabs.includes(route.query.tab as typeof tabs[number])?route.query.tab as typeof tabs[number]:'conversations');
+const allTabs=['conversations','favorites','following'] as const;
+const tabs: readonly (typeof allTabs)[number][]=stageAvailable ? allTabs : allTabs.filter(key => key !== 'conversations');
+const tab=computed(()=>tabs.includes(route.query.tab as typeof tabs[number])?route.query.tab as typeof tabs[number]:tabs[0]);
 const page=computed(()=>Math.max(1,Math.floor(Number(route.query.page)||1)));
 const chats=ref<ConversationSummary[]>([]),cards=ref<LibraryFavorite[]>([]),authors=ref<{handle:string;name:string;avatar:string;bio:string}[]>([]);
 const loading=ref(true),failed=ref(false),hasNext=ref(false),managing=ref(false),selected=ref<string[]>([]),locked=ref(false);

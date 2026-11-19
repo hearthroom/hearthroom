@@ -1,3 +1,5 @@
+import { stageAvailable } from "@stage-site";
+
 /** Active platform, capabilities and issuer-scoped credential compatibility. */
 export type ProviderId = "harbor";
 
@@ -53,9 +55,9 @@ const SCOPES: Record<ProviderId, string> = {
  */
 const FEATURES: Record<ProviderId, Record<string, boolean>> = {
   harbor: {
-    editor: true, worldbook: true, regex: true, library: true, persona: true,
+    editor: stageAvailable, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
-    outputContract: true, chatTest: true, previewPage: true, review: true,
+    outputContract: true, chatTest: stageAvailable, previewPage: stageAvailable, review: true,
     world: true,
     // 卡片變數（任務 2026-11-09-card-state）：編輯器的「卡片變數」一區跟著這個開關
     state: true,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stageAvailable } from "@stage-site";
 /**
  * 「我的卡片」›擴充分頁（docs studio/tasks/2026-11-15-workshop-v2-dlc-and-lorebook/ui.md §3.5）。
  *
@@ -71,7 +72,7 @@ const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.valu
   <div class="mine-ws">
     <!-- 空態自己帶主按鈕；有列表（或還在讀、讀失敗）時主按鈕在右上 -->
     <div v-if="!isEmpty" class="mine-ws__tools">
-      <button type="button" class="btn btn--primary btn--sm mine-ws__create" data-ws-create @click="picking = true">
+      <button v-if="stageAvailable" type="button" class="btn btn--primary btn--sm mine-ws__create" data-ws-create @click="picking = true">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("workshop.create") }}
       </button>
     </div>
@@ -88,7 +89,7 @@ const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.valu
     <div v-else-if="isEmpty" class="empty panel mine-ws__empty">
       <p class="empty__title ws-text">{{ $t("workshop.mine.empty.title") }}</p>
       <p class="empty__body ws-text">{{ $t("workshop.mine.empty.body") }}</p>
-      <button type="button" class="btn btn--primary" data-ws-create @click="picking = true">{{ $t("workshop.create") }}</button>
+      <button v-if="stageAvailable" type="button" class="btn btn--primary" data-ws-create @click="picking = true">{{ $t("workshop.create") }}</button>
     </div>
 
     <ul v-else class="mine-ws__list" :aria-busy="loading || undefined">
@@ -107,12 +108,12 @@ const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.valu
           <p v-if="hiddenByOwner(item)" class="subtle ws-text mine-ws__note" data-ws-hidden-note>{{ $t("workshop.mine.row.hiddenByOwner") }}</p>
         </div>
         <div class="mine-ws__actions">
-          <RouterLink :to="editTo(item)" class="btn btn--sm">{{ $t("workshop.mine.edit") }}</RouterLink>
+          <RouterLink v-if="stageAvailable" :to="editTo(item)" class="btn btn--sm">{{ $t("workshop.mine.edit") }}</RouterLink>
         </div>
       </li>
     </ul>
 
-    <CardPickerDialog v-if="picking" @close="picking = false" />
+    <CardPickerDialog v-if="stageAvailable && picking" @close="picking = false" />
   </div>
 </template>
 
