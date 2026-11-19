@@ -1,0 +1,11 @@
+{
+  "tier": "feature",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "「積分與會員」頁可以前往 HarperHarbor 錢包，輸入兌換碼或查看收支。",
+    "zh-Hans": "「积分与会员」页可以前往 HarperHarbor 钱包，输入兑换码或查看收支。",
+    "en": "Credits & membership now links to your HarperHarbor wallet, where you can redeem codes and check your history.",
+    "ja": "「ポイントと会員」から HarperHarbor のウォレットへ移り、引き換えコードを入力できます。",
+    "ko": "「포인트 및 멤버십」에서 HarperHarbor 지갑으로 이동해 크레딧 코드를 입력할 수 있어요."
+  }
+}

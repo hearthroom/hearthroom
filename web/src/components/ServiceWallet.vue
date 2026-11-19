@@ -18,7 +18,7 @@ import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan
 import { useLocalePath } from "@/lib/use-locale";
 import { honorKey, honorName, parseHonorKey } from "@/lib/honors";
 import { ledgerParts } from "@/lib/ledger-parts";
-import { topUpUrl } from "@/lib/topup";
+import { topUpUrl, WALLET_PAGE } from "@/lib/topup";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
@@ -222,7 +222,10 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 
 <template>
   <section class="wallet-service">
-    <h2 class="wallet__title">{{ providerName(provider) }}</h2>
+    <div class="wallet__head">
+      <h2 class="wallet__title">{{ providerName(provider) }}</h2>
+      <a class="btn btn--sm wallet__harbor" data-testid="wallet-harbor-link" :href="WALLET_PAGE" target="_blank" rel="noopener" @click="track('cta', { detail: 'harbor_wallet', subject: 'wallet' })">{{ $t("wallet.harborLink") }}<span aria-hidden="true">↗</span><span class="sr-only">（{{ $t("play.info.newTab") }}）</span></a>
+    </div>
 
     <ExpiryStrip :expiring="expiries" :now="Date.now()" />
     <!-- 第一排：手上有多少、怎麼拿到更多（儲值、邀請）、最近用了多少 -->
@@ -359,7 +362,13 @@ watch(() => [props.provider, props.externalId, locale.value], () => load(true), 
 
 <style scoped>
 .wallet-service { display: grid; gap: var(--s-4); }
+/* 標題左、HarperHarbor 錢包入口右；放不下時入口整顆換到標題下一行，不縮字、不截斷 */
+.wallet__head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .wallet__title { font-size: 22px; }
+.wallet__harbor { position: relative; }
+.wallet__harbor span[aria-hidden] { color: var(--text-3); }
+/* 視覺高 30，手機的點擊區往上下補到 44 */
+.wallet__harbor::after { content: ""; position: absolute; inset: -7px 0; }
 
 /* 三張等高的卡：餘額、邀請、最近消耗。窄一點就兩欄，手機一欄 */
 .overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-4); align-items: stretch; }

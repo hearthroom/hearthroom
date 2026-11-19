@@ -386,6 +386,7 @@
   "wallet.balance": "積分餘額",
   "wallet.temp": "含限時積分 {n}",
   "wallet.topUp": "前往儲值",
+  "wallet.harborLink": "兌換碼與帳務",
   "wallet.records": "積分記錄",
   "wallet.records.empty": "還沒有任何記錄",
   "wallet.records.time": "時間",

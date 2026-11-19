@@ -386,6 +386,7 @@
   "wallet.balance": "포인트 잔액",
   "wallet.temp": "기간 한정 {n} 포함",
   "wallet.topUp": "충전하기",
+  "wallet.harborLink": "크레딧 코드·내역",
   "wallet.records": "포인트 내역",
   "wallet.records.empty": "아직 내역이 없어요",
   "wallet.records.time": "시간",

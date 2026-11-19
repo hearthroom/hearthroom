@@ -5,6 +5,9 @@
  */
 export const PAY_PAGE = "https://console.harperharbor.com/pay/hearthroom";
 
+/** HarperHarbor 的錢包頁：兌換碼、收支明細、API 都從這裡走。綺夢社每個前往錢包的入口都用這一個。 */
+export const WALLET_PAGE = "https://console.harperharbor.com/me/wallet";
+
 export function topUpUrl(back: string = location.href): string {
   const url = new URL(PAY_PAGE);
   url.searchParams.set("back", back);

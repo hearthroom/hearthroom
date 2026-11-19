@@ -18,6 +18,7 @@ import type { TagPage, AuthorPage } from "@/lib/api";
 import MascotSay from "@/components/MascotSay.vue";
 import { adultUnavailable } from "@/lib/country-region";
 import type { CardPage, CommunityCard } from "@/lib/types";
+import { WALLET_PAGE } from "@/lib/topup";
 
 const route = useRoute();
 const router = useRouter();
@@ -55,7 +56,6 @@ const sort = computed(() => {
 /** 成人內容關著的成員：結果少的時候提一句，他才知道不是站上沒有，是沒開。訪客不提（無法確認年齡）。 */
 /** HarperHarbor 的點數兌換碼（HH 加 32 個 base32 字元，常見帶橫線）：有人拿到碼不知道去哪輸入就貼進搜尋框 */
 const voucher = computed(() => /^HH[A-Z2-7]{32}$/.test(q.value.toUpperCase().replace(/[-\s]/g, "")));
-const WALLET_URL = "https://console.harperharbor.com/me/wallet";
 // 地區選了中國大陸：那裡不提供成人內容、設定頁也沒有開關，不提
 const adultOff = computed(() => !!session.me && !!session.profile && !session.profile.showNsfw && !adultUnavailable(session.profile) && cards.value?.adult === false);
 const hasQuery = computed(() => !!q.value || !!fandom.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
@@ -212,7 +212,7 @@ watch(q, (v) => { draft.value = v; });
         <button class="btn btn--sm" @click="navigate({ tag: undefined })">{{ $t('search.clear') }}</button>
       </div>
     <p v-if="voucher" class="notice search__voucher">
-      {{ $t("search.voucher") }} <a :href="WALLET_URL" target="_blank" rel="noopener">{{ $t("search.voucher.link") }} ↗</a>
+      {{ $t("search.voucher") }} <a :href="WALLET_PAGE" target="_blank" rel="noopener">{{ $t("search.voucher.link") }} ↗</a>
     </p>
     <template v-if="hasQuery && !voucher">
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>

@@ -386,6 +386,7 @@
   "wallet.balance": "Credit balance",
   "wallet.temp": "includes {n} time-limited",
   "wallet.topUp": "Top up",
+  "wallet.harborLink": "Redeem codes & billing",
   "wallet.records": "Credit history",
   "wallet.records.empty": "No activity yet",
   "wallet.records.time": "Time",

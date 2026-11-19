@@ -386,6 +386,7 @@
   "wallet.balance": "ポイント残高",
   "wallet.temp": "うち期間限定 {n}",
   "wallet.topUp": "チャージする",
+  "wallet.harborLink": "引き換えコード・明細",
   "wallet.records": "ポイント履歴",
   "wallet.records.empty": "まだ履歴がありません",
   "wallet.records.time": "日時",

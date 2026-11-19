@@ -20,6 +20,7 @@ import { connectionMessage } from "@/lib/connection-ui";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { WALLET_PAGE } from "@/lib/topup";
 const session = useSession();
 const route=useRoute();
 const { t } = useI18n();
@@ -74,9 +75,6 @@ async function loadEmails() {
 }
 
 /** 管完帳號要回得來，所以把現在這一頁帶過去。 */
-function billingPage(id:ProviderId):string {
- return 'https://console.harperharbor.com/me/wallet';
-}
 function accountPage(id: ProviderId): string | null {
   const base = ACCOUNT_PAGE[id];
   return base ? `${base}?return_to=${encodeURIComponent(new URL(route.fullPath,location.origin).href)}` : null;
@@ -129,7 +127,7 @@ async function connect(provider: ProviderId) {
         </div>
         <div class="account__actions" v-if="isConnected(p.id)">
           <a v-if="accountPage(p.id)" class="account__action" :href="accountPage(p.id)!" :aria-label="$t('linked.manage',{name:providerName(p.id)})" target="_blank" rel="noopener">{{ $t('services.manage') }}<AccountIcon name="external" /></a>
-          <a class="account__action" :href="billingPage(p.id)" target="_blank" rel="noopener">{{ $t('services.billing') }}<AccountIcon name="external" /></a>
+          <a class="account__action" :href="WALLET_PAGE" target="_blank" rel="noopener">{{ $t('services.billing') }}<AccountIcon name="external" /></a>
           <button v-if="states[p.id]==='expired' || (managed && states[p.id]==='unavailable') || (states[p.id]==='ready' && !emails[p.id])" class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('me.reauthorize') }}</button>
           <button v-if="managed && states[p.id]!=='expired'" class="btn btn--ghost" :disabled="busy" @click="disconnect(p.id)">{{ $t('authorization.disconnect') }}</button>
           <button v-if="states[p.id]==='unavailable'" class="btn account__connect" :disabled="busy" @click="loadEmails">{{ $t('linked.retry') }}</button>

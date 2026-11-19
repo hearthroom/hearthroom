@@ -386,6 +386,7 @@
   "wallet.balance": "积分余额",
   "wallet.temp": "含限时积分 {n}",
   "wallet.topUp": "前往充值",
+  "wallet.harborLink": "兑换码与账务",
   "wallet.records": "积分记录",
   "wallet.records.empty": "还没有任何记录",
   "wallet.records.time": "时间",
