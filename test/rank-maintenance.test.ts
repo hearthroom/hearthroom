@@ -164,13 +164,13 @@ it('supplements cross-boundary week 2026-10-12, skips held payouts during paymen
  expect(await env.DB.prepare("SELECT COUNT(*) n FROM rank_awards WHERE card_id=100070 AND status='paid'").first('n')).toBe(2);
 });
 it('asks for heat v2 per cohort and never settles a v2 window on an answer without that formula',async()=>{
- const dec2=Date.parse('2026-12-02T10:00:00+08:00');
+ const dec2=Date.parse('2026-11-19T10:00:00+08:00');
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,approved_hosted_role_id) VALUES(100001,'v2-source',11,'{}','{}',?,1,'approved','harbor','v2-hosted')").bind(dec2).run();
  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,decided_at) VALUES('v2-first',100001,'harbor','v2-source','first','approved',?,?)").bind(dec2,dec2).run();
  const asked:{formula?:string}[]=[];
  // An older Provider ignores the field and answers without it.
  rankTransport.heats=async(_env,windows)=>{asked.push(...windows);return windows.map(({formula:_f,...w})=>({...w,heat:100,complete:true}))};
- const dayDone=Date.parse('2026-12-04T00:00:00+08:00');
+ const dayDone=Date.parse('2026-11-21T00:00:00+08:00');
  await rankMaintenance(env,dayDone);
  expect(asked.length).toBeGreaterThan(0);expect(asked.every(w=>w.formula==='v2')).toBe(true);
  expect(await env.DB.prepare('SELECT COUNT(*) n FROM rank_window_scores').first('n')).toBe(0);
