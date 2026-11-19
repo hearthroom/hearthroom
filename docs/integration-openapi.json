@@ -21416,7 +21416,7 @@
                 "type": "integer",
                 "format": "int64",
                 "minimum": 0,
-                "description": "Popularity of this card, summed across all published versions of the work. Each paid use by someone other than the author adds heat, weighted by the model's price and never less than the credits charged. Heat only increases. Staging versions are not counted."
+                "description": "Popularity of this card, summed across all published versions of the work. Computed from actual credits spent on the card by other users (excluding any author of the work, test accounts, and suspended or penalized accounts): each user's spend gains +4% at 10, 30, 100, 300, and 1000 turns (up to +20%), and unique users who spend at least 30 credits add a card-wide bonus (+1% each for the first 10 users, then 10 times as many users per tier at 1/10 the per-user rate, up to +10% per tier). Heat can decrease when penalized accounts are excluded. Staging versions are not counted."
               }
             }
           }
