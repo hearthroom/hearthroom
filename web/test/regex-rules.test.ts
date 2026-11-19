@@ -155,7 +155,7 @@ describe("validateRuleSet", () => {
     const rules = Array.from({ length: 66 }, (_, i) => makeRule({ id: `r${i}`, name: "圖片集", find: "x", replace: "字".repeat(6000) }));
     const set = { version: 1 as const, lowered: false, statusbar: "", rules };
     const enc = (s: string) => new TextEncoder().encode(s).length;
-    expect(ruleSetBytes(set)).toBe(rules.reduce((n, r) => n + enc(r.id) + enc(r.name) + enc(r.find) + enc(r.replace), 0));
+    expect(ruleSetBytes(set)).toBe(rules.reduce((n, r) => n + enc(r.name) + enc(r.find) + enc(r.replace), 0));
     expect(ruleSetBytes(set)).toBeLessThan(enc(JSON.stringify(set)));
     expect(ruleSetBytes(set)).toBeGreaterThan(1024 * 1024);
     expect(validateRuleSet(set).map((i) => i.key)).not.toContain("regex.issue.totalLong");

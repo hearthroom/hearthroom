@@ -12,14 +12,14 @@
  * （開場白與備選開場白，或網頁內容）先留在草稿裡，儲存時才移除（編輯頁處理），切回來就還原——
  * 可逆優先於確認，不跳確認框。
  */
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { applyTavernRules } from "stage-canvas/rule-engine-core";
 import { scopeCardHtml } from "stage-canvas/style-scope";
 import { openingSrcdoc } from "stage-common/opening-page";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
-import type { OpeningMode, RegexRule } from "@/lib/regex-rules";
+import { formatKiB, OPENING_PAGE_MAX_BYTES, utf8Bytes, type OpeningMode, type RegexRule } from "@/lib/regex-rules";
 
 const props = defineProps<{
   mode: OpeningMode;
@@ -46,7 +46,7 @@ const emit = defineEmits<{
   "update:openingPage": [string];
   "edit-rules": [];
 }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const welcomeModel = computed({ get: () => props.welcome, set: (v: string) => emit("update:welcome", v) });
 const pageModel = computed({ get: () => props.openingPage, set: (v: string) => emit("update:openingPage", v) });
@@ -85,6 +85,21 @@ function removeLeftover() {
 // ── 開場白：撰寫／玩家看到的 ──────────────────────────────────────────
 const welcomeTab = ref<"write" | "player">("write");
 const pageTab = ref<"write" | "preview">("write");
+const pageInput = ref<HTMLTextAreaElement>();
+const modeChoices = ref<HTMLElement>();
+const pageBytes = computed(() => utf8Bytes(props.openingPage));
+const pageOver = computed(() => pageBytes.value > OPENING_PAGE_MAX_BYTES);
+const pageUsage = computed(() => pageBytes.value > 64 * 1024);
+const pageMaxKB = OPENING_PAGE_MAX_BYTES / 1024;
+
+async function focusPage() {
+  pageTab.value = "write";
+  await nextTick();
+  if (pageInput.value) pageInput.value.focus();
+  else modeChoices.value?.querySelector<HTMLButtonElement>('[data-opening-mode="page"]')?.focus();
+}
+
+defineExpose({ focusPage });
 
 /** 只有套到 AI 訊息、而且開著的規則，跟畫布對開場白做的一樣。 */
 const aiRules = computed(() => props.rules.filter((r) => r.enabled && (!r.targets || r.targets.includes("ai"))));
@@ -140,7 +155,7 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 
 <template>
   <div class="opening">
-    <div class="omode" role="radiogroup" :aria-label="$t('editor.opening.mode')">
+    <div class="omode" ref="modeChoices" role="radiogroup" :aria-label="$t('editor.opening.mode')">
       <button v-for="m in modes" :key="m" type="button" class="omode__card" :class="{ 'omode__card--on': mode === m }"
               role="radio" :aria-checked="mode === m" :data-opening-mode="m" @click="emit('update:mode', m)">
         <span class="omode__dot" aria-hidden="true" />
@@ -219,8 +234,20 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
                     :aria-selected="pageTab === 'preview'" @click="pageTab = 'preview'">{{ $t("editor.readme.preview") }}</button>
           </div>
         </div>
-        <FieldText v-show="pageTab === 'write'" id="f-opening-page" v-model="pageModel" label="" :rows="8"
-                   :hint="$t('editor.openingPage.hint')" />
+        <div v-show="pageTab === 'write'" class="opening__page-write">
+          <textarea id="f-opening-page" ref="pageInput" v-model="pageModel" class="input opening__page-input" rows="8"
+                    autocomplete="off" :aria-invalid="pageOver || undefined"
+                    :aria-describedby="`f-opening-page-hint${pageUsage ? ' f-opening-page-usage' : ''}${pageOver ? ' f-opening-page-limit' : ''}`" />
+          <div class="opening__page-meta">
+            <span id="f-opening-page-hint" class="subtle">{{ $t("editor.openingPage.hint") }}</span>
+            <span v-if="pageUsage" id="f-opening-page-usage" class="subtle opening__page-usage" :class="{ 'opening__page-error': pageOver }">
+              {{ $t("editor.cardCss.usage", { size: formatKiB(pageBytes, String(locale)), max: pageMaxKB }) }}
+            </span>
+          </div>
+        </div>
+        <p v-if="pageOver" id="f-opening-page-limit" class="opening__page-error" role="alert">
+          {{ $t("editor.openingPage.tooLong", { max: pageMaxKB }) }}
+        </p>
         <div v-if="pageTab === 'preview'" class="opening__preview">
           <iframe v-if="openingPage.trim()" class="opening__frame opening__frame--page" sandbox="allow-scripts" :srcdoc="pageDoc"
                   :title="$t('editor.openingPage')" />
@@ -274,6 +301,12 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 .opening__preview > .subtle { margin: 0; padding: var(--s-4); }
 .opening__frame { width: 100%; min-height: 320px; border: 0; background: transparent; }
 .opening__frame--page { background: #fff; }
+.opening__page-write { display: grid; gap: var(--s-2); min-width: 0; }
+.opening__page-input { min-height: calc(8 * 1.7em + 26px); resize: vertical; }
+.opening__page-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.opening__page-meta > :first-child { flex: 1 1 16em; }
+.opening__page-usage { margin-inline-start: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.opening__page-error { margin: 0; color: var(--danger); font-size: 12.5px; }
 .opening__rules { margin: 0; }
 .opening__link { background: transparent; border: 0; padding: 0; font: inherit; color: var(--accent-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .opening__choices.is-missing :deep(.field > label) { color: var(--danger); }
@@ -281,5 +314,6 @@ const pageDoc = computed(() => openingSrcdoc(props.openingPage));
 
 @media (max-width: 760px) {
   .omode { grid-template-columns: minmax(0, 1fr); }
+  .opening__page-meta > :first-child { flex-basis: 100%; }
 }
 </style>

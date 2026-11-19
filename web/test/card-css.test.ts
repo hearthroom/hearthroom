@@ -69,9 +69,9 @@ describe('card styles are separate from message replacement', () => {
     const set = ruleSetFromAuthorAsset({ rules: [], cardCss: '.x{color:red}', cardCssDialect: 'fengyue' } as any);
     expect(ruleSetFromImport(ruleSetToExport(set, ''))?.set).toMatchObject({ cardCss: '.x{color:red}', cardCssDialect: 'fengyue', rules: [] });
   });
-  it('checks the independent UTF-8 stylesheet budget before saving', async () => {
+  it('keeps the stylesheet budget outside display-rule validation', async () => {
     const { validateRuleSet } = await import('../src/lib/regex-rules');
     const set = ruleSetFromAuthorAsset({ rules: [], cardCss: '界'.repeat(Math.floor(512 * 1024 / 3) + 1) } as any);
-    expect(validateRuleSet(set)).toContainEqual(expect.objectContaining({ key: 'editor.cardCss.tooLong' }));
+    expect(validateRuleSet(set)).toEqual([]);
   });
 });

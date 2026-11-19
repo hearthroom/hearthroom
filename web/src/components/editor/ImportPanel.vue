@@ -19,14 +19,15 @@ import { isPng } from "@/lib/png-chunks";
 import { fengyueToDraft, readFengyueFile } from "@/lib/fengyue";
 import { readRiliFile, readRiliLorebookFile, riliToDraft } from "@/lib/rili";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
-import { ruleSetWarnings, validateRuleSet } from "@/lib/regex-rules";
+import { formatKiB, OPENING_PAGE_MAX_BYTES, ruleSetWarnings, selectCardImportRules, utf8Bytes, validateRuleSetLimits } from "@/lib/regex-rules";
+import { CARD_CSS_MAX_BYTES } from "@/lib/card-appearance";
 import { stateLeafCount, stateValues } from "@/lib/card-state";
 import RegexIssueList from "./RegexIssueList.vue";
 
 const props = defineProps<{ language: string; detailMax?: number }>();
 const emit = defineEmits<{ apply: [ImportResult] }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 type Kind = "tavern" | "fengyue" | "mmd";
 const KIND_KEY = "hr.import.kind";
@@ -213,8 +214,22 @@ const reviewEl = ref<HTMLElement | null>(null);
 watch(current, (now, before) => {
   if (now && !before) void nextTick(() => reviewEl.value?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
 });
-const regexWarnings = computed(() => current.value?.regex ? ruleSetWarnings(current.value.regex) : []);
-const regexIssues = computed(() => current.value?.regex ? validateRuleSet(current.value.regex) : []);
+const ruleSelection = computed(() => current.value?.regex ? selectCardImportRules(current.value.regex) : null);
+const acceptedAsset = computed(() => {
+  const set = current.value?.regex;
+  return set && ruleSelection.value ? { ...set, rules: ruleSelection.value.rules } : null;
+});
+const regexWarnings = computed(() => acceptedAsset.value ? ruleSetWarnings(acceptedAsset.value) : []);
+const regexIssues = computed(() => acceptedAsset.value && ruleSelection.value ? validateRuleSetLimits(acceptedAsset.value, ruleSelection.value.totalBytes) : []);
+const omittedRules = computed(() => ruleSelection.value?.omitted ?? []);
+const openingBytes = computed(() => utf8Bytes(current.value?.regex?.openingPage ?? ""));
+const openingOver = computed(() => openingBytes.value > OPENING_PAGE_MAX_BYTES);
+const cssBytes = computed(() => utf8Bytes(current.value?.regex?.cardCss ?? ""));
+const cssOver = computed(() => cssBytes.value > CARD_CSS_MAX_BYTES);
+const assetSize = (bytes: number) => bytes <= 1024 * 1024
+  ? t("import.presentation.sizeKB", { size: formatKiB(bytes, String(locale.value)) })
+  : t("import.presentation.sizeMB", { size: formatKiB(bytes / 1024, String(locale.value)) });
+
 const noteLevel = (note: DropNote): "block" | "changed" | "info" => {
   if (note.level) return note.level;
   if (note.key.startsWith("import.fengyue.tooLong.")) return "block";
@@ -238,7 +253,7 @@ function reset() {
 }
 
 function apply() {
-  if (current.value) emit("apply", current.value);
+  if (current.value) emit("apply", { ...current.value, regex: acceptedAsset.value });
   reset();
 }
 
@@ -310,26 +325,43 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
         <li v-if="current.draft.roleOutputContract">{{ $t("import.landed.outputContract", { n: [...current.draft.roleOutputContract].length }) }}</li>
         <li v-if="current.draft.jailbreak">{{ $t("import.landed.custom", { n: [...current.draft.jailbreak].length }) }}</li>
         <li v-if="current.draft.prologue.length">{{ $t("import.landed.prologue", { n: current.draft.prologue.length }) }}</li>
-        <li v-if="current.regex?.openingPage">{{ $t("import.landed.openingPage", { n: [...current.regex.openingPage].length }) }}</li>
+        <li v-if="current.regex?.openingPage">
+          {{ openingOver
+            ? $t("import.landed.openingPageSized", { n: [...current.regex.openingPage].length.toLocaleString(String(locale)), size: assetSize(openingBytes) })
+            : $t("import.landed.openingPage", { n: [...current.regex.openingPage].length }) }}
+        </li>
         <li v-if="current.regex?.cardCss" data-import-card-css>{{ $t("editor.cardCss.title") }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue' && current.spec !== 'rili'">{{ $t("import.landed.examples", { n: current.draft.talkExample.length }) }}</li>
         <li v-if="current.spec !== 'mmd' && current.spec !== 'fengyue'">{{ $t("import.landed.tags", { n: current.draft.roleTag.length }) }}</li>
         <li v-if="current.worldbook">{{ $t("import.landed.worldbook", { n: current.worldbook.entries.length }) }}</li>
         <li v-if="stateCount !== null">{{ $t("import.landed.state", { n: stateCount }) }}</li>
-        <li v-if="current.regex">{{ $t("import.landed.regex", { n: current.regex.rules.length }) }}</li>
+        <li v-if="acceptedAsset">{{ $t("import.landed.regex", { n: acceptedAsset.rules.length }) }}</li>
         <li v-if="current.image">{{ $t("import.landed.image") }}</li>
       </ul>
 
       <p v-if="detailTooLong" class="notice notice--error">{{ $t("import.mmd.detailTooLong", { n: detailTooLong, max: props.detailMax }) }}</p>
 
-      <div v-if="current.regex && regexIssues.length" class="notice notice--error" role="alert">
-        {{ $t("import.regex.invalid") }}
-        <RegexIssueList :set="current.regex" :issues="regexIssues" />
+      <div v-if="current.regex && omittedRules.length" class="notice notice--error" role="alert">
+        {{ $t("import.regex.omitted") }}
+        <RegexIssueList :set="current.regex" :issues="omittedRules" />
       </div>
 
-      <div v-if="current.regex && regexWarnings.length" class="notice regex-warning" role="status">
+      <div v-if="acceptedAsset && regexIssues.length" class="notice notice--error" role="alert">
+        {{ $t("import.regex.invalid") }}
+        <RegexIssueList :set="acceptedAsset" :issues="regexIssues" />
+      </div>
+
+      <div v-if="openingOver || cssOver" class="notice notice--error" role="alert">
+        {{ $t("import.presentation.invalid") }}
+        <ul class="import__block">
+          <li v-if="openingOver">{{ $t("import.presentation.openingPage", { size: assetSize(openingBytes), max: OPENING_PAGE_MAX_BYTES / 1024 }) }}</li>
+          <li v-if="cssOver">{{ $t("import.presentation.cardCss", { size: assetSize(cssBytes), max: CARD_CSS_MAX_BYTES / 1024 }) }}</li>
+        </ul>
+      </div>
+
+      <div v-if="acceptedAsset && regexWarnings.length" class="notice regex-warning" role="status">
         {{ $t("regex.warning.largeNotice") }}
-        <RegexIssueList :set="current.regex" :issues="regexWarnings" />
+        <RegexIssueList :set="acceptedAsset" :issues="regexWarnings" />
       </div>
 
       <ul v-if="blockNotes.length" class="notice notice--error import__block" role="alert">

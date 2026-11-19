@@ -82,6 +82,21 @@ describe("錯誤訊息給人看", () => {
 
   // 2026-09-11 一位作者存 1.18 MB 的規則只看到「請求失敗 (validate_reject)」。
   // 上游現在附 detail：有就講出多大、上限多少、第幾條叫什麼；沒有就退回通用那句。
+  it.each([
+    ["openingPage", "開場網頁", "開局"],
+    ["cardCss", "卡片樣式", "進階"],
+  ])("validate_reject 的 %s 明細保留原因和修改入口", async (reason, label, section) => {
+    const { json } = await import("../src/lib/api");
+    const res = new Response(JSON.stringify({
+      error: "validate_reject",
+      detail: { reason, index: -1, max: 512 * 1024, actual: 512 * 1024 + 1 },
+    }), { status: 400 });
+    await expect(json(res)).rejects.toMatchObject({
+      reason,
+      message: expect.stringMatching(new RegExp(`${label}.*513.*512.*${section}`)),
+    });
+  });
+
   it("validate_reject 帶明細就照明細講", async () => {
     const { describeApiError } = await import("../src/lib/api");
     const { i18n } = await import("../src/lib/i18n");

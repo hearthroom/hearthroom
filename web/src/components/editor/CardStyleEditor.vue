@@ -12,6 +12,16 @@ const open = ref(false);
 const added = ref(false);
 const referenceOpen = ref(false);
 const toggleButton = ref<HTMLButtonElement>();
+const customInput = ref<HTMLTextAreaElement>();
+
+async function focusCustom() {
+  open.value = true;
+  added.value = true;
+  await nextTick();
+  customInput.value?.focus();
+}
+
+defineExpose({ focusCustom });
 const values = reactive<Record<string, string>>({});
 const storedValues = reactive<Record<string, string>>({});
 const customCss = ref("");
@@ -143,7 +153,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer));
 
       <div class="field card-style__custom">
         <label :for="`${id}-custom`">{{ t("editor.cardCss.custom") }}</label>
-        <textarea :id="`${id}-custom`" class="input" :value="customCss" :placeholder="t('editor.cardCss.placeholder')" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" :aria-invalid="overLimit || undefined" :aria-describedby="`${id}-custom-hint ${id}-usage${overLimit ? ` ${id}-limit` : ''}`" @input="updateCustom(($event.target as HTMLTextAreaElement).value)" />
+        <textarea ref="customInput" :id="`${id}-custom`" class="input" :value="customCss" :placeholder="t('editor.cardCss.placeholder')" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" :aria-invalid="overLimit || undefined" :aria-describedby="`${id}-custom-hint ${id}-usage${overLimit ? ` ${id}-limit` : ''}`" @input="updateCustom(($event.target as HTMLTextAreaElement).value)" />
         <div class="card-style__custom-meta">
           <span :id="`${id}-custom-hint`" class="subtle">{{ t("editor.cardCss.customHint") }}</span>
           <span :id="`${id}-usage`" class="subtle card-style__usage" :class="{ 'card-style__error': overLimit }" data-card-css-usage>{{ t("editor.cardCss.usage", { size: (bytes / 1024).toLocaleString(String(locale), { maximumFractionDigits: 1 }), max: CARD_CSS_MAX_BYTES / 1024 }) }}</span>

@@ -63,7 +63,7 @@ import {
   uploadImage,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, ruleSetWarnings, validateRuleSet, utf8Bytes, OPENING_PAGE_MAX_BYTES, type RegexRuleSet, chatPageOf, type ChatPageChoice, openingModeOf, type OpeningMode } from "@/lib/regex-rules";
 import OpeningEditor from "@/components/editor/OpeningEditor.vue";
 import ReplyDefaultsEditor from "@/components/editor/ReplyDefaultsEditor.vue";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
@@ -419,7 +419,9 @@ const cardCssText = computed({
   set: (value: string) => { regexSet.value.cardCss = value; },
 });
 const cardCssUsed = computed(() => !!cardCssText.value.trim());
-const cardCssOver = computed(() => new TextEncoder().encode(cardCssText.value).length > CARD_CSS_MAX_BYTES);
+const cardCssOver = computed(() => utf8Bytes(cardCssText.value) > CARD_CSS_MAX_BYTES);
+const cardStyleEditor = ref<InstanceType<typeof CardStyleEditor>>();
+const openingEditor = ref<InstanceType<typeof OpeningEditor>>();
 function removeCardCss() { regexSet.value.cardCss = ""; delete regexSet.value.cardCssDialect; }
 /** 首屏網頁的編輯框：存在作者資產（regexSet.openingPage），空字串就是沒有。 */
 const openingPageText = computed({
@@ -1356,7 +1358,8 @@ function onRegexFile(event: Event) {
       // 整份太大這種掛在整份上的問題，匯入當下就講清楚多大、上限多少；
       // 不然要等到存檔失敗才知道，而且不知道差多少（2026-09-11 一份 1.18 MB 的檔）。
       const whole = validateRuleSet(imported.set).find((i) => !i.ruleId);
-      if (whole) error.value = t("regex.importedButInvalid", { n: imported.set.rules.length, why: t(whole.key, whole.params ?? {}) });
+      if (cardCssOver.value) error.value = t("editor.cardCss.tooLong", { max: CARD_CSS_MAX_BYTES / 1024 });
+      else if (whole) error.value = t("regex.importedButInvalid", { n: imported.set.rules.length, why: t(whole.key, whole.params ?? {}) });
       else if (skipped) error.value = t("regex.imported", { n: imported.set.rules.length }) + " " + skipped;
       else flash(t("regex.imported", { n: imported.set.rules.length }));
       track("card_import", { detail: "regex" });
@@ -1557,6 +1560,58 @@ async function commitPendingRevert(token:string){
  recoveredRevert.value=false;restoredDraft.value=false;storeApprovedLocalDraft();
 }
 
+async function focusPresentation(section: "opening" | "display" | "advanced") {
+  goto(section);
+  await nextTick();
+  if (section === "opening") await openingEditor.value?.focusPage();
+  else if (section === "advanced") await cardStyleEditor.value?.focusCustom();
+  else paneOf("display")?.querySelector<HTMLButtonElement>("[data-edit-display-rules]")?.focus();
+}
+
+function presentationSection(reason: string): "opening" | "display" | "advanced" | undefined {
+  switch (reason) {
+    case "openingPage":
+    case "openingMode":
+      return "opening";
+    case "cardCss":
+    case "cardCssDialect":
+      return "advanced";
+    case "emptyFind":
+    case "ruleReplace":
+    case "rulesTotal":
+    case "ruleTargets":
+    case "ruleCssDialect":
+    case "cardFormat":
+    case "mountLayer":
+    case "pageMode":
+      return "display";
+  }
+}
+
+function validatePresentationBeforeSave(snapshot: RegexRuleSet | null): boolean {
+  if (snapshot) {
+    const clearPage = openingModeOf(snapshot) === "greeting" && savedOpening.value !== "greeting";
+    if (!clearPage && utf8Bytes(snapshot.openingPage ?? "") > OPENING_PAGE_MAX_BYTES) {
+      error.value = t("editor.openingPage.tooLong", { max: OPENING_PAGE_MAX_BYTES / 1024 });
+      void focusPresentation("opening");
+      return false;
+    }
+    const issues = validateRuleSet(snapshot);
+    if (issues.length) {
+      regexSaveIssues.value = issues;
+      error.value = t("editor.regex.invalid");
+      void focusPresentation("display");
+      return false;
+    }
+  }
+  if (cardCssOver.value) {
+    error.value = t("editor.cardCss.tooLong", { max: CARD_CSS_MAX_BYTES / 1024 });
+    void focusPresentation("advanced");
+    return false;
+  }
+  return true;
+}
+
 async function save() {
   if (pendingImages.value.size > 0) return;
   if (saving.value || loading.value || visibilityBusy.value) return;
@@ -1570,26 +1625,14 @@ async function save() {
   }
   replyBlocked.value = false;
   regexSaveIssues.value = [];
-  if (cardCssOver.value) {
-    section.value = "advanced";
-    error.value = t("editor.cardCss.tooLong", { max: CARD_CSS_MAX_BYTES / 1024 });
-    return;
-  }
+  // 文件、開場與版面資產分開保存。先攔下已知的問題，避免留下未完成的卡。
+  let regexSnapshot = can("regex") && regexDirty.value ? copied(regexSet.value) : null;
+  let regexSnapshotVersion = regexVersion.value;
+  if (!validatePresentationBeforeSave(regexSnapshot)) return;
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
     return;
-  }
-  // 文件、開場與作者資產是獨立請求；先擋已知無法保存的規則，避免留下只有開場的卡。
-  let regexSnapshot: RegexRuleSet | null = can("regex") && regexDirty.value ? JSON.parse(JSON.stringify(regexSet.value)) : null;
-  let regexSnapshotVersion = regexVersion.value;
-  if (regexSnapshot) {
-    const issues = validateRuleSet(regexSnapshot);
-    if (issues.length) {
-      regexSaveIssues.value = issues;
-      error.value = t("editor.regex.invalid");
-      return;
-    }
   }
   // 條目超長在送出前就攔下並點名：計數器只是變紅、不擋輸入，上游會整段拒收，
   // 而拒收訊息是英文散句，作者看不懂就重新整理——那條沒存過的條目就這樣「蒸發」了。
@@ -1629,6 +1672,8 @@ async function save() {
     return;
   }
   let wasNew = isNew.value;
+  let documentSaved = false;
+  let presentationRejection: ApiError | undefined;
   saving.value = true;
   error.value = "";
   saved.value = false;
@@ -1649,6 +1694,12 @@ async function save() {
     await commitPendingRevert(token);
     regexSnapshot=can("regex")&&regexDirty.value?copied(regexSet.value):null;
     regexSnapshotVersion=regexVersion.value;
+    if (!validatePresentationBeforeSave(regexSnapshot)) return;
+    const mode = regexSnapshot ? openingModeOf(regexSnapshot) : openingMode.value;
+    const clearGreeting = mode === "page" && savedOpening.value !== "page";
+    const clearPage = mode === "greeting" && savedOpening.value !== "greeting";
+    const pageBeforeClearing = regexSnapshot?.openingPage;
+    if (clearPage && regexSnapshot) delete regexSnapshot.openingPage;
     reviewRetry.value = false;
     ratingNeeded.value = false;
     if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
@@ -1662,18 +1713,24 @@ async function save() {
     // 存完拿快照當「上次存的內容」，中途進來的改動才會留在未儲存狀態、下次存得到；
     // 用當下的草稿當基準，那張頭像就會靜默消失（2026-09-15 匯入 V3 範例卡時發生）。
     const sent = cloneDraft(draft.value);
-    // 切換了開局呈現：另一種專屬的內容這次一起移除（開場白與備選開場白，或網頁內容）
-    const mode = openingMode.value;
-    const clearGreeting = mode === "page" && savedOpening.value !== "page";
-    const clearPage = mode === "greeting" && savedOpening.value !== "greeting";
+    // 用預檢時的開局模式；等待建卡期間切換的模式留給下次儲存。
+    const welcomeBeforeClearing = sent.roleWelcome;
+    const alternatesBeforeClearing = JSON.stringify(sent.alternates);
     if (clearGreeting) { sent.roleWelcome = ""; sent.alternates = []; }
-    if (clearPage && regexSnapshot) delete regexSnapshot.openingPage;
     const fields = documentPatch(sent, original.value);
     if (wasNew) fields.language = sent.language;
-    if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
+    if (hasAnyField(fields)) {
+      await patchRoleDocument(targetRoleId, fields, token);
+      documentSaved = true;
+    }
 
     // 作者資產（含開局呈現與網頁內容）先存：開場白留空時，上游要先看到開場網頁、首屏網頁或開場選項才收。
-    await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
+    try {
+      await saveRegex(token, targetRoleId, regexSnapshot, regexSnapshotVersion);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "validate_reject") presentationRejection = err;
+      throw err;
+    }
 
     if (welcomeChanged(sent, original.value) && (sent.roleWelcome.trim() || playerSpeaksFirst(sent, { openingPage: (regexSnapshot ?? regexSet.value).openingPage, openingMode: mode }))) {
       await patchRoleWelcome(
@@ -1724,8 +1781,11 @@ async function save() {
       await completeRoleProvision(targetRoleId, { roleName: sent.roleName.trim(), language: sent.language, visibility: newCardVisibility.value }, token);
     }
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
-    if (clearGreeting) { draft.value.roleWelcome = ""; draft.value.alternates = []; }
-    if (clearPage && regexSnapshot) delete regexSet.value.openingPage;
+    if (openingMode.value === mode) {
+      if (clearGreeting && draft.value.roleWelcome === welcomeBeforeClearing) draft.value.roleWelcome = "";
+      if (clearGreeting && JSON.stringify(draft.value.alternates) === alternatesBeforeClearing) draft.value.alternates = [];
+      if (clearPage && regexSnapshot && regexSet.value.openingPage === pageBeforeClearing) delete regexSet.value.openingPage;
+    }
     savedOpening.value = mode;
     creationPending.value = false;
     clearProvisionCompletion();
@@ -1757,8 +1817,10 @@ async function save() {
     if (wasNew && roleId.value) {
       // 卡建好了、內容沒存進去：講清楚，並把卡的編號記進本機草稿，重開頁面再存也是同一張。
       storeDraft();
-      error.value = t("editor.createdButNotSaved", { why });
+      error.value = t(presentationRejection && documentSaved ? "editor.createdButPresentationRejected" : "editor.createdButNotSaved", { why });
     } else error.value = pendingRevert.value?.saveAttempted && why === t('editor.revertSaveUnknown') ? '' : why;
+    const rejectedSection = presentationRejection && presentationSection(presentationRejection.reason);
+    if (rejectedSection) void focusPresentation(rejectedSection);
   } finally {
     saving.value = false;
   }
@@ -2324,7 +2386,7 @@ async function exportCard(format: "png" | "json") {
         <section data-section="opening" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.opening") }}</h2>
           <p class="muted pane__lede">{{ $t("editor.opening.lede") }}</p>
-          <OpeningEditor v-model:mode="openingMode" v-model:welcome="draft.roleWelcome" v-model:alternates="draft.alternates"
+          <OpeningEditor ref="openingEditor" v-model:mode="openingMode" v-model:welcome="draft.roleWelcome" v-model:alternates="draft.alternates"
                          v-model:prologue="draft.prologue" v-model:opening-page="openingPageText"
                          :saved-mode="savedOpening" :page-available="can('regex')" :rules="regexSet.rules"
                          :card-format="regexSet.format" :role-name="draft.roleName" :welcome-max="limits.roleWelcome"
@@ -2364,7 +2426,7 @@ async function exportCard(format: "png" | "json") {
             <div class="rxbar">
               <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
               <div class="rxbar__acts">
-                <button v-if="can('regex')" type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
+                <button v-if="can('regex')" data-edit-display-rules type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
                   {{ $t("regex.open") }}
                   <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
                 </button>
@@ -2380,7 +2442,7 @@ async function exportCard(format: "png" | "json") {
         <section v-if="sections.includes('advanced')" data-section="advanced" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.advanced") }}</h2>
           <p class="muted pane__lede">{{ $t("editor.advanced.lede") }}</p>
-          <CardStyleEditor v-if="can('regex')" v-model="cardCssText" :css-dialect="regexSet.cardCssDialect" :invalid="cardCssOver" @remove="removeCardCss" />
+          <CardStyleEditor v-if="can('regex')" ref="cardStyleEditor" v-model="cardCssText" :css-dialect="regexSet.cardCssDialect" :invalid="cardCssOver" @remove="removeCardCss" />
           <div v-if="can('state') && !draft.world" class="panel state-panel" data-state-panel>
             <div class="state-panel__head">
               <div class="state-panel__title">

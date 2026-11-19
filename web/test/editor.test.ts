@@ -2081,6 +2081,28 @@ it('keeps a length refusal on the editor after the author returns from the submi
 });
 
 describe('匯入正則在寫入前驗證', () => {
+
+  it("酒館整卡預覽以來源序號點名空匹配與只有換行字元的規則", async () => {
+    const card = { spec: "chara_card_v3", data: { name: "Synthetic Tavern rules", description: "Synthetic", first_mes: "Hello", extensions: {
+      regex_scripts: [
+        { scriptName: "Prompt only", findRegex: "model", promptOnly: true },
+        { scriptName: "Empty match", findRegex: "", replaceString: "empty" },
+        { scriptName: "NEL match", findRegex: "\u0085", replaceString: "space" },
+        { scriptName: "Good match", findRegex: "marker", replaceString: "<b>ok</b>" },
+      ],
+    } } };
+    await mount("/create");
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify(card)], "synthetic-tavern.json"));
+    const preview = $(".review .notice--error")?.textContent ?? "";
+    expect(preview).toMatch(/第 2 條.*Empty match/);
+    expect(preview).toMatch(/第 3 條.*NEL match/);
+    byText("套用到表單").click();
+    await flush();
+    await submit();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({
+      rules: [expect.objectContaining({ name: "Good match" })],
+    }), "tok");
+  });
   const oversized = { beginning: 'synthetic-image-marker', regex_scripts: [{ id: 'synthetic-rule', scriptName: 'Synthetic oversized rule', findRegex: 'synthetic-image-marker', replaceString: 'x'.repeat(512 * 1024 + 1) }] };
   it('匯入預覽指出超限規則，仍可套用修正', async () => {
     await mount('/create');
@@ -2163,6 +2185,110 @@ describe('large replacement advisory', () => {
 });
 
 describe("匯入 AI 風月卡 → 建立", () => {
+
+  it("超限網頁切換開場白保存時，只寫已預檢的開局快照", async () => {
+    let complete!: (value: {roleId: string}) => void;
+    api.provisionRole.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find(c => c.name.endsWith("(export-opening-1.json)"))!;
+    const intro = `<main>${"字".repeat(175_000)}</main>`;
+    await mount("/create");
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify({ ...fixture.input, intro })], "oversized-opening.json"));
+    byText("套用到表單").click();
+    await flush();
+    $<HTMLButtonElement>('[data-opening-mode="greeting"]').click();
+    await flush();
+    await type($("#f-welcome"), "合成開場白");
+    const pending = submit();
+    await flush();
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    $<HTMLButtonElement>('[data-opening-mode="page"]').click();
+    await flush();
+    complete({roleId: "r1"});
+    await pending;
+    await flush();
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({openingPage: "", openingMode: "greeting"}), "tok");
+    expect($<HTMLTextAreaElement>("#f-opening-page").value).toBe(intro);
+  });
+
+  it("風月 JSON 沒有規則但開場網頁超限時，保留原文並在建卡前引導修正", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find(c => c.name.endsWith("(export-opening-1.json)"))!;
+    const intro = `<main>${"字".repeat(175_000)}</main>`;
+    await mount("/create");
+    const raw = { ...fixture.input, intro, regex_replaces: [] };
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify(raw)], "synthetic-fengyue.json"));
+    const preview = $(".review");
+    expect(preview.querySelector(".notice--error")?.textContent).toMatch(/開場網頁.*512/);
+    expect(preview.querySelector(".regex-issues")).toBeNull();
+    byText("套用到表單").click();
+    await flush();
+
+    const page = $<HTMLTextAreaElement>("#f-opening-page");
+    expect(page.value).toBe(intro);
+    expect(page.getAttribute("aria-invalid")).toBe("true");
+    await submit();
+    expect(api.provisionRole).not.toHaveBeenCalled();
+    expect(api.patchRoleDocument).not.toHaveBeenCalled();
+    expect(api.saveAuthorAsset).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(page);
+
+    const fixed = "<div>TEST-INTRO-HTML</div>";
+    await type(page, fixed);
+    expect(page.getAttribute("aria-invalid")).toBeNull();
+    await submit();
+    expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+    expect(api.patchRoleWelcome).toHaveBeenCalledWith("r1", expect.objectContaining({ prologue: ["TEST-OPEN-A", "TEST-OPEN-B"] }), "tok");
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({ openingPage: fixed, rules: [] }), "tok");
+  });
+
+  it("只超限的卡片樣式在匯入預覽有自己的提示", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find(c => c.name.endsWith("(export-opening-1.json)"))!;
+    await mount("/create");
+    const raw = { ...fixture.input, built_in_css: `/*${"字".repeat(175_000)}*/`, regex_replaces: [] };
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify(raw)], "synthetic-css.json"));
+    const alert = $(".review .notice--error");
+    expect(alert.textContent).toContain("卡片樣式");
+    expect(alert.textContent).toContain("進階");
+    expect(alert.querySelector(".regex-issues")).toBeNull();
+  });
+
+  it("開場網頁被伺服器拒絕時，明示基本資料已存好並聚焦原欄位", async () => {
+    await mount("/create");
+    await type($("#f-name"), "合成卡");
+    $<HTMLButtonElement>('[data-opening-mode="page"]').click();
+    await flush();
+    await type($("#f-opening-page"), "<div>開場</div>");
+    api.saveAuthorAsset.mockRejectedValueOnce(new ApiError(400, "開場網頁過大", "validate_reject", undefined, "openingPage"));
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalledTimes(1);
+    expect(api.completeRoleProvision).not.toHaveBeenCalled();
+    expect(root.querySelector(".notice--error")?.textContent).toContain("基本資料已");
+    expect(document.activeElement?.id).toBe("f-opening-page");
+    await submit();
+    expect(api.provisionRole).toHaveBeenCalledTimes(1);
+    expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+  });
+
+  it("風月整卡匯入略過無法保存的命名規則，保留正常規則和開場網頁", async () => {
+    const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases.find(c => c.name.endsWith("(export-opening-1.json)"))!;
+    const rule = { match_regex: "MARKER", replace_text: "<strong>ok</strong>", scope: 2, is_enable: true };
+    const regex_replaces = [
+      { ...rule, title: "有效規則" },
+      { ...rule, title: "需修正的規則", replace_text: "a".repeat(512 * 1024 + 1) },
+      { ...rule, title: "比對留空的規則", match_regex: "" },
+    ];
+    await mount("/create");
+    await pickFile($(".import input[type=file]"), new File([JSON.stringify({ ...fixture.input, regex_replaces })], "synthetic-rules.json"));
+    expect($(".review").textContent).toContain("需修正的規則");
+    expect($(".review").textContent).toContain("比對留空的規則");
+    byText("套用到表單").click();
+    await flush();
+    await submit();
+    expect(api.completeRoleProvision).toHaveBeenCalledTimes(1);
+    expect(api.saveAuthorAsset).toHaveBeenCalledWith("r1", expect.objectContaining({
+      rules: [expect.objectContaining({ name: "有效規則", replace: "<strong>ok</strong>" })],
+      openingPage: "<div>TEST-INTRO-HTML</div>",
+    }), "tok");
+  });
   it("匯入的世界書還在建立時就按建立：規則與綁定照樣寫上去", async () => {
     const fixture = (await import("./fixtures/fengyue-cases.json")).default.cases[0];
     let release!: () => void;

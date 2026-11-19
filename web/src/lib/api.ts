@@ -208,7 +208,8 @@ export async function json<T>(res: Response): Promise<T> {
       : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
-    throw new ApiError(res.status, said, body.error ?? (body as { code?: string }).code ?? "", body.detail?.reviewLength, typeof body.reason === "string" ? body.reason : "");
+    const reason = raw === "validate_reject" ? body.detail?.reason ?? body.reason : body.reason;
+    throw new ApiError(res.status, said, body.error ?? (body as { code?: string }).code ?? "", body.detail?.reviewLength, typeof reason === "string" ? reason : "");
   }
   return (await res.json()) as T;
 }

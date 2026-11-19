@@ -133,16 +133,19 @@ function convertRegex(rows: Raw[], notes: DropNote[]): RegexRule[] {
   const rewritesHistory = countWhere(rows, (r) => r.is_only_render === false);
   if (unknownScope) notes.push({ key: "import.fengyue.regexScope", params: { n: unknownScope } });
   if (rewritesHistory) notes.push({ key: "import.fengyue.regexHistory", params: { n: rewritesHistory } });
-  return rows
-    .filter((r) => str(r.match_regex))
-    .map((r, i) => ({
-      id: `fengyue-${i + 1}`,
-      name: [...(str(r.title) || `#${i + 1}`)].slice(0, 40).join(""),
-      find: regexFind(String(r.match_regex)),
+  return rows.flatMap((r, sourceIndex) => {
+    if (typeof r.match_regex !== "string") return [];
+    const scope = scopes[String(r.scope)];
+    return [{
+      id: `fengyue-${sourceIndex + 1}`,
+      name: [...(str(r.title) || `#${sourceIndex + 1}`)].slice(0, 40).join(""),
+      find: /^\p{White_Space}*$/u.test(r.match_regex) ? "" : regexFind(r.match_regex),
       replace: typeof r.replace_text === "string" ? r.replace_text : "",
       enabled: r.is_enable !== false,
-      ...(scopes[String(r.scope)] ? { targets: [...scopes[String(r.scope)]] } : {}),
-    }));
+      sourceIndex,
+      ...(scope ? { targets: [...scope] } : {}),
+    }];
+  });
 }
 
 /** 沒有對應的功能：每一項都要出現在摘要裡。 */

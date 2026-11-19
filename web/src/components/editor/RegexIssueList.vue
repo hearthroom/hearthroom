@@ -1,16 +1,23 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { RegexRuleSet, RuleIssue } from "@/lib/regex-rules";
 
-defineProps<{ set: RegexRuleSet; issues: RuleIssue[] }>();
+const props = defineProps<{ set: RegexRuleSet; issues: RuleIssue[] }>();
+
+const rows = computed(() => props.issues.map(issue => {
+  const index = issue.ruleIndex ?? (issue.ruleId ? props.set.rules.findIndex(rule => rule.id === issue.ruleId) : -1);
+  const rule = props.set.rules[index];
+  return { issue, rule, number: (rule?.sourceIndex ?? index) + 1 };
+}));
 </script>
 
 <template>
   <ul class="regex-issues">
-    <li v-for="(issue, i) in issues" :key="i">
-      <template v-if="issue.ruleId && set.rules.some(rule => rule.id === issue.ruleId)">
+    <li v-for="({ issue, rule, number }, i) in rows" :key="i">
+      <template v-if="rule">
         {{ $t("regex.issue.rule", {
-          index: set.rules.findIndex(rule => rule.id === issue.ruleId) + 1,
-          name: set.rules.find(rule => rule.id === issue.ruleId)?.name.trim() || $t("regex.rule.untitled"),
+          index: number,
+          name: rule.name.trim() || $t("regex.rule.untitled"),
           why: $t(issue.key, issue.params ?? {}),
         }) }}
       </template>

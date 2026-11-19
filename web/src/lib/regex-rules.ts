@@ -42,6 +42,8 @@ export interface RegexRule {
   enabled: boolean;
   targets?: RegexMessageTarget[];
   cssDialect?: CssDialect;
+  /** 整卡匯入預覽使用來源序號，套用後移除。 */
+  sourceIndex?: number;
 }
 
 export interface RegexRuleSet {
@@ -145,14 +147,20 @@ export const REGEX_LIMITS = {
   /** 大型替換的非阻擋提醒門檻（UTF-8 bytes）。 */
   replaceWarningBytes: 256 * 1024,
   statusbar: 4000,
-  /** 整份規則的上限（位元組）：每條 id+name+find+replace 加總，跟上游同一把尺。 */
+  /** 整份規則的上限（位元組）：每條 name+find+replace 加總，跟上游同一把尺。 */
   total: 32 * 1024 * 1024,
 } as const;
 
+export const OPENING_PAGE_MAX_BYTES = 512 * 1024;
 export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
 
+/** Round up so a file over the limit by a few bytes still reads as over the limit. */
+export function formatKiB(bytes: number, locale: string): string {
+  return (Math.ceil(bytes * 10 / 1024) / 10).toLocaleString(locale, { maximumFractionDigits: 1 });
+}
+
 /**
- * 整份規則多大，算法跟上游一模一樣：每條 id、name、find、replace 的 UTF-8 位元組加總。
+ * 整份規則多大，算法跟上游一模一樣：每條 name、find、replace 的 UTF-8 位元組加總。
  * 之前量的是整份 JSON 的長度，比上游多算了鍵名與跳脫字元——這裡說太大而上游其實收得下，
  * 或反過來，都會讓作者摸不著頭緒。同一把尺，這裡放行的上游就收。
  */
@@ -160,7 +168,7 @@ export const ruleSetBytes = (set: RegexRuleSet): number =>
   set.rules.reduce((n, r) => n + ruleBytes(r), 0);
 
 export const ruleBytes = (rule: RegexRule): number =>
-  utf8Bytes(rule.id) + utf8Bytes(rule.name) + utf8Bytes(rule.find) + utf8Bytes(rule.replace);
+  utf8Bytes(rule.name) + utf8Bytes(rule.find) + utf8Bytes(rule.replace);
 
 /** 給人看的 MB：小於 10 MB 留一位小數（1.2 MB），再大就取整。 */
 export const formatMB = (bytes: number): string => (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1);
@@ -224,7 +232,7 @@ export function renderStatusbar(set: RegexRuleSet): string {
 }
 
 /** 哪些規則有問題。key 是 i18n key，畫面翻譯。 */
-export interface RuleIssue { ruleId: string; key: string; params?: Record<string, string | number> }
+export interface RuleIssue { ruleId: string; key: string; params?: Record<string, string | number>; ruleIndex?: number }
 /** 提醒與拒收分開，匯入、套用及保存不因提醒而停下。 */
 export function ruleSetWarnings(set: RegexRuleSet): RuleIssue[] {
   return set.rules.filter(rule => {
@@ -236,7 +244,7 @@ export function ruleSetWarnings(set: RegexRuleSet): RuleIssue[] {
 /** 單條檢查與整份檢查共用，讓編輯器只重算改動的那條。 */
 export function validateRule(rule: RegexRule): RuleIssue[] {
   const issues: RuleIssue[] = [];
-  if (!rule.find.trim()) issues.push({ ruleId: rule.id, key: "regex.issue.emptyFind" });
+  if (/^\p{White_Space}*$/u.test(rule.find)) issues.push({ ruleId: rule.id, key: "regex.issue.emptyFind" });
   if ([...rule.name].length > REGEX_LIMITS.name) issues.push({ ruleId: rule.id, key: "regex.issue.nameLong", params: { max: REGEX_LIMITS.name } });
   if ([...rule.find].length > REGEX_LIMITS.find) issues.push({ ruleId: rule.id, key: "regex.issue.findLong", params: { max: REGEX_LIMITS.find } });
   if (utf8Bytes(rule.replace) > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: rule.id, key: "regex.issue.replaceLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
@@ -246,7 +254,6 @@ export function validateRule(rule: RegexRule): RuleIssue[] {
 
 export function validateRuleSetLimits(set: RegexRuleSet, bytes: number): RuleIssue[] {
   const issues: RuleIssue[] = [];
-  if (utf8Bytes(set.cardCss ?? "") > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: "", key: "editor.cardCss.tooLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
   if (set.rules.length > REGEX_LIMITS.rules) issues.push({ ruleId: "", key: "regex.issue.tooMany", params: { max: REGEX_LIMITS.rules } });
   if ([...set.statusbar].length > REGEX_LIMITS.statusbar) issues.push({ ruleId: "", key: "regex.issue.statusbarLong", params: { max: REGEX_LIMITS.statusbar } });
   if (bytes > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong", params: { size: formatMB(bytes), max: REGEX_LIMITS.total / 1024 / 1024 } });
@@ -265,6 +272,33 @@ export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
 
 // ── 匯入 / 匯出 ─────────────────────────────────────────────────────────
 
+/** 整卡匯入保留可存的規則及原順序，讓預覽能指出來源檔中沒帶入的條目。 */
+export function selectCardImportRules(set: RegexRuleSet): { rules: RegexRule[]; omitted: RuleIssue[]; totalBytes: number } {
+  const rules: RegexRule[] = [];
+  const omitted: RuleIssue[] = [];
+  let totalBytes = 0;
+  for (const [ruleIndex, rule] of set.rules.entries()) {
+    const issues = validateRule(rule);
+    if (issues.length) {
+      omitted.push(...issues.map(issue => ({ ...issue, ruleIndex })));
+      continue;
+    }
+    if (rules.length >= REGEX_LIMITS.rules) {
+      omitted.push({ ruleId: rule.id, ruleIndex, key: "regex.issue.tooMany", params: { max: REGEX_LIMITS.rules } });
+      continue;
+    }
+    const bytes = ruleBytes(rule);
+    if (totalBytes + bytes > REGEX_LIMITS.total) {
+      omitted.push({ ruleId: rule.id, ruleIndex, key: "import.regex.totalLimit", params: { max: REGEX_LIMITS.total / 1024 / 1024 } });
+      continue;
+    }
+    const { sourceIndex, ...accepted } = rule;
+    rules.push(accepted);
+    totalBytes += bytes;
+  }
+  return { rules, omitted, totalBytes };
+}
+
 /** 酒館的 regex_scripts 條目（與魅魔島匯出共用同一組欄位名）。 */
 export interface TavernRegexScript {
   id?: unknown;
@@ -279,10 +313,14 @@ export interface TavernRegexScript {
 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
+function uniqueRuleTargets(targets: unknown[]): RegexMessageTarget[] {
+  return [...new Set(targets.filter((target): target is RegexMessageTarget => MESSAGE_TARGETS.includes(target as RegexMessageTarget)))];
+}
+
 /** 酒館 placement: 1 = 玩家、2 = AI；缺欄位保留舊匯入行為。 */
 function targetsFromTavern(script: TavernRegexScript): RegexMessageTarget[] | undefined {
   // Our exports carry targets as well, preserving system-only and empty selections.
-  if (Array.isArray(script.targets)) return script.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v as RegexMessageTarget));
+  if (Array.isArray(script.targets)) return uniqueRuleTargets(script.targets);
   if (!Array.isArray(script.placement) || !script.placement.length) return undefined;
   const placement = script.placement.map(Number);
   return ([1, 2] as const).filter(p => placement.includes(p)).map(p => p === 1 ? "user" : "ai");
@@ -293,17 +331,26 @@ export function promptOnlyRuleCount(scripts: unknown): number {
   return Array.isArray(scripts) ? scripts.filter(s => s && typeof s === "object" && text(s.findRegex) && s.promptOnly === true).length : 0;
 }
 
-export function rulesFromTavern(scripts: unknown): RegexRule[] {
+export function rulesFromTavern(scripts: unknown, wholeCard = false): RegexRule[] {
   if (!Array.isArray(scripts)) return [];
-  return (scripts as TavernRegexScript[])
-    .filter((s) => s && typeof s === "object" && text(s.findRegex))
-    .filter((s) => s.promptOnly !== true)
-    .filter((s) => Array.isArray(s.targets) || targetsFromTavern(s)?.length !== 0)
-    .map((s, i) => {
-      // 我們自己的匯出檔帶著 cssDialect；別家的檔沒有這個欄位。
-      const cssDialect = cssDialectFrom(s.cssDialect);
-      return makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true, targets: targetsFromTavern(s), ...(cssDialect ? { cssDialect } : {}) });
-    });
+  const rules: RegexRule[] = [];
+  for (const [sourceIndex, script] of (scripts as TavernRegexScript[]).entries()) {
+    if (!script || typeof script.findRegex !== "string" || script.promptOnly === true) continue;
+    if (!wholeCard && !script.findRegex) continue;
+    const targets = targetsFromTavern(script);
+    if (!Array.isArray(script.targets) && targets?.length === 0) continue;
+    const cssDialect = cssDialectFrom(script.cssDialect);
+    rules.push(makeRule({
+      name: text(script.scriptName) || `#${(wholeCard ? sourceIndex : rules.length) + 1}`,
+      find: script.findRegex,
+      replace: text(script.replaceString),
+      enabled: script.disabled !== true,
+      targets,
+      ...(cssDialect ? { cssDialect } : {}),
+      ...(wholeCard ? { sourceIndex } : {}),
+    }));
+  }
+  return rules;
 }
 
 /** 魅魔島自家「導出正則」列表（或 API 回包的 data）：條目是 { regex, content, name }。 */
@@ -350,7 +397,7 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
     .map((r) => {
       // 這個欄位出現前匯入的風月內置 CSS（固定 id、沒標）畫布當風月寫法；編輯器照實顯示，存檔時補上。
       const cssDialect = cssDialectFrom(r.cssDialect) ?? (text(r.id) === LEGACY_FENGYUE_CSS_RULE_ID ? "fengyue" : undefined);
-      return { id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: r.targets.filter((v): v is RegexMessageTarget => MESSAGE_TARGETS.includes(v)) } : {}), ...(cssDialect ? { cssDialect } : {}) };
+      return { id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false, ...(Array.isArray(r.targets) ? { targets: uniqueRuleTargets(r.targets) } : {}), ...(cssDialect ? { cssDialect } : {}) };
     });
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
   const pageMode = pageModeFrom(obj.pageMode);
