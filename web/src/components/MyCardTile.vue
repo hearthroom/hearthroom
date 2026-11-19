@@ -35,9 +35,9 @@ const hasDetails = computed(() => props.card.workVisibility ? (
  * 不用整塊底色分：主色跟警示色都是紅，「已發布」和「未通過」會看成同一種。
  * 跟首頁卡片一樣把狀態放在圖上，名字那兩行才不用跟標籤搶寬度。
  */
-const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }>(() => {
+const status = computed<{ key: string; descriptionKey?: string; tone: "on" | "wait" | "alert" | "muted" }>(() => {
   const c = props.card;
-  if(c.workVisibility?.syncState==='unavailable')return {key:'visibility.operation.unknown',tone:'wait'};
+  if(c.workVisibility?.syncState==='unavailable')return {key:'workspace.unknown',descriptionKey:'visibility.operation.unknown',tone:'wait'};
   if(c.workVisibility?.syncState==='changing')return {key:'visibility.operation.updating',tone:'wait'};
   if(c.workVisibility?.restriction!=='none'&&c.workVisibility)return {key:`visibility.badge.${c.workVisibility.restriction}`,tone:'alert'};
   if(c.workVisibility)return {key:`visibility.short.${c.workVisibility.access}`,tone:"muted"};
@@ -111,7 +111,7 @@ onBeforeUnmount(() => listen(false));
       <div class="card__title">
         <h3 class="card__name"><a :href="detailHref" class="card__link">{{ card.name }}</a></h3>
         <!-- 封面那層對讀屏隱藏（跟名字是同一個連結），狀態標在這裡再念一次 -->
-        <span class="sr-only">{{ $t(status.key) }}<template v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
+        <span class="sr-only">{{ $t(status.descriptionKey ?? status.key) }}<template v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
         <!-- 送審、重新送審都在編輯頁；這裡只留已登記卡的「撤回」（別處沒有這個入口）。
              放在名字旁邊而不是操作列：每張卡的操作列都是同樣兩顆鍵，排起來才整齊 -->
         <div v-if="visibilityEnabled" ref="more" class="card__more">
