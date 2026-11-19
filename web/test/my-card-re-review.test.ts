@@ -65,7 +65,6 @@ it("shows the unread comment count linking to #comments only when newComments > 
 it("uses a short cover badge and retains the full visibility explanation when authority is unavailable", async () => {
   const el = await mount({
     ...base,
-    reReview: true,
     workVisibility: { ...shared, syncState: "unavailable", effectiveAccess: "unavailable" },
   });
   expect(el.querySelector(".card__status--access")?.textContent?.trim()).toBe(i18n.global.t("workspace.unknown"));

@@ -20,7 +20,7 @@ const source=computed(()=>props.card.sourceProvider??props.card.provider??curren
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
 const detailHref=computed(()=>lp(`/cards/${props.card.num ?? props.card.detailId ?? props.card.workId ?? sourceId.value}`));
 const hasDetails = computed(() => props.card.workVisibility ? (
- !!props.card.reReview||props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
+ props.card.workVisibility.syncState==='unavailable'||!!props.card.reReview||props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
 ) : (
   !!props.card.draftChanged ||
   ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
