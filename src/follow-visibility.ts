@@ -87,11 +87,15 @@ export interface FollowListPage {
 
 /**
  * 名單一頁。kind＝following：owner 關注的人；followers：關注 owner 的人。
- * own＝作者本人看自己的粉絲：略過作者自己的設定，對方那一方的同意照樣要。
+ * 以 memberId 指定＝作者本人看自己的名單：略過作者自己的設定，對方那一方的同意照樣要。
  * 作者自己的設定不是 list（且不是本人）時回 403 list_not_public，不回任何人數。
  */
-export async function followList(db: D1Database, ownerHandle: string, kind: "following" | "followers", offset: number, own = false): Promise<FollowListPage> {
-  const owner = await db.prepare("SELECT id, following_visibility, followers_visibility FROM members WHERE handle=? AND account_class='normal'").bind(ownerHandle)
+export async function followList(db: D1Database, owner_: { handle: string } | { memberId: string }, kind: "following" | "followers", offset: number): Promise<FollowListPage> {
+  // 本人：用成員 id 找（測試帳號也能開自己的空名單）；他人：只認一般帳號的公開 ID
+  const own = "memberId" in owner_;
+  const owner = await (own
+    ? db.prepare("SELECT id, following_visibility, followers_visibility FROM members WHERE id=?").bind(owner_.memberId)
+    : db.prepare("SELECT id, following_visibility, followers_visibility FROM members WHERE handle=? AND account_class='normal'").bind(owner_.handle))
     .first<{ id: string; following_visibility: FollowingVisibility; followers_visibility: FollowersVisibility }>();
   if (!owner) throw new HttpError(404, "author not found");
   const setting = kind === "following" ? owner.following_visibility : owner.followers_visibility;

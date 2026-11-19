@@ -980,15 +980,14 @@ app.get("/v1/authors/:handle", async (c) => {
 for (const kind of ["following", "followers"] as const) {
   app.get(`/v1/authors/:handle/${kind}`, async (c) => {
     c.header("Cache-Control", "no-store");
-    return c.json(await countedFollowList(c, kind, () => followList(c.env.DB, c.req.param("handle"), kind, listOffset(c))));
+    return c.json(await countedFollowList(c, kind, () => followList(c.env.DB, { handle: c.req.param("handle") }, kind, listOffset(c))));
   });
 }
 /** 作者本人看自己的粉絲：不看自己的設定，粉絲那一方的同意照樣要。 */
 app.get("/v1/me/followers", async (c) => {
   c.header("Cache-Control", "private, no-store");
   const member = await requireMember(c);
-  const handle = (await c.env.DB.prepare("SELECT handle FROM members WHERE id=?").bind(member.id).first<{ handle: string }>())!.handle;
-  return c.json(await countedFollowList(c, "own_followers", () => followList(c.env.DB, handle, "followers", listOffset(c), true)));
+  return c.json(await countedFollowList(c, "own_followers", () => followList(c.env.DB, { memberId: member.id }, "followers", listOffset(c))));
 });
 const listOffset = (c: Context) => Math.min(100000, Math.max(0, Math.floor(Number(c.req.query("offset")) || 0)));
 async function countedFollowList<T>(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, kind: "following" | "followers" | "own_followers", read: () => Promise<T>): Promise<T> {

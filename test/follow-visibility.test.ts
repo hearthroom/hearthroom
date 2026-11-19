@@ -137,3 +137,11 @@ it('counts list reads by kind and outcome on /metrics', async () => {
   expect(metrics).toContain('hearthroom_follow_list_reads_total{kind="own_followers",outcome="success"} 1');
   expect(metrics).not.toContain(author);
 });
+
+it('lets a test account open its own (empty) followers list', async () => {
+  await env.DB.prepare("UPDATE members SET account_class='test', test_generation=1 WHERE id=?").bind(author).run();
+  vi.spyOn(upstream, 'fetchMe').mockResolvedValue({ accountNumId: 11, accountClass: 'test', testState: 'active', testGeneration: 1 } as any);
+  const own = await get('/v1/me/followers', bearer('valid'));
+  expect(own.status).toBe(200);
+  expect(await own.json()).toMatchObject({ total: 0, unlisted: 0, items: [] });
+});

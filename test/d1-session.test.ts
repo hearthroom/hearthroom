@@ -14,6 +14,12 @@ it('starts writes, sign-in callbacks and server-to-server calls at the primary; 
   expect(startsAtPrimary('GET','/internal/community/x')).toBe(true);
 });
 
+it('reads follow visibility at the primary so a newly hidden count or list reaches every viewer at once',()=>{
+  for (const path of ['/v1/authors','/v1/authors/abcdefgh','/v1/authors/abcdefgh/following','/v1/authors/abcdefgh/followers','/v1/me/followers'])
+    expect(startsAtPrimary('GET',path)).toBe(true);
+  expect(startsAtPrimary('GET','/v1/authors/abcdefgh/badges')).toBe(false);
+});
+
 function recorder(){
   const seen:string[]=[];
   const db={withSession(c:string){seen.push(c);return env.DB.withSession(c as any);}} as unknown as D1Database;
