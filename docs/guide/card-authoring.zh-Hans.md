@@ -191,6 +191,8 @@
 
 主线使用卡片工具时，服务器受理后 `sdk.message.send()` 就会完成。请从 `message:done` 读取本轮结果。模型线路暂时不可用时，事件会同时带有 `reasonCode: "service_unavailable"`、`reason: "interrupted"` 和 `toolCall: null`。普通中断只带 `reason: "interrupted"`，省略 `reasonCode`。事件的 `content` 可能为空。工具不受支持而改用普通文本时，如果同样遇到线路不可用，事件会保留 `reason: "unsupported"`。两种情况的处理方式见[卡片工具指南](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)。
 
+强制工具回复达到输出上限时，`message:done` 和 `sdk.history.list({content:true})` 会带有 `reason: "interrupted"`、`reasonCode: "output_limit"` 和 `toolCall: null`。已生成的部分正文可从 `content` 取得。Context 工具回复从 `sdk.context.run()` 读取相同的两个原因字段，部分正文放在 `text`。确认工具结果有效后，再根据它更新游戏状态。
+
 ### 运行规则
 
 - 打开页面时，每条既有消息依次触发 `message:new`、`message:mount`、`message:done`，最后触发 `ready`。

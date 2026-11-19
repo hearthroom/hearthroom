@@ -191,6 +191,8 @@ The sandbox shell also has `--chat-*` variables (for example `--chat-bg`, `--cha
 
 For a main turn sent with a card tool, `sdk.message.send()` resolves when the server accepts the turn. Read `message:done` for the result. When the model lane is temporarily unavailable, the event includes `reasonCode: "service_unavailable"`, `reason: "interrupted"` and `toolCall: null`. An ordinary interruption has `reason: "interrupted"` and no `reasonCode`. The event can have empty `content`. If the text fallback for an unsupported tool encounters the same outage, the event keeps `reason: "unsupported"`. The [card tools guide](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md) shows how to handle both cases.
 
+When a forced tool reply reaches the output limit, `message:done` and `sdk.history.list({content:true})` carry `reason: "interrupted"`, `reasonCode: "output_limit"`, and `toolCall: null`. Show any partial prose from `content`. For a context tool reply, read the same two reason fields from `sdk.context.run()` and show the partial prose from `text`. Apply game actions only from a valid tool result.
+
 ### Execution model
 
 - On open, each existing message fires `message:new`, `message:mount` and `message:done` in order; `ready` fires last.

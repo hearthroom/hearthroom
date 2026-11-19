@@ -36053,6 +36053,11 @@
               "missing",
               "multiple_calls"
             ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": ["output_limit"],
+            "description": "The tool turn reached the output limit. Applies to content-bearing reads of terminal tool replies with no usable tool call. Any partial body is in content."
           }
         }
       },

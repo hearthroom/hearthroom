@@ -191,6 +191,8 @@
 
 메인 대화에서 카드 도구를 사용하면 서버가 턴을 수락할 때 `sdk.message.send()`가 완료됩니다. 턴의 결과는 `message:done`에서 확인하세요. 모델 연결 경로를 일시적으로 사용할 수 없으면 이벤트에 `reasonCode: "service_unavailable"`, `reason: "interrupted"`, `toolCall: null`이 함께 포함됩니다. 일반 중단은 `reason: "interrupted"`로 표시되며 `reasonCode`는 생략됩니다. 이벤트의 `content`는 비어 있을 수 있습니다. 지원되지 않는 도구 대신 일반 텍스트를 생성하다가 같은 문제가 발생하면 `reason: "unsupported"`가 유지됩니다. 두 경우의 처리 방법은 [카드 도구 가이드](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)에 나와 있습니다.
 
+강제 도구 응답이 출력 한도에 도달하면 `message:done`과 `sdk.history.list({content:true})`에 `reason: "interrupted"`, `reasonCode: "output_limit"`, `toolCall: null`이 함께 들어옵니다. 생성된 본문은 `content`에서 읽을 수 있습니다. 컨텍스트 도구 응답의 경우 `sdk.context.run()`에서 같은 두 사유 필드를 확인하고 `text`에서 생성된 부분을 읽으세요. 유효한 도구 결과가 있을 때 게임 상태를 업데이트하세요.
+
 ### 실행 모델
 
 - 페이지를 열면 기존 각 메시지에 대해 `message:new`, `message:mount`, `message:done`이 순서대로 발생하고, 마지막에 `ready`가 발생합니다.

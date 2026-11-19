@@ -29526,6 +29526,10 @@
               "missing",
               "multiple_calls"
             ]
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": ["output_limit"]
           }
         }
       },

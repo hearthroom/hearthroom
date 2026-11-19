@@ -191,6 +191,8 @@
 
 メインの会話でカードツールを使うと、サーバーがターンを受理した時点で `sdk.message.send()` が完了します。ターンの結果は `message:done` で確認できます。モデルの接続先が一時的に利用できない場合、イベントには `reasonCode: "service_unavailable"`、`reason: "interrupted"`、`toolCall: null` が含まれます。通常の中断は `reason: "interrupted"` で、`reasonCode` は省略されます。イベントの `content` は空の場合があります。未対応のツールから通常のテキスト生成に切り替わった場合は、同じ接続障害が起きても `reason: "unsupported"` が維持されます。処理の例は[カードツールガイド](https://github.com/hearthroom/cli/blob/main/docs/card-tools.md)を参照してください。
 
+強制ツールの応答が出力上限に達すると、`message:done` と `sdk.history.list({content:true})` には `reason: "interrupted"`、`reasonCode: "output_limit"`、`toolCall: null` が含まれます。生成済みの本文は `content` から取得できます。コンテキストのツール応答では、同じ2つの理由フィールドを `sdk.context.run()` から、途中までの本文を `text` から読み取ります。有効なツール結果を受け取ってからゲームの状態を更新してください。
+
 ### 実行モデル
 
 - ページを開くと、既存の各メッセージについて `message:new`、`message:mount`、`message:done` が順に発火し、最後に `ready` が発火します。
