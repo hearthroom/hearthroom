@@ -2555,7 +2555,7 @@ export default {
     if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
       status:503, headers:{'Retry-After':'30','Cache-Control':'no-store'},
     });
-    // The maintenance controller opens its own fail-closed primary session.
+    // The maintenance controller reads through its own primary session.
     // A generic request session has no withSession API and must not replace its binding.
     if (path === "/internal/community/draft-transfer-gate" || path === CARD_REWARD_PUBLICATION_PATH) {
       return app.fetch(request, env, ctx);

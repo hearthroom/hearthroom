@@ -5,11 +5,18 @@ import { bumpOp } from './ops-metrics';
 import type { Env } from './types';
 export { MAINTENANCE_KEY };
 
+class InvalidMaintenanceState extends Error {}
+
 /** Read the primary before generic replica sessions; never cache this admission switch. */
 export async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
   const primary=typeof db.withSession==='function' ? db.withSession('first-primary') : db;
   const row=await primary.prepare('SELECT value FROM community_settings WHERE key=?').bind(MAINTENANCE_KEY).first<{value:string}>();
-  return row ? parseMaintenance(JSON.parse(row.value)) : maintenanceOff();
+  if (!row) return maintenanceOff();
+  try {
+    return parseMaintenance(JSON.parse(row.value));
+  } catch (cause) {
+    throw new InvalidMaintenanceState('Invalid maintenance configuration', {cause});
+  }
 }
 const STATIC = /\.(?:js|mjs|css|png|webp|jpe?g|gif|svg|ico|woff2?|ttf|map|webmanifest|txt|xml|atom)$/i;
 const noStore={'Cache-Control':'no-store','Retry-After':'15'};
@@ -27,8 +34,11 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
   if(!status&&!api&&!document&&!sandboxAsset)return null;
   let state:MaintenanceState;
   try { state=await readMaintenance(env.DB); }
-  catch {
+  catch (error) {
     ctx.waitUntil(bumpOp(env.DB,'maintenance','status','error'));
+    // Let the requested route handle its own dependencies. Pollers still need
+    // an explicit error so they do not dismiss an active maintenance notice.
+    if (!status && !(error instanceof InvalidMaintenanceState)) return null;
     return Response.json({error:'maintenance_status_unavailable'}, {status:503,headers:noStore});
   }
   if(status)return Response.json(state,{headers:{'Cache-Control':'no-store','Access-Control-Allow-Origin':'*'}});
