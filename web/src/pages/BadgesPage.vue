@@ -29,8 +29,8 @@ watch(()=>!author.value&&session.profile?.handle,handle=>{if(handle)void router.
 const claimable=computed(()=>own.value?(data.value?.items.filter(b=>b.state==='earned'&&b.reward&&!b.claim)??[]):[]);
 const claimTotal=computed(()=>new Intl.NumberFormat(locale.value).format(claimable.value.reduce((n,b)=>n+(b.reward??0),0)));
 const claiming=ref(''),claimError=ref('');
-/** 領積分：伺服器自己判斷值多少；一次一枚，全部領取就照順序一枚一枚領，失敗就停在那一枚 */
-async function claim(keys:string[]){if(claiming.value||!own.value)return;claimError.value='';const n=generation;try{for(const key of keys){claiming.value=key;const result=await request<BadgeCollection>('/'+encodeURIComponent(key)+'/claim','POST');if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
+/** 領積分：一個請求領完（伺服器自己判斷值多少、先記下再在背景發點）；全部領取不帶 keys，單枚帶那一枚 */
+async function claim(keys:string[]|null){if(claiming.value||!own.value)return;claimError.value='';const n=generation;claiming.value=keys?.[0]??'*';try{const result=await request<BadgeCollection>('/claim','POST',keys?{keys}:{});if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
 const apTotal=computed(()=>data.value?.ap?new Intl.NumberFormat(locale.value).format(data.value.ap):'');
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
 let generation=0;
@@ -78,7 +78,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
    </section>
    <section v-if="claimable.length" class="badge-claims panel" aria-live="polite">
     <p>{{ t('badgeWall.claimable',{n:claimable.length}) }}</p>
-    <button class="btn btn--primary" :disabled="!!claiming" @click="claim(claimable.map(b=>b.key))">{{ claiming?t('badgeWall.claiming'):t('badgeWall.claimAll',{total:claimTotal}) }}</button>
+    <button class="btn btn--primary" :disabled="!!claiming" @click="claim(null)">{{ claiming?t('badgeWall.claiming'):t('badgeWall.claimAll',{total:claimTotal}) }}</button>
    </section>
    <p v-if="claimError" class="notice notice--error" role="alert">{{ claimError }}</p>
    <div v-if="own" class="badge-collection-heading"><h2>{{ t('badgeWall.collection',{count:earned,total:data.items.length}) }}</h2><div class="badge-filters" :aria-label="t('badgeWall.filter')"><button v-for="key in ['all','earned','locked']" :key="key" class="btn" :aria-pressed="filter===key" @click="filter=key">{{ t('badgeWall.filter.'+key) }}</button></div></div>

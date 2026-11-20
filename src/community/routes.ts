@@ -5,9 +5,9 @@ import { changeOfficialAuthor } from '../official-authors';
 import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
 import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
-import { claimBadgeReward } from './badge-rewards';
+import { claimBadgeRewards } from './badge-rewards';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
 import { siteName } from "../../shared/site-name";
@@ -129,15 +129,28 @@ app.get('/v1/me/community/badges',async c=>c.json(await badgeCollection(c.env,(a
 app.patch('/v1/me/community/badges/featured',async c=>{
  const member=await requireMember(c);const b=await c.req.json();await setFeaturedBadges(c.env,member.id,b.featured,b.public);return c.json(await badgeCollection(c.env,member.id));
 });
-/** 領一枚徽章的積分：伺服器自己判斷這枚有沒有取得、值多少，不收前端給的數字。 */
-app.post('/v1/me/community/badges/:key/claim',async c=>{
- const member=await requireMember(c);const key=c.req.param('key');
- // 收藏只算一次：領完直接在同一份結果上改這枚的狀態，不再整份重算（2026-11-20 D1 過載）
- const collection=await badgeCollection(c.env,member.id);const badge=collection.items.find(b=>b.key===key);
- if(!badge||badge.state!=='earned')throw new HttpError(409,'badge_reward_unavailable');
- badge.claim=await claimBadgeReward(c.env,member.id,key,badge.reward??0);
+/**
+ * 領徽章積分：伺服器自己判斷哪些已取得、各值多少，不收前端給的數字。body.keys 指定要領哪幾枚，省略＝全部可領的。
+ * 收藏只算一次，寫完領取紀錄就回應，發點在回應之後背景進行（2026-11-20 D1 過載後改成一個請求）。
+ */
+async function claimRoute(c:Context<{Bindings:Env}>,keys:string[]|null){
+ const member=await requireMember(c);
+ const collection=await badgeCollection(c.env,member.id);
+ const claimable=collection.items.filter(b=>b.state==='earned'&&(b.reward??0)>0&&!b.claim);
+ const wanted=keys?collection.items.filter(b=>keys.includes(b.key)):claimable;
+ if(keys&&(wanted.length!==keys.length||wanted.some(b=>b.state!=='earned')))throw new HttpError(409,'badge_reward_unavailable');
+ if(!wanted.length)return c.json(collection);
+ const states=await claimBadgeRewards(c.env,member.id,wanted.map(b=>({key:b.key,amount:b.reward??0})),Date.now(),c.executionCtx);
+ for(const b of collection.items)if(states[b.key])b.claim=states[b.key];
  return c.json(collection);
+}
+app.post('/v1/me/community/badges/claim',async c=>{
+ const body=await c.req.json().catch(()=>({})) as {keys?:unknown};
+ const keys=body.keys===undefined?null:Array.isArray(body.keys)&&body.keys.length<=100&&body.keys.every(k=>typeof k==='string')?body.keys as string[]:(()=>{throw new HttpError(400,'community_input')})();
+ return claimRoute(c,keys);
 });
+/** 舊前端（還開著的頁面）一枚一個請求：走同一條路 */
+app.post('/v1/me/community/badges/:key/claim',async c=>claimRoute(c,[c.req.param('key')]));
 app.post('/v1/me/community/official/manage',async c=>c.json(await changeOfficialAuthor(c,await c.req.json().catch(()=>{throw new HttpError(400,'official_input')}))));
 app.get('/v1/me/community/badges/manage',async c=>c.json(await badgeManagement(c.env,(await requireMember(c)).id)));
 app.post('/v1/me/community/badges/manage/definitions',async c=>{

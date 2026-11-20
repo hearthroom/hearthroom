@@ -96,17 +96,17 @@ it('opens your own author badge page in owner mode and moves the old /me/badges 
  expect(router.currentRoute.value.path).toBe('/authors/fixture/badges');
 });
 
-it('claims credits for earned badges one by one, and the server decides each amount',async()=>{
+it('claims every earned badge in one request, and the server decides each amount',async()=>{
  const item=(key:string,extra:Record<string,unknown>)=>({key,icon:'star',category:'member',titles:{en:key},descriptions:{en:'How'},state:'earned',earnedAt:1,expiresAt:null,...extra});
  await open('/authors/fixture/badges',{...wall(),items:[item('a',{reward:100}),item('b',{reward:500}),item('c',{reward:100,claim:'paid'}),{...item('d',{reward:2000}),state:'locked'}]});
  expect(el.querySelector('.badge-claims')?.textContent).toContain('Claim all (600 credits)');
  expect([...el.querySelectorAll('[data-claim]')].map(b=>b.textContent)).toEqual(['Claim 100 credits','Claim 500 credits']);
  expect(el.textContent).toContain('100 credits claimed');expect(el.textContent).toContain('Earn it to claim 2,000 credits');
  mock.request.mockReset();
- mock.request.mockResolvedValueOnce({...wall(),items:[item('a',{reward:100,claim:'paid'}),item('b',{reward:500})]});
- mock.request.mockResolvedValueOnce({...wall(),items:[item('a',{reward:100,claim:'paid'}),item('b',{reward:500,claim:'paid'})]});
+ mock.request.mockResolvedValueOnce({...wall(),items:[item('a',{reward:100,claim:'pending'}),item('b',{reward:500,claim:'pending'})]});
  el.querySelector<HTMLButtonElement>('.badge-claims .btn--primary')!.click();await settle();await settle();
- expect(mock.request.mock.calls.map(c=>[c[0],c[2]])).toEqual([['/me/community/badges/a/claim','POST'],['/me/community/badges/b/claim','POST']]);
+ // 全部領取只發一個請求，不帶 keys：伺服器自己挑可領的（2026-11-20 起不再一枚一個請求）
+ expect(mock.request.mock.calls.map(c=>[c[0],c[2],c[3]])).toEqual([['/me/community/badges/claim','POST',{}]]);
  expect(el.querySelector('.badge-claims')).toBeNull();
 });
 

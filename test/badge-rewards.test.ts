@@ -18,6 +18,8 @@ beforeEach(async()=>{
 });
 afterEach(()=>{upstream.payCampaign=realPay;cardRewardTransport.token=realToken;restoreUpstream();});
 const award=(badge:string,who=member)=>env.DB.prepare("INSERT INTO community_awards(member_id,badge,source,created_at) VALUES(?,?,'test',1)").bind(who,badge).run();
+/** 等背景發點跑完（waitUntil 不擋回應） */
+const settled=async()=>{for(let i=0;i<50;i++){if(!(await env.DB.prepare("SELECT 1 FROM badge_reward_claims WHERE status='pending' AND attempted_at IS NULL").first()))return;await new Promise(r=>setTimeout(r,20));}};
 const claim=(key:string)=>SELF.fetch(`https://c.test/v1/me/community/badges/${key}/claim`,{method:'POST',headers:bearer('valid')});
 
 it('pays an earned badge once from the activity pool with the amount the server decides',async()=>{
@@ -26,10 +28,12 @@ it('pays an earned badge once from the activity pool with the amount the server 
  expect(before).toMatchObject({reward:100});expect(before).not.toHaveProperty('claim');
  const res=await claim('member_profile');expect(res.status).toBe(200);
  const body=await res.json<{items:{key:string;claim?:string}[]}>();
- expect(body.items.find(b=>b.key==='member_profile')?.claim).toBe('paid');
+ // 回應不等發點：記下就回「發放中」，發點在回應之後背景進行
+ expect(['pending','paid']).toContain(body.items.find(b=>b.key==='member_profile')?.claim);
+ await settled();
  expect(paid).toHaveLength(1);expect(paid[0]).toMatchObject({accountNo:11,amount:100,campaignRef:'badges-v1',contentRef:'badge:member_profile'});
  expect(paid[0].key).toMatch(/^badge-[0-9a-f]{32}$/);
- expect((await claim('member_profile')).status).toBe(200);expect(paid).toHaveLength(1);
+ expect((await claim('member_profile')).status).toBe(200);await settled();expect(paid).toHaveLength(1);
  expect(await opsMetrics(env.DB)).toContain('hearthroom_badge_rewards_total{operation="payout",outcome="success"} 1');
 });
 
@@ -64,4 +68,21 @@ it('records a provider refusal instead of retrying forever',async()=>{
  expect(await claimBadgeReward(env,member,'member_profile',100)).toBe('rejected');
  expect(await env.DB.prepare('SELECT error FROM badge_reward_claims').first('error')).toBe('pool_max_payout');
  await badgeRewardMaintenance(env,Date.now()+3600000);expect(paid).toHaveLength(1);
+});
+
+it('claims every claimable badge in one request and pays them all with one token',async()=>{
+ await award('member_profile');await award('player_saver');await award('player_explorer_10');await award('spend_1');whoAmI(11);
+ let tokens=0;cardRewardTransport.token=async()=>{tokens++;return 'service-only';};
+ const res=await SELF.fetch('https://c.test/v1/me/community/badges/claim',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:'{}'});
+ expect(res.status).toBe(200);
+ const body=await res.json<{items:{key:string;claim?:string}[]}>();
+ expect(body.items.filter(b=>b.claim).map(b=>b.key).sort()).toEqual(['member_profile','player_explorer_10','player_saver']);
+ await settled();
+ expect(paid.map(p=>p.contentRef).sort()).toEqual(['badge:member_profile','badge:player_explorer_10','badge:player_saver']);
+ expect(tokens).toBe(1);
+ // 再按一次：沒有可領的，照樣回收藏，不重複付
+ expect((await SELF.fetch('https://c.test/v1/me/community/badges/claim',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:'{}'})).status).toBe(200);
+ await settled();expect(paid).toHaveLength(3);
+ // 指定一枚不能領的：409
+ expect((await SELF.fetch('https://c.test/v1/me/community/badges/claim',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({keys:['spend_1']})})).status).toBe(409);
 });

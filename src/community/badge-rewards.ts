@@ -24,23 +24,43 @@ async function payoutAccount(env: Env, member: string): Promise<number | null> {
   return row?.n && row.n > 0 ? row.n : null;
 }
 
-export async function claimBadgeReward(env: Env, member: string, key: string, amount: number, now = Date.now()): Promise<ClaimState> {
-  if (!/^[a-z0-9_]{1,60}$/.test(key)) throw new HttpError(400, 'community_input');
+/**
+ * 一次領多枚：只查一次帳號、一次寫入全部領取紀錄。發點不讓使用者等：有 ctx 時放到回應之後在背景付（waitUntil），
+ * 沒付成的照舊由排程重試。2026-11-20 起「全部領取」只發一個請求，不再一枚一個請求、一枚失敗整串中斷。
+ */
+export async function claimBadgeRewards(env: Env, member: string, wanted: { key: string; amount: number }[], now = Date.now(), ctx?: Pick<ExecutionContext, 'waitUntil'>): Promise<Record<string, ClaimState>> {
+  if (wanted.length > 100 || wanted.some(w => !/^[a-z0-9_]{1,60}$/.test(w.key))) throw new HttpError(400, 'community_input');
   const blocked = await env.DB.prepare("SELECT 1 FROM members m WHERE m.id=? AND (m.account_class<>'normal' OR EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=m.id))").bind(member).first();
   if (blocked) { await bumpOp(env.DB, 'badge_reward', 'claim', 'denied'); throw new HttpError(403, 'badge_reward_unavailable'); }
-  const existing = await env.DB.prepare('SELECT status FROM badge_reward_claims WHERE member_id=? AND badge=?').bind(member, key).first<{ status: ClaimState }>();
-  if (existing) return existing.status;
-  if (amount <= 0) { await bumpOp(env.DB, 'badge_reward', 'claim', 'denied'); throw new HttpError(409, 'badge_reward_unavailable'); }
+  const states = await claimStates(env, member);
+  const fresh = wanted.filter(w => !states[w.key] && w.amount > 0);
+  if (!fresh.length) {
+    if (wanted.some(w => !states[w.key])) { await bumpOp(env.DB, 'badge_reward', 'claim', 'denied'); throw new HttpError(409, 'badge_reward_unavailable'); }
+    return states;
+  }
   const account = await payoutAccount(env, member);
   if (!account) { await bumpOp(env.DB, 'badge_reward', 'claim', 'denied'); throw new HttpError(409, 'badge_reward_unlinked'); }
-  const id = crypto.randomUUID().replaceAll('-', '');
-  await env.DB.prepare('INSERT OR IGNORE INTO badge_reward_claims(id,member_id,badge,amount,account_no,claimed_at) VALUES(?,?,?,?,?,?)').bind(id, member, key, amount, account, now).run();
-  await bumpOp(env.DB, 'badge_reward', 'claim', 'success');
-  const claim = await env.DB.prepare('SELECT id,member_id,badge,amount,account_no,status,attempted_at FROM badge_reward_claims WHERE member_id=? AND badge=?').bind(member, key).first<Claim>();
-  if (!claim) throw new HttpError(503, 'badge_reward_unavailable');
+  await env.DB.batch(fresh.map(w => env.DB.prepare('INSERT OR IGNORE INTO badge_reward_claims(id,member_id,badge,amount,account_no,claimed_at) VALUES(?,?,?,?,?,?)')
+    .bind(crypto.randomUUID().replaceAll('-', ''), member, w.key, w.amount, account, now)));
+  await bumpOp(env.DB, 'badge_reward', 'claim', 'success', fresh.length);
+  const payout = payMember(env, member, now).catch(async () => { await bumpOp(env.DB, 'badge_reward', 'payout', 'error'); });
+  if (ctx) { ctx.waitUntil(payout); for (const w of fresh) states[w.key] = 'pending'; return states; }
+  await payout;
+  return claimStates(env, member);
+}
+
+/** 單枚領取（舊網址與測試用）：同一條路，當下等發點結果。 */
+export async function claimBadgeReward(env: Env, member: string, key: string, amount: number, now = Date.now()): Promise<ClaimState> {
+  return (await claimBadgeRewards(env, member, [{ key, amount }], now))[key];
+}
+
+/** 付這位成員還沒付的領取：權杖拿一次，一枚一枚付（鍵固定，重複付不會重複入帳）。 */
+async function payMember(env: Env, member: string, now: number): Promise<void> {
+  const rows = (await env.DB.prepare("SELECT id,member_id,badge,amount,account_no,status,attempted_at FROM badge_reward_claims WHERE member_id=? AND status='pending' AND attempted_at IS NULL ORDER BY claimed_at LIMIT 100").bind(member).all<Claim>()).results;
+  if (!rows.length) return;
   let token: string;
-  try { token = await cardRewardTransport.token(env); } catch { await bumpOp(env.DB, 'badge_reward', 'payout', 'pending'); return claim.status; }
-  return pay(env, token, claim, now);
+  try { token = await cardRewardTransport.token(env); } catch { await bumpOp(env.DB, 'badge_reward', 'payout', 'pending'); return; }
+  for (const row of rows) await pay(env, token, row, now);
 }
 
 async function pay(env: Env, token: string, claim: Claim, now: number): Promise<ClaimState> {
