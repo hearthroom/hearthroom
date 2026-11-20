@@ -41,7 +41,7 @@ it('crowns whoever crossed first, not whoever was read first, once the hold has 
  expect((await holders('sole_lighthouse_pioneer')).map(r=>r.member_id)).toEqual([members[1]]);
  await awardFirstBadges(env,STAT_FIRST_BADGES,base+6*DAY);
  expect((await holders('sole_lighthouse_pioneer')).map(r=>r.member_id)).toEqual([members[1],members[2]]);
- expect((await badgeCollection(env,members[2])).items.find(b=>b.key==='sole_lighthouse_pioneer')).toMatchObject({state:'earned',ordinal:2});
+ expect((await badgeCollection(env,members[2])).items.find(b=>b.key==='sole_lighthouse_pioneer')).toMatchObject({state:'earned'});
 });
 
 it('keeps a revoked crown empty and stops at nine pioneers',async()=>{

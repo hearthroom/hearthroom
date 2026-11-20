@@ -104,18 +104,15 @@ async function holderCounts(env:Env):Promise<{members:number;holders:Record<stri
   return {members:members??0,holders:Object.fromEntries(rows.results.map(r=>[r.badge,r.n]))};
  })).value;
 }
-/** 全服唯一徽章（sole_，不含先驅版）現在的持有人；持有人公開了徽章才給公開 ID。撤銷了也算拿走（不順延）。 */
-async function crownHolders(env:Env):Promise<Record<string,{member:string;handle:string|null}>>{
+/**
+ * 全服唯一徽章（sole_，不含先驅版）現在的持有人；持有人公開了徽章才給公開 ID。撤銷了也算拿走（不順延）。
+ * 照目錄裡的 key 精確查（走 badge 索引）：帶 ESCAPE 的 LIKE 用不上索引，每次要掃整張獲獎表（2026-11-20 D1 過載）。
+ */
+async function crownHolders(env:Env,keys:string[]):Promise<Record<string,{member:string;handle:string|null}>>{
+ if(!keys.length)return {};
  const rows=(await env.DB.prepare(`SELECT a.badge,a.member_id,CASE WHEN p.public_badges=1 THEN m.handle END AS handle FROM community_awards a JOIN members m ON m.id=a.member_id
-  LEFT JOIN community_preferences p ON p.member_id=a.member_id WHERE a.badge LIKE 'sole\\_%' ESCAPE '\\' AND a.badge NOT LIKE '%\\_pioneer' ESCAPE '\\'`).all<{badge:string;member_id:string;handle:string|null}>()).results;
+  LEFT JOIN community_preferences p ON p.member_id=a.member_id WHERE a.badge IN (${keys.map(()=>'?').join(',')})`).bind(...keys).all<{badge:string;member_id:string;handle:string|null}>()).results;
  return Object.fromEntries(rows.map(r=>[r.badge,{member:r.member_id,handle:r.handle}]));
-}
-/** 這位成員每枚有效徽章是第幾位拿到的：比他早的有效紀錄數加一（同一刻補發的同名次）。 */
-async function ordinals(env:Env,member:string):Promise<Record<string,number>>{
- const now=Date.now();
- const rows=(await env.DB.prepare(`SELECT a.badge,(SELECT COUNT(*) FROM community_awards b WHERE b.badge=a.badge AND b.created_at<a.created_at AND b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at>?))+1 AS n
-  FROM community_awards a WHERE a.member_id=? AND a.revoked_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>?)`).bind(now,member,now).all<{badge:string;n:number}>()).results;
- return Object.fromEntries(rows.map(r=>[r.badge,r.n]));
 }
 export async function badgeCollection(env:Env,member:string,publicOnly=false):Promise<BadgeCollection> {
  const prefs=await env.DB.prepare('SELECT public_badges,featured_badges FROM community_preferences WHERE member_id=?').bind(member).first<{public_badges:number;featured_badges:string|null}>();
@@ -127,7 +124,8 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
- const [census,order,claims,crowns]=await Promise.all([holderCounts(env),ordinals(env,member),publicOnly?{} as Record<string,never>:claimStates(env,member),crownHolders(env)]);
+ // 「第幾位獲得」拿掉了：每次讀收藏都要按徽章數早於自己的紀錄，平均一次讀一萬多行，2026-11-20 上線後是 D1 讀取量最大的查詢
+ const [census,claims,crowns]=await Promise.all([holderCounts(env),publicOnly?{} as Record<string,never>:claimStates(env,member),crownHolders(env,catalog.filter(d=>d.key.startsWith('sole_')&&!d.key.endsWith('_pioneer')).map(d=>d.key))]);
  const now=Date.now();
  const crossed:string[]=[];
  let items:CollectedBadge[]=catalog.map(def=>{
@@ -154,7 +152,6 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   if(item.state==='earned'){
    const held=census.holders[def.key];
    if(held&&census.members)item.share=Math.round(Math.min(held,census.members)/census.members*1000)/10;
-   if(order[def.key])item.ordinal=order[def.key];
   }
   return item;
  });

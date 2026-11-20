@@ -1,6 +1,6 @@
 import {env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it} from 'vitest';
-import {resetDb,makeMember,restoreUpstream} from './helpers';
+import {resetDb,makeMember,restoreUpstream,recordD1} from './helpers';
 import {badgeCollection} from '../src/community/badges';
 import {settleRankSnapshot} from '../src/rank-awards';
 import {badgeRarity,BADGE_AP} from '../shared/badge-rarity';
@@ -26,14 +26,18 @@ it('assigns fixed points by rarity and counts each repeat of a rank honor',async
  expect(wall.ap).toBe(15*2+5);
 });
 
-it('shows the holder share and the order in which a member earned each badge',async()=>{
+it('shows the holder share without per-badge scans on every collection read',async()=>{
  await award(a,'member_profile',100);await award(b,'member_profile',200);await award(c,'member_profile',200);
  await env.DB.prepare("UPDATE community_awards SET revoked_at=1 WHERE member_id=? AND badge='member_profile'").bind(a).run();
  const mine=(await badgeCollection(env,c)).items.find(x=>x.key==='member_profile')!;
- // a 撤銷了：持有 2／3 人，c 跟 b 同一刻拿到，都是第 1 位
- expect(mine).toMatchObject({state:'earned',share:66.7,ordinal:1});
+ // a 撤銷了：持有 2／3 人
+ expect(mine).toMatchObject({state:'earned',share:66.7});
+ expect(mine).not.toHaveProperty('ordinal');
+ // 2026-11-20 D1 過載：讀收藏不能再逐枚掃「比我早的紀錄」，全服唯一持有人也要照 key 走索引，不能用 LIKE 掃全表
+ const rec=recordD1(env.DB);await badgeCollection({...env,DB:rec.db},c);
+ expect(rec.queries.some(q=>/created_at<a\.created_at/.test(q))).toBe(false);
+ expect(rec.queries.some(q=>/LIKE 'sole/.test(q))).toBe(false);
  await award(a,'player_saver',50);await award(c,'player_saver',60);
- expect((await badgeCollection(env,c)).items.find(x=>x.key==='player_saver')).toMatchObject({ordinal:2});
  expect((await badgeCollection(env,c)).items.find(x=>x.key==='creator_works_30')).not.toHaveProperty('share');
  const visible=(await badgeCollection(env,c,true));
  expect(visible).toEqual({items:[],featured:[]});
