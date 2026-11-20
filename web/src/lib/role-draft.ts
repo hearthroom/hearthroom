@@ -18,6 +18,9 @@ export interface TalkExampleEntry {
 export interface WorldbookEntryDraft {
   /** 上游已存在的條目才有。新加的是空的，送出時 op=create。 */
   entryId?: string;
+  /** Author DLC uses a stable draft entry ID for package membership. */
+  id?: string;
+  packId?: string;
   name: string;
   content: string;
   keywords: string[];

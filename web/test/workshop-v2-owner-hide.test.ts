@@ -1,24 +1,23 @@
 /**
- * 工坊 v2：原卡作者在卡片頁工坊分頁隱藏／取消隱藏玩家擴充，以及對話資訊面板在工坊關閉時的暫停顯示。
+ * 工坊管理分頁入口與遊玩視窗的存檔設定。
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, type App, type Component } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
-import { confirmState, settleConfirm } from "../src/lib/confirm";
 import type { CardWorkshopPage, ExtensionSummary } from "../src/lib/workshop";
-import type { WorkshopConversationView } from "../src/lib/play-social";
+import type { ConversationMods } from "../src/lib/workshop-mods";
 
-const ws = vi.hoisted(() => ({ ownerAction: vi.fn(), fetchCardWorkshop: vi.fn(), fetchWorkshopsByIds: vi.fn() }));
+const ws = vi.hoisted(() => ({ listUniversalMods: vi.fn(), fetchPlayerShares: vi.fn(), fetchCardWorkshop: vi.fn(), fetchWorkshopsByIds: vi.fn(), fetchConversationMods: vi.fn(), applyConversationMod: vi.fn() }));
 vi.mock("../src/lib/workshop", async (original) => ({ ...(await original<object>()), ...ws }));
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ me: { accountNumId: 7 }, accessToken: async () => "tok" }) }));
 import WorkshopTab from "../src/components/workshop/WorkshopTab.vue";
-import PlayInfoWorkshop from "../src/components/workshop/PlayInfoWorkshop.vue";
+import PlayModWindow from "../src/components/workshop/PlayModWindow.vue";
 
 let app: App | undefined;
 const settle = async () => { for (let i = 0; i < 8; i++) { await nextTick(); await Promise.resolve(); } };
-beforeEach(() => { i18n.global.locale.value = "zh-Hant"; });
-afterEach(() => { app?.unmount(); app = undefined; document.body.innerHTML = ""; vi.clearAllMocks(); if (confirmState.current) settleConfirm(false); });
+beforeEach(() => { i18n.global.locale.value = "zh-Hant"; ws.listUniversalMods.mockResolvedValue({ items: [] }); ws.fetchPlayerShares.mockResolvedValue({ items: [] }); });
+afterEach(() => { app?.unmount(); app = undefined; document.body.innerHTML = ""; vi.clearAllMocks(); });
 
 async function mount(component: Component, props: Record<string, unknown>) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:rest(.*)*", component: { render: () => null } }] });
@@ -35,34 +34,14 @@ const ext = (id: string, over: Partial<ExtensionSummary> = {}): ExtensionSummary
 });
 const page = (items: ExtensionSummary[]): CardWorkshopPage => ({ tabVisible: true, allowNew: true, viewerIsOwner: true, total: items.length, page: 1, hasMore: false, items });
 
-it("the card author hides a player extension after a confirm with no reason field, then can unhide it directly", async () => {
-  ws.ownerAction.mockImplementation(async (_id: string, action: string) => ({ ownerState: action === "hide" ? "hidden" : "visible" }));
-  const root = await mount(WorkshopTab, { cardId: "100001", cardNum: "100001", initial: page([ext("a")]), state: null, joinBusy: null });
-  const tile = () => root.querySelector<HTMLElement>("[data-ext-kind=lorebook]")!;
-  tile().querySelector<HTMLButtonElement>("[data-ext-hide]")!.click();
-  await settle();
-  expect(confirmState.current?.title).toBe("隱藏「擴充a」？");
-  expect(confirmState.current?.field).toBeUndefined();
-  expect(confirmState.current?.focusCancel).toBe(true);
-  settleConfirm(false);
-  await settle();
-  expect(ws.ownerAction).not.toHaveBeenCalled();
-
-  tile().querySelector<HTMLButtonElement>("[data-ext-hide]")!.click();
-  await settle();
-  settleConfirm(true);
-  await settle();
-  expect(ws.ownerAction).toHaveBeenCalledWith("a", "hide", "tok");
-  expect(tile().classList.contains("ext-tile--hidden")).toBe(true);
-  expect(tile().querySelector("[data-ext-hidden]")?.textContent).toBe("已隱藏");
-  expect(tile().querySelector("[data-ext-hide]")).toBeNull();
-  expect(document.querySelector(".ws-toast")?.textContent).toContain("已隱藏「擴充a」");
-
-  tile().querySelector<HTMLButtonElement>("[data-ext-unhide]")!.click();
-  await settle();
-  expect(confirmState.current).toBeNull();
-  expect(ws.ownerAction).toHaveBeenLastCalledWith("a", "restore", "tok");
-  expect(tile().classList.contains("ext-tile--hidden")).toBe(false);
+it("the card author manages visibility from the filtered management page", async () => {
+  ws.fetchPlayerShares.mockResolvedValue({ items: [{ new: true }] });
+  const root = await mount(WorkshopTab, { cardId: "100001", cardNum: "100001", roleId: "role-a", initial: page([ext("a")]), state: null, joinBusy: null });
+  expect(root.querySelector('[data-ext-kind=lorebook]')).not.toBeNull();
+  expect(root.querySelector('[data-ext-hide]')).toBeNull();
+  const manage = [...root.querySelectorAll("a")].find((link) => link.textContent?.includes("到工坊管理"));
+  expect(manage?.href).toContain("tab=workshop-management&card=100001");
+  expect(root.textContent).toContain("有 1 個新的玩家擴充");
 });
 
 it("author DLC tiles never offer hide", async () => {
@@ -71,32 +50,73 @@ it("author DLC tiles never offer hide", async () => {
   expect(root.querySelector("[data-ext-hide]")).toBeNull();
 });
 
-const view = (over: Partial<WorkshopConversationView> = {}): WorkshopConversationView => ({
-  selectionRevision: 1, manifestHash: "h", openingSource: null, triggeredCount: 0,
+const view = (over: Partial<ConversationMods> = {}): ConversationMods => ({
+  version: "rev1", triggeredCount: 0, availableCount: 0, workshopClosed: false, privateEntryCount: 0, activePrivateEntryCount: 0,
   items: [
-    { workshopId: "d", name: "雨夜篇", coverUrl: "", kind: "dlc", kinds: ["lore", "display"], residentChars: 0, status: "resident" },
-    { workshopId: "a", name: "月下書房", coverUrl: "", kind: "lorebook", kinds: ["lore"], residentChars: 120, status: "resident" },
+    { workshopId: "d", name: "雨夜篇", kind: "dlc", residentChars: 0, status: "resident", enabled: true },
+    { workshopId: "a", name: "月下書房", kind: "lorebook", residentChars: 120, status: "resident", enabled: true },
   ],
   ...over,
 });
 
-it("conversation panel: rows say which layer they come from", async () => {
-  const root = await mount(PlayInfoWorkshop, { view: view(), cardId: "100001" });
-  const rows = [...root.querySelectorAll(".pip-ws__row")].map((r) => r.textContent ?? "");
+async function mountWindow(value: ConversationMods) {
+  ws.fetchConversationMods.mockResolvedValue(value);
+  await mount(PlayModWindow, {
+    open: true, conversationId: "one-save", token: async () => "tok", acceptedTurn: 0,
+    settingsChanged: 0, browseHref: "/cards/100001?tab=workshop",
+  });
+  const dialog = document.querySelector<HTMLDialogElement>("dialog.mod-window");
+  expect(dialog?.open).toBe(true);
+  return dialog!;
+}
+
+it("the conversation workshop identifies each layer and waits for a successful toggle", async () => {
+  const current = view();
+  const dialog = await mountWindow(current);
+  const rows = [...dialog.querySelectorAll(".mod-window__row")].map(row => row.textContent);
   expect(rows[0]).toContain("作者 DLC");
   expect(rows[1]).toContain("玩家擴充");
-  expect(root.querySelector("[data-pip-closed]")).toBeNull();
+  let finish!: (next: ConversationMods) => void;
+  ws.applyConversationMod.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const toggle = dialog.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  toggle.click();
+  await settle();
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(toggle.disabled).toBe(true);
+  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "toggle", workshopId: "d", enabled: false }, "tok");
+  finish(view({ version: "rev2", items: [{ ...current.items[0]!, enabled: false, status: "disabled" }, current.items[1]!] }));
+  await settle();
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(dialog.querySelector('[role="status"]')?.textContent).toContain("從下一句起生效");
 });
 
-it("conversation panel: when the author turns the workshop off, a line explains and every row is paused", async () => {
-  const items = view().items.map((i) => ({ ...i, status: "disabled" as const, reason: "workshop_closed" }));
-  items.push({ workshopId: "off", name: "自己關掉的", coverUrl: "", kind: "lorebook", kinds: ["lore"], residentChars: 0, status: "disabled", reason: "player_disabled" });
-  const root = await mount(PlayInfoWorkshop, { view: view({ workshopClosed: true, manifestHash: "", items }), cardId: "100001" });
-  expect(root.querySelector("[data-pip-closed]")?.textContent).toContain("原作者已關閉這張卡的工坊");
-  expect(root.querySelectorAll("[data-pip-paused]").length).toBe(2);
-  expect(root.querySelectorAll(".pip-ws__row--off").length).toBe(3);
-  // 玩家自己關掉的那一列照舊是「已關閉」，不混成「暫停」
-  expect(root.querySelectorAll(".pip-ws__row")[2].textContent).toContain(i18n.global.t("workshop.panel.row.off"));
-  // 工坊頁不在了，不給到工坊管理的連結
-  expect(root.querySelector(".pip-ws__manage")).toBeNull();
+it("closing the workshop suspends switches and private entries and hides the browse link", async () => {
+  const items = view().items.map(item => ({ ...item, status: "disabled" as const, reason: "workshop_closed" }));
+  items.push({ workshopId: "off", name: "自己關掉的", kind: "lorebook", residentChars: 0, status: "disabled", reason: "player_disabled", enabled: false });
+  const dialog = await mountWindow(view({ items, workshopClosed: true }));
+  expect(dialog.querySelector("[data-mod-paused]")?.textContent).toContain("原作者已關閉這張卡的工坊");
+  const rows = [...dialog.querySelectorAll(".mod-window__row")];
+  expect(rows.every(row => row.querySelector<HTMLButtonElement>('[role="switch"]')?.disabled)).toBe(true);
+  expect(rows[2]?.textContent).toContain("已關閉");
+  expect(dialog.querySelector<HTMLButtonElement>('[data-mod-private]')?.disabled).toBe(true);
+  expect(dialog.querySelector('a[href="/cards/100001?tab=workshop"]')).toBeNull();
+});
+
+it("joins an owned universal extension from the current save and waits for confirmation", async () => {
+  ws.listUniversalMods.mockResolvedValue({ items: [{ id: "universal", name: "旅行備忘", summary: "", entryCount: 1, residentChars: 20, joined: false }] });
+  const current = view();
+  ws.applyConversationMod.mockResolvedValue(view({ version: "rev2", items: [...current.items, {
+    workshopId: "universal", name: "旅行備忘", kind: "universal", residentChars: 20, status: "resident", enabled: true,
+  }] }));
+  const dialog = await mountWindow(current);
+  dialog.querySelector<HTMLButtonElement>("[data-mod-universal]")!.click();
+  await settle();
+  expect(dialog.querySelector("#play-universal-title")?.textContent).toBe("加入通用擴充");
+  dialog.querySelector<HTMLButtonElement>(".mod-window__universal-join")!.click();
+  await settle();
+  expect(ws.applyConversationMod).toHaveBeenCalledWith("one-save", "rev1", { action: "join_universal", workshopId: "universal" }, "tok");
+  expect(dialog.querySelector(".mod-window__universal-join")).toBeNull();
+  dialog.querySelector<HTMLButtonElement>("[data-universal-back]")!.click();
+  await settle();
+  expect([...dialog.querySelectorAll(".mod-window__row")].find((row) => row.textContent?.includes("旅行備忘"))?.textContent).toContain("通用");
 });

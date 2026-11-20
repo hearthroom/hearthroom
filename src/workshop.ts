@@ -20,6 +20,7 @@ import { HttpError, pickLocale, type Env, type Localized } from "./types";
 import {
   toEpochMs,
   workshopUpstream,
+  type PlayerDisplayProjection,
   type WorkshopKind,
   type WorkshopOutboxEvent,
 } from "./workshop-gateway";
@@ -240,8 +241,14 @@ interface AuthorInfo {
   avatar_url: string | null;
 }
 
+type WorkshopListingRow = Pick<WorkshopRow,
+  "id" | "card_id" | "provider" | "author_num_id" | "name" | "summary" | "readme" | "cover_url" |
+  "kinds" | "rating" | "version_no" | "resident_chars" | "lore_count" | "rule_count" | "opening_count" |
+  "install_count" | "moderation_state" | "owner_state" | "first_published_at" | "published_at" | "created_at" | "updated_at"
+> & AuthorInfo;
+
 function formatExtensionSummary(
-  row: WorkshopRow & AuthorInfo,
+  row: WorkshopListingRow,
   card: CardRow,
   opts: { includeOwnerState?: boolean; joined?: boolean } = {},
 ) {
@@ -297,6 +304,48 @@ async function checkProviderViewerAccess(
   return map;
 }
 
+function isPlayerWorkshop(row: Pick<WorkshopRow, "provider" | "author_num_id">, card: Pick<CardRow, "provider" | "author_num_id">): boolean {
+  return row.provider !== card.provider || row.author_num_id !== card.author_num_id;
+}
+
+async function displayedPlayerWorkshops(env: Env, provider: ProviderId, ids: string[], workId?: string) {
+  const displayed = new Map<string, PlayerDisplayProjection | null>();
+  const requests = workId ? [ids] : Array.from({ length: Math.ceil(ids.length / 50) }, (_, index) => ids.slice(index * 50, index * 50 + 50));
+  for (const batch of requests) {
+    try {
+      const result = await workshopUpstream.playerDisplay(env, provider, batch, workId);
+      for (const id of result.displayedIds) displayed.set(id, null);
+      for (const item of result.items ?? []) displayed.set(item.id, item);
+    } catch {
+      // The cached projection alone cannot authorize a public read.
+      continue;
+    }
+  }
+  return displayed;
+}
+
+function refreshPlayerRow<T extends WorkshopListingRow>(row: T, current: PlayerDisplayProjection | null | undefined): T {
+  if (!current) return row;
+  return {
+    ...row, name: current.name, summary: current.summary, readme: current.readme, cover_url: current.coverUrl,
+    rating: current.rating, version_no: current.version, owner_state: "visible",
+    kinds: JSON.stringify(current.loreCount ? ["lore"] : []), lore_count: current.loreCount,
+    resident_chars: current.residentChars, install_count: current.joinCount,
+    published_at: current.publishedAt, updated_at: current.publishedAt,
+  };
+}
+
+function newPlayerRow(card: CardRow, current: PlayerDisplayProjection): WorkshopListingRow {
+  return refreshPlayerRow({
+    id: current.id, card_id: Number(card.id), provider: card.provider, author_num_id: current.authorNumber,
+    name: "", summary: "", readme: "", cover_url: "", kinds: "[]", rating: null,
+    version_no: 0, resident_chars: 0, lore_count: 0, rule_count: 0, opening_count: 0, install_count: 0,
+    moderation_state: "approved", owner_state: "visible", first_published_at: current.publishedAt,
+    published_at: null, created_at: current.publishedAt, updated_at: current.publishedAt,
+    handle: null, display_name: null, avatar_url: null,
+  }, current);
+}
+
 export async function listCardWorkshops(
   c: Ctx,
   cardIdParam: string,
@@ -316,11 +365,6 @@ export async function listCardWorkshops(
   const viewerIsOwner=await memberOwnsExternal(c.env.DB,member,card.provider,card.author_num_id);
   if(!allowNew) return {tabVisible:false,allowNew:false,viewerIsOwner,total:0,page:1,hasMore:false,items:[]};
 
-  const sortSql =
-    query.sort === "new"
-      ? "COALESCE(w.first_published_at, w.published_at, w.created_at) DESC, w.id ASC"
-      : "w.install_count DESC, COALESCE(w.first_published_at, w.published_at, w.created_at) DESC, w.id ASC";
-
   const rows = (
     await c.env.DB.prepare(
       `SELECT w.*, m.handle, m.display_name, m.avatar_url
@@ -330,25 +374,35 @@ export async function listCardWorkshops(
          (SELECT owner_member_id FROM member_connections mc WHERE mc.provider = w.provider AND mc.external_id = CAST(w.author_num_id AS TEXT)),
          (SELECT member_id FROM member_identities mi WHERE mi.provider = w.provider AND mi.external_id = CAST(w.author_num_id AS TEXT))
        )
-       WHERE w.card_id = ? AND w.moderation_state = 'approved'
-       ORDER BY CASE WHEN w.provider = ? AND w.author_num_id = ? THEN 0 ELSE 1 END, ${sortSql}`,
+       WHERE w.card_id = ? AND w.moderation_state = 'approved'`,
     )
-      .bind(Number(card.id),card.provider,card.author_num_id)
+      .bind(Number(card.id))
       .all<WorkshopRow & AuthorInfo>()
   ).results;
 
-  // Strictest adult & region filter: never expose R-rated workshops or counts to CN or non-NSFW viewers.
-  const ratingFiltered = rows.filter((r) => !(r.rating === "R" && (gate.countryRegion === "CN" || !gate.allowAdult)));
-
-  const nonVisibleIds = ratingFiltered.filter((r) => r.owner_state !== "visible").map((r) => r.id);
+  const playerIds = rows.filter((r) => isPlayerWorkshop(r, card)).map((r) => r.id);
+  const workId = await resolveWorkIdForCard(c.env.DB, card);
+  const displayed = await displayedPlayerWorkshops(c.env, card.provider as ProviderId, playerIds, workId);
+  const cachedIDs = new Set(rows.map((row) => row.id));
+  const currentRows: WorkshopListingRow[] = rows.map((row) => refreshPlayerRow(row, displayed.get(row.id)));
+  for (const [id, item] of displayed) {
+    if (item && item.workId === workId && !cachedIDs.has(id)) currentRows.push(newPlayerRow(card, item));
+  }
+  // Gate on the current rating, including a rating changed after the cached publication.
+  const ratingFiltered = currentRows.filter((r) => !(r.rating === "R" && (gate.countryRegion === "CN" || !gate.allowAdult)));
+  const nonVisibleIds = ratingFiltered.filter((r) => !isPlayerWorkshop(r, card) && r.owner_state !== "visible").map((r) => r.id);
   const token = bearerOf(c);
   const accessMap = await checkProviderViewerAccess(c.env, card.provider as ProviderId, nonVisibleIds, token);
 
   const visibleToViewer = ratingFiltered.filter((r) => {
+    if (isPlayerWorkshop(r, card)) return displayed.has(r.id);
     if (r.owner_state === "visible") return true;
     if (viewerIsOwner) return true;
     return accessMap.get(r.id)?.accessible === true;
   });
+  const firstPublished = (row: WorkshopListingRow) => row.first_published_at ?? row.published_at ?? row.created_at;
+  visibleToViewer.sort((a, b) => Number(isPlayerWorkshop(a, card)) - Number(isPlayerWorkshop(b, card)) ||
+    (query.sort === "new" ? 0 : b.install_count - a.install_count) || firstPublished(b) - firstPublished(a) || a.id.localeCompare(b.id));
 
   const total = visibleToViewer.length;
   const tabVisible = allowNew;
@@ -382,8 +436,9 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
   const placeholders = cleanIds.map(() => "?").join(",");
   const rows = (
     await c.env.DB.prepare(
-      `SELECT w.*, m.handle, m.display_name, m.avatar_url
+      `SELECT w.*, m.handle, m.display_name, m.avatar_url, c.author_num_id AS card_author_num_id, c.provider AS card_provider
        FROM workshops w
+       JOIN cards c ON c.id = w.card_id
        LEFT JOIN members m ON m.id = COALESCE(
          w.author_member_id,
          (SELECT owner_member_id FROM member_connections mc WHERE mc.provider = w.provider AND mc.external_id = CAST(w.author_num_id AS TEXT)),
@@ -392,23 +447,34 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
        WHERE w.id IN (${placeholders}) AND w.moderation_state = 'approved'`,
     )
       .bind(...cleanIds)
-      .all<WorkshopRow & AuthorInfo>()
+      .all<WorkshopRow & AuthorInfo & { card_author_num_id: number; card_provider: string }>()
   ).results;
 
-  const nonVisibleIds = rows.filter((r) => r.owner_state !== "visible").map((r) => r.id);
+  const playerRows = rows.filter((r) => isPlayerWorkshop(r, { author_num_id: r.card_author_num_id, provider: r.card_provider }));
+  const playerIds = new Set(playerRows.map((r) => r.id));
+  const nonVisibleIds = rows.filter((r) => !playerIds.has(r.id) && r.owner_state !== "visible").map((r) => r.id);
   const accessMap = await checkProviderViewerAccess(c.env, "harbor", nonVisibleIds, token);
+  const displayedByProvider = await Promise.all(
+    [...new Set(playerRows.map((r) => r.provider))].map((provider) =>
+      displayedPlayerWorkshops(c.env, provider as ProviderId, playerRows.filter((r) => r.provider === provider).map((r) => r.id)),
+    ),
+  );
+  const displayed = new Map(displayedByProvider.flatMap((items) => [...items]));
 
   const out = [];
   for (const id of cleanIds) {
-    const r = rows.find((x) => x.id === id);
-    if (!r) continue;
+    const cached = rows.find((x) => x.id === id);
+    if (!cached) continue;
+    const r = refreshPlayerRow(cached, displayed.get(id));
     if (r.rating === "R" && (gate.countryRegion === "CN" || !gate.allowAdult)) continue;
     const card = await getCard(c.env.DB, String(r.card_id));
     if (!card || card.status !== "approved" || card.public_blocked) continue;
     if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)continue;
     if (isAdult(card) && (gate.countryRegion === "CN" || !gate.allowAdult)) continue;
     const viewerIsOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
-    if (r.owner_state !== "visible" && !viewerIsOwner && !accessMap.get(r.id)?.accessible) continue;
+    if (isPlayerWorkshop(r, card)) {
+      if (!displayed.has(r.id)) continue;
+    } else if (r.owner_state !== "visible" && !viewerIsOwner && !accessMap.get(r.id)?.accessible) continue;
     out.push(
       formatExtensionSummary(r, card, {
         includeOwnerState: viewerIsOwner,
@@ -420,7 +486,7 @@ export async function batchGetWorkshops(c: Ctx, ids: string[]) {
 }
 
 export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string) {
-  const row = await c.env.DB.prepare(
+  const cached = await c.env.DB.prepare(
     `SELECT w.*, m.handle, m.display_name, m.avatar_url
      FROM workshops w
      LEFT JOIN members m ON m.id = COALESCE(
@@ -432,14 +498,21 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
   )
     .bind(workshopId)
     .first<WorkshopRow & AuthorInfo>();
-  if (!row) throw new HttpError(404, "not_found");
-
-  const card = await getCard(c.env.DB, String(row.card_id));
+  const inferred = cached ? undefined : (await displayedPlayerWorkshops(c.env, "harbor", [workshopId])).get(workshopId);
+  const card = cached ? await getCard(c.env.DB, String(cached.card_id)) :
+    inferred ? (await resolveCardForWork(c.env.DB, "harbor", inferred.workId, inferred.sourceRoleId))?.card : null;
   if (!card || card.status !== "approved" || card.public_blocked) {
     throw new HttpError(404, "not_found");
   }
 
   if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)throw new HttpError(404,"not_found");
+  const playerWorkshop = !cached || isPlayerWorkshop(cached, card);
+  const projected = !cached ? inferred : playerWorkshop
+    ? (await displayedPlayerWorkshops(c.env, card.provider as ProviderId, [cached.id])).get(cached.id) : undefined;
+  if (playerWorkshop && projected === undefined) {
+    throw new HttpError(404, "not_found");
+  }
+  const row = cached ? refreshPlayerRow(cached, projected) : newPlayerRow(card, inferred!);
   const member = await optionalViewer(c);
   const gate = await viewerContentGate(c, member);
   if ((isAdult(card) || row.rating === "R") && gate.countryRegion === "CN") {
@@ -476,7 +549,7 @@ export async function getWorkshopDetail(c: Ctx, workshopId: string, lang: string
 
   let availability: "open" | "hidden" = "open";
   let joined: boolean | undefined;
-  if (row.owner_state !== "visible") {
+  if (!playerWorkshop && row.owner_state !== "visible") {
     const access = await checkProviderViewerAccess(c.env, card.provider as ProviderId, [row.id], bearerOf(c));
     const viewerAccess = access.get(row.id);
     availability = viewerAccess?.accessible ? "open" : "hidden";
@@ -559,18 +632,24 @@ export async function commentWorkshopAt(
     throw new HttpError(404, "not_found");
   }
   if(!(await readWorkshopPolicy(c.env.DB,Number(card.id))).enabled)throw new HttpError(404,"not_found");
-  const member = await optionalViewer(c);
-  const gate = await viewerContentGate(c, member);
-  if ((isAdult(card) || row.rating === "R") && gate.countryRegion === "CN") {
+  const playerWorkshop = isPlayerWorkshop(row, card);
+  const current = playerWorkshop ? (await displayedPlayerWorkshops(c.env, card.provider as ProviderId, [row.id])).get(row.id) : undefined;
+  if (playerWorkshop && current === undefined) {
     throw new HttpError(404, "not_found");
   }
-  if ((isAdult(card) || row.rating === "R") && !gate.allowAdult) {
+  const member = await optionalViewer(c);
+  const gate = await viewerContentGate(c, member);
+  const adult = isAdult(card) || (current?.rating ?? row.rating) === "R";
+  if (adult && gate.countryRegion === "CN") {
+    throw new HttpError(404, "not_found");
+  }
+  if (adult && !gate.allowAdult) {
     throw new HttpError(403, "adult_content");
   }
   const creatorMemberId =
     row.author_member_id ?? (await findMemberIdByExternal(c.env.DB, row.provider, row.author_num_id));
 
-  if (row.owner_state !== "visible") {
+  if (!playerWorkshop && row.owner_state !== "visible") {
     const isCardOwner = await memberOwnsExternal(c.env.DB, member, card.provider, card.author_num_id);
     const isCreator =
       Boolean(member && creatorMemberId && member.id === creatorMemberId) ||
@@ -608,6 +687,7 @@ export async function listMyWorkshops(c: Ctx, lang: string) {
       kind:item.kind,
       loreCount:item.loreCount??0,
       workshopClosed:item.workshopClosed===true,
+      playerShareState:item.playerShareState,
       cardId: card ? String(card.id) : "",
       name: item.name,
       summary: item.summary,

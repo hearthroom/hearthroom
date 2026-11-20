@@ -596,7 +596,7 @@ watch(
       </header>
 
       <LineTabs v-if="wsShown?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
-      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :initial="wsShown" :initial-failed="!wsPage" @retry="loadWorkshop" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
+      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :role-id="card.roleId" :initial="wsShown" :initial-failed="!wsPage" @retry="loadWorkshop" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
       <div v-else class="role__body" :id="wsShown?.tabVisible ? 'card-panel' : undefined" :role="wsShown?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsShown?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
         <div class="role__main">
           <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->

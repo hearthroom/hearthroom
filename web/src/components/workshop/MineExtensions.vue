@@ -10,37 +10,54 @@ import { stageAvailable } from "@stage-site";
  * 這個元件在「卡片」分頁時也掛著（v-show），好讓分頁標籤上的數字不必另打一次請求。
  */
 import { computed, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import ExtensionCover from "./ExtensionCover.vue";
-import CardPickerDialog from "./CardPickerDialog.vue";
+import WorkshopScopeDialog from "./WorkshopScopeDialog.vue";
 import { compact } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { fetchMyWorkshops, type MineItem } from "@/lib/workshop";
+import { fetchMyWorkshops, listUniversalMods, type MineItem } from "@/lib/workshop";
+import type { UniversalModChoice } from "@/lib/workshop-mods";
 
 const emit = defineEmits<{ count: [number] }>();
 const { t } = useI18n();
 const session = useSession();
 const { lp } = useLocalePath();
+const route = useRoute();
+const router = useRouter();
 
 const items = ref<MineItem[]>([]);
+const universal = ref<UniversalModChoice[]>([]);
 const loading = ref(true);
 const failed = ref(false);
+const universalFailed = ref(false);
 const picking = ref(false);
+const preselectUniversal = computed(() => route.query.new === "universal");
+watch(preselectUniversal, (value) => { if (value) picking.value = true; }, { immediate: true });
+function closePicker() {
+  picking.value = false;
+  if (route.query.new) void router.replace({ query: { ...route.query, new: undefined } });
+}
 
 let seq = 0;
 async function load() {
   const n = ++seq;
   loading.value = true;
   failed.value = false;
+  universalFailed.value = false;
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const got = await fetchMyWorkshops(token);
+    const [got, local] = await Promise.all([
+      fetchMyWorkshops(token),
+      listUniversalMods(token).catch(() => null),
+    ]);
     if (n !== seq) return;
     items.value = got.items;
-    emit("count", got.items.length);
+    if (local) universal.value = local.items;
+    universalFailed.value = !local;
+    emit("count", got.items.length + universal.value.length);
   } catch {
     if (n === seq) failed.value = true;
   } finally {
@@ -58,13 +75,21 @@ const closedNote = (item: MineItem) => (item.workshopClosed && published(item)
     ? { chip: "workshop.status.ownWorkshopClosed", line: "workshop.mine.row.ownWorkshopClosed" }
     : { chip: "workshop.status.cardWorkshopClosed", line: "workshop.mine.row.cardWorkshopClosed" }
   : null);
-const hiddenByOwner = (item: MineItem) => !isDlc(item) && item.ownerState === "hidden";
-const meta = (item: MineItem) => item.version > 0
+const shareStatus = {
+  private: "workshop.status.private",
+  pending: "workshop.status.waitingAuthor",
+  displayed: "workshop.status.showing",
+  unlisted: "workshop.status.notShownByAuthor",
+};
+const statusOf = (item: MineItem) => isDlc(item)
+  ? (published(item) ? "workshop.status.published" : "workshop.status.draft")
+  : shareStatus[item.playerShareState ?? "private"];
+const meta = (item: MineItem) => isDlc(item) && item.version > 0
   ? t("workshop.mine.row.meta", { card: item.card.name, ver: `v${item.version}`, count: compact(item.joinCount) })
   : t("workshop.mine.row.metaDraft", { card: item.card.name });
 const displayName = (item: MineItem) => item.name.trim() || t(isDlc(item) ? "workshop.mine.row.untitledDlc" : "workshop.mine.row.untitled");
 const editTo = (item: MineItem) => lp(`/mine/workshops/${encodeURIComponent(item.id)}/edit`);
-const hasItems = computed(() => items.value.length > 0);
+const hasItems = computed(() => items.value.length > 0 || universal.value.length > 0);
 const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.value);
 </script>
 
@@ -100,20 +125,33 @@ const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.valu
           <p class="subtle mine-ws__meta">{{ meta(item) }}</p>
           <p class="mine-ws__chips">
             <span class="chip ws-chip--on" data-ws-kind>{{ isDlc(item) ? $t("workshop.layer.dlc") : $t("workshop.layer.extChip") }}</span>
-            <span class="chip" :class="{ 'ws-chip--ok': published(item) }" data-ws-status>{{ published(item) ? $t("workshop.status.published") : $t("workshop.status.draft") }}</span>
+            <span class="chip" :class="{ 'ws-chip--ok': isDlc(item) ? published(item) : item.playerShareState === 'displayed' }" data-ws-status>{{ $t(statusOf(item)) }}</span>
             <span v-if="closedNote(item)" class="chip ws-chip--warn" data-ws-closed>{{ $t(closedNote(item)!.chip) }}</span>
-            <span v-if="hiddenByOwner(item)" class="chip ws-chip--warn" data-ws-hidden>{{ $t("workshop.status.hiddenByOwner") }}</span>
           </p>
           <p v-if="closedNote(item)" class="subtle ws-text mine-ws__note" data-ws-closed-note>{{ $t(closedNote(item)!.line) }}</p>
-          <p v-if="hiddenByOwner(item)" class="subtle ws-text mine-ws__note" data-ws-hidden-note>{{ $t("workshop.mine.row.hiddenByOwner") }}</p>
         </div>
         <div class="mine-ws__actions">
           <RouterLink v-if="stageAvailable" :to="editTo(item)" class="btn btn--sm">{{ $t("workshop.mine.edit") }}</RouterLink>
         </div>
       </li>
+      <li v-for="item in universal" :key="item.id" class="panel mine-ws__row" :data-ws-mine="item.id">
+        <ExtensionCover class="mine-ws__cover" :src="''" :name="item.name" />
+        <div class="mine-ws__body">
+          <h3 class="mine-ws__name">{{ item.name || $t("workshop.mine.row.untitled") }}</h3>
+          <p class="subtle mine-ws__meta">{{ $t("workshop.mine.row.universalMeta") }}</p>
+          <p class="mine-ws__chips"><span class="chip">{{ $t("workshop.layer.universal") }}</span></p>
+        </div>
+        <div class="mine-ws__actions">
+          <RouterLink v-if="stageAvailable" :to="{ path: lp(`/mine/workshops/${encodeURIComponent(item.id)}/edit`), query: { scope: 'universal' } }" class="btn btn--sm">{{ $t("workshop.mine.edit") }}</RouterLink>
+        </div>
+      </li>
     </ul>
 
-    <CardPickerDialog v-if="stageAvailable && picking" @close="picking = false" />
+    <p v-if="universalFailed" class="notice notice--error" role="alert">
+      {{ $t("workshop.mine.error.load") }}
+      <button type="button" class="btn btn--sm" @click="load">{{ $t("library.retry") }}</button>
+    </p>
+    <WorkshopScopeDialog v-if="stageAvailable && picking" :initial-universal="preselectUniversal" @close="closePicker" />
   </div>
 </template>
 

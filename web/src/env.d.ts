@@ -10,6 +10,7 @@ declare module "*.vue" {
 declare module "moonstage/stage" {
   import type { App, Component } from "vue";
   export interface StageHost {
+    workshopWindow?: { allowed(roleId: string): boolean };
     ui: {
       toast(text: string, kind?: "info" | "success" | "error" | "warning", durationMs?: number): void;
       confirm(options: { title?: string; content: string; confirmText?: string; cancelText?: string }): Promise<boolean>;

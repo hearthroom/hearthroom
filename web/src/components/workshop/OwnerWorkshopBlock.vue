@@ -138,6 +138,9 @@ function retry() { if (failedTarget !== null) void save(failedTarget, true); }
 
     <template v-else-if="policy">
       <p class="muted ws-text ws-owner__desc">{{ $t("workshop.owner.switch.desc") }}</p>
+      <RouterLink v-if="cardRef" :to="{ path: lp('/mine'), query: { tab: 'workshop-management', card: cardRef } }" class="btn btn--sm ws-owner__go">
+        {{ $t("workshop.tab.ownerBanner.action") }}
+      </RouterLink>
       <div v-if="saveFailed" class="notice notice--error ws-owner__error" role="alert" data-ws-owner-error>
         <span class="ws-text">{{ $t("workshop.owner.error.save") }}</span>
         <button type="button" class="btn btn--sm" :disabled="saving" @click="retry">{{ $t("library.retry") }}</button>

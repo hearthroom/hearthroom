@@ -30,6 +30,7 @@ import { applyLocale, contentLang, i18n } from "@/lib/i18n";
 import { isPlayHost, mainSiteLinks, communityHost as communityHostForHistory } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
+import { openPlayModWindow, playModWindow, setPlayModScope } from "@/lib/play-mod-window";
 import { playSocialHost } from "@/lib/play-social";
 import { playShareHost } from "@/lib/play-share";
 import { playSharedHost } from "@/lib/play-shared";
@@ -76,6 +77,7 @@ export interface StageDeps {
   /** 目前所在頁的完整路徑，登入後要回到這裡。 */
   currentPath: () => string;
   currentRoleId?: () => string;
+  workshopAllowed?: (roleId: string) => boolean;
   /** 站台的 locale 前綴工具（/zh-Hans/...）。 */
   lp: (path: string) => string;
   /**
@@ -210,6 +212,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       else void deps.router.push(target);
     };
     const host = stage.browserHost({
+      ...(provider === "harbor" && !deps.guest && !deps.reviewId && deps.workshopAllowed
+        ? { workshopWindow: { allowed: deps.workshopAllowed } } : {}),
       ui: {
         toast: (text, kind, durationMs) => pushStageToast(text, kind, durationMs),
         confirm: (o) => confirmDialog({ title: o.title, message: o.content, confirmText: o.confirmText, cancelText: o.cancelText }),
@@ -294,6 +298,30 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。
     const storageScope = await stageStorageScope(provider, player);
     const startedConversations = new Set<string>();
+    if (host.workshopWindow) {
+      const scope = (payload: unknown) => {
+        const target = payload as { roleId?: unknown; conversationId?: unknown; showCapacity?: unknown } | null;
+        if (!target || target.roleId !== deps.currentRoleId?.() || typeof target.conversationId !== "string") return null;
+        return {
+          id: target.conversationId,
+          showCapacity: typeof target.showCapacity === "function" ? target.showCapacity as () => void : undefined,
+        };
+      };
+      host.events.on("workshopWindowScope", event => {
+        const target = scope(event);
+        if (target) setPlayModScope(target.id);
+      });
+      host.events.on("workshopWindowOpen", event => {
+        const target = scope(event);
+        if (target) openPlayModWindow(target.id, target.showCapacity);
+      });
+      host.events.on("workshopTurnAccepted", event => {
+        if (scope(event)?.id === playModWindow.conversationId) playModWindow.acceptedTurn++;
+      });
+      host.events.on("workshopSettingsChanged", event => {
+        if (scope(event)?.id === playModWindow.conversationId) playModWindow.settingsChanged++;
+      });
+    }
     host.events.on('conversationActivity', async (payload: unknown) => {
       if(deps.reviewId)return;
       const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;

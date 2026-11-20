@@ -30,12 +30,15 @@ import { loginPath } from "@/lib/login-return";
 import { isManagedAuth } from "@/lib/managed-auth";
 import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
-import { communityHost, isPlayHost } from "@/lib/site";
+import { communityHost, isPlayHost, mainSiteLinks } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
 import { resolveShareToken, setPlayShare, setPlayShareRef, shareContextOf, shareTokenOf } from "@/lib/play-share";
 import { setAuthorPlaytest } from "@/lib/play-author";
 import { currentReferralCode } from "@/lib/share-ref";
 import PlayInfoPanel from "@/components/PlayInfoPanel.vue";
+import PlayModWindow from "@/components/workshop/PlayModWindow.vue";
+import { playModWindow, setPlayModScope } from "@/lib/play-mod-window";
+import { fetchPolicy } from "@/lib/workshop";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
 import AdultGate from "@/components/AdultGate.vue";
@@ -53,6 +56,18 @@ const { t } = useI18n();
 
 const routeId = computed(() => String(route.params.roleId || ""));
 const roleId = shallowRef("");
+const workshopAllowed = shallowRef(false);
+const workshopCard = shallowRef("");
+const workshopToken = shallowRef<() => Promise<string | null>>(async () => null);
+const workshopHref = computed(() => {
+  if (!workshopCard.value) return "";
+  const links = mainSiteLinks({ locale: String(locale.value), lp });
+  return links.origin + links.lp(`/cards/${encodeURIComponent(workshopCard.value)}`) + "?tab=workshop";
+});
+function showWorkshopCapacity() {
+  playModWindow.open = false;
+  playModWindow.showCapacity?.();
+}
 const historyBootstrap = shallowRef<{conversationId?:string;readOnly?:boolean;reason?:string;title?:string}>({});
 /**
  * 卡片工坊交給畫布的三個參數（interface-stage.md §6；畫布不讀網址）：
@@ -194,7 +209,7 @@ function startShareRef(profileReady: Promise<unknown>) {
 let generation = 0;
 let canonicalNavigation = "";
 let playerProvider = "";
-onBeforeUnmount(() => { generation++; registerPlayCard(null); setPlayShare(null); });
+onBeforeUnmount(() => { generation++; registerPlayCard(null); setPlayShare(null); setPlayModScope(""); });
 onMounted(() => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
@@ -215,6 +230,9 @@ onMounted(() => {
     regionBlocked.value = false;
     backToReview.value = false;
     registerPlayCard(null);
+    setPlayModScope("");
+    workshopAllowed.value = false;
+    workshopCard.value = "";
     setPlayShare(null);
     setAuthorPlaytest(null);
     let recoveryProvider: ProviderId | null = null;
@@ -278,8 +296,17 @@ onMounted(() => {
       const player = sameProvider ? session.me : await fetchMeAt(apiBaseOf(provider), token);
       if (stale()) return;
       playerProvider = documentIdentity;
+      if (provider === "harbor" && !reviewId && route.query.mode !== "source") {
+        workshopToken.value = accessToken;
+        workshopCard.value = String(resolved.number ?? "");
+        void fetchPolicy(resolved.roleId, token).then(policy => {
+          if (!stale()) workshopAllowed.value = policy.allowNew;
+        }, () => {});
+      }
       const stage = await ensureStage({ app, router, session, provider, accessToken, player,
-        currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, reviewId });
+        currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, reviewId,
+        workshopAllowed: id => id === roleId.value && workshopAllowed.value,
+      });
       if (stale()) return;
       Stage.value = stage;
       track("play_open", { subject: roleId.value });
@@ -340,6 +367,12 @@ watch(locale, () => { void remergeStageMessages(); });
          transition. Once loading ends, remove the input-blocking cover directly. -->
     <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
     <PlayInfoPanel />
+    <PlayModWindow
+      :open="playModWindow.open" :conversation-id="playModWindow.conversationId" :token="workshopToken"
+      :browse-href="workshopHref" :accepted-turn="playModWindow.acceptedTurn"
+      :settings-changed="playModWindow.settingsChanged" :capacity-pending="!!playModWindow.showCapacity"
+      @close="playModWindow.open = false" @capacity="showWorkshopCapacity"
+    />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
     <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`" :role="toast.kind === 'error' ? 'alert' : 'status'" :aria-live="toast.kind === 'error' ? 'assertive' : 'polite'" aria-atomic="true">

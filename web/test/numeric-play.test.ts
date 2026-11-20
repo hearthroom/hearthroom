@@ -14,7 +14,8 @@ vi.mock('../src/lib/connections', () => ({accountToken:async()=>'host',connectAc
 vi.mock('../src/lib/play-authorization', () => ({ensurePlayAuthorization:async()=>true}));
 vi.mock('../src/lib/stage-host', () => ({ensureStage:mocks.stage,preloadStage:async()=>{},remergeStageMessages:async()=>{},stageToasts:{list:[]}}));
 vi.mock('../src/lib/card-manifest', () => ({applyCardHead:vi.fn()}));
-vi.mock('../src/lib/site', () => ({SITE:{name:'Hearthroom'},isPlayHost:()=>mocks.playApp,communityHost:()=> 'hearthroom.club'}));
+vi.mock('../src/lib/workshop', () => ({ fetchPolicy: async () => ({ allowNew: false }), CONSTANT_CHAR_LIMIT: 1500 }));
+vi.mock('../src/lib/site', () => ({SITE:{name:'Hearthroom'},isPlayHost:()=>mocks.playApp,communityHost:()=> 'hearthroom.club',mainSiteLinks:({lp}: {lp:(path:string)=>string})=>({origin:'https://hearthroom.club',lp})}));
 vi.mock('../src/lib/track', () => ({track:mocks.track}));
 vi.mock('../src/lib/share-ref', async (original) => ({...(await original<typeof import('../src/lib/share-ref')>()),currentReferralCode:async()=>'ABCD'}));
 let app:ReturnType<typeof createApp>, root:HTMLElement;

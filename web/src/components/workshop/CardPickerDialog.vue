@@ -21,6 +21,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { fetchWorkshopCards, type WorkshopCardChoice } from "@/lib/workshop";
 
 const emit = defineEmits<{ close: [] }>();
+const props = defineProps<{ dlcOnly?: boolean }>();
 const { t } = useI18n();
 const session = useSession();
 const router = useRouter();
@@ -42,7 +43,7 @@ async function load() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
     const got = await fetchWorkshopCards(query.value, token);
-    if (n === seq) items.value = got.items;
+    if (n === seq) items.value = props.dlcOnly ? got.items.filter((item) => item.viewerIsOwner) : got.items;
   } catch {
     if (n === seq) failed.value = true;
   } finally {

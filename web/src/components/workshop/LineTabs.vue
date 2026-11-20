@@ -6,7 +6,7 @@
  */
 import { nextTick, ref } from "vue";
 
-const props = defineProps<{ tabs: { key: K; label: string; count?: number | null }[]; modelValue: K; label: string; idPrefix: string }>();
+const props = defineProps<{ tabs: { key: K; label: string; count?: number | null; dotLabel?: string }[]; modelValue: K; label: string; idPrefix: string }>();
 const emit = defineEmits<{ "update:modelValue": [K] }>();
 const bar = ref<HTMLElement | null>(null);
 
@@ -29,6 +29,7 @@ async function onKey(e: KeyboardEvent, index: number) {
       @click="emit('update:modelValue', tab.key)" @keydown="onKey($event, i)"
     >
       {{ tab.label }}<small v-if="tab.count" class="line-tabs__n">{{ tab.count }}</small>
+      <span v-if="tab.dotLabel" class="line-tabs__dot"><span class="sr-only">{{ tab.dotLabel }}</span></span>
     </button>
   </div>
 </template>
@@ -46,4 +47,5 @@ async function onKey(e: KeyboardEvent, index: number) {
 .line-tabs__tab:hover { color: var(--text); }
 .line-tabs__tab[aria-selected="true"] { color: var(--accent-text); box-shadow: inset 0 -2px 0 var(--accent); }
 .line-tabs__n { font-size: 12px; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.line-tabs__dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--accent); }
 </style>

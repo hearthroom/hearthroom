@@ -21751,7 +21751,7 @@
           "Roles"
         ],
         "summary": "Read an extension draft",
-        "description": "Author only. Returns metadata, cover, rating, lorebook entries, display rules, opening, update note, published version and revision.",
+        "description": "Reads your own extension draft. Author DLC drafts can include package definitions and each Lorebook entry’s package assignment.",
         "x-unpublished": true,
         "security": [
           {
@@ -21774,7 +21774,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "lorePacks": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "$ref": "#/components/schemas/WorkshopLorePackDraft"
+                      },
+                      "description": "Optional package definitions for an original author’s DLC."
+                    },
+                    "scriptCanSwitchPacks": {
+                      "type": "boolean",
+                      "description": "The original author’s opt-in for the card script to change package selection. Defaults to off."
+                    },
+                    "worldbook": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "packId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Optional author DLC package assignment. Unassigned entries follow the DLC switch."
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -21799,7 +21826,7 @@
           "Roles"
         ],
         "summary": "Save an extension draft",
-        "description": "Saves even over the resident limit and returns `{revision, errors[]}` (`constant_char_limit` with `actual`, `max: 1500`, `unit: unicode_code_points`).",
+        "description": "Saves even over the resident limit and returns `{revision, errors[]}` (`constant_char_limit` with `actual`, `max: 1500`, `unit: unicode_code_points`). An original author can update their DLC package definitions, assignments and script permission in the same draft save.",
         "x-unpublished": true,
         "security": [
           {
@@ -21821,6 +21848,31 @@
                   },
                   "idempotencyKey": {
                     "type": "string"
+                  },
+                  "lorePacks": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/WorkshopLorePackDraft"
+                    },
+                    "description": "Optional package definitions for an original author’s DLC."
+                  },
+                  "scriptCanSwitchPacks": {
+                    "type": "boolean",
+                    "description": "The original author’s opt-in for the card script to change package selection. Defaults to off."
+                  },
+                  "worldbook": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "packId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Optional author DLC package assignment. Unassigned entries follow the DLC switch."
+                        }
+                      }
+                    }
                   }
                 },
                 "required": [
@@ -22331,6 +22383,122 @@
         }
       }
     },
+    "/open/v1/workshop/conversation/mod-packs": {
+      "get": {
+        "operationId": "getWorkshopConversationPackages",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Read the public packages of active author DLC",
+        "description": "Requires chat.play and an owned conversation. Returns version and items with workshopId, canSwitch and packs. Each pack contains id, name, optional description, defaultEnabled, enabled and residentChars.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversationId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public package metadata and current conversation version."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          }
+        }
+      },
+      "post": {
+        "operationId": "applyWorkshopConversationPackages",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Change the package selection for an owned conversation",
+        "description": "Requires chat.play and author DLC script permission. Applies the selection atomically on the next send after saving.",
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "const": "packs"
+                  },
+                  "packs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "workshopId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "packId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "workshopId",
+                        "packId",
+                        "enabled"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "conversationId",
+                  "version",
+                  "action",
+                  "packs"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Public package metadata and updated conversation version."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          },
+          "409": {
+            "description": "The selection changed; read again before applying."
+          }
+        }
+      }
+    },
     "/open/v1/role/context-preflight": {
       "post": {
         "operationId": "preflightCardContexts",
@@ -22414,6 +22582,851 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/conversation/mods": {
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "getConversationExtensions",
+        "summary": "Read conversation extension settings",
+        "description": "Requires chat.play and conversation ownership. Selection changes apply at the next send.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversationId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current settings for the owned conversation."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Conversation"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "writeConversationExtensions",
+        "summary": "Update conversation extension settings",
+        "description": "Requires chat.play and conversation ownership. Selection changes apply at the next send.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "toggle",
+                      "order",
+                      "remove",
+                      "add",
+                      "packs",
+                      "private_entry",
+                      "join_universal"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "entryId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "packs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "workshopId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "packId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "workshopId",
+                        "packId",
+                        "enabled"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "order": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "required": [
+                  "conversationId",
+                  "version",
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings after the write."
+          },
+          "409": {
+            "description": "The settings changed elsewhere."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/conversation/private-lorebook": {
+      "get": {
+        "tags": [
+          "Conversation"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "getConversationPrivateLorebook",
+        "summary": "Read your private Lorebook",
+        "description": "Requires chat.play and conversation ownership. For player-authored extensions, this is the same draft used by the extension editor. Contents remain private unless the player gives the original author permission to review.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversationId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current settings for the owned conversation."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Conversation"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "writeConversationPrivateLorebook",
+        "summary": "Update your private Lorebook",
+        "description": "Requires chat.play and conversation ownership. The entries are private to your account and shared across your saves of this agent configuration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "entries": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "content"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "conversationId",
+                  "revision",
+                  "entries"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings after the write."
+          },
+          "409": {
+            "description": "The settings changed elsewhere."
+          },
+          "404": {
+            "description": "Conversation unavailable."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/list": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "listPlayerShares",
+        "summary": "List player extensions available for review",
+        "description": "Requires role.read. The original card author sees only extensions whose players consented. Omit roleId to list all of your cards.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "roleId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/pending-count": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "countNewPlayerShares",
+        "summary": "Count new player extensions",
+        "description": "Requires role.read. Count unseen player extensions whose players gave you permission to display them.",
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/content": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "getPlayerShareContent",
+        "summary": "Read a player extension offered for display",
+        "description": "Requires role.read. Only the original card author has access while consent is active.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workshopId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/consent": {
+      "post": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "setPlayerShareConsent",
+        "summary": "Change permission to review and display",
+        "description": "Requires role.write. The extension owner grants or withdraws permission. Withdrawal closes author access and removes the extension from the Workshop.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "draftRevision",
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          },
+          "409": {
+            "description": "The version or authorization changed."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/display": {
+      "post": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "setPlayerShareDisplay",
+        "summary": "Change public display",
+        "description": "Requires role.write. The original card author can change display for the current revision while consent is active.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "draftRevision",
+                  "generation",
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          },
+          "409": {
+            "description": "The version or authorization changed."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/player-share/seen": {
+      "post": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "markPlayerShareSeen",
+        "summary": "Mark the reviewed version as seen",
+        "description": "Requires role.write. The original card author marks the current revision and permission generation as seen.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workshopId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "workshopId",
+                  "draftRevision",
+                  "generation"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          },
+          "409": {
+            "description": "The version or authorization changed."
+          }
+        }
+      }
+    },
+    "/open/v1/hosting/workshop/player-share/visibility": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "operationId": "getDisplayedPlayerWorkshops",
+        "summary": "Read the current public player-extension summaries",
+        "description": "Provide either the canonical work ID or up to 50 comma-separated extension IDs. The response includes currently displayed public metadata.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workshopIds",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/universal/list": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "listPrivateUniversalExtensions",
+        "summary": "List your universal extensions",
+        "description": "Requires chat.play. The optional conversation ID marks which extensions have been joined in that owned save.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversationId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/universal/draft": {
+      "get": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "getPrivateUniversalExtension",
+        "summary": "Read your universal extension",
+        "description": "Requires chat.play. Owner-only Lorebook content.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "savePrivateUniversalExtension",
+        "summary": "Save your universal extension",
+        "description": "Requires chat.play. For creation use the nil revision and a client request ID. Subsequent edits use the returned ID and current revision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 16
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "entries": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "content"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "revision",
+                  "entries"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          },
+          "409": {
+            "description": "The version or authorization changed."
+          }
+        }
+      }
+    },
+    "/open/v1/workshop/universal/delete": {
+      "post": {
+        "tags": [
+          "Workshop"
+        ],
+        "x-unpublished": true,
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "operationId": "deletePrivateUniversalExtension",
+        "summary": "Delete your universal extension",
+        "description": "Requires chat.play. The extension stops applying to subsequent sends.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "id",
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current result."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unavailable to this account."
+          },
+          "409": {
+            "description": "The version or authorization changed."
           }
         }
       }
@@ -38663,6 +39676,32 @@
             "description": "Which materials the context's requests include."
           }
         }
+      },
+      "WorkshopLorePackDraft": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "defaultEnabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "x-unpublished": true
       }
     }
   },

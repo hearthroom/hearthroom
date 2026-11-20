@@ -3,13 +3,17 @@ import { afterEach,beforeEach,expect,it } from 'vitest';
 import { approveFixtureResponse } from './hosted-fixture';
 import { bearer,identities,makeMember,ratingBody,resetDb,restoreUpstream,rolesOnMainSite } from './helpers';
 import { applyWorkshopEvents } from '../src/workshop';
-import { restoreWorkshopUpstream } from '../src/workshop-gateway';
+import { restoreWorkshopUpstream, workshopUpstream } from '../src/workshop-gateway';
 let cardId:number,workId:string;
 beforeEach(async()=>{
  await resetDb();identities({owner:74001,creator:74002});await makeMember(74001);await makeMember(74002);
  rolesOnMainSite({roleId:'v2-synthetic-card',authorNumId:74001,name:'Synthetic workshop v2'});
  const r=await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:{...bearer('owner'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'v2-synthetic-card',operationId:crypto.randomUUID(),...ratingBody(false)})}));expect(r.status).toBe(201);cardId=Number((await r.json() as any).id);
  const row=await env.DB.prepare("SELECT id FROM works WHERE source_provider='harbor' AND source_role_id='v2-synthetic-card'").first<{id:string}>();workId=row!.id;
+ workshopUpstream.playerDisplay = async (_env, _provider, ids) => {
+   const visible = await env.DB.prepare("SELECT id FROM workshops WHERE owner_state='visible' AND moderation_state='approved'").all<{id:string}>();
+   return { displayedIds: visible.results.map((row) => row.id).filter((id) => ids.includes(id)) };
+ };
 });
 afterEach(()=>{restoreWorkshopUpstream();restoreUpstream()});
 async function tab(){const r=await SELF.fetch(`https://c.test/v1/cards/${cardId}/workshop`,{headers:bearer('creator')});expect(r.status).toBe(200);return await r.json() as any}
@@ -27,6 +31,27 @@ it('only explicit v2 policy events can enable the page; legacy replays cannot re
 
 function publication(id=crypto.randomUUID(),version=1){return {workshopId:id,releaseId:crypto.randomUUID(),workId,sourceRoleId:'v2-synthetic-card',kind:'lorebook',status:'published',publicationRevision:version*2-1,version,draftRevision:2,publishedAt:Date.now(),contentHash:'synthetic-v1',authorPublicNo:74002,cardOwnerPublicNo:74001,ownerState:'visible',ownerGeneration:0,residentChars:14,policyVersion:2,sealed:{name:'Synthetic lore',summary:'SFW local lore',readme:'A local synthetic note.',coverUrl:'',rating:'G',worldbook:[{id:'lore',content:'synthetic lore',enabled:true,mode:'constant'}],rules:{rules:[]},opening:{mode:'greeting'},updateNote:''}}}
 async function openPolicy(){await applyWorkshopEvents(env,[{kind:'policy_changed',eventKey:'open-fixture',workId,sourceRoleId:'v2-synthetic-card',payload:{allowNew:true,revision:2,policyVersion:2}}])}
+it('withdrawal hides a player extension before the public projection catches up', async () => {
+  await openPolicy();
+  const receipt = publication();
+  await applyWorkshopEvents(env, [{ kind: 'release_published', eventKey: 'withdrawal-fixture', workId, workshopId: receipt.workshopId, payload: { policyVersion: 2, publication: receipt } }]);
+  let displayedIds = [receipt.workshopId];
+  workshopUpstream.playerDisplay = async () => ({ displayedIds, items: displayedIds.map((id) => ({
+    id, workId, sourceRoleId: receipt.sourceRoleId, name: 'Latest synthetic lore', summary: 'Latest edition',
+    readme: '', coverUrl: '', rating: 'G', loreCount: 2, residentChars: 17, joinCount: 3, authorNumber: 74002,
+    version: 2, publishedAt: receipt.publishedAt,
+  })) });
+  expect((await tab()).items).toHaveLength(1);
+  expect((await tab()).items[0]).toMatchObject({ name: 'Latest synthetic lore', version: 2, loreCount: 2, joinCount: 3 });
+  displayedIds = [];
+  expect((await tab()).items).toEqual([]);
+  for (const suffix of ['', '/versions', '/comments']) {
+    const res = await SELF.fetch(`https://c.test/v1/workshops/${receipt.workshopId}${suffix}`, { headers: bearer('owner') });
+    expect(res.status, suffix).toBe(404);
+  }
+  const res = await SELF.fetch(`https://c.test/v1/workshops?ids=${receipt.workshopId}`);
+  expect(await res.json()).toEqual({ items: [] });
+});
 it('publishes directly with the creator token and stores one public version without review',async()=>{
  await openPolicy();const receipt=publication();const calls:any[]=[];
  const gateway=await import('../src/workshop-gateway');(gateway.workshopUpstream as any).publish=async(_env:any,token:any,input:any)=>{calls.push({token,input});return receipt};

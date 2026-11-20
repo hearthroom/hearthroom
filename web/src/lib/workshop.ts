@@ -17,6 +17,7 @@ import { apiBaseOf, currentProvider } from "./provider";
 import { currentSurface } from "./track";
 import type { WorldbookEntryDraft } from "./role-draft";
 import type { RegexRuleSet } from "./regex-rules";
+import type { ConversationMods, ModAction, PrivateModBook, PrivateModEntry, UniversalMod, UniversalModChoice } from "./workshop-mods";
 
 /** 內容類型；"display" 是正則（介面規則），字面沿用線上契約，畫面寫「正則」 */
 export type WorkshopKind = "lore" | "display" | "opening";
@@ -66,12 +67,26 @@ export interface ExtensionDetail extends ExtensionSummary {
 export interface ExtensionVersion { version: number; publishedAt: number | null; note: string }
 
 export type MineStatus = "draft" | "live" | "live_changed";
+export type PlayerShareState = "private" | "pending" | "displayed" | "unlisted";
+export interface PlayerShare {
+  state: PlayerShareState; allowed: boolean; everAllowed: boolean;
+  draftRevision: number; generation: number; new: boolean; hasUpdate: boolean; joinCount: number;
+}
+export interface PlayerShareItem extends PlayerShare {
+  workshopId: string; roleId: string; cardNumber: number; cardName: string; name: string; coverUrl: string;
+  authorNumber: number; authorName?: string; entryCount: number; residentChars: number; updatedAt: number; closed: boolean;
+}
+export interface PlayerShareContent extends PlayerShare {
+  workshopId: string; name: string; summary: string;
+  entries: { id?: string; entryId?: string; name: string; content: string; keywords?: string[] }[];
+}
 export interface MineItem extends ExtensionSummary {
   card: { id: string; num: number; name: string; roleId: string };
   status: MineStatus;
   ownerState: OwnerState;
   /** 原卡作者關了這張卡的工坊：已發布的也暫停套用 */
   workshopClosed: boolean;
+  playerShareState?: PlayerShareState;
 }
 export interface WorkshopCardChoice {
   cardId: string; num: number; name: string; avatarUrl?: string;
@@ -109,13 +124,17 @@ export interface OwnerPolicy {
 }
 
 export interface WorkshopOpening { mode: "greeting" | "page"; welcome: string; alternates: string[]; prologue: string[]; openingPage: string }
+export interface LorePackDraft { id: string; name: string; description?: string; defaultEnabled: boolean }
 export interface WorkshopDraft {
   workshopId: string; revision: number;
   kind: ExtensionLayer;
+  playerShare?: PlayerShare;
   card: { roleId: string; cardId: string; num: number; name: string; ownerIsMe: boolean };
   name: string; summary: string; readme: string; coverUrl: string;
   rating: string | null; ratingAnswers: Record<string, unknown> | null;
   worldbook: WorldbookEntryDraft[];
+  lorePacks?: LorePackDraft[];
+  scriptCanSwitchPacks?: boolean;
   rules: RegexRuleSet;
   opening: WorkshopOpening;
   updateNote: string;
@@ -123,7 +142,7 @@ export interface WorkshopDraft {
   changedSincePublish: boolean;
 }
 /** 玩家擴充不送 rules／opening（伺服器拒收非空的正則與開場）；作者 DLC 一律帶 */
-export type DraftWrite = Pick<WorkshopDraft, "name" | "summary" | "readme" | "coverUrl" | "rating" | "ratingAnswers" | "worldbook" | "updateNote"> & Partial<Pick<WorkshopDraft, "rules" | "opening">>;
+export type DraftWrite = Pick<WorkshopDraft, "name" | "summary" | "readme" | "coverUrl" | "rating" | "ratingAnswers" | "worldbook" | "updateNote"> & Partial<Pick<WorkshopDraft, "rules" | "opening" | "lorePacks" | "scriptCanSwitchPacks">>;
 export interface DraftError { code: string; actual?: number; max?: number; unit?: string }
 
 // ---- 請求 ------------------------------------------------------------------
@@ -182,6 +201,25 @@ export const uninstallWorkshop = (roleId: string, workshopId: string, token: str
 export const saveSelection = (roleId: string, selection: Selection, token: string) =>
   upstream<Selection>("/workshop/selection/save", token, { roleId, expectedRevision: selection.revision, items: selection.items.map((i) => ({ workshopId: i.workshopId, enabled: i.enabled })) });
 export const fetchUsageSummary = (roleId: string, token: string) => upstream<UsageSummary>(`/workshop/usage-summary${q({ roleId })}`, token);
+
+const conversationModsPath = "/workshop/conversation/mods";
+const privateModPath = "/workshop/conversation/private-lorebook";
+export const fetchConversationMods = (conversationId: string, token: string) =>
+  upstream<ConversationMods>(conversationModsPath + q({ conversationId }), token);
+export const applyConversationMod = (conversationId: string, version: string, action: ModAction, token: string) =>
+  upstream<ConversationMods>(conversationModsPath, token, { conversationId, version, ...action });
+export const fetchPrivateMod = (conversationId: string, token: string) =>
+  upstream<PrivateModBook>(privateModPath + q({ conversationId }), token);
+export const savePrivateMod = (conversationId: string, revision: string, entries: PrivateModEntry[], token: string) =>
+  upstream<PrivateModBook>(privateModPath, token, { conversationId, revision, entries: entries.map(({ id, name, content, keywords }) => ({ id, name, content, keywords })) });
+export const listUniversalMods = (token: string, conversationId?: string) =>
+  upstream<{ items: UniversalModChoice[] }>(`/workshop/universal/list${q({ conversationId })}`, token);
+export const getUniversalMod = (id: string, token: string) =>
+  upstream<UniversalMod>(`/workshop/universal/draft${q({ id })}`, token);
+export const saveUniversalMod = (mod: UniversalMod, token: string) =>
+  upstream<UniversalMod>("/workshop/universal/draft", token, mod);
+export const deleteUniversalMod = (id: string, revision: string, token: string) =>
+  upstream<{ ok: true }>("/workshop/universal/delete", token, { id, revision });
 /** 切換上下文檔位：跟畫布的模型選單存同一個設定（這張卡的遊玩設定），存好才算數 */
 export const saveContextTier = (roleId: string, context: number, token: string) => upstream<unknown>("/player/role-settings/save", token, { roleId, context });
 export const fetchPolicy = (roleId: string, token: string) => upstream<OwnerPolicy>(`/workshop/policy${q({ roleId })}`, token);
@@ -199,6 +237,18 @@ export const ownerAction = (workshopId: string, action: "hide" | "restore", toke
   community<{ ownerState: OwnerState; generation?: number }>(`/workshops/${encodeURIComponent(workshopId)}/owner-action`, token, "POST", { action });
 export const createWorkshop = (roleId: string, token: string) => upstream<{ workshopId: string }>("/workshop/create", token, { roleId });
 export const fetchDraft = (workshopId: string, token: string) => upstream<WorkshopDraft>(`/workshop/draft${q({ workshopId })}`, token);
+export const fetchPlayerShares = (roleId: string, token: string) =>
+  upstream<{ items: PlayerShareItem[] }>(`/workshop/player-share/list${q({ roleId })}`, token);
+export const fetchNewPlayerShareCount = (token: string) =>
+  upstream<{ count: number }>("/workshop/player-share/pending-count", token);
+export const readPlayerShare = (workshopId: string, token: string) =>
+  upstream<PlayerShareContent>(`/workshop/player-share/content${q({ workshopId })}`, token);
+export const setPlayerShareConsent = (workshopId: string, draftRevision: number, enabled: boolean, token: string) =>
+  upstream<PlayerShare>("/workshop/player-share/consent", token, { workshopId, draftRevision, enabled });
+export const setPlayerShareDisplay = (item: Pick<PlayerShareItem, "workshopId" | "draftRevision" | "generation">, enabled: boolean, token: string) =>
+  upstream<PlayerShare>("/workshop/player-share/display", token, { workshopId: item.workshopId, draftRevision: item.draftRevision, generation: item.generation, enabled });
+export const markPlayerShareSeen = (item: Pick<PlayerShareItem, "workshopId" | "draftRevision" | "generation">, token: string) =>
+  upstream<{ ok: true }>("/workshop/player-share/seen", token, { workshopId: item.workshopId, draftRevision: item.draftRevision, generation: item.generation });
 export const saveDraft = (workshopId: string, expectedRevision: number, idempotencyKey: string, fields: DraftWrite, token: string) =>
   upstream<{ revision: number; errors: DraftError[] }>("/workshop/draft/save", token, { workshopId, expectedRevision, idempotencyKey, ...fields });
 export const deleteWorkshop = (workshopId: string, token: string) => upstream<unknown>("/workshop/delete", token, { workshopId });

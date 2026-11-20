@@ -21,7 +21,7 @@ import { useI18n } from "vue-i18n";
 import { ApiError, uploadImage } from "@/lib/api";
 import {
   CONSTANT_CHAR_LIMIT, constantChars, deleteWorkshop, discardWorkshopChanges, fetchDraft, fetchMyWorkshops, publishChecklist,
-  publishState, publishWorkshop, saveDraft, unpublishWorkshop,
+  publishState, publishWorkshop, saveDraft, setPlayerShareConsent, unpublishWorkshop,
   type DraftWrite, type MineItem, type MineStatus, type OwnerState, type WorkshopDraft,
 } from "@/lib/workshop";
 import { emptyRuleSet, ruleSetFromImport, ruleSetToExport, type OpeningMode } from "@/lib/regex-rules";
@@ -37,6 +37,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import FieldText from "@/components/editor/FieldText.vue";
 import ImageField from "@/components/editor/ImageField.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
+import WorkshopPacksEditor from "./WorkshopPacksEditor.vue";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import OpeningEditor from "@/components/editor/OpeningEditor.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
@@ -110,7 +111,7 @@ function writable(d: WorkshopDraft): DraftWrite {
     name: d.name, summary: d.summary, readme: d.readme, coverUrl: d.coverUrl, rating: d.rating, ratingAnswers: d.ratingAnswers,
     worldbook: d.worldbook, updateNote: d.updateNote,
   };
-  return d.kind === "dlc" ? { ...base, rules: d.rules, opening: d.opening } : base;
+  return d.kind === "dlc" ? { ...base, rules: d.rules, opening: d.opening, lorePacks: d.lorePacks ?? [], scriptCanSwitchPacks: d.scriptCanSwitchPacks ?? false } : base;
 }
 const dirty = computed(() => Boolean(draft.value) && JSON.stringify(writable(draft.value!)) !== baseline.value);
 
@@ -120,6 +121,8 @@ function apply(d: WorkshopDraft) {
     ...d,
     name: d.name ?? "", summary: d.summary ?? "", readme: d.readme ?? "", coverUrl: d.coverUrl ?? "", updateNote: d.updateNote ?? "",
     worldbook: d.worldbook ?? [],
+    lorePacks: (d.lorePacks ?? []).map(pack => ({ ...pack, defaultEnabled: pack.defaultEnabled !== false })),
+    scriptCanSwitchPacks: d.scriptCanSwitchPacks ?? false,
     rules: d.rules ?? emptyRuleSet(),
     opening: {
       mode: d.opening?.mode ?? "greeting", welcome: d.opening?.welcome ?? "", alternates: d.opening?.alternates ?? [],
@@ -201,7 +204,7 @@ async function save(): Promise<boolean> {
     await refreshItem(tk);
     // 草稿存在 Provider、狀態清單在本站：清單還沒跟上時，已發布又存了修改就是「有未發布的修改」，
     // 不然存完 dirty 歸零，「發布更新」會消失，存下的修改發布不出去
-    if (wasLive && status.value === "live") status.value = "live_changed";
+    if (isDlc.value && wasLive && status.value === "live") status.value = "live_changed";
     return true;
   } catch (err) {
     if (err instanceof ApiError && err.code === "draft_stale") stale.value = true;
@@ -211,6 +214,65 @@ async function save(): Promise<boolean> {
     saving.value = false;
   }
 }
+
+const shareChecks = computed(() => ({
+  name: !!draft.value?.name.trim(),
+  summary: !!draft.value?.summary.trim(),
+  entries: !!draft.value?.worldbook.some((entry) => entry.isEnabled && entry.content.trim()),
+}));
+const shareReady = computed(() => Object.values(shareChecks.value).every(Boolean));
+const shareQualified = computed(() => shareReady.value && !!draft.value?.rating);
+const shareStatus = computed(() => {
+  switch (draft.value?.playerShare?.state) {
+    case "displayed": return "showing";
+    case "pending": return "waitingAuthor";
+    case "unlisted": return "notShownByAuthor";
+    default: return "private";
+  }
+});
+const shareDescription = computed(() => {
+  const share = draft.value?.playerShare;
+  if (share?.state === "displayed") return "showing";
+  if (share?.state === "pending") return "waitingAuthor";
+  if (share?.state === "unlisted") return "notShownByAuthor";
+  return share?.everAllowed ? "withdrawn" : "private";
+});
+
+async function changeShare() {
+  const current = draft.value;
+  const share = current?.playerShare;
+  if (!current || !share || busy.value || saving.value || stale.value) return;
+  const enabled = !share.allowed;
+  if (enabled && (!shareQualified.value || workshopClosed.value)) return;
+  busy.value = true;
+  error.value = "";
+  try {
+    if (enabled && !share.everAllowed && !(await confirmDialog({
+      title: t("workshop.share.confirm.title"), message: t("workshop.share.confirm.body"),
+      confirmText: t("workshop.share.confirm.confirm"), cancelText: t("dialog.cancel"), focusCancel: true,
+    }))) return;
+    if (enabled && dirty.value && !(await save())) return;
+    current.playerShare = await setPlayerShareConsent(current.workshopId, revision.value, enabled, await token());
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "draft_stale") stale.value = true;
+    else error.value = t("workshop.managePage.error.actionFailed");
+  } finally {
+    busy.value = false;
+  }
+}
+
+let playerSaveTimer: ReturnType<typeof setTimeout> | undefined;
+function queuePlayerSave() {
+  clearTimeout(playerSaveTimer);
+  playerSaveTimer = setTimeout(() => {
+    if (!dirty.value || stale.value) return;
+    if (saving.value || busy.value) queuePlayerSave();
+    else void save();
+  }, 550);
+}
+watch(() => draft.value && !isDlc.value && JSON.stringify(writable(draft.value)), (next) => {
+  if (next) queuePlayerSave();
+});
 
 /** 重新載入伺服器那份（只在別處改過之後、作者自己按的時候） */
 function reload() { void load(); }
@@ -366,8 +428,18 @@ async function editRating() {
 // ── 世界書 ────────────────────────────────────────────────────────
 
 const numberFmt = computed(() => new Intl.NumberFormat(String(locale.value)));
+function removeLorePack(packId: string) {
+  if (draft.value) draft.value.worldbook = draft.value.worldbook.map(entry => entry.packId === packId ? { ...entry, packId: undefined } : entry);
+}
+function updateBook(entries: WorldbookEntryDraft[]) {
+  const current = draft.value;
+  if (!current) return;
+  current.worldbook = current.kind === "dlc"
+    ? entries.map(entry => entry.id || entry.entryId ? entry : { ...entry, id: crypto.randomUUID() })
+    : entries;
+}
 function onBookImported(payload: { entries: WorldbookEntryDraft[] }) {
-  if (draft.value) draft.value.worldbook = payload.entries;
+  updateBook(payload.entries);
 }
 const fileName = () => safeFileName(draft.value?.name ?? "", "extension");
 function exportBook() {
@@ -465,7 +537,7 @@ const onKey = (e: KeyboardEvent) => {
   }
 };
 onMounted(() => { window.addEventListener("beforeunload", guard); window.addEventListener("keydown", onKey); });
-onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); window.removeEventListener("keydown", onKey); clearTimeout(toastTimer); });
+onBeforeUnmount(() => { window.removeEventListener("beforeunload", guard); window.removeEventListener("keydown", onKey); clearTimeout(toastTimer); clearTimeout(playerSaveTimer); });
 
 /** 錯誤放在表單頂端：作者多半在某一區的深處按下按鈕，訊息要自己走到他眼前 */
 watch(error, async (text) => {
@@ -500,7 +572,7 @@ watch(error, async (text) => {
         <nav class="ws-ed__nav" :aria-label="$t('editor.sections')">
           <button v-for="key in SECTIONS" :key="key" type="button" class="ws-ed__tab" :class="{ 'ws-ed__tab--on': section === key }"
                   :aria-current="section === key ? 'true' : undefined" :data-section-tab="key" @click="go(key)">
-            <span class="ws-ed__tab-label">{{ $t(SECTION_LABEL[key]) }}</span>
+            <span class="ws-ed__tab-label">{{ $t(key === "publish" && !isDlc ? "workshop.share.tab" : SECTION_LABEL[key]) }}</span>
             <span v-if="key === 'world' && residentOver" class="ws-ed__dot" role="img" :aria-label="$t('editor.section.missing')" />
             <span v-else-if="key === 'world' && draft.worldbook.length" class="ws-ed__n">{{ draft.worldbook.length }}</span>
             <span v-else-if="key === 'regex' && draft.rules.rules.length" class="ws-ed__n">{{ draft.rules.rules.length }}</span>
@@ -567,9 +639,13 @@ watch(error, async (text) => {
             </div>
             <p v-if="residentOver" class="notice notice--error ws-text" role="alert" data-resident-over>{{ $t("workshop.editor.resident.over") }}</p>
             <!-- 擴充的世界書是草稿內嵌的條目，沒有「綁一本書」這回事：以已綁定、書名鎖住的樣子沿用，只編條目 -->
+            <WorkshopPacksEditor v-if="isDlc" :packs="draft.lorePacks ?? []" :script-can-switch="draft.scriptCanSwitchPacks ?? false"
+              :entries="draft.worldbook" @update:packs="draft.lorePacks = $event" @update:script-can-switch="draft.scriptCanSwitchPacks = $event"
+              @remove="removeLorePack" />
             <div class="ws-ed__wb">
-              <WorldbookEditor v-model="draft.worldbook" :book-name="draft.name" book-desc="" bound meta-locked :language="String(locale)"
-                               @imported="onBookImported" @export-book="exportBook" />
+              <WorldbookEditor :model-value="draft.worldbook" @update:model-value="updateBook" :book-name="draft.name" book-desc="" bound meta-locked :language="String(locale)"
+                               :lore-packs="isDlc ? (draft.lorePacks ?? []) : undefined"
+                               @update:lore-packs="draft.lorePacks = $event" @imported="onBookImported" @export-book="exportBook" />
             </div>
           </section>
 
@@ -602,11 +678,36 @@ watch(error, async (text) => {
           </section>
 
           <!-- 發布 -->
-          <section v-else class="pane" data-section="publish">
+          <section v-else-if="isDlc" class="pane" data-section="publish">
             <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
             <PublishPane :state="pubState" :kind="draft.kind" :draft="draft" :checklist="checklist" :owner-state="ownerState"
                          :workshop-closed="workshopClosed" :busy="busy || saving || stale" v-model:note="draft.updateNote"
                          @publish="publish" @unpublish="unpublish" @discard="discard" @delete="remove" />
+          </section>
+          <section v-else class="pane" data-section="share">
+            <div class="ws-share__status">
+              <h2 class="pane__title">{{ $t("workshop.share.sectionTitle") }}</h2>
+              <span class="chip">{{ $t(`workshop.status.${shareStatus}`) }}</span>
+            </div>
+            <div class="ws-share">
+              <div class="ws-share__switch">
+                <strong id="ws-share-label">{{ $t("workshop.share.switchLabel") }}</strong>
+                <button type="button" class="ws-switch" role="switch" aria-labelledby="ws-share-label"
+                        aria-describedby="ws-share-description" :aria-checked="draft.playerShare?.allowed ?? false"
+                        :disabled="!draft.playerShare || busy || saving || stale || (!draft.playerShare.allowed && (!shareQualified || workshopClosed))"
+                        @click="changeShare" />
+              </div>
+              <p id="ws-share-description" class="muted ws-text">{{ $t(`workshop.share.desc.${shareDescription}`, { joins: draft.playerShare?.joinCount ?? 0 }) }}</p>
+              <div v-if="!shareQualified && !draft.playerShare?.allowed" class="notice">
+                <strong>{{ $t("workshop.share.check.title") }}</strong>
+                <ul class="ws-share__checks">
+                  <li v-for="(ready, field) in shareChecks" :key="field"><span aria-hidden="true">{{ ready ? '✓' : '○' }}</span> {{ $t(`workshop.share.check.${field}`) }}</li>
+                  <li><span aria-hidden="true">{{ draft.rating ? '✓' : '○' }}</span> {{ $t("workshop.publish.check.rating") }}</li>
+                </ul>
+                <p v-if="!shareReady" class="muted ws-text">{{ $t("workshop.share.check.missingHint") }}</p>
+              </div>
+              <button v-if="!draft.published" class="btn btn--sm btn--danger" type="button" :disabled="busy || saving" @click="remove">{{ $t("workshop.delete.button") }}</button>
+            </div>
           </section>
         </div>
       </div>
@@ -632,6 +733,11 @@ watch(error, async (text) => {
 
 <style scoped>
 .ws-ed { display: grid; gap: var(--s-4); max-width: 1040px; width: 100%; margin: 0 auto; }
+.ws-share { display: grid; gap: var(--s-3); justify-items: start; }
+.ws-share p { margin: 0; }
+.ws-share__switch { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); width: 100%; min-height: 44px; }
+.ws-share__status { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.ws-share__checks { display: grid; gap: var(--s-1); margin: var(--s-2) 0; padding: 0; list-style: none; }
 .ws-ed__head { display: grid; gap: var(--s-1); justify-items: start; }
 .ws-ed__head h1 { margin: 0; font-size: 22px; }
 .ws-ed__head .eyebrow { margin: 0; }

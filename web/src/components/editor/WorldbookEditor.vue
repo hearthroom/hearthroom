@@ -25,6 +25,7 @@ import { useSession } from "@/lib/session";
 import { worldbookReviewCount } from "@/lib/draft-review-length";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
 import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
+import type { LorePackDraft } from "@/lib/workshop";
 import WorldbookEntriesDialog from "./WorldbookEntriesDialog.vue";
 
 const props = defineProps<{
@@ -41,10 +42,12 @@ const props = defineProps<{
   language: string;
   /** 整本已啟用條目的有效字數（格式化後的數字字串；未傳時自己照 modelValue 算）。 */
   totalChars?: string | null;
+  lorePacks?: LorePackDraft[];
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
+  "update:lorePacks": [LorePackDraft[]];
   "update:bookName": [string];
   "update:bookDesc": [string];
   create: [];
@@ -262,6 +265,7 @@ const preview = computed(() =>
     </div>
 
     <WorldbookEntriesDialog v-if="open" :model-value="modelValue" :language="language" :total-chars="totalCharsText"
+                            :lore-packs="lorePacks" @update:lore-packs="emit('update:lorePacks', $event)"
                             @update:model-value="emit('update:modelValue', $event)" @close="open = false" />
     </template>
   </section>

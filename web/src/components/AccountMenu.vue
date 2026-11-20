@@ -12,6 +12,7 @@ import { logoutWithRoutes } from "@/lib/logout";
 import NewMark from "@/components/NewMark.vue";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import { useCheckin } from "@/lib/checkin-store";
+import { useWorkshopSharePending } from "@/lib/workshop-share-pending";
 
 import CompactSiteSections from "./CompactSiteSections.vue";
 import AppearanceMenu from "./AppearanceMenu.vue";
@@ -23,6 +24,7 @@ const language = ref<InstanceType<typeof LocaleSwitch> | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const menuTop = ref(0);
 const session = useSession();
+const { pendingCount: workshopPending, refreshPending: refreshWorkshopPending } = useWorkshopSharePending();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
 const reviewerStore = useReviewer();
 // 簽到：今天還沒簽，頭像與選單的「簽到」各一個點（頭像上跟審核佇列共用同一顆，ui.md §1.1、美術總監 Q8）
@@ -35,7 +37,7 @@ const open = ref(false);
 useHeaderOverlay(open);
 watch(() => props.compact, () => { open.value = false; });
 const opener = () => root.value?.querySelector<HTMLElement>(".acct__btn") ?? null;
-watch(open, async value => { if (value) { await nextTick(); menuTop.value = menu.value?.getBoundingClientRect().top ?? 0; } });
+watch(open, async value => { if (value) { void refreshWorkshopPending(); await nextTick(); menuTop.value = menu.value?.getBoundingClientRect().top ?? 0; } });
 function menuKey(e: KeyboardEvent) { if (open.value && menu.value) navigateMenu(e, menu.value); }
 function preference(which: "appearance" | "language") {
   open.value = false;
@@ -110,6 +112,10 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
           <div class="menu__group">
             <p class="menu__label">{{ $t('home.contentGroup') }}</p>
             <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
+            <RouterLink :to="lp('/mine?tab=workshop-management')" class="menu__item" role="menuitem">
+              <AccountIcon name="folder" />{{ $t("workshop.managePage.nav") }}
+              <span v-if="workshopPending" class="menu__dot"><span class="sr-only">{{ $t("workshop.managePage.dotSr") }}</span></span>
+            </RouterLink>
             <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
             <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("preset.nav") }}</RouterLink>
             <RouterLink v-if="can('instructions')" :to="lp('/me/instructions')" class="menu__item" role="menuitem"><AccountIcon name="chat" />{{ $t("instructions.nav") }}</RouterLink>

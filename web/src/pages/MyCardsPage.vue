@@ -25,6 +25,8 @@ import { signedInHint } from "@/lib/signin-hint";
 import { suki } from "@/pet/events";
 import LineTabs from "@/components/workshop/LineTabs.vue";
 import MineExtensions from "@/components/workshop/MineExtensions.vue";
+import WorkshopManagement from "@/components/workshop/WorkshopManagement.vue";
+import { useWorkshopSharePending } from "@/lib/workshop-share-pending";
 
 const route = useRoute();
 const router = useRouter();
@@ -38,18 +40,24 @@ const visibilityEnabled=useWorkVisibilityCapability();
  * 卡片分頁照舊，也不多打任何請求：擴充分頁第一次打開才掛上（之後用 v-show 留著，切回來不重讀），
  * 分頁標籤上的數字由它讀完回報；還沒打開過時標籤只寫「擴充」。
  */
-type MineTab = "cards" | "workshops";
-const tab = computed<MineTab>(() => route.query.tab === "workshops" ? "workshops" : "cards");
+type MineTab = "cards" | "workshops" | "workshop-management";
+const tab = computed<MineTab>(() => {
+  if (route.query.tab === "workshops" || route.query.tab === "workshop-management") return route.query.tab;
+  return "cards";
+});
+const { pendingCount, refreshPending } = useWorkshopSharePending();
+watch(() => session.me?.accountNumId, (account) => { if (account) void refreshPending(); }, { immediate: true });
 const extensionCount = ref<number | null>(null);
 const workshopsOpened = ref(tab.value === "workshops");
 watch(tab, (value) => { if (value === "workshops") workshopsOpened.value = true; });
 const mineTabs = computed(() => [
   { key: "cards" as const, label: t("workshop.mine.tab.cards") },
   { key: "workshops" as const, label: extensionCount.value === null ? t("workshop.mine.tab.extensionsIdle") : t("workshop.mine.tab.extensions", { n: extensionCount.value }) },
+  { key: "workshop-management" as const, label: t("workshop.managePage.nav"), dotLabel: pendingCount.value ? t("workshop.managePage.dotSr") : undefined },
 ]);
 function setTab(next: MineTab) {
   if (next === tab.value) return;
-  void router.push({ query: { ...route.query, tab: next === "workshops" ? "workshops" : undefined } });
+  void router.push({ query: { ...route.query, tab: next === "cards" ? undefined : next, card: undefined } });
 }
 const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 /** 符合目前搜尋與篩選的張數（每家各算） */
@@ -256,6 +264,9 @@ watch(()=>route.query.fresh, fresh=>{
 
     <section v-if="workshopsOpened" v-show="tab === 'workshops'" :id="tab === 'workshops' ? 'mine-panel' : undefined" role="tabpanel" aria-labelledby="mine-tab-workshops">
       <MineExtensions @count="extensionCount = $event" />
+    </section>
+    <section v-if="tab === 'workshop-management'" id="mine-panel" role="tabpanel" aria-labelledby="mine-tab-workshop-management">
+      <WorkshopManagement />
     </section>
 
     <section v-if="tab === 'cards'" id="mine-panel" role="tabpanel" aria-labelledby="mine-tab-cards">

@@ -16,6 +16,7 @@ import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
 import { entryContentMax } from "@/lib/tavern";
 import { looksLikeBareRegex } from "@/lib/lorebook-regex";
+import type { LorePackDraft } from "@/lib/workshop";
 
 const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
@@ -23,9 +24,11 @@ const props = defineProps<{
   language: string;
   /** 整本已啟用條目的有效字數（格式化後的數字字串；算不出時為 null）。 */
   totalChars?: string | null;
+  lorePacks?: LorePackDraft[];
 }>();
 const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
+  "update:lorePacks": [LorePackDraft[]];
   close: [];
 }>();
 
@@ -47,9 +50,50 @@ const primaryRegexHint = computed(() => entry.value?.keywords.some(looksLikeBare
 const secondaryRegexHint = computed(() => entry.value?.secondaryKeywords?.some(looksLikeBareRegex) ?? false);
 
 const query = ref("");
+const packFilter = ref("");
+const batch = ref(false);
+const selection = ref<number[]>([]);
+const moveDialog = ref<HTMLDialogElement | null>(null);
+const targetPack = ref<string | null>(null);
+const newPack = ref("");
+const NEW_PACK = "new";
+const availablePack = computed(() => new Map(props.lorePacks?.map(pack => [pack.id, pack.name])));
+const newPackError = computed(() => {
+  const name = newPack.value.trim();
+  if (Array.from(name).length > 12) return t("wb.packs.form.nameTooLong", { max: 12 });
+  if (props.lorePacks?.some(pack => pack.name.trim().toLowerCase() === name.toLowerCase())) return t("wb.packs.form.nameTaken");
+  return "";
+});
+
+function setSelection(index: number, checked: boolean) {
+  selection.value = checked ? [...selection.value, index] : selection.value.filter(value => value !== index);
+}
+function cancelBatch() {
+  batch.value = false;
+  selection.value = [];
+}
+function openMoveDialog() {
+  targetPack.value = null;
+  newPack.value = "";
+  moveDialog.value?.showModal();
+}
+function saveMove() {
+  if (!props.lorePacks || !selection.value.length || targetPack.value === null) return;
+  let packId = targetPack.value || undefined;
+  if (packId === NEW_PACK) {
+    if (!newPack.value.trim() || newPackError.value || props.lorePacks.length >= 100) return;
+    packId = crypto.randomUUID();
+    emit("update:lorePacks", [...props.lorePacks, { id: packId, name: newPack.value.trim(), defaultEnabled: true }]);
+  }
+  const picked = new Set(selection.value);
+  commit(props.modelValue.map((row, index) => picked.has(index) ? { ...row, packId } : row));
+  moveDialog.value?.close();
+  cancelBatch();
+}
 const visible = computed(() => {
   const q = query.value.trim().toLowerCase();
-  const rows = props.modelValue.map((row, index) => ({ row, index }));
+  const rows = props.modelValue.map((row, index) => ({ row, index }))
+    .filter(({ row }) => !packFilter.value || (row.packId ?? "unpacked") === packFilter.value);
   if (!q) return rows;
   return rows.filter(({ row }) =>
     [row.name, row.content, row.keywords.join(" "), (row.secondaryKeywords ?? []).join(" ")]
@@ -156,7 +200,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 watch(windowRows, () => { observeRows(); }, { flush: 'post' });
-watch(query, () => {
+watch([query, packFilter], () => {
   if (rowsElement.value) rowsElement.value.scrollTop = 0;
   scrollTop.value = 0;
 });
@@ -209,7 +253,8 @@ function setEnabled(index: number, isEnabled: boolean) {
 function add() {
   commit([
     ...props.modelValue,
-    { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, semanticRecall: true, category: "custom" },
+    { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, semanticRecall: true, category: "custom",
+      ...(packFilter.value && availablePack.value.has(packFilter.value) ? { packId: packFilter.value } : {}) },
   ]);
   selected.value = props.modelValue.length;
   query.value = "";
@@ -231,7 +276,7 @@ async function remove(index: number) {
  * 換順序。這不只是整理：常駐條目每輪有上限，擠不下時上游留的是排在前面的幾條。
  * 過濾中不給拖——畫面上只有一部分條目，放下去要落在哪一格沒有一個誠實的答案。
  */
-const canOrder = computed(() => !query.value.trim() && props.modelValue.length > 1);
+const canOrder = computed(() => !batch.value && !packFilter.value && !query.value.trim() && props.modelValue.length > 1);
 
 function onDrop(to: number) {
   const from = dragFrom.value;
@@ -279,7 +324,10 @@ watch(
 );
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape") {
+    if (batch.value) cancelBatch();
+    else emit("close");
+  }
   if (event.key !== 'Tab' || event.defaultPrevented || !visible.value.length) return;
   const target = event.target as HTMLElement;
   // Preserve the full DOM tab order even when the list is scrolled: Add → first
@@ -316,27 +364,40 @@ function onKeydown(event: KeyboardEvent) {
           <aside class="wbd__list">
             <input v-model="query" class="input" type="search" :placeholder="$t('wb.search.placeholder')"
                    :aria-label="$t('wb.search.placeholder')" />
-            <button type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+            <div v-if="lorePacks?.length" class="seg wbd__pack-filter">
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': !packFilter }" :aria-pressed="!packFilter"
+                      @click="packFilter = ''">{{ $t("wb.filter.all") }}</button>
+              <button v-for="pack in lorePacks" :key="pack.id" type="button" class="seg__item"
+                      :class="{ 'seg__item--on': packFilter === pack.id }" :aria-pressed="packFilter === pack.id" @click="packFilter = pack.id">{{ pack.name }}</button>
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': packFilter === 'unpacked' }"
+                      :aria-pressed="packFilter === 'unpacked'" @click="packFilter = 'unpacked'">{{ $t("wb.filter.unpacked") }}</button>
+            </div>
+            <button v-if="!batch" type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+            <button v-if="lorePacks && modelValue.length && !batch" type="button" class="btn btn--sm" @click="batch = true">{{ $t("wb.batch.select") }}</button>
             <p v-if="canOrder" class="subtle wbd__order-hint">{{ $t("wb.order.hint") }}</p>
             <ul ref="rowsElement" class="wbd__rows" @scroll="onListScroll" @keydown="onListKeydown">
               <li v-if="windowRange.start" aria-hidden="true" :style="{ height: `${spacerHeights.before}px` }" />
-              <li v-for="{ row, index } in windowRows" :key="row.entryId ?? `new-${index}`" class="wbd__row" :data-row-index="index" :style="pinnedDragStyle(index)"
+              <li v-for="{ row, index } in windowRows" :key="row.entryId ?? row.id ?? `new-${index}`" class="wbd__row" :data-row-index="index" :style="pinnedDragStyle(index)"
                   :aria-posinset="index + 1" :aria-setsize="modelValue.length"
-                  :class="{ 'wbd__row--on': index === selected, 'wbd__row--off': !row.isEnabled, 'wbd__row--over': dragOver === index }"
+                  :class="{ 'wbd__row--on': index === selected, 'wbd__row--off': !row.isEnabled, 'wbd__row--over': dragOver === index, 'wbd__row--package': !!lorePacks }"
                   :draggable="canOrder" @dragstart="dragFrom = index" @dragover.prevent="dragOver = index"
                   @drop="onDrop(index)" @dragend="dragFrom = null; dragOver = null">
-                <input type="checkbox" :checked="row.isEnabled" :aria-label="$t('wb.entry.enabled')"
+                <input v-if="batch" type="checkbox" :checked="selection.includes(index)" :aria-label="row.name || $t('wb.entry.untitled')"
+                       @click.stop @change="setSelection(index, ($event.target as HTMLInputElement).checked)" />
+                <input v-else-if="!lorePacks" type="checkbox" :checked="row.isEnabled" :aria-label="$t('wb.entry.enabled')"
                        @click.stop @change="setEnabled(index, ($event.target as HTMLInputElement).checked)" />
-                <button type="button" class="wbd__row-name" @click="selected = index">
+                <button type="button" class="wbd__row-name" @click="batch ? setSelection(index, !selection.includes(index)) : selected = index">
                   <span class="wbd__row-title">
                     {{ row.name || $t("wb.entry.untitled") }}
                     <span v-if="row.isConstant" class="chip">{{ $t("wb.entry.constantShort") }}</span>
+                    <span v-if="row.packId && availablePack.has(row.packId)" class="chip">{{ availablePack.get(row.packId) }}</span>
                   </span>
                   <span v-if="!row.isConstant || row.keywords.length || row.secondaryKeywords?.length" class="subtle wbd__row-keys">
                     {{ summary(row) || $t("wb.entry.keywords.placeholder") }}
                   </span>
+                  <span v-if="lorePacks && !batch" class="wbd__row-chevron" aria-hidden="true">›</span>
                 </button>
-                <span class="wbd__row-tools">
+                <span v-if="!batch" class="wbd__row-tools">
                   <button v-if="canOrder" type="button" class="btn btn--icon btn--sm btn--ghost" :disabled="index === 0"
                           :aria-label="$t('list.up')" :title="$t('list.up')" @click="move(index, -1)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" /></svg>
@@ -356,6 +417,11 @@ function onKeydown(event: KeyboardEvent) {
             </ul>
             <p v-if="query.trim() && !visible.length" class="subtle wbd__empty">{{ $t("wb.search.none") }}</p>
             <p v-else-if="!modelValue.length" class="subtle wbd__empty">{{ $t("wb.entries.empty") }}</p>
+            <div v-if="batch" class="wbd__batch">
+              <span>{{ $t("wb.batch.selectedCount", { n: selection.length }) }}</span>
+              <button type="button" class="btn" @click="cancelBatch">{{ $t("dialog.cancel") }}</button>
+              <button type="button" class="btn btn--primary" :disabled="!selection.length" @click="openMoveDialog">{{ $t("wb.batch.movePack") }}</button>
+            </div>
           </aside>
 
           <!-- 右：編一條 -->
@@ -370,6 +436,20 @@ function onKeydown(event: KeyboardEvent) {
                 {{ $t("wb.entry.activations", { n: entry.activationCount }) }}
               </span>
             </div>
+
+            <div v-if="lorePacks" class="field">
+              <label for="wbd-pack">{{ $t("wb.entry.pack.label") }}</label>
+              <select id="wbd-pack" class="input" :value="entry.packId ?? ''"
+                      @change="patch({ packId: ($event.target as HTMLSelectElement).value || undefined })">
+                <option value="">{{ $t("wb.entry.pack.none") }}</option>
+                <option v-for="pack in lorePacks" :key="pack.id" :value="pack.id">{{ pack.name }}</option>
+              </select>
+              <span class="subtle">{{ $t("wb.entry.pack.hint") }}</span>
+            </div>
+            <label v-if="lorePacks" class="wbd__flag">
+              <input type="checkbox" :checked="entry.isEnabled" @change="patch({ isEnabled: ($event.target as HTMLInputElement).checked })" />
+              {{ $t("wb.entry.enabled") }}
+            </label>
 
             <div class="field">
               <label for="wbd-kw">{{ $t("wb.entry.keywords") }}</label>
@@ -469,6 +549,31 @@ function onKeydown(event: KeyboardEvent) {
         </div>
       </div>
     </div>
+    <dialog v-if="lorePacks" ref="moveDialog" class="mod-window wbd__move-packs" aria-labelledby="wbd-move-title" @click.self="moveDialog?.close()">
+      <form class="mod-window__section" @submit.prevent="saveMove">
+        <header class="mod-window__head">
+          <h2 id="wbd-move-title">{{ $t("wb.batch.moveModal.title", { n: selection.length }) }}</h2>
+        </header>
+        <div class="mod-window__scroll mod-window__form">
+          <p class="subtle">{{ $t("wb.batch.moveModal.hint", { n: selection.length }) }}</p>
+          <label v-for="pack in lorePacks" :key="pack.id">
+            <span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="pack.id" /> {{ pack.name }}</span>
+          </label>
+          <label><span><input v-model="targetPack" type="radio" name="wbd-move-pack" value="" /> {{ $t("wb.batch.moveModal.unpacked") }}</span></label>
+          <label v-if="lorePacks.length < 100"><span><input v-model="targetPack" type="radio" name="wbd-move-pack" :value="NEW_PACK" /> {{ $t("wb.batch.moveModal.newPack") }}</span></label>
+          <label v-if="targetPack === NEW_PACK">
+            {{ $t("wb.packs.form.nameLabel") }}
+            <input v-model="newPack" class="input" required :placeholder="$t('wb.packs.form.namePlaceholder')" />
+          </label>
+          <p v-if="targetPack === NEW_PACK && newPackError" role="alert" class="mod-window__row-error">{{ newPackError }}</p>
+        </div>
+        <footer class="mod-window__foot">
+          <button type="button" class="btn" @click="moveDialog?.close()">{{ $t("dialog.cancel") }}</button>
+          <button type="submit" class="btn btn--primary" :disabled="targetPack === null || (targetPack === NEW_PACK && (!!newPackError || !newPack.trim()))">{{ $t("wb.batch.moveModal.confirm", { n: selection.length }) }}</button>
+        </footer>
+      </form>
+    </dialog>
+
   </Teleport>
 </template>
 
@@ -521,4 +626,14 @@ function onKeydown(event: KeyboardEvent) {
   .wbd__body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 40%) minmax(0, 1fr); }
   .wbd__list { box-shadow: 0 1px 0 var(--line); }
 }
+
+.wbd__row--package { min-height: 44px; }
+.wbd__row--package .wbd__row-name { position: relative; min-height: 44px; padding-inline-end: 20px; }
+.wbd__row-chevron { position: absolute; inset-inline-end: 4px; inset-block-start: 50%; transform: translateY(-50%); }
+.wbd__pack-filter { display: flex; flex-shrink: 0; overflow-x: auto; max-width: 100%; }
+.wbd__pack-filter button { flex-shrink: 0; }
+.wbd__batch { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; padding: 6px 0 max(6px, env(safe-area-inset-bottom)); }
+.wbd__batch button { min-height: 44px; }
+.wbd__move-packs { max-width: min(420px, 100vw); }
+@media (max-width: 640px) { .wbd__move-packs { max-width: none; } }
 </style>

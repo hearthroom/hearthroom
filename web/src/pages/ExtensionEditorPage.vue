@@ -16,6 +16,7 @@ import { createWorkshop, fetchWorkshopCards } from "@/lib/workshop";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import WorkshopEditor from "@/components/workshop/editor/WorkshopEditor.vue";
+import UniversalWorkshopEditor from "@/components/workshop/editor/UniversalWorkshopEditor.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -82,7 +83,8 @@ watch([workshopId, cardParam], () => { if (!workshopId.value) void create(); }, 
 
 <template>
   <div class="page ws-page">
-    <WorkshopEditor v-if="workshopId" :key="workshopId" :workshop-id="workshopId" />
+    <UniversalWorkshopEditor v-if="workshopId && route.query.scope === 'universal'" :key="workshopId" :workshop-id="workshopId" />
+    <WorkshopEditor v-else-if="workshopId" :key="workshopId" :workshop-id="workshopId" />
     <template v-else>
       <header class="ws-page__head">
         <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>

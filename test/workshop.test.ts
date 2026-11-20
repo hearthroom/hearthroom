@@ -28,6 +28,7 @@ async function published(id:string,rating='G'){
  const receipt={workshopId:id,releaseId:op(),workId,sourceRoleId:'role-base',kind:'lorebook',status:'published',version:1,publicationRevision:1,draftRevision:2,publishedAt:Date.now(),contentHash:'synthetic',authorPublicNo:CREATOR,cardOwnerPublicNo:CARD_AUTHOR,ownerState:'visible',ownerGeneration:0,residentChars:14,policyVersion:2,sealed:{name:'雪夜後日談',summary:'SFW synthetic fixture',readme:'Local content',coverUrl:'',rating,worldbook:[{id:'one',content:'synthetic lore',enabled:true,mode:'constant'}],rules:{rules:[]},opening:{mode:'greeting'}}};
  await applyWorkshopEvents(env,[{kind:'release_published',eventKey:'fixture-publish:'+id,workId,workshopId:id,payload:{policyVersion:2,publication:receipt}}]);
  workshopUpstream.readRelease=async()=>({workshopId:id,releaseId:receipt.releaseId,sealed:receipt.sealed,residentChars:14,publishedVersion:1} as any);
+ workshopUpstream.playerDisplay = async (_env, _provider, ids) => ({ displayedIds: ids.filter((candidate) => candidate === id) });
  workshopUpstream.moderate=async()=>({ok:true});
  return receipt;
 }

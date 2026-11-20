@@ -44,6 +44,7 @@ export interface ProviderMineItem {
  kind:"dlc"|"lorebook";
  loreCount:number;
  workshopClosed:boolean;
+ playerShareState?:"private"|"pending"|"displayed"|"unlisted";
  status:"draft"|"live"|"live_changed";
   workshopId: string;
   workId: string;
@@ -107,6 +108,23 @@ export interface WorkshopStateItem {
   ownerState: string;
   viewerJoined?: boolean;
   viewerAccessible?: boolean;
+}
+
+export interface PlayerDisplayProjection {
+  id: string;
+  workId: string;
+  sourceRoleId: string;
+  name: string;
+  summary: string;
+  readme: string;
+  coverUrl: string;
+  rating: Rating;
+  loreCount: number;
+  residentChars: number;
+  joinCount: number;
+  authorNumber: number;
+  version: number;
+  publishedAt: number;
 }
 
 export interface WorkshopOutboxEvent {
@@ -214,6 +232,10 @@ mine: (env: Env, token: string, provider: ProviderId = "harbor") =>
     callHosting<{ items: ProviderMineItem[] }>(env, provider, "/mine", { token }),
 readRelease: (env: Env, releaseId: string, provider: ProviderId = "harbor") =>
     callHosting<WorkshopStaffReleaseView>(env, provider, `/staff-release/${encodeURIComponent(releaseId)}`),
+playerDisplay: (env: Env, provider: ProviderId, workshopIds: string[], workId?: string) => {
+    const query = new URLSearchParams(workId ? { workId } : { workshopIds: workshopIds.join(",") });
+    return callHosting<{ displayedIds: string[]; items?: PlayerDisplayProjection[] }>(env, provider, `/player-share/visibility?${query}`, { timeoutMs: 3_000 });
+  },
 moderate: (
     env: Env,
     input: { workshopId: string; action: "revoke" | "restore"; reason?: string; actorPublicNo?: number },

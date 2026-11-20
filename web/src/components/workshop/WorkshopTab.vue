@@ -7,7 +7,7 @@ import { stageAvailable } from "@stage-site";
  * - 分頁只在原卡作者開啟工坊時出現（卡片頁看伺服器的 tabVisible）；這裡只管分頁裡面。
  * - 玩家看：有 DLC 才出現 DLC 區；玩家擴充區一直在，有「建立擴充」，沒有內容時空態＋「建立第一個擴充」。
  * - 原作者看：DLC 區一直在，標題旁「建立 DLC」，沒有時空態＋唯一入口；玩家擴充區沒有建立入口，
- *   每格多「隱藏」（新玩家看不到也不能加入，已加入的照常；沒有理由、不通知製作者），隱藏的換「取消隱藏」。
+ *   展示決定集中在工坊管理。
  * - 兩區由同一頁結果依 kind 分開；篩選與頁碼記在網址（?ws=new|joined&wp=2），分享與返回都回到同一個位置。
  * - 讀不到時只在分頁裡說，不影響開始對話。
  */
@@ -16,14 +16,12 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import ExtensionTile from "./ExtensionTile.vue";
 import WorkshopIcon from "./WorkshopIcon.vue";
-import UndoToast from "./UndoToast.vue";
-import { confirmDialog } from "@/lib/confirm";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { activeCount, isJoined, type CardWorkshopState } from "@/lib/card-workshop";
-import { fetchCardWorkshop, fetchWorkshopsByIds, ownerAction, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
+import { fetchCardWorkshop, fetchWorkshopsByIds, fetchPlayerShares, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
 
-const props = defineProps<{ cardId: string; cardNum: string; initial: CardWorkshopPage; initialFailed?: boolean; state: CardWorkshopState | null; joinBusy: string | null }>();
+const props = defineProps<{ cardId: string; cardNum: string; roleId?: string; initial: CardWorkshopPage; initialFailed?: boolean; state: CardWorkshopState | null; joinBusy: string | null }>();
 const emit = defineEmits<{ manage: []; join: [ExtensionSummary]; retry: [] }>();
 const route = useRoute();
 const router = useRouter();
@@ -83,34 +81,31 @@ const showDlc = computed(() => (owner.value && !joinedView.value) || dlcItems.va
 const showExt = computed(() => !joinedView.value || extItems.value.length > 0 || !dlcItems.value.length);
 const joinedEmpty = computed(() => joinedView.value && !items.value.length);
 
-// ── 原作者隱藏玩家擴充 ─────────────────────────────────────────────
-const toast = ref<InstanceType<typeof UndoToast> | null>(null);
-const hideBusy = ref<string | null>(null);
-async function setHidden(ext: ExtensionSummary, hide: boolean) {
-  if (hideBusy.value) return;
-  if (hide) {
-    const ok = await confirmDialog({
-      title: t("workshop.hide.title", { name: ext.name }), message: t("workshop.hide.body"),
-      confirmText: t("workshop.hide.confirm"), cancelText: t("dialog.cancel"), focusCancel: true, phraseWrap: true,
-    });
-    if (!ok) return;
-  }
-  hideBusy.value = ext.id;
+const pending = ref(0);
+let pendingRequest = 0;
+watch([owner, () => props.roleId, () => session.me?.accountNumId], async ([isOwner, roleId, account]) => {
+  const request = ++pendingRequest;
+  pending.value = 0;
+  if (!isOwner || !roleId || !account) return;
   try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const got = await ownerAction(ext.id, hide ? "hide" : "restore", token);
-    ext.ownerState = got.ownerState ?? (hide ? "hidden" : "visible");
-    toast.value?.say(t(hide ? "workshop.hide.toast" : "workshop.unhide.toast", { name: ext.name }));
-  } catch (err) {
-    toast.value?.say(err instanceof Error && err.message ? err.message : t("state.actionFailed"));
-  } finally { hideBusy.value = null; }
-}
+    const access = await session.accessToken();
+    if (!access) return;
+    const result = await fetchPlayerShares(roleId, access);
+    if (request === pendingRequest) pending.value = result.items.filter((item) => item.new).length;
+  } catch {
+    // The management link is still available when its count cannot be loaded.
+  }
+}, { immediate: true });
 const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(props.state, ext.id) : !!ext.joined);
 </script>
 
 <template>
   <section id="card-panel" class="ws-tab" role="tabpanel" aria-labelledby="card-tab-workshop">
+    <div v-if="owner" class="ws-strip">
+      <WorkshopIcon name="layers" />
+      <span class="ws-strip__text">{{ pending ? $t("workshop.tab.ownerBanner.hasNew", { n: pending }) : $t("workshop.tab.ownerBanner.idle") }}</span>
+      <RouterLink class="btn btn--sm ws-tab__management" :to="{ path: lp('/mine'), query: { tab: 'workshop-management', card: cardNum } }">{{ $t("workshop.tab.ownerBanner.action") }}</RouterLink>
+    </div>
     <div class="ws-tab__tools">
       <div class="seg" role="radiogroup" :aria-label="$t('workshop.tab.workshop')">
         <button v-for="f in FILTERS" :key="f" type="button" role="radio" class="seg__item" :class="{ 'seg__item--on': filter === f }" :aria-checked="filter === f" @click="go({ filter: f })">
@@ -162,12 +157,13 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
         </div>
         <div v-if="extItems.length" class="ws-grid" :aria-busy="loading || undefined">
           <ExtensionTile
-            v-for="ext in extItems" :key="ext.id" :ext="ext" :joined="joinedOf(ext)" :busy="joinBusy === ext.id || hideBusy === ext.id" :can-hide="owner"
-            @join="emit('join', $event)" @hide="setHidden($event, true)" @unhide="setHidden($event, false)"
+            v-for="ext in extItems" :key="ext.id" :ext="ext" :joined="joinedOf(ext)" :busy="joinBusy === ext.id"
+            @join="emit('join', $event)"
           />
         </div>
         <div v-else class="panel ws-sect__empty" data-ws-empty="ext">
           <p class="muted ws-text">{{ $t("workshop.ext.empty") }}</p>
+          <p v-if="!owner" class="muted ws-text">{{ $t("workshop.ext.emptyHint") }}</p>
           <RouterLink v-if="stageAvailable && !owner" :to="createTo" class="btn btn--sm">{{ $t("workshop.empty.cta") }}</RouterLink>
         </div>
       </section>
@@ -178,12 +174,12 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
         <button type="button" class="btn btn--sm" :disabled="!data.hasMore" @click="go({ page: page + 1 })">›</button>
       </nav>
     </template>
-    <UndoToast ref="toast" />
-  </section>
+    </section>
 </template>
 
 <style scoped>
 .ws-tab { display: grid; gap: var(--s-4); min-width: 0; padding-bottom: var(--s-6); }
+.ws-tab__management { border-color: var(--accent); color: var(--accent-text); }
 .ws-tab__tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .ws-sect { display: grid; gap: var(--s-3); min-width: 0; }
 .ws-sect__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--h-sm); }
