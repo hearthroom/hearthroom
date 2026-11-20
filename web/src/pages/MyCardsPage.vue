@@ -45,8 +45,8 @@ const tab = computed<MineTab>(() => {
   if (route.query.tab === "workshops" || route.query.tab === "workshop-management") return route.query.tab;
   return "cards";
 });
-const { pendingCount, hasWorkshopCards, refreshPending } = useWorkshopSharePending();
-watch(() => session.me?.accountNumId, (account) => { if (account) void refreshPending(); }, { immediate: true });
+const { pendingCount, hasWorkshopCards, rememberWorkshopCards, refreshPending } = useWorkshopSharePending();
+watch(() => session.me?.accountNumId, (account) => { if (account) void refreshPending(false); }, { immediate: true });
 const extensionCount = ref<number | null>(null);
 const workshopsOpened = ref(tab.value === "workshops");
 watch(tab, (value) => { if (value === "workshops") workshopsOpened.value = true; });
@@ -83,6 +83,7 @@ const q = computed(() => typeof route.query.q === "string" ? route.query.q : "")
 const filter = computed<Filter>(() => visibilityEnabled.value&&FILTERS.includes(route.query.filter as Filter) ? route.query.filter as Filter : "all");
 const page = computed(() => Math.max(1, Number(route.query.page) || 1));
 const total = computed(() => Object.values(totals.value).reduce((a, b) => a + (b ?? 0), 0));
+watch(total, (count) => { if (count > 0) rememberWorkshopCards(); });
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 /** 頁碼列：頭尾、目前這頁前後各一頁，其餘收成「…」 */
 const pageList = computed<(number | "gap")[]>(() => {

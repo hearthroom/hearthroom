@@ -16,6 +16,7 @@ import { lastShown } from '../src/lib/mine-memory';
 const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),unregister:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),ask:vi.fn()}));
 vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({email:"fixture@example.test"}),fetchMyCards:mocks.fetch,registerCard:mocks.register,unregisterCard:mocks.unregister}));
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token,connectAccount:mocks.connect}));
+vi.mock('../src/lib/workshop',async original=>({...await original<typeof import('../src/lib/workshop')>(),fetchNewPlayerShareCount:async()=>({count:0})}));
 vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.ask}));
 vi.mock('../src/lib/distribution',async original=>({...await original<typeof import('../src/lib/distribution')>(),copies:mocks.copies,synchronize:mocks.synchronize}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));

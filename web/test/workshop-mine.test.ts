@@ -6,7 +6,7 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 import type { ExtensionSummary, MineItem, WorkshopCardChoice } from "../src/lib/workshop";
 
 const ws = vi.hoisted(() => ({
-  fetchMyWorkshops: vi.fn(), fetchWorkshopCards: vi.fn(), fetchPolicy: vi.fn(), savePolicy: vi.fn(),
+  fetchMyWorkshops: vi.fn(), listUniversalMods: vi.fn(), fetchWorkshopCards: vi.fn(), fetchPolicy: vi.fn(), savePolicy: vi.fn(),
 }));
 const api = vi.hoisted(() => ({ fetchCard: vi.fn() }));
 vi.mock("../src/lib/workshop", async (original) => ({ ...(await original<object>()), ...ws }));
@@ -18,7 +18,7 @@ import OwnerWorkshopBlock from "../src/components/workshop/OwnerWorkshopBlock.vu
 
 let app: App | undefined;
 const settle = async () => { for (let i = 0; i < 8; i++) { await nextTick(); await Promise.resolve(); } };
-beforeEach(() => { i18n.global.locale.value = "zh-Hant"; });
+beforeEach(() => { i18n.global.locale.value = "zh-Hant"; ws.listUniversalMods.mockResolvedValue({ items: [] }); });
 afterEach(() => { app?.unmount(); app = undefined; document.body.innerHTML = ""; vi.clearAllMocks(); if (confirmState.current) settleConfirm(false); });
 
 const Blank = { render: () => null };
@@ -44,11 +44,11 @@ const mine = (id: string, over: Partial<MineItem> = {}): MineItem => ({
 });
 const row = (id: string) => document.querySelector<HTMLElement>(`[data-ws-mine="${id}"]`)!;
 
-it("my extensions: a layer chip and draft or published; closed and hidden are marks with a line, never an appeal", async () => {
+it("my extensions show the current share state and the card workshop closure", async () => {
   ws.fetchMyWorkshops.mockResolvedValue({ items: [
     mine("dlc", { kind: "dlc", status: "draft", name: "" }),
-    mine("closed", { workshopClosed: true }),
-    mine("hid", { ownerState: "hidden", status: "live_changed" }),
+    mine("closed", { workshopClosed: true, playerShareState: "displayed" }),
+    mine("hid", { ownerState: "hidden", playerShareState: "unlisted", status: "live_changed" }),
     mine("ownclosed", { kind: "dlc", workshopClosed: true }),
   ] });
   await mount(MineExtensions);
@@ -56,11 +56,10 @@ it("my extensions: a layer chip and draft or published; closed and hidden are ma
   expect(row("dlc").querySelector("[data-ws-status]")?.textContent).toBe("草稿");
   expect(row("dlc").querySelector(".mine-ws__name")?.textContent).toBe("未命名 DLC");
   expect(row("closed").querySelector("[data-ws-kind]")?.textContent).toBe("玩家擴充");
-  expect(row("closed").querySelector("[data-ws-status]")?.textContent).toBe("已發布");
+  expect(row("closed").querySelector("[data-ws-status]")?.textContent).toBe("展示中");
   expect(row("closed").querySelector("[data-ws-closed]")?.textContent).toBe("作者已關閉工坊");
   expect(row("closed").querySelector("[data-ws-closed-note]")?.textContent).toContain("重新開啟後會自動恢復");
-  expect(row("hid").querySelector("[data-ws-status]")?.textContent).toBe("已發布");
-  expect(row("hid").querySelector("[data-ws-hidden]")?.textContent).toBe("原作者已隱藏");
+  expect(row("hid").querySelector("[data-ws-status]")?.textContent).toBe("作者未展示");
   // 自己的 DLC 用第一人稱，不自稱「原作者」
   expect(row("ownclosed").querySelector("[data-ws-closed]")?.textContent).toBe("工坊已關閉");
   expect(document.body.textContent).not.toMatch(/申訴|審核|分潤/);

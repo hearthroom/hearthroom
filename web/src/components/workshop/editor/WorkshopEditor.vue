@@ -688,6 +688,7 @@ watch(error, async (text) => {
             <div class="ws-share__status">
               <h2 class="pane__title">{{ $t("workshop.share.sectionTitle") }}</h2>
               <span class="chip">{{ $t(`workshop.status.${shareStatus}`) }}</span>
+              <span v-if="workshopClosed" class="chip ws-chip--warn">{{ $t("workshop.status.cardWorkshopClosed") }}</span>
             </div>
             <div class="ws-share">
               <div class="ws-share__switch">

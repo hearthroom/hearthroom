@@ -113,7 +113,7 @@ it("no DLC yet: players see only the player extensions section, with an empty st
   workshop = () => page({ total: 0, items: [] });
   const root = await mount("/cards/abc?tab=workshop");
   expect(root.querySelector("[data-ws-sect=dlc]")).toBeNull();
-  expect(root.querySelector("[data-ws-empty=ext]")?.textContent).toContain("還沒有玩家擴充。");
+  expect(root.querySelector("[data-ws-empty=ext]")?.textContent).toContain("作者還沒有挑選展示的玩家擴充。");
   expect(root.textContent).toContain("建立第一個擴充");
 });
 
@@ -122,7 +122,8 @@ it("the card author sees the DLC section with the only create entry, and no crea
   const root = await mount("/cards/abc?tab=workshop");
   expect(root.querySelector("[data-ws-empty=dlc]")?.textContent).toContain("建立第一個 DLC");
   expect(root.querySelector("[data-ws-sect=ext]")?.textContent).not.toContain("建立擴充");
-  expect(root.querySelector("[data-ext-hide]")?.textContent).toBe("隱藏");
+  expect(root.querySelector("[data-ext-hide]")).toBeNull();
+  expect(root.querySelector('a[href*="tab=workshop-management"]')?.textContent).toContain("到工坊管理");
 });
 
 it("arriving on ?tab=workshop when the workshop cannot be read keeps the tab with an error and a retry that recovers", async () => {

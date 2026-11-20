@@ -6,7 +6,7 @@ import { ApiError } from "../src/lib/api";
 import type { MineItem, MineStatus, WorkshopDraft } from "../src/lib/workshop";
 
 const api = vi.hoisted(() => ({
-  fetchDraft: vi.fn(), saveDraft: vi.fn(), fetchMyWorkshops: vi.fn(), publishWorkshop: vi.fn(), unpublishWorkshop: vi.fn(),
+  fetchDraft: vi.fn(), setPlayerShareConsent: vi.fn(), saveDraft: vi.fn(), fetchMyWorkshops: vi.fn(), publishWorkshop: vi.fn(), unpublishWorkshop: vi.fn(),
   discardWorkshopChanges: vi.fn(), deleteWorkshop: vi.fn(), createWorkshop: vi.fn(), fetchWorkshopCards: vi.fn(),
 }));
 const dialogs = vi.hoisted(() => ({ confirmDialog: vi.fn(), confirmForm: vi.fn() }));
@@ -175,7 +175,7 @@ it("published with edits: the update note is optional, and discard restores the 
   expect(document.querySelector<HTMLInputElement>("#ws-name")!.value).toBe("雪夜篇");
 });
 
-it("player extension: only basics, lorebook and publish; saving never sends regex or openings", async () => {
+it("player extension: only basics, lorebook and sharing; saving never sends regex or openings", async () => {
   api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
   api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
   api.saveDraft.mockResolvedValue({ revision: 4, errors: [] });
@@ -193,30 +193,43 @@ it("player extension: only basics, lorebook and publish; saving never sends rege
   expect(payload).not.toHaveProperty("rules");
   expect(payload).not.toHaveProperty("opening");
   await router.replace({ query: { section: "publish" } }); await settle();
-  expect(document.querySelector("[data-check=content]")?.textContent?.trim()).toBe(t("workshop.publish.check.contentLore"));
+  expect(document.querySelector("[data-section=share]")?.textContent).toContain(t("workshop.share.switchLabel"));
   expect(document.body.textContent).not.toContain(t("workshop.editor.section.regex"));
 });
 
-it("player extension hidden by the card author, or a closed card workshop: a chip and a line, no appeal", async () => {
-  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", published: { version: 3 }, card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
-  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("live", { kind: "lorebook", ownerState: "hidden", workshopClosed: true })] });
+const noShare = { state: "private" as const, allowed: false, everAllowed: false, draftRevision: 3, generation: 0, new: false, hasUpdate: false, joinCount: 0 };
+const nonOwnerCard = { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false };
+
+it("asks before the first share and withdraws without leaving the draft", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: nonOwnerCard, playerShare: noShare }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
+  api.setPlayerShareConsent
+    .mockResolvedValueOnce({ ...noShare, state: "pending", allowed: true, everAllowed: true, generation: 1 })
+    .mockResolvedValueOnce({ ...noShare, everAllowed: true, generation: 2 });
+  dialogs.confirmDialog.mockResolvedValueOnce(true);
   await mountAt("/mine/workshops/w1/edit?section=publish");
-  expect(document.querySelector("[data-pub-hidden]")?.textContent).toBe(t("workshop.status.hiddenByOwner"));
-  expect(document.querySelector("[data-pub-hidden-note]")?.textContent).toBe(t("workshop.mine.row.hiddenByOwner"));
-  expect(document.querySelector("[data-pub-closed]")?.textContent).toBe(t("workshop.status.cardWorkshopClosed"));
-  expect(button("[data-pub-unpublish]")).not.toBeNull();
-  // 新玩家加不了：不再說「已上架，玩家可以加入」
-  expect(document.body.textContent).not.toContain(t("workshop.publish.published.desc"));
+  const share = button("[data-section=share] [role=switch]")!;
+  share.click(); await settle();
+  expect(dialogs.confirmDialog).toHaveBeenCalledWith(expect.objectContaining({ title: t("workshop.share.confirm.title"), focusCancel: true }));
+  expect(api.setPlayerShareConsent).toHaveBeenCalledWith("w1", 3, 0, true, "tok");
+  expect(share.getAttribute("aria-checked")).toBe("true");
+  expect(document.querySelector("[data-section=share]")?.textContent).toContain(t("workshop.status.waitingAuthor"));
+  share.click(); await settle();
+  expect(dialogs.confirmDialog).toHaveBeenCalledTimes(1);
+  expect(api.setPlayerShareConsent).toHaveBeenLastCalledWith("w1", 3, 1, false, "tok");
+  expect(share.getAttribute("aria-checked")).toBe("false");
+  expect(document.querySelector("[data-section=share]")?.textContent).toContain(t("workshop.share.desc.withdrawn"));
+  expect(api.publishWorkshop).not.toHaveBeenCalled();
 });
 
-it("publishing into a closed workshop explains it and keeps the draft", async () => {
-  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: { roleId: "r1", cardId: "100001", num: 100001, name: "雪國", ownerIsMe: false } }));
-  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
-  api.publishWorkshop.mockRejectedValue(new ApiError(409, "closed", "workshop_closed"));
+it("keeps a private draft editable when the card workshop is closed while blocking first consent", async () => {
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", card: nonOwnerCard, playerShare: noShare }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook", workshopClosed: true })] });
   await mountAt("/mine/workshops/w1/edit?section=publish");
-  button("[data-pub-publish]")!.click(); await settle();
-  expect(document.querySelector("[data-error]")?.textContent).toBe(t("workshop.editor.error.workshopClosed"));
+  expect(document.querySelector("[data-section=share]")?.textContent).toContain(t("workshop.status.cardWorkshopClosed"));
+  expect(button("[data-section=share] [role=switch]")?.disabled).toBe(true);
   expect(button("[data-pub-publish]")).toBeNull();
+  expect(api.setPlayerShareConsent).not.toHaveBeenCalled();
 });
 
 it("draft_stale keeps the edits, stops saving, and reloads only when asked", async () => {
