@@ -13,7 +13,10 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
   const counts = source.pathname === "/v1/tags/counts";
   const fields = source.pathname === "/v1/cards"
     ? ["zone", "sort", "period", "q", "author", "limit", "offset", "cursor", "lang", "hide", "rating"]
-    : counts ? ["zone", "hide", "rating"] : ["zone", "sort", "q", "limit", "offset"];
+    : counts ? ["zone", "hide", "rating"]
+    // 成就榜與年度積分榜：榜別、期間、年度都會改變內容，少了它們幾種榜會共用同一份快取
+    : source.pathname.startsWith("/v1/rankings/") ? ["zone", "board", "period", "year"]
+    : ["zone", "sort", "q", "limit", "offset"];
   for (const field of fields) {
     const value = source.searchParams.get(field);
     if (value !== null) url.searchParams.set(field, value);

@@ -52,3 +52,17 @@ it('shows level and author rank on the collection and serves the board publicly'
  expect(JSON.stringify(body)).not.toContain('member-');
  for(const q of ['board=spend','period=2019-01','period=2026-13','period=2099-01'])expect((await SELF.fetch(`https://c.test/v1/rankings/achievements?${q}`)).status,q).toBe(400);
 });
+
+it('caches each board, period and year separately',async()=>{
+ await award(a,'creator_works_30');                                    // author board: a 40
+ await env.DB.prepare('INSERT INTO community_preferences(member_id,public_badges) VALUES(?,1)').bind(b).run();
+ await award(b,'player_commenter_100');                                // overall board only: b 40
+ const get=async(q:string)=>(await (await SELF.fetch(`https://c.test/v1/rankings/achievements?${q}`)).json<{board:string;period:string;items:{author:{handle:string}}[]}>());
+ const author=await get('board=author&period=all');
+ const overall=await get('board=all&period=all');
+ expect([author.board,overall.board]).toEqual(['author','all']);
+ expect(overall.items.map(i=>i.author.handle)).toEqual([testHandle(22)]);
+ expect((await get('board=author&period=2026-10')).period).toBe('2026-10');
+ const annual=await (await SELF.fetch('https://c.test/v1/rankings/annual?zone=all&year=2026')).json<{year:number}>();
+ expect(annual.year).toBe(2026);
+});
