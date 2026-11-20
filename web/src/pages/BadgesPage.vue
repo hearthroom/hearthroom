@@ -26,6 +26,11 @@ const author=computed(()=>typeof route.params.handle==='string'?route.params.han
 const own=computed(()=>!author.value||(!!session.profile?.handle&&author.value===session.profile.handle));
 // 舊網址 /me/badges：知道自己的公開 ID 後換成作者頁那一頁，連結與分享都只有一個網址
 watch(()=>!author.value&&session.profile?.handle,handle=>{if(handle)void router.replace({path:lp('/authors/'+handle+'/badges'),hash:route.hash});},{immediate:true});
+const claimable=computed(()=>own.value?(data.value?.items.filter(b=>b.state==='earned'&&b.reward&&!b.claim)??[]):[]);
+const claimTotal=computed(()=>new Intl.NumberFormat(locale.value).format(claimable.value.reduce((n,b)=>n+(b.reward??0),0)));
+const claiming=ref(''),claimError=ref('');
+/** 領積分：伺服器自己判斷值多少；一次一枚，全部領取就照順序一枚一枚領，失敗就停在那一枚 */
+async function claim(keys:string[]){if(claiming.value||!own.value)return;claimError.value='';const n=generation;try{for(const key of keys){claiming.value=key;const result=await request<BadgeCollection>('/'+encodeURIComponent(key)+'/claim','POST');if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
 const apTotal=computed(()=>data.value?.ap?new Intl.NumberFormat(locale.value).format(data.value.ap):'');
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
 let generation=0;
@@ -71,11 +76,16 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
     <div class="badge-actions"><button class="btn btn--primary" :disabled="busy||!dirty" @click="save">{{ t(busy?'badgeWall.saving':'badgeWall.save') }}</button><button class="btn" :disabled="busy||!dirty" @click="reset">{{ t('badgeWall.reset') }}</button><RouterLink v-if="session.profile?.handle" :to="lp('/authors/'+session.profile.handle)" class="btn">{{ t('me.publicPage') }}</RouterLink></div>
     <p v-if="saved&&!dirty" role="status" class="subtle">{{ t('badgeWall.saved') }}</p><p v-else-if="dirty" role="status" class="subtle">{{ t('badgeWall.unsaved') }}</p>
    </section>
+   <section v-if="claimable.length" class="badge-claims panel" aria-live="polite">
+    <p>{{ t('badgeWall.claimable',{n:claimable.length}) }}</p>
+    <button class="btn btn--primary" :disabled="!!claiming" @click="claim(claimable.map(b=>b.key))">{{ claiming?t('badgeWall.claiming'):t('badgeWall.claimAll',{total:claimTotal}) }}</button>
+   </section>
+   <p v-if="claimError" class="notice notice--error" role="alert">{{ claimError }}</p>
    <div v-if="own" class="badge-collection-heading"><h2>{{ t('badgeWall.collection',{count:earned,total:data.items.length}) }}</h2><div class="badge-filters" :aria-label="t('badgeWall.filter')"><button v-for="key in ['all','earned','locked']" :key="key" class="btn" :aria-pressed="filter===key" @click="filter=key">{{ t('badgeWall.filter.'+key) }}</button></div></div>
    <section v-for="section in sections" :key="section.category" class="badge-section">
     <h3 class="badge-section__title"><span class="badge-section__label">{{ categoryLabel(section.category) }}</span><span v-if="own" class="badge-section__count">{{ t('badgeWall.categoryProgress',{owned:section.owned,total:section.total}) }}</span></h3>
     <p v-if="own&&hint(section.category)" class="subtle badge-section__hint">{{ hint(section.category) }}</p>
-    <BadgeWall v-if="section.items.length" :items="section.items" :selected="selected" :editable="own" :busy="busy" @change="selected=$event;saved=false" />
+    <BadgeWall v-if="section.items.length" :items="section.items" :selected="selected" :editable="own" :busy="busy" :claiming="claiming" @change="selected=$event;saved=false" @claim="claim([$event])" />
     <details v-if="section.locked.length" class="badge-locked">
      <summary>{{ t('badgeWall.rank.locked',{n:section.locked.length}) }}</summary>
      <BadgeWall :items="section.locked" :selected="selected" :editable="own" :busy="busy" @change="selected=$event;saved=false" />
@@ -92,6 +102,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 .badge-curation{padding:var(--s-5);display:grid;gap:var(--s-3)}.badge-curation h2,.badge-collection-heading h2{margin:0;font-size:1.125rem}.badge-curation p{margin:0;line-height:1.6}.badge-visibility{display:flex;align-items:center;gap:var(--s-3);min-height:2.75rem;cursor:pointer}.badge-visibility input{width:1.125rem;height:1.125rem;accent-color:var(--accent)}.badge-actions,.badge-next,.badge-filters{display:flex;gap:var(--s-2);flex-wrap:wrap}.badges-page .btn{min-height:2.75rem;white-space:normal;line-height:1.5}.badge-actions .btn{gap:var(--s-2)}.badge-collection-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);flex-wrap:wrap}.badge-filters .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent-text)}
 .badge-section{display:grid;gap:var(--s-3)}.badge-section__title{display:flex;align-items:baseline;gap:var(--s-2);margin:0;font-size:13px;font-weight:600;color:var(--text-2)}.badge-section__count{font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}.badge-section__hint{margin:0;line-height:1.6;max-width:44rem}
 .badge-locked{display:grid;gap:var(--s-3)}.badge-locked summary{display:flex;align-items:center;min-height:2.75rem;cursor:pointer;color:var(--text-2);font-size:14px;font-weight:600}.badge-locked[open] summary{margin-bottom:var(--s-3)}
+.badge-claims{padding:var(--s-4) var(--s-5);display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);flex-wrap:wrap}.badge-claims p{margin:0;line-height:1.6}
 .badge-next{border-top:1px solid var(--line);padding-top:var(--s-5)}.badge-next .btn{gap:var(--s-2)}.badge-loading{display:grid;gap:var(--s-4)}.badge-loading .ghost{height:84px;border-radius:var(--r-lg)}
 .badge-empty{padding:var(--s-5);display:grid;gap:var(--s-3);justify-items:start}.badge-empty p{margin:0}
 .badge-section__hint:lang(ko),.badge-empty p:lang(ko){word-break:keep-all}

@@ -2,7 +2,8 @@ import { snapshot } from '../snapshot-cache';
 import { HttpError, type Env } from '../types';
 import { memberByHandle } from '../members';
 import { appearanceView } from './appearance';
-import { badgeAp } from '../../shared/badge-rarity';
+import { badgeAp, badgeReward } from '../../shared/badge-rarity';
+import { claimStates } from './badge-rewards';
 import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
 export const ACTIVE_AWARD = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)";
 /** Members who joined before this instant earned the founding-member badge. */
@@ -111,7 +112,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
- const [census,order]=await Promise.all([holderCounts(env),ordinals(env,member)]);
+ const [census,order,claims]=await Promise.all([holderCounts(env),ordinals(env,member),publicOnly?{} as Record<string,never>:claimStates(env,member)]);
  const now=Date.now();
  const crossed:string[]=[];
  let items:CollectedBadge[]=catalog.map(def=>{
@@ -132,6 +133,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   }
   if(!counts){item.count=item.state==='earned'?1:0;item.firstAt=item.earnedAt;item.lastAt=item.earnedAt;}
   item.ap=badgeAp(def);
+  if(!publicOnly){const reward=badgeReward(def);if(reward>0)item.reward=reward;if(claims[def.key])item.claim=claims[def.key];}
   if(item.state==='earned'){
    const held=census.holders[def.key];
    if(held&&census.members)item.share=Math.round(Math.min(held,census.members)/census.members*1000)/10;

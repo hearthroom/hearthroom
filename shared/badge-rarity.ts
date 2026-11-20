@@ -42,3 +42,19 @@ export function badgeRarity(badge: { key: string; category: string }): BadgeRari
   return BY_KEY[badge.key] ?? BY_CATEGORY[badge.category] ?? 'common';
 }
 export const badgeAp = (badge: { key: string; category: string }) => BADGE_AP[badgeRarity(badge)];
+
+/**
+ * 每枚徽章可領一次的積分（活動點數池，7,200 積分約 1 美元）。依稀有度：普通 100、稀有 500、史詩 2,000、傳說 6,000；
+ * 全服唯一各自在 REWARD_BY_KEY 定。不發積分的：榜單榮譽（結算時已發獎金）、消費（疊在儲值贈送上會超過定價憲章 6% 上限）、
+ * 活動與比賽（每次活動自己定）、元老（只看註冊時間，不是成就）。
+ */
+export const BADGE_REWARD: Record<BadgeRarity, number> = { common: 100, rare: 500, epic: 2000, legendary: 6000, unique: 30000 };
+const NO_REWARD_CATEGORIES = new Set(['rank', 'spend', 'event', 'contest']);
+const NO_REWARD_KEYS = new Set(['beta_veteran', 'opening_veteran']);
+/** 全服唯一徽章各自的獎勵；0＝只有徽章，不發積分。 */
+export const REWARD_BY_KEY: Record<string, number> = {};
+export function badgeReward(badge: { key: string; category: string }): number {
+  if (badge.key in REWARD_BY_KEY) return REWARD_BY_KEY[badge.key];
+  if (NO_REWARD_CATEGORIES.has(badge.category) || NO_REWARD_KEYS.has(badge.key)) return 0;
+  return BADGE_REWARD[badgeRarity(badge)];
+}

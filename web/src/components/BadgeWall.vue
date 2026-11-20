@@ -7,8 +7,10 @@ import { honorName, parseHonorKey, periodLabel, timesLabel } from '@/lib/honors'
 import { badgeRarity } from '@/lib/badge-rarity';
 import { badgeText, BADGE_ICONS, FEATURED_LIMIT, type CollectedBadge } from '../../../shared/community-badges';
 type Item=CollectedBadge&{lastPeriod?:string|null};
-const props=withDefaults(defineProps<{items:Item[];selected?:string[];editable?:boolean;busy?:boolean}>(),{selected:()=>[],editable:false,busy:false});
-const emit=defineEmits<{change:[keys:string[]]}>();
+/** claiming：正在領哪一枚的積分（按鈕上顯示領取中，其他領取鈕停用） */
+const props=withDefaults(defineProps<{items:Item[];selected?:string[];editable?:boolean;busy?:boolean;claiming?:string}>(),{selected:()=>[],editable:false,busy:false,claiming:''});
+const emit=defineEmits<{change:[keys:string[]];claim:[key:string]}>();
+const credits=(n:number)=>new Intl.NumberFormat(locale.value).format(n);
 const {t,locale}=useI18n();
 const items=computed(()=>props.items.filter(b=>BADGE_ICONS.includes(b.icon)).map(b=>({...b,rarity:badgeRarity(b)})));
 const date=(time:number)=>new Intl.DateTimeFormat(locale.value,{dateStyle:'medium'}).format(time);
@@ -46,8 +48,13 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
+    <p v-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='rejected'">{{ t('badgeWall.claimRejected') }}</p>
     <p v-if="badge.state==='earned'&&(share(badge)||badge.ordinal)" class="badge-tile__census">{{ [share(badge),badge.ordinal?t('badgeWall.ordinal',{n:badge.ordinal}):''].filter(Boolean).join(' · ') }}</p>
    </div>
+   <button v-if="editable && badge.state==='earned' && badge.reward && !badge.claim" type="button" class="btn badge-tile__claim" data-claim :disabled="busy || !!claiming" @click="emit('claim',badge.key)">{{ claiming===badge.key?t('badgeWall.claiming'):t('badgeWall.claim',{n:credits(badge.reward)}) }}</button>
    <button v-if="editable && badge.state==='earned'" type="button" class="btn" data-feature :aria-pressed="selected.includes(badge.key)" :disabled="busy || (!selected.includes(badge.key) && selected.length>=FEATURED_LIMIT)" @click="toggle(badge.key)">{{ t(selected.includes(badge.key)?'badgeWall.unfeature':'badgeWall.feature') }}</button>
   </article>
  </div>
@@ -92,6 +99,8 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 /* 全服唯一：在傳說的金框外再加一圈金色外光，跟傳說分得出來 */
 .badge-tile--unique.badge-tile--earned{box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 55%,transparent),0 12px 32px -14px rgba(242,176,30,.8)}
 .badge-tile__census{color:var(--text-3)}
+.badge-tile .badge-tile__claim{color:var(--accent-text);border-color:color-mix(in srgb,var(--accent) 45%,var(--border-strong))}
+.badge-tile__claimed{color:var(--success)}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}
 .badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}
 .badge-tile--earned h3{width:fit-content;max-width:100%;font-weight:700;background:linear-gradient(90deg,var(--ink),var(--ink-2));-webkit-background-clip:text;background-clip:text;color:transparent}

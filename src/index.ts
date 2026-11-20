@@ -14,6 +14,7 @@ import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
 import {annualBoard,isAnnualYear} from './annual-honors';
+import {badgeRewardMaintenance} from './community/badge-rewards';
 import {annualYearOf} from '../shared/annual-honors';
 import {badgeStatsBackfill} from './badge-stats-backfill';
 import {reviewPlayAccessRoutes} from './review-play-access';
@@ -2565,6 +2566,8 @@ export default {
       const phase=Math.floor(event.scheduledTime/60000)%3;
       const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
       ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));
+      // 徽章積分重試：跟付榜單獎金同一拍，各自接錯
+      if(phase===1)ctx.waitUntil(badgeRewardMaintenance(env,event.scheduledTime).catch(async()=>{console.warn('Badge reward retry unavailable');await bumpOp(env.DB,'badge_reward','payout','error');}));
       // 工坊同步每分鐘拉一批（作者開關、發布、隱藏要盡快出現在卡片頁）；跟排行各自 waitUntil、各自接錯，互不阻擋。
       // 只在這裡拉，每小時那輪不再拉，同一分鐘不會有兩輪重疊。
       ctx.waitUntil(drainProviderWorkshopOutbox(env,'harbor',WORKSHOP_OUTBOX_MINUTE_BATCH).then((r)=>(r.applied>0?dispatchPush(env):0)).catch(()=>{console.warn('Workshop outbox sync unavailable');}));
