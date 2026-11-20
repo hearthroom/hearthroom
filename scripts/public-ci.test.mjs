@@ -10,5 +10,9 @@ test("public PRs verify the website and Worker without Stage or deployment crede
   for (const command of ["npm run typecheck", "npm run test:public", "npm run test:api", "npm run build:public"]) {
     assert.ok(spec.includes(command), command);
   }
+  const build = spec.indexOf("npm run build:public");
+  const assets = spec.indexOf("ln -s dist-public web/dist");
+  const workerTests = spec.indexOf("npm run test:api");
+  assert.ok(build >= 0 && build < assets && assets < workerTests, "Worker tests must use the built public assets");
   assert.doesNotMatch(spec, /submodules: (true|recursive)|secrets\.|pull_request_target|wrangler deploy|migrate:remote|archive:assets/);
 });

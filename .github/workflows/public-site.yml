@@ -30,9 +30,14 @@ jobs:
       - run: node --test scripts/public-ci.test.mjs scripts/test-scope.test.mjs
       - run: npm run typecheck
       - run: npm run test:public
-      - run: npm run test:api
       - run: npm run build:public
       - run: test ! -e stage/package.json && test ! -d web/dist-public/sandbox
+      - name: Run Worker tests against the public build
+        run: |
+          test -f web/dist-public/index.html
+          # The tests use Wrangler's configured web/dist asset directory.
+          ln -s dist-public web/dist
+          npm run test:api
 
   # 每個使用者感覺得到的 commit 都要交代屬於哪則更新說明（updates/README.md）。
   # 獨立一個 job，不擋部署：為了缺一份說明擋掉緊急修正，代價比晚一點補說明大。
