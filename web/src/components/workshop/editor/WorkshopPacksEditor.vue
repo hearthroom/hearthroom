@@ -60,10 +60,11 @@ function toggleDefault(pack: LorePackDraft) {
   menu.value = "";
 }
 async function remove(pack: LorePackDraft) {
+  const count = entryCounts.value.get(pack.id) ?? 0;
   menu.value = "";
   if (!await confirmDialog({
     title: tr("delete.title", { name: pack.name }),
-    message: tr("delete.body", { n: n(entryCounts.value.get(pack.id) ?? 0) }),
+    message: t("wb.packs.delete.body", { n: n(count) }, count),
     confirmText: tr("delete.confirm"), danger: true, dangerAppearance: "subdued",
   })) return;
   emit("remove", pack.id);

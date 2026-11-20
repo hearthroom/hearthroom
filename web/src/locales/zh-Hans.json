@@ -5349,7 +5349,7 @@
   "wb.packs.form.descTooLong": "简介最多 {max} 字，请缩短后再保存。",
   "wb.packs.form.nameTaken": "已经有同名的包，请换一个名称。",
   "wb.packs.delete.title": "删除包“{name}”？",
-  "wb.packs.delete.body": "里面的 {n} 条条目不会被删除，会变成未归包并跟着整个 DLC 一起开关；玩家对这个包的勾选记录将不再显示。",
+  "wb.packs.delete.body": "里面的 {n} 条不会被删除，会变成未归包并跟着整个 DLC 一起开关；玩家对这个包的勾选记录将不再显示。",
   "wb.packs.delete.confirm": "删除",
   "wb.packs.scriptSwitch.label": "允许卡片脚本开关这个 DLC 的包",
   "wb.packs.scriptSwitch.desc": "默认关闭。开启后，卡片脚本可读取这个 DLC 的包名、简介与开关状态并替玩家切换，不会读到条目名称或内容。",
