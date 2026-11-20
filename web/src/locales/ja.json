@@ -1901,6 +1901,8 @@
   "badgeWall.share": "メンバーの {pct}% が所持",
   "badgeWall.shareTiny": "所持しているメンバーは 0.1% 未満",
   "badgeWall.ordinal": "{n} 人目の獲得者",
+  "badgeWall.taken": "すでに獲得したメンバーがいるため、このバッジはもう贈られません。",
+  "badgeWall.takenBy": "@{handle} さんが獲得済みのため、このバッジはもう贈られません。",
   "badgeWall.claim": "{n} ポイントを受け取る",
   "badgeWall.claiming": "受け取り中…",
   "badgeWall.claimed": "{n} ポイント受け取り済み",

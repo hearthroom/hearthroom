@@ -21,6 +21,8 @@ const BY_KEY: Record<string, BadgeRarity> = {
   player_commenter_10: 'rare', player_liked_10: 'rare', player_commenter_100: 'epic', player_liked_100: 'epic',
   community_level_10: 'rare', community_level_20: 'epic',
   invite_paid_10: 'epic',
+  player_explorer_100: 'epic', player_explorer_300: 'legendary', player_follows_20: 'rare', player_follows_50: 'epic', player_favorites_100: 'epic',
+  player_scout_1: 'rare', player_scout_5: 'epic', player_scout_20: 'legendary', player_rater_50: 'rare',
   server_booster: 'epic',
 };
 /** 管理員發的活動、比賽徽章是限時限量的；unique 類別是全服唯一。 */
@@ -31,8 +33,8 @@ const WINDOWS = ['day', 'week', 'month'];
 const BANDS = ['1', '3', '10'];
 
 export function badgeRarity(badge: { key: string; category: string }): BadgeRarity {
-  // 全服唯一（first_<名>）由第一個達成的人獨得；第 2–10 位拿先驅版（first_<名>_pioneer）
-  if (badge.key.startsWith('first_')) return badge.key.endsWith('_pioneer') ? 'epic' : 'unique';
+  // 全服唯一（sole_<名>）由第一個達成的人獨得；第 2–10 位拿先驅版（sole_<名>_pioneer）
+  if (badge.key.startsWith('sole_')) return badge.key.endsWith('_pioneer') ? 'epic' : 'unique';
   // 年冠全站唯一，年度十傑次之（annual_<zone>_<year>_<1|10>）
   const annual = /^annual_(?:clean|all)_\d{4}_(1|10)$/.exec(badge.key);
   if (annual) return annual[1] === '1' ? 'unique' : 'epic';
@@ -57,9 +59,9 @@ const NO_REWARD_KEYS = new Set(['beta_veteran', 'opening_veteran']);
 /** 全服唯一徽章各自的獎勵；0＝只有徽章，不發積分。 */
 export const REWARD_BY_KEY: Record<string, number> = {
   // 燈塔守護者：達成者至少帶來 100 筆首次儲值；超過活動點數池單筆上限（3 萬）前要先調高上限
-  first_lighthouse: 100_000,
+  sole_lighthouse: 100_000,
   // 首位星輝：發積分會疊在儲值贈送上、可能超過定價憲章 6% 上限，owner 裁決前只給徽章
-  first_starlight: 0,
+  sole_starlight: 0,
 };
 export function badgeReward(badge: { key: string; category: string }): number {
   if (badge.key in REWARD_BY_KEY) return REWARD_BY_KEY[badge.key];

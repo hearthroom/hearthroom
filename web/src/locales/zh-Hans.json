@@ -1901,6 +1901,8 @@
   "badgeWall.share": "全站 {pct}% 的成员拥有",
   "badgeWall.shareTiny": "全站不到 0.1% 的成员拥有",
   "badgeWall.ordinal": "第 {n} 位获得",
+  "badgeWall.taken": "已有成员获得，这枚不会再发出。",
+  "badgeWall.takenBy": "已由 @{handle} 获得，这枚不会再发出。",
   "badgeWall.claim": "领取 {n} 积分",
   "badgeWall.claiming": "领取中…",
   "badgeWall.claimed": "已领取 {n} 积分",

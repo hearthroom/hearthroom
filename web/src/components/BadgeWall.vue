@@ -48,7 +48,8 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
-    <p v-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
+    <p v-if="badge.taken" class="badge-tile__taken">{{ badge.holder?t('badgeWall.takenBy',{handle:badge.holder}):t('badgeWall.taken') }}</p>
+    <p v-else-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
     <p v-else-if="badge.reward&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits(badge.reward)}) }}</p>
     <p v-else-if="badge.reward&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits(badge.reward)}) }}</p>
     <p v-else-if="badge.reward&&badge.claim==='rejected'">{{ t('badgeWall.claimRejected') }}</p>
@@ -98,7 +99,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile__ap{font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 /* 全服唯一：在傳說的金框外再加一圈金色外光，跟傳說分得出來 */
 .badge-tile--unique.badge-tile--earned{box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 55%,transparent),0 12px 32px -14px rgba(242,176,30,.8)}
-.badge-tile__census{color:var(--text-3)}
+.badge-tile__census,.badge-tile__taken{color:var(--text-3)}
 .badge-tile .badge-tile__claim{color:var(--accent-text);border-color:color-mix(in srgb,var(--accent) 45%,var(--border-strong))}
 .badge-tile__claimed{color:var(--success)}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}

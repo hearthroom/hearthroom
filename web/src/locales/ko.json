@@ -1901,6 +1901,8 @@
   "badgeWall.share": "멤버의 {pct}%가 보유",
   "badgeWall.shareTiny": "보유한 멤버 0.1% 미만",
   "badgeWall.ordinal": "{n}번째 획득",
+  "badgeWall.taken": "이미 다른 멤버가 받아서 이 배지는 더 이상 주어지지 않아요.",
+  "badgeWall.takenBy": "@{handle} 님이 이미 받아서 이 배지는 더 이상 주어지지 않아요.",
   "badgeWall.claim": "포인트 {n} 받기",
   "badgeWall.claiming": "받는 중…",
   "badgeWall.claimed": "포인트 {n} 받음",

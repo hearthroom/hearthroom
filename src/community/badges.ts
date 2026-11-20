@@ -17,7 +17,7 @@ const DAY = 86400000;
  * (a connected account outranks the original identity), listed only, and never a
  * distributed copy — otherwise one work shipped to two providers counts twice.
  */
-const OWNED_LISTED = `cards c LEFT JOIN member_identities ai ON ai.provider=c.provider AND ai.external_id=CAST(c.author_num_id AS TEXT)
+export const OWNED_LISTED = `cards c LEFT JOIN member_identities ai ON ai.provider=c.provider AND ai.external_id=CAST(c.author_num_id AS TEXT)
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
  WHERE COALESCE(ac.owner_member_id,ai.member_id) IS NOT NULL AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
  AND NOT EXISTS (SELECT 1 FROM work_copies w WHERE w.provider=c.provider AND w.role_id=c.source_role_id)`;
@@ -50,6 +50,12 @@ export const METRICS:Record<string,Metric>={
  saves:{one:'SELECT COUNT(DISTINCT role_id) FROM card_saves WHERE member_id=?',all:'SELECT member_id,COUNT(DISTINCT role_id) AS value FROM card_saves GROUP BY member_id'},
  comments:{one:'SELECT COUNT(*) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,COUNT(*) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
  likes_received:{one:'SELECT COALESCE(SUM(like_count),0) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,SUM(like_count) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
+ /** 伯樂：在卡片第一次拿到榜單名次之前就收藏了它（作者自己的卡不算） */
+ talent_spotted:{one:`SELECT COUNT(*) FROM member_favorites f JOIN (SELECT card_id,MIN(awarded_at) AS first_at FROM rank_awards GROUP BY card_id) r ON r.card_id=f.card_id
+  WHERE f.member_id=? AND f.created_at<r.first_at AND NOT EXISTS(SELECT 1 FROM rank_awards x WHERE x.card_id=f.card_id AND x.member_id=f.member_id)`,
+  all:`SELECT f.member_id,COUNT(*) AS value FROM member_favorites f JOIN (SELECT card_id,MIN(awarded_at) AS first_at FROM rank_awards GROUP BY card_id) r ON r.card_id=f.card_id
+  WHERE f.created_at<r.first_at AND NOT EXISTS(SELECT 1 FROM rank_awards x WHERE x.card_id=f.card_id AND x.member_id=f.member_id) GROUP BY f.member_id`},
+ ratings:{one:'SELECT COUNT(*) FROM card_scores WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM card_scores GROUP BY member_id'},
  profile:{progress:false,one:'SELECT profile_edited_at IS NOT NULL FROM members WHERE id=?',all:'SELECT id AS member_id,1 AS value FROM members WHERE profile_edited_at IS NOT NULL'},
  beta_veteran:{progress:false,one:`SELECT created_at<${FOUNDER_CUTOFF} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${FOUNDER_CUTOFF}`},
  opening_veteran:{progress:false,one:`SELECT created_at<${VETERAN_END} FROM members WHERE id=?`,all:`SELECT id AS member_id,1 AS value FROM members WHERE created_at<${VETERAN_END}`},
@@ -98,6 +104,12 @@ async function holderCounts(env:Env):Promise<{members:number;holders:Record<stri
   return {members:members??0,holders:Object.fromEntries(rows.results.map(r=>[r.badge,r.n]))};
  })).value;
 }
+/** 全服唯一徽章（sole_，不含先驅版）現在的持有人；持有人公開了徽章才給公開 ID。撤銷了也算拿走（不順延）。 */
+async function crownHolders(env:Env):Promise<Record<string,{member:string;handle:string|null}>>{
+ const rows=(await env.DB.prepare(`SELECT a.badge,a.member_id,CASE WHEN p.public_badges=1 THEN m.handle END AS handle FROM community_awards a JOIN members m ON m.id=a.member_id
+  LEFT JOIN community_preferences p ON p.member_id=a.member_id WHERE a.badge LIKE 'sole\\_%' ESCAPE '\\' AND a.badge NOT LIKE '%\\_pioneer' ESCAPE '\\'`).all<{badge:string;member_id:string;handle:string|null}>()).results;
+ return Object.fromEntries(rows.map(r=>[r.badge,{member:r.member_id,handle:r.handle}]));
+}
 /** 這位成員每枚有效徽章是第幾位拿到的：比他早的有效紀錄數加一（同一刻補發的同名次）。 */
 async function ordinals(env:Env,member:string):Promise<Record<string,number>>{
  const now=Date.now();
@@ -115,7 +127,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
- const [census,order,claims]=await Promise.all([holderCounts(env),ordinals(env,member),publicOnly?{} as Record<string,never>:claimStates(env,member)]);
+ const [census,order,claims,crowns]=await Promise.all([holderCounts(env),ordinals(env,member),publicOnly?{} as Record<string,never>:claimStates(env,member),crownHolders(env)]);
  const now=Date.now();
  const crossed:string[]=[];
  let items:CollectedBadge[]=catalog.map(def=>{
@@ -136,6 +148,8 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   }
   if(!counts){item.count=item.state==='earned'?1:0;item.firstAt=item.earnedAt;item.lastAt=item.earnedAt;}
   item.ap=badgeAp(def);
+  const crown=crowns[def.key];
+  if(crown&&crown.member!==member&&item.state!=='earned'){item.taken=true;if(crown.handle)item.holder=crown.handle;}
   if(!publicOnly){const reward=badgeReward(def);if(reward>0)item.reward=reward;if(claims[def.key])item.claim=claims[def.key];}
   if(item.state==='earned'){
    const held=census.holders[def.key];
