@@ -109,3 +109,10 @@ it('claims credits for earned badges one by one, and the server decides each amo
  expect(mock.request.mock.calls.map(c=>[c[0],c[2]])).toEqual([['/me/community/badges/a/claim','POST'],['/me/community/badges/b/claim','POST']]);
  expect(el.querySelector('.badge-claims')).toBeNull();
 });
+
+it('says a one-of-a-kind badge is taken and by whom, without breaking the wall',async()=>{
+ const sole=(key:string,extra:Record<string,unknown>)=>({key,icon:'crown',category:'creation',titles:{en:key},descriptions:{en:'How'},state:'locked',earnedAt:null,expiresAt:null,...extra});
+ await open('/authors/fixture/badges',{...wall(),items:[sole('sole_a',{taken:true,holder:'moon'}),sole('sole_b',{taken:true}),{...wall().items[0]}]});
+ expect([...el.querySelectorAll('.badge-tile__taken')].map(p=>p.textContent)).toEqual(["@moon already holds this one, so it won't be awarded again.","Another member already holds this one, so it won't be awarded again."]);
+ expect(el.querySelectorAll('.badge-tile')).toHaveLength(3);
+});

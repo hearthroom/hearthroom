@@ -48,7 +48,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
-    <p v-if="badge.taken" class="badge-tile__taken">{{ badge.holder?t('badgeWall.takenBy',{handle:badge.holder}):t('badgeWall.taken') }}</p>
+    <p v-if="badge.taken" class="badge-tile__taken">{{ badge.holder?t('badgeWall.takenBy',{handle:'@'+badge.holder}):t('badgeWall.taken') }}</p>
     <p v-else-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
     <p v-else-if="badge.reward&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits(badge.reward)}) }}</p>
     <p v-else-if="badge.reward&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits(badge.reward)}) }}</p>

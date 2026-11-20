@@ -1902,7 +1902,7 @@
   "badgeWall.shareTiny": "Held by under 0.1% of members",
   "badgeWall.ordinal": "Earner #{n}",
   "badgeWall.taken": "Another member already holds this one, so it won't be awarded again.",
-  "badgeWall.takenBy": "@{handle} already holds this one, so it won't be awarded again.",
+  "badgeWall.takenBy": "{handle} already holds this one, so it won't be awarded again.",
   "badgeWall.claim": "Claim {n} credits",
   "badgeWall.claiming": "Claiming…",
   "badgeWall.claimed": "{n} credits claimed",
