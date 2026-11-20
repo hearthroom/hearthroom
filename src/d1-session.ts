@@ -1,3 +1,4 @@
+import { getPath } from "hono/utils/url";
 import type { Env } from "./types";
 
 /**
@@ -81,7 +82,8 @@ export function withD1Session(request: Request, env: Env): { env: Env; finish(re
   if (typeof env.DB?.withSession !== "function") return { env, finish: (response) => response };
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
-  const constraint = startsAtPrimary(method, url.pathname)
+  const primary = startsAtPrimary(method, url.pathname) || isPublicAggregatePath(getPath(request));
+  const constraint = primary
     ? "first-primary"
     : (bookmarkFrom(request) ?? "first-unconstrained");
   const session = openSession(env.DB, constraint);

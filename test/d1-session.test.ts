@@ -32,6 +32,12 @@ function recorder(){
   return {seen,env:{...env,DB:db} as any};
 }
 
+it('reads primary visibility for percent-encoded aggregate paths routed by Hono',()=>{
+  const r=recorder();
+  withD1Session(new Request('https://hearthroom.club/v1/%74ags'),r.env);
+  expect(r.seen).toEqual(['first-primary']);
+});
+
 it('reads author visibility and operation absence from primary even without a prior bookmark',async()=>{
   const r=recorder();
   for(const path of ['/v1/me/cards/100076/visibility','/v1/me/cards/100076/visibility/operations/missing','/v1/me/cards/100076/publication/operations/missing']){
