@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "回覆逐字出現時，顯示規則也會以整則回覆的開頭和結尾為準。",
+    "zh-Hans": "回复逐字显示时，显示规则也会按整条回复的开头和结尾来匹配。",
+    "en": "Display rules now use the full reply when matching its beginning or end during streaming.",
+    "ja": "返信が表示されている間も、表示ルールは返信全体の先頭と末尾を基準にします。",
+    "ko": "답변이 표시되는 중에도 표시 규칙은 답변 전체의 시작과 끝을 기준으로 적용됩니다."
+  }
+}
