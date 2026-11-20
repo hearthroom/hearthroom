@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "audience": "authors",
+  "try": "/?mode=achievements",
+  "title": {
+    "zh-Hant": "榜單名次現在會累計成年度積分，2026 年第一名的作者獲得「開元年冠」。",
+    "zh-Hans": "榜单名次现在会累计成年度积分，2026 年第一名的作者获得「开元年冠」。",
+    "en": "Board placements now add up to annual points, and the top author of 2026 wins the Founding Year Crown.",
+    "ja": "ランキングの順位が年間ポイントになり、2026 年 1 位の作者は「開元年冠」を獲得します。",
+    "ko": "랭킹 순위가 이제 연간 포인트로 쌓이고, 2026년 1위 작가는 '개원 연간 챔피언'을 받아요."
+  },
+  "body": {
+    "zh-Hant": "12 月 31 日前發布的卡片都算，清水、綜合的第一名各得年冠與 20 萬積分，積分表在首頁「成就」分頁。",
+    "zh-Hans": "12 月 31 日前发布的卡片都算，清水、综合的第一名各得年冠与 20 万积分，积分表在首页「成就」分页。",
+    "en": "Cards published by December 31 count toward the home page's Achievements tab, where the SFW and Overall winners each get the crown and 200,000 credits.",
+    "ja": "12 月 31 日までに公開したカードが対象で、全年齢と総合の 1 位がそれぞれ年冠と 20 万ポイントを獲得します（表はトップの「実績」タブ）。",
+    "ko": "12월 31일까지 공개한 카드가 대상이고, 전연령과 종합 1위가 각각 연간 챔피언과 포인트 20만을 받으며 표는 홈의 '업적' 탭에 있어요."
+  }
+}

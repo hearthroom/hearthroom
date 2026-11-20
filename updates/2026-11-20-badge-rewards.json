@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "audience": "everyone",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "徽章現在可以領積分，越難拿的徽章領得越多。",
+    "zh-Hans": "徽章现在可以领积分，越难拿的徽章领得越多。",
+    "en": "Badges now come with credits to claim, and harder badges pay more.",
+    "ja": "バッジでポイントを受け取れるようになり、難しいバッジほど多くもらえます。",
+    "ko": "이제 배지로 포인트를 받을 수 있고, 어려운 배지일수록 더 많이 받아요."
+  },
+  "body": {
+    "zh-Hant": "普通 100、稀有 500、史詩 2,000、傳說 6,000 積分，每枚領一次，榜單榮譽和消費類徽章另有獎金或不發積分。",
+    "zh-Hans": "普通 100、稀有 500、史诗 2,000、传说 6,000 积分，每枚领一次，榜单荣誉和消费类徽章另有奖金或不发积分。",
+    "en": "Common 100, rare 500, epic 2,000 and legendary 6,000 credits, once per badge, while board honors already pay prizes and spending badges carry no credits.",
+    "ja": "コモン 100、レア 500、エピック 2,000、レジェンド 6,000 ポイントを各 1 回受け取れ、ランキングと消費のバッジは対象外です。",
+    "ko": "일반 100, 희귀 500, 영웅 2,000, 전설 6,000포인트를 배지마다 한 번 받을 수 있고, 랭킹·소비 배지는 대상이 아니에요."
+  }
+}

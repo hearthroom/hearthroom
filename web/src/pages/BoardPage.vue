@@ -14,6 +14,7 @@ import { tourState } from "@/lib/coach-tour";
 import { starterFor } from "@/lib/onboarding";
 import type { CommunityCard } from "@/lib/types";
 import FollowFeed from "@/components/FollowFeed.vue";
+const AchievementsBoard = defineAsyncComponent(() => import("@/components/AchievementsBoard.vue"));
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard, fetchCard, fetchTagCounts } from "@/lib/api";
 import { recallStream, rememberStream, prepareBoardScroll } from "@/lib/board-memory";
@@ -76,9 +77,10 @@ const loading = computed(() => feed.loading);
  * 全站收藏數排行與評分排行不在分頁列：舊網址 ?sort=favorites／score 不在 SORTS 裡，照沒帶 sort 退回日榜。
  * 評分排序改放搜尋頁的排序選單（站方「評分放篩選」）；收藏排行站方說跟最熱差不多，網頁不放。伺服器兩種排法都還在（開放 API 在用）。
  * 「關注」是另一種清單（關注作者的動態），不是排法，但跟排序排在同一列、同一個樣式。
+ * 「成就」（年度榜單積分、作者成就、綜合成就三張榜）也是另一種清單，排在月榜後面：年度積分是三個榜累計出來的。
  */
 const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "updated", "random"];
-const TABS: Array<Sort | "following"> = ["day", "week", "month", "hot", "new", "following", "updated", "random"];
+const TABS: Array<Sort | "following" | "achievements"> = ["day", "week", "month", "achievements", "hot", "new", "following", "updated", "random"];
 const restoring = ref(false);
 const wide = ref(window.innerWidth >= 1080);
 /** 窄螢幕的類型列收成一顆鈕，跟分級選單排在同一列（見 DiscoveryTags 的 popover） */
@@ -89,7 +91,7 @@ function canLoad() {
   return !mounted || (document.visibilityState !== "hidden" && ![...document.querySelectorAll<HTMLElement>('[data-discovery-overlay], [role="menu"], [role="dialog"], dialog[open]')].some(el => el.getClientRects().length > 0));
 }
 /** 角色卡探索或關注動態；相容舊作者榜連結。 */
-const mode = computed(() => ["following", "authors"].includes(String(route.query.mode)) ? "following" : "cards");
+const mode = computed(() => route.query.mode === "achievements" ? "achievements" : ["following", "authors"].includes(String(route.query.mode)) ? "following" : "cards");
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
   return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "day";
@@ -257,7 +259,7 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
   router.push({ query });
 }
 /** 換榜的時候排序鍵不通用，一起清掉。 */
-const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag: undefined, rating: undefined });
+const switchMode = (m: "following" | "achievements") => navigate({ mode: m, sort: undefined, tag: undefined, rating: undefined });
 
 /** 已登入的人頂端放蘇綺面板；新訪客的歡迎橫幅還在時先放橫幅，一次只放一塊。翻到後面幾頁不放。 */
 const welcome = useMascotWelcome();
@@ -354,7 +356,7 @@ const ratingOptions = computed(() => {
     <div class="board-layout"><div class="board-main" :class="{ 'board-main--restored': restoring }">
     <div ref="sortsEl" class="sorts" role="group" :aria-label="$t('board.sorts')">
       <template v-for="s in TABS" :key="s">
-        <button v-if="s === 'following'" class="sorts__item" :class="{ 'sorts__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("board.mode.following") }}</button>
+        <button v-if="s === 'following' || s === 'achievements'" class="sorts__item" :class="{ 'sorts__item--on': mode === s }" :aria-pressed="mode === s" @click="switchMode(s)">{{ $t(`board.mode.${s}`) }}</button>
         <button v-else class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
           {{ $t(`board.sort.${s}`) }}
         </button>
@@ -419,6 +421,7 @@ const ratingOptions = computed(() => {
       </div>
     </template>
 
+    <AchievementsBoard v-else-if="mode === 'achievements'" />
     <FollowFeed v-else @discover="toNewCards" @top="sortsEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })" />
     </div><HomeSidebar v-if="wide" class="board-sidebar" /></div>
   </div>

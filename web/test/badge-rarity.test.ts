@@ -19,3 +19,9 @@ it('maps tiered milestones and falls back by category', () => {
   expect(badgeRarity({ key: 'event_summer', category: 'event' })).toBe('epic');
   expect(badgeRarity({ key: 'something_new', category: 'play' })).toBe('common');
 });
+
+it('keeps the existing first_work badge common while sole_ badges are one of a kind', () => {
+  expect(badgeRarity({ key: 'first_work', category: 'creation' })).toBe('common');
+  expect(badgeRarity({ key: 'sole_grand_slam', category: 'creation' })).toBe('unique');
+  expect(badgeRarity({ key: 'sole_grand_slam_pioneer', category: 'creation' })).toBe('epic');
+});

@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "作者、評論與遊玩都多了全站只有一位能拿的徽章，玩家也多了伯樂、評分等新徽章。",
+    "zh-Hans": "作者、评论与游玩都多了全站只有一位能拿的徽章，玩家也多了伯乐、评分等新徽章。",
+    "en": "Authors, commenters and players get one-of-a-kind badges to chase, plus new badges for talent scouting and ratings.",
+    "ja": "作者・コメント・遊びに全サイトで 1 人だけのバッジが加わり、名伯楽や評価のバッジも増えました。",
+    "ko": "작가·댓글·플레이에 한 명만 받는 배지가 생기고, 명백락·평가 같은 플레이어 배지도 늘었어요."
+  }
+}

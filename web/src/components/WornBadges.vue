@@ -46,7 +46,9 @@ watch(() => [props.handle, props.own, props.collection], load, { immediate: true
 
 const earned = computed(() => data.value?.items.filter(b => b.state === "earned") ?? []);
 const worn = computed(() => (data.value?.featured ?? []).map(key => earned.value.find(b => b.key === key)).filter((b): b is CollectedBadge => !!b));
+/** 自己和別人看同一頁（/authors/:handle/badges）；自己的入口走 /me/badges，進去後換成那一頁 */
 const allPath = computed(() => props.own ? lp("/me/badges") : lp(`/authors/${props.handle}/badges`));
+const viewAll = computed(() => data.value?.ap ? t("badges.viewAllPoints", { n: earned.value.length, ap: new Intl.NumberFormat(locale.value).format(data.value.ap), level: data.value.level ?? 1 }) : t("badges.viewAll", { n: earned.value.length }));
 
 /** lastPeriod：榜單榮譽最近一次那一組的起始日（後端契約），其他徽章沒有 */
 type Worn = CollectedBadge & { lastPeriod?: string | null };
@@ -145,7 +147,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
         <button type="button" class="worn__more" aria-haspopup="dialog" :aria-label="t('badges.moreAria', { n: hidden.length }, hidden.length)" @click="openDetail(hidden, $event)">+{{ hidden.length }}</button>
       </li>
     </ul>
-    <RouterLink ref="link" class="worn__all" :to="allPath">{{ t("badges.viewAll", { n: earned.length }) }}</RouterLink>
+    <RouterLink ref="link" class="worn__all" :to="allPath">{{ viewAll }}</RouterLink>
     <!-- 量測列：和展示列同樣的標籤，看不見、不佔位，只拿來量寬度 -->
     <div ref="measure" class="worn__measure" aria-hidden="true">
       <BadgeLabel v-for="badge in worn" :key="badge.key" data-measure-item :honor="honorOf(badge)" :icon="badge.icon" :text="nameOf(badge)" :count="badge.count" />
@@ -177,7 +179,7 @@ onBeforeUnmount(() => { observer?.disconnect(); removeEventListener("scroll", on
           <p class="worn-detail__condition">{{ badgeText(badge.descriptions, locale) }}</p>
         </div>
       </div>
-      <RouterLink class="worn__all" :to="allPath" @click="closeDetail">{{ t("badges.viewAll", { n: earned.length }) }}</RouterLink>
+      <RouterLink class="worn__all" :to="allPath" @click="closeDetail">{{ viewAll }}</RouterLink>
     </div>
   </Teleport>
   <!-- 桌機的浮層點外面就關 -->

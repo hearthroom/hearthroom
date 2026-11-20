@@ -7,8 +7,10 @@ import { honorName, parseHonorKey, periodLabel, timesLabel } from '@/lib/honors'
 import { badgeRarity } from '@/lib/badge-rarity';
 import { badgeText, BADGE_ICONS, FEATURED_LIMIT, type CollectedBadge } from '../../../shared/community-badges';
 type Item=CollectedBadge&{lastPeriod?:string|null};
-const props=withDefaults(defineProps<{items:Item[];selected?:string[];editable?:boolean;busy?:boolean}>(),{selected:()=>[],editable:false,busy:false});
-const emit=defineEmits<{change:[keys:string[]]}>();
+/** claiming：正在領哪一枚的積分（按鈕上顯示領取中，其他領取鈕停用） */
+const props=withDefaults(defineProps<{items:Item[];selected?:string[];editable?:boolean;busy?:boolean;claiming?:string}>(),{selected:()=>[],editable:false,busy:false,claiming:''});
+const emit=defineEmits<{change:[keys:string[]];claim:[key:string]}>();
+const credits=(n:number)=>new Intl.NumberFormat(locale.value).format(n);
 const {t,locale}=useI18n();
 const items=computed(()=>props.items.filter(b=>BADGE_ICONS.includes(b.icon)).map(b=>({...b,rarity:badgeRarity(b)})));
 const date=(time:number)=>new Intl.DateTimeFormat(locale.value,{dateStyle:'medium'}).format(time);
@@ -16,6 +18,8 @@ const date=(time:number)=>new Intl.DateTimeFormat(locale.value,{dateStyle:'mediu
 const honorOf=(b:CollectedBadge)=>parseHonorKey(b.key);
 const nameOf=(b:CollectedBadge)=>{const h=honorOf(b);return h?honorName(t,h):badgeText(b.titles,locale.value);};
 function recent(b:Item):string{const h=honorOf(b);if(!h||!b.lastPeriod||b.state!=='earned')return '';const period=periodLabel(h.window,b.lastPeriod,locale.value);return (b.count??1)>1?t('honor.recentMany',{n:b.count,period}):t('honor.periodSingle',{period});}
+/** 持有率：不到 0.1% 的寫「不到 0.1%」，不寫 0% */
+const share=(b:Item)=>b.share===undefined?'':b.share<0.1?t('badgeWall.shareTiny'):t('badgeWall.share',{pct:new Intl.NumberFormat(locale.value,{maximumFractionDigits:1}).format(b.share)});
 function toggle(key:string){emit('change',props.selected.includes(key)?props.selected.filter(k=>k!==key):[...props.selected,key]);}
 </script>
 <template>
@@ -36,7 +40,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
      </span>
      <span v-if="honorOf(badge)&&timesLabel(badge.count)" class="badge-tile__times">{{ timesLabel(badge.count) }}</span>
     </span>
-    <span class="badge-tile__meta"><span class="badge-tile__rarity">{{ t('badgeWall.rarity.'+badge.rarity) }}</span><span class="badge-tile__state">{{ t('badgeWall.state.'+badge.state) }}</span></span>
+    <span class="badge-tile__meta"><span class="badge-tile__rarity">{{ t('badgeWall.rarity.'+badge.rarity) }}</span><span v-if="badge.ap" class="badge-tile__ap">{{ t('badgeWall.ap',{n:badge.ap}) }}</span><span class="badge-tile__state">{{ t('badgeWall.state.'+badge.state) }}</span></span>
    </div>
    <div><h3>{{ nameOf(badge) }}</h3><p class="badge-tile__condition">{{ badgeText(badge.descriptions,locale) }}</p></div>
    <div class="badge-tile__details">
@@ -44,7 +48,14 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
+    <p v-if="badge.taken" class="badge-tile__taken">{{ badge.holder?t('badgeWall.takenBy',{handle:'@'+badge.holder}):t('badgeWall.taken') }}</p>
+    <p v-else-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits(badge.reward)}) }}</p>
+    <p v-else-if="badge.reward&&badge.claim==='rejected'">{{ t('badgeWall.claimRejected') }}</p>
+    <p v-if="badge.state==='earned'&&(share(badge)||badge.ordinal)" class="badge-tile__census">{{ [share(badge),badge.ordinal?t('badgeWall.ordinal',{n:badge.ordinal}):''].filter(Boolean).join(' · ') }}</p>
    </div>
+   <button v-if="editable && badge.state==='earned' && badge.reward && !badge.claim" type="button" class="btn badge-tile__claim" data-claim :disabled="busy || !!claiming" @click="emit('claim',badge.key)">{{ claiming===badge.key?t('badgeWall.claiming'):t('badgeWall.claim',{n:credits(badge.reward)}) }}</button>
    <button v-if="editable && badge.state==='earned'" type="button" class="btn" data-feature :aria-pressed="selected.includes(badge.key)" :disabled="busy || (!selected.includes(badge.key) && selected.length>=FEATURED_LIMIT)" @click="toggle(badge.key)">{{ t(selected.includes(badge.key)?'badgeWall.unfeature':'badgeWall.feature') }}</button>
   </article>
  </div>
@@ -58,20 +69,20 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile{--medal:url(/badges/medal-common.webp);--ink:var(--text);--ink-2:var(--ink);--glyph:#ead7b6;--glow:rgba(176,128,72,.25);position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;gap:var(--s-4);min-width:0;padding:var(--s-5);border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface-2)}
 .badge-tile--rare{--medal:url(/badges/medal-rare.webp);--ink:#1d5bd6;--glyph:#a8cbff;--glow:rgba(64,128,255,.4)}
 .badge-tile--epic{--medal:url(/badges/medal-epic.webp);--aura:url(/badges/aura-epic.webp);--ink:#6d28d9;--ink-2:#b0207a;--glyph:#e2c2ff;--glow:rgba(170,90,255,.5)}
-.badge-tile--legendary{--medal:url(/badges/medal-legendary.webp);--aura:url(/badges/aura-legendary.webp);--ink:#9a5800;--ink-2:#b86e00;--glyph:#ffe08a;--glow:rgba(242,176,30,.6)}
+.badge-tile--legendary,.badge-tile--unique{--medal:url(/badges/medal-legendary.webp);--aura:url(/badges/aura-legendary.webp);--ink:#9a5800;--ink-2:#b86e00;--glyph:#ffe08a;--glow:rgba(242,176,30,.6)}
 :root[data-mode="dark"] .badge-tile--rare{--ink:#8ab8ff}
 :root[data-mode="dark"] .badge-tile--epic{--ink:#cfa6ff;--ink-2:#ff8fd6}
-:root[data-mode="dark"] .badge-tile--legendary{--ink:#ffe08a;--ink-2:#ffb02e}
+:root[data-mode="dark"] .badge-tile--legendary,:root[data-mode="dark"] .badge-tile--unique{--ink:#ffe08a;--ink-2:#ffb02e}
 .badge-tile--rare.badge-tile--earned{border-color:color-mix(in srgb,#4080ff 45%,transparent);background:radial-gradient(120% 80% at 100% 0%,rgba(64,128,255,.12),transparent 60%),var(--surface-2)}
 .badge-tile--epic.badge-tile--earned{border-color:transparent;background:radial-gradient(120% 80% at 100% 0%,rgba(170,90,255,.12),transparent 60%) padding-box,linear-gradient(var(--surface-2),var(--surface-2)) padding-box,linear-gradient(135deg,#b46bff,#ff6fb5 55%,#6b4cff) border-box;box-shadow:0 10px 28px -14px rgba(170,90,255,.6)}
-.badge-tile--legendary.badge-tile--earned{border-color:transparent;background:radial-gradient(120% 80% at 100% 0%,rgba(242,176,30,.14),transparent 60%) padding-box,linear-gradient(var(--surface-2),var(--surface-2)) padding-box,linear-gradient(135deg,#ffe28a,#f2b01e 35%,#b8741a 65%,#ffe28a) border-box;box-shadow:0 12px 32px -14px rgba(242,176,30,.7)}
+.badge-tile--legendary.badge-tile--earned,.badge-tile--unique.badge-tile--earned{border-color:transparent;background:radial-gradient(120% 80% at 100% 0%,rgba(242,176,30,.14),transparent 60%) padding-box,linear-gradient(var(--surface-2),var(--surface-2)) padding-box,linear-gradient(135deg,#ffe28a,#f2b01e 35%,#b8741a 65%,#ffe28a) border-box;box-shadow:0 12px 32px -14px rgba(242,176,30,.7)}
 /* 史詩、傳說的卡面右上角疊一層光紋（AI 生圖，透明底） */
 .badge-tile--earned::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--aura,none) right top/95% auto no-repeat;opacity:.35;pointer-events:none}
 :root[data-mode="dark"] .badge-tile--earned::before{opacity:.6}
 /* 傳說：一道很淡的光每隔幾秒掃過卡面；減少動態時不掃 */
-.badge-tile--legendary.badge-tile--earned::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,232,160,.22) 50%,transparent 62%);transform:translateX(-100%);animation:badge-sheen 6s ease-in-out infinite;pointer-events:none}
+.badge-tile--unique.badge-tile--earned::after,.badge-tile--legendary.badge-tile--earned::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,232,160,.22) 50%,transparent 62%);transform:translateX(-100%);animation:badge-sheen 6s ease-in-out infinite;pointer-events:none}
 @keyframes badge-sheen{0%,55%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-@media (prefers-reduced-motion:reduce){.badge-tile--legendary.badge-tile--earned::after{display:none}}
+@media (prefers-reduced-motion:reduce){.badge-tile--unique.badge-tile--earned::after,.badge-tile--legendary.badge-tile--earned::after{display:none}}
 .badge-tile--featured{outline:2px solid var(--accent);outline-offset:2px}
 .badge-tile__top{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3)}
 .badge-tile__emblem{position:relative;flex:none;margin:-8px 0 -8px -10px}
@@ -85,10 +96,16 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile__times{position:absolute;right:2px;bottom:8px;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--text);color:var(--hr-page-bg);font-size:12px;font-weight:700;line-height:20px;text-align:center;font-variant-numeric:tabular-nums}
 .badge-tile__meta{display:grid;justify-items:end;gap:var(--s-2);min-width:0}
 .badge-tile__rarity{padding:2px 9px;border-radius:var(--r-pill);color:var(--ink);background:color-mix(in srgb,var(--ink) 10%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 28%,transparent);font-size:12px;font-weight:700;letter-spacing:.04em;line-height:1.6;white-space:nowrap}
+.badge-tile__ap{font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 全服唯一：在傳說的金框外再加一圈金色外光，跟傳說分得出來 */
+.badge-tile--unique.badge-tile--earned{box-shadow:0 0 0 2px color-mix(in srgb,var(--gold) 55%,transparent),0 12px 32px -14px rgba(242,176,30,.8)}
+.badge-tile__census,.badge-tile__taken{color:var(--text-3)}
+.badge-tile .badge-tile__claim{color:var(--accent-text);border-color:color-mix(in srgb,var(--accent) 45%,var(--border-strong))}
+.badge-tile__claimed{color:var(--success)}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}
 .badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}
 .badge-tile--earned h3{width:fit-content;max-width:100%;font-weight:700;background:linear-gradient(90deg,var(--ink),var(--ink-2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.badge-tile--legendary.badge-tile--earned h3{font-size:1.0625rem;font-weight:800;letter-spacing:.02em}
+.badge-tile--legendary.badge-tile--earned h3,.badge-tile--unique.badge-tile--earned h3{font-size:1.0625rem;font-weight:800;letter-spacing:.02em}
 .badge-tile:not(.badge-tile--earned) h3{color:var(--text-2)}
 .badge-tile--common progress{accent-color:var(--accent)}
 .badge-tile__details{margin-top:auto}.badge-tile__details label{display:grid;gap:var(--s-2)}progress{width:100%;height:.5rem;accent-color:var(--ink)}.badge-tile .btn{width:100%;min-height:2.75rem;white-space:normal;line-height:1.5}.badge-tile .btn[aria-pressed=true]{color:var(--accent-text);border-color:var(--accent)}

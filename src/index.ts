@@ -13,6 +13,10 @@ import {commentWorkshopAt, drainProviderWorkshopOutbox, WORKSHOP_OUTBOX_MINUTE_B
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
+import {annualBoard,isAnnualYear} from './annual-honors';
+import {badgeRewardMaintenance} from './community/badge-rewards';
+import {achievementBoard,currentMonth,monthRange} from './community/achievement-board';
+import {annualYearOf} from '../shared/annual-honors';
 import {badgeStatsBackfill} from './badge-stats-backfill';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import {enforcementNoticeRoutes} from './enforcement-notices';
@@ -675,6 +679,24 @@ app.get('/v1/me/cards/:id/author-reference', async c => {
     ...(metadata?.fandom ? { fandom: metadata.fandom } : {}),
     ...(metadata?.fandomKey ? { fandomKey: metadata.fandomKey } : {}),
   });
+});
+
+/** 年度榜單積分（年冠）：結算前是暫定排名，結算後照快照。匿名可讀，公開資料只有名次、分數與作者公開資料。 */
+app.get('/v1/rankings/annual',async c=>{
+  const zone=c.req.query('zone')??'all';
+  if(zone!=='all'&&zone!=='clean')throw new HttpError(400,'annual_zone');
+  const year=Number(c.req.query('year')??annualYearOf(Date.now()));
+  if(!isAnnualYear(year))throw new HttpError(400,'annual_year');
+  return cachedJson(c,()=>annualBoard(c.env,year,zone),{edgeOnly:true});
+});
+
+/** 成就榜：author＝作者成就（創作與榜單），all＝綜合（不含消費、邀請，只收公開徽章的成員）；period＝all 或 YYYY-MM。 */
+app.get('/v1/rankings/achievements',async c=>{
+  const board=c.req.query('board')??'author';
+  if(board!=='author'&&board!=='all')throw new HttpError(400,'achievement_board');
+  const period=c.req.query('period')??'all';
+  if(period!=='all'&&(!monthRange(period)||period<'2026-09'||period>currentMonth()))throw new HttpError(400,'achievement_period');
+  return cachedJson(c,()=>achievementBoard(c.env,board,period),{edgeOnly:true});
 });
 
 app.get('/v1/cards/:id/honors',async c=>{
@@ -2554,6 +2576,8 @@ export default {
       const phase=Math.floor(event.scheduledTime/60000)%3;
       const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
       ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));
+      // 徽章積分重試：跟付榜單獎金同一拍，各自接錯
+      if(phase===1)ctx.waitUntil(badgeRewardMaintenance(env,event.scheduledTime).catch(async()=>{console.warn('Badge reward retry unavailable');await bumpOp(env.DB,'badge_reward','payout','error');}));
       // 工坊同步每分鐘拉一批（作者開關、發布、隱藏要盡快出現在卡片頁）；跟排行各自 waitUntil、各自接錯，互不阻擋。
       // 只在這裡拉，每小時那輪不再拉，同一分鐘不會有兩輪重疊。
       ctx.waitUntil(drainProviderWorkshopOutbox(env,'harbor',WORKSHOP_OUTBOX_MINUTE_BATCH).then((r)=>(r.applied>0?dispatchPush(env):0)).catch(()=>{console.warn('Workshop outbox sync unavailable');}));
