@@ -344,6 +344,7 @@ async function saveNotice() {
                   ><span /></button>
                 </div>
                 <ul v-if="!sorted && !view.workshopClosed && rowActive(item) && isExpanded(item)" class="mod-window__packs">
+                  <li v-if="item.scriptCanSwitchPacks" class="mod-window__muted">{{ tr("pack.scriptManagedHint") }}</li>
                   <li v-for="pack in item.packs" :key="pack.id" class="mod-window__row">
                     <div class="mod-window__row-copy">
                       <strong>{{ pack.name }}</strong>
@@ -358,7 +359,6 @@ async function saveNotice() {
                       @click="mutate({ action: 'packs', packs: [{ workshopId: item.workshopId, packId: pack.id, enabled: !pack.enabled }] }, item.workshopId)"
                     ><span /></button>
                   </li>
-                  <li v-if="item.scriptCanSwitchPacks" class="mod-window__muted">{{ tr("pack.scriptManagedHint") }}</li>
                 </ul>
                 <p v-if="failure?.row === item.workshopId" class="mod-window__row-error" role="alert">
                   {{ tr(rowError(failure.action)) }}

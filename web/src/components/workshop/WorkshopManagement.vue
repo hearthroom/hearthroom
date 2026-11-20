@@ -285,12 +285,12 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
           <ExtensionCover :src="item.coverUrl" :name="item.name" />
           <div class="workshop-management__copy">
             <h3>{{ item.name }}</h3>
-            <p class="muted ws-text">
-              {{ item.authorName ? `${item.authorName} · ` : "" }}#{{ item.authorNumber }} ·
-              {{ $t("workshop.managePage.row.entries", { n: item.entryCount }) }} ·
-              {{ $t("workshop.managePage.row.resident", { chars: item.residentChars }) }} ·
-              {{ $t("workshop.managePage.row.updatedAt", { date: dateFormat.format(item.updatedAt) }) }}
-              <template v-if="item.state === 'displayed'"> · {{ $t("workshop.managePage.row.joins", { count: item.joinCount }) }}</template>
+            <p class="muted ws-text workshop-management__meta">
+              <span><template v-if="item.authorName">{{ item.authorName }} · </template>#{{ item.authorNumber }}</span>
+              <span>{{ $t("workshop.managePage.row.entries", { n: item.entryCount }) }}</span>
+              <span>{{ $t("workshop.managePage.row.resident", { chars: item.residentChars }) }}</span>
+              <span>{{ $t("workshop.managePage.row.updatedAt", { date: dateFormat.format(item.updatedAt) }) }}</span>
+              <span v-if="item.state === 'displayed'">{{ $t("workshop.managePage.row.joins", { count: item.joinCount }) }}</span>
             </p>
             <div class="workshop-management__chips">
               <span v-if="item.new" class="chip workshop-management__chip--new">{{ $t("workshop.managePage.chip.new") }}</span>
@@ -330,7 +330,10 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
           <p class="ws-text">{{ content.summary }}</p>
           <article v-for="(entry, index) in content.entries" :key="entry.id || entry.entryId || index" class="panel workshop-management__entry">
             <h3>{{ entry.name }}</h3>
-            <p v-if="entry.keywords?.length" class="muted ws-text">{{ $t("workshop.managePage.drawer.entryKeywords", { keywords: entry.keywords.join(", ") }) }}</p>
+            <div v-if="entry.isConstant ?? (entry.mode ? entry.mode === 'constant' : !entry.keywords?.length)">
+              <span class="chip">{{ $t("workshop.mineEntries.constantChip") }}</span>
+            </div>
+            <p v-else-if="entry.keywords?.length" class="muted ws-text">{{ $t("workshop.managePage.drawer.entryKeywords", { keywords: entry.keywords.join(", ") }) }}</p>
             <p class="workshop-management__entry-content">{{ entry.content }}</p>
           </article>
           <p class="muted ws-text">{{ $t("workshop.managePage.drawer.withdrawNote") }}</p>
@@ -356,6 +359,9 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
 .workshop-management__filter select { width: 100%; }
 .workshop-management__row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: var(--s-3); align-items: start; padding: var(--s-3); }
 .workshop-management__copy { display: grid; gap: var(--s-1); min-width: 0; overflow-wrap: anywhere; }
+.workshop-management__meta { display: flex; flex-wrap: wrap; gap: 0 var(--s-1); }
+.workshop-management__meta > span + span { white-space: nowrap; }
+.workshop-management__meta > span + span::before { content: "· "; }
 .workshop-management__chips, .workshop-management__actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .workshop-management__actions { justify-content: flex-end; justify-self: end; }
 .workshop-management__actions .btn { min-height: 44px; }

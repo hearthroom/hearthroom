@@ -29,7 +29,7 @@ const mine = computed(() => lp("/mine?tab=workshops"));
 const dirty = computed(() => !!draft.value && (name.value !== draft.value.name || summary.value !== draft.value.summary));
 const tabs = computed(() => [
   { key: "basic" as const, label: t("workshop.editor.section.basic") },
-  { key: "world" as const, label: t("workshop.editor.section.world") },
+  { key: "world" as const, label: t("editor.section.worldbook") },
   { key: "share" as const, label: t("workshop.share.tab") },
 ]);
 
@@ -86,6 +86,7 @@ function project(book: UniversalMod) {
   const residentChars = book.entries.reduce((n, entry) => n + (entry.keywords.length ? 0 : [...entry.content].length), 0);
   return {
     revision: book.revision, version: book.revision, entries: book.entries.map((entry) => ({ ...entry, enabled: true })),
+    // The Provider uses one content limit for an extension shared across cards and languages.
     residentChars, entryContentMax: entryContentMax("en"),
   };
 }

@@ -5,9 +5,9 @@
   "draft": true,
   "title": {
     "zh-Hant": "對話裡可以開關擴充，並把自己的條目加進故事。",
-    "zh-Hans": "现在可以在对话中开关扩展，把自己的条目加进故事。",
-    "en": "Switch extensions in your chat and bring your own Lorebook entries into the story.",
+    "zh-Hans": "现在可以在对话中开关扩展包，把自己的条目加进故事。",
+    "en": "Switch extensions in your chat and bring your own lorebook entries into the story.",
     "ja": "会話で拡張を切り替え、自分の世界設定を物語に追加できます。",
-    "ko": "대화에서 확장 기능을 켜고 끄거나 나만의 세계관 항목을 이야기에 추가할 수 있어요."
+    "ko": "대화에서 확장팩을 켜고 끄거나 내 세계관 항목을 이야기에 추가할 수 있어요."
   }
 }

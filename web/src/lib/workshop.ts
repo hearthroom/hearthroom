@@ -78,7 +78,10 @@ export interface PlayerShareItem extends PlayerShare {
 }
 export interface PlayerShareContent extends PlayerShare {
   workshopId: string; name: string; summary: string;
-  entries: { id?: string; entryId?: string; name: string; content: string; keywords?: string[] }[];
+  entries: {
+    id?: string; entryId?: string; name: string; content: string; keywords?: string[];
+    isConstant?: boolean; mode?: "constant" | "triggered";
+  }[];
 }
 export interface MineItem extends ExtensionSummary {
   card: { id: string; num: number; name: string; roleId: string };

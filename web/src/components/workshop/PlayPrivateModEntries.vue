@@ -57,7 +57,7 @@ const nextResidentChars = computed(() => {
   return claim + (draft.value && resident ? chars(draft.value.content) : 0);
 });
 const title = computed(() => props.universal && !editing.value
-  ? t("workshop.editor.section.world")
+  ? t("editor.section.worldbook")
   : tr(editing.value ? (editedExisting.value ? "form.editTitle" : "form.newTitle") : "title"));
 
 async function load() {
@@ -169,7 +169,10 @@ function removeEntry() {
           </p>
           <button class="btn btn--primary" type="button" :disabled="loading" @click="enter()">{{ tr("add") }}</button>
         </div>
-        <p v-if="!book.entries.length" class="mod-window__muted">{{ tr("emptyBody") }}</p>
+        <div v-if="!book.entries.length" class="mod-window__empty">
+          <strong>{{ tr("emptyTitle") }}</strong>
+          <p>{{ tr("emptyBody") }}</p>
+        </div>
         <ul v-else class="mod-window__list">
           <li v-for="entry in book.entries" :key="entry.id">
             <div class="mod-window__row">
