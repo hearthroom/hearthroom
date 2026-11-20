@@ -7,7 +7,7 @@ interface Entry { body: string; expiresAt: number }
 interface Key { edge: Request; kv: string }
 
 /** Only semantic query parameters enter the key; access and moderation are server-derived. */
-export async function boardKey(raw: string, revision: number, adult: boolean, locale?: string): Promise<Key> {
+export async function boardKey(raw: string, revision: number, adult: boolean, locale?: string, proofExpiresAt?: number): Promise<Key> {
   const source = new URL(raw);
   const url = new URL(source.pathname, source.origin);
   const counts = source.pathname === "/v1/tags/counts";
@@ -33,6 +33,7 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
   url.searchParams.set("_host", "harbor");
   url.searchParams.set("_access", adult ? "adult" : "general");
   url.searchParams.set("_moderation", String(revision));
+  if (proofExpiresAt !== undefined) url.searchParams.set("_proof", String(proofExpiresAt));
   // No bearer, cookie or viewer identity is stored in either cache.
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url.toString()));
   const hash = [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, "0")).join("");
@@ -55,12 +56,13 @@ async function storeEdge(key: Key, entry: Entry): Promise<void> {
 }
 
 /** Internal cache only. The handler must verify access before returning any cached data. */
-export async function readBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key): Promise<{ body: string; layer: "edge" | "kv" } | null> {
+export async function readBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key, edgeOnly = false): Promise<{ body: string; layer: "edge" | "kv" } | null> {
   try {
     const hit = await (await caches.open(boardCache.namespace)).match(key.edge);
     const entry: unknown = hit ? await hit.json() : null;
     if (live(entry)) return { body: entry.body, layer: "edge" };
   } catch { console.warn("Board edge cache read unavailable"); }
+  if (edgeOnly) return null;
   try {
     const entry: unknown = await env.CACHE.get(key.kv, "json");
     if (live(entry)) {
@@ -75,8 +77,9 @@ export async function readBoardCache(env: Env, ctx: Pick<ExecutionContext, "wait
  * opts.edgeOnly：只進邊緣快取、不寫 KV。打字時的建議與候選查詢幾乎每個前綴都是一次 miss，
  * 每次都寫 KV 會把寫入額度燒在沒人會再讀的鍵上；邊緣快取夠擋住同一個人連打的重複請求。
  */
-export function writeBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key, body: string, opts: { edgeOnly?: boolean } = {}): void {
-  const entry: Entry = { body, expiresAt: Date.now() + BOARD_TTL * 1000 };
+export function writeBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key, body: string, opts: { edgeOnly?: boolean; expiresAt?: number } = {}): void {
+  const expiresAt = Math.min(Date.now() + BOARD_TTL * 1000, opts.expiresAt ?? Infinity);
+  const entry: Entry = { body, expiresAt };
   ctx.waitUntil(Promise.all([
     storeEdge(key, entry).catch(() => { console.warn("Board edge cache write unavailable"); }),
     ...(opts.edgeOnly ? [] : [writePublicKv(env.CACHE, key.kv, {

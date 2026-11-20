@@ -31,6 +31,9 @@ const READ_MOSTLY_POSTS = new Set(["/v1/auth/session", "/v1/auth/token"]);
 // Author CAS and an operation's absence must not be inferred from a lagging replica.
 // Operation recovery may also finalize a previously accepted command in D1.
 const AUTHOR_VISIBILITY = /^\/v1\/me\/cards\/[^/]+\/(?:visibility(?:\/operations\/[^/]+)?|publication\/operations\/[^/]+)$/;
+const PUBLIC_AGGREGATE_PATHS = new Set(["/v1/tags", "/v1/fandoms", "/v1/authors", "/v1/suggest"]);
+
+export const isPublicAggregatePath = (pathname: string): boolean => PUBLIC_AGGREGATE_PATHS.has(pathname);
 
 export function startsAtPrimary(method: string, path: string): boolean {
   // A saved anonymity choice must apply to every viewer immediately, not only
@@ -39,6 +42,8 @@ export function startsAtPrimary(method: string, path: string): boolean {
   // A scrape must not observe counters moving backwards across D1 replicas.
   if (path === "/metrics" || path.startsWith("/auth/") || path.startsWith("/internal/")) return true;
   if (AUTHOR_VISIBILITY.test(path)) return true;
+  // A lagging visibility revision must not select a proof for an old catalog.
+  if (isPublicAggregatePath(path)) return true;
   // Same for follow visibility: a count or list the author just hid must not come back from a lagging replica.
   if (/^\/v1\/(?:authors(?:\/[^/]+(?:\/(?:following|followers))?)?|me\/followers)$/.test(path)) return true;
   if (READ_METHODS.has(method)) return false;

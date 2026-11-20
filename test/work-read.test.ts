@@ -3,7 +3,7 @@ import {createExecutionContext,env,waitOnExecutionContext} from 'cloudflare:test
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import worker,{iconCache} from '../src/index';
 import {getCard,upsertCard} from '../src/cards';
-import {identitiesFor,makeMember,resetDb,restoreUpstream,role} from './helpers';
+import {identitiesFor,makeMember,recordD1,resetDb,restoreUpstream,role} from './helpers';
 import {upstream} from '../src/upstream';
 import {ADULT_CONSENT_VERSION} from '../shared/adult-consent';
 import {signShortcutKey} from '../src/shortcut';
@@ -53,9 +53,9 @@ async function board(){
  await waitOnExecutionContext(context);
  return {response,body};
 }
-async function request(path:string,token?:string,init:RequestInit={}){
+async function request(path:string,token?:string,init:RequestInit={},db=env.DB){
  const context=createExecutionContext();
- const response=await worker.fetch(new Request(path.startsWith('http')?path:'https://c.test'+path,{...init,headers:{...init.headers,...(token?{Authorization:'Bearer '+token}:{})}}),{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},context);
+ const response=await worker.fetch(new Request(path.startsWith('http')?path:'https://c.test'+path,{...init,headers:{...init.headers,...(token?{Authorization:'Bearer '+token}:{})}}),{...env,DB:db,HOSTING_SERVICE_KEY:'fixture-issuer'},context);
  await waitOnExecutionContext(context);return response;
 }
 it('revalidates a managed public candidate before returning a stale positive board result',async()=>{
@@ -156,10 +156,53 @@ it.each(['/v1/tags','/v1/tags/counts','/v1/authors','/v1/fandoms','/v1/suggest?q
  expect(response.status).toBe(503);expect(await response.text()).not.toContain('Stale managed work');
 });
 
-it.each(['/v1/tags','/v1/tags/counts','/v1/authors'])('revalidates a cached aggregate at %s',async path=>{
+it('revalidates cached tag counts on every request',async()=>{
+ const path='/v1/tags/counts';
  await managedFixture();const {current,network}=providerFixture('public');
  expect((await request(path)).status).toBe(200);current.access='private';
  const response=await request(path);expect(response.status).toBe(503);expect(network).toHaveBeenCalledTimes(2);
+});
+
+it.each(['/v1/tags','/v1/authors','/v1/fandoms','/v1/suggest?q=Stale'])('avoids the global proof scan on a warm %s request',async path=>{
+ await managedFixture();const {network}=providerFixture('public');const {db,queries}=recordD1(env.DB);
+ const cold=await request(path,undefined,{},db);
+ expect(cold.status).toBe(200);expect(cold.headers.get('X-Cache')).toBe('miss');
+ expect(network).toHaveBeenCalledTimes(1);
+ expect(queries.some(sql=>sql.includes('FROM managed_work_access p JOIN cards c'))).toBe(true);
+ queries.length=0;
+ const warm=await request(path,undefined,{},db);
+ expect(warm.status).toBe(200);expect(warm.headers.get('X-Cache')).toBe('hit');
+ expect(await warm.json()).toEqual(await cold.json());
+ expect(queries.some(sql=>sql.includes('FROM managed_work_access p JOIN cards c'))).toBe(false);
+ expect(network).toHaveBeenCalledTimes(1);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_reads_total{surface="aggregate",outcome="allow"} 1\n');
+});
+
+it('shares a proof across aggregate routes in one zone and rechecks authority at 30 seconds',async()=>{
+ await managedFixture();const {current,network}=providerFixture('public');
+ const startedAt=Date.now();const now=vi.spyOn(Date,'now').mockReturnValue(startedAt);
+ expect((await request('/v1/tags?zone=zh')).status).toBe(200);
+ expect((await request('/v1/authors?zone=zh')).status).toBe(200);
+ expect(network).toHaveBeenCalledTimes(1);
+ current.access='private';
+ expect((await request('/v1/tags?zone=all')).status).toBe(503);
+ now.mockReturnValue(startedAt+30_000);
+ for(const path of ['/v1/tags?zone=zh','/v1/authors?zone=zh']){
+  const response=await request(path);
+  expect(response.status).toBe(503);expect(await response.json()).toEqual({error:'visibility_sync_pending'});
+ }
+ expect(network).toHaveBeenCalledTimes(4);
+});
+
+it('invalidates warm aggregate results immediately when local visibility changes',async()=>{
+ const {work}=await managedFixture();const {network}=providerFixture('public');
+ const path='/v1/authors?zone=all';
+ expect(await (await request(path)).json()).toMatchObject({items:[{accountNumId:11}]});
+ await env.DB.prepare("UPDATE managed_work_access SET access='private' WHERE work_id=?").bind(work).run();
+ const response=await request(path);
+ expect(response.status).toBe(200);expect(response.headers.get('X-Cache')).toBe('miss');
+ expect(await response.json()).toMatchObject({items:[]});
+ expect(network).toHaveBeenCalledTimes(1);
 });
 
 // Real D1 contributors span multiple policy batches; the Provider mock remains

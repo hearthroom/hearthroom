@@ -20,6 +20,12 @@ it('reads follow visibility at the primary so a newly hidden count or list reach
   expect(startsAtPrimary('GET','/v1/authors/abcdefgh/badges')).toBe(false);
 });
 
+it('reads the current visibility revision at the primary for proof-cached aggregate routes',()=>{
+  for (const path of ['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'])
+    expect(startsAtPrimary('GET',path)).toBe(true);
+  expect(startsAtPrimary('GET','/v1/tags/counts')).toBe(false);
+});
+
 function recorder(){
   const seen:string[]=[];
   const db={withSession(c:string){seen.push(c);return env.DB.withSession(c as any);}} as unknown as D1Database;

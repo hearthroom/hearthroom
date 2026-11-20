@@ -100,7 +100,7 @@ import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { PRESET_TAG_CATALOG, TAG_GROUPS, tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
 import {reconcileWorkAccess} from './work-reconcile';
-import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,type VisibilityReadSurface} from './work-read';
+import {filterPublicRows,currentCardAccess,unlistedCardRow,provePublicAggregates,proveCachedPublicAggregates,type VisibilityReadSurface} from './work-read';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -136,7 +136,7 @@ import { resolveFandom } from "./fandom";
 import { evaluateRating, questionnaireFor, RATINGS, RatingAnswersError, type Rating, type RatingResult } from "../shared/content-rating";
 import { topFandoms } from "./cards";
 import { wikidata } from "./wikidata";
-import { withD1Session } from "./d1-session";
+import { isPublicAggregatePath, withD1Session } from "./d1-session";
 import { renderSiteManifest } from "./site-manifest";
 import { analyticsRoutes } from "./ga4";
 import { isPromoPurchasePath, promoRedirect } from './promo-links';
@@ -408,21 +408,28 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
   } });
 }
 
-/** Aggregate lists share a five-minute internal cache, partitioned by verified access. */
+/** Cache responses by verified access, and by proof lifetime for public aggregates. */
 async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>, opts: { edgeOnly?: boolean; allowNsfw?: boolean; fresh?: (body: string) => Promise<string> } = {}) {
-  if(['/v1/tags','/v1/fandoms','/v1/authors','/v1/suggest'].includes(c.req.path))await provePublicAggregates(c.env,parseZone(c.req.query('zone')));
   const moderation = await moderationRevision(c);
+  const proofStarted = performance.now();
+  const proof = isPublicAggregatePath(c.req.path)
+    ? await proveCachedPublicAggregates(c.env, c.executionCtx, c.req.url, parseZone(c.req.query("zone")), moderation.revision)
+    : undefined;
+  const proofTiming = proof ? `, aggregate-proof;desc="${proof.hit ? "hit" : "miss"}";dur=${(performance.now() - proofStarted).toFixed(1)}` : "";
   const allowNsfw = opts.allowNsfw ?? false;
-  const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
+  const key = await boardKey(c.req.url, moderation.revision, allowNsfw, undefined, proof?.expiresAt);
   const started = performance.now();
-  const hit = await readBoardCache(c.env, c.executionCtx, key);
-  const cacheTiming = `${moderation.timing}, cache;dur=${(performance.now() - started).toFixed(1)}`;
-  // fresh：快取裡放不得的欄位（作者的關注／粉絲可見度），每次讀時另外補上
-  if (hit) return boardResponse(opts.fresh ? await opts.fresh(hit.body) : hit.body, allowNsfw, hit.layer, cacheTiming);
+  // A proof lives at the edge that validated it, so its matching response does too.
+  const hit = await readBoardCache(c.env, c.executionCtx, key, Boolean(proof));
+  const cacheTiming = `${moderation.timing}${proofTiming}, cache;dur=${(performance.now() - started).toFixed(1)}`;
   const queryStarted = performance.now();
-  const body = JSON.stringify(await compute());
-  writeBoardCache(c.env, c.executionCtx, key, body, opts);
-  return boardResponse(opts.fresh ? await opts.fresh(body) : body, allowNsfw, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
+  const body = hit?.body ?? JSON.stringify(await compute());
+  const timing = hit ? cacheTiming : `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`;
+  // fresh：快取裡放不得的欄位（作者的關注／粉絲可見度），每次讀時另外補上
+  const output = opts.fresh ? await opts.fresh(body) : body;
+  if (proof && proof.expiresAt <= Date.now()) throw new HttpError(503, "visibility_provider_unavailable");
+  if (!hit) writeBoardCache(c.env, c.executionCtx, key, body, { edgeOnly: Boolean(proof) || opts.edgeOnly, expiresAt: proof?.expiresAt });
+  return boardResponse(output, allowNsfw, hit?.layer ?? "origin", timing);
 }
 
 /** 榜單與搜尋。匿名可讀。 */
