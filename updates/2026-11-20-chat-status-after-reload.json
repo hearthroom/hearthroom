@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "重新整理對話後，卡片的狀態欄也會依作者設定顯示。",
+    "zh-Hans": "刷新对话后，角色卡的状态栏也会按作者的设置显示。",
+    "en": "Card status panels keep their formatting when you reload a conversation.",
+    "ja": "会話を再読み込みしても、カードのステータス欄が作者の設定どおりに表示されます。",
+    "ko": "대화를 새로고침해도 카드의 상태 표시줄에 제작자가 설정한 서식이 적용돼요."
+  }
+}
