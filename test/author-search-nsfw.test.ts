@@ -1,6 +1,6 @@
 import worker from '../src/index';
 import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { upsertCard } from '../src/cards';
 import { boardCache, boardKey } from '../src/board-cache';
 import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
@@ -41,7 +41,7 @@ beforeEach(async () => {
       .bind(fixture.roleId === 'mixed-general' ? 'G' : 'R', fixture.talkNum, card.id).run();
   }
 });
-afterEach(restoreUpstream);
+afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 
 it('uses the board adult preference for mixed and adult-only author counts', async () => {
   expect(counts((await read()).body)).toEqual(general);
@@ -51,15 +51,20 @@ it('uses the board adult preference for mixed and adult-only author counts', asy
   expect(counts((await read('viewer-token')).body)).toEqual(general);
 });
 
-it('isolates general and adult edge/KV caches and rechecks CN and invalid credentials', async () => {
+it('isolates general and adult proof-bound edge caches and rechecks CN and invalid credentials', async () => {
+  const now = Date.now();
+  vi.spyOn(Date, 'now').mockReturnValue(now);
   const first = await read('viewer-token');
   expect(counts(first.body)).toEqual(adult);
   expect(first.res.headers.get('X-Adult-Content')).toBe('1');
   expect(first.res.headers.get('Cache-Control')).toBe('private, no-store');
   expect((await read('viewer-token')).res.headers.get('X-Cache-Layer')).toBe('edge');
   const revision = (await env.DB.prepare('SELECT revision FROM moderation_clock WHERE id=1').first<{revision:number}>())!.revision;
-  await (await caches.open(boardCache.namespace)).delete((await boardKey(`https://c.test${path}`,revision,true)).edge);
-  expect((await read('viewer-token')).res.headers.get('X-Cache-Layer')).toBe('kv');
+  const key = await boardKey(`https://c.test${path}`, revision, true, undefined, now + 30_000);
+  expect(await (await caches.open(boardCache.namespace)).delete(key.edge)).toBe(true);
+  const refreshed = await read('viewer-token');
+  expect(refreshed.res.headers.get('X-Cache-Layer')).toBe('origin');
+  expect(counts(refreshed.body)).toEqual(adult);
   expect(counts((await read()).body)).toEqual(general);
   expect(counts((await read('invalid-token')).body)).toEqual(general);
   await env.DB.prepare('UPDATE members SET country_region=? WHERE id=?').bind('CN',`member-${VIEWER}`).run();
