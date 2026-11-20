@@ -106,10 +106,14 @@
       "text.ready",
       "user.get",
       "version",
-      "workshop.list"
+      "workshop.list",
+      "workshop.packs.apply",
+      "workshop.packs.get"
     ],
     "async": [
       "workshop.list",
+      "workshop.packs.get",
+      "workshop.packs.apply",
       "message.send",
       "message.edit",
       "save.set",
@@ -1577,5 +1581,5 @@
       ]
     }
   },
-  "stageCommit": "7642cf62c0f128110c0edf8c7c0fe0dced420aa9"
+  "stageCommit": "fd388dfb92db862e563569d3dabc12c8df86077a"
 }

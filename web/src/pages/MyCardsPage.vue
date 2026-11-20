@@ -45,7 +45,7 @@ const tab = computed<MineTab>(() => {
   if (route.query.tab === "workshops" || route.query.tab === "workshop-management") return route.query.tab;
   return "cards";
 });
-const { pendingCount, refreshPending } = useWorkshopSharePending();
+const { pendingCount, hasWorkshopCards, refreshPending } = useWorkshopSharePending();
 watch(() => session.me?.accountNumId, (account) => { if (account) void refreshPending(); }, { immediate: true });
 const extensionCount = ref<number | null>(null);
 const workshopsOpened = ref(tab.value === "workshops");
@@ -53,7 +53,9 @@ watch(tab, (value) => { if (value === "workshops") workshopsOpened.value = true;
 const mineTabs = computed(() => [
   { key: "cards" as const, label: t("workshop.mine.tab.cards") },
   { key: "workshops" as const, label: extensionCount.value === null ? t("workshop.mine.tab.extensionsIdle") : t("workshop.mine.tab.extensions", { n: extensionCount.value }) },
-  { key: "workshop-management" as const, label: t("workshop.managePage.nav"), dotLabel: pendingCount.value ? t("workshop.managePage.dotSr") : undefined },
+  ...(tab.value === "workshop-management" || hasWorkshopCards.value ? [
+    { key: "workshop-management" as const, label: t("workshop.managePage.nav"), dotLabel: pendingCount.value ? t("workshop.managePage.dotSr") : undefined },
+  ] : []),
 ]);
 function setTab(next: MineTab) {
   if (next === tab.value) return;

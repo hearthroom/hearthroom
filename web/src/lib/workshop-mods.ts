@@ -51,7 +51,7 @@ export interface PrivateModBook {
   revision: string;
   entryContentMax: number;
   version: string;
-  entries: Array<PrivateModEntry & { enabled: boolean }>;
+  entries: Array<PrivateModEntry & { enabled: boolean; resident?: boolean }>;
   residentChars: number;
 }
 

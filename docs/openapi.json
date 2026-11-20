@@ -22986,11 +22986,16 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
                   "workshopId",
                   "draftRevision",
+                  "generation",
                   "enabled"
                 ],
                 "additionalProperties": false

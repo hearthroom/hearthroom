@@ -48,9 +48,13 @@ const draftKeywords = computed(() => {
   return pending && !words.includes(pending) ? [...words, pending] : words;
 });
 const nextResidentChars = computed(() => {
-  const claim = book.value?.entries.filter(entry => entry.id !== draft.value?.id && !entry.keywords.length)
+  const claim = book.value?.entries.filter(entry => entry.id !== draft.value?.id && (entry.resident ?? !entry.keywords.length))
     .reduce((total, entry) => total + chars(entry.content), 0) ?? 0;
-  return claim + (draft.value && !draftKeywords.value.length ? chars(draft.value.content) : 0);
+  const existing = book.value?.entries.find((entry) => entry.id === draft.value?.id);
+  const unchangedKeywords = existing?.keywords.length === draftKeywords.value.length &&
+    existing.keywords.every((word, index) => word === draftKeywords.value[index]);
+  const resident = unchangedKeywords ? (existing.resident ?? !draftKeywords.value.length) : !draftKeywords.value.length;
+  return claim + (draft.value && resident ? chars(draft.value.content) : 0);
 });
 const title = computed(() => props.universal && !editing.value
   ? t("workshop.editor.section.world")
@@ -172,7 +176,7 @@ function removeEntry() {
               <button class="mod-window__entry" type="button" @click="enter(entry)">
                 <strong>{{ entryName(entry) }}</strong>
                 <span class="mod-window__meta">
-                  <span v-if="!entry.keywords.length" class="chip">{{ tr("constantChip") }}</span>
+                  <span v-if="entry.resident ?? !entry.keywords.length" class="chip">{{ tr("constantChip") }}</span>
                   <span v-for="word in entry.keywords.slice(0, 2)" :key="word" class="chip">{{ word }}</span>
                   <span v-if="entry.keywords.length > 2">{{ tr("moreKeywords", { n: entry.keywords.length - 2 }) }}</span>
                 </span>

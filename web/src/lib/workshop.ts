@@ -243,8 +243,8 @@ export const fetchNewPlayerShareCount = (token: string) =>
   upstream<{ count: number }>("/workshop/player-share/pending-count", token);
 export const readPlayerShare = (workshopId: string, token: string) =>
   upstream<PlayerShareContent>(`/workshop/player-share/content${q({ workshopId })}`, token);
-export const setPlayerShareConsent = (workshopId: string, draftRevision: number, enabled: boolean, token: string) =>
-  upstream<PlayerShare>("/workshop/player-share/consent", token, { workshopId, draftRevision, enabled });
+export const setPlayerShareConsent = (workshopId: string, draftRevision: number, generation: number, enabled: boolean, token: string) =>
+  upstream<PlayerShare>("/workshop/player-share/consent", token, { workshopId, draftRevision, generation, enabled });
 export const setPlayerShareDisplay = (item: Pick<PlayerShareItem, "workshopId" | "draftRevision" | "generation">, enabled: boolean, token: string) =>
   upstream<PlayerShare>("/workshop/player-share/display", token, { workshopId: item.workshopId, draftRevision: item.draftRevision, generation: item.generation, enabled });
 export const markPlayerShareSeen = (item: Pick<PlayerShareItem, "workshopId" | "draftRevision" | "generation">, token: string) =>

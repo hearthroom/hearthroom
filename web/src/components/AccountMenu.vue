@@ -24,7 +24,7 @@ const language = ref<InstanceType<typeof LocaleSwitch> | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const menuTop = ref(0);
 const session = useSession();
-const { pendingCount: workshopPending, refreshPending: refreshWorkshopPending } = useWorkshopSharePending();
+const { pendingCount: workshopPending, hasWorkshopCards, refreshPending: refreshWorkshopPending } = useWorkshopSharePending();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
 const reviewerStore = useReviewer();
 // 簽到：今天還沒簽，頭像與選單的「簽到」各一個點（頭像上跟審核佇列共用同一顆，ui.md §1.1、美術總監 Q8）
@@ -112,7 +112,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
           <div class="menu__group">
             <p class="menu__label">{{ $t('home.contentGroup') }}</p>
             <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
-            <RouterLink :to="lp('/mine?tab=workshop-management')" class="menu__item" role="menuitem">
+            <RouterLink v-if="hasWorkshopCards" :to="lp('/mine?tab=workshop-management')" class="menu__item" role="menuitem">
               <AccountIcon name="folder" />{{ $t("workshop.managePage.nav") }}
               <span v-if="workshopPending" class="menu__dot"><span class="sr-only">{{ $t("workshop.managePage.dotSr") }}</span></span>
             </RouterLink>

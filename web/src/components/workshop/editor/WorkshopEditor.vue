@@ -252,7 +252,7 @@ async function changeShare() {
       confirmText: t("workshop.share.confirm.confirm"), cancelText: t("dialog.cancel"), focusCancel: true,
     }))) return;
     if (enabled && dirty.value && !(await save())) return;
-    current.playerShare = await setPlayerShareConsent(current.workshopId, revision.value, enabled, await token());
+    current.playerShare = await setPlayerShareConsent(current.workshopId, revision.value, share.generation, enabled, await token());
   } catch (err) {
     if (err instanceof ApiError && err.code === "draft_stale") stale.value = true;
     else error.value = t("workshop.managePage.error.actionFailed");

@@ -106,6 +106,13 @@ const tabs = computed(() => [
 const selectedClosed = computed(() => !!cardFilter.value &&
   (filteredShares.value.some((item) => item.closed) || filteredDLCs.value.some((item) => item.workshopClosed)),
 );
+const closedCards = computed(() => {
+  if (cardFilter.value) return [];
+  const byRole = new Map<string, string>();
+  for (const item of playerShares.value) if (item.closed) byRole.set(item.roleId, item.cardName);
+  for (const item of dlcs.value) if (item.workshopClosed) byRole.set(item.card.roleId, item.card.name);
+  return [...byRole];
+});
 const filterValue = computed(() => selectedCard.value?.roleId ?? cardFilter.value);
 const dateFormat = computed(() => new Intl.DateTimeFormat(String(locale.value), { month: "numeric", day: "numeric" }));
 
@@ -252,6 +259,7 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
       <div id="workshop-management-panel" class="workshop-management__list" role="tabpanel" :aria-labelledby="`workshop-management-tab-${tab}`">
         <p v-if="writeFailed" class="notice notice--error" role="alert">{{ $t("workshop.managePage.error.actionFailed") }}</p>
         <p v-if="selectedClosed" class="notice">{{ $t("workshop.managePage.closed.cardFilterBanner", { card: selectedCard?.name || filteredShares[0]?.cardName }) }}</p>
+        <p v-for="[id, name] in closedCards" :key="id" class="notice">{{ $t("workshop.managePage.closed.allFilterBanner", { card: name }) }}</p>
         <template v-if="tab === 'myDlc'">
           <div v-if="stageAvailable" class="workshop-management__tools">
             <button class="btn btn--sm" type="button" @click="picking = true">{{ $t("workshop.owner.dlc.create") }}</button>
