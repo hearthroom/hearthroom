@@ -44,6 +44,44 @@ it('invalid state never silently opens admission, and off restores normal routin
   await setState({enabled:false});
   expect((await SELF.fetch('https://sukisuki.ai/v1/health')).status).toBe(200);
 });
+it('keeps pages and APIs available when the primary maintenance read fails', async () => {
+  const primaryRead = vi.fn(async () => { throw new Error('D1 temporarily unavailable'); });
+  const db = new Proxy(env.DB, {
+    get(binding, key) {
+      if (key === 'withSession') {
+        return (constraint: Parameters<D1Database['withSession']>[0]) => constraint === 'first-primary'
+          ? {prepare: () => ({bind: () => ({first: primaryRead})})}
+          : binding.withSession(constraint);
+      }
+      const value = Reflect.get(binding, key);
+      return typeof value === 'function' ? value.bind(binding) : value;
+    },
+  });
+  const assets = {fetch: async () => new Response('<html><head></head><body>Home</body></html>', {
+    headers: {'Content-Type': 'text/html'},
+  })} as unknown as Fetcher;
+  const ctx = createExecutionContext();
+  const settings = {...env, DB: db, ASSETS: assets};
+  const home = await worker.fetch(new Request('https://sukisuki.ai/', {headers: {Accept: 'text/html'}}), settings, ctx);
+  const health = await worker.fetch(new Request('https://sukisuki.ai/v1/health'), settings, ctx);
+  const status = await worker.fetch(new Request('https://sukisuki.ai/v1/maintenance'), settings, ctx);
+  await waitOnExecutionContext(ctx);
+
+  expect(primaryRead).toHaveBeenCalledTimes(3);
+  expect(home.status).toBe(200);
+  expect(await home.text()).toContain('<body>Home</body>');
+  expect(health.status).toBe(200);
+  expect(await health.json()).toEqual({ok: true});
+  expect(status.status).toBe(503);
+  expect(status.headers.get('Cache-Control')).toBe('no-store');
+  expect(await status.json()).toEqual({error: 'maintenance_status_unavailable'});
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_maintenance_requests_total{surface="status",outcome="error"} 3\n');
+
+  await setState({enabled: true});
+  expect(await (await SELF.fetch('https://sukisuki.ai/v1/health')).json()).toMatchObject({error: 'site_maintenance'});
+  await setState({enabled: false});
+  expect((await SELF.fetch('https://sukisuki.ai/v1/health')).status).toBe(200);
+});
 it('shows an auto-recovering shell on browser auth pages while holding machine auth operations',async()=>{
  await setState({enabled:true});
  const assets=async()=>new Response('<html><head></head><body><div id="app"></div></body></html>',{headers:{'Content-Type':'text/html'}});
