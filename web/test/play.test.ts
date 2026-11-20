@@ -12,6 +12,11 @@ import { i18n } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 
 const {recordConversation,clearLibraryCache} = vi.hoisted(() => ({recordConversation:vi.fn(async () => {}),clearLibraryCache:vi.fn()}));
+const workshop = vi.hoisted(() => ({
+  fetchCardWorkshop: vi.fn(async () => ({ allowNew: true, items: [] })),
+  fetchPolicy: vi.fn(async () => { throw Object.assign(new Error("forbidden"), { status: 403 }); }),
+}));
+vi.mock("../src/lib/workshop", async original => ({ ...await original<typeof import("../src/lib/workshop")>(), ...workshop }));
 vi.mock('../src/lib/library', () => ({
   recordConversation, clearLibraryCache,
   libraryRequest: vi.fn(async () => ({ cardNumber: 100009, provider: 'harbor', roleId: 'role-9' })),
@@ -121,6 +126,10 @@ describe("/play/:roleId", () => {
     await mount("/play/role-9");
     expect(installMoonStage).toHaveBeenCalledTimes(1);
     const [, options] = installMoonStage.mock.calls[0] as unknown as [unknown, { auth: { getAccessToken(): Promise<string | null> }; api: { base: string }; host: { ui: { toast(t: string): void } } }];
+    const host = options.host as typeof options.host & { workshopWindow?: { allowed(roleId: string): boolean } };
+    expect(host.workshopWindow?.allowed("role-9")).toBe(true);
+    expect(host.workshopWindow?.allowed("another-role")).toBe(false);
+    expect(workshop.fetchPolicy).not.toHaveBeenCalled();
     expect(recordConversation).not.toHaveBeenCalled();
     const handler = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'updateConversationId')?.[1];
     await handler?.({conversationId:'empty-conversation'});

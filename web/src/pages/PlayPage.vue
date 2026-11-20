@@ -38,7 +38,7 @@ import { currentReferralCode } from "@/lib/share-ref";
 import PlayInfoPanel from "@/components/PlayInfoPanel.vue";
 import PlayModWindow from "@/components/workshop/PlayModWindow.vue";
 import { playModWindow, setPlayModScope } from "@/lib/play-mod-window";
-import { fetchPolicy } from "@/lib/workshop";
+import { fetchCardWorkshop } from "@/lib/workshop";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
 import AdultGate from "@/components/AdultGate.vue";
@@ -299,9 +299,11 @@ onMounted(() => {
       if (provider === "harbor" && !reviewId && route.query.mode !== "source") {
         workshopToken.value = accessToken;
         workshopCard.value = String(resolved.number ?? "");
-        void fetchPolicy(resolved.roleId, token).then(policy => {
-          if (!stale()) workshopAllowed.value = policy.allowNew;
-        }, () => {});
+        if (resolved.card && workshopCard.value) {
+          void fetchCardWorkshop(workshopCard.value, { sort: "new", page: 1 }, token).then(workshop => {
+            if (!stale()) workshopAllowed.value = workshop.allowNew;
+          }, () => {});
+        }
       }
       const stage = await ensureStage({ app, router, session, provider, accessToken, player,
         currentPath: () => route.fullPath, currentRoleId: () => roleId.value, lp, reviewId,
