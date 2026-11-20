@@ -14502,6 +14502,32 @@
                           "spendingComplete": {
                             "type": "boolean",
                             "description": "False when spending qualification cannot be established; preserve previously verified spending badges."
+                          },
+                          "paidInvites": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "paidInvites10At": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "paidInvites100At": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "starlightAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
                           }
                         }
                       }
