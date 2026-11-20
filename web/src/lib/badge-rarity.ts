@@ -23,6 +23,9 @@ const BY_KEY: Record<string, BadgeRarity> = {
 const BY_CATEGORY: Record<string, BadgeRarity> = { event: 'epic', contest: 'epic' };
 
 export function badgeRarity(badge: { key: string; category: string }): BadgeRarity {
+  // 年冠全站唯一，年度十傑次之（shared/annual-honors 的 annual_<zone>_<year>_<1|10>）
+  const annual = /^annual_(?:clean|all)_\d{4}_(1|10)$/.exec(badge.key);
+  if (annual) return annual[1] === '1' ? 'legendary' : 'epic';
   const honor = parseHonorKey(badge.key);
   if (honor) {
     const score = HONOR_WINDOWS.indexOf(honor.window) + (HONOR_BANDS.length - 1 - HONOR_BANDS.indexOf(honor.band));

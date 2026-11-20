@@ -13,6 +13,8 @@ import {commentWorkshopAt, drainProviderWorkshopOutbox, WORKSHOP_OUTBOX_MINUTE_B
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
 import {badgeStatsMaintenance} from './badge-stats';
+import {annualBoard,isAnnualYear} from './annual-honors';
+import {annualYearOf} from '../shared/annual-honors';
 import {badgeStatsBackfill} from './badge-stats-backfill';
 import {reviewPlayAccessRoutes} from './review-play-access';
 import {enforcementNoticeRoutes} from './enforcement-notices';
@@ -675,6 +677,15 @@ app.get('/v1/me/cards/:id/author-reference', async c => {
     ...(metadata?.fandom ? { fandom: metadata.fandom } : {}),
     ...(metadata?.fandomKey ? { fandomKey: metadata.fandomKey } : {}),
   });
+});
+
+/** 年度榜單積分（年冠）：結算前是暫定排名，結算後照快照。匿名可讀，公開資料只有名次、分數與作者公開資料。 */
+app.get('/v1/rankings/annual',async c=>{
+  const zone=c.req.query('zone')??'all';
+  if(zone!=='all'&&zone!=='clean')throw new HttpError(400,'annual_zone');
+  const year=Number(c.req.query('year')??annualYearOf(Date.now()));
+  if(!isAnnualYear(year))throw new HttpError(400,'annual_year');
+  return cachedJson(c,()=>annualBoard(c.env,year,zone),{edgeOnly:true});
 });
 
 app.get('/v1/cards/:id/honors',async c=>{

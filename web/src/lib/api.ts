@@ -16,6 +16,7 @@ import { stateLimitParams, type StatePayload } from "./card-state";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, FollowersVisibility, FollowingVisibility, FollowListPage, MyRole, Sort, Zone } from "./types";
 import type { CardHonor, Honor } from "./honors";
+import type { AnnualBoard } from "../../../shared/annual-honors";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
@@ -323,6 +324,12 @@ export async function fetchCardHonors(id: string): Promise<CardHonor[]> {
   const viewer = await viewerAccess();
   const q = viewer.param ? "?nsfw=1" : "";
   return (await json<{ items: CardHonor[] }>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}/honors${q}`, { headers: { ...from(), ...viewer.headers } }))).items;
+}
+
+/** 首頁「年度」分頁：年度榜單積分（年冠）。結算前是暫定排名。 */
+export async function fetchAnnualBoard(zone: "all" | "clean", year?: number): Promise<AnnualBoard> {
+  const q = new URLSearchParams({ zone, ...(year ? { year: String(year) } : {}) });
+  return json<AnnualBoard>(await fetch(`${COMMUNITY_API}/rankings/annual?${q}`, { headers: from() }));
 }
 
 export interface CardVersion {
