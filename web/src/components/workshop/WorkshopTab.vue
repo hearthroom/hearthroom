@@ -101,7 +101,7 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
 
 <template>
   <section id="card-panel" class="ws-tab" role="tabpanel" aria-labelledby="card-tab-workshop">
-    <div v-if="owner" class="ws-strip">
+    <div v-if="owner" class="ws-strip ws-tab__owner">
       <WorkshopIcon name="layers" />
       <span class="ws-strip__text">{{ pending ? $t("workshop.tab.ownerBanner.hasNew", { n: pending }) : $t("workshop.tab.ownerBanner.idle") }}</span>
       <RouterLink class="btn btn--sm ws-tab__management" :to="{ path: lp('/mine'), query: { tab: 'workshop-management', card: cardNum } }">{{ $t("workshop.tab.ownerBanner.action") }}</RouterLink>
@@ -198,6 +198,10 @@ const joinedOf = (ext: ExtensionSummary) => (props.state?.selection ? isJoined(p
 .ws-tab .pager { display: flex; align-items: center; justify-content: center; gap: var(--s-3); }
 @media (max-width: 1000px) { .ws-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .ws-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); } .ws-tab__ghost { height: 110px; } }
-@media (max-width: 480px) { .ws-tab__tools .seg__item { padding: 0 10px; } }
+@media (max-width: 480px) {
+  .ws-tab__tools .seg__item { padding: 0 10px; }
+  .ws-tab__owner { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .ws-tab__management { grid-column: 2; justify-self: start; }
+}
 @media (max-width: 820px) { .ws-tab { padding-bottom: 96px; } }
 </style>

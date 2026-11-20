@@ -685,8 +685,8 @@ watch(error, async (text) => {
                          @publish="publish" @unpublish="unpublish" @discard="discard" @delete="remove" />
           </section>
           <section v-else class="pane" data-section="share">
-            <div class="ws-share__status">
-              <h2 class="pane__title">{{ $t("workshop.share.sectionTitle") }}</h2>
+            <div class="pane__title ws-share__status">
+              <h2>{{ $t("workshop.share.sectionTitle") }}</h2>
               <span class="chip">{{ $t(`workshop.status.${shareStatus}`) }}</span>
               <span v-if="workshopClosed" class="chip ws-chip--warn">{{ $t("workshop.status.cardWorkshopClosed") }}</span>
             </div>
@@ -738,6 +738,7 @@ watch(error, async (text) => {
 .ws-share p { margin: 0; }
 .ws-share__switch { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); width: 100%; min-height: 44px; }
 .ws-share__status { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.ws-share__status h2 { margin: 0; font: inherit; font-weight: 600; }
 .ws-share__checks { display: grid; gap: var(--s-1); margin: var(--s-2) 0; padding: 0; list-style: none; }
 .ws-ed__head { display: grid; gap: var(--s-1); justify-items: start; }
 .ws-ed__head h1 { margin: 0; font-size: 22px; }

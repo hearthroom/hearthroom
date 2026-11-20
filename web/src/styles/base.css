@@ -388,7 +388,7 @@ select.input { height: var(--h-md); }
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 105;
   display: grid; place-items: center; padding: var(--s-5);
-  background: rgba(16, 16, 24, 0.45);
+  background: var(--modal-scrim);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   animation: fade var(--dur) var(--ease);
 }

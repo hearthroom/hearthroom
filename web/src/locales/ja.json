@@ -4941,6 +4941,7 @@
   "workshop.mine.pick.closed": "作者がワークショップをオフにしています",
   "workshop.mine.row.meta": "「{card}」向け・{ver}・{count}人が追加",
   "workshop.mine.row.metaDraft": "「{card}」向け・下書き",
+  "workshop.mine.row.metaCard": "「{card}」向け",
   "workshop.mine.row.untitled": "名称未設定の拡張パック",
   "workshop.status.draft": "下書き",
   "workshop.status.published": "公開中",

@@ -4941,6 +4941,7 @@
   "workshop.mine.pick.closed": "Author hasn’t enabled Workshop",
   "workshop.mine.row.meta": "For {card} · {ver} · {count} added",
   "workshop.mine.row.metaDraft": "For {card} · Draft",
+  "workshop.mine.row.metaCard": "For {card}",
   "workshop.mine.row.untitled": "Untitled extension",
   "workshop.status.draft": "Draft",
   "workshop.status.published": "Published",

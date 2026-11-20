@@ -4941,6 +4941,7 @@
   "workshop.mine.pick.closed": "作者沒有開啟工坊",
   "workshop.mine.row.meta": "為《{card}》・{ver}・{count} 人加入",
   "workshop.mine.row.metaDraft": "為《{card}》・草稿",
+  "workshop.mine.row.metaCard": "為《{card}》",
   "workshop.mine.row.untitled": "未命名擴充",
   "workshop.status.draft": "草稿",
   "workshop.status.published": "已發布",

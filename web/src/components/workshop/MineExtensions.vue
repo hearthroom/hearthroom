@@ -84,9 +84,11 @@ const shareStatus = {
 const statusOf = (item: MineItem) => isDlc(item)
   ? (published(item) ? "workshop.status.published" : "workshop.status.draft")
   : shareStatus[item.playerShareState ?? "private"];
-const meta = (item: MineItem) => isDlc(item) && item.version > 0
-  ? t("workshop.mine.row.meta", { card: item.card.name, ver: `v${item.version}`, count: compact(item.joinCount) })
-  : t("workshop.mine.row.metaDraft", { card: item.card.name });
+const meta = (item: MineItem) => {
+  if (!isDlc(item)) return t("workshop.mine.row.metaCard", { card: item.card.name });
+  if (!item.version) return t("workshop.mine.row.metaDraft", { card: item.card.name });
+  return t("workshop.mine.row.meta", { card: item.card.name, ver: `v${item.version}`, count: compact(item.joinCount) });
+};
 const displayName = (item: MineItem) => item.name.trim() || t(isDlc(item) ? "workshop.mine.row.untitledDlc" : "workshop.mine.row.untitled");
 const editTo = (item: MineItem) => lp(`/mine/workshops/${encodeURIComponent(item.id)}/edit`);
 const hasItems = computed(() => items.value.length > 0 || universal.value.length > 0);
@@ -124,7 +126,7 @@ const isEmpty = computed(() => !hasItems.value && !loading.value && !failed.valu
           <h3 class="mine-ws__name">{{ displayName(item) }}</h3>
           <p class="subtle mine-ws__meta">{{ meta(item) }}</p>
           <p class="mine-ws__chips">
-            <span class="chip ws-chip--on" data-ws-kind>{{ isDlc(item) ? $t("workshop.layer.dlc") : $t("workshop.layer.extChip") }}</span>
+            <span class="chip" data-ws-kind>{{ isDlc(item) ? $t("workshop.layer.dlc") : $t("workshop.layer.extChip") }}</span>
             <span class="chip" :class="{ 'ws-chip--ok': isDlc(item) ? published(item) : item.playerShareState === 'displayed' }" data-ws-status>{{ $t(statusOf(item)) }}</span>
             <span v-if="closedNote(item)" class="chip ws-chip--warn" data-ws-closed>{{ $t(closedNote(item)!.chip) }}</span>
           </p>

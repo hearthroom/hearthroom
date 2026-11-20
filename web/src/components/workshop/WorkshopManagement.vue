@@ -370,8 +370,8 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
 .workshop-management__ghost { min-height: 96px; }
 .workshop-management__tools { display: flex; justify-content: flex-end; }
 .workshop-management__empty { padding: var(--s-6); display: grid; gap: var(--s-3); text-align: center; justify-items: center; }
-.workshop-management__drawer { inset: 0 0 0 auto; margin: 0; width: min(100%, 580px); height: 100dvh; max-height: 100dvh; max-width: 100%; overflow: auto; padding: var(--s-5); color: var(--text); background: var(--surface); }
-.workshop-management__drawer::backdrop { background: var(--overlay, #0008); }
+.workshop-management__drawer { inset: 0 0 0 auto; margin: 0; width: min(100%, 580px); height: 100dvh; max-height: 100dvh; max-width: 100%; overflow: auto; padding: var(--s-5); color: var(--text); background: var(--surface); border: 0; border-radius: var(--r-lg) 0 0 var(--r-lg); box-shadow: 0 0 0 1px var(--line), var(--shadow-md); }
+.workshop-management__drawer::backdrop { background: var(--modal-scrim); backdrop-filter: blur(6px); }
 .workshop-management__drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
 .workshop-management__drawer-head h2 { overflow-wrap: anywhere; }
 .workshop-management__entry { padding: var(--s-3); display: grid; gap: var(--s-2); }
@@ -380,5 +380,8 @@ const emptyLabel = computed(() => tab.value === "showing" ? "showing" : "unshown
   .workshop-management__row { grid-template-columns: 72px minmax(0, 1fr); }
   .workshop-management__actions { grid-column: 1 / -1; }
   .workshop-management__drawer { padding: var(--s-4); }
+}
+@media (max-width: 480px) {
+  .workshop-management__drawer { border-radius: 24px 24px 0 0; padding-bottom: max(var(--s-4), env(safe-area-inset-bottom)); }
 }
 </style>

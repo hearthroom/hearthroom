@@ -143,10 +143,12 @@ async function remove(pack: LorePackDraft) {
 .workshop-packs__menu {
   position: absolute; inset-inline-end: 0; inset-block-start: 100%; z-index: 2;
   display: grid; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
 }
 .workshop-packs__menu button { justify-content: flex-start; min-height: 44px; }
 .workshop-packs__script { display: grid; gap: 4px; }
 .workshop-packs__script label { min-height: 44px; display: flex; align-items: center; gap: 8px; }
+.workshop-packs__script input { accent-color: var(--accent); }
 .workshop-packs__dialog { max-width: min(420px, 100vw); }
 @media (max-width: 640px) {
   .workshop-packs__count { display: none; }

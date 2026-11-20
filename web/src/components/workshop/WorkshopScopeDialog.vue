@@ -107,7 +107,7 @@ async function create() {
           </label>
         </div>
         <p v-if="createFailed" class="notice notice--error" role="alert">{{ $t("state.actionFailed") }}</p>
-        <footer>
+        <footer class="modal__actions">
           <button class="btn" type="button" :disabled="creating" @click="emit('close')">{{ $t("dialog.cancel") }}</button>
           <button class="btn btn--primary" type="submit" :disabled="creating || !canCreate">{{ $t("workshop.scopeModal.confirm") }}</button>
         </footer>
@@ -117,17 +117,17 @@ async function create() {
 </template>
 
 <style scoped>
-.workshop-scope { width: min(480px, calc(100% - 28px)); max-height: 88dvh; padding: var(--s-5); color: var(--text); background: var(--surface); }
-.workshop-scope::backdrop { background: var(--overlay, #0008); }
+.workshop-scope { width: min(480px, calc(100% - 28px)); max-height: 88dvh; padding: var(--s-5); color: var(--text); background: var(--surface); border: 0; border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line), var(--shadow-md); }
+.workshop-scope::backdrop { background: var(--modal-scrim); backdrop-filter: blur(6px); }
 .workshop-scope h2, .workshop-scope p { margin: 0; }
 .workshop-scope__form, .workshop-scope__picker { display: grid; gap: var(--s-3); }
 .workshop-scope__option { display: grid; gap: var(--s-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s-3); }
 .workshop-scope__option label { display: flex; align-items: flex-start; gap: var(--s-2); }
 .workshop-scope__option label > span { display: grid; gap: var(--s-1); }
+.workshop-scope__option input { accent-color: var(--accent); }
 .workshop-scope__picker { grid-template-columns: minmax(0, 1fr); }
 .workshop-scope__label { font-weight: 600; }
-.workshop-scope footer { display: flex; justify-content: flex-end; gap: var(--s-2); }
 @media (max-width: 640px) {
-  .workshop-scope { inset: auto 0 0; position: fixed; width: 100%; max-width: 100%; margin: 0; }
+  .workshop-scope { inset: auto 0 0; position: fixed; width: 100%; max-width: 100%; margin: 0; border-radius: 24px 24px 0 0; padding-bottom: max(var(--s-5), env(safe-area-inset-bottom)); }
 }
 </style>

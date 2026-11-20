@@ -4941,6 +4941,7 @@
   "workshop.mine.pick.closed": "작가가 창작마당을 켜지 않았어요",
   "workshop.mine.row.meta": "「{card}」용 · {ver} · {count}명 추가",
   "workshop.mine.row.metaDraft": "「{card}」용 · 초안",
+  "workshop.mine.row.metaCard": "「{card}」용",
   "workshop.mine.row.untitled": "이름 없는 확장팩",
   "workshop.status.draft": "초안",
   "workshop.status.published": "게시됨",

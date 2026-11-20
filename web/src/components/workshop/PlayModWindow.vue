@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import ExtensionCover from "./ExtensionCover.vue";
+import WorkshopIcon from "./WorkshopIcon.vue";
 import PlayPrivateModEntries from "./PlayPrivateModEntries.vue";
 import { ApiError } from "@/lib/api";
 import { fetchConversationMods, applyConversationMod, listUniversalMods } from "@/lib/workshop";
@@ -257,7 +258,7 @@ async function saveNotice() {
           </ul>
         </div>
         <footer class="mod-window__foot">
-          <a :href="lp('/mine?tab=workshops')" target="_blank" rel="noopener">{{ tr("universal.manageLink") }} <span class="sr-only">{{ tr("footer.newTabSr") }}</span></a>
+          <a :href="lp('/mine?tab=workshops')" target="_blank" rel="noopener">{{ tr("universal.manageLink") }} <span aria-hidden="true">↗</span><span class="sr-only">{{ tr("footer.newTabSr") }}</span></a>
         </footer>
       </section>
       <section v-show="(!privateOpen && !universalOpen) || view?.workshopClosed" class="mod-window__section">
@@ -315,6 +316,7 @@ async function saveNotice() {
                     :aria-label="tr(isExpanded(item) ? 'a11y.collapsePacks' : 'a11y.expandPacks', { name: item.name })"
                     @click="expand(item)"
                   >{{ isExpanded(item) && rowActive(item) ? "⌄" : "›" }}</button>
+                  <span v-else class="mod-window__expand-space" aria-hidden="true" />
                   <ExtensionCover class="mod-window__cover" :src="item.coverUrl ?? ''" :name="item.name" square />
                   <div class="mod-window__row-copy">
                     <strong>{{ item.name }}</strong>
@@ -367,6 +369,10 @@ async function saveNotice() {
               </li>
               <li v-if="!sorted || view.workshopClosed">
                 <button class="mod-window__private" type="button" data-mod-private :disabled="view.workshopClosed" @click="openPrivate">
+                  <span class="mod-window__expand-space" aria-hidden="true" />
+                  <span class="mod-window__cover mod-window__private-cover" aria-hidden="true">
+                    <WorkshopIcon name="book" />
+                  </span>
                   <span class="mod-window__row-copy">
                     <strong>{{ t("workshop.mineEntries.title") }}</strong>
                     <span v-if="view.workshopClosed" class="mod-window__muted">{{ t("workshop.mineEntries.rowSubClosed") }}</span>
@@ -385,7 +391,7 @@ async function saveNotice() {
         </div>
         <footer v-if="browseHref && view && !view.workshopClosed && items.length" class="mod-window__foot">
           <a :href="browseHref" target="_blank" rel="noopener">
-            {{ tr("footer.browse") }} <span class="sr-only">{{ tr("footer.newTabSr") }}</span>
+            {{ tr("footer.browse") }} <span aria-hidden="true">↗</span><span class="sr-only">{{ tr("footer.newTabSr") }}</span>
           </a>
         </footer>
       </section>

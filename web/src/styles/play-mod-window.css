@@ -12,7 +12,7 @@
     overflow: hidden;
   }
 
-  .mod-window::backdrop { background: rgb(0 0 0 / .54); }
+  .mod-window::backdrop { background: var(--modal-scrim); backdrop-filter: blur(6px); }
   .mod-window__section {
     display: flex;
     flex-direction: column;
@@ -34,9 +34,10 @@
     flex-wrap: wrap;
     padding-block-end: max(12px, env(safe-area-inset-bottom));
   }
-  .mod-window__foot a { display: inline-flex; align-items: center; min-height: 44px; }
+  .mod-window__foot a { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-lg); color: var(--accent-text); text-decoration: underline; }
   .mod-window__foot p { flex: 1 1 100%; margin: 0; }
   .mod-window__icon { width: 44px; height: 44px; padding: 0; flex: none; font-size: 1.125rem; }
+  .mod-window__expand-space { flex: 0 0 var(--h-lg); }
 
   .mod-window__scroll {
     min-height: 0;
@@ -82,6 +83,8 @@
   }
   .mod-window__row--muted .mod-window__cover { opacity: .6; }
   .mod-window__cover { width: 36px; border-radius: var(--r-sm); flex: none; }
+  .mod-window__private-cover { display: grid; place-items: center; aspect-ratio: 1; background: var(--accent-tint); color: var(--accent-text); }
+  .mod-window__private-cover svg { width: 20px; height: 20px; }
   .mod-window__row-copy, .mod-window__entry { display: grid; gap: 4px; flex: 1; min-width: 0; }
   .mod-window__row-copy > strong, .mod-window__entry > strong {
     overflow: hidden;
