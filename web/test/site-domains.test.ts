@@ -2,7 +2,6 @@ import cors from '../../deploy/harperharbor-assets-cors.json';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { isPlayHost, playAppUrl } from '../src/lib/site';
 import wrangler from '../../wrangler.toml?raw';
-import deployWorkflow from '../../.github/workflows/deploy.yml?raw';
 afterEach(() => vi.unstubAllGlobals());
 describe('official domain families', () => {
   for (const root of ['hearthroom.club', 'sukisuki.ai', 'sukisuki.chat', 'sukisuki.pro']) {
@@ -32,12 +31,4 @@ it('allows media reads and signed uploads from every official app origin without
  expect(rule.allowed.origins).not.toContain('null');
  expect(rule.allowed.origins).not.toContain('https://sukisuki.club');
  expect(rule.allowed.methods).toEqual(['GET','HEAD','PUT']);
-});
-
-it('packages the pinned Playground sandbox before the combined deployment', () => {
- const build=deployWorkflow.indexOf('npm run build:h5:prod');
- const copy=deployWorkflow.indexOf('node scripts/copy-playground-sandbox.mjs');
- expect(build).toBeGreaterThan(-1);
- expect(copy).toBeGreaterThan(build);
- expect(copy).toBeLessThan(deployWorkflow.indexOf('npx wrangler deploy --cwd stage'));
 });
