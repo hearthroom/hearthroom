@@ -112,9 +112,16 @@ it("extends public day exposure only for cards eligible at outage start, includi
     const compensated = ["after","left-edge","moderated","next","outage","outage-original","previous"];
     expect(await board(configured)).toEqual({cards:compensated, cache:"miss"});
     expect(await board(configured)).toEqual({cards:compensated, cache:"hit"});
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(now());
+    expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(1);
     expect((await board(configured,"sort=day&period=week")).cards).toEqual(["after","expired","left-edge","moderated","next","outage","outage-original","previous"]);
     now.mockReturnValue(local("2026-11-21T06:30:00")+1);
+    expect((await board(configured)).cards).toEqual(["after","left-edge","moderated","next","previous"]);
+    now.mockReturnValue(local("2026-11-21T08:00:00")-1);
+    expect((await board(configured)).cards).toEqual(["after","left-edge","moderated","next","previous"]);
+    now.mockReturnValue(local("2026-11-21T08:00:00"));
     expect((await board(configured)).cards).toEqual(["after","moderated","next"]);
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(local("2026-11-21T02:00:00"));
     now.mockReturnValue(local("2026-11-22T04:59:00"));
     expect(await board(configured)).toEqual({cards:["moderated"],cache:"miss"});
     now.mockReturnValue(local("2026-11-22T05:01:00"));

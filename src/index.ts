@@ -390,11 +390,36 @@ function parseZone(raw: string | undefined): Zone | undefined {
   return (ZONES as readonly string[]).includes(raw ?? "") ? (raw as Zone) : "zh";
 }
 
+const NOV19_OUTAGE_EXPOSURE_SETTING = 'nov19_rank_outage_exposure_started';
+
+/** Start the exposure once, on the first public daily-board request served by the new Worker. */
+async function startNov19OutageExposure(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, now: number): Promise<number | null> {
+  const db = c.env.DB;
+  try {
+    const [saved, current] = await db.batch<{updated_at: number}>([
+      db.prepare("INSERT OR IGNORE INTO community_settings (key,value,updated_at) VALUES (?,'true',?)").bind(NOV19_OUTAGE_EXPOSURE_SETTING, now),
+      db.prepare("SELECT updated_at FROM community_settings WHERE key=?").bind(NOV19_OUTAGE_EXPOSURE_SETTING),
+    ]);
+    if (saved.meta.changes) c.executionCtx.waitUntil(bumpOp(db, 'rank_settlement', 'exposure', 'success'));
+    return current.results[0]?.updated_at ?? null;
+  } catch {
+    c.executionCtx.waitUntil(bumpOp(db, 'rank_settlement', 'exposure', 'error'));
+    return null;
+  }
+}
+
 /** Keep moderation authoritative: a removal changes the key immediately, including KV hits. */
-async function moderationRevision(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<{ revision: number; timing: string }> {
+async function moderationRevision(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, nowForNov19Exposure?: number): Promise<{ revision: number; timing: string; outageStartedAt: number | null }> {
   const started = performance.now();
-  const revision = await c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1").first<{ revision: number }>();
-  return { revision: revision?.revision ?? 0, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
+  const query = nowForNov19Exposure === undefined
+    ? c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1")
+    : c.env.DB.prepare("SELECT revision,(SELECT updated_at FROM community_settings WHERE key=?) AS outageStartedAt FROM moderation_clock WHERE id=1").bind(NOV19_OUTAGE_EXPOSURE_SETTING);
+  const revision = await query.first<{ revision: number; outageStartedAt?: number | null }>();
+  let outageStartedAt = revision?.outageStartedAt ?? null;
+  if (nowForNov19Exposure !== undefined && outageStartedAt === null) {
+    outageStartedAt = await startNov19OutageExposure(c, nowForNov19Exposure);
+  }
+  return { revision: revision?.revision ?? 0, outageStartedAt, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
 }
 
 function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "origin", timing: string): Response {
@@ -466,23 +491,25 @@ function tagFilters(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): 
 }
 
 app.get("/v1/cards", async (c) => {
+  const now = Date.now();
+  const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"), now);
+  const period = c.req.query("period");
+  const dailyRankExtension = sortKey === "day" && !period
+    ? nov20RankExtension(c.env.NOV_20_DAILY_RANK_EXTENSION_MINUTES) ?? 0 : 0;
   // Permission is never cached. Authentication and the moderation clock are independent reads.
   const accessStarted = performance.now();
   let accessMs = 0;
   const [allowNsfw, moderation] = await Promise.all([
     viewerAllowsNsfw(c).then(value => { accessMs = performance.now() - accessStarted; return value; }),
-    moderationRevision(c),
+    moderationRevision(c, dailyRankExtension ? now : undefined),
   ]);
   const offset=clamp(c.req.query('offset'),0,10_000);
   const limit=Math.max(1,clamp(c.req.query('limit'),24,100));
   const position=await publicPosition(c.env,c.req.url,offset,allowNsfw);
-  const now = Date.now();
-  const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"), now);
   const periods: Record<string, number> = { week: 7, month: 30, quarter: 90, year: 365 };
-  const period = c.req.query("period");
   const since = period && Object.hasOwn(periods, period) ? now - periods[period] * 86_400_000 : sortSince;
-  const dailyRankExtension = sortKey === "day" && !period
-    ? nov20RankExtension(c.env.NOV_20_DAILY_RANK_EXTENSION_MINUTES) ?? 0 : 0;
+  const nov19OutageExposure = moderation.outageStartedAt !== null &&
+    now < moderation.outageStartedAt + dailyRankExtension;
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
@@ -506,11 +533,13 @@ app.get("/v1/cards", async (c) => {
     since,
     boardWindow: period ? undefined : c.req.query("sort"),
     dailyRankExtension,
+    nov19OutageExposure,
     randomSeed:position.randomSeed,
     limit,
     offset,
   } as const;
-  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, dailyRankExtension);
+  const outage = dailyRankExtension ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure } : undefined;
+  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage);
   const cacheStarted = performance.now();
   const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;

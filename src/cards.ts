@@ -9,7 +9,7 @@ import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
-import {NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START} from './rank-settlement';
+import {NOV_20_DAILY_COHORT_START,NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START} from './rank-settlement';
 import type {RankHonor} from '../shared/rank-honors';
 
 export interface CardRow {
@@ -110,7 +110,7 @@ const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
 export async function listCardRowsByIds(db:D1Database,ids:string[],source?:ListOptions):Promise<CardRow[]>{
  if(!ids.length)return [];
  const window=source?.since!==undefined&&source.dailyRankExtension
-  ? boardWindowCondition(source.since,source.boardWindow,source.dailyRankExtension) : null;
+  ? boardWindowCondition(source.since,source.boardWindow,source.dailyRankExtension,source.nov19OutageExposure) : null;
  return (await db.prepare(`SELECT ${LIST_CARD_COLUMNS} FROM cards c WHERE c.id IN(SELECT value FROM json_each(?))${window?` AND ${window.sql}`:''}`)
   .bind(JSON.stringify(ids),...(window?.binds??[])).all<CardRow>()).results;
 }
@@ -281,6 +281,7 @@ export interface ListOptions {
   since?: number;
   boardWindow?: string;
   dailyRankExtension?: number;
+  nov19OutageExposure?: boolean;
   /** feed＝關注動態：依每張卡最近一次事件（新卡或通知過的更新）排，見 FEED_EVENT_AT。 */
   sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated" | "feed";
   /** Internal seed keeps random candidate batches in one ordering. */
@@ -312,14 +313,19 @@ export interface ListResult {
 }
 
 /** Add outage time to cards within the public daily window when the outage started. */
-function boardWindowCondition(since: number, board = "", extension = 0) {
+function boardWindowCondition(since: number, board = "", extension = 0, nov19OutageExposure = false) {
   const registered = "c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0)";
   if (!extension) return {sql: `${registered} >= ?`, binds: [board, since]};
+  const extended = `${registered} + CASE WHEN c.id IN (
+    SELECT card_id FROM rank_publications WHERE published_at BETWEEN ? AND ?
+  ) THEN ? ELSE 0 END >= ?`;
+  const binds = [board, NOV_20_DAILY_COHORT_START, NOV_20_OUTAGE_START, extension, since];
+  if (!nov19OutageExposure) return {sql: extended, binds};
   return {
-    sql: `${registered} + CASE WHEN c.id IN (
-      SELECT card_id FROM rank_publications WHERE published_at BETWEEN ? AND ?
-    ) THEN ? ELSE 0 END >= ?`,
-    binds: [board, NOV_20_OUTAGE_BOARD_SINCE, NOV_20_OUTAGE_START, extension, since],
+    sql: `(${extended} OR c.id IN (
+      SELECT card_id FROM rank_publications WHERE published_at >= ? AND published_at < ?
+    ))`,
+    binds: [...binds, NOV_20_OUTAGE_BOARD_SINCE, NOV_20_DAILY_COHORT_START],
   };
 }
 
@@ -505,7 +511,7 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
-    const window = boardWindowCondition(opts.since, opts.boardWindow, opts.dailyRankExtension);
+    const window = boardWindowCondition(opts.since, opts.boardWindow, opts.dailyRankExtension, opts.nov19OutageExposure);
     where.push(window.sql);
     binds.push(...window.binds);
   }

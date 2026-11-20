@@ -3,7 +3,7 @@ export const RANK_WINDOWS:RankWindow[]=['day','week','month'];
 export const RANK_DURATION:Record<RankWindow,number>={day:86400000,week:7*86400000,month:30*86400000};
 export const RANK_REWARDS:Record<RankWindow,Record<RankBand,number>>={day:{1:5000,3:2500,10:1000},week:{1:50000,3:25000,10:10000},month:{1:100000,3:50000,10:20000}};
 const TAIPEI=8*3600000;
-const NOV_20_DAILY_COHORT_START = Date.parse('2026-11-20T00:00:00+08:00');
+export const NOV_20_DAILY_COHORT_START = Date.parse('2026-11-20T00:00:00+08:00');
 export const NOV_20_OUTAGE_START = Date.parse('2026-11-20T21:20:00+08:00');
 export const NOV_20_OUTAGE_BOARD_SINCE = NOV_20_OUTAGE_START - RANK_DURATION.day;
 

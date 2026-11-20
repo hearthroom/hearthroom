@@ -13,7 +13,7 @@ export async function boardKey(
   adult: boolean,
   locale?: string,
   proofExpiresAt?: number,
-  dailyRankExtension = 0,
+  outage?: { duration: number; nov19Exposure: boolean },
 ): Promise<Key> {
   const source = new URL(raw);
   const url = new URL(source.pathname, source.origin);
@@ -41,7 +41,8 @@ export async function boardKey(
   url.searchParams.set("_access", adult ? "adult" : "general");
   url.searchParams.set("_moderation", String(revision));
   if (proofExpiresAt !== undefined) url.searchParams.set("_proof", String(proofExpiresAt));
-  if (dailyRankExtension) url.searchParams.set("_dailyRankExtension", String(dailyRankExtension));
+  if (outage) url.searchParams.set("_dailyRankExtension", String(outage.duration));
+  if (outage?.nov19Exposure) url.searchParams.set("_nov19OutageExposure", "1");
   // No bearer, cookie or viewer identity is stored in either cache.
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url.toString()));
   const hash = [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, "0")).join("");
