@@ -6,6 +6,9 @@ import { createApp, nextTick, type App } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
+import { useSession } from "../src/lib/session";
+import { forgetCardWorkshops } from "../src/lib/card-workshop";
+import type { SelectionItem } from "../src/lib/workshop";
 
 vi.mock("../src/lib/oauth", () => ({ restorePersisted: () => null, refresh: async () => null, persist: () => {}, revokeSession: async () => {}, beginLogin: async () => {} }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "card", setSurface: () => {} }));
@@ -22,10 +25,16 @@ const CARD = {
 const EXT = { id: "w1", cardId: "abc", name: "雪夜篇", summary: "", coverUrl: "", author: { handle: null, name: "霧港" }, joinCount: 12, version: 2, updatedAt: 1763000000000, kinds: ["lore"], kind: "lorebook", loreCount: 12, rating: "G", adult: false };
 const DLC = { ...EXT, id: "d1", name: "雨夜篇", author: { handle: null, name: "月光" }, kinds: ["lore", "display", "opening"], kind: "dlc", loreCount: 4 };
 let workshop: () => Promise<Response>;
+let selection: SelectionItem[];
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   if (url.includes("/workshop?")) return workshop();
+  if (url.includes("/workshop/selection?")) return json({ revision: 0, items: selection });
+  if (url.endsWith("/workshop/install")) {
+    selection = [{ workshopId: EXT.id, name: EXT.name, coverUrl: "", enabled: true, kinds: ["lore"], residentChars: 0, availability: "open" }];
+    return json({ revision: 1, items: selection });
+  }
   if (url.includes("/platforms")) return json({ platforms: [{ provider: "harbor", roleId: "role-abc", playable: true }] });
   if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
   if (url.includes("/versions?")) return json({ items: [], page: 1, hasMore: false });
@@ -38,18 +47,24 @@ let app: App | null = null;
 let el: HTMLElement | null = null;
 let router: Router;
 const flush = async () => { for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
-async function mount(path: string) {
+async function mount(path: string, signedIn = false) {
   el = document.createElement("div"); document.body.appendChild(el);
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/cards/:id", component: CardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
   const pinia = createPinia(); setActivePinia(pinia);
+  if (signedIn) {
+    const session = useSession();
+    session.me = { accountNumId: 31, nickName: "測試玩家", avatar: "" };
+    session.token = { accessToken: "test-token", expiresAt: Date.now() + 60_000 };
+    session.ready = true;
+  }
   await router.push(path); await router.isReady();
   app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
   app.mount(el);
   await flush();
   return el;
 }
-beforeEach(() => { i18n.global.locale.value = "zh-Hant"; vi.stubGlobal("fetch", fakeFetch); });
-afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
+beforeEach(() => { selection = []; i18n.global.locale.value = "zh-Hant"; vi.stubGlobal("fetch", fakeFetch); });
+afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; forgetCardWorkshops(); vi.unstubAllGlobals(); });
 
 const page = (over: object = {}) => json({ tabVisible: true, allowNew: true, viewerIsOwner: false, total: 1, page: 1, hasMore: false, items: [EXT], ...over });
 
@@ -140,3 +155,18 @@ it("arriving on ?tab=workshop when the workshop cannot be read keeps the tab wit
   expect(root.textContent).toContain("雪夜篇");
 });
 
+
+it.each(["hot", "new"])("refreshes a displayed extension's join count from the %s filter", async (filter) => {
+  workshop = () => page({ items: [{ ...EXT, joinCount: selection.length }] });
+  const root = await mount(`/cards/abc?tab=workshop&ws=${filter}`, true);
+  expect(root.querySelector(".ext-tile__meta")?.textContent).toContain("0 人加入");
+  root.querySelector<HTMLButtonElement>(".ext-tile__join")!.click();
+  await flush();
+  expect(root.querySelector(".ext-tile__joined")?.textContent).toContain("已加入");
+  expect(root.querySelector(".ext-tile__meta")?.textContent).toContain("1 人加入");
+  root.querySelector<HTMLButtonElement>("#card-tab-intro")!.click();
+  await flush();
+  root.querySelector<HTMLButtonElement>("#card-tab-workshop")!.click();
+  await flush();
+  expect(root.querySelector(".ext-tile__meta")?.textContent).toContain("1 人加入");
+});

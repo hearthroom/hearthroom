@@ -21,8 +21,8 @@ import { useSession } from "@/lib/session";
 import { activeCount, isJoined, type CardWorkshopState } from "@/lib/card-workshop";
 import { fetchCardWorkshop, fetchWorkshopsByIds, fetchPlayerShares, type CardWorkshopPage, type ExtensionSummary } from "@/lib/workshop";
 
-const props = defineProps<{ cardId: string; cardNum: string; roleId?: string; initial: CardWorkshopPage; initialFailed?: boolean; state: CardWorkshopState | null; joinBusy: string | null }>();
-const emit = defineEmits<{ manage: []; join: [ExtensionSummary]; retry: [] }>();
+const props = defineProps<{ cardId: string; cardNum: string; roleId?: string; initial: CardWorkshopPage; initialFailed?: boolean; membership: string; state: CardWorkshopState | null; joinBusy: string | null }>();
+const emit = defineEmits<{ manage: []; join: [ExtensionSummary]; retry: []; refresh: [] }>();
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -33,6 +33,7 @@ type Filter = "hot" | "new" | "joined";
 const FILTERS: Filter[] = ["hot", "new", "joined"];
 const filter = computed<Filter>(() => (FILTERS.includes(route.query.ws as Filter) ? (route.query.ws as Filter) : "hot"));
 const page = computed(() => Math.max(1, Math.floor(Number(route.query.wp) || 1)));
+const initialPage = computed(() => filter.value === "hot" && page.value === 1);
 function go(next: { filter?: Filter; page?: number }) {
   const f = next.filter ?? filter.value;
   const p = next.page ?? 1;
@@ -57,7 +58,12 @@ async function load() {
     } catch { if (n === seq) failed.value = true; } finally { if (n === seq) loading.value = false; }
     return;
   }
-  if (filter.value === "hot" && page.value === 1 && n === 1) { data.value = props.initial; return; }
+  if (initialPage.value) {
+    data.value = props.initial;
+    loading.value = false;
+    if (n > 1) emit("refresh");
+    return;
+  }
   loading.value = true;
   try {
     const token = session.me ? await session.accessToken() : null;
@@ -65,9 +71,13 @@ async function load() {
     if (n === seq) data.value = got;
   } catch { if (n === seq) failed.value = true; } finally { if (n === seq) loading.value = false; }
 }
-// 「已加入」要等清單讀到：直接開 ?ws=joined 的連結時，分頁比清單先到
-watch([filter, page, () => props.cardId, () => (filter.value === "joined" ? props.state?.selection?.items.map((i) => i.workshopId).join(",") : "")], load, { immediate: true });
-watch(() => props.initial, (v) => { if (filter.value === "hot" && page.value === 1) data.value = v; });
+// 「已加入」依加入清單的順序讀。公開分頁只在加入或移除時重讀，熱門第一頁由卡片頁更新。
+const watchedSelection = computed(() => {
+  if (filter.value === "joined") return props.state?.selection?.items.map((item) => item.workshopId).join(",");
+  return initialPage.value ? undefined : props.membership;
+});
+watch([filter, page, () => props.cardId, watchedSelection], load, { immediate: true });
+watch(() => props.initial, (v) => { if (initialPage.value) data.value = v; });
 
 const items = computed(() => (filter.value === "joined" ? joinedList.value : data.value.items));
 const dlcItems = computed(() => items.value.filter((i) => i.kind === "dlc"));

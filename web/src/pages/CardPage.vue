@@ -400,6 +400,7 @@ const playRoleId = ref<string | null>(null);
 watch(() => card.value?.id, () => { playRoleId.value = null; });
 function onPlatforms(list: CardPlatform[]) { playRoleId.value = list.find((p) => p.provider === "harbor" && p.playable)?.roleId ?? null; }
 const wsState = computed(() => (playRoleId.value && session.me ? cardWorkshop(playRoleId.value, session.me.accountNumId) : null));
+const wsMembership = computed(() => wsState.value?.selection?.items.map((item) => item.workshopId).sort().join(",") ?? "");
 const wsCount = computed(() => (wsState.value ? activeCount(wsState.value) : 0));
 const wsRecTier = computed(() => tierLabel(wsState.value?.usage?.recommendedContextTokens));
 const pageTab = computed<"intro" | "workshop">(() => (wsShown.value?.tabVisible && route.query.tab === "workshop" ? "workshop" : "intro"));
@@ -413,7 +414,7 @@ function setPageTab(next: "intro" | "workshop") {
   void router.push({ query: { ...route.query, tab: next === "workshop" ? "workshop" : undefined, ws: undefined, wp: undefined } });
 }
 let wsGeneration = 0;
-async function loadWorkshop() {
+async function loadWorkshopPage(keepCurrent = false) {
   const c = card.value;
   const n = ++wsGeneration;
   if (!c) { wsPage.value = null; return; }
@@ -421,12 +422,19 @@ async function loadWorkshop() {
     const token = session.me ? await session.accessToken() : null;
     const got = await fetchCardWorkshop(c.id, { sort: "hot", page: 1 }, token);
     if (n === wsGeneration && card.value?.id === c.id) { wsPage.value = got; wsFailed.value = false; }
-  } catch { if (n === wsGeneration) { wsPage.value = null; wsFailed.value = true; } }
+  } catch { if (n === wsGeneration && !keepCurrent) { wsPage.value = null; wsFailed.value = true; } }
+}
+async function loadWorkshop() {
+  await loadWorkshopPage();
   const s = wsState.value;
   const token = s ? await session.accessToken() : null;
   if (s && token && s.status !== "loading") await loadCardWorkshop(s, token);
 }
 watch([() => card.value?.id, confirmed, () => session.me?.accountNumId, playRoleId], ([id, ok]) => { if (id && ok) void loadWorkshop(); });
+// 保留卡片層的第一頁投影，切回「工坊」時可直接顯示最新計數。
+watch([wsState, wsMembership], ([state], [previousState]) => {
+  if (confirmed.value && state && state === previousState && wsPage.value) void loadWorkshopPage(true);
+});
 
 const toast = ref<InstanceType<typeof UndoToast> | null>(null);
 const say = (text: string, undo?: () => void) => toast.value?.say(text, undo);
@@ -596,7 +604,7 @@ watch(
       </header>
 
       <LineTabs v-if="wsShown?.tabVisible" class="role__tabs" :tabs="pageTabs" :model-value="pageTab" :label="$t('workshop.tab.label')" id-prefix="card" @update:model-value="setPageTab" />
-      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :role-id="card.roleId" :initial="wsShown" :initial-failed="!wsPage" @retry="loadWorkshop" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
+      <WorkshopTab v-if="pageTab === 'workshop' && wsShown" class="role__ws-tab" :card-id="card.id" :card-num="String(card.num ?? card.id)" :role-id="card.roleId" :initial="wsShown" :initial-failed="!wsPage" :membership="wsMembership" @retry="loadWorkshop" @refresh="loadWorkshopPage()" :state="wsState" :join-busy="joiner.busy.value" @manage="openManage" @join="joiner.join" />
       <div v-else class="role__body" :id="wsShown?.tabVisible ? 'card-panel' : undefined" :role="wsShown?.tabVisible ? 'tabpanel' : undefined" :aria-labelledby="wsShown?.tabVisible ? 'card-tab-intro' : undefined" :aria-busy="revalidating || undefined">
         <div class="role__main">
           <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->
