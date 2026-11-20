@@ -53,9 +53,9 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("首頁：關注併進排序列", () => {
-  const TABS = ["day", "week", "month", "annual", "hot", "new", "following", "updated", "random"];
-  const label = (s: string) => i18n.global.t(s === "following" || s === "annual" ? `board.mode.${s}` : `board.sort.${s}`);
-  it("分頁照站方要的順序排（2026-11-03），「年度」接在月榜後（2026-11-20），「關注」跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
+  const TABS = ["day", "week", "month", "achievements", "hot", "new", "following", "updated", "random"];
+  const label = (s: string) => i18n.global.t(s === "following" || s === "achievements" ? `board.mode.${s}` : `board.sort.${s}`);
+  it("分頁照站方要的順序排（2026-11-03），「成就」接在月榜後（2026-11-20），「關注」跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
     await mount("/");
     expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(TABS.map(label));
     expect(root.querySelector(".sorts__mode")).toBeNull();
@@ -89,11 +89,11 @@ describe("首頁：關注併進排序列", () => {
     expect(tagsNav()).not.toBeNull();
   });
 
-  it("點「年度」進年度積分榜：網址只剩 mode=annual，其他分頁全部不亮，類型列不畫", async () => {
+  it("點「成就」進成就榜：網址只剩 mode=achievements，其他分頁全部不亮，類型列不畫", async () => {
     await mount("/?sort=hot&tag=roleplay");
-    const annual = sortButtons().find((b) => b.textContent?.trim() === i18n.global.t("board.mode.annual"))!;
+    const annual = sortButtons().find((b) => b.textContent?.trim() === i18n.global.t("board.mode.achievements"))!;
     annual.click(); await settle();
-    expect(router.currentRoute.value.query).toEqual({ mode: "annual" });
+    expect(router.currentRoute.value.query).toEqual({ mode: "achievements" });
     expect(annual.getAttribute("aria-pressed")).toBe("true");
     expect(sortButtons().filter((b) => b !== annual).every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect(tagsNav()).toBeNull();

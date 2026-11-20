@@ -17,6 +17,7 @@ import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, FollowersVisibility, FollowingVisibility, FollowListPage, MyRole, Sort, Zone } from "./types";
 import type { CardHonor, Honor } from "./honors";
 import type { AnnualBoard } from "../../../shared/annual-honors";
+import type { AchievementBoard, AchievementBoardKind } from "../../../shared/achievements";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
@@ -330,6 +331,11 @@ export async function fetchCardHonors(id: string): Promise<CardHonor[]> {
 export async function fetchAnnualBoard(zone: "all" | "clean", year?: number): Promise<AnnualBoard> {
   const q = new URLSearchParams({ zone, ...(year ? { year: String(year) } : {}) });
   return json<AnnualBoard>(await fetch(`${COMMUNITY_API}/rankings/annual?${q}`, { headers: from() }));
+}
+
+/** 首頁「成就」分頁：作者成就／綜合成就榜，period 是 all 或 YYYY-MM。 */
+export async function fetchAchievementBoard(board: AchievementBoardKind, period: string): Promise<AchievementBoard> {
+  return json<AchievementBoard>(await fetch(`${COMMUNITY_API}/rankings/achievements?${new URLSearchParams({ board, period })}`, { headers: from() }));
 }
 
 export interface CardVersion {

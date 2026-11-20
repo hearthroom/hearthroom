@@ -65,7 +65,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 <template>
  <div class="page badges-page">
   <RouterLink class="badges-back" :to="own&&!author?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
-  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal}):t('badgeWall.earnedCount',{n:earned}) }}</p></div></header>
+  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/?mode=achievements&board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div></header>
   <div v-if="loading&&!data" class="badge-loading" aria-live="polite"><span class="sr-only">{{ t('state.loading') }}</span><div v-for="i in 3" :key="i" class="ghost" /></div>
   <div v-if="error" class="notice notice--error" role="alert"><p>{{ error }}</p><button class="btn" :disabled="loading||busy" @click="load()">{{ t(own?'badgeWall.reload':'badgeWall.retry') }}</button></div>
   <template v-if="data">

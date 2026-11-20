@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/?mode=achievements",
+  "title": {
+    "zh-Hant": "首頁的「成就」分頁有作者成就榜和綜合成就榜，徽章頁也會顯示你的成就等級。",
+    "zh-Hans": "首页的「成就」分页有作者成就榜和综合成就榜，徽章页也会显示你的成就等级。",
+    "en": "The home page's Achievements tab ranks authors and everyone by achievement points, and the badge page shows your level.",
+    "ja": "トップの「実績」タブに作者と総合の実績ランキングができ、バッジページに実績レベルも表示されます。",
+    "ko": "홈의 '업적' 탭에 작가·종합 업적 랭킹이 생기고, 배지 페이지에 업적 레벨이 표시돼요."
+  }
+}

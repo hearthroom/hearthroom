@@ -15,6 +15,7 @@ import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from '
 import {badgeStatsMaintenance} from './badge-stats';
 import {annualBoard,isAnnualYear} from './annual-honors';
 import {badgeRewardMaintenance} from './community/badge-rewards';
+import {achievementBoard,currentMonth,monthRange} from './community/achievement-board';
 import {annualYearOf} from '../shared/annual-honors';
 import {badgeStatsBackfill} from './badge-stats-backfill';
 import {reviewPlayAccessRoutes} from './review-play-access';
@@ -687,6 +688,15 @@ app.get('/v1/rankings/annual',async c=>{
   const year=Number(c.req.query('year')??annualYearOf(Date.now()));
   if(!isAnnualYear(year))throw new HttpError(400,'annual_year');
   return cachedJson(c,()=>annualBoard(c.env,year,zone),{edgeOnly:true});
+});
+
+/** 成就榜：author＝作者成就（創作與榜單），all＝綜合（不含消費、邀請，只收公開徽章的成員）；period＝all 或 YYYY-MM。 */
+app.get('/v1/rankings/achievements',async c=>{
+  const board=c.req.query('board')??'author';
+  if(board!=='author'&&board!=='all')throw new HttpError(400,'achievement_board');
+  const period=c.req.query('period')??'all';
+  if(period!=='all'&&(!monthRange(period)||period<'2026-09'||period>currentMonth()))throw new HttpError(400,'achievement_period');
+  return cachedJson(c,()=>achievementBoard(c.env,board,period),{edgeOnly:true});
 });
 
 app.get('/v1/cards/:id/honors',async c=>{

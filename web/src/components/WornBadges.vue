@@ -48,7 +48,7 @@ const earned = computed(() => data.value?.items.filter(b => b.state === "earned"
 const worn = computed(() => (data.value?.featured ?? []).map(key => earned.value.find(b => b.key === key)).filter((b): b is CollectedBadge => !!b));
 /** 自己和別人看同一頁（/authors/:handle/badges）；自己的入口走 /me/badges，進去後換成那一頁 */
 const allPath = computed(() => props.own ? lp("/me/badges") : lp(`/authors/${props.handle}/badges`));
-const viewAll = computed(() => data.value?.ap ? t("badges.viewAllPoints", { n: earned.value.length, ap: new Intl.NumberFormat(locale.value).format(data.value.ap) }) : t("badges.viewAll", { n: earned.value.length }));
+const viewAll = computed(() => data.value?.ap ? t("badges.viewAllPoints", { n: earned.value.length, ap: new Intl.NumberFormat(locale.value).format(data.value.ap), level: data.value.level ?? 1 }) : t("badges.viewAll", { n: earned.value.length }));
 
 /** lastPeriod：榜單榮譽最近一次那一組的起始日（後端契約），其他徽章沒有 */
 type Worn = CollectedBadge & { lastPeriod?: string | null };

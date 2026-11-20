@@ -4,6 +4,8 @@ import { memberByHandle } from '../members';
 import { appearanceView } from './appearance';
 import { badgeAp, badgeReward } from '../../shared/badge-rarity';
 import { claimStates } from './badge-rewards';
+import { levelOf } from '../../shared/achievements';
+import { authorRankOf } from './achievement-board';
 import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
 export const ACTIVE_AWARD = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)";
 /** Members who joined before this instant earned the founding-member badge. */
@@ -146,8 +148,10 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
  const apOf=(list:CollectedBadge[])=>list.filter(b=>b.state==='earned').reduce((sum,b)=>sum+(b.ap??0)*Math.max(1,b.count??1),0);
  const chosen:string[]=prefs?.featured_badges===null||prefs?.featured_badges===undefined?items.filter(b=>b.state==='earned'&&b.category!=='spend').map(b=>b.key).slice(0,FEATURED_LIMIT):JSON.parse(prefs.featured_badges);
  const featured=chosen.filter(key=>active.includes(key)).slice(0,FEATURED_LIMIT);
- if(publicOnly){items=items.filter(b=>b.state==='earned'&&(b.category!=='spend'||featured.includes(b.key)));return {items,featured,ap:apOf(items)};}
- return {items,featured,public:!!prefs?.public_badges,ap:apOf(items)};
+ const authorRank=await authorRankOf(env,member).catch(()=>null);
+ if(publicOnly){items=items.filter(b=>b.state==='earned'&&(b.category!=='spend'||featured.includes(b.key)));const ap=apOf(items);return {items,featured,ap,level:levelOf(ap),authorRank};}
+ const ap=apOf(items);
+ return {items,featured,public:!!prefs?.public_badges,ap,level:levelOf(ap),authorRank};
 }
 export async function setFeaturedBadges(env:Env,member:string,input:unknown,visibility?:unknown) {
  if(visibility!==undefined&&typeof visibility!=="boolean")throw new HttpError(400,"community_input");
