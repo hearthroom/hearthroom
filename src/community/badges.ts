@@ -36,6 +36,7 @@ type Metric = {
  */
 export const METRICS:Record<string,Metric>={
  effective_invites:{one:'SELECT effective_invites FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,effective_invites AS value FROM badge_qualifications'},
+ paid_invites:{one:'SELECT paid_invites FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,paid_invites AS value FROM badge_qualifications'},
  xp:{unit:'xp',one:"SELECT COALESCE(SUM(x.points),0) FROM discord_links l JOIN community_xp x ON x.discord_id=l.discord_id WHERE l.member_id=? AND l.state='active'",
   all:"SELECT l.member_id,SUM(x.points) AS value FROM discord_links l JOIN community_xp x ON x.discord_id=l.discord_id WHERE l.state='active' GROUP BY l.member_id"},
  works_listed:{one:`SELECT COUNT(*) FROM ${OWNED_LISTED} AND ${OWNER}=?`,all:`SELECT ${OWNER} AS member_id,COUNT(*) AS value FROM ${OWNED_LISTED} GROUP BY 1`},

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "新增全站只有一位能拿的「燈塔守護者」與「首位星輝」徽章。",
+    "zh-Hans": "新增全站只有一位能拿的「灯塔守护者」与「首位星辉」徽章。",
+    "en": "Keeper of the Lighthouse and First Starlight are new badges that only one member on the site can hold.",
+    "ja": "全サイトで 1 人だけの「灯台守」「最初の星の輝き」バッジが加わりました。",
+    "ko": "사이트에서 한 명만 받는 '등대지기'와 '최초의 별빛' 배지가 생겼어요."
+  },
+  "body": {
+    "zh-Hant": "最先達成的成員獨得，第 2–10 位達成的成員獲得先驅徽章。",
+    "zh-Hans": "最先达成的成员独得，第 2–10 位达成的成员获得先驱徽章。",
+    "en": "The first member to reach each one keeps it, and the next nine earn a pioneer badge.",
+    "ja": "最初に達成したメンバーが獲得し、2〜10 人目は先駆者バッジを獲得します。",
+    "ko": "가장 먼저 달성한 멤버가 받고, 2~10번째 달성자는 개척자 배지를 받아요."
+  }
+}
