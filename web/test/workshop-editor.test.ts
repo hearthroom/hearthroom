@@ -331,3 +331,31 @@ it("a name over 16 characters leaves the basics unchecked and blocks publishing"
   expect(document.querySelector("[data-check=basics]")?.getAttribute("data-ok")).toBe("false");
   expect(button("[data-pub-publish]")!.disabled).toBe(true);
 });
+
+it("opens and saves migrated workshop entries with null keyword lists", async () => {
+  const legacy = { ...entry("保留舊條目的內容", false), name: "舊條目", keywords: null, secondaryKeywords: null };
+  const current = { ...entry("保留其他關鍵詞", false), name: "現行條目", keywords: ["暮色"], secondaryKeywords: ["燈光"] };
+  const worldbook = [legacy, current] as unknown as WorkshopDraft["worldbook"];
+  api.fetchDraft.mockResolvedValue(makeDraft({ kind: "lorebook", worldbook }));
+  api.fetchMyWorkshops.mockResolvedValue({ items: [mineItem("draft", { kind: "lorebook" })] });
+  api.saveDraft.mockResolvedValue({ revision: 4, errors: [] });
+  await mountAt("/mine/workshops/w1/edit?section=world");
+  const manage = Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim() === t("wb.entries.manage"));
+  expect(manage).toBeDefined();
+  manage!.click();
+  await settle();
+
+  expect(document.querySelector(".wbd__row")?.textContent).toContain("舊條目");
+  const keywords = document.querySelector<HTMLInputElement>("#wbd-kw");
+  expect(keywords?.value).toBe("");
+  type(keywords!, "新關鍵詞");
+  await settle();
+  Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim() === t("wb.entries.done"))!.click();
+  await settle();
+  button("[data-save]")!.click();
+  await settle();
+  expect(api.saveDraft.mock.calls[0]?.[3].worldbook).toEqual([
+    { ...legacy, keywords: ["新關鍵詞"], secondaryKeywords: [] },
+    current,
+  ]);
+});

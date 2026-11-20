@@ -120,7 +120,11 @@ function apply(d: WorkshopDraft) {
   const next: WorkshopDraft = {
     ...d,
     name: d.name ?? "", summary: d.summary ?? "", readme: d.readme ?? "", coverUrl: d.coverUrl ?? "", updateNote: d.updateNote ?? "",
-    worldbook: d.worldbook ?? [],
+    worldbook: (d.worldbook ?? []).map(entry => ({
+      ...entry,
+      keywords: entry.keywords ?? [],
+      secondaryKeywords: entry.secondaryKeywords ?? [],
+    })),
     lorePacks: (d.lorePacks ?? []).map(pack => ({ ...pack, defaultEnabled: pack.defaultEnabled !== false })),
     scriptCanSwitchPacks: d.scriptCanSwitchPacks ?? false,
     rules: d.rules ?? emptyRuleSet(),
