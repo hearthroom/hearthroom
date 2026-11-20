@@ -75,7 +75,7 @@ When writing, reviewing or testing a Hearthroom character card, read ~/.hearthro
 
 ## 3. Nothing else to install
 
-Status panels, choice buttons and themes are built by the toolkit's own sandbox kit (`assets/sandbox-kit` in the skills, with `hearthroom card check` and `hearthroom card preview` to verify them), so no second skill set is needed. Authors who also target SillyTavern or MMD's older chat page may install the open-source `tavern-mmd` skill for those platforms on their own; it is not part of this setup. The chat page is open source (`hearthroom/moonstage`); the skills say which of its files to read when a fact is missing.
+Status panels, choice buttons and themes are built by the toolkit's own sandbox kit (`assets/sandbox-kit` in the skills, with `hearthroom card check` and `hearthroom card preview` to verify them), so no second skill set is needed. Authors who also target SillyTavern or MMD's older chat page may install the open-source `tavern-mmd` skill for those platforms on their own; it is not part of this setup. The [public sandbox contract](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json) lists the SDK, events and markup supported by the chat page. Use the skills' platform facts and the CLI to verify card behavior.
 
 ## 4. Sign in
 
