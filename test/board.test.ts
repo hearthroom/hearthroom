@@ -74,27 +74,32 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
-it("extends public day exposure only for the Nov 20 first publications, including an existing board cache", async () => {
+it("extends public day exposure only for cards eligible at outage start, including across the previous day", async () => {
   const local = (time: string) => Date.parse(`${time}+08:00`);
   const now = vi.spyOn(Date, "now").mockReturnValue(local("2026-11-21T02:00:00"));
   try {
     const affected = local("2026-11-20T00:30:00");
     const previous = local("2026-11-19T23:59:00");
     const next = local("2026-11-21T00:00:00");
-    const moderated = local("2026-11-20T23:00:00");
+    const moderated = local("2026-11-20T21:00:00");
+    const leftEdge = local("2026-11-19T21:20:00");
+    const after = local("2026-11-20T21:20:00")+1;
     for (const [id, registeredAt, publishedAt] of [
       ["outage", affected, affected],
       ["outage-original", previous, affected],
       ["previous", previous, previous],
+      ["left-edge", leftEdge, leftEdge],
+      ["expired", leftEdge-1, leftEdge-1],
       ["next", next, next],
       ["moderated", moderated, moderated],
+      ["after", after, after],
     ] as const) {
       await seed({ id, registeredAt });
       await env.DB.prepare("INSERT INTO rank_publications SELECT id,?,? FROM cards WHERE source_role_id=?").bind(publishedAt,publishedAt,`role-${id}`).run();
     }
     await env.DB.prepare("INSERT INTO moderation_events VALUES('fixture-compensation','harbor','role-moderated','moderator','compensation','fixture','{}','{}',?,'one')").bind(now()).run();
     await env.DB.prepare("INSERT INTO moderation_compensation VALUES('fixture-compensation','harbor','role-moderated','day',7200000)").run();
-    const configured = {...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES:"240"};
+    const configured = {...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES:"360"};
     async function board(binding: Env, query = "sort=day") {
       const ctx = createExecutionContext();
       const response = await worker.fetch(new Request(`https://outage-board.test/v1/cards?${query}`),binding,ctx);
@@ -103,12 +108,13 @@ it("extends public day exposure only for the Nov 20 first publications, includin
       const body = await response.json() as {items: {id: string}[]};
       return {cards: ids(body).sort(), cache:response.headers.get("X-Cache")};
     }
-    expect(await board(env)).toEqual({cards:["moderated","next"], cache:"miss"});
-    expect(await board(configured)).toEqual({cards:["moderated","next","outage","outage-original"], cache:"miss"});
-    expect(await board(configured)).toEqual({cards:["moderated","next","outage","outage-original"], cache:"hit"});
-    expect((await board(configured,"sort=day&period=week")).cards).toEqual(["moderated","next","outage","outage-original","previous"]);
-    now.mockReturnValue(local("2026-11-21T04:30:00")+1);
-    expect((await board(configured)).cards).toEqual(["moderated","next"]);
+    expect(await board(env)).toEqual({cards:["after","moderated","next"], cache:"miss"});
+    const compensated = ["after","left-edge","moderated","next","outage","outage-original","previous"];
+    expect(await board(configured)).toEqual({cards:compensated, cache:"miss"});
+    expect(await board(configured)).toEqual({cards:compensated, cache:"hit"});
+    expect((await board(configured,"sort=day&period=week")).cards).toEqual(["after","expired","left-edge","moderated","next","outage","outage-original","previous"]);
+    now.mockReturnValue(local("2026-11-21T06:30:00")+1);
+    expect((await board(configured)).cards).toEqual(["after","moderated","next"]);
     now.mockReturnValue(local("2026-11-22T04:59:00"));
     expect(await board(configured)).toEqual({cards:["moderated"],cache:"miss"});
     now.mockReturnValue(local("2026-11-22T05:01:00"));

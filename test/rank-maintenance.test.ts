@@ -13,15 +13,16 @@ beforeEach(async()=>{await resetDb();member=await makeMember(11);cardRewardTrans
 afterEach(()=>{vi.restoreAllMocks();Object.assign(rankTransport,real);cardRewardTransport.token=token;badgeStatsTransport.read=statsRead;restoreUpstream()});
 async function card(){await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,approved_hosted_role_id) VALUES(100001,'rank-source',11,'{}','{}',?,1,'approved','harbor','rank-hosted')").bind(at+1000).run();await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,decided_at) VALUES('rank-first',100001,'harbor','rank-source','first','approved',?,?)").bind(at,at+1000).run()}
 
-it('extends both Nov 20 daily awards until all adjusted v2 windows complete, once', async () => {
+it('extends both Nov 20 daily awards only for cards already on the board at outage start', async () => {
  const local = (time: string) => Date.parse(`${time}+08:00`);
  const previous = local('2026-11-19T23:59:00');
- const affected = local('2026-11-20T23:55:00');
+ const affected = local('2026-11-20T21:20:00');
+ const after = affected + 1;
  const next = local('2026-11-21T00:00:00');
  const originalDue = local('2026-11-22T00:00:00');
- const extendedEnd = local('2026-11-22T03:55:00');
- const configured = {...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES:'240'};
- for (const [id, roleId, publishedAt] of [[100001,'previous',previous],[100002,'affected',affected],[100003,'next',next]] as const) {
+ const extendedEnd = local('2026-11-22T03:20:00');
+ const configured = {...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES:'360'};
+ for (const [id, roleId, publishedAt] of [[100001,'previous',previous],[100002,'affected',affected],[100003,'next',next],[100004,'after',after]] as const) {
   await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,rating) VALUES(?,?,11,'{}','{}',?,1,'approved','harbor','G')").bind(id,roleId,publishedAt).run();
   await env.DB.prepare('INSERT INTO rank_publications VALUES(?,?,?)').bind(id,publishedAt,publishedAt).run();
  }
@@ -30,7 +31,7 @@ it('extends both Nov 20 daily awards until all adjusted v2 windows complete, onc
  const calls: {roleId:string; from:string; to:string; formula?:'v2'}[] = [];
  rankTransport.heats = async (_env, windows) => {
   calls.push(...windows);
-  return windows.map(window => ({...window,heat:350,complete:window.roleId!=='affected'||complete}));
+  return windows.map(window => ({...window,heat:window.roleId==='after'?10:350,complete:window.roleId!=='affected'||complete}));
  };
  const awards = async () => (await env.DB.prepare("SELECT card_id,zone,period,amount FROM rank_awards WHERE window='day' ORDER BY period,zone").all()).results;
  await rankMaintenance(configured,originalDue);
@@ -38,7 +39,8 @@ it('extends both Nov 20 daily awards until all adjusted v2 windows complete, onc
  expect(calls.map(call => [call.roleId,Date.parse(call.to)])).toEqual([['previous',previous+86400000]]);
  expect((await awards()).map(row=>row.period)).toEqual(['2026-11-19','2026-11-19']);
  await rankMaintenance(configured,extendedEnd);
- expect(calls.at(-1)).toEqual({roleId:'affected',from:new Date(affected).toISOString(),to:new Date(extendedEnd).toISOString(),formula:'v2'});
+ expect(calls.find(call=>call.roleId==='affected')).toEqual({roleId:'affected',from:new Date(affected).toISOString(),to:new Date(extendedEnd).toISOString(),formula:'v2'});
+ expect(calls.find(call=>call.roleId==='after')).toMatchObject({to:new Date(after+86400000).toISOString()});
  expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='day' AND outcome='pending'").first('value')).toBe(1);
  expect((await awards()).map(row=>row.period)).not.toContain('2026-11-20');
  complete = true;
@@ -55,7 +57,7 @@ it('extends both Nov 20 daily awards until all adjusted v2 windows complete, onc
 });
 
 it('preserves an earlier Nov 20 settlement and holds the other zone when its score window changed', async () => {
- const published = Date.parse('2026-11-20T23:55:00+08:00');
+ const published = Date.parse('2026-11-20T21:15:00+08:00');
  const due = Date.parse('2026-11-22T04:00:00+08:00');
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider,rating) VALUES(100001,'already-scored',11,'{}','{}',?,1,'approved','harbor','G')").bind(published).run();
  await env.DB.prepare('INSERT INTO rank_publications VALUES(100001,?,?)').bind(published,published).run();

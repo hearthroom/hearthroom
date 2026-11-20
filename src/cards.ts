@@ -9,7 +9,7 @@ import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
-import {NOV_20_RANK_END,NOV_20_RANK_START} from './rank-settlement';
+import {NOV_20_OUTAGE_BOARD_SINCE,NOV_20_OUTAGE_START} from './rank-settlement';
 import type {RankHonor} from '../shared/rank-honors';
 
 export interface CardRow {
@@ -311,15 +311,15 @@ export interface ListResult {
   partial?: boolean;
 }
 
-/** Keep the existing moderation credit and add the outage credit to this cohort only. */
+/** Add outage time to cards within the public daily window when the outage started. */
 function boardWindowCondition(since: number, board = "", extension = 0) {
   const registered = "c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0)";
   if (!extension) return {sql: `${registered} >= ?`, binds: [board, since]};
   return {
     sql: `${registered} + CASE WHEN c.id IN (
-      SELECT card_id FROM rank_publications WHERE published_at >= ? AND published_at < ?
+      SELECT card_id FROM rank_publications WHERE published_at BETWEEN ? AND ?
     ) THEN ? ELSE 0 END >= ?`,
-    binds: [board, NOV_20_RANK_START, NOV_20_RANK_END, extension, since],
+    binds: [board, NOV_20_OUTAGE_BOARD_SINCE, NOV_20_OUTAGE_START, extension, since],
   };
 }
 

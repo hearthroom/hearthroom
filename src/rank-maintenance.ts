@@ -3,7 +3,7 @@ import type {RankZone} from '../shared/rank-honors';
 import {reviewEnabled} from './providers';
 import {REVIEW_ERA_START} from './card-reward';
 import {cardRewardTransport} from './card-reward-service';
-import {cohortOf,heatFormulaOf,isNov20DailyCohort,nov20RankExtension,rankScoreWindow,RANK_WINDOWS} from './rank-settlement';
+import {cohortOf,getsNov20OutageScoreExtension,heatFormulaOf,nov20RankExtension,rankScoreWindow,RANK_WINDOWS} from './rank-settlement';
 import {periodOf,rankSnapshot,settleRankSnapshot,supplementRankSnapshot,type AwardEntrant} from './rank-awards';
 import {bumpOp} from './ops-metrics';
 import {annualMaintenance,annualPaymentMaintenance} from './annual-honors';
@@ -100,7 +100,7 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
    if(!entries.every(r=>now>=rankScoreWindow(r.published_at,window,extension??0).due))continue;
    const unsettled=(['clean','all']as const).filter(z=>!settled.has(`${z}:${window}:${period}`));
    if(unsettled.length){
-    if(extension===null&&isNov20DailyCohort(cohortOf(entries[0].published_at,window).at,window)){
+    if(extension===null&&entries.some(r=>getsNov20OutageScoreExtension(r.published_at,window))){
      await bumpOp(env.DB,'rank_settlement','day','error');
      continue;
     }
@@ -122,7 +122,7 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  }
  for(const {window,period,entries,supplementZones}of dueJobs.sort((a,b)=>(attempts.get(`${a.window}:${a.period}`)??0)-(attempts.get(`${b.window}:${b.period}`)??0)).slice(0,3)){
    await env.DB.prepare('INSERT INTO rank_attempts(window,period,attempted_at) VALUES(?,?,?) ON CONFLICT(window,period) DO UPDATE SET attempted_at=excluded.attempted_at').bind(window,period,now).run();
-   const extended=!!extension&&isNov20DailyCohort(cohortOf(entries[0].published_at,window).at,window);
+   const extended=!!extension&&entries.some(r=>getsNov20OutageScoreExtension(r.published_at,window));
    const windows=entries.map(r=>{
     const formula=heatFormulaOf(r.published_at,window);
     const {to}=rankScoreWindow(r.published_at,window,extension??0);

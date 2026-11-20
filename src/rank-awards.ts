@@ -1,6 +1,6 @@
 import {HttpError,type Env} from './types';
 import type {RankZone,RankWindow} from '../shared/rank-honors';
-import {cohortOf,isNov20DailyCohort,nov20RankExtension,rankCohort,rankScoreWindow,RANK_REWARDS,type RankEntrant} from './rank-settlement';
+import {cohortOf,getsNov20OutageScoreExtension,nov20RankExtension,rankCohort,rankScoreWindow,RANK_REWARDS,type RankEntrant} from './rank-settlement';
 import {bumpOp} from './ops-metrics';
 export interface AwardEntrant extends RankEntrant {memberId:string|null;accountNo:number;payoutHold?:boolean}
 export interface RankSnapshotInput {zone:RankZone;window:RankWindow;period:string;now:number;cards:AwardEntrant[];excludedCardIds?:number[]}
@@ -11,7 +11,9 @@ function validateSnapshotInput(env:Env,input:RankSnapshotInput){
  const cohort=cohortOf(Date.parse(`${period}T00:00:00+08:00`),window);
  if(!Number.isFinite(cohort.at)||periodOf(cohort.at)!==period||new Set(cards.map(c=>c.id)).size!==cards.length||cards.some(c=>periodOf(cohortOf(c.registeredAt,window).at)!==period||!Number.isSafeInteger(c.heat)||c.heat<0))throw new HttpError(400,'rank_invalid_snapshot');
  const extension=nov20RankExtension(env.NOV_20_DAILY_RANK_EXTENSION_MINUTES);
- if(extension===null&&isNov20DailyCohort(cohort.at,window))throw new HttpError(409,'rank_invalid_extension');
+ if(extension===null&&(cards.length
+  ? cards.some(c=>getsNov20OutageScoreExtension(c.registeredAt,window))
+  : getsNov20OutageScoreExtension(cohort.at,window)))throw new HttpError(409,'rank_invalid_extension');
  if(cards.some(c=>now<rankScoreWindow(c.registeredAt,window,extension??0).due)||(!cards.length&&now<rankScoreWindow(cohort.at,window,extension??0).due))throw new HttpError(409,'rank_not_due');
 }
 export async function settleRankSnapshot(env:Env,input:RankSnapshotInput):Promise<void>{
