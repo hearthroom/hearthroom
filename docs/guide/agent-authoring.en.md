@@ -20,7 +20,7 @@ SillyTavern PNG, JSON and CHARX cards and MMD three-file sets import directly.
 
 When the screen matters it uses the toolkit's own sandbox kit (a status panel drawn from a block the model writes, choice buttons, a theme), checks the folder with `hearthroom card check`, and looks at the result with `hearthroom card preview` and `card render`. With no rule at all, the page itself draws a reply's closing [status] and [choices] blocks as a panel and buttons; the kit is for a look, theme or pinned bar of your own.
 
-The chat page itself is open source (`hearthroom/moonstage`, the `stage` submodule of this site): the skills' sandbox contract is generated from its `src/sandbox/`, and the facts sheet names the files to read when something is undocumented.
+The [public sandbox contract](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json) lists the SDK, events and markup supported by the chat page. Use it with the skills' platform facts and confirm a card's behavior with Hearthroom CLI.
 
 ### Playtest and find problems
 

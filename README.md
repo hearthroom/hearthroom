@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
   <a href="https://github.com/hearthroom/hearthroom/stargazers"><img src="https://img.shields.io/github/stars/hearthroom/hearthroom?style=social" alt="GitHub stars"></a>
@@ -35,7 +35,7 @@
 Hearthroom is an open-source platform for AI character cards. It combines three parts:
 
 - **Board** — authors register cards; readers browse daily, weekly and monthly rankings, search by name, summary or tag, and view author pages.
-- **Chat** — every listed card can be played in the browser. The chat stage (a separate open-source project included as the `stage/` submodule) renders the conversation, the card's status bars and panels, and runs the card's scripts in a sandbox.
+- **Chat** — every listed card can be played in the browser. The chat stage (Moon Stage, maintained as an access-controlled `stage/` submodule) renders the conversation, the card's status bars and panels, and runs the card's scripts in a sandbox.
 - **Distribution** — cards are reviewed by the community before listing and are opened with their rules, lorebook and images. SillyTavern PNG/JSON cards can be imported.
 
 Hearthroom differs from SillyTavern in where things run. Nothing is installed locally and no API keys are configured by the user. Sign-in, card storage and text generation are handled by a **card provider**, a chat service with an open API. Hearthroom stores the registry (which cards are listed), the review state, the search index and site-level settings. Authors sign in through the provider and register a card by its ID; the site copies the card's public fields from the provider once an hour. Card content is never stored on the site.
@@ -92,6 +92,8 @@ Design notes and the reasoning behind individual decisions are in [docs/architec
 Node 22 and npm are required. The web tests do not run on Node 26 because of its built-in `localStorage` global.
 
 For browsing, search and card details with a plain clone, see [public site development](docs/public-development.md). The commands below are for the full build.
+
+The full build requires access to the Moon Stage repository.
 
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
@@ -151,7 +153,7 @@ npm run migrate:remote
 npm run deploy              # runs preflight, typecheck, tests and the build first
 ```
 
-The workflow in `.github/workflows/deploy.yml` type-checks, builds and tests every push and pull request. On `main`, if the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set, it also applies migrations and deploys. If they are not set, the deploy step is skipped and the run still passes.
+Public site CI verifies the website and Worker on main and pull requests. Hearthroom maintainers release the hosted site and playground from the Moon Stage repository after verifying the pinned website and Stage commits.
 
 ## Community
 
@@ -160,11 +162,13 @@ Discussion, card sharing and development coordination take place on [Discord](ht
 ## Contributing
 
 - **Issues** — for bugs, include the page, the browser and the expected behaviour.
-- **Pull requests** — CI runs typecheck, build and tests on every PR. Keep a PR to one change, add or update tests next to the code (`test/` for the Worker, `web/test/` for the web app), and run `npm test` before pushing.
+- **Pull requests** — CI runs typecheck, build and tests on every PR. Keep a PR to one change, add or update tests next to the code (`test/` for the Worker, `web/test/` for the web app), and run `npm run test:public` before pushing. Use `npm run test:api` for Worker changes.
 - **Translations** — UI strings are in `web/src/locales/<locale>.json`, one file per language. `npm run i18n -w web` reports missing keys per locale. New strings must be added to all five files; the test step fails if a component contains untranslated text. The authoring guide has one file per language under `docs/guide/`.
 - **Chat stage** — changes to the conversation UI go to the stage repository, not here.
 - **License** — contributions are accepted under AGPL-3.0, the same license as the project.
 
 ## License
+
+The website source in this repository is licensed under AGPL-3.0. Previously released Moon Stage versions retain their original terms. The hosted build includes Moon Stage, and the public build supports browsing, search and card details.
 
 [GNU Affero General Public License v3.0](LICENSE). Anyone who runs a modified version as a network service must make the modified source available to its users.

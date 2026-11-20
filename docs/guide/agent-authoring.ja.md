@@ -20,7 +20,7 @@ SillyTavern の PNG・JSON・CHARX と、魅魔島（MMD）の 3 点セットを
 
 画面が必要なときは、ツールキット付属のサンドボックスキット（モデルが書くステータスブロックをパネルに、選択肢ボタン、テーマ）を使い、`hearthroom card check` でフォルダを検査し、`hearthroom card preview` と `card render` で結果を確認します。ルールを何も書かなくても、返信末尾の [status]／[choices] ブロックはページ自身がパネルとボタンに描きます。独自の見た目、テーマ、ピン留めバーが欲しいときにキットを使います。
 
-チャットページ自体はオープンソースです（`hearthroom/moonstage`、このサイトの `stage` サブモジュール）。skills のサンドボックス契約はその `src/sandbox/` から生成され、未記載の事柄についてはプラットフォーム事実ページが読むべきファイルを示します。
+チャットページが対応する SDK、イベント、マークアップは[公開サンドボックス仕様](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json)で確認できます。skills のプラットフォーム資料も参照し、カードの動作は Hearthroom CLI で確認してください。
 
 ### 試しプレイで問題を見つける
 

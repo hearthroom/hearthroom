@@ -268,12 +268,12 @@ Wikidata 搜候選，點選就對上一個 Q 編號；選定時 `src/fandom.ts` 
 
 ## 對話舞台（stage/）
 
-卡片頁的「開始對話」走站內 `/play/:roleId`，畫布是 [Moonstage](https://github.com/hearthroom/moonstage)。
+卡片頁的「開始對話」走站內 `/play/:roleId`，畫布由採限制存取的 Moon Stage 提供。作者可查閱 [公開沙盒契約](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json)。
 它由 Hearthroom 獨立維護，以子模組 `stage/` 釘在匿名化歷史中的特定 commit。
 獨立 playground 位於 `playground.hearthroom.club`，使用 HarperHarbor OAuth；
 嵌入本站時仍由 `StageHost` 提供 API origin 與身分，不改既有供應商帳號或資料。
 
-舞台當套件用的那一層（`src/stage/`、`vite.stage.config.ts`、`npm run build:stage`）由上游提供，任何站台都能拿去嵌。
+舞台當套件用的那一層（`src/stage/`、`vite.stage.config.ts`、`npm run build:stage`）由 Moon Stage 提供，完整建置需要該倉庫的存取權。
 程式碼改動一律往上游提；要跟上上游就更新指標：
 
 ```sh

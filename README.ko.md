@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
   <a href="https://github.com/hearthroom/hearthroom/stargazers"><img src="https://img.shields.io/github/stars/hearthroom/hearthroom?style=social" alt="GitHub stars"></a>
@@ -35,7 +35,7 @@
 Hearthroom은 AI 캐릭터 카드를 위한 오픈소스 플랫폼으로, 세 부분으로 구성됩니다.
 
 - **랭킹 보드** — 작성자가 카드를 등록하고, 독자는 일간·주간·월간 랭킹, 이름·소개·태그 검색, 작성자 페이지로 카드를 찾습니다.
-- **채팅** — 등재된 모든 카드를 브라우저에서 플레이할 수 있습니다. 채팅 스테이지(`stage/` 서브모듈로 포함된 별도의 오픈소스 프로젝트)가 대화, 카드의 상태 바와 패널을 그리고 카드 스크립트를 샌드박스에서 실행합니다.
+- **채팅** — 등재된 모든 카드를 브라우저에서 플레이할 수 있습니다. 채팅 스테이지(접근이 제한된 `stage/` 서브모듈의 Moon Stage)가 대화, 카드의 상태 바와 패널을 그리고 카드 스크립트를 샌드박스에서 실행합니다.
 - **배포** — 카드는 등재 전에 커뮤니티 심사를 거치며, 열 때 규칙, 세계관, 이미지와 함께 로드됩니다. SillyTavern PNG/JSON 카드를 가져올 수 있습니다.
 
 SillyTavern과의 차이는 실행 위치입니다. 로컬에 설치할 것이 없고 사용자가 API 키를 설정하지도 않습니다. 로그인, 카드 저장, 텍스트 생성은 **카드 제공자**(오픈 API를 제공하는 채팅 서비스)가 담당합니다. Hearthroom이 저장하는 것은 등록 정보(어떤 카드가 등재되었는지), 심사 상태, 검색 인덱스, 사이트 설정입니다. 작성자는 제공자를 통해 로그인하고 카드 ID로 등록합니다. 사이트는 한 시간마다 제공자에서 카드의 공개 필드를 복사합니다. 카드 내용은 사이트에 저장되지 않습니다.
@@ -93,6 +93,8 @@ Node 22와 npm이 필요합니다. 웹 테스트는 Node 26에서 실행되지 �
 
 공개 저장소만으로 탐색, 검색, 카드 상세를 개발하려면 [공개 사이트 개발 가이드](docs/public-development.md)를 참고하세요. 아래 명령은 전체 빌드용입니다.
 
+전체 빌드에는 Moon Stage 저장소 접근 권한이 필요합니다.
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom
@@ -144,7 +146,7 @@ npm run migrate:remote
 npm run deploy              # 사전 점검, 타입 검사, 테스트, 빌드를 먼저 실행
 ```
 
-`.github/workflows/deploy.yml`의 워크플로는 모든 push와 PR에서 타입 검사, 빌드, 테스트를 실행합니다. `main`에서는 저장소 secrets `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`가 설정되어 있으면 마이그레이션 적용과 배포도 수행합니다. 설정되지 않았으면 배포 단계를 건너뛰고 실행은 성공으로 처리됩니다.
+공개 CI는 main과 PR에서 사이트와 Worker를 검증합니다. 운영 사이트와 playground는 관리자가 Moon Stage 릴리스 절차에서 고정 버전을 검증한 뒤 배포합니다.
 
 ## 커뮤니티
 
@@ -153,11 +155,13 @@ npm run deploy              # 사전 점검, 타입 검사, 테스트, 빌드를
 ## 기여하기
 
 - **Issue** — 버그는 페이지, 브라우저, 기대한 동작을 적어 주세요.
-- **Pull Request** — CI는 모든 PR에서 타입 검사, 빌드, 테스트를 실행합니다. PR 하나에 변경 하나, 테스트는 해당 코드 옆에(Worker는 `test/`, web은 `web/test/`), push 전에 `npm test`를 실행하세요.
+- **Pull Request** — CI는 모든 PR에서 타입 검사, 빌드, 테스트를 실행합니다. PR 하나에 변경 하나, 테스트는 해당 코드 옆에(Worker는 `test/`, web은 `web/test/`), push 전에 `npm run test:public`를 실행하세요.
 - **번역** — UI 문자열은 `web/src/locales/<언어>.json`에 언어당 한 파일씩 있습니다. `npm run i18n -w web`이 언어별 누락 키를 보고합니다. 새 문자열은 다섯 파일 모두에 추가해야 하며, 컴포넌트에 미번역 문자열이 있으면 테스트 단계가 실패합니다. 카드 작성 가이드는 `docs/guide/`에 언어별로 한 파일씩 있습니다.
 - **채팅 스테이지** — 대화 UI 변경은 스테이지 저장소로 보냅니다. 여기서는 하지 않습니다.
 - **라이선스** — 기여는 프로젝트와 같은 AGPL-3.0으로 받습니다.
 
 ## 라이선스
+
+이 저장소의 웹사이트 소스 코드는 AGPL-3.0을 따릅니다. 이미 공개된 Moon Stage 버전에는 기존 라이선스가 적용됩니다. 운영 사이트는 Moon Stage를 포함하며, 공개 빌드는 탐색, 검색, 카드 상세를 지원합니다.
 
 [GNU Affero General Public License v3.0](LICENSE). 수정한 버전을 네트워크 서비스로 운영하는 경우, 그 사용자에게 수정된 소스 코드를 제공해야 합니다.

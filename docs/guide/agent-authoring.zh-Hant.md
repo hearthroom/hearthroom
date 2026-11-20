@@ -20,7 +20,7 @@ SillyTavern 的 PNG、JSON、CHARX 和魅魔島三件套都能直接匯入。
 
 需要畫面時，Agent 使用工具包內建的沙盒套件（把模型寫的狀態區塊畫成面板、選項鈕與主題），以 `hearthroom card check` 檢查資料夾，再以 `hearthroom card preview` 與 `card render` 檢視結果。即使沒有任何顯示規則，平台也會把回覆結尾的 [status]／[choices] 區塊畫成面板與按鈕；需要自訂樣式、主題或釘選列時才使用套件。
 
-聊天頁本身是開源的（`hearthroom/moonstage`，本站的 `stage` 子模組）：skills 的沙盒契約由它的 `src/sandbox/` 生成，文件未涵蓋的部分，平台事實頁列出應讀取的檔案。
+[公開沙盒契約](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json) 列出聊天頁支援的 SDK、事件與標記。可搭配 skills 的平台說明查閱，再用 Hearthroom CLI 驗證卡片行為。
 
 ### 試玩並找出問題
 

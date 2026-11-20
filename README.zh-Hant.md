@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://sukisuki.ai"><img src="https://img.shields.io/website?url=https%3A%2F%2Fsukisuki.ai&label=sukisuki.ai" alt="Website"></a>
   <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/public-site.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
   <a href="https://github.com/hearthroom/hearthroom/stargazers"><img src="https://img.shields.io/github/stars/hearthroom/hearthroom?style=social" alt="GitHub stars"></a>
@@ -35,7 +35,7 @@
 綺夢社（開源專案名 Hearthroom）是 AI 角色卡的開源平台，由三個部分組成：
 
 - **榜單**——作者登記卡片；讀者瀏覽日榜、週榜、月榜，依名稱、簡介或標籤搜尋，查看作者頁。
-- **對話**——每張上榜的卡都能在瀏覽器裡直接遊玩。對話舞台（另一個開源專案，以 `stage/` 子模組納入）負責繪製對話、卡片的狀態欄與面板，並在沙箱中執行卡片的腳本。
+- **對話**——每張上榜的卡都能在瀏覽器裡直接遊玩。對話舞台（Moon Stage，以限制存取的 `stage/` 子模組納入）負責繪製對話、卡片的狀態欄與面板，並在沙箱中執行卡片的腳本。
 - **分發**——卡片上榜前經社群審核，開啟時連同規則、世界書與圖片一併載入。可匯入 SillyTavern 的 PNG／JSON 角色卡。
 
 綺夢社與 SillyTavern 的差別在於執行位置。使用者不需要在本機安裝任何東西，也不需要設定 API 金鑰。登入、卡片儲存與文字生成由**卡片供應商**負責，也就是一個提供開放 API 的聊天服務。綺夢社儲存的是登記資料（哪些卡上榜）、審核狀態、搜尋索引與站台設定。作者透過供應商登入，以卡片 ID 登記；站台每小時從供應商複製一次卡片的公開欄位。卡片內容不儲存在站台。
@@ -93,6 +93,8 @@ API 與前端由同一個 Worker 提供：`/v1/*` 由 Hono 處理，其餘路徑
 
 只用公開原始碼開發瀏覽、搜尋與卡片詳情，請見[公開網站開發指南](docs/public-development.md)。下方指令適用於完整建置。
 
+完整建置需要 Moon Stage 倉庫的存取權。
+
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom
@@ -146,7 +148,7 @@ npm run migrate:remote
 npm run deploy              # 先執行部署前檢查、型別檢查、測試與建置
 ```
 
-`.github/workflows/deploy.yml` 對每次 push 與 PR 執行型別檢查、建置與測試。在 `main` 上，若倉庫 secrets `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID` 已設定，會接著套用遷移並部署；未設定時略過部署步驟，執行結果仍為通過。
+公開 CI 對主線與 PR 驗證網站和 Worker。維護者從 Moon Stage 的發布流程驗證固定版本後，部署正式站及 playground。
 
 ## 社群
 
@@ -155,11 +157,13 @@ npm run deploy              # 先執行部署前檢查、型別檢查、測試�
 ## 貢獻
 
 - **Issue**——回報錯誤時附上頁面、瀏覽器與預期行為。
-- **Pull request**——CI 對每個 PR 執行型別檢查、建置與測試。一個 PR 只做一項修改，測試放在對應程式碼旁（Worker 在 `test/`，前端在 `web/test/`），推送前執行 `npm test`。
+- **Pull request**——CI 對每個 PR 執行型別檢查、建置與測試。一個 PR 只做一項修改，測試放在對應程式碼旁（Worker 在 `test/`，前端在 `web/test/`），推送前執行 `npm run test:public`。
 - **翻譯**——介面字串在 `web/src/locales/<語系>.json`，每種語言一個檔案。`npm run i18n -w web` 報告各語系缺少的 key。新增字串須同時加入五個檔案；元件中若有未翻譯的文字，測試步驟會失敗。寫卡指南在 `docs/guide/` 下每種語言一份。
 - **對話舞台**——對話介面的修改提交到舞台的倉庫，不在本倉庫。
 - **授權**——貢獻以與專案相同的 AGPL-3.0 授權接受。
 
 ## 授權
+
+本站原始碼採 AGPL-3.0。已發布的 Moon Stage 版本沿用原授權。正式站包含 Moon Stage，公開建置支援瀏覽、搜尋與卡片詳情。
 
 [GNU Affero General Public License v3.0](LICENSE)。以修改後的版本提供網路服務者，須向其使用者提供修改後的原始碼。

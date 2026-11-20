@@ -20,7 +20,7 @@ SillyTavern의 PNG, JSON, CHARX와 魅魔島(MMD) 3종 세트를 그대로 가�
 
 화면이 필요하면 툴킷에 포함된 샌드박스 키트(모델이 쓰는 상태 블록을 패널로, 선택지 버튼, 테마)를 쓰고, `hearthroom card check`로 폴더를 검사한 뒤 `hearthroom card preview`와 `card render`로 결과를 확인합니다. 규칙을 하나도 쓰지 않아도 답변 끝의 [status]／[choices] 블록은 페이지가 직접 패널과 버튼으로 그립니다. 자신만의 모양·테마·고정 바가 필요할 때 키트를 씁니다.
 
-채팅 페이지 자체는 오픈 소스입니다(`hearthroom/moonstage`, 이 사이트의 `stage` 서브모듈). skills의 샌드박스 계약은 그 `src/sandbox/`에서 생성되며, 문서에 없는 사항은 플랫폼 사실 페이지가 읽어야 할 파일을 알려 줍니다.
+채팅 페이지가 지원하는 SDK, 이벤트, 마크업은 [공개 샌드박스 명세](https://github.com/hearthroom/hearthroom/blob/main/web/public/contracts/sandbox-contract.json)에서 확인할 수 있습니다. skills의 플랫폼 설명을 함께 참고하고 Hearthroom CLI로 카드 동작을 확인하세요.
 
 ### 테스트 플레이로 문제 찾기
 
