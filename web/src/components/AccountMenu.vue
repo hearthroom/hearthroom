@@ -117,6 +117,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
               <span v-if="workshopPending" class="menu__dot"><span class="sr-only">{{ $t("workshop.managePage.dotSr") }}</span></span>
             </RouterLink>
             <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
+            <RouterLink :to="lp('/achievements')" class="menu__item" role="menuitem"><CommunityIcon name="crown" />{{ $t("achievements.title") }}</RouterLink>
             <RouterLink v-if="can('presets')" :to="lp('/me/presets')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("preset.nav") }}</RouterLink>
             <RouterLink v-if="can('instructions')" :to="lp('/me/instructions')" class="menu__item" role="menuitem"><AccountIcon name="chat" />{{ $t("instructions.nav") }}</RouterLink>
             <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>

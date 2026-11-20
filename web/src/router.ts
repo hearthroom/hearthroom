@@ -42,6 +42,8 @@ const pages: RouteRecordRaw[] = [
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
   // 作者的全部徽章（唯讀）：和自己的徽章頁同一個元件，看 :handle 決定模式
   { path: "authors/:handle/badges", component: () => import("./pages/BadgesPage.vue") },
+  // 成就榜：排的是作者與成員，不是角色卡，所以不放在首頁榜單分頁裡
+  { path: "achievements", component: () => import("./pages/AchievementsPage.vue") },
   { path: "library", component: () => import("./pages/LibraryPage.vue"), meta: { auth: true } },
   { path: "me/badges", component: () => import("./pages/BadgesPage.vue"), meta: { auth: true } },
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
@@ -348,6 +350,7 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/search")) return "search";
   if (bare.startsWith("/cards")) return "card";
   if (bare.startsWith("/authors")) return "author";
+  if (bare.startsWith("/achievements")) return "board";
   if (bare.startsWith("/mine")) return "mine";
   if (bare.startsWith("/me/presets")) return "presets";
   if (bare.startsWith("/me/instructions")) return "instructions";
