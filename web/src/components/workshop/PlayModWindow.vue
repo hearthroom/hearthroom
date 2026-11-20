@@ -398,3 +398,7 @@ async function saveNotice() {
     </dialog>
   </Teleport>
 </template>
+
+<style scoped>
+.mod-window__foot a { color: var(--accent-text); text-decoration: underline; }
+</style>

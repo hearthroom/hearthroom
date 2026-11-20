@@ -34,7 +34,7 @@
     flex-wrap: wrap;
     padding-block-end: max(12px, env(safe-area-inset-bottom));
   }
-  .mod-window__foot a { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-lg); color: var(--accent-text); text-decoration: underline; }
+  .mod-window__foot a { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-lg); }
   .mod-window__foot p { flex: 1 1 100%; margin: 0; }
   .mod-window__icon { width: 44px; height: 44px; padding: 0; flex: none; font-size: 1.125rem; }
   .mod-window__expand-space { flex: 0 0 var(--h-lg); }
