@@ -1,9 +1,7 @@
 import type {Env} from './types';
 import {HttpError} from './types';
 import {bumpOp} from './ops-metrics';
-import {awardFirstBadges,STAT_FIRST_BADGES} from './community/first-badges';
-/** paidInvites／paidInvites100At／starlightAt：Harbor 新加的欄位，舊 Harbor 沒有就當 0／沒有越線（不改既有值以外的東西） */
-export interface BadgeStats {accountNo:number;effectiveInvites:number;netTopupUsdMicros:number;consumedCredits:number;complete:boolean;invitesComplete?:boolean;spendingComplete?:boolean;paidInvites?:number;paidInvites100At?:string|null;starlightAt?:string|null}
+export interface BadgeStats {accountNo:number;effectiveInvites:number;netTopupUsdMicros:number;consumedCredits:number;complete:boolean;invitesComplete?:boolean;spendingComplete?:boolean}
 export const badgeStatsTransport={async read(env:Env,accounts:number[]):Promise<BadgeStats[]>{
  if(!env.HARBOR_BADGES_CLIENT_ID||!env.HARBOR_BADGES_CLIENT_SECRET)throw new Error('badge_stats_unconfigured');
  const tokenResponse=await fetch(`${env.PROVIDER_API_BASE_HARBOR}/oauth/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'client_credentials',client_id:env.HARBOR_BADGES_CLIENT_ID,client_secret:env.HARBOR_BADGES_CLIENT_SECRET,scope:'community.badges.read'}),signal:AbortSignal.timeout(5000)});
@@ -35,15 +33,9 @@ export async function applyBadgeStats(env:Env,member:string,value:BadgeStats,now
  for(const check of checks)writes.push(check.earned?
   env.DB.prepare(`INSERT INTO community_awards(member_id,badge,source,created_at) SELECT ?,?,'badge-stats-v1',? WHERE ${guard} ON CONFLICT(member_id,badge) DO UPDATE SET revoked_at=NULL,created_at=CASE WHEN community_awards.revoked_at IS NOT NULL THEN excluded.created_at ELSE community_awards.created_at END`).bind(member,check.key,now,...guardArgs):
   env.DB.prepare(`UPDATE community_awards SET revoked_at=? WHERE member_id=? AND badge=? AND revoked_at IS NULL AND ${guard}`).bind(now,member,check.key,...guardArgs));
- const at=(value?:string|null)=>{if(!value)return null;const t=Date.parse(value);return Number.isFinite(t)?t:null;};
- const paid=Number.isSafeInteger(value.paidInvites)&&value.paidInvites!>=0?value.paidInvites!:null;
- if(invitesComplete&&paid!==null)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET paid_invites=?,paid_invites_100_at=? WHERE member_id=? AND ${guard}`).bind(paid,at(value.paidInvites100At),member,...guardArgs));
- if(spendingComplete&&value.starlightAt!==undefined)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET starlight_at=? WHERE member_id=? AND ${guard}`).bind(at(value.starlightAt),member,...guardArgs));
  const [saved]=await env.DB.batch(writes);return !!saved.meta.changes;
 }
 export async function badgeStatsMaintenance(env:Env,now=Date.now()):Promise<void>{
- // 全服唯一：每一拍都看一次確認期過了沒（只讀已存的越線時間，不打 Harbor）
- await awardFirstBadges(env,STAT_FIRST_BADGES,now).catch(async()=>{await bumpOp(env.DB,'badge_stats','first','error');});
  const rows=(await env.DB.prepare(`SELECT member_id,account_no FROM (SELECT m.id AS member_id,CAST(i.external_id AS INTEGER) AS account_no,
  ROW_NUMBER() OVER(PARTITION BY m.id ORDER BY i.linked_at DESC,i.external_id) AS n,r.attempted_at
  FROM member_identities i LEFT JOIN member_connections c ON c.provider=i.provider AND c.external_id=i.external_id JOIN members m ON m.id=COALESCE(c.owner_member_id,i.member_id)

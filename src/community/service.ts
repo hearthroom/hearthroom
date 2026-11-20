@@ -1,8 +1,6 @@
 import {assertNormalMember} from '../test-accounts';
 import { SANDBOX_PARENT_ORIGINS } from '../../shared/site-hosts';
 import { activeAwardKeys, sweepMilestones } from './badges';
-import { bumpOp } from '../ops-metrics';
-import { awardFirstBadges, LOCAL_FIRST_BADGES } from './first-badges';
 import { appearanceView, projectAppearance, type AppearancePreferences } from './appearance';
 import { HttpError, type Env } from "../types";
 import { digest, random } from "./crypto";
@@ -434,6 +432,4 @@ export async function communityMaintenance(env: Env) {
   // Milestones cross without anyone opening a badge page; the sweep is set-based so
   // its cost does not grow with membership as a per-member loop would.
   await sweepMilestones(env);
-  // 全服唯一（創作、社群、遊玩）：越線時間從本站資料算，跟里程碑同一拍
-  await awardFirstBadges(env, LOCAL_FIRST_BADGES).catch(async () => { await bumpOp(env.DB, 'badge_stats', 'first', 'error'); });
 }

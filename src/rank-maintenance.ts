@@ -6,7 +6,6 @@ import {cardRewardTransport} from './card-reward-service';
 import {cohortOf,heatFormulaOf,RANK_DURATION,RANK_WINDOWS} from './rank-settlement';
 import {periodOf,rankSnapshot,settleRankSnapshot,supplementRankSnapshot,type AwardEntrant} from './rank-awards';
 import {bumpOp} from './ops-metrics';
-import {annualMaintenance,annualPaymentMaintenance} from './annual-honors';
 type RequestWindow={roleId:string;from:string;to:string;formula?:'v2'};
 type Payment={key:string;accountNo:number;amount:number;campaignRef:string;contentRef:string};
 type EligibleRow={id:number;hosted:string;published_at:number;talk_num:number;rating:string|null;author_num_id:number;member_id:string|null};
@@ -146,7 +145,6 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
     for(const zone of ['clean','all']as const)if(!settled.has(`${zone}:${window}:${period}`))await settleRankSnapshot(env,{zone,window,period,now,cards,excludedCardIds:[...excluded]});
    }
  }
- await annualMaintenance(env,now,rows);
 }
 /**
  * Pre-reserved idempotent one-time step to release held pre-10/17 rank payouts once owner-approved.
@@ -186,7 +184,6 @@ export async function releaseHeldRankPayouts(env:Env,now=Date.now(),releaseKey=P
 }
 export async function rankPaymentMaintenance(env:Env,now=Date.now()):Promise<void>{
  if(env.RANK_PRE_LAUNCH_PAYOUTS_ENABLED==='true')await releaseHeldRankPayouts(env,now);
- await annualPaymentMaintenance(env,now);
  const rows=(await env.DB.prepare(`SELECT id,account_no,amount,card_id,zone,window,period,attempted_at FROM rank_awards WHERE status='pending' AND payout_hold=0
   AND (attempted_at IS NULL OR attempted_at+MIN(3600000,60000*(1<<MIN(MAX(attempts-1,0),6)))<=?) ORDER BY attempted_at IS NOT NULL,attempted_at,awarded_at,id LIMIT 5`).bind(now)
   .all<{id:string;account_no:number;amount:number;card_id:number;zone:string;window:string;period:string;attempted_at:number|null}>()).results;

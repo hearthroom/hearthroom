@@ -82,37 +82,3 @@ it('keeps one section per category even when the list is not grouped',async()=>{
  await open('/me/badges',{items:[rank('rank_clean_day_1'),other('invite_3','invite'),rank('rank_all_week_3','locked')],featured:[],public:true});
  expect([...el.querySelectorAll('.badge-section__label')].map(h=>h.textContent)).toEqual(['Board honors','Invites']);
 });
-
-it('opens your own author badge page in owner mode and moves the old /me/badges address there',async()=>{
- await open('/authors/fixture/badges',{...wall(),ap:1240,items:[{...wall().items[0],ap:40,share:0.04,ordinal:7}]});
- expect(mock.request).toHaveBeenCalledWith('/me/community/badges','fixture','GET',undefined);
- expect(el.querySelector('.badge-curation')).not.toBeNull();
- expect(el.querySelector('.badges-heading p')?.textContent).toContain('1,240 achievement points · Lv.1');
- expect(el.querySelector('.badge-tile__ap')?.textContent).toBe('+40 pts');
- expect(el.querySelector('.badge-tile__census')?.textContent).toBe('Held by under 0.1% of members · Earner #7');
- expect(el.querySelector('.badges-back')?.getAttribute('href')).toContain('/authors/fixture');
- await open('/me/badges',wall());
- const router=(app.config.globalProperties as {$router:import('vue-router').Router}).$router;
- expect(router.currentRoute.value.path).toBe('/authors/fixture/badges');
-});
-
-it('claims credits for earned badges one by one, and the server decides each amount',async()=>{
- const item=(key:string,extra:Record<string,unknown>)=>({key,icon:'star',category:'member',titles:{en:key},descriptions:{en:'How'},state:'earned',earnedAt:1,expiresAt:null,...extra});
- await open('/authors/fixture/badges',{...wall(),items:[item('a',{reward:100}),item('b',{reward:500}),item('c',{reward:100,claim:'paid'}),{...item('d',{reward:2000}),state:'locked'}]});
- expect(el.querySelector('.badge-claims')?.textContent).toContain('Claim all (600 credits)');
- expect([...el.querySelectorAll('[data-claim]')].map(b=>b.textContent)).toEqual(['Claim 100 credits','Claim 500 credits']);
- expect(el.textContent).toContain('100 credits claimed');expect(el.textContent).toContain('Earn it to claim 2,000 credits');
- mock.request.mockReset();
- mock.request.mockResolvedValueOnce({...wall(),items:[item('a',{reward:100,claim:'paid'}),item('b',{reward:500})]});
- mock.request.mockResolvedValueOnce({...wall(),items:[item('a',{reward:100,claim:'paid'}),item('b',{reward:500,claim:'paid'})]});
- el.querySelector<HTMLButtonElement>('.badge-claims .btn--primary')!.click();await settle();await settle();
- expect(mock.request.mock.calls.map(c=>[c[0],c[2]])).toEqual([['/me/community/badges/a/claim','POST'],['/me/community/badges/b/claim','POST']]);
- expect(el.querySelector('.badge-claims')).toBeNull();
-});
-
-it('says a one-of-a-kind badge is taken and by whom, without breaking the wall',async()=>{
- const sole=(key:string,extra:Record<string,unknown>)=>({key,icon:'crown',category:'creation',titles:{en:key},descriptions:{en:'How'},state:'locked',earnedAt:null,expiresAt:null,...extra});
- await open('/authors/fixture/badges',{...wall(),items:[sole('sole_a',{taken:true,holder:'moon'}),sole('sole_b',{taken:true}),{...wall().items[0]}]});
- expect([...el.querySelectorAll('.badge-tile__taken')].map(p=>p.textContent)).toEqual(["@moon already holds this one, so it won't be awarded again.","Another member already holds this one, so it won't be awarded again."]);
- expect(el.querySelectorAll('.badge-tile')).toHaveLength(3);
-});

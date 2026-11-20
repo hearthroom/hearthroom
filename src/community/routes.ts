@@ -5,7 +5,6 @@ import { changeOfficialAuthor } from '../official-authors';
 import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
 import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
-import { claimBadgeReward } from './badge-rewards';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -128,14 +127,6 @@ app.get("/v1/me/community", async (c) =>
 app.get('/v1/me/community/badges',async c=>c.json(await badgeCollection(c.env,(await requireMember(c)).id)));
 app.patch('/v1/me/community/badges/featured',async c=>{
  const member=await requireMember(c);const b=await c.req.json();await setFeaturedBadges(c.env,member.id,b.featured,b.public);return c.json(await badgeCollection(c.env,member.id));
-});
-/** 領一枚徽章的積分：伺服器自己判斷這枚有沒有取得、值多少，不收前端給的數字。 */
-app.post('/v1/me/community/badges/:key/claim',async c=>{
- const member=await requireMember(c);const key=c.req.param('key');
- const badge=(await badgeCollection(c.env,member.id)).items.find(b=>b.key===key);
- if(!badge||badge.state!=='earned')throw new HttpError(409,'badge_reward_unavailable');
- await claimBadgeReward(c.env,member.id,key,badge.reward??0);
- return c.json(await badgeCollection(c.env,member.id));
 });
 app.post('/v1/me/community/official/manage',async c=>c.json(await changeOfficialAuthor(c,await c.req.json().catch(()=>{throw new HttpError(400,'official_input')}))));
 app.get('/v1/me/community/badges/manage',async c=>c.json(await badgeManagement(c.env,(await requireMember(c)).id)));

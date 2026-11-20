@@ -1,13 +1,12 @@
 <script setup lang="ts">
 /**
  * 全部徽章。兩種模式同一個頁面：
- *   自己（/authors/<自己>/badges；舊網址 /me/badges 換成這裡）：展示管理（最多 5 枚）、公開開關、篩選、進度；沒拿過的榜單榮譽收進摺疊區，不攤平 18 枚。
+ *   自己（/me/badges）：展示管理（最多 5 枚）、公開開關、篩選、進度；沒拿過的榜單榮譽收進摺疊區，不攤平 18 枚。
  *   看別人（/authors/:handle/badges）：唯讀，只列已取得（伺服器對外只回已取得、公開的；消費類只在展示時回）。
- * 一個網址：別人看到公開內容，本人看到同一頁多了管理與進度（成就設計 V2 §4）。
  * 依類別分組，順序照目錄（shared/community-badges 的 BADGE_CATEGORIES）；榜單榮譽在類別內照清水→綜合、日→週→月、第一→前十排。
  */
 import { computed, ref, watch } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
@@ -21,17 +20,9 @@ import CommunityIcon from '@/components/CommunityIcon.vue';
 /** 榜單榮譽說明句裡的結構常數（和後端結算一致）：每張卡比 24 小時／7 天／30 天的熱度，同期最後一張比滿的隔天頒發；同期有熱度的卡不足 10 張只發第一名 */
 const RANK_RULE = { dayHours: 24, weekDays: 7, monthDays: 30, minCards: 10 };
 
-const {t,locale}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute(),router=useRouter();
+const {t}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute();
 const author=computed(()=>typeof route.params.handle==='string'?route.params.handle:'');
-const own=computed(()=>!author.value||(!!session.profile?.handle&&author.value===session.profile.handle));
-// 舊網址 /me/badges：知道自己的公開 ID 後換成作者頁那一頁，連結與分享都只有一個網址
-watch(()=>!author.value&&session.profile?.handle,handle=>{if(handle)void router.replace({path:lp('/authors/'+handle+'/badges'),hash:route.hash});},{immediate:true});
-const claimable=computed(()=>own.value?(data.value?.items.filter(b=>b.state==='earned'&&b.reward&&!b.claim)??[]):[]);
-const claimTotal=computed(()=>new Intl.NumberFormat(locale.value).format(claimable.value.reduce((n,b)=>n+(b.reward??0),0)));
-const claiming=ref(''),claimError=ref('');
-/** 領積分：伺服器自己判斷值多少；一次一枚，全部領取就照順序一枚一枚領，失敗就停在那一枚 */
-async function claim(keys:string[]){if(claiming.value||!own.value)return;claimError.value='';const n=generation;try{for(const key of keys){claiming.value=key;const result=await request<BadgeCollection>('/'+encodeURIComponent(key)+'/claim','POST');if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
-const apTotal=computed(()=>data.value?.ap?new Intl.NumberFormat(locale.value).format(data.value.ap):'');
+const own=computed(()=>!author.value);
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
 let generation=0;
 const dirty=computed(()=>own.value&&!!data.value&&(JSON.stringify(selected.value)!==JSON.stringify(data.value.featured)||visible.value!==data.value.public));
@@ -64,8 +55,8 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 </script>
 <template>
  <div class="page badges-page">
-  <RouterLink class="badges-back" :to="own&&!author?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
-  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/?mode=achievements&board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div></header>
+  <RouterLink class="badges-back" :to="own?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
+  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ t('badgeWall.earnedCount',{n:earned}) }}</p></div></header>
   <div v-if="loading&&!data" class="badge-loading" aria-live="polite"><span class="sr-only">{{ t('state.loading') }}</span><div v-for="i in 3" :key="i" class="ghost" /></div>
   <div v-if="error" class="notice notice--error" role="alert"><p>{{ error }}</p><button class="btn" :disabled="loading||busy" @click="load()">{{ t(own?'badgeWall.reload':'badgeWall.retry') }}</button></div>
   <template v-if="data">
@@ -76,16 +67,11 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
     <div class="badge-actions"><button class="btn btn--primary" :disabled="busy||!dirty" @click="save">{{ t(busy?'badgeWall.saving':'badgeWall.save') }}</button><button class="btn" :disabled="busy||!dirty" @click="reset">{{ t('badgeWall.reset') }}</button><RouterLink v-if="session.profile?.handle" :to="lp('/authors/'+session.profile.handle)" class="btn">{{ t('me.publicPage') }}</RouterLink></div>
     <p v-if="saved&&!dirty" role="status" class="subtle">{{ t('badgeWall.saved') }}</p><p v-else-if="dirty" role="status" class="subtle">{{ t('badgeWall.unsaved') }}</p>
    </section>
-   <section v-if="claimable.length" class="badge-claims panel" aria-live="polite">
-    <p>{{ t('badgeWall.claimable',{n:claimable.length}) }}</p>
-    <button class="btn btn--primary" :disabled="!!claiming" @click="claim(claimable.map(b=>b.key))">{{ claiming?t('badgeWall.claiming'):t('badgeWall.claimAll',{total:claimTotal}) }}</button>
-   </section>
-   <p v-if="claimError" class="notice notice--error" role="alert">{{ claimError }}</p>
    <div v-if="own" class="badge-collection-heading"><h2>{{ t('badgeWall.collection',{count:earned,total:data.items.length}) }}</h2><div class="badge-filters" :aria-label="t('badgeWall.filter')"><button v-for="key in ['all','earned','locked']" :key="key" class="btn" :aria-pressed="filter===key" @click="filter=key">{{ t('badgeWall.filter.'+key) }}</button></div></div>
    <section v-for="section in sections" :key="section.category" class="badge-section">
     <h3 class="badge-section__title"><span class="badge-section__label">{{ categoryLabel(section.category) }}</span><span v-if="own" class="badge-section__count">{{ t('badgeWall.categoryProgress',{owned:section.owned,total:section.total}) }}</span></h3>
     <p v-if="own&&hint(section.category)" class="subtle badge-section__hint">{{ hint(section.category) }}</p>
-    <BadgeWall v-if="section.items.length" :items="section.items" :selected="selected" :editable="own" :busy="busy" :claiming="claiming" @change="selected=$event;saved=false" @claim="claim([$event])" />
+    <BadgeWall v-if="section.items.length" :items="section.items" :selected="selected" :editable="own" :busy="busy" @change="selected=$event;saved=false" />
     <details v-if="section.locked.length" class="badge-locked">
      <summary>{{ t('badgeWall.rank.locked',{n:section.locked.length}) }}</summary>
      <BadgeWall :items="section.locked" :selected="selected" :editable="own" :busy="busy" @change="selected=$event;saved=false" />
@@ -102,7 +88,6 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 .badge-curation{padding:var(--s-5);display:grid;gap:var(--s-3)}.badge-curation h2,.badge-collection-heading h2{margin:0;font-size:1.125rem}.badge-curation p{margin:0;line-height:1.6}.badge-visibility{display:flex;align-items:center;gap:var(--s-3);min-height:2.75rem;cursor:pointer}.badge-visibility input{width:1.125rem;height:1.125rem;accent-color:var(--accent)}.badge-actions,.badge-next,.badge-filters{display:flex;gap:var(--s-2);flex-wrap:wrap}.badges-page .btn{min-height:2.75rem;white-space:normal;line-height:1.5}.badge-actions .btn{gap:var(--s-2)}.badge-collection-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);flex-wrap:wrap}.badge-filters .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent-text)}
 .badge-section{display:grid;gap:var(--s-3)}.badge-section__title{display:flex;align-items:baseline;gap:var(--s-2);margin:0;font-size:13px;font-weight:600;color:var(--text-2)}.badge-section__count{font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}.badge-section__hint{margin:0;line-height:1.6;max-width:44rem}
 .badge-locked{display:grid;gap:var(--s-3)}.badge-locked summary{display:flex;align-items:center;min-height:2.75rem;cursor:pointer;color:var(--text-2);font-size:14px;font-weight:600}.badge-locked[open] summary{margin-bottom:var(--s-3)}
-.badge-claims{padding:var(--s-4) var(--s-5);display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);flex-wrap:wrap}.badge-claims p{margin:0;line-height:1.6}
 .badge-next{border-top:1px solid var(--line);padding-top:var(--s-5)}.badge-next .btn{gap:var(--s-2)}.badge-loading{display:grid;gap:var(--s-4)}.badge-loading .ghost{height:84px;border-radius:var(--r-lg)}
 .badge-empty{padding:var(--s-5);display:grid;gap:var(--s-3);justify-items:start}.badge-empty p{margin:0}
 .badge-section__hint:lang(ko),.badge-empty p:lang(ko){word-break:keep-all}

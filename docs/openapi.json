@@ -19827,36 +19827,6 @@
                           "spendingComplete": {
                             "type": "boolean",
                             "description": "False when spending qualification cannot be established; preserve previously verified spending badges."
-                          },
-                          "paidInvites": {
-                            "type": "integer",
-                            "format": "int64",
-                            "minimum": 0,
-                            "description": "Distinct invitees, scoped to the authenticated application, whose first top-up referral reward settled as granted (past the refund window, not the referrer's own payment method). Older providers omit this field."
-                          },
-                          "paidInvites10At": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
-                            "format": "date-time",
-                            "description": "Settlement time of the 10th such invitee, ordered by settlement time; null when fewer than 10."
-                          },
-                          "paidInvites100At": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
-                            "format": "date-time",
-                            "description": "Settlement time of the 100th such invitee; null when fewer than 100."
-                          },
-                          "starlightAt": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
-                            "format": "date-time",
-                            "description": "Later of the moments net USD top-ups first reached US$1,000 (1,000,000,000 micros) and consumption first reached 6,000,000 credits, by running totals using current net order amounts. Null unless both current totals meet the thresholds."
                           }
                         }
                       }

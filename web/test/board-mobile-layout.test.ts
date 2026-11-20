@@ -53,9 +53,9 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("首頁：關注併進排序列", () => {
-  const TABS = ["day", "week", "month", "achievements", "hot", "new", "following", "updated", "random"];
-  const label = (s: string) => i18n.global.t(s === "following" || s === "achievements" ? `board.mode.${s}` : `board.sort.${s}`);
-  it("分頁照站方要的順序排（2026-11-03），「成就」接在月榜後（2026-11-20），「關注」跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
+  const TABS = ["day", "week", "month", "hot", "new", "following", "updated", "random"];
+  const label = (s: string) => i18n.global.t(s === "following" ? "board.mode.following" : `board.sort.${s}`);
+  it("八個分頁照站方要的順序排（2026-11-03），「關注」在第六位、跟其他分頁同一個樣式；榜單頁自己不畫 R18 開關", async () => {
     await mount("/");
     expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(TABS.map(label));
     expect(root.querySelector(".sorts__mode")).toBeNull();
@@ -84,19 +84,9 @@ describe("首頁：關注併進排序列", () => {
     // 點任一個排序就回到角色卡榜
     sortButtons()[1].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "week" });
-    sortButtons()[7].click(); await settle();
+    sortButtons()[6].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "updated" });
     expect(tagsNav()).not.toBeNull();
-  });
-
-  it("點「成就」進成就榜：網址只剩 mode=achievements，其他分頁全部不亮，類型列不畫", async () => {
-    await mount("/?sort=hot&tag=roleplay");
-    const annual = sortButtons().find((b) => b.textContent?.trim() === i18n.global.t("board.mode.achievements"))!;
-    annual.click(); await settle();
-    expect(router.currentRoute.value.query).toEqual({ mode: "achievements" });
-    expect(annual.getAttribute("aria-pressed")).toBe("true");
-    expect(sortButtons().filter((b) => b !== annual).every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
-    expect(tagsNav()).toBeNull();
   });
 });
 
