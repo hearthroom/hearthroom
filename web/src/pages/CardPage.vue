@@ -414,6 +414,12 @@ function setPageTab(next: "intro" | "workshop") {
   void router.push({ query: { ...route.query, tab: next === "workshop" ? "workshop" : undefined, ws: undefined, wp: undefined } });
 }
 let wsGeneration = 0;
+// 工坊清單可能含只有目前帳號能看的項目。切換卡片或帳號時，立即丟掉前一份投影。
+watch([() => card.value?.id, () => session.me?.accountNumId], () => {
+  wsGeneration++;
+  wsPage.value = null;
+  wsFailed.value = false;
+}, { flush: "sync" });
 async function loadWorkshopPage(keepCurrent = false) {
   const c = card.value;
   const n = ++wsGeneration;

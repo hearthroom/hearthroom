@@ -170,3 +170,28 @@ it.each(["hot", "new"])("refreshes a displayed extension's join count from the %
   await flush();
   expect(root.querySelector(".ext-tile__meta")?.textContent).toContain("1 人加入");
 });
+
+it("discards the previous viewer's workshop entries while the next viewer's request is pending or fails", async () => {
+  const ownerOnlyName = "原作者限定的擴充";
+  workshop = () => page({ viewerIsOwner: true, items: [{ ...DLC, name: ownerOnlyName }] });
+  const root = await mount("/cards/abc?tab=workshop", true);
+  expect(root.textContent).toContain(ownerOnlyName);
+
+  let finish: () => void = () => {};
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  workshop = async () => {
+    await pending;
+    return json({ error: "internal" }, 500);
+  };
+  const session = useSession();
+  session.token = { accessToken: "next-test-token", expiresAt: Date.now() + 60_000 };
+  session.me = { accountNumId: 32, nickName: "另一位玩家", avatar: "" };
+  await flush();
+  const shownWhilePending = root.textContent;
+  finish();
+  await flush();
+
+  expect(shownWhilePending).not.toContain(ownerOnlyName);
+  expect(root.textContent).not.toContain(ownerOnlyName);
+  expect(root.textContent).toContain("工坊載入失敗");
+});
