@@ -2,6 +2,7 @@ import { snapshot } from '../snapshot-cache';
 import { HttpError, type Env } from '../types';
 import { memberByHandle } from '../members';
 import { appearanceView } from './appearance';
+import { badgeAp } from '../../shared/badge-rarity';
 import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
 export const ACTIVE_AWARD = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)";
 /** Members who joined before this instant earned the founding-member badge. */
@@ -81,6 +82,25 @@ export async function canManageBadges(env:Env,member:string) {
  return !!await env.DB.prepare("SELECT 1 FROM reviewers WHERE member_id=? AND revoked_at IS NULL AND role IN ('manager','owner')").bind(member).first();
 }
 async function requireManager(env:Env,member:string) {if(!await canManageBadges(env,member))throw new HttpError(403,'community_manager_required');}
+/** 每枚徽章目前的持有人數與全站成員數；30 分鐘快取，持有率只是參考，不必即時。 */
+async function holderCounts(env:Env):Promise<{members:number;holders:Record<string,number>}>{
+ const bucket=Math.floor(Date.now()/1800000);
+ return (await snapshot(env,['badge-holders-v1',bucket],1800,async()=>{
+  const now=Date.now();
+  const [members,rows]=await Promise.all([
+   env.DB.prepare("SELECT COUNT(*) n FROM members WHERE account_class='normal' AND NOT EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=members.id)").first<number>('n'),
+   env.DB.prepare(`SELECT badge,COUNT(*) n FROM community_awards WHERE ${ACTIVE_AWARD} GROUP BY badge`).bind(now).all<{badge:string;n:number}>(),
+  ]);
+  return {members:members??0,holders:Object.fromEntries(rows.results.map(r=>[r.badge,r.n]))};
+ })).value;
+}
+/** 這位成員每枚有效徽章是第幾位拿到的：比他早的有效紀錄數加一（同一刻補發的同名次）。 */
+async function ordinals(env:Env,member:string):Promise<Record<string,number>>{
+ const now=Date.now();
+ const rows=(await env.DB.prepare(`SELECT a.badge,(SELECT COUNT(*) FROM community_awards b WHERE b.badge=a.badge AND b.created_at<a.created_at AND b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at>?))+1 AS n
+  FROM community_awards a WHERE a.member_id=? AND a.revoked_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>?)`).bind(now,member,now).all<{badge:string;n:number}>()).results;
+ return Object.fromEntries(rows.map(r=>[r.badge,r.n]));
+}
 export async function badgeCollection(env:Env,member:string,publicOnly=false):Promise<BadgeCollection> {
  const prefs=await env.DB.prepare('SELECT public_badges,featured_badges FROM community_preferences WHERE member_id=?').bind(member).first<{public_badges:number;featured_badges:string|null}>();
  if(publicOnly&&!prefs?.public_badges)return {items:[],featured:[]};
@@ -91,6 +111,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
+ const [census,order]=await Promise.all([holderCounts(env),ordinals(env,member)]);
  const now=Date.now();
  const crossed:string[]=[];
  let items:CollectedBadge[]=catalog.map(def=>{
@@ -110,14 +131,21 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
    if(metric.progress!==false)item.progress={value:item.state==='earned'?Math.max(value,def.threshold):Math.min(value,def.threshold),target:def.threshold,...(metric.unit?{unit:metric.unit}:{})};
   }
   if(!counts){item.count=item.state==='earned'?1:0;item.firstAt=item.earnedAt;item.lastAt=item.earnedAt;}
+  item.ap=badgeAp(def);
+  if(item.state==='earned'){
+   const held=census.holders[def.key];
+   if(held&&census.members)item.share=Math.round(Math.min(held,census.members)/census.members*1000)/10;
+   if(order[def.key])item.ordinal=order[def.key];
+  }
   return item;
  });
  if(crossed.length)await env.DB.batch(crossed.map(key=>env.DB.prepare("INSERT OR IGNORE INTO community_awards(member_id,badge,source,created_at) VALUES (?,?,'metric-v1',?)").bind(member,key,now)));
  const active=items.filter(b=>b.state==='earned').map(b=>b.key);
+ const apOf=(list:CollectedBadge[])=>list.filter(b=>b.state==='earned').reduce((sum,b)=>sum+(b.ap??0)*Math.max(1,b.count??1),0);
  const chosen:string[]=prefs?.featured_badges===null||prefs?.featured_badges===undefined?items.filter(b=>b.state==='earned'&&b.category!=='spend').map(b=>b.key).slice(0,FEATURED_LIMIT):JSON.parse(prefs.featured_badges);
  const featured=chosen.filter(key=>active.includes(key)).slice(0,FEATURED_LIMIT);
- if(publicOnly){items=items.filter(b=>b.state==='earned'&&(b.category!=='spend'||featured.includes(b.key)));return {items,featured};}
- return {items,featured,public:!!prefs?.public_badges};
+ if(publicOnly){items=items.filter(b=>b.state==='earned'&&(b.category!=='spend'||featured.includes(b.key)));return {items,featured,ap:apOf(items)};}
+ return {items,featured,public:!!prefs?.public_badges,ap:apOf(items)};
 }
 export async function setFeaturedBadges(env:Env,member:string,input:unknown,visibility?:unknown) {
  if(visibility!==undefined&&typeof visibility!=="boolean")throw new HttpError(400,"community_input");

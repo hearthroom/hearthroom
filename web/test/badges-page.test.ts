@@ -82,3 +82,16 @@ it('keeps one section per category even when the list is not grouped',async()=>{
  await open('/me/badges',{items:[rank('rank_clean_day_1'),other('invite_3','invite'),rank('rank_all_week_3','locked')],featured:[],public:true});
  expect([...el.querySelectorAll('.badge-section__label')].map(h=>h.textContent)).toEqual(['Board honors','Invites']);
 });
+
+it('opens your own author badge page in owner mode and moves the old /me/badges address there',async()=>{
+ await open('/authors/fixture/badges',{...wall(),ap:1240,items:[{...wall().items[0],ap:40,share:0.04,ordinal:7}]});
+ expect(mock.request).toHaveBeenCalledWith('/me/community/badges','fixture','GET',undefined);
+ expect(el.querySelector('.badge-curation')).not.toBeNull();
+ expect(el.querySelector('.badges-heading p')?.textContent).toContain('1,240 achievement points');
+ expect(el.querySelector('.badge-tile__ap')?.textContent).toBe('+40 pts');
+ expect(el.querySelector('.badge-tile__census')?.textContent).toBe('Held by under 0.1% of members · Earner #7');
+ expect(el.querySelector('.badges-back')?.getAttribute('href')).toContain('/authors/fixture');
+ await open('/me/badges',wall());
+ const router=(app.config.globalProperties as {$router:import('vue-router').Router}).$router;
+ expect(router.currentRoute.value.path).toBe('/authors/fixture/badges');
+});

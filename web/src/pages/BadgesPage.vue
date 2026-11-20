@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
  * 全部徽章。兩種模式同一個頁面：
- *   自己（/me/badges）：展示管理（最多 5 枚）、公開開關、篩選、進度；沒拿過的榜單榮譽收進摺疊區，不攤平 18 枚。
+ *   自己（/authors/<自己>/badges；舊網址 /me/badges 換成這裡）：展示管理（最多 5 枚）、公開開關、篩選、進度；沒拿過的榜單榮譽收進摺疊區，不攤平 18 枚。
  *   看別人（/authors/:handle/badges）：唯讀，只列已取得（伺服器對外只回已取得、公開的；消費類只在展示時回）。
+ * 一個網址：別人看到公開內容，本人看到同一頁多了管理與進度（成就設計 V2 §4）。
  * 依類別分組，順序照目錄（shared/community-badges 的 BADGE_CATEGORIES）；榜單榮譽在類別內照清水→綜合、日→週→月、第一→前十排。
  */
 import { computed, ref, watch } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
@@ -20,9 +21,12 @@ import CommunityIcon from '@/components/CommunityIcon.vue';
 /** 榜單榮譽說明句裡的結構常數（和後端結算一致）：每張卡比 24 小時／7 天／30 天的熱度，同期最後一張比滿的隔天頒發；同期有熱度的卡不足 10 張只發第一名 */
 const RANK_RULE = { dayHours: 24, weekDays: 7, monthDays: 30, minCards: 10 };
 
-const {t}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute();
+const {t,locale}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute(),router=useRouter();
 const author=computed(()=>typeof route.params.handle==='string'?route.params.handle:'');
-const own=computed(()=>!author.value);
+const own=computed(()=>!author.value||(!!session.profile?.handle&&author.value===session.profile.handle));
+// 舊網址 /me/badges：知道自己的公開 ID 後換成作者頁那一頁，連結與分享都只有一個網址
+watch(()=>!author.value&&session.profile?.handle,handle=>{if(handle)void router.replace({path:lp('/authors/'+handle+'/badges'),hash:route.hash});},{immediate:true});
+const apTotal=computed(()=>data.value?.ap?new Intl.NumberFormat(locale.value).format(data.value.ap):'');
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
 let generation=0;
 const dirty=computed(()=>own.value&&!!data.value&&(JSON.stringify(selected.value)!==JSON.stringify(data.value.featured)||visible.value!==data.value.public));
@@ -55,8 +59,8 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 </script>
 <template>
  <div class="page badges-page">
-  <RouterLink class="badges-back" :to="own?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
-  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ t('badgeWall.earnedCount',{n:earned}) }}</p></div></header>
+  <RouterLink class="badges-back" :to="own&&!author?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
+  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal}):t('badgeWall.earnedCount',{n:earned}) }}</p></div></header>
   <div v-if="loading&&!data" class="badge-loading" aria-live="polite"><span class="sr-only">{{ t('state.loading') }}</span><div v-for="i in 3" :key="i" class="ghost" /></div>
   <div v-if="error" class="notice notice--error" role="alert"><p>{{ error }}</p><button class="btn" :disabled="loading||busy" @click="load()">{{ t(own?'badgeWall.reload':'badgeWall.retry') }}</button></div>
   <template v-if="data">
