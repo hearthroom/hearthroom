@@ -3,6 +3,23 @@ export const RANK_WINDOWS:RankWindow[]=['day','week','month'];
 export const RANK_DURATION:Record<RankWindow,number>={day:86400000,week:7*86400000,month:30*86400000};
 export const RANK_REWARDS:Record<RankWindow,Record<RankBand,number>>={day:{1:5000,3:2500,10:1000},week:{1:50000,3:25000,10:10000},month:{1:100000,3:50000,10:20000}};
 const TAIPEI=8*3600000;
+export const NOV_20_RANK_START = Date.parse('2026-11-20T00:00:00+08:00');
+export const NOV_20_RANK_END = NOV_20_RANK_START + RANK_DURATION.day;
+
+/** Invalid configuration is distinct from a deliberately disabled extension. */
+export function nov20RankExtension(value: string | undefined): number | null {
+  if (value === undefined || value === '0') return 0;
+  if (!/^[1-9][0-9]*$/.test(value)) return null;
+  const minutes = Number(value);
+  const milliseconds = minutes * 60_000;
+  // Harbor accepts a heat interval of at most 30 days.
+  return minutes % 5 === 0 && milliseconds <= RANK_DURATION.month - RANK_DURATION.day
+    ? milliseconds : null;
+}
+
+export function isNov20DailyCohort(cohortStart: number, window: RankWindow): boolean {
+  return window === 'day' && cohortStart === NOV_20_RANK_START;
+}
 /** Heat v2 scores every period not yet settled when v2 shipped (Taipei): day 11-19, the week of 11-16 and November onward; settled periods keep their v1 scores. */
 export const RANK_HEAT_V2_FROM:Record<RankWindow,number>={day:Date.parse('2026-11-19T00:00:00+08:00'),week:Date.parse('2026-11-16T00:00:00+08:00'),month:Date.parse('2026-11-01T00:00:00+08:00')};
 /** The heat formula a card's window is scored with: decided by its cohort, so one period never mixes formulas. */
@@ -17,6 +34,12 @@ export function cohortOf(at:number,window:RankWindow) {
  const end=d.getTime()-TAIPEI;
  const maturityDay=new Date(at+RANK_DURATION[window]+TAIPEI);maturityDay.setUTCHours(0,0,0,0);maturityDay.setUTCDate(maturityDay.getUTCDate()+1);
  return {at:start,end,due:maturityDay.getTime()-TAIPEI};
+}
+export function rankScoreWindow(publishedAt: number, window: RankWindow, nov20Extension: number) {
+  const cohort = cohortOf(publishedAt, window);
+  const extension = isNov20DailyCohort(cohort.at, window) ? nov20Extension : 0;
+  const to = publishedAt + RANK_DURATION[window] + extension;
+  return { to, due: Math.max(cohort.due, to) };
 }
 export interface RankEntrant {id:number;heat:number;talkNum:number;registeredAt:number;adult:boolean}
 export function rankCohort<T extends RankEntrant>(cards:T[],zone:RankZone):(T&{rank:number;band:RankBand})[] {

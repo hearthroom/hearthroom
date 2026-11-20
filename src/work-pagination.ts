@@ -58,7 +58,8 @@ export async function publicCandidatePage(env:Env,candidates:PublicCandidates,po
  const proven:{row:CardRow;raw:number}[]=[],seen=new Set<string>();
  let batch=candidates;
  for(;;){
-  const result=await listCardRowsByIds(env.DB,batch.ids);
+  // Candidate IDs may outlive a card's outage extension inside the public cache.
+  const result=await listCardRowsByIds(env.DB,batch.ids,source);
   const found=new Map(result.filter(r=>r.status==='approved'&&!r.board_hidden&&!r.public_blocked).map(r=>[String(r.id),r]));
   const ordered=batch.ids.map(id=>found.get(id)).filter((r):r is CardRow=>!!r&&(opts.allowNsfw||r.rating!=='R'));
   const visible=await filterPublicRows(env,ordered,opts.surface??'list');

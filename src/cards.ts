@@ -9,6 +9,7 @@ import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import {managedWork} from './work-policy';
 import {fenceManagedWork} from './work-fence';
 import {COVER_HONORS} from './rank-honors';
+import {NOV_20_RANK_END,NOV_20_RANK_START} from './rank-settlement';
 import type {RankHonor} from '../shared/rank-honors';
 
 export interface CardRow {
@@ -106,9 +107,12 @@ const LIST_CARD_COLUMNS = "CAST(c.id AS TEXT) AS id, " + [
   'status','reviewed_hash','featured_at','rating','rating_descriptors','fandom','fandom_key','fandom_qid',
 ].map(column => `c.${column}`).join(', ');
 
-export async function listCardRowsByIds(db:D1Database,ids:string[]):Promise<CardRow[]>{
+export async function listCardRowsByIds(db:D1Database,ids:string[],source?:ListOptions):Promise<CardRow[]>{
  if(!ids.length)return [];
- return (await db.prepare(`SELECT ${LIST_CARD_COLUMNS} FROM cards c WHERE c.id IN(SELECT value FROM json_each(?))`).bind(JSON.stringify(ids)).all<CardRow>()).results;
+ const window=source?.since!==undefined&&source.dailyRankExtension
+  ? boardWindowCondition(source.since,source.boardWindow,source.dailyRankExtension) : null;
+ return (await db.prepare(`SELECT ${LIST_CARD_COLUMNS} FROM cards c WHERE c.id IN(SELECT value FROM json_each(?))${window?` AND ${window.sql}`:''}`)
+  .bind(JSON.stringify(ids),...(window?.binds??[])).all<CardRow>()).results;
 }
 
 /** Decorate only displayed rows. Never reload card content after its access proof. */
@@ -276,6 +280,7 @@ export interface ListOptions {
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
   boardWindow?: string;
+  dailyRankExtension?: number;
   /** feed＝關注動態：依每張卡最近一次事件（新卡或通知過的更新）排，見 FEED_EVENT_AT。 */
   sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated" | "feed";
   /** Internal seed keeps random candidate batches in one ordering. */
@@ -304,6 +309,18 @@ export interface ListResult {
   total: number | null;
   /** 幾個詞全部命中的沒有、改列任一命中的：畫面要說清楚這不是全部符合。 */
   partial?: boolean;
+}
+
+/** Keep the existing moderation credit and add the outage credit to this cohort only. */
+function boardWindowCondition(since: number, board = "", extension = 0) {
+  const registered = "c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0)";
+  if (!extension) return {sql: `${registered} >= ?`, binds: [board, since]};
+  return {
+    sql: `${registered} + CASE WHEN c.id IN (
+      SELECT card_id FROM rank_publications WHERE published_at >= ? AND published_at < ?
+    ) THEN ? ELSE 0 END >= ?`,
+    binds: [board, NOV_20_RANK_START, NOV_20_RANK_END, extension, since],
+  };
 }
 
 /**
@@ -488,8 +505,9 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
-    where.push("c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0) >= ?");
-    binds.push(opts.boardWindow ?? "", opts.since);
+    const window = boardWindowCondition(opts.since, opts.boardWindow, opts.dailyRankExtension);
+    where.push(window.sql);
+    binds.push(...window.binds);
   }
   if (opts.authorMemberId !== undefined) {
     // 作者＝這個成員在任一家供應商上的身分

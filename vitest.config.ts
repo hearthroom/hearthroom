@@ -24,6 +24,8 @@ export default defineConfig({
           REVIEW_ENABLED: "false",
           // 正式發布可開啟 GA；測試明確預設停用，需要時由個案開啟。
           GA4_ENABLED: "false",
+          // Keep unaffected fixtures independent of the one-time production duration.
+          NOV_20_DAILY_RANK_EXTENSION_MINUTES: "0",
         },
       },
     }),

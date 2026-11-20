@@ -7,7 +7,14 @@ interface Entry { body: string; expiresAt: number }
 interface Key { edge: Request; kv: string }
 
 /** Only semantic query parameters enter the key; access and moderation are server-derived. */
-export async function boardKey(raw: string, revision: number, adult: boolean, locale?: string, proofExpiresAt?: number): Promise<Key> {
+export async function boardKey(
+  raw: string,
+  revision: number,
+  adult: boolean,
+  locale?: string,
+  proofExpiresAt?: number,
+  dailyRankExtension = 0,
+): Promise<Key> {
   const source = new URL(raw);
   const url = new URL(source.pathname, source.origin);
   const counts = source.pathname === "/v1/tags/counts";
@@ -34,6 +41,7 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
   url.searchParams.set("_access", adult ? "adult" : "general");
   url.searchParams.set("_moderation", String(revision));
   if (proofExpiresAt !== undefined) url.searchParams.set("_proof", String(proofExpiresAt));
+  if (dailyRankExtension) url.searchParams.set("_dailyRankExtension", String(dailyRankExtension));
   // No bearer, cookie or viewer identity is stored in either cache.
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url.toString()));
   const hash = [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, "0")).join("");

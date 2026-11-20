@@ -3,13 +3,14 @@ import type {RankZone} from '../shared/rank-honors';
 import {reviewEnabled} from './providers';
 import {REVIEW_ERA_START} from './card-reward';
 import {cardRewardTransport} from './card-reward-service';
-import {cohortOf,heatFormulaOf,RANK_DURATION,RANK_WINDOWS} from './rank-settlement';
+import {cohortOf,heatFormulaOf,isNov20DailyCohort,nov20RankExtension,rankScoreWindow,RANK_WINDOWS} from './rank-settlement';
 import {periodOf,rankSnapshot,settleRankSnapshot,supplementRankSnapshot,type AwardEntrant} from './rank-awards';
 import {bumpOp} from './ops-metrics';
 import {annualMaintenance,annualPaymentMaintenance} from './annual-honors';
 type RequestWindow={roleId:string;from:string;to:string;formula?:'v2'};
 type Payment={key:string;accountNo:number;amount:number;campaignRef:string;contentRef:string};
 type EligibleRow={id:number;hosted:string;published_at:number;talk_num:number;rating:string|null;author_num_id:number;member_id:string|null};
+type CachedScore={card_id:number;from_at:number;to_at:number;heat:number;excluded:number};
 export type PayoutReleaseResult={status:'settlement_incomplete'}|{status:'released'|'already_released';awardCount:number;totalAmount:number};
 export const RANK_START=Date.parse('2026-09-24T00:00:00+08:00');
 export const RANK_MONTH_START=Date.parse('2026-10-01T00:00:00+08:00');
@@ -85,6 +86,7 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  const settled=new Set((await env.DB.prepare('SELECT zone,window,period FROM rank_settlements').all<{zone:string;window:string;period:string}>()).results.map(r=>`${r.zone}:${r.window}:${r.period}`));
  const supplemented=new Set((await env.DB.prepare('SELECT zone,window,period FROM rank_settlement_supplements WHERE supplement_key=?').bind(PRE_LAUNCH_SUPPLEMENT_KEY).all<{zone:string;window:string;period:string}>()).results.map(r=>`${r.zone}:${r.window}:${r.period}`));
  const attempts=new Map((await env.DB.prepare('SELECT window,period,attempted_at FROM rank_attempts').all<{window:string;period:string;attempted_at:number}>()).results.map(r=>[`${r.window}:${r.period}`,r.attempted_at]));
+ const extension=nov20RankExtension(env.NOV_20_DAILY_RANK_EXTENSION_MINUTES);
  const dueJobs:{window:typeof RANK_WINDOWS[number];period:string;entries:EligibleRow[];supplementZones:RankZone[]}[]=[];
  for(const window of RANK_WINDOWS){
   const start=window==='month'?RANK_MONTH_START:RANK_START;
@@ -95,9 +97,15 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
    const group=groups.get(period);if(group)group.push(row);else groups.set(period,[row]);
   }
   for(const [period,entries]of groups){
-   if(!entries.every(r=>now>=cohortOf(r.published_at,window).due))continue;
+   if(!entries.every(r=>now>=rankScoreWindow(r.published_at,window,extension??0).due))continue;
    const unsettled=(['clean','all']as const).filter(z=>!settled.has(`${z}:${window}:${period}`));
-   if(unsettled.length){dueJobs.push({window,period,entries,supplementZones:[]});continue;}
+   if(unsettled.length){
+    if(extension===null&&isNov20DailyCohort(cohortOf(entries[0].published_at,window).at,window)){
+     await bumpOp(env.DB,'rank_settlement','day','error');
+     continue;
+    }
+    dueJobs.push({window,period,entries,supplementZones:[]});continue;
+   }
    if(window==='month')continue;
    const preEntries=entries.filter(r=>r.published_at<RANK_PAYOUT_START);
    if(!preEntries.length||!entries.some(r=>r.published_at>=RANK_PAYOUT_START))continue;
@@ -114,26 +122,56 @@ export async function rankMaintenance(env:Env,now=Date.now(),heatBatchBudget=10)
  }
  for(const {window,period,entries,supplementZones}of dueJobs.sort((a,b)=>(attempts.get(`${a.window}:${a.period}`)??0)-(attempts.get(`${b.window}:${b.period}`)??0)).slice(0,3)){
    await env.DB.prepare('INSERT INTO rank_attempts(window,period,attempted_at) VALUES(?,?,?) ON CONFLICT(window,period) DO UPDATE SET attempted_at=excluded.attempted_at').bind(window,period,now).run();
-   const windows=entries.map(r=>{const formula=heatFormulaOf(r.published_at,window);return {roleId:r.hosted,from:new Date(r.published_at).toISOString(),to:new Date(r.published_at+RANK_DURATION[window]).toISOString(),...(formula?{formula}:{})}});
-   const cached=(await env.DB.prepare('SELECT card_id,from_at,to_at,heat,excluded FROM rank_window_scores WHERE window=? AND card_id IN(SELECT value FROM json_each(?))').bind(window,JSON.stringify(entries.map(r=>r.id))).all<{card_id:number;from_at:number;to_at:number;heat:number;excluded:number}>()).results;
-   const publishedByCard=new Map(entries.map(r=>[r.id,r.published_at]));
-   const scoresByCard=new Map(cached.filter(c=>publishedByCard.get(c.card_id)===c.from_at&&c.from_at+RANK_DURATION[window]===c.to_at).map(c=>[c.card_id,c.heat]));
-   const excluded=new Set(cached.filter(c=>c.excluded&&scoresByCard.has(c.card_id)).map(c=>c.card_id));
-   const missing=entries.map((r,i)=>({r,expected:windows[i]})).filter(({r})=>!scoresByCard.has(r.id));
+   const extended=!!extension&&isNov20DailyCohort(cohortOf(entries[0].published_at,window).at,window);
+   const windows=entries.map(r=>{
+    const formula=heatFormulaOf(r.published_at,window);
+    const {to}=rankScoreWindow(r.published_at,window,extension??0);
+    const expected={roleId:r.hosted,from:new Date(r.published_at).toISOString(),to:new Date(to).toISOString(),...(formula?{formula}:{})};
+    return {r,to,expected};
+   });
+   const scoreQuery=env.DB.prepare('SELECT card_id,from_at,to_at,heat,excluded FROM rank_window_scores WHERE window=? AND card_id IN(SELECT value FROM json_each(?))').bind(window,JSON.stringify(entries.map(r=>r.id)));
+   const byCard=new Map(windows.map(item=>[item.r.id,item]));
+   const scoresByCard=new Map<number,number>();
+   const excluded=new Set<number>();
+   const readScores=async()=>{
+    const {results}=await scoreQuery.all<CachedScore>();
+    scoresByCard.clear();
+    excluded.clear();
+    for(const cached of results){
+     const expected=byCard.get(cached.card_id);
+     if(!expected||cached.from_at!==expected.r.published_at||cached.to_at!==expected.to)continue;
+     scoresByCard.set(cached.card_id,cached.heat);
+     if(cached.excluded)excluded.add(cached.card_id);
+    }
+   };
+   await readScores();
+   const missing=windows.filter(({r})=>!scoresByCard.has(r.id));
+   if(extended&&missing.length&&(['clean','all']as const).some(z=>settled.has(`${z}:${window}:${period}`))){
+    // Preserve an existing snapshot and leave the other zone pending for reconciliation.
+    await bumpOp(env.DB,'rank_settlement',window,'pending');continue;
+   }
    try{
     for(let i=0;i<missing.length&&remaining>0;i+=200){
      remaining--;const chunk=missing.slice(i,i+200),scores=await rankTransport.heats(env,chunk.map(c=>c.expected));
      const completed=[];
-     for(const {r,expected}of chunk){
+     for(const {r,to,expected}of chunk){
       // An answer without the requested formula (a Provider before heat v2) is not a score for this window.
       const score=scores.find(s=>s.roleId===expected.roleId&&Date.parse(s.from)===Date.parse(expected.from)&&Date.parse(s.to)===Date.parse(expected.to)&&s.formula===expected.formula);
       const unavailable=scores.unavailable?.some(w=>w.roleId===expected.roleId&&Date.parse(w.from)===Date.parse(expected.from)&&Date.parse(w.to)===Date.parse(expected.to)&&w.formula===expected.formula);
-      if(!score&&unavailable){completed.push({id:r.id,from:r.published_at,to:r.published_at+RANK_DURATION[window],heat:0,excluded:1});scoresByCard.set(r.id,0);excluded.add(r.id);continue;}
+      if(!score&&unavailable){completed.push({id:r.id,from:r.published_at,to,heat:0,excluded:1});scoresByCard.set(r.id,0);excluded.add(r.id);continue;}
       if(score?.complete!==true||!Number.isSafeInteger(score.heat)||score.heat<0)throw new Error('rank_incomplete');
-      completed.push({id:r.id,from:r.published_at,to:r.published_at+RANK_DURATION[window],heat:score.heat,excluded:0});scoresByCard.set(r.id,score.heat);
+      completed.push({id:r.id,from:r.published_at,to,heat:score.heat,excluded:0});scoresByCard.set(r.id,score.heat);
      }
-     await env.DB.prepare(`INSERT OR IGNORE INTO rank_window_scores(card_id,window,from_at,to_at,heat,scored_at,excluded) SELECT json_extract(value,'$.id'),?,json_extract(value,'$.from'),json_extract(value,'$.to'),json_extract(value,'$.heat'),?,json_extract(value,'$.excluded') FROM json_each(?)`).bind(window,now,JSON.stringify(completed)).run();
+     const insert=`INSERT OR IGNORE INTO rank_window_scores(card_id,window,from_at,to_at,heat,scored_at,excluded)
+      SELECT json_extract(value,'$.id'),?,json_extract(value,'$.from'),json_extract(value,'$.to'),json_extract(value,'$.heat'),?,json_extract(value,'$.excluded') FROM json_each(?)`;
+     const payload=JSON.stringify(completed);
+     if(extended){
+      await env.DB.prepare(`${insert} WHERE NOT EXISTS(SELECT 1 FROM rank_settlements WHERE window='day' AND period=? AND zone IN ('clean','all'))
+       ON CONFLICT(card_id,window) DO UPDATE SET from_at=excluded.from_at,to_at=excluded.to_at,heat=excluded.heat,scored_at=excluded.scored_at,excluded=excluded.excluded
+       WHERE rank_window_scores.from_at<>excluded.from_at OR rank_window_scores.to_at<>excluded.to_at`).bind(window,now,payload,period).run();
+     }else await env.DB.prepare(insert).bind(window,now,payload).run();
     }
+    if(extended&&missing.length)await readScores();
    }catch{await bumpOp(env.DB,'rank_settlement',window,'pending');continue;}
    if(scoresByCard.size!==entries.length){await bumpOp(env.DB,'rank_settlement',window,'pending');continue;}
    const cards:AwardEntrant[]=entries.filter(r=>!excluded.has(r.id)).map(r=>({

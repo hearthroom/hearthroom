@@ -12,6 +12,7 @@ import {workshopRoutes} from './workshop-routes';
 import {commentWorkshopAt, drainProviderWorkshopOutbox, WORKSHOP_OUTBOX_MINUTE_BATCH} from './workshop';
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
+import {nov20RankExtension} from './rank-settlement';
 import {badgeStatsMaintenance} from './badge-stats';
 import {annualBoard,isAnnualYear} from './annual-honors';
 import {badgeRewardMaintenance} from './community/badge-rewards';
@@ -435,8 +436,8 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
 /** 榜單與搜尋。匿名可讀。 */
 /** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random／score（評分）／favorites（收藏）／updated（最近更新）不開窗。top 是 hot 的舊名字。 */
 const BOARD_WINDOW: Record<string, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
-function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated"; since?: number; key: string } {
-  if (raw && raw in BOARD_WINDOW) return { sort: "hot", since: Date.now() - BOARD_WINDOW[raw], key: raw };
+function parseBoardSort(raw: string | undefined, now: number): { sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated"; since?: number; key: string } {
+  if (raw && raw in BOARD_WINDOW) return { sort: "hot", since: now - BOARD_WINDOW[raw], key: raw };
   if (raw === "new" || raw === "random" || raw === "relevance" || raw === "score" || raw === "favorites" || raw === "updated") return { sort: raw, key: raw };
   return { sort: "hot", key: "hot" };
 }
@@ -475,10 +476,13 @@ app.get("/v1/cards", async (c) => {
   const offset=clamp(c.req.query('offset'),0,10_000);
   const limit=Math.max(1,clamp(c.req.query('limit'),24,100));
   const position=await publicPosition(c.env,c.req.url,offset,allowNsfw);
-  const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"));
+  const now = Date.now();
+  const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"), now);
   const periods: Record<string, number> = { week: 7, month: 30, quarter: 90, year: 365 };
   const period = c.req.query("period");
-  const since = period && Object.hasOwn(periods, period) ? Date.now() - periods[period] * 86_400_000 : sortSince;
+  const since = period && Object.hasOwn(periods, period) ? now - periods[period] * 86_400_000 : sortSince;
+  const dailyRankExtension = sortKey === "day" && !period
+    ? nov20RankExtension(c.env.NOV_20_DAILY_RANK_EXTENSION_MINUTES) ?? 0 : 0;
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
@@ -501,17 +505,18 @@ app.get("/v1/cards", async (c) => {
     sort,
     since,
     boardWindow: period ? undefined : c.req.query("sort"),
+    dailyRankExtension,
     randomSeed:position.randomSeed,
     limit,
     offset,
   } as const;
-  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c));
+  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, dailyRankExtension);
   const cacheStarted = performance.now();
   const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
   const cachedCandidates=hit?parsePublicCandidates(hit.body):null;
   if (hit&&cachedCandidates) {
-    hit.body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw},source),sort:parseBoardSort(c.req.query('sort')).key});
+    hit.body=JSON.stringify({...await publicCandidatePage(c.env,cachedCandidates,position,{limit,offset,lang:lang(c),allowNsfw},source),sort:sortKey});
     // 快取命中一樣是一次瀏覽行為；結果數這條路上沒有，但空不空看得出來——不標的話中間件會把每次命中都記成 ok，空結果率就偏低
     const q0 = c.req.query("q")?.trim();
     note(c, {

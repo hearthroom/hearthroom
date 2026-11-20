@@ -4,7 +4,7 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES"> & {
   /** Worker secret JSON: fixed audit memberId and SHA-256 of the private blog-only key. Unset disables it. */
   BLOG_PUBLISHER_CONFIG?: string;
   HARBOR_BADGES_CLIENT_ID?:string;
@@ -69,6 +69,7 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   HARBOR_CARD_REWARDS_CLIENT_SECRET?: string;
   /** "true" 才放行 10/17 以前舊卡榜單補發榮譽的積分撥款（預設關閉，只發榮譽徽章）。 */
   RANK_PRE_LAUNCH_PAYOUTS_ENABLED?: string;
+  NOV_20_DAILY_RANK_EXTENSION_MINUTES?: string;
   /** 分享連結訪客雜湊的鑰匙（每週由它衍生一把）；沒設就用 isolate 內的隨機鑰匙 */
   SHARE_VISITOR_SECRET?: string;
   ANALYTICS_ENABLED?: string;
