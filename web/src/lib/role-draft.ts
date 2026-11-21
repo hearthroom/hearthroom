@@ -9,6 +9,7 @@
 import { hasPresetTag } from "../../../shared/tag-catalog";
 import { hasPublicationOpening } from "../../../shared/publication-fields";
 import { readState, type CardStateDraft } from "./card-state";
+import { replyOption } from "./response-defaults";
 
 export interface TalkExampleEntry {
   roleType: "user" | "ai";
@@ -491,7 +492,9 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
     patch.cardMeta = draft.cardMeta;
   }
   // Compare sparse maps by value: do not freeze platform defaults on an untouched card.
-  const defaults = draft.responseDefaults ?? {};
+  const savedDefaults = draft.responseDefaults ?? {};
+  const style = replyOption("style", savedDefaults.style);
+  const defaults = savedDefaults.style && style !== savedDefaults.style ? { ...savedDefaults, style } : savedDefaults;
   const previous = original?.responseDefaults ?? {};
   const defaultsChanged = Object.keys(defaults).length !== Object.keys(previous).length ||
     Object.entries(defaults).some(([key, value]) => previous[key] !== value);

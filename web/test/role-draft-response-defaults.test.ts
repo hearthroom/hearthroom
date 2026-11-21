@@ -1,3 +1,4 @@
+import { replyOption, replyOptions } from '../src/lib/response-defaults';
 import { describe, expect, it } from 'vitest';
 import { cloneDraft, documentPatch, draftFromRoleDetail, makeDraft } from '../src/lib/role-draft';
 
@@ -25,7 +26,7 @@ describe('card author response defaults in the editor draft', () => {
     expect(draft.responseDefaults).toEqual({});
     expect(documentPatch(draft, null)).not.toHaveProperty('responseDefaults');
     draft.responseDefaults = {style:'vivid'};
-    expect(documentPatch(draft, null).responseDefaults).toEqual({style:'vivid'});
+    expect(documentPatch(draft, null).responseDefaults).toEqual({style:'default'});
   });
   it('compares values independently of JSON property order', () => {
     const original = draftFromRoleDetail({responseDefaults:{agency:'protect',pace:'linger'}}, 'en');
@@ -33,4 +34,14 @@ describe('card author response defaults in the editor draft', () => {
     same.responseDefaults = {pace:'linger',agency:'protect'};
     expect(documentPatch(same, original)).not.toHaveProperty('responseDefaults');
   });
+});
+
+it('shows a saved vivid style as standard and migrates only that value on save', () => {
+  const legacy = { style: 'vivid', styleNote: 'Keep pauses.', pace: 'linger' };
+  const original = draftFromRoleDetail({responseDefaults: legacy}, 'en');
+  const draft = cloneDraft(original);
+  expect(replyOption('style', draft.responseDefaults.style)).toBe('default');
+  expect(replyOptions.style).toEqual(['default', 'guided', 'card', 'custom']);
+  expect(documentPatch(draft, original).responseDefaults).toEqual({ ...legacy, style: 'default' });
+  expect(original.responseDefaults).toEqual(legacy);
 });
