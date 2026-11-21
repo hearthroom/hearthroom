@@ -7,7 +7,7 @@ test("public PRs verify the website and Worker without Stage or deployment crede
   const spec = readFileSync(workflow, "utf8");
   assert.match(spec, /^  pull_request:/m);
   assert.match(spec, /permissions:\n  contents: read/);
-  for (const command of ["npm run typecheck", "npm run test:public", "npm run test:api", "npm run build:public"]) {
+  for (const command of ["npm run typecheck", "node scripts/public-sandbox-contract.mjs --check-pin", "npm run test:public", "npm run test:api", "npm run build:public"]) {
     assert.ok(spec.includes(command), command);
   }
   const build = spec.indexOf("npm run build:public");

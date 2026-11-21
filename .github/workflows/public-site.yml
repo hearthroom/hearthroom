@@ -28,6 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node --test scripts/public-ci.test.mjs scripts/test-scope.test.mjs
+      - run: node scripts/public-sandbox-contract.mjs --check-pin
       - run: npm run typecheck
       - run: npm run test:public
       - run: npm run build:public
