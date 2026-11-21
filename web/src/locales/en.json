@@ -1242,6 +1242,7 @@
   "author.supports": "Supports {providers}",
   "card.supports": "Supports {provider}",
   "card.featured": "Featured",
+  "card.back": "Back",
   "card.featuredShort": "Featured",
   "card.featuredHint": "Community pick: the author earns a higher rebate",
   "card.featureAction": "Mark as featured",

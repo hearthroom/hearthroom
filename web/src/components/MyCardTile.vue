@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { stageAvailable } from "@stage-site";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { RouterLink } from "vue-router";
 import { platformPath } from "@/lib/distribution";
 import { compact } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
@@ -92,7 +93,8 @@ onBeforeUnmount(() => listen(false));
   <!-- 進場用 settle 不用 rise：卡片就是首屏最大的內容，要一出現就看得見（見 base.css） -->
   <article class="card settle">
     <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
-    <a :href="detailHref" class="card__art" tabindex="-1" aria-hidden="true">
+    <!-- 站內換頁（RouterLink）：整頁跳過去的話，按返回會把這一頁整頁重開、位置也丟了（玩家 2026-11-21） -->
+    <RouterLink :to="detailHref" class="card__art" tabindex="-1" aria-hidden="true">
       <img v-if="artSrc" :key="artSrc" :src="artSrc" alt="" :loading="eager ? 'eager' : 'lazy'" :fetchpriority="eager ? 'high' : undefined" decoding="async" @error="onArtError" />
       <div v-else class="card__void"><span>{{ initial }}</span></div>
       <!-- 已發布但改過沒送審：狀態標下面再一個琥珀燈（owner 2026-10-05：改了忘記提交，自己都不知道） -->
@@ -106,11 +108,11 @@ onBeforeUnmount(() => listen(false));
         <span v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
       <RatingMark v-if="card.registered && card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
-    </a>
+    </RouterLink>
 
     <div class="card__content">
       <div class="card__title">
-        <h3 class="card__name"><a :href="detailHref" class="card__link">{{ card.name }}</a></h3>
+        <h3 class="card__name"><RouterLink :to="detailHref" class="card__link">{{ card.name }}</RouterLink></h3>
         <!-- 封面那層對讀屏隱藏（跟名字是同一個連結），狀態標在這裡再念一次 -->
         <span class="sr-only">{{ $t(status.descriptionKey ?? status.key) }}<template v-if="card.workVisibility ? card.workVisibility.access==='public'&&card.workVisibility.draftChanged&&card.workVisibility.update==='none' : card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
         <!-- 送審、重新送審都在編輯頁；這裡只留已登記卡的「撤回」（別處沒有這個入口）。
@@ -136,7 +138,7 @@ onBeforeUnmount(() => listen(false));
           <span aria-hidden="true">{{ compact(card.talkNum) }}</span>
         </span>
       </p>
-      <a v-if="card.newComments" :href="`${detailHref}#comments`" class="card__comments" data-new-comments>{{ $t("mine.newComments", { count: card.newComments }, card.newComments) }}</a>
+      <RouterLink v-if="card.newComments" :to="`${detailHref}#comments`" class="card__comments" data-new-comments>{{ $t("mine.newComments", { count: card.newComments }, card.newComments) }}</RouterLink>
 
       <div v-if="hasDetails" class="card__body">
         <template v-if="card.workVisibility">

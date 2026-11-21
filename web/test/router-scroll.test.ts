@@ -24,8 +24,48 @@ it('still scrolls to the top on a new page or on pages that did not ask', () => 
   expect(scrollFor(at('/wallet'), at('/me', {}, { keepScrollOnQuery: true }), null)).toEqual({ top: 0 });
   expect(scrollFor(at('/authors/a', { offset: '24' }), at('/authors/a'), null)).toEqual({ top: 0 });
 });
-it('restores the saved position on back and forward', () => {
-  expect(scrollFor(at('/me'), at('/wallet'), { left: 0, top: 480 })).toEqual({ left: 0, top: 480 });
+it('restores the saved position on back and forward', async () => {
+  const restore = withPageHeight(2000);
+  try { expect(await scrollFor(at('/me'), at('/wallet'), { left: 0, top: 480 })).toEqual({ left: 0, top: 480 }); }
+  finally { restore(); }
+});
+
+/** 讓 jsdom 有一個可以改的頁面高度（視窗高 800）。回傳還原函式。 */
+function withPageHeight(initial: number) {
+  let height = initial;
+  const html = document.documentElement;
+  Object.defineProperty(html, 'scrollHeight', { configurable: true, get: () => height });
+  const innerHeight = window.innerHeight;
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+  const restore = () => { delete (html as any).scrollHeight; Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight }); };
+  return Object.assign(restore, { grow: (h: number) => { height = h; } });
+}
+
+// 搜尋、收藏、作者頁這些列表回來時會重讀一次：結果到之前頁面很短，馬上捲會被截在頂端附近（2026-11-21 搜尋頁 1143 → 187）
+it('waits for a re-fetched list to grow back before restoring the position', async () => {
+  const page = withPageHeight(900);
+  try {
+    let settled: unknown = 'pending';
+    const restoring = Promise.resolve(scrollFor(at('/search', { q: 'x' }), at('/cards/1'), { left: 0, top: 1143 })).then(v => { settled = v; });
+    await new Promise(r => setTimeout(r, 120));
+    expect(settled).toBe('pending');
+    page.grow(2043);
+    await restoring;
+    expect(settled).toEqual({ left: 0, top: 1143 });
+  } finally { page(); }
+});
+
+it('gives up waiting when the reader starts scrolling or leaves the page', async () => {
+  const page = withPageHeight(900);
+  try {
+    const scrolled = scrollFor(at('/search'), at('/cards/1'), { left: 0, top: 1143 });
+    window.dispatchEvent(new Event('wheel'));
+    expect(await scrolled).toBe(false);
+    const left = scrollFor(at('/search'), at('/cards/1'), { left: 0, top: 1143 });
+    history.pushState(null, '', '/elsewhere');
+    page.grow(2043);
+    expect(await left).toBe(false);
+  } finally { page(); history.replaceState(null, '', '/'); }
 });
 
 it('waits for the restored board DOM and corrects to the card anchor', async () => {

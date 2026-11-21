@@ -35,6 +35,7 @@ import { BANNER_THUMB_WIDTH } from "../../../shared/card-thumb";
 import { MIN_SCORE_COUNT } from "../../../shared/card-score";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
+import { readEntry, stepsBack } from "@/lib/card-back";
 import { renderReadme } from "@/lib/card-readme";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
@@ -74,6 +75,15 @@ import { useExtensionJoin } from "@/lib/use-extension-join";
 const route = useRoute();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
+// 返回鈕（桌機）：記下進這張卡的那一筆歷史，按下時連同切分頁推的幾筆一起退回列表；沒有站內上一頁就讓連結帶去首頁（lib/card-back.ts）
+let cardEntry = readEntry(null);
+watch(() => route.params.id, () => { cardEntry = readEntry(window.history.state); }, { immediate: true });
+function leaveCard(event: MouseEvent) {
+  const steps = stepsBack(cardEntry, readEntry(window.history.state));
+  if (steps === null) return;
+  event.preventDefault();
+  router.go(-steps);
+}
 const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
@@ -537,6 +547,12 @@ watch(
 
       <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
 
+      <!-- 桌機的返回鈕：手機有系統返回手勢，版面也留給封面與名字 -->
+      <RouterLink :to="lp('/')" class="btn btn--sm role__back" data-card-back @click="leaveCard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+        <span>{{ $t("card.back") }}</span>
+      </RouterLink>
+
       <header class="role__hero settle" :class="{ 'role__hero--plain': !banner }" :aria-busy="revalidating || undefined">
         <div class="role__art">
           <img v-if="hasArt" :key="artUrls[artStep]" :src="artUrls[artStep]" alt="" :fetchpriority="banner ? 'auto' : 'high'" @error="artStep += 1" />
@@ -735,6 +751,11 @@ watch(
 
 .role__own { position: relative; z-index: 1; margin-bottom: var(--s-4); }
 
+/* 返回鈕：在橫幅上也讀得到（.btn 自帶 --surface 底）；佔掉的高度從橫幅版的上留白扣回，封面位置不動 */
+.role__back { position: relative; z-index: 3; margin-bottom: var(--s-3); padding-inline-start: var(--s-2); }
+.role__back svg { width: 16px; height: 16px; }
+@media (min-width: 821px) { .role__back + .role__hero:not(.role__hero--plain) { margin-top: calc(170px - var(--h-sm) - var(--s-3)); } }
+
 /* ── 身分列 ── */
 /* 疊在下半部之上：手機的「開始對話」固定在畫面底部，是身分列裡的元素，要蓋得過捲上來的評論 */
 .role__hero {
@@ -864,6 +885,7 @@ a.role__author-who:hover { color: var(--accent-text); }
 
 /* ── 手機：單欄，介紹 → 評分 → 評論 → 卡片資訊 → 其他作品；開始對話固定在畫面最底部 ── */
 @media (max-width: 820px) {
+  .role__back { display: none; }
   .role__score-toast, .role__comments :deep(.cmt--card > .toast) { bottom: calc(var(--h-lg) + var(--s-3) * 3 + env(safe-area-inset-bottom)); }
   .role { padding-bottom: calc(var(--s-8) + 72px); }
   .role__banner { --banner-h: 230px; top: calc(-1 * var(--s-4)); }

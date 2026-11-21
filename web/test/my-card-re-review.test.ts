@@ -8,10 +8,11 @@ import MyCardTile from "../src/components/MyCardTile.vue";
 let app: App | null = null;
 afterEach(() => { app?.unmount(); app = null; document.body.innerHTML = ""; });
 
+let router = createRouter({ history: createMemoryHistory(), routes: [] });
 async function mount(card: Record<string, unknown>) {
   const el = document.createElement("div");
   document.body.append(el);
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
   await router.push("/mine");
   app = createApp({ render: () => h(MyCardTile, { card: card as never, busy: false }) }).use(router).use(i18n);
   app.mount(el);
@@ -70,4 +71,18 @@ it("uses a short cover badge and retains the full visibility explanation when au
   expect(el.querySelector(".card__status--access")?.textContent?.trim()).toBe(i18n.global.t("workspace.unknown"));
   expect(el.querySelector(".card__note")?.textContent).toContain(i18n.global.t("visibility.operation.unknown"));
   expect(el.querySelector(".card__title .sr-only")?.textContent).toContain(i18n.global.t("visibility.operation.unknown"));
+});
+
+// 點卡片進詳情要留在站內（換頁不重載）：整頁跳過去的話，按返回會把「我的卡片」整頁重開、位置也丟了（玩家 2026-11-21）
+it("opening a card from my cards stays inside the app", async () => {
+  const el = await mount({ ...base, newComments: 2 });
+  for (const selector of [".card__link", ".card__art", "[data-new-comments]"]) {
+    await router.push("/mine");
+    const link = el.querySelector<HTMLAnchorElement>(selector)!;
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented, selector).toBe(true);
+    await new Promise(r => setTimeout(r));
+    expect(router.currentRoute.value.path, selector).toBe("/cards/100855");
+  }
 });

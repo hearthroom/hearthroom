@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "從卡片頁回到列表時會停在原本的位置，電腦版卡片頁也多了返回鈕。",
+    "zh-Hans": "从卡片页回到列表时会停在原来的位置，电脑版卡片页也多了返回按钮。",
+    "en": "Going back from a card page now keeps your place in the list, and the desktop card page has a Back button.",
+    "ja": "カードページから一覧に戻ると元の位置に戻り、パソコン版のカードページには戻るボタンも付きました。",
+    "ko": "카드 페이지에서 목록으로 돌아가면 원래 보던 위치로 돌아가고, PC 카드 페이지에는 뒤로 버튼도 생겼어요."
+  }
+}

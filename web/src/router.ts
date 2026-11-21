@@ -1,5 +1,6 @@
 import { nextTick } from "vue";
 import { boardScrollPosition } from "./lib/board-memory";
+import { whenScrollable } from "./lib/scroll-restore";
 import { stageSite } from "@stage-site";
 import { createRouter, createWebHistory, type LocationQuery, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
@@ -193,7 +194,8 @@ export const router = createRouter({
 /** 換頁面回頂端、返回鍵回原位；頁面標了 keepScrollOnQuery 時，同一頁只改網址參數（切分區、排序）不動捲動位置。 */
 export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormalized, saved: { left: number; top: number } | null) {
   if (saved && to.meta.board) return nextTick().then(() => new Promise<{ left: number; top: number }>(resolve => requestAnimationFrame(() => resolve(boardScrollPosition(saved)))));
-  if (saved) return saved;
+  // 其他列表回來時重新讀：等它長回原來的高度再捲（lib/scroll-restore.ts）
+  if (saved) return whenScrollable(saved);
   if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
   // 首頁只換類型（窄螢幕的類型浮層、寬螢幕的類型列）不動：浮層開著連點好幾個，每點一下都捲回頂端就得再滑下來（owner 2026-11-03）。
   // 換排序、換榜照舊回頂端；換類型時一併清掉的 offset／cursor 不算別的改動
