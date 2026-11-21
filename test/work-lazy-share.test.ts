@@ -88,3 +88,21 @@ it('tells the author of a private card that only they can open it',async()=>{
  const own=await request(source,'owner',{SHARE_CONTEXT_ENABLED:'true'});expect(own.status).toBe(200);
  expect(await own.json()).toMatchObject({name:'Owned private draft',audience:'author',shareContext:true});
 });
+
+it('falls back to the author view when a readable link cannot be read anonymously',async()=>{
+ // Test-account sources are link-readable by policy but hidden from anonymous content reads.
+ const {source,content,reader}=await fixture();identitiesFor({harbor:{owner:11,reader:42}});await adult(await makeMember(11));await adult(reader);
+ content.mockRejectedValue(new HttpError(404,'role not found'));
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_env,token,id)=>{
+  if(token!=='owner')throw new HttpError(403,'insufficient_scope');
+  return role({roleId:id,authorNumId:11,name:'Owned hidden draft'});
+ });
+ const id=String(await ensureCardNumber(env.DB,'harbor',source));
+ const response=await request(id,'owner');expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({roleId:source,name:'Owned hidden draft',canInteract:false,listed:false,audience:'author'});
+ expect(response.headers.get('Cache-Control')).toContain('no-store');
+ const denied=await request(id,'reader');expect(denied.status).toBe(404);
+ expect(await denied.text()).not.toContain('Owned hidden draft');
+ expect(await getCard(env.DB,source)).toBeNull();
+ for(const table of ['works','card_registrations','managed_work_access'])expect(await env.DB.prepare(`SELECT count(*) AS n FROM ${table}`).first()).toEqual({n:0});
+});
