@@ -74,7 +74,7 @@ The catalog now carries generic milestone definitions next to the original six b
 
 | Metric | Counted from | Tiers |
 |---|---|---|
-| `works_listed` | listed cards the member owns (same ownership rule as the author page, copies excluded, adult cards included) | 3 / 10 / 30 |
+| `works_listed` | listed cards the member owns (same ownership rule as the author page, copies excluded, adult cards included; private and removed cards do not count) | 1 (`first_work`, also granted by the review trigger) / 3 / 10 / 30 |
 | `works_featured` | owned listed cards picked as HearthRoom Featured | 1 |
 | `followers` | members following the author | 10 / 100 |
 | `favorites_received` | saves on the author's listed cards | 10 / 100 |

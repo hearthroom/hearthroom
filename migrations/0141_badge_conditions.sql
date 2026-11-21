@@ -1,0 +1,7 @@
+-- 作者回報「該拿沒拿」（2026-11-21）：作品數徽章只算公開上架的卡，私人卡與已下架的卡不算，條件句沒寫清楚。
+UPDATE community_badge_definitions SET descriptions='{"zh-Hant":"公開上架 3 張卡片（要通過審核，私人卡和已下架的卡不算）。","zh-Hans":"公开上架 3 张卡片（要通过审核，私人卡和已下架的卡不算）。","en":"Have 3 cards publicly listed. Cards must pass review; private and removed cards don''t count.","ja":"審査を通過した公開中のカードを 3 枚にする（非公開や掲載終了のカードは数えません）。","ko":"심사를 통과해 공개된 카드 3장을 모으면 획득해요. 비공개 카드와 내린 카드는 세지 않아요."}' WHERE key='creator_works_3';
+UPDATE community_badge_definitions SET descriptions='{"zh-Hant":"公開上架 10 張卡片（要通過審核，私人卡和已下架的卡不算）。","zh-Hans":"公开上架 10 张卡片（要通过审核，私人卡和已下架的卡不算）。","en":"Have 10 cards publicly listed. Cards must pass review; private and removed cards don''t count.","ja":"審査を通過した公開中のカードを 10 枚にする（非公開や掲載終了のカードは数えません）。","ko":"심사를 통과해 공개된 카드 10장을 모으면 획득해요. 비공개 카드와 내린 카드는 세지 않아요."}' WHERE key='creator_works_10';
+UPDATE community_badge_definitions SET descriptions='{"zh-Hant":"公開上架 30 張卡片（要通過審核，私人卡和已下架的卡不算）。","zh-Hans":"公开上架 30 张卡片（要通过审核，私人卡和已下架的卡不算）。","en":"Have 30 cards publicly listed. Cards must pass review; private and removed cards don''t count.","ja":"審査を通過した公開中のカードを 30 枚にする（非公開や掲載終了のカードは数えません）。","ko":"심사를 통과해 공개된 카드 30장을 모으면 획득해요. 비공개 카드와 내린 카드는 세지 않아요."}' WHERE key='creator_works_30';
+-- 首個過審作品原本只靠審核決定的觸發器發，走更正審核等其他路徑過審的卡發不到（線上 2 人漏發）。
+-- 改成每小時掃描也發：有一張公開上架的卡就算。觸發器照舊，兩邊都是 INSERT OR IGNORE。
+UPDATE community_badge_definitions SET metric='works_listed',threshold=1 WHERE key='first_work' AND metric IS NULL;

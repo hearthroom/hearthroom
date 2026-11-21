@@ -116,3 +116,11 @@ it('says a one-of-a-kind badge is taken and by whom, without breaking the wall',
  expect([...el.querySelectorAll('.badge-tile__taken')].map(p=>p.textContent)).toEqual(["@moon already holds this one, so it won't be awarded again.","Another member already holds this one, so it won't be awarded again."]);
  expect(el.querySelectorAll('.badge-tile')).toHaveLength(3);
 });
+it('tells the owner that invite and spending numbers arrive with a delay',async()=>{
+ const badge=(key:string,category:string)=>({key,icon:'star',category,titles:{en:key},descriptions:{en:'How'},state:'locked',earnedAt:null,expiresAt:null});
+ app.unmount();mock.request.mockResolvedValue({...wall(),items:[badge('invite_3','invite'),badge('spend_1','spend')]});
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:BadgesPage}]});await router.push('/me/badges');app=createApp(BadgesPage).use(router).use(i18n);app.mount(el);await settle();
+ const hints=[...el.querySelectorAll('.badge-section__hint')].map(h=>h.textContent??'');
+ expect(hints).toHaveLength(2);
+ for(const hint of hints){expect(hint).toContain('3 days');expect(hint).not.toMatch(/[{}]/);}
+});

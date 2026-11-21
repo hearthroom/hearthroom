@@ -114,7 +114,7 @@ it('the hourly sweep evaluates every metric and agrees with the owner read',asyn
  await env.DB.prepare("INSERT INTO community_xp VALUES ('e1','123456789012345678',1,250,'chat-v1')").run();
  await communityMaintenance(env);
  const awarded=async(who:string)=>(await env.DB.prepare('SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge').bind(who).all<{badge:string}>()).results.map(r=>r.badge);
- expect(await awarded(author)).toEqual(['creator_favorited_10','creator_featured','creator_followers_10','creator_works_3']);
+ expect(await awarded(author)).toEqual(['creator_favorited_10','creator_featured','creator_followers_10','creator_works_3','first_work']);
  expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','beta_veteran','opening_veteran','member_profile','player_commenter_1','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
  // The owner read measures the same tables, so it finds nothing new to award.
  const before=(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_awards').first<{n:number}>())!.n;

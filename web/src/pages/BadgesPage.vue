@@ -20,6 +20,8 @@ import CommunityIcon from '@/components/CommunityIcon.vue';
 
 /** 榜單榮譽說明句裡的結構常數（和後端結算一致）：每張卡比 24 小時／7 天／30 天的熱度，同期最後一張比滿的隔天頒發；同期有熱度的卡不足 10 張只發第一名 */
 const RANK_RULE = { dayHours: 24, weekDays: 7, monthDays: 30, minCards: 10 };
+/** 邀請與消費的數字由 Harbor 分批同步（src/badge-stats.ts 每輪 8 人，約兩天一輪），最慢約 3 天才計入 */
+const STATS_SYNC = { days: 3 };
 
 const {t,locale}=useI18n(),{lp}=useLocalePath(),session=useSession(),route=useRoute(),router=useRouter();
 const author=computed(()=>typeof route.params.handle==='string'?route.params.handle:'');
@@ -48,7 +50,7 @@ const sections=computed(()=>{
  return out;
 });
 const categoryLabel=(category:string)=>(BADGE_CATEGORIES as readonly string[]).includes(category)?t('badgeWall.category.'+category):category;
-const hint=(category:string)=>category==='rank'?t('badgeWall.rank.hint',RANK_RULE):category==='spend'?t('badgeWall.spend.hint'):'';
+const hint=(category:string)=>category==='rank'?t('badgeWall.rank.hint',RANK_RULE):category==='spend'?t('badgeWall.spend.hint',STATS_SYNC):category==='invite'?t('badgeWall.invite.hint',STATS_SYNC):'';
 async function request<T>(path='',method='GET',body?:unknown){
  if(!own.value)return communityRequest<T>('/community/members/'+encodeURIComponent(author.value)+'/badges');
  const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));return communityRequest<T>('/me/community/badges'+path,token,method,body);
