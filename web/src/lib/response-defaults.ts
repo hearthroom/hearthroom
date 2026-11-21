@@ -1,7 +1,7 @@
 export const replyOptions = {
   agency: ['coauthor', 'protect'],
   style: ['default', 'guided', 'card', 'custom'],
-  perspective: ['card', 'first_character', 'second_user', 'third_limited', 'third_omniscient'],
+  perspective: ['card', 'first_user', 'second_user', 'third_limited', 'third_omniscient'],
   length: ['auto', 'recommended', 'target'],
   pace: ['natural', 'linger', 'advance'],
 } as const;
@@ -12,6 +12,7 @@ export const replyLengthTargets = [200,300,400,500,600,800,1000,1200,1500,2000,2
 export const replyNote = (axis: ReplyAxis) => `${axis}Note`;
 export function replyOption(axis:ReplyAxis, value:string|undefined) {
   if(axis==='style' && value==='vivid')return 'default';
+  if(axis==='perspective' && value==='first_character')return 'card';
   return axis==='agency' ? ({assist:'protect',lines:'coauthor'} as Record<string,string>)[value??''] ?? value ?? '' : value ?? '';
 }
 export const replyKnownKeys = [...replyAxes,...replyAxes.map(replyNote),'customStyle','lengthTarget'];

@@ -1722,10 +1722,13 @@ async function save() {
     if (hasAnyField(fields)) {
       await patchRoleDocument(targetRoleId, fields, token);
       documentSaved = true;
-      if (sent.responseDefaults.style === "vivid" && fields.responseDefaults?.style === "default") {
-        sent.responseDefaults.style = fields.responseDefaults.style;
+      for (const axis of ["style", "perspective"] as const) {
+        const sentValue = sent.responseDefaults[axis];
+        const savedValue = fields.responseDefaults?.[axis];
+        if (!savedValue || savedValue === sentValue) continue;
+        sent.responseDefaults[axis] = savedValue;
         // Preserve any different choice made while the document was saving.
-        if (draft.value.responseDefaults.style === "vivid") draft.value.responseDefaults.style = fields.responseDefaults.style;
+        if (draft.value.responseDefaults[axis] === sentValue) draft.value.responseDefaults[axis] = savedValue;
       }
     }
 

@@ -492,9 +492,10 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
     patch.cardMeta = draft.cardMeta;
   }
   // Compare sparse maps by value: do not freeze platform defaults on an untouched card.
-  const savedDefaults = draft.responseDefaults ?? {};
-  const style = replyOption("style", savedDefaults.style);
-  const defaults = savedDefaults.style && style !== savedDefaults.style ? { ...savedDefaults, style } : savedDefaults;
+  const defaults = { ...draft.responseDefaults };
+  for (const axis of ["style", "perspective"] as const) {
+    if (defaults[axis]) defaults[axis] = replyOption(axis, defaults[axis]);
+  }
   const previous = original?.responseDefaults ?? {};
   const defaultsChanged = Object.keys(defaults).length !== Object.keys(previous).length ||
     Object.entries(defaults).some(([key, value]) => previous[key] !== value);

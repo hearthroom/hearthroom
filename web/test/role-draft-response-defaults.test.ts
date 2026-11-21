@@ -45,3 +45,14 @@ it('shows a saved vivid style as standard and migrates only that value on save',
   expect(documentPatch(draft, original).responseDefaults).toEqual({ ...legacy, style: 'default' });
   expect(original.responseDefaults).toEqual(legacy);
 });
+
+it('shows legacy author perspective as follow card and saves it with notes intact', () => {
+  const defaults = { perspective: 'first_character', perspectiveNote: 'Stay nearby.', style: 'vivid', pace: 'linger' };
+  const original = { ...makeDraft('en'), responseDefaults: defaults };
+  const draft = cloneDraft(original);
+  expect(replyOption('perspective', draft.responseDefaults.perspective)).toBe('card');
+  expect(replyOptions.perspective).toEqual(['card', 'first_user', 'second_user', 'third_limited', 'third_omniscient']);
+  expect(documentPatch(draft, original).responseDefaults).toEqual({ ...defaults, perspective: 'card', style: 'default' });
+  draft.responseDefaults.perspective = 'first_user';
+  expect(documentPatch(draft, original).responseDefaults?.perspective).toBe('first_user');
+});
