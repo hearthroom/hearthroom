@@ -18,7 +18,7 @@ import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import OfficialBadge from "@/components/OfficialBadge.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import CommentPanel from "@/components/CommentPanel.vue";
@@ -35,7 +35,8 @@ import { BANNER_THUMB_WIDTH } from "../../../shared/card-thumb";
 import { MIN_SCORE_COUNT } from "../../../shared/card-score";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
-import { readEntry, stepsBack } from "@/lib/card-back";
+import { entryOf, readEntry } from "@/lib/card-back";
+import CardBackLink from "@/components/CardBackLink.vue";
 import { renderReadme } from "@/lib/card-readme";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
@@ -75,15 +76,11 @@ import { useExtensionJoin } from "@/lib/use-extension-join";
 const route = useRoute();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
-// 返回鈕（桌機）：記下進這張卡的那一筆歷史，按下時連同切分頁推的幾筆一起退回列表；沒有站內上一頁就讓連結帶去首頁（lib/card-back.ts）
-let cardEntry = readEntry(null);
-watch(() => route.params.id, () => { cardEntry = readEntry(window.history.state); }, { immediate: true });
-function leaveCard(event: MouseEvent) {
-  const steps = stepsBack(cardEntry, readEntry(window.history.state));
-  if (steps === null) return;
-  event.preventDefault();
-  router.go(-steps);
-}
+// 返回鈕（桌機）：記下進這張卡的那一筆歷史，按下時連同切分頁推的幾筆一起退回列表；沒有站內上一頁就讓連結帶去首頁。
+// 卡片頁自己推歷史時把它帶在 state 裡，重新掛載（重新整理、從別頁返回到工坊分頁）才讀得回來（lib/card-back.ts）
+const cardEntry = shallowRef(readEntry(null));
+watch(() => route.params.id, () => { cardEntry.value = entryOf(window.history.state); }, { immediate: true });
+const carryEntry = () => ({ cardEntry: { ...cardEntry.value } });
 const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
@@ -421,7 +418,7 @@ const pageTabs = computed(() => [
 function setPageTab(next: "intro" | "workshop") {
   if (next === pageTab.value) return;
   // 推一筆歷史：手機返回鍵回到上一個分頁，不是離開卡片頁
-  void router.push({ query: { ...route.query, tab: next === "workshop" ? "workshop" : undefined, ws: undefined, wp: undefined } });
+  void router.push({ query: { ...route.query, tab: next === "workshop" ? "workshop" : undefined, ws: undefined, wp: undefined }, state: carryEntry() });
 }
 let wsGeneration = 0;
 // 工坊清單可能含只有目前帳號能看的項目。切換卡片或帳號時，立即丟掉前一份投影。
@@ -456,7 +453,7 @@ const toast = ref<InstanceType<typeof UndoToast> | null>(null);
 const say = (text: string, undo?: () => void) => toast.value?.say(text, undo);
 const joiner = useExtensionJoin(() => wsState.value, say);
 const manageOpen = computed(() => route.query.manage === "1" && !!wsState.value);
-function openManage() { void router.push({ query: { ...route.query, manage: "1" } }); }
+function openManage() { void router.push({ query: { ...route.query, manage: "1" }, state: carryEntry() }); }
 // 開管理推了一筆歷史（手機返回鍵關掉它）；從別處直接帶 ?manage=1 進來的（面板的「到工坊管理」開新分頁）沒有上一頁，改成換掉網址
 function closeManage() {
   if (!route.query.manage) return;
@@ -548,10 +545,10 @@ watch(
       <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
 
       <!-- 桌機的返回鈕：手機有系統返回手勢，版面也留給封面與名字 -->
-      <RouterLink :to="lp('/')" class="btn btn--sm role__back" data-card-back @click="leaveCard">
+      <CardBackLink :to="lp('/')" :entry="cardEntry" class="btn btn--sm role__back" data-card-back>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
         <span>{{ $t("card.back") }}</span>
-      </RouterLink>
+      </CardBackLink>
 
       <header class="role__hero settle" :class="{ 'role__hero--plain': !banner }" :aria-busy="revalidating || undefined">
         <div class="role__art">
