@@ -417,6 +417,16 @@ export async function ingestXP(env: Env, event: XPEvent, now = Date.now()) {
     .bind(event.id)
     .first();
 }
+/** Website notification retention window (30 days); enforced independently on reads and purged daily. */
+export const NOTIFICATION_RETENTION_MS = 30 * 86_400_000;
+
+/** Daily purge for expired site notifications, kept off high-frequency Discord polling and hourly maintenance. */
+export async function purgeExpiredCommunityNotifications(env: Env, now = Date.now()): Promise<void> {
+  await env.DB.prepare("DELETE FROM community_notifications WHERE created_at<?")
+    .bind(now - NOTIFICATION_RETENTION_MS)
+    .run();
+}
+
 /** Also runs on the website schedule when the bot is offline. Reads enforce expiry independently. */
 export async function communityMaintenance(env: Env) {
   const now = Date.now();
@@ -427,9 +437,6 @@ export async function communityMaintenance(env: Env) {
       now,
     ),
     env.DB.prepare("DELETE FROM community_nonces WHERE expires<?").bind(now),
-    env.DB.prepare(
-      "DELETE FROM community_notifications WHERE created_at<?",
-    ).bind(now - 2592000000),
   ]);
   // Milestones cross without anyone opening a badge page; the sweep is set-based so
   // its cost does not grow with membership as a per-member loop would.

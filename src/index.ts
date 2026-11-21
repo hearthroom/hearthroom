@@ -39,7 +39,7 @@ export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
 import { listReviewDecisions, correctReview, correctionEligibility } from './review-correction';
 import { pickLocale } from './types';
-import { communityMaintenance } from "./community/service";
+import { communityMaintenance, NOTIFICATION_RETENTION_MS, purgeExpiredCommunityNotifications } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
@@ -77,8 +77,7 @@ import {
   ensureCardNumbers,
   listAuthors,
   listCards,
-  catalogTagCounts,
-  ratingCounts,
+  catalogAndRatingCounts,
   toAuthor,
   toCard,
   topTags,
@@ -595,7 +594,7 @@ app.get("/v1/tags/counts", async (c) => {
   const filters = tagFilters(c);
   if (!filters) return c.json({ error: "too_many_tags" }, 400);
   const scope = { zone: parseZone(c.req.query("zone")), ...filters, allowNsfw, maxRating: maxRatingOf(c) };
-  const [counts, ratings] = await Promise.all([catalogTagCounts(c.env.DB, scope), ratingCounts(c.env.DB, scope)]);
+  const { counts, ratings } = await catalogAndRatingCounts(c.env.DB, scope);
   const body = JSON.stringify({ counts, ratings });
   writeBoardCache(c.env, c.executionCtx, key, body);
   return boardResponse(body, allowNsfw, "origin", moderation.timing);
@@ -984,8 +983,8 @@ app.get("/v1/me/cards", async (c) => {
   if (memberId) {
     const rows = await c.env.DB.prepare(
       `SELECT card_id, CAST(json_extract(extra, '$.count') AS INTEGER) AS n FROM community_notifications
-       WHERE event_key IN (SELECT value FROM json_each(?)) AND member_id=? AND read_at IS NULL`,
-    ).bind(JSON.stringify(nums.map((n) => `card_comments:${n}`)), memberId).all<{ card_id: number; n: number }>();
+       WHERE event_key IN (SELECT value FROM json_each(?)) AND member_id=? AND read_at IS NULL AND created_at>=?`,
+    ).bind(JSON.stringify(nums.map((n) => `card_comments:${n}`)), memberId, Date.now() - NOTIFICATION_RETENTION_MS).all<{ card_id: number; n: number }>();
     for (const r of rows.results) if (r.n > 0) unreadComments.set(Number(r.card_id), r.n);
   }
   const items = body.items.map((item, i) => {
@@ -2632,6 +2631,8 @@ export default {
     if (!(await numericSchemaReady(env.DB))) return;
     if(event.cron===RANK_CRON){
       run(rankMaintenance(cronEnv,event.scheduledTime).catch(async()=>{await bumpOp(cronEnv.DB,'rank_settlement','run','error');}));
+      // Daily cleanup of expired site notifications (moved off Discord pending polling).
+      run(purgeExpiredCommunityNotifications(cronEnv, event.scheduledTime).catch(() => { console.warn("Expired notification cleanup unavailable"); }));
       finish();
       return;
     }

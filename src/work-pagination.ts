@@ -43,8 +43,12 @@ export async function publicPosition(env:Env,url:string,rank:number,adult:boolea
  }catch{throw new HttpError(400,'invalid_cursor');}
 }
 export async function publicCandidates(env:Env,opts:ListOptions,rawOffset:number):Promise<PublicCandidates>{
- const result=await listCardIds(env.DB,{...opts,limit:WORK_READ_BUDGET,offset:rawOffset});
  const filtered=!!(opts.favoritedBy!==undefined||opts.followedBy!==undefined||opts.q||opts.fandom||opts.tags?.length||opts.tagGroups?.length||opts.authorMemberId!==undefined||opts.since!==undefined||opts.maxRating);
+ // publicCandidatePage always returns total=null when any managed work exists;
+ // skip the full-zone COUNT(*) up front instead of computing and discarding it.
+ const managedRow=!filtered?await env.DB.prepare('SELECT EXISTS(SELECT 1 FROM managed_work_access) AS has_managed').first<{has_managed:number}>():null;
+ const skipCount=managedRow?.has_managed===1;
+ const result=await listCardIds(env.DB,{...opts,limit:WORK_READ_BUDGET,offset:rawOffset,skipCount});
  return {version:1,ids:result.rows.map(r=>String(r.id)),rawOffset,more:result.hasNext,total:result.total,filtered,...(result.partial?{partial:true}:{})};
 }
 export function parsePublicCandidates(body:string):PublicCandidates|null{

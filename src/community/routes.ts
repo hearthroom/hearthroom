@@ -33,6 +33,7 @@ import {
   finishProjection,
   ingestXP,
   snowflake,
+  NOTIFICATION_RETENTION_MS,
   type XPEvent,
 } from "./service";
 export const communityRoutes = new Hono<{ Bindings: Env }>();
@@ -314,14 +315,16 @@ app.get("/v1/me/community/notifications", async (c) => {
   const m = await requireMember(c);
   const lang = langOf(c);
   const adult = await memberNsfw(c.env.DB,m.id);
+  const now = Date.now();
+  const retentionCutoff = now - NOTIFICATION_RETENTION_MS;
   // Unread platform account notices come first so a busy list never pushes them out of the 50.
   const rows = await c.env.DB.prepare(
     `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
      a.handle AS actor_handle,a.display_name AS actor_name,n.card_id,c.id AS card_num,c.names AS card_names
      FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id
-     WHERE ${eligibleNotification()} AND n.member_id=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R')) ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
+     WHERE ${eligibleNotification()} AND n.member_id=? AND n.created_at>=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R')) ORDER BY (n.kind IN ('enforcement_notice','enforcement_result') AND n.read_at IS NULL) DESC,n.created_at DESC LIMIT 50`,
   )
-    .bind(Date.now(),Date.now(),m.id,adult.countryRegion)
+    .bind(now,now,m.id,retentionCutoff,adult.countryRegion)
     .all<{ card_id:string|number|null; id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
   const visibility=await updateNoticeVisibility(c.env,rows.results,adult.showNsfw&&!!adult.ageVerifiedAt&&adult.adultConsent);
   // Only public identity leaves here: the actor's handle and display name, the card's number and name.
@@ -338,12 +341,13 @@ app.get("/v1/me/community/notifications/summary", async (c) => {
   const m = await requireMember(c);
   const adult = await memberNsfw(c.env.DB,m.id);
   const locale = c.req.query("lang");
+  const retentionCutoff = Date.now() - NOTIFICATION_RETENTION_MS;
   // The header bell polls this; it is also where the website learns which language the member
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
     await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
-  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R'))`)
-    .bind(m.id,adult.countryRegion)
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND n.created_at>=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R'))`)
+    .bind(m.id,retentionCutoff,adult.countryRegion)
     .first<{ unread: number }>();
   return c.json({ unread: row?.unread ?? 0 });
 });
@@ -588,33 +592,32 @@ app.post("/internal/community/:operation", async (c) => {
     return c.json({ receipts });
   }
   if (op === "pending") {
+    const now = Date.now();
     await c.env.DB.batch([
       c.env.DB.prepare("DELETE FROM community_case_jobs WHERE expires<?").bind(
-        Date.now(),
+        now,
       ),
       c.env.DB.prepare(
         "DELETE FROM discord_link_attempts WHERE expires<?",
-      ).bind(Date.now()),
-      c.env.DB.prepare(
-        "DELETE FROM community_notifications WHERE created_at<?",
-      ).bind(Date.now() - 2592000000),
+      ).bind(now),
     ]);
     const subjects = await c.env.DB.prepare(
       "SELECT discord_id FROM community_subjects WHERE retry_at<? AND (dirty=1 OR synced_at<? OR (EXISTS(SELECT 1 FROM discord_links l WHERE l.discord_id=community_subjects.discord_id AND l.state='active' AND (synced_at<? OR NOT EXISTS(SELECT 1 FROM community_discord_appearance a WHERE a.member_id=l.member_id AND a.link_version=l.version))))) ORDER BY retry_at LIMIT 20",
     )
-      .bind(Date.now(), Date.now() - 86400000, Date.now() - 900000)
+      .bind(now, now - 86400000, now - 900000)
       .all<{ discord_id: string }>();
     const jobs = await c.env.DB.prepare(
       "SELECT j.id FROM community_case_jobs j JOIN discord_links l ON l.member_id=j.member_id AND l.version=j.link_version AND l.state='active' JOIN community_preferences p ON p.member_id=l.member_id AND p.case_access=1 WHERE j.status='pending' AND j.lease_until<? AND j.expires>? LIMIT 10",
     )
-      .bind(Date.now(), Date.now())
+      .bind(now, now)
       .all();
     const notifications = await c.env.DB.prepare(
       // Keep the small opted-in recipient set outside the notification scan.
       // CROSS JOIN fixes that loop order without changing eligibility or limits.
-      `SELECT n.id,n.kind,n.extra,n.card_id FROM community_preferences p JOIN discord_links l ON l.member_id=p.member_id AND l.state='active' CROSS JOIN community_notifications n WHERE n.member_id=p.member_id AND p.discord_dm=1 AND p.notifications=1 AND ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
+      // Expired notifications are filtered here and purged on the daily schedule.
+      `SELECT n.id,n.kind,n.extra,n.card_id FROM community_preferences p JOIN discord_links l ON l.member_id=p.member_id AND l.state='active' CROSS JOIN community_notifications n WHERE n.member_id=p.member_id AND p.discord_dm=1 AND p.notifications=1 AND ${eligibleNotification()} AND n.delivered=0 AND n.retry_at<? AND n.created_at>=? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
     )
-      .bind(Date.now(),Date.now())
+      .bind(now,now - NOTIFICATION_RETENTION_MS,now)
       .all<UpdateNoticeRef>();
     const updateVisibility=await updateNoticeVisibility(c.env,notifications.results);
     const withheld=notifications.results.filter(r=>updateVisibility.newIds.has(r.id)&&!updateVisibility.reachable.has(r.id));
@@ -697,10 +700,11 @@ app.post("/internal/community/:operation", async (c) => {
     return c.json({ ok: true });
   }
   if (op === "notification") {
+    const now = Date.now();
     const n = await c.env.DB.prepare(
-      `SELECT n.id,n.card_id,n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE ${eligibleNotification()} AND n.id=? AND n.delivered=0 AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.id,n.card_id,n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE ${eligibleNotification()} AND n.id=? AND n.delivered=0 AND n.created_at>=? AND ${notificationRecipientEligible()} AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
-      .bind(String(b.id),Date.now())
+      .bind(String(b.id),now - NOTIFICATION_RETENTION_MS,now)
       .first<Parameters<typeof pushLine>[0] & UpdateNoticeRef & { path: string; discord_id: string; locale: string | null }>();
     if (!n) throw new HttpError(404, "not_found");
     const visibility=await updateNoticeVisibility(c.env,[n]);

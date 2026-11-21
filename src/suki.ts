@@ -31,9 +31,17 @@ async function cravingMet(db: D1Database, member: string, now: number, tz: numbe
   const names = tagNamesFor(cravingKey(day)) ?? [];
   if (!names.length) return false;
   const start = Date.parse(`${day}T00:00:00Z`) + tz * 60_000;
-  const row = await db.prepare(`SELECT 1 AS ok FROM member_conversations r
-      JOIN cards c ON c.provider=r.provider AND (c.source_role_id=r.role_id OR c.approved_hosted_role_id=r.role_id), json_each(c.tags) t
-      WHERE r.member_id=? AND r.updated_at>=? AND t.value IN (SELECT value FROM json_each(?)) LIMIT 1`)
+  // Split source_role_id and approved_hosted_role_id lookups into two indexed seeks
+  // with CROSS JOIN so SQLite always drives from the member's few conversations today.
+  const row = await db.prepare(`WITH today_roles AS MATERIALIZED (
+        SELECT DISTINCT provider, role_id FROM member_conversations WHERE member_id=? AND updated_at>=?
+      ), matched_cards AS MATERIALIZED (
+        SELECT c.id FROM today_roles r CROSS JOIN cards c ON c.provider=r.provider AND c.source_role_id=r.role_id
+        UNION
+        SELECT c.id FROM today_roles r CROSS JOIN cards c ON c.approved_hosted_role_id=r.role_id AND c.approved_hosted_role_id IS NOT NULL AND c.provider=r.provider
+      )
+      SELECT 1 AS ok FROM matched_cards mc CROSS JOIN cards c ON c.id=mc.id, json_each(c.tags) t
+      WHERE t.value IN (SELECT value FROM json_each(?)) LIMIT 1`)
     .bind(member, start, JSON.stringify(names)).first<{ ok: number }>().catch(async () => { await count(db, "craving", "error"); return null; });
   return !!row;
 }
@@ -58,7 +66,15 @@ sukiRoutes.post("/v1/me/suki/visit", bodyLimit({ maxSize: 512 }), async (c) => {
   const tz = tzOf(input.tzOffset);
   const now = Date.now();
   const row = await c.env.DB.prepare("SELECT state,recall FROM suki_states WHERE member_id=?").bind(member.id).first<Pick<Row, "state" | "recall">>();
-  const { state, news } = visit(row ? (JSON.parse(row.state) as SukiState) : null, now, await lastStory(c.env.DB, member.id), tz, await cravingMet(c.env.DB, member.id, now, tz));
+  const prev = row ? (JSON.parse(row.state) as SukiState) : null;
+  const storyAt = await lastStory(c.env.DB, member.id);
+  const day = localDay(now, tz);
+  const dayStart = Date.parse(`${day}T00:00:00Z`) + tz * 60_000;
+  // Short-circuit when today's craving was already credited or the member has no conversation today.
+  const met = prev?.cravedDay !== day && storyAt !== null && storyAt >= dayStart
+    ? await cravingMet(c.env.DB, member.id, now, tz)
+    : false;
+  const { state, news } = visit(prev, now, storyAt, tz, met);
   await c.env.DB.prepare(`INSERT INTO suki_states(member_id,state,tz_offset,last_seen,updated_at) VALUES(?,?,?,?,?)
     ON CONFLICT(member_id) DO UPDATE SET state=excluded.state,tz_offset=excluded.tz_offset,last_seen=excluded.last_seen,updated_at=excluded.updated_at`)
     .bind(member.id, JSON.stringify(state), tz, now, now).run();
@@ -95,12 +111,21 @@ export async function sukiRecall(env: Env, now = Date.now()): Promise<number> {
   for (const row of rows) {
     const state = JSON.parse(row.state) as SukiState;
     if (!recallDue(state, row.last_seen, row.last_recall, now, row.tz_offset)) continue;
-    // 明信片：最近玩過、而且在榜上的那張卡
-    const card = await env.DB.prepare(`SELECT cn.num AS num, c.id AS id FROM member_conversations r
-      JOIN cards c ON c.provider=r.provider AND (c.source_role_id=r.role_id OR c.approved_hosted_role_id=r.role_id)
-      JOIN card_numbers cn ON cn.provider=c.provider AND cn.source_role_id=c.source_role_id
-      WHERE r.member_id=? AND c.status='approved' AND COALESCE(c.public_blocked,0)=0 AND c.rating IS NOT 'R'
-      ORDER BY r.updated_at DESC LIMIT 1`).bind(row.member_id).first<{ num: number; id: string }>().catch(async () => {
+    // 明信片：最近玩過、而且在榜上的那張卡（拆開來源與託管索引查法，避免 OR JOIN 全掃 cards）
+    const card = await env.DB.prepare(`WITH recent_roles AS MATERIALIZED (
+        SELECT provider, role_id, updated_at FROM member_conversations WHERE member_id=?
+      ), matched AS (
+        SELECT c.id, c.provider, c.source_role_id, r.updated_at FROM recent_roles r
+          CROSS JOIN cards c ON c.provider=r.provider AND c.source_role_id=r.role_id
+          WHERE c.status='approved' AND COALESCE(c.public_blocked,0)=0 AND c.rating IS NOT 'R'
+        UNION ALL
+        SELECT c.id, c.provider, c.source_role_id, r.updated_at FROM recent_roles r
+          CROSS JOIN cards c ON c.approved_hosted_role_id=r.role_id AND c.approved_hosted_role_id IS NOT NULL AND c.provider=r.provider
+          WHERE c.status='approved' AND COALESCE(c.public_blocked,0)=0 AND c.rating IS NOT 'R'
+      )
+      SELECT cn.num AS num, m.id AS id FROM matched m
+      CROSS JOIN card_numbers cn ON cn.provider=m.provider AND cn.source_role_id=m.source_role_id
+      ORDER BY m.updated_at DESC LIMIT 1`).bind(row.member_id).first<{ num: number; id: string }>().catch(async () => {
       // 查卡失敗就退回「餓了」，但要記下來：不然明信片壞掉了也看不出來
       await count(env.DB, "recall", "card_error");
       return null;

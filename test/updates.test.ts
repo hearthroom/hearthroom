@@ -278,16 +278,17 @@ describe("回報者通知", () => {
   const call = (op: string, b: Record<string, unknown>, now = EVENING) => updateBridge(env as Env, op, b, now) as Promise<any>;
 
   it("具名回報：送達後在綁定的會員鈴鐺裡留一則，標題照會員的語言", async () => {
+    const now = Date.now();
     identities({ reporter: 40001 });
     const member = await makeMember(40001);
     await linked(member);
     use(entry("2026-10-05-a", { reports: [KASE] }));
-    expect((await call("update-pending", { locales: [] })).reports).toEqual([{ entry: "2026-10-05-a", case: KASE }]);
-    const r = await call("update-report", { entry: "2026-10-05-a", case: KASE });
+    expect((await call("update-pending", { locales: [] }, now)).reports).toEqual([{ entry: "2026-10-05-a", case: KASE }]);
+    const r = await call("update-report", { entry: "2026-10-05-a", case: KASE }, now);
     expect(r).toMatchObject({ entry: "2026-10-05-a", case: KASE, url: "https://sukisuki.ai/updates#2026-10-05-a" });
     expect(r.titles.en).toBe("EN 標題 2026-10-05-a");
-    expect(await call("update-report-ack", { entry: "2026-10-05-a", case: KASE, outcome: "delivered", reporter: REPORTER })).toEqual({ accepted: true });
-    expect((await call("update-pending", { locales: [] })).reports).toEqual([]);
+    expect(await call("update-report-ack", { entry: "2026-10-05-a", case: KASE, outcome: "delivered", reporter: REPORTER }, now)).toEqual({ accepted: true });
+    expect((await call("update-pending", { locales: [] }, now)).reports).toEqual([]);
     const notices = await json(await get("/v1/me/community/notifications?lang=ja", { headers: bearer("reporter") }));
     expect(notices.items).toHaveLength(1);
     expect(notices.items[0]).toMatchObject({ kind: "report_shipped", path: "/updates#2026-10-05-a", extra: { entry: "2026-10-05-a", title: "JA 標題 2026-10-05-a" } });

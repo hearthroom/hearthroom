@@ -7,6 +7,32 @@ export async function assertNormalMember(db:D1Database,...ids:(string|null|undef
  const row=await db.prepare(`SELECT 1 FROM members WHERE (account_class='test' OR EXISTS(SELECT 1 FROM legacy_account_fence f WHERE f.member_id=members.id)) AND id IN(SELECT value FROM json_each(?)) LIMIT 1`).bind(JSON.stringify(values)).first();
  if(row)throw new HttpError(403,'test_account_operation_not_allowed');
 }
+export async function excludedAuthorKeys(db:D1Database):Promise<Set<string>>{
+ // Test and retired subjects are a small indexed set. Resolve their identities once,
+ // rather than re-reading cards by primary key or repeating across aggregate batches.
+ const rows=await db.prepare(`WITH excluded_members AS MATERIALIZED (
+  SELECT id FROM members WHERE account_class='test'
+  UNION SELECT m.id FROM legacy_account_fence f CROSS JOIN members m ON m.id=f.member_id
+ )
+ SELECT i.provider,i.external_id FROM excluded_members em CROSS JOIN member_identities i ON i.member_id=em.id
+ UNION SELECT x.provider,x.external_id FROM excluded_members em CROSS JOIN member_connections x ON x.owner_member_id=em.id`)
+  .all<{provider:string;external_id:string}>();
+ return new Set(rows.results.map(r=>`${r.provider}\0${r.external_id}`));
+}
+export async function testCardIdsForRows(
+ db:D1Database,
+ rows:readonly {id:string|number;provider:string;author_num_id:number}[],
+ preloaded?:ReadonlySet<string>,
+):Promise<Set<string>>{
+ if(!rows.length)return new Set();
+ const excluded=preloaded??await excludedAuthorKeys(db);
+ if(!excluded.size)return new Set();
+ const out=new Set<string>();
+ for(const r of rows){
+  if(excluded.has(`${r.provider}\0${r.author_num_id}`))out.add(String(r.id));
+ }
+ return out;
+}
 export async function testCardIds(db:D1Database,ids:string[]):Promise<Set<string>>{
  if(!ids.length)return new Set();
  // A single-card lookup is cheaper with direct indexed owner seeks. The set-based

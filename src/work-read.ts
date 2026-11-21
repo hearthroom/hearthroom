@@ -1,4 +1,4 @@
-import {testCardIds} from './test-accounts';
+import {excludedAuthorKeys,testCardIdsForRows} from './test-accounts';
 import type {CardRow} from './cards';
 import {apiBaseOf} from './providers';
 import {hostingKey} from './hosting';
@@ -94,12 +94,12 @@ export async function localWorkPolicies(env:Env,rows:Pick<CardRow,'source_role_i
 
 // Legacy rows retain their original contract until explicit enrollment. Once
 // enrolled, both the durable D1 fence and current PG policy constrain discovery.
-export async function filterPublicRows(env:Env,rows:CardRow[],surface:VisibilityReadSurface='list'):Promise<{rows:CardRow[];checked:boolean}>{
- return observeRead(env,surface,()=>publicRows(env,rows),result=>result.rows.length===rows.length);
+export async function filterPublicRows(env:Env,rows:CardRow[],surface:VisibilityReadSurface='list',preloadedExcluded?:ReadonlySet<string>):Promise<{rows:CardRow[];checked:boolean}>{
+ return observeRead(env,surface,()=>publicRows(env,rows,preloadedExcluded),result=>result.rows.length===rows.length);
 }
-async function publicRows(env:Env,rows:CardRow[]):Promise<{rows:CardRow[];checked:boolean}>{
+async function publicRows(env:Env,rows:CardRow[],preloadedExcluded?:ReadonlySet<string>):Promise<{rows:CardRow[];checked:boolean}>{
  if(rows.length>WORK_READ_BUDGET)throw new HttpError(503,'visibility_read_budget_exceeded');
- const hidden=await testCardIds(env.DB,rows.map(r=>String(r.id)));
+ const hidden=await testCardIdsForRows(env.DB,rows,preloadedExcluded);
  rows=rows.filter(r=>!hidden.has(String(r.id)));
  const local=await localWorkPolicies(env,rows);
  const candidates=rows.filter(row=>{
@@ -135,13 +135,15 @@ export async function revalidateBoardBody(env:Env,body:string):Promise<string>{
 // a diverged or unavailable batch still rejects the entire aggregate.
 export async function provePublicAggregates(env:Env,zone?:string):Promise<void>{
  let after=0;
+ let excluded:Set<string>|undefined;
  for(;;){
   const result=await env.DB.prepare(`SELECT c.* FROM managed_work_access p JOIN cards c
   ON c.provider=p.provider AND c.source_role_id=p.source_role_id
   WHERE p.access='public' AND p.restriction='none' AND p.sync_state='complete'
   AND p.moderation_revision=p.confirmed_moderation_revision AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
   ${zone?"AND c.zone IN (?, 'all')":''} AND c.id>? ORDER BY c.id LIMIT ?`).bind(...(zone?[zone]:[]),after,WORK_READ_BUDGET).all<CardRow>();
-  const visible=await filterPublicRows(env,result.results,'aggregate');
+  if(result.results.length&&!excluded)excluded=await excludedAuthorKeys(env.DB);
+  const visible=await filterPublicRows(env,result.results,'aggregate',excluded);
   if(visible.rows.length!==result.results.length)throw new HttpError(503,'visibility_sync_pending');
   if(result.results.length<WORK_READ_BUDGET)return;
   after=Number(result.results.at(-1)!.id);
@@ -212,7 +214,7 @@ export async function currentCardsAccess(env:Env,rows:CardRow[],surface:Visibili
 async function cardsAccess(env:Env,rows:CardRow[]):Promise<Map<string,CurrentCardAccess>>{
  const policies=await localWorkPolicies(env,rows),out=new Map<string,CurrentCardAccess>();
  const candidates:CardRow[]=[];
- const hidden=await testCardIds(env.DB,rows.map(r=>String(r.id)));
+ const hidden=await testCardIdsForRows(env.DB,rows);
  for(const row of rows){
   if(hidden.has(String(row.id))){out.set(String(row.id),{managed:true,access:'private',reachable:false,indexable:false,shareRoleId:''});continue;}
   const p=policies.get(row.source_role_id);

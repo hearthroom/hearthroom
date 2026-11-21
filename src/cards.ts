@@ -295,6 +295,8 @@ export interface ListOptions {
   submittedOnly?: boolean;
   /** 看的人開了成人內容（且驗過年齡）；沒開就只列一般內容 */
   allowNsfw?: boolean;
+  /** Skip the unfiltered COUNT(*) when the caller will discard total (e.g. managed discovery pages). */
+  skipCount?: boolean;
 }
 
 export interface ListResult {
@@ -407,6 +409,54 @@ export async function catalogTagCounts(db: D1Database, opts: CountScope): Promis
     for (const key of keys) counts[key] += row.n;
   }
   return counts;
+}
+
+/**
+ * Single-scan computation for /v1/tags/counts: computes ratingCounts (ignoring maxRating)
+ * and catalogTagCounts (applying maxRating) in one GROUP BY c.tags, rating pass.
+ */
+export async function catalogAndRatingCounts(
+  db: D1Database,
+  opts: CountScope,
+): Promise<{ counts: Record<string, number>; ratings: Record<Rating | "none", number> }> {
+  const { where, binds } = countScope({ ...opts, maxRating: undefined });
+  const { results } = await db
+    .prepare(`SELECT c.tags, COALESCE(c.rating, 'none') AS r, COUNT(*) AS n FROM cards c WHERE ${where.join(" AND ")} GROUP BY c.tags, r`)
+    .bind(...binds)
+    .all<{ tags: string; r: string; n: number }>();
+
+  const ratings = Object.fromEntries([...RATINGS, "none"].map((r) => [r, 0])) as Record<Rating | "none", number>;
+  const counts: Record<string, number> = Object.fromEntries(TAG_CATALOG.map((e) => [e.key, 0]));
+  const keysByName = new Map<string, string[]>();
+  for (const entry of TAG_CATALOG) for (const name of new Set(Object.values(entry.names))) {
+    keysByName.set(name, [...(keysByName.get(name) ?? []), entry.key]);
+  }
+
+  const max = opts.maxRating;
+  const allowedRatings = max && max !== "R" ? new Set<string>(RATINGS.slice(0, RATINGS.indexOf(max) + 1)) : null;
+  const ratingMatches = (r: string) =>
+    !allowedRatings || allowedRatings.has(r) || (max === "PG15" && r === "none");
+
+  const parsedKeysCache = new Map<string, Set<string>>();
+  for (const row of results) {
+    if (row.r in ratings) ratings[row.r as Rating | "none"] += row.n;
+    if (!ratingMatches(row.r)) continue;
+    let keys = parsedKeysCache.get(row.tags);
+    if (!keys) {
+      let tags: unknown;
+      try { tags = JSON.parse(row.tags); } catch { /* Preserve SQLite JSON support for legacy values below. */ }
+      if (!Array.isArray(tags)) {
+        tags = (await db.prepare('SELECT value FROM json_each(?)').bind(row.tags).all<{ value: unknown }>()).results.map((r) => r.value);
+      }
+      keys = new Set<string>();
+      for (const tag of tags as unknown[]) if (typeof tag === 'string') {
+        for (const key of keysByName.get(tag) ?? []) keys.add(key);
+      }
+      parsedKeysCache.set(row.tags, keys);
+    }
+    for (const key of keys) counts[key] += row.n;
+  }
+  return { counts, ratings };
 }
 
 /**
@@ -571,7 +621,7 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
   const rows = probe.results.length > opts.limit ? probe.results.slice(0, opts.limit) : probe.results;
 
   let total: number | null = null;
-  if (!filtered) {
+  if (!filtered && !opts.skipCount) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
     const countWhere = [listed(!!opts.allowNsfw,'cards'), NOT_A_COPY("cards"), "provider = 'harbor'"];

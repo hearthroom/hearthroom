@@ -116,7 +116,9 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowU
  if(refresh.length){await refreshWorkAccess(env,refresh.length,[],refresh);provider=await workPolicyGateway.owners(env,'harbor',sources,token);}
  const [cards,policies,reviews,moderation]=await Promise.all([
   env.DB.prepare("SELECT * FROM cards WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<CardRow>(),
-  env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>(),
+  refresh.length
+   ? env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>()
+   : Promise.resolve(before),
   env.DB.prepare(`SELECT * FROM (SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,
    COALESCE(v.source_role_id,s.source_role_id) AS source,
    ROW_NUMBER() OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id) ORDER BY s.submitted_at DESC,s.rowid DESC) AS n,
