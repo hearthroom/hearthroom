@@ -26,6 +26,8 @@ export default defineConfig({
           GA4_ENABLED: "false",
           // Keep unaffected fixtures independent of the one-time production duration.
           NOV_20_DAILY_RANK_EXTENSION_MINUTES: "0",
+          // Keep existing tests synchronous unless a test explicitly enables metrics batching.
+          METRICS_FLUSH_MS: "0",
         },
       },
     }),

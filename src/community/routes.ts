@@ -1,4 +1,5 @@
 import {updateNoticeVisibility,type UpdateNoticeRef} from './update-visibility';
+import {recordCommunityMetric} from '../metrics-buffer';
 import {notificationRecipientEligible} from '../card-update';
 import {eligibleNotification} from '../test-accounts';
 import { changeOfficialAuthor } from '../official-authors';
@@ -74,9 +75,7 @@ for (const path of [
       outcome = e instanceof HttpError && e.status < 500 ? "denied" : "error";
       throw e;
     } finally {
-      c.executionCtx.waitUntil(c.env.DB.prepare(
-        "INSERT INTO community_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1",
-      ).bind(operation,outcome).run().catch(() => { console.warn('Community request metric unavailable'); }));
+      await recordCommunityMetric(c.env.DB, operation, outcome, c.executionCtx);
     }
   });
 app.use("/v1/me/community*", async (c, next) => {

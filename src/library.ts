@@ -7,6 +7,7 @@ import {publicPosition,publicCandidates,publicCandidatePage} from './work-pagina
 import { ownedHistory, bindOwnedHistory } from "./owned-history";
 import { moderationMetrics } from "./moderation";
 import { opsMetrics } from "./ops-metrics";
+import { flushMetrics, recordLibraryMetric } from "./metrics-buffer";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
 import { getCard,cardsByIds,listCards, toCard, type CardRow } from "./cards";
@@ -26,10 +27,11 @@ libraryRoutes.use('/v1/me/*', async (c, next) => {
   await next();
   const operation = c.req.method === 'POST' ? favoriteRestore ? 'favorites_restore' : `conversations_${recentAction}` : `${match[1]}_${c.req.method.toLowerCase()}`;
   const outcome = c.res.status === 207 ? 'error' : c.res.status < 400 ? 'success' : c.res.status < 500 ? 'denied' : 'error';
-  c.executionCtx.waitUntil(c.env.DB.prepare('INSERT INTO library_metrics(operation,outcome,value) VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(operation,outcome).run().catch(() => { console.warn('Library request metric unavailable'); }));
+  await recordLibraryMetric(c.env.DB, operation, outcome, c.executionCtx);
 });
 
 libraryRoutes.get('/metrics', async c => {
+  await flushMetrics(c.env.DB, { force: true });
   const rows = await c.env.DB.prepare('SELECT operation,outcome,value FROM library_metrics ORDER BY operation,outcome').all<{ operation: string; outcome: string; value: number }>();
   const maintenance = await readMaintenance(c.env.DB);
   const lines = rows.results.filter(r => /^(?:(favorites|following|feed|conversations)_(get|put|delete)|conversations_(hide|restore)|favorites_restore)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))

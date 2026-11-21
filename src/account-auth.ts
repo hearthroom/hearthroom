@@ -1,4 +1,5 @@
 import {countryRegionDefaults,initializeCountryRegion} from './country-region';
+import { flushMetrics, recordAuthMetric } from './metrics-buffer';
 import { excludeQABrowser, isQABrowser } from "./qa-browser-context";
 import { Hono, type Context } from 'hono';
 import type { Pending } from './analytics';
@@ -128,7 +129,7 @@ async function limitRoute(c:C){
   if(!allowed)throw new HttpError(429,'auth_route_rate_limited');
 }
 export async function metric(env:Env,operation:string,provider:string,outcome:string){
-  await env.DB.prepare('INSERT INTO account_auth_metrics VALUES(?,?,?,1) ON CONFLICT(operation,provider,outcome) DO UPDATE SET value=value+1').bind(operation,provider,outcome).run();
+  await recordAuthMetric(env.DB,operation,provider,outcome);
 }
 /**
  * 讀取請求由本站登入 session 認人，不必再跨洋問供應商「你是誰」。
@@ -753,6 +754,7 @@ export async function accountAuthMaintenance(env:Env){
 }
 accountAuthRoutes.get('/internal/auth/metrics',async c=>{
   if(!c.env.AUTH_METRICS_SECRET||c.req.header('Authorization')!==`Bearer ${c.env.AUTH_METRICS_SECRET}`)throw new HttpError(401,'unauthorized');
+  await flushMetrics(c.env.DB, { force: true });
   const rows=await c.env.DB.prepare('SELECT * FROM account_auth_metrics').all<{operation:string;provider:string;outcome:string;value:number}>();
   c.header('Cache-Control','no-store');
   return c.text('# TYPE hearthroom_auth_operations_total counter\n'+rows.results.map(r=>`hearthroom_auth_operations_total{operation="${r.operation}",provider="${r.provider}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n');

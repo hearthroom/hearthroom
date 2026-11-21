@@ -28,6 +28,7 @@ import {applyQAIdentity} from './members';
 import { HEAT_CRON, syncHeat } from "./heat";
 import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
 import { bumpOp, bumpHarborProxy } from './ops-metrics';
+import { bindMetricsDb, flushMetricsWithRetry, parseMetricsFlushMs } from './metrics-buffer';
 import { HARBOR_PROXY_PREFIX, proxyHarborApi } from './harbor-api-proxy';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
@@ -2584,13 +2585,17 @@ async function numericSchemaReady(db: D1Database): Promise<boolean> {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const maintenance = await maintenanceResponse(request, env, ctx);
+    const metricsFlushMs = parseMetricsFlushMs(env.METRICS_FLUSH_MS);
+    const scopedEnv = env.DB && metricsFlushMs > 0
+      ? { ...env, DB: bindMetricsDb(env.DB, env.DB, ctx, metricsFlushMs) }
+      : env;
+    const maintenance = await maintenanceResponse(request, scopedEnv, ctx);
     if (maintenance) return maintenance;
     const path = new URL(request.url).pathname;
     // Transport is independent of the community schema, HTML transforms and cookies.
     if (path === HARBOR_PROXY_PREFIX || path.startsWith(`${HARBOR_PROXY_PREFIX}/`)) {
-      const response = await proxyHarborApi(request, env);
-      ctx.waitUntil(bumpHarborProxy(env.DB, request, response.status));
+      const response = await proxyHarborApi(request, scopedEnv);
+      ctx.waitUntil(bumpHarborProxy(scopedEnv.DB, request, response.status));
       return response;
     }
     if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
@@ -2599,67 +2604,89 @@ export default {
     // The maintenance controller reads through its own primary session.
     // A generic request session has no withSession API and must not replace its binding.
     if (path === "/internal/community/draft-transfer-gate" || path === CARD_REWARD_PUBLICATION_PATH) {
-      return app.fetch(request, env, ctx);
+      return app.fetch(request, scopedEnv, ctx);
     }
     const d1 = withD1Session(request, env);
-    return d1.finish(await app.fetch(request, d1.env, ctx));
+    const requestEnv = d1.env.DB && metricsFlushMs > 0
+      ? { ...d1.env, DB: bindMetricsDb(d1.env.DB, env.DB, ctx, metricsFlushMs) }
+      : d1.env;
+    return d1.finish(await app.fetch(request, requestEnv, ctx));
   },
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    try { if ((await readMaintenance(env.DB)).enabled) return; }
+    const metricsFlushMs = parseMetricsFlushMs(env.METRICS_FLUSH_MS);
+    const cronEnv = env.DB && metricsFlushMs > 0
+      ? { ...env, DB: bindMetricsDb(env.DB, env.DB, ctx, metricsFlushMs, { deferToExplicitFlush: true }) }
+      : env;
+    const tasks: Promise<unknown>[] = [];
+    const run = (p: Promise<unknown>) => { tasks.push(p); };
+    const finish = () => {
+      if (!tasks.length) return;
+      ctx.waitUntil(
+        Promise.allSettled(tasks)
+          .then(() => (metricsFlushMs > 0 && env.DB ? flushMetricsWithRetry(env.DB) : undefined))
+          .catch(() => {}),
+      );
+    };
+    try { if ((await readMaintenance(cronEnv.DB)).enabled) return; }
     catch { console.warn("Maintenance status unavailable; scheduled work held"); return; }
     if (!(await numericSchemaReady(env.DB))) return;
     if(event.cron===RANK_CRON){
-      ctx.waitUntil(rankMaintenance(env,event.scheduledTime).catch(async()=>{await bumpOp(env.DB,'rank_settlement','run','error');}));
+      run(rankMaintenance(cronEnv,event.scheduledTime).catch(async()=>{await bumpOp(cronEnv.DB,'rank_settlement','run','error');}));
+      finish();
       return;
     }
     if(event.cron===RANK_RETRY_CRON){
-      ctx.waitUntil(badgeStatsBackfill(env,event.scheduledTime).catch(async()=>{console.warn('Badge qualification backfill unavailable');await bumpOp(env.DB,'badge_stats','backfill','error');}));
+      run(badgeStatsBackfill(cronEnv,event.scheduledTime).catch(async()=>{console.warn('Badge qualification backfill unavailable');await bumpOp(cronEnv.DB,'badge_stats','backfill','error');}));
       const phase=Math.floor(event.scheduledTime/60000)%3;
-      const work=phase===0?rankMaintenance(env,event.scheduledTime):phase===1?rankPaymentMaintenance(env,event.scheduledTime):badgeStatsMaintenance(env,event.scheduledTime);
-      ctx.waitUntil(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(env.DB,'rank_settlement','run','error');}));
+      const work=phase===0?rankMaintenance(cronEnv,event.scheduledTime):phase===1?rankPaymentMaintenance(cronEnv,event.scheduledTime):badgeStatsMaintenance(cronEnv,event.scheduledTime);
+      run(work.catch(async()=>{console.warn('Rank and badge maintenance unavailable');await bumpOp(cronEnv.DB,'rank_settlement','run','error');}));
       // 徽章積分重試：跟付榜單獎金同一拍，各自接錯
-      if(phase===1)ctx.waitUntil(badgeRewardMaintenance(env,event.scheduledTime).catch(async()=>{console.warn('Badge reward retry unavailable');await bumpOp(env.DB,'badge_reward','payout','error');}));
+      if(phase===1)run(badgeRewardMaintenance(cronEnv,event.scheduledTime).catch(async()=>{console.warn('Badge reward retry unavailable');await bumpOp(cronEnv.DB,'badge_reward','payout','error');}));
       // 工坊同步每分鐘拉一批（作者開關、發布、隱藏要盡快出現在卡片頁）；跟排行各自 waitUntil、各自接錯，互不阻擋。
       // 只在這裡拉，每小時那輪不再拉，同一分鐘不會有兩輪重疊。
-      ctx.waitUntil(drainProviderWorkshopOutbox(env,'harbor',WORKSHOP_OUTBOX_MINUTE_BATCH).then((r)=>(r.applied>0?dispatchPush(env):0)).catch(()=>{console.warn('Workshop outbox sync unavailable');}));
+      run(drainProviderWorkshopOutbox(cronEnv,'harbor',WORKSHOP_OUTBOX_MINUTE_BATCH).then((r)=>(r.applied>0?dispatchPush(cronEnv):0)).catch(()=>{console.warn('Workshop outbox sync unavailable');}));
+      finish();
       return;
     }
     if (event.cron === '*/5 * * * *') {
-      ctx.waitUntil(cardRewardMaintenance(env).catch(() => { console.warn('Card reward recovery unavailable'); }));
+      run(cardRewardMaintenance(cronEnv).catch(() => { console.warn('Card reward recovery unavailable'); }));
+      finish();
       return;
     }
     // 熱度有自己的排程（wrangler.toml）：一次執行的子請求額度全給 Harbor 的批次讀。
     if (event.cron === HEAT_CRON) {
-      ctx.waitUntil(
-        syncHeat(env).then((r) => {
+      run(
+        syncHeat(cronEnv).then((r) => {
           console.log("heat sync done", r);
-          emit(env, ctx, { event: "heat_sync", resultCount: r.updated, talk_updated: r.talk_updated, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed || r.skipped ? "partial" : "ok" });
+          emit(cronEnv, ctx, { event: "heat_sync", resultCount: r.updated, talk_updated: r.talk_updated, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed || r.skipped ? "partial" : "ok" });
         }).catch(() => {
           console.warn("heat sync unavailable");
-          emit(env, ctx, { event: "heat_sync", client: "server", outcome: "error" });
+          emit(cronEnv, ctx, { event: "heat_sync", client: "server", outcome: "error" });
         }),
       );
+      finish();
       return;
     }
-    ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
-    ctx.waitUntil(reconcileWorkAccess(env).catch(() => { console.warn('Work access recovery unavailable'); }));
-    ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
+    run(accountAuthMaintenance(cronEnv).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
+    run(reconcileWorkAccess(cronEnv).catch(() => { console.warn('Work access recovery unavailable'); }));
+    run(communityMaintenance(cronEnv).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     // 蘇綺的召回先寫進通知，同一輪就推出去
-    ctx.waitUntil(sukiRecall(env).catch(() => { console.warn("Suki recall unavailable"); return 0; })
-      .then(() => dispatchPush(env)).catch(() => { console.warn("push dispatch unavailable"); }));
-    ctx.waitUntil(cleanAvatars(env));
+    run(sukiRecall(cronEnv).catch(() => { console.warn("Suki recall unavailable"); return 0; })
+      .then(() => dispatchPush(cronEnv)).catch(() => { console.warn("push dispatch unavailable"); }));
+    run(cleanAvatars(cronEnv));
     // 應用獎勵：送出待送的事件、清掉過期的訪客雜湊
-    ctx.waitUntil(rewardEventMaintenance(env, Date.now()).catch(() => { console.warn("reward events maintenance unavailable"); }));
+    run(rewardEventMaintenance(cronEnv, Date.now()).catch(() => { console.warn("reward events maintenance unavailable"); }));
     // 分享活動的截圖：未掛上的過期刪除、保留期到了刪物件
-    ctx.waitUntil(campaignMaintenance(env, Date.now()).catch(() => { console.warn("campaign maintenance unavailable"); }));
+    run(campaignMaintenance(cronEnv, Date.now()).catch(() => { console.warn("campaign maintenance unavailable"); }));
     // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整
-    ctx.waitUntil(maintainUpdates(env, Date.now()).catch(() => { console.warn("updates maintenance unavailable"); }));
-    ctx.waitUntil(
-      syncBatch(env).then((r) => {
+    run(maintainUpdates(cronEnv, Date.now()).catch(() => { console.warn("updates maintenance unavailable"); }));
+    run(
+      syncBatch(cronEnv).then((r) => {
         console.log("sync done", r);
-        emit(env, ctx, { event: "sync", resultCount: r.ok, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed ? "partial" : "ok" });
+        emit(cronEnv, ctx, { event: "sync", resultCount: r.ok, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed ? "partial" : "ok" });
       }),
     );
+    finish();
   },
 };

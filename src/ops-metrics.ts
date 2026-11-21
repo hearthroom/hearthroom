@@ -1,5 +1,6 @@
 import { cardRewardBacklog } from "./card-reward-service";
 import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-api-proxy';
+import { flushMetrics, recordOpsMetric } from "./metrics-buffer";
 
 /**
  * 各功能的操作計數，共用一張表、依 metric 分開輸出。每個 metric 列舉自己的合法值，
@@ -158,14 +159,11 @@ export type OpsMetric = keyof typeof METRICS;
 
 /** outcome 由各指標自己的 outcomes 推出：insufficient 只在發錢的指標合法。 */
 export async function bumpOp<M extends OpsMetric>(db: D1Database, metric: M, operation: string, outcome: (typeof METRICS)[M]["outcomes"][number], by = 1): Promise<void> {
-  try {
-    await db.prepare("INSERT INTO ops_metrics VALUES (?1, ?2, ?3, ?4) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + ?4").bind(metric, operation, outcome, by).run();
-  } catch {
-    console.warn("Ops metric unavailable");
-  }
+  await recordOpsMetric(db, metric, operation, outcome, by, "Ops metric unavailable");
 }
 
 export async function opsMetrics(db: D1Database): Promise<string> {
+  await flushMetrics(db, { force: true });
   const rows = await db.prepare("SELECT metric, operation, outcome, value FROM ops_metrics ORDER BY metric, operation, outcome").all<{ metric: string; operation: string; outcome: string; value: number }>();
   const out: string[] = [];
   for (const [key, m] of Object.entries(METRICS)) {
@@ -206,8 +204,5 @@ export async function bumpHarborProxy(db: D1Database, request: Request, status: 
   const route = proxyRoute(new URL(request.url).pathname.slice('/hh-api'.length));
   const websocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
   const statusClass = `${Math.floor(status / 100)}xx`;
-  try {
-    await db.prepare('INSERT INTO ops_metrics VALUES (?1, ?2, ?3, ?4) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + ?4')
-      .bind('harbor_proxy', `${route}:${websocket}`, statusClass, weight).run();
-  } catch { console.warn('Harbor proxy metric unavailable'); }
+  await recordOpsMetric(db, 'harbor_proxy', `${route}:${websocket}`, statusClass, weight, 'Harbor proxy metric unavailable');
 }

@@ -5,6 +5,7 @@ import type { ProviderId } from "../src/providers";
 import { HttpError } from "../src/types";
 import { mineCache } from "../src/mine";
 import { boardCache } from "../src/index";
+import { resetMetricsBufferForTest } from "../src/metrics-buffer";
 import { evaluateRating, RATING_QUESTIONNAIRE_VERSION } from "../shared/content-rating";
 
 let cacheGeneration = 0;
@@ -45,6 +46,7 @@ for (const table of ["card_update_cooldown_exempt", "card_update_events", "card_
   await env.DB.batch(statements);
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
+  resetMetricsBufferForTest();
 }
 
 const real = { ...upstream };

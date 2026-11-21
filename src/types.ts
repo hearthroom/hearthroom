@@ -4,7 +4,9 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES" | "METRICS_FLUSH_MS"> & {
+  /** Isolate telemetry counter coalescing window in ms ("0" = direct per-event write). */
+  METRICS_FLUSH_MS?: string;
   /** Worker secret JSON: fixed audit memberId and SHA-256 of the private blog-only key. Unset disables it. */
   BLOG_PUBLISHER_CONFIG?: string;
   HARBOR_BADGES_CLIENT_ID?:string;
