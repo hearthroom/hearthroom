@@ -12324,12 +12324,14 @@
                         "anyOf": [
                           {
                             "type": "string",
+                            "description": "Legacy first_character is accepted and stored as card.",
                             "enum": [
                               "card",
-                              "first_character",
+                              "first_user",
                               "second_user",
                               "third_limited",
-                              "third_omniscient"
+                              "third_omniscient",
+                              "first_character"
                             ]
                           },
                           {
@@ -32955,7 +32957,7 @@
             "type": "string",
             "enum": [
               "card",
-              "first_character",
+              "first_user",
               "second_user",
               "third_limited",
               "third_omniscient"
@@ -34145,12 +34147,14 @@
           },
           "perspective": {
             "type": "string",
+            "description": "Legacy first_character is accepted and stored as card.",
             "enum": [
               "card",
-              "first_character",
+              "first_user",
               "second_user",
               "third_limited",
-              "third_omniscient"
+              "third_omniscient",
+              "first_character"
             ]
           },
           "length": {
