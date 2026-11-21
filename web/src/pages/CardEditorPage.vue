@@ -1722,6 +1722,11 @@ async function save() {
     if (hasAnyField(fields)) {
       await patchRoleDocument(targetRoleId, fields, token);
       documentSaved = true;
+      if (sent.responseDefaults.style === "vivid" && fields.responseDefaults?.style === "default") {
+        sent.responseDefaults.style = fields.responseDefaults.style;
+        // Preserve any different choice made while the document was saving.
+        if (draft.value.responseDefaults.style === "vivid") draft.value.responseDefaults.style = fields.responseDefaults.style;
+      }
     }
 
     // 作者資產（含開局呈現與網頁內容）先存：開場白留空時，上游要先看到開場網頁、首屏網頁或開場選項才收。
