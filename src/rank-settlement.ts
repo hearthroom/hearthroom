@@ -6,6 +6,8 @@ const TAIPEI=8*3600000;
 export const NOV_20_DAILY_COHORT_START = Date.parse('2026-11-20T00:00:00+08:00');
 export const NOV_20_OUTAGE_START = Date.parse('2026-11-20T21:20:00+08:00');
 export const NOV_20_OUTAGE_BOARD_SINCE = NOV_20_OUTAGE_START - RANK_DURATION.day;
+/** Worker f5e1464d cutover for the Nov 20 outage compensation; Nov 20 cards expired before this never got live exposure. */
+export const NOV_20_COMPENSATION_DEPLOYED_AT = Date.parse('2026-11-21T12:27:09+08:00');
 
 /** Invalid configuration is distinct from a deliberately disabled extension. */
 export function nov20RankExtension(value: string | undefined): number | null {

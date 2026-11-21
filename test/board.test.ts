@@ -8,7 +8,8 @@ import { buildSearchBody, buildSearchName, buildSearchText } from "../src/upstre
 import { HttpError } from "../src/types";
 import type { Env } from "../src/types";
 import { upstream } from "../src/upstream";
-import { mainSiteDown, makeMember, resetDb, restoreUpstream, role, rolesOnMainSite, testHandle } from "./helpers";
+import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
+import { bearer, mainSiteDown, makeMember, resetDb, restoreUpstream, role, rolesOnMainSite, testHandle, whoAmI } from "./helpers";
 
 /** 直接寫庫，才能精確控制註冊時間與趨勢窗口。 */
 async function seed(f: {
@@ -123,9 +124,88 @@ it("extends public day exposure only for cards eligible at outage start, includi
     expect((await board(configured)).cards).toEqual(["after","moderated","next"]);
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(local("2026-11-21T02:00:00"));
     now.mockReturnValue(local("2026-11-22T04:59:00"));
-    expect(await board(configured)).toEqual({cards:["moderated"],cache:"miss"});
+    expect(await board(configured)).toEqual({cards:["moderated","outage","outage-original"],cache:"miss"});
     now.mockReturnValue(local("2026-11-22T05:01:00"));
-    expect(await board(configured)).toEqual({cards:[],cache:"hit"});
+    expect(await board(configured)).toEqual({cards:["outage","outage-original"],cache:"hit"});
+    now.mockReturnValue(local("2026-11-22T10:59:00"));
+    expect(await board(configured)).toEqual({cards:[],cache:"miss"});
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it("re-exposes Nov 20 cards whose extended exposure expired before the Nov 21 deploy for six live hours", async () => {
+  const local = (time: string) => Date.parse(`${time}+08:00`);
+  const deployAt = local("2026-11-21T12:27:09");
+  const nov19Started = local("2026-11-21T12:27:11") + 904;
+  await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('nov19_rank_outage_exposure_started','true',?)").bind(nov19Started).run();
+  const now = vi.spyOn(Date, "now").mockReturnValue(local("2026-11-22T00:30:00"));
+  try {
+    const expiredCard = local("2026-11-20T02:35:38");
+    const edgeBefore = local("2026-11-20T06:27:09") - 1;
+    const edgeAtDeploy = local("2026-11-20T06:27:09");
+    const liveAtDeploy = local("2026-11-20T11:05:46");
+    const moderatedPast = local("2026-11-20T02:35:38");
+    const nov19 = local("2026-11-19T23:59:00");
+    const afterOutage = local("2026-11-20T21:20:00") + 1;
+    const nov21 = local("2026-11-21T00:00:00");
+    const fresh = local("2026-11-22T00:10:00");
+    for (const [id, publishedAt, rating] of [
+      ["expired-clean", expiredCard, "PG15"],
+      ["expired-adult", expiredCard, "R"],
+      ["edge-before", edgeBefore, "G"],
+      ["edge-at-deploy", edgeAtDeploy, "G"],
+      ["live-at-deploy", liveAtDeploy, "G"],
+      ["moderated-past", moderatedPast, "G"],
+      ["nov19", nov19, "G"],
+      ["after-outage", afterOutage, "G"],
+      ["nov21", nov21, "G"],
+      ["fresh", fresh, "G"],
+    ] as const) {
+      await seed({ id, registeredAt: publishedAt });
+      await env.DB.prepare("UPDATE cards SET rating=? WHERE source_role_id=?").bind(rating, `role-${id}`).run();
+      await env.DB.prepare("INSERT INTO rank_publications SELECT id,?,? FROM cards WHERE source_role_id=?").bind(publishedAt, publishedAt, `role-${id}`).run();
+    }
+    // 4h moderation compensation pushes expiry to 12:35:38 (>= 12:27:09 deploy).
+    await env.DB.prepare("INSERT INTO moderation_events VALUES('fixture-mc-past','harbor','role-moderated-past','moderator','compensation','fixture','{}','{}',?,'one')").bind(deployAt).run();
+    await env.DB.prepare("INSERT INTO moderation_compensation VALUES('fixture-mc-past','harbor','role-moderated-past','day',?)").bind(4 * 3600_000).run();
+    const adultMember = await makeMember(20001);
+    await env.DB.prepare("UPDATE members SET show_nsfw=1, age_verified_at=?, adult_consent_version=?, country_region='TW' WHERE id=?").bind(deployAt, ADULT_CONSENT_VERSION, adultMember).run();
+    whoAmI(20001);
+    const configured = { ...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES: "360" };
+    async function board(binding: Env, query = "sort=day", headers?: HeadersInit) {
+      const ctx = createExecutionContext();
+      const response = await worker.fetch(new Request(`https://reexpose-board.test/v1/cards?${query}`, headers ? { headers } : undefined), binding, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(response.status).toBe(200);
+      const body = await response.json() as { items: { id: string }[] };
+      return { cards: ids(body).sort(), cache: response.headers.get("X-Cache") };
+    }
+
+    // Disabled extension or non-day period does not activate re-exposure.
+    expect(await board(env)).toEqual({ cards: ["fresh"], cache: "miss" });
+    expect((await board(configured, "sort=day&period=week")).cards).toContain("nov19");
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first()).toBeNull();
+
+    // First public daily-board request activates the shared 6h re-exposure window.
+    const expectedClean = ["edge-before", "expired-clean", "fresh"];
+    const expectedAll = ["edge-before", "expired-adult", "expired-clean", "fresh"];
+    expect(await board(configured)).toEqual({ cards: expectedClean, cache: "miss" });
+    expect(await board(configured)).toEqual({ cards: expectedClean, cache: "hit" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAll, cache: "miss" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAll, cache: "hit" });
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(local("2026-11-22T00:30:00"));
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(nov19Started);
+    expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(1);
+
+    // Still active 1ms before 6h expiry; immediately gone at 6h even with warm cache.
+    now.mockReturnValue(local("2026-11-22T06:30:00") - 1);
+    expect((await board(configured)).cards).toEqual(expectedClean);
+    expect((await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).cards).toEqual(expectedAll);
+    now.mockReturnValue(local("2026-11-22T06:30:00"));
+    expect(await board(configured)).toEqual({ cards: ["fresh"], cache: "miss" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: ["fresh"], cache: "miss" });
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(local("2026-11-22T00:30:00"));
   } finally {
     now.mockRestore();
   }

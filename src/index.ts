@@ -12,7 +12,7 @@ import {workshopRoutes} from './workshop-routes';
 import {commentWorkshopAt, drainProviderWorkshopOutbox, WORKSHOP_OUTBOX_MINUTE_BATCH} from './workshop';
 import {allCardHonors} from './rank-honors';
 import {rankMaintenance,rankPaymentMaintenance,RANK_CRON,RANK_RETRY_CRON} from './rank-maintenance';
-import {nov20RankExtension} from './rank-settlement';
+import {NOV_20_COMPENSATION_DEPLOYED_AT,nov20RankExtension} from './rank-settlement';
 import {badgeStatsMaintenance} from './badge-stats';
 import {annualBoard,isAnnualYear} from './annual-honors';
 import {badgeRewardMaintenance} from './community/badge-rewards';
@@ -391,14 +391,15 @@ function parseZone(raw: string | undefined): Zone | undefined {
 }
 
 const NOV19_OUTAGE_EXPOSURE_SETTING = 'nov19_rank_outage_exposure_started';
+const NOV20_OUTAGE_REEXPOSURE_SETTING = 'nov20_rank_outage_reexposure_started';
 
-/** Start the exposure once, on the first public daily-board request served by the new Worker. */
-async function startNov19OutageExposure(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, now: number): Promise<number | null> {
+/** Start an outage exposure window once, on the first eligible public daily-board request. */
+async function startOutageExposure(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, settingKey: string, now: number): Promise<number | null> {
   const db = c.env.DB;
   try {
     const [saved, current] = await db.batch<{updated_at: number}>([
-      db.prepare("INSERT OR IGNORE INTO community_settings (key,value,updated_at) VALUES (?,'true',?)").bind(NOV19_OUTAGE_EXPOSURE_SETTING, now),
-      db.prepare("SELECT updated_at FROM community_settings WHERE key=?").bind(NOV19_OUTAGE_EXPOSURE_SETTING),
+      db.prepare("INSERT OR IGNORE INTO community_settings (key,value,updated_at) VALUES (?,'true',?)").bind(settingKey, now),
+      db.prepare("SELECT updated_at FROM community_settings WHERE key=?").bind(settingKey),
     ]);
     if (saved.meta.changes) c.executionCtx.waitUntil(bumpOp(db, 'rank_settlement', 'exposure', 'success'));
     return current.results[0]?.updated_at ?? null;
@@ -409,17 +410,28 @@ async function startNov19OutageExposure(c: Context<{ Bindings: Env; Variables: {
 }
 
 /** Keep moderation authoritative: a removal changes the key immediately, including KV hits. */
-async function moderationRevision(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, nowForNov19Exposure?: number): Promise<{ revision: number; timing: string; outageStartedAt: number | null }> {
+async function moderationRevision(
+  c: Context<{ Bindings: Env; Variables: { ev: Pending } }>,
+  nowForOutageExposure?: number,
+): Promise<{ revision: number; timing: string; outageStartedAt: number | null; nov20ReexposureStartedAt: number | null }> {
   const started = performance.now();
-  const query = nowForNov19Exposure === undefined
+  const query = nowForOutageExposure === undefined
     ? c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1")
-    : c.env.DB.prepare("SELECT revision,(SELECT updated_at FROM community_settings WHERE key=?) AS outageStartedAt FROM moderation_clock WHERE id=1").bind(NOV19_OUTAGE_EXPOSURE_SETTING);
-  const revision = await query.first<{ revision: number; outageStartedAt?: number | null }>();
+    : c.env.DB.prepare(
+        "SELECT revision,(SELECT updated_at FROM community_settings WHERE key=?) AS outageStartedAt,(SELECT updated_at FROM community_settings WHERE key=?) AS nov20ReexposureStartedAt FROM moderation_clock WHERE id=1",
+      ).bind(NOV19_OUTAGE_EXPOSURE_SETTING, NOV20_OUTAGE_REEXPOSURE_SETTING);
+  const revision = await query.first<{ revision: number; outageStartedAt?: number | null; nov20ReexposureStartedAt?: number | null }>();
   let outageStartedAt = revision?.outageStartedAt ?? null;
-  if (nowForNov19Exposure !== undefined && outageStartedAt === null) {
-    outageStartedAt = await startNov19OutageExposure(c, nowForNov19Exposure);
+  let nov20ReexposureStartedAt = revision?.nov20ReexposureStartedAt ?? null;
+  if (nowForOutageExposure !== undefined) {
+    if (outageStartedAt === null) {
+      outageStartedAt = await startOutageExposure(c, NOV19_OUTAGE_EXPOSURE_SETTING, nowForOutageExposure);
+    }
+    if (nov20ReexposureStartedAt === null && nowForOutageExposure >= NOV_20_COMPENSATION_DEPLOYED_AT) {
+      nov20ReexposureStartedAt = await startOutageExposure(c, NOV20_OUTAGE_REEXPOSURE_SETTING, nowForOutageExposure);
+    }
   }
-  return { revision: revision?.revision ?? 0, outageStartedAt, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
+  return { revision: revision?.revision ?? 0, outageStartedAt, nov20ReexposureStartedAt, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
 }
 
 function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "origin", timing: string): Response {
@@ -510,6 +522,8 @@ app.get("/v1/cards", async (c) => {
   const since = period && Object.hasOwn(periods, period) ? now - periods[period] * 86_400_000 : sortSince;
   const nov19OutageExposure = moderation.outageStartedAt !== null &&
     now < moderation.outageStartedAt + dailyRankExtension;
+  const nov20OutageReexposure = moderation.nov20ReexposureStartedAt !== null &&
+    now < moderation.nov20ReexposureStartedAt + dailyRankExtension;
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
@@ -534,11 +548,14 @@ app.get("/v1/cards", async (c) => {
     boardWindow: period ? undefined : c.req.query("sort"),
     dailyRankExtension,
     nov19OutageExposure,
+    nov20OutageReexposure,
     randomSeed:position.randomSeed,
     limit,
     offset,
   } as const;
-  const outage = dailyRankExtension ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure } : undefined;
+  const outage = dailyRankExtension
+    ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure, nov20Reexposure: nov20OutageReexposure }
+    : undefined;
   const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage);
   const cacheStarted = performance.now();
   const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
