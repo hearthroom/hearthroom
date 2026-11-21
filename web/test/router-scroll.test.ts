@@ -1,5 +1,5 @@
 /** 個人主頁切分區只改網址參數，不能把頁面拉回頂端；換頁面照舊回頂端，返回鍵照舊回原位。 */
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { prepareBoardScroll } from '../src/lib/board-memory';
 import { scrollFor } from '../src/router';
 
@@ -53,6 +53,35 @@ it('waits for a re-fetched list to grow back before restoring the position', asy
     await restoring;
     expect(settled).toEqual({ left: 0, top: 1143 });
   } finally { page(); }
+});
+
+// 正式站讀回（2026-11-21）：手機搜尋有一次超過 3 秒才回來，被截在 1608（原位 3330）
+it('keeps waiting for a slow list well past three seconds', async () => {
+  const page = withPageHeight(900);
+  vi.useFakeTimers();
+  try {
+    let settled: unknown = 'pending';
+    const restoring = Promise.resolve(scrollFor(at('/search'), at('/cards/1'), { left: 0, top: 3330 })).then(v => { settled = v; });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(settled).toBe('pending');
+    page.grow(4174);
+    await vi.advanceTimersByTimeAsync(100);
+    await restoring;
+    expect(settled).toEqual({ left: 0, top: 3330 });
+  } finally { vi.useRealTimers(); page(); }
+});
+
+it('stops waiting at ten seconds when the list never grows back', async () => {
+  const page = withPageHeight(900);
+  vi.useFakeTimers();
+  try {
+    let settled: unknown = 'pending';
+    void Promise.resolve(scrollFor(at('/search'), at('/cards/1'), { left: 0, top: 3330 })).then(v => { settled = v; });
+    await vi.advanceTimersByTimeAsync(9900);
+    expect(settled).toBe('pending');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(settled).toEqual({ left: 0, top: 3330 });
+  } finally { vi.useRealTimers(); page(); }
 });
 
 it('gives up waiting when the reader starts scrolling or leaves the page', async () => {
