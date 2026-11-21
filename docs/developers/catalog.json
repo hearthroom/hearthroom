@@ -2724,5 +2724,6 @@
   "d39b1a8d084a7": "Members counted in total who are ineligible for public follow lists.",
   "d2af53d0f5fe2": "Pagination offset; page size is 30.",
   "d5e24bdb91f16": "The author does not make this list public.",
-  "d71525e8ff9bb": "Your eligible followers, regardless of your own list settings or theirs."
+  "d71525e8ff9bb": "Your eligible followers, regardless of your own list settings or theirs.",
+  "db262677e942b": "Legacy first_character is accepted and stored as card."
 }
