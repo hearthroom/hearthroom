@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "模型選單現在預設按「玩家順序」排列模型與線路。",
+    "zh-Hans": "模型菜单现在默认按「玩家顺序」排列模型和线路。",
+    "en": "The model picker now uses Player order as the default for models and lanes.",
+    "ja": "モデル選択では、モデルと回線が初期設定で「プレイヤー順」に並びます。",
+    "ko": "모델 선택 메뉴는 이제 모델과 회선을 기본으로 ‘플레이어 순서’에 따라 표시해요."
+  }
+}
