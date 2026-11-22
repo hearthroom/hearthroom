@@ -1678,11 +1678,15 @@ app.post("/v1/cards", async (c) => {
   await recordRewardDevice(c.env.DB, memberId, deviceHash, now);
   const existing = await getCard(c.env.DB, roleId, provider);
   let packId: string | null = null;
+  let checkedUsage: Awaited<ReturnType<typeof weeklyUsageForMember>> | null = null;
+  let checkedLimit = 0;
   if (await needsFirstRegistration(c.env.DB, provider, roleId)) {
     const [usage, limit] = await Promise.all([
       weeklyUsageForMember(c.env.DB, memberId, now, deviceHash),
       weeklyLimitAt(c.env.DB, now),
     ]);
+    checkedUsage = usage;
+    checkedLimit = limit;
     if (!usage.allOwnWorks.has(`${provider}:${roleId}`) && usage.effectiveFreeWorks.size >= limit) {
       packId = await openPack(c.env.DB, memberId);
       if (!packId) {
@@ -1694,21 +1698,36 @@ app.post("/v1/cards", async (c) => {
         throw new HttpError(403, "weekly_quota_exceeded", undefined, blockedByDevice ? { reason: "device_shared" } : undefined);
       }
     }
-    if (usage.deviceCapActive) {
-      await bumpOp(
-        c.env.DB,
-        "card_reward_device_cap",
-        "check",
-        usage.exempt ? "exempt" : !usage.hasDeviceSignal ? "fallback_account" : "allowed",
-      );
-    }
   }
 
   {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,deviceHash,updateKind:body.updateKind,updateNote:body.updateNote,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
+    let receipt: Awaited<ReturnType<typeof submitHosted>>;
+    try {
+      receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,deviceHash,updateKind:body.updateKind,updateNote:body.updateNote,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
+    } catch (err) {
+      if (err instanceof HttpError && err.message === "weekly_quota_exceeded") {
+        const latest = await weeklyUsageForMember(c.env.DB, memberId, now, deviceHash);
+        const limit = checkedLimit || (await weeklyLimitAt(c.env.DB, now));
+        const blockedByDevice = latest.deviceShared && latest.ownFreeWorks.size < limit;
+        if (latest.deviceCapActive) {
+          await bumpOp(c.env.DB, "card_reward_device_cap", "check", blockedByDevice ? "blocked_device" : "blocked_account");
+        }
+        note(c, { event: "register", subject: roleId, detail: blockedByDevice ? "quota_device" : "quota" });
+        throw new HttpError(403, "weekly_quota_exceeded", undefined, blockedByDevice ? { reason: "device_shared" } : undefined);
+      }
+      throw err;
+    }
+    if (checkedUsage?.deviceCapActive) {
+      await bumpOp(
+        c.env.DB,
+        "card_reward_device_cap",
+        "check",
+        checkedUsage.exempt ? "exempt" : !checkedUsage.hasDeviceSignal ? "fallback_account" : "allowed",
+      );
+    }
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);

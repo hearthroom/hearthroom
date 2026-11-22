@@ -414,7 +414,32 @@ export async function notifyCampaignRuleChange(
   const path = `/campaign/${campaign.slug}`;
   const extra = JSON.stringify({ slug: campaign.slug, effectiveAt });
   const keyPrefix = `campaign_quota_device:${campaign.slug}:${effectiveAt}:`;
-  const res = await db.prepare(
+  const checkPrior = async (): Promise<{ slug: string; effectiveAt: number; delivered: number } | null> => {
+    const prior = await db.prepare(
+      "SELECT subject_kind, subject_id, action, after_json FROM audit_log WHERE actor_member_id = ? AND operation_id = ?",
+    ).bind(actorMemberId, op).first<{ subject_kind: string; subject_id: string; action: string; after_json: string | null }>();
+    if (!prior) return null;
+    const after = prior.after_json ? (JSON.parse(prior.after_json) as { slug?: string; effectiveAt?: number }) : {};
+    if (
+      prior.subject_kind !== "card_reward" ||
+      prior.subject_id !== campaign.id ||
+      prior.action !== "rule_notice" ||
+      after.slug !== campaign.slug ||
+      after.effectiveAt !== effectiveAt
+    ) {
+      throw new HttpError(409, "card_reward_conflict");
+    }
+    const existing = await db.prepare(
+      "SELECT COUNT(*) AS n FROM community_notifications WHERE SUBSTR(event_key, 1, LENGTH(?1)) = ?1",
+    ).bind(keyPrefix).first<{ n: number }>();
+    await bumpOp(db, "card_reward_device_cap", "notice", "replay");
+    return { slug: campaign.slug, effectiveAt, delivered: Number(existing?.n ?? 0) };
+  };
+
+  const replayed = await checkPrior();
+  if (replayed) return replayed;
+
+  const insertNotif = db.prepare(
     `INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, extra)
      SELECT ?1 || m.id, m.id, 'campaign_rule_notice', ?2, ?3, ?4
      FROM members m
@@ -434,20 +459,33 @@ export async function notifyCampaignRuleChange(
              ) = m.id
          )
        )`,
-  ).bind(keyPrefix, path, now, extra, campaign.id, campaign.startsAt, campaign.endsAt).run();
-  const delivered = res.meta.changes ?? 0;
-  await db.batch([
-    auditStmt(db, {
-      subjectKind: "card_reward",
-      subjectId: campaign.id,
-      actorMemberId,
-      actorKind: "human",
-      action: "rule_notice",
-      after: { slug: campaign.slug, effectiveAt, delivered },
-      operationId: op,
-      now,
-    }),
-  ]);
+  ).bind(keyPrefix, path, now, extra, campaign.id, campaign.startsAt, campaign.endsAt);
+
+  let results: D1Result[];
+  try {
+    results = await db.batch([
+      auditStmt(db, {
+        subjectKind: "card_reward",
+        subjectId: campaign.id,
+        actorMemberId,
+        actorKind: "human",
+        action: "rule_notice",
+        after: { slug: campaign.slug, effectiveAt },
+        operationId: op,
+        now,
+      }),
+      insertNotif,
+    ]);
+  } catch (err) {
+    if (String(err).includes("UNIQUE")) {
+      const concurrent = await checkPrior();
+      if (concurrent) return concurrent;
+      throw new HttpError(409, "card_reward_conflict");
+    }
+    throw err;
+  }
+
+  const delivered = results[1]?.meta.changes ?? 0;
   await bumpOp(db, "card_reward_device_cap", "notice", "delivered", delivered > 0 ? delivered : 0);
   return { slug: campaign.slug, effectiveAt, delivered };
 }

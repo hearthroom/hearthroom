@@ -289,9 +289,9 @@ moderationRoutes.post('/v1/moderation/members/:handle/device-quota-exemption',as
  const member=await requireReviewer(c);const db=c.env.DB;
  const target=await targetOf(c,member.id);
  const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);
- const prior=await db.prepare("SELECT subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_id:string;action:string;reason:string|null}>();
+ const prior=await db.prepare("SELECT subject_kind,subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_kind:string;subject_id:string;action:string;reason:string|null}>();
  if(prior){
-  if(prior.subject_id!==target||prior.action!=='grant'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
+  if(prior.subject_kind!=='quota_device_exemption'||prior.subject_id!==target||prior.action!=='grant'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
   await bumpOp(db,'card_reward_device_cap','exemption','replay');
   return c.json(await memberDetail(c.env,target),200);
  }
@@ -311,9 +311,9 @@ moderationRoutes.delete('/v1/moderation/members/:handle/device-quota-exemption',
  const member=await requireReviewer(c);const db=c.env.DB;
  const target=await targetOf(c,member.id);
  const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);
- const prior=await db.prepare("SELECT subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_id:string;action:string;reason:string|null}>();
+ const prior=await db.prepare("SELECT subject_kind,subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_kind:string;subject_id:string;action:string;reason:string|null}>();
  if(prior){
-  if(prior.subject_id!==target||prior.action!=='revoke'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
+  if(prior.subject_kind!=='quota_device_exemption'||prior.subject_id!==target||prior.action!=='revoke'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
   await bumpOp(db,'card_reward_device_cap','exemption','replay');
   return c.json(await memberDetail(c.env,target),200);
  }

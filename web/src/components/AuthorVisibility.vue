@@ -16,7 +16,7 @@ import type { ProviderId } from '@/lib/provider';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import VisibilityPicker from './VisibilityPicker.vue';
 import CreatorSeasonEntry from './CreatorSeasonEntry.vue';
-const props=withDefaults(defineProps<{id:string;provider:ProviderId;actor:string;name:string;token:()=>Promise<string|null>;cardId?:string;inline?:boolean;editor?:boolean;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;disabled?:boolean;dialogOnly?:boolean}>(),{inline:false,editor:false});
+const props=withDefaults(defineProps<{id:string;provider:ProviderId;actor:string;name:string;token:()=>Promise<string|null>;cardId?:string;inline?:boolean;editor?:boolean;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;disabled?:boolean;dialogOnly?:boolean}>(),{inline:false,editor:false,quotaFull:undefined,quotaShared:undefined});
 const visibilityEnabled=useWorkVisibilityCapability();
 const emit=defineEmits<{changed:[value:WorkVisibility];submit:[value:WorkVisibility];missing:[reason?:'presetTag'|'roleBackground'];cover:[];busy:[value:boolean]}>();
 const {t}=useI18n(),{lp}=useLocalePath(),router=useRouter();

@@ -15,6 +15,7 @@ import { bumpOp } from "./ops-metrics";
 import { bearerOf, communityAdmin, humanOnly, requireCommunityAdmin, staff } from "./staff";
 import { upstream } from "./upstream";
 import { cardRewardDetail, cardRewardSummary, getRewardCampaign, listRewardCampaigns } from "./card-reward";
+import { deviceCapPolicy } from "./quota";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -85,7 +86,10 @@ campaignRoutes.get("/v1/campaigns/:slug", async (c) => {
   // getCampaign 也認 id；公開網址只認 slug。分享活動沒有這個 slug 就找發卡獎勵活動。
   if (!campaign || campaign.slug !== slug || campaign.status === "draft") {
     const reward = await getRewardCampaign(c.env.DB, slug);
-    if (reward?.status === "active") return c.json(cardRewardDetail(reward, Date.now()), 200, PUBLIC);
+    if (reward?.status === "active") {
+      const policy = await deviceCapPolicy(c.env.DB);
+      return c.json(cardRewardDetail(reward, Date.now(), policy.effectiveAt), 200, PUBLIC);
+    }
     return c.json({ error: "campaign_not_found" }, 404, PUBLIC);
   }
   return c.json({ kind: "share", ...detailView(campaign, Date.now()) }, 200, PUBLIC);

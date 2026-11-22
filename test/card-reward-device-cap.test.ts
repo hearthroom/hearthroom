@@ -90,6 +90,13 @@ describe("0144 遷移預設設定與公開活動資訊", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { deviceCapEffectiveAt: number | null };
     expect(body.deviceCapEffectiveAt).toBe(EFFECTIVE_AT);
+
+    // 活動頁實際呼叫的是 /v1/campaigns/:slug，同樣必須帶出 deviceCapEffectiveAt
+    const campaignRes = await SELF.fetch("https://c.test/v1/campaigns/creator-season");
+    expect(campaignRes.status).toBe(200);
+    const campaignBody = (await campaignRes.json()) as { kind: string; deviceCapEffectiveAt: number | null };
+    expect(campaignBody.kind).toBe("card_reward");
+    expect(campaignBody.deviceCapEffectiveAt).toBe(EFFECTIVE_AT);
   });
 });
 
@@ -264,17 +271,34 @@ describe("HTTP 路由端到端：POST /v1/cards、額度查詢、白名單與站
       env.DB.prepare("INSERT INTO community_preferences (member_id, notifications) VALUES (?, 0)").bind(`member-${BOB}`),
     ]);
 
-    const send = () => SELF.fetch("https://c.test/v1/moderation/card-rewards/creator-season/notify-rule-change", {
+    const op1 = crypto.randomUUID();
+    const send = (operationId = crypto.randomUUID(), effectiveAt: unknown = EFFECTIVE_AT) => SELF.fetch("https://c.test/v1/moderation/card-rewards/creator-season/notify-rule-change", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...bearer("mod-token") },
-      body: JSON.stringify({ operationId: crypto.randomUUID(), effectiveAt: EFFECTIVE_AT }),
+      body: JSON.stringify({ operationId, effectiveAt }),
     });
-    const first = await send();
+    // 不合法的 effectiveAt 直接回 400，且不污染 payout 指標
+    const bad = await send(crypto.randomUUID(), "2026-11-30");
+    expect(bad.status).toBe(400);
+    const errMetrics = await (await SELF.fetch("https://c.test/metrics")).text();
+    expect(errMetrics).not.toContain('hearthroom_card_reward_total{operation="payout"');
+    expect(errMetrics).toContain('hearthroom_card_reward_device_cap_total{operation="notice",outcome="error"}');
+
+    const first = await send(op1, EFFECTIVE_AT);
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 1 });
 
-    // 重送完全冪等（不再多發）
-    const second = await send();
+    // 同 operationId 重試回冪等重放（200，不 500）
+    const replay = await send(op1, EFFECTIVE_AT);
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 1 });
+
+    // 同 operationId 換參數必須 409 且不寫出新通知
+    const conflict = await send(op1, EFFECTIVE_AT + DAY);
+    expect(conflict.status).toBe(409);
+
+    // 新 operationId 重送仍由 event_key 冪等（不再多發）
+    const second = await send(crypto.randomUUID(), EFFECTIVE_AT);
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 0 });
 

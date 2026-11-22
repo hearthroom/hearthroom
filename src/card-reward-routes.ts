@@ -74,6 +74,10 @@ cardRewardRoutes.use("/v1/moderation/card-rewards/*", async (c, next) => {
   await next();
   c.header("Cache-Control", "private, no-store");
   if (c.req.method === "GET" || c.res.status < 400) return;
+  if (/\/notify-rule-change$/.test(c.req.path)) {
+    await bumpOp(c.env.DB, "card_reward_device_cap", "notice", "error");
+    return;
+  }
   await bumpOp(c.env.DB, "card_reward", /\/reconcile$/.test(c.req.path) ? "reconcile" : "payout", c.res.status < 500 ? "denied" : "error");
 });
 
@@ -128,10 +132,15 @@ cardRewardRoutes.post("/v1/moderation/card-rewards/:slug/notify-rule-change", as
   const k = await activeCampaign(c);
   const b = await bodyOf(c);
   const op = operationOf(b.operationId);
-  const policy = await deviceCapPolicy(c.env.DB);
-  const effectiveAt = typeof b.effectiveAt === "number" && Number.isSafeInteger(b.effectiveAt) && b.effectiveAt > 0
-    ? b.effectiveAt
-    : policy.effectiveAt;
+  let effectiveAt: number | null;
+  if (b.effectiveAt !== undefined) {
+    if (typeof b.effectiveAt !== "number" || !Number.isSafeInteger(b.effectiveAt) || b.effectiveAt <= 0) {
+      throw new HttpError(400, "card_reward_invalid", undefined, { field: "effectiveAt" });
+    }
+    effectiveAt = b.effectiveAt;
+  } else {
+    effectiveAt = (await deviceCapPolicy(c.env.DB)).effectiveAt;
+  }
   if (!effectiveAt) throw new HttpError(400, "card_reward_invalid", undefined, { field: "effectiveAt" });
   const result = await notifyCampaignRuleChange(c.env.DB, k, effectiveAt, x.memberId, op, x.now());
   if (result.delivered > 0) queuePush(c);

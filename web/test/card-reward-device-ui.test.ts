@@ -80,6 +80,7 @@ vi.mock("../src/lib/share-ref", async (original) => ({
 
 import QuotaDeviceHelp from "../src/components/QuotaDeviceHelp.vue";
 import CreatorSeason from "../src/components/CreatorSeason.vue";
+import AuthorVisibility from "../src/components/AuthorVisibility.vue";
 import VisibilityPicker from "../src/components/VisibilityPicker.vue";
 import CardOwnerActions from "../src/components/CardOwnerActions.vue";
 import MyCardsPage from "../src/pages/MyCardsPage.vue";
@@ -321,6 +322,30 @@ it("VisibilityPicker shows State 6 exceededDevice and places QuotaDeviceHelp out
   root!.remove();
   await mountWithRouter(() => h(VisibilityPicker, { value: baseVisibility, phase: "ready", dirty: true, quotaFull: true, quotaShared: true }));
   expect(root!.querySelector("[data-quota-device-help]")).toBeNull();
+});
+
+it("AuthorVisibility reads quota via fetchMyCards when quotaFull/quotaShared props are omitted and renders State 6", async () => {
+  apiMocks.fetchMyCards.mockResolvedValue({
+    items: [],
+    total: 0,
+    quota: baseQuota({ used: 6, limit: 6, packRemaining: 0, deviceShared: true }),
+  });
+  await mountWithRouter(() =>
+    h(AuthorVisibility, {
+      id: "draft-1",
+      provider: "harbor",
+      actor: "22",
+      name: "Synthetic Card",
+      token: async () => "tok-author",
+      inline: true,
+      editor: true,
+    }),
+  );
+  expect(apiMocks.fetchMyCards).toHaveBeenCalled();
+  expect(root!.textContent).toContain(i18n.global.t("mine.quota.exceededDevice"));
+  const help = root!.querySelector("[data-quota-device-help]")!;
+  expect(help).not.toBeNull();
+  expect(help.closest('[role="radiogroup"]')).toBeNull();
 });
 
 it("CardOwnerActions distinguishes device_shared weekly_quota_exceeded from normal weekly_quota_exceeded", async () => {
