@@ -16,7 +16,7 @@ import {effectiveAnonymous,projectPlayer,readPrivacy,readPrivacyOperation,savePr
 
 type Ctx=Context<{Bindings:Env}>;
 type RawPlayer={accountNumId:number;credits:string;rank:number};
-type RawBoard={list:RawPlayer[];self:RawPlayer|null;total:number;updatedAt?:string;authorCredits?:string};
+type RawBoard={list:RawPlayer[];self:RawPlayer|null;total:number;updatedAt?:string;authorCredits?:string;viewerCredits?:string};
 export const spendGateway={
  async read(env:Env,input:{roleId:string;limit:number;offset:number},token?:string):Promise<RawBoard>{
   const key=hostingKey(env,'harbor');if(!key)throw new HttpError(503,'leaderboard_unavailable');
@@ -24,7 +24,8 @@ export const spendGateway={
   if(!res.ok)throw new HttpError(res.status===404?404:503,'leaderboard_unavailable');
   const body=await res.json() as RawBoard;
   const valid=(p:RawPlayer)=>p&&Number.isSafeInteger(p.accountNumId)&&p.accountNumId>0&&Number.isSafeInteger(p.rank)&&p.rank>0&&typeof p.credits==='string'&&/^[1-9]\d*$/.test(p.credits);
-  if(!Array.isArray(body.list)||body.list.length>input.limit||!body.list.every(valid)||body.self!==null&&!valid(body.self)||!Number.isSafeInteger(body.total)||body.total<0||body.updatedAt!==undefined&&!Number.isFinite(Date.parse(body.updatedAt))||body.authorCredits!==undefined&&(typeof body.authorCredits!=='string'||!/^(0|[1-9]\d*)$/.test(body.authorCredits)))throw new HttpError(503,'leaderboard_unavailable');
+  const validCredits=(value:unknown)=>value===undefined||typeof value==='string'&&/^(0|[1-9]\d*)$/.test(value);
+  if(!Array.isArray(body.list)||body.list.length>input.limit||!body.list.every(valid)||body.self!==null&&!valid(body.self)||!Number.isSafeInteger(body.total)||body.total<0||body.updatedAt!==undefined&&!Number.isFinite(Date.parse(body.updatedAt))||!validCredits(body.authorCredits)||!validCredits(body.viewerCredits))throw new HttpError(503,'leaderboard_unavailable');
   return body;
  }
 };
@@ -103,6 +104,7 @@ spendLeaderboardRoutes.get('/v1/cards/:id/leaderboard',async c=>{
   };
   const selfState=!viewer?'guest':viewer.accountClass==='test'?'test':viewer.externalId===card.author_num_id?'author':raw.self?'ranked':'unranked';
   const result={list:raw.list.map(project),self:raw.self?project(raw.self):null,total:raw.total,offset,nextOffset:offset+raw.list.length<raw.total?offset+raw.list.length:null,selfState,...(raw.updatedAt?{updatedAt:raw.updatedAt}:{}),
+   ...((selfState==='ranked'||selfState==='unranked')&&raw.viewerCredits!==undefined?{viewerCredits:raw.viewerCredits}:{}),
    // The author's own spend is never ranked and is shown only to the author.
    ...(selfState==='author'&&raw.authorCredits!==undefined?{authorCredits:raw.authorCredits}:{}),...(viewer?{privacy:await readPrivacy(c.env.DB,viewer.id,keyOf(card))}:{})};
   await bumpOp(c.env.DB,'spend_leaderboard','read','success');

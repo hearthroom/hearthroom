@@ -38,6 +38,28 @@ it('keeps preference writes owner scoped and recovers the exact atomic operation
  await env.DB.prepare("UPDATE cards SET public_blocked=1 WHERE id=100001").run();
  expect((await SELF.fetch('https://c.test/v1/cards/100001/leaderboard')).status).toBe(404);
 });
+it('returns live spend only to the authenticated player, independent of hourly rank',async()=>{
+ identities({player:80001,author:90001});
+ spendGateway.read=async()=>({
+  list:[{rank:1,credits:'500',accountNumId:80001}],
+  self:{rank:1,credits:'500',accountNumId:80001},total:1,viewerCredits:'0'
+ });
+ const path='https://c.test/v1/cards/100001/leaderboard';
+ const player=await (await SELF.fetch(path,{headers:bearer('player')})).json() as any;
+ expect(player).toMatchObject({selfState:'ranked',viewerCredits:'0',self:{rank:1,credits:'500'},list:[{rank:1,credits:'500'}]});
+ for(const headers of [bearer('author'),{}]){
+  const body=await (await SELF.fetch(path,{headers})).json() as any;
+  expect(Object.hasOwn(body,'viewerCredits')).toBe(false);
+ }
+ spendGateway.read=async()=>({list:[],self:null,total:0,viewerCredits:'550'});
+ const unranked=await (await SELF.fetch(path,{headers:bearer('player')})).json() as any;
+ expect(unranked).toMatchObject({selfState:'unranked',viewerCredits:'550',self:null,total:0});
+});
+it('accepts a ranking response from a provider predating live spend',async()=>{
+ const body=await (await SELF.fetch('https://c.test/v1/cards/100001/leaderboard',{headers:bearer('player')})).json() as any;
+ expect(body).toMatchObject({selfState:'ranked',self:{rank:1,credits:'9007199254740993'}});
+ expect(Object.hasOwn(body,'viewerCredits')).toBe(false);
+});
 it.each([
  [false,'inherit',false],[true,'inherit',true],
  [false,'anonymous',true],[true,'anonymous',true],
