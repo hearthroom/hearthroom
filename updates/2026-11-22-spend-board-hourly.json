@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "知音榜改成每小時更新，你自己的累計消耗則即時顯示。",
+    "zh-Hans": "知音榜改为每小时更新，你自己的累计消耗则实时显示。",
+    "en": "Kindred Spirits now updates hourly, and your own spending is shown live.",
+    "ja": "共感ランキングは1時間ごとの更新になり、自分の累計使用は最新の数字で表示されます。",
+    "ko": "공감 랭킹은 1시간마다 갱신되고, 내 누적 사용 포인트는 실시간으로 표시돼요."
+  }
+}
