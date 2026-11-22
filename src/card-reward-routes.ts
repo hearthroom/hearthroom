@@ -1,10 +1,12 @@
 import { serviceRewardState } from "./card-reward-service";
 import { Hono, type Context } from "hono";
-import { BATCH_MAX, cardRewardDetail, batchReward, cancelReward, getRewardCampaign, listDue, listRewards, myProgress, reconcileRewards, requestReward, retryReward, type Payer } from "./card-reward";
+import { BATCH_MAX, cardRewardDetail, batchReward, cancelReward, getRewardCampaign, listDue, listRewards, myProgress, notifyCampaignRuleChange, reconcileRewards, requestReward, retryReward, type Payer } from "./card-reward";
 import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
-import { quotaForMember } from "./quota";
+import { deviceCapPolicy, quotaForMember } from "./quota";
+import { hashDeviceToken, recordRewardDevice } from "./reward-device";
+import { queuePush } from "./community/push";
 import { bearerOf } from "./community-admin";
 import { humanOnly, requireCommunityAdmin, staff } from "./staff";
 import { HttpError, type Env } from "./types";
@@ -50,12 +52,18 @@ async function activeCampaign(c: Ctx) {
   return k;
 }
 
-cardRewardRoutes.get("/v1/card-rewards/:slug", async (c) => c.json(cardRewardDetail(await activeCampaign(c), Date.now()), 200, PUBLIC));
+cardRewardRoutes.get("/v1/card-rewards/:slug", async (c) => {
+  const [k, policy] = await Promise.all([activeCampaign(c), deviceCapPolicy(c.env.DB)]);
+  return c.json(cardRewardDetail(k, Date.now(), policy.effectiveAt), 200, PUBLIC);
+});
 
 cardRewardRoutes.get("/v1/card-rewards/:slug/me", async (c) => {
   const k = await activeCampaign(c);
   const member = await requireMember(c);
-  const quota = await quotaForMember(c.env.DB, member.id, Date.now());
+  const now = Date.now();
+  const deviceHash = await hashDeviceToken(c.env, c.req.header("X-Device-Token"));
+  await recordRewardDevice(c.env.DB, member.id, deviceHash, now);
+  const quota = await quotaForMember(c.env.DB, member.id, now, deviceHash);
   return c.json({ quota, ...(await myProgress(c.env.DB, member.id, k)) }, 200, PRIVATE);
 });
 
@@ -113,4 +121,19 @@ cardRewardRoutes.post("/v1/moderation/card-rewards/:id/cancel", async (c) => {
   const reason = typeof b.reason === "string" ? b.reason.trim() : "";
   if (!reason || [...reason].length > 500) throw new HttpError(400, "card_reward_invalid", undefined, { field: "reason" });
   return c.json(await cancelReward(x, c.req.param("id"), reason, operationOf(b.operationId)));
+});
+
+cardRewardRoutes.post("/v1/moderation/card-rewards/:slug/notify-rule-change", async (c) => {
+  const x = await payer(c);
+  const k = await activeCampaign(c);
+  const b = await bodyOf(c);
+  const op = operationOf(b.operationId);
+  const policy = await deviceCapPolicy(c.env.DB);
+  const effectiveAt = typeof b.effectiveAt === "number" && Number.isSafeInteger(b.effectiveAt) && b.effectiveAt > 0
+    ? b.effectiveAt
+    : policy.effectiveAt;
+  if (!effectiveAt) throw new HttpError(400, "card_reward_invalid", undefined, { field: "effectiveAt" });
+  const result = await notifyCampaignRuleChange(c.env.DB, k, effectiveAt, x.memberId, op, x.now());
+  if (result.delivered > 0) queuePush(c);
+  return c.json(result);
 });

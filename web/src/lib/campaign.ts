@@ -3,6 +3,7 @@
  * 形狀照 src/campaign-routes.ts。業務數字（檔位金額、門檻、保留天數）全部來自服務端，這裡不放預設值。
  */
 import { ApiError, describeApiError } from "./api";
+import { deviceToken } from "./reward-device";
 import type { Localized } from "./blog";
 import { COMMUNITY_API } from "./config";
 import { i18n } from "./i18n";
@@ -167,7 +168,7 @@ export function campaignErrorText(e: unknown): string {
   return i18n.global.t("state.requestFailed");
 }
 
-const headers = (token: string) => ({ "X-From": currentSurface(), "X-Provider": currentProvider(), Authorization: `Bearer ${token}` });
+const headers = (token: string) => ({ "X-From": currentSurface(), "X-Provider": currentProvider(), "X-Device-Token": deviceToken(), Authorization: `Bearer ${token}` });
 
 async function fail(res: Response): Promise<never> {
   const b = (await res.json().catch(() => ({}))) as { error?: string; field?: string };
@@ -210,7 +211,7 @@ export interface PublicCampaign {
 export interface CardRewardCampaign {
   kind: "card_reward";
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number; endsAt: number; timezone: string; bannerUrl: string | null; posterUrls?: CampaignPosterUrls; featured: boolean;
-  publicDays?:number; featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number;
+  publicDays?:number; featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number; deviceCapEffectiveAt?: number | null;
 }
 export type AnyCampaign = PublicCampaign | CardRewardCampaign;
 export const isCardReward = (c: { kind?: string } | null | undefined): c is CardRewardCampaign => c?.kind === "card_reward";
@@ -257,7 +258,7 @@ export function formatShortPeriod(c: { startsAt: number | null; endsAt: number |
 export type RewardReview = "pending" | "approved" | "rejected";
 export interface RewardProgressItem { cardId: number; name: string; avatarUrl: string | null; submittedAt: number; review: RewardReview; reward: { status: "paid" | "pending"; amount: number } | null }
 export interface RewardProgress {
-  quota: { limit: number; used: number; weekStart: number; weekEnd: number; packRemaining: number };
+  quota: { limit: number; used: number; weekStart: number; weekEnd: number; packRemaining: number; deviceShared?: boolean };
   approvedCount: number; pendingCount: number; creditsPaid: number; items: RewardProgressItem[];
 }
 export const fetchRewardProgress = (token: string, slug: string) => request<RewardProgress>(token, `/card-rewards/${enc(slug)}/me`);

@@ -2,6 +2,7 @@ import type { AppearanceView } from "./community-appearance";
 import { COMMUNITY_API } from "./config";
 import { currentProvider } from "./provider";
 import { ApiError } from "./api";
+import { deviceToken } from "./reward-device";
 import { i18n, LOCALE_CODES, SOURCE_LOCALE } from "./i18n";
 import { discordReturnPath, takeDiscordReturnLocale } from "./discord-attempt";
 export interface CommunityView {
@@ -67,7 +68,7 @@ export async function communityRequest<T>(
     headers: {
       "Content-Type": "application/json",
       "X-Provider": currentProvider(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}`, "X-Device-Token": deviceToken() } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",

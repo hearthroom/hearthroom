@@ -686,7 +686,7 @@ async function listCardRows<T>(db:D1Database,opts:ListOptions,columns:string){
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; recordRegistration?: boolean; /** 這次登記扣哪個補充包（見 quota.ts openPack）；沒帶就走週額度 */ packId?: string | null; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; recordRegistration?: boolean; /** 這次登記扣哪個補充包（見 quota.ts openPack）；沒帶就走週額度 */ packId?: string | null; deviceHash?: string | null; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
   const provider: ProviderId = opts.provider ?? "harbor";
   const existing = await db
     .prepare("SELECT CAST(id AS TEXT) AS id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
@@ -743,7 +743,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "harbor", opts.status ?? "approved");
   try {
     await db.batch([
-      ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at,pack_id) VALUES (?,?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now,opts.packId??null)] : []),
+      ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at,pack_id,device_hash) VALUES (?,?,?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now,opts.packId??null,opts.deviceHash??null)] : []),
       insert,
       ...(opts.additionalWrites?.(id) ?? []),
     ]);

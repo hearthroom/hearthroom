@@ -5,6 +5,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile } from './members';
 import { badgeCollection } from './community/badges';
 import { quotaForMember, PACK_MAX } from './quota';
+import { auditStmt } from './audit';
+import { bumpOp } from './ops-metrics';
 import { pickLocale, HttpError, type Env, type Localized } from './types';
 import { communityAdmin } from './staff';
 import { resolveFandom } from './fandom';
@@ -239,16 +241,18 @@ async function targetOf(c:{env:Env;req:{param(k:'handle'):string}},actor:string)
 }
 async function memberDetail(env:Env,memberId:string){
  const db=env.DB;const profile=await memberProfile(db,memberId);if(!profile)throw new HttpError(404,'community_member_missing');
- const [quota,packs,staff,badges,badgeAudit]=await Promise.all([
+ const [quota,packs,staff,badges,badgeAudit,deviceExempt]=await Promise.all([
   quotaForMember(db,memberId,Date.now()),
   db.prepare(PACK+' WHERE p.member_id=? ORDER BY p.created_at DESC,p.id LIMIT 100').bind(memberId).all<PackRow>(),
   db.prepare('SELECT role FROM reviewers WHERE member_id=? AND revoked_at IS NULL').bind(memberId).first<{role:StaffRole}>(),
   badgeCollection(env,memberId),
   db.prepare('SELECT a.request_id AS id,a.badge,d.titles,a.action,a.reason,a.created_at AS at,m.handle AS actor FROM community_badge_audit a JOIN members m ON m.id=a.actor LEFT JOIN community_badge_definitions d ON d.key=a.badge WHERE a.member_id=? ORDER BY a.created_at DESC LIMIT 100').bind(memberId).all<{id:string;badge:string;titles:string|null;action:string;reason:string;at:number;actor:string}>(),
+  db.prepare('SELECT e.reason,e.created_at,g.handle AS granted_by FROM quota_device_exemptions e JOIN members g ON g.id=e.granted_by WHERE e.member_id=? AND e.revoked_at IS NULL').bind(memberId).first<{reason:string;created_at:number;granted_by:string}>(),
  ]);
  return {
   member:{handle:profile.handle,displayName:profile.displayName,avatarUrl:profile.avatarUrl,memberSince:profile.memberSince,providers:[...new Set(profile.identities.map(i=>i.provider))],role:staff?.role??null},
   quota,packs:packs.results.map(publicPack),
+  deviceQuotaExempt: deviceExempt ? { active: true, reason: deviceExempt.reason, grantedBy: deviceExempt.granted_by, at: deviceExempt.created_at } : null,
   badges:badges.items.filter(b=>b.state==='earned').map(b=>({key:b.key,icon:b.icon,titles:b.titles,earnedAt:b.earnedAt,expiresAt:b.expiresAt})),
   badgeAudit:badgeAudit.results.map(a=>({...a,titles:a.titles?JSON.parse(a.titles) as Record<string,string>:null})),
  };
@@ -279,4 +283,46 @@ moderationRoutes.post('/v1/moderation/members/:handle/packs',async c=>{
   db.prepare("INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,extra) SELECT ?,?,'registration_pack','/mine',?,json_object('granted',?) WHERE NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=? AND p.notifications=0)").bind('pack:'+id,target,now,granted,target),
  ]));
  return c.json(await memberDetail(c.env,target),201);
+});
+
+moderationRoutes.post('/v1/moderation/members/:handle/device-quota-exemption',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;
+ const target=await targetOf(c,member.id);
+ const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);
+ const prior=await db.prepare("SELECT subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_id:string;action:string;reason:string|null}>();
+ if(prior){
+  if(prior.subject_id!==target||prior.action!=='grant'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
+  await bumpOp(db,'card_reward_device_cap','exemption','replay');
+  return c.json(await memberDetail(c.env,target),200);
+ }
+ const now=Date.now();
+ await mutate(()=>db.batch([
+  db.prepare(`INSERT INTO quota_device_exemptions(member_id,reason,granted_by,operation_id,created_at,revoked_at,revoked_by,revoke_reason)
+   VALUES(?,?,?,?,?,NULL,NULL,NULL)
+   ON CONFLICT(member_id) DO UPDATE SET reason=excluded.reason,granted_by=excluded.granted_by,operation_id=excluded.operation_id,created_at=excluded.created_at,revoked_at=NULL,revoked_by=NULL,revoke_reason=NULL`)
+   .bind(target,reason,member.id,op,now),
+  auditStmt(db,{subjectKind:'quota_device_exemption',subjectId:target,actorMemberId:member.id,actorKind:'human',action:'grant',reason,after:{active:true},operationId:op,now}),
+ ]));
+ await bumpOp(db,'card_reward_device_cap','exemption','granted');
+ return c.json(await memberDetail(c.env,target),201);
+});
+
+moderationRoutes.delete('/v1/moderation/members/:handle/device-quota-exemption',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;
+ const target=await targetOf(c,member.id);
+ const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);
+ const prior=await db.prepare("SELECT subject_id,action,reason FROM audit_log WHERE actor_member_id=? AND operation_id=?").bind(member.id,op).first<{subject_id:string;action:string;reason:string|null}>();
+ if(prior){
+  if(prior.subject_id!==target||prior.action!=='revoke'||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
+  await bumpOp(db,'card_reward_device_cap','exemption','replay');
+  return c.json(await memberDetail(c.env,target),200);
+ }
+ const now=Date.now();
+ await mutate(()=>db.batch([
+  db.prepare('UPDATE quota_device_exemptions SET revoked_at=?,revoked_by=?,revoke_reason=? WHERE member_id=? AND revoked_at IS NULL')
+   .bind(now,member.id,reason,target),
+  auditStmt(db,{subjectKind:'quota_device_exemption',subjectId:target,actorMemberId:member.id,actorKind:'human',action:'revoke',reason,after:{active:false},operationId:op,now}),
+ ]));
+ await bumpOp(db,'card_reward_device_cap','exemption','revoked');
+ return c.json(await memberDetail(c.env,target),200);
 });

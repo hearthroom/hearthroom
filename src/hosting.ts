@@ -107,7 +107,7 @@ function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;updateKind?:unknown;updateNote?:unknown;packId?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;updateKind?:unknown;updateNote?:unknown;packId?:string|null;deviceHash?:string|null;expectedVisibility?:{policyRevision:string;approvalRevision:string}}):Promise<Receipt>{
  const db=env.DB;
  const intent=updateIntent(input);
  const fandom:ResolvedFandom=input.fandom??{fandom:'',qid:null,key:'',search:''};
@@ -211,7 +211,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const packedSnapshot=await encodeSnapshot(reviewRecord(settings));
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
-   firstRegistrationStatement(db,{provider,account:input.account,source:input.role.roleId,now:input.now,packId:input.packId}),
+   firstRegistrationStatement(db,{provider,account:input.account,source:input.role.roleId,now:input.now,packId:input.packId,deviceHash:input.deviceHash}),
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,fandom:fandom.fandom,fandomQid:fandom.qid,fandomKey:fandom.key,fandomSearch:fandom.search,searchName:buildSearchName({...sealed,fandom:fandom.fandom,fandomSearch:fandom.search}),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers,review_length_total,review_worldbook_entries,review_regex_rules) SELECT ?,?,?,?,?,'pending',?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,length.total,counts.worldbookEntries,counts.regexRules,version!.version_id,submissionId),

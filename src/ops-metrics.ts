@@ -118,6 +118,13 @@ const METRICS = {
     // insufficient：點數池餘額不足，發放排隊
     outcomes: ["success", "denied", "error", "insufficient"],
   },
+  card_reward_device_cap: {
+    name: "hearthroom_card_reward_device_cap_total",
+    help: "Campaign weekly card-registration device-cap checks, shared-computer exemptions and rule-change notices by bounded outcome.",
+    label: "operation",
+    operations: ["check", "exemption", "notice"],
+    outcomes: ["allowed", "blocked_device", "blocked_account", "exempt", "fallback_account", "granted", "revoked", "replay", "delivered", "error"],
+  },
   card_heat: {
     name: "hearthroom_card_heat_sync_total",
     help: "Card heat sync every ten minutes: batch reads from the provider.",

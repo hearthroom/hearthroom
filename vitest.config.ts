@@ -12,6 +12,7 @@ export default defineConfig({
           TEST_MIGRATIONS: migrations,
           SHORTCUT_SECRET: "test-shortcut-secret",
           SHARE_VISITOR_SECRET: "test-share-visitor-secret",
+          REWARD_DEVICE_SECRET: "test-reward-device-secret",
           // 本機 .dev.vars 可能放了接真 Harbor 用的應用憑證與託管金鑰；測試一律當沒設，要的測試自己帶
           HARBOR_REWARDS_CLIENT_ID: "",
           HARBOR_REWARDS_CLIENT_SECRET: "",

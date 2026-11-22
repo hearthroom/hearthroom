@@ -89,13 +89,13 @@ export async function loadMine(
   env: Env,
   bearer: string,
   me: ProviderIdentity,
-  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string;access?:WorkAccess },
+  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string; access?: WorkAccess; deviceHash?: string | null },
 ): Promise<MineResult> {
   const { accountNumId } = me;
   const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
   if(provider==='harbor'&&env.WORK_SHARING_ENABLED==='true')return loadSharingMine(env,bearer,me,opts);
   // 已登記張數與本週額度只看是誰，跟下面讀清單互不相依：一起問，不一趟接一趟（每趟 D1 約 40 ms）
-  const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, me, Date.now(), provider)]);
+  const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, me, Date.now(), provider, opts.deviceHash)]);
 
   // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
   // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。

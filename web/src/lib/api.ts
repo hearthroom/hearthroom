@@ -497,7 +497,7 @@ export async function registerCard(
   try{result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
+      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, "X-Device-Token": deviceToken(), ...authHeaders(token) },
       body: JSON.stringify({ roleId, ratingAnswers, operationId, ...intent, ...(consent.expected ? {expectedPolicyRevision:consent.expected.policyRevision,expectedApprovalRevision:consent.expected.approvalRevision} : {}), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
@@ -828,7 +828,7 @@ export async function putCardSave(roleId: string, key: string, value: unknown, t
   await json(
     await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves/${encodeURIComponent(key)}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
+      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, "X-Device-Token": deviceToken(), ...authHeaders(token) },
       body: JSON.stringify({ value }),
     }),
   );
@@ -933,6 +933,8 @@ export interface ListingQuota {
   weekEnd: number;
   /** 補充包還剩幾張：管理員發的額外登記次數，不隨週重置，免費額度用完才扣 */
   packRemaining: number;
+  /** 同裝置其他帳號本週也佔用了共用免費額度（僅為 true 時存在） */
+  deviceShared?: boolean;
 }
 
 export interface MyCardPage {
@@ -966,7 +968,7 @@ export async function fetchMyCards(
   if (opts.q) params.set("q", opts.q);
   if (opts.access) params.set("access", opts.access);
   return json<MyCardPage>(
-    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...(opts.provider ? {"X-Provider":opts.provider} : {}), ...authHeaders(token) } }),
+    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...(opts.provider ? {"X-Provider":opts.provider} : {}), "X-Device-Token": deviceToken(), ...authHeaders(token) } }),
   );
 }
 

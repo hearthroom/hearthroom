@@ -15,6 +15,7 @@ import { siteName } from "../../shared/site-name";
 import { isEnforcementKind } from "../../shared/enforcement-notice";
 import { hasSubscription, pushConfigured, pushLine, pushLocale, pushTitle, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
+import { hashDeviceToken, recordRewardDevice } from "../reward-device";
 import { getCard, isAdult } from "../cards";
 import { updateBridge, updateTitle } from "../updates";
 import { random, digest, verifyBridge, seal, unseal } from "./crypto";
@@ -346,6 +347,8 @@ app.get("/v1/me/community/notifications/summary", async (c) => {
   // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
   if (locale && NOTICE_LOCALES.includes(locale))
     await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
+  const deviceHash = await hashDeviceToken(c.env, c.req.header("X-Device-Token"));
+  if (deviceHash) await recordRewardDevice(c.env.DB, m.id, deviceHash, Date.now()).catch(() => undefined);
   const row = await c.env.DB.prepare(`SELECT COUNT(*) AS unread FROM community_notifications n LEFT JOIN cards c ON c.id=n.card_id LEFT JOIN workshops w ON w.id=n.workshop_id LEFT JOIN cards wc ON wc.id=w.card_id WHERE ${eligibleNotification()} AND n.member_id=? AND n.read_at IS NULL AND n.created_at>=? AND (? IS NOT 'CN' OR (c.rating IS NOT 'R' AND w.rating IS NOT 'R' AND wc.rating IS NOT 'R'))`)
     .bind(m.id,retentionCutoff,adult.countryRegion)
     .first<{ unread: number }>();

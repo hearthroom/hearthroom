@@ -57,8 +57,8 @@ export const cardRewardSummary = (k: RewardCampaign, now: number) => ({
   bannerUrl: k.bannerUrl, ...(Object.keys(k.posterUrls).length ? { posterUrls: k.posterUrls } : {}), featured: k.featured, featuredRank: k.featuredRank,
 });
 /** 公開活動頁：規則卡要的數字。 */
-export const cardRewardDetail = (k: RewardCampaign, now: number) => ({
-  ...cardRewardSummary(k, now), payoutDeadline: k.payoutDeadline, reward: k.reward, publicDays:k.publicDays, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT,
+export const cardRewardDetail = (k: RewardCampaign, now: number, deviceCapEffectiveAt: number | null = null) => ({
+  ...cardRewardSummary(k, now), payoutDeadline: k.payoutDeadline, reward: k.reward, publicDays: k.publicDays, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT, deviceCapEffectiveAt,
 });
 
 // ---- 誰該拿 -------------------------------------------------------------------
@@ -397,4 +397,57 @@ export async function myProgress(db: D1Database, memberId: string, campaign: Rew
     creditsPaid: items.reduce((n, i) => n + (i.reward?.status === "paid" ? i.reward.amount : 0), 0),
     items,
   };
+}
+
+/**
+ * 發送規則變更站內通知給本季參與發卡獎的作者（有 card_rewards 紀錄，或活動期間內送過初審的正常成員）。
+ * 以固定 event_key 冪等寫入 community_notifications，尊重使用者的通知開關，重送不重複推播。
+ */
+export async function notifyCampaignRuleChange(
+  db: D1Database,
+  campaign: RewardCampaign,
+  effectiveAt: number,
+  actorMemberId: string,
+  op: string,
+  now = Date.now(),
+): Promise<{ slug: string; effectiveAt: number; delivered: number }> {
+  const path = `/campaign/${campaign.slug}`;
+  const extra = JSON.stringify({ slug: campaign.slug, effectiveAt });
+  const keyPrefix = `campaign_quota_device:${campaign.slug}:${effectiveAt}:`;
+  const res = await db.prepare(
+    `INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, extra)
+     SELECT ?1 || m.id, m.id, 'campaign_rule_notice', ?2, ?3, ?4
+     FROM members m
+     WHERE m.account_class = 'normal'
+       AND NOT EXISTS (SELECT 1 FROM legacy_account_fence f WHERE f.member_id = m.id)
+       AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id = m.id AND p.notifications = 0)
+       AND (
+         EXISTS (SELECT 1 FROM card_rewards r WHERE r.campaign_id = ?5 AND r.member_id = m.id)
+         OR EXISTS (
+           SELECT 1 FROM review_submissions s
+           JOIN cards c ON c.id = s.card_id
+           WHERE c.provider = 'harbor' AND s.kind = 'first'
+             AND s.submitted_at >= ?6 AND s.submitted_at < ?7
+             AND COALESCE(
+               (SELECT owner_member_id FROM member_connections WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT)),
+               (SELECT member_id FROM member_identities WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT))
+             ) = m.id
+         )
+       )`,
+  ).bind(keyPrefix, path, now, extra, campaign.id, campaign.startsAt, campaign.endsAt).run();
+  const delivered = res.meta.changes ?? 0;
+  await db.batch([
+    auditStmt(db, {
+      subjectKind: "card_reward",
+      subjectId: campaign.id,
+      actorMemberId,
+      actorKind: "human",
+      action: "rule_notice",
+      after: { slug: campaign.slug, effectiveAt, delivered },
+      operationId: op,
+      now,
+    }),
+  ]);
+  await bumpOp(db, "card_reward_device_cap", "notice", "delivered", delivered > 0 ? delivered : 0);
+  return { slug: campaign.slug, effectiveAt, delivered };
 }

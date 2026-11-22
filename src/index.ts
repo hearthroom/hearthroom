@@ -106,7 +106,8 @@ import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAge
 import { followList, ownFollowVisibility, parseFollowVisibility, publicFollowStats, updateFollowVisibility } from "./follow-visibility";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
-import { weeklyLimitAt, registeredThisWeek, openPack,needsFirstRegistration } from "./quota";
+import { weeklyLimitAt, weeklyUsageForMember, openPack, needsFirstRegistration } from "./quota";
+import { hashDeviceToken, recordRewardDevice, trimRewardDevices } from "./reward-device";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
@@ -999,7 +1000,10 @@ app.get("/v1/me/cards", async (c) => {
   const started = performance.now();
   const me = await requestIdentity(c, bearer, provider);
   const identified = performance.now();
-  const { body, source } = await loadMine(c.env, bearer, me, { page, pageSize, fresh, filter, provider, q,...(access?{access:access as 'private'|'unlisted'|'public'}:{}) });
+  const deviceHash = await hashDeviceToken(c.env, c.req.header("X-Device-Token"));
+  const resolvedMemberForDevice = deviceHash ? await connectedMemberId(c.env.DB, provider, me.accountNumId) : null;
+  if (resolvedMemberForDevice && deviceHash) await recordRewardDevice(c.env.DB, resolvedMemberForDevice, deviceHash, Date.now());
+  const { body, source } = await loadMine(c.env, bearer, me, { page, pageSize, fresh, filter, provider, q, deviceHash, ...(access?{access:access as 'private'|'unlisted'|'public'}:{}) });
 
   const listedAt = performance.now();
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
@@ -1670,16 +1674,33 @@ app.post("/v1/cards", async (c) => {
   // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。
   // 免費額度用完，有補充包就扣一個包；扣包跟登記同一批寫入，資料庫的 trigger 再驗一次。
   const now = Date.now();
+  const deviceHash = await hashDeviceToken(c.env, c.req.header("X-Device-Token"));
+  await recordRewardDevice(c.env.DB, memberId, deviceHash, now);
   const existing = await getCard(c.env.DB, roleId, provider);
   let packId: string | null = null;
-  if (await needsFirstRegistration(c.env.DB,provider,roleId)) {
-    const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
-    if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= (await weeklyLimitAt(c.env.DB, now))) {
+  if (await needsFirstRegistration(c.env.DB, provider, roleId)) {
+    const [usage, limit] = await Promise.all([
+      weeklyUsageForMember(c.env.DB, memberId, now, deviceHash),
+      weeklyLimitAt(c.env.DB, now),
+    ]);
+    if (!usage.allOwnWorks.has(`${provider}:${roleId}`) && usage.effectiveFreeWorks.size >= limit) {
       packId = await openPack(c.env.DB, memberId);
       if (!packId) {
-        note(c, { event: "register", subject: roleId, detail: "quota" });
-        throw new HttpError(403, "weekly_quota_exceeded");
+        const blockedByDevice = usage.deviceShared && usage.ownFreeWorks.size < limit;
+        if (usage.deviceCapActive) {
+          await bumpOp(c.env.DB, "card_reward_device_cap", "check", blockedByDevice ? "blocked_device" : "blocked_account");
+        }
+        note(c, { event: "register", subject: roleId, detail: blockedByDevice ? "quota_device" : "quota" });
+        throw new HttpError(403, "weekly_quota_exceeded", undefined, blockedByDevice ? { reason: "device_shared" } : undefined);
       }
+    }
+    if (usage.deviceCapActive) {
+      await bumpOp(
+        c.env.DB,
+        "card_reward_device_cap",
+        "check",
+        usage.exempt ? "exempt" : !usage.hasDeviceSignal ? "fallback_account" : "allowed",
+      );
     }
   }
 
@@ -1687,7 +1708,7 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,updateKind:body.updateKind,updateNote:body.updateNote,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,rating,fandom,operationId,now,packId,deviceHash,updateKind:body.updateKind,updateNote:body.updateNote,...(hasConsent?{expectedVisibility:{policyRevision:body.expectedPolicyRevision as string,approvalRevision:body.expectedApprovalRevision as string}}:{})});
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);
@@ -2709,8 +2730,9 @@ export default {
     run(sukiRecall(cronEnv).catch(() => { console.warn("Suki recall unavailable"); return 0; })
       .then(() => dispatchPush(cronEnv)).catch(() => { console.warn("push dispatch unavailable"); }));
     run(cleanAvatars(cronEnv));
-    // 應用獎勵：送出待送的事件、清掉過期的訪客雜湊
+    // 應用獎勵：送出待送的事件、清掉過期的訪客雜湊與裝置關聯
     run(rewardEventMaintenance(cronEnv, Date.now()).catch(() => { console.warn("reward events maintenance unavailable"); }));
+    run(trimRewardDevices(cronEnv.DB, Date.now()).catch(() => { console.warn("reward devices cleanup unavailable"); }));
     // 分享活動的截圖：未掛上的過期刪除、保留期到了刪物件
     run(campaignMaintenance(cronEnv, Date.now()).catch(() => { console.warn("campaign maintenance unavailable"); }));
     // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整

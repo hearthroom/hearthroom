@@ -19,6 +19,9 @@ export async function resetDb(): Promise<void> {
   // resetting the database in one RPC instead of a round trip for every table.
   const statements:D1PreparedStatement[]=[];
   statements.push(env.DB.prepare('DELETE FROM review_length_exemptions'));
+  statements.push(env.DB.prepare('DELETE FROM quota_device_exemptions'));
+  statements.push(env.DB.prepare('DELETE FROM reward_devices'));
+  statements.push(env.DB.prepare("INSERT OR REPLACE INTO quota_device_policy (id, effective_at, scope, updated_at) VALUES (1, 1795996800000, 'campaign', 0)"));
  statements.push(env.DB.prepare('DELETE FROM workshop_sync_rejections'));
   statements.push(env.DB.prepare('DELETE FROM badge_stats_backfill_members'));
   statements.push(env.DB.prepare("UPDATE badge_stats_backfill_runs SET completed_at=NULL,outcome='running' WHERE job_key='invite-source-v2'"));

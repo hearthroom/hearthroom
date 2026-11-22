@@ -11,6 +11,7 @@ declare global {
        * 所以只測呼叫契約。可選：綁定沒配時程式碼要照常跑。
        */
       EVENTS?: AnalyticsEngineDataset;
+      REWARD_DEVICE_SECRET?: string;
     }
   }
 }

@@ -78,6 +78,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   NOV_20_DAILY_RANK_EXTENSION_MINUTES?: string;
   /** 分享連結訪客雜湊的鑰匙（每週由它衍生一把）；沒設就用 isolate 內的隨機鑰匙 */
   SHARE_VISITOR_SECRET?: string;
+  /** 裝置安裝識別（X-Device-Token）HMAC 雜湊金鑰（`wrangler secret put REWARD_DEVICE_SECRET`）；未設則退回帳號計。 */
+  REWARD_DEVICE_SECRET?: string;
   ANALYTICS_ENABLED?: string;
   /** GA4 is off until its resource settings and privacy notice are approved. */
   GA4_ENABLED?: string;

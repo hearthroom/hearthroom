@@ -1,7 +1,7 @@
 /** The only ordinary identity this private cleanup may retire is legacy 279. */
 import {HttpError,type Env} from './types';
 
-const privateTables=['card_saves','member_conversations','rating_drafts','checkin_prompts','member_update_state','suki_states','analytics_milestones','community_preferences','community_appearance_preferences','community_discord_appearance','community_appearance_media','community_case_jobs','discord_link_attempts','community_awards','push_subscriptions','community_notifications','member_favorites','member_follows','card_scores'] as const;
+const privateTables=['card_saves','member_conversations','rating_drafts','checkin_prompts','member_update_state','suki_states','analytics_milestones','community_preferences','community_appearance_preferences','community_discord_appearance','community_appearance_media','community_case_jobs','discord_link_attempts','community_awards','push_subscriptions','community_notifications','member_favorites','member_follows','card_scores','reward_devices'] as const;
 export async function legacyCleanupProof(env:Env){
  const scope=await env.DB.prepare('SELECT member_id FROM legacy_account_fence WHERE public_no=279').first<{member_id:string|null}>();
  if(!scope)throw new HttpError(503,'workflow_pending');
@@ -49,6 +49,7 @@ export async function cleanupLegacy279(env:Env,requestId:string,digest:string){
   ['SELECT 1 FROM card_reward_topups WHERE requested_by=? LIMIT 1',[scope]],
   ['SELECT 1 FROM share_payouts WHERE requested_by=? LIMIT 1',[scope]],
   ['SELECT 1 FROM registration_packs WHERE member_id=? OR granted_by=? LIMIT 1',[scope,scope]],
+  ['SELECT 1 FROM quota_device_exemptions WHERE member_id=? OR granted_by=? OR revoked_by=? LIMIT 1',[scope,scope,scope]],
   ['SELECT 1 FROM reviewers WHERE member_id=? OR granted_by=? LIMIT 1',[scope,scope]],
   ['SELECT 1 FROM review_agents WHERE member_id=? OR granted_by=? LIMIT 1',[scope,scope]],
   ['SELECT 1 FROM audit_log WHERE actor_member_id=? OR subject_id=? LIMIT 1',[scope,scope]],
