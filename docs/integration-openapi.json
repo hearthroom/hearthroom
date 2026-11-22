@@ -13933,7 +13933,12 @@
                     "updatedAt": {
                       "type": "string",
                       "format": "date-time",
-                      "description": "Latest qualifying ledger record timestamp, omitted when no records exist."
+                      "description": "Time when this ranking snapshot was computed."
+                    },
+                    "viewerCredits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Current net spend of the signed-in viewer when they are not the author. This value can be zero and may differ from the ranking snapshot. Forward it only to the same viewer."
                     },
                     "authorCredits": {
                       "type": "string",
