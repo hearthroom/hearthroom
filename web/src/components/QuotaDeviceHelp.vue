@@ -58,6 +58,7 @@ function onClick() {
   text-decoration: underline;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .quota-device-help--center {
   justify-content: center;

@@ -207,6 +207,8 @@ export async function json<T>(res: Response): Promise<T> {
     const said = retained&&raw==='card_reward_recovery_insufficient'&&body.availableCredits!==undefined&&body.shortfallCredits!==undefined ? i18n.global.t('rewardRetention.delete.insufficient',retentionParams(retained,body.availableCredits,body.shortfallCredits))+' '+i18n.global.t('rewardRetention.delete.insufficientLater',retentionParams(retained))
       :retained&&raw==='card_reward_recovery_required'?i18n.global.t('rewardRetention.delete.reward',retentionParams(retained))+' '+i18n.global.t('rewardRetention.delete.later',retentionParams(retained))
       :retained&&raw==='card_reward_public_locked'?i18n.global.t('rewardRetention.lock.error',retentionParams(retained))
+      : raw === "weekly_quota_exceeded"
+      ? i18n.global.t(body.reason === "device_shared" ? "mine.quota.exceededDevice" : "mine.quota.exceeded")
       : raw === "comment_muted" && body.until !== undefined
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);

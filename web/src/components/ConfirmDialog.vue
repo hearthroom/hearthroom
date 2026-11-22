@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { confirmDialog, confirmState, confirmTextMatches, settleConfirm, publicationDrafts } from "@/lib/confirm";
 import LookupField, { type LookupValue } from "./LookupField.vue";
 import PublicationUpdateFields from './PublicationUpdateFields.vue';
+import QuotaDeviceHelp from "./QuotaDeviceHelp.vue";
 import { parseUpdateIntent, type UpdateIntent } from '../../../shared/card-update';
 import { useI18n } from 'vue-i18n';
 import { wrapTab } from "@/lib/focus-trap";
@@ -10,7 +11,7 @@ import { wrapTab } from "@/lib/focus-trap";
 const {t}=useI18n();
 const box = ref<HTMLElement | null>(null);
 const update=ref<UpdateIntent>({updateKind:'minor',updateNote:''});
-const busy=ref(false),pending=ref(false),submitError=ref(''),now=ref(Date.now());
+const busy=ref(false),pending=ref(false),submitError=ref(''),submitQuotaDevice=ref(false),now=ref(Date.now());
 let cooldownTimer:ReturnType<typeof setTimeout>|undefined;
 function changeUpdate(value:UpdateIntent){
  update.value=value;
@@ -45,7 +46,7 @@ async function confirm() {
   const id=cur.field?.lookup?fieldPick.value.id:undefined;
   const intent=cur.publication?parseUpdateIntent(update.value.updateKind==='major'?update.value:{updateKind:'minor'}):{updateKind:'minor' as const,updateNote:''};
   if(cur.onConfirm){
-   busy.value=true;submitError.value='';
+   busy.value=true;submitError.value='';submitQuotaDevice.value=false;
    try{
     if(pending.value&&cur.onPending){await cur.onPending();return;}
     await cur.onConfirm({text:text.trim(),...(id?{id}:{}),update:intent});
@@ -54,10 +55,13 @@ async function confirm() {
     if(cur.publication)publicationDrafts.delete(cur.publication.key);
    }catch(error){
     if(confirmState.current!==cur)return;
-    const e=error as {status?:number;code?:string;message?:string};
+    const e=error as {status?:number;code?:string;reason?:string;message?:string};
     pending.value=error instanceof TypeError||!!e.status&&e.status>=500;
     if(cur.publication)publicationDrafts.set(cur.publication.key,{...update.value,pending:pending.value});
-    submitError.value=pending.value?(cur.pendingText??t('cardUpdate.update.resultPending')):e.code==='update_notification_cooldown'?t('cardUpdate.update.noticeLimit'):cur.failureText??(e.message||t('cardUpdate.update.submitFailed'));
+    const quotaExceeded=!pending.value&&e.code==='weekly_quota_exceeded';
+    const quotaDevice=quotaExceeded&&e.reason==='device_shared';
+    submitQuotaDevice.value=quotaDevice;
+    submitError.value=pending.value?(cur.pendingText??t('cardUpdate.update.resultPending')):quotaDevice?t('mine.quota.exceededDevice'):quotaExceeded?t('mine.quota.exceeded'):e.code==='update_notification_cooldown'?t('cardUpdate.update.noticeLimit'):cur.failureText??(e.message||t('cardUpdate.update.submitFailed'));
     if(e.code==='update_notification_cooldown')await retryEligibility();
     return;
    }finally{if(confirmState.current===cur)busy.value=false;}
@@ -70,7 +74,7 @@ let restore: HTMLElement | null = null;
 watch(() => confirmState.current, async (cur) => {
   if (!cur) { restore?.focus?.(); restore = null; return; }
   restore = document.activeElement as HTMLElement | null;
-  busy.value=false;pending.value=!!(cur.publication&&publicationDrafts.get(cur.publication.key)?.pending);submitError.value=pending.value?t('cardUpdate.update.resultPending'):'';
+  busy.value=false;pending.value=!!(cur.publication&&publicationDrafts.get(cur.publication.key)?.pending);submitError.value=pending.value?t('cardUpdate.update.resultPending'):'';submitQuotaDevice.value=false;
   update.value=cur.publication?{...(publicationDrafts.get(cur.publication.key)??{updateKind:'minor',updateNote:''})}:{updateKind:'minor',updateNote:''};
   typed.value = "";
   fieldText.value = cur.field?.initial ?? "";
@@ -89,8 +93,8 @@ watch(()=>confirmState.current?.publication?.nextMajorUpdateAt,(next)=>{
 function onKey(e: KeyboardEvent) {
   if (!confirmState.current) return;
   if (e.key === "Escape") { e.preventDefault(); if(!busy.value)settleConfirm(false); return; }
-  // 焦點只在彈窗裡繞（沿用原本的範圍：停用的鍵也算一站）
-  wrapTab(e, box.value);
+  // 焦點只在彈窗裡繞（沿用原本的範圍，並含求助連結 a[href]）
+  wrapTab(e, box.value, "a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex='0']");
 }
 onMounted(() => {
   document.addEventListener("keydown", onKey);
@@ -114,7 +118,10 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
         <p v-if="confirmState.current.hint" class="subtle">{{confirmState.current.hint}}</p>
         <ul v-if="confirmState.current.items?.length" class="dlg__items"><li v-for="(item,index) in confirmState.current.items" :key="index"><img v-if="item.image" :src="item.image" alt="" /><span>{{ item.name }}</span></li><li v-if="confirmState.current.moreText" class="subtle">{{ confirmState.current.moreText }}</li></ul>
         <PublicationUpdateFields v-if="confirmState.current.publication" :model-value="update" @update:model-value="changeUpdate" :next-major-update-at="confirmState.current.publication.nextMajorUpdateAt" :update-cooldown-exempt="confirmState.current.publication.updateCooldownExempt" :now="now" :disabled="busy||pending" @retry="retryEligibility" />
-        <p v-if="submitError" class="notice notice--error" role="alert">{{ submitError }}</p>
+        <div v-if="submitError" class="notice notice--error dlg__error" role="alert">
+          <span>{{ submitError }}</span>
+          <QuotaDeviceHelp v-if="submitQuotaDevice" />
+        </div>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
         <code v-if="confirmState.current.detail" class="dlg__detail" tabindex="0" @click="($event.target as HTMLElement).ownerDocument.getSelection()?.selectAllChildren($event.target as Node)">{{ confirmState.current.detail }}</code>
         <!-- 要照打的字：打對了確認鍵才亮；Enter 也只在打對時算數 -->
@@ -224,4 +231,7 @@ onBeforeUnmount(() => { document.removeEventListener("keydown", onKey);if(cooldo
 .dlg__check-text { display: grid; gap: 2px; }
 .dlg__check-hint { font-size: 12px; color: var(--text-3); white-space: pre-line; }
 .dlg__field-label { font-size: 13px; color: var(--text-2); }
+.dlg__error { display: grid; justify-items: start; gap: 2px; }
+.dlg__error:lang(ko) { word-break: keep-all; }
+.dlg__error:lang(ja) { word-break: auto-phrase; }
 </style>
