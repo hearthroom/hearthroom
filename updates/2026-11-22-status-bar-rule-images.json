@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "有些卡片的狀態欄圖片以前顯示不出來，現在會正常顯示了。",
+    "zh-Hans": "有些卡片的状态栏图片以前显示不出来，现在会正常显示了。",
+    "en": "Pictures in some cards' status bars used to stay blank, and now they show up.",
+    "ja": "一部のカードでステータスバーの画像が表示されない問題を直しました。",
+    "ko": "일부 카드에서 상태 바 이미지가 보이지 않던 문제를 고쳤어요."
+  },
+  "body": {
+    "zh-Hant": "一條顯示規則放進圖片、再由另一條規則換成網址時，以前圖片會是空白。",
+    "zh-Hans": "一条显示规则放进图片、再由另一条规则换成链接时，以前图片会是空白。",
+    "en": "This happened when one display rule placed the picture and a later rule filled in its link.",
+    "ja": "ある表示ルールで画像を置き、別のルールでリンクを入れると、画像が空白になっていました。",
+    "ko": "한 표시 규칙으로 이미지를 넣고 다른 규칙으로 링크를 채우면 이미지가 비어 있었어요."
+  }
+}
