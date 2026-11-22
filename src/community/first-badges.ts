@@ -65,7 +65,9 @@ export const LOCAL_FIRST_BADGES: FirstBadge[] = [
   { key: 'sole_beloved', hold: DAY, crossings: `SELECT a.author_id AS member_id,${nth('member_follows', 'x.author_id=a.author_id', 500)} AS at FROM (SELECT author_id FROM member_follows GROUP BY author_id HAVING COUNT(*)>=500) a` },
   { key: 'sole_eloquent', hold: DAY, crossings: `SELECT c.member_id,${nth('comment_likes', 'x.comment_id=c.id', 100)} AS at FROM comments c
     WHERE c.deleted_at IS NULL AND c.status='visible' AND (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id)>=100` },
-  { key: 'sole_wanderer', hold: DAY, crossings: `SELECT m.member_id,${nth('member_conversations', 'x.member_id=m.member_id', 500)} AS at FROM (SELECT member_id FROM member_conversations GROUP BY member_id HAVING COUNT(*)>=500) m` },
+  // 千面旅人暫停發放（2026-11-22 owner）：「開始過對話」是遊玩頁回報、伺服器不驗證，
+  // 上線後兩位成員在幾小時內各開了數百個角色衝過 500。等 owner 定好計數方式再放回來。
+  // { key: 'sole_wanderer', hold: DAY, crossings: `SELECT m.member_id,${nth('member_conversations', 'x.member_id=m.member_id', 500)} AS at FROM (SELECT member_id FROM member_conversations GROUP BY member_id HAVING COUNT(*)>=500) m` },
   { key: 'sole_founder', hold: DAY, crossings: `WITH owned AS (SELECT c.id,c.registered_at,${OWNER} AS member_id FROM ${OWNED_LISTED}),
     listed AS (SELECT member_id,registered_at,ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY registered_at,id) AS n FROM owned),
     honored AS (SELECT o.member_id,MIN(r.awarded_at) AS first_at FROM owned o JOIN rank_awards r ON r.card_id=o.id GROUP BY o.id),

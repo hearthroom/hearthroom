@@ -92,3 +92,9 @@ it('tells everyone else that a one-of-a-kind badge is taken, naming the holder o
  expect((await badgeCollection(env,b)).items.find(x=>x.key==='sole_grand_slam')).toMatchObject({taken:true,holder:'aaaaaabb'});
  expect((await badgeCollection(env,a)).items.find(x=>x.key==='sole_grand_slam')).not.toHaveProperty('taken');
 });
+
+it('holds the 500-character badge back while its count is unverified',async()=>{
+ await env.DB.prepare(`WITH RECURSIVE s(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM s WHERE i<500) INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) SELECT ?,'harbor','r'||i,'c'||i,i,i FROM s`).bind(a).run();
+ await awardFirstBadges(env,LOCAL_FIRST_BADGES,now);
+ expect([...await holders('sole_wanderer'),...await holders('sole_wanderer_pioneer')]).toEqual([]);
+});
