@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "和不同角色對話的徽章，改成每個角色聊滿 10 輪才算一個。",
+    "zh-Hans": "和不同角色对话的徽章，改成每个角色聊满 10 轮才算一个。",
+    "en": "Badges for chatting with different characters now count a character after 10 rounds with it.",
+    "ja": "キャラクターと会話するバッジは、10 往復以上会話した相手だけを数えます。",
+    "ko": "캐릭터 대화 배지는 이제 한 캐릭터와 10번 이상 대화해야 세요."
+  },
+  "body": {
+    "zh-Hant": "每天最多計入 10 個新角色，已經拿到的徽章都會保留，新的進度大約兩天內更新完成。",
+    "zh-Hans": "每天最多计入 10 个新角色，已经拿到的徽章都会保留，新的进度大约两天内更新完成。",
+    "en": "Up to 10 new characters count per day, badges you already earned stay, and your new progress shows within about two days.",
+    "ja": "1 日に数えるのは新しいキャラクター 10 人までで、獲得済みのバッジはそのまま残り、新しい進み具合は 2 日ほどで反映されます。",
+    "ko": "하루에 새 캐릭터는 10명까지 세고, 이미 받은 배지는 그대로 유지되며, 새 진행도는 이틀 안에 반영돼요."
+  }
+}

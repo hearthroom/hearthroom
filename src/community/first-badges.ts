@@ -21,9 +21,14 @@ export interface FirstBadge {
 const DAY = 86400000;
 export const PIONEER_SLOTS = 9;
 
-/** 讀 Harbor 統計的兩枚：付費好友 100、儲值與使用都到星輝門檻。條件也要「現在仍然成立」。 */
+/**
+ * 讀 Harbor 統計的幾枚：付費好友 100、儲值與使用都到星輝門檻、探索 500 個角色。條件也要「現在仍然成立」。
+ * 千面旅人原本看遊玩頁回報的「開過對話」（不驗證），2026-11-22 改成 Harbor 驗證過的角色數：
+ * 每個角色自己聊滿 10 輪、每天最多計入 10 個，所以最快也要 50 天。
+ */
 export const STAT_FIRST_BADGES: FirstBadge[] = [
   { key: 'sole_lighthouse', hold: 7 * DAY, crossings: 'SELECT member_id,paid_invites_100_at AS at FROM badge_qualifications WHERE paid_invites_100_at IS NOT NULL AND paid_invites>=100' },
+  { key: 'sole_wanderer', hold: DAY, crossings: 'SELECT member_id,explored_roles_500_at AS at FROM badge_qualifications WHERE explored_roles_500_at IS NOT NULL AND explored_roles>=500' },
   { key: 'sole_starlight', hold: 30 * DAY, crossings: 'SELECT member_id,starlight_at AS at FROM badge_qualifications WHERE starlight_at IS NOT NULL AND net_topup_usd_micros>=1000000000 AND consumed_credits>=6000000' },
 ];
 
@@ -65,9 +70,6 @@ export const LOCAL_FIRST_BADGES: FirstBadge[] = [
   { key: 'sole_beloved', hold: DAY, crossings: `SELECT a.author_id AS member_id,${nth('member_follows', 'x.author_id=a.author_id', 500)} AS at FROM (SELECT author_id FROM member_follows GROUP BY author_id HAVING COUNT(*)>=500) a` },
   { key: 'sole_eloquent', hold: DAY, crossings: `SELECT c.member_id,${nth('comment_likes', 'x.comment_id=c.id', 100)} AS at FROM comments c
     WHERE c.deleted_at IS NULL AND c.status='visible' AND (SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id)>=100` },
-  // 千面旅人暫停發放（2026-11-22 owner）：「開始過對話」是遊玩頁回報、伺服器不驗證，
-  // 上線後兩位成員在幾小時內各開了數百個角色衝過 500。等 owner 定好計數方式再放回來。
-  // { key: 'sole_wanderer', hold: DAY, crossings: `SELECT m.member_id,${nth('member_conversations', 'x.member_id=m.member_id', 500)} AS at FROM (SELECT member_id FROM member_conversations GROUP BY member_id HAVING COUNT(*)>=500) m` },
   { key: 'sole_founder', hold: DAY, crossings: `WITH owned AS (SELECT c.id,c.registered_at,${OWNER} AS member_id FROM ${OWNED_LISTED}),
     listed AS (SELECT member_id,registered_at,ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY registered_at,id) AS n FROM owned),
     honored AS (SELECT o.member_id,MIN(r.awarded_at) AS first_at FROM owned o JOIN rank_awards r ON r.card_id=o.id GROUP BY o.id),

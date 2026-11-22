@@ -14530,6 +14530,18 @@
                               "null"
                             ],
                             "format": "date-time"
+                          },
+                          "exploredRoles": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "exploredRoles500At": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
                           }
                         }
                       }
@@ -29559,7 +29571,9 @@
           },
           "reasonCode": {
             "type": "string",
-            "enum": ["output_limit"]
+            "enum": [
+              "output_limit"
+            ]
           }
         }
       },

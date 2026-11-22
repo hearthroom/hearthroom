@@ -74,3 +74,17 @@ it('leaves older Harbor responses without the new fields untouched',async()=>{
  await applyBadgeStats(env,members[0],stats(1,{}),base+1);
  expect(await env.DB.prepare('SELECT paid_invites,paid_invites_100_at FROM badge_qualifications WHERE member_id=?').bind(members[0]).first()).toEqual({paid_invites:120,paid_invites_100_at:base-20*DAY});
 });
+
+it('crowns the 500-character badge from the verified explored count and keeps it on older reads',async()=>{
+ const wander=(n:number,count:number,at:number|null)=>applyBadgeStats(env,members[n-1],stats(n,{exploredRoles:count,exploredRoles500At:at===null?null:new Date(at).toISOString()}),base);
+ await wander(1,499,null);
+ await wander(2,500,base-2*DAY);
+ await wander(3,520,base-3*DAY);
+ await awardFirstBadges(env,STAT_FIRST_BADGES,base);
+ expect((await holders('sole_wanderer')).map(r=>r.member_id)).toEqual([members[2]]);
+ expect((await holders('sole_wanderer_pioneer')).map(r=>r.member_id)).toEqual([members[1]]);
+ // 舊版 Harbor 沒有這兩個欄位：不動已存的數，徽章牆照舊顯示進度。
+ await applyBadgeStats(env,members[0],stats(1,{}),base+1);
+ await sweepMilestones(env);
+ expect((await badgeCollection(env,members[0])).items.find(b=>b.key==='player_explorer_300')).toMatchObject({state:'earned',progress:{value:499,target:300}});
+});

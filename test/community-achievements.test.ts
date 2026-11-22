@@ -13,6 +13,8 @@ beforeEach(async()=>{
 });
 afterEach(restoreUpstream);
 const find=async(who:string,key:string,publicOnly=false)=>(await badgeCollection(env,who,publicOnly)).items.find(b=>b.key===key);
+/** Harbor 驗證過的探索角色數（每個角色 10 輪、每天最多 10 個），由徽章統計寫入 */
+async function explored(who:string,n:number){await env.DB.prepare("INSERT INTO badge_qualifications(member_id,account_no,effective_invites,net_topup_usd_micros,consumed_credits,verified_at,explored_roles) VALUES (?,1,0,0,0,1,?) ON CONFLICT(member_id) DO UPDATE SET explored_roles=excluded.explored_roles").bind(who,n).run();}
 async function conversations(who:string,n:number){for(let i=0;i<n;i++)await env.DB.prepare("INSERT INTO member_conversations VALUES (?,'harbor',?,?,1,1)").bind(who,'role-'+i,'conv-'+i).run();}
 async function listedCard(id:number,authorNumId:number,extra:Record<string,unknown>={}){
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,featured_at,provider) VALUES (?,?,?,'{}','{}',1,1,'approved',?,'harbor')").bind(id,'role-'+id,authorNumId,extra.featuredAt??null).run();
@@ -31,11 +33,14 @@ it('ships a catalog with every locale, an allowlisted icon and a known category'
 it('awards milestones on the owner read, shows progress toward the next tier and persists the award',async()=>{
  await conversations(member,10);
  expect(await find(member,'player_first_play')).toMatchObject({state:'earned'});
+ // 開過的對話只算「初次見面」；探險家要 Harbor 驗證過的角色數。
+ expect(await find(member,'player_explorer_10')).toMatchObject({state:'locked',progress:{value:0,target:10}});
+ await explored(member,10);
  expect(await find(member,'player_explorer_10')).toMatchObject({state:'earned',progress:{value:10,target:10}});
  expect(await find(member,'player_explorer_50')).toMatchObject({state:'locked',progress:{value:10,target:50}});
  const rows=(await env.DB.prepare("SELECT badge,source FROM community_awards WHERE member_id=? ORDER BY badge").bind(member).all()).results;
  expect(rows).toEqual([{badge:'player_explorer_10',source:'metric-v1'},{badge:'player_first_play',source:'metric-v1'}]);
- await env.DB.prepare('DELETE FROM member_conversations').run();
+ await env.DB.prepare('DELETE FROM member_conversations').run();await explored(member,0);
  // Earned milestones are one-way: losing the counter never revokes them.
  expect(await find(member,'player_explorer_10')).toMatchObject({state:'earned'});
 });
@@ -85,7 +90,7 @@ it('reads social, profile and tenure milestones from their own tables',async()=>
  expect(await find(member,'community_level_5')).toMatchObject({state:'locked',progress:{value:0,target:250,unit:'xp'}});
 });
 it('lets members feature up to five earned badges',async()=>{
- await conversations(member,50);
+ await conversations(member,1);await explored(member,50);
  for(let i=0;i<10;i++)await env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES (?,100001,?,'hi',1)").bind('d'+i,member).run();
  await env.DB.prepare('UPDATE members SET profile_edited_at=1 WHERE id=?').bind(member).run();
  await badgeCollection(env,member);
@@ -102,7 +107,7 @@ it('the hourly sweep evaluates every metric and agrees with the owner read',asyn
  await listedCard(100001,22);await listedCard(100002,22);await listedCard(100003,22,{featuredAt:5});
  for(const fan of fans){await env.DB.prepare('INSERT INTO member_follows VALUES (?,?,1)').bind(fan,author).run();await env.DB.prepare('INSERT INTO member_favorites VALUES (?,100001,1)').bind(fan).run();}
  // player side: one conversation, one save, ten favorites, five follows, one comment with ten likes
- await conversations(member,1);
+ await conversations(member,1);await explored(member,10);
  await env.DB.prepare("INSERT INTO card_saves VALUES (?,'role-1','slot','{}',1)").bind(member).run();
  for(let i=0;i<10;i++){await listedCard(100010+i,33);await env.DB.prepare('INSERT INTO member_favorites VALUES (?,?,1)').bind(member,100010+i).run();}
  for(const fan of fans.slice(0,5))await env.DB.prepare('INSERT INTO member_follows VALUES (?,?,1)').bind(member,fan).run();
@@ -115,7 +120,7 @@ it('the hourly sweep evaluates every metric and agrees with the owner read',asyn
  await communityMaintenance(env);
  const awarded=async(who:string)=>(await env.DB.prepare('SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge').bind(who).all<{badge:string}>()).results.map(r=>r.badge);
  expect(await awarded(author)).toEqual(['creator_favorited_10','creator_featured','creator_followers_10','creator_works_3','first_work']);
- expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','beta_veteran','opening_veteran','member_profile','player_commenter_1','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
+ expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','beta_veteran','opening_veteran','member_profile','player_commenter_1','player_explorer_10','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
  // The owner read measures the same tables, so it finds nothing new to award.
  const before=(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_awards').first<{n:number}>())!.n;
  // Live badges (Discord link, booster) are never awards, so they are left out of the comparison.

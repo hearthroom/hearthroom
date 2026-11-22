@@ -46,7 +46,10 @@ export const METRICS:Record<string,Metric>={
  followers:{one:'SELECT COUNT(*) FROM member_follows WHERE author_id=?',all:'SELECT author_id AS member_id,COUNT(*) AS value FROM member_follows GROUP BY author_id'},
  follows:{one:'SELECT COUNT(*) FROM member_follows WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_follows GROUP BY member_id'},
  favorites:{one:'SELECT COUNT(*) FROM member_favorites WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_favorites GROUP BY member_id'},
+ /** 開過對話的角色數（遊玩頁回報、不驗證），只給「初次見面」用 */
  cards_played:{one:'SELECT COUNT(*) FROM member_conversations WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_conversations GROUP BY member_id'},
+ /** Harbor 驗證過的探索角色數：每個角色自己聊滿 10 輪、每天最多計入 10 個（探險家一系列） */
+ explored_roles:{one:'SELECT explored_roles FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,explored_roles AS value FROM badge_qualifications WHERE explored_roles>0'},
  saves:{one:'SELECT COUNT(DISTINCT role_id) FROM card_saves WHERE member_id=?',all:'SELECT member_id,COUNT(DISTINCT role_id) AS value FROM card_saves GROUP BY member_id'},
  comments:{one:'SELECT COUNT(*) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,COUNT(*) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
  likes_received:{one:'SELECT COALESCE(SUM(like_count),0) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,SUM(like_count) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},

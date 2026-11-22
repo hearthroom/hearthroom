@@ -19859,6 +19859,20 @@
                             ],
                             "format": "date-time",
                             "description": "Later of the moments net USD top-ups first reached US$1,000 (1,000,000,000 micros) and consumption first reached 6,000,000 credits, by running totals using current net order amounts. Null unless both current totals meet the thresholds."
+                          },
+                          "exploredRoles": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0,
+                            "description": "Characters with at least ten of the member's own sent turns completed (send or retry; regenerations, failures and review plays excluded; deleted conversations still count), counting at most ten new characters per business day (Asia/Taipei, 04:00 boundary) and carrying the rest into later days. Older providers omit this field."
+                          },
+                          "exploredRoles500At": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "description": "When the 500th character counted under exploredRoles; null when fewer than 500."
                           }
                         }
                       }

@@ -2,8 +2,8 @@ import type {Env} from './types';
 import {HttpError} from './types';
 import {bumpOp} from './ops-metrics';
 import {awardFirstBadges,STAT_FIRST_BADGES} from './community/first-badges';
-/** paidInvites／paidInvites100At／starlightAt：Harbor 新加的欄位，舊 Harbor 沒有就當 0／沒有越線（不改既有值以外的東西） */
-export interface BadgeStats {accountNo:number;effectiveInvites:number;netTopupUsdMicros:number;consumedCredits:number;complete:boolean;invitesComplete?:boolean;spendingComplete?:boolean;paidInvites?:number;paidInvites100At?:string|null;starlightAt?:string|null}
+/** paidInvites／paidInvites100At／starlightAt／exploredRoles：Harbor 新加的欄位，舊 Harbor 沒有就不動已存的值 */
+export interface BadgeStats {accountNo:number;effectiveInvites:number;netTopupUsdMicros:number;consumedCredits:number;complete:boolean;invitesComplete?:boolean;spendingComplete?:boolean;paidInvites?:number;paidInvites100At?:string|null;starlightAt?:string|null;exploredRoles?:number;exploredRoles500At?:string|null}
 export const badgeStatsTransport={async read(env:Env,accounts:number[]):Promise<BadgeStats[]>{
  if(!env.HARBOR_BADGES_CLIENT_ID||!env.HARBOR_BADGES_CLIENT_SECRET)throw new Error('badge_stats_unconfigured');
  const tokenResponse=await fetch(`${env.PROVIDER_API_BASE_HARBOR}/oauth/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'client_credentials',client_id:env.HARBOR_BADGES_CLIENT_ID,client_secret:env.HARBOR_BADGES_CLIENT_SECRET,scope:'community.badges.read'}),signal:AbortSignal.timeout(5000)});
@@ -38,6 +38,8 @@ export async function applyBadgeStats(env:Env,member:string,value:BadgeStats,now
  const at=(value?:string|null)=>{if(!value)return null;const t=Date.parse(value);return Number.isFinite(t)?t:null;};
  const paid=Number.isSafeInteger(value.paidInvites)&&value.paidInvites!>=0?value.paidInvites!:null;
  if(invitesComplete&&paid!==null)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET paid_invites=?,paid_invites_100_at=? WHERE member_id=? AND ${guard}`).bind(paid,at(value.paidInvites100At),member,...guardArgs));
+ const explored=Number.isSafeInteger(value.exploredRoles)&&value.exploredRoles!>=0?value.exploredRoles!:null;
+ if(explored!==null)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET explored_roles=?,explored_roles_500_at=? WHERE member_id=? AND ${guard}`).bind(explored,at(value.exploredRoles500At),member,...guardArgs));
  if(spendingComplete&&value.starlightAt!==undefined)writes.push(env.DB.prepare(`UPDATE badge_qualifications SET starlight_at=? WHERE member_id=? AND ${guard}`).bind(at(value.starlightAt),member,...guardArgs));
  const [saved]=await env.DB.batch(writes);return !!saved.meta.changes;
 }
