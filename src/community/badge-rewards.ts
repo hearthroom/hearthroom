@@ -8,13 +8,20 @@ import { upstream } from '../upstream';
 import { cardRewardTransport } from '../card-reward-service';
 import { bumpOp } from '../ops-metrics';
 import { ACTIVE_AWARD } from './badges';
+import { badgeReward, CONVERSATION_REWARD_FROZEN_KEYS, parseConversationRewardFreeze } from '../../shared/badge-rarity';
 
 export type ClaimState = 'pending' | 'paid' | 'void' | 'rejected';
+export type ClaimSummary = { status: ClaimState; amount: number };
 type Claim = { id: string; member_id: string; badge: string; amount: number; account_no: number; status: ClaimState; attempted_at: number | null };
 
 export async function claimStates(env: Env, member: string): Promise<Record<string, ClaimState>> {
   const rows = (await env.DB.prepare('SELECT badge,status FROM badge_reward_claims WHERE member_id=?').bind(member).all<{ badge: string; status: ClaimState }>()).results;
   return Object.fromEntries(rows.map(r => [r.badge, r.status]));
+}
+
+export async function claimSummaries(env: Env, member: string): Promise<Record<string, ClaimSummary>> {
+  const rows = (await env.DB.prepare('SELECT badge,status,amount FROM badge_reward_claims WHERE member_id=?').bind(member).all<{ badge: string; status: ClaimState; amount: number }>()).results;
+  return Object.fromEntries(rows.map(r => [r.badge, { status: r.status, amount: r.amount }]));
 }
 
 /** 收款用的供應商公開編號：跟徽章統計同一條規則（連結過的帳號歸擁有者，取最近綁的那個）。 */
@@ -66,11 +73,19 @@ async function payMember(env: Env, member: string, now: number): Promise<void> {
 async function pay(env: Env, token: string, claim: Claim, now: number): Promise<ClaimState> {
   const taken = await env.DB.prepare("UPDATE badge_reward_claims SET attempts=attempts+1,attempted_at=? WHERE id=? AND status='pending' AND attempted_at IS ?").bind(now, claim.id, claim.attempted_at).run();
   if (!taken.meta.changes) return (await env.DB.prepare('SELECT status FROM badge_reward_claims WHERE id=?').bind(claim.id).first<ClaimState>('status')) ?? 'pending';
-  const active = await env.DB.prepare(`SELECT 1 FROM community_awards WHERE member_id=? AND badge=? AND ${ACTIVE_AWARD}`).bind(claim.member_id, claim.badge, now).first();
+  const active = await env.DB.prepare(`SELECT created_at FROM community_awards WHERE member_id=? AND badge=? AND ${ACTIVE_AWARD}`).bind(claim.member_id, claim.badge, now).first<{ created_at: number }>();
   // 連結 Discord、伺服器加成這兩枚不落獎勵紀錄，由徽章頁即時判斷；其他徽章付款前要還有效
   if (!active && !['discord_linked', 'server_booster'].includes(claim.badge)) {
     await env.DB.prepare("UPDATE badge_reward_claims SET status='void' WHERE id=? AND status='pending'").bind(claim.id).run();
     return 'void';
+  }
+  // 付款前再檢一次凍結規則（防止排程重試或合併發點繞過凍結／排除名單）
+  if (CONVERSATION_REWARD_FROZEN_KEYS.has(claim.badge)) {
+    const freeze = parseConversationRewardFreeze(env.CONVERSATION_BADGE_REWARD_FREEZE, env.CONVERSATION_BADGE_FREEZE_EXCLUDED);
+    if (badgeReward({ key: claim.badge, category: 'play' }, { freeze, memberId: claim.member_id, state: 'earned', earnedAt: active?.created_at ?? null }) <= 0) {
+      await env.DB.prepare("UPDATE badge_reward_claims SET status='void' WHERE id=? AND status='pending'").bind(claim.id).run();
+      return 'void';
+    }
   }
   const result = await upstream.payCampaign(env, token, { key: `badge-${claim.id}`, accountNo: claim.account_no, amount: claim.amount, campaignRef: 'badges-v1', contentRef: `badge:${claim.badge}` });
   if (result.kind === 'paid') {

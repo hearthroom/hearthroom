@@ -2,8 +2,8 @@ import { snapshot } from '../snapshot-cache';
 import { HttpError, type Env } from '../types';
 import { memberByHandle } from '../members';
 import { appearanceView } from './appearance';
-import { badgeAp, badgeReward } from '../../shared/badge-rarity';
-import { claimStates } from './badge-rewards';
+import { badgeAp, badgeReward, parseConversationRewardFreeze } from '../../shared/badge-rarity';
+import { claimSummaries } from './badge-rewards';
 import { levelOf } from '../../shared/achievements';
 import { authorRankOf } from './achievement-board';
 import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
@@ -125,8 +125,9 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
  // 「第幾位獲得」拿掉了：每次讀收藏都要按徽章數早於自己的紀錄，平均一次讀一萬多行，2026-11-20 上線後是 D1 讀取量最大的查詢
- const [census,claims,crowns]=await Promise.all([holderCounts(env),publicOnly?{} as Record<string,never>:claimStates(env,member),crownHolders(env,catalog.filter(d=>d.key.startsWith('sole_')&&!d.key.endsWith('_pioneer')).map(d=>d.key))]);
+ const [census,claims,crowns]=await Promise.all([holderCounts(env),publicOnly?{} as Record<string,never>:claimSummaries(env,member),crownHolders(env,catalog.filter(d=>d.key.startsWith('sole_')&&!d.key.endsWith('_pioneer')).map(d=>d.key))]);
  const now=Date.now();
+ const rewardFreeze=publicOnly?undefined:parseConversationRewardFreeze(env.CONVERSATION_BADGE_REWARD_FREEZE,env.CONVERSATION_BADGE_FREEZE_EXCLUDED);
  const crossed:string[]=[];
  let items:CollectedBadge[]=catalog.map(def=>{
   const award=awards.results.find(a=>a.badge===def.key);
@@ -148,7 +149,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
   item.ap=badgeAp(def);
   const crown=crowns[def.key];
   if(crown&&crown.member!==member&&item.state!=='earned'){item.taken=true;if(crown.handle)item.holder=crown.handle;}
-  if(!publicOnly){const reward=badgeReward(def);if(reward>0)item.reward=reward;if(claims[def.key])item.claim=claims[def.key];}
+  if(!publicOnly){const reward=badgeReward(def,{freeze:rewardFreeze,memberId:member,state:item.state,earnedAt:item.earnedAt});if(reward>0)item.reward=reward;const claim=claims[def.key];if(claim){item.claim=claim.status;if(claim.amount>0)item.claimAmount=claim.amount;}}
   if(item.state==='earned'){
    const held=census.holders[def.key];
    if(held&&census.members)item.share=Math.round(Math.min(held,census.members)/census.members*1000)/10;

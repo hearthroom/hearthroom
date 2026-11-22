@@ -3,7 +3,7 @@ import {beforeEach,afterEach,expect,it} from 'vitest';
 import {resetDb,makeMember,restoreUpstream} from './helpers';
 import {awardFirstBadges,LOCAL_FIRST_BADGES} from '../src/community/first-badges';
 import {badgeCollection} from '../src/community/badges';
-import {badgeRarity,badgeReward} from '../shared/badge-rarity';
+import {badgeRarity,badgeReward,parseConversationRewardFreeze} from '../shared/badge-rarity';
 
 const DAY=86400000,now=Date.parse('2027-06-01T00:00:00Z');
 let a:string,b:string;
@@ -24,6 +24,45 @@ it('rates the new badges and pays the default one-of-a-kind amount',()=>{
  expect(badgeRarity({key:'sole_grand_slam',category:'creation'})).toBe('unique');
  expect(badgeReward({key:'sole_grand_slam',category:'creation'})).toBe(30000);
  expect(badgeRarity({key:'player_scout_20',category:'play'})).toBe('legendary');
+});
+
+it('keeps conversation explorer and wanderer badges earnable by rarity while freezing their credit rewards at zero',()=>{
+ expect(badgeRarity({key:'player_explorer_50',category:'play'})).toBe('rare');
+ expect(badgeRarity({key:'player_explorer_100',category:'play'})).toBe('epic');
+ expect(badgeRarity({key:'player_explorer_300',category:'play'})).toBe('legendary');
+ expect(badgeRarity({key:'sole_wanderer',category:'play'})).toBe('unique');
+ expect(badgeRarity({key:'sole_wanderer_pioneer',category:'play'})).toBe('epic');
+ for(const key of ['player_explorer_50','player_explorer_100','player_explorer_300','sole_wanderer','sole_wanderer_pioneer']){
+  expect(badgeReward({key,category:'play'}),key).toBe(0);
+ }
+ // Lower tiers stay unchanged until Harbor paid-turn counting lands.
+ expect(badgeReward({key:'player_first_play',category:'play'})).toBe(100);
+ expect(badgeReward({key:'player_explorer_10',category:'play'})).toBe(100);
+
+ // Cutoff mode: pre-cutoff earned non-excluded keeps original reward; post-cutoff, locked, excluded, or malformed config fail closed to 0.
+ expect(parseConversationRewardFreeze(undefined)).toEqual({mode:'all'});
+ expect(parseConversationRewardFreeze('')).toEqual({mode:'all'});
+ expect(parseConversationRewardFreeze('all')).toEqual({mode:'all'});
+ expect(parseConversationRewardFreeze('not-a-date')).toEqual({mode:'all'});
+ expect(parseConversationRewardFreeze('off')).toEqual({mode:'off'});
+
+ const cutoff='2026-11-22T03:30:00Z';
+ const cutoffMs=Date.parse(cutoff);
+ const policy=parseConversationRewardFreeze(cutoff,' abuser-1 , abuser-2 ');
+ expect(policy.mode).toBe('cutoff');
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(500);
+ expect(badgeReward({key:'player_explorer_100',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(2000);
+ expect(badgeReward({key:'player_explorer_300',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(6000);
+ expect(badgeReward({key:'sole_wanderer',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(30000);
+ expect(badgeReward({key:'sole_wanderer_pioneer',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(2000);
+ // At/after cutoff, locked, excluded, or missing memberId when exclusion list is active -> 0.
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:policy,memberId:'ok-1',state:'earned',earnedAt:cutoffMs})).toBe(0);
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:policy,memberId:'ok-1',state:'locked',earnedAt:null})).toBe(0);
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:policy,memberId:'abuser-1',state:'earned',earnedAt:cutoffMs-1000})).toBe(0);
+ expect(badgeReward({key:'sole_wanderer',category:'play'},{freeze:policy,memberId:'abuser-2',state:'earned',earnedAt:cutoffMs-1000})).toBe(0);
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:policy,state:'earned',earnedAt:cutoffMs-1000})).toBe(0);
+ // Full-freeze switch overrides pre-cutoff earned too.
+ expect(badgeReward({key:'player_explorer_50',category:'play'},{freeze:parseConversationRewardFreeze('all'),memberId:'ok-1',state:'earned',earnedAt:cutoffMs-1})).toBe(0);
 });
 
 it('crowns three weekly #1s in a row by the time of the third win',async()=>{

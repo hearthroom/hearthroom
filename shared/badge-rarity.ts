@@ -63,8 +63,71 @@ export const REWARD_BY_KEY: Record<string, number> = {
   // 首位星輝：發積分會疊在儲值贈送上、可能超過定價憲章 6% 上限，owner 裁決前只給徽章
   sole_starlight: 0,
 };
-export function badgeReward(badge: { key: string; category: string }): number {
+
+/** 開始對話類高檔位徽章：在改計 Harbor 付費回合與調整防刷門檻前受凍結規則控管（預設全部歸零，亦支援截止時間制＋排除名單）。 */
+export const CONVERSATION_REWARD_FROZEN_KEYS = new Set([
+  'player_explorer_50',
+  'player_explorer_100',
+  'player_explorer_300',
+  'sole_wanderer',
+  'sole_wanderer_pioneer',
+]);
+
+export type ConversationRewardFreeze =
+  | { mode: 'all' }
+  | { mode: 'cutoff'; cutoffMs: number; excludedMembers: ReadonlySet<string> }
+  | { mode: 'off' };
+
+/**
+ * 解析開始對話類徽章的積分凍結模式（fail-closed：未設、空值或無效格式一律視同全部歸零）：
+ * - "all"（預設）：全部未領歸零
+ * - ISO-8601 時間或毫秒時間戳：截止前已取得且不在排除名單者仍可領原積分，其餘為 0
+ * - "off"：不凍結
+ */
+export function parseConversationRewardFreeze(
+  rawMode?: string | null,
+  rawExcluded?: string | null,
+): ConversationRewardFreeze {
+  const trimmed = (rawMode ?? '').trim();
+  if (trimmed === 'off') return { mode: 'off' };
+  if (!trimmed || trimmed === 'all') return { mode: 'all' };
+  const cutoffMs = /^\d+$/.test(trimmed) ? Number(trimmed) : Date.parse(trimmed);
+  if (!Number.isSafeInteger(cutoffMs) || cutoffMs <= 0) return { mode: 'all' };
+  const excludedMembers = new Set(
+    (rawExcluded ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+  );
+  return { mode: 'cutoff', cutoffMs, excludedMembers };
+}
+
+export interface BadgeRewardContext {
+  freeze?: ConversationRewardFreeze;
+  memberId?: string;
+  state?: 'earned' | 'locked' | 'revoked' | 'expired';
+  earnedAt?: number | null;
+}
+
+export function badgeReward(
+  badge: { key: string; category: string },
+  context?: BadgeRewardContext,
+): number {
   if (badge.key in REWARD_BY_KEY) return REWARD_BY_KEY[badge.key];
   if (NO_REWARD_CATEGORIES.has(badge.category) || NO_REWARD_KEYS.has(badge.key)) return 0;
+  if (CONVERSATION_REWARD_FROZEN_KEYS.has(badge.key)) {
+    const freeze = context?.freeze ?? { mode: 'all' };
+    if (freeze.mode === 'all') return 0;
+    if (freeze.mode === 'cutoff') {
+      const excluded = freeze.excludedMembers.size > 0 && (!context?.memberId || freeze.excludedMembers.has(context.memberId));
+      const eligible =
+        context?.state === 'earned' &&
+        typeof context.earnedAt === 'number' &&
+        Number.isFinite(context.earnedAt) &&
+        context.earnedAt < freeze.cutoffMs &&
+        !excluded;
+      if (!eligible) return 0;
+    }
+  }
   return BADGE_REWARD[badgeRarity(badge)];
 }

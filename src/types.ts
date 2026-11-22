@@ -4,7 +4,11 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES" | "METRICS_FLUSH_MS"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "AUTH_MEDIA_GENERATE_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT" | "NOV_20_DAILY_RANK_EXTENSION_MINUTES" | "METRICS_FLUSH_MS" | "CONVERSATION_BADGE_REWARD_FREEZE"> & {
+  /** 開始對話類五枚徽章的積分凍結模式："all"（全部歸零，預設 fail-closed）、ISO/ms 截止時間（截止前已得且未排除者仍可領），或 "off"。 */
+  CONVERSATION_BADGE_REWARD_FREEZE?: string;
+  /** Worker secret：逗號分隔的 member_id 排除名單，在截止時間制下即使早於截止時間也不發這五枚徽章積分。 */
+  CONVERSATION_BADGE_FREEZE_EXCLUDED?: string;
   /** Isolate telemetry counter coalescing window in ms ("0" = direct per-event write). */
   METRICS_FLUSH_MS?: string;
   /** Worker secret JSON: fixed audit memberId and SHA-256 of the private blog-only key. Unset disables it. */

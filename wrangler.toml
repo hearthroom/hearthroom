@@ -142,6 +142,10 @@ NOV_20_DAILY_RANK_EXTENSION_MINUTES = "360"
 # 遙測計數器（ops/community/library/account_auth_metrics）isolate 內合批落庫間隔（毫秒）。
 # "0"＝逐筆直寫（緊急回退）；正式預設 "10000"（10 秒，scrape 前會先刷本執行個體緩衝）。
 METRICS_FLUSH_MS = "10000"
+# 開始對話類五枚徽章（player_explorer_50/100/300、sole_wanderer、sole_wanderer_pioneer）的積分凍結模式：
+# 採截止時間制（2026-11-22 owner 定案）：早於此 UTC 時刻已取得且不在 secret CONVERSATION_BADGE_FREEZE_EXCLUDED 名單者仍可領原積分，其餘為 0；
+# 設為 "all" 可一鍵改為全部未領歸零（未設或格式無效亦 fail-closed 視同 "all"）。
+CONVERSATION_BADGE_REWARD_FREEZE = "2026-11-22T06:30:00Z"
 # 瀏覽器推播（Web Push）的 VAPID 公鑰與聯絡人；私鑰是 secret `PUSH_VAPID_PRIVATE_KEY`（wrangler secret put）。
 # 三者缺一推播就關：/v1/push/config 回 enabled:false，站上不會出現推播開關。公鑰不是密鑰，換鑰要三者一起換。
 PUSH_VAPID_PUBLIC_KEY = "BPtnWqq9-GEcvvu8iLFiek-R2e0irBqzECbuvs8OeAYhRAk832IDbJh2f10ssltIXg5-Bb26zvc4R6JwK_Si0ro"

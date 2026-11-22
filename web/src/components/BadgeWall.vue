@@ -50,9 +50,9 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
     <p v-if="badge.taken" class="badge-tile__taken">{{ badge.holder?t('badgeWall.takenBy',{handle:'@'+badge.holder}):t('badgeWall.taken') }}</p>
     <p v-else-if="editable&&badge.reward&&badge.state!=='earned'">{{ t('badgeWall.rewardLocked',{n:credits(badge.reward)}) }}</p>
-    <p v-else-if="badge.reward&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits(badge.reward)}) }}</p>
-    <p v-else-if="badge.reward&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits(badge.reward)}) }}</p>
-    <p v-else-if="badge.reward&&badge.claim==='rejected'">{{ t('badgeWall.claimRejected') }}</p>
+    <p v-else-if="(badge.claimAmount??badge.reward)&&badge.claim==='paid'" class="badge-tile__claimed">{{ t('badgeWall.claimed',{n:credits((badge.claimAmount??badge.reward)!)}) }}</p>
+    <p v-else-if="(badge.claimAmount??badge.reward)&&badge.claim==='pending'" role="status">{{ t('badgeWall.claimPending',{n:credits((badge.claimAmount??badge.reward)!)}) }}</p>
+    <p v-else-if="badge.claim==='rejected'">{{ t('badgeWall.claimRejected') }}</p>
     <p v-if="badge.state==='earned'&&(share(badge)||badge.ordinal)" class="badge-tile__census">{{ [share(badge),badge.ordinal?t('badgeWall.ordinal',{n:badge.ordinal}):''].filter(Boolean).join(' · ') }}</p>
    </div>
    <button v-if="editable && badge.state==='earned' && badge.reward && !badge.claim" type="button" class="btn badge-tile__claim" data-claim :disabled="busy || !!claiming" @click="emit('claim',badge.key)">{{ claiming===badge.key?t('badgeWall.claiming'):t('badgeWall.claim',{n:credits(badge.reward)}) }}</button>

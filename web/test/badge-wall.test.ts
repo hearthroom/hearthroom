@@ -33,3 +33,15 @@ it('ships painted art for every icon except the Discord brand mark, which stays 
  app=createApp(BadgeWall,{items:[{...item('discord_linked'),icon:'discord'}]}).use(i18n);app.mount(el);
  expect(el.querySelector('.badge-tile__art')).toBeNull();expect(el.querySelector('svg[data-icon=discord]')).not.toBeNull();
 });
+it('omits claim buttons and credit copy when a badge has no credit reward, while preserving prior claimed status',()=>{
+ app=createApp(BadgeWall,{items:[
+  {...item('player_explorer_50','earned'),category:'play',claim:'paid',claimAmount:500},
+  {...item('player_explorer_100','earned'),category:'play'},
+  {...item('sole_wanderer','locked'),category:'play'},
+ ],editable:true}).use(i18n);app.mount(el);
+ expect(el.querySelector('[data-claim]')).toBeNull();
+ const tiles=[...el.querySelectorAll('.badge-tile')];
+ expect(tiles[0].textContent).toContain('500');
+ expect(tiles[1].textContent).not.toContain('credits');
+ expect(tiles[2].textContent).not.toContain('credits');
+});

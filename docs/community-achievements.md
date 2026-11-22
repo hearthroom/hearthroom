@@ -133,7 +133,7 @@ MCP decision: not applicable — cohort settlement and historical honor backfill
 | `sole_double_crown` | SFW and Overall monthly #1 in the same month |
 | `sole_grand_slam` | all 18 board honors |
 | `sole_eloquent` | a comment reaches 100 likes |
-| `sole_wanderer` | conversations with 500 different characters |
+| `sole_wanderer` | conversations with 500 different characters; credits for `player_explorer_50/100/300`, `sole_wanderer` and `sole_wanderer_pioneer` are controlled by `CONVERSATION_BADGE_REWARD_FREEZE` (`"all"` default fail-closed freeze, or ISO/ms cutoff with `CONVERSATION_BADGE_FREEZE_EXCLUDED` secret) pending Harbor paid-turn counting |
 
 New milestones: `invite_paid_10` (Harbor `paidInvites`), longer player ladders (characters 100/300, follows 20/50, saves 100), `player_scout_1/5/20` (saving a card before its first placement, own cards excluded) and `player_rater_10/50`.
 
