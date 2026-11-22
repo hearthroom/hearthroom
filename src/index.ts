@@ -392,6 +392,7 @@ function parseZone(raw: string | undefined): Zone | undefined {
 
 const NOV19_OUTAGE_EXPOSURE_SETTING = 'nov19_rank_outage_exposure_started';
 const NOV20_OUTAGE_REEXPOSURE_SETTING = 'nov20_rank_outage_reexposure_started';
+const NOV20_OUTAGE_PARTIAL_REEXPOSURE_SETTING = 'nov20_rank_outage_partial_reexposure_started';
 
 /** Start an outage exposure window once, on the first eligible public daily-board request. */
 async function startOutageExposure(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, settingKey: string, now: number): Promise<number | null> {
@@ -413,16 +414,17 @@ async function startOutageExposure(c: Context<{ Bindings: Env; Variables: { ev: 
 async function moderationRevision(
   c: Context<{ Bindings: Env; Variables: { ev: Pending } }>,
   nowForOutageExposure?: number,
-): Promise<{ revision: number; timing: string; outageStartedAt: number | null; nov20ReexposureStartedAt: number | null }> {
+): Promise<{ revision: number; timing: string; outageStartedAt: number | null; nov20ReexposureStartedAt: number | null; nov20PartialReexposureStartedAt: number | null }> {
   const started = performance.now();
   const query = nowForOutageExposure === undefined
     ? c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1")
     : c.env.DB.prepare(
-        "SELECT revision,(SELECT updated_at FROM community_settings WHERE key=?) AS outageStartedAt,(SELECT updated_at FROM community_settings WHERE key=?) AS nov20ReexposureStartedAt FROM moderation_clock WHERE id=1",
-      ).bind(NOV19_OUTAGE_EXPOSURE_SETTING, NOV20_OUTAGE_REEXPOSURE_SETTING);
-  const revision = await query.first<{ revision: number; outageStartedAt?: number | null; nov20ReexposureStartedAt?: number | null }>();
+        "SELECT revision,(SELECT updated_at FROM community_settings WHERE key=?) AS outageStartedAt,(SELECT updated_at FROM community_settings WHERE key=?) AS nov20ReexposureStartedAt,(SELECT updated_at FROM community_settings WHERE key=?) AS nov20PartialReexposureStartedAt FROM moderation_clock WHERE id=1",
+      ).bind(NOV19_OUTAGE_EXPOSURE_SETTING, NOV20_OUTAGE_REEXPOSURE_SETTING, NOV20_OUTAGE_PARTIAL_REEXPOSURE_SETTING);
+  const revision = await query.first<{ revision: number; outageStartedAt?: number | null; nov20ReexposureStartedAt?: number | null; nov20PartialReexposureStartedAt?: number | null }>();
   let outageStartedAt = revision?.outageStartedAt ?? null;
   let nov20ReexposureStartedAt = revision?.nov20ReexposureStartedAt ?? null;
+  let nov20PartialReexposureStartedAt = revision?.nov20PartialReexposureStartedAt ?? null;
   if (nowForOutageExposure !== undefined) {
     if (outageStartedAt === null) {
       outageStartedAt = await startOutageExposure(c, NOV19_OUTAGE_EXPOSURE_SETTING, nowForOutageExposure);
@@ -430,8 +432,11 @@ async function moderationRevision(
     if (nov20ReexposureStartedAt === null && nowForOutageExposure >= NOV_20_COMPENSATION_DEPLOYED_AT) {
       nov20ReexposureStartedAt = await startOutageExposure(c, NOV20_OUTAGE_REEXPOSURE_SETTING, nowForOutageExposure);
     }
+    if (nov20PartialReexposureStartedAt === null && nowForOutageExposure >= NOV_20_COMPENSATION_DEPLOYED_AT) {
+      nov20PartialReexposureStartedAt = await startOutageExposure(c, NOV20_OUTAGE_PARTIAL_REEXPOSURE_SETTING, nowForOutageExposure);
+    }
   }
-  return { revision: revision?.revision ?? 0, outageStartedAt, nov20ReexposureStartedAt, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
+  return { revision: revision?.revision ?? 0, outageStartedAt, nov20ReexposureStartedAt, nov20PartialReexposureStartedAt, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
 }
 
 function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "origin", timing: string): Response {
@@ -522,10 +527,12 @@ app.get("/v1/cards", async (c) => {
   const since = period && Object.hasOwn(periods, period) ? now - periods[period] * 86_400_000 : sortSince;
   const nov19OutageExposure = moderation.outageStartedAt !== null &&
     now < moderation.outageStartedAt + dailyRankExtension;
-  const nov20ReexposureElapsed = dailyRankExtension > 0 &&
-    moderation.nov20ReexposureStartedAt !== null &&
-    now < moderation.nov20ReexposureStartedAt + dailyRankExtension
-    ? Math.max(0, now - moderation.nov20ReexposureStartedAt)
+  const nov20OutageReexposure = moderation.nov20ReexposureStartedAt !== null &&
+    now < moderation.nov20ReexposureStartedAt + dailyRankExtension;
+  const nov20PartialReexposureElapsed = dailyRankExtension > 0 &&
+    moderation.nov20PartialReexposureStartedAt !== null &&
+    now < moderation.nov20PartialReexposureStartedAt + dailyRankExtension
+    ? Math.max(0, now - moderation.nov20PartialReexposureStartedAt)
     : undefined;
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
@@ -551,13 +558,19 @@ app.get("/v1/cards", async (c) => {
     boardWindow: period ? undefined : c.req.query("sort"),
     dailyRankExtension,
     nov19OutageExposure,
-    nov20ReexposureElapsed,
+    nov20OutageReexposure,
+    nov20PartialReexposureElapsed,
     randomSeed:position.randomSeed,
     limit,
     offset,
   } as const;
   const outage = dailyRankExtension
-    ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure, nov20Reexposure: nov20ReexposureElapsed !== undefined }
+    ? {
+      duration: dailyRankExtension,
+      nov19Exposure: nov19OutageExposure,
+      nov20Reexposure: nov20OutageReexposure,
+      nov20PartialReexposure: nov20PartialReexposureElapsed !== undefined,
+    }
     : undefined;
   const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage);
   const cacheStarted = performance.now();

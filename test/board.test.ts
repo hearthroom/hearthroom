@@ -203,8 +203,9 @@ it("re-exposes Nov 20 cards whose exposure ended or lost time before the Nov 21 
     expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAllInitial, cache: "miss" });
     expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAllInitial, cache: "hit" });
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(startedAt);
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_partial_reexposure_started'").first("updated_at")).toBe(startedAt);
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(nov19Started);
-    expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(1);
+    expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(2);
 
     // Partial cards expire at their exact owed duration even on a warm cache hit.
     const shortOwed = deployAt - (partialShort + 86_400_000);
@@ -237,6 +238,61 @@ it("re-exposes Nov 20 cards whose exposure ended or lost time before the Nov 21 
     expect(await board(configured)).toEqual({ cards: ["fresh"], cache: "miss" });
     expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: ["fresh"], cache: "miss" });
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(startedAt);
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_partial_reexposure_started'").first("updated_at")).toBe(startedAt);
+    expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(2);
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it("starts partial Nov 20 re-exposure on its own clock when full-6h re-exposure deployed in an earlier release", async () => {
+  const local = (time: string) => Date.parse(`${time}+08:00`);
+  const deployAt = local("2026-11-21T12:27:09");
+  const fullStartedAt = local("2026-11-22T09:50:00");
+  const partialDeployAt = local("2026-11-22T11:30:00"); // 100 min after full-6h started (> max 81m partial gap)
+  await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('nov19_rank_outage_exposure_started','true',?)").bind(local("2026-11-21T12:27:11")).run();
+  await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('nov20_rank_outage_reexposure_started','true',?)").bind(fullStartedAt).run();
+  const now = vi.spyOn(Date, "now").mockReturnValue(partialDeployAt);
+  try {
+    const expiredCard = local("2026-11-20T02:35:38");
+    const partialLong = local("2026-11-20T11:05:46"); // owed 81m 23s
+    const partialShort = local("2026-11-20T11:19:30"); // owed 67m 39s
+    const fresh = local("2026-11-22T10:00:00");
+    for (const [id, publishedAt] of [
+      ["expired-26", expiredCard],
+      ["partial-long", partialLong],
+      ["partial-short", partialShort],
+      ["fresh", fresh],
+    ] as const) {
+      await seed({ id, registeredAt: publishedAt });
+      await env.DB.prepare("INSERT INTO rank_publications SELECT id,?,? FROM cards WHERE source_role_id=?").bind(publishedAt, publishedAt, `role-${id}`).run();
+    }
+    const configured = { ...env, NOV_20_DAILY_RANK_EXTENSION_MINUTES: "360" };
+    async function board() {
+      const ctx = createExecutionContext();
+      const response = await worker.fetch(new Request("https://two-train-board.test/v1/cards?sort=day"), configured, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(response.status).toBe(200);
+      return { cards: ids(await response.json() as { items: { id: string }[] }).sort(), cache: response.headers.get("X-Cache") };
+    }
+
+    // Both partial cards get their full owed gap starting at 11:30, while full-6h stays anchored at 09:50.
+    expect(await board()).toEqual({ cards: ["expired-26", "fresh", "partial-long", "partial-short"], cache: "miss" });
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(fullStartedAt);
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_partial_reexposure_started'").first("updated_at")).toBe(partialDeployAt);
+
+    const shortOwed = deployAt - (partialShort + 86_400_000);
+    const longOwed = deployAt - (partialLong + 86_400_000);
+    now.mockReturnValue(partialDeployAt + shortOwed - 1);
+    expect((await board()).cards).toEqual(["expired-26", "fresh", "partial-long", "partial-short"]);
+    now.mockReturnValue(partialDeployAt + shortOwed);
+    expect(await board()).toEqual({ cards: ["expired-26", "fresh", "partial-long"], cache: "hit" });
+    now.mockReturnValue(partialDeployAt + longOwed);
+    expect((await board()).cards).toEqual(["expired-26", "fresh"]);
+
+    // Full-6h card still expires at 09:50 + 6h = 15:50 (not extended to 11:30 + 6h).
+    now.mockReturnValue(fullStartedAt + 6 * 3600_000);
+    expect((await board()).cards).toEqual(["fresh"]);
   } finally {
     now.mockRestore();
   }
