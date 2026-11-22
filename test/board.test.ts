@@ -134,18 +134,21 @@ it("extends public day exposure only for cards eligible at outage start, includi
   }
 });
 
-it("re-exposes Nov 20 cards whose extended exposure expired before the Nov 21 deploy for six live hours", async () => {
+it("re-exposes Nov 20 cards whose exposure ended or lost time before the Nov 21 deploy for their exact owed time", async () => {
   const local = (time: string) => Date.parse(`${time}+08:00`);
   const deployAt = local("2026-11-21T12:27:09");
   const nov19Started = local("2026-11-21T12:27:11") + 904;
   await env.DB.prepare("INSERT INTO community_settings(key,value,updated_at) VALUES('nov19_rank_outage_exposure_started','true',?)").bind(nov19Started).run();
-  const now = vi.spyOn(Date, "now").mockReturnValue(local("2026-11-22T00:30:00"));
+  const startedAt = local("2026-11-22T00:30:00");
+  const now = vi.spyOn(Date, "now").mockReturnValue(startedAt);
   try {
     const expiredCard = local("2026-11-20T02:35:38");
     const edgeBefore = local("2026-11-20T06:27:09") - 1;
-    const edgeAtDeploy = local("2026-11-20T06:27:09");
-    const liveAtDeploy = local("2026-11-20T11:05:46");
-    const moderatedPast = local("2026-11-20T02:35:38");
+    const partialLong = local("2026-11-20T11:05:46"); // owed 1h 21m 23s
+    const partialShort = local("2026-11-20T11:19:30"); // owed 1h 07m 39s
+    const edgeAtDeploy = local("2026-11-20T12:27:09"); // normalExpiry === deployAt, owed 0
+    const fullAtDeploy = local("2026-11-20T14:16:00"); // already got full 6h
+    const moderatedBase = local("2026-11-20T09:00:00");
     const nov19 = local("2026-11-19T23:59:00");
     const afterOutage = local("2026-11-20T21:20:00") + 1;
     const nov21 = local("2026-11-21T00:00:00");
@@ -154,9 +157,12 @@ it("re-exposes Nov 20 cards whose extended exposure expired before the Nov 21 de
       ["expired-clean", expiredCard, "PG15"],
       ["expired-adult", expiredCard, "R"],
       ["edge-before", edgeBefore, "G"],
+      ["partial-long", partialLong, "R"],
+      ["partial-short", partialShort, "G"],
       ["edge-at-deploy", edgeAtDeploy, "G"],
-      ["live-at-deploy", liveAtDeploy, "G"],
-      ["moderated-past", moderatedPast, "G"],
+      ["full-at-deploy", fullAtDeploy, "G"],
+      ["moderated-partial", moderatedBase, "G"],
+      ["moderated-full", moderatedBase, "G"],
       ["nov19", nov19, "G"],
       ["after-outage", afterOutage, "G"],
       ["nov21", nov21, "G"],
@@ -166,9 +172,11 @@ it("re-exposes Nov 20 cards whose extended exposure expired before the Nov 21 de
       await env.DB.prepare("UPDATE cards SET rating=? WHERE source_role_id=?").bind(rating, `role-${id}`).run();
       await env.DB.prepare("INSERT INTO rank_publications SELECT id,?,? FROM cards WHERE source_role_id=?").bind(publishedAt, publishedAt, `role-${id}`).run();
     }
-    // 4h moderation compensation pushes expiry to 12:35:38 (>= 12:27:09 deploy).
-    await env.DB.prepare("INSERT INTO moderation_events VALUES('fixture-mc-past','harbor','role-moderated-past','moderator','compensation','fixture','{}','{}',?,'one')").bind(deployAt).run();
-    await env.DB.prepare("INSERT INTO moderation_compensation VALUES('fixture-mc-past','harbor','role-moderated-past','day',?)").bind(4 * 3600_000).run();
+    // 2h moderation compensation pushes normalExpiry to 11:00:00 (owed 1h 27m 09s); 4h pushes it to 13:00:00 (owed 0).
+    await env.DB.prepare("INSERT INTO moderation_events VALUES('fixture-mc-partial','harbor','role-moderated-partial','moderator','compensation','fixture','{}','{}',?,'one')").bind(deployAt).run();
+    await env.DB.prepare("INSERT INTO moderation_compensation VALUES('fixture-mc-partial','harbor','role-moderated-partial','day',?)").bind(2 * 3600_000).run();
+    await env.DB.prepare("INSERT INTO moderation_events VALUES('fixture-mc-full','harbor','role-moderated-full','moderator','compensation','fixture','{}','{}',?,'two')").bind(deployAt).run();
+    await env.DB.prepare("INSERT INTO moderation_compensation VALUES('fixture-mc-full','harbor','role-moderated-full','day',?)").bind(4 * 3600_000).run();
     const adultMember = await makeMember(20001);
     await env.DB.prepare("UPDATE members SET show_nsfw=1, age_verified_at=?, adult_consent_version=?, country_region='TW' WHERE id=?").bind(deployAt, ADULT_CONSENT_VERSION, adultMember).run();
     whoAmI(20001);
@@ -187,25 +195,48 @@ it("re-exposes Nov 20 cards whose extended exposure expired before the Nov 21 de
     expect((await board(configured, "sort=day&period=week")).cards).toContain("nov19");
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first()).toBeNull();
 
-    // First public daily-board request activates the shared 6h re-exposure window.
-    const expectedClean = ["edge-before", "expired-clean", "fresh"];
-    const expectedAll = ["edge-before", "expired-adult", "expired-clean", "fresh"];
-    expect(await board(configured)).toEqual({ cards: expectedClean, cache: "miss" });
-    expect(await board(configured)).toEqual({ cards: expectedClean, cache: "hit" });
-    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAll, cache: "miss" });
-    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAll, cache: "hit" });
-    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(local("2026-11-22T00:30:00"));
+    // First public daily-board request activates the shared re-exposure window for both full-6h and partial-missed cards.
+    const expectedCleanInitial = ["edge-before", "expired-clean", "fresh", "moderated-partial", "partial-short"];
+    const expectedAllInitial = ["edge-before", "expired-adult", "expired-clean", "fresh", "moderated-partial", "partial-long", "partial-short"];
+    expect(await board(configured)).toEqual({ cards: expectedCleanInitial, cache: "miss" });
+    expect(await board(configured)).toEqual({ cards: expectedCleanInitial, cache: "hit" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAllInitial, cache: "miss" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: expectedAllInitial, cache: "hit" });
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(startedAt);
     expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov19_rank_outage_exposure_started'").first("updated_at")).toBe(nov19Started);
     expect(await env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='rank_settlement' AND operation='exposure' AND outcome='success'").first("value")).toBe(1);
 
-    // Still active 1ms before 6h expiry; immediately gone at 6h even with warm cache.
+    // Partial cards expire at their exact owed duration even on a warm cache hit.
+    const shortOwed = deployAt - (partialShort + 86_400_000);
+    now.mockReturnValue(startedAt + shortOwed - 1);
+    expect((await board(configured)).cards).toEqual(expectedCleanInitial);
+    expect((await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).cards).toEqual(expectedAllInitial);
+
+    now.mockReturnValue(startedAt + shortOwed);
+    expect(await board(configured)).toEqual({ cards: ["edge-before", "expired-clean", "fresh", "moderated-partial"], cache: "hit" });
+    expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({
+      cards: ["edge-before", "expired-adult", "expired-clean", "fresh", "moderated-partial", "partial-long"],
+      cache: "hit",
+    });
+
+    const longOwed = deployAt - (partialLong + 86_400_000);
+    now.mockReturnValue(startedAt + longOwed);
+    expect((await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).cards).toEqual([
+      "edge-before", "expired-adult", "expired-clean", "fresh", "moderated-partial",
+    ]);
+
+    const moderatedOwed = deployAt - (moderatedBase + 2 * 3600_000 + 86_400_000);
+    now.mockReturnValue(startedAt + moderatedOwed);
+    expect((await board(configured)).cards).toEqual(["edge-before", "expired-clean", "fresh"]);
+
+    // Full-6h cards remain active 1ms before 6h expiry and drop immediately at 6h.
     now.mockReturnValue(local("2026-11-22T06:30:00") - 1);
-    expect((await board(configured)).cards).toEqual(expectedClean);
-    expect((await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).cards).toEqual(expectedAll);
+    expect((await board(configured)).cards).toEqual(["edge-before", "expired-clean", "fresh"]);
+    expect((await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).cards).toEqual(["edge-before", "expired-adult", "expired-clean", "fresh"]);
     now.mockReturnValue(local("2026-11-22T06:30:00"));
     expect(await board(configured)).toEqual({ cards: ["fresh"], cache: "miss" });
     expect(await board(configured, "sort=day&nsfw=1", bearer("adult-viewer"))).toEqual({ cards: ["fresh"], cache: "miss" });
-    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(local("2026-11-22T00:30:00"));
+    expect(await env.DB.prepare("SELECT updated_at FROM community_settings WHERE key='nov20_rank_outage_reexposure_started'").first("updated_at")).toBe(startedAt);
   } finally {
     now.mockRestore();
   }

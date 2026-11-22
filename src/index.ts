@@ -522,8 +522,11 @@ app.get("/v1/cards", async (c) => {
   const since = period && Object.hasOwn(periods, period) ? now - periods[period] * 86_400_000 : sortSince;
   const nov19OutageExposure = moderation.outageStartedAt !== null &&
     now < moderation.outageStartedAt + dailyRankExtension;
-  const nov20OutageReexposure = moderation.nov20ReexposureStartedAt !== null &&
-    now < moderation.nov20ReexposureStartedAt + dailyRankExtension;
+  const nov20ReexposureElapsed = dailyRankExtension > 0 &&
+    moderation.nov20ReexposureStartedAt !== null &&
+    now < moderation.nov20ReexposureStartedAt + dailyRankExtension
+    ? Math.max(0, now - moderation.nov20ReexposureStartedAt)
+    : undefined;
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
@@ -548,13 +551,13 @@ app.get("/v1/cards", async (c) => {
     boardWindow: period ? undefined : c.req.query("sort"),
     dailyRankExtension,
     nov19OutageExposure,
-    nov20OutageReexposure,
+    nov20ReexposureElapsed,
     randomSeed:position.randomSeed,
     limit,
     offset,
   } as const;
   const outage = dailyRankExtension
-    ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure, nov20Reexposure: nov20OutageReexposure }
+    ? { duration: dailyRankExtension, nov19Exposure: nov19OutageExposure, nov20Reexposure: nov20ReexposureElapsed !== undefined }
     : undefined;
   const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c), undefined, outage);
   const cacheStarted = performance.now();
