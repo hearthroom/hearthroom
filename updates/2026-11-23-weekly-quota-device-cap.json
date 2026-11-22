@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/campaign/creator-season",
+  "title": {
+    "zh-Hant": "創作季的每週送審額度將自 11 月 30 日起改為同一台裝置共用。",
+    "zh-Hans": "创作季的每周提交额度将自 11 月 30 日起改为同一台设备共用。",
+    "en": "Starting Nov 30, accounts on the same device will share the Creator Season weekly submission limit.",
+    "ja": "11月30日より、創作シーズンの週ごとの提出枠は同じ端末のアカウント間で共有になります。",
+    "ko": "11월 30일부터 창작 시즌의 주간 제출 한도를 같은 기기의 계정이 함께 쓰게 돼요."
+  },
+  "body": {
+    "zh-Hant": "台北時間 11 月 30 日 08:00 起，同一台裝置上的帳號會合計每週送審上限，與家人或室友共用電腦的作者可到 Discord 找客服申請獨立額度。",
+    "zh-Hans": "北京时间 11 月 30 日 08:00 起，同一台设备上的账号会合计每周提交上限，与家人或室友共用电脑的作者可到 Discord 找客服申请独立额度。",
+    "en": "From Nov 30 at 08:00 (UTC+8), weekly submissions during Creator Season count across accounts on the same device, and authors who share a computer with family or housemates can contact support on Discord for a separate limit.",
+    "ja": "日本時間11月30日 9:00（台湾時間 8:00）より同じ端末のアカウントで週の上限を合算しますが、ご家族や同居人とパソコンを共有している作者は Discord のサポートで個別枠を申請できます。",
+    "ko": "한국 시간 11월 30일 09:00(대만 시간 08:00)부터 같은 기기의 계정은 주간 한도를 합산하며, 가족이나 동거인과 컴퓨터를 함께 쓰는 작가는 Discord 고객지원에 별도 한도를 신청할 수 있어요."
+  }
+}

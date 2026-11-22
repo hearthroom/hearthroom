@@ -49,7 +49,7 @@ const quote = (locale: PushLocale, name: string) => (locale.startsWith("zh") ? `
 type Copy = {
   title: string; reply: string; replyPlain: string; cardComments: string; cardCommentsMany?: string; cardCommentsPlain: string; work: string; workNew: string; workUpdate: string; workPlain: string;
   approved: string; approvedUpdate: string; rejected: string; rejectedNote: string; rejectedUpdate: string; rejectedUpdateNote: string; reviewPlain: string;
-  like: string; likes: string; pack: string; packCount: string; reminder: string; reminderCard: string; shipped: string; generic: string;
+  like: string; likes: string; pack: string; packCount: string; campaignRuleNotice: string; campaignRuleNoticePlain: string; reminder: string; reminderCard: string; shipped: string; generic: string;
   /** 蘇綺的召回：標題是她的名字，內容是她的口吻 */
   sukiTitle: string; sukiHungry: string; sukiPostcard: string;
   /** 分享活動：只說結果，不提金額與發放方式；理由在活動頁看 */
@@ -67,6 +67,8 @@ const copy: Record<PushLocale, Copy> = {
     rejectedUpdate: "{card}的更新這次沒有通過審核", rejectedUpdateNote: "{card}的更新這次沒有通過審核，審核員說：{note}", reviewPlain: "審核結果已更新",
     like: "{actor} 讚了你在{card}的留言", likes: "{actor} 和另外 {others} 人讚了你在{card}的留言",
     pack: "你收到了額外的登記次數", packCount: "你可以在每週額度之外再登記 {count} 次",
+    campaignRuleNotice: "創作季自 {at} 起，同一台裝置的帳號共用每週額度，共用電腦可到 Discord 找客服申請獨立額度。",
+    campaignRuleNoticePlain: "創作季的每週送審額度將改為同一台裝置共用，共用電腦可到 Discord 找客服申請獨立額度。",
     reminder: "你認領的作品即將到期，請繼續審核或放回待審清單", reminderCard: "你認領的{card}即將到期，請繼續審核或放回待審清單",
     shipped: "你回報的事已經處理好了：{title}", generic: "有新的通知",
     sukiTitle: "蘇綺", sukiHungry: "肚子餓了……今晚講一個故事給我聽好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那邊的人在問你什麼時候回去～",
@@ -82,6 +84,8 @@ const copy: Record<PushLocale, Copy> = {
     rejectedUpdate: "{card}的更新这次没有通过审核", rejectedUpdateNote: "{card}的更新这次没有通过审核，审核员说：{note}", reviewPlain: "审核结果已更新",
     like: "{actor} 点赞了你在{card}的评论", likes: "{actor} 和另外 {others} 人点赞了你在{card}的评论",
     pack: "你收到了额外的登记次数", packCount: "你可以在每周额度之外再登记 {count} 次",
+    campaignRuleNotice: "创作季自 {at} 起，同一台设备的账号共用每周额度，共用电脑可到 Discord 找客服申请独立额度。",
+    campaignRuleNoticePlain: "创作季的每周提交额度将改为同一台设备共用，共用电脑可到 Discord 找客服申请独立额度。",
     reminder: "你认领的作品即将到期，请继续审核或放回待审列表", reminderCard: "你认领的{card}即将到期，请继续审核或放回待审列表",
     shipped: "你反馈的事已经处理好了：{title}", generic: "有新的通知",
     sukiTitle: "苏绮", sukiHungry: "肚子饿了……今晚讲一个故事给我听好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那边的人在问你什么时候回去～",
@@ -97,6 +101,8 @@ const copy: Record<PushLocale, Copy> = {
     rejectedUpdate: "Your update to {card} did not pass review this time", rejectedUpdateNote: "Your update to {card} did not pass review this time. The reviewer wrote: {note}", reviewPlain: "Your review result was updated",
     like: "{actor} liked your comment on {card}", likes: "{actor} and {others} others liked your comment on {card}",
     pack: "You received extra listings", packCount: "You can now list {count} more beyond your weekly quota",
+    campaignRuleNotice: "From {at}, accounts on the same device share the Creator Season weekly limit; if you share a computer, contact support on Discord for a separate limit.",
+    campaignRuleNoticePlain: "Accounts on the same device will share the Creator Season weekly limit; if you share a computer, contact support on Discord for a separate limit.",
     reminder: "Your review claim expires soon. Continue reviewing or release it to the queue.", reminderCard: "Your claim on {card} expires soon. Continue reviewing or release it to the queue.",
     shipped: "What you reported is now live: {title}", generic: "You have a new notification",
     sukiTitle: "Suki", sukiHungry: "I'm hungry… tell me a story tonight?", sukiPostcard: "I took a trip into the world of {card}. Everyone there is asking when you'll be back~",
@@ -112,6 +118,8 @@ const copy: Record<PushLocale, Copy> = {
     rejectedUpdate: "{card}の更新は今回審査を通過しませんでした", rejectedUpdateNote: "{card}の更新は今回審査を通過しませんでした。審査担当者のコメント：{note}", reviewPlain: "審査結果が更新されました",
     like: "{actor} さんが{card}へのコメントにいいねしました", likes: "{actor} さんと他 {others} 人が{card}へのコメントにいいねしました",
     pack: "追加の掲載枠を受け取りました", packCount: "週ごとの枠とは別に、あと {count} 件掲載できるようになりました",
+    campaignRuleNotice: "創作シーズンは{at}より、同じ端末のアカウント間で週の提出枠を共有します。共有パソコンの方は Discord のサポートで個別枠を申請できます。",
+    campaignRuleNoticePlain: "創作シーズンでは、同じ端末のアカウント間で週の提出枠を共有します。共有パソコンの方は Discord のサポートで個別枠を申請できます。",
     reminder: "担当の有効期限が近づいています。審査を続けるか、一覧に戻してください。", reminderCard: "担当中の{card}の有効期限が近づいています。審査を続けるか、一覧に戻してください。",
     shipped: "ご報告いただいた件が反映されました：{title}", generic: "新しいお知らせがあります",
     sukiTitle: "スキ", sukiHungry: "おなかすいた……今夜、お話ひとつ聞かせてくれる？", sukiPostcard: "{card}の世界をひとまわりしてきたよ。みんな、あなたはいつ戻るのって聞いてた～",
@@ -127,6 +135,8 @@ const copy: Record<PushLocale, Copy> = {
     rejectedUpdate: "{card}의 업데이트가 이번 심사를 통과하지 못했습니다", rejectedUpdateNote: "{card}의 업데이트가 이번 심사를 통과하지 못했습니다. 검토자 의견: {note}", reviewPlain: "심사 결과가 업데이트되었습니다",
     like: "{actor} 님이 {card}에 남긴 내 댓글을 좋아합니다", likes: "{actor} 님 외 {others}명이 {card}에 남긴 내 댓글을 좋아합니다",
     pack: "추가 등록 횟수를 받았습니다", packCount: "주간 한도와 별도로 {count}번 더 등록할 수 있습니다",
+    campaignRuleNotice: "창작 시즌은 {at}부터 같은 기기의 계정이 주간 제출 한도를 함께 써요. 공용 컴퓨터를 쓴다면 Discord 고객지원에 별도 한도를 신청할 수 있어요.",
+    campaignRuleNoticePlain: "창작 시즌에서는 같은 기기의 계정이 주간 제출 한도를 함께 써요. 공용 컴퓨터를 쓴다면 Discord 고객지원에 별도 한도를 신청할 수 있어요.",
     reminder: "검토 담당 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.", reminderCard: "담당한 {card}의 검토 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.",
     shipped: "제보하신 내용이 반영되었습니다: {title}", generic: "새 알림이 있습니다",
     sukiTitle: "스키", sukiHungry: "배고파… 오늘 밤에 이야기 하나 들려줄래?", sukiPostcard: "{card}의 세계에 잠깐 다녀왔어. 다들 너 언제 돌아오냐고 묻더라~",
@@ -179,6 +189,21 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
   if (row.kind === "suki_recall") return extra.variant === "postcard" && card ? fill(c.sukiPostcard, { card }) : c.sukiHungry;
   if (row.kind === "comment_like" && actor && card) return count > 1 ? fill(c.likes, { actor, card, others: count - 1 }) : fill(c.like, { actor, card });
   if (row.kind === "registration_pack") return Number(extra.granted) > 0 ? fill(c.packCount, { count: Number(extra.granted) }) : c.pack;
+  if (row.kind === "campaign_rule_notice") {
+    const effectiveAt = Number(extra.effectiveAt);
+    if (Number.isSafeInteger(effectiveAt) && effectiveAt > 0) {
+      const at = new Intl.DateTimeFormat(locale, {
+        timeZone: "Asia/Taipei",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(effectiveAt);
+      return fill(c.campaignRuleNotice, { at });
+    }
+    return c.campaignRuleNoticePlain;
+  }
   if (row.kind === "review_reminder") return card ? fill(c.reminderCard, { card }) : c.reminder;
   if (row.kind === "report_shipped" && typeof extra.entry === "string") {
     const title = updateTitle(extra.entry, locale);

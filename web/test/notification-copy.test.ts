@@ -16,7 +16,7 @@ const notice = (kind: string): CommunityNotice => ({ id: 'fixture', kind, path: 
 const kinds = [
   'comment_reply', 'comment_like', 'card_comments', 'followed_work',
   'review_result', 'review_reminder', 'review_reminder_expired', 'comment_removed',
-  'registration_pack', 'report_shipped', 'suki_recall',
+  'registration_pack', 'campaign_rule_notice', 'report_shipped', 'suki_recall',
   'share_needs_info', 'share_approved', 'share_rejected', 'share_paid', 'share_queued',
   'enforcement_notice', 'enforcement_result',
 ];
@@ -45,6 +45,23 @@ it.each(locales)('retains the card name and comment count in %s', async locale =
   await applyLocale(locale);
   expect(noticeText({ ...notice('card_comments'), card: { id: 12, name: '合成卡' }, extra: { count: 3 } }))
     .toBe(digest[locales.indexOf(locale)]);
+});
+
+it.each(locales)('formats campaign_rule_notice with Taipei effectiveAt and falls back when missing in %s', async locale => {
+  await applyLocale(locale);
+  const effectiveAt = Date.UTC(2026, 10, 30, 0, 0, 0);
+  const at = new Intl.DateTimeFormat(locale, {
+    timeZone: 'Asia/Taipei',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(effectiveAt);
+  expect(noticeText({ ...notice('campaign_rule_notice'), extra: { slug: 'creator-season', effectiveAt } }))
+    .toBe(i18n.global.t('community.noticeText.campaign_rule_notice', { at }));
+  expect(noticeText({ ...notice('campaign_rule_notice'), extra: { slug: 'creator-season' } }))
+    .toBe(i18n.global.t('community.notices.campaign_rule_notice'));
 });
 
 it('also shields plain and detailed card comment copy missing in every loaded language', async () => {

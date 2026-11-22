@@ -10,6 +10,7 @@ import MyCardTile from "@/components/MyCardTile.vue";
 import AgentOnboard from "@/components/AgentOnboard.vue";
 import AuthorDiscordEntry from "@/components/AuthorDiscordEntry.vue";
 import CreatorSeasonEntry from "@/components/CreatorSeasonEntry.vue";
+import QuotaDeviceHelp from "@/components/QuotaDeviceHelp.vue";
 
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
@@ -69,6 +70,7 @@ const reauth = ref<Partial<Record<ProviderId, boolean>>>({});
 const quota = ref<MyCardPage["quota"] | null>(null);
 const loading = ref(true);
 const error = ref("");
+const quotaDeviceBlocked = ref(false);
 const busy = ref<string | null>(null);
 const providers = computed(() => session.profile?.identities.filter(i=>i.provider==='harbor').map(i=>i.provider as ProviderId) ?? (session.me ? [currentProvider()] : []));
 const visible = computed(()=>groupWorks(rows.value));
@@ -179,7 +181,7 @@ async function submitReview(expected:WorkVisibility){
   const options={title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:(q:string)=>fetchFandomLookup(q)}};
   let missingPresetTag=false,missingCover=false;
   const send=async(value:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
-   if(!valid())return;busy.value=key;error.value='';
+   if(!valid())return;busy.value=key;error.value='';quotaDeviceBlocked.value=false;
    try{
     await saveRatingDraft(source,answers,token,provider).catch(()=>{});if(!valid())return;
     if(expected.everPublic)await registerCard(source,token,answers,[],provider,value.text,value.id,expected,value.update);
@@ -205,7 +207,12 @@ async function submitReview(expected:WorkVisibility){
    if(!consent||!valid())return;
   }
   await visibilityDialog.value?.reload();if(valid())await load(true);
- }catch(e){if(valid())error.value=e instanceof Error?e.message:t('state.actionFailed');}
+ }catch(e){
+  if(!valid())return;
+  const deviceBlocked=e instanceof ApiError&&e.code==='weekly_quota_exceeded'&&e.reason==='device_shared';
+  quotaDeviceBlocked.value=deviceBlocked;
+  error.value=deviceBlocked?t('mine.quota.exceededDevice'):e instanceof ApiError&&e.code==='weekly_quota_exceeded'?t('mine.quota.exceeded'):e instanceof Error?e.message:t('state.actionFailed');
+ }
 }
 
 function visibilityChanged(value:WorkVisibility){
@@ -247,6 +254,7 @@ watch(()=>route.query.fresh, fresh=>{
             <span class="quota__num"><strong>{{ quota.used }}</strong>/{{ quota.limit }} {{ $t("mine.quota.unit") }}</span>
             <span class="quota__pips" aria-hidden="true"><i v-for="i in quota.limit" :key="i" class="quota__pip" :class="{ 'quota__pip--on': i <= quota.used }" /></span>
             <span class="quota__reset">{{ quotaResetText }}</span>
+            <span v-if="quota.deviceShared" class="quota__shared" data-quota-shared>{{ $t("mine.quota.deviceShared") }}</span>
             <span v-if="packLeft > 0" class="quota__packs" data-quota-packs>{{ $t("mine.quota.packs", { n: packLeft }) }}</span>
           </template>
         </p>
@@ -290,7 +298,10 @@ watch(()=>route.query.fresh, fresh=>{
       <button v-if="reauth[provider]" class="btn btn--sm btn--primary" @click="reconnect(provider as ProviderId)">{{ $t('me.reauthorize') }}</button>
       <button v-else class="btn btn--sm" :disabled="loading" @click="load()">{{ $t('linked.retry') }}</button>
     </div>
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <div v-if="error" class="notice notice--error notice--stack" role="alert">
+      <span>{{ error }}</span>
+      <QuotaDeviceHelp v-if="quotaDeviceBlocked" />
+    </div>
 
     <div v-if="loading && !visible.length" class="wall" aria-hidden="true">
       <div v-for="i in 12" :key="i" class="ghost ghost--card" />
@@ -324,7 +335,7 @@ watch(()=>route.query.fresh, fresh=>{
       />
     </div>
 
-    <AuthorVisibility v-if="visibilityEnabled&&visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" @changed="visibilityChanged" @submit="submitReview" />
+    <AuthorVisibility v-if="visibilityEnabled&&visibilityCard" ref="visibilityDialog" :key="workKey(visibilityCard)" dialog-only :id="visibilityCard.sourceRoleId??visibilityCard.roleId" :card-id="String(visibilityCard.num??visibilityCard.roleId)" :provider="visibilityCard.sourceProvider??visibilityCard.provider" :actor="visibilityActor" :name="visibilityCard.name" :token="visibilityToken" :quota-full="quotaFull" :quota-shared="!!quota?.deviceShared" @changed="visibilityChanged" @submit="submitReview" />
 
     <nav v-if="pageCount > 1" class="pager" :aria-label="$t('mine.pages')">
       <button type="button" class="btn btn--sm pager__step" :disabled="page <= 1" :aria-label="$t('pager.prev')" @click="goPage(page - 1)">
@@ -371,8 +382,11 @@ watch(()=>route.query.fresh, fresh=>{
 .quota__pip { width: 14px; height: 6px; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .quota__pip--on { background: var(--accent-grad); box-shadow: none; }
 .quota__packs { font-weight: 600; color: var(--accent-text); }
+.quota__shared:lang(ko) { word-break: keep-all; }
+.quota__shared:lang(ja) { word-break: auto-phrase; }
 .quota--full .quota__label { color: var(--danger); font-weight: 600; }
 .quota--full .quota__pip--on { background: var(--text-3); }
+.notice--stack { display: grid; justify-items: start; gap: 2px; }
 
 /* ── 搜尋與篩選：同一列；手機上各自撐滿 ── */
 .tools { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; margin-bottom: var(--s-4); }

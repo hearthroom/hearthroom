@@ -76,6 +76,7 @@ import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from "@/components/AuthorVisibility.vue";
 import AuthorDiscordEntry from "@/components/AuthorDiscordEntry.vue";
+import QuotaDeviceHelp from "@/components/QuotaDeviceHelp.vue";
 import SharedStatePanel from "@/components/SharedStatePanel.vue";
 import OwnerWorkshopBlock from "@/components/workshop/OwnerWorkshopBlock.vue";
 import type { WorkVisibility } from "@/lib/work-visibility";
@@ -457,6 +458,8 @@ const saving = ref(false);
 /** 世界書分段送出時的進度；沒在送就是 null。 */
 const saveProgress = ref<{ done: number; total: number } | null>(null);
 const error = ref("");
+const quotaDeviceBlocked = ref(false);
+watch(error, (val) => { if (val !== t("mine.quota.exceededDevice")) quotaDeviceBlocked.value = false; });
 const deletionError = ref("");
 const deletionErrorNotice = ref<HTMLElement | null>(null);
 const saved = ref(false);
@@ -1903,7 +1906,7 @@ async function publish(expected:WorkVisibility) {
   };
   let missingPresetTag=false,missingCover=false;
   const send=async(answer:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{
-    if(!valid())return;saving.value=true;error.value='';
+    if(!valid())return;saving.value=true;error.value='';quotaDeviceBlocked.value=false;
     try{
       const token=await session.accessToken();if(!valid())return;
       if(!token)throw new Error(t('auth.expired'));
@@ -1933,7 +1936,10 @@ async function publish(expected:WorkVisibility) {
     if(valid())await router.push(lp('/mine?fresh=1'));
   }catch(err){
     if(!valid())return;
-    error.value=err instanceof ApiError&&err.code==='weekly_quota_exceeded'?t('mine.quota.exceeded')
+    const deviceBlocked=err instanceof ApiError&&err.code==='weekly_quota_exceeded'&&err.reason==='device_shared';
+    quotaDeviceBlocked.value=deviceBlocked;
+    error.value=deviceBlocked?t('mine.quota.exceededDevice')
+      :err instanceof ApiError&&err.code==='weekly_quota_exceeded'?t('mine.quota.exceeded')
       :err instanceof ApiError&&(err.code==='fandom_lookup_failed'||err.code==='fandom_not_found')?t('mine.fandomLookupFailed')
       :err instanceof ApiError&&err.code==='card_too_large_for_review'?t('mine.tooLargeForReview')
       :err instanceof ApiError&&err.code==='rating_version_outdated'?t('error.ratingOutdated')
@@ -2129,8 +2135,9 @@ async function exportCard(format: "png" | "json") {
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("visibility.review.cancelled") }}</p>
         <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
         <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
-        <div v-if="error" class="notice notice--error" role="alert">
-          {{ error }}
+        <div v-if="error" class="notice notice--error" :class="{ 'notice--stack': quotaDeviceBlocked }" role="alert">
+          <span>{{ error }}</span>
+          <QuotaDeviceHelp v-if="quotaDeviceBlocked" />
           <button v-if="replyBlocked" type="button" class="btn btn--sm btn--ghost" @click="goto('advanced'); replyDefaultsEditor?.validate()">{{ $t("editor.reply.title") }}</button>
           <RegexIssueList v-if="regexSaveIssues.length" :set="regexSet" :issues="regexSaveIssues" />
         </div>
@@ -3019,6 +3026,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .pane { scroll-margin-top: 52px; }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.notice--stack { display: grid; justify-items: start; gap: 2px; }
 /* 卡片展示：一組有外框的欄位，標題列右邊是「顯示在哪裡？」 */
 .showcase { display: grid; gap: var(--s-4); padding: var(--s-4) var(--s-5) var(--s-5); border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line); min-width: 0; }
 .showcase__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }

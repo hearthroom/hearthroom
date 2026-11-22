@@ -14,6 +14,7 @@ import { useLocalePath } from '@/lib/use-locale';
 import {useWorkVisibilityCapability} from '@/lib/work-visibility-capability';
 import {legacyAuthorStateKey} from '@/lib/legacy-author-state';
 import AuthorVisibility from './AuthorVisibility.vue';
+import QuotaDeviceHelp from './QuotaDeviceHelp.vue';
 import {fetchWorkVisibility,type WorkVisibility} from '@/lib/work-visibility';
 import type { CommunityCard } from '@/lib/types';
 const props = defineProps<{card: CommunityCard}>();
@@ -29,6 +30,7 @@ const owner = computed(() => !!provider.value && (
 ));
 const busy = ref(false);
 const error = ref('');
+const quotaDeviceBlocked = ref(false);
 const visibility=ref<WorkVisibility|null>(null);
 const visibilityEnabled=useWorkVisibilityCapability();
 const visibilityControl=ref<InstanceType<typeof AuthorVisibility>|null>(null);
@@ -50,7 +52,7 @@ async function submit(expected=visibility.value) {
   let token: string | null = null;
   try { token = await accountToken(p, props.card.author.accountNumId); } catch { token = null; }
   if(!valid())return;
-  if (!token) { error.value = t('auth.expired'); return; }
+  if (!token) { quotaDeviceBlocked.value = false; error.value = t('auth.expired'); return; }
   const saved = await fetchRatingDraft(source, token, p).catch(() => null);
   const answers = await askRating(saved);
   if (!answers||!valid()) return;
@@ -61,7 +63,7 @@ async function submit(expected=visibility.value) {
   };
   let missingPresetTag=false,missingCover=false;
   const send=async(value?:{update:import('../../../shared/card-update').UpdateIntent})=>{
-    if(!valid())return;busy.value=true;error.value='';
+    if(!valid())return;busy.value=true;error.value='';quotaDeviceBlocked.value=false;
     try{
       void saveRatingDraft(source,answers,token!,p).catch(()=>{});
       if(expected.everPublic)await registerCard(source,token!,answers,[],p,undefined,undefined,expected,value?.update);
@@ -89,8 +91,15 @@ async function submit(expected=visibility.value) {
     }
     if(!valid())return;await visibilityControl.value?.reload();if(valid())emit('submitted');
   } catch (err) {
-    if(valid())error.value = err instanceof ApiError && err.code === 'weekly_quota_exceeded'
-      ? t('mine.quota.exceeded') : err instanceof Error ? err.message : t('state.actionFailed');
+    if (valid()) {
+      const deviceBlocked = err instanceof ApiError && err.code === 'weekly_quota_exceeded' && err.reason === 'device_shared';
+      quotaDeviceBlocked.value = deviceBlocked;
+      error.value = deviceBlocked
+        ? t('mine.quota.exceededDevice')
+        : err instanceof ApiError && err.code === 'weekly_quota_exceeded'
+          ? t('mine.quota.exceeded')
+          : err instanceof Error ? err.message : t('state.actionFailed');
+    }
   }
 }
 </script>
@@ -102,11 +111,15 @@ async function submit(expected=visibility.value) {
     <!-- 作者試玩自己的草稿（mode=source）；公開的「遊玩」仍開過審那一版，作者也看得到玩家看到的樣子 -->
     <a v-if="stageAvailable" class="btn" :href="platformPath(lp(`/play/${card.num ?? card.id}?mode=source`), provider)">{{ t('card.owner.playDraft') }}</a>
     <button v-if="visibilityEnabled&&canSubmitUpdate" class="btn btn--primary" :disabled="busy" @click="submit()">{{ t('card.owner.submitUpdate') }}</button>
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <div v-if="error" class="notice notice--error card-owner-actions__error" role="alert">
+      <span>{{ error }}</span>
+      <QuotaDeviceHelp v-if="quotaDeviceBlocked" />
+    </div>
   </div>
 </template>
 <style scoped>
 .card-owner-actions { display:flex; flex-wrap:wrap; gap:var(--s-2); grid-column:1 / -1; }
 .card-owner-actions .btn { min-height:44px; flex:1; }
-.card-owner-actions p, .card-owner-actions :deep(.author-visibility) { flex-basis:100%; }
+.card-owner-actions p, .card-owner-actions__error, .card-owner-actions :deep(.author-visibility) { flex-basis:100%; }
+.card-owner-actions__error { display:grid; justify-items:start; gap:2px; }
 </style>

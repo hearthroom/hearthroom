@@ -145,6 +145,21 @@ export function noticeText(n: CommunityNotice): string {
   if (n.kind === "comment_like" && actor && card)
     return count > 1 ? t("community.noticeText.comment_like_many", { actor, card, others: count - 1 }) : t("community.noticeText.comment_like", { actor, card });
   if (n.kind === "registration_pack" && Number(extra.granted) > 0) return t("community.noticeText.registration_pack", { count: Number(extra.granted) });
+  if (n.kind === "campaign_rule_notice") {
+    const effectiveAt = Number(extra.effectiveAt);
+    if (Number.isSafeInteger(effectiveAt) && effectiveAt > 0) {
+      const at = new Intl.DateTimeFormat(locale, {
+        timeZone: "Asia/Taipei",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(effectiveAt);
+      return t("community.noticeText.campaign_rule_notice", { at });
+    }
+    return t("community.notices.campaign_rule_notice");
+  }
   if (n.kind === "review_reminder" && card) return t("community.noticeText.review_reminder", { card });
   if (n.kind === "suki_recall") return extra.variant === "postcard" && card ? t("community.noticeText.suki_postcard", { card }) : t("community.noticeText.suki_hungry");
   return t("community.notices." + n.kind);

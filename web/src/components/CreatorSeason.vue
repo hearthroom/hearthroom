@@ -14,6 +14,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { campaignErrorText, fetchRewardProgress, formatNumber, type CardRewardCampaign, type RewardProgress, type RewardProgressItem } from "@/lib/campaign";
 import AmountText from "@/components/AmountText.vue";
+import QuotaDeviceHelp from "@/components/QuotaDeviceHelp.vue";
 import { hueFrom } from "@/lib/format";
 import { daysUntilReset, remaining } from "@/lib/quota";
 import { useSession } from "@/lib/session";
@@ -34,6 +35,19 @@ const total = computed(() => formatNumber(c.value.reward * c.value.weeklyLimit))
 const md = (ms: number) => new Intl.DateTimeFormat(locale.value, { timeZone: c.value.timezone, month: "short", day: "numeric" }).format(ms);
 const start = computed(() => md(c.value.startsAt));
 const end = computed(() => md(c.value.endsAt - 1));
+const showDeviceCap = computed(() => c.value.deviceCapEffectiveAt != null && c.value.phase !== "ended");
+const deviceCapAt = computed(() =>
+  c.value.deviceCapEffectiveAt == null
+    ? ""
+    : new Intl.DateTimeFormat(locale.value, {
+        timeZone: c.value.timezone,
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(c.value.deviceCapEffectiveAt),
+);
 
 // ---- 我的進度 -----------------------------------------------------------------
 const progress = ref<RewardProgress | null>(null);
@@ -101,7 +115,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           <!-- 額度用完：主按鈕換成從我的卡片送審（位置不變），一行說明在它下面，再接寫一張新卡 -->
           <template v-else-if="quotaFull">
             <RouterLink class="btn btn--primary btn--lg" :to="lp('/mine')">{{ t("creator.cta.fromMine") }}</RouterLink>
-            <p class="creator__full" data-quota-full>{{ t("creator.cta.quotaFull", { reset: resetText }) }}</p>
+            <p class="creator__full" data-quota-full>{{ t(quota?.deviceShared ? "creator.cta.quotaFullDevice" : "creator.cta.quotaFull", { reset: resetText }) }}</p>
+            <QuotaDeviceHelp v-if="quota?.deviceShared" align="center" />
             <RouterLink v-if="stageAvailable" class="btn btn--ghost btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
           </template>
           <template v-else>
@@ -118,6 +133,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
               <template #count><strong>{{ t("creator.rules.limitCount", { limit: c.weeklyLimit }) }}</strong></template>
               <template #normal>{{ c.normalWeeklyLimit }}</template>
             </i18n-t>
+          </li>
+          <li v-if="showDeviceCap" data-rule-device-cap>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="4.25" width="13.5" height="9.5" rx="2" /><path d="M7 16.75h6M10 13.75v3" /></svg>
+            <span>{{ t("creator.rules.deviceCap", { at: deviceCapAt }) }}</span>
           </li>
           <li>
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 6.25V10l2.5 1.75" /></svg>
@@ -184,6 +203,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
               <span class="creator__cell-sub">{{ t("creator.mine.unit") }}</span>
             </div>
           </div>
+          <p v-if="c.phase !== 'ended' && progress.quota.deviceShared" class="creator__shared" data-device-shared>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="4.25" width="13.5" height="9.5" rx="2" /><path d="M7 16.75h6M10 13.75v3" /></svg>
+            <span>{{ t("creator.mine.deviceShared") }}</span>
+          </p>
 
           <div v-if="empty" class="creator__empty" data-empty>
             <img src="/mascot/home/pose-write-1.webp" alt="" width="96" height="120" loading="lazy" decoding="async" />
@@ -237,7 +260,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
       <details class="panel creator__notes" data-notes>
         <summary>
           <span>{{ t("creator.notes.title") }}</span>
-          <span class="creator__cap">{{ t("campaign.page.notes.count", { n: 5 }) }}</span>
+          <span class="creator__cap">{{ t("campaign.page.notes.count", { n: showDeviceCap ? 6 : 5 }) }}</span>
         </summary>
         <ul>
           <li>{{ t("creator.notes.1") }}</li>
@@ -245,6 +268,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           <li>{{ t("creator.notes.3", { start, end }) }}</li>
           <li>{{ t("creator.notes.4") }}</li>
           <li>{{ t("creator.notes.5") }}</li>
+          <li v-if="showDeviceCap" data-note-device-cap>{{ t("creator.notes.6") }}</li>
         </ul>
       </details>
     </div>
@@ -309,6 +333,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__pips { display: flex; gap: 2px; margin: 2px 0; }
 .creator__pips i { flex: 0 1 10px; min-width: 4px; height: 6px; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .creator__pips i.on { background: var(--accent-grad); box-shadow: none; }
+.creator__shared { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
+.creator__shared svg { width: 16px; height: 16px; margin-top: 2px; color: var(--text-3); }
 .creator__ghosts { display: grid; gap: var(--s-2); }
 .creator__ghost-cell { height: 96px; border-radius: var(--r-md); }
 .creator__ghost-row { height: 52px; border-radius: var(--r-md); }

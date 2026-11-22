@@ -2,7 +2,7 @@ import { approveFixtureResponse } from './hosted-fixture';
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { ratingBody, bearer, identities, makeMember, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
-import { dispatchPush, pushLine, saveSubscription, type PushSender } from '../src/community/push';
+import { dispatchPush, pushLine, pushTitle, saveSubscription, type PushSender } from '../src/community/push';
 import type { Env } from '../src/types';
 
 // 瀏覽器推播：訂閱綁在會員上，派送只推還沒推過的通知，壞掉的訂閱自己清掉。
@@ -111,4 +111,33 @@ it('keeps card pin notifications on site even for a browser subscriber', async (
  const sends:unknown[]=[];
  await dispatchPush(e,async(_sub,data)=>{sends.push(data);return 201;});
  expect(sends).toEqual([]);
+});
+
+it('formats campaign_rule_notice in every language with effectiveAt and plain fallback, using site title', () => {
+ const effectiveAt = Date.UTC(2026, 10, 30, 0, 0, 0);
+ const withDate = {
+  kind: 'campaign_rule_notice',
+  extra: JSON.stringify({ slug: 'creator-season', effectiveAt }),
+  actor_name: null,
+  actor_handle: null,
+  card_names: null,
+ };
+ const plain = { ...withDate, extra: null };
+ for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const) {
+  const at = new Intl.DateTimeFormat(locale, {
+   timeZone: 'Asia/Taipei',
+   month: 'short',
+   day: 'numeric',
+   hour: '2-digit',
+   minute: '2-digit',
+   hour12: false,
+  }).format(effectiveAt);
+  const line = pushLine(withDate, locale);
+  expect(line).toContain(at);
+  expect(line).toContain('Discord');
+  expect(pushLine(plain, locale)).toContain('Discord');
+  expect(pushLine(plain, locale)).not.toContain('{at}');
+  expect(pushTitle(withDate, locale)).not.toBe('蘇綺');
+  expect(pushTitle(withDate, locale)).not.toBe('Suki');
+ }
 });

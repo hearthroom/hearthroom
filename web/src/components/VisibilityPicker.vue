@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {retentionText} from '@/lib/reward-retention';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
-const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false});
+import QuotaDeviceHelp from './QuotaDeviceHelp.vue';
+const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false,quotaShared:false});
 const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[];cover:[]}>();
 const {t}=useI18n();const uid=useId();
 const selected=ref<WorkAccess|null>(null),cancel=ref(false),copied=ref(false),copyFailed=ref(false);
@@ -20,6 +21,7 @@ const changed=computed(()=>selected.value!==props.value?.access||cancel.value||u
 const review=computed(()=>selected.value==='public'&&!props.value?.actions.includes('restore_public'));
 const canSubmit=computed(()=>!!props.value?.actions.some(action=>action==='submit_review'||action==='submit_update'));
 const delistedReview=computed(()=>props.value?.restriction==='delisted'&&canSubmit.value&&!props.value.actions.includes('restore_public'));
+const quotaBlocked=computed(()=>!!props.value&&props.value.restriction==='none'&&!pending.value&&!props.dirty&&!props.missing&&props.quotaFull&&!props.value.actions.includes('restore_public'));
 function disabled(access:WorkAccess){
  if(props.newCard||busy.value||!props.value||props.value.syncState!=='complete')return true;
  if(access===props.value.access&&access!=='public')return false;
@@ -67,7 +69,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
        <span v-else-if="pending" class="visibility-option__reason">{{ t(value.update==='pending'?'visibility.badge.updatePending':'mine.badge.pending') }}</span>
        <span v-else-if="dirty" class="visibility-option__reason">{{ t('visibility.saveFirst') }}</span>
        <button v-else-if="missing" type="button" class="link visibility-missing" @click.prevent="emit('missing')">{{ t('visibility.missing',{fields:missing}) }}</button>
-       <span v-else-if="quotaFull&&!value.actions.includes('restore_public')" class="visibility-option__reason">{{ t('mine.quota.exceeded') }}</span>
+       <span v-else-if="quotaFull&&!value.actions.includes('restore_public')" class="visibility-option__reason">{{ t(quotaShared?'mine.quota.exceededDevice':'mine.quota.exceeded') }}</span>
        <span v-else-if="value.actions.includes('restore_public')" class="visibility-option__reason">{{ t('visibility.public.restore') }}</span>
        <span v-else-if="value.revisionState==='changed'" class="visibility-option__reason">{{ t('visibility.public.changed') }}</span>
        <span v-else-if="value.everPublic" class="visibility-option__reason">{{ t('visibility.public.unknown') }}</span>
@@ -77,6 +79,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
      <input type="radio" :name="uid" :value="access" :checked="selected===access" :disabled="disabled(access)" :aria-describedby="`${uid}-${access}`" @change="select(access)" @keydown="arrow($event,access)" />
     </label>
    </div>
+   <QuotaDeviceHelp v-if="quotaBlocked&&quotaShared" class="visibility-quota-help" />
    <button v-if="value?.actions.includes('cancel_review')" type="button" class="btn btn--ghost" :disabled="busy" @click="cancel=true;selected=value?.access??null">{{ t('visibility.action.cancelReview') }}</button>
    <div v-if="changed&&value" class="notice visibility-effect" role="status">
     <p v-if="pending&&!cancel&&value.review==='pending'">{{ t('visibility.review.cancelling') }}</p><p>{{ effect }}</p>
@@ -96,6 +99,7 @@ async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??''
 <style scoped>
 .visibility-option__reason{font-size:13px;overflow-wrap:anywhere;line-height:1.6}
 .visibility-option__reason{color:var(--text)}
+.visibility-quota-help{margin-top:var(--s-1)}
 .visibility-missing{border:0;background:none;padding:0;font:inherit;font-size:13px;line-height:1.6;text-align:start;cursor:pointer;overflow-wrap:anywhere;min-height:var(--h-lg)}
 .cover-upload{border:0;background:none;padding:0;color:var(--accent-text);font:inherit;cursor:pointer;min-height:var(--h-sm)}
 .visibility-option__restriction{color:var(--danger);cursor:default;max-width:100%}
