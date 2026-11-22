@@ -4447,7 +4447,13 @@
                     },
                     "updatedAt": {
                       "type": "string",
-                      "format": "date-time"
+                      "format": "date-time",
+                      "description": "Time when this ranking snapshot was computed."
+                    },
+                    "viewerCredits": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$",
+                      "description": "Current net spend of the signed-in player when selfState is ranked or unranked. This value can be zero and may differ from the ranking snapshot."
                     },
                     "authorCredits": {
                       "type": "string",
