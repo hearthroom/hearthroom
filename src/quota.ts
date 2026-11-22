@@ -21,7 +21,7 @@ export const DEFAULT_DEVICE_CAP_EFFECTIVE_AT = Date.UTC(2026, 10, 30, 0, 0, 0);
 
 /**
  * 某一刻的每週上限：落在發卡獎勵活動（card_reward_campaigns）期間就用活動的設定，否則 WEEKLY_LIMIT。
- * 跟資料庫觸發器 community_weekly_limit（0070／0143 遷移）同一條規則；開始那一刻算期間內，結束那一刻不算。
+ * 跟資料庫觸發器 community_weekly_limit（0070／0144 遷移）同一條規則；開始那一刻算期間內，結束那一刻不算。
  */
 export async function weeklyLimitAt(db: D1Database, at: number): Promise<number> {
   const row = await db.prepare("SELECT MAX(weekly_limit) AS n FROM card_reward_campaigns WHERE status = 'active' AND starts_at <= ?1 AND ends_at > ?1").bind(at).first<{ n: number | null }>();
@@ -124,7 +124,7 @@ export interface WeeklyUsage {
 }
 
 /**
- * 計算成員本週的登記用量；邏輯與 D1 觸發器 community_weekly_limit（0143 遷移）保持兩層完全一致。
+ * 計算成員本週的登記用量；邏輯與 D1 觸發器 community_weekly_limit（0144 遷移）保持兩層完全一致。
  */
 export async function weeklyUsageForMember(
   db: D1Database,

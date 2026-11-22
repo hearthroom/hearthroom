@@ -79,7 +79,7 @@ beforeEach(async () => {
 
 afterEach(restoreUpstream);
 
-describe("0143 遷移預設設定與公開活動資訊", () => {
+describe("0144 遷移預設設定與公開活動資訊", () => {
   it("預設生效時間為 2026-11-30 00:00 UTC 且範圍僅限發卡獎活動（campaign）", async () => {
     expect(DEFAULT_DEVICE_CAP_EFFECTIVE_AT).toBe(EFFECTIVE_AT);
     const row = await env.DB.prepare("SELECT effective_at, scope FROM quota_device_policy WHERE id = 1").first<{ effective_at: number; scope: string }>();
