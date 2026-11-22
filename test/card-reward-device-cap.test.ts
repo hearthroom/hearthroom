@@ -3,6 +3,7 @@ import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { appAdmins, bearer, identities, makeMember, makeReviewer, myRolesOnUpstream, ratingBody, resetDb, restoreUpstream, rolesOnMainSite, testHandle } from "./helpers";
 import { DEFAULT_DEVICE_CAP_EFFECTIVE_AT, quotaFor, quotaForMember } from "../src/quota";
+import { RULE_NOTICE_INSERT_SQL } from "../src/card-reward";
 import { hashDeviceToken, recordRewardDevice, trimRewardDevices } from "../src/reward-device";
 
 const EFFECTIVE_AT = Date.UTC(2026, 10, 30, 0, 0, 0); // 2026-11-30 00:00 UTC
@@ -257,12 +258,21 @@ describe("HTTP 路由端到端：POST /v1/cards、額度查詢、白名單與站
     expect(bobAfter.deviceShared).toBe(true);
   });
 
-  it("管理員發送本季作者規則變更站內通知：只發給本季參與且未關通知的正常作者，且冪等不重複", async () => {
+  it("管理員發送本季作者規則變更站內通知：以 candidates CTE 驅動（不掃 members 全表）、涵蓋初審作者且冪等可續", async () => {
     const now = Date.now();
     await seedCampaign({ id: "creator-season-1", slug: "creator-season", startsAt: now - 7 * DAY, endsAt: now + 7 * DAY });
     appAdmins("mod-token");
 
-    // Alice 有本季 card_rewards 紀錄；Bob 有本季紀錄但關了通知；Charlie 沒參與本季
+    // 驗證查詢計畫以 candidates CTE（card_rewards UNION review_submissions）驅動，不對 members 做外層全表掃描
+    const plan = (
+      await env.DB.prepare(`EXPLAIN QUERY PLAN ${RULE_NOTICE_INSERT_SQL}`)
+        .bind("campaign_quota_device:creator-season:1:", "/campaign/creator-season", now, "{}", "creator-season-1", now - 7 * DAY, now + 7 * DAY)
+        .all<{ detail: string }>()
+    ).results.map((r) => r.detail);
+    expect(plan.some((d) => /\bSCAN m\b/.test(d))).toBe(false);
+    expect(plan.some((d) => /COMPOUND QUERY|UNION/i.test(d))).toBe(true);
+
+    // Alice 有本季 card_rewards 紀錄；Bob 有本季紀錄但關了通知；Charlie 僅透過真實送審留下本季初審紀錄（尚無 card_rewards）
     await env.DB.batch([
       env.DB.prepare("INSERT INTO card_rewards (id, campaign_id, work_key, card_id, member_id, recipient_account_no, amount, status, requested_by, created_at, updated_at) VALUES ('rw-1', 'creator-season-1', 'harbor:a1', 100001, ?, ?, 20000, 'paid', 'system', ?, ?)")
         .bind(`member-${ALICE}`, ALICE, now - DAY, now - DAY),
@@ -270,6 +280,8 @@ describe("HTTP 路由端到端：POST /v1/cards、額度查詢、白名單與站
         .bind(`member-${BOB}`, BOB, now - DAY, now - DAY),
       env.DB.prepare("INSERT INTO community_preferences (member_id, notifications) VALUES (?, 0)").bind(`member-${BOB}`),
     ]);
+    rolesOnMainSite({ roleId: "c1", authorNumId: CHARLIE, name: "Charlie First Sub" });
+    expect((await registerCard("c1", "charlie-token")).status).toBe(201);
 
     const op1 = crypto.randomUUID();
     const send = (operationId = crypto.randomUUID(), effectiveAt: unknown = EFFECTIVE_AT) => SELF.fetch("https://c.test/v1/moderation/card-rewards/creator-season/notify-rule-change", {
@@ -281,17 +293,17 @@ describe("HTTP 路由端到端：POST /v1/cards、額度查詢、白名單與站
     const bad = await send(crypto.randomUUID(), "2026-11-30");
     expect(bad.status).toBe(400);
     const errMetrics = await (await SELF.fetch("https://c.test/metrics")).text();
-    expect(errMetrics).not.toContain('hearthroom_card_reward_total{operation="payout"');
+    expect(errMetrics).not.toContain('hearthroom_card_reward_operations_total{operation="payout"');
     expect(errMetrics).toContain('hearthroom_card_reward_device_cap_total{operation="notice",outcome="error"}');
 
     const first = await send(op1, EFFECTIVE_AT);
     expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 1 });
+    expect(await first.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 2 });
 
-    // 同 operationId 重試回冪等重放（200，不 500）
+    // 同 operationId 重試回冪等重放（200，不 500、不重發）
     const replay = await send(op1, EFFECTIVE_AT);
     expect(replay.status).toBe(200);
-    expect(await replay.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 1 });
+    expect(await replay.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 2 });
 
     // 同 operationId 換參數必須 409 且不寫出新通知
     const conflict = await send(op1, EFFECTIVE_AT + DAY);
@@ -302,12 +314,32 @@ describe("HTTP 路由端到端：POST /v1/cards、額度查詢、白名單與站
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 0 });
 
-    const notices = (await env.DB.prepare("SELECT member_id, kind, path, extra FROM community_notifications WHERE kind = 'campaign_rule_notice'").all<{ member_id: string; kind: string; path: string; extra: string }>()).results;
-    expect(notices).toEqual([{
-      member_id: `member-${ALICE}`,
-      kind: "campaign_rule_notice",
-      path: "/campaign/creator-season",
-      extra: JSON.stringify({ slug: "creator-season", effectiveAt: EFFECTIVE_AT }),
-    }]);
+    // 失敗／漏發可續：若 Bob 重新打開通知，新 operationId 只補發給 Bob，Alice／Charlie 不重複
+    await env.DB.prepare("UPDATE community_preferences SET notifications = 1 WHERE member_id = ?").bind(`member-${BOB}`).run();
+    const resume = await send(crypto.randomUUID(), EFFECTIVE_AT);
+    expect(resume.status).toBe(200);
+    expect(await resume.json()).toEqual({ slug: "creator-season", effectiveAt: EFFECTIVE_AT, delivered: 1 });
+
+    const notices = (await env.DB.prepare("SELECT member_id, kind, path, extra FROM community_notifications WHERE kind = 'campaign_rule_notice' ORDER BY member_id").all<{ member_id: string; kind: string; path: string; extra: string }>()).results;
+    expect(notices).toEqual([
+      {
+        member_id: `member-${ALICE}`,
+        kind: "campaign_rule_notice",
+        path: "/campaign/creator-season",
+        extra: JSON.stringify({ slug: "creator-season", effectiveAt: EFFECTIVE_AT }),
+      },
+      {
+        member_id: `member-${BOB}`,
+        kind: "campaign_rule_notice",
+        path: "/campaign/creator-season",
+        extra: JSON.stringify({ slug: "creator-season", effectiveAt: EFFECTIVE_AT }),
+      },
+      {
+        member_id: `member-${CHARLIE}`,
+        kind: "campaign_rule_notice",
+        path: "/campaign/creator-season",
+        extra: JSON.stringify({ slug: "creator-season", effectiveAt: EFFECTIVE_AT }),
+      },
+    ]);
   });
 });

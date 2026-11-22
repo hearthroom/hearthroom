@@ -400,6 +400,35 @@ export async function myProgress(db: D1Database, memberId: string, campaign: Rew
 }
 
 /**
+ * 本季參與作者名單查詢（以 card_rewards 與 review_submissions UNION 驅動，再點查 members，
+ * 避免全表掃描 members 搭配相關子查詢在正式 D1 觸發 7429 CPU 超時）。
+ */
+export const RULE_NOTICE_INSERT_SQL = `WITH candidates(member_id) AS (
+       SELECT r.member_id
+       FROM card_rewards r
+       WHERE r.campaign_id = ?5
+       UNION
+       SELECT COALESCE(
+         (SELECT owner_member_id FROM member_connections WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT)),
+         (SELECT member_id FROM member_identities WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT))
+       )
+       FROM review_submissions s
+       JOIN cards c ON c.id = s.card_id
+       WHERE c.provider = 'harbor'
+         AND s.kind = 'first'
+         AND s.submitted_at >= ?6
+         AND s.submitted_at < ?7
+     )
+     INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, extra)
+     SELECT ?1 || m.id, m.id, 'campaign_rule_notice', ?2, ?3, ?4
+     FROM candidates k
+     JOIN members m ON m.id = k.member_id
+     WHERE k.member_id IS NOT NULL
+       AND m.account_class = 'normal'
+       AND NOT EXISTS (SELECT 1 FROM legacy_account_fence f WHERE f.member_id = m.id)
+       AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id = m.id AND p.notifications = 0)`;
+
+/**
  * 發送規則變更站內通知給本季參與發卡獎的作者（有 card_rewards 紀錄，或活動期間內送過初審的正常成員）。
  * 以固定 event_key 冪等寫入 community_notifications，尊重使用者的通知開關，重送不重複推播。
  */
@@ -414,6 +443,7 @@ export async function notifyCampaignRuleChange(
   const path = `/campaign/${campaign.slug}`;
   const extra = JSON.stringify({ slug: campaign.slug, effectiveAt });
   const keyPrefix = `campaign_quota_device:${campaign.slug}:${effectiveAt}:`;
+  const keyEnd = `${keyPrefix.slice(0, -1)};`;
   const checkPrior = async (): Promise<{ slug: string; effectiveAt: number; delivered: number } | null> => {
     const prior = await db.prepare(
       "SELECT subject_kind, subject_id, action, after_json FROM audit_log WHERE actor_member_id = ? AND operation_id = ?",
@@ -430,8 +460,8 @@ export async function notifyCampaignRuleChange(
       throw new HttpError(409, "card_reward_conflict");
     }
     const existing = await db.prepare(
-      "SELECT COUNT(*) AS n FROM community_notifications WHERE SUBSTR(event_key, 1, LENGTH(?1)) = ?1",
-    ).bind(keyPrefix).first<{ n: number }>();
+      "SELECT COUNT(*) AS n FROM community_notifications WHERE event_key >= ?1 AND event_key < ?2",
+    ).bind(keyPrefix, keyEnd).first<{ n: number }>();
     await bumpOp(db, "card_reward_device_cap", "notice", "replay");
     return { slug: campaign.slug, effectiveAt, delivered: Number(existing?.n ?? 0) };
   };
@@ -439,27 +469,8 @@ export async function notifyCampaignRuleChange(
   const replayed = await checkPrior();
   if (replayed) return replayed;
 
-  const insertNotif = db.prepare(
-    `INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, extra)
-     SELECT ?1 || m.id, m.id, 'campaign_rule_notice', ?2, ?3, ?4
-     FROM members m
-     WHERE m.account_class = 'normal'
-       AND NOT EXISTS (SELECT 1 FROM legacy_account_fence f WHERE f.member_id = m.id)
-       AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id = m.id AND p.notifications = 0)
-       AND (
-         EXISTS (SELECT 1 FROM card_rewards r WHERE r.campaign_id = ?5 AND r.member_id = m.id)
-         OR EXISTS (
-           SELECT 1 FROM review_submissions s
-           JOIN cards c ON c.id = s.card_id
-           WHERE c.provider = 'harbor' AND s.kind = 'first'
-             AND s.submitted_at >= ?6 AND s.submitted_at < ?7
-             AND COALESCE(
-               (SELECT owner_member_id FROM member_connections WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT)),
-               (SELECT member_id FROM member_identities WHERE provider = c.provider AND external_id = CAST(c.author_num_id AS TEXT))
-             ) = m.id
-         )
-       )`,
-  ).bind(keyPrefix, path, now, extra, campaign.id, campaign.startsAt, campaign.endsAt);
+  const insertNotif = db.prepare(RULE_NOTICE_INSERT_SQL)
+    .bind(keyPrefix, path, now, extra, campaign.id, campaign.startsAt, campaign.endsAt);
 
   let results: D1Result[];
   try {
