@@ -120,6 +120,7 @@ import { dropBatch, dropSubmission, groupItems, groupSubmissionIds, isDropped, l
 import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor, revokeAuthorMark } from "./review-profile";
 import { queueContext as queueContextOf, recordOriginalityStatement } from "./review-v2";
 import { computeDiffSummary, diffMaintenance, diffView } from "./review-diff-store";
+import { reviewTimeline } from "./review-timeline";
 import { parseReviewReasons } from "../shared/review-reasons";
 import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
@@ -2204,6 +2205,13 @@ app.get("/v1/review/:id/diff", async (c) => {
   if (s.status !== "pending") throw new HttpError(410, "review no longer active");
   if (await c.env.DB.prepare("SELECT 1 FROM hosting_versions WHERE submission_id=? AND member_id=?").bind(s.id, member.id).first()) throw new HttpError(403, "review_own_card");
   return c.json(await diffView(c.env, s.id), 200, { "Cache-Control": "private, no-store" });
+});
+
+/** 單卡審核紀錄（審卡 V2 第二批）：跟審核頁同一道門；審核員本人寫的卡看不到（作者不該知道卡被不受理） */
+app.get("/v1/review/:id/timeline", async (c) => {
+  const { member, s } = await claimedSubmission(c);
+  if (await c.env.DB.prepare("SELECT 1 FROM hosting_versions v JOIN review_submissions x ON x.id=v.submission_id WHERE x.card_id=? AND v.member_id=?").bind(s.card_id, member.id).first()) throw new HttpError(403, "review_own_card");
+  return c.json(await reviewTimeline(c.env.DB, s.id, member.id), 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/review/:id/detail", async (c) => {
