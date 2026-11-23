@@ -209,13 +209,26 @@ export async function suggestionsOf(db: D1Database, submissionId: string): Promi
   }));
 }
 
-/** 審核員看得到 AI 建議嗎：自己蓋過章、自己不受理過，或已定案時是管理員。其他一律等自己決定完。 */
+/**
+ * 審核員看得到 AI 建議嗎：自己蓋過章、自己不受理而且還在不受理中，或已定案時是管理員。其他一律等自己決定完。
+ * 不受理被復原之後就不再揭曉；萬一先看了再復原、再蓋章，那一章由 TAINTED 排除在對照報表之外。
+ */
 export async function canReveal(db: D1Database, s: Pick<SubmissionRow, "id" | "status">, memberId: string, role: string | null): Promise<boolean> {
   const mine = await db.prepare(`SELECT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?1 AND member_id=?2)
-    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
+    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
   if (mine?.ok) return true;
   return s.status !== "pending" && (role === "manager" || role === "owner");
 }
+
+/** 揭曉留一筆事件（每人每單一次）：用來找出「看過 AI 判斷之後才蓋章」的決定 */
+export function revealEventStatement(db: D1Database, input: { submissionId: string; cardId: number; memberId: string; now: number }) {
+  return db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,actor_kind,actor_member_id)
+    VALUES (?,1,?,?,?,'ai_reveal','reviewer',?)`).bind(`aireveal:${input.submissionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId);
+}
+
+/** 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章）：這種單不進人機對照 */
+export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv JOIN review_stamps st ON st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at
+  WHERE rv.action='ai_reveal' AND rv.submission_id=s.id)`;
 
 /** 揭曉後的覆核：可以改選，每次一筆審核事件（同一個 operationId 重送不多記），統計取每位審核員對每筆建議最後一次。 */
 export async function recordFeedback(db: D1Database, input: { submissionId: string; cardId: number; suggestionId: string; memberId: string; value: string; operationId: string; now: number }) {
@@ -236,7 +249,8 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped
     FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id
     WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)
-      AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))`)
+      AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))
+      AND NOT ${TAINTED}`)
     .bind(input.from, input.to, input.criteria ?? null).all<Record<string, any>>();
   const feedback = await db.prepare(`SELECT a.criteria_version AS v, e.source AS value, COUNT(*) AS n FROM review_events e JOIN review_ai_suggestions a ON a.id=e.ai_suggestion_id
     JOIN review_submissions s ON s.id=a.submission_id

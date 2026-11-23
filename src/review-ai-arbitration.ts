@@ -1,6 +1,6 @@
 import { parseReviewReasons } from "../shared/review-reasons";
 import { HttpError } from "./types";
-import { LATEST_FEEDBACK } from "./review-ai";
+import { LATEST_FEEDBACK, TAINTED } from "./review-ai";
 
 /**
  * AI 分歧仲裁（owner 2026-11-23 22:22）：只看人工與 AI 結論相反的單，由管理員判誰對。
@@ -16,10 +16,11 @@ export const NOTE_MAX = 500;
 const HUMAN = `CASE WHEN EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) THEN 'dropped'
   WHEN s.status IN ('approved','rejected') THEN s.status END`;
 /** 分歧：人過 AI 不過（AI 較嚴），或人不過 AI 過（人較嚴）。交人與沒結論的不算。 */
-const DIRECTION = `CASE WHEN (${HUMAN})='approved' AND a.verdict='reject' THEN 'ai_stricter'
+const DIRECTION = `CASE WHEN ${TAINTED} THEN NULL WHEN (${HUMAN})='approved' AND a.verdict='reject' THEN 'ai_stricter'
   WHEN (${HUMAN}) IN ('rejected','dropped') AND a.verdict='pass' THEN 'human_stricter' END`;
 const LATEST = `(SELECT x.value FROM review_ai_arbitrations x WHERE x.suggestion_id=a.id ORDER BY x.created_at DESC, x.rowid DESC LIMIT 1)`;
 
+// 看過 AI 判斷才蓋章的單不算分歧（人工那邊不是獨立判斷）
 const base = `FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id`;
 
 export interface DisagreementFilter {

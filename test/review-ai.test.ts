@@ -361,3 +361,19 @@ describe('AI 讀卡的開場網頁與新理由', () => {
     expect((await suggest(id, { verdict: 'reject', reasons: ['opening.unedited_generated', 'character.copied_verbatim'] })).status).toBe(200);
   });
 });
+
+describe('雙盲：不受理後復原', () => {
+  it('復原後不再揭曉；看過再蓋章的單不進對照報表與分歧清單', async () => {
+    const { id } = await submitCard();
+    await suggest(id, { verdict: 'reject', reasons: ['opening.too_short'] });
+    await dropSubmission(env.DB, { submissionId: id, memberId: humanId, now: Date.now() });
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
+    await env.DB.prepare('UPDATE review_drops SET restored_at=?, restored_by=? WHERE submission_id=?').bind(Date.now(), humanId, id).run();
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(403);
+    await new Promise((r) => setTimeout(r, 5));
+    await decide(id, humanId, 'approve');
+    const report = await json(await get('/v1/review-ai/report', 'mgr'));
+    expect(report.versions.find((v: any) => v.criteriaVersion === 'v1')).toBeUndefined();
+    expect((await json(await get('/v1/review-ai/disagreements?state=all', 'mgr'))).total).toBe(0);
+  });
+});

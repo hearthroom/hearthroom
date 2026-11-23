@@ -261,7 +261,7 @@ Body: `{ criteriaVersion: "v<n>", model, verdict: "pass"|"reject"|"handoff", rea
 
 ### Reveal and feedback (human reviewers)
 
-- `GET /v1/review/:id/ai` → `{ suggestions: { id, criteriaVersion, model, verdict, reasons, flags, confidence, handoffCause, note, phase, at }[], myFeedback }`. Allowed once the caller has stamped or dropped this submission, or for managers after it is decided; otherwise 403 `ai_hidden_until_decided`.
+- `GET /v1/review/:id/ai` → `{ suggestions: { id, criteriaVersion, model, verdict, reasons, flags, confidence, handoffCause, note, phase, at }[], myFeedback }`. Allowed once the caller has stamped this submission or has it dropped (not restored), or for managers after it is decided; otherwise 403 `ai_hidden_until_decided`. Each reveal is logged as an `ai_reveal` review event; a decision stamped after the same reviewer saw the AI verdict (drop → reveal → restore → stamp) is left out of the report and the disagreement list.
 - `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records a review event and returns `{ value }`. A reviewer may change their answer; each change is a new event (resending the same `operationId` records nothing new) and the reveal and the report use each reviewer's latest answer.
 
 ### `GET /v1/review-ai/report?from=&to=&criteria=` (managers)
