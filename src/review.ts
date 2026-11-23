@@ -476,6 +476,8 @@ export async function stamp(
     );
   } else if (approvals >= required && managed) {
     writes.push(db.prepare('INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) VALUES(?,?)').bind(row.id,input.now));
+    // 託管作品要等同步完成才真的過審（work-publication.ts）；保留期從審核員定案這一刻起算
+    writes.push(retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS));
   } else if (approvals >= required) {
     await reserveUpdateNotification(db,row.id,input.now);
     cardStatus = "approved";
@@ -732,16 +734,23 @@ async function rejectReopen(
   return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "rejected", approvals: 0, required: STAMPS_REQUIRED[row.kind] };
 }
 
-/** 刪掉保留期已過的審核快照（排程呼叫）。一次最多 200 張，回傳刪了幾張。 */
+/**
+ * 刪掉保留期已過的審核快照（排程呼叫）。一張一張刪：轉移中的作品會擋下刪除（draft_transfer_hold），
+ * 被擋的那張留到下次，不拖住其他張。一次最多 50 張，回傳刪了幾張。
+ */
 export async function purgeRetainedSnapshots(db: D1Database, now: number): Promise<number> {
-  const due = await db.prepare("SELECT submission_id FROM review_snapshot_retention WHERE expires_at <= ? ORDER BY expires_at LIMIT 200").bind(now).all<{ submission_id: string }>();
-  if (!due.results.length) return 0;
-  const ids = JSON.stringify(due.results.map((r) => r.submission_id));
-  await db.batch([
-    db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT value FROM json_each(?))").bind(ids),
-    db.prepare("DELETE FROM review_snapshot_retention WHERE submission_id IN (SELECT value FROM json_each(?))").bind(ids),
-  ]);
-  return due.results.length;
+  const due = await db.prepare("SELECT submission_id FROM review_snapshot_retention WHERE expires_at <= ? ORDER BY expires_at LIMIT 50").bind(now).all<{ submission_id: string }>();
+  let deleted = 0;
+  for (const { submission_id } of due.results) {
+    try {
+      await db.batch([
+        db.prepare("DELETE FROM review_snapshots WHERE submission_id = ?").bind(submission_id),
+        db.prepare("DELETE FROM review_snapshot_retention WHERE submission_id = ?").bind(submission_id),
+      ]);
+      deleted++;
+    } catch { /* 被轉移鎖擋下，下次再試 */ }
+  }
+  return deleted;
 }
 
 /** 這張已定案的單，快照還在保留期內嗎（審核員回頭複核、仲裁讀完整內容用） */

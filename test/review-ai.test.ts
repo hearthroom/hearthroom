@@ -570,3 +570,45 @@ describe('兩段式決定', () => {
     expect((await lastStampEvent(b.id))!.final_source).toBe('modified');
   });
 });
+
+describe('兩段式：審查修正', () => {
+  const gen = async (id: string) => (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(id).first<{ claim_generation: string }>())!.claim_generation;
+  it('先看過 AI 才送的盲審不算獨立判斷：不進對照報表', async () => {
+    const { id } = await submitCard();
+    await suggest(id, { verdict: 'reject', reasons: ['opening.too_short'] });
+    await dropSubmission(env.DB, { submissionId: id, memberId: humanId, now: Date.now() });
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
+    await env.DB.prepare('UPDATE review_drops SET restored_at=?, restored_by=? WHERE submission_id=?').bind(Date.now(), humanId, id).run();
+    await new Promise((r) => setTimeout(r, 5));
+    await claim(env.DB, id, humanId, Date.now());
+    expect((await send('POST', `/v1/review/${id}/blind`, 'human', { verdict: 'approve', generation: await gen(id) })).status).toBe(200);
+    expect((await send('POST', `/v1/review/${id}/stamp`, 'human', { finalSource: 'blind', generation: await gen(id) })).status).toBe(200);
+    const report = await json(await get('/v1/review-ai/report', 'mgr'));
+    expect(report.versions.find((v: any) => v.criteriaVersion === 'v1')).toBeUndefined();
+  });
+
+  it('作者標記只在定案那一章記一次；只打標記不改建議的更新時間', async () => {
+    const { id } = await submitCard();
+    await suggest(id, { verdict: 'pass' });
+    const before = (await env.DB.prepare('SELECT updated_at FROM review_ai_suggestions WHERE submission_id=?').bind(id).first<{ updated_at: number }>())!.updated_at;
+    await new Promise((r) => setTimeout(r, 5));
+    await send('PUT', `/v1/review-ai/submissions/${id}/tags`, 'key', { criteriaVersion: 'v1', model: 'm', flags: ['ai_unedited'] });
+    expect((await env.DB.prepare('SELECT updated_at FROM review_ai_suggestions WHERE submission_id=?').bind(id).first<{ updated_at: number }>())!.updated_at).toBe(before);
+    await claim(env.DB, id, humanId, Date.now());
+    await send('POST', `/v1/review/${id}/blind`, 'human', { verdict: 'approve', marks: ['suspect_ai_text'], generation: await gen(id) });
+    await send('POST', `/v1/review/${id}/stamp`, 'human', { finalSource: 'blind', generation: await gen(id) });
+    const rows = (await env.DB.prepare("SELECT action, marks FROM review_events WHERE submission_id=? AND marks IS NOT NULL").bind(id).all()).results;
+    expect(rows.map((r: any) => r.action)).toEqual(['approve']);
+  });
+
+  it('過了保留期：查重與完整內容都不再給（排程還沒刪也一樣）', async () => {
+    const { id } = await submitCard();
+    await decide(id, humanId, 'approve');
+    await env.DB.prepare('UPDATE review_snapshot_retention SET expires_at=? WHERE submission_id=?').bind(Date.now() - 1, id).run();
+    const d = await json(await get(`/v1/review/${id}/detail`, 'human'));
+    expect(d.retainUntil).toBeNull();
+    expect(d.detail.closed).toBe(true);
+    const o = await json(await get(`/v1/review/${id}/originality`, 'human'));
+    expect(o.available).toBe(false);
+  });
+});

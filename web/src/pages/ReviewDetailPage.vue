@@ -1483,8 +1483,9 @@ onMounted(() => { void load(); });
           <!-- 沒領著（例如領取逾時後回來）不能送出判斷，也不能定案 -->
           <p v-if="!claimedByMe && !decided && !hold && (stage === 'reveal' || choice !== 'drop')" class="subtle">{{ $t("review.claimFirst") }}</p>
           <!-- 給 AI 的說明：一致時收合，不增加一鍵定案的步驟；不一致時在選擇下方 -->
-          <ReviewAiNoteField v-if="stage === 'reveal' && (agreeWithAi === true || (agreeWithAi === false && finalPick))" v-model:types="aiNoteTypes" v-model:note="aiNote"
-            context="final" id-base="final-ai-note" :disabled="busy" :collapsible="agreeWithAi === true" />
+          <!-- 給 AI 的說明：一致時收合；不一致選好定案方式後展開；AI 沒審完或沒有判斷的出口也有，收合放在出口按鈕上方（UI/UX 2026-11-24） -->
+          <ReviewAiNoteField v-if="stage === 'reveal' && (agreeWithAi === true || (agreeWithAi === false && finalPick) || aiView === 'pending' || aiView === 'none' || aiView === 'error')" v-model:types="aiNoteTypes" v-model:note="aiNote"
+            context="final" id-base="final-ai-note" :disabled="busy" :collapsible="agreeWithAi === true || aiView === 'pending' || aiView === 'none' || aiView === 'error'" />
           <div class="verdict__acts">
             <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
             <template v-if="stage === 'reveal' && blind">

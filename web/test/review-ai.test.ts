@@ -313,6 +313,9 @@ it('two-step: no AI call (handoff) or an AI choice the server will not take leav
   $('[data-ai-retry]')!.click();
   await vi.waitFor(() => expect(aiCalls().length).toBe(1));
   expect($('[data-final-mine]')!.textContent!.trim()).toBe(t('reviewAi.two.none.final.approve'));
+  // AI 沒判的出口也有「給 AI 的說明」，收合在出口按鈕上方（UI/UX 2026-11-24）
+  expect($('[data-ai-note-toggle]')).not.toBeNull();
+  expect($('[data-ai-note-toggle]')!.compareDocumentPosition($('[data-final-mine]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   $('[data-final-mine]')!.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
   expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'human_no_ai' });
