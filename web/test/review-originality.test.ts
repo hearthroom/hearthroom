@@ -4,6 +4,8 @@ import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
 const api=vi.hoisted(()=>({claimReview:vi.fn(),fetchReviewDetail:vi.fn(),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
+// 結果卡下方的 AI 揭曉區自己讀網路：這裡只驗審核頁本身，揭曉區由 review-ai.test.ts 管
+vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],myFeedback:[]})}));
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
 

@@ -41,7 +41,8 @@ const blog = { key: 'blog', path: '/review/blog' } as const;
 const visible = computed(() => {
   const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
   if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
-  if (list.length && (reviewer.role === 'manager' || reviewer.role === 'owner')) list.push({ key: 'reviewStats', path: '/review/stats' });
+  // 審核統計與 AI 分歧（仲裁）只給管理員，兩格相鄰
+  if (list.length && (reviewer.role === 'manager' || reviewer.role === 'owner')) list.push({ key: 'reviewStats', path: '/review/stats' }, { key: 'aiReview', path: '/review/ai' });
   if (reviewer.blogWriter) list.push(blog);
   return list;
 });

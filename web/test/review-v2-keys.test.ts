@@ -11,6 +11,8 @@ const files = [
   "components/MyCardTile.vue", "components/ReviewReasonPicker.vue", "components/ReviewReasonOptions.vue", "components/ReviewAuthorProfile.vue",
   "components/ReviewBatchSheet.vue", "components/ReviewRowMenu.vue", "components/ReviewListTabs.vue", "components/ReviewTimeline.vue",
   "components/ReviewDiffView.vue", "components/ReviewDiffLines.vue", "lib/notifications.ts",
+  // AI 審卡影子模式：揭曉區與 AI 分歧仲裁
+  "components/ReviewAiReveal.vue", "components/ReviewAiNav.vue", "pages/ReviewAiListPage.vue", "pages/ReviewAiItemPage.vue", "pages/ReviewAiReportPage.vue",
 ];
 const locales = readdirSync(join(root, "locales")).filter((f) => f.endsWith(".json"));
 
@@ -19,7 +21,7 @@ it("every literal reviewV2.* / review.reasons.* key used by the review V2 screen
   const keys = new Set<string>();
   for (const f of files) {
     const src = readFileSync(join(root, f), "utf8");
-    for (const m of src.matchAll(/["'`]((?:reviewV2|reviewStats|review\.reasons)\.[\w.]+)["'`]/g)) keys.add(m[1]);
+    for (const m of src.matchAll(/["'`]((?:reviewV2|reviewStats|reviewAi|review\.reasons)\.[\w.]+)["'`]/g)) keys.add(m[1]);
   }
   expect(keys.size).toBeGreaterThan(50);
   const missing: string[] = [];
@@ -45,6 +47,19 @@ it("keys built from enumerations (events, flags, labels, reasons) exist in all f
     ...["all", "single", "batch", "auto", "aged"].map((x) => `reviewV2.dropped.filter.${x}`),
     ...["new", "updates", "dropped"].flatMap((x) => [`reviewV2.tabs.${x}`, `reviewV2.tabs.${x}NoCount`]),
     ...REVIEW_REASONS.flatMap((c) => ["name", "summary", "fix"].map((f) => `review.reasons.${c}.${f}`)),
+    // AI 審卡影子模式：照列舉組出來的鍵
+    ...["pass", "reject"].map((v) => `reviewAi.reveal.verdict.${v}`),
+    ...["both", "mine", "ai"].map((v) => `reviewAi.reveal.compare.${v}`),
+    ...["ai_right", "ai_wrong", "both_ok"].map((v) => `reviewAi.reveal.feedback.${v}`),
+    ...["ai_unedited", "copied_text", "mass_produced"].map((f) => `reviewAi.flag.${f}`),
+    ...["human_right", "ai_right", "both_ok", "both_wrong"].flatMap((v) => [`reviewAi.arb.value.${v}`, `reviewAi.arb.valueHint.${v}`]),
+    ...["ai_stricter", "human_stricter"].map((d) => `reviewAi.arb.direction.${d}`),
+    ...["approved", "rejected", "dropped"].map((d) => `reviewAi.arb.decision.${d}`),
+    ...["pass", "reject"].flatMap((v) => [`reviewAi.arb.aiVerdict.${v}`, `reviewAi.arb.form.pool.${v}`, `reviewAi.arb.done.pool.${v}`]),
+    ...["open", "done", "all"].map((s) => `reviewAi.arb.state.${s}`),
+    ...["list", "report"].map((s) => `reviewAi.arb.sub.${s}`),
+    ...["pass", "reject", "handoff"].map((c) => `reviewAi.arb.report.col.${c}`),
+    "moderation.tab.aiReview",
   ];
   const missing: string[] = [];
   for (const l of locales) {

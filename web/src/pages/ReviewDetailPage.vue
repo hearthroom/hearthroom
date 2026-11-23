@@ -32,6 +32,8 @@ import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
 import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
 import ReviewTimeline from '@/components/ReviewTimeline.vue';
 import ReviewDiffView from '@/components/ReviewDiffView.vue';
+import ReviewAiReveal from '@/components/ReviewAiReveal.vue';
+import type { MyDecision } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { REVIEW_DECISION_MARKS } from '../../../shared/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
@@ -256,6 +258,13 @@ const withdrawError = ref("");
 const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine) ?? null);
 /** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
 const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
+/**
+ * AI 的判斷（揭曉區）只在「我」做完決定之後掛上：我蓋了章，或剛在這頁不受理（復原後就收起）。
+ * 已定案但不是我決定的（管理員看別人的單）、從不受理清單點進來看的，都不掛也不讀——詳情回應沒說是誰不受理的。
+ * 比對看我的章，不看單子目前的狀態（改判後狀態會變，我的章不變）。
+ */
+const aiDecision = computed<MyDecision | null>(() => myStamp.value ? myStamp.value.verdict : dropDone.value && !decided.value ? 'drop' : null);
+const aiMyReasons = computed(() => (myStamp.value?.verdict === 'reject' ? data.value?.rejectReasons ?? [] : []));
 
 /**
  * 審卡 V2 決定區（ui.md §2.3）：一個「你的決定」、三個選項都不預選（通過｜駁回｜不受理），選了才展開。
@@ -1191,6 +1200,7 @@ onMounted(() => { void load(); });
           </div>
         </template>
       </section>
+      <ReviewAiReveal v-if="aiDecision" :key="id" :submission-id="id" :mine="aiDecision" :my-reasons="aiMyReasons" />
       </div>
     </div>
 

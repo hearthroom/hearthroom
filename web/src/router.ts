@@ -139,6 +139,10 @@ const pages: RouteRecordRaw[] = [
       {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews',petQuietOnPhone:true}},
       // 審核統計（審卡 V2，管理員）：要在 :id 之前，不然 stats 會被當成審核編號
       { path: "stats", component: () => import("./pages/ReviewStatsPage.vue"), meta: { managementTab: "reviewStats" } },
+      // AI 分歧仲裁（AI 審卡影子模式，管理員）：清單、報表、單筆。都要在 :id 之前，report 也要在 :suggestionId 之前
+      { path: "ai", component: () => import("./pages/ReviewAiListPage.vue"), meta: { managementTab: "aiReview", aiReviewSub: "list" } },
+      { path: "ai/report", component: () => import("./pages/ReviewAiReportPage.vue"), meta: { managementTab: "aiReview", aiReviewSub: "report" } },
+      { path: "ai/:suggestionId", component: () => import("./pages/ReviewAiItemPage.vue"), meta: { managementTab: "aiReview", aiReviewSub: "list" } },
       // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判
       { path: "members", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
