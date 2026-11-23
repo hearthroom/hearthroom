@@ -40,7 +40,7 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
       FROM review_stamps st JOIN review_submissions s ON s.id=st.submission_id LEFT JOIN members m ON m.id=st.member_id WHERE s.card_id=?`).bind(card.card_id),
     db.prepare(`SELECT e.submission_id, e.action, e.at, e.actor_member_id, e.source, COALESCE(NULLIF(m.display_name,''), m.handle) AS name
       FROM review_events e LEFT JOIN members m ON m.id=e.actor_member_id
-      WHERE e.card_id=? AND e.action IN (${EVENT_ACTIONS.map(() => '?').join(',')})`).bind(card.card_id, ...EVENT_ACTIONS),
+      WHERE e.card_id=? AND +e.action IN (${EVENT_ACTIONS.map(() => '?').join(',')})`).bind(card.card_id, ...EVENT_ACTIONS),
     db.prepare('SELECT MIN(at) AS at FROM review_events'),
   ]);
   type Sub = { id: string; submitted_at: number; status: string; decided_at: number | null; note: string; reject_reasons: string | null; reopen_of: string | null };

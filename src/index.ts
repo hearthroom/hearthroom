@@ -2206,6 +2206,9 @@ app.get("/v1/review/:id/diff", async (c) => {
   const { member, s } = await claimedSubmission(c);
   if (s.status !== "pending") throw new HttpError(410, "review no longer active");
   if (await c.env.DB.prepare("SELECT 1 FROM hosting_versions WHERE submission_id=? AND member_id=?").bind(s.id, member.id).first()) throw new HttpError(403, "review_own_card");
+  // 基準版有自己的分級：舊版是限制級、這次改成一般，未驗年齡的審核員也不能讀到舊版的原文
+  const base = await c.env.DB.prepare("SELECT v.rating FROM review_submission_diffs d JOIN hosting_versions v ON v.hosted_revision_id=d.base_revision WHERE d.submission_id=?").bind(s.id).first<{ rating: string | null }>();
+  if (base?.rating === "R" && (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt === null) throw new HttpError(403, "age_verification_required");
   return c.json(await diffView(c.env, s.id), 200, { "Cache-Control": "private, no-store" });
 });
 

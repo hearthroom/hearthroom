@@ -17,3 +17,7 @@ CREATE TABLE review_submission_diffs (
   computed_at    INTEGER
 );
 CREATE INDEX idx_review_submission_diffs_state ON review_submission_diffs (state, created_at);
+
+-- 單卡紀錄依卡號讀事件、統計依時間讀審核章：沒有這兩個索引每次都掃整張表（code-review 2026-11-23）
+CREATE INDEX idx_review_events_card_time ON review_events (card_id, at);
+CREATE INDEX idx_review_stamps_created ON review_stamps (created_at);
