@@ -150,7 +150,7 @@ reviewAiRoutes.get("/v1/review/:id/ai", (c) => counted(c, "reveal", async () => 
   const s = await getSubmission(c.env.DB, c.req.param("id"));
   if (!(await canReveal(c.env.DB, s, member.id, role))) throw new HttpError(403, "ai_hidden_until_decided");
   const suggestions = await suggestionsOf(c.env.DB, s.id);
-  if (suggestions.length) await revealEventStatement(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), memberId: member.id, now: Date.now() }).run();
+  if (suggestions.some((x) => x.verdict !== null)) await revealEventStatement(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), memberId: member.id, now: Date.now() }).run();
   const mine = await c.env.DB.prepare(`SELECT e.ai_suggestion_id AS suggestionId, e.source AS value, e.at FROM review_events e WHERE ${LATEST_FEEDBACK} AND e.submission_id=? AND e.actor_member_id=?`)
     .bind(s.id, member.id).all<{ suggestionId: string; value: string }>();
   return c.json({ suggestions, myFeedback: mine.results }, 200, NO_STORE);
