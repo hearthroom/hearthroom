@@ -45,6 +45,7 @@ import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import {workSharingRoutes} from './work-sharing';
 import {reviewStatusRoutes,submissionReceipt} from './review-status';
+import {reviewStatsRoutes} from './review-stats';
 import {workSharingCommandRoutes} from './work-sharing-commands';
 import {workSubmissionRoutes} from './work-submission';
 import {registerLegacyShare} from './work-share-registration';
@@ -280,6 +281,7 @@ app.use('/v1/*',async(c,next)=>{
 app.route("/", accountAuthRoutes);
 app.route('/',workSharingRoutes);
 app.route('/',reviewStatusRoutes);
+app.route('/',reviewStatsRoutes);
 app.route('/',workSharingCommandRoutes);
 app.route('/',workSubmissionRoutes);
 app.route("/", analyticsRoutes);

@@ -41,6 +41,7 @@ const blog = { key: 'blog', path: '/review/blog' } as const;
 const visible = computed(() => {
   const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
   if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
+  if (list.length && (reviewer.role === 'manager' || reviewer.role === 'owner')) list.push({ key: 'reviewStats', path: '/review/stats' });
   if (reviewer.blogWriter) list.push(blog);
   return list;
 });

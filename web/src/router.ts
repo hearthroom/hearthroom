@@ -137,6 +137,8 @@ const pages: RouteRecordRaw[] = [
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },
       {path:'decisions',component:()=>import('./pages/ReviewDecisionsPage.vue'),meta:{managementTab:'reviews',petQuietOnPhone:true}},
+      // 審核統計（審卡 V2，管理員）：要在 :id 之前，不然 stats 會被當成審核編號
+      { path: "stats", component: () => import("./pages/ReviewStatsPage.vue"), meta: { managementTab: "reviewStats" } },
       // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判
       { path: "members", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
