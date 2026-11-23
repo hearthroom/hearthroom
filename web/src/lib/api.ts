@@ -710,6 +710,15 @@ export async function fetchReviewQueue(token: string, lang?: string, tab?: "new"
   return json(await fetch(`${COMMUNITY_API}/review/queue${q}`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
+export interface ReviewTimelineItem {
+  at: number; action: "submit" | "approve" | "reject" | "reopen" | "reopen_withdraw" | "drop" | "restore" | "hold" | "unhold" | "superseded";
+  round: number; actor: string | null; mine: boolean; source?: string | null; reasons?: string[]; note?: string; current: boolean;
+}
+/** 單卡審核紀錄；coverageFrom＝事件紀錄的起點（之前的冷凍與不受理沒有紀錄） */
+export async function fetchReviewTimeline(id: string, token: string): Promise<{ items: ReviewTimelineItem[]; coverageFrom: number | null }> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/timeline`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
 /** 不受理清單的一列；droppedSince 是案件起點（作者原樣重送沿用第一次的時間） */
 export interface ReviewDroppedItem {
   id: string; cardId: string; name: string; avatarUrl: string | null; adultHidden: boolean; rating: Rating | null;

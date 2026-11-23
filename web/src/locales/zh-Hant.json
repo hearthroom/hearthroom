@@ -5721,5 +5721,20 @@
   "reviewV2.queue.afterDrop": "不受理後改版重送",
   "reviewV2.batch.undone": "已復原 {n} 張",
   "reviewV2.decide.nextSwitchedToNew": "更新都審完了，下一張是新卡。",
-  "reviewV2.decide.nextSwitchedToUpdates": "新卡都審完了，下一張是更新。"
+  "reviewV2.decide.nextSwitchedToUpdates": "新卡都審完了，下一張是更新。",
+  "review.section.history": "紀錄",
+  "reviewV2.timeline.event.submit": "送審",
+  "reviewV2.timeline.event.resubmit": "作者改版再送",
+  "reviewV2.timeline.event.reject": "駁回",
+  "reviewV2.timeline.event.hold": "冷凍",
+  "reviewV2.timeline.event.unhold": "解凍",
+  "reviewV2.timeline.event.drop": "不受理",
+  "reviewV2.timeline.event.restore": "復原",
+  "reviewV2.timeline.event.superseded": "作者取消送審",
+  "reviewV2.timeline.event.reopen": "重新審核",
+  "reviewV2.timeline.event.approve": "通過",
+  "reviewV2.timeline.latest": "最近：{result}，{who}，{time}",
+  "reviewV2.timeline.onlySubmit": "目前只有送審一筆",
+  "reviewV2.timeline.coverage": "冷凍與不受理從 {date} 起才有紀錄。",
+  "reviewV2.timeline.you": "你"
 }

@@ -5721,5 +5721,20 @@
   "reviewV2.queue.afterDrop": "審査対象外後に修正して再提出",
   "reviewV2.batch.undone": "{n}件を審査待ちに戻しました",
   "reviewV2.decide.nextSwitchedToNew": "更新はすべて審査済みです。次は新規のカードです。",
-  "reviewV2.decide.nextSwitchedToUpdates": "新規はすべて審査済みです。次は更新のカードです。"
+  "reviewV2.decide.nextSwitchedToUpdates": "新規はすべて審査済みです。次は更新のカードです。",
+  "review.section.history": "履歴",
+  "reviewV2.timeline.event.submit": "提出",
+  "reviewV2.timeline.event.resubmit": "作者が修正して再提出",
+  "reviewV2.timeline.event.reject": "却下",
+  "reviewV2.timeline.event.hold": "保留",
+  "reviewV2.timeline.event.unhold": "保留解除",
+  "reviewV2.timeline.event.drop": "審査対象外",
+  "reviewV2.timeline.event.restore": "元に戻した",
+  "reviewV2.timeline.event.superseded": "作者が提出を取り消し",
+  "reviewV2.timeline.event.reopen": "再審査",
+  "reviewV2.timeline.event.approve": "承認",
+  "reviewV2.timeline.latest": "直近：{result}、{who}、{time}",
+  "reviewV2.timeline.onlySubmit": "今のところ提出の記録のみです",
+  "reviewV2.timeline.coverage": "保留と審査対象外は {date} 以降のみ記録されています。",
+  "reviewV2.timeline.you": "あなた"
 }

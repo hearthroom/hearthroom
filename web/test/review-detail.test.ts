@@ -93,8 +93,8 @@ const typeNote=(text:string)=>{const n=el.querySelector<HTMLTextAreaElement>('#r
 it('reveals a focused review tab before activation without changing the selected section', async () => {
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  await remount();
- // 八格都在分頁條上（owner 2026-11-02：不收進「更多」）
- await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(8));
+ // 九格都在分頁條上（owner 2026-11-02：不收進「更多」；審卡 V2 加了「紀錄」）
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(9));
  const tabs=el.querySelectorAll<HTMLButtonElement>('.tabs button');
  const reveal=vi.fn();
  tabs[4].scrollIntoView=reveal;

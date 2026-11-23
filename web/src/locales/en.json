@@ -5721,5 +5721,20 @@
   "reviewV2.queue.afterDrop": "Resubmitted after set aside",
   "reviewV2.batch.undone": "{n} card is back in the queue | {n} cards are back in the queue",
   "reviewV2.decide.nextSwitchedToNew": "All updates are reviewed. The next card is a new one.",
-  "reviewV2.decide.nextSwitchedToUpdates": "All new cards are reviewed. The next card is an update."
+  "reviewV2.decide.nextSwitchedToUpdates": "All new cards are reviewed. The next card is an update.",
+  "review.section.history": "History",
+  "reviewV2.timeline.event.submit": "Submitted",
+  "reviewV2.timeline.event.resubmit": "Author edited and resubmitted",
+  "reviewV2.timeline.event.reject": "Rejected",
+  "reviewV2.timeline.event.hold": "Held",
+  "reviewV2.timeline.event.unhold": "Hold released",
+  "reviewV2.timeline.event.drop": "Set aside",
+  "reviewV2.timeline.event.restore": "Restored",
+  "reviewV2.timeline.event.superseded": "Author canceled submission",
+  "reviewV2.timeline.event.reopen": "Re-review",
+  "reviewV2.timeline.event.approve": "Approved",
+  "reviewV2.timeline.latest": "Latest: {result}, {who}, {time}",
+  "reviewV2.timeline.onlySubmit": "Only the submission so far",
+  "reviewV2.timeline.coverage": "Holds and set-asides are recorded from {date}.",
+  "reviewV2.timeline.you": "You"
 }

@@ -30,6 +30,7 @@ import RatingMark from "@/components/RatingMark.vue";
 import ReviewAuthorPanel from '@/components/ReviewAuthorPanel.vue';
 import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
 import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
+import ReviewTimeline from '@/components/ReviewTimeline.vue';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
@@ -75,9 +76,9 @@ function summary(name:string,submittedAt:number,verdict:string,reason:string,rea
  const row=(label:string,value:string)=>t('review.confirm.row',{label,value});
  return [row(t('review.confirm.card'),name),row(t('review.confirm.version'),dateTime(submittedAt)),row(t('review.confirm.decision'),verdict),row(t(reasonKey),reason||t('review.confirm.noNote'))].join('\n');
 }
-const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
-const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
-const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
+const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost" | "history">("basic");
+const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost", "history"] as const;
+const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost", "history"];
 
 function revealFocusedTab(event: FocusEvent) {
   const tab = event.currentTarget as HTMLElement;
@@ -980,6 +981,10 @@ onMounted(() => { void load(); });
         </details>
       </section>
 
+      <!-- 審核紀錄（審卡 V2 第二批）：第一次切到這一格才讀 -->
+      <section v-if="section === 'history'" class="pane panel" data-history-pane>
+        <ReviewTimeline :submission-id="data.submission.id" />
+      </section>
       <section v-show="section === 'cost'" class="pane panel">
         <dl class="cost">
           <dt>{{ $t("review.cost.persona") }}</dt><dd>{{ data.detail.costProfile.personaChars }}</dd>
