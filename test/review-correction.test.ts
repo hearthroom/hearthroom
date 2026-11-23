@@ -1,3 +1,4 @@
+import { purgeRetainedSnapshots } from '../src/review';
 import { SELF, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { legacyPolicyFixture } from './work-policy-fixture';
@@ -120,6 +121,10 @@ it('restores the previous approved projection and does not announce it as a new 
  expect(await response.json()).toMatchObject({publicState:'previous_version',publicVersionId:firstVersion!.approved_version_id});
  expect(await env.DB.prepare('SELECT status,approved_version_id,names FROM cards').first()).toMatchObject({status:'approved',approved_version_id:firstVersion!.approved_version_id});
  expect(await followerNotices()).toBe(before);
+ // 定案後保留期內讀封存版（owner 2026-11-24）；保留期過了只剩公開資料，名字是那一版公開的名字
+ const retained=await (await SELF.fetch(`https://c.test/v1/review/${second}/detail`,{headers:bearer('reviewer')})).json() as any;
+ expect(retained.retainUntil).toBeGreaterThan(Date.now());
+ await purgeRetainedSnapshots(env.DB,Date.now()+15*86_400_000);
  const historic=await SELF.fetch(`https://c.test/v1/review/${second}/detail`,{headers:bearer('reviewer')});
  expect((await historic.json() as any).detail.document.roleName).toBe('New name');
 });
