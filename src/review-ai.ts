@@ -315,12 +315,13 @@ export async function suggestionsOf(db: D1Database, submissionId: string): Promi
 }
 
 /**
- * 審核員看得到 AI 建議嗎：自己蓋過章、自己不受理而且還在不受理中，或已定案時是管理員。其他一律等自己決定完。
+ * 審核員看得到 AI 建議嗎：自己送過盲審判斷、蓋過章、自己不受理而且還在不受理中，或已定案時是管理員。其他一律等自己決定完。
  * 不受理被復原之後就不再揭曉；萬一先看了再復原、再蓋章，那一章由 TAINTED 排除在對照報表之外。
  */
 export async function canReveal(db: D1Database, s: Pick<SubmissionRow, "id" | "status">, memberId: string, role: string | null): Promise<boolean> {
   const mine = await db.prepare(`SELECT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?1 AND member_id=?2)
-    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
+    OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL)
+    OR EXISTS(SELECT 1 FROM review_blind_judgments WHERE submission_id=?1 AND member_id=?2) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
   if (mine?.ok) return true;
   return s.status !== "pending" && (role === "manager" || role === "owner");
 }
@@ -331,8 +332,12 @@ export function revealEventStatement(db: D1Database, input: { submissionId: stri
     VALUES (?,1,?,?,?,'ai_reveal','reviewer',?)`).bind(`aireveal:${input.submissionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId);
 }
 
-/** 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章，或再不受理一次）：這種單不進人機對照 */
-export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id AND (
+/**
+ * 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章，或再不受理一次）：這種單不進人機對照。
+ * 兩段式決定（先送盲審再看 AI）不算：那位審核員的獨立判斷記在盲審判斷裡，對照用它。
+ */
+export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id
+  AND NOT EXISTS(SELECT 1 FROM review_blind_judgments bj WHERE bj.submission_id=rv.submission_id AND bj.member_id=rv.actor_member_id) AND (
   EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
   OR EXISTS(SELECT 1 FROM review_drops dr WHERE dr.submission_id=rv.submission_id AND dr.actor_member_id=rv.actor_member_id AND dr.created_at>rv.at AND dr.restored_at IS NULL)))`;
 
@@ -352,7 +357,10 @@ export const LATEST_FEEDBACK = `e.action='ai_feedback' AND e.id=(SELECT f.id FRO
 export async function aiReport(db: D1Database, input: { from: number; to: number; criteria?: string | null }) {
   const rows = await db.prepare(`SELECT a.criteria_version AS v, a.phase, a.verdict, a.reasons AS ai_reasons, a.flags, a.handoff_cause, a.latency_ms, a.cost_usd,
       s.status, s.reject_reasons,
-      EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped
+      EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped,
+      (SELECT b.verdict FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_verdict,
+      (SELECT b.payload FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_payload,
+      (SELECT e.final_source FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_source
     FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id
     WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)
       AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))
@@ -372,10 +380,16 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
     if (typeof r.cost_usd === "number") g.costUsd += r.cost_usd;
     for (const f of JSON.parse(r.flags) as string[]) g.flags[f] = (g.flags[f] ?? 0) + 1;
     // 只算人已經做完決定的單：還在待審的不進報表，否則管理員能把時間窗縮到一張待審卡，提前看到 AI 的判斷
-    const human = r.dropped ? "dropped" : r.status;
+    // 兩段式：人那邊用盲審判斷（沒看過 AI 的獨立判斷）；舊流程用定案
+    const human = r.blind_verdict ? (r.blind_verdict === "approve" ? "approved" : "rejected") : r.dropped ? "dropped" : r.status;
+    if (r.final_source) {
+      g.finalSource[r.final_source] = (g.finalSource[r.final_source] ?? 0) + 1;
+      // AI 校正：盲審跟 AI 不同，最後改用 AI 的
+      if (r.final_source === "ai") g.corrected++;
+    }
     g.matrix[human as keyof typeof g.matrix][r.verdict as AiVerdict]++;
     if (human === "rejected") {
-      const humanReasons = new Set<string>(JSON.parse(r.reject_reasons ?? "[]"));
+      const humanReasons = new Set<string>(r.blind_payload ? (JSON.parse(r.blind_payload).reasons ?? []) : JSON.parse(r.reject_reasons ?? "[]"));
       const aiReasons = new Set<string>(JSON.parse(r.ai_reasons));
       for (const code of AI_REASONS) {
         const h = humanReasons.has(code), a = aiReasons.has(code);
@@ -413,6 +427,9 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       flags: g.flags,
       feedback: g.feedback,
       avgLatencyMs: g.latencyN ? Math.round(g.latencySum / g.latencyN) : null,
+      // 兩段式定案來源（blind 用我的／ai 用 AI 的／modified 修改後／human_no_ai 沒等 AI）與 AI 校正次數
+      finalSource: g.finalSource,
+      corrected: g.corrected,
       costUsd: Math.round(g.costUsd * 10_000) / 10_000,
     };
   });
@@ -421,7 +438,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
 function emptyGroup() {
   const cell = () => ({ pass: 0, reject: 0, handoff: 0 });
   return {
-    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0,
+    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0, corrected: 0, finalSource: {} as Record<string, number>,
     matrix: { approved: cell(), rejected: cell(), dropped: cell() },
     handoffCauses: {} as Record<string, number>, flags: {} as Record<string, number>,
     reasonAgreement: {} as Record<string, { human: number; ai: number; both: number }>,

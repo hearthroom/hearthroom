@@ -1,6 +1,8 @@
 import { parseReviewReasons } from "../shared/review-reasons";
 import { HttpError } from "./types";
 import { LATEST_FEEDBACK, TAINTED } from "./review-ai";
+import { parseAiNote } from "./review-two-stage";
+import { RETAIN_MS } from "./review";
 
 /**
  * AI 分歧仲裁（owner 2026-11-23 22:22）：只看人工與 AI 結論相反的單，由管理員判誰對。
@@ -83,7 +85,7 @@ export async function disagreementSides(db: D1Database, suggestionId: string, op
       WHERE st.submission_id=? ORDER BY st.created_at`).bind(row.submission_id).all(),
     db.prepare(`SELECT e.source AS value, e.at, COALESCE(m.display_name, m.handle) AS reviewer FROM review_events e LEFT JOIN members m ON m.id=e.actor_member_id
       WHERE ${LATEST_FEEDBACK} AND e.ai_suggestion_id=? ORDER BY e.at`).bind(suggestionId).all(),
-    db.prepare(`SELECT x.value, x.reference_pool AS referencePool, x.note, x.created_at AS at, COALESCE(m.display_name, m.handle) AS arbiter
+    db.prepare(`SELECT x.value, x.reference_pool AS referencePool, x.note, json(x.note_types) AS noteTypes, x.created_at AS at, COALESCE(m.display_name, m.handle) AS arbiter
       FROM review_ai_arbitrations x LEFT JOIN members m ON m.id=x.member_id WHERE x.suggestion_id=? ORDER BY x.created_at, x.rowid`).bind(suggestionId).all(),
   ]);
   return {
@@ -102,12 +104,13 @@ export async function disagreementSides(db: D1Database, suggestionId: string, op
 }
 
 /** 仲裁一筆分歧：寫仲裁紀錄＋一筆審核事件。同一個 operationId 重送回同一筆，不重複寫。 */
-export async function arbitrate(db: D1Database, input: { suggestionId: string; memberId: string; value: unknown; addToReference: unknown; note: unknown; operationId: string; now: number }) {
+export async function arbitrate(db: D1Database, input: { suggestionId: string; memberId: string; value: unknown; addToReference: unknown; note: unknown; noteTypes?: unknown; operationId: string; now: number }) {
   if (typeof input.value !== "string" || !(ARBITRATION_VALUES as readonly string[]).includes(input.value)) throw new HttpError(400, "invalid_arguments", undefined, { field: "value" });
   const value = input.value as ArbitrationValue;
   const note = input.note === undefined || input.note === null ? "" : input.note;
   if (typeof note !== "string" || note.length > NOTE_MAX) throw new HttpError(400, "invalid_arguments", undefined, { field: "note" });
   const add = input.addToReference === true;
+  const noteTypes = parseAiNote(input.noteTypes, null).types;
   if (add && value !== "human_right" && value !== "ai_right") throw new HttpError(400, "reference_needs_a_winner", undefined, { field: "addToReference" });
   const row = await db.prepare(`SELECT a.id, a.submission_id, a.verdict, a.reasons, s.card_id, s.reject_reasons, ${HUMAN_NOW} AS human, ${DIRECTION} AS direction,
       ${LAST("reasons")} AS last_reasons ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
@@ -120,9 +123,11 @@ export async function arbitrate(db: D1Database, input: { suggestionId: string; m
   const disputed = row.last_reasons ?? JSON.stringify(row.direction === "ai_stricter" ? JSON.parse(row.reasons) : parseReviewReasons(row.reject_reasons));
   const id = crypto.randomUUID();
   await db.batch([
-    db.prepare(`INSERT INTO review_ai_arbitrations (id,suggestion_id,submission_id,member_id,value,direction,human_decision,reasons,reference_pool,note,operation_id,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(member_id,operation_id) DO NOTHING`)
-      .bind(id, row.id, row.submission_id, input.memberId, value, row.direction, humanDecision, disputed, pool, note.trim(), input.operationId, input.now),
+    db.prepare(`INSERT INTO review_ai_arbitrations (id,suggestion_id,submission_id,member_id,value,direction,human_decision,reasons,reference_pool,note,note_types,operation_id,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(member_id,operation_id) DO NOTHING`)
+      .bind(id, row.id, row.submission_id, input.memberId, value, row.direction, humanDecision, disputed, pool, note.trim(), JSON.stringify(noteTypes), input.operationId, input.now),
+    // 仲裁完成：快照保留期縮回定案後 7 天（不一致時原本留到 14 天等仲裁）
+    db.prepare("UPDATE review_snapshot_retention SET expires_at=MIN(expires_at, decided_at+?) WHERE submission_id=?").bind(RETAIN_MS, row.submission_id),
     db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,actor_kind,actor_member_id,source,ai_suggestion_id)
       SELECT 'aiarb:'||x.id,1,x.submission_id,?,x.created_at,'ai_arbitration','reviewer',x.member_id,x.value,x.suggestion_id
       FROM review_ai_arbitrations x WHERE x.member_id=? AND x.operation_id=?`).bind(row.card_id, input.memberId, input.operationId),
@@ -169,4 +174,22 @@ export async function arbitrationStats(db: D1Database, input: { from: number; to
     }
   }
   return Object.fromEntries(out);
+}
+
+/**
+ * 給 AI 的說明（管理員，判準調整用）：定案與仲裁時寫的原因類型與說明全文，最新的在前。
+ * 不列審核員是誰；作者端看不到。
+ */
+export async function aiNotes(db: D1Database, input: { from: number; to: number; type: string | null; limit: number }) {
+  const rows = await db.prepare(`SELECT * FROM (
+      SELECT 'final' AS kind, e.at, e.ai_note_types AS types, e.ai_note AS note, e.final_source AS finalSource, e.action AS decision, NULL AS arbitration,
+        (SELECT a.criteria_version FROM review_ai_suggestions a WHERE a.id=e.ai_suggestion_id) AS criteriaVersion, e.card_id AS cardId
+      FROM review_events e WHERE e.final_source IS NOT NULL AND (e.ai_note IS NOT NULL OR e.ai_note_types IS NOT NULL) AND e.at>=?1 AND e.at<?2
+      UNION ALL
+      SELECT 'arbitration', x.created_at, x.note_types, NULLIF(x.note,''), NULL, x.human_decision, x.value, a.criteria_version, s.card_id
+      FROM review_ai_arbitrations x JOIN review_ai_suggestions a ON a.id=x.suggestion_id JOIN review_submissions s ON s.id=x.submission_id
+      WHERE (x.note<>'' OR x.note_types<>'[]') AND x.created_at>=?1 AND x.created_at<?2
+    ) WHERE (?3 IS NULL OR EXISTS(SELECT 1 FROM json_each(COALESCE(types,'[]')) t WHERE t.value=?3))
+    ORDER BY at DESC LIMIT ${input.limit}`).bind(input.from, input.to, input.type).all<Record<string, any>>();
+  return rows.results.map((r) => ({ ...r, cardId: String(r.cardId), types: JSON.parse(r.types ?? "[]") as string[] }));
 }
