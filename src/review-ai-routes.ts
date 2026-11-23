@@ -89,7 +89,7 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
   return c.json({
     submission: { ...submission, phase },
     author,
-    ...aiCardInput(settings, meta),
+    ...aiCardInput(settings, meta, { applyRules: true }),
     update: await aiUpdateDiff(c.env, s),
     allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES },
   }, 200, NO_STORE);

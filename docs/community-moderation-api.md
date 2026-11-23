@@ -248,7 +248,7 @@ The sealed version the author submitted, without claiming it. Long text is cut a
   author: { tier, batchSuspected,            // tier and batchSuspected only while pending (null once decided)
             submissions7d, registrations7d, quotaFull, priorApproved, accountAgeDays, deviceAccounts } | null,  // counted up to submission time
   card: { name, summary, tags, originalWork: string|null, userName, setting, speech, instructions, examples,
-          openings: { mode: "page"|"greeting", page, welcome, alternates, prologue /* opening choices the player taps */, welcomeRendered /* plain text after display rules, when they match the opening */ },
+          openings: { mode: "page"|"greeting", page, welcome, alternates, prologue /* opening choices the player taps */, welcomeRendered /* plain text after display rules, when they match the opening; only on this route, only rules that look safe to run (no nested quantifiers, backreferences or lookarounds; first 20 rules, first 2,000 characters) */ },
           lorebook: { entryCount, constantCount, recallCount, index: { name, chars, constant, keywords, mentionedInCard }[], entries: { name, content }[] },
           rules: { count, enabled, list: { name, findChars, replaceChars }[], hasCardCss } },
   update: null | { state: "no_base"|"unreadable"|"missing" } | { state: "ready", baseKind, summary, fields: { key, before, after }[], lorebook: { added, removed, modified } },

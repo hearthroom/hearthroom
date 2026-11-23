@@ -1,5 +1,5 @@
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
-import { WEEKLY_LIMIT } from "./quota";
+import { weeklyLimitAt } from "./quota";
 import { submissionHistory, type SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -28,25 +28,39 @@ const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alte
 
 interface RuleInput { name?: unknown; find?: unknown; replace?: unknown; enabled?: unknown }
 
-/** 顯示規則（正規表示式）在一段文字裡命中幾次。作者寫錯的規則跳過；一段文字最多量 6,000 字。 */
-function ruleHits(rules: RuleInput[], text: string): number {
-  let n = 0;
+/**
+ * 作者寫的顯示規則要在 Worker 裡執行，正規表示式沒有逾時：只跑看起來安全的規則，免得一張卡的災難性回溯拖垮請求。
+ * 跳過：太長的樣式或替換、巢狀量詞（(a+)+ 之類）、反向參照、前後瞻。最多 20 條、只量開場前 2,000 字、每條後輸出截在 12,000 字。
+ * 漏網的最壞情況是審卡員讀這一張卡失敗（AI 記成交人），不影響玩家或審核員。
+ */
+const RULE_GUARD = { rules: 20, find: 200, replace: 1_000, input: 2_000, output: 12_000 };
+const UNSAFE_PATTERN = /\([^)]*[+*{][^)]*\)[+*{?]|\\[1-9]|\\k<|\(\?<?[=!]/;
+function safeRules(rules: RuleInput[]): { re: RegExp; replace: string }[] {
+  const out: { re: RegExp; replace: string }[] = [];
   for (const r of rules) {
-    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim()) continue;
-    try { n += (text.slice(0, LIMITS.opening).match(new RegExp(r.find, "g")) ?? []).length; } catch { /* 作者的規則寫錯，略過 */ }
+    if (out.length >= RULE_GUARD.rules) break;
+    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim() || r.find.length > RULE_GUARD.find) continue;
+    const replace = typeof r.replace === "string" ? r.replace : "";
+    if (replace.length > RULE_GUARD.replace || UNSAFE_PATTERN.test(r.find)) continue;
+    try { out.push({ re: new RegExp(r.find, "g"), replace }); } catch { /* 作者的規則寫錯，略過 */ }
   }
-  return n;
+  return out;
 }
 
-/** 套用顯示規則後玩家大致看到的字：照規則替換，再去掉標籤與樣式。規則寫錯就略過那一條。 */
-function renderedText(rules: RuleInput[], text: string): string {
-  let out = text.slice(0, LIMITS.opening);
-  for (const r of rules) {
-    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim()) continue;
-    try { out = out.replace(new RegExp(r.find, "g"), typeof r.replace === "string" ? r.replace : ""); } catch { /* 略過 */ }
-  }
+/** 顯示規則在一段文字裡命中幾次 */
+function ruleHits(rules: { re: RegExp }[], text: string): number {
+  const input = text.slice(0, RULE_GUARD.input);
+  return rules.reduce((n, r) => n + (input.match(r.re) ?? []).length, 0);
+}
+
+/** 套用顯示規則後玩家大致看到的字：照規則替換，再去掉標籤與樣式 */
+function renderedText(rules: { re: RegExp; replace: string }[], text: string): string {
+  let out = text.slice(0, RULE_GUARD.input);
+  for (const r of rules) out = out.replace(r.re, r.replace).slice(0, RULE_GUARD.output);
   return pageText(out);
 }
+
+const NAME_MAX = 40;
 
 /** 開場網頁（作者資產的 openingPage）只取玩家看得到的字：去掉 script／style 與標籤，留下選項等文字。 */
 export function pageText(html: string): string {
@@ -71,7 +85,8 @@ export function aiPhaseOf(s: Pick<SubmissionRow, "status" | "submitted_at">, now
 }
 
 /** 送給 AI 的卡片內容：只有判斷用心程度需要的文字，長文截斷；統計數字用全文算。 */
-export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }) {
+/** applyRules：只有審卡員讀卡時才執行作者的顯示規則（其他路由不需要，也不冒效能風險） */
+export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean } = {}) {
   const doc = (settings.document ?? {}) as Record<string, unknown>;
   const greetings = (settings.greetings ?? {}) as Record<string, unknown>;
   const asset = (settings.authorAsset ?? {}) as Record<string, unknown>;
@@ -86,8 +101,9 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
   const welcome = text(greetings.welcome);
   const rules = (Array.isArray(asset.rules) ? asset.rules : []) as RuleInput[];
   const activeRules = rules.filter((r) => r.enabled !== false && typeof r.find === "string" && r.find.trim());
+  const runnable = opts.applyRules ? safeRules(activeRules) : [];
   const cardText = setting + welcome + list(greetings.alternates).join("");
-  const welcomeHits = ruleHits(activeRules, welcome);
+  const welcomeHits = opts.applyRules ? ruleHits(runnable, welcome) : null;
   const alternates = list(greetings.alternates);
   const prologue = list(greetings.prologue);
   const scanned = setting + welcome;
@@ -112,21 +128,21 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
         // 開場選項：玩家點了會填進輸入框的預設回覆（編輯器的「開場選項」欄位）
         prologue: prologue.slice(0, LIMITS.prologue).map((a) => clip(a, LIMITS.alternate)),
         // 開場白有被顯示規則替換的標記時，玩家看到的是替換後的版面：這是套用規則後的純文字近似
-        welcomeRendered: welcomeHits ? clip(renderedText(activeRules, welcome), LIMITS.opening) : null,
+        welcomeRendered: welcomeHits ? clip(renderedText(runnable, welcome), LIMITS.opening) : null,
       },
       // 世界書：設定可以寫在世界書裡（常駐條目每輪都在，召回條目依關鍵字帶入）。index 是全部條目的目錄（不含內文）
       lorebook: {
         entryCount: entries.length,
         constantCount: entries.filter((e) => e.constant).length,
         recallCount: entries.filter((e) => !e.constant).length,
-        index: entries.slice(0, LIMITS.index).map((e) => ({ name: e.name, chars: e.content.length, constant: e.constant, keywords: e.keywords, mentionedInCard: !!e.name && cardText.includes(e.name) })),
+        index: entries.slice(0, LIMITS.index).map((e) => ({ name: e.name.slice(0, NAME_MAX), chars: e.content.length, constant: e.constant, keywords: e.keywords, mentionedInCard: !!e.name && cardText.includes(e.name) })),
         entries: entries.slice(0, LIMITS.entries).map((e) => ({ name: e.name, content: clip(e.content, LIMITS.entry) })),
       },
       // 顯示規則（正規表示式）：把對話與開場裡的標記換成版面（狀態欄、面板、按鈕）。只給名稱與長度，不給原文
       rules: {
         count: rules.length,
         enabled: activeRules.length,
-        list: activeRules.slice(0, LIMITS.rules).map((r) => ({ name: text(r.name), findChars: text(r.find).length, replaceChars: text(r.replace).length })),
+        list: activeRules.slice(0, LIMITS.rules).map((r) => ({ name: text(r.name).slice(0, NAME_MAX), findChars: text(r.find).length, replaceChars: text(r.replace).length })),
         hasCardCss: !!text(asset.cardCss),
       },
     },
@@ -142,7 +158,7 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       openingPageChars: page.length,
       openingOptions: prologue.length,
       // 開場白（含備選）被顯示規則命中的次數：多代表開場靠規則換成版面呈現
-      openingRuleHits: welcomeHits + list(greetings.alternates).slice(0, LIMITS.alternates).reduce((n, a) => n + ruleHits(activeRules, a), 0),
+      openingRuleHits: welcomeHits === null ? null : welcomeHits + list(greetings.alternates).slice(0, LIMITS.alternates).reduce((n, a) => n + ruleHits(runnable, a), 0),
       lorebookConstantChars: entries.filter((e) => e.constant).reduce((n, e) => n + e.content.length, 0),
       openingChoices: /\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])\s*\S/.test(welcome),
     },
@@ -197,18 +213,24 @@ const WEEK = 7 * 86_400_000;
  * - deviceAccounts：登記這張卡的裝置上有幾個帳號（同一支手機綁多個帳號）
  */
 async function authorSignals(db: D1Database, memberId: string, sourceRoleId: string, at: number) {
+  // 先取作者在各供應商的公開 ID，再用 (provider, author_num_id, registered_at) 索引數登記；免費額度不算禮包登記
+  const ids = await db.prepare("SELECT provider, external_id FROM member_identities WHERE member_id=?").bind(memberId).all<{ provider: string; external_id: string }>();
+  const byProvider = JSON.stringify(ids.results.map((r) => [r.provider, Number(r.external_id)]));
   const row = await db.prepare(`SELECT
       (SELECT COUNT(*) FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id WHERE v2.member_id=?1 AND s2.submitted_at>?3-${WEEK} AND s2.submitted_at<=?3) AS submissions7d,
-      (SELECT COUNT(*) FROM card_registrations r JOIN member_identities i ON i.provider=r.provider AND i.external_id=CAST(r.author_num_id AS TEXT)
-        WHERE i.member_id=?1 AND r.registered_at>?3-${WEEK} AND r.registered_at<=?3) AS registrations7d,
+      (SELECT COUNT(*) FROM json_each(?4) p JOIN card_registrations r ON r.provider=json_extract(p.value,'$[0]') AND r.author_num_id=json_extract(p.value,'$[1]')
+        WHERE r.registered_at>?3-${WEEK} AND r.registered_at<=?3 AND r.pack_id IS NULL) AS registrations7d,
       (SELECT COUNT(*) FROM review_submissions s3 JOIN hosting_versions v3 ON v3.submission_id=s3.id WHERE v3.member_id=?1 AND s3.status='approved' AND s3.decided_at<?3) AS priorApproved,
       (SELECT created_at FROM members WHERE id=?1) AS createdAt,
-      (SELECT COUNT(DISTINCT d.member_id) FROM reward_devices d WHERE d.device_hash=(SELECT r2.device_hash FROM card_registrations r2 WHERE r2.source_role_id=?2 AND r2.device_hash IS NOT NULL ORDER BY r2.registered_at DESC LIMIT 1)) AS deviceAccounts`)
-    .bind(memberId, sourceRoleId, at).first<{ submissions7d: number; registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>();
+      (SELECT COUNT(DISTINCT d.member_id) FROM reward_devices d WHERE d.first_seen<=?3 AND d.device_hash=(
+        SELECT r2.device_hash FROM json_each(?4) p2 JOIN card_registrations r2 ON r2.provider=json_extract(p2.value,'$[0]')
+        WHERE r2.source_role_id=?2 AND r2.device_hash IS NOT NULL AND r2.registered_at<=?3 ORDER BY r2.registered_at DESC LIMIT 1)) AS deviceAccounts`)
+    .bind(memberId, sourceRoleId, at, byProvider).first<{ submissions7d: number; registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>();
+  const limit = await weeklyLimitAt(db, at);
   return {
     submissions7d: row?.submissions7d ?? 0,
     registrations7d: row?.registrations7d ?? 0,
-    quotaFull: (row?.registrations7d ?? 0) >= WEEKLY_LIMIT,
+    quotaFull: (row?.registrations7d ?? 0) >= limit,
     priorApproved: row?.priorApproved ?? 0,
     accountAgeDays: row?.createdAt ? Math.max(0, Math.floor((at - row.createdAt) / 86_400_000)) : null,
     deviceAccounts: row?.deviceAccounts || null,

@@ -428,27 +428,42 @@ describe('判準 v4 的讀卡輸入', () => {
       authorAsset: { rules: [
         { name: '狀態欄', find: '<status hp="(\\d+)" mood="([^"]+)"></status>', replace: '<div>生命 $1｜心情 $2</div>', enabled: true },
         { name: '壞掉的', find: '(', replace: '', enabled: true },
-        { name: '關掉的', find: 'x', replace: '', enabled: false },
+        { name: '關掉的', find: '末班車', replace: '刪掉', enabled: false },
+        // 巢狀量詞會災難性回溯：不在 Worker 裡跑
+        { name: '危險的', find: '(到+)+了', replace: 'X', enabled: true },
       ], cardCss: '.a{}' },
-    }, { tags: [], fandom: '' });
+    }, { tags: [], fandom: '' }, { applyRules: true });
     expect(input.card.lorebook).toMatchObject({ entryCount: 2, constantCount: 1, recallCount: 1 });
     expect(input.card.lorebook.index).toEqual([
       { name: '月台', chars: 7, constant: true, keywords: 0, mentionedInCard: true },
       { name: '列車長', chars: 50, constant: false, keywords: 2, mentionedInCard: false },
     ]);
-    expect(input.card.rules).toMatchObject({ count: 3, enabled: 2, hasCardCss: true });
-    expect(input.card.rules.list.map((r) => r.name)).toEqual(['狀態欄', '壞掉的']);
+    expect(input.card.rules).toMatchObject({ count: 4, enabled: 3, hasCardCss: true });
+    expect(input.card.rules.list.map((r) => r.name)).toEqual(['狀態欄', '壞掉的', '危險的']);
     expect(input.stats.openingRuleHits).toBe(1);
     expect(input.stats.openingOptions).toBe(2);
     expect(input.card.openings.welcomeRendered).toBe('生命 80｜心情 緊張\n末班車到了。');
     expect(input.card.openings.prologue).toEqual(['上車', '留下']);
+    // 審卡員以外的路由不執行作者的規則
+    const plain = aiCardInput({ greetings: { welcome: '<status hp="1" mood="x"></status>' }, authorAsset: { rules: [{ name: 'a', find: 'status', replace: 'b' }] } }, { tags: [], fandom: '' });
+    expect(plain.stats.openingRuleHits).toBeNull();
+    expect(plain.card.openings.welcomeRendered).toBeNull();
   });
 
   it('作者行為訊號算到送審那一刻；已定案的單不給作者標記，但照樣給訊號', async () => {
     const { id } = await submitCard();
     await decide(id, humanId, 'approve');
     const body = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
-    expect(body.author).toMatchObject({ tier: null, batchSuspected: null, submissions7d: 1, priorApproved: 0, quotaFull: false });
-    expect(JSON.stringify(body.author)).not.toMatch(/member-|v1:|[0-9a-f]{8}-[0-9a-f]{4}/);
+    expect(body.author).toMatchObject({ tier: null, batchSuspected: null, submissions7d: 1, priorApproved: 0 });
+    expect(typeof body.author.registrations7d).toBe('number');
+    // 只有數字、布林或 null，沒有任何識別碼
+    for (const v of Object.values(body.author)) expect(v === null || typeof v === 'number' || typeof v === 'boolean').toBe(true);
+    // 額度：送審前 7 天登記滿每週上限（禮包登記不算）就算用滿；送審之後的登記不算
+    const sub = (await env.DB.prepare('SELECT submitted_at FROM review_submissions WHERE id=?').bind(id).first<{ submitted_at: number }>())!.submitted_at;
+    for (const [i, at] of [sub - 1000, sub - 2000].entries()) await env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES ('harbor', ?, ?, ?)").bind(AUTHOR, `extra-${i}`, at).run();
+    await env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES ('harbor', ?, 'later', ?)").bind(AUTHOR, sub + 8 * 86_400_000).run();
+    const again = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
+    expect(again.author.registrations7d).toBe(body.author.registrations7d + 2);
+    expect(again.author.quotaFull).toBe(true);
   });
 });
