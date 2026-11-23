@@ -5,7 +5,7 @@
  * 桌機三欄：卡片｜人工｜AI；手機直排，角色設定與世界書折疊。卡片內容是 AI 讀到的那一份封存版本；
  * 定案後原始設定讀不到時（content.state=unavailable）明說，只留審核紀錄。
  *
- * 仲裁四選一、不預選；備註選填（≤500）。「加入參考範例」只有人對／AI 對能勾，池照仲裁後的正確結論（與伺服器同一條規則）。
+ * 仲裁四選一、不預選；「給 AI 的說明」選填（原因類型可多選＋500 字內說明，與兩段式定案同一個區塊）。「加入參考範例」只有人對／AI 對能勾，池照仲裁後的正確結論（與伺服器同一條規則）。
  * 仲裁不改原決定、不通知作者，可以重新仲裁（報表取最後一筆），所以不需要確認層。
  * 送出失敗保留選擇與備註；同一組內容重試沿用同一個 operationId（伺服器回同一筆，不會多記），內容改了才換新的。
  */
@@ -13,7 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
-import { ARBITRATION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, type Arbitration, type DisagreementDetail } from '@/lib/review-ai-api';
+import { ARBITRATION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, noteTypesOf, type AiNoteType, type Arbitration, type DisagreementDetail } from '@/lib/review-ai-api';
 import { referencePool } from '@/lib/review-ai';
 import { reasonKey } from '@/lib/review-reasons';
 import { reviewDiffFieldLabel } from '@/lib/review-diff-labels';
@@ -23,8 +23,8 @@ import { useLocalePath } from '@/lib/use-locale';
 import { dateTime } from '@/lib/format';
 import { pageTitle } from '@/lib/i18n';
 import ReviewAiNav from '@/components/ReviewAiNav.vue';
+import ReviewAiNoteField from '@/components/ReviewAiNoteField.vue';
 
-const NOTE_MAX = 500;
 const { t, te, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
@@ -65,7 +65,7 @@ async function load() {
     if (gen === generation) loading.value = false;
   }
 }
-function reset() { data.value = null; choice.value = null; note.value = ''; addRef.value = false; sendError.value = ''; result.value = null; next.value = null; pendingOp = null; }
+function reset() { data.value = null; choice.value = null; note.value = ''; noteTypes.value = []; addRef.value = false; sendError.value = ''; result.value = null; next.value = null; pendingOp = null; }
 watch(id, () => { reset(); void load(); });
 watch(allowed, (a) => { if (a && !data.value) void load(); });
 onMounted(() => { document.title = pageTitle(t('reviewAi.arb.title')); void load(); });
@@ -92,10 +92,11 @@ const fieldLabel = (key: string) => reviewDiffFieldLabel(key, t, te);
 // ---- 仲裁 ----
 const choice = ref<Arbitration | null>(null);
 const note = ref('');
+const noteTypes = ref<AiNoteType[]>([]);
 const addRef = ref(false);
 const sending = ref(false);
 const sendError = ref('');
-const result = ref<{ value: Arbitration; referencePool: 'pass' | 'reject' | null; note: string } | null>(null);
+const result = ref<{ value: Arbitration; referencePool: 'pass' | 'reject' | null; note: string; noteTypes: AiNoteType[] } | null>(null);
 /** 下一筆待仲裁：送出後查一次（清單第一筆與總數） */
 const next = ref<{ id: string | null; total: number } | null>(null);
 let pendingOp: { key: string; id: string } | null = null;
@@ -111,7 +112,7 @@ const reopenTo = computed(() => (data.value ? lp(`/review/cards?q=${encodeURICom
 async function submit() {
   const d = data.value, value = choice.value;
   if (!d || !value || sending.value) return;
-  const body = { value, addToReference: !!pool.value && addRef.value, note: note.value.trim() };
+  const body = { value, addToReference: !!pool.value && addRef.value, note: note.value.trim(), noteTypes: [...noteTypes.value] };
   const key = JSON.stringify(body);
   if (!pendingOp || pendingOp.key !== key) pendingOp = { key, id: crypto.randomUUID() };
   const target = id.value;
@@ -120,8 +121,8 @@ async function submit() {
     const res = await arbitrate(target, await token(), { ...body, operationId: pendingOp.id });
     if (!alive || target !== id.value) return;
     pendingOp = null;
-    result.value = { value: res.value, referencePool: res.referencePool, note: body.note };
-    d.arbitrations = [...d.arbitrations, { value: res.value, referencePool: res.referencePool, note: body.note, at: Date.now(), arbiter: null, mine: true }];
+    result.value = { value: res.value, referencePool: res.referencePool, note: body.note, noteTypes: body.noteTypes };
+    d.arbitrations = [...d.arbitrations, { value: res.value, referencePool: res.referencePool, note: body.note, noteTypes: body.noteTypes, at: Date.now(), arbiter: null, mine: true }];
     void loadNext();
   } catch (e) {
     if (!alive || target !== id.value) return;
@@ -139,7 +140,7 @@ async function loadNext() {
     if (alive) next.value = { id: res.items.find((i) => i.suggestionId !== id.value)?.suggestionId ?? null, total: res.total };
   } catch { if (alive) next.value = null; }
 }
-function again() { result.value = null; choice.value = null; note.value = ''; addRef.value = false; sendError.value = ''; }
+function again() { result.value = null; choice.value = null; note.value = ''; noteTypes.value = []; addRef.value = false; sendError.value = ''; }
 const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 </script>
 
@@ -271,6 +272,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
               <span class="chip ai-tag ai-tag--strong">{{ t(`reviewAi.arb.value.${result.value}`) }}</span>
               <span v-if="result.referencePool" class="chip ai-tag" data-result-pool>{{ t(`reviewAi.arb.done.pool.${result.referencePool}`) }}</span>
             </p>
+            <p v-if="result.noteTypes.length" class="ai-chips" data-result-note-types><span v-for="type in result.noteTypes" :key="type" class="chip ai-tag">{{ t(`reviewAi.note.type.${type}`) }}</span></p>
             <p v-if="result.note" class="ai-text">{{ t('reviewAi.arb.done.note', { note: result.note }) }}</p>
             <div v-if="reopenHint(result.value)" class="notice ai-item__row" role="note" data-reopen-hint>
               <span>{{ t('reviewAi.arb.form.reopenHint') }}</span>
@@ -298,10 +300,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
               <span>{{ t('reviewAi.arb.form.reopenHint') }}</span>
               <RouterLink class="btn btn--sm" :to="reopenTo" data-reopen-link>{{ t('reviewAi.arb.form.reopenLink') }}</RouterLink>
             </div>
-            <div class="field ai-form__field">
-              <label for="ai-arb-note">{{ t('reviewAi.arb.form.noteLabel') }}</label>
-              <textarea id="ai-arb-note" v-model="note" class="input" rows="3" :maxlength="NOTE_MAX" :placeholder="t('reviewAi.arb.form.notePlaceholder')" :disabled="sending" autocomplete="off" />
-            </div>
+            <ReviewAiNoteField v-model:types="noteTypes" v-model:note="note" context="arbitration" id-base="ai-arb-note" :disabled="sending" />
             <label class="ai-check" :class="{ 'ai-check--off': !pool }">
               <input v-model="addRef" type="checkbox" :disabled="!pool || sending" data-reference aria-describedby="ai-arb-pool" />
               <span class="ai-check__text">
@@ -320,6 +319,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
             <ul class="ai-lines">
               <li v-for="(h, i) in history" :key="i">
                 {{ t('reviewAi.arb.historyLine', { value: t(`reviewAi.arb.value.${h.value}`), who: h.arbiter || (h.mine ? t('reviewAi.arb.you') : t('reviewAi.arb.unknownReviewer')), time: dateTime(h.at) }) }}<template v-if="h.referencePool"> · {{ t(`reviewAi.arb.done.pool.${h.referencePool}`) }}</template>
+                <span v-if="noteTypesOf(h.noteTypes).length" class="ai-chips ai-history__types"><span v-for="type in noteTypesOf(h.noteTypes)" :key="type" class="chip ai-tag">{{ t(`reviewAi.note.type.${type}`) }}</span></span>
                 <span v-if="h.note" class="ai-text ai-history__note">{{ h.note }}</span>
               </li>
             </ul>
@@ -349,6 +349,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 .ai-note { margin: 0; overflow-wrap: anywhere; }
 .ai-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); font-size: 13px; overflow-wrap: anywhere; }
 .ai-history__note { display: block; margin-top: var(--s-1); }
+.ai-history__types { margin-top: var(--s-1); }
 .ai-fold > summary { cursor: pointer; min-height: var(--h-sm); display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .ai-fold[open] > summary { margin-bottom: var(--s-2); }
 .ai-diff { display: grid; gap: var(--s-1); }
@@ -367,7 +368,6 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 .ai-choice--on { border-color: var(--accent); background: var(--accent-tint); }
 .ai-choice__name { font-weight: 600; overflow-wrap: anywhere; }
 .ai-choice__hint { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
-.ai-form__field { margin-bottom: 0; }
 .ai-check { display: flex; align-items: flex-start; gap: var(--s-2); min-height: var(--h-md); cursor: pointer; }
 .ai-check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; }
 .ai-check--off { cursor: not-allowed; }

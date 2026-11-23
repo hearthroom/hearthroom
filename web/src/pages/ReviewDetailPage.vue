@@ -11,12 +11,16 @@
  *   - 分頁條黏在頁首下方，低頻的兩格收進「更多」；手機底部固定「前往決定」，桌機右側欄放字數與入口。
  *   - 字數未達標時「通過」不能按（伺服器同樣拒絕）。駁回理由改成結構化代碼（審卡 V2，見決定區的說明）。
  *   - 送出後決定區換成結果卡（我的決定、目前結果、下一張），重新整理或回頭看也是同一張。
+ *
+ * 兩段式決定（ui-two-stage.md，owner 2026-11-24）：① 送出判斷（盲審，只記錄、不定案、不跳確認）→ ② 看 AI → ③ 定案。
+ * 不受理、冷凍、重新審核仍是一步。盲審送出後鎖定；重新進來（重新整理、領取逾時後回來）從詳情的 myBlind 直接進第二步。
+ * 決定前不讀 AI（伺服器也擋）：只有送過盲審之後才發 /ai。
  */
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, dropReview, restoreReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, dropReview, restoreReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, blindReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality, type ReviewBlind, type ReviewAiState, type ReviewDecisionBody, type ReviewFinalSource } from "@/lib/api";
 import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
@@ -33,7 +37,11 @@ import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
 import ReviewTimeline from '@/components/ReviewTimeline.vue';
 import ReviewDiffView from '@/components/ReviewDiffView.vue';
 import ReviewAiReveal from '@/components/ReviewAiReveal.vue';
-import type { MyDecision } from '@/lib/review-ai';
+import ReviewTwoStageCompare from '@/components/ReviewTwoStageCompare.vue';
+import ReviewAiNoteField from '@/components/ReviewAiNoteField.vue';
+import ReviewReasonPreview from '@/components/ReviewReasonPreview.vue';
+import { fetchReviewAi, type AiNoteType } from '@/lib/review-ai-api';
+import { aiAsHuman, aiChoiceUsable, aiReasonCodes, aiStateOf, publishesAgainstBlind, waitedSeconds, type AiView, type MyDecision } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { REVIEW_DECISION_MARKS } from '../../../shared/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
@@ -71,7 +79,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];suggestOpen.value=false;suggestPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];suggestOpen.value=false;suggestPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;resetTwoStage();finalSourceDone.value=null;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -259,12 +267,10 @@ const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine)
 /** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
 const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
 /**
- * AI 的判斷（揭曉區）只在「我」做完決定之後掛上：我蓋了章，或剛在這頁不受理（復原後就收起）。
- * 已定案但不是我決定的（管理員看別人的單）、從不受理清單點進來看的，都不掛也不讀——詳情回應沒說是誰不受理的。
- * 比對看我的章，不看單子目前的狀態（改判後狀態會變，我的章不變）。
+ * 決定後的「AI 的判斷」揭曉區（附覆核）只剩不受理用：剛在這頁不受理（復原後就收起）才掛上。
+ * 通過與駁回改走兩段式，定案前已經並排比過，結果卡不再掛（ui-two-stage.md）；重新審核與舊單的章也不再掛。
  */
-const aiDecision = computed<MyDecision | null>(() => myStamp.value ? myStamp.value.verdict : dropDone.value && !decided.value ? 'drop' : null);
-const aiMyReasons = computed(() => (myStamp.value?.verdict === 'reject' ? data.value?.rejectReasons ?? [] : []));
+const aiDecision = computed<MyDecision | null>(() => (dropDone.value && !decided.value ? 'drop' : null));
 
 /**
  * 審卡 V2 決定區（ui.md §2.3）：一個「你的決定」、三個選項都不預選（通過｜駁回｜不受理），選了才展開。
@@ -304,6 +310,131 @@ let sectionChosen = false;
 /** 快速審：作者是優質、沒有疑似量產旗標、還在待審。只是先給重點，不自動通過 */
 const fastReview = computed(() => !decided.value && !reopen.value && data.value?.authorProfile?.tier === "top" && !data.value.authorProfile.batchSuspected);
 const keyChecksOpen = ref(false);
+
+// ---- 兩段式決定 ----
+/** 我的盲審判斷：剛送出的，或重新進來時詳情帶的 myBlind（伺服器正規化後的那一份） */
+const blind = ref<ReviewBlind | null>(null);
+/** AI 那一邊：null＝還沒讀到（重新進來時） */
+const aiState = ref<ReviewAiState | null>(null);
+const aiLoadFailed = ref(false);
+const aiBusy = ref(false);
+/** 伺服器說「用 AI 的」不能選（409 ai_choice_unavailable）：當成 AI 沒有給出判斷 */
+const aiForcedNone = ref(false);
+/** AI 在揭曉後重判過（409 ai_changed）：已換上新的判斷，請審核員重選 */
+const aiChanged = ref(false);
+/** 不一致時的定案方式：用我的／用 AI 的／修改後定案，不預選 */
+const FINAL_PICKS = ['blind', 'ai', 'modified'] as const;
+const finalPick = ref<(typeof FINAL_PICKS)[number] | null>(null);
+/** 給 AI 的說明（選填，跟著定案送出，不給作者看） */
+const aiNoteTypes = ref<AiNoteType[]>([]);
+const aiNote = ref('');
+/** 剛定案時伺服器回的來源；重新讀詳情後以我那一章的 finalSource 為準 */
+const finalSourceDone = ref<ReviewFinalSource | null>(null);
+/** AI 還沒審完：每 10 秒重讀一次，沒有上限（PM 2026-11-24）；「已等 N 秒」每秒更新 */
+const AI_POLL_MS = 10_000;
+const clock = ref(Date.now());
+let modifiedFilled = false;
+function resetTwoStage() {
+  blind.value = null; aiState.value = null; aiLoadFailed.value = false; aiBusy.value = false; aiForcedNone.value = false; aiChanged.value = false;
+  finalPick.value = null; aiNoteTypes.value = []; aiNote.value = ''; modifiedFilled = false;
+}
+/** 盲審送出後、定案前：決定區換成揭曉與定案（重新審核沒有兩段式） */
+const stage = computed<'judge' | 'reveal'>(() => (blind.value && !reopen.value && data.value?.submission.status === 'pending' && !stampedByMe.value ? 'reveal' : 'judge'));
+const aiSuggestion = computed(() => aiState.value?.suggestion ?? null);
+const aiView = computed<AiView>(() => {
+  if (aiForcedNone.value) return 'none';
+  const s = aiState.value;
+  if (!s) return aiLoadFailed.value ? 'error' : 'loading';
+  if (s.state === 'pending') return 'pending';
+  return s.state === 'ready' && aiChoiceUsable(s.suggestion) ? 'ready' : 'none';
+});
+const aiVerdict = computed(() => (aiView.value === 'ready' ? aiAsHuman(aiSuggestion.value!.verdict) : null));
+/** null＝還不能比（AI 沒審完或沒有判斷） */
+const agreeWithAi = computed(() => (blind.value && aiVerdict.value ? aiVerdict.value === blind.value.verdict : null));
+/** 「用 AI 的」是通過，但這一版字數未達標：伺服器會拒絕，先停用 */
+const aiPickBlocked = computed(() => aiVerdict.value === 'approve' && approveBlocked.value);
+/** 修改後定案：用第一步同一套控制項自由調整，盲審判斷本身不變 */
+const modifying = computed(() => stage.value === 'reveal' && agreeWithAi.value === false && finalPick.value === 'modified');
+const showForm = computed(() => stage.value === 'judge' || modifying.value);
+/** 定案後的結論（決定按鈕上寫的那個） */
+const finalVerdict = computed<'approve' | 'reject' | null>(() => {
+  const b = blind.value;
+  if (!b) return null;
+  if (agreeWithAi.value !== false) return b.verdict;
+  if (finalPick.value === 'blind') return b.verdict;
+  if (finalPick.value === 'ai') return aiVerdict.value;
+  if (finalPick.value === 'modified') return choice.value === 'approve' || choice.value === 'reject' ? choice.value : null;
+  return null;
+});
+const finalReady = computed(() => {
+  if (!canDecide.value || !finalPick.value) return false;
+  if (finalPick.value === 'ai') return !aiPickBlocked.value;
+  if (finalPick.value === 'modified') return choice.value === 'approve' ? !approveBlocked.value && !suggestNoteMissing.value : choice.value === 'reject' ? rejectReady.value : false;
+  return true;
+});
+/** 不一致、選了用我的或用 AI 的：作者會看到什麼（「用 AI 的」駁回時是 AI 的理由代碼，不附輔導） */
+const finalPreview = computed(() => {
+  const b = blind.value;
+  if (!b || agreeWithAi.value !== false) return null;
+  if (finalPick.value === 'blind') {
+    if (b.verdict === 'reject') return { codes: b.payload.reasons, coaching: b.payload.coaching, title: '' };
+    if (b.payload.suggestions.length) return { codes: b.payload.suggestions, coaching: true, title: t('reviewV2.decide.suggestPreviewTitle') };
+  }
+  if (finalPick.value === 'ai' && aiVerdict.value === 'reject') return { codes: aiReasonCodes(aiSuggestion.value!), coaching: false, title: '' };
+  return null;
+});
+const waited = computed(() => (blind.value ? waitedSeconds(blind.value.at, clock.value) : 0));
+const STEPS = ['judge', 'reveal', 'final'] as const;
+/** 步驟列：送出判斷前在第一格；之後看 AI 與定案在同一個畫面，停在第二格（原型同樣標法） */
+const stepIndex = computed(() => (stage.value === 'reveal' ? 1 : 0));
+/** 結果卡的來源 chip：詳情裡我那一章記下的來源；剛定案、還沒重讀時用蓋章回應的 */
+const resultSource = computed<ReviewFinalSource | null>(() => myStamp.value?.finalSource ?? (myStamp.value ? finalSourceDone.value : null));
+/** 已定案、而保留期已過（伺服器回 null）：內容只剩公開資料。舊版伺服器不帶這個欄位，照舊顯示 */
+const retentionExpired = computed(() => decided.value && data.value?.retainUntil === null);
+// 第一次選「修改後定案」：表單換成盲審那一份（伺服器正規化過的），之後怎麼改都不動盲審判斷
+watch(finalPick, (pick) => {
+  const b = blind.value;
+  if (pick !== 'modified' || !b || modifiedFilled) return;
+  modifiedFilled = true;
+  const p = b.payload;
+  choice.value = p.verdict; reasonPicks.value = [...p.reasons]; coaching.value = p.coaching; note.value = p.note;
+  suggestPicks.value = [...p.suggestions]; suggestOpen.value = p.suggestions.length > 0; decisionMarks.value = [...p.marks];
+});
+
+/** 讀 AI 的判斷：只在送過盲審之後（重新進來、輪詢、再試一次） */
+async function refreshAi(manual = false) {
+  const target = id.value;
+  if (!blind.value) return;
+  if (manual) { aiBusy.value = true; aiLoadFailed.value = false; }
+  try {
+    const res = await fetchReviewAi(target, await token());
+    if (!active || target !== id.value || !blind.value) return;
+    aiState.value = aiStateOf(res.suggestions);
+    aiForcedNone.value = false;
+  } catch {
+    if (!active || target !== id.value) return;
+    // 輪詢失敗不打斷：下一次再讀；還沒讀到過才顯示讀不到
+    if (!aiState.value) aiLoadFailed.value = true;
+    else if (manual) decideError.value = t('reviewAi.reveal.loadFailed');
+  } finally {
+    if (manual && target === id.value) aiBusy.value = false;
+  }
+}
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let tickTimer: ReturnType<typeof setInterval> | null = null;
+function stopAiPoll() {
+  if (pollTimer) clearInterval(pollTimer);
+  if (tickTimer) clearInterval(tickTimer);
+  pollTimer = tickTimer = null;
+}
+watch(() => stage.value === 'reveal' && aiView.value === 'pending', (on) => {
+  stopAiPoll();
+  if (!on) return;
+  clock.value = Date.now();
+  pollTimer = setInterval(() => void refreshAi(), AI_POLL_MS);
+  tickTimer = setInterval(() => { clock.value = Date.now(); }, 1000);
+}, { immediate: true });
+onBeforeUnmount(stopAiPoll);
 
 const decideError = ref("");
 /** 送出後不知道有沒有成功（連線中斷）：不叫人直接重按，先去「我處理過的」看 */
@@ -392,6 +523,11 @@ async function load() {
     const result=await fetchReviewDetail(target, await token());
     if(!active||seq!==loadSequence||target!==id.value)return;
     data.value=result;
+    // 兩段式：我已經送過盲審（重新整理、領取逾時後回來）就直接進揭曉；沒送過不讀 AI
+    const mine=result.myBlind??null;
+    if(mine&&result.submission.status==='pending'&&!result.submission.stampedByMe&&!result.submission.reopen&&blind.value?.id!==mine.id){
+      resetTwoStage();blind.value=mine;void refreshAi();
+    }
     // 新卡預設先看開場白（最大的駁回原因，也最快看完）；之後使用者自己切的分頁不動
     // 更新與駁回後重送先看「這次改了什麼」
     if(!sectionChosen){sectionChosen=true;if(hasChanges.value)section.value='changes';else if(submissionTypeOf({ ...result.submission, reopen: !!result.submission.reopen })==='first')section.value='dialogue';}
@@ -558,55 +694,77 @@ async function withdraw() {
   }
 }
 
-async function stamp(verdict: "approve" | "reject") {
-  if(busy.value||!data.value||data.value.submission.id!==id.value)return;
+/**
+ * 重新審核（一步，沒有兩段式）：維持通過不動卡片；駁回限管理員，走改判（卡改回上一個通過的版本或下架），要寫說明。
+ * 兩樣都先跳確認層。
+ */
+async function stampReopen(verdict: "approve" | "reject") {
+  if(busy.value||!data.value||data.value.submission.id!==id.value||!reopen.value)return;
   if (hold.value) return;
   if (verdict === "reject" && rejectLocked.value) return;
   if (!claimedByMe.value) {
     error.value = t("review.claimFirst");
     return;
   }
-  if (verdict === "approve" && approveBlocked.value) return;
-  busy.value = true;
   error.value = "";
   decideError.value = "";
   decideUnknown.value = false;
-  // 說明欄只在選「駁回」時出現：改選通過時，之前打在駁回裡的字不能跟著送出
-  // 通過附建議時，補充說明跟著建議一起給作者
-  const target=id.value,review=data.value,reason=verdict==='reject'||(verdict==='approve'&&suggestions.value.length)?note.value:'',generation=review.submission.claimGeneration;
-  const suggest=verdict==='approve'?[...suggestions.value]:[];
-  if(suggest.length&&suggestNoteMissing.value){busy.value=false;decideError.value=t('reviewV2.decide.otherNeedsNote');return;}
-  const codes=verdict==='reject'&&!reopen.value?pickedReasons.value:undefined,coach=verdict==='reject'&&!reopen.value&&coachingOn.value;
-  if(verdict==='reject'&&!rejectReady.value){busy.value=false;decideError.value=t(reopen.value||pickedReasons.value.length?'reviewV2.decide.otherNeedsNote':'reviewV2.decide.pickReason');return;}
+  const built = decisionBody(verdict);
+  if ('error' in built) { decideError.value = built.error; return; }
+  const target=id.value,review=data.value,generation=review.submission.claimGeneration,keep=verdict==='approve';
+  busy.value = true;
   try {
     const confirmedToken=await token();
-    const approved=approvals.value+1>=review.submission.required;
-    // 重新審核：維持通過不動卡片；駁回走改判，卡改回上一個通過的版本或下架
-    const keep=verdict==='approve'&&reopen.value;
-    const body=verdict==='reject'?(reopen.value?'review.reopen.rejectBody':'review.confirm.rejectBody'):keep?'review.reopen.keepBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending';
-    // 駁回確認：列卡名、版本、理由名稱與補充；輔導時多一行
-    const reasonLines=codes?.length?'\n'+t('reviewV2.decide.confirmBody')+'\n'+codes.map(c=>'・'+t(reasonKey(c,'name'))).join('\n')+(coach?'\n'+t('reviewV2.decide.confirmCoaching'):'')
-      :suggest.length?'\n'+t('reviewV2.decide.confirmSuggestBody')+'\n'+suggest.map(c=>'・'+t(reasonKey(c,'name'))).join('\n'):'';
-    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+reasonLines+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?(suggest.length?'reviewV2.decide.confirmApproveWithSuggestions':'review.confirm.approve'):'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':'review.action.reject'),built.body.note??'')+'\n\n'+t(keep?'review.reopen.keepBody':'review.reopen.rejectBody'),confirmText:t(keep?'review.action.keep':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:!keep,dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
-    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}), ...(decisionMarks.value.length ? { marks: [...decisionMarks.value] } : {}), ...(suggest.length ? { suggestions: suggest } : {}) });
+    const res = await stampReview(target, confirmedToken, { ...built.body, generation });
     if(!active||id.value!==target)return;
-    if (data.value) {
-      data.value.submission.status = res.status;
-      data.value.submission.claimedByMe = false;
-      data.value.submission.stampedByMe = true;
-      data.value.submission.stamps.push({ verdict, note:reason, at: Date.now(), mine: true });
-      // 重讀一次：結果卡要的是伺服器上的案件狀態，不是前端推算的
-      await load();
-      if(!active||id.value!==target)return;
-      await nextTick();
-      decideSection.value?.scrollIntoView({ block: "start" });
-      decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
-    }
+    await settleStamp(target, res.status, { verdict, note: built.body.note ?? '' });
   } catch (err) {
+    await explainDecideError(err, target);
+  } finally {
+    busy.value = false;
+  }
+}
+
+/** 蓋章成功：先在畫面上記下我的章，再重讀一次（結果卡要的是伺服器上的案件狀態，不是前端推算的） */
+async function settleStamp(target: string, status: string, stamp: { verdict: "approve" | "reject"; note: string; finalSource?: ReviewFinalSource }) {
+  if (!data.value) return;
+  data.value.submission.status = status;
+  data.value.submission.claimedByMe = false;
+  data.value.submission.stampedByMe = true;
+  data.value.submission.stamps.push({ ...stamp, at: Date.now(), mine: true });
+  await load();
+  if(!active||id.value!==target)return;
+  await nextTick();
+  decideSection.value?.scrollIntoView({ block: "start" });
+  decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
+}
+
+/**
+ * 決定（盲審、定案、舊流程蓋章）失敗時說明，輸入都留著。兩段式的幾個 409 要先認出來，不能當成「領取變了」：
+ * 已經送過盲審（換個分頁送過、或重送）→ 重讀詳情，從 myBlind 進揭曉；AI 剛重判 → 換上新的判斷請他重選；
+ * 「用 AI 的」不能選 → 當成 AI 沒有給出判斷，只剩用我的判斷定案。
+ */
+async function explainDecideError(err: unknown, target: string) {
     if(!active||id.value!==target)return;
-    if (err instanceof ApiError && err.code === "review_length_insufficient") {
+    if (err instanceof ApiError && err.code === "blind_already_recorded") {
+      await load();
+      return;
+    } else if (err instanceof ApiError && err.code === "ai_changed") {
+      finalPick.value = null;
+      aiChanged.value = true;
+      await refreshAi(true);
+      return;
+    } else if (err instanceof ApiError && err.code === "ai_choice_unavailable") {
+      finalPick.value = null;
+      aiForcedNone.value = true;
+      return;
+    } else if (err instanceof ApiError && (err.code === "finalize_with_source" || err.code === "blind_required" || err.code === "blind_not_applicable")) {
+      decideError.value = t("review.decide.failed");
+      await load();
+    } else if (err instanceof ApiError && err.code === "review_length_insufficient") {
       const l = err.reviewLength ? formatReviewLength(err.reviewLength, String(locale.value)) : lengthParams.value;
       decideError.value = t("review.decide.errorLength", { total: l.total, required: l.required });
     } else if (err instanceof ApiError && err.code === "review_reopen_stale") {
@@ -633,6 +791,95 @@ async function stamp(verdict: "approve" | "reject") {
     await nextTick();
     decideErrorEl.value?.focus({ preventScroll: true });
     decideErrorEl.value?.scrollIntoView({ block: "nearest" });
+}
+
+/** 第一步、通過與駁回共用：組出決定的內容；缺理由或說明時回傳要顯示的錯誤 */
+function decisionBody(verdict: "approve" | "reject"): { body: ReviewDecisionBody } | { error: string } {
+  // 說明欄只在選「駁回」時出現：改選通過時，之前打在駁回裡的字不能跟著送出；通過附建議時，補充說明跟著建議一起給作者
+  const reason = verdict === 'reject' || (verdict === 'approve' && suggestions.value.length) ? note.value : '';
+  const suggest = verdict === 'approve' ? [...suggestions.value] : [];
+  if (suggest.length && suggestNoteMissing.value) return { error: t('reviewV2.decide.otherNeedsNote') };
+  if (verdict === 'reject' && !rejectReady.value) return { error: t(reopen.value || pickedReasons.value.length ? 'reviewV2.decide.otherNeedsNote' : 'reviewV2.decide.pickReason') };
+  const codes = verdict === 'reject' && !reopen.value ? pickedReasons.value : undefined;
+  return { body: { verdict, note: reason, ...(codes ? { reasons: [...codes], coaching: coachingOn.value } : {}), ...(decisionMarks.value.length ? { marks: [...decisionMarks.value] } : {}), ...(suggest.length ? { suggestions: suggest } : {}) } };
+}
+
+/** ① 送出判斷（盲審）：檢查跟蓋章一樣，但只記錄；不跳確認。回應直接帶 AI 的判斷，決定區原地換成揭曉 */
+async function submitBlind(verdict: "approve" | "reject") {
+  if (busy.value || !data.value || data.value.submission.id !== id.value || hold.value || reopen.value) return;
+  if (!claimedByMe.value) { error.value = t("review.claimFirst"); return; }
+  if (verdict === "approve" && approveBlocked.value) return;
+  decideError.value = ""; decideUnknown.value = false; error.value = "";
+  const built = decisionBody(verdict);
+  if ('error' in built) { decideError.value = built.error; return; }
+  const target = id.value, generation = data.value.submission.claimGeneration;
+  busy.value = true;
+  try {
+    const res = await blindReview(target, await token(), { ...built.body, generation });
+    if (!active || id.value !== target) return;
+    resetTwoStage();
+    blind.value = res.blind; aiState.value = res.ai;
+    await nextTick();
+    decideSection.value?.scrollIntoView({ block: "start" });
+    decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
+  } catch (err) {
+    await explainDecideError(err, target);
+  } finally {
+    busy.value = false;
+  }
+}
+
+/**
+ * ③ 定案。一致：用我的（blind）；不一致：用我的／用 AI 的／修改後；AI 沒審完或沒有判斷：用我的（human_no_ai，伺服器會在
+ * AI 剛好判完時記成 blind）。只有「定案會讓卡上架、而盲審是駁回」時跳確認（PM 2026-11-24），其他一律直接定案。
+ */
+async function finalize(source: ReviewFinalSource) {
+  const b = blind.value, review = data.value;
+  if (busy.value || !b || !review || review.submission.id !== id.value || hold.value) return;
+  if (!claimedByMe.value) { error.value = t("review.claimFirst"); return; }
+  decideError.value = ""; decideUnknown.value = false; error.value = ""; aiChanged.value = false;
+  let decision: ReviewDecisionBody | null = null;
+  let verdict = b.verdict;
+  if (source === 'modified') {
+    const v = choice.value;
+    if (v !== 'approve' && v !== 'reject') return;
+    if (v === 'approve' && approveBlocked.value) return;
+    const built = decisionBody(v);
+    if ('error' in built) { decideError.value = built.error; return; }
+    decision = built.body; verdict = v;
+  } else if (source === 'ai') {
+    if (!aiVerdict.value || aiPickBlocked.value) return;
+    verdict = aiVerdict.value;
+  }
+  // 「用 AI 的」帶畫面上那一筆：AI 在這之間重判過，伺服器回 ai_changed，不會蓋成沒看過的結論
+  const shown = source === 'ai' ? aiSuggestion.value : null;
+  const target = id.value, generation = review.submission.claimGeneration;
+  busy.value = true;
+  try {
+    const confirmedToken = await token();
+    if (publishesAgainstBlind(b.verdict, verdict)) {
+      const row = (label: string, value: string) => t('review.confirm.row', { label, value });
+      const message = [
+        row(t('review.confirm.card'), review.detail.document.roleName),
+        row(t('review.confirm.version'), dateTime(review.submission.submittedAt)),
+        row(t('reviewAi.two.confirm.blind'), t('review.action.reject')),
+        row(t('reviewAi.two.confirm.final'), t('reviewAi.two.confirm.finalValue', { source: t(`reviewAi.two.source.${source}`) })),
+      ].join('\n') + '\n\n' + t('reviewAi.two.confirm.body');
+      if (!await decisionConfirm({ scrollMessage: true, title: t('reviewAi.two.confirm.title'), message, confirmText: t('reviewAi.two.confirm.submit'), cancelText: t('reviewAi.two.confirm.back'), focusCancel: true })) return;
+      if (!active || id.value !== target || data.value !== review) return;
+      if (await token() !== confirmedToken) throw new Error(t('auth.expired'));
+    }
+    const types = [...aiNoteTypes.value], text = aiNote.value.trim();
+    const res = await stampReview(target, confirmedToken, {
+      generation, finalSource: source, ...(decision ?? {}),
+      ...(shown ? { aiSuggestionId: shown.id, aiSuggestionAt: shown.at } : {}),
+      ...(types.length ? { aiNoteTypes: types } : {}), ...(text ? { aiNote: text } : {}),
+    });
+    if (!active || id.value !== target) return;
+    finalSourceDone.value = res.finalSource ?? source;
+    await settleStamp(target, res.status, { verdict, note: decision?.note ?? (source === 'ai' ? '' : b.payload.note), finalSource: res.finalSource ?? source });
+  } catch (err) {
+    await explainDecideError(err, target);
   } finally {
     busy.value = false;
   }
@@ -709,7 +956,9 @@ onMounted(() => { void load(); });
     </div>
     <RouterLink v-if="error && !data" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
-    <p v-if="data?.detail.closed" class="notice" role="status">{{ $t("review.closedPartial") }}</p>
+    <!-- 定案後的保留期（7 天，與 AI 不一致未仲裁最長 14 天）過了：只剩公開資料 -->
+    <p v-if="retentionExpired" class="notice" role="status" data-retain-expired>{{ $t("review.retain.expired") }}</p>
+    <p v-else-if="data?.detail.closed" class="notice" role="status">{{ $t("review.closedPartial") }}</p>
     <p v-else-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
     <p v-if="done" class="notice" role="status">{{ done }} <RouterLink :to="lp('/review')">← {{ $t("review.eyebrow") }}</RouterLink></p>
 
@@ -1056,6 +1305,9 @@ onMounted(() => { void load(); });
           <p v-if="myStamp" class="result__mine"><span class="chip" :class="{ 'chip--reject': myStamp.verdict === 'reject' }">{{ $t(myStamp.verdict === 'approve' ? 'review.result.mine.approve' : 'review.result.mine.reject') }}</span></p>
           <!-- 一張單一章就定案：送出後只會是已上榜或已駁回 -->
           <p v-if="data.submission.status === 'approved' || data.submission.status === 'rejected'" class="result__now">{{ $t(data.submission.status === 'approved' ? 'review.result.now.approved' : 'review.result.now.rejected') }}</p>
+          <!-- 兩段式定案的來源（用我的／用 AI 的／修改後／沒有 AI 對照） -->
+          <p v-if="resultSource" class="result__mine"><span class="chip result__source" :data-final-source="resultSource">{{ $t("reviewAi.two.sourceChip", { source: $t(`reviewAi.two.source.${resultSource}`) }) }}</span></p>
+          <p v-if="data.retainUntil" class="subtle result__retain" data-retain-until>{{ $t("review.retain.until", { date: dateTime(data.retainUntil) }) }}</p>
           <ul v-if="data.rejectReasons?.length" class="result__reasons" data-result-reasons>
             <li v-for="code in data.rejectReasons" :key="code" class="chip">{{ $t(reasonKey(code, 'name')) }}</li>
           </ul>
@@ -1107,14 +1359,22 @@ onMounted(() => { void load(); });
         </template>
         <template v-else>
           <h3 class="verdict__title" tabindex="-1" data-decide-title>{{ $t("review.decide.title") }}</h3>
+          <!-- 兩段式：① 送出判斷 → ② 看 AI → ③ 定案（重新審核只有一步，不畫） -->
+          <ol v-if="!reopen" class="steps" :aria-label="$t('reviewAi.two.steps.label')" data-steps>
+            <li v-for="(step, i) in STEPS" :key="step" class="steps__item" :class="{ 'steps__item--on': stepIndex === i, 'steps__item--done': stepIndex > i }" :aria-current="stepIndex === i ? 'step' : undefined" :data-step="step">
+              <span class="steps__num" aria-hidden="true">{{ stepIndex > i ? "✓" : i + 1 }}</span>
+              <span>{{ $t(`reviewAi.two.steps.${step}`) }}</span>
+              <span v-if="stepIndex > i" class="sr-only">{{ $t("reviewAi.two.steps.done") }}</span>
+            </li>
+          </ol>
           <div v-if="decideError || decideUnknown" ref="decideErrorEl" class="notice notice--error" role="alert" tabindex="-1">
             <p>{{ decideUnknown ? $t("review.decide.unknown") : decideError }}</p>
             <RouterLink v-if="decideUnknown" class="btn btn--sm" :to="lp('/review/decisions')">{{ $t("review.history.title") }}</RouterLink>
           </div>
           <p v-if="hold" class="notice blocked" data-hold-blocked>{{ $t("review.hold.decideBlocked") }}</p>
           <p v-else-if="rejectLocked && claimedByMe" class="subtle" data-reject-locked>{{ $t("review.reopen.rejectManager") }}</p>
-          <p v-if="approveBlocked" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
-          <p v-else-if="!length && !decided" id="approve-blocked" class="subtle">{{ $t("review.decide.lengthUnknown") }}</p>
+          <p v-if="approveBlocked && showForm" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
+          <p v-else-if="!length && !decided && showForm" id="approve-blocked" class="subtle">{{ $t("review.decide.lengthUnknown") }}</p>
           <!-- 已經有人蓋過的章（舊單或需要兩章時）。駁回說明可能很長：不能塞進固定高度的 chip -->
           <div v-if="otherStamps.length" class="records" data-other-stamps>
             <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
@@ -1128,8 +1388,34 @@ onMounted(() => { void load(); });
               </li>
             </ul>
           </div>
+          <!-- ② 看 AI、③ 定案：決定區原地換成並排比較；整區還沒定案 -->
+          <template v-if="stage === 'reveal' && blind">
+            <div class="reveal__head">
+              <p class="reveal__title">{{ $t("reviewAi.two.revealTitle") }}</p>
+              <span class="chip reveal__undecided" data-undecided>{{ $t("reviewAi.two.undecided") }}</span>
+            </div>
+            <ReviewTwoStageCompare :blind="blind" :view="aiView" :suggestion="aiSuggestion" :waited="waited" :busy="aiBusy || busy" @retry="refreshAi(true)" />
+            <p v-if="aiChanged" class="notice" role="status" data-ai-changed>{{ $t("reviewAi.two.final.aiChanged") }}</p>
+            <p v-if="agreeWithAi === true" class="final__text" data-final-agree>{{ $t(`reviewAi.two.final.agreeBody.${blind.verdict}`) }}</p>
+            <template v-else-if="agreeWithAi === false">
+              <p id="final-pick-title" class="final__label">{{ $t("reviewAi.two.final.choiceTitle") }}</p>
+              <div class="choices" role="radiogroup" aria-labelledby="final-pick-title" data-final-choices>
+                <label v-for="pick in FINAL_PICKS" :key="pick" class="choice" :class="{ 'choice--on': finalPick === pick, 'choice--off': pick === 'ai' && aiPickBlocked }">
+                  <input v-model="finalPick" type="radio" name="final" :value="pick" :disabled="busy || (pick === 'ai' && aiPickBlocked)" :data-final-pick="pick" />
+                  <span class="choice__name">{{ $t(`reviewAi.two.final.pick.${pick}`) }}</span>
+                  <span class="choice__hint">{{ pick === 'modified' ? $t("reviewAi.two.final.pick.modifiedHint") : pick === 'ai' && aiPickBlocked ? $t("reviewV2.decide.lengthGap", { gap: lengthParams.remaining }, Number(data.detail.reviewLength?.remaining ?? 0)) : $t(`review.action.${pick === 'ai' ? aiVerdict : blind.verdict}`) }}</span>
+                </label>
+              </div>
+              <p v-if="(finalPick === 'blind' || finalPick === 'ai') && finalVerdict" class="final__text" data-final-result>{{ $t(finalVerdict === 'approve' ? "reviewAi.two.final.result.approve" : finalPick === 'ai' ? "reviewAi.two.final.result.rejectAi" : "reviewAi.two.final.result.reject") }}</p>
+              <ReviewReasonPreview v-if="finalPreview" :codes="finalPreview.codes" :coaching="finalPreview.coaching" :length="lengthParams" :title="finalPreview.title" />
+              <p v-if="finalPick === 'modified'" class="final__text" data-final-modified>{{ $t("reviewAi.two.final.modifiedLead") }}</p>
+            </template>
+            <p v-else-if="aiView === 'pending'" class="final__text">{{ $t("reviewAi.two.pending.skipLead") }}</p>
+          </template>
+
           <!-- 三個選項都不預選；重新審核單沒有「不受理」，駁回限管理員 -->
-          <div class="choices" role="radiogroup" :aria-label="$t('reviewV2.decide.title')" data-decide-choices>
+          <template v-if="showForm">
+          <div class="choices" role="radiogroup" :aria-label="$t(modifying ? 'reviewAi.two.final.formTitle' : 'reviewV2.decide.title')" data-decide-choices>
             <label class="choice" :class="{ 'choice--on': choice === 'approve', 'choice--off': approveBlocked || !claimedByMe || !!hold }">
               <input v-model="choice" type="radio" name="decide" value="approve" :disabled="busy || !claimedByMe || !!hold || approveBlocked" />
               <span class="choice__name">{{ $t(reopen ? "review.action.keep" : "reviewV2.decide.approve") }}</span>
@@ -1140,7 +1426,7 @@ onMounted(() => { void load(); });
               <span class="choice__name">{{ $t("reviewV2.decide.reject") }}</span>
               <span class="choice__hint">{{ !claimedByMe ? $t("reviewV2.decide.claimFirst") : $t("reviewV2.decide.rejectHint") }}</span>
             </label>
-            <label v-if="!reopen" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
+            <label v-if="!reopen && stage === 'judge'" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
               <input v-model="choice" type="radio" name="decide" value="drop" :disabled="busy || !!hold" />
               <span class="choice__name">{{ $t("reviewV2.decide.drop") }}</span>
               <span class="choice__hint">{{ hold ? $t("reviewV2.menu.held") : $t("reviewV2.decide.dropHint") }}</span>
@@ -1185,22 +1471,42 @@ onMounted(() => { void load(); });
               <span>{{ $t(`reviewV2.marks.${m}`) }}</span>
             </label>
           </fieldset>
-          <p v-if="!claimedByMe && !decided && !hold && choice !== 'drop'" class="subtle">{{ $t("review.claimFirst") }}</p>
           <!-- 拿不定主意、要先跟其他審核員討論：冷凍後誰都不能決定，卡留在清單上 -->
-          <div v-if="canHold" class="field hold-entry">
+          <div v-if="canHold && stage === 'judge'" class="field hold-entry">
             <button type="button" class="btn" :disabled="busy || holdBusy" data-hold @click="holdCard">{{ $t("review.action.hold") }}</button>
             <p class="subtle small-note">{{ $t("review.hold.hint") }}</p>
             <p v-if="holdError" class="notice notice--error" role="alert">{{ holdError }}</p>
           </div>
+          </template>
+          <!-- 沒領著（例如領取逾時後回來）不能送出判斷，也不能定案 -->
+          <p v-if="!claimedByMe && !decided && !hold && (stage === 'reveal' || choice !== 'drop')" class="subtle">{{ $t("review.claimFirst") }}</p>
+          <!-- 給 AI 的說明：一致時收合，不增加一鍵定案的步驟；不一致時在選擇下方 -->
+          <ReviewAiNoteField v-if="stage === 'reveal' && (agreeWithAi === true || (agreeWithAi === false && finalPick))" v-model:types="aiNoteTypes" v-model:note="aiNote"
+            context="final" id-base="final-ai-note" :disabled="busy" :collapsible="agreeWithAi === true" />
           <div class="verdict__acts">
             <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
-            <button v-if="choice === 'reject'" class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !rejectReady" data-submit-reject @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
-            <button v-else-if="choice === 'drop'" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !!hold" data-submit-drop @click="dropCard">{{ busy ? $t("review.decide.submitting") : $t("reviewV2.decide.dropAction") }}</button>
-            <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked || choice !== 'approve'" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" data-submit-approve @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : suggestions.length ? "reviewV2.decide.approveWithSuggestions" : "review.action.approve") }}</button>
+            <template v-if="stage === 'reveal' && blind">
+              <button v-if="agreeWithAi === true" type="button" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !canDecide" data-final-submit @click="finalize('blind')">{{ busy ? $t("review.decide.submitting") : $t(`reviewAi.two.final.agree.${blind.verdict}`) }}</button>
+              <button v-else-if="agreeWithAi === false" type="button" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !finalReady" data-final-submit @click="finalPick && finalize(finalPick)">{{ busy ? $t("review.decide.submitting") : finalPick && finalVerdict ? $t(`reviewAi.two.final.submit.${finalVerdict}`) : $t("reviewAi.two.final.submitIdle") }}</button>
+              <button v-else-if="aiView === 'pending'" type="button" class="btn btn--lg verdict__btn" :disabled="busy || !canDecide" data-final-skip @click="finalize('human_no_ai')">{{ busy ? $t("review.decide.submitting") : $t(`reviewAi.two.pending.skip.${blind.verdict}`) }}</button>
+              <button v-else-if="aiView === 'none' || aiView === 'error'" type="button" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !canDecide" data-final-mine @click="finalize('human_no_ai')">{{ busy ? $t("review.decide.submitting") : $t(`reviewAi.two.none.final.${blind.verdict}`) }}</button>
+            </template>
+            <template v-else-if="reopen">
+              <button v-if="choice === 'reject'" class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !rejectReady" data-submit-reject @click="stampReopen('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
+              <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || choice !== 'approve'" data-submit-approve @click="stampReopen('approve')">{{ busy ? $t("review.decide.submitting") : $t("review.action.keep") }}</button>
+            </template>
+            <template v-else>
+              <button v-if="choice === 'reject'" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || !rejectReady" data-submit-reject @click="submitBlind('reject')">{{ busy ? $t("review.decide.submitting") : $t("reviewAi.two.judge.submit") }}</button>
+              <button v-else-if="choice === 'drop'" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !!hold" data-submit-drop @click="dropCard">{{ busy ? $t("review.decide.submitting") : $t("reviewV2.decide.dropAction") }}</button>
+              <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked || choice !== 'approve'" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" data-submit-approve @click="submitBlind('approve')">{{ busy ? $t("review.decide.submitting") : $t("reviewAi.two.judge.submit") }}</button>
+            </template>
           </div>
+          <!-- 第一步不是定案：按鈕下一行寫明；不受理仍是一步，不寫 -->
+          <p v-if="stage === 'judge' && !reopen && choice !== 'drop'" class="subtle final__note" data-blind-hint>{{ $t("reviewAi.two.judge.hint") }}</p>
+          <p v-if="stage === 'reveal' && aiView === 'pending'" class="subtle final__note">{{ $t("reviewAi.two.pending.skipNote") }}</p>
         </template>
       </section>
-      <ReviewAiReveal v-if="aiDecision" :key="id" :submission-id="id" :mine="aiDecision" :my-reasons="aiMyReasons" />
+      <ReviewAiReveal v-if="aiDecision" :key="id" :submission-id="id" :mine="aiDecision" :my-reasons="[]" />
       </div>
     </div>
 
@@ -1362,6 +1668,22 @@ onMounted(() => { void load(); });
 .reason:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .reason:disabled { opacity: 0.55; cursor: default; }
 .result__mine, .result__now { margin: 0; }
+.result__source { cursor: default; color: var(--accent-text); background: var(--accent-tint); font-weight: 600; }
+.result__source:hover { color: var(--accent-text); background: var(--accent-tint); }
+.result__retain { margin: 0; overflow-wrap: anywhere; }
+/* 兩段式步驟列：目前這一格用 accent 淡底，完成的打勾；都有文字，不只靠顏色 */
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.steps__item { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--h-sm); padding: 0 var(--s-3); border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); font-size: 13px; }
+.steps__item--on { background: var(--accent-tint); color: var(--accent-text); font-weight: 600; }
+.steps__item--done { color: var(--text); }
+.steps__num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.reveal__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.reveal__title { margin: 0; font-size: 14px; font-weight: 600; }
+.reveal__undecided { cursor: default; color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); font-weight: 600; }
+.reveal__undecided:hover { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 12%, var(--surface)); }
+.final__label { margin: 0; font-size: 14px; font-weight: 600; }
+.final__text, .final__note { margin: 0; overflow-wrap: anywhere; }
+.final__text:lang(ko), .final__note:lang(ko) { word-break: keep-all; }
 .blocked-note { color: var(--warning-text); }
 .result__now { font-weight: 600; }
 .tags-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }

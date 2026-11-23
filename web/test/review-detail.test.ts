@@ -4,10 +4,12 @@ import {createRouter,createMemoryHistory} from 'vue-router';
 import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
 import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),blindReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
-// 結果卡下方的 AI 揭曉區自己讀網路：這裡只驗審核頁本身，揭曉區由 review-ai.test.ts 管
+// AI 的判斷（兩段式揭曉、不受理後的揭曉區）自己讀網路：這裡只驗審核頁本身，AI 那一側由 review-ai.test.ts 管
 vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],myFeedback:[]})}));
+/** 第一步（盲審）送出後的回應：AI 還沒審完，畫面停在第二步 */
+const blindSaved=(verdict:'approve'|'reject',over:Record<string,unknown>={})=>({blind:{id:'b1',verdict,payload:{verdict,note:'',reasons:[],coaching:false,marks:[],suggestions:[],...over},at:Date.now()},ai:{state:'pending',suggestion:null}});
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
 let app:App,el:HTMLElement;
@@ -142,23 +144,26 @@ it('an update opens on its changes tab and reads the diff once; a first submissi
  expect(api.fetchReviewDiff).not.toHaveBeenCalled();
 });
 
-it('requires confirmation before approval, cancels without POST, and snapshots the reviewed decision',async()=>{
+// 兩段式（owner 2026-11-24）：第一步「送出判斷」只記錄盲審判斷、不是定案，不跳確認；送出後原地換成第二步
+it('step one sends the blind call without a confirmation, says it is not final, and moves to the AI step',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
- api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
+ api.blindReview.mockResolvedValue(blindSaved('approve'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(el.querySelector('[data-step="judge"]')!.getAttribute('aria-current')).toBe('step');
  await choose('approve');
  const approve=()=>submit('approve')!;
- expect(approve().textContent?.trim()).toBe(i18n.global.t('review.action.approve'));
+ expect(approve().textContent?.trim()).toBe(i18n.global.t('reviewAi.two.judge.submit'));
+ expect(el.querySelector('[data-blind-hint]')!.textContent).toBe(i18n.global.t('reviewAi.two.judge.hint'));
  approve().click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1'}));
+ expect(confirmState.current).toBeNull();
  expect(api.stampReview).not.toHaveBeenCalled();
- expect(confirmState.current!.message).toContain('Night Detective');
- settleConfirm(false);
- await vi.waitFor(()=>expect(approve().disabled).toBe(false));expect(api.stampReview).not.toHaveBeenCalled();
- approve().click();await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1'}));
+ await vi.waitFor(()=>expect(el.querySelector('[data-two-stage-compare]')).toBeTruthy());
+ expect(el.querySelector('[data-step="reveal"]')!.getAttribute('aria-current')).toBe('step');
+ expect(el.querySelector('[data-undecided]')!.textContent).toBe(i18n.global.t('reviewAi.two.undecided'));
+ // 決定的控制項收起來了：盲審判斷送出後鎖定
+ expect(el.querySelector('[data-decide-choices]')).toBeNull();
 });
 
 it('clears the old actionable submission immediately while the next route detail is still loading',async()=>{
@@ -376,12 +381,11 @@ it('an unknown count does not block approval and says so',async()=>{
 
 it('the server refusing a short approval shows the count where the decision is made',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.stampReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
+ api.blindReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
  submit('approve')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
  await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t('review.decide.errorLength',{total:'3,000',required:'3,001'})));
  expect(el.querySelector('[data-result-card]')).toBeNull();
 });
@@ -389,15 +393,21 @@ it('the server refusing a short approval shows the count where the decision is m
 it('after deciding, the decision area becomes a result card with my decision, the current result and the next card',async()=>{
  const before=withLength(3600);
  api.fetchReviewDetail.mockReset().mockResolvedValueOnce(before)
-  .mockResolvedValue({...before,submission:{...before.submission,claimedByMe:false,stampedByMe:true,status:'approved',stamps:[{verdict:'approve',note:'',at:2,mine:true}]}});
- api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
+  .mockResolvedValue({...before,submission:{...before.submission,claimedByMe:false,stampedByMe:true,status:'approved',stamps:[{verdict:'approve',note:'',at:2,mine:true,finalSource:'human_no_ai'}]}});
+ api.blindReview.mockResolvedValue(blindSaved('approve'));
+ api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved',finalSource:'human_no_ai'});
  api.fetchReviewQueue.mockResolvedValue({items:[{id:'s9',kind:'first',submittedAt:1,card:{id:'9',roleId:'r9',name:'下一張',summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false}],claimTtlMs:1});
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
  submit('approve')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ // AI 還沒審完：不等，直接用我的判斷定案
+ await vi.waitFor(()=>expect(el.querySelector('[data-final-skip]')).toBeTruthy());
+ el.querySelector<HTMLButtonElement>('[data-final-skip]')!.click();
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{generation:'g1',finalSource:'human_no_ai'}));
+ expect(confirmState.current).toBeNull();
  await vi.waitFor(()=>expect(el.querySelector('[data-result-card]')).toBeTruthy());
+ expect(el.querySelector('[data-final-source]')!.textContent).toBe(i18n.global.t('reviewAi.two.sourceChip',{source:i18n.global.t('reviewAi.two.source.human_no_ai')}));
  expect(el.textContent).toContain(i18n.global.t('review.result.mine.approve'));
  expect(el.textContent).toContain(i18n.global.t('review.result.now.approved'));
  await vi.waitFor(()=>expect(button(i18n.global.t('review.result.next',{n:1}))).toBeTruthy());
@@ -492,7 +502,8 @@ it('the phone bottom bar is for reaching the decision: gone once the card is dec
  expect(el.querySelector('.dock')).toBeNull();
 });
 
-it('marks the count status so short and eligible look different, and writes confirm rows with the localized separator',async()=>{
+// 確認層的「標籤：值」分隔照語系：改由重新審核與改判上架的確認層驗（第一步不再有確認層）
+it('marks the count status so short and eligible look different',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-length-status]')).toBeTruthy());
@@ -501,10 +512,6 @@ it('marks the count status so short and eligible look different, and writes conf
  const note=typeNote('x');
  expect(note.maxLength).toBe(2000);
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
- submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
- settleConfirm(false);
 });
 
 // 冷凍並討論（審核員 2026-11-08）
@@ -562,13 +569,11 @@ it('a manager releasing someone else\'s hold must write a reason first',async()=
 
 it('a hold placed just before approving explains itself where the decision is made',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValueOnce(pendingDetail()).mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
- api.stampReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
+ api.blindReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
  submit('approve')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- settleConfirm(true);
  await vi.waitFor(()=>expect(el.textContent).toContain(t('review.hold.decideBlocked')));
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeTruthy());
 });
@@ -846,7 +851,7 @@ it('nothing is preselected: approve stays disabled until chosen, and the note on
 
 it('a rejection needs at least one reason, previews what the author sees, and sends the reason codes',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ api.blindReview.mockResolvedValue(blindSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('reject');
@@ -861,17 +866,14 @@ it('a rejection needs at least one reason, previews what the author sees, and se
  expect(preview.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.name'));
  expect(preview.textContent).toContain(i18n.global.t('reviewV2.decide.previewOpening'));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['opening.no_reply_hook'],coaching:false}));
+ expect(confirmState.current).toBeNull();
  expect(api.stampReview).not.toHaveBeenCalled();
- expect(confirmState.current!.message).toContain('・'+i18n.global.t('review.reasons.opening.no_reply_hook.name'));
- expect(confirmState.current!.message).not.toContain(i18n.global.t('reviewV2.decide.confirmCoaching'));
- settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['opening.no_reply_hook'],coaching:false}));
 });
 
 it('a new author gets coaching by default; the reviewer can switch it back to the normal fix',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
- api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ api.blindReview.mockResolvedValue(blindSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
  await choose('reject');
@@ -880,14 +882,10 @@ it('a new author gets coaching by default; the reviewer can switch it back to th
  reason('character.setting_thin')!.click();
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- expect(confirmState.current!.message).toContain(i18n.global.t('reviewV2.decide.confirmCoaching'));
- settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['character.setting_thin'],coaching:true}));
- await vi.waitFor(()=>expect(confirmState.current).toBeNull());
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['character.setting_thin'],coaching:true}));
 
  // 改回一般：送出的就是一般版
- api.stampReview.mockClear();
+ api.blindReview.mockClear();
  api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
@@ -897,8 +895,7 @@ it('a new author gets coaching by default; the reviewer can switch it back to th
  reason('character.setting_thin')!.click();
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({reasons:['character.setting_thin'],coaching:false})));
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({reasons:['character.setting_thin'],coaching:false})));
 });
 
 it('the live preview adds the three ways to offer choices for no reply hook, with the [choices] example in a monospace block',async()=>{
@@ -957,7 +954,7 @@ it('coaching is not offered for authors who are not new',async()=>{
 
 it('"other" needs a written note before the rejection can be sent',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ api.blindReview.mockResolvedValue(blindSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('reject');
@@ -972,15 +969,12 @@ it('"other" needs a written note before the rejection can be sent',async()=>{
  typeNote('封面圖是別人的作品');
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- expect(confirmState.current!.message).toContain('封面圖是別人的作品');
- settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'封面圖是別人的作品',generation:'g1',reasons:['other'],coaching:false}));
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'封面圖是別人的作品',generation:'g1',reasons:['other'],coaching:false}));
 });
 
 it('a short card always carries the locked length reason alongside the reviewer\'s picks',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
- api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ api.blindReview.mockResolvedValue(blindSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-approve-blocked]')).toBeTruthy());
  await choose('reject');
@@ -991,9 +985,8 @@ it('a short card always carries the locked length reason alongside the reviewer\
  reason('opening.too_short')!.click();
  await vi.waitFor(()=>expect(reason('opening.too_short')!.checked).toBe(true));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledTimes(1));
- const body=api.stampReview.mock.calls[0][2];
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledTimes(1));
+ const body=api.blindReview.mock.calls[0][2];
  expect(body).toMatchObject({verdict:'reject',generation:'g1',coaching:false});
  expect([...body.reasons].sort()).toEqual(['content.min_length','opening.too_short']);
 });
@@ -1010,7 +1003,11 @@ it('a manager rejecting a re-review writes a note and sends no reason codes',asy
  typeNote('確認是盜用');
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ // 重新審核仍是一步、有確認層；列的「標籤：值」用語系的分隔
+ expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
+ expect(api.blindReview).not.toHaveBeenCalled();
+ settleConfirm(true);
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'確認是盜用',generation:'g1'}));
 });
 
@@ -1042,7 +1039,7 @@ it('the reject picker offers the unedited-generated and copied-verbatim reasons'
 // owner 2026-11-23：通過並附改進建議（選了通過才有、預設收合、不列字數與分級、作者看輔導版）
 it('approve can carry suggestions; min-length and rating are not offered as suggestions',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.stampReview.mockReset().mockResolvedValue({status:'approved',cardStatus:'approved'});
+ api.blindReview.mockReset().mockResolvedValue(blindSaved('approve'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('[data-suggest]')).toBeNull();
@@ -1053,13 +1050,10 @@ it('approve can carry suggestions; min-length and rating are not offered as sugg
  expect(el.querySelector('[data-reason="rating.mismatch"]')).toBeNull();
  el.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.click();await nextTick();
  expect(el.querySelector('[data-reason-preview]')!.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.coachFix'));
- expect(submit('approve')!.textContent!.trim()).toBe(i18n.global.t('reviewV2.decide.approveWithSuggestions'));
+ expect(submit('approve')!.textContent!.trim()).toBe(i18n.global.t('reviewAi.two.judge.submit'));
  submit('approve')!.click();
- await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
- expect(confirmState.current!.message).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.name'));
- expect(confirmState.current!.confirmText).toBe(i18n.global.t('reviewV2.decide.confirmApproveWithSuggestions'));
- settleConfirm(true);
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1',suggestions:['opening.no_reply_hook']}));
+ await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1',suggestions:['opening.no_reply_hook']}));
+ expect(confirmState.current).toBeNull();
 });
 
 it('drop works without a claim, needs no confirmation, and can be restored from the result',async()=>{
