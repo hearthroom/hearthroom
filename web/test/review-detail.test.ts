@@ -4,7 +4,7 @@ import {createRouter,createMemoryHistory} from 'vue-router';
 import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
 import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -75,6 +75,20 @@ const remount=async()=>{
  app.unmount();
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
 };
+// 審卡 V2 決定區：三個選項都不預選，選了才展開；送出鈕跟著選項換
+type Choice='approve'|'reject'|'drop';
+const radio=(value:Choice)=>el.querySelector<HTMLInputElement>(`[data-decide-choices] input[name=decide][value=${value}]`);
+const choose=async(value:Choice)=>{
+ const input=radio(value);
+ expect(input,`radio ${value}`).toBeTruthy();
+ expect(input!.disabled,`radio ${value} disabled`).toBe(false);
+ input!.click();
+ expect(input!.checked).toBe(true);
+ await vi.waitFor(()=>expect(el.querySelector(`[data-submit-${value}]`)).toBeTruthy());
+};
+const submit=(value:Choice)=>el.querySelector<HTMLButtonElement>(`[data-submit-${value}]`);
+const reason=(code:string)=>el.querySelector<HTMLInputElement>(`[data-reason-picker] input[data-reason="${code}"]`);
+const typeNote=(text:string)=>{const n=el.querySelector<HTMLTextAreaElement>('#review-note')!;n.value=text;n.dispatchEvent(new Event('input'));return n;};
 
 it('reveals a focused review tab before activation without changing the selected section', async () => {
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
@@ -94,8 +108,10 @@ it('requires confirmation before approval, cancels without POST, and snapshots t
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
  api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
  await remount();
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
- const approve=()=>[...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.action.approve'))!;
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('approve');
+ const approve=()=>submit('approve')!;
+ expect(approve().textContent?.trim()).toBe(i18n.global.t('review.action.approve'));
  approve().click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
  expect(api.stampReview).not.toHaveBeenCalled();
@@ -114,10 +130,13 @@ it('clears the old actionable submission immediately while the next route detail
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});
  await router.push('/review/s1');
  app=createApp({template:'<router-view />'}).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
  await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
  await router.push('/review/s2');
  await vi.waitFor(()=>expect(api.fetchReviewDetail).toHaveBeenCalledWith('s2','local-reviewer'));
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeNull());
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeNull());
+ expect(el.querySelector('#review-note')).toBeNull();
  expect(confirmState.current).toBeNull();
  release({...pendingDetail(),submission:{...pendingDetail().submission,id:'s2'}});
 });
@@ -256,7 +275,7 @@ it('a resubmitted card shows which submission it is and the previous rejection; 
 
  api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,attempt:1,previous:null}});
  await remount();
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('[data-attempt]')).toBeNull();
  expect(el.querySelector('[data-previous-submission]')).toBeNull();
 });
@@ -272,27 +291,36 @@ it('3,000 counted characters: approve is disabled with the gap explained; reject
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-approve-blocked]')).toBeTruthy());
- const approve=button(i18n.global.t('review.action.approve'))!;
+ // 「通過」選項與送出鈕都不能按，差額寫在決定區
+ expect(radio('approve')!.disabled).toBe(true);
+ const approve=submit('approve')!;
  expect(approve.disabled).toBe(true);
  expect(approve.getAttribute('aria-describedby')).toBe('approve-blocked');
  expect(el.querySelector('#approve-blocked')!.textContent).toBe(i18n.global.t('review.decide.approveBlocked',{total:'3,000',gap:'1'}));
- const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;
- note.value='開場也再補一點。';note.dispatchEvent(new Event('input'));
- // 「有效字數不足」只在未達標時出現；點了接在已打的字後面，另起一行
- el.querySelector<HTMLButtonElement>('[data-reason="count"]')!.click();
- await vi.waitFor(()=>expect(note.value).toBe('開場也再補一點。\n'+i18n.global.t('review.reason.count.text',{total:'3,000',gap:'1',required:'3,001'})));
- expect(button(i18n.global.t('review.action.reject'))!.disabled).toBe(false);
+ // 駁回照樣可以：「有效字數不足」自動勾著、不能取消，其他理由不必再選
+ await choose('reject');
+ const count=reason('content.min_length')!;
+ expect(count.checked).toBe(true);
+ expect(count.disabled).toBe(true);
+ count.click();
+ expect(count.checked).toBe(true);
+ expect(el.querySelector('[data-reason-preview]')?.textContent).toContain(i18n.global.t('review.reasons.content.min_length.name'));
+ expect(submit('reject')!.disabled).toBe(false);
 });
 
-it('3,001 counted characters: approve is enabled and the count reason is not offered',async()=>{
+it('3,001 counted characters: approve is enabled and the count reason is not forced',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3001));
  await remount();
- await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
- expect(button(i18n.global.t('review.action.approve'))!.disabled).toBe(false);
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('[data-approve-blocked]')).toBeNull();
- expect(el.querySelector('[data-reason="count"]')).toBeNull();
- el.querySelector<HTMLButtonElement>('[data-reason="rating"]')!.click();
- await vi.waitFor(()=>expect(el.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(i18n.global.t('review.reason.rating.text')));
+ await choose('approve');
+ expect(submit('approve')!.disabled).toBe(false);
+ await choose('reject');
+ const count=reason('content.min_length')!;
+ expect(count.checked).toBe(false);
+ expect(count.disabled).toBe(false);
+ expect(el.querySelector('[data-reason-preview]')).toBeNull();
+ expect(submit('reject')!.disabled).toBe(true);
 });
 
 it('an unknown count does not block approval and says so',async()=>{
@@ -300,15 +328,17 @@ it('an unknown count does not block approval and says so',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue({...d,detail:{...d.detail,partial:true}});
  await remount();
  await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.decide.lengthUnknown')));
- expect(button(i18n.global.t('review.action.approve'))!.disabled).toBe(false);
+ await choose('approve');
+ expect(submit('approve')!.disabled).toBe(false);
 });
 
 it('the server refusing a short approval shows the count where the decision is made',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
  api.stampReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
  await remount();
- await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
- button(i18n.global.t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('approve');
+ submit('approve')!.click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
  await vi.waitFor(()=>expect(el.querySelector('.verdict [role="alert"]')?.textContent).toContain(i18n.global.t('review.decide.errorLength',{total:'3,000',required:'3,001'})));
  expect(el.querySelector('[data-result-card]')).toBeNull();
@@ -321,8 +351,9 @@ it('after deciding, the decision area becomes a result card with my decision, th
  api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved'});
  api.fetchReviewQueue.mockResolvedValue({items:[{id:'s9',kind:'first',submittedAt:1,card:{id:'9',roleId:'r9',name:'下一張',summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false}],claimTtlMs:1});
  await remount();
- await vi.waitFor(()=>expect(button(i18n.global.t('review.action.approve'))).toBeTruthy());
- button(i18n.global.t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('approve');
+ submit('approve')!.click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
  await vi.waitFor(()=>expect(el.querySelector('[data-result-card]')).toBeTruthy());
  expect(el.textContent).toContain(i18n.global.t('review.result.mine.approve'));
@@ -375,8 +406,10 @@ it('opening the next card in the same page drops the previous card\'s similarity
  await vi.waitFor(()=>expect(el.querySelector('.tabs')?.textContent).toContain('42%'));
  await vi.waitFor(()=>expect(button(i18n.global.t('review.result.next',{n:1}))).toBeTruthy());
  button(i18n.global.t('review.result.next',{n:1}))!.click();
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('.tabs')!.textContent).not.toContain('42%');
+ // 換卡時上一張的選擇也清掉：三個選項回到都不預選
+ expect([...el.querySelectorAll<HTMLInputElement>('[data-decide-choices] input')].some(i=>i.checked)).toBe(false);
 });
 
 it('the phone bottom bar is for reaching the decision: gone once the card is decided',async()=>{
@@ -396,30 +429,14 @@ it('marks the count status so short and eligible look different, and writes conf
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-length-status]')).toBeTruthy());
  expect(el.querySelector('[data-length-status]')!.classList.contains('length-status--short')).toBe(true);
- const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;note.value='x';note.dispatchEvent(new Event('input'));
- await vi.waitFor(()=>expect(button(i18n.global.t('review.action.reject'))!.disabled).toBe(false));
- button(i18n.global.t('review.action.reject'))!.click();
+ await choose('reject');
+ const note=typeNote('x');
+ expect(note.maxLength).toBe(2000);
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ submit('reject')!.click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
  expect(confirmState.current!.message).toContain(i18n.global.t('review.confirm.row',{label:i18n.global.t('review.confirm.card'),value:'Night Detective'}));
  settleConfirm(false);
-});
-
-it('a reason that would push the note past 2,000 characters is not added, and the page says why',async()=>{
- api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- await remount();
- await vi.waitFor(()=>expect(el.querySelector('#review-note')).toBeTruthy());
- const note=el.querySelector<HTMLTextAreaElement>('#review-note')!;
- expect(note.maxLength).toBe(2000);
- note.value='x'.repeat(1990);note.dispatchEvent(new Event('input'));
- el.querySelector<HTMLButtonElement>('[data-reason="setting"]')!.click();
- await vi.waitFor(()=>expect(el.querySelector('[data-note-full]')).toBeTruthy());
- expect(note.value).toBe('x'.repeat(1990));
- expect(el.querySelector('[data-note-full]')!.textContent).toBe(i18n.global.t('review.decide.noteFull',{max:'2,000'}));
- // 刪掉一些再點：放得下就照常接上，說明也收起
- note.value='x'.repeat(10);note.dispatchEvent(new Event('input'));
- el.querySelector<HTMLButtonElement>('[data-reason="setting"]')!.click();
- await vi.waitFor(()=>expect(note.value).toBe('x'.repeat(10)+'\n'+i18n.global.t('review.reason.setting.text')));
- expect(el.querySelector('[data-note-full]')).toBeNull();
 });
 
 // 冷凍並討論（審核員 2026-11-08）
@@ -436,8 +453,10 @@ it('a claimed reviewer can hold the card; the page then says nobody can decide, 
  await vi.waitFor(()=>expect(api.holdReview).toHaveBeenCalledWith('s1','local-reviewer','g1'));
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')?.textContent).toContain(t('review.hold.noticeMine')));
  expect(el.textContent).toContain(t('review.hold.done'));
- expect(btn(t('review.action.approve'))?.disabled).toBe(true);
- expect(btn(t('review.action.reject'))?.disabled).toBe(true);
+ expect(submit('approve')?.disabled).toBe(true);
+ expect(radio('approve')?.disabled).toBe(true);
+ expect(radio('reject')?.disabled).toBe(true);
+ expect(radio('drop')?.disabled).toBe(true);
  expect(el.querySelector('[data-hold-blocked]')).toBeTruthy();
  expect(el.querySelector('[data-hold]')).toBeNull();
  expect(el.querySelector('[data-hold-notice] [data-unhold]')).toBeTruthy();
@@ -447,7 +466,9 @@ it('another reviewer reading a held card sees who holds it, cannot decide and ca
  api.fetchReviewDetail.mockReset().mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')?.textContent).toContain(t('review.hold.noticeOther',{name:'Mika'})));
- expect(btn(t('review.action.approve'))?.disabled).toBe(true);
+ expect(submit('approve')?.disabled).toBe(true);
+ expect(radio('approve')?.disabled).toBe(true);
+ expect(radio('reject')?.disabled).toBe(true);
  expect(el.querySelector('[data-unhold]')).toBeNull();
  expect(el.querySelector('[data-hold]')).toBeNull();
  // 手機底部「前往決定」也收起：沒有可以決定的東西
@@ -475,8 +496,9 @@ it('a hold placed just before approving explains itself where the decision is ma
  api.fetchReviewDetail.mockReset().mockResolvedValueOnce(pendingDetail()).mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
  api.stampReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
  await remount();
- await vi.waitFor(()=>expect(btn(t('review.action.approve'))).toBeTruthy());
- btn(t('review.action.approve'))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('approve');
+ submit('approve')!.click();
  await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
  settleConfirm(true);
  await vi.waitFor(()=>expect(el.textContent).toContain(t('review.hold.decideBlocked')));
@@ -489,9 +511,10 @@ it('after the holder releases a card someone else is reading, the page stops say
  api.unholdReview.mockResolvedValue({hold:null});
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice] [data-unhold]')).toBeTruthy());
- // 冷凍人沒領著：標頭的領取鈕說「領取並查看」，說明欄不能填
+ // 冷凍人沒領著：標頭的領取鈕說「領取並查看」，駁回選不了，說明欄也就不會出現
  expect(btn(t('review.action.claimHeld'))).toBeTruthy();
- expect((el.querySelector('#review-note') as HTMLTextAreaElement).disabled).toBe(true);
+ expect(radio('reject')?.disabled).toBe(true);
+ expect(el.querySelector('#review-note')).toBeNull();
  (el.querySelector('[data-unhold]') as HTMLButtonElement).click();
  await vi.waitFor(()=>expect(api.unholdReview).toHaveBeenCalledWith('s1','local-reviewer',undefined));
  await vi.waitFor(()=>expect(el.querySelector('[data-hold-notice]')).toBeNull());
@@ -506,9 +529,13 @@ it('a re-review says the card is published, shows the reason, offers keep-approv
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-reopen-notice]')?.textContent).toContain(t('review.reopen.notice')));
  expect(el.querySelector('[data-reopen-notice]')?.textContent).toContain('疑似盜用他人設定');
- expect(btn(t('review.action.keep'))).toBeTruthy();
+ expect(submit('approve')?.textContent?.trim()).toBe(t('review.action.keep'));
  expect(btn(t('review.action.approve'))).toBeUndefined();
- expect(btn(t('review.action.reject'))?.disabled).toBe(true);
+ // 重新審核只有「維持通過」與「駁回」；駁回限管理員，也沒有「不受理」
+ expect(radio('reject')?.disabled).toBe(true);
+ expect(radio('drop')).toBeNull();
+ await choose('approve');
+ expect(submit('approve')!.disabled).toBe(false);
  expect(el.querySelector('[data-reject-locked]')?.textContent).toContain(t('review.reopen.rejectManager'));
  expect(el.querySelector('[data-withdraw]')).toBeNull();
 });
@@ -723,6 +750,217 @@ it('translates dialogue tab and opening-page review strings across all 5 locales
  await applyLocale('zh-Hant');
 });
 
+// 審卡 V2 第一批：決定區（三選一不預選、結構化駁回理由、不受理）
+const profile=(tier:'new'|'stable'|'top'|'general'|'unknown')=>({tier,autoTier:tier,batchSuspected:false,autoBatch:false,manual:{},
+ basis:{works:1,decidedWorks:0,firstPassRate:null,qualityScore:null,memberSince:1,deviceAccounts:null,deviceRecentWorks:null,dropCases90d:null},pendingSameAuthor:null,pendingSameDevice:null});
 
+it('nothing is preselected: approve stays disabled until chosen, and the note only appears for a rejection',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ const inputs=[...el.querySelectorAll<HTMLInputElement>('[data-decide-choices] input[name=decide]')];
+ expect(inputs.map(i=>i.value)).toEqual(['approve','reject','drop']);
+ expect(inputs.some(i=>i.checked)).toBe(false);
+ expect(el.querySelector('[data-decide-choices]')!.getAttribute('role')).toBe('radiogroup');
+ expect(submit('approve')!.disabled).toBe(true);
+ expect(submit('reject')).toBeNull();
+ expect(submit('drop')).toBeNull();
+ expect(el.querySelector('#review-note')).toBeNull();
+ await choose('approve');
+ expect(submit('approve')!.disabled).toBe(false);
+ expect(el.querySelector('#review-note')).toBeNull();
+ expect(el.querySelector('[data-reason-picker]')).toBeNull();
+ await choose('reject');
+ expect(submit('approve')).toBeNull();
+ expect(el.querySelector('#review-note')).toBeTruthy();
+ expect(el.querySelector('[data-reason-picker]')).toBeTruthy();
+});
 
+it('a rejection needs at least one reason, previews what the author sees, and sends the reason codes',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
+ expect(submit('reject')!.disabled).toBe(true);
+ expect(el.querySelector('[data-reason-preview]')).toBeNull();
+ // 作者不是新人：沒有輔導那一行
+ expect(el.querySelector('[data-coaching]')).toBeNull();
+ reason('opening.no_reply_hook')!.click();
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ const preview=el.querySelector('[data-reason-preview]')!;
+ expect(preview.textContent).toContain(i18n.global.t('reviewV2.decide.previewTitle'));
+ expect(preview.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.name'));
+ expect(preview.textContent).toContain(i18n.global.t('reviewV2.decide.previewOpening'));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(api.stampReview).not.toHaveBeenCalled();
+ expect(confirmState.current!.message).toContain('・'+i18n.global.t('review.reasons.opening.no_reply_hook.name'));
+ expect(confirmState.current!.message).not.toContain(i18n.global.t('reviewV2.decide.confirmCoaching'));
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['opening.no_reply_hook'],coaching:false}));
+});
 
+it('a new author gets coaching by default; the reviewer can switch it back to the normal fix',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
+ api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
+ await choose('reject');
+ const coaching=el.querySelector('[data-coaching]')!;
+ expect(coaching.textContent).toContain(i18n.global.t('reviewV2.decide.coachingOn'));
+ reason('character.setting_thin')!.click();
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(confirmState.current!.message).toContain(i18n.global.t('reviewV2.decide.confirmCoaching'));
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['character.setting_thin'],coaching:true}));
+ await vi.waitFor(()=>expect(confirmState.current).toBeNull());
+
+ // 改回一般：送出的就是一般版
+ api.stampReview.mockClear();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
+ button(i18n.global.t('reviewV2.decide.coachingOff'))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-coaching]')?.textContent).not.toContain(i18n.global.t('reviewV2.decide.coachingOn')));
+ reason('character.setting_thin')!.click();
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({reasons:['character.setting_thin'],coaching:false})));
+});
+
+it('coaching is not offered for authors who are not new',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('stable')});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
+ await choose('reject');
+ expect(el.querySelector('[data-coaching]')).toBeNull();
+});
+
+it('"other" needs a written note before the rejection can be sent',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
+ expect(el.querySelector('label[for=review-note]')!.textContent).toBe(i18n.global.t('reviewV2.decide.noteLabel'));
+ reason('other')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('label[for=review-note]')!.textContent).toBe(i18n.global.t('reviewV2.decide.noteLabelRequired')));
+ expect(el.querySelector('#review-note')!.getAttribute('aria-required')).toBe('true');
+ expect(submit('reject')!.disabled).toBe(true);
+ typeNote('   ');
+ await new Promise(r=>setTimeout(r,0));
+ expect(submit('reject')!.disabled).toBe(true);
+ typeNote('封面圖是別人的作品');
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(confirmState.current!.message).toContain('封面圖是別人的作品');
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'封面圖是別人的作品',generation:'g1',reasons:['other'],coaching:false}));
+});
+
+it('a short card always carries the locked length reason alongside the reviewer\'s picks',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
+ api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-approve-blocked]')).toBeTruthy());
+ await choose('reject');
+ const count=reason('content.min_length')!;
+ expect(count.checked).toBe(true);
+ expect(count.disabled).toBe(true);
+ expect(count.closest('label')!.textContent).toContain(i18n.global.t('reviewV2.decide.lengthAuto'));
+ reason('opening.too_short')!.click();
+ await vi.waitFor(()=>expect(reason('opening.too_short')!.checked).toBe(true));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledTimes(1));
+ const body=api.stampReview.mock.calls[0][2];
+ expect(body).toMatchObject({verdict:'reject',generation:'g1',coaching:false});
+ expect([...body.reasons].sort()).toEqual(['content.min_length','opening.too_short']);
+});
+
+it('a manager rejecting a re-review writes a note and sends no reason codes',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(reopened(true));
+ api.stampReview.mockResolvedValue({status:'rejected',cardStatus:'rejected'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(radio('drop')).toBeNull();
+ await choose('reject');
+ expect(el.querySelector('[data-reason-picker]')).toBeNull();
+ expect(submit('reject')!.disabled).toBe(true);
+ typeNote('確認是盜用');
+ await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
+ submit('reject')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'確認是盜用',generation:'g1'}));
+});
+
+it('drop works without a claim, needs no confirmation, and can be restored from the result',async()=>{
+ const d=withLength(3600,{claimedByMe:false});
+ api.fetchReviewDetail.mockReset().mockResolvedValue(d);
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ api.claimReview.mockClear();
+ // 沒領取：通過、駁回不能選；不受理可以
+ expect(radio('approve')!.disabled).toBe(true);
+ expect(radio('reject')!.disabled).toBe(true);
+ await choose('drop');
+ expect(el.querySelector('[data-drop-info]')).toBeTruthy();
+ submit('drop')!.click();
+ await vi.waitFor(()=>expect(api.dropReview).toHaveBeenCalledWith('s1','local-reviewer'));
+ expect(confirmState.current).toBeNull();
+ await vi.waitFor(()=>expect(el.querySelector('[data-dropped-card]')?.textContent).toBe(i18n.global.t('reviewV2.decide.resultDropped')));
+ expect(el.querySelector('[data-decide-choices]')).toBeNull();
+ expect(api.claimReview).not.toHaveBeenCalled();
+ expect(api.stampReview).not.toHaveBeenCalled();
+ const reads=api.fetchReviewDetail.mock.calls.length;
+ el.querySelector<HTMLButtonElement>('[data-restore]')!.click();
+ await vi.waitFor(()=>expect(api.restoreReview).toHaveBeenCalledWith('s1','local-reviewer'));
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(api.fetchReviewDetail.mock.calls.length).toBeGreaterThan(reads);
+ expect(el.querySelector('[data-dropped-card]')).toBeNull();
+ expect([...el.querySelectorAll<HTMLInputElement>('[data-decide-choices] input')].some(i=>i.checked)).toBe(false);
+});
+
+it('a card opened from the dropped list is read-only until restored',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValueOnce({...withLength(3600),dropped:true}).mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-dropped-card]')).toBeTruthy());
+ expect(el.querySelector('[data-dropped-card]')!.textContent).toBe(i18n.global.t('reviewV2.dropped.title'));
+ expect(el.textContent).toContain(i18n.global.t('reviewV2.dropped.readonly'));
+ expect(el.querySelector('[data-decide-choices]')).toBeNull();
+ expect(el.querySelector('#review-note')).toBeNull();
+ el.querySelector<HTMLButtonElement>('[data-restore]')!.click();
+ await vi.waitFor(()=>expect(api.restoreReview).toHaveBeenCalledWith('s1','local-reviewer'));
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(el.querySelector('[data-dropped-card]')).toBeNull();
+});
+
+it('a first submission opens on the dialogue tab; updates still open on the basic tab',async()=>{
+ const d=withLength(3600);
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,kind:'first',type:'first'}});
+ await remount();
+ const tab=(s:string)=>button(i18n.global.t(`editor.section.${s}`));
+ await vi.waitFor(()=>expect(tab('dialogue')?.getAttribute('aria-pressed')).toBe('true'));
+ expect(tab('basic')!.getAttribute('aria-pressed')).toBe('false');
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,kind:'re',type:'update'}});
+ await remount();
+ await vi.waitFor(()=>expect(tab('basic')?.getAttribute('aria-pressed')).toBe('true'));
+ expect(tab('dialogue')!.getAttribute('aria-pressed')).toBe('false');
+});
+
+it('shows the author profile to the reviewer when the detail carries one',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
+ expect(el.querySelector('[data-profile-tier]')?.textContent).toBe(i18n.global.t('reviewV2.mark.tier.new'));
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(el.querySelector('[data-author-profile]')).toBeNull();
+});

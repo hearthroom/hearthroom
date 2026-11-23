@@ -168,16 +168,17 @@ it('carries the card and the verdict on review results', async () => {
   // The first card's approval left its own notice; this one belongs to the rejected card.
   const stored = (await rows(author, 'review_result')).results.filter(r => r.card_id === row!.card_id);
   expect(stored).toHaveLength(1);
-  expect(stored[0]).toMatchObject({ path: '/mine', card_id: row!.card_id });
+  // 審卡 V2：託管作品的駁回連到結果頁（理由與改法都在那裡）；舊流程沒有結果頁的單仍連「我的卡片」
+  expect(stored[0]).toMatchObject({ path: '/mine/reviews/' + row!.id, card_id: row!.card_id });
   const list = await json(await api('?lang=en', 'author'));
-  expect(list.items.find((n: any) => n.card?.id === row!.card_id)).toMatchObject({ kind: 'review_result', path: '/mine', card: { id: row!.card_id, name: 'Reviewed' }, extra: { status: 'rejected', kind: 'first', note: '開場太短，\n請補一段。' }, actor: null });
+  expect(list.items.find((n: any) => n.card?.id === row!.card_id)).toMatchObject({ kind: 'review_result', path: '/mine/reviews/' + row!.id, card: { id: row!.card_id, name: 'Reviewed' }, extra: { status: 'rejected', kind: 'first', note: '開場太短，\n請補一段。' }, actor: null });
   expect(list.items.find((n: any) => n.card?.id === Number(cardId))).toMatchObject({ kind: 'review_result', extra: { status: 'approved' } });
   // The Discord DM says which card and which verdict, like the bell does.
   await setPreferences(env as Env, author, { discordDm: true });
   await linkDiscord(author);
   await env.DB.prepare("UPDATE members SET locale='en' WHERE id=?").bind(author).run();
   const rejected = await json(await bridge('notification', { id: stored[0].id }));
-  expect(rejected).toMatchObject({ kind: 'review_result', path: '/mine', locale: 'en', text: '“Reviewed” did not pass review this time. The reviewer wrote: 開場太短， 請補一段。' });
+  expect(rejected).toMatchObject({ kind: 'review_result', path: '/mine/reviews/' + row!.id, locale: 'en', text: '“Reviewed” did not pass review this time. The reviewer wrote: 開場太短， 請補一段。' });
   const approved = (await rows(author, 'review_result')).results.find(r => r.card_id === Number(cardId))!;
   await env.DB.prepare('UPDATE members SET locale=NULL WHERE id=?').bind(author).run();
   expect((await json(await bridge('notification', { id: approved.id }))).text).toBe('「雨夜書店」審核通過了 / “Rainy Bookshop” passed review');

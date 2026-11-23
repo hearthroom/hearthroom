@@ -177,7 +177,8 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
     if (!card) return c.reviewPlain;
     const update = extra.kind === "re";
     if (extra.status !== "rejected") return fill(update ? c.approvedUpdate : c.approved, { card });
-    const note = noticeNote(extra.note);
+    // 審卡 V2 的駁回帶理由代碼：推播與私訊只說沒通過，理由與改法在點進去的結果頁（網站鈴鐺另外列理由名稱）
+    const note = Array.isArray(extra.reasons) && extra.reasons.length ? "" : noticeNote(extra.note);
     return fill(note ? (update ? c.rejectedUpdateNote : c.rejectedNote) : update ? c.rejectedUpdate : c.rejected, { card, note });
   }
   if (Object.hasOwn(c.share, row.kind)) return c.share[row.kind as keyof Copy["share"]];

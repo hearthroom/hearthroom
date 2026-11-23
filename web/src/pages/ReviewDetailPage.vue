@@ -9,14 +9,14 @@
  * 審核工具第一批（2026-11-02 體檢 R1–R5、R2）：
  *   - 直接開連結撞到「請先領取」時自動再領一次，真的被別人領走才說明。
  *   - 分頁條黏在頁首下方，低頻的兩格收進「更多」；手機底部固定「前往決定」，桌機右側欄放字數與入口。
- *   - 字數未達標時「通過」不能按（伺服器同樣拒絕）；常用理由一點就接到說明後面，不蓋掉已打的字。
+ *   - 字數未達標時「通過」不能按（伺服器同樣拒絕）。駁回理由改成結構化代碼（審卡 V2，見決定區的說明）。
  *   - 送出後決定區換成結果卡（我的決定、目前結果、下一張），重新整理或回頭看也是同一張。
  */
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, dropReview, restoreReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
 import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
@@ -28,6 +28,9 @@ import { useLocalePath } from "@/lib/use-locale";
 import { readTags, readTalkExample } from "@/lib/role-draft";
 import RatingMark from "@/components/RatingMark.vue";
 import ReviewAuthorPanel from '@/components/ReviewAuthorPanel.vue';
+import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
+import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
+import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
@@ -63,7 +66,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';blockedNote.value=null;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -236,30 +239,37 @@ const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine)
 /** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
 const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
 
-const REASONS = ["count", "setting", "opening", "rating", "other"] as const;
-type Reason = (typeof REASONS)[number];
-/** 「有效字數不足」只在真的未達標時出現 */
-const reasons = computed(() => REASONS.filter((r) => r !== "count" || approveBlocked.value));
+/**
+ * 審卡 V2 決定區（ui.md §2.3）：一個「你的決定」、三個選項都不預選（通過｜駁回｜不受理），選了才展開。
+ * 駁回改成結構化理由（可多選、至少一項、「其他」要補充），作者看到的改法與範例由理由帶出，審核員不必再手打。
+ * 有效字數未達標時「有效字數不足」自動勾選且不能取消（伺服器也會補上）。不受理不必先領取、不跳確認。
+ * 重新審核單只有「維持通過」與「駁回（管理員，走改判、要寫說明）」，沒有理由選擇器也不能不受理。
+ */
+const choice = ref<"approve" | "reject" | "drop" | null>(null);
+const reasonPicks = ref<string[]>([]);
+/** 輔導（附完整改法與範例）：作者是新人時預設開，可改回一般；null＝照預設 */
+const coaching = ref<boolean | null>(null);
+const coachingDefault = computed(() => data.value?.authorProfile?.tier === "new");
+const coachingOn = computed(() => coaching.value ?? coachingDefault.value);
+const lengthForced = computed(() => approveBlocked.value);
+const pickedReasons = computed(() => {
+  const set = new Set(reasonPicks.value);
+  if (lengthForced.value) set.add("content.min_length");
+  return REVIEW_REASONS.filter((c) => set.has(c));
+});
 const noteField = ref<HTMLTextAreaElement | null>(null);
 const noteFocused = ref(false);
-/** 說明上限（與伺服器 REVIEW_NOTE_MAX 同一個數）。輸入框的 maxlength 只擋打字，理由 chip 是程式填入，要自己擋 */
+/** 說明上限（與伺服器 REVIEW_NOTE_MAX 同一個數） */
 const NOTE_MAX = 2000;
-/** 點的理由放不下：不追加、不截斷，改說明一句；說明欄一改動（刪減後）就收起 */
-const blockedNote = ref<string | null>(null);
-const noteFull = computed(() => blockedNote.value !== null && blockedNote.value === note.value);
-function pickReason(reason: Reason) {
-  if (reason !== "other") {
-    const text = reason === "count"
-      ? t("review.reason.count.text", { total: lengthParams.value.total, gap: lengthParams.value.remaining, required: lengthParams.value.required })
-      : t(`review.reason.${reason}.text`);
-    // 已經打了字就另起一行接在後面，不覆蓋、不詢問
-    const typed = note.value.replace(/\s+$/, "");
-    const next = typed ? `${typed}\n${text}` : text;
-    if (next.trim().length > NOTE_MAX) { blockedNote.value = note.value; noteField.value?.focus(); return; }
-    note.value = next;
-  }
-  noteField.value?.focus();
-}
+const noteRequired = computed(() => reopen.value || pickedReasons.value.includes("other"));
+const rejectReady = computed(() => reopen.value ? !!note.value.trim() : pickedReasons.value.length > 0 && (!noteRequired.value || !!note.value.trim()));
+/** 不受理：剛移出（結果卡）與從不受理清單點進來看（唯讀） */
+const dropDone = ref(false);
+const dropped = computed(() => !!data.value?.dropped || dropDone.value);
+let sectionChosen = false;
+/** 快速審：作者是優質、沒有疑似量產旗標、還在待審。只是先給重點，不自動通過 */
+const fastReview = computed(() => !decided.value && !reopen.value && data.value?.authorProfile?.tier === "top" && !data.value.authorProfile.batchSuspected);
+const keyChecksOpen = ref(false);
 
 const decideError = ref("");
 /** 送出後不知道有沒有成功（連線中斷）：不叫人直接重按，先去「我處理過的」看 */
@@ -331,6 +341,8 @@ async function load() {
     const result=await fetchReviewDetail(target, await token());
     if(!active||seq!==loadSequence||target!==id.value)return;
     data.value=result;
+    // 新卡預設先看開場白（最大的駁回原因，也最快看完）；之後使用者自己切的分頁不動
+    if(!sectionChosen){sectionChosen=true;if(submissionTypeOf({ ...result.submission, reopen: !!result.submission.reopen })==='first')section.value='dialogue';}
     void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
@@ -507,17 +519,22 @@ async function stamp(verdict: "approve" | "reject") {
   error.value = "";
   decideError.value = "";
   decideUnknown.value = false;
-  const target=id.value,review=data.value,reason=note.value,generation=review.submission.claimGeneration;
+  // 說明欄只在選「駁回」時出現：改選通過時，之前打在駁回裡的字不能跟著送出
+  const target=id.value,review=data.value,reason=verdict==='reject'?note.value:'',generation=review.submission.claimGeneration;
+  const codes=verdict==='reject'&&!reopen.value?pickedReasons.value:undefined,coach=verdict==='reject'&&!reopen.value&&coachingOn.value;
+  if(verdict==='reject'&&!rejectReady.value){busy.value=false;decideError.value=t(reopen.value||pickedReasons.value.length?'reviewV2.decide.otherNeedsNote':'reviewV2.decide.pickReason');return;}
   try {
     const confirmedToken=await token();
     const approved=approvals.value+1>=review.submission.required;
     // 重新審核：維持通過不動卡片；駁回走改判，卡改回上一個通過的版本或下架
     const keep=verdict==='approve'&&reopen.value;
     const body=verdict==='reject'?(reopen.value?'review.reopen.rejectBody':'review.confirm.rejectBody'):keep?'review.reopen.keepBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending';
-    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    // 駁回確認：列卡名、版本、理由名稱與補充；輔導時多一行
+    const reasonLines=codes?.length?'\n'+t('reviewV2.decide.confirmBody')+'\n'+codes.map(c=>'・'+t(reasonKey(c,'name'))).join('\n')+(coach?'\n'+t('reviewV2.decide.confirmCoaching'):''):'';
+    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+reasonLines+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
-    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation });
+    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}) });
     if(!active||id.value!==target)return;
     if (data.value) {
       data.value.submission.status = res.status;
@@ -547,6 +564,12 @@ async function stamp(verdict: "approve" | "reject") {
       // 送出前一刻被別人冷凍了：說明並重讀，畫面換成冷凍狀態
       decideError.value = t("review.hold.decideBlocked");
       await load();
+    } else if (err instanceof ApiError && err.code === "review_dropped") {
+      await load();
+    } else if (err instanceof ApiError && (err.code === "review_reasons_required" || err.code === "review_reason_invalid")) {
+      decideError.value = t("reviewV2.decide.pickReason");
+    } else if (err instanceof ApiError && err.code === "review_other_needs_note") {
+      decideError.value = t("reviewV2.decide.otherNeedsNote");
     } else if (err instanceof ApiError && err.status === 409) decideError.value = t("review.claimChanged");
     else if (err instanceof ApiError) decideError.value = t("review.decide.failed");
     else if (err instanceof Error && err.message === t("auth.expired")) decideError.value = err.message;
@@ -557,6 +580,41 @@ async function stamp(verdict: "approve" | "reject") {
   } finally {
     busy.value = false;
   }
+}
+
+/** 不受理：不必領取、不寫理由、不跳確認；結果卡上可以復原 */
+async function dropCard() {
+  if (busy.value || !data.value || data.value.submission.id !== id.value) return;
+  const target = id.value;
+  busy.value = true; decideError.value = "";
+  try {
+    await dropReview(target, await token());
+    if (!active || id.value !== target) return;
+    dropDone.value = true;
+    if (data.value) data.value.submission.claimedByMe = false;
+    void loadNext();
+    await nextTick();
+    decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    decideError.value = err instanceof ApiError && err.code === "claimed_by_other" ? t("reviewV2.menu.claimedByOther")
+      : err instanceof ApiError && err.code === "review_held" ? t("reviewV2.menu.held")
+      : err instanceof Error && err.message === t("auth.expired") ? err.message : t("reviewV2.decide.submitFailed");
+  } finally { busy.value = false; }
+}
+
+async function restoreCard() {
+  if (busy.value || !data.value) return;
+  const target = id.value;
+  busy.value = true; decideError.value = "";
+  try {
+    await restoreReview(target, await token());
+    if (!active || id.value !== target) return;
+    dropDone.value = false; choice.value = null;
+    await load();
+  } catch {
+    if (active && id.value === target) decideError.value = t("reviewV2.toast.failed");
+  } finally { busy.value = false; }
 }
 
 async function correct(){
@@ -624,6 +682,9 @@ onMounted(() => { void load(); });
           </div>
           <!-- 原作者與他的其他卡（owner 2026-11-08 取消盲審）：抓到一張盜卡要能一串查出 -->
           <ReviewAuthorPanel v-if="data.author" :submission-id="data.submission.id" :author="data.author" />
+          <!-- 審卡 V2：作者標記與依據（只給審核員）；管理員從這裡開批次不受理 -->
+          <ReviewAuthorProfile v-if="data.authorProfile" :submission-id="data.submission.id" :profile="data.authorProfile" :manager="manager"
+            :can-mark="claimedByMe && !decided" @changed="data.authorProfile = $event" @batched="load" />
           <!-- 作者的分級放最上面：審核人第一件事就是對照內容跟它符不符；問卷在「分級問卷」分頁 -->
           <p class="rating">
             {{ $t("review.rating.declared") }}
@@ -659,6 +720,22 @@ onMounted(() => { void load(); });
           <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
+
+      <!-- 快速審（優質作者、沒有疑似量產）：先給重點檢查，決定規則與一般卡完全相同，全文照樣在下面的分頁 -->
+      <section v-if="fastReview" class="pane panel key-checks layout__head" data-key-checks>
+        <h3>{{ $t("reviewV2.fast.summaryTitle") }}</h3>
+        <p class="text key-checks__opening" :class="{ 'key-checks__opening--clamp': !keyChecksOpen }">{{ data.detail.greetings?.welcome || "—" }}</p>
+        <button type="button" class="btn btn--sm btn--ghost" :aria-expanded="keyChecksOpen" @click="keyChecksOpen = !keyChecksOpen">{{ keyChecksOpen ? $t("reviewV2.fast.collapse") : $t("reviewV2.fast.expand") }}</button>
+        <ul class="key-checks__elements">
+          <li>{{ $t("reviewV2.elements.scene") }}</li><li>{{ $t("reviewV2.elements.event") }}</li><li>{{ $t("reviewV2.elements.hook") }}</li>
+        </ul>
+        <dl class="key-checks__cells">
+          <div><dt>{{ $t("reviewV2.fast.rating") }}</dt><dd><RatingMark v-if="data.submission.rating" :rating="data.submission.rating" variant="chip" /><template v-else>{{ $t("review.rating.sfw") }}</template></dd></div>
+          <div><dt>{{ $t("reviewV2.fast.originality") }}</dt><dd>{{ originality?.available ? percent(originality.similarity) : $t("reviewV2.mark.unmeasured") }}</dd></div>
+          <div><dt>{{ $t("reviewV2.fast.length") }}</dt><dd>{{ data.detail.reviewLength ? lengthParams.total : $t("reviewV2.mark.unmeasured") }}</dd></div>
+        </dl>
+        <p class="subtle">{{ $t("reviewV2.fast.entries", { n: data.features?.worldbookEntries ?? data.detail.costProfile?.worldbookEntryCount ?? 0 }) }}</p>
+      </section>
 
       <!-- 桌機右側欄（≥1080，黏著）：字數與決定入口。窄螢幕排在卡名下面，入口改由底部固定列給 -->
       <aside class="side layout__side">
@@ -897,12 +974,26 @@ onMounted(() => { void load(); });
       </section>
 
       <section ref="decideSection" id="decide" class="verdict panel">
+        <!-- 不受理中：剛移出的結果卡，或從不受理清單點進來的唯讀查看。復原後才能領取與決定 -->
+        <template v-if="dropped && !decided">
+          <h3 class="verdict__title" tabindex="-1" data-decide-title data-dropped-card>{{ dropDone ? $t("reviewV2.decide.resultDropped") : $t("reviewV2.dropped.title") }}</h3>
+          <p v-if="!dropDone" class="notice" role="status">{{ $t("reviewV2.dropped.readonly") }}</p>
+          <p v-if="decideError" class="notice notice--error" role="alert">{{ decideError }}</p>
+          <div class="verdict__acts">
+            <button type="button" class="btn btn--lg" :disabled="busy" data-restore @click="restoreCard">{{ $t("reviewV2.decide.restore") }}</button>
+            <button v-if="nextItems && nextItems.length" type="button" class="btn btn--primary btn--lg" :disabled="nextBusy" @click="goNext">{{ $t("reviewV2.decide.next", { n: nextItems.length }) }}</button>
+            <RouterLink v-else class="btn btn--primary btn--lg" :to="lp('/review')">{{ $t("review.result.toQueue") }}</RouterLink>
+          </div>
+        </template>
         <!-- 送出後（或回頭看審過、已定案的單）：決定區換成結果卡 -->
-        <template v-if="stampedByMe || decided">
+        <template v-else-if="stampedByMe || decided">
           <h3 class="verdict__title" tabindex="-1" data-decide-title data-result-card>{{ doc.roleName }}</h3>
           <p v-if="myStamp" class="result__mine"><span class="chip" :class="{ 'chip--reject': myStamp.verdict === 'reject' }">{{ $t(myStamp.verdict === 'approve' ? 'review.result.mine.approve' : 'review.result.mine.reject') }}</span></p>
           <!-- 一張單一章就定案：送出後只會是已上榜或已駁回 -->
           <p v-if="data.submission.status === 'approved' || data.submission.status === 'rejected'" class="result__now">{{ $t(data.submission.status === 'approved' ? 'review.result.now.approved' : 'review.result.now.rejected') }}</p>
+          <ul v-if="data.rejectReasons?.length" class="result__reasons" data-result-reasons>
+            <li v-for="code in data.rejectReasons" :key="code" class="chip">{{ $t(reasonKey(code, 'name')) }}</li>
+          </ul>
           <div v-if="myStamp" class="field">
             <p class="subtle records__title">{{ $t("review.result.noteTitle") }}</p>
             <p class="text record__note">{{ myStamp.note || $t("review.confirm.noNote") }}</p>
@@ -971,19 +1062,41 @@ onMounted(() => { void load(); });
               </li>
             </ul>
           </div>
-          <div class="field">
-            <p class="reasons__label">{{ $t("review.decide.reasons") }}</p>
-            <div class="reasons" role="group" :aria-label="$t('review.decide.reasons')">
-              <button v-for="r in reasons" :key="r" type="button" class="chip reason" :disabled="!canDecide" :data-reason="r" @click="pickReason(r)">{{ $t(`review.reason.${r}.label`) }}</button>
+          <!-- 三個選項都不預選；重新審核單沒有「不受理」，駁回限管理員 -->
+          <div class="choices" role="radiogroup" :aria-label="$t('reviewV2.decide.title')" data-decide-choices>
+            <label class="choice" :class="{ 'choice--on': choice === 'approve', 'choice--off': approveBlocked || !claimedByMe || !!hold }">
+              <input v-model="choice" type="radio" name="decide" value="approve" :disabled="busy || !claimedByMe || !!hold || approveBlocked" />
+              <span class="choice__name">{{ $t(reopen ? "review.action.keep" : "reviewV2.decide.approve") }}</span>
+              <span class="choice__hint">{{ approveBlocked ? $t("reviewV2.decide.lengthGap", { gap: lengthParams.remaining }, Number(data.detail.reviewLength?.remaining ?? 0)) : !claimedByMe ? $t("reviewV2.decide.claimFirst") : $t("reviewV2.decide.approveHint") }}</span>
+            </label>
+            <label class="choice" :class="{ 'choice--on': choice === 'reject', 'choice--off': !claimedByMe || !!hold || rejectLocked }">
+              <input v-model="choice" type="radio" name="decide" value="reject" :disabled="busy || !claimedByMe || !!hold || rejectLocked" />
+              <span class="choice__name">{{ $t("reviewV2.decide.reject") }}</span>
+              <span class="choice__hint">{{ !claimedByMe ? $t("reviewV2.decide.claimFirst") : $t("reviewV2.decide.rejectHint") }}</span>
+            </label>
+            <label v-if="!reopen" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
+              <input v-model="choice" type="radio" name="decide" value="drop" :disabled="busy || !!hold" />
+              <span class="choice__name">{{ $t("reviewV2.decide.drop") }}</span>
+              <span class="choice__hint">{{ $t("reviewV2.decide.dropHint") }}</span>
+            </label>
+          </div>
+
+          <template v-if="choice === 'reject'">
+            <ReviewReasonPicker v-if="!reopen" v-model="reasonPicks" :locked="lengthForced ? ['content.min_length'] : []" :disabled="busy || !canDecide"
+              :coaching="coachingOn" :coaching-default="coachingDefault" :fandom="!!fandom" :opening="data.detail.greetings?.welcome ?? ''"
+              :length="lengthParams" @update:coaching="coaching = $event" />
+            <div class="field">
+              <label for="review-note">{{ $t(noteRequired ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
+              <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" :aria-required="noteRequired" @focus="noteFocused = true" @blur="noteFocused = false" />
             </div>
-            <p v-if="noteFull" class="small-note blocked-note" role="status" data-note-full>{{ $t("review.decide.noteFull", { max: new Intl.NumberFormat(String(locale)).format(NOTE_MAX) }) }}</p>
-            <p v-else class="subtle small-note">{{ $t("review.decide.reasonsHint") }}</p>
+          </template>
+          <div v-else-if="choice === 'drop'" class="drop-info" data-drop-info>
+            <p>{{ $t("reviewV2.decide.dropLine1") }}</p>
+            <p>{{ $t("reviewV2.decide.dropLine2") }}</p>
+            <p>{{ $t("reviewV2.decide.dropLine3") }}</p>
           </div>
-          <div class="field">
-            <label for="review-note">{{ $t("review.note.label") }}</label>
-            <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" @focus="noteFocused = true" @blur="noteFocused = false" />
-          </div>
-          <p v-if="!claimedByMe && !decided && !hold" class="subtle">{{ $t("review.claimFirst") }}</p>
+
+          <p v-if="!claimedByMe && !decided && !hold && choice !== 'drop'" class="subtle">{{ $t("review.claimFirst") }}</p>
           <!-- 拿不定主意、要先跟其他審核員討論：冷凍後誰都不能決定，卡留在清單上 -->
           <div v-if="canHold" class="field hold-entry">
             <button type="button" class="btn" :disabled="busy || holdBusy" data-hold @click="holdCard">{{ $t("review.action.hold") }}</button>
@@ -992,8 +1105,9 @@ onMounted(() => { void load(); });
           </div>
           <div class="verdict__acts">
             <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
-            <button class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !note.trim()" @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
-            <button class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : "review.action.approve") }}</button>
+            <button v-if="choice === 'reject'" class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !rejectReady" data-submit-reject @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
+            <button v-else-if="choice === 'drop'" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !!hold" data-submit-drop @click="dropCard">{{ busy ? $t("review.decide.submitting") : $t("reviewV2.decide.dropAction") }}</button>
+            <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked || choice !== 'approve'" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" data-submit-approve @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : "review.action.approve") }}</button>
           </div>
         </template>
       </section>
@@ -1123,6 +1237,26 @@ onMounted(() => { void load(); });
 .blocked { color: var(--warning-text); background: color-mix(in srgb, var(--warning-text) 10%, var(--surface)); margin: 0; }
 .reasons__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; }
 .reasons { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2); }
+/* 決定三選項：手機直排、桌機三欄；選中用 accent 淡底，不用實心（實心留給主按鈕） */
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-2); }
+.choice { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-2); row-gap: 2px; align-items: center; padding: var(--s-3); min-height: var(--h-lg); border: 1px solid var(--border); border-radius: var(--r-md); cursor: pointer; }
+.choice input { grid-row: span 2; width: 18px; height: 18px; margin: 0; }
+.choice--on { border-color: var(--accent); background: var(--accent-tint); }
+.choice--off { cursor: not-allowed; }
+.choice--off .choice__name { color: var(--text-3); }
+.choice__name { font-weight: 600; }
+.choice__hint { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.choice__hint:lang(ko), .drop-info:lang(ko) { word-break: keep-all; }
+.drop-info { display: grid; gap: var(--s-1); padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; }
+.key-checks { display: grid; gap: var(--s-2); }
+.key-checks h3 { margin: 0; font-size: 15px; }
+.key-checks__opening { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; margin: 0; }
+.key-checks__opening--clamp { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.key-checks__elements { margin: 0; padding-left: var(--s-5); font-size: 13px; color: var(--text-2); }
+.key-checks__cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s-2); margin: 0; }
+.key-checks__cells dt { font-size: 12px; color: var(--text-3); }
+.key-checks__cells dd { margin: 0; font-variant-numeric: tabular-nums; }
+.result__reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
 /* 可點的 chip：點擊區至少 30（DESIGN 點擊區分級），有 hover 與焦點樣式 */
 .reason { min-height: var(--h-sm); padding-inline: var(--s-3); border: 0; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
 .reason:hover:not(:disabled) { background: var(--border); }

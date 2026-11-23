@@ -574,7 +574,27 @@ export interface ReviewQueueItem {
   reopen?: boolean;
   /** 送審類型；舊版伺服器不帶就退回 kind */
   type?: ReviewSubmissionType;
+  /** 審卡 V2：不受理後作者改版重送 */
+  afterDrop?: boolean;
+  /** 作者標記與同裝置帳號數（只給審核員，不帶身分）；舊流程的單是 null */
+  authorMark?: ReviewAuthorMark | null;
+  /** 快速審：優質作者、沒有疑似量產。只是排序前移與預設重點檢查 */
+  fast?: boolean;
 }
+
+export type ReviewAuthorTier = "new" | "stable" | "top" | "general" | "unknown";
+export interface ReviewAuthorMark { tier: ReviewAuthorTier; manualTier: boolean; batchSuspected: boolean; deviceAccounts: number | null }
+
+/** 審核頁的作者側寫：標記、依據與人工覆寫。null 的依據＝量不到 */
+export interface ReviewAuthorProfile {
+  tier: ReviewAuthorTier; autoTier: ReviewAuthorTier; batchSuspected: boolean; autoBatch: boolean;
+  manual: { tier?: { expiresAt: number }; batch?: { expiresAt: number } };
+  basis: { works: number | null; decidedWorks: number | null; firstPassRate: number | null; qualityScore: number | null; memberSince: number | null; deviceAccounts: number | null; deviceRecentWorks: number | null; dropCases90d: number | null };
+  pendingSameAuthor: number | null; pendingSameDevice: number | null;
+}
+
+export interface ReviewQueueCounts { new: number; updates: number; dropped: number }
+export interface ReviewBatchGroup { scope: "device"; anchorId: string; count: number }
 
 /** 首次送審／更新（上次通過）／退回後再送（上次駁回）／審核員發起的重新審核 */
 export type ReviewSubmissionType = "first" | "update" | "resubmit" | "reopen";
@@ -627,6 +647,12 @@ export interface ReviewDetail {
   };
   /** 原作者；舊版伺服器不帶 */
   author?: ReviewAuthor | null;
+  /** 審卡 V2：作者側寫（只有待審單）、是否在不受理清單（唯讀）、送審特徵、駁回理由 */
+  authorProfile?: ReviewAuthorProfile | null;
+  dropped?: boolean;
+  features?: { openingChars?: number; settingChars?: number; totalChars?: number; worldbookEntries?: number; regexRules?: number; hasFandom?: boolean; afterDrop?: boolean } | null;
+  rejectReasons?: string[];
+  rejectCoaching?: boolean;
   /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
   card: { id: string; roleId: string; tags?: string[]; fandom?: string; fandomId?: string };
   detail: {
@@ -676,10 +702,39 @@ export async function fetchReviewMe(token: string, provider = currentProvider())
   return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
 }
 
-export async function fetchReviewQueue(token: string, lang?: string): Promise<{ items: ReviewQueueItem[]; claimTtlMs: number }> {
-  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+export async function fetchReviewQueue(token: string, lang?: string, tab?: "new" | "updates"): Promise<{ items: ReviewQueueItem[]; claimTtlMs: number; counts?: ReviewQueueCounts; batchGroups?: ReviewBatchGroup[] }> {
+  const query = new URLSearchParams();
+  if (lang) query.set("lang", lang);
+  if (tab) query.set("tab", tab);
+  const q = query.size ? `?${query}` : "";
   return json(await fetch(`${COMMUNITY_API}/review/queue${q}`, { headers: { ...from(), ...authHeaders(token) } }));
 }
+
+/** 不受理清單的一列；droppedSince 是案件起點（作者原樣重送沿用第一次的時間） */
+export interface ReviewDroppedItem {
+  id: string; cardId: string; name: string; avatarUrl: string | null; adultHidden: boolean; rating: Rating | null;
+  source: "single" | "author_batch" | "device_batch" | "auto_same_content"; droppedSince: number; submittedAt: number; actor: string | null;
+}
+export type ReviewDroppedFilter = "all" | "single" | "batch" | "auto" | "aged";
+export async function fetchDroppedReviews(token: string, lang: string, filter: ReviewDroppedFilter): Promise<{ items: ReviewDroppedItem[]; total: number }> {
+  return json(await fetch(`${COMMUNITY_API}/review/dropped?${new URLSearchParams({ lang, filter })}`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+export const dropReview = (id: string, token: string) => reviewAction<{ caseId: string }>(id, "drop", token, {});
+export const restoreReview = (id: string, token: string) => reviewAction<{ restored: boolean }>(id, "restore", token, {});
+
+export interface ReviewGroupItem { id: string; cardId: string; name: string; coverUrl: string | null; openingLine: string; adultHidden: boolean; dropped: boolean; held: boolean; claimedByOther: boolean }
+export async function fetchReviewGroup(id: string, token: string, lang: string, scope: "author" | "device"): Promise<{ scope: "author" | "device"; items: ReviewGroupItem[] }> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/group?${new URLSearchParams({ lang, scope })}`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+async function reviewPost<T>(path: string, token: string, body: unknown): Promise<T> {
+  return json<T>(await fetch(`${COMMUNITY_API}/review/${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) }, body: JSON.stringify(body) }));
+}
+export interface ReviewBatchResult { batchId: string; dropped: string[]; skipped: { id: string; reason: string }[] }
+/** 批量不受理（限管理員）。batchId 由呼叫端產生：結果不明時重送同一個批次不會多做 */
+export const dropReviewBatch = (token: string, body: { anchorId: string; scope: "author" | "device"; ids: string[]; batchId: string }) => reviewPost<ReviewBatchResult>("drop-batch", token, body);
+export const restoreReviewBatch = (token: string, batchId: string) => reviewPost<{ restored: string[] }>("restore-batch", token, { batchId });
+export const markReviewAuthor = (id: string, token: string, body: { kind: "tier" | "batch"; value: string; reasonCode: string; note?: string }) =>
+  reviewAction<{ id: string; expiresAt: number; profile: ReviewAuthorProfile | null }>(id, "author-mark", token, body);
 
 async function reviewAction<T>(id: string, action: string, token: string, body?: unknown): Promise<T> {
   const res = await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/${action}`, {
@@ -708,7 +763,7 @@ export const holdReview = (id: string, token: string, generation?: string) => re
 export const unholdReview = (id: string, token: string, reason?: string) => reviewAction<{ hold: null }>(id, "unhold", token, { reason });
 /** 撤銷重新審核（限管理員，要寫理由） */
 export const withdrawReopen = (id: string, token: string, reason: string) => reviewAction<{ status: string }>(id, "withdraw", token, { reason });
-export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
+export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string; reasons?: string[]; coaching?: boolean }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
 export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean}
@@ -718,7 +773,11 @@ export async function fetchReviewDecisions(token:string,lang:string,before?:numb
  return json(await fetch(`${COMMUNITY_API}/review/decisions?${query}`,{headers:{...from(),...authHeaders(token)}}));
 }
 export const correctReviewDecision=(id:string,token:string,body:{operationId:string;note:string})=>reviewAction<{status:'rejected';publicVersionId:string|null;publicState:'previous_version'|'unpublished'|'unchanged';operationId:string;replayed:boolean}>(id,'correction',token,body);
-export interface AuthorReviewResult {name:string;status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;corrected:boolean;correctedAt:number|null;rewardKept?:boolean}
+export interface AuthorReviewResult {name:string;status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;corrected:boolean;correctedAt:number|null;rewardKept?:boolean;
+ /** 審卡 V2：駁回理由代碼（舊單是空陣列）、是否附完整改法、送審種類（re＝更新） */
+ reasons?:string[];coaching?:boolean;kind?:string;
+ /** 卡號與來源平台：「修改這張卡」連到編輯器 */
+ cardNumber?:number;provider?:string}
 export async function fetchAuthorReviewResult(id:string,token:string,lang:string):Promise<AuthorReviewResult>{
  return json(await fetch(`${COMMUNITY_API}/mine/reviews/${encodeURIComponent(id)}?lang=${encodeURIComponent(lang)}`,{headers:{...from(),...authHeaders(token)}}));
 }

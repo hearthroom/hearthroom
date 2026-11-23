@@ -5,6 +5,7 @@ import { i18n } from "./i18n";
 import { useSession } from "./session";
 import { noticeNote } from "../../../shared/notice-note";
 import { enforcementDeadline, isEnforcementKind } from "../../../shared/enforcement-notice";
+import { reasonSummary } from "./review-reasons";
 
 /**
  * 頁首鈴鐺的狀態：未讀數（每分鐘與回到分頁時輪詢）與打開浮層時才載入的清單。
@@ -136,6 +137,10 @@ export function noticeText(n: CommunityNotice): string {
   if (n.kind === "review_result" && card) {
     const update = extra.kind === "re";
     if (extra.status !== "rejected") return t(update ? "community.noticeText.review_update_approved" : "community.noticeText.review_approved", { card });
+    // 審卡 V2：新的駁回帶理由代碼、不帶審核員的話；說是哪幾項，點進去（結果頁）看怎麼改。認不出任何代碼就照舊
+    const reasons = Array.isArray(extra.reasons)
+      ? reasonSummary(t, extra.reasons.filter((c): c is string => typeof c === "string"), /^(en|ko)/.test(locale) ? ", " : "、") : "";
+    if (reasons) return t(update ? "reviewV2.author.noticeUpdate" : "reviewV2.author.noticeNew", { card, reasons });
     const note = noticeNote(extra.note);
     const key = (update ? "community.noticeText.review_update_rejected" : "community.noticeText.review_rejected") + (note ? "_note" : "");
     return t(key, { card, note });

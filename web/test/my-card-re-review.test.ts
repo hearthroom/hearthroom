@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, h, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
@@ -85,4 +85,89 @@ it("opening a card from my cards stays inside the app", async () => {
     await new Promise(r => setTimeout(r));
     expect(router.currentRoute.value.path, selector).toBe("/cards/100855");
   }
+});
+
+// 審卡 V2：駁回帶理由代碼時，卡片列說是哪幾項並連到結果頁；沒有代碼的舊駁回照舊顯示審核說明
+const rejected = { ...shared, access: "private", effectiveAccess: "owner", review: "rejected", everPublic: false, actions: [] };
+it("a rejection with reason codes names the reasons and links to the result page", async () => {
+  const el = await mount({ ...base, status: "rejected", workVisibility: { ...rejected, reviewReasons: ["opening.too_short", "character.setting_thin"], reviewId: "s1" } });
+  expect(el.querySelector(".card__note")?.textContent).toBe("未通過審核：開場太短、設定太少");
+  const link = el.querySelector<HTMLAnchorElement>("[data-review-fix]");
+  expect(link?.textContent?.trim()).toBe(i18n.global.t("reviewV2.author.viewFix"));
+  expect(link?.getAttribute("href")).toBe("/mine/reviews/s1");
+});
+it("more than two reasons are summarised as the first one and a count", async () => {
+  const el = await mount({ ...base, status: "rejected", workVisibility: { ...rejected, reviewReasons: ["opening.too_short", "opening.no_reply_hook", "other"], reviewId: "s1" } });
+  expect(el.querySelector(".card__note")?.textContent).toBe("未通過審核：開場太短等 3 項");
+});
+it("a rejected update with reasons says the public version is still playable", async () => {
+  const el = await mount({ ...base, workVisibility: { ...shared, update: "rejected", actions: [], reviewReasons: ["rating.mismatch"], reviewId: "s2" } });
+  expect(el.querySelector(".card__note")?.textContent).toBe(i18n.global.t("reviewV2.author.mineLineUpdate", { reasons: "分級不符" }));
+  expect(el.querySelector("[data-review-fix]")?.getAttribute("href")).toBe("/mine/reviews/s2");
+});
+it("an old rejection without reason codes keeps the reviewer note and has no result link", async () => {
+  const el = await mount({ ...base, status: "rejected", workVisibility: { ...rejected, reviewNote: "開場太短", reviewReasons: [] } });
+  expect(el.querySelector(".card__note")?.textContent).toBe(i18n.global.t("visibility.state.rejected", { note: "開場太短" }));
+  expect(el.querySelector("[data-review-fix]")).toBeNull();
+});
+it("a suspension outranks the rejection reasons", async () => {
+  const el = await mount({ ...base, status: "rejected", workVisibility: { ...rejected, restriction: "suspended", reviewReasons: ["other"], reviewId: "s1" } });
+  expect(el.querySelector(".card__note")?.textContent).not.toContain(i18n.global.t("review.reasons.other.name"));
+  expect(el.querySelector("[data-review-fix]")).toBeNull();
+});
+it("unknown reason codes fall back to the old wording without a result link", async () => {
+  const el = await mount({ ...base, status: "rejected", workVisibility: { ...rejected, reviewNote: "", reviewReasons: ["no.such_code"], reviewId: "s1" } });
+  expect(el.querySelector(".card__note")?.textContent).toBe(i18n.global.t("visibility.state.rejected", { note: "" }));
+  expect(el.querySelector("[data-review-fix]")).toBeNull();
+});
+
+// 送審超過七天沒有結果：提示可以先取消送審；取消走公開範圍彈層裡既有的取消送審
+describe("long-pending review", () => {
+  const DAY = 86_400_000, NOW = Date.UTC(2026, 10, 23, 12);
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
+  afterEach(() => { vi.useRealTimers(); });
+  const pending = (since: number, over: Record<string, unknown> = {}) => ({ ...shared, access: "private", effectiveAccess: "owner", review: "pending", everPublic: false, actions: ["cancel_review"], reviewSince: since, ...over });
+  async function mountTile(card: Record<string, unknown>, visibilityEnabled = true) {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const toggle = vi.fn();
+    router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
+    await router.push("/mine");
+    app = createApp({ render: () => h(MyCardTile, { card: card as never, busy: false, visibilityEnabled, onToggle: toggle }) }).use(router).use(i18n);
+    app.mount(el);
+    return { el, toggle };
+  }
+  it("says nothing before seven days", async () => {
+    const { el } = await mountTile({ ...base, status: "pending", workVisibility: pending(NOW - 6 * DAY) });
+    expect(el.querySelector("[data-wait-long]")).toBeNull();
+    expect(el.querySelector("[data-cancel-review]")).toBeNull();
+  });
+  it("exactly seven days is not yet long", async () => {
+    const { el } = await mountTile({ ...base, status: "pending", workVisibility: pending(NOW - 7 * DAY) });
+    expect(el.querySelector("[data-wait-long]")).toBeNull();
+  });
+  it("after seven days shows both lines and a cancel action that opens the visibility dialog", async () => {
+    const { el, toggle } = await mountTile({ ...base, status: "pending", workVisibility: pending(NOW - 7 * DAY - 1) });
+    expect(el.querySelector("[data-wait-long]")?.textContent).toBe(i18n.global.t("reviewV2.author.waitLong", { n: 7 }));
+    expect(el.querySelector("[data-wait-hint]")?.textContent).toBe(i18n.global.t("reviewV2.author.waitHint"));
+    const cancel = el.querySelector<HTMLButtonElement>("[data-cancel-review]")!;
+    expect(cancel.textContent?.trim()).toBe(i18n.global.t("visibility.action.cancelReview"));
+    cancel.click();
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+  it("a long-pending update gets the same lines under the update note", async () => {
+    const { el } = await mountTile({ ...base, workVisibility: pending(NOW - 10 * DAY, { access: "public", effectiveAccess: "public", review: "approved", update: "pending", everPublic: true }) });
+    expect(el.querySelector(".card__note")?.textContent).toBe(i18n.global.t("visibility.state.updatePending"));
+    expect(el.querySelector("[data-wait-long]")).not.toBeNull();
+    expect(el.querySelector("[data-cancel-review]")).not.toBeNull();
+  });
+  it("without the cancel action or work sharing the lines stay but there is no button", async () => {
+    const noAction = await mountTile({ ...base, status: "pending", workVisibility: pending(NOW - 8 * DAY, { actions: [] }) });
+    expect(noAction.el.querySelector("[data-wait-long]")).not.toBeNull();
+    expect(noAction.el.querySelector("[data-cancel-review]")).toBeNull();
+    app?.unmount(); app = null; document.body.innerHTML = "";
+    const sharingOff = await mountTile({ ...base, status: "pending", workVisibility: pending(NOW - 8 * DAY) }, false);
+    expect(sharingOff.el.querySelector("[data-wait-long]")).not.toBeNull();
+    expect(sharingOff.el.querySelector("[data-cancel-review]")).toBeNull();
+  });
 });

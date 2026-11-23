@@ -18,6 +18,10 @@ export interface WorkVisibility {
  draftChanged: boolean;
  restriction: 'none' | 'delisted' | 'suspended' | 'takedown';
  reviewNote?: string;
+ /** 審卡 V2：最近一張駁回的理由代碼與結果頁單號；最近一張在審的送審時間 */
+ reviewReasons?: string[];
+ reviewId?: string;
+ reviewSince?: number;
  restrictionNote?: string;
  policyRevision: string;
  approvalRevision: string;

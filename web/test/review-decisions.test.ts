@@ -44,12 +44,18 @@ it('a search with no match explains how matching works and clears back to the fu
  expect(el.querySelector<HTMLInputElement>('input[type=search]')!.value).toBe('');
 });
 
-it('the pending tab shows no number until the count is known, never a made-up 0',async()=>{
- api.fetchReviewMe.mockImplementationOnce(()=>new Promise(()=>{}));
+// 這一頁不知道各清單的待審數（counts=null）：頁籤只寫名稱，不寫 0；有數字的情形在 review.test.ts 的佇列頁驗
+it('the list tabs show names without numbers here, never a made-up 0',async()=>{
  await mount('/review/decisions');
  await vi.waitFor(()=>expect(el.textContent).toContain('夜行'));
- const tab=el.querySelector('.review-tabs a')!;
- expect(tab.textContent?.trim()).toBe(i18n.global.t('review.queue.tab.pendingNoCount'));
+ const tab=(id:string)=>el.querySelector(`.review-tabs [data-review-tab="${id}"]`);
+ expect(tab('new')?.textContent?.trim()).toBe(i18n.global.t('reviewV2.tabs.newNoCount'));
+ expect(tab('updates')?.textContent?.trim()).toBe(i18n.global.t('reviewV2.tabs.updatesNoCount'));
+ expect(tab('dropped')?.textContent?.trim()).toBe(i18n.global.t('reviewV2.tabs.droppedNoCount'));
+ expect(tab('history')?.textContent?.trim()).toBe(i18n.global.t('review.history.title'));
+ expect(tab('history')?.getAttribute('aria-current')).toBe('page');
+ expect(tab('new')?.getAttribute('aria-current')).toBeNull();
+ expect(el.querySelector('.review-tabs')!.textContent).not.toMatch(/\d/);
 });
 
 it('each row states the current result as a label, without a sentence ending',async()=>{

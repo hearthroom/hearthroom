@@ -15,10 +15,10 @@ import { stageAvailable } from "@stage-site";
  * 領取與開始審是同一顆按鈕（2026-11-02 體檢 R1）：以前領取不導頁、「查看」又隨時可按，
  * 太早點就撞進「請先領取」。現在只有領成功才進詳情；領取送出中這一列的按鈕都不能按。
  */
-import { computed, onMounted, ref } from "vue";
-import { RouterLink, useRouter } from "vue-router";
+import { computed, onMounted, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewQueue, releaseReview, unholdReview, type ReviewQueueItem } from "@/lib/api";
+import { ApiError, claimReview, dropReview, fetchReviewQueue, releaseReview, restoreReview, unholdReview, type ReviewBatchGroup, type ReviewQueueCounts, type ReviewQueueItem } from "@/lib/api";
 import { submissionTypeKey, submissionTypeOf } from "@/lib/review-type";
 import { relativeTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
@@ -28,12 +28,25 @@ import { useLocalePath } from "@/lib/use-locale";
 import { zoneLabel } from "@/lib/i18n";
 import RatingMark from "@/components/RatingMark.vue";
 import ReviewListTabs from "@/components/ReviewListTabs.vue";
+import ReviewRowMenu from "@/components/ReviewRowMenu.vue";
+import ReviewBatchSheet from "@/components/ReviewBatchSheet.vue";
+import ActionToast from "@/components/ActionToast.vue";
 
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
 const reviewerStore = useReviewer();
 const router = useRouter();
+const route = useRoute();
+/** 新卡／更新兩頁共用這個元件：/review 是新卡，/review/updates 是更新（含駁回後重送、重新審核） */
+const tab = computed<"new" | "updates">(() => (route.meta.reviewTab === "updates" ? "updates" : "new"));
+const counts = ref<ReviewQueueCounts | null>(null);
+const batchGroups = ref<ReviewBatchGroup[]>([]);
+const batchOpen = ref<ReviewBatchGroup | null>(null);
+const batchCount = computed(() => batchGroups.value.reduce((n, g) => n + g.count, 0));
+/** 不受理後的復原提示（ActionToast：滑過或聚焦時暫停，可以 Tab 到）*/
+const toast = ref<{ id: number; text: string; label?: string; action?: () => void } | null>(null);
+let toastSeq = 0;
 
 const items = ref<ReviewQueueItem[]>([]);
 const loading = ref(true);
@@ -51,11 +64,9 @@ const lengthChip = (item: ReviewQueueItem) => {
   return { short: !l.eligible, text: t(l.eligible ? "review.queue.length.ok" : "review.queue.length.short", params) };
 };
 
-/** 重送＝同一張卡之前審過至少一次（被駁回後再送，或過審後改內容再送）。
- *  篩選只收窄還沒領的；自己領著的永遠列著，免得忘了手上還有一張。 */
-const resubmittedOnly = ref(false);
+/** 自己領著的永遠列在最上面，免得忘了手上還有一張 */
 const mine = computed(() => items.value.filter((i) => i.claim === "mine"));
-const others = computed(() => items.value.filter((i) => i.claim !== "mine" && (!resubmittedOnly.value || (i.attempt ?? 1) >= 2)));
+const others = computed(() => items.value.filter((i) => i.claim !== "mine"));
 
 async function load() {
   error.value = "";
@@ -63,7 +74,10 @@ async function load() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    items.value = (await fetchReviewQueue(token, String(locale.value))).items;
+    const result = await fetchReviewQueue(token, String(locale.value), tab.value);
+    items.value = result.items;
+    counts.value = result.counts ?? null;
+    batchGroups.value = result.batchGroups ?? [];
     forbidden.value = false;
   } catch (err) {
     if (err instanceof ApiError && err.status === 403) forbidden.value = true;
@@ -132,6 +146,44 @@ async function release(item: ReviewQueueItem) {
   }
 }
 
+/** 不受理：不必領取、不跳確認，一步完成；底部提示可以復原 */
+async function drop(item: ReviewQueueItem) {
+  if (busy.value) return;
+  busy.value = item.id;
+  rowError.value = null;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await dropReview(item.id, token);
+    items.value = items.value.filter((i) => i.id !== item.id);
+    if (counts.value) counts.value = { ...counts.value, [tab.value]: Math.max(0, counts.value[tab.value] - 1), dropped: counts.value.dropped + 1 };
+    showToast(t("reviewV2.toast.dropped", { card: item.card.name }), t("reviewV2.toast.undo"), () => void undo(item));
+    void reviewerStore.refresh();
+  } catch (err) {
+    rowError.value = { id: item.id, text: err instanceof Error && err.message === t("auth.expired") ? err.message : err instanceof ApiError && err.code === "claimed_by_other" ? t("reviewV2.menu.claimedByOther") : err instanceof ApiError && err.code === "review_held" ? t("reviewV2.menu.held") : t("reviewV2.toast.failed") };
+    if (err instanceof ApiError && err.status === 409) void load();
+  } finally {
+    busy.value = null;
+  }
+}
+
+async function undo(item: ReviewQueueItem) {
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await restoreReview(item.id, token);
+    showToast(t("reviewV2.toast.restored", { card: item.card.name }));
+    void load();
+    void reviewerStore.refresh();
+  } catch {
+    showToast(t("reviewV2.toast.failed"));
+  }
+}
+
+function showToast(text: string, label?: string, action?: () => void) { toast.value = { id: ++toastSeq, text, label, action }; }
+function batchClosed(changed: boolean) { batchOpen.value = null; if (changed) void load(); }
+watch(tab, () => { items.value = []; void load(); });
+
 onMounted(() => {
   document.title = pageTitle(t("review.title"));
   void reviewerStore.refresh();
@@ -142,11 +194,16 @@ onMounted(() => {
 <template>
   <section class="review-queue">
     <header class="head">
-      <ReviewListTabs active="pending" :pending="reviewerStore.reviewer ? reviewerStore.pendingReviews : null" />
+      <ReviewListTabs :active="tab" :counts="counts" />
       <button class="btn btn--sm" :disabled="loading" @click="load">{{ $t("review.refresh") }}</button>
     </header>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <!-- 疑似大量送審（只有管理員收得到）：一次處理一組，處理完下一組補上 -->
+    <div v-if="batchGroups.length" class="notice batch-banner" data-batch-banner>
+      <span>{{ $t("reviewV2.batch.banner", { groups: batchGroups.length, n: batchCount }) }}</span>
+      <button class="btn btn--sm" @click="batchOpen = batchGroups[0]">{{ $t("reviewV2.batch.view") }}</button>
+    </div>
 
     <div v-if="forbidden" class="empty panel"><p class="empty__title">{{ $t("review.notReviewer") }}</p></div>
     <div v-else-if="loading" class="list" aria-hidden="true"><div v-for="i in 4" :key="i" class="ghost row-ghost" /></div>
@@ -155,14 +212,11 @@ onMounted(() => {
       <div v-if="!error" class="empty panel">
         <p class="empty__title">{{ $t("review.empty") }}</p>
         <p class="subtle">{{ $t("review.emptyHint") }}</p>
+        <p v-if="counts?.dropped"><RouterLink class="link" :to="lp('/review/dropped')">{{ $t("reviewV2.tabs.dropped", { n: counts.dropped }) }}</RouterLink></p>
       </div>
     </template>
 
     <template v-else>
-      <div class="seg filter" role="group" :aria-label="$t('review.filter.label')">
-        <button class="seg__item" :class="{ 'seg__item--on': !resubmittedOnly }" :aria-pressed="!resubmittedOnly" @click="resubmittedOnly = false">{{ $t("review.filter.all") }}</button>
-        <button class="seg__item" :class="{ 'seg__item--on': resubmittedOnly }" :aria-pressed="resubmittedOnly" @click="resubmittedOnly = true">{{ $t("review.filter.resubmitted") }}</button>
-      </div>
       <ul v-for="(group, gi) in [mine, others]" :key="gi" class="list">
         <li v-for="item in group" :key="item.id" class="row panel" :class="{ 'row--mine': item.claim === 'mine' }" :data-review-row="item.id">
           <div class="row__art">
@@ -181,6 +235,11 @@ onMounted(() => {
               <span v-if="item.stampedByMe" class="chip">{{ $t("review.queue.reviewed") }}</span>
               <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
               <span v-if="item.hold" class="chip chip--hold" data-hold-chip>{{ $t("review.hold.chip") }}</span>
+              <span v-if="item.fast" class="chip chip--fast" data-fast-chip>{{ $t("reviewV2.fast.chip") }}</span>
+              <span v-if="item.afterDrop" class="chip" data-after-drop>{{ $t("reviewV2.queue.afterDrop") }}</span>
+              <!-- 作者標記：只放標記與計數，不放身分 -->
+              <span v-if="item.authorMark && item.authorMark.tier !== 'general'" class="chip chip--mark" data-author-mark>{{ $t(`reviewV2.mark.tier.${item.authorMark.tier}`) }}</span>
+              <span v-if="item.authorMark?.batchSuspected" class="chip chip--batch" data-batch-flag>{{ $t("reviewV2.mark.batch") }}<template v-if="item.authorMark.deviceAccounts"> · {{ $t("reviewV2.mark.deviceAccounts", { n: item.authorMark.deviceAccounts }, item.authorMark.deviceAccounts) }}</template></span>
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>
             <p class="row__meta">{{ zoneLabel(item.card.zone) }} · {{ relativeTime(item.submittedAt) }}</p>
@@ -200,17 +259,25 @@ onMounted(() => {
             <!-- 冷凍人自己解凍；管理員解別人的要寫理由，在審核頁 -->
             <button v-if="item.hold?.byMe" class="btn btn--ghost row__minor" :disabled="!!busy" data-unhold @click="unhold(item)">{{ $t("review.action.unhold") }}</button>
           </div>
+          <!-- 重新審核單不是作者送的，不能不受理 -->
+          <ReviewRowMenu v-if="!item.reopen" class="row__menu" :name="item.card.name" :busy="busy === item.id"
+            :blocked="item.claim === 'other' ? 'claimed' : item.hold ? 'held' : null" @drop="drop(item)" />
         </li>
       </ul>
-      <div v-if="resubmittedOnly && !others.length" class="empty panel"><p class="empty__title">{{ $t("review.filter.empty") }}</p></div>
     </template>
+    <ReviewBatchSheet v-if="batchOpen" :anchor-id="batchOpen.anchorId" :scope="batchOpen.scope" @close="batchClosed" />
+    <ActionToast v-if="toast" :key="toast.id" :message="toast.text" :action-label="toast.label" @action="toast?.action?.(); toast = null" @dismiss="toast = null" />
   </section>
 </template>
 
 <style scoped>
 .head { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-4); }
 .list { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: grid; gap: var(--s-3); }
-.row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px; gap: var(--s-3); padding: var(--s-3); align-items: center; }
+.row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 150px auto; gap: var(--s-3); padding: var(--s-3); align-items: center; }
+.row__menu { align-self: start; }
+.chip--fast, .chip--mark { background: var(--accent-tint); color: var(--accent-text); }
+.chip--batch { color: var(--warning-text); }
+.batch-banner { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
 .row--mine { box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
 .row__art { display: block; width: 56px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
 .row__art img { width: 100%; height: 100%; object-fit: cover; }
@@ -231,13 +298,13 @@ onMounted(() => {
 .chip--short { color: var(--warning-text); }
 .chip--hold { color: var(--warning-text); }
 .row__hold { color: var(--warning-text); overflow-wrap: anywhere; }
-.filter { margin-bottom: var(--s-3); }
 .row-ghost { height: 96px; border-radius: var(--r-md); }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-2); }
 .empty__title { font-size: 16px; font-weight: 600; }
 @media (max-width: 600px) {
-  .row { grid-template-columns: 48px minmax(0, 1fr); }
+  .row { grid-template-columns: 48px minmax(0, 1fr) auto; }
   .row__art { width: 48px; }
+  .row__menu { grid-column: 3; grid-row: 1; }
   .row__acts { grid-column: 1 / -1; }
 }
 </style>

@@ -1817,12 +1817,13 @@ app.get('/v1/mine/reviews/:id',async(c)=>{
  const member=await requireMember(c);
  const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,s.kind,
   CASE WHEN s.status='rejected' THEN s.reject_reasons END AS reasons,CASE WHEN s.status='rejected' THEN s.reject_coaching ELSE 0 END AS coaching,
+  s.card_id AS cardNumber,w.source_provider AS provider,
   v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
   FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
   LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
   WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
-   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;
+   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;cardNumber:number;provider:string;
   }>();
  if(!row)throw new HttpError(404,'review result not found');
  // 作者只看到結果、理由代碼與審核員寫給他的補充。待審（含不受理中）一律是 pending，不分是否被移出佇列

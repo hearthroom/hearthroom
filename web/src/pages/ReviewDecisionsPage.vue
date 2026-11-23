@@ -45,7 +45,7 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
 </script>
 <template>
  <section class="decisions">
-  <header class="head"><ReviewListTabs active="history" :pending="reviewer.reviewer ? reviewer.pendingReviews : null" /></header>
+  <header class="head"><ReviewListTabs active="history" :counts="null" /></header>
   <form class="history-search" role="search" @submit.prevent="submitSearch">
    <input v-model="typed" class="input history-search__input" type="search" enterkeyhint="search" autocomplete="off" :placeholder="t('review.history.search.placeholder')" :aria-label="t('review.history.search.placeholder')" @input="onInput" />
   </form>

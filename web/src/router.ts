@@ -129,6 +129,9 @@ const pages: RouteRecordRaw[] = [
     children: [
       // petQuietOnPhone：手機上桌寵進來不說招呼，泡泡才不會蓋住第一列的按鈕（2026-11-02 體檢 R8）
       { path: "", component: () => import("./pages/ReviewQueuePage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
+      // 審卡 V2：更新與不受理清單各自一個網址（要在 :id 之前，不然會被當成審核編號）
+      { path: "updates", component: () => import("./pages/ReviewQueuePage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true, reviewTab: "updates" } },
+      { path: "dropped", component: () => import("./pages/ReviewDroppedPage.vue"), meta: { managementTab: "reviews", petQuietOnPhone: true } },
       { path: "cases", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cases" } },
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },

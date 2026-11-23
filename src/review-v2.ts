@@ -134,6 +134,9 @@ export function submissionRecordStatements(db: D1Database, input: {
       db.prepare(`INSERT INTO review_drops(id,submission_id,case_id,source,actor_member_id,batch_id,created_at)
         SELECT ?,?,?,'auto_same_content',NULL,NULL,? WHERE ${exists} AND EXISTS(SELECT 1 FROM review_drop_cases WHERE id=? AND closed_at IS NULL)`)
         .bind(crypto.randomUUID(), input.submissionId, input.autoDrop.caseId, input.now, input.submissionId, input.autoDrop.caseId),
+      // 原樣重送不該在審核頻道再發一則待審：還沒送出的那則一起刪掉（送審建單的 trigger 剛排進去）
+      db.prepare(`DELETE FROM review_deliveries WHERE id=? AND message_id IS NULL AND EXISTS(SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL)`)
+        .bind('review:' + input.submissionId, input.submissionId),
       reviewEventStatement(db, { key: 'auto_drop:' + input.submissionId, submissionId: input.submissionId, cardId: input.cardId, at: input.now, action: 'drop', from: 'pending', to: 'dropped', actorKind: 'system', source: 'auto_same_content', requireSubmission: true }),
     );
   }

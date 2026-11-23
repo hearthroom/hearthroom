@@ -149,3 +149,17 @@ it('formats card comment digest notifications across all five languages and navi
   expect(noticeText(digest(3))).toBe('“雨夜書店”에 새 댓글이 3개 달렸습니다');
   expect(noticeText(digest(3, { card: null }))).toBe(i18n.global.t('community.notices.card_comments', { count: 3 }, 3));
 });
+
+// 審卡 V2：新的駁回帶理由代碼、沒有審核員的話；通知說是哪幾項，路徑是結果頁
+it('names the reject reasons for a coded rejection and keeps the note wording for old ones', async () => {
+  await applyLocale('zh-Hant');
+  const coded = (extra: Record<string, unknown>) => notice({ kind: 'review_result', actor: null, path: '/mine/reviews/s1', extra: { status: 'rejected', ...extra } });
+  expect(noticeText(coded({ kind: 'first', reasons: ['opening.too_short', 'character.setting_thin'] }))).toBe('「雨夜書店」這次沒有通過審核：開場太短、設定太少');
+  expect(noticeText(coded({ kind: 're', reasons: ['rating.mismatch'] }))).toBe('「雨夜書店」的更新這次沒有通過審核：分級不符');
+  expect(noticeText(coded({ kind: 'first', reasons: ['opening.too_short', 'opening.no_reply_hook', 'other'] }))).toBe('「雨夜書店」這次沒有通過審核：開場太短等 3 項');
+  // 空陣列或認不出的代碼照舊
+  expect(noticeText(coded({ kind: 'first', reasons: [], note: '開場太短' }))).toBe('「雨夜書店」這次沒有通過審核，審核員說：開場太短');
+  expect(noticeText(coded({ kind: 'first', reasons: ['no.such_code'] }))).toBe(i18n.global.t('community.noticeText.review_rejected', { card: '「雨夜書店」' }));
+  await applyLocale('en');
+  expect(noticeText(coded({ kind: 'first', reasons: ['opening.too_short', 'character.setting_thin'] }))).toBe('“雨夜書店” did not pass review this time: Opening too short, Not enough detail');
+});

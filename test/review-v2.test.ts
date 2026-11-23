@@ -160,6 +160,9 @@ describe('不受理', () => {
     expect(await listQueue(env.DB, a, Date.now(), 'zh')).toEqual([]);
     const drop = await env.DB.prepare('SELECT case_id, source FROM review_drops WHERE submission_id=? AND restored_at IS NULL').bind(second.id).first<{ case_id: string; source: string }>();
     expect(drop).toEqual({ case_id: caseId, source: 'auto_same_content' });
+    // 審核頻道不再為原樣重送發一則待審
+    expect(await env.DB.prepare('SELECT 1 FROM review_deliveries WHERE id=?').bind('review:' + second.id).first()).toBeNull();
+    expect(await env.DB.prepare('SELECT 1 FROM review_deliveries WHERE id=?').bind('review:' + first.id).first()).not.toBeNull();
     expect((await events(first.id)).map((e) => [e.action, e.source])).toContainEqual(['superseded', 'dropped']);
 
     await f.edit();

@@ -12,16 +12,19 @@ import type { MyCard } from "@/lib/api";
 import RatingMark from "./RatingMark.vue";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
 import { ratingName } from "@/lib/rating";
+import { useI18n } from "vue-i18n";
+import { reasonSummary } from "@/lib/review-reasons";
 
 /** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
 const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean; visibilityEnabled?:boolean }>();
 const emit = defineEmits<{ toggle: [] }>();
 
 const { lp } = useLocalePath();
+const { t, locale } = useI18n();
 const source=computed(()=>props.card.sourceProvider??props.card.provider??currentProvider());
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
 const detailHref=computed(()=>lp(`/cards/${props.card.num ?? props.card.detailId ?? props.card.workId ?? sourceId.value}`));
-const hasDetails = computed(() => props.card.workVisibility ? (
+const baseDetails = computed(() => props.card.workVisibility ? (
  props.card.workVisibility.syncState==='unavailable'||!!props.card.reReview||props.card.workVisibility.restriction!=='none'||props.card.workVisibility.review==='rejected'||props.card.workVisibility.review==='revoked'||props.card.workVisibility.update!=='none'||(props.card.workVisibility.access==='public'&&props.card.workVisibility.draftChanged)
 ) : (
   !!props.card.draftChanged ||
@@ -30,6 +33,41 @@ const hasDetails = computed(() => props.card.workVisibility ? (
   (props.card.status === 'rejected' && !!props.card.note) ||
   props.card.sourceAvailable === false
 ));
+
+/*
+ * 審卡 V2：駁回帶理由代碼時，卡片列說是哪幾項，再連到結果頁看怎麼改；沒有代碼的舊駁回照舊顯示審核說明。
+ * 只在狀態句本來就是「未通過」那兩種時換字：停權、授權收回這些優先的狀態不能被駁回蓋掉。
+ */
+const rejectReasons = computed(() => {
+  const v = props.card.workVisibility;
+  if (!v) return "";
+  const key = visibilityStateKey(v);
+  return key === "visibility.state.rejected" || key === "visibility.state.updateRejected"
+    ? reasonSummary(t, v.reviewReasons ?? [], /^(en|ko)/.test(String(locale.value)) ? ", " : "、") : "";
+});
+const visibilityNote = computed(() => {
+  const v = props.card.workVisibility;
+  if (!v) return "";
+  const reasons = rejectReasons.value;
+  if (reasons) return t(v.update === "rejected" ? "reviewV2.author.mineLineUpdate" : "reviewV2.author.mineLine", { reasons });
+  return t(visibilityStateKey(v), { note: v.reviewNote ?? "", reason: v.restrictionNote ?? "" });
+});
+const fixHref = computed(() => {
+  const id = props.card.workVisibility?.reviewId;
+  return rejectReasons.value && id ? lp(`/mine/reviews/${encodeURIComponent(id)}`) : "";
+});
+/*
+ * 送審超過七天還沒結果：告訴作者可以先取消送審、改完再送。每一張久等的卡都一樣說，
+ * 不分是否被審核員移出佇列——作者不該看得出差別。取消走「公開範圍」那個彈層裡既有的取消送審。
+ */
+const WAIT_DAYS = 7;
+const longWait = computed(() => {
+  const v = props.card.workVisibility;
+  return !!v && (v.review === "pending" || v.update === "pending") && typeof v.reviewSince === "number"
+    && Date.now() - v.reviewSince > WAIT_DAYS * 86_400_000;
+});
+const canCancel = computed(() => !!props.visibilityEnabled && !!props.card.workVisibility?.actions?.includes("cancel_review"));
+const hasDetails = computed(() => baseDetails.value || longWait.value);
 
 /*
  * 封面角上一個狀態標，四種主要狀態（owner 2026-10-05）：同一個深色底，靠字前面的燈號分——
@@ -142,8 +180,14 @@ onBeforeUnmount(() => listen(false));
 
       <div v-if="hasDetails" class="card__body">
         <template v-if="card.workVisibility">
-          <p class="card__note">{{ $t(visibilityStateKey(card.workVisibility),{note:card.workVisibility.reviewNote??'',reason:card.workVisibility.restrictionNote??''}) }}</p>
+          <p v-if="baseDetails" class="card__note">{{ visibilityNote }}</p>
+          <RouterLink v-if="fixHref" :to="fixHref" class="card__inline-link" data-review-fix>{{ $t("reviewV2.author.viewFix") }}</RouterLink>
           <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
+          <template v-if="longWait">
+            <p class="card__note" data-wait-long>{{ $t("reviewV2.author.waitLong", { n: WAIT_DAYS }) }}</p>
+            <p class="card__note" data-wait-hint>{{ $t("reviewV2.author.waitHint") }}</p>
+            <button v-if="canCancel" type="button" class="btn btn--ghost btn--sm card__inline-btn" data-cancel-review :disabled="busy || card.sourceAvailable===false" @click="emit('toggle')">{{ $t("visibility.action.cancelReview") }}</button>
+          </template>
         </template>
         <template v-else>
         <p v-if="card.draftChanged" class="card__note card__note--wait">{{ $t("workspace.draftChanged") }}</p>
@@ -239,6 +283,17 @@ onBeforeUnmount(() => listen(false));
   display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .card__note--alert { color: var(--danger); }
+.card__note:lang(ko) { word-break: keep-all; }
+.card__note:lang(ja) { word-break: auto-phrase; }
+/* 卡片列裡的連結與按鈕要疊在整張卡的連結上面（z-index），否則點下去會進卡片頁 */
+.card__inline-link, .card__inline-btn { position: relative; z-index: 1; justify-self: start; max-width: 100%; }
+.card__inline-link {
+  display: inline-flex; align-items: center; min-height: var(--h-sm);
+  font-size: 12px; font-weight: 600; color: var(--accent-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card__inline-link:hover { color: var(--accent); }
+.card__inline-btn { margin-top: 2px; padding-inline: var(--s-2); font-size: 12px; }
 /* 有修改沒送審：琥珀燈開頭，跟封面上那盞同一個意思 */
 .card__note--wait { color: var(--text); }
 .card__note--wait::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--gold); vertical-align: middle; }
@@ -269,5 +324,6 @@ onBeforeUnmount(() => listen(false));
   /* 「⋯」看起來小、點起來 44px：用負邊距把多出來的點擊範圍吃回去，不撐高名字那一列 */
   .card__more-btn { width: var(--h-lg); height: var(--h-lg); margin: -7px -7px -7px 0; }
   .card__menu-item { height: var(--h-lg); }
+  .card__inline-link, .card__inline-btn { min-height: var(--h-lg); }
 }
 </style>
