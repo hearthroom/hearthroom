@@ -504,8 +504,17 @@ describe('兩段式決定', () => {
     await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] });
     await claim(env.DB, id, humanId, Date.now());
     await blind(id, { verdict: 'approve' });
-    const res = await final(id, { finalSource: 'ai', aiNoteTypes: ['author_relation', 'card_content'], aiNote: '同一群人的多個帳號' });
+    const shown = (await json(await get(`/v1/review/${id}/ai`, 'human'))).suggestions[0];
+    // 審卡員在揭曉之後重判了：用 AI 的要先看新的判斷
+    await new Promise((r) => setTimeout(r, 5));
+    await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'], confidence: 0.9 });
+    expect(await json(await final(id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at }))).toEqual({ error: 'ai_changed' });
+    const now = (await json(await get(`/v1/review/${id}/ai`, 'human'))).suggestions[0];
+    const res = await final(id, { finalSource: 'ai', aiSuggestionId: now.id, aiSuggestionAt: now.at, aiNoteTypes: ['author_relation', 'card_content'], aiNote: '同一群人的多個帳號' });
     expect(res.status).toBe(200);
+    expect((await json(res)).finalSource).toBe('ai');
+    const after = await json(await get(`/v1/review/${id}/detail`, 'human'));
+    expect(after.submission.stamps).toMatchObject([{ mine: true, finalSource: 'ai' }]);
     const row = await env.DB.prepare('SELECT status, reject_reasons FROM review_submissions WHERE id=?').bind(id).first<{ status: string; reject_reasons: string }>();
     expect(row).toEqual({ status: 'rejected', reject_reasons: '["opening.no_reply_hook"]' });
     const ev = await lastStampEvent(id);
