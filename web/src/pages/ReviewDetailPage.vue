@@ -346,13 +346,15 @@ const aiView = computed<AiView>(() => {
   const s = aiState.value;
   if (!s) return aiLoadFailed.value ? 'error' : 'loading';
   if (s.state === 'pending') return 'pending';
-  return s.state === 'ready' && aiChoiceUsable(s.suggestion) ? 'ready' : 'none';
+  return s.state === 'ready' ? 'ready' : 'none';
 });
 const aiVerdict = computed(() => (aiView.value === 'ready' ? aiAsHuman(aiSuggestion.value!.verdict) : null));
 /** null＝還不能比（AI 沒審完或沒有判斷） */
 const agreeWithAi = computed(() => (blind.value && aiVerdict.value ? aiVerdict.value === blind.value.verdict : null));
-/** 「用 AI 的」是通過，但這一版字數未達標：伺服器會拒絕，先停用 */
-const aiPickBlocked = computed(() => aiVerdict.value === 'approve' && approveBlocked.value);
+/** AI 駁回卻沒有作者看得懂的理由代碼（只打了標記）：可以比，但「用 AI 的」蓋不出給作者的理由，不能選 */
+const aiNoReasons = computed(() => aiView.value === 'ready' && !aiChoiceUsable(aiSuggestion.value));
+/** 「用 AI 的」不能選：上面那種，或 AI 是通過但這一版字數未達標（伺服器會拒絕） */
+const aiPickBlocked = computed(() => aiNoReasons.value || (aiVerdict.value === 'approve' && approveBlocked.value));
 /** 修改後定案：用第一步同一套控制項自由調整，盲審判斷本身不變 */
 const modifying = computed(() => stage.value === 'reveal' && agreeWithAi.value === false && finalPick.value === 'modified');
 const showForm = computed(() => stage.value === 'judge' || modifying.value);
@@ -1403,7 +1405,7 @@ onMounted(() => { void load(); });
                 <label v-for="pick in FINAL_PICKS" :key="pick" class="choice" :class="{ 'choice--on': finalPick === pick, 'choice--off': pick === 'ai' && aiPickBlocked }">
                   <input v-model="finalPick" type="radio" name="final" :value="pick" :disabled="busy || (pick === 'ai' && aiPickBlocked)" :data-final-pick="pick" />
                   <span class="choice__name">{{ $t(`reviewAi.two.final.pick.${pick}`) }}</span>
-                  <span class="choice__hint">{{ pick === 'modified' ? $t("reviewAi.two.final.pick.modifiedHint") : pick === 'ai' && aiPickBlocked ? $t("reviewV2.decide.lengthGap", { gap: lengthParams.remaining }, Number(data.detail.reviewLength?.remaining ?? 0)) : $t(`review.action.${pick === 'ai' ? aiVerdict : blind.verdict}`) }}</span>
+                  <span class="choice__hint">{{ pick === 'modified' ? $t("reviewAi.two.final.pick.modifiedHint") : pick === 'ai' && aiNoReasons ? $t("reviewAi.two.final.pick.aiNoReasons") : pick === 'ai' && aiPickBlocked ? $t("reviewV2.decide.lengthGap", { gap: lengthParams.remaining }, Number(data.detail.reviewLength?.remaining ?? 0)) : $t(`review.action.${pick === 'ai' ? aiVerdict : blind.verdict}`) }}</span>
                 </label>
               </div>
               <p v-if="(finalPick === 'blind' || finalPick === 'ai') && finalVerdict" class="final__text" data-final-result>{{ $t(finalVerdict === 'approve' ? "reviewAi.two.final.result.approve" : finalPick === 'ai' ? "reviewAi.two.final.result.rejectAi" : "reviewAi.two.final.result.reject") }}</p>

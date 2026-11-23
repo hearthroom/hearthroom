@@ -6165,5 +6165,6 @@
   "reviewAi.arb.notes.typesOnly": "Only reason types were picked; no note.",
   "reviewAi.arb.notes.empty": "No notes for the AI in this period.",
   "reviewAi.arb.notes.emptyFiltered": "No notes of this type in this period. Try another type or period.",
-  "reviewAi.arb.notes.failed": "Notes for the AI couldn't load."
+  "reviewAi.arb.notes.failed": "Notes for the AI couldn't load.",
+  "reviewAi.two.final.pick.aiNoReasons": "The AI picked no reason the author can see, so it can't be used as is"
 }

@@ -69,7 +69,7 @@ export const isManagerRole = (role: string | null | undefined) => role === "mana
 
 // ---- 兩段式決定（盲審→揭曉→定案） ----
 
-/** 揭曉時 AI 那一欄的狀態：讀取中、讀不到、還沒審完、沒有可用的判斷（交人、拒答、駁回卻沒有正式理由）、已判 */
+/** 揭曉時 AI 那一欄的狀態：讀取中、讀不到、還沒審完、沒有判斷（交人、拒答）、已判 */
 export type AiView = "loading" | "error" | "pending" | "none" | "ready";
 
 /**
