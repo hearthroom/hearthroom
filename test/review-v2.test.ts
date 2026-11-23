@@ -148,6 +148,8 @@ describe('通過並附改進建議（owner 2026-11-23）', () => {
     // 統計的駁回理由只看駁回：首次定案事件不帶建議
     const first = await env.DB.prepare("SELECT reasons FROM review_events WHERE action='first_decision' AND submission_id=?").bind(s.id).first<{ reasons: string | null }>();
     expect(first!.reasons).toBeNull();
+    expect((await reviewTimeline(env.DB, s.id, a)).items.find((i) => i.action === 'approve')?.suggestions).toEqual(['opening.no_reply_hook']);
+    expect((await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)?.basis.suggestions90d).toBe(1);
   });
 
   it('沒附建議的通過照舊連「我的卡片」；不認得的代碼擋下', async () => {
@@ -157,6 +159,8 @@ describe('通過並附改進建議（owner 2026-11-23）', () => {
     const a = await reviewer(20001);
     await claim(env.DB, s.id, a, Date.now());
     await expect(stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now(), suggestions: ['nope'] })).rejects.toThrow('review_reason_invalid');
+    // 有效字數不足、分級不符只能駁回，不能當建議
+    await expect(stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now(), suggestions: ['rating.mismatch'] })).rejects.toThrow('review_reason_invalid');
     await stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now() });
     const notice = await env.DB.prepare("SELECT path, extra FROM community_notifications WHERE kind='review_result'").first<{ path: string; extra: string }>();
     expect(notice!.path).toBe('/mine');

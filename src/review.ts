@@ -411,7 +411,8 @@ export async function stamp(
   // 通過並附改進建議（owner 2026-11-23）：只在通過時收，代碼跟駁回同一套；空陣列＝沒附
   let suggestions: string[] = [];
   if (input.verdict === "approve" && input.suggestions !== undefined && input.suggestions !== null) {
-    if (!Array.isArray(input.suggestions) || input.suggestions.some((r) => !isReviewReason(r))) throw new HttpError(400, "review_reason_invalid");
+    // 有效字數不足、分級不符該駁回，不是建議（ui-suggest.md）
+    if (!Array.isArray(input.suggestions) || input.suggestions.some((r) => !isReviewReason(r) || NOT_SUGGESTIONS.includes(r as string))) throw new HttpError(400, "review_reason_invalid");
     const set = new Set(input.suggestions as string[]);
     suggestions = REVIEW_REASONS.filter((c) => set.has(c));
   }
@@ -505,6 +506,9 @@ async function assertApprovableLength(db: D1Database, row: SubmissionRow): Promi
   await bumpOp(db, "review_length", "stamp", length.eligible ? "eligible" : "insufficient");
   if (!length.eligible) throw new HttpError(400, "review_length_insufficient", undefined, { detail: { reviewLength: length } });
 }
+
+/** 只能當駁回理由、不能當改進建議的代碼 */
+export const NOT_SUGGESTIONS: readonly string[] = ["content.min_length", "rating.mismatch"];
 
 /** 有效字數確定未達標（有記字數、沒有豁免）：駁回一定帶「有效字數不足」。算不出來不算未達標。 */
 async function lengthInsufficient(db: D1Database, row: SubmissionRow): Promise<boolean> {

@@ -27,6 +27,8 @@ export interface TimelineItem {
   note?: string;
   /** 審核標記（只給審核員） */
   marks?: string[];
+  /** 通過並附改進建議的理由代碼 */
+  suggestions?: string[];
   /** 這一筆屬於現在打開的這張單 */
   current: boolean;
 }
@@ -39,7 +41,8 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
   const [subs, stamps, events, first] = await db.batch([
     db.prepare(`SELECT id, submitted_at, status, decided_at, note, reject_reasons, reopen_of FROM review_submissions WHERE card_id=? ORDER BY submitted_at, rowid`).bind(card.card_id),
     db.prepare(`SELECT st.submission_id, st.member_id, st.verdict, st.note, st.created_at, COALESCE(NULLIF(m.display_name,''), m.handle) AS name, s.reject_reasons, s.reopen_of,
-        (SELECT ev.marks FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id) AS marks
+        (SELECT ev.marks FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id) AS marks,
+        (SELECT ev.reasons FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id AND ev.source='suggestions') AS suggestions
       FROM review_stamps st JOIN review_submissions s ON s.id=st.submission_id LEFT JOIN members m ON m.id=st.member_id WHERE s.card_id=?`).bind(card.card_id),
     db.prepare(`SELECT e.submission_id, e.action, e.at, e.actor_member_id, e.source, e.marks, COALESCE(NULLIF(m.display_name,''), m.handle) AS name
       FROM review_events e LEFT JOIN members m ON m.id=e.actor_member_id
@@ -57,8 +60,9 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
   const base = (id: string) => ({ round: round.get(id) ?? 1, current: id === submissionId });
   for (const s of subRows) items.push({ at: s.submitted_at, action: s.reopen_of ? 'reopen' : 'submit', actor: null, mine: false, ...base(s.id) });
   const marksOf = (raw: string | null) => { try { const m = raw ? JSON.parse(raw) : []; return Array.isArray(m) && m.length ? { marks: m.filter((x): x is string => typeof x === 'string') } : {}; } catch { return {}; } };
-  for (const st of (stamps as D1Result<{ submission_id: string; member_id: string; verdict: 'approve' | 'reject'; note: string; created_at: number; name: string | null; reject_reasons: string | null; marks: string | null }>).results) {
-    items.push({ ...marksOf(st.marks),
+  for (const st of (stamps as D1Result<{ submission_id: string; member_id: string; verdict: 'approve' | 'reject'; note: string; created_at: number; name: string | null; reject_reasons: string | null; marks: string | null; suggestions: string | null }>).results) {
+    const suggestions = st.verdict === 'approve' ? parseReviewReasons(st.suggestions) : [];
+    items.push({ ...marksOf(st.marks), ...(suggestions.length ? { suggestions } : {}),
       at: st.created_at, action: st.verdict, actor: (st.name ?? '').slice(0, 80) || null, mine: st.member_id === viewer,
       ...(st.verdict === 'reject' ? { reasons: parseReviewReasons(st.reject_reasons), note: st.note.slice(0, 2000) } : {}),
       ...base(st.submission_id),

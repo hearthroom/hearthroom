@@ -32,6 +32,8 @@ export interface AuthorProfile {
     memberSince: number | null; deviceAccounts: number | null; deviceRecentWorks: number | null; dropCases90d: number | null;
     /** 最近 90 天審核員對這位作者的卡標過的審核標記次數（疑似 AI 原文、疑似搬運） */
     marks90d: Record<string, number>;
+    /** 最近 90 天收過幾次「通過並附改進建議」 */
+    suggestions90d: number;
   };
 }
 
@@ -59,7 +61,7 @@ export async function authorProfiles(db: D1Database, memberIds: string[], now: n
   const out = new Map<string, AuthorProfile>();
   if (!ids.length) return out;
   const list = JSON.stringify(ids);
-  const [works, firsts, legacy, members, drops, marks, decisionMarks] = await db.batch([
+  const [works, firsts, legacy, members, drops, marks, decisionMarks, suggested] = await db.batch([
     db.prepare(`SELECT member_id, COUNT(DISTINCT work_id) AS n FROM hosting_versions WHERE submission_id IS NOT NULL AND member_id IN (${LIST}) GROUP BY member_id`).bind(list),
     db.prepare(`WITH firsts AS (
         SELECT v.member_id, s.status, s.decided_at, ROW_NUMBER() OVER (PARTITION BY v.work_id ORDER BY s.submitted_at, s.rowid) AS rn
@@ -78,6 +80,8 @@ export async function authorProfiles(db: D1Database, memberIds: string[], now: n
     db.prepare(`SELECT f.author_member_id AS member_id, j.value AS mark, COUNT(*) AS n FROM review_events e
       JOIN review_submission_features f ON f.submission_id=e.submission_id, json_each(e.marks) j
       WHERE e.marks IS NOT NULL AND e.at>=? AND f.author_member_id IN (${LIST}) GROUP BY f.author_member_id, j.value`).bind(now - 90 * DAY, list),
+    db.prepare(`SELECT f.author_member_id AS member_id, COUNT(*) AS n FROM review_events e JOIN review_submission_features f ON f.submission_id=e.submission_id
+      WHERE e.action='approve' AND e.source='suggestions' AND e.at>=? AND f.author_member_id IN (${LIST}) GROUP BY f.author_member_id`).bind(now - 90 * DAY, list),
   ]);
   const by = <T extends Record<string, unknown>>(rows: D1Result<T>, key = 'member_id') => new Map(rows.results.map((r) => [String(r[key]), r]));
   const workMap = by(works as D1Result<{ member_id: string; n: number }>);
@@ -95,6 +99,7 @@ export async function authorProfiles(db: D1Database, memberIds: string[], now: n
         works: workMap.get(id)?.n ?? 0, decidedWorks: decided, firstPassRate: decided ? firstPass / decided : null,
         qualityScore: decided >= 20 ? Math.round(wilsonLower(firstPass, decided) * 100) : null,
         memberSince: memberMap.get(id)?.created_at ?? null, deviceAccounts: null, deviceRecentWorks: null, dropCases90d: dropMap.get(id)?.n ?? 0,
+        suggestions90d: (suggested as D1Result<{ member_id: string; n: number }>).results.find((r) => r.member_id === id)?.n ?? 0,
         marks90d: Object.fromEntries((decisionMarks as D1Result<{ member_id: string; mark: string; n: number }>).results.filter((r) => r.member_id === id).map((r) => [r.mark, r.n])),
       },
     };
