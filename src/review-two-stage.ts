@@ -87,6 +87,10 @@ export function parseAiNote(types: unknown, note: unknown): { types: string[]; n
 export async function finalize(db: D1Database, env: Env, input: {
   submissionId: string; memberId: string; now: number; generation?: string; source: unknown; decision: Omit<DecisionInput, "submissionId" | "memberId" | "now" | "generation"> | null;
   aiNoteTypes: unknown; aiNote: unknown;
+  /** 用 AI 的：畫面上顯示的那一筆建議。審卡員在這之間重判了就回 409，讓審核員先看新的判斷 */
+  aiSuggestionId?: unknown;
+  /** 那一筆建議當時的更新時間（同一版判準重判時 id 不變，要靠它認出換過了） */
+  aiSuggestionAt?: unknown;
 }): Promise<StampResult & { finalSource: FinalSource }> {
   if (typeof input.source !== "string" || !(FINAL_SOURCES as readonly string[]).includes(input.source)) throw new HttpError(400, "invalid_arguments", undefined, { field: "finalSource" });
   let source = input.source as FinalSource;
@@ -100,6 +104,8 @@ export async function finalize(db: D1Database, env: Env, input: {
     decision = { verdict: blind.payload.verdict, note: blind.payload.note, reasons: blind.payload.reasons, coaching: blind.payload.coaching, marks: blind.payload.marks, suggestions: blind.payload.suggestions };
   } else if (source === "ai") {
     if (ai.state !== "ready") throw new HttpError(409, "ai_choice_unavailable");
+    if (input.aiSuggestionId !== undefined && input.aiSuggestionId !== null
+      && (input.aiSuggestionId !== ai.suggestion.id || (typeof input.aiSuggestionAt === "number" && input.aiSuggestionAt !== ai.suggestion.at))) throw new HttpError(409, "ai_changed");
     const verdict = aiVerdictAsHuman(ai.suggestion.verdict)!;
     const reasons = ai.suggestion.reasons.filter(isReviewReason);
     if (verdict === "reject" && !reasons.length) throw new HttpError(409, "ai_choice_unavailable");
