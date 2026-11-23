@@ -1,4 +1,5 @@
-import { env } from 'cloudflare:test';
+import { env, createExecutionContext, createScheduledController, waitOnExecutionContext } from 'cloudflare:test';
+import worker from '../src/index';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GENERAL_RATING, makeMember, makeReviewer, resetDb, role } from './helpers';
 import { beginHostedEdit, hostGateway, submitHosted } from '../src/hosting';
@@ -88,6 +89,20 @@ describe('更新差異', () => {
     await diffMaintenance(env as never, Date.now());
     expect(await rowOf(s.id)).toMatchObject({ state: 'unreadable', attempts: 3 });
     expect((await diffView(env as never, s.id)).state).toBe('unreadable');
+  });
+
+  it('每 5 分鐘的排程就會補（掛在每小時那一支時，上線後舊單要補好幾個小時）', async () => {
+    const f = await setup();
+    await f.submit();
+    await f.decide('reject');
+    await f.edit();
+    await f.submit();
+    const s = await f.pending();
+    await env.DB.prepare('DELETE FROM review_submission_diffs').run();
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController({ cron: '*/5 * * * *' }), env as never, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(await rowOf(s.id)).toMatchObject({ base_kind: 'rejected', state: 'done' });
   });
 
   it('0146 之前就在排隊的單：排程替它補上基準', async () => {
