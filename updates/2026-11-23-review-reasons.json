@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/mine",
-  "draft": true,
   "title": {
     "zh-Hant": "未通過審核的卡片會逐項列出要改的地方，附改法與範例。",
     "zh-Hans": "未通过审核的卡片会逐项列出要改的地方，附改法与示例。",
