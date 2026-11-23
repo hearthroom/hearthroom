@@ -265,6 +265,8 @@ watch(() => [notifications.unread, pet.value] as const, async ([n, p], before) =
   const fresh = notifications.items.find((x) => !x.read_at && !told.has(x.id));
   if (!fresh) return;
   remember(fresh.id);
+  // 通知指的那一頁正開著（例如從通知點進審核結果頁）：內容已經在眼前，不再用泡泡唸一次蓋住它
+  if (fresh.path && route.path === lp(fresh.path)) return;
   const go = { label: line("go.look"), run: () => router.push(fresh.path ? lp(fresh.path) : lp("/me/notifications")) };
   const rejected = fresh.kind === "review_result" && fresh.extra?.status === "rejected";
   const approved = fresh.kind === "review_result" && !rejected;
