@@ -465,6 +465,8 @@ describe('判準 v4 的讀卡輸入', () => {
     const again = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
     expect(again.author.registrations7d).toBe(body.author.registrations7d + 2);
     expect(again.author.quotaFull).toBe(true);
+  });
+});
 
 describe('兩段式決定', () => {
   const blind = async (id: string, body: Record<string, unknown>, token = 'human') => {
