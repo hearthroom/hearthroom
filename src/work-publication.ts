@@ -76,7 +76,8 @@ export async function finalizeManagedReview(env:Env,submission:string,path:'stam
   auditStmtIfChanged(db, {subjectKind:'card_reward',subjectId:submission,actorMemberId:null,actorKind:'system',action:'approval',after:{path,cardId:Number(row.card_id)},operationId:crypto.randomUUID(),now:Date.now()}),
   db.prepare(`UPDATE cards SET status='approved',reviewed_hash=?,registered_at=CASE WHEN ?='first' THEN ? ELSE registered_at END
    WHERE id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')`).bind(row.content_hash,row.kind,row.decided_at,row.card_id,submission),
-  db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')").bind(submission,submission),
+  // 有保留期的快照留給審核員複核，到期由排程刪（review.ts purgeRetainedSnapshots）；沒有保留期的照舊在上架時刪
+  db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved') AND NOT EXISTS(SELECT 1 FROM review_snapshot_retention WHERE submission_id=?)").bind(submission,submission,submission),
   supersedeOlderWorkIntents(env,receipt),
  ]);
  if(!final[2].meta.changes)throw new HttpError(409,'visibility_operation_conflict');

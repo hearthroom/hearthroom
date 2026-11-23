@@ -291,7 +291,8 @@ export async function saveSuggestion(db: D1Database, input: SuggestionInput & { 
   const id = crypto.randomUUID();
   const cols = "id,submission_id,card_id,agent_member_id,criteria_version,model,verdict,reasons,flags,confidence,handoff_cause,note,phase,input_tokens,output_tokens,cost_usd,latency_ms,created_at,updated_at";
   const update = opts.tagsOnly
-    ? "flags=excluded.flags,model=excluded.model,updated_at=excluded.updated_at"
+    // 只打標記不動 updated_at：updated_at 代表結論何時改過（揭曉後「用 AI 的」靠它認出 AI 重判）
+    ? "flags=excluded.flags,model=excluded.model"
     : "model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=excluded.flags,confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at";
   const row = await db.prepare(`INSERT INTO review_ai_suggestions (${cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET ${update} RETURNING id, verdict, phase`)
@@ -334,11 +335,12 @@ export function revealEventStatement(db: D1Database, input: { submissionId: stri
 
 /**
  * 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章，或再不受理一次）：這種單不進人機對照。
- * 兩段式決定（先送盲審再看 AI）不算：那位審核員的獨立判斷記在盲審判斷裡，對照用它。
+ * 兩段式決定不算：只要盲審判斷是在第一次看到 AI 之前送的，那位審核員的獨立判斷記在盲審裡，對照用它。
+ * 先看過 AI 才送的「盲審」（不受理→看→復原→盲審）照樣算污染。
  */
-export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id
-  AND NOT EXISTS(SELECT 1 FROM review_blind_judgments bj WHERE bj.submission_id=rv.submission_id AND bj.member_id=rv.actor_member_id) AND (
-  EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
+export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id AND (
+  (EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
+    AND NOT EXISTS(SELECT 1 FROM review_blind_judgments bj WHERE bj.submission_id=rv.submission_id AND bj.member_id=rv.actor_member_id AND bj.created_at<=rv.at))
   OR EXISTS(SELECT 1 FROM review_drops dr WHERE dr.submission_id=rv.submission_id AND dr.actor_member_id=rv.actor_member_id AND dr.created_at>rv.at AND dr.restored_at IS NULL)))`;
 
 /** 揭曉後的覆核：可以改選，每次一筆審核事件（同一個 operationId 重送不多記），統計取每位審核員對每筆建議最後一次。 */

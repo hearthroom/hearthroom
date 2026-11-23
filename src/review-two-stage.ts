@@ -56,7 +56,6 @@ export async function recordBlind(db: D1Database, input: DecisionInput): Promise
       key: `blind:${row.id}:${input.memberId}`, submissionId: row.id, cardId: row.card_id, at: input.now, action: "blind_judgment",
       from: "pending", to: input.verdict, actorKind: "reviewer", actorMemberId: input.memberId,
       reasons: payload.reasons.length ? payload.reasons : null, reasonVersion: payload.reasons.length ? REVIEW_REASON_VERSION : null,
-      marks: payload.marks.length ? payload.marks : null,
       claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at),
     }),
   ]);

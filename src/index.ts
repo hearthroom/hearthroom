@@ -2111,7 +2111,9 @@ app.post("/v1/review/:id/unhold", async (c) => {
  */
 app.get("/v1/review/:id/originality", async (c) => {
   const { s } = await claimedSubmission(c);
-  const report = await originalityReport(c.env.DB, s, await loadSnapshot(c.env.DB, s.id), lang(c));
+  // 已定案的單只在保留期內查重（owner 2026-11-24：複核用）
+  const snapshot = s.status === "pending" || (await retainedUntil(c.env.DB, s.id, Date.now())) ? await loadSnapshot(c.env.DB, s.id) : null;
+  const report = await originalityReport(c.env.DB, s, snapshot, lang(c));
   if (report.available && s.status === "pending") await recordOriginalityStatement(c.env.DB, s.id, report.similarity, "ngram1", Date.now()).run();
   note(c, { event: "review_originality", subject: s.source_role_id, detail: !report.available ? report.reason : report.similarity >= 0.3 ? "high" : report.similarity > 0 ? "some" : "none" });
   return c.json(report, 200, { "Cache-Control": "private, no-store" });
@@ -2265,10 +2267,11 @@ app.get("/v1/review/:id/timeline", async (c) => {
 
 app.get("/v1/review/:id/detail", async (c) => {
   const { member, s, stampedByMe, droppedNow } = await claimedSubmission(c);
-  let detail = await loadSnapshot(c.env.DB, s.id);
+  const retainUntil = s.status === 'pending' ? null : await retainedUntil(c.env.DB, s.id, Date.now());
+  // 已定案、保留期過了：快照即使排程還沒刪掉也不再給
+  let detail = s.status === 'pending' || retainUntil ? await loadSnapshot(c.env.DB, s.id) : null;
   // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後只在保留期內讀（owner 2026-11-24：
   // 審核員要能回頭複核與仲裁；7 天，與 AI 不一致未仲裁最長 14 天），過期只給公開資料
-  const retainUntil = s.status === 'pending' ? null : await retainedUntil(c.env.DB, s.id, Date.now());
   if (detail?.slim) detail = s.status === 'pending' || retainUntil ? await upstream.readSealedForReview(c.env, s.source_role_id, s.provider as ProviderId).catch((e) => { if (s.status === 'pending') throw e; return null; }) : null;
   if (!detail && s.status !== 'pending') {
     // 定案時快照已刪（本站不留私有設定）：回頭看的審核人只拿得到社群登記的公開資料。
