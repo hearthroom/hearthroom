@@ -5,7 +5,8 @@ import { getSubmission, type SubmissionRow } from "./review";
 import { LATEST_FEEDBACK, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { diffView } from "./review-diff-store";
-import { arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
+import { AI_NOTE_TYPES } from "./review-two-stage";
+import { aiNotes, arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
 import { reviewAgentByKey } from "./review-agent-key";
 import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
@@ -36,7 +37,7 @@ async function requireHuman(c: Ctx) {
   return { member, role: await reviewerRole(c.env.DB, member.id) };
 }
 
-type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references";
+type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
@@ -231,7 +232,7 @@ reviewAiRoutes.post("/v1/review-ai/disagreements/:id/arbitration", (c) => counte
   const { member } = await requireHuman(c);
   const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
   const operationId = operationOf(body.operationId);
-  const out = await arbitrate(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, addToReference: body.addToReference, note: body.note, operationId, now: Date.now() });
+  const out = await arbitrate(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, addToReference: body.addToReference, note: body.note, noteTypes: body.noteTypes, operationId, now: Date.now() });
   return c.json(out, 200, NO_STORE);
 }));
 
@@ -263,4 +264,16 @@ reviewAiRoutes.get("/v1/review-ai/reference-candidates", (c) => counted(c, "refe
     }
   }
   return c.json({ items, skipped }, 200, NO_STORE);
+}));
+
+/** 給 AI 的說明全文（管理員）：可依原因類型篩，預設近 30 天，最多 200 筆。判準調整用。 */
+reviewAiRoutes.get("/v1/review-ai/notes", (c) => counted(c, "notes", async () => {
+  await requireManager(c);
+  const to = Number(c.req.query("to") ?? Date.now());
+  const from = Number(c.req.query("from") ?? to - 30 * 86_400_000);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 120 * 86_400_000) throw new HttpError(400, "invalid_arguments", undefined, { field: "from" });
+  const type = c.req.query("type") ?? null;
+  if (type !== null && !(AI_NOTE_TYPES as readonly string[]).includes(type)) throw new HttpError(400, "invalid_arguments", undefined, { field: "type" });
+  const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 100)) || 100, 1), 200);
+  return c.json({ from, to, items: await aiNotes(c.env.DB, { from, to, type, limit }) }, 200, NO_STORE);
 }));

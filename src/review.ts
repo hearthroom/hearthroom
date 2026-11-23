@@ -379,21 +379,17 @@ export interface StampResult {
  * 蓋章。要先領著（沒逾時）才能蓋：蓋章是「我看完了」，沒領就沒看。
  * 通過章數夠了就上榜並把內容版本綁上；任一駁回即駁回。蓋完章就放回，讓下一個人領。
  */
-export async function stamp(
-  db: D1Database,
-  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown; suggestions?: unknown },
-  env?:Env,
-): Promise<StampResult> {
-  const row = await getSubmission(db, input.submissionId);
-  const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id=?').bind(row.id).first();
-  if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
-   if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');
-   if(!env)throw new HttpError(503,'visibility_sync_pending');
-   await finalizeManagedReview(env,row.id,'stamp');
-   const count=await db.prepare("SELECT count(*) n FROM review_stamps WHERE submission_id=? AND verdict='approve'").bind(row.id).first<{n:number}>();
-   return {submission:await getSubmission(db,row.id),cardStatus:'approved',approvals:count?.n??0,required:STAMPS_REQUIRED[row.kind]};
-  }
+export interface DecisionInput { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown; suggestions?: unknown }
+/** 兩段式定案附帶的資訊（review-two-stage.ts 組）：寫進同一筆蓋章事件，並決定快照保留多久 */
+export interface FinalizeInfo { source: string; aiSuggestionId: string | null; aiNoteTypes: string[]; aiNote: string; retainMs: number }
+/** 定案後快照預設保留 7 天（給審核員複核與仲裁）；與 AI 不一致的由兩段式定案改成 14 天 */
+export const RETAIN_MS = 7 * 86_400_000;
+const retainStatement = (db: D1Database, submissionId: string, now: number, retainMs: number) =>
+  db.prepare("INSERT OR REPLACE INTO review_snapshot_retention (submission_id, decided_at, expires_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM review_snapshots WHERE submission_id=?)")
+    .bind(submissionId, now, now + retainMs, submissionId);
 
+/** 定案前的守門（盲審判斷也用同一套）：待審、沒冷凍、沒不受理、自己領著、還沒蓋過章。 */
+export async function guardDecision(db: D1Database, row: SubmissionRow, input: DecisionInput): Promise<void> {
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   // 冷凍中誰都不能定案（資料庫的 trigger 也會擋）。放在領取檢查前：冷凍的單不該被說成「請先領取」
   if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_held");
@@ -402,7 +398,10 @@ export async function stamp(
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
-  if (row.reopen_of) return stampReopen(db, row, input, env);
+}
+
+/** 決定內容的規則（盲審判斷也用同一套）：字數、說明長度、駁回理由、標記、改進建議。 */
+export async function normalizeDecision(db: D1Database, row: SubmissionRow, input: DecisionInput) {
   if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
@@ -419,6 +418,27 @@ export async function stamp(
   }
   const coaching = rejection ? input.coaching === true : false;
 
+  return { note, rejection, marks, suggestions, coaching };
+}
+
+export async function stamp(
+  db: D1Database,
+  input: DecisionInput & { final?: FinalizeInfo },
+  env?:Env,
+): Promise<StampResult> {
+  const row = await getSubmission(db, input.submissionId);
+  const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id=?').bind(row.id).first();
+  if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
+   if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');
+   if(!env)throw new HttpError(503,'visibility_sync_pending');
+   await finalizeManagedReview(env,row.id,'stamp');
+   const count=await db.prepare("SELECT count(*) n FROM review_stamps WHERE submission_id=? AND verdict='approve'").bind(row.id).first<{n:number}>();
+   return {submission:await getSubmission(db,row.id),cardStatus:'approved',approvals:count?.n??0,required:STAMPS_REQUIRED[row.kind]};
+  }
+
+  await guardDecision(db, row, input);
+  if (row.reopen_of) return stampReopen(db, row, input, env);
+  const { note, rejection, marks, suggestions, coaching } = await normalizeDecision(db, row, input);
   const required = STAMPS_REQUIRED[row.kind];
   const writes: D1PreparedStatement[] = [
     db
@@ -431,6 +451,7 @@ export async function stamp(
       from: "pending", actorKind: "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
       reasons: rejection?.reasons ?? null, reasonVersion: rejection ? REVIEW_REASON_VERSION : null, coaching: rejection ? coaching : null,
       claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
+      finalSource: input.final?.source ?? null, aiSuggestionId: input.final?.aiSuggestionId ?? null, aiNoteTypes: input.final?.aiNoteTypes ?? null, aiNote: input.final?.aiNote ?? null,
       ...(suggestions.length ? { reasons: suggestions, reasonVersion: REVIEW_REASON_VERSION, source: "suggestions" } : {}),
     }),
     // 改進建議要在狀態變成通過之前寫好：通知的 trigger 在那一刻讀它（託管作品要等同步完成才變）
@@ -450,7 +471,8 @@ export async function stamp(
       db.prepare("UPDATE review_submissions SET status = 'rejected', decided_at = ?, note = ?, reject_reasons = ?, reason_version = ?, reject_coaching = ? WHERE id = ?")
         .bind(input.now, note, JSON.stringify(rejection!.reasons), REVIEW_REASON_VERSION, coaching ? 1 : 0, row.id),
       db.prepare("UPDATE cards SET status = 'rejected' WHERE id = ? AND approved_version_id IS NULL").bind(row.card_id),
-      dropSnapshotStatement(db, row.id),
+      // 定案後快照保留一段時間給審核員複核與仲裁（owner 2026-11-24），到期由排程刪（purgeRetainedSnapshots）
+      retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS),
     );
   } else if (approvals >= required && managed) {
     writes.push(db.prepare('INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) VALUES(?,?)').bind(row.id,input.now));
@@ -459,8 +481,8 @@ export async function stamp(
     cardStatus = "approved";
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
     writes.push(auditStmtIfChanged(db, { subjectKind:'card_reward', subjectId:row.id, actorMemberId:null, actorKind:'system', action:'approval', after:{path:'stamp',cardId:Number(row.card_id)}, operationId:crypto.randomUUID(), now:input.now }));
-    // 定案就刪快照：本站不留任何卡片的私有設定
-    writes.push(dropSnapshotStatement(db, row.id));
+    // 快照保留一段時間給審核員複核與仲裁（owner 2026-11-24），到期由排程刪；本站不長期留卡片的私有設定
+    writes.push(retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS));
     if (row.kind === "first") {
       // 上榜時間＝卡片第一次過審、真的出現在榜上的那一刻（owner 2026-09-07：時間是卡片上榜的那一刻）。
       // 以前只在登記時寫一次：昨天送審、今天才過審的卡，上榜時間停在昨天，日榜的 24 小時窗口
@@ -708,4 +730,22 @@ async function rejectReopen(
   await bumpOp(db, "review_reopen", "reject", "success");
   const card = await db.prepare("SELECT status FROM cards WHERE id = ?").bind(row.card_id).first<{ status: CardStatus }>();
   return { submission: await getSubmission(db, row.id), cardStatus: card?.status ?? "rejected", approvals: 0, required: STAMPS_REQUIRED[row.kind] };
+}
+
+/** 刪掉保留期已過的審核快照（排程呼叫）。一次最多 200 張，回傳刪了幾張。 */
+export async function purgeRetainedSnapshots(db: D1Database, now: number): Promise<number> {
+  const due = await db.prepare("SELECT submission_id FROM review_snapshot_retention WHERE expires_at <= ? ORDER BY expires_at LIMIT 200").bind(now).all<{ submission_id: string }>();
+  if (!due.results.length) return 0;
+  const ids = JSON.stringify(due.results.map((r) => r.submission_id));
+  await db.batch([
+    db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT value FROM json_each(?))").bind(ids),
+    db.prepare("DELETE FROM review_snapshot_retention WHERE submission_id IN (SELECT value FROM json_each(?))").bind(ids),
+  ]);
+  return due.results.length;
+}
+
+/** 這張已定案的單，快照還在保留期內嗎（審核員回頭複核、仲裁讀完整內容用） */
+export async function retainedUntil(db: D1Database, submissionId: string, now: number): Promise<number | null> {
+  const row = await db.prepare("SELECT r.expires_at FROM review_snapshot_retention r JOIN review_snapshots s ON s.submission_id=r.submission_id WHERE r.submission_id=? AND r.expires_at>?").bind(submissionId, now).first<{ expires_at: number }>();
+  return row?.expires_at ?? null;
 }

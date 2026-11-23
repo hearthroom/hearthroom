@@ -116,6 +116,7 @@ import {
 import { authorCards, reviewAuthor, submissionType } from "./review-author";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
+import { purgeRetainedSnapshots, retainedUntil } from "./review";
 import { originalityReport } from "./originality";
 import { dropBatch, dropSubmission, groupItems, groupSubmissionIds, isDropped, listDropped, restoreBatch, restoreSubmission, type DroppedFilter, type GroupScope } from "./review-drop";
 import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor, revokeAuthorMark } from "./review-profile";
@@ -131,6 +132,8 @@ import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { reviewAiRoutes } from "./review-ai-routes";
+import { aiStateOf, blindOf, finalize as finalizeTwoStage, recordBlind } from "./review-two-stage";
+import { revealEventStatement } from "./review-ai";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
@@ -1973,18 +1976,29 @@ app.post("/v1/review/:id/release", async (c) => {
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown; finalSource?: unknown; aiNoteTypes?: unknown; aiNote?: unknown };
+  if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
+  const submissionId = c.req.param("id");
+  // 兩段式決定（owner 2026-11-24）：送過盲審的人要說明定案從哪來（用我的／用 AI 的／修改後／沒等 AI）；
+  // 沒送盲審的舊頁面照舊直接蓋章
+  const twoStage = body.finalSource !== undefined || !!(await blindOf(c.env.DB, submissionId, member.id));
+  if (twoStage && body.finalSource === undefined) throw new HttpError(409, "finalize_with_source");
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
-  if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
+  if (!verdict && !(twoStage && body.finalSource !== "modified")) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
   // 駁回要理由代碼（至少一個，「其他」要補充）；只送說明的舊頁面記成「其他」。規則見 normalizeRejectReasons
   // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
   if (noteText.trim().length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
-  if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions },c.env)
-    .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", verdict, error.status === 409 ? "conflict" : "denied"); throw error; });
-  await bumpOp(c.env.DB, "review_stamp", verdict, "success");
-  note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
+  const decision = verdict ? { verdict: verdict as "approve" | "reject", note: noteText, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions } : null;
+  const metricVerdict = (verdict ?? "approve") as "approve" | "reject";
+  const result = await (twoStage
+    ? finalizeTwoStage(c.env.DB, c.env, { submissionId, memberId: member.id, now: Date.now(), generation: body.generation, source: body.finalSource, decision, aiNoteTypes: body.aiNoteTypes, aiNote: body.aiNote })
+        .then(async (r) => { await bumpOp(c.env.DB, "review_two_stage", "final", r.finalSource); return r; })
+    : stampSubmission(c.env.DB, { submissionId, memberId: member.id, verdict: verdict!, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions },c.env))
+    .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", metricVerdict, error.status === 409 ? "conflict" : "denied"); throw error; });
+  const finalVerdict = result.submission.status === "rejected" ? "reject" : "approve";
+  await bumpOp(c.env.DB, "review_stamp", finalVerdict, "success");
+  note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: finalVerdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
   // 過審操作已透過服務身分發放；這裡只讀結果，失敗由專用排程重試。
   const paid = result.submission.status === "approved" ? await rewardOnApproval(c, member.id, Number(result.submission.card_id)) : { reward: null };
   queuePush(c);
@@ -1995,6 +2009,29 @@ app.post("/v1/review/:id/stamp", async (c) => {
     stamps: { approve: result.approvals, required: result.required },
     ...paid,
   });
+});
+
+/**
+ * 兩段式決定第一步：盲審判斷（owner 2026-11-24）。檢查跟蓋章一樣，但只記錄、不改送審狀態；
+ * 回應直接帶 AI 的判斷（已判／交人／還沒判）。之後用 /stamp 帶 finalSource 定案。
+ */
+app.post("/v1/review/:id/blind", async (c) => {
+  const member = await requireReviewer(c);
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?: unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown };
+  const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
+  if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
+  if (typeof body.generation !== "string" || !body.generation) throw new HttpError(409, "claim changed");
+  const submissionId = c.req.param("id");
+  try {
+    const blind = await recordBlind(c.env.DB, { submissionId, memberId: member.id, verdict, note: typeof body.note === "string" ? body.note : "", now: Date.now(), generation: body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions });
+    await bumpOp(c.env.DB, "review_two_stage", "blind", "success");
+    const ai = await aiStateOf(c.env.DB, submissionId);
+    if (ai.suggestion) await revealEventStatement(c.env.DB, { submissionId, cardId: Number((await getSubmission(c.env.DB, submissionId)).card_id), memberId: member.id, now: Date.now() }).run();
+    return c.json({ blind, ai }, 200, { "Cache-Control": "private, no-store" });
+  } catch (error) {
+    if (error instanceof HttpError) await bumpOp(c.env.DB, "review_two_stage", "blind", error.status === 409 ? "conflict" : "denied");
+    throw error;
+  }
 });
 
 /**
@@ -2227,8 +2264,10 @@ app.get("/v1/review/:id/timeline", async (c) => {
 app.get("/v1/review/:id/detail", async (c) => {
   const { member, s, stampedByMe, droppedNow } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
-  // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後就不再讀（只給公開資料）。
-  if (detail?.slim) detail = s.status === 'pending' ? await upstream.readSealedForReview(c.env, s.source_role_id, s.provider as ProviderId) : null;
+  // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後只在保留期內讀（owner 2026-11-24：
+  // 審核員要能回頭複核與仲裁；7 天，與 AI 不一致未仲裁最長 14 天），過期只給公開資料
+  const retainUntil = s.status === 'pending' ? null : await retainedUntil(c.env.DB, s.id, Date.now());
+  if (detail?.slim) detail = s.status === 'pending' || retainUntil ? await upstream.readSealedForReview(c.env, s.source_role_id, s.provider as ProviderId).catch((e) => { if (s.status === 'pending') throw e; return null; }) : null;
   if (!detail && s.status !== 'pending') {
     // 定案時快照已刪（本站不留私有設定）：回頭看的審核人只拿得到社群登記的公開資料。
     const row = await getCard(c.env.DB, String(s.card_id));
@@ -2303,6 +2342,8 @@ app.get("/v1/review/:id/detail", async (c) => {
       features: await c.env.DB.prepare("SELECT features, after_drop AS afterDrop FROM review_submission_features WHERE submission_id=?").bind(s.id).first<{ features: string; afterDrop: number }>()
         .then((f) => (f ? { ...(JSON.parse(f.features) as Record<string, unknown>), afterDrop: !!f.afterDrop } : null)),
       rejectReasons: s.status === "rejected" ? parseReviewReasons(s.reject_reasons) : [],
+      // 定案後的保留期（到期時間）；過期或讀不到時 null，頁面顯示「內容已過保留期」
+      retainUntil,
       rejectCoaching: s.status === "rejected" ? !!s.reject_coaching : false,
       detail,
     },
@@ -2905,6 +2946,10 @@ export default {
     }
     if (event.cron === '*/5 * * * *') {
       run(cardRewardMaintenance(cronEnv).catch(() => { console.warn('Card reward recovery unavailable'); }));
+      // 定案後審核快照的保留期到了就刪（7 天；與 AI 不一致未仲裁最長 14 天）
+      run(purgeRetainedSnapshots(cronEnv.DB, event.scheduledTime)
+        .then((n) => (n ? bumpOp(cronEnv.DB, 'review_retention', 'purge', 'deleted', n) : undefined))
+        .catch(async () => { console.warn('Review snapshot retention purge unavailable'); await bumpOp(cronEnv.DB, 'review_retention', 'purge', 'error'); }));
       finish();
       return;
     }

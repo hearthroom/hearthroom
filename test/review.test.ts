@@ -5,7 +5,7 @@ import worker from "../src/index";
 import { ratingBody,
   bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, sealedReads, settingsReads,
 } from "./helpers";
-import { CLAIM_TTL_MS } from "../src/review";
+import { purgeRetainedSnapshots, CLAIM_TTL_MS } from "../src/review";
 
 // 審核開著時，提交＝本站用作者的 token 讀一次整份設定存成快照＋排隊；審核人領、蓋章、上榜；
 // 修改草稿後須明確送審新版本；公開版保留到新版本核准。
@@ -150,7 +150,11 @@ describe("審核佇列", () => {
     expect(first).toMatchObject({ status: "approved", cardStatus: "approved", stamps: { approve: 1, required: 1 } });
     expect(await board()).toHaveLength(1);
     expect(await cardStatus("role-1")).toMatchObject({ status: "approved", reviewed_hash: expect.stringMatching(/^version:/) });
-    // 上榜＝定案：快照刪掉，本站不留私有設定
+    // 上榜＝定案：快照保留 7 天給審核員複核與仲裁（owner 2026-11-24），到期由排程刪掉，本站不長期留私有設定
+    expect(await snapshots()).toBe(1);
+    const kept = await env.DB.prepare("SELECT decided_at, expires_at FROM review_snapshot_retention WHERE submission_id=?").bind(id).first<{ decided_at: number; expires_at: number }>();
+    expect(kept!.expires_at - kept!.decided_at).toBe(7 * 86_400_000);
+    expect(await purgeRetainedSnapshots(env.DB, kept!.expires_at)).toBe(1);
     expect(await snapshots()).toBe(0);
     expect((await queue("rev-a")).body.items).toHaveLength(0);
     // 定案後不能再領、再蓋
@@ -221,9 +225,16 @@ describe("審核佇列", () => {
 
     await act(id, "claim", "rev-a");
     expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(200);
+    // 保留期內：蓋章人回頭看得到完整內容（複核、仲裁用）
+    const retained = (await (await detail("rev-a")).json()) as any;
+    expect(retained.retainUntil).toBeGreaterThan(Date.now());
+    expect(retained.detail.closed).toBeUndefined();
+    // 保留期過了：只剩公開資料
+    await purgeRetainedSnapshots(env.DB, Date.now() + 8 * 86_400_000);
     const closed = await detail("rev-a");
     expect(closed.status).toBe(200);
     const body = (await closed.json()) as any;
+    expect(body.retainUntil).toBeNull();
     expect(body.submission).toMatchObject({ status: "approved", stampedByMe: true, claimedByMe: false });
     expect(body.submission.stamps).toHaveLength(1);
     expect(body.detail).toMatchObject({ partial: true, closed: true });
@@ -291,9 +302,11 @@ describe("審核佇列", () => {
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
     // 審核頁不再回頭問供應商：快照是唯一來源
     expect(settingsReads).toHaveLength(2);
-    // 駁回即定案：快照刪掉
+    // 駁回即定案：快照一樣只保留 7 天
     await act(id, "claim", "rev-a");
     expect((await act(id, "stamp", "rev-a", { verdict: "reject", note: "不行" })).status).toBe(200);
+    expect(await snapshots()).toBe(1);
+    await purgeRetainedSnapshots(env.DB, Date.now() + 8 * 86_400_000);
     expect(await snapshots()).toBe(0);
   });
 
