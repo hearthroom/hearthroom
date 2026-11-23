@@ -110,6 +110,8 @@ async function pickTarget(target: Target, e: MouseEvent) {
     await navigator.clipboard.writeText(props.url);
   } catch {
     track("share", { detail: "share_manual", subject: props.subject, ok: false });
+    // 連結就攤在面前讓人自己複製：一樣是產生了分享連結（新手七日「分享一張卡」要算到）
+    void noteShareLinkCreated(props.subject);
     close();
     await confirmDialog({ title: t("card.share"), message: t("card.copyLink"), detail: props.url, single: true });
     return;
@@ -178,6 +180,8 @@ async function copy() {
     resetCopied = setTimeout(() => { copied.value = false; close(); }, 1200);
   } catch {
     track("share", { detail: "share_manual", subject: props.subject, ok: false });
+    // 連結就攤在面前讓人自己複製：一樣是產生了分享連結（新手七日「分享一張卡」要算到）
+    void noteShareLinkCreated(props.subject);
     close();
     await confirmDialog({ title: t("card.share"), message: t("card.copyLink"), detail: props.url, single: true });
   }

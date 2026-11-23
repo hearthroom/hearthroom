@@ -1,9 +1,9 @@
 /**
  * 簽到與任務的狀態：簽到頁、「我的」頁入口卡、首頁 chip、帳號選單的點都讀同一份面板。
- * 面板只在需要時讀（進簽到頁、回到分頁、登入後一次），不輪詢。
+ * 面板只在需要時讀（進簽到頁、回到分頁、登入後一次；首頁的新手卡與桌寵進頁與切回分頁時讀過久就重讀），不輪詢。
  */
 import { defineStore } from "pinia";
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   checkin as postCheckin, claimNewcomer as postNewcomer, claimTask as postTask, fetchPanel, fetchPlan, forgetCurrentPlan, isRewardsUnauthorized, makeup as postMakeup,
   RewardsError, withRewardsToken, type CheckinResponse, type ClaimResult, type RewardPlan, type RewardsPanel, type RewardTask,
@@ -82,6 +82,19 @@ export const useCheckin = defineStore("checkin", () => {
     })();
     return inflight;
   }
+
+  /**
+   * 讀過的面板放超過 maxAgeMs 才重讀；還沒讀過、獎勵沒開就不動（第一次讀由帳號選單負責）。
+   * 首頁用：玩家在卡片頁分享、留言之後點回首頁，新手卡要看得到「已完成・領取」，不能停在進站時那一份。
+   */
+  function refresh(maxAgeMs = 15_000): Promise<void> {
+    if (!panel.value || disabled.value) return Promise.resolve();
+    if (inflight) return inflight;
+    if (Date.now() - fetchedAt.value < maxAgeMs) return Promise.resolve();
+    return load();
+  }
+  /** 剛做了一件可能完成目標的事（產生分享連結）：下次 refresh 不管多久以前讀的都重讀 */
+  function markStale() { fetchedAt.value = 0; }
 
   /**
    * 簽到：冪等鍵以業務日為範圍，重新整理或網路斷掉後再按一次會拿回同一個結果。
@@ -165,5 +178,13 @@ export const useCheckin = defineStore("checkin", () => {
     await Promise.all([load(), session.refreshWallet?.()]);
   }
 
-  return { panel, plan, fetchedAt, loading, error, disabled, load, settle, ensurePlan, checkin, makeup, claimTask, claimNewcomer, noteUnauthorized, claimableTasks, canCheckIn, reset };
+  return { panel, plan, fetchedAt, loading, error, disabled, load, refresh, markStale, settle, ensurePlan, checkin, makeup, claimTask, claimNewcomer, noteUnauthorized, claimableTasks, canCheckIn, reset };
 });
+
+/** 首頁上讀面板的元件用：掛上時與切回這個分頁時，面板讀過久就重讀（簽到頁另有自己的重讀） */
+export function useCheckinFreshOnShow(): void {
+  const store = useCheckin();
+  const onVisible = () => { if (document.visibilityState === "visible") void store.refresh(); };
+  onMounted(() => { void store.refresh(); document.addEventListener("visibilitychange", onVisible); });
+  onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisible));
+}
