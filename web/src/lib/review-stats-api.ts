@@ -17,7 +17,10 @@ export interface ReviewStats {
   specVersion: number;
   generatedAt: number;
   weeks: number;
-  window: { start: number; end: number; weekStarts: string[] };
+  /** effectiveStart＝max(窗口起點, V2 開始)，只給到 UTC 日 */
+  window: { start: number; end: number; effectiveStart: number; weekStarts: string[] };
+  /** 再送（滿 14 天）與不受理（滿 7 天）算到哪一天為止（左閉右開）；之後的週是量不到 */
+  matured: { resubmit: number; dropOutcome: number };
   baseline: { start: number; end: number; weekStarts: string[] };
   v2StartedAt: number;
   v2Recorded: boolean;

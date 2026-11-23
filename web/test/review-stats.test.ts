@@ -41,7 +41,8 @@ const SUP = { status: "suppressed" } as const;
 const UNM = { status: "unmeasured" } as const;
 const stats = (extra: Record<string, unknown> = {}) => ({
   specVersion: 1, generatedAt: Date.UTC(2026, 11, 30, 4), weeks: 4,
-  window: { start: Date.UTC(2026, 10, 30), end: Date.UTC(2026, 11, 28), weekStarts: [] },
+  window: { start: Date.UTC(2026, 10, 30), end: Date.UTC(2026, 11, 28), effectiveStart: Date.UTC(2026, 10, 30), weekStarts: [] },
+  matured: { resubmit: Date.UTC(2026, 11, 14), dropOutcome: Date.UTC(2026, 11, 21) },
   baseline: { start: Date.UTC(2026, 9, 26), end: Date.UTC(2026, 10, 23, 6, 27), weekStarts: [] },
   v2StartedAt: Date.UTC(2026, 10, 23, 6, 27), v2Recorded: true, empty: false, thresholds: { rows: 10, authors: 5 },
   cells: {

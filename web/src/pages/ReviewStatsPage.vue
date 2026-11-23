@@ -85,8 +85,8 @@ const duration = (ms: number | null | undefined) => (ms == null ? DASH : ms < 48
 const utcDay = (ms: number) => new Intl.DateTimeFormat(loc.value, { timeZone: 'UTC', dateStyle: 'medium' }).format(ms);
 const localDay = (ms: number) => new Intl.DateTimeFormat(loc.value, { dateStyle: 'medium' }).format(ms);
 const asOf = computed(() => (stats.value ? new Intl.DateTimeFormat(loc.value, { dateStyle: 'medium', timeStyle: 'short' }).format(stats.value.generatedAt) : ''));
-/** 窗口右端是開區間：顯示最後一天 */
-const windowText = computed(() => (stats.value ? t('reviewStats.window', { start: utcDay(stats.value.window.start), end: utcDay(stats.value.window.end - DAY) }) : ''));
+/** 從 V2 開始（或窗口起點）到窗口最後一天：右端是開區間 */
+const windowText = computed(() => (stats.value ? t('reviewStats.window', { start: utcDay(stats.value.window.effectiveStart), end: utcDay(stats.value.window.end - DAY) }) : ''));
 
 // ---- 格子 ----
 const blank: StatCell = { status: 'unmeasured' };
