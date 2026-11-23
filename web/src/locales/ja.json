@@ -5916,5 +5916,6 @@
   "reviewV2.author.mineSuggestLine": "改善の提案が{n}件あります：{reasons}",
   "reviewV2.author.viewSuggest": "改善の提案を見る",
   "reviewV2.timeline.event.approve_suggestions": "承認（提案あり）",
-  "reviewV2.mark.basis.suggestions": "改善の提案つき承認"
+  "reviewV2.mark.basis.suggestions": "改善の提案つき承認",
+  "reviewV2.author.suggestPoint": "気になった点"
 }

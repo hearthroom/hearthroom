@@ -5916,5 +5916,6 @@
   "reviewV2.author.mineSuggestLine": "有 {n} 項改進建議：{reasons}",
   "reviewV2.author.viewSuggest": "查看改進建議",
   "reviewV2.timeline.event.approve_suggestions": "通過（附建議）",
-  "reviewV2.mark.basis.suggestions": "收過改進建議"
+  "reviewV2.mark.basis.suggestions": "收過改進建議",
+  "reviewV2.author.suggestPoint": "目前情況"
 }

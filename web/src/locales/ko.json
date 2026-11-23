@@ -5916,5 +5916,6 @@
   "reviewV2.author.mineSuggestLine": "개선 제안 {n}건: {reasons}",
   "reviewV2.author.viewSuggest": "개선 제안 보기",
   "reviewV2.timeline.event.approve_suggestions": "승인(제안 포함)",
-  "reviewV2.mark.basis.suggestions": "개선 제안과 함께 승인"
+  "reviewV2.mark.basis.suggestions": "개선 제안과 함께 승인",
+  "reviewV2.author.suggestPoint": "눈여겨본 점"
 }
