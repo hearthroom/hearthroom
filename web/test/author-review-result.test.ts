@@ -69,6 +69,51 @@ it("coaching uses the fuller fix and adds before and after where the reason has 
   expect(el.querySelector("[data-reviewer-note]")?.textContent).toContain("角色背景再補一點");
 });
 
+it("no reply hook adds the three ways to offer choices after its example; other reasons do not", async () => {
+  const el = await mount(result({ reasons: ["opening.no_reply_hook", "opening.too_short"] }));
+  const hook = card(el, "opening.no_reply_hook")!;
+  expect(hook.querySelector("[data-fix]")?.textContent).toBe(t("review.reasons.opening.no_reply_hook.fix"));
+  const options = hook.querySelector("[data-reason-options]")!;
+  expect(options.querySelector("dt")?.textContent).toBe(t("review.reasons.opening.no_reply_hook.options.title"));
+  // 範例之後：dl 裡的順序是 問題、怎麼改、範例、三種做法
+  const parts = [...hook.querySelectorAll(".reason-card__parts > div")];
+  expect(parts.indexOf(options)).toBe(3);
+  expect([...options.querySelectorAll("[data-option]")].map((n) => n.getAttribute("data-option"))).toEqual(["field", "text", "tag"]);
+  for (const way of ["field", "text", "tag"]) {
+    const item = options.querySelector(`[data-option="${way}"]`)!;
+    expect(item.textContent).toContain(t(`review.reasons.opening.no_reply_hook.options.${way}.name`));
+    expect(item.textContent).toContain(t(`review.reasons.opening.no_reply_hook.options.${way}.desc`));
+  }
+  // [choices] 的範例：等寬區塊，標記照原樣、兩行選項夾在中間
+  const code = options.querySelector("[data-choices-example]")!;
+  expect(code.tagName).toBe("PRE");
+  expect(code.textContent).toBe("[choices]\n一樓靠窗\n頂樓\n[/choices]");
+  expect(options.querySelectorAll("pre")).toHaveLength(1);
+  expect(options.querySelector('[data-option="text"]')?.textContent).toContain(t("review.reasons.opening.no_reply_hook.options.text.example"));
+  // 一般版沒有改前改後
+  expect(hook.querySelector("[data-after]")).toBeNull();
+  expect(hook.querySelector("[data-after-choices]")).toBeNull();
+  expect(card(el, "opening.too_short")!.querySelector("[data-reason-options]")).toBeNull();
+});
+
+it("coaching on no reply hook shows before, after with a question and after with choices, each with its own label", async () => {
+  const el = await mount(result({ coaching: true, reasons: ["opening.no_reply_hook", "character.setting_thin"] }));
+  const hook = card(el, "opening.no_reply_hook")!;
+  expect(hook.querySelector("[data-fix]")?.textContent).toBe(t("review.reasons.opening.no_reply_hook.coachFix"));
+  expect(hook.querySelector("[data-before] dt")?.textContent).toBe(t("reviewV2.author.before"));
+  expect(hook.querySelector("[data-after] dt")?.textContent).toBe("改後（問題）");
+  expect(hook.querySelector("[data-after] dd")?.textContent).toBe(t("review.reasons.opening.no_reply_hook.after"));
+  expect(hook.querySelector("[data-after-choices] dt")?.textContent).toBe("改後（選項）");
+  expect(hook.querySelector("[data-after-choices] dd")?.textContent).toBe(t("review.reasons.opening.no_reply_hook.afterChoices"));
+  // 輔導版也有三種做法
+  expect(hook.querySelector("[data-reason-options] [data-choices-example]")?.tagName).toBe("PRE");
+  // 其他代碼的小標不變，也沒有第二個改後
+  const setting = card(el, "character.setting_thin")!;
+  expect(setting.querySelector("[data-after] dt")?.textContent).toBe(t("reviewV2.author.after"));
+  expect(setting.querySelector("[data-after-choices]")).toBeNull();
+  expect(setting.querySelector("[data-reason-options]")).toBeNull();
+});
+
 it("an old rejection without reason codes keeps the reviewer note layout", async () => {
   const el = await mount(result({ note: "開場太短，請補一段。" }));
   expect(el.querySelector("[data-guided]")).toBeNull();

@@ -2,6 +2,7 @@
 /**
  * 駁回理由選擇器（審卡 V2，ui.md §2.3）：四組（開場白、設定、分級、其他），可多選、至少一項。
  * 勾選時下方即時預覽「作者會看到」：每項的怎麼改與範例（輔導時是完整改法與改前改後），
+ * 有「給選項的三種做法」的代碼（沒有接話點）兩種版本都在最後附上那一塊，
  * 有開場白理由時多一行「並附上好開場的三個要素」。審核員不必再手打改法。
  *
  * locked：一定要帶的理由（有效字數未達標時的「有效字數不足」），勾著、不能取消。
@@ -9,7 +10,8 @@
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { REVIEW_REASON_GROUPS, REVIEW_REASONS, hasOpeningReason, reasonKey, type ReviewReasonGroup } from "@/lib/review-reasons";
+import { REVIEW_REASON_GROUPS, REVIEW_REASONS, hasOpeningReason, hasOptions, reasonKey, reasonOptionKey, type ReviewReasonGroup } from "@/lib/review-reasons";
+import ReviewReasonOptions from "@/components/ReviewReasonOptions.vue";
 
 const props = defineProps<{
   modelValue: string[]; locked: string[]; disabled?: boolean;
@@ -66,9 +68,14 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
         <p>{{ fixOf(code) }}</p>
         <template v-if="coaching && field(code, 'before')">
           <p class="preview__ex"><span class="preview__label">{{ $t("reviewV2.author.before") }}</span>{{ field(code, "before") }}</p>
-          <p class="preview__ex"><span class="preview__label">{{ $t("reviewV2.author.after") }}</span>{{ field(code, "after") }}</p>
+          <p class="preview__ex" data-after><span class="preview__label">{{ field(code, "afterLabel") || $t("reviewV2.author.after") }}</span>{{ field(code, "after") }}</p>
+          <p v-if="field(code, 'afterChoices')" class="preview__ex" data-after-choices><span class="preview__label">{{ field(code, "afterChoicesLabel") }}</span>{{ field(code, "afterChoices") }}</p>
         </template>
         <p v-else-if="field(code, 'example')" class="preview__ex"><span class="preview__label">{{ $t("reviewV2.author.example") }}</span>{{ field(code, "example") }}</p>
+        <div v-if="hasOptions(te, code)" class="preview__options" data-reason-options>
+          <p class="preview__label">{{ $t(reasonOptionKey(code, "title")) }}</p>
+          <ReviewReasonOptions :code="code" />
+        </div>
       </article>
       <p v-if="hasOpeningReason(picked)" class="subtle">{{ $t("reviewV2.decide.previewOpening") }}</p>
     </section>
@@ -98,10 +105,12 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
 .coaching__text { margin: 0; color: var(--text-2); }
 .preview { display: grid; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
 .preview__title { margin: 0; font-size: 14px; }
-.preview__item { display: grid; gap: var(--s-1); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.preview__item { display: grid; gap: var(--s-1); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
+.preview__options { display: grid; gap: var(--s-2); min-width: 0; margin-top: var(--s-1); }
 .preview__item p { margin: 0; }
 .preview__name { font-weight: 600; }
 .preview__ex { color: var(--text-2); }
+.preview__ex[data-after-choices] { white-space: pre-wrap; }
 .preview__label { font-weight: 600; margin-inline-end: var(--s-2); color: var(--text); }
 .picker:lang(ko) { word-break: keep-all; }
 .picker:lang(ja) { word-break: auto-phrase; }

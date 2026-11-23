@@ -7,7 +7,8 @@ import {useSession} from '@/lib/session';
 import {useLocalePath} from '@/lib/use-locale';
 import {dateTime} from '@/lib/format';
 import {pageTitle} from '@/lib/i18n';
-import {REVIEW_REASONS,hasField,hasOpeningReason,reasonKey} from '@/lib/review-reasons';
+import {REVIEW_REASONS,hasField,hasOpeningReason,hasOptions,reasonKey,reasonOptionKey} from '@/lib/review-reasons';
+import ReviewReasonOptions from '@/components/ReviewReasonOptions.vue';
 import {REVIEW_REQUIRED_CHARACTERS} from '../../../shared/review-length';
 import {platformPath} from '@/lib/distribution';
 import type {ProviderId} from '@/lib/provider';
@@ -29,6 +30,8 @@ const has=(code:string,field:Parameters<typeof reasonKey>[1])=>hasField(te,code,
 // 有效字數那一項的「怎麼改」帶門檻字數；其他代碼用不到這個參數
 const say=(code:string,field:Parameters<typeof reasonKey>[1])=>t(reasonKey(code,field),{required:REVIEW_REQUIRED_CHARACTERS});
 const fixField=(code:string)=>coaching.value&&has(code,'coachFix')?'coachFix':'fix';
+// 有兩種改後的代碼（沒有接話點：問題／選項），小標由該代碼自己帶；其他代碼照通用的「改後」
+const afterLabel=(code:string)=>has(code,'afterLabel')?say(code,'afterLabel'):t('reviewV2.author.after');
 async function load(){
  const seq=++sequence;loading.value=true;error.value='';data.value=null;
  try{const token=await session.accessToken();if(!token)throw new Error(t('auth.expired'));
@@ -58,9 +61,11 @@ watch([guided,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(
      <div><dt>{{t('reviewV2.author.problem')}}</dt><dd>{{say(code,'summary')}}</dd></div>
      <div><dt>{{t('reviewV2.author.fix')}}</dt><dd data-fix>{{say(code,fixField(code))}}</dd></div>
      <div v-if="has(code,'example')"><dt>{{t('reviewV2.author.example')}}</dt><dd>{{say(code,'example')}}</dd></div>
+     <div v-if="hasOptions(te,code)" data-reason-options><dt>{{t(reasonOptionKey(code,'title'))}}</dt><dd><ReviewReasonOptions :code="code" /></dd></div>
      <template v-if="coaching&&has(code,'before')&&has(code,'after')">
       <div data-before><dt>{{t('reviewV2.author.before')}}</dt><dd class="quote">{{say(code,'before')}}</dd></div>
-      <div data-after><dt>{{t('reviewV2.author.after')}}</dt><dd class="quote">{{say(code,'after')}}</dd></div>
+      <div data-after><dt>{{afterLabel(code)}}</dt><dd class="quote">{{say(code,'after')}}</dd></div>
+      <div v-if="has(code,'afterChoices')" data-after-choices><dt>{{say(code,'afterChoicesLabel')}}</dt><dd class="quote">{{say(code,'afterChoices')}}</dd></div>
      </template>
     </dl>
    </article>
@@ -99,10 +104,13 @@ h2, h3, p, dl, dd, ul { margin: 0; }
 .result__chip { justify-self: start; cursor: default; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .result__chip:hover, .result__chip:active { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .reason-card { gap: var(--s-3); }
-.reason-card__parts { display: grid; gap: var(--s-3); }
+.reason-card__parts { display: grid; gap: var(--s-3); min-width: 0; }
+.reason-card__parts > div, .reason-card__parts dd { min-width: 0; }
 .reason-card__parts dt { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .reason-card__parts dd { line-height: 1.7; }
 .quote { padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); }
+/* 改後（選項）的編號選項之間在英韓是兩個空白，照原樣保留 */
+[data-after-choices] .quote { white-space: pre-wrap; }
 .elements summary { cursor: pointer; font-size: 16px; font-weight: 600; min-height: var(--h-sm); display: flex; align-items: center; }
 .elements ul { display: grid; gap: var(--s-2); padding-inline-start: var(--s-5); line-height: 1.7; }
 .elements:not([open]) { gap: 0; }

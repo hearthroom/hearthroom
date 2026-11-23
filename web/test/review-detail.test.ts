@@ -863,6 +863,52 @@ it('a new author gets coaching by default; the reviewer can switch it back to th
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({reasons:['character.setting_thin'],coaching:false})));
 });
 
+it('the live preview adds the three ways to offer choices for no reply hook, with the [choices] example in a monospace block',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
+ reason('character.setting_thin')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-reason-preview]')).toBeTruthy());
+ // 其他理由沒有這一塊
+ expect(el.querySelector('[data-reason-preview] [data-reason-options]')).toBeNull();
+ reason('opening.no_reply_hook')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-reason-preview] [data-reason-options]')).toBeTruthy());
+ const preview=el.querySelector('[data-reason-preview]')!;
+ expect(preview.querySelectorAll('[data-reason-options]')).toHaveLength(1);
+ const options=preview.querySelector('[data-reason-options]')!;
+ expect(options.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.options.title'));
+ expect(preview.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.fix'));
+ const code=options.querySelector('[data-choices-example]')!;
+ expect(code.tagName).toBe('PRE');
+ expect(code.textContent).toBe('[choices]\n一樓靠窗\n頂樓\n[/choices]');
+ expect(preview.querySelector('[data-after-choices]')).toBeNull();
+});
+
+it('with coaching, the preview for no reply hook shows before, after (question) and after (choices) and keeps the three ways',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
+ await choose('reject');
+ reason('opening.no_reply_hook')!.click();
+ await vi.waitFor(()=>expect(el.querySelector('[data-reason-preview] [data-after-choices]')).toBeTruthy());
+ reason('character.setting_thin')!.click();
+ await vi.waitFor(()=>expect(el.querySelectorAll('[data-reason-preview] .preview__item')).toHaveLength(2));
+ const items=[...el.querySelectorAll('[data-reason-preview] .preview__item')];
+ const hook=items.find((n)=>n.textContent!.includes(i18n.global.t('review.reasons.opening.no_reply_hook.name')))!;
+ const setting=items.find((n)=>n.textContent!.includes(i18n.global.t('review.reasons.character.setting_thin.name')))!;
+ expect(hook.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.coachFix'));
+ expect(hook.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.before'));
+ expect(hook.querySelector('[data-after] .preview__label')?.textContent).toBe('改後（問題）');
+ expect(hook.querySelector('[data-after]')?.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.after'));
+ expect(hook.querySelector('[data-after-choices] .preview__label')?.textContent).toBe('改後（選項）');
+ expect(hook.querySelector('[data-after-choices]')?.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.afterChoices'));
+ expect(hook.querySelector('[data-reason-options] [data-choices-example]')?.tagName).toBe('PRE');
+ expect(setting.querySelector('[data-after] .preview__label')?.textContent).toBe(i18n.global.t('reviewV2.author.after'));
+ expect(setting.querySelector('[data-after-choices]')).toBeNull();
+ expect(setting.querySelector('[data-reason-options]')).toBeNull();
+});
+
 it('coaching is not offered for authors who are not new',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('stable')});
  await remount();
