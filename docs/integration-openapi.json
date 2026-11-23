@@ -14547,6 +14547,16 @@
                               "null"
                             ],
                             "format": "date-time"
+                          },
+                          "sendTurns": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
+                          },
+                          "maxRoleTurns": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0
                           }
                         }
                       }

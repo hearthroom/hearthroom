@@ -1,0 +1,18 @@
+{
+  "tier": "feature",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "徽章牆新增「累計對話輪數」和「同一張卡深聊」兩組徽章。",
+    "zh-Hans": "徽章墙新增「累计对话轮数」和「同一张卡深聊」两组徽章。",
+    "en": "The badge wall adds two new ladders for total rounds chatted and rounds with a single card.",
+    "ja": "バッジに「会話の合計往復数」と「1 枚のカードとの会話」の 2 系統が加わりました。",
+    "ko": "배지 벽에 누적 대화 횟수와 한 카드와의 대화 횟수 배지가 새로 생겼어요."
+  },
+  "body": {
+    "zh-Hant": "不少徽章換了新名字、多了更高的一檔，留言要 10 個字以上才計入，讚、關注和收藏只算註冊滿 3 天、聊過 3 輪以上的成員，已經拿到的徽章都會保留。",
+    "zh-Hans": "不少徽章换了新名字、多了更高的一档，留言要 10 个字以上才计入，赞、关注和收藏只算注册满 3 天、聊过 3 轮以上的成员，已经拿到的徽章都会保留。",
+    "en": "Many badges have new names and a higher tier, comments need 10+ characters to count, likes, follows and saves count only from members who joined 3+ days ago and chatted 3 rounds, and badges you earned stay.",
+    "ja": "多くのバッジに新しい名前と上の段階が加わり、コメントは 10 文字以上、いいね・フォロー・保存は登録 3 日以上で 3 往復以上会話した人の分だけ数えますが、獲得済みのバッジは残ります。",
+    "ko": "여러 배지에 새 이름과 더 높은 단계가 생겼고, 댓글은 10자 이상이어야 세며, 좋아요·팔로우·저장은 가입한 지 3일이 지나고 3번 이상 대화한 멤버 것만 세지만, 이미 받은 배지는 그대로 유지돼요."
+  }
+}

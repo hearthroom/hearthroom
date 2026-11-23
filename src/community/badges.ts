@@ -22,6 +22,17 @@ export const OWNED_LISTED = `cards c LEFT JOIN member_identities ai ON ai.provid
  WHERE COALESCE(ac.owner_member_id,ai.member_id) IS NOT NULL AND c.status='approved' AND c.board_hidden=0 AND c.public_blocked=0
  AND NOT EXISTS (SELECT 1 FROM work_copies w WHERE w.provider=c.provider AND w.role_id=c.source_role_id)`;
 const OWNER = 'COALESCE(ac.owner_member_id,ai.member_id)';
+/**
+ * 有效互動者（成就第一批，owner 2026-11-23）：按讚、關注、收藏的人要註冊滿 3 天，且在 Harbor 聊過至少 3 輪
+ * （徽章統計寫入的 send_turns），測試帳號不算。第一個 `?` 是 now，所以這幾個指標都是 timed。
+ * ponytail: 同一裝置的多個帳號還沒合併成一人；要合併時改讀 reward_devices。
+ */
+const established=(who:string,now='?')=>`JOIN members em ON em.id=${who} AND em.account_class='normal' AND em.created_at<=${now}-${3*DAY}
+ JOIN badge_qualifications eq ON eq.member_id=${who} AND eq.send_turns>=3`;
+/** 留言：10 個字以上、同一個對象（卡、文章、模組）最多 3 則、每個台北營業日（04:00 換日）最多 5 則 */
+const COMMENT_TARGET="COALESCE(post_id,workshop_id,CAST(card_id AS TEXT))";
+const COUNTED_COMMENT="deleted_at IS NULL AND status='visible' AND length(trim(content))>=10";
+const BUSINESS_DAY="date(created_at/1000+14400,'unixepoch')";
 type Metric = {
  /** value for one member; placeholders are the member id, or `now` then the member id when `timed` */
  one:string;
@@ -41,18 +52,35 @@ export const METRICS:Record<string,Metric>={
   all:"SELECT l.member_id,SUM(x.points) AS value FROM discord_links l JOIN community_xp x ON x.discord_id=l.discord_id WHERE l.state='active' GROUP BY l.member_id"},
  works_listed:{one:`SELECT COUNT(*) FROM ${OWNED_LISTED} AND ${OWNER}=?`,all:`SELECT ${OWNER} AS member_id,COUNT(*) AS value FROM ${OWNED_LISTED} GROUP BY 1`},
  works_featured:{one:`SELECT COUNT(*) FROM ${OWNED_LISTED} AND c.featured_at IS NOT NULL AND ${OWNER}=?`,all:`SELECT ${OWNER} AS member_id,COUNT(*) AS value FROM ${OWNED_LISTED} AND c.featured_at IS NOT NULL GROUP BY 1`},
- favorites_received:{one:`SELECT COUNT(*) FROM member_favorites f WHERE f.card_id IN (SELECT c.id FROM ${OWNED_LISTED} AND ${OWNER}=?)`,
-  all:`SELECT o.member_id,COUNT(*) AS value FROM member_favorites f JOIN (SELECT c.id,${OWNER} AS member_id FROM ${OWNED_LISTED}) o ON o.id=f.card_id GROUP BY o.member_id`},
- followers:{one:'SELECT COUNT(*) FROM member_follows WHERE author_id=?',all:'SELECT author_id AS member_id,COUNT(*) AS value FROM member_follows GROUP BY author_id'},
+  // 從作者自己的卡出發（CROSS JOIN 固定順序）：先掃全部收藏再過濾，作者看一次徽章頁要讀 5.9 萬行（2026-11-23 線上量測）
+ favorites_received:{timed:true,one:`SELECT COUNT(*) FROM (SELECT ? AS now) t CROSS JOIN (SELECT c.id,${OWNER} AS owner FROM ${OWNED_LISTED} AND ${OWNER}=?) o
+  CROSS JOIN member_favorites f ON f.card_id=o.id ${established('f.member_id','t.now')} WHERE f.member_id<>o.owner`,
+  all:`SELECT o.member_id,COUNT(*) AS value FROM (SELECT ? AS now) t CROSS JOIN (SELECT c.id,${OWNER} AS member_id FROM ${OWNED_LISTED}) o
+  CROSS JOIN member_favorites f ON f.card_id=o.id ${established('f.member_id','t.now')} WHERE f.member_id<>o.member_id GROUP BY o.member_id`},
+ followers:{timed:true,one:`SELECT COUNT(*) FROM member_follows f ${established('f.member_id')} WHERE f.author_id=? AND f.member_id<>f.author_id`,
+  all:`SELECT f.author_id AS member_id,COUNT(*) AS value FROM member_follows f ${established('f.member_id')} WHERE f.member_id<>f.author_id GROUP BY f.author_id`},
  follows:{one:'SELECT COUNT(*) FROM member_follows WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_follows GROUP BY member_id'},
  favorites:{one:'SELECT COUNT(*) FROM member_favorites WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_favorites GROUP BY member_id'},
  /** 開過對話的角色數（遊玩頁回報、不驗證），只給「初次見面」用 */
  cards_played:{one:'SELECT COUNT(*) FROM member_conversations WHERE member_id=?',all:'SELECT member_id,COUNT(*) AS value FROM member_conversations GROUP BY member_id'},
  /** Harbor 驗證過的探索角色數：每個角色自己聊滿 10 輪、每天最多計入 10 個（探險家一系列） */
  explored_roles:{one:'SELECT explored_roles FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,explored_roles AS value FROM badge_qualifications WHERE explored_roles>0'},
+ /** Harbor 驗證過的對話輪數與單張卡最多輪數：自己的卡不算，每個營業日最多計入 300 輪 */
+ send_turns:{one:'SELECT send_turns FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,send_turns AS value FROM badge_qualifications WHERE send_turns>0'},
+ max_role_turns:{one:'SELECT max_role_turns FROM badge_qualifications WHERE member_id=?',all:'SELECT member_id,max_role_turns AS value FROM badge_qualifications WHERE max_role_turns>0'},
+ /** 三合君王：同一張卡拿過日、週、月榜第一（清水或綜合都算） */
+ same_card_crown:{progress:false,one:"SELECT COUNT(*) FROM (SELECT card_id FROM rank_awards WHERE member_id=? AND band=1 GROUP BY card_id HAVING COUNT(DISTINCT window)=3)",
+  all:"SELECT member_id,COUNT(*) AS value FROM (SELECT member_id,card_id FROM rank_awards WHERE band=1 GROUP BY member_id,card_id HAVING COUNT(DISTINCT window)=3) GROUP BY member_id"},
  saves:{one:'SELECT COUNT(DISTINCT role_id) FROM card_saves WHERE member_id=?',all:'SELECT member_id,COUNT(DISTINCT role_id) AS value FROM card_saves GROUP BY member_id'},
- comments:{one:'SELECT COUNT(*) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,COUNT(*) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
- likes_received:{one:'SELECT COALESCE(SUM(like_count),0) FROM comments WHERE member_id=? AND deleted_at IS NULL AND status=\'visible\'',all:'SELECT member_id,SUM(like_count) AS value FROM comments WHERE deleted_at IS NULL AND status=\'visible\' GROUP BY member_id'},
+ comments:{one:`SELECT COALESCE(SUM(MIN(n,5)),0) FROM (SELECT COUNT(*) n FROM (SELECT created_at,ROW_NUMBER() OVER (PARTITION BY ${COMMENT_TARGET} ORDER BY created_at,id) k
+  FROM comments WHERE member_id=? AND ${COUNTED_COMMENT}) WHERE k<=3 GROUP BY ${BUSINESS_DAY})`,
+  all:`SELECT member_id,SUM(MIN(n,5)) AS value FROM (SELECT member_id,COUNT(*) n FROM (SELECT member_id,created_at,ROW_NUMBER() OVER (PARTITION BY member_id,${COMMENT_TARGET} ORDER BY created_at,id) k
+  FROM comments WHERE ${COUNTED_COMMENT}) WHERE k<=3 GROUP BY member_id,${BUSINESS_DAY}) GROUP BY member_id`},
+ /** 留言獲讚：自己按的不算，同一個人最多計 3 個，按讚的人要是有效互動者 */
+ likes_received:{timed:true,one:`SELECT COALESCE(SUM(MIN(n,3)),0) FROM (SELECT COUNT(*) n FROM comment_likes l ${established('l.member_id')}
+  JOIN comments c ON c.id=l.comment_id AND c.member_id=? AND c.deleted_at IS NULL AND c.status='visible' WHERE l.member_id<>c.member_id GROUP BY l.member_id)`,
+  all:`SELECT member_id,SUM(MIN(n,3)) AS value FROM (SELECT c.member_id,COUNT(*) n FROM comment_likes l ${established('l.member_id')}
+  JOIN comments c ON c.id=l.comment_id AND c.deleted_at IS NULL AND c.status='visible' WHERE l.member_id<>c.member_id GROUP BY c.member_id,l.member_id) GROUP BY member_id`},
  /** 伯樂：在卡片第一次拿到榜單名次之前就收藏了它（作者自己的卡不算） */
  talent_spotted:{one:`SELECT COUNT(*) FROM member_favorites f JOIN (SELECT card_id,MIN(awarded_at) AS first_at FROM rank_awards GROUP BY card_id) r ON r.card_id=f.card_id
   WHERE f.member_id=? AND f.created_at<r.first_at AND NOT EXISTS(SELECT 1 FROM rank_awards x WHERE x.card_id=f.card_id AND x.member_id=f.member_id)`,

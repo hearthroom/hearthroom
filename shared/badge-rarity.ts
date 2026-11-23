@@ -24,6 +24,11 @@ const BY_KEY: Record<string, BadgeRarity> = {
   player_explorer_100: 'epic', player_explorer_300: 'legendary', player_follows_20: 'rare', player_follows_50: 'epic', player_favorites_100: 'epic',
   player_scout_1: 'rare', player_scout_5: 'epic', player_scout_20: 'legendary', player_rater_50: 'rare',
   server_booster: 'epic',
+  // 成就第一批（2026-11-23）：依實際拿到的比例定檔，見「綺夢成就表·修訂版」
+  player_turns_500: 'rare', player_turns_2500: 'epic', player_turns_10000: 'legendary',
+  player_devoted_150: 'rare', player_devoted_500: 'epic', player_devoted_1500: 'legendary',
+  player_commenter_300: 'legendary', player_liked_500: 'legendary',
+  creator_followers_300: 'legendary', creator_favorited_1000: 'legendary', rank_same_card_crown: 'legendary',
 };
 /** 管理員發的活動、比賽徽章是限時限量的；unique 類別是全服唯一。 */
 const BY_CATEGORY: Record<string, BadgeRarity> = { event: 'epic', contest: 'epic', unique: 'unique' };

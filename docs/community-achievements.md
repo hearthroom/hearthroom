@@ -97,6 +97,27 @@ Discord: the projection already carries every active award key. Only a few top b
 
 Verification: Worker suite (real D1 migrations) covers catalog completeness in five locales, owner-read awarding with progress, one-way persistence, public reads without evaluation, the sweep awarding without a visit, creator ownership/copy/hidden-card rules, social/profile/tenure counters and the five-badge feature limit. Web suite covers unit-aware progress labels, the six-badge guard and category headings. Observability is unchanged: badge routes still emit `hearthroom_community_requests_total{operation="badge_read"|"badge_write"|"badge_admin"}`; the sweep runs inside the existing maintenance job and writes only `community_awards` rows with `source='metric-v1'`, which is the durable readback (`SELECT COUNT(*) FROM community_awards WHERE source='metric-v1'`).
 
+## Achievement batch 1 (migration 0145)
+
+Owner decision 2026-11-23, from the revised achievement table. Existing badges keep their keys, thresholds and awards; seventeen are renamed in five locales and fifteen definitions are added.
+
+| Metric | Counted from | New tiers |
+|---|---|---|
+| `send_turns` | Harbor `sendTurns`: the member's completed send/retry turns with other authors' cards, at most 300 per Taipei business day | 50 / 500 / 2,500 / 10,000 (`player_turns_*`) |
+| `max_role_turns` | Harbor `maxRoleTurns`: the most such turns on one card, each card at most 300 per day | 30 / 150 / 500 / 1,500 (`player_devoted_*`) |
+| `explored_roles` | unchanged | adds 3 (`player_explorer_3`) |
+| `comments` | visible, undeleted comments of at least 10 characters; at most 3 per card, post or mod and 5 per Taipei business day (04:00) | adds 300 |
+| `likes_received` | `comment_likes` from established members, never the commenter, at most 3 per liker | adds 5 and 500 |
+| `followers` | follows from established members, never the author | adds 300 |
+| `favorites_received` | saves on owned listed cards from established members, never the owner | adds 1,000 |
+| `same_card_crown` | owned cards that reached band 1 on a daily, a weekly and a monthly board | 1 (`rank_same_card_crown`, rank category, no credits) |
+
+An established member is a normal account that joined at least three days ago and has `badge_qualifications.send_turns >= 3`. Members from older providers without Harbor turn counts never qualify as likers, followers or savers. Accounts on the same device are not merged yet. The rule change applies to future awards only; the sweep never revokes.
+
+Harbor turn counts arrive through the existing badge statistics refresh (about 54 hours for a full round). Until the Provider with `sendTurns` and `maxRoleTurns` is deployed, the stored counts stay 0 and the like, follow and save filters admit nobody, so deploy Harbor first.
+
+Cost, measured read-only on production D1 on 2026-11-23: the owner wall's favorites count reads about 2,900 rows (previously 2,700) because the query starts from the owner's cards; the hourly sweep reads about 45,000 more rows than before (favorites 58k, comments 14k, likes 4k, followers 3k, the two turn ladders 9k each). MCP is not applicable, as for the rest of the badge wall. Observability is unchanged: awards land as `community_awards` rows with `source='metric-v1'`.
+
 ## Leaderboard honors and pre-launch backfill (migrations 0102–0105, 0128)
 
 Cohort leaderboard honors (`rank_<clean|all>_<day|week|month>_<1|3|10>`, 18 definitions) compare approved non-test Harbor works grouped by immutable first publication (`rank_publications.published_at`) in `Asia/Taipei` day, Monday-week and calendar-month cohorts over each work's completed `24h`, `7d` and `30d` Harbor popularity window (`/open/v1/role/heat/windows` with `complete === true`). SFW (`clean`) excludes `R`-rated works; overall (`all`) includes all eligible public works. Cohorts with fewer than 10 positive-heat works award `#1` (`band = 1`) only; cohorts with at least 10 positive-heat works award `#1` (`band = 1`), `#2–3` (`band = 3`) and `#4–10` (`band = 10`).

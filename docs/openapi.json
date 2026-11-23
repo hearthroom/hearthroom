@@ -19935,6 +19935,18 @@
                             ],
                             "format": "date-time",
                             "description": "When the 500th character counted under exploredRoles; null when fewer than 500."
+                          },
+                          "sendTurns": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0,
+                            "description": "The member's own completed turns (send or retry) with other authors' characters, review plays excluded, counting at most 300 per business day (Asia/Taipei, 04:00 boundary). Older providers omit this field."
+                          },
+                          "maxRoleTurns": {
+                            "type": "integer",
+                            "format": "int64",
+                            "minimum": 0,
+                            "description": "The most such turns with any one character, each character counting at most 300 per business day. Older providers omit this field."
                           }
                         }
                       }
