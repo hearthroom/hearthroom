@@ -1,4 +1,5 @@
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
+import { WEEKLY_LIMIT } from "./quota";
 import { submissionHistory, type SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -23,7 +24,29 @@ export const AI_FEEDBACK = ["ai_right", "ai_wrong", "both_ok"] as const;
 /** 已定案的單，送審後多久內還能讓 AI 讀（試跑用） */
 export const AI_BACKFILL_WINDOW_MS = 7 * 86_400_000;
 
-const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 3, entries: 20, entry: 300, note: 400 };
+const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 6, entries: 20, entry: 300, note: 400, index: 40, rules: 20 };
+
+interface RuleInput { name?: unknown; find?: unknown; replace?: unknown; enabled?: unknown }
+
+/** 顯示規則（正規表示式）在一段文字裡命中幾次。作者寫錯的規則跳過；一段文字最多量 6,000 字。 */
+function ruleHits(rules: RuleInput[], text: string): number {
+  let n = 0;
+  for (const r of rules) {
+    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim()) continue;
+    try { n += (text.slice(0, LIMITS.opening).match(new RegExp(r.find, "g")) ?? []).length; } catch { /* 作者的規則寫錯，略過 */ }
+  }
+  return n;
+}
+
+/** 套用顯示規則後玩家大致看到的字：照規則替換，再去掉標籤與樣式。規則寫錯就略過那一條。 */
+function renderedText(rules: RuleInput[], text: string): string {
+  let out = text.slice(0, LIMITS.opening);
+  for (const r of rules) {
+    if (r.enabled === false || typeof r.find !== "string" || !r.find.trim()) continue;
+    try { out = out.replace(new RegExp(r.find, "g"), typeof r.replace === "string" ? r.replace : ""); } catch { /* 略過 */ }
+  }
+  return pageText(out);
+}
 
 /** 開場網頁（作者資產的 openingPage）只取玩家看得到的字：去掉 script／style 與標籤，留下選項等文字。 */
 export function pageText(html: string): string {
@@ -54,12 +77,17 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
   const asset = (settings.authorAsset ?? {}) as Record<string, unknown>;
   const page = pageText(text(asset.openingPage));
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
-  const entries = (books as { entries?: { name?: unknown; content?: unknown; isEnabled?: unknown }[] }[])
-    .flatMap((b) => (Array.isArray(b?.entries) ? b.entries : []))
+  type Entry = { name?: unknown; content?: unknown; isEnabled?: unknown; isConstant?: unknown; keywords?: unknown };
+  const allEntries = (books as { entries?: Entry[] }[]).flatMap((b) => (Array.isArray(b?.entries) ? b.entries : []));
+  const entries = allEntries
     .filter((e) => e.isEnabled !== false)
-    .map((e) => ({ name: text(e.name), content: text(e.content) }));
+    .map((e) => ({ name: text(e.name), content: text(e.content), constant: e.isConstant === true, keywords: list(e.keywords).length }));
   const setting = text(doc.roleDetailDesc);
   const welcome = text(greetings.welcome);
+  const rules = (Array.isArray(asset.rules) ? asset.rules : []) as RuleInput[];
+  const activeRules = rules.filter((r) => r.enabled !== false && typeof r.find === "string" && r.find.trim());
+  const cardText = setting + welcome + list(greetings.alternates).join("");
+  const welcomeHits = ruleHits(activeRules, welcome);
   const alternates = list(greetings.alternates);
   const prologue = list(greetings.prologue);
   const scanned = setting + welcome;
@@ -81,9 +109,26 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
         page: clip(page, LIMITS.page),
         welcome: clip(welcome, LIMITS.opening),
         alternates: alternates.slice(0, LIMITS.alternates).map((a) => clip(a, LIMITS.alternate)),
+        // 開場選項：玩家點了會填進輸入框的預設回覆（編輯器的「開場選項」欄位）
         prologue: prologue.slice(0, LIMITS.prologue).map((a) => clip(a, LIMITS.alternate)),
+        // 開場白有被顯示規則替換的標記時，玩家看到的是替換後的版面：這是套用規則後的純文字近似
+        welcomeRendered: welcomeHits ? clip(renderedText(activeRules, welcome), LIMITS.opening) : null,
       },
-      lorebook: { entryCount: entries.length, entries: entries.slice(0, LIMITS.entries).map((e) => ({ name: e.name, content: clip(e.content, LIMITS.entry) })) },
+      // 世界書：設定可以寫在世界書裡（常駐條目每輪都在，召回條目依關鍵字帶入）。index 是全部條目的目錄（不含內文）
+      lorebook: {
+        entryCount: entries.length,
+        constantCount: entries.filter((e) => e.constant).length,
+        recallCount: entries.filter((e) => !e.constant).length,
+        index: entries.slice(0, LIMITS.index).map((e) => ({ name: e.name, chars: e.content.length, constant: e.constant, keywords: e.keywords, mentionedInCard: !!e.name && cardText.includes(e.name) })),
+        entries: entries.slice(0, LIMITS.entries).map((e) => ({ name: e.name, content: clip(e.content, LIMITS.entry) })),
+      },
+      // 顯示規則（正規表示式）：把對話與開場裡的標記換成版面（狀態欄、面板、按鈕）。只給名稱與長度，不給原文
+      rules: {
+        count: rules.length,
+        enabled: activeRules.length,
+        list: activeRules.slice(0, LIMITS.rules).map((r) => ({ name: text(r.name), findChars: text(r.find).length, replaceChars: text(r.replace).length })),
+        hasCardCss: !!text(asset.cardCss),
+      },
     },
     stats: {
       settingChars: setting.length,
@@ -95,6 +140,10 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       dashPer1k: per1k((scanned.match(/—+|──+/g) ?? []).length, scanned.length),
       openingQuestion: /[?？]|\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])/.test(tail),
       openingPageChars: page.length,
+      openingOptions: prologue.length,
+      // 開場白（含備選）被顯示規則命中的次數：多代表開場靠規則換成版面呈現
+      openingRuleHits: welcomeHits + list(greetings.alternates).slice(0, LIMITS.alternates).reduce((n, a) => n + ruleHits(activeRules, a), 0),
+      lorebookConstantChars: entries.filter((e) => e.constant).reduce((n, e) => n + e.content.length, 0),
       openingChoices: /\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])\s*\S/.test(welcome),
     },
   };
@@ -104,21 +153,26 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
 export async function aiSubmissionMeta(db: D1Database, s: SubmissionRow, now: number) {
   const [history, version] = await Promise.all([
     submissionHistory(db, s.id),
-    db.prepare("SELECT member_id, json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom FROM hosting_versions WHERE submission_id=?")
-      .bind(s.id).first<{ member_id: string; tags: string | null; fandom: string | null }>(),
+    db.prepare("SELECT member_id, source_role_id, json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom FROM hosting_versions WHERE submission_id=?")
+      .bind(s.id).first<{ member_id: string; source_role_id: string; tags: string | null; fandom: string | null }>(),
   ]);
-  // 作者側寫只給待審單（跟審核頁同一套：人工覆寫、批量標記、同裝置訊號）。已定案的單不給：
-  // 側寫是「現在」算的，會把這張單自己的結果算進去，等於洩漏人工決定。
-  let author: { tier: string; batchSuspected: boolean } | null = null;
-  if (s.status === "pending" && version?.member_id) {
-    const profiles = await authorProfiles(db, [version.member_id], now);
-    await applyBatchMarks(db, profiles, now);
-    const p = profiles.get(version.member_id);
-    if (p) {
-      const device = await db.prepare("SELECT device_hash FROM review_submission_devices WHERE submission_id=?").bind(s.id).first<{ device_hash: string }>();
-      const signal = device ? (await deviceSignals(db, [device.device_hash], now)).get(device.device_hash) : undefined;
-      author = { tier: p.tier, batchSuspected: p.manual.batch ? p.batchSuspected : !!signal?.suspected };
+  // 作者標記（新人／穩定／頭部、疑似批量）只給待審單：它是「現在」算的，已定案的單會把這張單自己的結果算進去。
+  // 作者行為訊號一律算到送審那一刻為止（送審頻率、額度用滿、過去通過數、帳號年齡、同裝置帳號數），已定案的單也不洩漏結果。
+  let author: Record<string, unknown> | null = null;
+  if (version?.member_id) {
+    let tier: string | null = null, batchSuspected: boolean | null = null;
+    if (s.status === "pending") {
+      const profiles = await authorProfiles(db, [version.member_id], now);
+      await applyBatchMarks(db, profiles, now);
+      const p = profiles.get(version.member_id);
+      if (p) {
+        const device = await db.prepare("SELECT device_hash FROM review_submission_devices WHERE submission_id=?").bind(s.id).first<{ device_hash: string }>();
+        const signal = device ? (await deviceSignals(db, [device.device_hash], now)).get(device.device_hash) : undefined;
+        tier = p.tier;
+        batchSuspected = p.manual.batch ? p.batchSuspected : !!signal?.suspected;
+      }
     }
+    author = { tier, batchSuspected, ...(await authorSignals(db, version.member_id, version.source_role_id, s.submitted_at)) };
   }
   let tags: string[] = [];
   try { tags = version?.tags ? (JSON.parse(version.tags) as string[]) : []; } catch { tags = []; }
@@ -129,6 +183,35 @@ export async function aiSubmissionMeta(db: D1Database, s: SubmissionRow, now: nu
     },
     author,
     meta: { tags, fandom: version?.fandom ?? "" },
+  };
+}
+
+const WEEK = 7 * 86_400_000;
+
+/**
+ * 作者行為訊號，算到送審那一刻為止（不含這張單之後發生的事）。只給數量，不給帳號或裝置識別碼。
+ * - submissions7d：送審前 7 天這位作者送了幾次審（含這次）
+ * - registrations7d／quotaFull：送審前 7 天登記了幾張卡、是否用滿每週額度
+ * - priorApproved：送審前過審過幾次（新人判斷）
+ * - accountAgeDays：帳號建立到送審幾天
+ * - deviceAccounts：登記這張卡的裝置上有幾個帳號（同一支手機綁多個帳號）
+ */
+async function authorSignals(db: D1Database, memberId: string, sourceRoleId: string, at: number) {
+  const row = await db.prepare(`SELECT
+      (SELECT COUNT(*) FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id WHERE v2.member_id=?1 AND s2.submitted_at>?3-${WEEK} AND s2.submitted_at<=?3) AS submissions7d,
+      (SELECT COUNT(*) FROM card_registrations r JOIN member_identities i ON i.provider=r.provider AND i.external_id=CAST(r.author_num_id AS TEXT)
+        WHERE i.member_id=?1 AND r.registered_at>?3-${WEEK} AND r.registered_at<=?3) AS registrations7d,
+      (SELECT COUNT(*) FROM review_submissions s3 JOIN hosting_versions v3 ON v3.submission_id=s3.id WHERE v3.member_id=?1 AND s3.status='approved' AND s3.decided_at<?3) AS priorApproved,
+      (SELECT created_at FROM members WHERE id=?1) AS createdAt,
+      (SELECT COUNT(DISTINCT d.member_id) FROM reward_devices d WHERE d.device_hash=(SELECT r2.device_hash FROM card_registrations r2 WHERE r2.source_role_id=?2 AND r2.device_hash IS NOT NULL ORDER BY r2.registered_at DESC LIMIT 1)) AS deviceAccounts`)
+    .bind(memberId, sourceRoleId, at).first<{ submissions7d: number; registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>();
+  return {
+    submissions7d: row?.submissions7d ?? 0,
+    registrations7d: row?.registrations7d ?? 0,
+    quotaFull: (row?.registrations7d ?? 0) >= WEEKLY_LIMIT,
+    priorApproved: row?.priorApproved ?? 0,
+    accountAgeDays: row?.createdAt ? Math.max(0, Math.floor((at - row.createdAt) / 86_400_000)) : null,
+    deviceAccounts: row?.deviceAccounts || null,
   };
 }
 

@@ -93,8 +93,8 @@ describe('審卡員讀卡', () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.submission.phase).toBe('backfill');
-    // 作者側寫是現在算的、會含這張單自己的結果：已定案的單不給
-    expect(body.author).toBeNull();
+    // 作者標記是現在算的、會含這張單自己的結果：已定案的單不給；行為訊號算到送審那一刻，照給
+    expect(body.author).toMatchObject({ tier: null, batchSuspected: null });
     expect(JSON.stringify(body)).not.toContain('opening.no_reply_hook"]');
     await env.DB.prepare('UPDATE review_submissions SET submitted_at=? WHERE id=?').bind(Date.now() - 8 * 86_400_000, id).run();
     const old = await get(`/v1/review-ai/submissions/${id}`, 'key');
@@ -412,5 +412,43 @@ describe('仲裁：不受理中的單與改判', () => {
     expect((await get(`/v1/review-ai/disagreements/${sid}`, 'mgr')).status).toBe(200);
     const v1 = (await json(await get('/v1/review-ai/report', 'mgr'))).versions.find((v: any) => v.criteriaVersion === 'v1');
     expect(v1.arbitration.reasons).toEqual({ 'opening.no_reply_hook': { humanWrong: 1, aiWrong: 0 } });
+  });
+});
+
+describe('判準 v4 的讀卡輸入', () => {
+  it('世界書目錄（常駐／召回、是否在卡裡提到）、顯示規則摘要、開場選項；開場被規則替換時給套用後的純文字', () => {
+    const input = aiCardInput({
+      document: { roleDetailDesc: '她是車站站務員，常去月台。' },
+      greetings: { welcome: '<status hp="80" mood="緊張"></status>末班車到了。', prologue: ['上車', '留下'] },
+      worldbooks: [{ entries: [
+        { name: '月台', content: '終點站的月台。', isEnabled: true, isConstant: true, keywords: [] },
+        { name: '列車長', content: 'x'.repeat(50), isEnabled: true, isConstant: false, keywords: ['列車長', '車長'] },
+        { name: '停用', content: 'y', isEnabled: false },
+      ] }],
+      authorAsset: { rules: [
+        { name: '狀態欄', find: '<status hp="(\\d+)" mood="([^"]+)"></status>', replace: '<div>生命 $1｜心情 $2</div>', enabled: true },
+        { name: '壞掉的', find: '(', replace: '', enabled: true },
+        { name: '關掉的', find: 'x', replace: '', enabled: false },
+      ], cardCss: '.a{}' },
+    }, { tags: [], fandom: '' });
+    expect(input.card.lorebook).toMatchObject({ entryCount: 2, constantCount: 1, recallCount: 1 });
+    expect(input.card.lorebook.index).toEqual([
+      { name: '月台', chars: 7, constant: true, keywords: 0, mentionedInCard: true },
+      { name: '列車長', chars: 50, constant: false, keywords: 2, mentionedInCard: false },
+    ]);
+    expect(input.card.rules).toMatchObject({ count: 3, enabled: 2, hasCardCss: true });
+    expect(input.card.rules.list.map((r) => r.name)).toEqual(['狀態欄', '壞掉的']);
+    expect(input.stats.openingRuleHits).toBe(1);
+    expect(input.stats.openingOptions).toBe(2);
+    expect(input.card.openings.welcomeRendered).toBe('生命 80｜心情 緊張\n末班車到了。');
+    expect(input.card.openings.prologue).toEqual(['上車', '留下']);
+  });
+
+  it('作者行為訊號算到送審那一刻；已定案的單不給作者標記，但照樣給訊號', async () => {
+    const { id } = await submitCard();
+    await decide(id, humanId, 'approve');
+    const body = await json(await get(`/v1/review-ai/submissions/${id}`, 'key'));
+    expect(body.author).toMatchObject({ tier: null, batchSuspected: null, submissions7d: 1, priorApproved: 0, quotaFull: false });
+    expect(JSON.stringify(body.author)).not.toMatch(/member-|v1:|[0-9a-f]{8}-[0-9a-f]{4}/);
   });
 });
