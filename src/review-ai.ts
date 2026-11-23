@@ -15,7 +15,7 @@ import { HttpError } from "./types";
 export const AI_VERDICTS = ["pass", "reject", "handoff"] as const;
 export type AiVerdict = (typeof AI_VERDICTS)[number];
 /** 作者看得到的駁回理由裡，AI 能判的那幾個（分級與字數門檻不給 AI 判）。代碼與 shared/review-reasons.ts 同步。 */
-export const AI_REASONS = ["opening.no_reply_hook", "opening.no_focused_event", "opening.exposition_only", "opening.too_short", "character.setting_thin"] as const;
+export const AI_REASONS = ["opening.no_reply_hook", "opening.no_focused_event", "opening.exposition_only", "opening.too_short", "opening.unedited_generated", "character.setting_thin", "character.copied_verbatim"] as const;
 /** 審核標記：只給審核與數據，作者看不到 */
 export const AI_FLAGS = ["ai_unedited", "copied_text", "mass_produced"] as const;
 export const AI_HANDOFF_CAUSES = ["unsure", "refusal", "invalid_output", "timeout", "error", "too_large"] as const;
@@ -23,7 +23,17 @@ export const AI_FEEDBACK = ["ai_right", "ai_wrong", "both_ok"] as const;
 /** 已定案的單，送審後多久內還能讓 AI 讀（試跑用） */
 export const AI_BACKFILL_WINDOW_MS = 7 * 86_400_000;
 
-const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, alternates: 3, alternate: 3_000, prologue: 3, entries: 20, entry: 300, note: 400 };
+const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 3, entries: 20, entry: 300, note: 400 };
+
+/** 開場網頁（作者資產的 openingPage）只取玩家看得到的字：去掉 script／style 與標籤，留下選項等文字。 */
+export function pageText(html: string): string {
+  return html
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|button|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&")
+    .replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+}
 
 const text = (v: unknown): string => (typeof v === "string" ? v : v === null || v === undefined ? "" : JSON.stringify(v));
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(text) : []);
@@ -41,6 +51,8 @@ export function aiPhaseOf(s: Pick<SubmissionRow, "status" | "submitted_at">, now
 export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }) {
   const doc = (settings.document ?? {}) as Record<string, unknown>;
   const greetings = (settings.greetings ?? {}) as Record<string, unknown>;
+  const asset = (settings.authorAsset ?? {}) as Record<string, unknown>;
+  const page = pageText(text(asset.openingPage));
   const books = Array.isArray(settings.worldbooks) ? settings.worldbooks : settings.worldbook ? [settings.worldbook] : [];
   const entries = (books as { entries?: { name?: unknown; content?: unknown; isEnabled?: unknown }[] }[])
     .flatMap((b) => (Array.isArray(b?.entries) ? b.entries : []))
@@ -64,6 +76,9 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       instructions: clip(text(doc.customInstructions), LIMITS.text),
       examples: clip(text(doc.talkExample), LIMITS.text),
       openings: {
+        // 開場網頁：玩家進卡先看到的互動頁（選項、按鈕的字）。mode=page 時它就是開場，welcome 可能是空的
+        mode: text(asset.openingMode) || (asset.cardFormat === "fengyue" ? "page" : "greeting"),
+        page: clip(page, LIMITS.page),
         welcome: clip(welcome, LIMITS.opening),
         alternates: alternates.slice(0, LIMITS.alternates).map((a) => clip(a, LIMITS.alternate)),
         prologue: prologue.slice(0, LIMITS.prologue).map((a) => clip(a, LIMITS.alternate)),
@@ -79,6 +94,7 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       ellipsisPer1k: per1k((scanned.match(/…+|\.{3,}/g) ?? []).length, scanned.length),
       dashPer1k: per1k((scanned.match(/—+|──+/g) ?? []).length, scanned.length),
       openingQuestion: /[?？]|\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])/.test(tail),
+      openingPageChars: page.length,
       openingChoices: /\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])\s*\S/.test(welcome),
     },
   };

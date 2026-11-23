@@ -267,3 +267,91 @@ describe('審卡員服務金鑰', () => {
     expect((await withKey('/v1/review-ai/queue')).status).toBe(403);
   });
 });
+
+describe('AI 分歧仲裁', () => {
+  const arbitrate = (sid: string, body: Record<string, unknown>, token = 'mgr') =>
+    send('POST', `/v1/review-ai/disagreements/${sid}/arbitration`, token, { operationId: crypto.randomUUID(), ...body });
+  async function setup() {
+    const a = await submitCard('draft-a');
+    const b = await submitCard('draft-b');
+    const c = await submitCard('draft-c');
+    const sa = (await json(await suggest(a.id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] }))).id;
+    const sb = (await json(await suggest(b.id, { verdict: 'pass' }))).id;
+    await suggest(c.id, { verdict: 'pass' });
+    await decide(a.id, humanId, 'approve');
+    await decide(b.id, humanId, 'reject');
+    await decide(c.id, humanId, 'approve');
+    return { a, b, c, sa, sb };
+  }
+
+  it('清單只列人機相反的單，標出方向；一般審核員看不到', async () => {
+    const { sa, sb } = await setup();
+    expect((await get('/v1/review-ai/disagreements', 'human')).status).toBe(403);
+    const list = await json(await get('/v1/review-ai/disagreements', 'mgr'));
+    expect(list.total).toBe(2);
+    expect(Object.fromEntries(list.items.map((i: any) => [i.suggestionId, i.direction]))).toEqual({ [sa]: 'ai_stricter', [sb]: 'human_stricter' });
+    const stricter = await json(await get('/v1/review-ai/disagreements?direction=ai_stricter&reason=opening.no_reply_hook', 'mgr'));
+    expect(stricter.items.map((i: any) => i.suggestionId)).toEqual([sa]);
+  });
+
+  it('單筆並排：卡片內容、人工（含審核員名字）、AI；仲裁不改原決定，待仲裁清單少一筆', async () => {
+    const { a, sa } = await setup();
+    const detail = await json(await get(`/v1/review-ai/disagreements/${sa}`, 'mgr'));
+    expect(detail.content.state).toBe('ready');
+    expect(detail.content.card.setting.length).toBeGreaterThan(0);
+    expect(detail.human.decision).toBe('approved');
+    expect(detail.human.stamps).toHaveLength(1);
+    expect(detail.human.stamps[0].reviewer).toBeTruthy();
+    expect(detail.ai).toMatchObject({ verdict: 'reject', reasons: ['opening.no_reply_hook'] });
+    const res = await arbitrate(sa, { value: 'ai_right', addToReference: true, note: '開場確實停在旁白' });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({ value: 'ai_right', referencePool: 'reject' });
+    expect(await status(a.id)).toBe('approved');
+    const open = await json(await get('/v1/review-ai/disagreements', 'mgr'));
+    expect(open.items.map((i: any) => i.suggestionId)).not.toContain(sa);
+    const ev = await env.DB.prepare("SELECT actor_kind, source, ai_suggestion_id FROM review_events WHERE action='ai_arbitration'").first();
+    expect(ev).toEqual({ actor_kind: 'reviewer', source: 'ai_right', ai_suggestion_id: sa });
+  });
+
+  it('同一個操作重送不重複寫；都說得通不能加入參考範例；一致的單不能仲裁', async () => {
+    const { sa, c } = await setup();
+    const op = crypto.randomUUID();
+    expect((await arbitrate(sa, { value: 'human_right', operationId: op })).status).toBe(200);
+    expect((await arbitrate(sa, { value: 'human_right', operationId: op })).status).toBe(200);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM review_ai_arbitrations').first<{ n: number }>())!.n).toBe(1);
+    expect((await arbitrate(sa, { value: 'ai_right', operationId: op })).status).toBe(409);
+    expect((await arbitrate(sa, { value: 'both_ok', addToReference: true })).status).toBe(400);
+    const agreed = await env.DB.prepare('SELECT id FROM review_ai_suggestions WHERE submission_id=?').bind(c.id).first<{ id: string }>();
+    expect((await arbitrate(agreed!.id, { value: 'human_right' })).status).toBe(404);
+  });
+
+  it('參考範例草稿取最後一次仲裁的池；報表有仲裁分佈與各理由的人錯／AI 錯', async () => {
+    const { sa, sb } = await setup();
+    await arbitrate(sa, { value: 'ai_right', addToReference: true });
+    await arbitrate(sb, { value: 'human_right', addToReference: true });
+    // 重新仲裁 b、不再勾：草稿裡就沒有它
+    await arbitrate(sb, { value: 'both_ok' });
+    const refs = await json(await get('/v1/review-ai/reference-candidates', 'mgr'));
+    expect(refs.items).toHaveLength(1);
+    expect(refs.items[0]).toMatchObject({ verdict: 'reject', reasons: ['opening.no_reply_hook'], why: '' });
+    expect(refs.items[0].excerpt.opening.length).toBeGreaterThan(0);
+    expect(JSON.stringify(refs)).not.toMatch(/member-|submission|draft-/);
+    const report = await json(await get('/v1/review-ai/report', 'mgr'));
+    const v1 = report.versions.find((v: any) => v.criteriaVersion === 'v1');
+    expect(v1.arbitration.values).toEqual({ human_right: 0, ai_right: 1, both_ok: 1, both_wrong: 0 });
+    expect(v1.arbitration.reasons['opening.no_reply_hook']).toEqual({ humanWrong: 1, aiWrong: 0 });
+  });
+});
+
+describe('AI 讀卡的開場網頁與新理由', () => {
+  it('開場網頁只留玩家看得到的字；新的兩個駁回理由可以用', async () => {
+    const input = aiCardInput({
+      document: {}, greetings: { welcome: '' },
+      authorAsset: { openingMode: 'page', openingPage: '<style>.x{}</style><div class="x">清晨的訓練場</div><button>認真對練</button><script>alert(1)</script>' },
+    }, { tags: [], fandom: '' });
+    expect(input.card.openings.mode).toBe('page');
+    expect(input.card.openings.page).toBe('清晨的訓練場\n認真對練');
+    const { id } = await submitCard();
+    expect((await suggest(id, { verdict: 'reject', reasons: ['opening.unedited_generated', 'character.copied_verbatim'] })).status).toBe(200);
+  });
+});

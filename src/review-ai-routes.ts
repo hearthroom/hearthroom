@@ -4,6 +4,8 @@ import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
 import { AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
+import { diffView } from "./review-diff-store";
+import { arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
 import { reviewAgentByKey } from "./review-agent-key";
 import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
@@ -34,7 +36,7 @@ async function requireHuman(c: Ctx) {
   return { member, role: await reviewerRole(c.env.DB, member.id) };
 }
 
-type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report";
+type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
@@ -88,9 +90,26 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
     submission: { ...submission, phase },
     author,
     ...aiCardInput(settings, meta),
+    update: await aiUpdateDiff(c.env, s),
     allowed: { verdicts: AI_VERDICTS, reasons: AI_REASONS, flags: AI_FLAGS, handoffCauses: AI_HANDOFF_CAUSES },
   }, 200, NO_STORE);
 }));
+
+/**
+ * 更新與重送：跟審核頁同一份差異（基準＝上次過審版，重送時是上次被駁回版）。給 AI 的只取欄位前後各 1,500 字。
+ * 新卡、沒有基準、讀不到都照實回狀態，不擋讀卡。
+ */
+async function aiUpdateDiff(env: Env, s: SubmissionRow) {
+  if (s.kind !== "re") return null;
+  const view = await diffView(env, s.id).catch(() => ({ state: "unreadable" as const }));
+  if (view.state !== "ready") return { state: view.state };
+  const clipText = (t: string) => (t.length > 1500 ? `${t.slice(0, 1500)}…[截斷]` : t);
+  return {
+    state: view.state, baseKind: view.baseKind, summary: view.diff.summary,
+    fields: view.diff.fields.map((f) => ({ key: f.key, before: clipText(f.before), after: clipText(f.after) })),
+    lorebook: { added: view.diff.worldbook.added.length, removed: view.diff.worldbook.removed.length, modified: view.diff.worldbook.modified.length },
+  };
+}
 
 async function readContent(env: Env, s: SubmissionRow): Promise<Record<string, unknown>> {
   if (s.status === "pending") {
@@ -149,14 +168,94 @@ reviewAiRoutes.post("/v1/review/:id/ai-feedback", (c) => counted(c, "feedback", 
 }));
 
 /** 人工 vs AI 對照報表（管理員）：預設近 7 天送審的單，依判準版本分組。 */
-reviewAiRoutes.get("/v1/review-ai/report", (c) => counted(c, "report", async () => {
-  const { role } = await requireHuman(c);
+async function requireManager(c: Ctx) {
+  const { member, role } = await requireHuman(c);
   if (role !== "manager" && role !== "owner") throw new HttpError(403, "review_manager_required");
+  return member;
+}
+
+reviewAiRoutes.get("/v1/review-ai/report", (c) => counted(c, "report", async () => {
+  await requireManager(c);
   const now = Date.now();
   const to = Number(c.req.query("to") ?? now);
   const from = Number(c.req.query("from") ?? to - 7 * 86_400_000);
   if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 120 * 86_400_000) throw new HttpError(400, "invalid_arguments", undefined, { field: "from" });
   const criteria = c.req.query("criteria") ?? null;
   if (criteria !== null && !/^v\d{1,4}$/.test(criteria)) throw new HttpError(400, "invalid_arguments", undefined, { field: "criteria" });
-  return c.json({ from, to, versions: await aiReport(c.env.DB, { from, to, criteria }) }, 200, NO_STORE);
+  const [versions, arbitration] = await Promise.all([aiReport(c.env.DB, { from, to, criteria }), arbitrationStats(c.env.DB, { from, to, criteria })]);
+  return c.json({ from, to, versions: versions.map((v) => ({ ...v, arbitration: arbitration[v.criteriaVersion] ?? null })) }, 200, NO_STORE);
+}));
+
+const criteriaOf = (c: Ctx) => {
+  const v = c.req.query("criteria") ?? null;
+  if (v !== null && !/^v\d{1,4}$/.test(v)) throw new HttpError(400, "invalid_arguments", undefined, { field: "criteria" });
+  return v;
+};
+
+/** 分歧清單（管理員）：只列人工與 AI 結論相反的單；預設待仲裁。 */
+reviewAiRoutes.get("/v1/review-ai/disagreements", (c) => counted(c, "arbitration_list", async () => {
+  await requireManager(c);
+  const state = c.req.query("state") ?? "open";
+  if (state !== "open" && state !== "done" && state !== "all") throw new HttpError(400, "invalid_arguments", undefined, { field: "state" });
+  const direction = c.req.query("direction") ?? null;
+  if (direction !== null && direction !== "ai_stricter" && direction !== "human_stricter") throw new HttpError(400, "invalid_arguments", undefined, { field: "direction" });
+  const reason = c.req.query("reason") ?? null;
+  if (reason !== null && !/^[a-z_]+(\.[a-z_]+)?$/.test(reason)) throw new HttpError(400, "invalid_arguments", undefined, { field: "reason" });
+  const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 20)) || 20, 1), 50);
+  const offset = Math.max(Math.floor(Number(c.req.query("offset") ?? 0)) || 0, 0);
+  return c.json(await listDisagreements(c.env.DB, { state, criteria: criteriaOf(c), direction: direction as Direction | null, reason, limit, offset }), 200, NO_STORE);
+}));
+
+/** 單筆分歧：卡片（與 AI 讀到的同一份封存內容；讀不到就說明）、人工、AI、歷次仲裁。 */
+reviewAiRoutes.get("/v1/review-ai/disagreements/:id", (c) => counted(c, "arbitration_read", async () => {
+  await requireManager(c);
+  const sides = await disagreementSides(c.env.DB, c.req.param("id"));
+  const s = await getSubmission(c.env.DB, sides.submission.id);
+  let card: ReturnType<typeof aiCardInput> | null = null;
+  try {
+    const { meta } = await aiSubmissionMeta(c.env.DB, s, Date.now());
+    card = aiCardInput(await readContent(c.env, s), meta);
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error;
+  }
+  return c.json({ ...sides, content: card ? { state: "ready", ...card } : { state: "unavailable" }, update: await aiUpdateDiff(c.env, s) }, 200, NO_STORE);
+}));
+
+/** 仲裁：人對／AI 對／都說得通／都不對，選填備註，可勾加入參考範例。不改原決定、不通知作者。 */
+reviewAiRoutes.post("/v1/review-ai/disagreements/:id/arbitration", (c) => counted(c, "arbitrate", async () => {
+  const member = await requireManager(c);
+  const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+  const operationId = operationOf(body.operationId);
+  const out = await arbitrate(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, addToReference: body.addToReference, note: body.note, operationId, now: Date.now() });
+  return c.json(out, 200, NO_STORE);
+}));
+
+/**
+ * 參考範例草稿（管理員）：被勾進參考範例的分歧，組成下一版 references 的草稿形狀。
+ * 節錄只取開場與設定前 600 字，不含帳號、卡號；why 留空給 PM 寫。讀不到內容的那幾筆照實列在 skipped。
+ */
+reviewAiRoutes.get("/v1/review-ai/reference-candidates", (c) => counted(c, "references", async () => {
+  await requireManager(c);
+  const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 30)) || 30, 1), 30);
+  const candidates = await referenceCandidates(c.env.DB, criteriaOf(c), limit);
+  const items: unknown[] = [];
+  let skipped = 0;
+  for (const cand of candidates) {
+    try {
+      const s = await getSubmission(c.env.DB, cand.submissionId);
+      const { meta } = await aiSubmissionMeta(c.env.DB, s, Date.now());
+      const input = aiCardInput(await readContent(c.env, s), meta);
+      const opening = input.card.openings.welcome || input.card.openings.alternates[0] || input.card.openings.page;
+      items.push({
+        id: `c${items.length + 1}`, verdict: cand.verdict, reasons: cand.reasons, flags: cand.flags, why: "",
+        originalWork: !!input.card.originalWork, tags: input.card.tags,
+        excerpt: { opening: opening.slice(0, 600), setting: input.card.setting.slice(0, 600) },
+        source: { criteriaVersion: cand.criteriaVersion, arbitration: cand.arbitration },
+      });
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      skipped++;
+    }
+  }
+  return c.json({ items, skipped }, 200, NO_STORE);
 }));
