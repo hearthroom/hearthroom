@@ -6,7 +6,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRouter } from "vue-router";
-import { useCheckin } from "@/lib/checkin-store";
+import { useCheckin, useCheckinFreshOnShow } from "@/lib/checkin-store";
 import { newcomerView } from "@/lib/checkin";
 import { newcomerPrompt } from "@/lib/newcomer-prompt";
 import { startNewcomerTour } from "@/lib/newcomer-tour";
@@ -17,6 +17,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { glueUnits } from "@/lib/format";
 
 const store = useCheckin();
+useCheckinFreshOnShow();
 const session = useSession();
 const router = useRouter();
 const { t, locale } = useI18n();

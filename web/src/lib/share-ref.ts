@@ -13,6 +13,7 @@ import { ApiError, fetchReferral, redeemReferral } from "./api";
 import { COMMUNITY_API } from "./config";
 import { accountToken } from "./connections";
 import { currentProvider, type ProviderId } from "./provider";
+import { useCheckin } from "./checkin-store";
 import { useSession } from "./session";
 import { signedInHint } from "./signin-hint";
 
@@ -309,4 +310,6 @@ export async function noteShareLinkCreated(roleId: string | undefined): Promise<
     headers: { "Content-Type": "application/json", "X-Provider": currentProvider(), Authorization: `Bearer ${token}` },
     body: JSON.stringify({ roleId }),
   }).catch(() => undefined);
+  // 首頁的新手卡下次出現時重讀進度，才看得到「分享一張卡」已完成
+  try { useCheckin().markStale(); } catch { /* 沒有 pinia（例如卡片 App 網域）就算了 */ }
 }

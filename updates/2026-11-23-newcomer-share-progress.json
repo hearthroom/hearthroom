@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "新手七日分享卡片後回到首頁，今天的目標會直接顯示已完成。",
+    "zh-Hans": "新手七日分享卡片后回到首页，今天的目标会直接显示已完成。",
+    "en": "After sharing a card for the newcomer week, today's goal now shows as done when you return home.",
+    "ja": "新人7日間でカードをシェアしてホームに戻ると、今日の目標がすぐ達成済みになります。",
+    "ko": "신규 7일 미션에서 카드를 공유하고 홈에 돌아오면 오늘의 목표가 바로 완료로 보여요."
+  },
+  "body": {
+    "zh-Hant": "瀏覽器不讓網站複製、改成自己複製連結的那次分享，現在也會算進目標。",
+    "zh-Hans": "浏览器不让网站复制、改成自己复制链接的那次分享，现在也会算进目标。",
+    "en": "Shares where your browser blocked copying and you copied the link yourself now count toward the goal too.",
+    "ja": "ブラウザがコピーを許可せず、自分でリンクをコピーした場合のシェアも目標に数えられるようになりました。",
+    "ko": "브라우저가 복사를 막아서 링크를 직접 복사한 공유도 이제 목표에 포함돼요."
+  }
+}

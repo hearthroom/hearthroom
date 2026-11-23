@@ -28,7 +28,7 @@ import { track } from "@/lib/track";
 import { greetingOf, isNight, poseOf, sceneOf, slotOf, type HomeIntent } from "@/lib/mascot-home";
 import type { CommunityCard } from "@/lib/types";
 import CoverImg from "@/components/CoverImg.vue";
-import { useCheckin } from "@/lib/checkin-store";
+import { useCheckin, useCheckinFreshOnShow } from "@/lib/checkin-store";
 import { newcomerView } from "@/lib/checkin";
 
 const emit = defineEmits<{ discover: [] }>();
@@ -41,6 +41,7 @@ const { locale, lp } = useLocalePath();
  * 新手七日講今天的目標；還沒簽講簽到；簽過但有任務可領講任務；都沒有就不出現。
  */
 const checkin = useCheckin();
+useCheckinFreshOnShow();
 const checkinChip = computed(() => {
   const p = checkin.panel;
   if (!session.me || !p) return null;
