@@ -34,6 +34,8 @@ CREATE TABLE review_submission_features (
   created_at        INTEGER NOT NULL
 );
 CREATE INDEX idx_review_features_author ON review_submission_features (author_member_id, created_at);
+-- 作者側寫與同作者分組依成員找版本：沒有這個索引，每次讀佇列都要掃整張 hosting_versions（code-review 2026-11-23）
+CREATE INDEX idx_hosting_versions_member ON hosting_versions (member_id, work_id);
 
 -- 這張單送審時的安裝雜湊（同 card_registrations.device_hash 的 v1:HMAC）。作業用：只在待審期間留著，
 -- 單子一離開待審（定案、撤回、被取代、刪除）就由下面的 trigger 刪掉。事件表與統計只存計數，不存雜湊。

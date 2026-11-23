@@ -1,6 +1,6 @@
 import { CLAIM_TTL_MS, getSubmission } from './review';
 import { reviewerRole } from './members';
-import { queueContext, reviewEventStatement } from './review-v2';
+import { queueContext, reviewEventStatement, type QueueContext } from './review-v2';
 import { HttpError, pickLocale, type Localized } from './types';
 
 /**
@@ -35,13 +35,13 @@ async function dropBlocker(db: D1Database, id: string, memberId: string, now: nu
 }
 
 /** 移出一張。成功回案件編號；不能移出丟 409（代碼見 dropBlocker）。 */
-export async function dropSubmission(db: D1Database, input: { submissionId: string; memberId: string; now: number; source?: DropSource; batchId?: string | null }): Promise<{ caseId: string }> {
+export async function dropSubmission(db: D1Database, input: { submissionId: string; memberId: string; now: number; source?: DropSource; batchId?: string | null; ctx?: QueueContext }): Promise<{ caseId: string }> {
   const source = input.source ?? 'single';
   const blocker = await dropBlocker(db, input.submissionId, input.memberId, input.now);
   if (blocker === 'review_not_found') throw new HttpError(404, 'submission not found');
   if (blocker) throw new HttpError(409, blocker);
   const row = await getSubmission(db, input.submissionId);
-  const ctx = await queueContext(db, row.id);
+  const ctx = input.ctx ?? await queueContext(db, row.id);
   const caseId = crypto.randomUUID(), dropId = crypto.randomUUID();
   // 寫入當下再確認一次全部條件：上面的檢查與這裡之間，別人可能剛領走、冷凍或蓋完章
   const eligible = `s.id=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')}
@@ -74,6 +74,8 @@ export async function dropSubmission(db: D1Database, input: { submissionId: stri
 /** 復原：回到待審，保留原送審時間（排在原位）。任何審核員都能復原；沒在不受理就當成功（冪等）。 */
 export async function restoreSubmission(db: D1Database, input: { submissionId: string; memberId: string; now: number; batchId?: string | null }): Promise<{ restored: boolean }> {
   const row = await getSubmission(db, input.submissionId);
+  // 已經撤回、被取代的單留著的舊紀錄不算：它不在清單上，復原它不會讓任何卡回到待審
+  if (row.status !== 'pending') return { restored: false };
   const drop = await db.prepare('SELECT id, case_id FROM review_drops WHERE submission_id=? AND restored_at IS NULL').bind(row.id).first<{ id: string; case_id: string }>();
   if (!drop) return { restored: false };
   const result = await db.batch([
@@ -121,11 +123,11 @@ export interface GroupItem {
 /** 批量 sheet 的列：卡名、封面、公開開場白的第一行（讓管理員確認不是誤判）。都是公開資料。 */
 export async function groupItems(db: D1Database, ids: string[], viewer: { memberId: string; adultAllowed: boolean; now: number; lang: string }): Promise<GroupItem[]> {
   if (!ids.length) return [];
-  const holes = ids.map(() => '?').join(',');
+  // 一組可能上百張：名單綁成一個 JSON 陣列（D1 一個查詢最多 100 個綁定參數）
   const rows = await db.prepare(`SELECT s.id, s.card_id, s.rating, s.claimed_by, s.claimed_at, v.public_role,
       EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AS held, ${ACTIVE_DROP('s')} AS dropped
-    FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE s.id IN (${holes}) ORDER BY s.submitted_at, s.rowid`)
-    .bind(...ids).all<{ id: string; card_id: number; rating: string | null; claimed_by: string | null; claimed_at: number | null; public_role: string | null; held: number; dropped: number }>();
+    FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE s.id IN (SELECT value FROM json_each(?)) ORDER BY s.submitted_at, s.rowid`)
+    .bind(JSON.stringify(ids)).all<{ id: string; card_id: number; rating: string | null; claimed_by: string | null; claimed_at: number | null; public_role: string | null; held: number; dropped: number }>();
   return rows.results.map((r) => {
     const role = r.public_role ? (JSON.parse(r.public_role) as { names?: Localized; welcome?: string; backgroundUrl?: string | null; avatarUrl?: string | null }) : {};
     const hidden = r.rating === 'R' && !viewer.adultAllowed;
@@ -141,6 +143,8 @@ export async function groupItems(db: D1Database, ids: string[], viewer: { member
   });
 }
 
+/** 一次批次最多幾張：每張約四個查詢，D1 一次請求最多 1000 個 */
+export const BATCH_MAX = 100;
 export interface BatchResult { batchId: string; dropped: string[]; skipped: { id: string; reason: string }[] }
 
 /**
@@ -154,10 +158,17 @@ export async function dropBatch(db: D1Database, input: { anchorId: string; scope
   const inGroup = new Set(group);
   const batchId = input.batchId ?? crypto.randomUUID();
   const out: BatchResult = { batchId, dropped: [], skipped: [] };
-  for (const id of [...new Set(input.ids)].slice(0, 200)) {
+  // 重送同一個批次（第一次的回應沒收到）：這一批已經移出的照樣算移出，不報成略過
+  const done = new Set((await db.prepare('SELECT submission_id FROM review_drops WHERE batch_id=? AND restored_at IS NULL').bind(batchId).all<{ submission_id: string }>()).results.map((r) => r.submission_id));
+  // 當下計數在變更前算一次，整批共用（da.md）；也讓一次請求的查詢數留在 D1 的上限內
+  const ctx = await queueContext(db, input.anchorId);
+  const unique = [...new Set(input.ids)];
+  for (const id of unique.slice(BATCH_MAX)) out.skipped.push({ id, reason: 'batch_limit' });
+  for (const id of unique.slice(0, BATCH_MAX)) {
+    if (done.has(id)) { out.dropped.push(id); continue; }
     if (!inGroup.has(id)) { out.skipped.push({ id, reason: 'not_in_group' }); continue; }
     try {
-      await dropSubmission(db, { submissionId: id, memberId: input.memberId, now: input.now, source: input.scope === 'author' ? 'author_batch' : 'device_batch', batchId });
+      await dropSubmission(db, { submissionId: id, memberId: input.memberId, now: input.now, source: input.scope === 'author' ? 'author_batch' : 'device_batch', batchId, ctx });
       out.dropped.push(id);
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
@@ -170,7 +181,9 @@ export async function dropBatch(db: D1Database, input: { anchorId: string; scope
 /** 批量復原（「復原這 N 張」）。只復原這個批次移出、還在不受理的單。 */
 export async function restoreBatch(db: D1Database, input: { batchId: string; memberId: string; now: number }): Promise<{ restored: string[] }> {
   if (!isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, 'review_batch_manager_required');
-  const rows = await db.prepare('SELECT submission_id FROM review_drops WHERE batch_id=? AND restored_at IS NULL').bind(input.batchId).all<{ submission_id: string }>();
+  // 這一批開的案件裡現在還在清單上的單：作者撤回後原樣重送、自動回到清單的那張也一起復原
+  const rows = await db.prepare(`SELECT d.submission_id FROM review_drops d JOIN review_submissions s ON s.id=d.submission_id
+    WHERE d.restored_at IS NULL AND s.status='pending' AND d.case_id IN (SELECT case_id FROM review_drops WHERE batch_id=?)`).bind(input.batchId).all<{ submission_id: string }>();
   const restored: string[] = [];
   for (const r of rows.results) if ((await restoreSubmission(db, { submissionId: r.submission_id, memberId: input.memberId, now: input.now, batchId: input.batchId })).restored) restored.push(r.submission_id);
   return { restored };
@@ -189,10 +202,11 @@ export interface DroppedItem {
 export async function listDropped(db: D1Database, viewer: { memberId: string; adultAllowed: boolean; now: number; lang: string }, filter: DroppedFilter): Promise<{ items: DroppedItem[]; total: number }> {
   const where = filter === 'single' ? "d.source='single'" : filter === 'batch' ? "d.source IN ('author_batch','device_batch')"
     : filter === 'auto' ? "d.source='auto_same_content'" : filter === 'aged' ? 'k.opened_at<=?' : '1=1';
-  const args = filter === 'aged' ? [viewer.now - DROP_REVIEW_AGE_MS] : [];
+  // 審核員自己也寫卡：自己的卡不出現在清單（作者永遠不知道卡被不受理，包括身兼審核員的作者）
+  const args = [viewer.memberId, ...(filter === 'aged' ? [viewer.now - DROP_REVIEW_AGE_MS] : [])];
   const base = `FROM review_drops d JOIN review_drop_cases k ON k.id=d.case_id JOIN review_submissions s ON s.id=d.submission_id
     JOIN cards c ON c.id=s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id LEFT JOIN members m ON m.id=d.actor_member_id
-    WHERE d.restored_at IS NULL AND s.status='pending' AND ${where}`;
+    WHERE d.restored_at IS NULL AND s.status='pending' AND (v.member_id IS NULL OR v.member_id<>?) AND ${where}`;
   const total = await db.prepare(`SELECT COUNT(*) AS n ${base}`).bind(...args).first<{ n: number }>();
   const rows = await db.prepare(`SELECT s.id, s.card_id, s.rating, s.submitted_at, d.source, k.opened_at,
       COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,

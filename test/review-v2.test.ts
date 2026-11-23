@@ -132,6 +132,16 @@ describe('不受理', () => {
     await expect(dropSubmission(env.DB, { submissionId: s.id, memberId: b, now: Date.now() })).rejects.toThrow('review_held');
   });
 
+  it('審核員自己寫的卡：不受理清單看不到、也不能用唯讀查看；事件不記作者帳號', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    await dropSubmission(env.DB, { submissionId: s.id, memberId: await reviewer(20001), now: Date.now() });
+    await env.DB.prepare('INSERT OR IGNORE INTO reviewers (member_id, granted_at, granted_by) VALUES (?, ?, ?)').bind(f.memberId, Date.now(), 'test').run();
+    expect((await listDropped(env.DB, { memberId: f.memberId, adultAllowed: true, now: Date.now(), lang: 'zh' }, 'all')).items).toEqual([]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_events WHERE actor_member_id=?").bind(f.memberId).first<{ n: number }>())!.n).toBe(0);
+  });
+
   it('作者那邊看不出差別：不受理前後審核狀態完全一樣', async () => {
     const f = await setup();
     await f.submit();
@@ -191,6 +201,28 @@ describe('批量不受理（管理員）', () => {
     expect(result.skipped).toEqual([{ id: s2.id, reason: 'claimed_by_other' }, { id: 'elsewhere', reason: 'not_in_group' }]);
     expect((await events(s1.id)).find((e) => e.action === 'drop')?.source).toBe('device_batch');
     expect((await restoreBatch(env.DB, { batchId: result.batchId, memberId: mgr, now: Date.now() })).restored).toEqual([s1.id]);
+  });
+
+  it('重送同一個批次不報成略過；復原這一批連作者原樣重送、自動回清單的那張一起復原', async () => {
+    const one = await setup({ account: 10001, roleId: 'r1' });
+    await one.submit('v1:device-a');
+    const two = await setup({ account: 10002, roleId: 'r2' });
+    await two.submit('v1:device-a');
+    const s1 = await one.pending(), s2 = await two.pending();
+    const mgr = await reviewer(20003, true);
+    const batchId = crypto.randomUUID();
+    const first = await dropBatch(env.DB, { anchorId: s1.id, scope: 'device', ids: [s1.id, s2.id], memberId: mgr, now: Date.now(), batchId });
+    expect(first.dropped.sort()).toEqual([s1.id, s2.id].sort());
+    const again = await dropBatch(env.DB, { anchorId: s1.id, scope: 'device', ids: [s1.id, s2.id], memberId: mgr, now: Date.now(), batchId });
+    expect(again).toEqual({ batchId, dropped: [s1.id, s2.id], skipped: [] });
+    // 作者撤回 s2 後原樣重送：新單自動回清單（沒有批次編號）。最後一個 setup 的封存替身是 two 的
+    await two.edit();
+    await two.submit('v1:device-a');
+    const s2b = await two.pending();
+    expect(s2b.id).not.toBe(s2.id);
+    const restored = await restoreBatch(env.DB, { batchId, memberId: mgr, now: Date.now() });
+    expect(restored.restored.sort()).toEqual([s1.id, s2b.id].sort());
+    expect((await listQueue(env.DB, mgr, Date.now(), 'zh')).map((q) => q.id).sort()).toEqual([s1.id, s2b.id].sort());
   });
 
   it('安裝不認識就沒有同裝置這一組', async () => {
@@ -262,6 +294,11 @@ describe('內容指紋', () => {
   it('重新封存（新的圖片路徑、世界書編號、版本號）指紋不變', async () => {
     const again = settings({ document: { roleName: 'A', roleDetailDesc: 'x', roleBackground: 'https://cdn.test/versions/2' }, worldbooks: [{ worldbookId: 'w2', name: 'b', entries: [{ entryId: '0', content: 'c' }] }], authorAsset: { rules: [], status: 'x', version: 9 } });
     expect(await fp(again)).toBe(await fp(settings()));
+  });
+
+  it('只換頭像也會變（頭像不在封存複製之列，留在設定裡比）', async () => {
+    const base = await fp(settings());
+    expect(await fp(settings({ document: { roleName: 'A', roleDetailDesc: 'x', roleBackground: 'https://cdn.test/versions/1', roleAvatar: 'https://cdn.test/u/new-face.png' } }))).not.toBe(base);
   });
 
   it('換封面、改世界書內容、改分級答案都會變', async () => {

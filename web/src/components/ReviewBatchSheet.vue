@@ -28,8 +28,9 @@ const changed = ref(false);
 const box = ref<HTMLElement | null>(null);
 let opener: HTMLElement | null = null;
 
+const BATCH_MAX = 100;
 const selectable = (i: ReviewGroupItem) => !i.claimedByOther && !i.held && !i.dropped;
-const chosen = computed(() => items.value.filter((i) => selectable(i) && picked.value.has(i.id)));
+const chosen = computed(() => items.value.filter((i) => selectable(i) && picked.value.has(i.id)).slice(0, BATCH_MAX));
 const skippedBy = (reason: string) => result.value?.skipped.filter((s) => s.reason === reason).length ?? 0;
 const skippedOther = computed(() => (result.value?.skipped.length ?? 0) - skippedBy("claimed_by_other") - skippedBy("review_held"));
 
@@ -39,7 +40,8 @@ async function load() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
     items.value = (await fetchReviewGroup(props.anchorId, token, String(locale.value), props.scope)).items;
-    picked.value = new Set(items.value.filter(selectable).map((i) => i.id));
+    // 一次最多 100 張（伺服器同一個上限）；更多的處理完再開一次
+    picked.value = new Set(items.value.filter(selectable).slice(0, BATCH_MAX).map((i) => i.id));
   } catch (err) {
     error.value = err instanceof Error && err.message === t("auth.expired") ? err.message : t("reviewV2.dropped.loadFailed");
   } finally { loading.value = false; }

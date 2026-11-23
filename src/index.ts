@@ -2137,7 +2137,8 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
   // 冷凍人回頭看自己冷凍的單也不必領：單子可能正被別人領著讀，他要能找到解凍
   const heldByMe=s.status==='pending'&&!!await c.env.DB.prepare('SELECT 1 FROM review_holds WHERE card_id=? AND member_id=?').bind(s.card_id,member.id).first();
   // 不受理清單的「查看」：唯讀，不必領取（不受理中的單本來就不能領）
-  const droppedNow=s.status==='pending'&&await isDropped(c.env.DB,s.id);
+  // 自己寫的卡例外：作者（包括身兼審核員的作者）永遠不該知道卡被不受理
+  const droppedNow=s.status==='pending'&&await isDropped(c.env.DB,s.id)&&!await c.env.DB.prepare('SELECT 1 FROM hosting_versions WHERE submission_id=? AND member_id=?').bind(s.id,member.id).first();
   if(!stampedByMe&&!heldByMe&&!droppedNow&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
     if(s.status!=='pending')throw new HttpError(410,'review no longer active');
     if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');

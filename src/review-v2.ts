@@ -36,9 +36,10 @@ async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 封存時每張上傳的圖都會複製成新的版本路徑、世界書會換新編號：這些欄位每次封存都不同，不能進指紋。
-// 圖片改用作者草稿上的網址（同一張圖不重傳就不變，換了圖就變）。
-const SEALED_MEDIA_FIELDS = ['roleAvatar', 'roleBackground', 'roleBackgroundLandscape', 'roleShareImage'];
+// 封存時背景、橫式背景、分享圖會複製成新的版本路徑（Harbor SealHosted 的 frozenImages）、世界書會換新編號：
+// 這些欄位每次封存都不同，不能進指紋，改用作者草稿上的網址（同一張圖不重傳就不變，換了圖就變）。
+// 頭像不在複製之列，留在封存版的設定裡比：只換頭像也算改了（草稿的 avatarUrl 會被背景蓋過，不能拿來比）。
+const SEALED_MEDIA_FIELDS = ['roleBackground', 'roleBackgroundLandscape', 'roleShareImage'];
 
 /**
  * 內容指紋：判斷「不受理後原樣重送」。白名單＝封存版的設定、開場與序章、世界卡成員、世界書（含停用條目）、
@@ -47,7 +48,7 @@ const SEALED_MEDIA_FIELDS = ['roleAvatar', 'roleBackground', 'roleBackgroundLand
  */
 export async function contentFingerprint(
   settings: Record<string, unknown>,
-  draft: Pick<UpstreamRole, 'avatarUrl' | 'backgroundUrl' | 'backgroundLandscapeUrl' | 'shareImageUrl'>,
+  draft: Pick<UpstreamRole, 'backgroundUrl' | 'backgroundLandscapeUrl' | 'shareImageUrl'>,
   extra: { ratingAnswers: string; fandomKey: string },
 ): Promise<string | null> {
   const document = record(settings.document);
@@ -64,10 +65,7 @@ export async function contentFingerprint(
     greetings: record(settings.greetings),
     worldbooks: books,
     authorAsset: asset,
-    media: {
-      avatar: draft.avatarUrl ?? '', background: draft.backgroundUrl ?? '',
-      landscape: draft.backgroundLandscapeUrl ?? '', share: draft.shareImageUrl ?? '',
-    },
+    media: { background: draft.backgroundUrl ?? '', landscape: draft.backgroundLandscapeUrl ?? '', share: draft.shareImageUrl ?? '' },
     ratingAnswers: extra.ratingAnswers,
     fandom: extra.fandomKey,
   };
@@ -118,7 +116,7 @@ export function submissionRecordStatements(db: D1Database, input: {
        EXISTS(SELECT 1 FROM cards c WHERE c.id=?4 AND c.approved_version_id IS NOT NULL),?5,?6,?7
       WHERE ${exists.replace('?', '?1')}`)
       .bind(input.submissionId, REVIEW_SPEC_VERSION, input.memberId, input.cardId, input.closeCaseId ? 1 : 0, JSON.stringify(input.features), input.now),
-    reviewEventStatement(db, { key: 'submit:' + input.submissionId, submissionId: input.submissionId, cardId: input.cardId, at: input.now, action: 'submit', to: 'pending', actorKind: 'author', actorMemberId: input.memberId, requireSubmission: true }),
+    reviewEventStatement(db, { key: 'submit:' + input.submissionId, submissionId: input.submissionId, cardId: input.cardId, at: input.now, action: 'submit', to: 'pending', actorKind: 'author', actorMemberId: null, requireSubmission: true }),
   ];
   if (input.deviceHash) {
     out.push(db.prepare(`INSERT OR IGNORE INTO review_submission_devices(submission_id,device_hash,created_at) SELECT ?,?,? WHERE ${exists}`)
@@ -137,7 +135,8 @@ export function submissionRecordStatements(db: D1Database, input: {
       // 原樣重送不該在審核頻道再發一則待審：還沒送出的那則一起刪掉（送審建單的 trigger 剛排進去）
       db.prepare(`DELETE FROM review_deliveries WHERE id=? AND message_id IS NULL AND EXISTS(SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL)`)
         .bind('review:' + input.submissionId, input.submissionId),
-      reviewEventStatement(db, { key: 'auto_drop:' + input.submissionId, submissionId: input.submissionId, cardId: input.cardId, at: input.now, action: 'drop', from: 'pending', to: 'dropped', actorKind: 'system', source: 'auto_same_content', requireSubmission: true }),
+      reviewEventStatement(db, { key: 'auto_drop:' + input.submissionId, submissionId: input.submissionId, cardId: input.cardId, at: input.now, action: 'drop', from: 'pending', to: 'dropped', actorKind: 'system', source: 'auto_same_content', requireSubmission: true,
+        guard: { sql: 'EXISTS(SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL)', args: [input.submissionId] } }),
     );
   }
   return out;
@@ -183,7 +182,7 @@ export interface ReviewEvent {
   from?: string; to?: string; actorKind: 'author' | 'reviewer' | 'system'; actorMemberId?: string | null;
   source?: string | null; batchId?: string | null; reasons?: readonly string[] | null; reasonVersion?: number | null; coaching?: boolean | null;
   claimElapsedMs?: number | null; ctx?: QueueContext | null;
-  /** 只在這張單還存在時寫（跟建立單子同一批時用） */
+  /** 只在這張單還存在時寫（跟建立單子同一批時用）。作者與系統事件不記帳號：作者要串，從送審特徵表接 */
   requireSubmission?: boolean;
   /** 只在這個條件成立時寫（同一批裡前面的寫入真的生效了才記） */
   guard?: { sql: string; args: unknown[] };
