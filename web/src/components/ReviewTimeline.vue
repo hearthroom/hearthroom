@@ -68,6 +68,9 @@ const latest = computed(() => {
               <span class="subtle">{{ i.mine ? $t("reviewV2.timeline.you") : i.actor ?? "" }}</span>
               <time class="subtle event__time" :datetime="new Date(i.at).toISOString()">{{ dateTime(i.at) }}</time>
             </div>
+            <ul v-if="i.marks?.length" class="event__reasons" data-timeline-marks>
+              <li v-for="m in i.marks" :key="m" class="chip chip--warn">{{ $t(`reviewV2.marks.${m}`) }}</li>
+            </ul>
             <ul v-if="i.reasons?.length" class="event__reasons">
               <li v-for="code in i.reasons" :key="code" class="chip">{{ $t(reasonKey(code, "name")) }}</li>
             </ul>

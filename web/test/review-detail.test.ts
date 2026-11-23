@@ -1,5 +1,5 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
-import {createApp,type App} from 'vue';
+import {createApp,nextTick,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
@@ -976,6 +976,31 @@ it('a manager rejecting a re-review writes a note and sends no reason codes',asy
  await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'確認是盜用',generation:'g1'}));
 });
 
+// owner 2026-11-23：兩個新駁回理由；審核標記（疑似 AI 原文、疑似搬運）三種決定都能標，作者看不到
+it('reviewer flags ride along with any decision; the two new reasons are offered',async()=>{
+ const d=withLength(3600,{claimedByMe:false});
+ api.fetchReviewDetail.mockReset().mockResolvedValue(d);
+ api.dropReview.mockClear();
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(el.querySelector('[data-decision-marks]')).toBeNull();
+ await choose('drop');
+ const flag=el.querySelector<HTMLInputElement>('[data-decision-mark="suspect_ai_text"]')!;
+ expect(flag.closest('label')!.textContent).toContain(i18n.global.t('reviewV2.marks.suspect_ai_text'));
+ flag.click();await nextTick();
+ submit('drop')!.click();
+ await vi.waitFor(()=>expect(api.dropReview).toHaveBeenCalledWith('s1','local-reviewer',['suspect_ai_text']));
+});
+it('the reject picker offers the unedited-generated and copied-verbatim reasons',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ await choose('reject');
+ expect(el.querySelector('[data-reason-group="opening"] [data-reason="opening.unedited_generated"]')).toBeTruthy();
+ expect(el.querySelector('[data-reason-group="setting"] [data-reason="character.copied_verbatim"]')).toBeTruthy();
+ expect(el.textContent).toContain(i18n.global.t('review.reasons.opening.unedited_generated.name'));
+});
+
 it('drop works without a claim, needs no confirmation, and can be restored from the result',async()=>{
  const d=withLength(3600,{claimedByMe:false});
  api.fetchReviewDetail.mockReset().mockResolvedValue(d);
@@ -988,7 +1013,7 @@ it('drop works without a claim, needs no confirmation, and can be restored from 
  await choose('drop');
  expect(el.querySelector('[data-drop-info]')).toBeTruthy();
  submit('drop')!.click();
- await vi.waitFor(()=>expect(api.dropReview).toHaveBeenCalledWith('s1','local-reviewer'));
+ await vi.waitFor(()=>expect(api.dropReview).toHaveBeenCalledWith('s1','local-reviewer',[]));
  expect(confirmState.current).toBeNull();
  await vi.waitFor(()=>expect(el.querySelector('[data-dropped-card]')?.textContent).toBe(i18n.global.t('reviewV2.decide.resultDropped')));
  expect(el.querySelector('[data-decide-choices]')).toBeNull();

@@ -1883,7 +1883,8 @@ async function suspectedBatchGroups(db: D1Database, now: number): Promise<{ scop
 app.post("/v1/review/:id/drop", async (c) => {
   const member = await requireReviewer(c);
   try {
-    const result = await dropSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, now: Date.now() });
+    const body = (await c.req.json().catch(() => ({}))) as { marks?: unknown };
+    const result = await dropSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, now: Date.now(), marks: body.marks });
     await bumpOp(c.env.DB, "review_drop", "drop", "success");
     note(c, { event: "review_drop", detail: "drop" });
     queuePush(c);
@@ -1968,7 +1969,7 @@ app.post("/v1/review/:id/release", async (c) => {
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown };
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
   if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
@@ -1976,7 +1977,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
   if (noteText.trim().length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true },c.env)
+  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks },c.env)
     .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", verdict, error.status === 409 ? "conflict" : "denied"); throw error; });
   await bumpOp(c.env.DB, "review_stamp", verdict, "success");
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });

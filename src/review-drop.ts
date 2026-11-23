@@ -2,6 +2,7 @@ import { CLAIM_TTL_MS, getSubmission } from './review';
 import { reviewerRole } from './members';
 import { queueContext, reviewEventStatement, type QueueContext } from './review-v2';
 import { HttpError, pickLocale, type Localized } from './types';
+import { normalizeDecisionMarks } from '../shared/review-reasons';
 
 /**
  * 不受理（owner 2026-11-23）：審核員零成本把一張卡移出待審佇列。不是判定：不寫理由、不通知作者、
@@ -35,7 +36,9 @@ async function dropBlocker(db: D1Database, id: string, memberId: string, now: nu
 }
 
 /** 移出一張。成功回案件編號；不能移出丟 409（代碼見 dropBlocker）。 */
-export async function dropSubmission(db: D1Database, input: { submissionId: string; memberId: string; now: number; source?: DropSource; batchId?: string | null; ctx?: QueueContext }): Promise<{ caseId: string }> {
+export async function dropSubmission(db: D1Database, input: { submissionId: string; memberId: string; now: number; source?: DropSource; batchId?: string | null; ctx?: QueueContext; marks?: unknown }): Promise<{ caseId: string }> {
+  let marks: string[];
+  try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, 'review_mark_invalid'); }
   const source = input.source ?? 'single';
   const blocker = await dropBlocker(db, input.submissionId, input.memberId, input.now);
   if (blocker === 'review_not_found') throw new HttpError(404, 'submission not found');
@@ -60,7 +63,7 @@ export async function dropSubmission(db: D1Database, input: { submissionId: stri
       .bind(row.id, input.memberId, dropId),
     reviewEventStatement(db, {
       key: 'drop:' + dropId, submissionId: row.id, cardId: row.card_id, at: input.now, action: 'drop', from: 'pending', to: 'dropped',
-      actorKind: 'reviewer', actorMemberId: input.memberId, source, batchId: input.batchId ?? null, ctx,
+      actorKind: 'reviewer', actorMemberId: input.memberId, source, batchId: input.batchId ?? null, ctx, marks,
       guard: { sql: 'EXISTS(SELECT 1 FROM review_drops WHERE id=?)', args: [dropId] },
     }),
   ]);

@@ -182,6 +182,8 @@ export interface ReviewEvent {
   from?: string; to?: string; actorKind: 'author' | 'reviewer' | 'system'; actorMemberId?: string | null;
   source?: string | null; batchId?: string | null; reasons?: readonly string[] | null; reasonVersion?: number | null; coaching?: boolean | null;
   claimElapsedMs?: number | null; ctx?: QueueContext | null;
+  /** 審核標記（只有代碼；作者看不到） */
+  marks?: readonly string[] | null;
   /** 只在這張單還存在時寫（跟建立單子同一批時用）。作者與系統事件不記帳號：作者要串，從送審特徵表接 */
   requireSubmission?: boolean;
   /** 只在這個條件成立時寫（同一批裡前面的寫入真的生效了才記） */
@@ -190,14 +192,14 @@ export interface ReviewEvent {
 
 /** 一筆審核事件。event_key 綁單子與那一次操作：重試、重放都不多記。 */
 export function reviewEventStatement(db: D1Database, e: ReviewEvent): D1PreparedStatement {
-  return db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,from_state,to_state,actor_kind,actor_member_id,source,batch_id,reasons,reason_version,coaching,claim_elapsed_ms,queue_same_author,queue_same_device,device_known,originality,originality_version)
-    SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,f.originality,f.originality_version
+  return db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,from_state,to_state,actor_kind,actor_member_id,source,batch_id,reasons,reason_version,coaching,claim_elapsed_ms,queue_same_author,queue_same_device,device_known,originality,originality_version,marks)
+    SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,f.originality,f.originality_version,?21
     FROM (SELECT 1) LEFT JOIN review_submission_features f ON f.submission_id=?3
     WHERE (?20=0 OR EXISTS(SELECT 1 FROM review_submissions WHERE id=?3))${e.guard ? ` AND (${e.guard.sql})` : ''}`)
     .bind(e.key, REVIEW_SPEC_VERSION, e.submissionId, Number(e.cardId), e.at, e.action, e.from ?? null, e.to ?? null, e.actorKind, e.actorMemberId ?? null,
       e.source ?? null, e.batchId ?? null, e.reasons?.length ? JSON.stringify(e.reasons) : null, e.reasonVersion ?? null,
       e.coaching === undefined || e.coaching === null ? null : e.coaching ? 1 : 0, e.claimElapsedMs ?? null,
-      e.ctx?.sameAuthor ?? null, e.ctx?.sameDevice ?? null, e.ctx ? (e.ctx.deviceKnown ? 1 : 0) : null, e.requireSubmission ? 1 : 0, ...(e.guard?.args ?? []));
+      e.ctx?.sameAuthor ?? null, e.ctx?.sameDevice ?? null, e.ctx ? (e.ctx.deviceKnown ? 1 : 0) : null, e.requireSubmission ? 1 : 0, e.marks?.length ? JSON.stringify(e.marks) : null, ...(e.guard?.args ?? []));
 }
 
 /** 審核頁開查重時記下這一版的相似度（同送審版最近一次成功的計算為準） */

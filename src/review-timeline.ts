@@ -25,6 +25,8 @@ export interface TimelineItem {
   source?: string | null;
   reasons?: string[];
   note?: string;
+  /** 審核標記（只給審核員） */
+  marks?: string[];
   /** 這一筆屬於現在打開的這張單 */
   current: boolean;
 }
@@ -36,9 +38,10 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
   if (!card) return { items: [], coverageFrom: null };
   const [subs, stamps, events, first] = await db.batch([
     db.prepare(`SELECT id, submitted_at, status, decided_at, note, reject_reasons, reopen_of FROM review_submissions WHERE card_id=? ORDER BY submitted_at, rowid`).bind(card.card_id),
-    db.prepare(`SELECT st.submission_id, st.member_id, st.verdict, st.note, st.created_at, COALESCE(NULLIF(m.display_name,''), m.handle) AS name, s.reject_reasons, s.reopen_of
+    db.prepare(`SELECT st.submission_id, st.member_id, st.verdict, st.note, st.created_at, COALESCE(NULLIF(m.display_name,''), m.handle) AS name, s.reject_reasons, s.reopen_of,
+        (SELECT ev.marks FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id) AS marks
       FROM review_stamps st JOIN review_submissions s ON s.id=st.submission_id LEFT JOIN members m ON m.id=st.member_id WHERE s.card_id=?`).bind(card.card_id),
-    db.prepare(`SELECT e.submission_id, e.action, e.at, e.actor_member_id, e.source, COALESCE(NULLIF(m.display_name,''), m.handle) AS name
+    db.prepare(`SELECT e.submission_id, e.action, e.at, e.actor_member_id, e.source, e.marks, COALESCE(NULLIF(m.display_name,''), m.handle) AS name
       FROM review_events e LEFT JOIN members m ON m.id=e.actor_member_id
       WHERE e.card_id=? AND +e.action IN (${EVENT_ACTIONS.map(() => '?').join(',')})`).bind(card.card_id, ...EVENT_ACTIONS),
     db.prepare('SELECT MIN(at) AS at FROM review_events'),
@@ -53,15 +56,16 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
   const items: TimelineItem[] = [];
   const base = (id: string) => ({ round: round.get(id) ?? 1, current: id === submissionId });
   for (const s of subRows) items.push({ at: s.submitted_at, action: s.reopen_of ? 'reopen' : 'submit', actor: null, mine: false, ...base(s.id) });
-  for (const st of (stamps as D1Result<{ submission_id: string; member_id: string; verdict: 'approve' | 'reject'; note: string; created_at: number; name: string | null; reject_reasons: string | null }>).results) {
-    items.push({
+  const marksOf = (raw: string | null) => { try { const m = raw ? JSON.parse(raw) : []; return Array.isArray(m) && m.length ? { marks: m.filter((x): x is string => typeof x === 'string') } : {}; } catch { return {}; } };
+  for (const st of (stamps as D1Result<{ submission_id: string; member_id: string; verdict: 'approve' | 'reject'; note: string; created_at: number; name: string | null; reject_reasons: string | null; marks: string | null }>).results) {
+    items.push({ ...marksOf(st.marks),
       at: st.created_at, action: st.verdict, actor: (st.name ?? '').slice(0, 80) || null, mine: st.member_id === viewer,
       ...(st.verdict === 'reject' ? { reasons: parseReviewReasons(st.reject_reasons), note: st.note.slice(0, 2000) } : {}),
       ...base(st.submission_id),
     });
   }
-  for (const e of (events as D1Result<{ submission_id: string; action: TimelineAction; at: number; actor_member_id: string | null; source: string | null; name: string | null }>).results) {
-    items.push({ at: e.at, action: e.action, actor: e.actor_member_id ? (e.name ?? '').slice(0, 80) || null : null, mine: !!e.actor_member_id && e.actor_member_id === viewer, ...(e.action === 'drop' ? { source: e.source } : {}), ...base(e.submission_id) });
+  for (const e of (events as D1Result<{ submission_id: string; action: TimelineAction; at: number; actor_member_id: string | null; source: string | null; marks: string | null; name: string | null }>).results) {
+    items.push({ ...marksOf(e.marks), at: e.at, action: e.action, actor: e.actor_member_id ? (e.name ?? '').slice(0, 80) || null : null, mine: !!e.actor_member_id && e.actor_member_id === viewer, ...(e.action === 'drop' ? { source: e.source } : {}), ...base(e.submission_id) });
   }
   items.sort((a, b) => a.at - b.at);
   return { items, coverageFrom: (first as D1Result<{ at: number | null }>).results[0]?.at ?? null };

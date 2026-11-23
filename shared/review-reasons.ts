@@ -4,11 +4,12 @@
  *
  * 語意改了就加新代碼、把舊的移到 RETIRED（歷史單照樣顯示），不要改既有代碼的意思。
  */
-export const REVIEW_REASON_VERSION = 1;
+/** 2：owner 2026-11-23 追加「開場白讀起來像未修改的 AI 生成文字」「設定直接搬運現成文本」 */
+export const REVIEW_REASON_VERSION = 2;
 
 export const REVIEW_REASON_GROUPS = {
-  opening: ['opening.no_reply_hook', 'opening.no_focused_event', 'opening.exposition_only', 'opening.too_short'],
-  setting: ['content.min_length', 'character.setting_thin'],
+  opening: ['opening.no_reply_hook', 'opening.no_focused_event', 'opening.exposition_only', 'opening.too_short', 'opening.unedited_generated'],
+  setting: ['content.min_length', 'character.setting_thin', 'character.copied_verbatim'],
   rating: ['rating.mismatch'],
   other: ['other'],
 } as const;
@@ -44,4 +45,17 @@ export function parseReviewReasons(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * 審核標記（owner 2026-11-23）：審核員對這張卡的判斷，只給審核與數據用，作者看不到；任何決定（通過、駁回、不受理）都能標。
+ * 跟駁回理由分開：理由告訴作者怎麼改，標記記審核員的懷疑，餵作者側寫。字在語系檔 reviewV2.marks.<代碼>。
+ */
+export const REVIEW_DECISION_MARKS = ['suspect_ai_text', 'suspect_copied'] as const;
+export type ReviewDecisionMark = (typeof REVIEW_DECISION_MARKS)[number];
+export function normalizeDecisionMarks(raw: unknown): ReviewDecisionMark[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.some((m) => !(REVIEW_DECISION_MARKS as readonly unknown[]).includes(m))) throw new Error('review_mark_invalid');
+  const set = new Set(raw);
+  return REVIEW_DECISION_MARKS.filter((m) => set.has(m));
 }

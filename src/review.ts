@@ -12,7 +12,7 @@ import { reviewLengthExemptForCard } from './review-length-exemption';
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import { submissionType, type SubmissionType } from "./review-author";
 import { normalizeRejectReasons, queueContext, reviewEventStatement } from "./review-v2";
-import { REVIEW_REASON_VERSION } from "../shared/review-reasons";
+import { REVIEW_REASON_VERSION, normalizeDecisionMarks } from "../shared/review-reasons";
 import { NOT_DROPPED } from "./review-drop";
 import { applyBatchMarks, authorProfiles, deviceSignals, type AuthorTier } from "./review-profile";
 
@@ -378,7 +378,7 @@ export interface StampResult {
  */
 export async function stamp(
   db: D1Database,
-  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean },
+  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown },
   env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
@@ -404,6 +404,8 @@ export async function stamp(
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
   const rejection = input.verdict === "reject" ? normalizeRejectReasons({ reasons: input.reasons, note, lengthInsufficient: await lengthInsufficient(db, row) }) : null;
+  let marks: string[];
+  try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, "review_mark_invalid"); }
   const coaching = rejection ? input.coaching === true : false;
 
   const required = STAMPS_REQUIRED[row.kind];
@@ -417,7 +419,7 @@ export async function stamp(
       key: `stamp:${row.id}:${input.memberId}`, submissionId: row.id, cardId: row.card_id, at: input.now, action: input.verdict,
       from: "pending", actorKind: "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
       reasons: rejection?.reasons ?? null, reasonVersion: rejection ? REVIEW_REASON_VERSION : null, coaching: rejection ? coaching : null,
-      claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id),
+      claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
     }),
   ];
 

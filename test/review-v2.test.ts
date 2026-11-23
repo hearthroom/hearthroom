@@ -6,6 +6,8 @@ import { claim, listQueue, pendingSubmissionOf, queueCounts, statusAmong, stamp 
 import { dropBatch, dropSubmission, groupSubmissionIds, listDropped, restoreBatch, restoreSubmission } from '../src/review-drop';
 import { authorProfiles, autoTier, markAuthor, revokeAuthorMark, wilsonLower } from '../src/review-profile';
 import { contentFingerprint } from '../src/review-v2';
+import { reviewTimeline } from '../src/review-timeline';
+import { REVIEW_REASON_VERSION } from '../shared/review-reasons';
 import { getCard } from '../src/cards';
 import { upstream } from '../src/upstream';
 
@@ -57,7 +59,7 @@ describe('結構化駁回理由', () => {
     const a = await reviewer(20001);
     await reject(s.id, a, { reasons: ['opening.no_reply_hook', 'opening.exposition_only', 'opening.no_reply_hook'], coaching: true });
     const row = await env.DB.prepare('SELECT status, reject_reasons, reason_version, reject_coaching FROM review_submissions WHERE id=?').bind(s.id).first<Record<string, unknown>>();
-    expect(row).toEqual({ status: 'rejected', reject_reasons: '["opening.no_reply_hook","opening.exposition_only"]', reason_version: 1, reject_coaching: 1 });
+    expect(row).toEqual({ status: 'rejected', reject_reasons: '["opening.no_reply_hook","opening.exposition_only"]', reason_version: REVIEW_REASON_VERSION, reject_coaching: 1 });
     const notice = await env.DB.prepare("SELECT path, extra FROM community_notifications WHERE kind='review_result'").first<{ path: string; extra: string }>();
     expect(notice!.path).toBe('/mine/reviews/' + s.id);
     expect(JSON.parse(notice!.extra)).toEqual({ status: 'rejected', kind: 'first', reasons: ['opening.no_reply_hook', 'opening.exposition_only'] });
@@ -95,6 +97,35 @@ describe('結構化駁回理由', () => {
     await reject(s.id, await reviewer(20001), { reasons: ['opening.too_short'] });
     const row = await env.DB.prepare('SELECT reject_reasons FROM review_submissions WHERE id=?').bind(s.id).first<{ reject_reasons: string }>();
     expect(JSON.parse(row!.reject_reasons)).toEqual(['opening.too_short', 'content.min_length']);
+  });
+});
+
+describe('審核標記與新理由（owner 2026-11-23）', () => {
+  it('駁回可以選「讀起來像未修改的 AI 生成文字」「直接搬運現成文本」；標記記在事件、餵作者側寫、出現在紀錄', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await claim(env.DB, s.id, a, Date.now());
+    await stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'reject', note: '', now: Date.now(), reasons: ['opening.unedited_generated', 'character.copied_verbatim'], marks: ['suspect_copied', 'suspect_ai_text', 'suspect_ai_text'] });
+    const row = await env.DB.prepare('SELECT reject_reasons FROM review_submissions WHERE id=?').bind(s.id).first<{ reject_reasons: string }>();
+    expect(JSON.parse(row!.reject_reasons)).toEqual(['opening.unedited_generated', 'character.copied_verbatim']);
+    const ev = await env.DB.prepare("SELECT marks FROM review_events WHERE action='reject' AND submission_id=?").bind(s.id).first<{ marks: string }>();
+    expect(JSON.parse(ev!.marks)).toEqual(['suspect_ai_text', 'suspect_copied']);
+    expect((await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)?.basis.marks90d).toEqual({ suspect_ai_text: 1, suspect_copied: 1 });
+    const { items } = await reviewTimeline(env.DB, s.id, a);
+    expect(items.find((i) => i.action === 'reject')?.marks).toEqual(['suspect_ai_text', 'suspect_copied']);
+  });
+
+  it('不受理也能帶標記；不認得的標記擋下', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await expect(dropSubmission(env.DB, { submissionId: s.id, memberId: a, now: Date.now(), marks: ['made_up'] })).rejects.toThrow('review_mark_invalid');
+    await dropSubmission(env.DB, { submissionId: s.id, memberId: a, now: Date.now(), marks: ['suspect_ai_text'] });
+    const ev = await env.DB.prepare("SELECT marks FROM review_events WHERE action='drop' AND submission_id=?").bind(s.id).first<{ marks: string }>();
+    expect(JSON.parse(ev!.marks)).toEqual(['suspect_ai_text']);
   });
 });
 

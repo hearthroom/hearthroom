@@ -21,3 +21,7 @@ CREATE INDEX idx_review_submission_diffs_state ON review_submission_diffs (state
 -- 單卡紀錄依卡號讀事件、統計依時間讀審核章：沒有這兩個索引每次都掃整張表（code-review 2026-11-23）
 CREATE INDEX idx_review_events_card_time ON review_events (card_id, at);
 CREATE INDEX idx_review_stamps_created ON review_stamps (created_at);
+
+-- 審核標記（owner 2026-11-23：疑似 AI 原文、疑似搬運）：審核員對這張卡的判斷，只給審核與數據，作者看不到。
+-- 記在那一次作業的事件上（JSON 陣列，只有代碼）；作者側寫依作者彙總最近 90 天的次數。
+ALTER TABLE review_events ADD COLUMN marks TEXT;

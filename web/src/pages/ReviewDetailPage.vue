@@ -32,6 +32,7 @@ import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
 import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
 import ReviewTimeline from '@/components/ReviewTimeline.vue';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
+import { REVIEW_DECISION_MARKS } from '../../../shared/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
 import { ratingLocale } from "@/lib/rating";
@@ -67,7 +68,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -248,6 +249,8 @@ const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !
  */
 const choice = ref<"approve" | "reject" | "drop" | null>(null);
 const reasonPicks = ref<string[]>([]);
+/** 審核標記（只給審核員與數據；任何決定都能標） */
+const decisionMarks = ref<string[]>([]);
 /** 輔導（附完整改法與範例）：作者是新人時預設開，可改回一般；null＝照預設 */
 const coaching = ref<boolean | null>(null);
 const coachingDefault = computed(() => data.value?.authorProfile?.tier === "new");
@@ -552,7 +555,7 @@ async function stamp(verdict: "approve" | "reject") {
     if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+reasonLines+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
-    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}) });
+    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}), ...(decisionMarks.value.length ? { marks: [...decisionMarks.value] } : {}) });
     if(!active||id.value!==target)return;
     if (data.value) {
       data.value.submission.status = res.status;
@@ -606,7 +609,7 @@ async function dropCard() {
   const target = id.value;
   busy.value = true; decideError.value = "";
   try {
-    await dropReview(target, await token());
+    await dropReview(target, await token(), [...decisionMarks.value]);
     if (!active || id.value !== target) return;
     dropDone.value = true;
     if (data.value) data.value.submission.claimedByMe = false;
@@ -1120,6 +1123,14 @@ onMounted(() => { void load(); });
             <p>{{ $t("reviewV2.decide.dropLine3") }}</p>
           </div>
 
+          <!-- 審核標記：只給審核員與數據，作者看不到；三種決定都能標 -->
+          <fieldset v-if="choice" class="decision-marks" data-decision-marks>
+            <legend class="decision-marks__title">{{ $t("reviewV2.decide.marksTitle") }}</legend>
+            <label v-for="m in REVIEW_DECISION_MARKS" :key="m" class="decision-marks__item">
+              <input v-model="decisionMarks" type="checkbox" :value="m" :disabled="busy" :data-decision-mark="m" />
+              <span>{{ $t(`reviewV2.marks.${m}`) }}</span>
+            </label>
+          </fieldset>
           <p v-if="!claimedByMe && !decided && !hold && choice !== 'drop'" class="subtle">{{ $t("review.claimFirst") }}</p>
           <!-- 拿不定主意、要先跟其他審核員討論：冷凍後誰都不能決定，卡留在清單上 -->
           <div v-if="canHold" class="field hold-entry">
@@ -1283,6 +1294,9 @@ onMounted(() => { void load(); });
 .key-checks__cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s-2); margin: 0; }
 .key-checks__cells dt { font-size: 12px; color: var(--text-3); }
 .key-checks__cells dd { margin: 0; font-variant-numeric: tabular-nums; }
+.decision-marks { border: 0; margin: 0; padding: 0; min-width: 0; min-inline-size: 0; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); align-items: center; }
+.decision-marks__title { font-size: 13px; font-weight: 600; color: var(--text-2); padding: 0; margin-bottom: var(--s-1); width: 100%; }
+.decision-marks__item { display: inline-flex; gap: var(--s-2); align-items: center; min-height: var(--h-md); cursor: pointer; font-size: 13px; }
 .result__reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
 /* 可點的 chip：點擊區至少 30（DESIGN 點擊區分級），有 hover 與焦點樣式 */
 .reason { min-height: var(--h-sm); padding-inline: var(--s-3); border: 0; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
