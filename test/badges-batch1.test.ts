@@ -4,6 +4,8 @@ import {resetDb,makeMember,restoreUpstream} from './helpers';
 import {applyBadgeStats,type BadgeStats} from '../src/badge-stats';
 import {badgeCollection,sweepMilestones} from '../src/community/badges';
 import {badgeAp,badgeRarity,badgeReward} from '../shared/badge-rarity';
+import {rankedMembers} from '../src/community/achievement-board';
+import {snapshotCache} from '../src/snapshot-cache';
 
 // 成就第一批（owner 2026-11-23）：對話輪數、單卡輪數、留言／獲讚／粉絲／收藏的防刷口徑、三合君王。
 const DAY=86400000;
@@ -85,14 +87,19 @@ it('crowns one card that reached #1 on a daily, a weekly and a monthly board',as
  const honor=async(card:number,zone:string,window:string,band:number)=>{id++;
   await env.DB.prepare('INSERT OR IGNORE INTO rank_settlements(zone,window,period,settled_at,receipt,snapshot) VALUES(?,?,?,1,?,?)').bind(zone,window,'p'+id,'r','{}').run();
   await env.DB.prepare(`INSERT INTO rank_awards(id,card_id,zone,window,period,rank,band,member_id,account_no,amount,awarded_at,status)
-  VALUES(?,?,?,?,?,?,?,?,22,1000,1,'paid')`).bind('h'+id,card,zone,window,'p'+id,band,band,author).run();};
+  VALUES(?,?,?,?,?,?,?,?,22,1000,1,'paid')`).bind('h'+id,card,zone,window,'p'+id,band,band,author).run();honors.push(`rank_${zone}_${window}_${band}`);};
+ const honors:string[]=[];
  await honor(100001,'clean','day',1);await honor(100001,'all','week',1);await honor(100002,'all','month',1);
  await honor(100001,'all','month',3);
  await sweepMilestones(env);
- expect(await awarded(author)).not.toContain('rank_same_card_crown');   // 兩張卡分開拿的不算
+ expect(await awarded(author)).not.toContain('honor_same_card_crown');   // 兩張卡分開拿的不算
  await honor(100001,'clean','month',1);
  await sweepMilestones(env);
- expect(await awarded(author)).toContain('rank_same_card_crown');
+ expect(await awarded(author)).toContain('honor_same_card_crown');
+ // 不能用 rank_ 開頭：成就排行把 rank_ 的獲獎紀錄當成榜單榮誉另外算，會漏掉這枚的成就點
+ snapshotCache.namespace=`badges-batch1-${Date.now()}`;
+ const board=await rankedMembers(env,'author','all');const ap=board.order.find(x=>x.memberId===author)?.ap;
+ expect(ap).toBe(honors.reduce((n,key)=>n+badgeAp({key,category:'rank'}),0)+100);
 });
 
 it('rates the new tiers by how hard they are and keeps the board badge credit-free',()=>{
@@ -111,6 +118,6 @@ it('rates the new tiers by how hard they are and keeps the board badge credit-fr
  expect(r('player_commenter_300','social')).toEqual(['legendary',6000]);
  expect(r('creator_followers_300','creation')).toEqual(['legendary',6000]);
  expect(r('creator_favorited_1000','creation')).toEqual(['legendary',6000]);
- expect(r('rank_same_card_crown','rank')).toEqual(['legendary',0]);
- expect(badgeAp({key:'rank_same_card_crown',category:'rank'})).toBe(100);
+ expect(r('honor_same_card_crown','rank')).toEqual(['legendary',0]);
+ expect(badgeAp({key:'honor_same_card_crown',category:'rank'})).toBe(100);
 });

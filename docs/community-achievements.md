@@ -110,7 +110,7 @@ Owner decision 2026-11-23, from the revised achievement table. Existing badges k
 | `likes_received` | `comment_likes` from established members, never the commenter, at most 3 per liker | adds 5 and 500 |
 | `followers` | follows from established members, never the author | adds 300 |
 | `favorites_received` | saves on owned listed cards from established members, never the owner | adds 1,000 |
-| `same_card_crown` | owned cards that reached band 1 on a daily, a weekly and a monthly board | 1 (`rank_same_card_crown`, rank category, no credits) |
+| `same_card_crown` | owned cards that reached band 1 on a daily, a weekly and a monthly board | 1 (`honor_same_card_crown`, rank category, no credits) |
 
 An established member is a normal account that joined at least three days ago and has `badge_qualifications.send_turns >= 3`. Members from older providers without Harbor turn counts never qualify as likers, followers or savers. Accounts on the same device are not merged yet. The rule change applies to future awards only; the sweep never revokes.
 

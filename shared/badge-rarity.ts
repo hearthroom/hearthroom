@@ -28,7 +28,7 @@ const BY_KEY: Record<string, BadgeRarity> = {
   player_turns_500: 'rare', player_turns_2500: 'epic', player_turns_10000: 'legendary',
   player_devoted_150: 'rare', player_devoted_500: 'epic', player_devoted_1500: 'legendary',
   player_commenter_300: 'legendary', player_liked_500: 'legendary',
-  creator_followers_300: 'legendary', creator_favorited_1000: 'legendary', rank_same_card_crown: 'legendary',
+  creator_followers_300: 'legendary', creator_favorited_1000: 'legendary', honor_same_card_crown: 'legendary',
 };
 /** 管理員發的活動、比賽徽章是限時限量的；unique 類別是全服唯一。 */
 const BY_CATEGORY: Record<string, BadgeRarity> = { event: 'epic', contest: 'epic', unique: 'unique' };
