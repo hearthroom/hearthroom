@@ -2344,6 +2344,8 @@ app.get("/v1/review/:id/detail", async (c) => {
       rejectReasons: s.status === "rejected" ? parseReviewReasons(s.reject_reasons) : [],
       // 定案後的保留期（到期時間）；過期或讀不到時 null，頁面顯示「內容已過保留期」
       retainUntil,
+      // 兩段式決定：我自己送過的盲審判斷（只有本人看得到；不含 AI 的任何資訊）。有就直接進揭曉步驟
+      myBlind: await blindOf(c.env.DB, s.id, member.id),
       rejectCoaching: s.status === "rejected" ? !!s.reject_coaching : false,
       detail,
     },

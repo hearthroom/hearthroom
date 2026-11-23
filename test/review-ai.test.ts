@@ -488,7 +488,10 @@ describe('兩段式決定', () => {
     expect(body.blind.verdict).toBe('approve');
     expect(body.ai).toMatchObject({ state: 'ready', suggestion: { verdict: 'reject' } });
     expect(await status(id)).toBe('pending');
-    expect((await get(`/v1/review/${id}/detail`, 'human')).status).toBe(200);
+    const d = await json(await get(`/v1/review/${id}/detail`, 'human'));
+    expect(d.myBlind).toMatchObject({ verdict: 'approve' });
+    // 詳情不帶 AI 的任何資訊
+    expect(JSON.stringify(d)).not.toContain('opening.no_reply_hook');
     expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
     expect((await blind(id, { verdict: 'reject', reasons: ['other'], note: 'x' })).status).toBe(409);
     expect(await json(await final(id, { verdict: 'approve' }))).toEqual({ error: 'finalize_with_source' });
