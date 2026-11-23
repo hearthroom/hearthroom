@@ -3040,6 +3040,9 @@ export default {
       run(purgeRetainedSnapshots(cronEnv.DB, event.scheduledTime)
         .then((n) => (n ? bumpOp(cronEnv.DB, 'review_retention', 'purge', 'deleted', n) : undefined))
         .catch(async () => { console.warn('Review snapshot retention purge unavailable'); await bumpOp(cronEnv.DB, 'review_retention', 'purge', 'error'); }));
+      // 審卡 V2：更新差異的摘要補漏（送審後當下沒算成的、0146 之前就在排隊的單）。每 5 分鐘 3 張：
+      // 掛在每小時那一支時一小時只補 3 張，上線後舊的待審更新單要補好幾個小時（2026-11-23 讀回發現）
+      run(diffMaintenance(cronEnv, event.scheduledTime).catch(() => { console.warn('Review diff maintenance unavailable'); }));
       finish();
       return;
     }
@@ -3060,8 +3063,6 @@ export default {
     run(accountAuthMaintenance(cronEnv).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     run(reconcileWorkAccess(cronEnv).catch(() => { console.warn('Work access recovery unavailable'); }));
     run(communityMaintenance(cronEnv).catch(() => { console.warn("Community maintenance unavailable"); }));
-    // 審卡 V2：更新差異的摘要補漏（送審後當下沒算成的、0146 之前就在排隊的單）
-    run(diffMaintenance(cronEnv, event.scheduledTime).catch(() => { console.warn("Review diff maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     // 蘇綺的召回先寫進通知，同一輪就推出去
     run(sukiRecall(cronEnv).catch(() => { console.warn("Suki recall unavailable"); return 0; })
