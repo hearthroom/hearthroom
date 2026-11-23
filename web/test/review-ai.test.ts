@@ -327,6 +327,16 @@ it('two-step: no AI call (handoff) or an AI choice the server will not take leav
   await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
   expect($('[data-final-choices]')).toBeNull();
   expect($('[data-final-mine]')).not.toBeNull();
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  // AI 駁回但只打了標記、沒有作者看得到的理由：照樣並排比，「用 AI 的」停用並說明
+  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ reasons: [], flags: ['mass_produced'] }));
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  expect($('[data-agree]')!.dataset.agree).toBe('differ');
+  const ai = host.querySelector<HTMLInputElement>('[data-final-pick=ai]')!;
+  expect(ai.disabled).toBe(true);
+  expect(ai.closest('label')!.textContent).toContain(t('reviewAi.two.final.pick.aiNoReasons'));
 });
 
 it('two-step: if the AI re-judged after the reveal, the new call is swapped in and the reviewer chooses again', async () => {

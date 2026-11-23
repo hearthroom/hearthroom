@@ -6165,5 +6165,6 @@
   "reviewAi.arb.notes.typesOnly": "只选了原因类型，没有写说明。",
   "reviewAi.arb.notes.empty": "这段期间没有给 AI 的说明。",
   "reviewAi.arb.notes.emptyFiltered": "这段期间没有这个类型的说明；换个类型或期间看看。",
-  "reviewAi.arb.notes.failed": "给 AI 的说明加载失败。"
+  "reviewAi.arb.notes.failed": "给 AI 的说明加载失败。",
+  "reviewAi.two.final.pick.aiNoReasons": "AI 没有选作者看得到的理由，不能直接采用"
 }

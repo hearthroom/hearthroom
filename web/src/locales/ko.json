@@ -6165,5 +6165,6 @@
   "reviewAi.arb.notes.typesOnly": "이유 유형만 고르고 설명은 없어요.",
   "reviewAi.arb.notes.empty": "이 기간에는 AI에게 남긴 설명이 없어요.",
   "reviewAi.arb.notes.emptyFiltered": "이 기간에는 이 유형의 설명이 없어요. 유형이나 기간을 바꿔 보세요.",
-  "reviewAi.arb.notes.failed": "AI에게 남긴 설명을 불러올 수 없어요."
+  "reviewAi.arb.notes.failed": "AI에게 남긴 설명을 불러올 수 없어요.",
+  "reviewAi.two.final.pick.aiNoReasons": "AI가 작성자에게 보이는 이유를 고르지 않아 그대로 쓸 수 없어요"
 }

@@ -6165,5 +6165,6 @@
   "reviewAi.arb.notes.typesOnly": "理由の種類だけが選ばれ、メモはありません。",
   "reviewAi.arb.notes.empty": "この期間にAIへのメモはありません。",
   "reviewAi.arb.notes.emptyFiltered": "この期間にこの種類のメモはありません。種類か期間を変えてみてください。",
-  "reviewAi.arb.notes.failed": "AIへのメモを読み込めませんでした。"
+  "reviewAi.arb.notes.failed": "AIへのメモを読み込めませんでした。",
+  "reviewAi.two.final.pick.aiNoReasons": "AIが作者に見える理由を選んでいないため、そのままは使えません"
 }
