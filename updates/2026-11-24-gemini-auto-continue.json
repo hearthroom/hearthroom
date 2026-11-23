@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "部分 Gemini 線路的回覆被截斷時，現在會自動接著寫完。",
+    "zh-Hans": "部分 Gemini 线路的回复被截断时，现在会自动接着写完。",
+    "en": "Replies on some Gemini lanes now finish on their own when they get cut off.",
+    "ja": "一部の Gemini 回線で、途中で切れた返信が自動で続きまで書かれるようになりました。",
+    "ko": "일부 Gemini 회선에서 잘린 답변을 이제 자동으로 이어서 끝까지 써요."
+  },
+  "body": {
+    "zh-Hant": "開關在模型設定的「深度思考」裡，每則回覆最多續寫五次，每次續寫會多一次呼叫並照實計費。",
+    "zh-Hans": "开关在模型设置的「深度思考」里，每条回复最多续写五次，每次续写会多一次调用并按实际计费。",
+    "en": "The switch is under Thinking Mode in model settings, and each reply continues at most five times, with every continuation billed as one more call.",
+    "ja": "モデル設定の「思考モード」でオンとオフを切り替えられ、1件につき最大5回まで続きを書き、続きを書くたびに呼び出し1回分の料金がかかります。",
+    "ko": "모델 설정의 '사고 모드'에서 켜고 끌 수 있으며, 답변당 최대 다섯 번 이어서 쓰고 이어 쓸 때마다 호출 한 번만큼 요금이 들어요."
+  }
+}

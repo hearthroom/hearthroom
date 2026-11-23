@@ -3547,6 +3547,63 @@
         }
       }
     },
+    "/open/v1/conversation/turn-diagnostics": {
+      "get": {
+        "operationId": "getTurnDiagnostics",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Recorded metadata of one reply, for application admins",
+        "description": "Without `chatId`, answers `{available}`: whether the caller is an owner or admin of the application the token belongs to; every other caller gets `available:false`. With `chatId`, returns that reply's recorded metadata: lane, delivery (streaming setting, upstream stream or non-stream, tool reply status, upstream finish and filter reason, where the shown body came from, whether the reply tool closed, characters written outside it, reasoning tokens), whether a custom preset was used and its revision tail, the classification, reply and thinking lengths, each automatic continuation step, usage, charge and timing. It never returns reply text, the player's line, preset content or account data; identifiers are reduced to their last 8 characters. A value the turn did not record is `null`. Callers without that standing get 403; a reply outside the caller's own conversations is 404.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Conversation owned by the caller; required with `chatId`."
+          },
+          {
+            "name": "chatId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "AI reply to describe. Omit to only ask whether the caller may use this endpoint."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{available}` without `chatId`; the reply's metadata with it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not an owner or admin of the application."
+          },
+          "404": {
+            "description": "Unknown reply, or a reply outside the caller's own conversations."
+          }
+        },
+        "x-unpublished": true
+      }
+    },
     "/open/v1/conversation/replay": {
       "get": {
         "operationId": "getChatReplay",
