@@ -247,8 +247,9 @@ The sealed version the author submitted, without claiming it. Long text is cut a
 { submission: { id, cardId, kind, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
   author: { tier, batchSuspected } | null,   // pending only; null for decided submissions
   card: { name, summary, tags, originalWork: string|null, userName, setting, speech, instructions, examples,
-          openings: { welcome, alternates, prologue }, lorebook: { entryCount, entries: { name, content }[] } },
-  stats: { settingChars, openingChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
+          openings: { mode: "page"|"greeting", page, welcome, alternates, prologue }, lorebook: { entryCount, entries: { name, content }[] } },
+  update: null | { state: "no_base"|"unreadable"|"missing" } | { state: "ready", baseKind, summary, fields: { key, before, after }[], lorebook: { added, removed, modified } },
+  stats: { settingChars, openingChars, openingPageChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
   allowed: { verdicts, reasons, flags, handoffCauses } }
 ```
 
@@ -261,10 +262,20 @@ Body: `{ criteriaVersion: "v<n>", model, verdict: "pass"|"reject"|"handoff", rea
 ### Reveal and feedback (human reviewers)
 
 - `GET /v1/review/:id/ai` → `{ suggestions: { id, criteriaVersion, model, verdict, reasons, flags, confidence, handoffCause, note, phase, at }[], myFeedback }`. Allowed once the caller has stamped or dropped this submission, or for managers after it is decided; otherwise 403 `ai_hidden_until_decided`.
-- `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records one review event per reviewer and suggestion (the first answer stands) and returns `{ value, kept }` (`kept: true` means an earlier answer was kept and this one ignored).
+- `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records a review event and returns `{ value }`. A reviewer may change their answer; each change is a new event (resending the same `operationId` records nothing new) and the reveal and the report use each reviewer's latest answer.
 
 ### `GET /v1/review-ai/report?from=&to=&criteria=` (managers)
 
 Human vs AI by criteria version for submissions sent in the window (default the last 7 days, at most 120) that a human has already decided or dropped; pending ones are left out so the report never shows an AI verdict before a decision. It returns totals, the decision matrix (approved / rejected / dropped × pass / reject / handoff), `agreement` over submissions both sides decided, `aiStricter` (human approved, AI rejected), `humanStricter`, per-reason agreement on rejections, flag counts, handoff and refusal rates, reviewer feedback, average latency and cost.
+
+### Disagreement arbitration (managers)
+
+Managers review only the submissions where the human decision and the AI verdict point opposite ways: `ai_stricter` (human approved, AI rejected) or `human_stricter` (human rejected or dropped, AI passed). Handoffs and undecided submissions are not disagreements. Arbitration never changes the decision and never notifies the author.
+
+- `GET /v1/review-ai/disagreements?state=open|done|all&direction=&criteria=&reason=&limit=20&offset=0` → `{ total, items: { suggestionId, submissionId, cardId, name, direction, criteriaVersion, human: { decision, reasons, at }, ai: { verdict, reasons, flags, confidence, at }, arbitration }[] }`, oldest first; `open` (default) means never arbitrated; `reason` matches either side.
+- `GET /v1/review-ai/disagreements/:suggestionId` → `{ submission, direction, human: { decision, reasons, note, at, stamps: { verdict, at, reviewer }[], feedback }, ai: { …, note, model }, arbitrations, content: { state: "ready", card, stats } | { state: "unavailable" }, update }`. Reviewer names appear only here, never in reports or exports. `content` is the same sealed version the AI read.
+- `POST /v1/review-ai/disagreements/:suggestionId/arbitration` with `{ value: "human_right"|"ai_right"|"both_ok"|"both_wrong", addToReference?: boolean, note?: string (≤500), operationId }` → `{ id, value, referencePool: "pass"|"reject"|null }`. Only `human_right` and `ai_right` can add a reference (400 `reference_needs_a_winner` otherwise); the pool is the winning side's verdict. Re-arbitrating adds a new record; the latest counts. Resending the same `operationId` returns the stored record; reusing it for another value gives 409 `arbitration_operation_repeated`. A suggestion that is not a disagreement gives 404 `disagreement_not_found`.
+- `GET /v1/review-ai/reference-candidates?criteria=&limit=30` → `{ items, skipped }`: suggestions whose latest arbitration added them to a pool, shaped like a criteria `references` entry (`verdict`, `reasons`, `flags`, empty `why`, `originalWork`, `tags`, `excerpt: { opening, setting }` of at most 600 characters each). No accounts or ids. `skipped` counts candidates whose content the host could no longer read.
+- The report's version rows gain `arbitration: { values: { human_right, ai_right, both_ok, both_wrong }, reasons: { [code]: { humanWrong, aiWrong } } } | null`.
 
 Metrics: `hearthroom_review_ai_operations_total{operation,outcome}`, `hearthroom_review_ai_verdicts_total{verdict,outcome="shadow"|"backfill"}` and `hearthroom_review_agent_key_admissions_total{operation="admission",outcome}`.

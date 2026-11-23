@@ -217,15 +217,17 @@ export async function canReveal(db: D1Database, s: Pick<SubmissionRow, "id" | "s
   return s.status !== "pending" && (role === "manager" || role === "owner");
 }
 
-/** 揭曉後的覆核：每位審核員對每筆建議記一次（第一次為準），寫成審核事件。 */
-export async function recordFeedback(db: D1Database, input: { submissionId: string; cardId: number; suggestionId: string; memberId: string; value: string; now: number }) {
+/** 揭曉後的覆核：可以改選，每次一筆審核事件（同一個 operationId 重送不多記），統計取每位審核員對每筆建議最後一次。 */
+export async function recordFeedback(db: D1Database, input: { submissionId: string; cardId: number; suggestionId: string; memberId: string; value: string; operationId: string; now: number }) {
   await db.prepare(`INSERT OR IGNORE INTO review_events(event_key,spec_version,submission_id,card_id,at,action,actor_kind,actor_member_id,source,ai_suggestion_id)
     VALUES (?,1,?,?,?,'ai_feedback','reviewer',?,?,?)`)
-    .bind(`aifb:${input.suggestionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId, input.value, input.suggestionId).run();
-  const row = await db.prepare("SELECT source FROM review_events WHERE event_key=?").bind(`aifb:${input.suggestionId}:${input.memberId}`).first<{ source: string }>();
-  // kept：這位審核員之前已覆核過，保留第一次的答案、這次沒寫入
-  return { value: row!.source, kept: row!.source !== input.value };
+    .bind(`aifb:${input.suggestionId}:${input.memberId}:${input.operationId}`, input.submissionId, input.cardId, input.now, input.memberId, input.value, input.suggestionId).run();
+  return { value: input.value };
 }
+
+/** 每位審核員對每筆建議最後一次覆核（揭曉與報表共用） */
+export const LATEST_FEEDBACK = `e.action='ai_feedback' AND e.id=(SELECT f.id FROM review_events f WHERE f.action='ai_feedback'
+  AND f.ai_suggestion_id=e.ai_suggestion_id AND f.actor_member_id=e.actor_member_id ORDER BY f.at DESC, f.id DESC LIMIT 1)`;
 
 /** 人工 vs AI 的對照：只算人已做完決定（通過、駁回、不受理中）且 AI 下了結論的單。依判準版本分組。 */
 export async function aiReport(db: D1Database, input: { from: number; to: number; criteria?: string | null }) {
@@ -238,7 +240,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
     .bind(input.from, input.to, input.criteria ?? null).all<Record<string, any>>();
   const feedback = await db.prepare(`SELECT a.criteria_version AS v, e.source AS value, COUNT(*) AS n FROM review_events e JOIN review_ai_suggestions a ON a.id=e.ai_suggestion_id
     JOIN review_submissions s ON s.id=a.submission_id
-    WHERE e.action='ai_feedback' AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3) GROUP BY a.criteria_version, e.source`)
+    WHERE ${LATEST_FEEDBACK} AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3) GROUP BY a.criteria_version, e.source`)
     .bind(input.from, input.to, input.criteria ?? null).all<{ v: string; value: string; n: number }>();
   const versions = new Map<string, ReturnType<typeof emptyGroup>>();
   for (const r of rows.results) {

@@ -177,6 +177,12 @@ describe('雙盲與揭曉', () => {
     expect(fb.status).toBe(200);
     const ev = await env.DB.prepare("SELECT actor_kind, actor_member_id, source, ai_suggestion_id FROM review_events WHERE action='ai_feedback'").first();
     expect(ev).toEqual({ actor_kind: 'reviewer', actor_member_id: humanId, source: 'ai_wrong', ai_suggestion_id: sid });
+    // 可以改選：每次一筆事件，揭曉與報表取最後一次
+    expect((await send('POST', `/v1/review/${id}/ai-feedback`, 'human', { suggestionId: sid, value: 'both_ok', operationId: crypto.randomUUID() })).status).toBe(200);
+    expect((await json(await get(`/v1/review/${id}/ai`, 'human'))).myFeedback).toMatchObject([{ suggestionId: sid, value: 'both_ok' }]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_events WHERE action='ai_feedback'").first<{ n: number }>())!.n).toBe(2);
+    const fbReport = (await json(await get('/v1/review-ai/report', 'mgr'))).versions[0].feedback;
+    expect(fbReport).toEqual({ ai_right: 0, ai_wrong: 0, both_ok: 1 });
     // 另一位沒參與的審核員仍看不到；管理員在定案後可看
     expect((await get(`/v1/review/${id}/ai`, 'agent')).status).toBe(403);
     expect((await get(`/v1/review/${id}/ai`, 'mgr')).status).toBe(200);

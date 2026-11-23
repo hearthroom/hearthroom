@@ -1,5 +1,6 @@
 import { parseReviewReasons } from "../shared/review-reasons";
 import { HttpError } from "./types";
+import { LATEST_FEEDBACK } from "./review-ai";
 
 /**
  * AI 分歧仲裁（owner 2026-11-23 22:22）：只看人工與 AI 結論相反的單，由管理員判誰對。
@@ -68,7 +69,7 @@ export async function disagreementSides(db: D1Database, suggestionId: string) {
     db.prepare(`SELECT st.verdict, st.created_at AS at, COALESCE(m.display_name, m.handle) AS reviewer FROM review_stamps st LEFT JOIN members m ON m.id=st.member_id
       WHERE st.submission_id=? ORDER BY st.created_at`).bind(row.submission_id).all(),
     db.prepare(`SELECT e.source AS value, e.at, COALESCE(m.display_name, m.handle) AS reviewer FROM review_events e LEFT JOIN members m ON m.id=e.actor_member_id
-      WHERE e.action='ai_feedback' AND e.ai_suggestion_id=? ORDER BY e.at`).bind(suggestionId).all(),
+      WHERE ${LATEST_FEEDBACK} AND e.ai_suggestion_id=? ORDER BY e.at`).bind(suggestionId).all(),
     db.prepare(`SELECT x.value, x.reference_pool AS referencePool, x.note, x.created_at AS at, COALESCE(m.display_name, m.handle) AS arbiter
       FROM review_ai_arbitrations x LEFT JOIN members m ON m.id=x.member_id WHERE x.suggestion_id=? ORDER BY x.created_at, x.rowid`).bind(suggestionId).all(),
   ]);

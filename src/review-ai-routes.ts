@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
+import { LATEST_FEEDBACK, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { diffView } from "./review-diff-store";
 import { arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
@@ -148,7 +148,7 @@ reviewAiRoutes.get("/v1/review/:id/ai", (c) => counted(c, "reveal", async () => 
   const s = await getSubmission(c.env.DB, c.req.param("id"));
   if (!(await canReveal(c.env.DB, s, member.id, role))) throw new HttpError(403, "ai_hidden_until_decided");
   const suggestions = await suggestionsOf(c.env.DB, s.id);
-  const mine = await c.env.DB.prepare("SELECT ai_suggestion_id AS suggestionId, source AS value FROM review_events WHERE action='ai_feedback' AND submission_id=? AND actor_member_id=?")
+  const mine = await c.env.DB.prepare(`SELECT e.ai_suggestion_id AS suggestionId, e.source AS value, e.at FROM review_events e WHERE ${LATEST_FEEDBACK} AND e.submission_id=? AND e.actor_member_id=?`)
     .bind(s.id, member.id).all<{ suggestionId: string; value: string }>();
   return c.json({ suggestions, myFeedback: mine.results }, 200, NO_STORE);
 }));
@@ -158,12 +158,12 @@ reviewAiRoutes.post("/v1/review/:id/ai-feedback", (c) => counted(c, "feedback", 
   const { member, role } = await requireHuman(c);
   const s = await getSubmission(c.env.DB, c.req.param("id"));
   const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
-  operationOf(body.operationId);
+  const operationId = operationOf(body.operationId);
   if (typeof body.value !== "string" || !(AI_FEEDBACK as readonly string[]).includes(body.value)) throw new HttpError(400, "invalid_arguments", undefined, { field: "value" });
   if (!(await canReveal(c.env.DB, s, member.id, role))) throw new HttpError(403, "ai_hidden_until_decided");
   const suggestion = await c.env.DB.prepare("SELECT id FROM review_ai_suggestions WHERE id=? AND submission_id=? AND verdict IS NOT NULL").bind(body.suggestionId ?? "", s.id).first<{ id: string }>();
   if (!suggestion) throw new HttpError(404, "suggestion_not_found");
-  const out = await recordFeedback(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), suggestionId: suggestion.id, memberId: member.id, value: body.value, now: Date.now() });
+  const out = await recordFeedback(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), suggestionId: suggestion.id, memberId: member.id, value: body.value, operationId, now: Date.now() });
   return c.json(out, 200, NO_STORE);
 }));
 
