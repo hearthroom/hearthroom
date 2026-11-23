@@ -290,13 +290,26 @@ describe('AI 分歧仲裁', () => {
     return { a, b, c, sa, sb };
   }
 
-  it('清單只列人機相反的單，標出方向；一般審核員看不到', async () => {
+  it('清單只列人機相反的單，標出方向；審核員都能用（owner 11-24），但看不到審核員名字、看不到自己寫的卡', async () => {
     const { sa, sb } = await setup();
-    expect((await get('/v1/review-ai/disagreements', 'human')).status).toBe(403);
-    const list = await json(await get('/v1/review-ai/disagreements', 'mgr'));
+    const asReviewer = await json(await get('/v1/review-ai/disagreements', 'human'));
+    expect(asReviewer.total).toBe(2);
+    const detail = await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'));
+    expect(detail.human.stamps[0].reviewer).toBeNull();
+    expect((await send('POST', `/v1/review-ai/disagreements/${sa}/arbitration`, 'human', { value: 'human_right', operationId: crypto.randomUUID() })).status).toBe(200);
+    // 報表與參考範例匯出仍限管理員
+    expect((await get('/v1/review-ai/report', 'human')).status).toBe(403);
+    expect((await get('/v1/review-ai/reference-candidates', 'human')).status).toBe(403);
+    // 作者自己也是審核員時，自己的卡不出現、也不能仲裁
+    identities({ agent: AGENT, human: HUMAN, mgr: MANAGER, author: AUTHOR });
+    await makeReviewer(AUTHOR);
+    expect((await json(await get('/v1/review-ai/disagreements?state=all', 'author'))).total).toBe(0);
+    expect((await get(`/v1/review-ai/disagreements/${sa}`, 'author')).status).toBe(404);
+    expect((await send('POST', `/v1/review-ai/disagreements/${sa}/arbitration`, 'author', { value: 'ai_right', operationId: crypto.randomUUID() })).status).toBe(404);
+    const list = await json(await get('/v1/review-ai/disagreements?state=all', 'mgr'));
     expect(list.total).toBe(2);
     expect(Object.fromEntries(list.items.map((i: any) => [i.suggestionId, i.direction]))).toEqual({ [sa]: 'ai_stricter', [sb]: 'human_stricter' });
-    const stricter = await json(await get('/v1/review-ai/disagreements?direction=ai_stricter&reason=opening.no_reply_hook', 'mgr'));
+    const stricter = await json(await get('/v1/review-ai/disagreements?state=all&direction=ai_stricter&reason=opening.no_reply_hook', 'mgr'));
     expect(stricter.items.map((i: any) => i.suggestionId)).toEqual([sa]);
   });
 

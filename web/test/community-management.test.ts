@@ -33,7 +33,7 @@ const links = () => [...host.querySelectorAll<HTMLAnchorElement>('.management-na
 it('keeps card review, cases, works, comments, share campaign, members, history and settings inside one management workspace with separate counts', async () => {
   expect(host.querySelectorAll('h1')).toHaveLength(1);
   expect(host.querySelector('h1')!.textContent).toBe(i18n.global.t('moderation.title'));
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/comments', '/review/campaign', '/review/members', '/review/history', '/review/settings']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/comments', '/review/campaign', '/review/members', '/review/history', '/review/settings', '/review/ai']);
   await vi.waitFor(() => expect(links()[0]!.querySelector('.review-badge')?.textContent).toBe('2'));
   expect(links()[1]!.querySelector('.review-badge')?.textContent).toBe('3');
   const shell = host.querySelector('.community-management');
@@ -53,7 +53,7 @@ it('keeps card review, cases, works, comments, share campaign, members, history 
 it('keeps legacy management bookmarks and all navigation in the selected language', async () => {
   await router.push('/en/review/manage?from=bookmark#pending'); await nextTick();
   expect(router.currentRoute.value.fullPath).toBe('/en/review/cases?from=bookmark#pending');
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/comments', '/en/review/campaign', '/en/review/members', '/en/review/history', '/en/review/settings']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/comments', '/en/review/campaign', '/en/review/members', '/en/review/history', '/en/review/settings', '/en/review/ai']);
   expect(router.currentRoute.value.meta.auth).toBe(true);
 });
 it('opens the Members tab for any reviewer, between works and history', async () => {

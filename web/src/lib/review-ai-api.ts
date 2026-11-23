@@ -64,7 +64,7 @@ export interface DisagreementDetail {
   direction: Direction;
   human: { decision: HumanDecision; reasons: string[]; note: string; at: number | null; stamps: { verdict: "approve" | "reject"; at: number; reviewer: string | null }[]; feedback: { value: AiFeedback; at: number; reviewer: string | null }[] };
   ai: { suggestionId: string; criteriaVersion: string; model: string; verdict: "pass" | "reject"; reasons: string[]; flags: string[]; confidence: number | null; note: string; phase: string; at: number };
-  arbitrations: { value: Arbitration; referencePool: "pass" | "reject" | null; note: string; at: number; arbiter: string | null }[];
+  arbitrations: { value: Arbitration; referencePool: "pass" | "reject" | null; note: string; at: number; arbiter: string | null; /** 這次在頁面上剛送出的（伺服器對非管理員不回名字） */ mine?: boolean }[];
   content: ({ state: "ready" } & { card: AiCardContent }) | { state: "unavailable" };
   update: AiUpdate;
 }

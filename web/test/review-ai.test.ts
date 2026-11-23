@@ -222,11 +222,12 @@ const disagreement = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-it('shows the AI disagreement tab next to review stats only to managers, and denies the route to others', async () => {
+it('shows the AI arbitration tab to every reviewer (managers also get stats and the report)', async () => {
   routes['/v1/review-ai/disagreements?'] = () => [200, { total: 0, items: [] }];
   routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [] }];
   await mountPage('/en/review/ai');
   await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/en/review/ai"][aria-current="page"]')).not.toBeNull());
+  await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/en/review/stats"]')).not.toBeNull());
   const hrefs = [...host.querySelectorAll('.management-nav a')].map((a) => a.getAttribute('href'));
   expect(hrefs.indexOf('/en/review/ai')).toBe(hrefs.indexOf('/en/review/stats') + 1);
   expect(router.currentRoute.value.meta.managementTab).toBe('aiReview');
@@ -239,12 +240,17 @@ it('shows the AI disagreement tab next to review stats only to managers, and den
   await vi.waitFor(() => expect(calls.some((c) => c.url === '/v1/review-ai/disagreements/g1')).toBe(true));
   app!.unmount(); document.body.innerHTML = ''; calls = [];
 
+  // 一般審核員（owner 2026-11-24）：有 AI 仲裁分頁、清單可用；沒有審核統計、沒有報表子頁，報表網址顯示沒有權限
   mocks.role = 'reviewer';
   await mountPage('/en/review/ai');
-  await vi.waitFor(() => expect(host.querySelector('.management-nav a')).not.toBeNull());
+  await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/en/review/ai"]')).not.toBeNull());
+  expect(host.querySelector('.management-nav a[href="/en/review/stats"]')).toBeNull();
+  await vi.waitFor(() => expect($('[data-empty]')).not.toBeNull());
+  expect($('[data-ai-sub="report"]')).toBeNull();
+  calls = [];
+  await router.push('/en/review/ai/report'); await nextTick();
   await vi.waitFor(() => expect($('[data-forbidden]')).not.toBeNull());
-  expect(host.querySelector('.management-nav a[href="/en/review/ai"]')).toBeNull();
-  expect(calls.filter((c) => c.url.startsWith('/v1/review-ai/'))).toEqual([]);
+  expect(calls.filter((c) => c.url.startsWith('/v1/review-ai/report'))).toEqual([]);
 });
 
 it('arbitration: reference checkbox only for a winner, names the pool, links to re-review when the AI was right about an approved card', async () => {

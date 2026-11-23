@@ -41,8 +41,9 @@ const blog = { key: 'blog', path: '/review/blog' } as const;
 const visible = computed(() => {
   const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
   if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
-  // 審核統計與 AI 分歧（仲裁）只給管理員，兩格相鄰
-  if (list.length && (reviewer.role === 'manager' || reviewer.role === 'owner')) list.push({ key: 'reviewStats', path: '/review/stats' }, { key: 'aiReview', path: '/review/ai' });
+  // 審核統計只給管理員；AI 仲裁給所有審核員（owner 2026-11-24「能審卡的人都能給 AI 打標」），兩格相鄰
+  if (list.length && (reviewer.role === 'manager' || reviewer.role === 'owner')) list.push({ key: 'reviewStats', path: '/review/stats' });
+  if (list.length) list.push({ key: 'aiReview', path: '/review/ai' });
   if (reviewer.blogWriter) list.push(blog);
   return list;
 });

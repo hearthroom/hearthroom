@@ -5946,7 +5946,7 @@
   "reviewAi.reveal.loadFailed": "AIの判定を今は読み込めません。あなたの決定には影響しません。",
   "reviewAi.reveal.retry": "再試行",
   "reviewAi.reveal.footnote": "AIはあなたが決定を送る前に判定していて、あなたには見えていませんでした。AIが見るのはカードが丁寧に書かれているかだけで、内容の過激さは判断しません。",
-  "moderation.tab.aiReview": "AIとの不一致",
+  "moderation.tab.aiReview": "AI 仲裁",
   "reviewAi.arb.title": "AIとの不一致の裁定",
   "reviewAi.arb.sub.list": "不一致リスト",
   "reviewAi.arb.sub.report": "裁定レポート",

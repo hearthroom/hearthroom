@@ -5946,7 +5946,7 @@
   "reviewAi.reveal.loadFailed": "지금은 AI 판단을 불러올 수 없어요. 내 결정에는 영향이 없어요.",
   "reviewAi.reveal.retry": "다시 시도",
   "reviewAi.reveal.footnote": "AI는 내가 결정을 보내기 전에 이미 판단했고, 나는 그 판단을 보지 못했어요. AI는 카드가 정성껏 쓰였는지만 보고 수위는 판단하지 않아요.",
-  "moderation.tab.aiReview": "AI 불일치",
+  "moderation.tab.aiReview": "AI 중재",
   "reviewAi.arb.title": "AI 불일치 판정",
   "reviewAi.arb.sub.list": "불일치 목록",
   "reviewAi.arb.sub.report": "판정 리포트",

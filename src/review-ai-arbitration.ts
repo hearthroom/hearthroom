@@ -31,6 +31,8 @@ const base = `FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.s
 
 export interface DisagreementFilter {
   state: "open" | "done" | "all"; criteria: string | null; direction: Direction | null; reason: string | null; limit: number; offset: number;
+  /** 看的人：自己寫的卡不列（作者不該看到自己卡的審核判斷） */
+  viewer: string;
 }
 
 const pickName = (raw: string | null): string => {
@@ -46,8 +48,9 @@ export async function listDisagreements(db: D1Database, f: DisagreementFilter) {
     AND (?1 IS NULL OR a.criteria_version=?1)
     AND (?2 IS NULL OR ${DIRECTION} = ?2)
     AND (?3='all' OR (?3='open' AND ${LATEST} IS NULL) OR (?3='done' AND ${LATEST} IS NOT NULL))
-    AND (?4 IS NULL OR EXISTS(SELECT 1 FROM json_each(a.reasons) r WHERE r.value=?4) OR EXISTS(SELECT 1 FROM json_each(COALESCE(s.reject_reasons,'[]')) r WHERE r.value=?4))`;
-  const args = [f.criteria, f.direction, f.state, f.reason];
+    AND (?4 IS NULL OR EXISTS(SELECT 1 FROM json_each(a.reasons) r WHERE r.value=?4) OR EXISTS(SELECT 1 FROM json_each(COALESCE(s.reject_reasons,'[]')) r WHERE r.value=?4))
+    AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?5)`;
+  const args = [f.criteria, f.direction, f.state, f.reason, f.viewer];
   const [rows, total] = await Promise.all([
     db.prepare(`SELECT a.id, a.submission_id, s.card_id, a.criteria_version, a.verdict, a.reasons, a.flags, a.confidence, a.created_at,
         s.decided_at, s.reject_reasons, ${HUMAN_NOW} AS human, ${DIRECTION} AS direction, ${LATEST} AS arbitration,
@@ -68,9 +71,12 @@ export async function listDisagreements(db: D1Database, f: DisagreementFilter) {
 }
 
 /** 單筆分歧的人工與 AI 兩邊（卡片內容由路由另讀）。審核員名字只給管理員這頁，報表與匯出不列。 */
-export async function disagreementSides(db: D1Database, suggestionId: string) {
+export async function disagreementSides(db: D1Database, suggestionId: string, opts: { viewer: string; names: boolean }) {
+  // 審核員、仲裁人的名字只給管理員（PM 2026-11-23）；一般審核員看得到結論，不看是誰
+  const hideNames = (rows: Record<string, unknown>[], key: string) => (opts.names ? rows : rows.map((r) => ({ ...r, [key]: null })));
   const row = await db.prepare(`SELECT a.*, s.status, s.card_id, s.decided_at, s.reject_reasons, s.note AS human_note, s.source_role_id, s.provider, s.submitted_at,
-      ${HUMAN_NOW} AS human, ${DIRECTION} AS direction ${base} WHERE a.id=?`).bind(suggestionId).first<Record<string, any>>();
+      ${HUMAN_NOW} AS human, ${DIRECTION} AS direction ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
+    .bind(suggestionId, opts.viewer).first<Record<string, any>>();
   if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
   const [stamps, feedback, history] = await Promise.all([
     db.prepare(`SELECT st.verdict, st.created_at AS at, COALESCE(m.display_name, m.handle) AS reviewer FROM review_stamps st LEFT JOIN members m ON m.id=st.member_id
@@ -85,13 +91,13 @@ export async function disagreementSides(db: D1Database, suggestionId: string) {
     direction: row.direction as Direction,
     human: {
       decision: row.human, reasons: row.human === "rejected" ? parseReviewReasons(row.reject_reasons) : [], note: (row.human_note as string) ?? "",
-      at: row.decided_at, stamps: stamps.results, feedback: feedback.results,
+      at: row.decided_at, stamps: hideNames(stamps.results, "reviewer"), feedback: hideNames(feedback.results, "reviewer"),
     },
     ai: {
       suggestionId, criteriaVersion: row.criteria_version, model: row.model, verdict: row.verdict, reasons: JSON.parse(row.reasons), flags: JSON.parse(row.flags),
       confidence: row.confidence, note: row.note, phase: row.phase, at: row.created_at,
     },
-    arbitrations: history.results,
+    arbitrations: hideNames(history.results, "arbiter"),
   };
 }
 
@@ -104,8 +110,8 @@ export async function arbitrate(db: D1Database, input: { suggestionId: string; m
   const add = input.addToReference === true;
   if (add && value !== "human_right" && value !== "ai_right") throw new HttpError(400, "reference_needs_a_winner", undefined, { field: "addToReference" });
   const row = await db.prepare(`SELECT a.id, a.submission_id, a.verdict, a.reasons, s.card_id, s.reject_reasons, ${HUMAN_NOW} AS human, ${DIRECTION} AS direction,
-      ${LAST("reasons")} AS last_reasons ${base} WHERE a.id=?`)
-    .bind(input.suggestionId).first<{ id: string; submission_id: string; verdict: string; reasons: string; card_id: number; reject_reasons: string | null; human: string; direction: string | null; last_reasons: string | null }>();
+      ${LAST("reasons")} AS last_reasons ${base} WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
+    .bind(input.suggestionId, input.memberId).first<{ id: string; submission_id: string; verdict: string; reasons: string; card_id: number; reject_reasons: string | null; human: string; direction: string | null; last_reasons: string | null }>();
   if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
   // 池＝仲裁後的正確結論：人對取人工結論（通過→pass、駁回／不受理→reject），AI 對取 AI 結論
   const pool = !add ? null : value === "ai_right" ? row.verdict : row.human === "approved" ? "pass" : "reject";

@@ -11,7 +11,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
 import { fetchAiReport, fetchDisagreements, type DisagreementItem, type Direction } from '@/lib/review-ai-api';
-import { isManagerRole, versionNumber } from '@/lib/review-ai';
+import { versionNumber } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
@@ -29,7 +29,8 @@ const route = useRoute();
 const router = useRouter();
 
 // 審核身分查回來之前不讀也不擋（骨架）；查回來不是管理員就只說一句，不發請求
-const allowed = computed(() => reviewer.reviewer === true && isManagerRole(reviewer.role));
+// 審核員都能仲裁（owner 2026-11-24）；報表與參考範例匯出仍限管理員
+const allowed = computed(() => reviewer.reviewer === true);
 const denied = computed(() => reviewer.reviewer !== null && !allowed.value);
 const forbidden = ref(false);
 

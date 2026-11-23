@@ -5946,7 +5946,7 @@
   "reviewAi.reveal.loadFailed": "The AI's call can't be loaded right now. Your decision isn't affected.",
   "reviewAi.reveal.retry": "Retry",
   "reviewAi.reveal.footnote": "The AI made its call before you decided, and you couldn't see it. It only checks whether the card was written with care, not how explicit it is.",
-  "moderation.tab.aiReview": "AI disagreements",
+  "moderation.tab.aiReview": "AI arbitration",
   "reviewAi.arb.title": "AI disagreement review",
   "reviewAi.arb.sub.list": "Disagreements",
   "reviewAi.arb.sub.report": "Report",

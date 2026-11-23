@@ -5946,7 +5946,7 @@
   "reviewAi.reveal.loadFailed": "AI 的判断暂时读不到，不影响你的决定。",
   "reviewAi.reveal.retry": "重试",
   "reviewAi.reveal.footnote": "AI 在你提交决定前就已判断，你没有看到它；它只看卡片是不是用心写的，不判断内容尺度。",
-  "moderation.tab.aiReview": "AI 分歧",
+  "moderation.tab.aiReview": "AI 仲裁",
   "reviewAi.arb.title": "AI 分歧仲裁",
   "reviewAi.arb.sub.list": "分歧列表",
   "reviewAi.arb.sub.report": "仲裁报表",

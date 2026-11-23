@@ -194,9 +194,12 @@ const criteriaOf = (c: Ctx) => {
   return v;
 };
 
-/** 分歧清單（管理員）：只列人工與 AI 結論相反的單；預設待仲裁。 */
+/**
+ * 分歧清單（審核員都能用，owner 2026-11-24「能審卡的人都能給 AI 打標」）：只列人工與 AI 結論相反、已定案的單；
+ * 不列自己寫的卡。預設待仲裁。報表與參考範例匯出仍限管理員。
+ */
 reviewAiRoutes.get("/v1/review-ai/disagreements", (c) => counted(c, "arbitration_list", async () => {
-  await requireManager(c);
+  const { member } = await requireHuman(c);
   const state = c.req.query("state") ?? "open";
   if (state !== "open" && state !== "done" && state !== "all") throw new HttpError(400, "invalid_arguments", undefined, { field: "state" });
   const direction = c.req.query("direction") ?? null;
@@ -205,13 +208,13 @@ reviewAiRoutes.get("/v1/review-ai/disagreements", (c) => counted(c, "arbitration
   if (reason !== null && !/^[a-z_]+(\.[a-z_]+)?$/.test(reason)) throw new HttpError(400, "invalid_arguments", undefined, { field: "reason" });
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 20)) || 20, 1), 50);
   const offset = Math.max(Math.floor(Number(c.req.query("offset") ?? 0)) || 0, 0);
-  return c.json(await listDisagreements(c.env.DB, { state, criteria: criteriaOf(c), direction: direction as Direction | null, reason, limit, offset }), 200, NO_STORE);
+  return c.json(await listDisagreements(c.env.DB, { state, criteria: criteriaOf(c), direction: direction as Direction | null, reason, limit, offset, viewer: member.id }), 200, NO_STORE);
 }));
 
-/** 單筆分歧：卡片（與 AI 讀到的同一份封存內容；讀不到就說明）、人工、AI、歷次仲裁。 */
+/** 單筆分歧：卡片（與 AI 讀到的同一份封存內容；讀不到就說明）、人工、AI、歷次仲裁。審核員名字只給管理員。 */
 reviewAiRoutes.get("/v1/review-ai/disagreements/:id", (c) => counted(c, "arbitration_read", async () => {
-  await requireManager(c);
-  const sides = await disagreementSides(c.env.DB, c.req.param("id"));
+  const { member, role } = await requireHuman(c);
+  const sides = await disagreementSides(c.env.DB, c.req.param("id"), { viewer: member.id, names: role === "manager" || role === "owner" });
   const s = await getSubmission(c.env.DB, sides.submission.id);
   let card: ReturnType<typeof aiCardInput> | null = null;
   try {
@@ -225,7 +228,7 @@ reviewAiRoutes.get("/v1/review-ai/disagreements/:id", (c) => counted(c, "arbitra
 
 /** 仲裁：人對／AI 對／都說得通／都不對，選填備註，可勾加入參考範例。不改原決定、不通知作者。 */
 reviewAiRoutes.post("/v1/review-ai/disagreements/:id/arbitration", (c) => counted(c, "arbitrate", async () => {
-  const member = await requireManager(c);
+  const { member } = await requireHuman(c);
   const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
   const operationId = operationOf(body.operationId);
   const out = await arbitrate(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, addToReference: body.addToReference, note: body.note, operationId, now: Date.now() });

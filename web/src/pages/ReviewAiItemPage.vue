@@ -14,7 +14,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
 import { ARBITRATION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, type Arbitration, type DisagreementDetail } from '@/lib/review-ai-api';
-import { isManagerRole, referencePool } from '@/lib/review-ai';
+import { referencePool } from '@/lib/review-ai';
 import { reasonKey } from '@/lib/review-reasons';
 import { reviewDiffFieldLabel } from '@/lib/review-diff-labels';
 import { useReviewer } from '@/lib/review';
@@ -32,7 +32,8 @@ const reviewer = useReviewer();
 const route = useRoute();
 
 // 審核身分查回來之前不讀也不擋（骨架）；查回來不是管理員就只說一句，不發請求
-const allowed = computed(() => reviewer.reviewer === true && isManagerRole(reviewer.role));
+// 審核員都能仲裁（owner 2026-11-24）；報表與參考範例匯出仍限管理員
+const allowed = computed(() => reviewer.reviewer === true);
 const denied = computed(() => reviewer.reviewer !== null && !allowed.value);
 const forbidden = ref(false);
 const id = computed(() => String(route.params.suggestionId ?? ''));
@@ -120,7 +121,7 @@ async function submit() {
     if (!alive || target !== id.value) return;
     pendingOp = null;
     result.value = { value: res.value, referencePool: res.referencePool, note: body.note };
-    d.arbitrations = [...d.arbitrations, { value: res.value, referencePool: res.referencePool, note: body.note, at: Date.now(), arbiter: null }];
+    d.arbitrations = [...d.arbitrations, { value: res.value, referencePool: res.referencePool, note: body.note, at: Date.now(), arbiter: null, mine: true }];
     void loadNext();
   } catch (e) {
     if (!alive || target !== id.value) return;
@@ -318,7 +319,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
             <p class="ai-label">{{ t('reviewAi.arb.history') }}</p>
             <ul class="ai-lines">
               <li v-for="(h, i) in history" :key="i">
-                {{ t('reviewAi.arb.historyLine', { value: t(`reviewAi.arb.value.${h.value}`), who: h.arbiter || t('reviewAi.arb.you'), time: dateTime(h.at) }) }}<template v-if="h.referencePool"> · {{ t(`reviewAi.arb.done.pool.${h.referencePool}`) }}</template>
+                {{ t('reviewAi.arb.historyLine', { value: t(`reviewAi.arb.value.${h.value}`), who: h.arbiter || (h.mine ? t('reviewAi.arb.you') : t('reviewAi.arb.unknownReviewer')), time: dateTime(h.at) }) }}<template v-if="h.referencePool"> · {{ t(`reviewAi.arb.done.pool.${h.referencePool}`) }}</template>
                 <span v-if="h.note" class="ai-text ai-history__note">{{ h.note }}</span>
               </li>
             </ul>
