@@ -2028,7 +2028,7 @@ app.post("/v1/review/:id/blind", async (c) => {
     const blind = await recordBlind(c.env.DB, { submissionId, memberId: member.id, verdict, note: typeof body.note === "string" ? body.note : "", now: Date.now(), generation: body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions });
     await bumpOp(c.env.DB, "review_two_stage", "blind", "success");
     const ai = await aiStateOf(c.env.DB, submissionId);
-    if (ai.suggestion) await revealEventStatement(c.env.DB, { submissionId, cardId: Number((await getSubmission(c.env.DB, submissionId)).card_id), memberId: member.id, now: Date.now() }).run();
+    if (ai.state !== "pending") await revealEventStatement(c.env.DB, { submissionId, cardId: Number((await getSubmission(c.env.DB, submissionId)).card_id), memberId: member.id, now: Date.now() }).run();
     return c.json({ blind, ai }, 200, { "Cache-Control": "private, no-store" });
   } catch (error) {
     if (error instanceof HttpError) await bumpOp(c.env.DB, "review_two_stage", "blind", error.status === 409 ? "conflict" : "denied");
