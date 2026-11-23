@@ -5706,5 +5706,7 @@
   "reviewV2.fast.expand": "전체 보기",
   "reviewV2.fast.collapse": "접기",
   "reviewV2.queue.afterDrop": "심사 제외 후 수정해 재제출",
-  "reviewV2.batch.undone": "{n}장을 대기열로 되돌렸어요"
+  "reviewV2.batch.undone": "{n}장을 대기열로 되돌렸어요",
+  "reviewV2.decide.nextSwitchedToNew": "업데이트는 모두 심사했어요. 다음은 신규 카드예요.",
+  "reviewV2.decide.nextSwitchedToUpdates": "신규 카드는 모두 심사했어요. 다음은 업데이트예요."
 }

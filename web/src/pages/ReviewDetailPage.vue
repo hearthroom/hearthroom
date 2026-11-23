@@ -66,7 +66,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -299,12 +299,29 @@ function backToRead() { tabsBar.value?.parentElement?.scrollIntoView({ block: "s
 const nextItems = ref<ReviewQueueItem[] | null>(null);
 const nextError = ref("");
 const nextBusy = ref(false);
+/**
+ * 「下一張」留在同一個分頁（owner 2026-11-23）：審更新就一直拿更新，審新卡就一直拿新卡，順序跟那一頁一樣
+ * （快速審在前）；那一頁審完了才換另一頁，並說一聲。不受理清單與我處理過的不參與。
+ */
+const nextSwitched = ref<"new" | "updates" | null>(null);
 async function loadNext() {
   try {
-    const q = await fetchReviewQueue(await token(), String(locale.value));
-    // 冷凍中的卡不能決定，「下一張」不帶人過去
-    const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe && !i.hold && !skipped.has(i.id));
-    nextItems.value = [...open.filter((i) => i.claim === "mine"), ...open.filter((i) => i.claim === "free")];
+    const tok = await token();
+    const from: "new" | "updates" = submissionType.value === "first" ? "new" : "updates";
+    const pick = async (tab: "new" | "updates") => {
+      const q = await fetchReviewQueue(tok, String(locale.value), tab);
+      // 冷凍中的卡不能決定，「下一張」不帶人過去
+      const open = q.items.filter((i) => i.id !== id.value && !i.stampedByMe && !i.hold && !skipped.has(i.id));
+      return [...open.filter((i) => i.claim === "mine"), ...open.filter((i) => i.claim === "free")];
+    };
+    let items = await pick(from);
+    nextSwitched.value = null;
+    if (!items.length) {
+      const other = from === "new" ? "updates" : "new";
+      items = await pick(other);
+      if (items.length) nextSwitched.value = other;
+    }
+    nextItems.value = items;
   } catch { nextItems.value = null; }
 }
 /** 這次領不到、而且再試也領不到的卡（要先確認年齡）：「下一張」跳過它們 */
@@ -979,6 +996,7 @@ onMounted(() => { void load(); });
           <h3 class="verdict__title" tabindex="-1" data-decide-title data-dropped-card>{{ dropDone ? $t("reviewV2.decide.resultDropped") : $t("reviewV2.dropped.title") }}</h3>
           <p v-if="!dropDone" class="notice" role="status">{{ $t("reviewV2.dropped.readonly") }}</p>
           <p v-if="decideError" class="notice notice--error" role="alert">{{ decideError }}</p>
+          <p v-if="nextSwitched && nextItems?.length" class="subtle" data-next-switched>{{ $t(nextSwitched === "new" ? "reviewV2.decide.nextSwitchedToNew" : "reviewV2.decide.nextSwitchedToUpdates") }}</p>
           <div class="verdict__acts">
             <button type="button" class="btn btn--lg" :disabled="busy" data-restore @click="restoreCard">{{ $t("reviewV2.decide.restore") }}</button>
             <button v-if="nextItems && nextItems.length" type="button" class="btn btn--primary btn--lg" :disabled="nextBusy" @click="goNext">{{ $t("reviewV2.decide.next", { n: nextItems.length }) }}</button>
@@ -1034,6 +1052,7 @@ onMounted(() => { void load(); });
             </template>
           <p v-if="nextError" class="notice notice--error" role="alert">{{ nextError }}</p>
           <p v-if="nextItems && !nextItems.length" class="subtle">{{ $t("review.result.queueEmpty") }}</p>
+          <p v-else-if="nextSwitched" class="subtle" data-next-switched>{{ $t(nextSwitched === "new" ? "reviewV2.decide.nextSwitchedToNew" : "reviewV2.decide.nextSwitchedToUpdates") }}</p>
           <div class="verdict__acts">
             <RouterLink class="btn btn--lg" :to="lp('/review')">{{ $t("review.result.toQueue") }}</RouterLink>
             <button v-if="nextItems && nextItems.length" type="button" class="btn btn--primary btn--lg" :disabled="nextBusy" @click="goNext">{{ $t("review.result.next", { n: nextItems.length }) }}</button>
@@ -1205,7 +1224,7 @@ onMounted(() => { void load(); });
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
 /* 捲到決定區時要避開黏著的頁首與分頁條 */
-.verdict { padding: var(--s-4); display: grid; gap: var(--s-3); scroll-margin-top: calc(var(--header-h) + var(--tabs-bar-h, 0px) + var(--s-3)); }
+.verdict { padding: var(--s-4); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); min-width: 0; scroll-margin-top: calc(var(--header-h) + var(--tabs-bar-h, 0px) + var(--s-3)); }
 .verdict__title { margin: 0; font-size: 16px; }
 /* 標題只在送出後被程式聚焦（讓讀屏器知道結果出來了），不在 Tab 順序裡：不畫鍵盤焦點環 */
 .verdict__title:focus { outline: none; }
@@ -1240,13 +1259,14 @@ onMounted(() => { void load(); });
 .reasons__label { margin: 0 0 var(--s-2); font-size: 14px; font-weight: 600; }
 .reasons { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2); }
 /* 決定三選項：手機直排、桌機三欄；選中用 accent 淡底，不用實心（實心留給主按鈕） */
-.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-2); }
-.choice { display: grid; grid-template-columns: auto 1fr; column-gap: var(--s-2); row-gap: 2px; align-items: center; padding: var(--s-3); min-height: var(--h-lg); border: 1px solid var(--border); border-radius: var(--r-md); cursor: pointer; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: var(--s-2); min-width: 0; }
+@media (max-width: 760px) { .choices { grid-template-columns: minmax(0, 1fr); } }
+.choice { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--s-2); row-gap: 2px; align-items: center; padding: var(--s-3); min-height: var(--h-lg); border: 1px solid var(--border); border-radius: var(--r-md); cursor: pointer; }
 .choice input { grid-row: span 2; width: 18px; height: 18px; margin: 0; }
 .choice--on { border-color: var(--accent); background: var(--accent-tint); }
 .choice--off { cursor: not-allowed; }
 .choice--off .choice__name { color: var(--text-3); }
-.choice__name { font-weight: 600; }
+.choice__name { font-weight: 600; overflow-wrap: anywhere; }
 .choice__hint { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
 .choice__hint:lang(ko), .drop-info:lang(ko) { word-break: keep-all; }
 .drop-info { display: grid; gap: var(--s-1); padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; }

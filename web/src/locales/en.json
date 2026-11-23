@@ -5706,5 +5706,7 @@
   "reviewV2.fast.expand": "Show full text",
   "reviewV2.fast.collapse": "Collapse",
   "reviewV2.queue.afterDrop": "Resubmitted after set aside",
-  "reviewV2.batch.undone": "{n} card is back in the queue | {n} cards are back in the queue"
+  "reviewV2.batch.undone": "{n} card is back in the queue | {n} cards are back in the queue",
+  "reviewV2.decide.nextSwitchedToNew": "All updates are reviewed. The next card is a new one.",
+  "reviewV2.decide.nextSwitchedToUpdates": "All new cards are reviewed. The next card is an update."
 }

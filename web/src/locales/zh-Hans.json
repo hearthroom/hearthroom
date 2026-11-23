@@ -5706,5 +5706,7 @@
   "reviewV2.fast.expand": "展开全文",
   "reviewV2.fast.collapse": "收起",
   "reviewV2.queue.afterDrop": "不受理后改版重送",
-  "reviewV2.batch.undone": "已恢复 {n} 张"
+  "reviewV2.batch.undone": "已恢复 {n} 张",
+  "reviewV2.decide.nextSwitchedToNew": "更新都审完了，下一张是新卡。",
+  "reviewV2.decide.nextSwitchedToUpdates": "新卡都审完了，下一张是更新。"
 }

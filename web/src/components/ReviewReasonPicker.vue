@@ -76,20 +76,23 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
 </template>
 
 <style scoped>
-.picker { display: grid; gap: var(--s-3); }
+.picker { display: grid; gap: var(--s-3); min-width: 0; }
 .picker__hint { margin: 0; }
-.group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+/* fieldset 預設 min-inline-size: min-content：一行不換行的開場白會把整個決定區撐出螢幕（2026-11-23 owner 手機回報） */
+.group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s-1); min-width: 0; min-inline-size: 0; }
 .group__name { font-size: 14px; font-weight: 600; margin-bottom: var(--s-1); padding: 0; }
 .group__note { margin: 0; font-size: 12px; }
 .group__opening { font-size: 13px; color: var(--text-2); }
-.group__opening summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: var(--h-sm); display: flex; align-items: center; }
+.group__opening { min-width: 0; }
+/* 收合時只顯示一行、超出用省略號：要用 list-item 不用 flex，flex 裡的文字不會縮 */
+.group__opening summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: var(--h-sm); line-height: var(--h-sm); display: list-item; }
 .group__opening-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; margin: var(--s-1) 0 0; max-height: 240px; overflow-y: auto; }
-.reason { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2); align-items: start; padding: var(--s-2); min-height: var(--h-lg); border-radius: var(--r-sm); cursor: pointer; }
+.reason { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-2); align-items: start; padding: var(--s-2); min-height: var(--h-lg); border-radius: var(--r-sm); cursor: pointer; }
 .reason:hover { background: var(--surface-2); }
 .reason input { width: 18px; height: 18px; margin: 2px 0 0; }
 .reason--locked { cursor: not-allowed; }
 .reason__text { display: grid; gap: 2px; min-width: 0; }
-.reason__name { font-weight: 600; font-size: 14px; }
+.reason__name { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
 .reason__summary { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
 .coaching { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; justify-content: space-between; font-size: 13px; }
 .coaching__text { margin: 0; color: var(--text-2); }

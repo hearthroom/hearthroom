@@ -369,6 +369,32 @@ it('after deciding, the decision area becomes a result card with my decision, th
  await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s9','local-reviewer'));
 });
 
+// owner 2026-11-23：「下一張」留在同一個分頁，那一頁審完了才換另一頁並說一聲
+const queueItem=(id:string,kind:'first'|'re')=>({id,kind,submittedAt:1,card:{id:id.slice(1),roleId:'r'+id,name:'卡'+id,summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false});
+const decidedAs=(type:'first'|'update')=>{const d=withLength(3600);return {...d,submission:{...d.submission,kind:type==='first'?'first':'re',type,claimedByMe:false,stampedByMe:true,status:'approved',stamps:[{verdict:'approve',note:'',at:2,mine:true}]}};};
+it('next after an update stays on the updates tab while it has cards',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(decidedAs('update'));
+ api.fetchReviewQueue.mockReset().mockImplementation(async(_t:string,_l:string,tab?:string)=>({items:tab==='updates'?[queueItem('s7','re')]:[queueItem('s8','first')],claimTtlMs:1}));
+ await remount();
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.result.next',{n:1}))).toBeTruthy());
+ expect(api.fetchReviewQueue.mock.calls.map(c=>c[2])).toEqual(['updates']);
+ expect(el.querySelector('[data-next-switched]')).toBeNull();
+ api.claimReview.mockClear();
+ button(i18n.global.t('review.result.next',{n:1}))!.click();
+ await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s7','local-reviewer'));
+});
+it('next after a new card stays on new cards; when that tab is empty it moves to updates and says so',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(decidedAs('first'));
+ api.fetchReviewQueue.mockReset().mockImplementation(async(_t:string,_l:string,tab?:string)=>({items:tab==='updates'?[queueItem('s7','re')]:[],claimTtlMs:1}));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-next-switched]')).toBeTruthy());
+ expect(api.fetchReviewQueue.mock.calls.map(c=>c[2])).toEqual(['new','updates']);
+ expect(el.querySelector('[data-next-switched]')!.textContent).toBe(i18n.global.t('reviewV2.decide.nextSwitchedToUpdates'));
+ api.claimReview.mockClear();
+ button(i18n.global.t('review.result.next',{n:1}))!.click();
+ await vi.waitFor(()=>expect(api.claimReview).toHaveBeenCalledWith('s7','local-reviewer'));
+});
+
 it('an empty queue after deciding offers only the way back',async()=>{
  const d=withLength(3600);
  api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,claimedByMe:false,stampedByMe:true,status:'rejected',stamps:[{verdict:'reject',note:'設定太少',at:2,mine:true}]}});

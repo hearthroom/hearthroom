@@ -5706,5 +5706,7 @@
   "reviewV2.fast.expand": "全文を表示",
   "reviewV2.fast.collapse": "たたむ",
   "reviewV2.queue.afterDrop": "審査対象外後に修正して再提出",
-  "reviewV2.batch.undone": "{n}件を審査待ちに戻しました"
+  "reviewV2.batch.undone": "{n}件を審査待ちに戻しました",
+  "reviewV2.decide.nextSwitchedToNew": "更新はすべて審査済みです。次は新規のカードです。",
+  "reviewV2.decide.nextSwitchedToUpdates": "新規はすべて審査済みです。次は更新のカードです。"
 }
