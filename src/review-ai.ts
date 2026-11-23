@@ -1,4 +1,4 @@
-import { authorProfiles } from "./review-profile";
+import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
 import { submissionHistory, type SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -91,10 +91,18 @@ export async function aiSubmissionMeta(db: D1Database, s: SubmissionRow, now: nu
     db.prepare("SELECT member_id, json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom FROM hosting_versions WHERE submission_id=?")
       .bind(s.id).first<{ member_id: string; tags: string | null; fandom: string | null }>(),
   ]);
+  // 作者側寫只給待審單（跟審核頁同一套：人工覆寫、批量標記、同裝置訊號）。已定案的單不給：
+  // 側寫是「現在」算的，會把這張單自己的結果算進去，等於洩漏人工決定。
   let author: { tier: string; batchSuspected: boolean } | null = null;
-  if (version?.member_id) {
-    const p = (await authorProfiles(db, [version.member_id], now)).get(version.member_id);
-    if (p) author = { tier: p.tier, batchSuspected: p.batchSuspected };
+  if (s.status === "pending" && version?.member_id) {
+    const profiles = await authorProfiles(db, [version.member_id], now);
+    await applyBatchMarks(db, profiles, now);
+    const p = profiles.get(version.member_id);
+    if (p) {
+      const device = await db.prepare("SELECT device_hash FROM review_submission_devices WHERE submission_id=?").bind(s.id).first<{ device_hash: string }>();
+      const signal = device ? (await deviceSignals(db, [device.device_hash], now)).get(device.device_hash) : undefined;
+      author = { tier: p.tier, batchSuspected: p.manual.batch ? p.batchSuspected : !!signal?.suspected };
+    }
   }
   let tags: string[] = [];
   try { tags = version?.tags ? (JSON.parse(version.tags) as string[]) : []; } catch { tags = []; }
@@ -199,16 +207,18 @@ export async function recordFeedback(db: D1Database, input: { submissionId: stri
     VALUES (?,1,?,?,?,'ai_feedback','reviewer',?,?,?)`)
     .bind(`aifb:${input.suggestionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId, input.value, input.suggestionId).run();
   const row = await db.prepare("SELECT source FROM review_events WHERE event_key=?").bind(`aifb:${input.suggestionId}:${input.memberId}`).first<{ source: string }>();
-  return { value: row!.source, replaced: row!.source !== input.value };
+  // kept：這位審核員之前已覆核過，保留第一次的答案、這次沒寫入
+  return { value: row!.source, kept: row!.source !== input.value };
 }
 
-/** 人工 vs AI 的對照：只算有人工結論（通過或駁回）且有 AI 結論的單。依判準版本分組。 */
+/** 人工 vs AI 的對照：只算人已做完決定（通過、駁回、不受理中）且 AI 下了結論的單。依判準版本分組。 */
 export async function aiReport(db: D1Database, input: { from: number; to: number; criteria?: string | null }) {
   const rows = await db.prepare(`SELECT a.criteria_version AS v, a.phase, a.verdict, a.reasons AS ai_reasons, a.flags, a.handoff_cause, a.latency_ms, a.cost_usd,
       s.status, s.reject_reasons,
       EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped
     FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id
-    WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)`)
+    WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)
+      AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))`)
     .bind(input.from, input.to, input.criteria ?? null).all<Record<string, any>>();
   const feedback = await db.prepare(`SELECT a.criteria_version AS v, e.source AS value, COUNT(*) AS n FROM review_events e JOIN review_ai_suggestions a ON a.id=e.ai_suggestion_id
     JOIN review_submissions s ON s.id=a.submission_id
@@ -223,7 +233,8 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
     if (typeof r.latency_ms === "number") { g.latencySum += r.latency_ms; g.latencyN++; }
     if (typeof r.cost_usd === "number") g.costUsd += r.cost_usd;
     for (const f of JSON.parse(r.flags) as string[]) g.flags[f] = (g.flags[f] ?? 0) + 1;
-    const human = r.dropped ? "dropped" : r.status === "approved" || r.status === "rejected" ? r.status : "pending";
+    // 只算人已經做完決定的單：還在待審的不進報表，否則管理員能把時間窗縮到一張待審卡，提前看到 AI 的判斷
+    const human = r.dropped ? "dropped" : r.status;
     g.matrix[human as keyof typeof g.matrix][r.verdict as AiVerdict]++;
     if (human === "rejected") {
       const humanReasons = new Set<string>(JSON.parse(r.reject_reasons ?? "[]"));
@@ -273,7 +284,7 @@ function emptyGroup() {
   const cell = () => ({ pass: 0, reject: 0, handoff: 0 });
   return {
     total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0,
-    matrix: { approved: cell(), rejected: cell(), dropped: cell(), pending: cell() },
+    matrix: { approved: cell(), rejected: cell(), dropped: cell() },
     handoffCauses: {} as Record<string, number>, flags: {} as Record<string, number>,
     reasonAgreement: {} as Record<string, { human: number; ai: number; both: number }>,
     feedback: { ai_right: 0, ai_wrong: 0, both_ok: 0 },

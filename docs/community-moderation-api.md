@@ -229,7 +229,9 @@ A batch reports per-item failures as `{ contentId, error: "<code>" }` with the s
 
 ## Card review shadow suggestions (AI account)
 
-The AI account can read card submissions and record an advisory suggestion. A suggestion never changes the submission: the AI account still gets 403 `agent_not_allowed` on claim, stamp, hold and drop. Human reviewers cannot use the `/v1/review-ai/submissions` and `/v1/review-ai/queue` routes (403 `review_agent_only`).
+A dedicated card-review identity can read card submissions and record an advisory suggestion. A suggestion never changes the submission, and the identity cannot claim, stamp, hold or drop.
+
+The `/v1/review-ai/queue` and `/v1/review-ai/submissions/*` routes take only `X-Review-Agent-Key: <64 hex>` (no Harbor sign-in, no expiry). The server keeps only the key's SHA-256 in the `REVIEW_AGENT_CONFIG` secret (`{"memberId","keySha256"}`); requests carrying an `Origin` header are refused. A wrong key, a missing or empty config, or a revoked `review_agents` row gives 403 `review_agent_key_invalid`; a signed-in reviewer or other AI account without the key gives 403 `review_agent_only`. Revoke by clearing the secret or revoking the identity's `review_agents` row. The key works on no other route.
 
 Double-blind: what the AI reads carries no human decision, stamp, note or drop state, and a human reviewer only sees the AI's suggestion after making their own decision on that submission.
 
@@ -243,7 +245,7 @@ The sealed version the author submitted, without claiming it. Long text is cut a
 
 ```ts
 { submission: { id, cardId, kind, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
-  author: { tier, batchSuspected } | null,
+  author: { tier, batchSuspected } | null,   // pending only; null for decided submissions
   card: { name, summary, tags, originalWork: string|null, userName, setting, speech, instructions, examples,
           openings: { welcome, alternates, prologue }, lorebook: { entryCount, entries: { name, content }[] } },
   stats: { settingChars, openingChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
@@ -259,10 +261,10 @@ Body: `{ criteriaVersion: "v<n>", model, verdict: "pass"|"reject"|"handoff", rea
 ### Reveal and feedback (human reviewers)
 
 - `GET /v1/review/:id/ai` → `{ suggestions: { id, criteriaVersion, model, verdict, reasons, flags, confidence, handoffCause, note, phase, at }[], myFeedback }`. Allowed once the caller has stamped or dropped this submission, or for managers after it is decided; otherwise 403 `ai_hidden_until_decided`.
-- `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records one review event per reviewer and suggestion (the first answer stands) and returns `{ value, replaced }`.
+- `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records one review event per reviewer and suggestion (the first answer stands) and returns `{ value, kept }` (`kept: true` means an earlier answer was kept and this one ignored).
 
 ### `GET /v1/review-ai/report?from=&to=&criteria=` (managers)
 
-Human vs AI by criteria version for submissions sent in the window (default the last 7 days, at most 120): totals, the decision matrix (approved / rejected / dropped / pending × pass / reject / handoff), `agreement` over submissions both sides decided, `aiStricter` (human approved, AI rejected), `humanStricter`, per-reason agreement on rejections, flag counts, handoff and refusal rates, reviewer feedback, average latency and cost.
+Human vs AI by criteria version for submissions sent in the window (default the last 7 days, at most 120) that a human has already decided or dropped; pending ones are left out so the report never shows an AI verdict before a decision. It returns totals, the decision matrix (approved / rejected / dropped × pass / reject / handoff), `agreement` over submissions both sides decided, `aiStricter` (human approved, AI rejected), `humanStricter`, per-reason agreement on rejections, flag counts, handoff and refusal rates, reviewer feedback, average latency and cost.
 
-Metrics: `hearthroom_review_ai_operations_total{operation,outcome}` and `hearthroom_review_ai_verdicts_total{verdict,outcome="shadow"|"backfill"}`.
+Metrics: `hearthroom_review_ai_operations_total{operation,outcome}`, `hearthroom_review_ai_verdicts_total{verdict,outcome="shadow"|"backfill"}` and `hearthroom_review_agent_key_admissions_total{operation="admission",outcome}`.

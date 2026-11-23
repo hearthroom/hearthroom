@@ -1,9 +1,10 @@
 import { Hono, type Context } from "hono";
-import { isReviewAgent, requireReviewer, reviewerRole } from "./members";
+import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
 import { AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
+import { reviewAgentByKey } from "./review-agent-key";
 import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
@@ -17,10 +18,15 @@ export const reviewAiRoutes = new Hono<{ Bindings: Env }>();
 type Ctx = Context<{ Bindings: Env }>;
 const NO_STORE = { "Cache-Control": "private, no-store" };
 
-async function requireAgent(c: Ctx) {
-  const member = await requireReviewer(c, { allowAgent: true });
-  if (!(await isReviewAgent(c.env.DB, member.id))) throw new HttpError(403, "review_agent_only");
-  return member;
+/**
+ * 審卡員只認固定金鑰對應的專用身分（REVIEW_AGENT_CONFIG）。其他 AI 審核帳號（例如留言審核）不能讀卡片私有設定。
+ * 沒帶金鑰：已登入的審核員回 403，未登入回 401。
+ */
+async function requireAgent(c: Ctx): Promise<{ id: string }> {
+  const key = c.req.header("X-Review-Agent-Key");
+  if (key !== undefined) return { id: await reviewAgentByKey(c.env, key, c.req.header("Origin")) };
+  await requireReviewer(c, { allowAgent: true });
+  throw new HttpError(403, "review_agent_only");
 }
 
 async function requireHuman(c: Ctx) {
@@ -52,7 +58,7 @@ reviewAiRoutes.get("/v1/review-ai/queue", (c) => counted(c, "queue", async () =>
   const criteria = c.req.query("criteria") ?? null;
   if (criteria !== null && !/^v\d{1,4}$/.test(criteria)) throw new HttpError(400, "invalid_arguments", undefined, { field: "criteria" });
   const unshadowed = c.req.query("unshadowed") === "1" || c.req.query("unshadowed") === "true";
-  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50) || 50, 1), 200);
+  const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 50)) || 50, 1), 200);
   const now = Date.now();
   const where = `FROM review_submissions s
     WHERE (s.status='pending' OR (?1='recent' AND s.status IN ('approved','rejected')))
