@@ -7,17 +7,21 @@
  * 交人比例與決定矩陣看對照總數，仲裁分佈看已仲裁筆數，各理由看人錯＋AI 錯的筆數。費用是總額，不抑制。
  *
  * 參考範例：伺服器最多回最近 30 筆被勾進範例池的分歧；匯出就是把這一份存成 JSON 草稿（不含帳號與卡號），PM 審過才成為新版本。
+ *
+ * 兩段式定案（ui-two-stage.md）：每個判準版本多列定案來源（用我的／用 AI 的／修改後／沒有 AI 對照）與改用 AI 結論的筆數，
+ * 少於 10 筆一樣抑制。「給 AI 的說明」列出定案與仲裁時寫的全文（新的在前、不列審核員），可依原因類型篩，期間跟著上面的選擇。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
-import { ARBITRATION_VALUES, fetchAiReport, fetchReferenceCandidates, type AiReportVersion, type ReferenceCandidate } from '@/lib/review-ai-api';
+import { AI_NOTE_TYPES, AI_NOTES_LIMIT, ARBITRATION_VALUES, FINAL_SOURCES, fetchAiNotes, fetchAiReport, fetchReferenceCandidates, type AiNoteItem, type AiNoteType, type AiReportVersion, type ReferenceCandidate } from '@/lib/review-ai-api';
 import { enough, isManagerRole, versionNumber } from '@/lib/review-ai';
 import { reasonKey } from '@/lib/review-reasons';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
 import { pageTitle } from '@/lib/i18n';
+import { dateTime } from '@/lib/format';
 import ReviewAiNav from '@/components/ReviewAiNav.vue';
 
 const DAY_OPTIONS = [7, 30, 90, 120] as const;
@@ -91,9 +95,29 @@ function exportRefs() {
   }
 }
 
-watch(days, () => void load());
-watch(allowed, (a) => { if (a && !versions.value) { void load(); void loadRefs(); } });
-onMounted(() => { document.title = pageTitle(t('reviewAi.arb.title')); if (allowed.value) { void load(); void loadRefs(); } });
+// ---- 給 AI 的說明 ----
+const notes = ref<AiNoteItem[] | null>(null);
+const notesFailed = ref(false);
+const noteType = ref<AiNoteType | null>(null);
+let notesGeneration = 0;
+async function loadNotes() {
+  if (!allowed.value) return;
+  const gen = ++notesGeneration;
+  notesFailed.value = false; notes.value = null;
+  try {
+    const res = await fetchAiNotes(await token(), { days: days.value, type: noteType.value });
+    if (alive && gen === notesGeneration) notes.value = res.items;
+  } catch (e) {
+    if (!alive || gen !== notesGeneration) return;
+    if (e instanceof ApiError && e.status === 403) forbidden.value = true; else notesFailed.value = true;
+  }
+}
+function pickNoteType(v: string) { noteType.value = (AI_NOTE_TYPES as readonly string[]).includes(v) ? (v as AiNoteType) : null; }
+
+watch(days, () => { void load(); void loadNotes(); });
+watch(noteType, () => void loadNotes());
+watch(allowed, (a) => { if (a && !versions.value) { void load(); void loadRefs(); void loadNotes(); } });
+onMounted(() => { document.title = pageTitle(t('reviewAi.arb.title')); if (allowed.value) { void load(); void loadRefs(); void loadNotes(); } });
 
 // ---- 格式化 ----
 const loc = computed(() => String(locale.value));
@@ -103,6 +127,8 @@ const usd = (n: number) => new Intl.NumberFormat(loc.value, { style: 'currency',
 const small = () => t('reviewStats.suppressed');
 const arbTotal = (v: AiReportVersion) => (v.arbitration ? ARBITRATION_VALUES.reduce((n, k) => n + v.arbitration!.values[k], 0) : 0);
 const reasonRows = (v: AiReportVersion) => Object.entries(v.arbitration?.reasons ?? {}).map(([code, c]) => ({ code, ...c, n: c.humanWrong + c.aiWrong })).sort((a, b) => b.n - a.n);
+/** 兩段式定案筆數（舊版伺服器不帶 finalSource：整段不畫） */
+const finalTotal = (v: AiReportVersion) => FINAL_SOURCES.reduce((n, k) => n + (v.finalSource?.[k] ?? 0), 0);
 const MATRIX_ROWS = ['approved', 'rejected', 'dropped'] as const;
 const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
 </script>
@@ -164,6 +190,19 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
           </table>
         </div>
 
+        <template v-if="v.finalSource">
+          <h3 class="ai-rep__h3">{{ t('reviewAi.arb.report.finalSource') }}</h3>
+          <p v-if="!finalTotal(v)" class="muted ai-rep__note" data-final-none>{{ t('reviewAi.arb.report.finalNone') }}</p>
+          <p v-else-if="!enough(finalTotal(v))" class="muted ai-rep__note" data-final-small>{{ t('reviewAi.arb.report.finalSmall', { n: int(finalTotal(v)) }) }}</p>
+          <div v-else class="ai-rep__scroll">
+            <table class="ai-rep__table" data-table="final">
+              <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.finals') }}</th><th v-for="k in FINAL_SOURCES" :key="k" scope="col">{{ t(`reviewAi.two.source.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.corrected') }}</th></tr></thead>
+              <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="corrected">{{ int(v.corrected ?? 0) }}</td></tr></tbody>
+            </table>
+          </div>
+          <p v-if="enough(finalTotal(v))" class="subtle ai-rep__note">{{ t('reviewAi.arb.report.correctedNote') }}</p>
+        </template>
+
         <template v-if="reasonRows(v).length">
           <h3 class="ai-rep__h3">{{ t('reviewAi.arb.report.reasons') }}</h3>
           <p class="subtle ai-rep__note">{{ t('reviewAi.arb.report.reasonsNote') }}</p>
@@ -180,6 +219,38 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
             </table>
           </div>
         </template>
+      </section>
+
+      <!-- 給 AI 的說明：定案與仲裁時寫的全文，新的在前；不列審核員 -->
+      <section class="panel ai-rep__block" data-block="notes" aria-labelledby="ai-rep-notes">
+        <h2 id="ai-rep-notes" class="ai-rep__h">{{ t('reviewAi.arb.notes.title') }}</h2>
+        <div class="ai-rep__bar">
+          <select class="input ai-rep__days" :value="noteType ?? ''" :aria-label="t('reviewAi.arb.notes.filter')" data-filter="note-type" @change="pickNoteType(($event.target as HTMLSelectElement).value)">
+            <option value="">{{ t('reviewAi.arb.notes.filterAll') }}</option>
+            <option v-for="type in AI_NOTE_TYPES" :key="type" :value="type">{{ t(`reviewAi.note.type.${type}`) }}</option>
+          </select>
+          <p class="subtle ai-rep__note">{{ t('reviewAi.arb.notes.rule', { n: AI_NOTES_LIMIT }) }}</p>
+        </div>
+        <div v-if="notesFailed" class="notice notice--error ai-rep__row" role="alert">
+          <span>{{ t('reviewAi.arb.notes.failed') }}</span>
+          <button type="button" class="btn btn--sm" @click="loadNotes">{{ t('reviewAi.arb.retry') }}</button>
+        </div>
+        <div v-else-if="!notes" class="ghost ai-rep__ghost--sm" aria-hidden="true" />
+        <p v-else-if="!notes.length" class="muted ai-rep__note" data-notes-empty>{{ t(noteType ? 'reviewAi.arb.notes.emptyFiltered' : 'reviewAi.arb.notes.empty') }}</p>
+        <ul v-else class="ai-rep__notes" data-notes>
+          <li v-for="(n, i) in notes" :key="i" class="ai-rep__noteItem" :data-note-kind="n.kind">
+            <p class="ai-rep__chips">
+              <span class="chip ai-rep__chip ai-rep__chip--strong">{{ t(`reviewAi.arb.notes.kind.${n.kind}`) }}</span>
+              <span v-if="n.kind === 'final' && n.finalSource" class="chip ai-rep__chip">{{ t(`reviewAi.two.source.${n.finalSource}`) }}</span>
+              <span v-if="n.kind === 'arbitration' && n.arbitration" class="chip ai-rep__chip">{{ t(`reviewAi.arb.value.${n.arbitration}`) }}</span>
+              <span v-if="n.criteriaVersion" class="chip ai-rep__chip">{{ t('reviewAi.arb.criteria', { v: n.criteriaVersion }) }}</span>
+              <span class="subtle">{{ dateTime(n.at) }}</span>
+            </p>
+            <p v-if="n.types.length" class="ai-rep__chips"><span v-for="type in n.types" :key="type" class="chip ai-rep__chip">{{ t(`reviewAi.note.type.${type}`) }}</span></p>
+            <p v-if="n.note" class="ai-rep__noteText">{{ n.note }}</p>
+            <p v-else class="muted ai-rep__note">{{ t('reviewAi.arb.notes.typesOnly') }}</p>
+          </li>
+        </ul>
       </section>
 
       <!-- 參考範例 -->
@@ -226,6 +297,14 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
 .ai-rep__table tbody tr:last-child > * { border-bottom: 0; }
 .ai-rep__state { color: var(--text-2); }
 .ai-rep__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.ai-rep__notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.ai-rep__noteItem { display: grid; gap: var(--s-2); min-width: 0; padding-top: var(--s-3); border-top: 1px solid var(--line); }
+.ai-rep__noteItem:first-child { padding-top: 0; border-top: 0; }
+.ai-rep__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; }
+.ai-rep__chip { cursor: default; max-width: 100%; }
+.ai-rep__chip:hover { color: var(--text-2); background: var(--surface-2); }
+.ai-rep__chip--strong, .ai-rep__chip--strong:hover { color: var(--accent-text); background: var(--accent-tint); font-weight: 600; }
+.ai-rep__noteText { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .ai-rep__block { padding: var(--s-4); }
   .ai-rep__days, .ai-rep__acts .btn { min-height: var(--h-lg); }

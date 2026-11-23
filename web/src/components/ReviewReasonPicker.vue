@@ -3,15 +3,14 @@
  * 駁回理由選擇器（審卡 V2，ui.md §2.3）：四組（開場白、設定、分級、其他），可多選、至少一項。
  * 勾選時下方即時預覽「作者會看到」：每項的怎麼改與範例（輔導時是完整改法與改前改後），
  * 有「給選項的三種做法」的代碼（沒有接話點）兩種版本都在最後附上那一塊，
- * 有開場白理由時多一行「並附上好開場的三個要素」。審核員不必再手打改法。
+ * 有開場白理由時多一行「並附上好開場的三個要素」。審核員不必再手打改法。預覽本身在 ReviewReasonPreview（兩段式定案也用）。
  *
  * locked：一定要帶的理由（有效字數未達標時的「有效字數不足」），勾著、不能取消。
  * 有原作的卡在設定組旁提示「設定可以簡略，開場白照一般標準」——只是提示，不擋任何選項。
  */
 import { computed } from "vue";
-import { useI18n } from "vue-i18n";
-import { REVIEW_REASON_GROUPS, REVIEW_REASONS, hasOpeningReason, hasOptions, reasonKey, reasonOptionKey, type ReviewReasonGroup } from "@/lib/review-reasons";
-import ReviewReasonOptions from "@/components/ReviewReasonOptions.vue";
+import { REVIEW_REASON_GROUPS, REVIEW_REASONS, reasonKey, type ReviewReasonGroup } from "@/lib/review-reasons";
+import ReviewReasonPreview from "@/components/ReviewReasonPreview.vue";
 
 const props = defineProps<{
   modelValue: string[]; locked: string[]; disabled?: boolean;
@@ -23,7 +22,6 @@ const props = defineProps<{
   previewTitle?: string;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string[]]; "update:coaching": [value: boolean] }>();
-const { t, te } = useI18n();
 
 const groups = Object.keys(REVIEW_REASON_GROUPS) as ReviewReasonGroup[];
 const checked = (code: string) => props.locked.includes(code) || props.modelValue.includes(code);
@@ -34,10 +32,6 @@ function toggle(code: string, on: boolean) {
   if (on) next.add(code); else next.delete(code);
   emit("update:modelValue", REVIEW_REASONS.filter((c) => next.has(c)));
 }
-// 字數參數：伺服器給的是 remaining，字串用的是 {gap}（跟作者端同一個鍵）
-const params = computed(() => ({ ...props.length, gap: props.length.remaining ?? "" }));
-const field = (code: string, name: Parameters<typeof reasonKey>[1]) => (te(reasonKey(code, name)) ? t(reasonKey(code, name), params.value) : "");
-const fixOf = (code: string) => (code === "content.min_length" && props.length.total ? field(code, "fixCount") : props.coaching ? field(code, "coachFix") || field(code, "fix") : field(code, "fix"));
 </script>
 
 <template>
@@ -65,24 +59,7 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
       <button type="button" class="btn btn--sm btn--ghost" :disabled="disabled" @click="emit('update:coaching', !coaching)">{{ coaching ? $t("reviewV2.decide.coachingOff") : $t("reviewV2.decide.coachingEnable") }}</button>
     </div>
 
-    <section v-if="picked.length" class="preview" aria-live="polite" data-reason-preview>
-      <h4 class="preview__title">{{ previewTitle || $t("reviewV2.decide.previewTitle") }}</h4>
-      <article v-for="code in picked" :key="code" class="preview__item">
-        <p class="preview__name">{{ $t(reasonKey(code, "name")) }}</p>
-        <p>{{ fixOf(code) }}</p>
-        <template v-if="coaching && field(code, 'before')">
-          <p class="preview__ex"><span class="preview__label">{{ $t("reviewV2.author.before") }}</span>{{ field(code, "before") }}</p>
-          <p class="preview__ex" data-after><span class="preview__label">{{ field(code, "afterLabel") || $t("reviewV2.author.after") }}</span>{{ field(code, "after") }}</p>
-          <p v-if="field(code, 'afterChoices')" class="preview__ex" data-after-choices><span class="preview__label">{{ field(code, "afterChoicesLabel") }}</span>{{ field(code, "afterChoices") }}</p>
-        </template>
-        <p v-else-if="field(code, 'example')" class="preview__ex"><span class="preview__label">{{ $t("reviewV2.author.example") }}</span>{{ field(code, "example") }}</p>
-        <div v-if="hasOptions(te, code)" class="preview__options" data-reason-options>
-          <p class="preview__label">{{ $t(reasonOptionKey(code, "title")) }}</p>
-          <ReviewReasonOptions :code="code" />
-        </div>
-      </article>
-      <p v-if="hasOpeningReason(picked)" class="subtle">{{ $t("reviewV2.decide.previewOpening") }}</p>
-    </section>
+    <ReviewReasonPreview :codes="picked" :coaching="coaching" :length="length" :title="previewTitle" />
   </div>
 </template>
 
@@ -107,15 +84,6 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
 .reason__summary { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
 .coaching { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; justify-content: space-between; font-size: 13px; }
 .coaching__text { margin: 0; color: var(--text-2); }
-.preview { display: grid; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
-.preview__title { margin: 0; font-size: 14px; }
-.preview__item { display: grid; gap: var(--s-1); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; min-width: 0; }
-.preview__options { display: grid; gap: var(--s-2); min-width: 0; margin-top: var(--s-1); }
-.preview__item p { margin: 0; }
-.preview__name { font-weight: 600; }
-.preview__ex { color: var(--text-2); }
-.preview__ex[data-after-choices] { white-space: pre-wrap; }
-.preview__label { font-weight: 600; margin-inline-end: var(--s-2); color: var(--text); }
 .picker:lang(ko) { word-break: keep-all; }
 .picker:lang(ja) { word-break: auto-phrase; }
 </style>

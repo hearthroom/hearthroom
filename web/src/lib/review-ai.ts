@@ -1,4 +1,5 @@
-import { REVIEW_REASONS } from "../../../shared/review-reasons";
+import { REVIEW_REASONS, isReviewReason } from "../../../shared/review-reasons";
+import type { ReviewAiState } from "./api";
 import type { AiSuggestion, Arbitration, HumanDecision } from "./review-ai-api";
 
 /**
@@ -65,3 +66,37 @@ export const enough = (n: number | null | undefined) => typeof n === "number" &&
 
 /** AI 分歧分頁與路由只給管理員（與審核統計同一個判斷；服務端每次也檢查） */
 export const isManagerRole = (role: string | null | undefined) => role === "manager" || role === "owner";
+
+// ---- 兩段式決定（盲審→揭曉→定案） ----
+
+/** 揭曉時 AI 那一欄的狀態：讀取中、讀不到、還沒審完、沒有可用的判斷（交人、拒答、駁回卻沒有正式理由）、已判 */
+export type AiView = "loading" | "error" | "pending" | "none" | "ready";
+
+/**
+ * 定案時伺服器拿來比的那一筆 AI 判斷（與服務端 aiStateOf 同一條規則）：清單照更新時間新到舊，第一筆下了結論的。
+ * 揭曉與「用 AI 的」都用這一筆，按鈕寫的結論才會等於實際蓋下去的。只打標記、沒下結論的不算。
+ */
+export function aiStateOf(list: readonly AiSuggestion[]): ReviewAiState {
+  const s = list.find((x) => x.verdict !== null);
+  if (!s) return { state: "pending", suggestion: null };
+  return { state: s.verdict === "handoff" ? "handoff" : "ready", suggestion: s };
+}
+
+/** AI 的結論換成審核員的說法；交人與沒下結論是 null */
+export const aiAsHuman = (v: AiSuggestion["verdict"]): "approve" | "reject" | null => (v === "pass" ? "approve" : v === "reject" ? "reject" : null);
+
+/** AI 選的理由裡，作者看得到改法的那些（正式理由代碼）；「用 AI 的」駁回時作者看到的就是這些 */
+export const aiReasonCodes = (s: AiSuggestion) => REVIEW_REASONS.filter((c) => s.reasons.includes(c) && isReviewReason(c));
+
+/** 「用 AI 的」能不能選：AI 下了通過，或下了駁回且至少有一個正式理由代碼（伺服器同一條規則，否則 409 ai_choice_unavailable） */
+export function aiChoiceUsable(s: AiSuggestion | null): boolean {
+  if (!s) return false;
+  if (s.verdict === "pass") return true;
+  return s.verdict === "reject" && aiReasonCodes(s).length > 0;
+}
+
+/** 這個定案會讓卡上架、而盲審判斷是駁回：只有這種情況要跳確認（PM 2026-11-24） */
+export const publishesAgainstBlind = (blind: "approve" | "reject", final: "approve" | "reject") => blind === "reject" && final === "approve";
+
+/** 已等幾秒：從盲審送出的時間算；兩邊時鐘可能差一點，不會是負的 */
+export const waitedSeconds = (since: number, now: number) => Math.max(0, Math.floor((now - since) / 1000));
