@@ -117,7 +117,7 @@ import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { dropBatch, dropSubmission, groupItems, groupSubmissionIds, isDropped, listDropped, restoreBatch, restoreSubmission, type DroppedFilter, type GroupScope } from "./review-drop";
-import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor } from "./review-profile";
+import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor, revokeAuthorMark } from "./review-profile";
 import { queueContext as queueContextOf, recordOriginalityStatement } from "./review-v2";
 import { parseReviewReasons } from "../shared/review-reasons";
 import { type Env, HttpError } from "./types";
@@ -2168,11 +2168,16 @@ async function reviewAuthorProfile(db: D1Database, submissionId: string, now: nu
 
 app.post("/v1/review/:id/author-mark", async (c) => {
   const { member, s } = await claimedSubmission(c);
-  const body = (await c.req.json().catch(() => ({}))) as { kind?: unknown; value?: unknown; reasonCode?: unknown; note?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { kind?: unknown; value?: unknown; reasonCode?: unknown; note?: unknown; revoke?: unknown };
   if (body.kind !== "tier" && body.kind !== "batch") throw new HttpError(400, "review_mark_invalid");
   const author = await c.env.DB.prepare("SELECT member_id FROM hosting_versions WHERE submission_id=?").bind(s.id).first<{ member_id: string }>();
   if (!author) throw new HttpError(409, "review_author_unknown");
   const now = Date.now();
+  if (body.revoke === true) {
+    await revokeAuthorMark(c.env.DB, { authorMemberId: author.member_id, kind: body.kind, now });
+    await bumpOp(c.env.DB, "review_author_mark", body.kind, "success");
+    return c.json({ revoked: true, profile: await reviewAuthorProfile(c.env.DB, s.id, now) }, 200, { "Cache-Control": "private, no-store" });
+  }
   const current = await reviewAuthorProfile(c.env.DB, s.id, now);
   const result = await markAuthor(c.env.DB, {
     authorMemberId: author.member_id, kind: body.kind, value: String(body.value ?? ""), reasonCode: String(body.reasonCode ?? ""),

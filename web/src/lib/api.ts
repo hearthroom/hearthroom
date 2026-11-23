@@ -735,6 +735,9 @@ export const dropReviewBatch = (token: string, body: { anchorId: string; scope: 
 export const restoreReviewBatch = (token: string, batchId: string) => reviewPost<{ restored: string[] }>("restore-batch", token, { batchId });
 export const markReviewAuthor = (id: string, token: string, body: { kind: "tier" | "batch"; value: string; reasonCode: string; note?: string }) =>
   reviewAction<{ id: string; expiresAt: number; profile: ReviewAuthorProfile | null }>(id, "author-mark", token, body);
+/** 取消標記：撤銷人工覆寫，恢復自動標記 */
+export const revokeReviewAuthorMark = (id: string, token: string, kind: "tier" | "batch") =>
+  reviewAction<{ revoked: true; profile: ReviewAuthorProfile | null }>(id, "author-mark", token, { kind, revoke: true });
 
 async function reviewAction<T>(id: string, action: string, token: string, body?: unknown): Promise<T> {
   const res = await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/${action}`, {

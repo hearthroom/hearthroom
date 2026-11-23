@@ -68,7 +68,8 @@ export async function authorProfiles(db: D1Database, memberIds: string[], now: n
     db.prepare(`SELECT DISTINCT i.member_id FROM member_identities i JOIN cards c ON c.provider=i.provider AND c.author_num_id=CAST(i.external_id AS INTEGER)
       WHERE i.member_id IN (${LIST}) AND NOT EXISTS(SELECT 1 FROM works w WHERE w.source_provider=c.provider AND w.source_role_id=c.source_role_id)`).bind(list),
     db.prepare(`SELECT id, created_at FROM members WHERE id IN (${LIST})`).bind(list),
-    db.prepare(`SELECT author_member_id AS member_id, COUNT(*) AS n FROM review_drop_cases WHERE author_member_id IN (${LIST}) AND opened_at>=? GROUP BY author_member_id`).bind(list, now - 90 * DAY),
+    // 復原的案件是審核員認定移錯了，不算作者的不受理次數
+    db.prepare(`SELECT author_member_id AS member_id, COUNT(*) AS n FROM review_drop_cases WHERE author_member_id IN (${LIST}) AND opened_at>=? AND close_reason IS NOT 'restored' GROUP BY author_member_id`).bind(list, now - 90 * DAY),
     db.prepare(`SELECT author_member_id, kind, value, expires_at FROM review_author_marks m
       WHERE author_member_id IN (${LIST}) AND revoked_at IS NULL AND expires_at>?
       AND created_at=(SELECT MAX(created_at) FROM review_author_marks x WHERE x.author_member_id=m.author_member_id AND x.kind=m.kind AND x.revoked_at IS NULL)`).bind(list, now),
@@ -141,6 +142,12 @@ export async function applyBatchMarks(db: D1Database, profiles: Map<string, Auth
     p.manual.batch = { expiresAt: r.expires_at };
     p.batchSuspected = r.value === 'suspected';
   }
+}
+
+/** 取消標記：撤銷這一類的人工覆寫，馬上恢復最新的自動標記（不是改標成「沒有」） */
+export async function revokeAuthorMark(db: D1Database, input: { authorMemberId: string; kind: 'tier' | 'batch'; now: number }): Promise<number> {
+  const r = await db.prepare('UPDATE review_author_marks SET revoked_at=? WHERE author_member_id=? AND kind=? AND revoked_at IS NULL').bind(input.now, input.authorMemberId, input.kind).run();
+  return r.meta.changes ?? 0;
 }
 
 export const MARK_REASONS = ['shared_device', 'missing_data', 'content_checked', 'other'] as const;

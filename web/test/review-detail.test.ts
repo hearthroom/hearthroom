@@ -305,6 +305,10 @@ it('3,000 counted characters: approve is disabled with the gap explained; reject
  count.click();
  expect(count.checked).toBe(true);
  expect(el.querySelector('[data-reason-preview]')?.textContent).toContain(i18n.global.t('review.reasons.content.min_length.name'));
+ // 作者會看到的改法帶著實際字數與差額（QA 2026-11-23：曾經漏了差額）
+ const fix=i18n.global.t('review.reasons.content.min_length.fixCount',{total:'3,000',gap:'1',required:'3,001'});
+ expect(fix).toContain('3,000');
+ expect(el.querySelector('[data-reason-preview]')?.textContent).toContain(fix);
  expect(submit('reject')!.disabled).toBe(false);
 });
 

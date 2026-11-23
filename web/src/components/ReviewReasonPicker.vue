@@ -28,7 +28,9 @@ function toggle(code: string, on: boolean) {
   if (on) next.add(code); else next.delete(code);
   emit("update:modelValue", REVIEW_REASONS.filter((c) => next.has(c)));
 }
-const field = (code: string, name: Parameters<typeof reasonKey>[1]) => (te(reasonKey(code, name)) ? t(reasonKey(code, name), props.length) : "");
+// 字數參數：伺服器給的是 remaining，字串用的是 {gap}（跟作者端同一個鍵）
+const params = computed(() => ({ ...props.length, gap: props.length.remaining ?? "" }));
+const field = (code: string, name: Parameters<typeof reasonKey>[1]) => (te(reasonKey(code, name)) ? t(reasonKey(code, name), params.value) : "");
 const fixOf = (code: string) => (code === "content.min_length" && props.length.total ? field(code, "fixCount") : props.coaching ? field(code, "coachFix") || field(code, "fix") : field(code, "fix"));
 </script>
 

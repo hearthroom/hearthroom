@@ -4,7 +4,7 @@ import { GENERAL_RATING, makeMember, makeReviewer, resetDb, role } from './helpe
 import { beginHostedEdit, hostGateway, submitHosted } from '../src/hosting';
 import { claim, listQueue, pendingSubmissionOf, queueCounts, statusAmong, stamp } from '../src/review';
 import { dropBatch, dropSubmission, groupSubmissionIds, listDropped, restoreBatch, restoreSubmission } from '../src/review-drop';
-import { authorProfiles, autoTier, wilsonLower } from '../src/review-profile';
+import { authorProfiles, autoTier, markAuthor, revokeAuthorMark, wilsonLower } from '../src/review-profile';
 import { contentFingerprint } from '../src/review-v2';
 import { getCard } from '../src/cards';
 import { upstream } from '../src/upstream';
@@ -273,6 +273,22 @@ describe('佇列分頁與作者標記', () => {
     expect(autoTier({ works: 6, decided: 5, firstPass: 3, legacy: false })).toBe('general');
     expect(autoTier({ works: 2, decided: 0, firstPass: 0, legacy: true })).toBe('unknown');
     expect(autoTier({ works: 2, decided: 0, firstPass: 0, legacy: false })).toBe('new');
+  });
+
+  it('取消標記恢復自動標記；復原的不受理不算作者的不受理次數', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await markAuthor(env.DB, { authorMemberId: f.memberId, kind: 'tier', value: 'top', reasonCode: 'content_checked', note: '', autoValue: 'new', actorMemberId: a, now: Date.now() });
+    expect((await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)?.tier).toBe('top');
+    expect(await revokeAuthorMark(env.DB, { authorMemberId: f.memberId, kind: 'tier', now: Date.now() })).toBe(1);
+    const back = (await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)!;
+    expect([back.tier, back.manual.tier]).toEqual(['new', undefined]);
+    await dropSubmission(env.DB, { submissionId: s.id, memberId: a, now: Date.now() });
+    expect((await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)?.basis.dropCases90d).toBe(1);
+    await restoreSubmission(env.DB, { submissionId: s.id, memberId: a, now: Date.now() });
+    expect((await authorProfiles(env.DB, [f.memberId], Date.now())).get(f.memberId)?.basis.dropCases90d).toBe(0);
   });
 
   it('沒有成員列的作者量不到', async () => {

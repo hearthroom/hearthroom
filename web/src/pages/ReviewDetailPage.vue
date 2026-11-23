@@ -717,7 +717,7 @@ onMounted(() => { void load(); });
         </div>
         <div class="head__acts">
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe && !dropped" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
 

@@ -6,7 +6,7 @@
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { markReviewAuthor, type ReviewAuthorProfile } from "@/lib/api";
+import { markReviewAuthor, revokeReviewAuthorMark, type ReviewAuthorProfile } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import ReviewBatchSheet from "@/components/ReviewBatchSheet.vue";
@@ -45,13 +45,14 @@ const batch = ref<"author" | "device" | null>(null);
 function openSheet() { sheet.value = true; kind.value = "tier"; value.value = profile.value.tier === "general" ? "none" : profile.value.tier; reason.value = ""; note.value = ""; error.value = ""; }
 async function save(clear = false) {
   if (busy.value) return;
-  const v = clear ? (kind.value === "tier" ? "none" : "clear") : value.value;
-  if (!v || !reason.value || (reason.value === "other" && !note.value.trim())) { error.value = t("reviewV2.decide.pickReason"); return; }
+  // 取消標記＝撤銷人工覆寫、恢復自動標記，不必選原因
+  if (!clear && (!value.value || !reason.value || (reason.value === "other" && !note.value.trim()))) { error.value = t("reviewV2.decide.pickReason"); return; }
   busy.value = true; error.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const res = await markReviewAuthor(props.submissionId, token, { kind: kind.value, value: v, reasonCode: reason.value, note: note.value.trim() });
+    const res = clear ? await revokeReviewAuthorMark(props.submissionId, token, kind.value)
+      : await markReviewAuthor(props.submissionId, token, { kind: kind.value, value: value.value, reasonCode: reason.value, note: note.value.trim() });
     if (res.profile) emit("changed", res.profile);
     sheet.value = false;
   } catch (err) {
@@ -108,7 +109,7 @@ function batchClosed(changed: boolean) { batch.value = null; if (changed) emit("
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       <div class="mark__acts">
         <button type="button" class="btn btn--sm btn--ghost" :disabled="busy" @click="sheet = false">{{ $t("reviewV2.mark.back") }}</button>
-        <button type="button" class="btn btn--sm" :disabled="busy" @click="save(true)">{{ $t("reviewV2.mark.clear") }}</button>
+        <button v-if="kind === 'tier' ? profile.manual.tier : profile.manual.batch" type="button" class="btn btn--sm" :disabled="busy" data-mark-clear @click="save(true)">{{ $t("reviewV2.mark.clear") }}</button>
         <button type="button" class="btn btn--sm btn--primary" :disabled="busy" data-mark-save @click="save()">{{ $t("reviewV2.mark.save") }}</button>
       </div>
     </div>
