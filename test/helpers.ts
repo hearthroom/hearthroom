@@ -33,6 +33,7 @@ export async function resetDb(): Promise<void> {
   statements.push(...['qa_session_exclusion','legacy_account_fence','qa_account_operation','qa_session_generation','qa_browser_nonce','qa_browser_receipt'].map(table=>env.DB.prepare(`DELETE FROM ${table}`)));
   statements.push(env.DB.prepare('DELETE FROM author_card_deletions'));
   statements.push(env.DB.prepare('DELETE FROM review_corrections'));
+  statements.push(...['review_events','review_drops','review_drop_cases','review_submission_features','review_submission_devices','review_author_marks'].map(t=>env.DB.prepare(`DELETE FROM ${t}`)));
   statements.push(env.DB.prepare('DELETE FROM author_visibility_operations'));
   statements.push(env.DB.prepare('DELETE FROM account_route_handoffs'));
   statements.push(env.DB.prepare('DELETE FROM account_route_families'));

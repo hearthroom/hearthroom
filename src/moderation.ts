@@ -69,6 +69,7 @@ export async function reviewSummary(db:D1Database,member:{id:string},isAdmin=fal
  const cutoff=Date.now()-45*60*1000;
  const reviews=await db.prepare(`SELECT count(*) n FROM review_submissions s JOIN cards c ON c.id=s.card_id
  WHERE s.status='pending' AND (s.rating IS NOT 'R' OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
+ AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
  AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,cutoff,member.id,member.id,member.id).first<{n:number}>();

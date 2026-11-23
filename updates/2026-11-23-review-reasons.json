@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "draft": true,
+  "title": {
+    "zh-Hant": "未通過審核的卡片會逐項列出要改的地方，附改法與範例。",
+    "zh-Hans": "未通过审核的卡片会逐项列出要改的地方，附改法与示例。",
+    "en": "When a card isn't approved, you'll see each thing to fix, with how to fix it and an example.",
+    "ja": "審査を通らなかったカードには、直す点ごとに直し方と例が表示されます。",
+    "ko": "심사를 통과하지 못한 카드에는 고칠 점마다 고치는 방법과 예시가 표시돼요."
+  }
+}

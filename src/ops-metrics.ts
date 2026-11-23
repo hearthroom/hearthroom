@@ -24,6 +24,9 @@ const METRICS = {
   review_length_exemption:{name:'hearthroom_review_length_exemption_operations_total',help:'Manager publication length exception operations.',label:'operation',operations:['enable','disable','read'],outcomes:['success','replay','denied','conflict','error']},
   review_hold:{name:'hearthroom_review_holds_total',help:'Reviewer hold (freeze for discussion) operations: hold places one, release lifts it (holder or manager).',label:'operation',operations:['hold','release'],outcomes:['success','denied','conflict']},
   review_reopen:{name:'hearthroom_review_reopens_total',help:'Re-reviews of published cards: open (any reviewer), withdraw (manager), keep (still approved), reject (manager, via correction).',label:'operation',operations:['open','withdraw','keep','reject'],outcomes:['success','denied','conflict']},
+  review_drop:{name:'hearthroom_review_drops_total',help:'Review V2 not-accepted (drop) operations: drop and restore by any reviewer, batch and restore_batch by managers; partial means some cards were skipped.',label:'operation',operations:['drop','restore','batch','restore_batch'],outcomes:['success','noop','partial','conflict','denied']},
+  review_author_mark:{name:'hearthroom_review_author_marks_total',help:'Reviewer overrides of automatic author marks (tier, suspected batch).',label:'operation',operations:['tier','batch'],outcomes:['success']},
+  review_stamp:{name:'hearthroom_review_stamps_total',help:'Reviewer verdicts on author submissions; conflict covers claim, hold and drop guards.',label:'operation',operations:['approve','reject'],outcomes:['success','conflict','denied']},
   review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',

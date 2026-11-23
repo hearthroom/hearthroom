@@ -1,3 +1,4 @@
+import {parseReviewReasons} from '../shared/review-reasons';
 import {sourceUpdateEligibility} from './card-update';
 import {Hono} from 'hono';
 import {CARD_NUMBER,getCard,type CardRow} from './cards';
@@ -17,11 +18,13 @@ export interface WorkVisibility {
  everPublic:boolean;revisionState:'same'|'changed'|'unknown';restorable:boolean;
  restoreReason:'none'|'no_approval'|'content_changed'|'revision_unknown'|'restricted'|'unavailable';draftChanged:boolean;
  restriction:'none'|'delisted'|'suspended'|'takedown';reviewNote?:string;restrictionNote?:string;
+ /** 審卡 V2：最近一張是駁回時的理由代碼與單號（作者結果頁）；最近一張在審時的送審時間 */
+ reviewReasons?:string[];reviewId?:string;reviewSince?:number;
  policyRevision:string;approvalRevision:string;
  actions:('set_private'|'set_unlisted'|'restore_public'|'submit_review'|'submit_update'|'cancel_review')[];
  syncState:'complete'|'changing'|'unavailable';
 }
-type ReviewRow={id:string;kind:string;status:string;note:string;submitted_at:number;decided_at:number|null};
+type ReviewRow={id:string;kind:string;status:string;note:string;submitted_at:number;decided_at:number|null;reject_reasons?:string|null};
 async function revision(value:unknown):Promise<string>{
  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
  return [...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('');
@@ -48,7 +51,7 @@ export async function readOwnerVisibility(env:Env,source:string,token:string,row
   if(local&&(!provider.managed||provider.workId!==local.work_id))throw new HttpError(503,'visibility_provider_unavailable');
  }
  const [reviews,history,moderation]=await Promise.all([
-  env.DB.prepare("SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1").bind(source).first<ReviewRow>(),
+  env.DB.prepare("SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1").bind(source).first<ReviewRow>(),
   env.DB.prepare("SELECT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND s.status='approved') AS ever_public").bind(source).first<{ever_public:number}>(),
   env.DB.prepare("SELECT reason FROM moderation_events WHERE provider='harbor' AND source_role_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(source).first<{reason:string}>(),
  ]);
@@ -83,6 +86,9 @@ async function projectOwnerVisibility(provider:WorkOwnerView,local:ManagedWork|n
   ...(provider.rewardRetention?{rewardRetention:provider.rewardRetention}:{}),review,update,everPublic,revisionState:provider.revisionState,restorable,
   restoreReason:syncState!=='complete'?'unavailable':restriction!=='none'?'restricted':restorable?'none':provider.restoreReason==='content_changed'?'content_changed':provider.restoreReason==='not_approved'?'no_approval':'revision_unknown',
   draftChanged:provider.revisionState==='changed',restriction,...(reviews?.status==='rejected'&&reviews.note?{reviewNote:reviews.note}:{}),
+  // 審卡 V2：駁回理由代碼與結果頁的單號；待審的送審時間（等太久時作者端多一行提示，不分是否被不受理）
+  ...(reviews?.status==='rejected'?{reviewReasons:parseReviewReasons(reviews.reject_reasons),reviewId:reviews.id}:{}),
+  ...(reviews?.status==='pending'?{reviewSince:reviews.submitted_at}:{}),
   ...(restriction!=='none'&&moderation?.reason?{restrictionNote:moderation.reason}:{}),
   policyRevision:await revision({rewardRetention:provider.rewardRetention??null,provider:provider.policyRevision,local:local?[local.work_id,local.provider,local.source_role_id,local.access,local.epoch,local.restriction,local.approved_role_id,local.sync_state,local.sync_operation_id,local.moderation_revision,local.confirmed_moderation_revision]:null,row:row?[row.status,row.approved_version_id,row.approved_hosted_role_id,row.board_hidden,row.public_blocked]:null,reviews,everPublic}),
   approvalRevision:await revision({provider:provider.approvalRevision,approved:row?.approved_version_id??null,role:row?.approved_hosted_role_id??null,everPublic}),actions,syncState};
@@ -119,7 +125,7 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowU
   refresh.length
    ? env.DB.prepare("SELECT * FROM managed_work_access WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))").bind(ids).all<ManagedWork>()
    : Promise.resolve(before),
-  env.DB.prepare(`SELECT * FROM (SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,
+  env.DB.prepare(`SELECT * FROM (SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons,
    COALESCE(v.source_role_id,s.source_role_id) AS source,
    ROW_NUMBER() OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id) ORDER BY s.submitted_at DESC,s.rowid DESC) AS n,
    MAX(CASE WHEN s.status='approved' THEN 1 ELSE 0 END) OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id)) AS ever_public

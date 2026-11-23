@@ -109,13 +109,17 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, weeklyUsageForMember, openPack, needsFirstRegistration } from "./quota";
 import { hashDeviceToken, recordRewardDevice, trimRewardDevices } from "./reward-device";
 import {
-  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue, queueCounts,
   release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
 } from "./review";
 import { authorCards, reviewAuthor, submissionType } from "./review-author";
 import { isAdult, setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
+import { dropBatch, dropSubmission, groupItems, groupSubmissionIds, isDropped, listDropped, restoreBatch, restoreSubmission, type DroppedFilter, type GroupScope } from "./review-drop";
+import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor } from "./review-profile";
+import { queueContext as queueContextOf, recordOriginalityStatement } from "./review-v2";
+import { parseReviewReasons } from "../shared/review-reasons";
 import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
@@ -1811,17 +1815,19 @@ app.get('/v1/review/decisions',async(c)=>{
 
 app.get('/v1/mine/reviews/:id',async(c)=>{
  const member=await requireMember(c);
- const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,
+ const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,s.kind,
+  CASE WHEN s.status='rejected' THEN s.reject_reasons END AS reasons,CASE WHEN s.status='rejected' THEN s.reject_coaching ELSE 0 END AS coaching,
   v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
   FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
   LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
   WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
-   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;
+   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;
   }>();
  if(!row)throw new HttpError(404,'review result not found');
- const {public_role,correctionState,...result}=row;
- return c.json({...result,name:pickLocale(JSON.parse(public_role).names,lang(c)),corrected:correctionState==='complete'},200,{'Cache-Control':'private, no-store'});
+ // 作者只看到結果、理由代碼與審核員寫給他的補充。待審（含不受理中）一律是 pending，不分是否被移出佇列
+ const {public_role,correctionState,reasons,coaching,...result}=row;
+ return c.json({...result,reasons:parseReviewReasons(reasons),coaching:!!coaching,name:pickLocale(JSON.parse(public_role).names,lang(c)),corrected:correctionState==='complete'},200,{'Cache-Control':'private, no-store'});
 });
 
 app.post('/v1/review/:id/correction',async(c)=>{
@@ -1841,9 +1847,93 @@ app.get("/v1/review/queue", async (c) => {
   const member = await requireReviewer(c);
   const now = Date.now();
   const locale = lang(c);
-  const items = await listQueue(c.env.DB, member.id, now, locale);
+  const rawTab = c.req.query("tab");
+  const tab = rawTab === "new" || rawTab === "updates" ? rawTab : undefined;
+  const items = await listQueue(c.env.DB, member.id, now, locale, tab);
+  const counts = await queueCounts(c.env.DB);
+  // 疑似批量的提示列只給管理員：同一個安裝的待審卡一組
+  const manager = ["manager", "owner"].includes(String(await reviewerRole(c.env.DB, member.id)));
   note(c, { event: "review_queue", resultCount: items.length });
-  return c.json({ items, claimTtlMs: 45 * 60 * 1000 }, 200, { "Cache-Control": "private, no-store" });
+  return c.json({ items, counts, batchGroups: manager ? await suspectedBatchGroups(c.env.DB, now) : [], claimTtlMs: 45 * 60 * 1000 }, 200, { "Cache-Control": "private, no-store" });
+});
+
+/** 待審（不含不受理）裡疑似批量的安裝群組：每組一張錨點單與張數，不帶雜湊與帳號 */
+async function suspectedBatchGroups(db: D1Database, now: number): Promise<{ scope: "device"; anchorId: string; count: number }[]> {
+  const rows = await db.prepare(`SELECT sd.device_hash, MIN(s.id) AS anchor, COUNT(*) AS n FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
+    WHERE s.status='pending' AND s.reopen_of IS NULL AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
+    GROUP BY sd.device_hash HAVING COUNT(*)>=2 LIMIT 50`).all<{ device_hash: string; anchor: string; n: number }>();
+  const signals = await deviceSignals(db, rows.results.map((r) => r.device_hash), now);
+  return rows.results.filter((r) => signals.get(r.device_hash)?.suspected).map((r) => ({ scope: "device" as const, anchorId: r.anchor, count: r.n }));
+}
+
+/**
+ * 不受理（審卡 V2）：不必先領取；不寫理由、不通知作者，作者端仍顯示審核中。任何審核員都能移出與復原，
+ * 批量限管理員。規則見 src/review-drop.ts。
+ */
+app.post("/v1/review/:id/drop", async (c) => {
+  const member = await requireReviewer(c);
+  try {
+    const result = await dropSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, now: Date.now() });
+    await bumpOp(c.env.DB, "review_drop", "drop", "success");
+    note(c, { event: "review_drop", detail: "drop" });
+    queuePush(c);
+    return c.json(result, 200, { "Cache-Control": "private, no-store" });
+  } catch (error) {
+    if (error instanceof HttpError) await bumpOp(c.env.DB, "review_drop", "drop", error.status === 409 ? "conflict" : "denied");
+    throw error;
+  }
+});
+
+app.post("/v1/review/:id/restore", async (c) => {
+  const member = await requireReviewer(c);
+  const result = await restoreSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, now: Date.now() });
+  await bumpOp(c.env.DB, "review_drop", "restore", result.restored ? "success" : "noop");
+  note(c, { event: "review_drop", detail: "restore" });
+  queuePush(c);
+  return c.json(result, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/review/dropped", async (c) => {
+  const member = await requireReviewer(c);
+  const raw = c.req.query("filter");
+  const filter: DroppedFilter = raw === "single" || raw === "batch" || raw === "auto" || raw === "aged" ? raw : "all";
+  const adultAllowed = (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt !== null;
+  const result = await listDropped(c.env.DB, { memberId: member.id, adultAllowed, now: Date.now(), lang: lang(c) }, filter);
+  note(c, { event: "review_dropped", resultCount: result.items.length });
+  return c.json(result, 200, { "Cache-Control": "private, no-store" });
+});
+
+/** 批量 sheet 的內容：同一位作者或同一個安裝的待審卡（限管理員；安裝不認識就回 409） */
+app.get("/v1/review/:id/group", async (c) => {
+  const member = await requireReviewer(c);
+  if (!["manager", "owner"].includes(String(await reviewerRole(c.env.DB, member.id)))) throw new HttpError(403, "review_batch_manager_required");
+  const scope: GroupScope = c.req.query("scope") === "author" ? "author" : "device";
+  const ids = await groupSubmissionIds(c.env.DB, c.req.param("id"), scope);
+  if (!ids) throw new HttpError(409, "review_group_unknown");
+  const adultAllowed = (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt !== null;
+  return c.json({ scope, items: await groupItems(c.env.DB, ids, { memberId: member.id, adultAllowed, now: Date.now(), lang: lang(c) }) }, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.post("/v1/review/drop-batch", async (c) => {
+  const member = await requireReviewer(c);
+  const body = (await c.req.json().catch(() => ({}))) as { anchorId?: unknown; scope?: unknown; ids?: unknown; batchId?: unknown };
+  if (typeof body.anchorId !== "string" || (body.scope !== "author" && body.scope !== "device") || !Array.isArray(body.ids) || body.ids.some((v) => typeof v !== "string")) throw new HttpError(400, "invalid batch");
+  const batchId = typeof body.batchId === "string" && /^[0-9a-f-]{36}$/.test(body.batchId) ? body.batchId : undefined;
+  const result = await dropBatch(c.env.DB, { anchorId: body.anchorId, scope: body.scope, ids: body.ids as string[], memberId: member.id, now: Date.now(), batchId });
+  await bumpOp(c.env.DB, "review_drop", "batch", result.skipped.length ? (result.dropped.length ? "partial" : "conflict") : "success");
+  note(c, { event: "review_drop", detail: "batch", resultCount: result.dropped.length });
+  queuePush(c);
+  return c.json(result, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.post("/v1/review/restore-batch", async (c) => {
+  const member = await requireReviewer(c);
+  const body = (await c.req.json().catch(() => ({}))) as { batchId?: unknown };
+  if (typeof body.batchId !== "string") throw new HttpError(400, "invalid batch");
+  const result = await restoreBatch(c.env.DB, { batchId: body.batchId, memberId: member.id, now: Date.now() });
+  await bumpOp(c.env.DB, "review_drop", "restore_batch", "success");
+  queuePush(c);
+  return c.json(result, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.post("/v1/review/:id/claim", async (c) => {
@@ -1868,15 +1958,17 @@ app.post("/v1/review/:id/release", async (c) => {
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown };
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
   if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
-  if (verdict === "reject" && !noteText.trim()) throw new HttpError(400, "a rejection needs a note for the author");
+  // 駁回要理由代碼（至少一個，「其他」要補充）；只送說明的舊頁面記成「其他」。規則見 normalizeRejectReasons
   // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
   if (noteText.trim().length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation },c.env);
+  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true },c.env)
+    .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", verdict, error.status === 409 ? "conflict" : "denied"); throw error; });
+  await bumpOp(c.env.DB, "review_stamp", verdict, "success");
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
   // 過審操作已透過服務身分發放；這裡只讀結果，失敗由專用排程重試。
   const paid = result.submission.status === "approved" ? await rewardOnApproval(c, member.id, Number(result.submission.card_id)) : { reward: null };
@@ -1966,6 +2058,7 @@ app.post("/v1/review/:id/unhold", async (c) => {
 app.get("/v1/review/:id/originality", async (c) => {
   const { s } = await claimedSubmission(c);
   const report = await originalityReport(c.env.DB, s, await loadSnapshot(c.env.DB, s.id), lang(c));
+  if (report.available && s.status === "pending") await recordOriginalityStatement(c.env.DB, s.id, report.similarity, "ngram1", Date.now()).run();
   note(c, { event: "review_originality", subject: s.source_role_id, detail: !report.available ? report.reason : report.similarity >= 0.3 ? "high" : report.similarity > 0 ? "some" : "none" });
   return c.json(report, 200, { "Cache-Control": "private, no-store" });
 });
@@ -2042,16 +2135,54 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
   const role=await reviewerRole(c.env.DB,member.id);
   // 冷凍人回頭看自己冷凍的單也不必領：單子可能正被別人領著讀，他要能找到解凍
   const heldByMe=s.status==='pending'&&!!await c.env.DB.prepare('SELECT 1 FROM review_holds WHERE card_id=? AND member_id=?').bind(s.card_id,member.id).first();
-  if(!stampedByMe&&!heldByMe&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
+  // 不受理清單的「查看」：唯讀，不必領取（不受理中的單本來就不能領）
+  const droppedNow=s.status==='pending'&&await isDropped(c.env.DB,s.id);
+  if(!stampedByMe&&!heldByMe&&!droppedNow&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
     if(s.status!=='pending')throw new HttpError(410,'review no longer active');
     if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
   }
   if(s.rating==='R'&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
-  return { member, s, stampedByMe };
+  return { member, s, stampedByMe, droppedNow };
 }
 
+/** 作者側寫（審卡 V2）：只給審核頁；回標記、依據與覆寫，不回帳號以外的身分、不回裝置雜湊 */
+async function reviewAuthorProfile(db: D1Database, submissionId: string, now: number) {
+  const row = await db.prepare(`SELECT v.member_id, sd.device_hash FROM hosting_versions v LEFT JOIN review_submission_devices sd ON sd.submission_id=v.submission_id WHERE v.submission_id=?`)
+    .bind(submissionId).first<{ member_id: string; device_hash: string | null }>();
+  if (!row) return null;
+  const profiles = await authorProfiles(db, [row.member_id], now);
+  await applyBatchMarks(db, profiles, now);
+  const profile = profiles.get(row.member_id)!;
+  const device = row.device_hash ? (await deviceSignals(db, [row.device_hash], now)).get(row.device_hash) : undefined;
+  const ctx = await queueContextOf(db, submissionId);
+  return {
+    ...profile,
+    batchSuspected: profile.manual.batch ? profile.batchSuspected : !!device?.suspected,
+    autoBatch: !!device?.suspected,
+    basis: { ...profile.basis, deviceAccounts: device ? device.accounts : null, deviceRecentWorks: device ? device.recentWorks : null },
+    pendingSameAuthor: ctx.sameAuthor, pendingSameDevice: ctx.sameDevice,
+  };
+}
+
+app.post("/v1/review/:id/author-mark", async (c) => {
+  const { member, s } = await claimedSubmission(c);
+  const body = (await c.req.json().catch(() => ({}))) as { kind?: unknown; value?: unknown; reasonCode?: unknown; note?: unknown };
+  if (body.kind !== "tier" && body.kind !== "batch") throw new HttpError(400, "review_mark_invalid");
+  const author = await c.env.DB.prepare("SELECT member_id FROM hosting_versions WHERE submission_id=?").bind(s.id).first<{ member_id: string }>();
+  if (!author) throw new HttpError(409, "review_author_unknown");
+  const now = Date.now();
+  const current = await reviewAuthorProfile(c.env.DB, s.id, now);
+  const result = await markAuthor(c.env.DB, {
+    authorMemberId: author.member_id, kind: body.kind, value: String(body.value ?? ""), reasonCode: String(body.reasonCode ?? ""),
+    note: typeof body.note === "string" ? body.note : "", autoValue: body.kind === "tier" ? String(current?.autoTier ?? "unknown") : current?.autoBatch ? "suspected" : "clear",
+    actorMemberId: member.id, now,
+  });
+  await bumpOp(c.env.DB, "review_author_mark", body.kind, "success");
+  return c.json({ ...result, profile: await reviewAuthorProfile(c.env.DB, s.id, now) }, 200, { "Cache-Control": "private, no-store" });
+});
+
 app.get("/v1/review/:id/detail", async (c) => {
-  const { member, s, stampedByMe } = await claimedSubmission(c);
+  const { member, s, stampedByMe, droppedNow } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
   // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後就不再讀（只給公開資料）。
   if (detail?.slim) detail = s.status === 'pending' ? await upstream.readSealedForReview(c.env, s.source_role_id, s.provider as ProviderId) : null;
@@ -2123,6 +2254,13 @@ app.get("/v1/review/:id/detail", async (c) => {
       card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },
       // 原作者：Harbor 帳號名稱、數字帳號 ID、本站代號與卡數。只有審核頁給，作者端與玩家端不變
       author: await reviewAuthor(c.env.DB, s.card_id),
+      // 審卡 V2：作者標記與依據（只給審核員）、不受理狀態、送審特徵（快速審的重點檢查用）、駁回理由
+      authorProfile: s.status === "pending" ? await reviewAuthorProfile(c.env.DB, s.id, Date.now()) : null,
+      dropped: droppedNow,
+      features: await c.env.DB.prepare("SELECT features, after_drop AS afterDrop FROM review_submission_features WHERE submission_id=?").bind(s.id).first<{ features: string; afterDrop: number }>()
+        .then((f) => (f ? { ...(JSON.parse(f.features) as Record<string, unknown>), afterDrop: !!f.afterDrop } : null)),
+      rejectReasons: s.status === "rejected" ? parseReviewReasons(s.reject_reasons) : [],
+      rejectCoaching: s.status === "rejected" ? !!s.reject_coaching : false,
       detail,
     },
     200,

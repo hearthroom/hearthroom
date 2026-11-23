@@ -20,6 +20,7 @@ import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
+import { contentFingerprint, dropCaseForSubmission, submissionFeatures, submissionRecordStatements } from './review-v2';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
 import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
@@ -205,6 +206,10 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId,consent??undefined);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
+ // 審卡 V2：送審特徵與內容指紋（不受理後原樣重送會自動回到不受理，見 review-v2.ts）
+ const fingerprint=await contentFingerprint(settings,input.role,{ratingAnswers:answers,fandomKey:fandom.key});
+ const features=submissionFeatures(settings,{hasFandom:!!fandom.key,lengthExempt:await reviewLengthExempt(db,provider,input.role.roleId)});
+ const dropCase=await dropCaseForSubmission(db,{cardId:existing?String(existing.id):null,memberId:input.memberId,fingerprint});
  // Validate size before any registry write. Snapshot creation joins the submission
  // transaction below, so reviewers never see an incomplete submitted revision.
  // 本站只留查重原文與統計；完整設定審核時向 Harbor 封存版讀，不在這裡抄一份（見 readSealedForReview）。
@@ -220,6 +225,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
    // 查重指紋跟審核單同一批：單子沒寫成就不留指紋
    ...indexStatements(db,{submissionId,cardId,memberId:input.memberId,text:String(privateDoc.roleDetailDesc??''),names:[String(privateDoc.roleName??''),String(privateDoc.userName??'')],now:input.now}),
    db.prepare("UPDATE cards SET status='pending' WHERE id=? AND approved_version_id IS NULL").bind(cardId),
+   ...submissionRecordStatements(db,{submissionId,cardId:String(cardId),memberId:input.memberId,now:input.now,features,deviceHash:input.deviceHash??null,fingerprint,...dropCase}),
  ];
  if(existing){await db.batch(finalize(existing.id));}
  else {
