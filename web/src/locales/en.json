@@ -5686,7 +5686,7 @@
   "reviewV2.mark.kindTier": "Author label",
   "reviewV2.mark.kindBatch": "Possible bulk",
   "reviewV2.mark.batchOn": "Mark as possible bulk",
-  "reviewV2.mark.batchOff": "Not bulk",
+  "reviewV2.mark.batchOff": "Remove possible bulk",
   "reviewV2.mark.reasonLabel": "Reason",
   "reviewV2.mark.reason.shared_device": "Shared device",
   "reviewV2.mark.reason.missing_data": "Missing data",

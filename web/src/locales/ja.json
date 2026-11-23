@@ -5686,7 +5686,7 @@
   "reviewV2.mark.kindTier": "作者ラベル",
   "reviewV2.mark.kindBatch": "一括の疑い",
   "reviewV2.mark.batchOn": "一括の疑いにする",
-  "reviewV2.mark.batchOff": "一括ではない",
+  "reviewV2.mark.batchOff": "一括の疑いを外す",
   "reviewV2.mark.reasonLabel": "理由",
   "reviewV2.mark.reason.shared_device": "共用端末",
   "reviewV2.mark.reason.missing_data": "データ不足",

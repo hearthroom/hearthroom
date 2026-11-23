@@ -5686,7 +5686,7 @@
   "reviewV2.mark.kindTier": "作者标记",
   "reviewV2.mark.kindBatch": "疑似批量",
   "reviewV2.mark.batchOn": "标为疑似批量",
-  "reviewV2.mark.batchOff": "不是批量",
+  "reviewV2.mark.batchOff": "取消疑似批量",
   "reviewV2.mark.reasonLabel": "原因",
   "reviewV2.mark.reason.shared_device": "共用设备",
   "reviewV2.mark.reason.missing_data": "数据缺失",

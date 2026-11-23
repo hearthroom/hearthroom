@@ -5686,7 +5686,7 @@
   "reviewV2.mark.kindTier": "作者標記",
   "reviewV2.mark.kindBatch": "疑似量產",
   "reviewV2.mark.batchOn": "標為疑似量產",
-  "reviewV2.mark.batchOff": "不是量產",
+  "reviewV2.mark.batchOff": "取消疑似量產",
   "reviewV2.mark.reasonLabel": "原因",
   "reviewV2.mark.reason.shared_device": "共用裝置",
   "reviewV2.mark.reason.missing_data": "資料缺漏",

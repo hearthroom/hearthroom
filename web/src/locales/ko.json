@@ -5686,7 +5686,7 @@
   "reviewV2.mark.kindTier": "작성자 분류",
   "reviewV2.mark.kindBatch": "일괄 의심",
   "reviewV2.mark.batchOn": "일괄 의심으로 표시",
-  "reviewV2.mark.batchOff": "일괄 아님",
+  "reviewV2.mark.batchOff": "일괄 의심 해제",
   "reviewV2.mark.reasonLabel": "사유",
   "reviewV2.mark.reason.shared_device": "공용 기기",
   "reviewV2.mark.reason.missing_data": "데이터 부족",
