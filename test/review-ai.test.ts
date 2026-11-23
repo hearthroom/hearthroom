@@ -15,7 +15,7 @@ let humanId = '', managerId = '';
 const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 /** 重跑 migration 裡建審卡員身分的那幾句（resetDb 會清掉成員與審核員表） */
 async function seedReviewAgentIdentity() {
-  const migration = (env as unknown as { TEST_MIGRATIONS: { name: string; queries: string[] }[] }).TEST_MIGRATIONS.find((m) => m.name.startsWith('0146_review_ai'))!;
+  const migration = (env as unknown as { TEST_MIGRATIONS: { name: string; queries: string[] }[] }).TEST_MIGRATIONS.find((m) => m.name.endsWith('_review_ai.sql') || m.name.endsWith('_review_ai'))!;
   for (const q of migration.queries.filter((q) => /_review_agent_identity_guard|system-review-agent/.test(q))) await env.DB.prepare(q).run();
 }
 
