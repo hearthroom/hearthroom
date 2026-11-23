@@ -377,3 +377,27 @@ describe('雙盲：不受理後復原', () => {
     expect((await json(await get('/v1/review-ai/disagreements?state=all', 'mgr'))).total).toBe(0);
   });
 });
+
+describe('仲裁：不受理中的單與改判', () => {
+  it('不受理中（仍待審）的單不進分歧清單，管理員看不到 AI 判斷', async () => {
+    const { id } = await submitCard();
+    await suggest(id, { verdict: 'pass' });
+    await dropSubmission(env.DB, { submissionId: id, memberId: humanId, now: Date.now() });
+    expect((await json(await get('/v1/review-ai/disagreements?state=all', 'mgr'))).total).toBe(0);
+  });
+
+  it('仲裁後兩邊不再相反（審卡員改判成交人），仲裁仍找得到，統計照仲裁當時的方向與理由', async () => {
+    const { id } = await submitCard();
+    const sid = (await json(await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] }))).id;
+    await decide(id, humanId, 'approve');
+    const res = await send('POST', `/v1/review-ai/disagreements/${sid}/arbitration`, 'mgr', { value: 'ai_right', operationId: crypto.randomUUID() });
+    expect(res.status).toBe(200);
+    // 審卡員同一版判準重寫成交人：現在已經不算分歧（重新審核改判也會這樣）
+    await suggest(id, { verdict: 'handoff', handoffCause: 'unsure' });
+    const done = await json(await get('/v1/review-ai/disagreements?state=done', 'mgr'));
+    expect(done.items.map((i: any) => [i.suggestionId, i.direction, i.human.decision])).toEqual([[sid, 'ai_stricter', 'approved']]);
+    expect((await get(`/v1/review-ai/disagreements/${sid}`, 'mgr')).status).toBe(200);
+    const v1 = (await json(await get('/v1/review-ai/report', 'mgr'))).versions.find((v: any) => v.criteriaVersion === 'v1');
+    expect(v1.arbitration.reasons).toEqual({ 'opening.no_reply_hook': { humanWrong: 1, aiWrong: 0 } });
+  });
+});

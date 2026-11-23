@@ -100,8 +100,9 @@ reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", as
  * 新卡、沒有基準、讀不到都照實回狀態，不擋讀卡。
  */
 async function aiUpdateDiff(env: Env, s: SubmissionRow) {
-  if (s.kind !== "re") return null;
+  // 新卡被駁回後重送也有差異（基準＝上次被駁回版），所以不看 kind，照差異表有沒有這張單
   const view = await diffView(env, s.id).catch(() => ({ state: "unreadable" as const }));
+  if (view.state === "missing") return null;
   if (view.state !== "ready") return { state: view.state };
   const clipText = (t: string) => (t.length > 1500 ? `${t.slice(0, 1500)}…[截斷]` : t);
   return {

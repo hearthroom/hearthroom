@@ -226,9 +226,10 @@ export function revealEventStatement(db: D1Database, input: { submissionId: stri
     VALUES (?,1,?,?,?,'ai_reveal','reviewer',?)`).bind(`aireveal:${input.submissionId}:${input.memberId}`, input.submissionId, input.cardId, input.now, input.memberId);
 }
 
-/** 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章）：這種單不進人機對照 */
-export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv JOIN review_stamps st ON st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at
-  WHERE rv.action='ai_reveal' AND rv.submission_id=s.id)`;
+/** 這張單的人工決定是不是在看過 AI 判斷之後才做的（不受理→看→復原→蓋章，或再不受理一次）：這種單不進人機對照 */
+export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id AND (
+  EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
+  OR EXISTS(SELECT 1 FROM review_drops dr WHERE dr.submission_id=rv.submission_id AND dr.actor_member_id=rv.actor_member_id AND dr.created_at>rv.at AND dr.restored_at IS NULL)))`;
 
 /** 揭曉後的覆核：可以改選，每次一筆審核事件（同一個 operationId 重送不多記），統計取每位審核員對每筆建議最後一次。 */
 export async function recordFeedback(db: D1Database, input: { submissionId: string; cardId: number; suggestionId: string; memberId: string; value: string; operationId: string; now: number }) {
