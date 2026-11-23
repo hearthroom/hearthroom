@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n';
 import {retentionText} from '@/lib/reward-retention';
 import type { WorkAccess, WorkVisibility } from '@/lib/work-visibility';
 import QuotaDeviceHelp from './QuotaDeviceHelp.vue';
-const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;shareUrl?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false,quotaShared:false});
+import { noteShareLinkCreated } from '@/lib/share-ref';
+const props=withDefaults(defineProps<{value:WorkVisibility|null;phase:string;dirty?:boolean;missing?:string;previewMissing?:boolean;quotaFull?:boolean;quotaShared?:boolean;shareUrl?:string;shareRole?:string;newCard?:boolean;primary?:boolean;appealUrl?:string;resumeAction?:string;selectPublic?:number}>(),{dirty:false,quotaFull:false,quotaShared:false});
 const emit=defineEmits<{apply:[access:WorkAccess];submit:[];cancelReview:[];check:[];resume:[];reload:[];missing:[];cover:[]}>();
 const {t}=useI18n();const uid=useId();
 const selected=ref<WorkAccess|null>(null),cancel=ref(false),copied=ref(false),copyFailed=ref(false);
@@ -45,7 +46,8 @@ function arrow(event:KeyboardEvent,access:WorkAccess){
 }
 const urlInput=ref<HTMLInputElement|null>(null);
 let copyTimer:ReturnType<typeof setTimeout>|undefined;onBeforeUnmount(()=>clearTimeout(copyTimer));
-async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??'');copied.value=true;clearTimeout(copyTimer);copyTimer=setTimeout(()=>copied.value=false,1600);}catch{copyFailed.value=true;urlInput.value?.select();}}
+// 複製了卡片連結（含剪貼簿拿不到、改成自己選字複製）：新手七日「分享一張卡」要算到
+async function copy(){try{await navigator.clipboard.writeText(props.shareUrl??'');copied.value=true;clearTimeout(copyTimer);copyTimer=setTimeout(()=>copied.value=false,1600);void noteShareLinkCreated(props.shareRole);}catch{copyFailed.value=true;urlInput.value?.select();void noteShareLinkCreated(props.shareRole);}}
 </script>
 <template>
  <div class="visibility-picker" :aria-busy="phase==='loading'||phase==='saving'||phase==='checking'">
