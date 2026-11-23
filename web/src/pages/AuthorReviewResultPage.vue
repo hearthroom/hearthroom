@@ -22,9 +22,12 @@ let sequence=0;
  * 舊的駁回（沒有代碼）、更正、通過、待審照舊只顯示結果與審核員的說明。
  * 只列認得的代碼：語系檔沒有的代碼畫不出卡片，整張單退回舊版面。
  */
-const reasons=computed(()=>{const d=data.value;if(!d||d.status!=='rejected'||d.corrected)return [];return (d.reasons??[]).filter(c=>(REVIEW_REASONS as readonly string[]).includes(c));});
+const known=(codes:string[]|undefined)=>(codes??[]).filter(c=>(REVIEW_REASONS as readonly string[]).includes(c));
+/** 通過並附改進建議（owner 2026-11-23）：卡已通過上架，這一頁列「可以更好的地方」，一律用輔導版的完整改法 */
+const suggest=computed(()=>{const d=data.value;return !!d&&d.status==='approved'&&!d.corrected&&known(d.suggestions).length>0;});
+const reasons=computed(()=>{const d=data.value;if(!d||d.corrected)return [];if(suggest.value)return known(d.suggestions);if(d.status!=='rejected')return [];return known(d.reasons);});
 const guided=computed(()=>reasons.value.length>0);
-const coaching=computed(()=>guided.value&&!!data.value?.coaching);
+const coaching=computed(()=>guided.value&&(suggest.value||!!data.value?.coaching));
 const opening=computed(()=>hasOpeningReason(reasons.value));
 const has=(code:string,field:Parameters<typeof reasonKey>[1])=>hasField(te,code,field);
 // 有效字數那一項的「怎麼改」帶門檻字數；其他代碼用不到這個參數
@@ -41,24 +44,26 @@ async function load(){
 }
 onMounted(()=>{void load();});
 watch(()=>[route.params.id,locale.value],()=>void load());
-watch([guided,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(guided.value?'reviewV2.author.pageTitle':'review.correction.authorTitle'));},{immediate:true});
+watch([guided,suggest,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(suggest.value?'reviewV2.author.suggestTitle':guided.value?'reviewV2.author.pageTitle':'review.correction.authorTitle'));},{immediate:true});
 </script>
 <template>
  <section class="page page--narrow result">
   <RouterLink class="link" :to="lp('/mine')">{{t('nav.mine')}}</RouterLink>
-  <h1>{{t(guided?'reviewV2.author.pageTitle':data?.corrected?'review.correction.authorTitle':'review.correction.authorOpen')}}</h1>
+  <h1>{{t(suggest?'reviewV2.author.suggestTitle':guided?'reviewV2.author.pageTitle':data?.corrected?'review.correction.authorTitle':'review.correction.authorOpen')}}</h1>
   <p v-if="error" class="notice notice--error" role="alert">{{error}} <button class="btn" @click="load">{{t('review.correction.reload')}}</button></p>
   <div v-else-if="loading" class="ghost placeholder" aria-busy="true" />
   <template v-else-if="data&&guided">
    <article class="panel record" data-guided>
-    <span class="chip result__chip">{{t('reviewV2.author.chip')}}</span>
+    <!-- 通過附建議：標題與結果永遠是「已通過」，建議在後面，語氣是建議不是問題清單 -->
+    <span class="chip result__chip" :class="{'result__chip--ok':suggest}" :data-suggest="suggest?'':undefined">{{t(suggest?'reviewV2.author.chipApproved':'reviewV2.author.chip')}}</span>
     <h2>{{data.name}}</h2>
     <p class="subtle">{{t('review.confirm.version')}} · {{dateTime(data.submittedAt)}}</p>
+    <p v-if="suggest" data-suggest-intro>{{t('reviewV2.author.suggestIntro')}}</p>
    </article>
    <article v-for="code in reasons" :key="code" class="panel record reason-card" :data-reason="code">
     <h3>{{t(reasonKey(code,'name'))}}</h3>
     <dl class="reason-card__parts">
-     <div><dt>{{t('reviewV2.author.problem')}}</dt><dd>{{say(code,'summary')}}</dd></div>
+     <div><dt>{{t(suggest?'reviewV2.author.suggestPoint':'reviewV2.author.problem')}}</dt><dd>{{say(code,'summary')}}</dd></div>
      <div><dt>{{t('reviewV2.author.fix')}}</dt><dd data-fix>{{say(code,fixField(code))}}</dd></div>
      <div v-if="has(code,'example')"><dt>{{t('reviewV2.author.example')}}</dt><dd>{{say(code,'example')}}</dd></div>
      <div v-if="hasOptions(te,code)" data-reason-options><dt>{{t(reasonOptionKey(code,'title'))}}</dt><dd><ReviewReasonOptions :code="code" /></dd></div>
@@ -78,9 +83,9 @@ watch([guided,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(
     <p class="subtle">{{t('reviewV2.elements.footer')}}</p>
    </details>
    <div v-if="editPath" class="edit">
-    <a class="btn btn--primary btn--lg" :href="editPath" data-edit-card>{{t('reviewV2.author.edit')}}</a>
+    <a class="btn btn--lg" :class="{'btn--primary':!suggest}" :href="editPath" data-edit-card>{{t('reviewV2.author.edit')}}</a>
    </div>
-   <p class="subtle quota">{{t('reviewV2.author.quota')}}</p>
+   <p class="subtle quota">{{t(suggest?'reviewV2.author.suggestQuota':'reviewV2.author.quota')}}</p>
   </template>
   <article v-else-if="data" class="panel record">
    <h2>{{data.name}}</h2>
@@ -103,6 +108,7 @@ h2, h3, p, dl, dd, ul { margin: 0; }
 /* 結果標：狀態色只用危險色一種（一屏最多兩種強調色：accent 加一個狀態色），chip 本身不可點 */
 .result__chip { justify-self: start; cursor: default; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .result__chip:hover, .result__chip:active { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+.result__chip--ok, .result__chip--ok:hover, .result__chip--ok:active { background: var(--success-soft); color: var(--success); }
 .reason-card { gap: var(--s-3); }
 .reason-card__parts { display: grid; gap: var(--s-3); min-width: 0; }
 .reason-card__parts > div, .reason-card__parts dd { min-width: 0; }

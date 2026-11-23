@@ -69,7 +69,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];suggestOpen.value=false;suggestPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -267,6 +267,11 @@ const choice = ref<"approve" | "reject" | "drop" | null>(null);
 const reasonPicks = ref<string[]>([]);
 /** 審核標記（只給審核員與數據；任何決定都能標） */
 const decisionMarks = ref<string[]>([]);
+/** 通過並附改進建議（owner 2026-11-23）：選了通過才有，預設收合；作者端一律看輔導版改法 */
+const suggestOpen = ref(false);
+const suggestPicks = ref<string[]>([]);
+const suggestions = computed(() => (choice.value === "approve" && !reopen.value && suggestOpen.value ? REVIEW_REASONS.filter((c) => suggestPicks.value.includes(c)) : []));
+const suggestNoteMissing = computed(() => suggestions.value.includes("other") && !note.value.trim());
 /** 輔導（附完整改法與範例）：作者是新人時預設開，可改回一般；null＝照預設 */
 const coaching = ref<boolean | null>(null);
 const coachingDefault = computed(() => data.value?.authorProfile?.tier === "new");
@@ -558,7 +563,10 @@ async function stamp(verdict: "approve" | "reject") {
   decideError.value = "";
   decideUnknown.value = false;
   // 說明欄只在選「駁回」時出現：改選通過時，之前打在駁回裡的字不能跟著送出
-  const target=id.value,review=data.value,reason=verdict==='reject'?note.value:'',generation=review.submission.claimGeneration;
+  // 通過附建議時，補充說明跟著建議一起給作者
+  const target=id.value,review=data.value,reason=verdict==='reject'||(verdict==='approve'&&suggestions.value.length)?note.value:'',generation=review.submission.claimGeneration;
+  const suggest=verdict==='approve'?[...suggestions.value]:[];
+  if(suggest.length&&suggestNoteMissing.value){busy.value=false;decideError.value=t('reviewV2.decide.otherNeedsNote');return;}
   const codes=verdict==='reject'&&!reopen.value?pickedReasons.value:undefined,coach=verdict==='reject'&&!reopen.value&&coachingOn.value;
   if(verdict==='reject'&&!rejectReady.value){busy.value=false;decideError.value=t(reopen.value||pickedReasons.value.length?'reviewV2.decide.otherNeedsNote':'reviewV2.decide.pickReason');return;}
   try {
@@ -568,11 +576,12 @@ async function stamp(verdict: "approve" | "reject") {
     const keep=verdict==='approve'&&reopen.value;
     const body=verdict==='reject'?(reopen.value?'review.reopen.rejectBody':'review.confirm.rejectBody'):keep?'review.reopen.keepBody':approved?'review.confirm.approveFinal':'review.confirm.approvePending';
     // 駁回確認：列卡名、版本、理由名稱與補充；輔導時多一行
-    const reasonLines=codes?.length?'\n'+t('reviewV2.decide.confirmBody')+'\n'+codes.map(c=>'・'+t(reasonKey(c,'name'))).join('\n')+(coach?'\n'+t('reviewV2.decide.confirmCoaching'):''):'';
-    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+reasonLines+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?'review.confirm.approve':'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
+    const reasonLines=codes?.length?'\n'+t('reviewV2.decide.confirmBody')+'\n'+codes.map(c=>'・'+t(reasonKey(c,'name'))).join('\n')+(coach?'\n'+t('reviewV2.decide.confirmCoaching'):'')
+      :suggest.length?'\n'+t('reviewV2.decide.confirmSuggestBody')+'\n'+suggest.map(c=>'・'+t(reasonKey(c,'name'))).join('\n'):'';
+    if(!await decisionConfirm({scrollMessage:true,title:t(keep?'review.reopen.keepTitle':verdict==='approve'?'review.confirm.approveTitle':'review.confirm.rejectTitle'),message:summary(review.detail.document.roleName,review.submission.submittedAt,t(keep?'review.action.keep':`review.action.${verdict}`),reason)+reasonLines+'\n\n'+t(body),confirmText:t(keep?'review.action.keep':verdict==='approve'?(suggest.length?'reviewV2.decide.confirmApproveWithSuggestions':'review.confirm.approve'):'review.confirm.rejectSubmit'),cancelText:t('review.confirm.back'),focusCancel:true,danger:verdict==='reject',dangerAppearance:'subdued'}))return;
     if(!active||id.value!==target||data.value!==review)return;
     if(await token()!==confirmedToken)throw new Error(t('auth.expired'));
-    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}), ...(decisionMarks.value.length ? { marks: [...decisionMarks.value] } : {}) });
+    const res = await stampReview(target, confirmedToken, { verdict, note:reason, generation, ...(codes ? { reasons: codes, coaching: coach } : {}), ...(decisionMarks.value.length ? { marks: [...decisionMarks.value] } : {}), ...(suggest.length ? { suggestions: suggest } : {}) });
     if(!active||id.value!==target)return;
     if (data.value) {
       data.value.submission.status = res.status;
@@ -1129,6 +1138,21 @@ onMounted(() => { void load(); });
             </label>
           </div>
 
+          <!-- 通過並附改進建議：不常用，預設收合；駁回、不受理、重新審核單沒有 -->
+          <div v-if="choice === 'approve' && !reopen" class="suggest" data-suggest>
+            <button type="button" class="btn btn--ghost btn--sm suggest__toggle" :aria-expanded="suggestOpen" :disabled="busy" data-suggest-toggle @click="suggestOpen = !suggestOpen">{{ suggestOpen ? "−" : "＋" }} {{ $t("reviewV2.decide.suggestToggle") }}</button>
+            <p class="subtle suggest__hint">{{ $t("reviewV2.decide.suggestHint") }}</p>
+            <template v-if="suggestOpen">
+              <ReviewReasonPicker v-model="suggestPicks" :locked="[]" :disabled="busy || !canDecide" :coaching="true" :coaching-default="false" :fandom="!!fandom"
+                :opening="data.detail.greetings?.welcome ?? ''" :length="lengthParams" :exclude="['content.min_length', 'rating.mismatch']"
+                :preview-title="$t('reviewV2.decide.suggestPreviewTitle')" />
+              <div class="field">
+                <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
+                <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" />
+              </div>
+            </template>
+          </div>
+
           <template v-if="choice === 'reject'">
             <ReviewReasonPicker v-if="!reopen" v-model="reasonPicks" :locked="lengthForced ? ['content.min_length'] : []" :disabled="busy || !canDecide"
               :coaching="coachingOn" :coaching-default="coachingDefault" :fandom="!!fandom" :opening="data.detail.greetings?.welcome ?? ''"
@@ -1163,7 +1187,7 @@ onMounted(() => { void load(); });
             <button type="button" class="btn btn--ghost verdict__back" @click="backToRead">← {{ $t("review.decide.backToRead") }}</button>
             <button v-if="choice === 'reject'" class="btn btn--danger btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || rejectLocked || !rejectReady" data-submit-reject @click="stamp('reject')">{{ busy ? $t("review.decide.submitting") : $t("review.action.reject") }}</button>
             <button v-else-if="choice === 'drop'" class="btn btn--primary btn--lg verdict__btn" :disabled="busy || !!hold" data-submit-drop @click="dropCard">{{ busy ? $t("review.decide.submitting") : $t("reviewV2.decide.dropAction") }}</button>
-            <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked || choice !== 'approve'" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" data-submit-approve @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : "review.action.approve") }}</button>
+            <button v-else class="btn btn--primary btn--lg verdict__btn" :disabled="busy || decided || !claimedByMe || !!hold || approveBlocked || choice !== 'approve'" :aria-describedby="approveBlocked || !length ? 'approve-blocked' : undefined" data-submit-approve @click="stamp('approve')">{{ busy ? $t("review.decide.submitting") : $t(reopen ? "review.action.keep" : suggestions.length ? "reviewV2.decide.approveWithSuggestions" : "review.action.approve") }}</button>
           </div>
         </template>
       </section>
@@ -1315,6 +1339,9 @@ onMounted(() => { void load(); });
 .key-checks__cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--s-2); margin: 0; }
 .key-checks__cells dt { font-size: 12px; color: var(--text-3); }
 .key-checks__cells dd { margin: 0; font-variant-numeric: tabular-nums; }
+.suggest { display: grid; gap: var(--s-2); min-width: 0; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
+.suggest__toggle { justify-self: start; min-height: var(--h-md); }
+.suggest__hint { margin: 0; }
 .decision-marks { border: 0; margin: 0; padding: 0; min-width: 0; min-inline-size: 0; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); align-items: center; }
 .decision-marks__title { font-size: 13px; font-weight: 600; color: var(--text-2); padding: 0; margin-bottom: var(--s-1); width: 100%; }
 .decision-marks__item { display: inline-flex; gap: var(--s-2); align-items: center; min-height: var(--h-md); cursor: pointer; font-size: 13px; }

@@ -127,3 +127,14 @@ it("a corrected result stays on the correction layout even with stored reasons",
   expect(el.querySelector("[data-guided]")).toBeNull();
   expect(el.querySelector("h1")?.textContent).toBe(t("review.correction.authorTitle"));
 });
+
+it("通過並附改進建議：結果是已通過，列「可以更好的地方」並用輔導版改法；修改按鈕是次要", async () => {
+  const el = await mount(result({ status: "approved", reasons: [], suggestions: ["opening.no_reply_hook"] }));
+  expect(el.querySelector("[data-suggest]")!.textContent).toBe(t("reviewV2.author.chipApproved"));
+  expect(el.querySelector("h1")!.textContent).toBe(t("reviewV2.author.suggestTitle"));
+  expect(el.querySelector("[data-suggest-intro]")).toBeTruthy();
+  const c = card(el, "opening.no_reply_hook")!;
+  expect(c.textContent).toContain(t("reviewV2.author.suggestPoint"));
+  expect(c.querySelector("[data-fix]")!.textContent).toBe(t("review.reasons.opening.no_reply_hook.coachFix"));
+  expect(el.textContent).toContain(t("reviewV2.author.suggestQuota"));
+});

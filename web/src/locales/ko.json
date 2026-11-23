@@ -5900,5 +5900,21 @@
   "reviewV2.marks.suspect_ai_text": "미편집 AI 원문 의심",
   "reviewV2.marks.suspect_copied": "전재 의심",
   "reviewV2.decide.marksTitle": "심사 표시(작성자에게 보이지 않아요)",
-  "reviewV2.mark.basis.marks": "최근 90일 심사 표시"
+  "reviewV2.mark.basis.marks": "최근 90일 심사 표시",
+  "reviewV2.decide.suggestToggle": "개선 제안 덧붙이기",
+  "reviewV2.decide.suggestHint": "카드는 평소대로 승인·공개되고, 선택한 개선 제안과 예시가 작성자에게 함께 전달돼요.",
+  "reviewV2.author.noticeApprovedSuggest": "축하해요, {card} 카드가 심사를 통과했어요. 더 좋아질 수 있는 점도 몇 가지 함께 적어 두었어요",
+  "reviewV2.author.noticeUpdateApprovedSuggest": "축하해요, {card} 카드의 업데이트가 심사를 통과했어요. 더 좋아질 수 있는 점도 몇 가지 함께 적어 두었어요",
+  "reviewV2.author.suggestTitle": "더 좋아질 수 있는 점",
+  "reviewV2.author.suggestIntro": "이 카드는 심사를 통과해 공개되었어요. 아래는 앞으로 업데이트할 때 참고할 수 있는 심사자의 제안이며, 고치지 않아도 공개 상태에는 영향이 없어요.",
+  "reviewV2.decide.suggestPreviewTitle": "작성자에게 보이는 '더 좋아질 수 있는 점'",
+  "reviewV2.decide.approveWithSuggestions": "승인하고 제안 보내기",
+  "reviewV2.decide.confirmSuggestBody": "이 버전은 평소대로 공개돼요. 작성자에게 승인 알림과 함께 아래 제안이 전달되며, 수정하지 않아도 공개 상태에는 영향이 없어요.",
+  "reviewV2.decide.confirmApproveWithSuggestions": "승인 및 제안 보내기 확정",
+  "reviewV2.author.chipApproved": "심사 통과",
+  "reviewV2.author.suggestQuota": "수정해서 제출하면 업데이트로 심사에 들어가요. 공개 중인 버전은 그대로 유지되고, 이번 주 제출 한도도 더 쓰지 않아요.",
+  "reviewV2.author.mineSuggestLine": "개선 제안 {n}건: {reasons}",
+  "reviewV2.author.viewSuggest": "개선 제안 보기",
+  "reviewV2.timeline.event.approve_suggestions": "승인(제안 포함)",
+  "reviewV2.mark.basis.suggestions": "개선 제안과 함께 승인"
 }

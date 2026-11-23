@@ -171,3 +171,10 @@ describe("long-pending review", () => {
     expect(sharingOff.el.querySelector("[data-cancel-review]")).toBeNull();
   });
 });
+// owner 2026-11-23：通過並附改進建議，卡片照常公開，下面一行「有 N 項改進建議」＋查看建議
+it("an approved card with suggestions says how many and links to the result page", async () => {
+  const el = await mount({ ...base, workVisibility: { ...shared, actions: [], reviewSuggestions: ["opening.no_reply_hook", "character.setting_thin"], reviewId: "s3" } });
+  expect(el.querySelector("[data-review-suggest]")?.textContent).toBe(i18n.global.t("reviewV2.author.mineSuggestLine", { n: 2, reasons: "沒有接話點、設定太少" }, 2));
+  expect(el.querySelector("[data-review-suggest-link]")?.getAttribute("href")).toBe("/mine/reviews/s3");
+  expect(el.querySelector("[data-review-fix]")).toBeNull();
+});

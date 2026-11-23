@@ -17,6 +17,10 @@ const props = defineProps<{
   modelValue: string[]; locked: string[]; disabled?: boolean;
   coaching: boolean; coachingDefault: boolean; fandom: boolean; opening: string;
   length: { total?: string; remaining?: string; required?: string };
+  /** 不列的代碼（通過附建議時不列「有效字數不足」「分級不符」：那兩項該駁回） */
+  exclude?: string[];
+  /** 預覽標題換字（通過附建議：作者會看到「可以更好的地方」） */
+  previewTitle?: string;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string[]]; "update:coaching": [value: boolean] }>();
 const { t, te } = useI18n();
@@ -39,14 +43,14 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
 <template>
   <div class="picker" data-reason-picker>
     <p class="subtle picker__hint">{{ $t("reviewV2.decide.pickHint") }}</p>
-    <fieldset v-for="g in groups" :key="g" class="group" :data-reason-group="g">
+    <fieldset v-for="g in groups.filter((x) => REVIEW_REASON_GROUPS[x].some((c) => !exclude?.includes(c)))" :key="g" class="group" :data-reason-group="g">
       <legend class="group__name">{{ $t(`reviewV2.decide.group.${g}`) }}</legend>
       <p v-if="g === 'setting' && fandom" class="subtle group__note" data-fandom-hint>{{ $t("reviewV2.decide.fandomHint") }}</p>
       <details v-if="g === 'opening' && opening.trim()" class="group__opening">
         <summary>{{ opening.trim().split("\n")[0] }}</summary>
         <p class="group__opening-text">{{ opening }}</p>
       </details>
-      <label v-for="code in REVIEW_REASON_GROUPS[g]" :key="code" class="reason" :class="{ 'reason--locked': locked.includes(code) }">
+      <label v-for="code in REVIEW_REASON_GROUPS[g].filter((c) => !exclude?.includes(c))" :key="code" class="reason" :class="{ 'reason--locked': locked.includes(code) }">
         <input type="checkbox" :checked="checked(code)" :disabled="disabled || locked.includes(code)" :data-reason="code" @change="toggle(code, ($event.target as HTMLInputElement).checked)" />
         <span class="reason__text">
           <span class="reason__name">{{ $t(reasonKey(code, "name")) }}</span>
@@ -62,7 +66,7 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
     </div>
 
     <section v-if="picked.length" class="preview" aria-live="polite" data-reason-preview>
-      <h4 class="preview__title">{{ $t("reviewV2.decide.previewTitle") }}</h4>
+      <h4 class="preview__title">{{ previewTitle || $t("reviewV2.decide.previewTitle") }}</h4>
       <article v-for="code in picked" :key="code" class="preview__item">
         <p class="preview__name">{{ $t(reasonKey(code, "name")) }}</p>
         <p>{{ fixOf(code) }}</p>

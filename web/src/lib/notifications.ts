@@ -136,6 +136,9 @@ export function noticeText(n: CommunityNotice): string {
     return t(extra.event === "new" ? "community.noticeText.followed_work_new" : extra.event === "update" ? "community.noticeText.followed_work_update" : "community.noticeText.followed_work", { actor, card });
   if (n.kind === "review_result" && card) {
     const update = extra.kind === "re";
+    // 通過並附改進建議：仍是「已通過」，多一句還有地方可以更好（點進結果頁看）
+    if (extra.status !== "rejected" && Array.isArray(extra.suggestions) && extra.suggestions.length)
+      return t(update ? "reviewV2.author.noticeUpdateApprovedSuggest" : "reviewV2.author.noticeApprovedSuggest", { card });
     if (extra.status !== "rejected") return t(update ? "community.noticeText.review_update_approved" : "community.noticeText.review_approved", { card });
     // 審卡 V2：新的駁回帶理由代碼、不帶審核員的話；說是哪幾項，點進去（結果頁）看怎麼改。認不出任何代碼就照舊
     const reasons = Array.isArray(extra.reasons)

@@ -22,6 +22,8 @@ export interface WorkVisibility {
  reviewReasons?: string[];
  reviewId?: string;
  reviewSince?: number;
+ /** 最近一張通過時附的改進建議代碼 */
+ reviewSuggestions?: string[];
  restrictionNote?: string;
  policyRevision: string;
  approvalRevision: string;

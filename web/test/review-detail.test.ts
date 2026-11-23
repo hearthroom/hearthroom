@@ -1037,6 +1037,29 @@ it('the reject picker offers the unedited-generated and copied-verbatim reasons'
  expect(el.textContent).toContain(i18n.global.t('review.reasons.opening.unedited_generated.name'));
 });
 
+// owner 2026-11-23：通過並附改進建議（選了通過才有、預設收合、不列字數與分級、作者看輔導版）
+it('approve can carry suggestions; min-length and rating are not offered as suggestions',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
+ api.stampReview.mockReset().mockResolvedValue({status:'approved',cardStatus:'approved'});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
+ expect(el.querySelector('[data-suggest]')).toBeNull();
+ await choose('approve');
+ expect(el.querySelector('[data-reason-picker]')).toBeNull();
+ el.querySelector<HTMLButtonElement>('[data-suggest-toggle]')!.click();await nextTick();
+ expect(el.querySelector('[data-reason="content.min_length"]')).toBeNull();
+ expect(el.querySelector('[data-reason="rating.mismatch"]')).toBeNull();
+ el.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.click();await nextTick();
+ expect(el.querySelector('[data-reason-preview]')!.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.coachFix'));
+ expect(submit('approve')!.textContent!.trim()).toBe(i18n.global.t('reviewV2.decide.approveWithSuggestions'));
+ submit('approve')!.click();
+ await vi.waitFor(()=>expect(confirmState.current).toBeTruthy());
+ expect(confirmState.current!.message).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.name'));
+ expect(confirmState.current!.confirmText).toBe(i18n.global.t('reviewV2.decide.confirmApproveWithSuggestions'));
+ settleConfirm(true);
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1',suggestions:['opening.no_reply_hook']}));
+});
+
 it('drop works without a claim, needs no confirmation, and can be restored from the result',async()=>{
  const d=withLength(3600,{claimedByMe:false});
  api.fetchReviewDetail.mockReset().mockResolvedValue(d);

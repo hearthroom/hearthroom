@@ -5900,5 +5900,21 @@
   "reviewV2.marks.suspect_ai_text": "疑似 AI 原文",
   "reviewV2.marks.suspect_copied": "疑似搬運",
   "reviewV2.decide.marksTitle": "審核標記（作者看不到）",
-  "reviewV2.mark.basis.marks": "近 90 天審核標記"
+  "reviewV2.mark.basis.marks": "近 90 天審核標記",
+  "reviewV2.decide.suggestToggle": "附改進建議",
+  "reviewV2.decide.suggestHint": "卡片照常通過並公開，作者會一併收到你勾選的改進建議與範例。",
+  "reviewV2.author.noticeApprovedSuggest": "恭喜，{card}審核通過了，還有幾個地方可以改得更好",
+  "reviewV2.author.noticeUpdateApprovedSuggest": "恭喜，{card}的更新審核通過了，還有幾個地方可以改得更好",
+  "reviewV2.author.suggestTitle": "可以更好的地方",
+  "reviewV2.author.suggestIntro": "這張卡已經通過審核並公開；以下是審核員整理的改進建議，不修改也不影響公開，之後更新時可以參考。",
+  "reviewV2.decide.suggestPreviewTitle": "作者會看到「可以更好的地方」",
+  "reviewV2.decide.approveWithSuggestions": "通過並送出建議",
+  "reviewV2.decide.confirmSuggestBody": "這一版會照常公開，作者會收到通過通知與以下改進建議；不修改也不影響公開。",
+  "reviewV2.decide.confirmApproveWithSuggestions": "確認通過並送出建議",
+  "reviewV2.author.chipApproved": "已通過審核",
+  "reviewV2.author.suggestQuota": "修改後會以更新送審，目前公開的版本不受影響，也不會多佔本週額度。",
+  "reviewV2.author.mineSuggestLine": "有 {n} 項改進建議：{reasons}",
+  "reviewV2.author.viewSuggest": "查看改進建議",
+  "reviewV2.timeline.event.approve_suggestions": "通過（附建議）",
+  "reviewV2.mark.basis.suggestions": "收過改進建議"
 }

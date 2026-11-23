@@ -5900,5 +5900,21 @@
   "reviewV2.marks.suspect_ai_text": "Possible unedited AI",
   "reviewV2.marks.suspect_copied": "Possible copied text",
   "reviewV2.decide.marksTitle": "Reviewer flags (not shown to the author)",
-  "reviewV2.mark.basis.marks": "Reviewer flags, last 90 days"
+  "reviewV2.mark.basis.marks": "Reviewer flags, last 90 days",
+  "reviewV2.decide.suggestToggle": "Add suggestions",
+  "reviewV2.decide.suggestHint": "The card is approved and published as usual, and the author also gets the suggestions and examples you select.",
+  "reviewV2.author.noticeApprovedSuggest": "Congrats, {card} passed review, with a few suggestions to make it even better",
+  "reviewV2.author.noticeUpdateApprovedSuggest": "Congrats, your update to {card} passed review, with a few suggestions to make it even better",
+  "reviewV2.author.suggestTitle": "Ways to make it even better",
+  "reviewV2.author.suggestIntro": "This card has passed review and is now live. Here are a few suggestions from the reviewer for future updates; leaving it as is won't affect publication.",
+  "reviewV2.decide.suggestPreviewTitle": "What the author will see under “Ways to make it even better”",
+  "reviewV2.decide.approveWithSuggestions": "Approve with suggestions",
+  "reviewV2.decide.confirmSuggestBody": "This version will be published as usual. The author will get the approval notice along with the suggestions below; leaving it unchanged won't affect publication.",
+  "reviewV2.decide.confirmApproveWithSuggestions": "Confirm and send suggestions",
+  "reviewV2.author.chipApproved": "Approved",
+  "reviewV2.author.suggestQuota": "If you edit and submit again, it goes through review as an update. The published version stays live and doesn't use more of this week's slots.",
+  "reviewV2.author.mineSuggestLine": "{n} suggestion: {reasons} | {n} suggestions: {reasons}",
+  "reviewV2.author.viewSuggest": "See suggestions",
+  "reviewV2.timeline.event.approve_suggestions": "Approved (with suggestions)",
+  "reviewV2.mark.basis.suggestions": "Approved with suggestions"
 }

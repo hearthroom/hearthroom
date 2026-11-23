@@ -621,7 +621,7 @@ export interface ReviewAuthorMark { tier: ReviewAuthorTier; manualTier: boolean;
 export interface ReviewAuthorProfile {
   tier: ReviewAuthorTier; autoTier: ReviewAuthorTier; batchSuspected: boolean; autoBatch: boolean;
   manual: { tier?: { expiresAt: number }; batch?: { expiresAt: number } };
-  basis: { works: number | null; decidedWorks: number | null; firstPassRate: number | null; qualityScore: number | null; memberSince: number | null; deviceAccounts: number | null; deviceRecentWorks: number | null; dropCases90d: number | null; marks90d?: Record<string, number> };
+  basis: { works: number | null; decidedWorks: number | null; firstPassRate: number | null; qualityScore: number | null; memberSince: number | null; deviceAccounts: number | null; deviceRecentWorks: number | null; dropCases90d: number | null; marks90d?: Record<string, number>; suggestions90d?: number };
   pendingSameAuthor: number | null; pendingSameDevice: number | null;
 }
 
@@ -745,7 +745,7 @@ export async function fetchReviewQueue(token: string, lang?: string, tab?: "new"
 
 export interface ReviewTimelineItem {
   at: number; action: "submit" | "approve" | "reject" | "reopen" | "reopen_withdraw" | "drop" | "restore" | "hold" | "unhold" | "superseded";
-  round: number; actor: string | null; mine: boolean; source?: string | null; reasons?: string[]; note?: string; marks?: string[]; current: boolean;
+  round: number; actor: string | null; mine: boolean; source?: string | null; reasons?: string[]; note?: string; marks?: string[]; suggestions?: string[]; current: boolean;
 }
 /** 單卡審核紀錄；coverageFrom＝事件紀錄的起點（之前的冷凍與不受理沒有紀錄） */
 export async function fetchReviewTimeline(id: string, token: string): Promise<{ items: ReviewTimelineItem[]; coverageFrom: number | null }> {
@@ -808,7 +808,7 @@ export const holdReview = (id: string, token: string, generation?: string) => re
 export const unholdReview = (id: string, token: string, reason?: string) => reviewAction<{ hold: null }>(id, "unhold", token, { reason });
 /** 撤銷重新審核（限管理員，要寫理由） */
 export const withdrawReopen = (id: string, token: string, reason: string) => reviewAction<{ status: string }>(id, "withdraw", token, { reason });
-export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string; reasons?: string[]; coaching?: boolean; marks?: string[] }) =>
+export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string; reasons?: string[]; coaching?: boolean; marks?: string[]; suggestions?: string[] }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
 export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean}
@@ -821,6 +821,8 @@ export const correctReviewDecision=(id:string,token:string,body:{operationId:str
 export interface AuthorReviewResult {name:string;status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;corrected:boolean;correctedAt:number|null;rewardKept?:boolean;
  /** 審卡 V2：駁回理由代碼（舊單是空陣列）、是否附完整改法、送審種類（re＝更新） */
  reasons?:string[];coaching?:boolean;kind?:string;
+ /** 通過並附改進建議的理由代碼；沒附是空陣列 */
+ suggestions?:string[];
  /** 卡號與來源平台：「修改這張卡」連到編輯器 */
  cardNumber?:number;provider?:string}
 export async function fetchAuthorReviewResult(id:string,token:string,lang:string):Promise<AuthorReviewResult>{

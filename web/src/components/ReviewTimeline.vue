@@ -34,6 +34,7 @@ onMounted(load);
 const label = (i: ReviewTimelineItem) =>
   i.action === "reopen_withdraw" ? t("review.action.withdraw")
   : i.action === "submit" && i.round > 1 ? t("reviewV2.timeline.event.resubmit")
+  : i.action === "approve" && i.suggestions?.length ? t("reviewV2.timeline.event.approve_suggestions")
   : t(`reviewV2.timeline.event.${i.action}`);
 const rounds = computed(() => {
   const out: { round: number; items: ReviewTimelineItem[] }[] = [];
@@ -70,6 +71,9 @@ const latest = computed(() => {
             </div>
             <ul v-if="i.marks?.length" class="event__reasons" data-timeline-marks>
               <li v-for="m in i.marks" :key="m" class="chip chip--warn">{{ $t(`reviewV2.marks.${m}`) }}</li>
+            </ul>
+            <ul v-if="i.suggestions?.length" class="event__reasons" data-timeline-suggestions>
+              <li v-for="code in i.suggestions" :key="code" class="chip">{{ $t(reasonKey(code, "name")) }}</li>
             </ul>
             <ul v-if="i.reasons?.length" class="event__reasons">
               <li v-for="code in i.reasons" :key="code" class="chip">{{ $t(reasonKey(code, "name")) }}</li>

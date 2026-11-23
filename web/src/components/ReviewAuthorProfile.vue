@@ -30,6 +30,7 @@ const basis = computed(() => {
     { key: "deviceAccounts", value: measured(b.deviceAccounts, (n) => fmt.value.format(n)) },
     { key: "recentPending", value: measured(b.deviceRecentWorks, (n) => fmt.value.format(n)) },
     { key: "drops", value: measured(b.dropCases90d, (n) => fmt.value.format(n)) },
+    ...(b.suggestions90d ? [{ key: "suggestions", value: fmt.value.format(b.suggestions90d) }] : []),
     // 審核標記：沒有就不列；有就寫「疑似 AI 原文 2、疑似搬運 1」
     ...(b.marks90d && Object.keys(b.marks90d).length ? [{ key: "marks", value: Object.entries(b.marks90d).map(([m, n]) => `${t(`reviewV2.marks.${m}`)} ${fmt.value.format(n)}`).join("、") }] : []),
   ];

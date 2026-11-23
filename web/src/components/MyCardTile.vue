@@ -67,7 +67,17 @@ const longWait = computed(() => {
     && Date.now() - v.reviewSince > WAIT_DAYS * 86_400_000;
 });
 const canCancel = computed(() => !!props.visibilityEnabled && !!props.card.workVisibility?.actions?.includes("cancel_review"));
-const hasDetails = computed(() => baseDetails.value || longWait.value);
+/*
+ * 通過並附改進建議（owner 2026-11-23）：卡照常公開，下面多一行「有 N 項改進建議」＋查看建議（結果頁）。
+ * 卡有停權、授權收回這類優先狀態時不顯示，免得蓋過它們。
+ */
+const suggestions = computed(() => {
+  const v = props.card.workVisibility;
+  if (!v || v.restriction !== "none" || !v.reviewSuggestions?.length || !v.reviewId) return null;
+  const reasons = reasonSummary(t, v.reviewSuggestions, /^(en|ko)/.test(String(locale.value)) ? ", " : "、");
+  return reasons ? { n: v.reviewSuggestions.length, reasons, href: lp(`/mine/reviews/${encodeURIComponent(v.reviewId)}`) } : null;
+});
+const hasDetails = computed(() => baseDetails.value || longWait.value || !!suggestions.value);
 
 /*
  * 封面角上一個狀態標，四種主要狀態（owner 2026-10-05）：同一個深色底，靠字前面的燈號分——
@@ -182,6 +192,10 @@ onBeforeUnmount(() => listen(false));
         <template v-if="card.workVisibility">
           <p v-if="baseDetails" class="card__note">{{ visibilityNote }}</p>
           <RouterLink v-if="fixHref" :to="fixHref" class="card__inline-link" data-review-fix>{{ $t("reviewV2.author.viewFix") }}</RouterLink>
+          <template v-if="suggestions">
+            <p class="card__note" data-review-suggest>{{ $t("reviewV2.author.mineSuggestLine", { n: suggestions.n, reasons: suggestions.reasons }, suggestions.n) }}</p>
+            <RouterLink :to="suggestions.href" class="card__inline-link" data-review-suggest-link>{{ $t("reviewV2.author.viewSuggest") }}</RouterLink>
+          </template>
           <p v-if="card.reReview" class="card__note" data-re-review>{{ $t("mine.note.reReview") }}</p>
           <template v-if="longWait">
             <p class="card__note" data-wait-long>{{ $t("reviewV2.author.waitLong", { n: WAIT_DAYS }) }}</p>

@@ -5900,5 +5900,21 @@
   "reviewV2.marks.suspect_ai_text": "未編集AI文の疑い",
   "reviewV2.marks.suspect_copied": "転載の疑い",
   "reviewV2.decide.marksTitle": "審査フラグ（作者には表示されません）",
-  "reviewV2.mark.basis.marks": "直近90日の審査フラグ"
+  "reviewV2.mark.basis.marks": "直近90日の審査フラグ",
+  "reviewV2.decide.suggestToggle": "改善の提案を添える",
+  "reviewV2.decide.suggestHint": "カードは通常どおり承認・公開され、選んだ改善の提案と例が作者に届きます。",
+  "reviewV2.author.noticeApprovedSuggest": "おめでとうございます、{card}が審査を通過しました。さらに良くできる点がいくつかあります",
+  "reviewV2.author.noticeUpdateApprovedSuggest": "おめでとうございます、{card}の更新が審査を通過しました。さらに良くできる点がいくつかあります",
+  "reviewV2.author.suggestTitle": "さらに良くできるところ",
+  "reviewV2.author.suggestIntro": "このカードは審査を通過して公開されています。以下は今後の更新で参考にできる審査員からの提案で、このままでも公開には影響しません。",
+  "reviewV2.decide.suggestPreviewTitle": "作者に表示される「さらに良くできるところ」",
+  "reviewV2.decide.approveWithSuggestions": "承認して提案を送る",
+  "reviewV2.decide.confirmSuggestBody": "このバージョンは通常どおり公開されます。作者には承認の通知とあわせて次の提案が届きますが、修正しなくても公開には影響しません。",
+  "reviewV2.decide.confirmApproveWithSuggestions": "承認して提案を送る",
+  "reviewV2.author.chipApproved": "審査通過",
+  "reviewV2.author.suggestQuota": "直して提出すると更新として審査に入ります。公開中のバージョンはそのまま遊べて、今週の提出枠も追加では使いません。",
+  "reviewV2.author.mineSuggestLine": "改善の提案が{n}件あります：{reasons}",
+  "reviewV2.author.viewSuggest": "改善の提案を見る",
+  "reviewV2.timeline.event.approve_suggestions": "承認（提案あり）",
+  "reviewV2.mark.basis.suggestions": "改善の提案つき承認"
 }

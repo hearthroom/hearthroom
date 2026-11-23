@@ -77,6 +77,9 @@ it('writes each notice in the reader language and falls back to the plain label 
 it('says whether it was an update, what the reviewer wrote, how many listings and which claim', async () => {
   await applyLocale('en');
   expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'approved', kind: 're' } }))).toBe('Your update to “雨夜書店” passed review');
+  // 通過並附改進建議：仍是通過，另說還有地方可以更好
+  expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'approved', suggestions: ['opening.no_reply_hook'] } }))).toBe(i18n.global.t('reviewV2.author.noticeApprovedSuggest', { card: '“雨夜書店”' }));
+  expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'approved', kind: 're', suggestions: ['opening.no_reply_hook'] } }))).toBe(i18n.global.t('reviewV2.author.noticeUpdateApprovedSuggest', { card: '“雨夜書店”' }));
   expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'rejected', kind: 're', note: null } }))).toBe('Your update to “雨夜書店” did not pass review this time');
   expect(noticeText(notice({ kind: 'followed_work', extra: { event: 'update' } }))).toBe('小雨 updated “雨夜書店”');
   expect(noticeText({ id: 'x', kind: 'registration_pack', path: '/mine', created_at: 1, read_at: null, extra: { granted: 2 } })).toBe('You can now list 2 more beyond your weekly quota');
