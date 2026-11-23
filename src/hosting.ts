@@ -21,6 +21,7 @@ import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
 import { contentFingerprint, dropCaseForSubmission, submissionFeatures, submissionRecordStatements } from './review-v2';
+import { diffBaseStatement } from './review-diff-store';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
 import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
@@ -226,6 +227,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
    ...indexStatements(db,{submissionId,cardId,memberId:input.memberId,text:String(privateDoc.roleDetailDesc??''),names:[String(privateDoc.roleName??''),String(privateDoc.userName??'')],now:input.now}),
    db.prepare("UPDATE cards SET status='pending' WHERE id=? AND approved_version_id IS NULL").bind(cardId),
    ...submissionRecordStatements(db,{submissionId,cardId:String(cardId),memberId:input.memberId,now:input.now,features,deviceHash:input.deviceHash??null,fingerprint,...dropCase}),
+   // 更新差異的基準版在送審當下固定（review-diff-store.ts）；摘要送審後補算
+   diffBaseStatement(db,submissionId,input.now),
  ];
  if(existing){await db.batch(finalize(existing.id));}
  else {

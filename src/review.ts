@@ -85,7 +85,7 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
  * 同一張卡在這張單之前、審核人真的看過（定案）的單。作者在排隊中重送而被取代的單（superseded）
  * 沒人看過，不算一次送審。用送審時間排，同一毫秒再看 rowid。
  */
-const EARLIER_DECIDED = (p: string, s: string) =>
+export const EARLIER_DECIDED = (p: string, s: string) =>
   `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected') AND ${p}.reopen_of IS NULL
    AND (${p}.submitted_at < ${s}.submitted_at OR (${p}.submitted_at = ${s}.submitted_at AND ${p}.rowid < ${s}.rowid))`;
 
@@ -147,7 +147,11 @@ export interface QueueItem {
   authorMark: QueueAuthor | null;
   /** 快速審：頭部作者、沒有疑似批量旗標。只是排序前移與預設重點檢查，不自動通過 */
   fast: boolean;
+  /** 更新差異的摘要（只有更新單有；pending＝還沒算，no_base／unreadable＝無法比較） */
+  diff: QueueDiff | null;
 }
+
+export interface QueueDiff { state: "pending" | "done" | "no_base" | "unreadable"; summary: Record<string, unknown> | null }
 
 export interface QueueAuthor { tier: AuthorTier; manualTier: boolean; batchSuspected: boolean; deviceAccounts: number | null }
 export type QueueTab = "new" | "updates";
@@ -191,9 +195,10 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
               (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
               (SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1) AS previous_status, ${HOLD_COLUMNS},
-              v.member_id AS author_member, sd.device_hash, COALESCE(f.after_drop, 0) AS after_drop
+              v.member_id AS author_member, sd.device_hash, COALESCE(f.after_drop, 0) AS after_drop, dd.state AS diff_state, dd.summary AS diff_summary
        FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id ${HOLD_JOIN}
        LEFT JOIN review_submission_devices sd ON sd.submission_id = s.id LEFT JOIN review_submission_features f ON f.submission_id = s.id
+       LEFT JOIN review_submission_diffs dd ON dd.submission_id = s.id
        WHERE s.status = 'pending' AND ${NOT_DROPPED("s")} ${tab === "new" ? `AND ${NEW_CARD("s")}` : tab === "updates" ? `AND NOT ${NEW_CARD("s")}` : ""}
        ORDER BY s.submitted_at ASC LIMIT 200`,
     )
@@ -203,7 +208,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
       hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null; previous_status: "approved" | "rejected" | null;
-      author_member: string | null; device_hash: string | null; after_drop: number;
+      author_member: string | null; device_hash: string | null; after_drop: number; diff_state: string | null; diff_summary: string | null;
     }>();
   const manager = isManager(await reviewerRole(db, memberId));
   const profiles = await authorProfiles(db, rows.results.map((r) => r.author_member ?? ""), now);
@@ -246,6 +251,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     hold: holdView(r, memberId, manager),
     reopen: r.reopen_of !== null,
     afterDrop: !!r.after_drop,
+    diff: r.diff_state ? { state: r.diff_state as QueueDiff["state"], summary: r.diff_summary ? JSON.parse(r.diff_summary) as Record<string, unknown> : null } : null,
     authorMark,
     fast,
   })).sort((a, b) => {

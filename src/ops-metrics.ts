@@ -27,6 +27,7 @@ const METRICS = {
   review_drop:{name:'hearthroom_review_drops_total',help:'Review V2 not-accepted (drop) operations: drop and restore by any reviewer, batch and restore_batch by managers; partial means some cards were skipped.',label:'operation',operations:['drop','restore','batch','restore_batch'],outcomes:['success','noop','partial','conflict','denied']},
   review_author_mark:{name:'hearthroom_review_author_marks_total',help:'Reviewer overrides of automatic author marks (tier, suspected batch).',label:'operation',operations:['tier','batch'],outcomes:['success']},
   review_stamp:{name:'hearthroom_review_stamps_total',help:'Reviewer verdicts on author submissions; conflict covers claim, hold and drop guards.',label:'operation',operations:['approve','reject'],outcomes:['success','conflict','denied']},
+  review_diff:{name:'hearthroom_review_diffs_total',help:'Update diff against the base sealed version: summary (after submit or scheduled) and view (reviewer opens the diff); no_base and unreadable show as cannot compare.',label:'operation',operations:['summary','view'],outcomes:['success','no_base','unreadable','error']},
   review_correction:{name:'hearthroom_review_corrections_total',help:'Durable review correction outcomes; success counts completed corrections.',label:'operation',operations:['correct'],outcomes:['success','replay','denied','conflict','pending','error']},
   publication_recovery: {
     name:'hearthroom_publication_recovery_total',

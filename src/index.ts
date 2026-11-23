@@ -119,6 +119,7 @@ import { originalityReport } from "./originality";
 import { dropBatch, dropSubmission, groupItems, groupSubmissionIds, isDropped, listDropped, restoreBatch, restoreSubmission, type DroppedFilter, type GroupScope } from "./review-drop";
 import { applyBatchMarks, authorProfiles, deviceSignals, markAuthor, revokeAuthorMark } from "./review-profile";
 import { queueContext as queueContextOf, recordOriginalityStatement } from "./review-v2";
+import { computeDiffSummary, diffMaintenance, diffView } from "./review-diff-store";
 import { parseReviewReasons } from "../shared/review-reasons";
 import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
@@ -1735,6 +1736,8 @@ app.post("/v1/cards", async (c) => {
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     queuePush(c);
+    // 更新差異的摘要在回應之後補算：Harbor 讀失敗不影響送審，排程會再補（review-diff-store.ts）
+    try{c.executionCtx.waitUntil((async()=>{const v=await c.env.DB.prepare('SELECT submission_id FROM hosting_versions WHERE version_id=?').bind(receipt.versionId).first<{submission_id:string|null}>();if(v?.submission_id)await computeDiffSummary(c.env,v.submission_id);})().catch(()=>{}));}catch{/* 沒有執行環境（測試）就交給排程 */}
     // This is the submission receipt: its rating describes this questionnaire,
     // while the public card keeps its previous rating until review approves it.
     return c.json({...toCard(row,lang(c)),rating:rating.rating,ratingDescriptors:rating.descriptors,status:row.status,versionId:receipt.versionId,...await submissionReceipt(c.env.DB,receipt.versionId)},existing?200:201,{'Cache-Control':'private, no-store'});
@@ -2189,6 +2192,18 @@ app.post("/v1/review/:id/author-mark", async (c) => {
   });
   await bumpOp(c.env.DB, "review_author_mark", body.kind, "success");
   return c.json({ ...result, profile: await reviewAuthorProfile(c.env.DB, s.id, now) }, 200, { "Cache-Control": "private, no-store" });
+});
+
+/**
+ * 更新差異（審卡 V2 第二批）：這張更新單跟送審時固定的基準版（上次過審版，或駁回後重送的上次駁回版）比。
+ * 跟審核頁同一道門；只在待審期間讀（定案後不再讀私有設定），作者自己（身兼審核員）也看不到自己的卡。
+ * 兩邊都是即時讀的 Harbor 封存版，不落本站；讀不到回 unreadable，畫面顯示無法比較。
+ */
+app.get("/v1/review/:id/diff", async (c) => {
+  const { member, s } = await claimedSubmission(c);
+  if (s.status !== "pending") throw new HttpError(410, "review no longer active");
+  if (await c.env.DB.prepare("SELECT 1 FROM hosting_versions WHERE submission_id=? AND member_id=?").bind(s.id, member.id).first()) throw new HttpError(403, "review_own_card");
+  return c.json(await diffView(c.env, s.id), 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/review/:id/detail", async (c) => {
@@ -2892,6 +2907,8 @@ export default {
     run(accountAuthMaintenance(cronEnv).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     run(reconcileWorkAccess(cronEnv).catch(() => { console.warn('Work access recovery unavailable'); }));
     run(communityMaintenance(cronEnv).catch(() => { console.warn("Community maintenance unavailable"); }));
+    // 審卡 V2：更新差異的摘要補漏（送審後當下沒算成的、0146 之前就在排隊的單）
+    run(diffMaintenance(cronEnv, event.scheduledTime).catch(() => { console.warn("Review diff maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     // 蘇綺的召回先寫進通知，同一輪就推出去
     run(sukiRecall(cronEnv).catch(() => { console.warn("Suki recall unavailable"); return 0; })
