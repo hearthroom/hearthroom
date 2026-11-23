@@ -1823,18 +1823,20 @@ app.get('/v1/mine/reviews/:id',async(c)=>{
  const member=await requireMember(c);
  const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,s.kind,
   CASE WHEN s.status='rejected' THEN s.reject_reasons END AS reasons,CASE WHEN s.status='rejected' THEN s.reject_coaching ELSE 0 END AS coaching,
+  CASE WHEN s.status='approved' THEN s.approve_suggestions END AS suggestions,
   s.card_id AS cardNumber,w.source_provider AS provider,
   v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
   FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
   LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
   WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
-   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;cardNumber:number;provider:string;
+   status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;suggestions:string|null;cardNumber:number;provider:string;
   }>();
  if(!row)throw new HttpError(404,'review result not found');
  // 作者只看到結果、理由代碼與審核員寫給他的補充。待審（含不受理中）一律是 pending，不分是否被移出佇列
- const {public_role,correctionState,reasons,coaching,...result}=row;
- return c.json({...result,reasons:parseReviewReasons(reasons),coaching:!!coaching,name:pickLocale(JSON.parse(public_role).names,lang(c)),corrected:correctionState==='complete'},200,{'Cache-Control':'private, no-store'});
+ const {public_role,correctionState,reasons,coaching,suggestions,...result}=row;
+ // 通過並附改進建議：作者結果頁的「可以更好的地方」（一律用輔導版的完整改法）
+ return c.json({...result,reasons:parseReviewReasons(reasons),coaching:!!coaching,suggestions:parseReviewReasons(suggestions),name:pickLocale(JSON.parse(public_role).names,lang(c)),corrected:correctionState==='complete'},200,{'Cache-Control':'private, no-store'});
 });
 
 app.post('/v1/review/:id/correction',async(c)=>{
@@ -1969,7 +1971,7 @@ app.post("/v1/review/:id/release", async (c) => {
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown };
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
   if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
@@ -1977,7 +1979,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   // 說明是寫給作者的：超過上限整個拒絕，不默默截掉尾巴讓審核員以為作者收到了全文
   if (noteText.trim().length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks },c.env)
+  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions },c.env)
     .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", verdict, error.status === 409 ? "conflict" : "denied"); throw error; });
   await bumpOp(c.env.DB, "review_stamp", verdict, "success");
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });

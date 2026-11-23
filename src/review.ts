@@ -12,7 +12,7 @@ import { reviewLengthExemptForCard } from './review-length-exemption';
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import { submissionType, type SubmissionType } from "./review-author";
 import { normalizeRejectReasons, queueContext, reviewEventStatement } from "./review-v2";
-import { REVIEW_REASON_VERSION, normalizeDecisionMarks } from "../shared/review-reasons";
+import { REVIEW_REASON_VERSION, REVIEW_REASONS, isReviewReason, normalizeDecisionMarks } from "../shared/review-reasons";
 import { NOT_DROPPED } from "./review-drop";
 import { applyBatchMarks, authorProfiles, deviceSignals, type AuthorTier } from "./review-profile";
 
@@ -70,6 +70,8 @@ export interface SubmissionRow {
   reason_version: number | null;
   reject_coaching: number;
   content_fingerprint: string | null;
+  /** 通過並附改進建議的理由代碼（0146 起） */
+  approve_suggestions: string | null;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
@@ -378,7 +380,7 @@ export interface StampResult {
  */
 export async function stamp(
   db: D1Database,
-  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown },
+  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string; reasons?: unknown; coaching?: boolean; marks?: unknown; suggestions?: unknown },
   env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
@@ -406,6 +408,13 @@ export async function stamp(
   const rejection = input.verdict === "reject" ? normalizeRejectReasons({ reasons: input.reasons, note, lengthInsufficient: await lengthInsufficient(db, row) }) : null;
   let marks: string[];
   try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, "review_mark_invalid"); }
+  // 通過並附改進建議（owner 2026-11-23）：只在通過時收，代碼跟駁回同一套；空陣列＝沒附
+  let suggestions: string[] = [];
+  if (input.verdict === "approve" && input.suggestions !== undefined && input.suggestions !== null) {
+    if (!Array.isArray(input.suggestions) || input.suggestions.some((r) => !isReviewReason(r))) throw new HttpError(400, "review_reason_invalid");
+    const set = new Set(input.suggestions as string[]);
+    suggestions = REVIEW_REASONS.filter((c) => set.has(c));
+  }
   const coaching = rejection ? input.coaching === true : false;
 
   const required = STAMPS_REQUIRED[row.kind];
@@ -420,7 +429,10 @@ export async function stamp(
       from: "pending", actorKind: "reviewer", actorMemberId: input.memberId, source: rejection?.legacy ? "legacy_note" : null,
       reasons: rejection?.reasons ?? null, reasonVersion: rejection ? REVIEW_REASON_VERSION : null, coaching: rejection ? coaching : null,
       claimElapsedMs: row.claimed_at === null ? null : Math.max(0, input.now - row.claimed_at), ctx: await queueContext(db, row.id), marks,
+      ...(suggestions.length ? { reasons: suggestions, reasonVersion: REVIEW_REASON_VERSION, source: "suggestions" } : {}),
     }),
+    // 改進建議要在狀態變成通過之前寫好：通知的 trigger 在那一刻讀它（託管作品要等同步完成才變）
+    ...(suggestions.length ? [db.prepare("UPDATE review_submissions SET approve_suggestions = ? WHERE id = ? AND status = 'pending'").bind(JSON.stringify(suggestions), row.id)] : []),
   ];
 
   const prior = await db

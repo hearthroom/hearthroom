@@ -129,6 +129,41 @@ describe('審核標記與新理由（owner 2026-11-23）', () => {
   });
 });
 
+describe('通過並附改進建議（owner 2026-11-23）', () => {
+  it('卡照常通過；建議代碼存在單上、事件記成 suggestions、作者通知連到結果頁並帶代碼', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await claim(env.DB, s.id, a, Date.now());
+    const r = await stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now(), suggestions: ['opening.no_reply_hook', 'opening.no_reply_hook'] });
+    expect(r.submission.status).toBe('approved');
+    const row = await env.DB.prepare('SELECT approve_suggestions, reject_reasons FROM review_submissions WHERE id=?').bind(s.id).first<{ approve_suggestions: string; reject_reasons: string | null }>();
+    expect(row).toEqual({ approve_suggestions: '["opening.no_reply_hook"]', reject_reasons: null });
+    const ev = await env.DB.prepare("SELECT source, reasons FROM review_events WHERE action='approve' AND submission_id=?").bind(s.id).first<{ source: string; reasons: string }>();
+    expect(ev).toEqual({ source: 'suggestions', reasons: '["opening.no_reply_hook"]' });
+    const notice = await env.DB.prepare("SELECT path, extra FROM community_notifications WHERE kind='review_result'").first<{ path: string; extra: string }>();
+    expect(notice!.path).toBe('/mine/reviews/' + s.id);
+    expect(JSON.parse(notice!.extra)).toEqual({ status: 'approved', kind: 'first', suggestions: ['opening.no_reply_hook'] });
+    // 統計的駁回理由只看駁回：首次定案事件不帶建議
+    const first = await env.DB.prepare("SELECT reasons FROM review_events WHERE action='first_decision' AND submission_id=?").bind(s.id).first<{ reasons: string | null }>();
+    expect(first!.reasons).toBeNull();
+  });
+
+  it('沒附建議的通過照舊連「我的卡片」；不認得的代碼擋下', async () => {
+    const f = await setup();
+    await f.submit();
+    const s = await f.pending();
+    const a = await reviewer(20001);
+    await claim(env.DB, s.id, a, Date.now());
+    await expect(stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now(), suggestions: ['nope'] })).rejects.toThrow('review_reason_invalid');
+    await stamp(env.DB, { submissionId: s.id, memberId: a, verdict: 'approve', note: '', now: Date.now() });
+    const notice = await env.DB.prepare("SELECT path, extra FROM community_notifications WHERE kind='review_result'").first<{ path: string; extra: string }>();
+    expect(notice!.path).toBe('/mine');
+    expect(JSON.parse(notice!.extra).suggestions).toBeUndefined();
+  });
+});
+
 describe('不受理', () => {
   it('不必領取就能移出；移出後不在佇列、領不到也蓋不了章；復原回到原位', async () => {
     const f = await setup();
