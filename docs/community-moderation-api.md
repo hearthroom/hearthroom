@@ -226,3 +226,43 @@ How a payout behaves:
 | 409 | `campaign_operation_repeated` | The `operationId` was used for something else. |
 
 A batch reports per-item failures as `{ contentId, error: "<code>" }` with the same codes; the request itself still returns 200.
+
+## Card review shadow suggestions (AI account)
+
+The AI account can read card submissions and record an advisory suggestion. A suggestion never changes the submission: the AI account still gets 403 `agent_not_allowed` on claim, stamp, hold and drop. Human reviewers cannot use the `/v1/review-ai/submissions` and `/v1/review-ai/queue` routes (403 `review_agent_only`).
+
+Double-blind: what the AI reads carries no human decision, stamp, note or drop state, and a human reviewer only sees the AI's suggestion after making their own decision on that submission.
+
+### `GET /v1/review-ai/queue?scope=pending|recent&unshadowed=1&criteria=v1&count=1&limit=50`
+
+`pending` (default) lists submissions waiting for review; `recent` adds those decided within 7 days of submission (trial runs). `unshadowed=1` keeps only submissions this account has not yet given a verdict for, optionally for one criteria version. `count=1` returns `{ count }`. Otherwise `{ items: { id, cardId, kind: "first"|"re", reopen, submittedAt, rating }[] }`, oldest first.
+
+### `GET /v1/review-ai/submissions/:id`
+
+The sealed version the author submitted, without claiming it. Long text is cut and marked; `stats` are counted on the full text.
+
+```ts
+{ submission: { id, cardId, kind, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
+  author: { tier, batchSuspected } | null,
+  card: { name, summary, tags, originalWork: string|null, userName, setting, speech, instructions, examples,
+          openings: { welcome, alternates, prologue }, lorebook: { entryCount, entries: { name, content }[] } },
+  stats: { settingChars, openingChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
+  allowed: { verdicts, reasons, flags, handoffCauses } }
+```
+
+A submission decided more than 7 days after it was submitted, or superseded, gives 410 `review_ai_window_closed`. Content the host can no longer read gives 404 `content_unavailable`.
+
+### `PUT /v1/review-ai/submissions/:id/suggestion` and `PUT /v1/review-ai/submissions/:id/tags`
+
+Body: `{ criteriaVersion: "v<n>", model, verdict: "pass"|"reject"|"handoff", reasons?: string[], flags?: string[], confidence?: 0..1, note?: string (≤400), handoffCause?, inputTokens?, outputTokens?, costUsd?, latencyMs? }`. Codes must come from `allowed`; `reject` needs at least one reason or flag; `pass` takes no reasons; `handoff` defaults its cause to `unsure`. One record per account, criteria version and submission: sending again overwrites it. The `tags` route takes `{ criteriaVersion, model, flags }` and keeps any verdict already written. Response: `{ id, verdict, phase, criteriaVersion }`.
+
+### Reveal and feedback (human reviewers)
+
+- `GET /v1/review/:id/ai` → `{ suggestions: { id, criteriaVersion, model, verdict, reasons, flags, confidence, handoffCause, note, phase, at }[], myFeedback }`. Allowed once the caller has stamped or dropped this submission, or for managers after it is decided; otherwise 403 `ai_hidden_until_decided`.
+- `POST /v1/review/:id/ai-feedback` with `{ suggestionId, value: "ai_right"|"ai_wrong"|"both_ok", operationId }` records one review event per reviewer and suggestion (the first answer stands) and returns `{ value, replaced }`.
+
+### `GET /v1/review-ai/report?from=&to=&criteria=` (managers)
+
+Human vs AI by criteria version for submissions sent in the window (default the last 7 days, at most 120): totals, the decision matrix (approved / rejected / dropped / pending × pass / reject / handoff), `agreement` over submissions both sides decided, `aiStricter` (human approved, AI rejected), `humanStricter`, per-reason agreement on rejections, flag counts, handoff and refusal rates, reviewer feedback, average latency and cost.
+
+Metrics: `hearthroom_review_ai_operations_total{operation,outcome}` and `hearthroom_review_ai_verdicts_total{verdict,outcome="shadow"|"backfill"}`.

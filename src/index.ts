@@ -127,6 +127,7 @@ import { commentCard, countTop, deleteComment, listReplies, listTop, postComment
 import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
+import { reviewAiRoutes } from "./review-ai-routes";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
@@ -271,6 +272,7 @@ app.route('/',enforcementNoticeRoutes());
 app.route('/',cardRewardPublicationRoutes);
 app.route("/", moderationRoutes);
 app.route("/", commentModerationRoutes);
+app.route("/", reviewAiRoutes);
 app.use('/v1/*',async(c,next)=>{
   if(c.req.header('X-Provider'))parseProvider(c.req.header('X-Provider'));
   return next();
