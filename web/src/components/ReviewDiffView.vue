@@ -29,6 +29,7 @@ export function diffSummaryChips(s: ReviewDiffSummary, t: Translate, n: (v: numb
  * 改動標示不靠顏色：新增＝底線＋淡綠底、刪除＝刪除線＋淡紅底，另有讀屏用的「新增／刪除」。
  * 「只看改動」把沒改的段落收成一行，點開才看；「全文」整段照列。
  */
+import { reviewDiffFieldLabel } from "@/lib/review-diff-labels";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchReviewDiff, type ReviewDiffEntry, type ReviewDiffResult } from "@/lib/api";
@@ -71,35 +72,7 @@ const ready = computed(() => (result.value?.state === "ready" ? result.value : n
 const summary = computed(() => ready.value?.diff.summary ?? null);
 const chips = computed(() => (summary.value ? diffSummaryChips(summary.value, t, fmt) : []));
 
-/** 欄位名稱沿用編輯頁與審核頁現有的字；作者資產的欄位帶 asset. 前綴 */
-const FIELD_LABELS: Record<string, string> = {
-  name: "editor.name",
-  summary: "editor.summary",
-  setting: "editor.detail",
-  userName: "reviewV2.diff.field.userName",
-  instructions: "editor.jailbreak",
-  talkExample: "editor.talkExample",
-  outputContract: "editor.contract",
-  speech: "reviewV2.diff.field.speech",
-  type: "reviewV2.diff.field.type",
-  sex: "settings.persona.sex",
-  language: "create.language",
-  tags: "review.tags",
-  world: "editor.section.world",
-  opening: "editor.welcome",
-  alternates: "editor.alternates",
-  prologue: "editor.prologue",
-  "asset.openingPage": "editor.opening.page",
-  "asset.openingMode": "editor.opening.mode",
-  "asset.cardFormat": "reviewV2.diff.field.cardFormat",
-  "asset.cardCss": "editor.cardCss.title",
-  "asset.cardCssDialect": "reviewV2.diff.field.cardCssDialect",
-  "asset.pageMode": "reviewV2.diff.field.pageMode",
-  "asset.mountTrigger": "reviewV2.diff.field.mountTrigger",
-  "asset.mountLayer": "reviewV2.diff.field.mountLayer",
-};
-/* 伺服器之後多比一個欄位、這裡還沒有字時，退回鍵名本身，不讓整塊消失 */
-const fieldLabel = (key: string) => (FIELD_LABELS[key] && te(FIELD_LABELS[key]) ? t(FIELD_LABELS[key]) : key.replace(/^asset\./, ""));
+const fieldLabel = (key: string) => reviewDiffFieldLabel(key, t, te);
 
 /** 對話示例存的是 JSON：拆成一輪一輪再比，不然整段只會是一行刪、一行加 */
 function talkText(raw: string): string {

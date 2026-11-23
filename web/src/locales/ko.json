@@ -6085,5 +6085,7 @@
   "reviewAi.arb.refs.cap": "최근 추가된 30건까지만 보여요.",
   "reviewAi.arb.refs.export": "references 초안 내보내기",
   "reviewAi.arb.refs.failed": "참고 예시를 불러오지 못했어요.",
-  "reviewAi.arb.refs.note": "내보낸 파일은 초안이고 PM 검토 후에 새 버전이 돼요. 심사에 필요한 항목만 있고 계정은 없어요."
+  "reviewAi.arb.refs.note": "내보낸 파일은 초안이고 PM 검토 후에 새 버전이 돼요. 심사에 필요한 항목만 있고 계정은 없어요.",
+  "reviewAi.arb.update.before": "변경 전",
+  "reviewAi.arb.update.after": "변경 후"
 }

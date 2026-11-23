@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api';
 import { ARBITRATION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, type Arbitration, type DisagreementDetail } from '@/lib/review-ai-api';
 import { isManagerRole, referencePool } from '@/lib/review-ai';
 import { reasonKey } from '@/lib/review-reasons';
+import { reviewDiffFieldLabel } from '@/lib/review-diff-labels';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
@@ -24,7 +25,7 @@ import { pageTitle } from '@/lib/i18n';
 import ReviewAiNav from '@/components/ReviewAiNav.vue';
 
 const NOTE_MAX = 500;
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
 const reviewer = useReviewer();
@@ -84,6 +85,8 @@ const opening = computed(() => {
 });
 const pct = (n: number) => new Intl.NumberFormat(String(locale.value), { style: 'percent', maximumFractionDigits: 0 }).format(n);
 const update = computed(() => data.value?.update ?? null);
+/** 更新：逐欄列出改前改後（AI 讀到的也是這一份，每邊最多 1,500 字），折疊，點開才看 */
+const fieldLabel = (key: string) => reviewDiffFieldLabel(key, t, te);
 
 // ---- 仲裁 ----
 const choice = ref<Arbitration | null>(null);
@@ -186,7 +189,20 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
                 <p v-else class="muted ai-note">{{ t('reviewAi.arb.none') }}</p>
               </details>
             </template>
-            <p v-if="update" class="subtle ai-note" data-update>{{ update.state === 'ready' ? t('reviewAi.arb.update.ready', { n: update.fields.length, a: update.lorebook.added, r: update.lorebook.removed, m: update.lorebook.modified }) : t('reviewAi.arb.update.unavailable') }}</p>
+            <div v-if="update" class="ai-field" data-update>
+              <p class="ai-label">{{ update.state === 'ready' ? t('reviewAi.arb.update.ready', { n: update.fields.length, a: update.lorebook.added, r: update.lorebook.removed, m: update.lorebook.modified }) : t('reviewAi.arb.update.unavailable') }}</p>
+              <template v-if="update.state === 'ready'">
+                <details v-for="f in update.fields" :key="f.key" class="ai-fold" :data-update-field="f.key">
+                  <summary>{{ fieldLabel(f.key) }}</summary>
+                  <div class="ai-diff">
+                    <p class="ai-label">{{ t('reviewAi.arb.update.before') }}</p>
+                    <p class="ai-text">{{ f.before || t('reviewAi.arb.none') }}</p>
+                    <p class="ai-label">{{ t('reviewAi.arb.update.after') }}</p>
+                    <p class="ai-text">{{ f.after || t('reviewAi.arb.none') }}</p>
+                  </div>
+                </details>
+              </template>
+            </div>
             <p class="subtle ai-note">{{ t('reviewAi.arb.content.same') }}</p>
           </section>
 
@@ -334,6 +350,7 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 .ai-history__note { display: block; margin-top: var(--s-1); }
 .ai-fold > summary { cursor: pointer; min-height: var(--h-sm); display: flex; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-2); }
 .ai-fold[open] > summary { margin-bottom: var(--s-2); }
+.ai-diff { display: grid; gap: var(--s-1); }
 .ai-entries { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); font-size: 13px; }
 .ai-entries strong { display: block; margin-bottom: 2px; overflow-wrap: anywhere; }
 .ai-tag { cursor: default; max-width: 100%; }

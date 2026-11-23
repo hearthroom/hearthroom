@@ -122,6 +122,16 @@ it('revisiting a card I stamped shows the latest decided suggestion, agreement a
   expect($('[data-ai-recorded]')).toBeNull();
 });
 
+it('a decided card whose stamp is not mine (a manager reading it) gets no panel and no request', async () => {
+  mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'approved', claimedByMe: false, stampedByMe: false, manager: true, stamps: [{ verdict: 'approve', note: '', at: 2 }] }));
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
+  await new Promise((r) => setTimeout(r, 0));
+  expect($('[data-ai-reveal]')).toBeNull();
+  expect(aiCalls()).toEqual([]);
+});
+
 it('disagreement: three unselected options, each submit sends a fresh operationId, and the answer can be changed', async () => {
   let fb: unknown[] = [];
   routes['/v1/review/s1/ai-feedback'] = (c) => [200, { value: c.body.value }];
@@ -239,7 +249,7 @@ it('shows the AI disagreement tab next to review stats only to managers, and den
 
 it('arbitration: reference checkbox only for a winner, names the pool, links to re-review when the AI was right about an approved card', async () => {
   routes['/v1/review-ai/disagreements/g1/arbitration'] = (c) => [200, { id: 'x1', value: c.body.value, referencePool: c.body.addToReference ? 'reject' : null }];
-  routes['/v1/review-ai/disagreements/g1'] = () => [200, disagreement()];
+  routes['/v1/review-ai/disagreements/g1'] = () => [200, disagreement({ update: { state: 'ready', baseKind: 'approved', fields: [{ key: 'opening', before: 'Old opening', after: 'New opening' }], lorebook: { added: 1, removed: 0, modified: 0 } } })];
   routes['/v1/review-ai/disagreements?'] = () => [200, { total: 4, items: [{ suggestionId: 'g2' }] }];
   await mountPage('/en/review/ai/g1');
   await vi.waitFor(() => expect($('[data-arbitration]')).not.toBeNull());
@@ -247,6 +257,11 @@ it('arbitration: reference checkbox only for a winner, names the pool, links to 
   expect($('[data-col=human]')!.textContent).toContain('Rin');
   expect($('[data-col=ai]')!.textContent).toContain(t('reviewAi.flag.ai_unedited'));
   expect($('[data-col=ai]')!.textContent).toContain('deepseek-x');
+  // 更新：逐欄改前改後，欄位名稱與審核頁「更新內容」同一份
+  const field = $('[data-update-field=opening]')!;
+  expect(field.querySelector('summary')!.textContent).toBe(t('editor.welcome'));
+  expect(field.textContent).toContain('Old opening');
+  expect(field.textContent).toContain('New opening');
 
   const box = () => host.querySelector<HTMLInputElement>('[data-reference]')!;
   const hint = () => $('[data-pool-hint]')!.textContent!.trim();

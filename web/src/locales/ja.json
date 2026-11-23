@@ -6085,5 +6085,7 @@
   "reviewAi.arb.refs.cap": "最近追加された 30 件までを表示します。",
   "reviewAi.arb.refs.export": "references の下書きを書き出す",
   "reviewAi.arb.refs.failed": "参考例を読み込めませんでした。",
-  "reviewAi.arb.refs.note": "書き出すのは下書きで、PMの確認を経て新しいバージョンになります。審査に必要な項目だけで、アカウントは含みません。"
+  "reviewAi.arb.refs.note": "書き出すのは下書きで、PMの確認を経て新しいバージョンになります。審査に必要な項目だけで、アカウントは含みません。",
+  "reviewAi.arb.update.before": "変更前",
+  "reviewAi.arb.update.after": "変更後"
 }

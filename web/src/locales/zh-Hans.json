@@ -6085,5 +6085,7 @@
   "reviewAi.arb.refs.cap": "只列最近加入的 30 条。",
   "reviewAi.arb.refs.export": "导出为 references 草稿",
   "reviewAi.arb.refs.failed": "参考范例加载失败。",
-  "reviewAi.arb.refs.note": "导出的是草稿，PM 审过才成为新版本；内容只含审核所需字段，不含账号。"
+  "reviewAi.arb.refs.note": "导出的是草稿，PM 审过才成为新版本；内容只含审核所需字段，不含账号。",
+  "reviewAi.arb.update.before": "改前",
+  "reviewAi.arb.update.after": "改后"
 }

@@ -6085,5 +6085,7 @@
   "reviewAi.arb.refs.cap": "Only the 30 most recently added are listed.",
   "reviewAi.arb.refs.export": "Export references draft",
   "reviewAi.arb.refs.failed": "Reference examples didn't load.",
-  "reviewAi.arb.refs.note": "The export is a draft; it becomes a new version only after PM review. It has only the fields needed for review, no accounts."
+  "reviewAi.arb.refs.note": "The export is a draft; it becomes a new version only after PM review. It has only the fields needed for review, no accounts.",
+  "reviewAi.arb.update.before": "Before",
+  "reviewAi.arb.update.after": "After"
 }
