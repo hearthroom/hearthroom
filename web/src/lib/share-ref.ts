@@ -305,11 +305,14 @@ export async function noteShareLinkCreated(roleId: string | undefined): Promise<
   let token: string | null = null;
   try { const session = useSession(); token = session.me ? await session.accessToken() : null; } catch { token = null; }
   if (!token) return;
+  // 首頁的新手卡下次出現時重讀進度，才看得到「分享一張卡」已完成。送出前後各標一次：
+  // 回報還在路上時就回到首頁，那一次讀到的是舊進度，送達之後的下一次進頁要再讀
+  const stale = () => { try { useCheckin().markStale(); } catch { /* 沒有 pinia（例如卡片 App 網域）就算了 */ } };
+  stale();
   await fetch(`${COMMUNITY_API}/me/share/created`, {
     method: "POST", keepalive: true,
     headers: { "Content-Type": "application/json", "X-Provider": currentProvider(), Authorization: `Bearer ${token}` },
     body: JSON.stringify({ roleId }),
   }).catch(() => undefined);
-  // 首頁的新手卡下次出現時重讀進度，才看得到「分享一張卡」已完成
-  try { useCheckin().markStale(); } catch { /* 沒有 pinia（例如卡片 App 網域）就算了 */ }
+  stale();
 }
