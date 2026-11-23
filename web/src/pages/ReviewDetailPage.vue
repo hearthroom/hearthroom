@@ -31,6 +31,7 @@ import ReviewAuthorPanel from '@/components/ReviewAuthorPanel.vue';
 import ReviewAuthorProfile from '@/components/ReviewAuthorProfile.vue';
 import ReviewReasonPicker from '@/components/ReviewReasonPicker.vue';
 import ReviewTimeline from '@/components/ReviewTimeline.vue';
+import ReviewDiffView from '@/components/ReviewDiffView.vue';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { REVIEW_DECISION_MARKS } from '../../../shared/review-reasons';
 import { submissionTypeKey, submissionTypeOf } from '@/lib/review-type';
@@ -68,7 +69,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -77,9 +78,24 @@ function summary(name:string,submittedAt:number,verdict:string,reason:string,rea
  const row=(label:string,value:string)=>t('review.confirm.row',{label,value});
  return [row(t('review.confirm.card'),name),row(t('review.confirm.version'),dateTime(submittedAt)),row(t('review.confirm.decision'),verdict),row(t(reasonKey),reason||t('review.confirm.noNote'))].join('\n');
 }
-const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost" | "history">("basic");
-const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost", "history"] as const;
-const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost", "history"];
+type Section = "changes" | "basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost" | "history";
+const section = ref<Section>("basic");
+const READ_SECTIONS: readonly Section[] = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost", "history"];
+const REVIEW_SECTIONS: readonly string[] = ["changes", "rating", "originality", "display", "cost", "history"];
+/**
+ * 「更新內容」（審卡 V2 第二批）：只給待審中的更新與駁回後重送（伺服器明說的 type）。
+ * 重新審核審的是現行公開版，沒有基準；首次送審也沒有。定案後差異讀不到（410），也不給。
+ */
+const hasChanges = computed(() => {
+  const s = data.value?.submission;
+  return !!s && s.status === "pending" && (s.type === "update" || s.type === "resubmit");
+});
+const SECTIONS = computed<readonly Section[]>(() => (hasChanges.value ? ["changes", ...READ_SECTIONS] : READ_SECTIONS));
+/** 第一次切到「更新內容」才掛上差異元件（才去讀），之後切走也留著，不重讀 */
+const changesOpened = ref(false);
+watch(section, (s) => { if (s === "changes") changesOpened.value = true; }, { flush: "sync" });
+/* 定案後這一格就沒了：停在上面的人回到基本資料，不留一個空白頁 */
+watch(hasChanges, (shown) => { if (!shown && section.value === "changes") section.value = "basic"; });
 
 function revealFocusedTab(event: FocusEvent) {
   const tab = event.currentTarget as HTMLElement;
@@ -129,7 +145,7 @@ const marked = computed(() => {
   if (at < text.length) out.push({ text: text.slice(at), hit: false });
   return out;
 });
-const sectionLabel = (s: (typeof SECTIONS)[number]) => {
+const sectionLabel = (s: Section) => {
   const label = REVIEW_SECTIONS.includes(s) ? t(`review.section.${s}`) : t(`editor.section.${s}`);
   return s === "originality" && originality.value?.available ? `${label} · ${percent(originality.value.similarity)}` : label;
 };
@@ -363,7 +379,8 @@ async function load() {
     if(!active||seq!==loadSequence||target!==id.value)return;
     data.value=result;
     // 新卡預設先看開場白（最大的駁回原因，也最快看完）；之後使用者自己切的分頁不動
-    if(!sectionChosen){sectionChosen=true;if(submissionTypeOf({ ...result.submission, reopen: !!result.submission.reopen })==='first')section.value='dialogue';}
+    // 更新與駁回後重送先看「這次改了什麼」
+    if(!sectionChosen){sectionChosen=true;if(hasChanges.value)section.value='changes';else if(submissionTypeOf({ ...result.submission, reopen: !!result.submission.reopen })==='first')section.value='dialogue';}
     void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
@@ -790,6 +807,10 @@ onMounted(() => { void load(); });
         </div>
       </nav>
 
+      <!-- 更新內容（審卡 V2 第二批）：第一次切到這一格才讀，之後留著 -->
+      <section v-if="hasChanges && changesOpened" v-show="section === 'changes'" class="pane panel" data-changes-pane>
+        <ReviewDiffView :key="data.submission.id" :submission-id="data.submission.id" :previous-reasons="data.submission.previous?.status === 'rejected' ? data.submission.previous.reasons : undefined" />
+      </section>
       <section v-show="section === 'basic'" class="pane panel">
         <div class="field"><label>{{ $t("editor.name") }}</label><input class="input" :value="doc.roleName" readonly /></div>
         <div class="field"><label>{{ $t("editor.summary") }}</label><pre class="text">{{ doc.roleDesc }}</pre></div>

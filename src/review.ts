@@ -12,7 +12,7 @@ import { reviewLengthExemptForCard } from './review-length-exemption';
 import { HttpError, type Env, type Localized, pickLocale } from "./types";
 import { submissionType, type SubmissionType } from "./review-author";
 import { normalizeRejectReasons, queueContext, reviewEventStatement } from "./review-v2";
-import { REVIEW_REASON_VERSION, REVIEW_REASONS, isReviewReason, normalizeDecisionMarks } from "../shared/review-reasons";
+import { REVIEW_REASON_VERSION, REVIEW_REASONS, isReviewReason, normalizeDecisionMarks, parseReviewReasons } from "../shared/review-reasons";
 import { NOT_DROPPED } from "./review-drop";
 import { applyBatchMarks, authorProfiles, deviceSignals, type AuthorTier } from "./review-profile";
 
@@ -91,25 +91,26 @@ export const EARLIER_DECIDED = (p: string, s: string) =>
   `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected') AND ${p}.reopen_of IS NULL
    AND (${p}.submitted_at < ${s}.submitted_at OR (${p}.submitted_at = ${s}.submitted_at AND ${p}.rowid < ${s}.rowid))`;
 
-export interface PreviousSubmission { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null }
+export interface PreviousSubmission { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null; reasons?: string[] }
 
 /** 這張單是同一張卡第幾次送審，以及上一次的結果（給審核頁）。 */
 export async function submissionHistory(db: D1Database, submissionId: string): Promise<{ attempt: number; previous: PreviousSubmission | null }> {
   const row = await db
     .prepare(
       `SELECT (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
-              p.status, p.note, p.submitted_at, p.decided_at
+              p.status, p.note, p.submitted_at, p.decided_at, p.reject_reasons
        FROM review_submissions s
        LEFT JOIN review_submissions p ON p.id = (SELECT p.id FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}
                                                  ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1)
        WHERE s.id = ?`,
     )
     .bind(submissionId)
-    .first<{ earlier: number; status: "approved" | "rejected" | null; note: string | null; submitted_at: number | null; decided_at: number | null }>();
+    .first<{ earlier: number; status: "approved" | "rejected" | null; note: string | null; submitted_at: number | null; decided_at: number | null; reject_reasons: string | null }>();
   if (!row) throw new HttpError(404, "submission not found");
   return {
     attempt: row.earlier + 1,
-    previous: row.status ? { status: row.status, note: row.note ?? "", submittedAt: row.submitted_at!, decidedAt: row.decided_at } : null,
+    // 上次駁回的理由代碼（審卡 V2）：更新差異把每個理由對到這次有沒有改
+    previous: row.status ? { status: row.status, note: row.note ?? "", submittedAt: row.submitted_at!, decidedAt: row.decided_at, ...(row.status === "rejected" ? { reasons: parseReviewReasons(row.reject_reasons) } : {}) } : null,
   };
 }
 

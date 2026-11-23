@@ -580,6 +580,38 @@ export interface ReviewQueueItem {
   authorMark?: ReviewAuthorMark | null;
   /** 快速審：優質作者、沒有疑似量產。只是排序前移與預設重點檢查 */
   fast?: boolean;
+  /** 審卡 V2 第二批：更新差異的摘要（只有更新單有）。pending＝還沒算；no_base／unreadable＝無法比較 */
+  diff?: { state: "pending" | "done" | "no_base" | "unreadable"; summary: ReviewDiffSummary | null } | null;
+}
+
+/** 更新差異的純數字摘要（伺服器 src/review-diff.ts DiffSummary）：不含卡片原文 */
+export interface ReviewDiffSummary {
+  changedFields: string[];
+  setting: { charsAdded: number; charsRemoved: number };
+  opening: { changed: boolean; charsBefore: number; charsAfter: number };
+  worldbook: { added: number; removed: number; modified: number };
+  rules: { added: number; removed: number; modified: number };
+  tags: { added: number; removed: number };
+  totalChanged: number;
+  unchanged: boolean;
+}
+export interface ReviewDiffEntry { name: string; content: string; keywords: string[]; isEnabled: boolean; isConstant: boolean }
+export type ReviewDiffChange = "added" | "removed" | "modified";
+/** 審核頁的完整差異。fields 的 key：name、summary、setting…，作者資產的欄位帶 asset. 前綴 */
+export interface ReviewDiff {
+  summary: ReviewDiffSummary;
+  fields: { key: string; before: string; after: string }[];
+  worldbook: { added: ReviewDiffEntry[]; removed: ReviewDiffEntry[]; modified: { before: ReviewDiffEntry; after: ReviewDiffEntry }[] };
+  rules: { added: number; removed: number; modified: number; items: { change: ReviewDiffChange; label: string }[] };
+}
+/** no_base＝沒有過審或駁回過的版本可比；unreadable／missing＝讀不到，無法比較 */
+export type ReviewDiffResult =
+  | { state: "no_base" | "unreadable" | "missing" }
+  | { state: "ready"; baseKind: "approved" | "rejected"; diff: ReviewDiff };
+
+/** 更新差異：只在待審期間讀（定案後 410）；跟審核頁同一道門 */
+export async function fetchReviewDiff(id: string, token: string): Promise<ReviewDiffResult> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/diff`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
 export type ReviewAuthorTier = "new" | "stable" | "top" | "general" | "unknown";
@@ -642,7 +674,8 @@ export interface ReviewDetail {
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
     /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */
     attempt?: number;
-    previous?: { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null } | null;
+    /** reasons：上次駁回的理由代碼。伺服器目前還沒帶（只有 note），帶了「更新內容」分頁才列出逐項對照 */
+    previous?: { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null; reasons?: string[] } | null;
     type?: ReviewSubmissionType;
   };
   /** 原作者；舊版伺服器不帶 */

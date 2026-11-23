@@ -31,6 +31,7 @@ import ReviewListTabs from "@/components/ReviewListTabs.vue";
 import ReviewRowMenu from "@/components/ReviewRowMenu.vue";
 import ReviewBatchSheet from "@/components/ReviewBatchSheet.vue";
 import ActionToast from "@/components/ActionToast.vue";
+import { diffSummaryChips } from "@/components/ReviewDiffView.vue";
 
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
@@ -62,6 +63,22 @@ const lengthChip = (item: ReviewQueueItem) => {
   if (!l) return null;
   const params = { total: numbers.value.format(l.total), gap: numbers.value.format(l.remaining) };
   return { short: !l.eligible, text: t(l.eligible ? "review.queue.length.ok" : "review.queue.length.short", params) };
+};
+
+/**
+ * 更新列的改動摘要（審卡 V2 第二批）：不進詳情就知道這次改了什麼，字跟詳情的摘要 chip 同一份。
+ * 還沒算好（pending）或不是更新單就不寫；沒有基準或讀不到寫「無法比較」。
+ */
+const diffLine = (item: ReviewQueueItem): string => {
+  const d = item.diff;
+  if (!d) return "";
+  if (d.state === "no_base" || d.state === "unreadable") return t("reviewV2.diff.queue.uncomparable");
+  const s = d.state === "done" ? d.summary : null;
+  if (!s) return "";
+  if (s.unchanged) return t("reviewV2.diff.queue.unchanged");
+  const fmt = (v: number) => numbers.value.format(v);
+  const chips = diffSummaryChips(s, t, fmt);
+  return chips.length ? chips.join(" · ") : typeof s.totalChanged === "number" ? t("reviewV2.diff.total", { n: fmt(s.totalChanged) }, s.totalChanged) : "";
 };
 
 /** 自己領著的永遠列在最上面，免得忘了手上還有一張 */
@@ -242,6 +259,7 @@ onMounted(() => {
               <span v-if="item.authorMark?.batchSuspected" class="chip chip--batch" data-batch-flag>{{ $t("reviewV2.mark.batch") }}<template v-if="item.authorMark.deviceAccounts"> · {{ $t("reviewV2.mark.deviceAccounts", { n: item.authorMark.deviceAccounts }, item.authorMark.deviceAccounts) }}</template></span>
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>
+            <p v-if="diffLine(item)" class="row__diff" data-diff-summary>{{ diffLine(item) }}</p>
             <p class="row__meta">{{ zoneLabel(item.card.zone) }} · {{ relativeTime(item.submittedAt) }}</p>
             <p v-if="item.hold" class="row__meta row__hold" data-hold-by>{{ item.hold.byMe ? $t("review.hold.byMe") : $t("review.hold.by", { name: item.hold.holder || $t("review.hold.someone") }) }} · {{ relativeTime(item.hold.at) }}</p>
             <p v-if="rowError?.id === item.id" class="notice notice--error row__error" role="alert">{{ rowError.text }}</p>
@@ -287,6 +305,7 @@ onMounted(() => {
 .row__name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
 .row__hook { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__meta { font-size: 12px; color: var(--text-3); }
+.row__diff { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .row__error { margin: var(--s-1) 0 0; font-size: 13px; }
 .row__acts { display: grid; gap: var(--s-2); }
 /* 主行動 44（觸控主行動）；放回是次要動作，至少 36 */

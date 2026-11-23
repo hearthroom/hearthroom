@@ -366,6 +366,29 @@ describe("審卡 V2 佇列：新卡／更新、不受理、作者標記", () => 
     expect(html).not.toContain("98765");
   });
 
+  it("更新列帶改動摘要：有改的才寫；還沒算好不寫；沒有基準或讀不到寫無法比較", async () => {
+    const sum = (o: Record<string, unknown> = {}) => ({ changedFields: ["setting", "opening"], setting: { charsAdded: 86, charsRemoved: 0 }, opening: { changed: true, charsBefore: 1, charsAfter: 2 },
+      worldbook: { added: 0, removed: 0, modified: 0 }, rules: { added: 0, removed: 0, modified: 0 }, tags: { added: 0, removed: 0 }, totalChanged: 90, unchanged: false, ...o });
+    await remountQueue({ items: [
+      item("done", { kind: "re", type: "update", diff: { state: "done", summary: sum() } }),
+      item("name", { kind: "re", type: "update", diff: { state: "done", summary: sum({ changedFields: ["name"], setting: { charsAdded: 0, charsRemoved: 0 }, opening: { changed: false, charsBefore: 1, charsAfter: 1 }, totalChanged: 4 }) } }),
+      item("same", { kind: "re", type: "update", diff: { state: "done", summary: sum({ changedFields: [], setting: { charsAdded: 0, charsRemoved: 0 }, opening: { changed: false, charsBefore: 1, charsAfter: 1 }, totalChanged: 0, unchanged: true }) } }),
+      item("pending", { kind: "re", type: "update", diff: { state: "pending", summary: null } }),
+      item("nobase", { kind: "re", type: "resubmit", diff: { state: "no_base", summary: null } }),
+      item("lost", { kind: "re", type: "update", diff: { state: "unreadable", summary: null } }),
+      item("old", { kind: "re", type: "reopen", reopen: true, diff: null }),
+    ], claimTtlMs: 1, counts: { new: 0, updates: 7, dropped: 0 } }, "/review/updates");
+    await vi.waitFor(() => expect(host.textContent).toContain("卡done"));
+    const line = (id: string) => host.querySelector(`[data-review-row="${id}"] [data-diff-summary]`)?.textContent?.trim();
+    expect(line("done")).toBe(`${t("reviewV2.diff.chip.setting", { a: "86", d: "0" })} · ${t("reviewV2.diff.chip.opening")}`);
+    expect(line("name")).toBe(t("reviewV2.diff.total", { n: "4" }, 4));
+    expect(line("same")).toBe(t("reviewV2.diff.queue.unchanged"));
+    expect(line("pending")).toBeUndefined();
+    expect(line("nobase")).toBe(t("reviewV2.diff.queue.uncomparable"));
+    expect(line("lost")).toBe(t("reviewV2.diff.queue.uncomparable"));
+    expect(line("old")).toBeUndefined();
+  });
+
   it("管理員收到疑似大量送審的提示；沒有就不顯示", async () => {
     expect(host.querySelector("[data-batch-banner]")).toBeNull();
     await remountQueue({ items: [item("a")], claimTtlMs: 1, batchGroups: [{ scope: "device", anchorId: "a", count: 3 }, { scope: "device", anchorId: "z", count: 2 }] });

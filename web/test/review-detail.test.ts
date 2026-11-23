@@ -4,7 +4,7 @@ import {createRouter,createMemoryHistory} from 'vue-router';
 import {applyLocale,i18n,LOCALE_CODES} from '../src/lib/i18n';
 import {confirmState,settleConfirm} from '../src/lib/confirm';
 import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -102,6 +102,42 @@ it('reveals a focused review tab before activation without changing the selected
  await vi.waitFor(()=>expect(reveal).toHaveBeenCalledWith({block:'nearest',inline:'nearest'}));
  expect(tabs[0].getAttribute('aria-pressed')).toBe('true');
  expect(tabs[4].getAttribute('aria-pressed')).toBe('false');
+});
+
+// 審卡 V2 第二批：更新與駁回後重送多一格「更新內容」，排第一、預設選它，第一次打開才讀差異；首次送審與重新審核沒有這一格
+it('an update opens on its changes tab and reads the diff once; a first submission has no changes tab',async()=>{
+ const base=pendingDetail();
+ api.fetchReviewDiff.mockResolvedValue({state:'no_base'});
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,type:'update',attempt:2,previous:{status:'approved',note:'',submittedAt:1,decidedAt:2}}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(10));
+ const tabs=()=>[...el.querySelectorAll<HTMLButtonElement>('.tabs button')];
+ expect(tabs()[0].textContent?.trim()).toBe(i18n.global.t('review.section.changes'));
+ expect(tabs()[0].getAttribute('aria-pressed')).toBe('true');
+ await vi.waitFor(()=>expect(el.querySelector('[data-changes-pane] [data-diff-state="no_base"]')).toBeTruthy());
+ expect(api.fetchReviewDiff).toHaveBeenCalledTimes(1);
+ expect(api.fetchReviewDiff).toHaveBeenCalledWith('s1','local-reviewer');
+ // 切走再切回來不重讀
+ tabs()[1].click();
+ await vi.waitFor(()=>expect(tabs()[1].getAttribute('aria-pressed')).toBe('true'));
+ tabs()[0].click();
+ await vi.waitFor(()=>expect(tabs()[0].getAttribute('aria-pressed')).toBe('true'));
+ expect(api.fetchReviewDiff).toHaveBeenCalledTimes(1);
+
+ api.fetchReviewDiff.mockClear();
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,kind:'first',type:'first',attempt:1,previous:null}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(9));
+ expect(tabs().some(b=>b.textContent?.trim()===i18n.global.t('review.section.changes'))).toBe(false);
+ // 新卡照舊先看開場白（對話）
+ expect(tabs().find(b=>b.getAttribute('aria-pressed')==='true')?.textContent?.trim()).toBe(i18n.global.t('editor.section.dialogue'));
+ expect(el.querySelector('[data-changes-pane]')).toBeNull();
+ expect(api.fetchReviewDiff).not.toHaveBeenCalled();
+
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...base,submission:{...base.submission,type:'reopen',reopen:true}});
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelectorAll('.tabs button')).toHaveLength(9));
+ expect(api.fetchReviewDiff).not.toHaveBeenCalled();
 });
 
 it('requires confirmation before approval, cancels without POST, and snapshots the reviewed decision',async()=>{
@@ -1042,8 +1078,10 @@ it('a card opened from the dropped list is read-only until restored',async()=>{
  expect(el.querySelector('[data-dropped-card]')).toBeNull();
 });
 
-it('a first submission opens on the dialogue tab; updates still open on the basic tab',async()=>{
+// 審卡 V2 第二批（ui.md §4.1）：更新改成預設「更新內容」；重新審核沒有差異，仍停在基本資料
+it('a first submission opens on the dialogue tab; updates open on what changed; a re-review stays on the basic tab',async()=>{
  const d=withLength(3600);
+ api.fetchReviewDiff.mockResolvedValue({state:'no_base'});
  api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,kind:'first',type:'first'}});
  await remount();
  const tab=(s:string)=>button(i18n.global.t(`editor.section.${s}`));
@@ -1051,8 +1089,13 @@ it('a first submission opens on the dialogue tab; updates still open on the basi
  expect(tab('basic')!.getAttribute('aria-pressed')).toBe('false');
  api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,kind:'re',type:'update'}});
  await remount();
- await vi.waitFor(()=>expect(tab('basic')?.getAttribute('aria-pressed')).toBe('true'));
+ await vi.waitFor(()=>expect(button(i18n.global.t('review.section.changes'))?.getAttribute('aria-pressed')).toBe('true'));
+ expect(tab('basic')!.getAttribute('aria-pressed')).toBe('false');
  expect(tab('dialogue')!.getAttribute('aria-pressed')).toBe('false');
+ api.fetchReviewDetail.mockReset().mockResolvedValue({...d,submission:{...d.submission,kind:'re',type:'reopen',reopen:true}});
+ await remount();
+ await vi.waitFor(()=>expect(tab('basic')?.getAttribute('aria-pressed')).toBe('true'));
+ expect(button(i18n.global.t('review.section.changes'))).toBeUndefined();
 });
 
 it('shows the author profile to the reviewer when the detail carries one',async()=>{
