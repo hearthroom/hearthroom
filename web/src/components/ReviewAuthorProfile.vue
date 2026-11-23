@@ -108,9 +108,9 @@ function batchClosed(changed: boolean) { batch.value = null; if (changed) emit("
       <p class="subtle">{{ $t("reviewV2.mark.ttl", { a: BATCH_DAYS, b: TIER_DAYS }) }}</p>
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       <div class="mark__acts">
-        <button type="button" class="btn btn--sm btn--ghost" :disabled="busy" @click="sheet = false">{{ $t("reviewV2.mark.back") }}</button>
-        <button v-if="kind === 'tier' ? profile.manual.tier : profile.manual.batch" type="button" class="btn btn--sm" :disabled="busy" data-mark-clear @click="save(true)">{{ $t("reviewV2.mark.clear") }}</button>
-        <button type="button" class="btn btn--sm btn--primary" :disabled="busy" data-mark-save @click="save()">{{ $t("reviewV2.mark.save") }}</button>
+        <button type="button" class="btn btn--ghost" :disabled="busy" @click="sheet = false">{{ $t("reviewV2.mark.back") }}</button>
+        <button v-if="kind === 'tier' ? profile.manual.tier : profile.manual.batch" type="button" class="btn" :disabled="busy" data-mark-clear @click="save(true)">{{ $t("reviewV2.mark.clear") }}</button>
+        <button type="button" class="btn btn--primary" :disabled="busy" data-mark-save @click="save()">{{ $t("reviewV2.mark.save") }}</button>
       </div>
     </div>
     <ReviewBatchSheet v-if="batch" :anchor-id="submissionId" :scope="batch" @close="batchClosed" />
@@ -136,6 +136,7 @@ function batchClosed(changed: boolean) { batch.value = null; if (changed) emit("
 .mark__options { display: flex; flex-wrap: wrap; gap: var(--s-3); }
 .mark__option { display: inline-flex; gap: var(--s-1); align-items: center; min-height: var(--h-md); cursor: pointer; }
 .mark__field { display: grid; gap: var(--s-1); font-size: 13px; margin: 0; }
+.mark .seg__item { min-height: var(--h-md); }
 .mark__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: flex-end; }
 .profile:lang(ko) { word-break: keep-all; }
 </style>

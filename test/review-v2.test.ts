@@ -200,6 +200,8 @@ describe('批量不受理（管理員）', () => {
     expect(result.dropped).toEqual([s1.id]);
     expect(result.skipped).toEqual([{ id: s2.id, reason: 'claimed_by_other' }, { id: 'elsewhere', reason: 'not_in_group' }]);
     expect((await events(s1.id)).find((e) => e.action === 'drop')?.source).toBe('device_batch');
+    // 已在不受理清單的不再算進這一組（提示列、sheet 標題、按鈕同一個口徑）
+    expect(await groupSubmissionIds(env.DB, s2.id, 'device')).toEqual([s2.id]);
     expect((await restoreBatch(env.DB, { batchId: result.batchId, memberId: mgr, now: Date.now() })).restored).toEqual([s1.id]);
   });
 

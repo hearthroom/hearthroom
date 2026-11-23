@@ -30,6 +30,8 @@ let opener: HTMLElement | null = null;
 
 const BATCH_MAX = 100;
 const selectable = (i: ReviewGroupItem) => !i.claimedByOther && !i.held && !i.dropped;
+/** 已在不受理清單的不列：提示列、標題與按鈕的張數同一個口徑（伺服器的群組也排除它們） */
+const listed = computed(() => items.value.filter((i) => !i.dropped));
 const chosen = computed(() => items.value.filter((i) => selectable(i) && picked.value.has(i.id)).slice(0, BATCH_MAX));
 const skippedBy = (reason: string) => result.value?.skipped.filter((s) => s.reason === reason).length ?? 0;
 const skippedOther = computed(() => (result.value?.skipped.length ?? 0) - skippedBy("claimed_by_other") - skippedBy("review_held"));
@@ -102,7 +104,7 @@ onBeforeUnmount(() => opener?.focus());
   <Teleport to="body">
     <div class="modal-backdrop" @click.self="close" @keydown="keydown">
       <section ref="box" class="modal panel batch" role="dialog" aria-modal="true" aria-labelledby="batch-title" tabindex="-1" data-batch-sheet>
-        <h2 id="batch-title" class="batch__title">{{ $t("reviewV2.batch.sheetTitle", { n: items.length }) }}</h2>
+        <h2 id="batch-title" class="batch__title">{{ $t("reviewV2.batch.sheetTitle", { n: listed.length }) }}</h2>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <div v-if="loading" class="batch__list" aria-hidden="true"><div v-for="i in 3" :key="i" class="ghost batch__ghost" /></div>
 
@@ -123,14 +125,14 @@ onBeforeUnmount(() => opener?.focus());
 
         <template v-else>
           <ul class="batch__list">
-            <li v-for="item in items" :key="item.id" class="batch__row" :class="{ 'batch__row--off': !selectable(item) }">
+            <li v-for="item in listed" :key="item.id" class="batch__row" :class="{ 'batch__row--off': !selectable(item) }">
               <label class="batch__pick">
                 <input type="checkbox" :checked="selectable(item) && picked.has(item.id)" :disabled="!selectable(item) || busy" @change="toggle(item.id)" />
                 <span class="batch__art"><img v-if="item.coverUrl" :src="item.coverUrl" alt="" loading="lazy" /></span>
                 <span class="batch__text">
                   <span class="batch__name">{{ item.name || "—" }}</span>
                   <span class="batch__line">{{ item.openingLine }}</span>
-                  <span v-if="!selectable(item)" class="batch__why">{{ item.claimedByOther ? $t("reviewV2.batch.rowClaimed") : item.held ? $t("reviewV2.batch.rowHeld") : $t("reviewV2.batch.rowDropped") }}</span>
+                  <span v-if="!selectable(item)" class="batch__why">{{ item.claimedByOther ? $t("reviewV2.batch.rowClaimed") : $t("reviewV2.batch.rowHeld") }}</span>
                 </span>
               </label>
             </li>
@@ -148,9 +150,14 @@ onBeforeUnmount(() => opener?.focus());
 </template>
 
 <style scoped>
-.batch { max-width: 560px; width: calc(100vw - var(--s-6)); max-height: min(80dvh, 720px); display: grid; grid-template-rows: auto auto 1fr auto; gap: var(--s-3); padding: var(--s-5); }
+/* 直向 flex：標題、提示、按鈕照內容高，清單吃剩下的高度並自己捲（固定格線列數時，少了錯誤提示那一列清單就不會捲） */
+.batch { max-width: 560px; width: calc(100vw - var(--s-6)); max-height: min(80dvh, 720px); display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-5); }
+.batch > * { flex: none; }
+.batch > .batch__list { flex: 1 1 auto; }
 .batch__title { font-size: 18px; }
-.batch__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); overflow-y: auto; min-height: 0; }
+.batch__list { list-style: none; margin: 0; padding: 0 0 var(--s-5); display: grid; align-content: start; gap: var(--s-2); overflow-y: auto; min-height: 0;
+  /* 還有下一列時底部淡出，提示可以往下捲 */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
 .batch__ghost { height: 72px; border-radius: var(--r-md); }
 .batch__row { border: 1px solid var(--line); border-radius: var(--r-md); }
 .batch__row--off .batch__name, .batch__row--off .batch__line { color: var(--text-3); }

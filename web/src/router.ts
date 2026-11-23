@@ -70,7 +70,8 @@ const pages: RouteRecordRaw[] = [
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true, petQuietOnPhone: true } },
-  { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true}},
+  // petQuietOnPhone：手機上桌寵進來不說招呼，泡泡才不會蓋住第一張理由卡（審卡 V2 視覺簽核）
+  { path: 'mine/reviews/:id',component:()=>import('./pages/AuthorReviewResultPage.vue'),meta:{auth:true,petQuietOnPhone:true}},
   // 建立與編輯擴充是同一頁（new 帶 ?card=）
   ...(stageSite ? [{ path: "mine/workshops/new", component: stageSite.loadWorkshopEditor, meta: { auth: true, petAway: true } }] : []),
   ...(stageSite ? [{ path: "mine/workshops/:id/edit", component: stageSite.loadWorkshopEditor, meta: { auth: true, petAway: true } }] : []),

@@ -722,7 +722,7 @@ onMounted(() => { void load(); });
       </header>
 
       <!-- 快速審（優質作者、沒有疑似量產）：先給重點檢查，決定規則與一般卡完全相同，全文照樣在下面的分頁 -->
-      <section v-if="fastReview" class="pane panel key-checks layout__head" data-key-checks>
+      <section v-if="fastReview" class="pane panel key-checks layout__checks" data-key-checks>
         <h3>{{ $t("reviewV2.fast.summaryTitle") }}</h3>
         <p class="text key-checks__opening" :class="{ 'key-checks__opening--clamp': !keyChecksOpen }">{{ data.detail.greetings?.welcome || "—" }}</p>
         <button type="button" class="btn btn--sm btn--ghost" :aria-expanded="keyChecksOpen" @click="keyChecksOpen = !keyChecksOpen">{{ keyChecksOpen ? $t("reviewV2.fast.collapse") : $t("reviewV2.fast.expand") }}</button>
@@ -1077,7 +1077,7 @@ onMounted(() => { void load(); });
             <label v-if="!reopen" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
               <input v-model="choice" type="radio" name="decide" value="drop" :disabled="busy || !!hold" />
               <span class="choice__name">{{ $t("reviewV2.decide.drop") }}</span>
-              <span class="choice__hint">{{ $t("reviewV2.decide.dropHint") }}</span>
+              <span class="choice__hint">{{ hold ? $t("reviewV2.menu.held") : $t("reviewV2.decide.dropHint") }}</span>
             </label>
           </div>
 
@@ -1137,8 +1137,10 @@ onMounted(() => { void load(); });
 .previous__time { font-size: 12px; }
 .head__acts { display: flex; gap: var(--s-2); }
 /* 版面：窄螢幕一欄（卡名 → 字數 → 分頁與內容 → 決定）；≥1080 右側 300 寬黏著欄放字數與決定入口 */
-.layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "side" "body"; column-gap: var(--s-5); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "checks" "side" "body"; column-gap: var(--s-5); }
 .layout__head { grid-area: head; }
+/* 快速審的重點檢查：自己一格，排在頁首之後（跟頁首共用一格會蓋住卡名與作者區） */
+.layout__checks { grid-area: checks; margin-bottom: var(--s-4); }
 .layout__side { grid-area: side; }
 .layout__body { grid-area: body; min-width: 0; scroll-margin-top: var(--header-h); --tabs-bar-h: calc(var(--h-sm) + var(--s-1) * 2 + var(--s-2) * 3); }
 .side__acts { display: none; }
@@ -1154,7 +1156,7 @@ onMounted(() => { void load(); });
   .tabs-bar::after { content: ""; position: absolute; top: 0; right: 0; width: 36px; height: calc(var(--h-sm) + var(--s-2) * 2 + var(--s-1) * 2); pointer-events: none; background: linear-gradient(to right, transparent, var(--hr-page-bg)); }
 }
 @media (min-width: 1080px) {
-  .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "body side"; }
+  .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: "head side" "checks side" "body side"; }
   .layout__side { position: sticky; top: calc(var(--header-h) + var(--s-4)); align-self: start; display: grid; gap: var(--s-3); }
   .side__length { margin-bottom: 0; }
   .side__acts { display: grid; gap: var(--s-2); }

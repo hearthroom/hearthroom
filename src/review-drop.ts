@@ -94,7 +94,7 @@ export async function restoreSubmission(db: D1Database, input: { submissionId: s
 export type GroupScope = 'author' | 'device';
 
 /**
- * 同一位作者、或同一個已知安裝的待審單（含錨點那張）。同裝置不認識（沒有安裝紀錄）就回 null：
+ * 同一位作者、或同一個已知安裝的待審單（含錨點那張；已在不受理清單的不算，提示列、sheet 標題與按鈕的張數同一個口徑）。同裝置不認識（沒有安裝紀錄）就回 null：
  * 不顯示這組。已核准的共用設備白名單成員排除（他們合法共用電腦，不該被一起圈進來）。
  */
 export async function groupSubmissionIds(db: D1Database, anchorId: string, scope: GroupScope): Promise<string[] | null> {
@@ -102,14 +102,14 @@ export async function groupSubmissionIds(db: D1Database, anchorId: string, scope
     const author = await db.prepare('SELECT member_id FROM hosting_versions WHERE submission_id=?').bind(anchorId).first<{ member_id: string }>();
     if (!author) return null;
     const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
-      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
+      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')} ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
     return rows.results.map((r) => r.id);
   }
   const device = await db.prepare('SELECT device_hash FROM review_submission_devices WHERE submission_id=?').bind(anchorId).first<{ device_hash: string }>();
   if (!device) return null;
   const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
     JOIN hosting_versions v ON v.submission_id=s.id
-    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL
+    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')}
     AND NOT EXISTS(SELECT 1 FROM quota_device_exemptions e WHERE e.member_id=v.member_id AND e.revoked_at IS NULL)
     ORDER BY s.submitted_at, s.rowid`).bind(device.device_hash).all<{ id: string }>();
   return rows.results.map((r) => r.id);

@@ -133,7 +133,7 @@ onMounted(() => {
             </p>
           </div>
           <div class="row__acts">
-            <button class="btn btn--primary row__main" :disabled="!!busy" :aria-busy="busy === item.id" data-restore @click="restore(item)">{{ $t("reviewV2.dropped.restore") }}</button>
+            <button class="btn row__main" :disabled="!!busy" :aria-busy="busy === item.id" data-restore @click="restore(item)">{{ $t("reviewV2.dropped.restore") }}</button>
             <RouterLink v-if="stageAvailable" class="btn row__minor" :to="lp(`/review/${item.id}`)">{{ $t("reviewV2.dropped.view") }}</RouterLink>
           </div>
         </li>

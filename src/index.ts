@@ -1860,8 +1860,11 @@ app.get("/v1/review/queue", async (c) => {
 
 /** 待審（不含不受理）裡疑似批量的安裝群組：每組一張錨點單與張數，不帶雜湊與帳號 */
 async function suspectedBatchGroups(db: D1Database, now: number): Promise<{ scope: "device"; anchorId: string; count: number }[]> {
+  // 張數跟批次 sheet 同一個口徑（groupSubmissionIds）：排除不受理中、重新審核單與共用電腦白名單成員
   const rows = await db.prepare(`SELECT sd.device_hash, MIN(s.id) AS anchor, COUNT(*) AS n FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
+    JOIN hosting_versions v ON v.submission_id=s.id
     WHERE s.status='pending' AND s.reopen_of IS NULL AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)
+    AND NOT EXISTS(SELECT 1 FROM quota_device_exemptions e WHERE e.member_id=v.member_id AND e.revoked_at IS NULL)
     GROUP BY sd.device_hash HAVING COUNT(*)>=2 LIMIT 50`).all<{ device_hash: string; anchor: string; n: number }>();
   const signals = await deviceSignals(db, rows.results.map((r) => r.device_hash), now);
   return rows.results.filter((r) => signals.get(r.device_hash)?.suspected).map((r) => ({ scope: "device" as const, anchorId: r.anchor, count: r.n }));
