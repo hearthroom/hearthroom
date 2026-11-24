@@ -116,7 +116,7 @@ it("shows a skeleton while loading, then a retryable error that does not block t
   await mount();
   expect(el.querySelector("[data-author-activity] .ghost")).toBeTruthy();
   fail(new ApiError(500, "x"));
-  await vi.waitFor(() => expect(el.querySelector("[data-activity-error]")?.textContent).toContain("作者行為暫時讀不到，不影響你的決定。"));
+  await vi.waitFor(() => expect(el.querySelector("[data-activity-error]")?.textContent).toContain("作者行為暫時載入不了，不影響你的決定。"));
   el.querySelector<HTMLButtonElement>("[data-activity-retry]")!.click();
   await vi.waitFor(() => expect(details()).toBeTruthy());
   expect(api.fetchReviewAuthorActivity).toHaveBeenCalledTimes(2);
@@ -136,7 +136,7 @@ it("reads in English with plural forms", async () => {
   api.fetchReviewAuthorActivity.mockResolvedValue(busy());
   await mount();
   await vi.waitFor(() => expect(el.querySelector("[data-activity-anomalies]")).toBeTruthy());
-  expect(el.textContent).toContain("4 unusual activity signs, 1 severe");
+  expect(el.textContent).toContain("4 unusual activity signs, including 1 severe");
   expect(el.textContent).toContain("4 cards in 12 hours, each 1,500+ characters");
   expect(row("day")).toBe("6 cards");
 });

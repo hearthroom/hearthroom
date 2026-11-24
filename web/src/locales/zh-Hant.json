@@ -5727,7 +5727,7 @@
   "reviewV2.activity.count": "{n} 張",
   "reviewV2.activity.deviceValue": "{n} 個（含此帳號）",
   "reviewV2.activity.insufficient": "這位作者的紀錄還不夠，無法判斷；照一般流程審。",
-  "reviewV2.activity.loadFailed": "作者行為暫時讀不到，不影響你的決定。",
+  "reviewV2.activity.loadFailed": "作者行為暫時載入不了，不影響你的決定。",
   "reviewV2.activity.retry": "重試",
   "reviewV2.fast.chip": "快速審",
   "reviewV2.fast.note": "這張卡的作者過去品質穩定。決定規則與一般卡相同，仍要看過內容。",
