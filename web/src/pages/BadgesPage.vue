@@ -77,7 +77,8 @@ const REREAD={delayMs:4000,attempts:2,shownMs:3000};
 const refresh=ref<''|'updating'|'updated'>('');
 /** 儲存展示或領積分之後，背景重讀不能再蓋回畫面（重讀可能在寫入前就讀了） */
 let mutations=0;
-const signature=(c:BadgeCollection)=>c.items.map(b=>`${b.key}:${b.state}:${b.progress?.value??''}:${b.pausedMet?1:0}`).join('|');
+/** 只比畫面上看得到的值：進度照磚上顯示取整（入站天數這類計時進度每次讀都差一點小數） */
+const signature=(c:BadgeCollection)=>c.items.map(b=>`${b.key}:${b.state}:${b.progress?Math.floor(b.progress.value):''}:${b.pausedMet?1:0}`).join('|');
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function followRefresh(n:number){
  refresh.value='updating';const before=data.value?signature(data.value):'',edits=mutations;
@@ -99,7 +100,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 <template>
  <div class="page badges-page">
   <RouterLink class="badges-back" :to="own&&!author?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
-  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/achievements?board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div><p v-if="own&&data" class="badges-refresh"><span v-if="refresh==='updating'" class="badges-refresh__dot" aria-hidden="true" /><span v-if="refresh==='updating'">{{ t('badgeWall.updating') }}</span><span aria-live="polite">{{ refresh==='updated'?t('badgeWall.updated'):'' }}</span></p></header>
+  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/achievements?board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div><p v-if="own&&data" class="badges-refresh"><span class="badges-refresh__item" :class="{'is-on':refresh==='updating'}" :aria-hidden="refresh!=='updating'"><span class="badges-refresh__dot" aria-hidden="true" />{{ t('badgeWall.updating') }}</span><span class="badges-refresh__item is-on" aria-live="polite">{{ refresh==='updated'?t('badgeWall.updated'):'' }}</span><span class="badges-refresh__item" aria-hidden="true">{{ t('badgeWall.updated') }}</span></p></header>
   <div v-if="loading&&!data" class="badge-loading" aria-live="polite"><span class="sr-only">{{ t('state.loading') }}</span><div v-for="i in 3" :key="i" class="ghost" /></div>
   <div v-if="error" class="notice notice--error" role="alert"><p>{{ error }}</p><button class="btn" :disabled="loading||busy" @click="load()">{{ t(own?'badgeWall.reload':'badgeWall.retry') }}</button></div>
   <template v-if="data">
@@ -143,6 +144,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 .badge-next{border-top:1px solid var(--line);padding-top:var(--s-5)}.badge-next .btn{gap:var(--s-2)}.badge-loading{display:grid;gap:var(--s-4)}.badge-loading .ghost{height:84px;border-radius:var(--r-lg)}
 .badge-empty{padding:var(--s-5);display:grid;gap:var(--s-3);justify-items:start}.badge-empty p{margin:0}
 .badge-section__hint:lang(ko),.badge-empty p:lang(ko){word-break:keep-all}
-.badges-refresh{margin:0 0 0 auto;align-self:center;display:flex;align-items:center;gap:var(--s-2);min-height:1.5rem;font-size:.875rem;color:var(--text-2);white-space:nowrap}.badges-refresh__dot{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:var(--r-pill);animation:badges-spin var(--dur-slow) linear infinite}@keyframes badges-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.badges-refresh__dot{animation:none}}
+/* 「更新中」「已更新」與一份隱形的尺寸字疊在同一格：寬高一直保留，出現、消失、折行都不推動版面 */
+.badges-refresh{margin:0 0 0 auto;align-self:center;display:grid;min-height:1.5rem;font-size:.875rem;color:var(--text-2);white-space:nowrap}.badges-refresh__item{grid-area:1/1;display:flex;align-items:center;justify-content:flex-end;gap:var(--s-2);visibility:hidden}.badges-refresh__item.is-on{visibility:visible}.badges-refresh__dot{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:var(--r-pill);animation:badges-spin var(--dur-slow) linear infinite}@keyframes badges-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.badges-refresh__dot{animation:none}}
 .badge-series{display:grid;gap:var(--s-1);padding:var(--s-3) var(--s-4);border-radius:var(--r-md);background:var(--surface-2)}.badge-series__title{margin:0;font-size:.9375rem;font-weight:600}.badge-series__note{margin:0;font-size:.8125rem;line-height:1.6;color:var(--text-2)}.badge-series__note:lang(ko){word-break:keep-all}
 </style>
