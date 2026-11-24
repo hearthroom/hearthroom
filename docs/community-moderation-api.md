@@ -246,13 +246,14 @@ The sealed version the author submitted, without claiming it. Long text is cut a
 ```ts
 { submission: { id, cardId, kind, reopen, submittedAt, rating, attempt, previous: { status } | null, phase: "shadow"|"backfill" },
   author: { tier, batchSuspected,            // tier and batchSuspected only while pending (null once decided)
-            submissions7d, registrations7d, quotaFull, priorApproved, accountAgeDays, deviceAccounts } | null,  // counted up to submission time
+            submissions7d, submissions24h, pendingAtSubmit, registrations7d, weeklyLimit, quotaFull,
+            medianGapHours, minutesSincePrevious, recentChars, priorApproved, accountAgeDays, deviceAccounts } | null,  // counted up to submission time
   card: { name, summary, tags, originalWork: string|null, userName, setting, speech, instructions, examples,
           openings: { mode: "page"|"greeting", page, welcome, alternates, prologue /* opening choices the player taps */, welcomeRendered /* plain text after display rules, when they match the opening; only on this route, only rules that look safe to run (no nested quantifiers, backreferences or lookarounds; first 20 rules, first 2,000 characters) */ },
           lorebook: { entryCount, constantCount, recallCount, index: { name, chars, constant, keywords, mentionedInCard }[], entries: { name, content }[] },
           rules: { count, enabled, list: { name, findChars, replaceChars }[], hasCardCss } },
   update: null | { state: "no_base"|"unreadable"|"missing" } | { state: "ready", baseKind, summary, fields: { key, before, after }[], lorebook: { added, removed, modified } },
-  stats: { settingChars, openingChars, openingPageChars, openingOptions, openingRuleHits, lorebookConstantChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
+  stats: { settingChars, openingChars, openingPageChars, openingPageHtmlChars, openingPageElements, openingPageInteractive, openingPageScript, openingHtmlTags, openingOptions, openingRuleHits, lorebookConstantChars, alternateCount, lorebookEntries, lorebookChars, ellipsisPer1k, dashPer1k, openingQuestion, openingChoices },
   allowed: { verdicts, reasons, flags, handoffCauses } }
 ```
 
@@ -270,6 +271,10 @@ A reviewer first records a blind judgment, then sees the AI verdict, then finali
 - `POST /v1/review/:id/stamp` with `finalSource`: `blind` (stamp the blind judgment as is), `ai` (stamp the AI verdict and its reason codes; 409 `ai_choice_unavailable` when the AI has not decided or has no reason code; send the shown suggestion's `aiSuggestionId` and `aiSuggestionAt` to get 409 `ai_changed` if the AI re-judged in between), `modified` (stamp the decision in this body), or `human_no_ai` (did not wait; recorded as `blind` if the AI verdict arrived meanwhile). Optional `aiNoteTypes` (any of `card_content`, `author_relation`, `author_history`, `criteria_issue`, `other`) and `aiNote` (≤500 characters) go into the same review event; they are for review tuning only and never reach the author. A reviewer who recorded a blind judgment must send `finalSource` (409 `finalize_with_source`); pages that never call `/blind` stamp as before. The stamp response returns the recorded `finalSource`, and the detail route's `submission.stamps[]` row with `mine: true` carries it too.
 - The comparison report uses the stamping reviewer's blind judgment as the human side when one exists, and adds `finalSource` counts and `corrected` (finals that took the AI verdict).
 - `GET /v1/review-ai/notes?type=&from=&to=&limit=100` (managers) lists the notes and reason types written at finalization and arbitration, newest first, without reviewer identities.
+
+### Author activity (human reviewers)
+
+`GET /v1/review/:id/author-activity` (same gate as the review detail) returns the author's recent behaviour as numbers only: `weekly: { used, limit, deviceShared }` (this UTC week's free registrations and the actual limit), `submissions7d`, `submissions24h`, `pendingNow`, `avgGapHours`, `minutesSincePrevious` (this submission vs the author's previous one), `recent: { at, chars, status, kind, current }[]` (last 7 days, newest first), `deviceAccounts`, `priorApproved`, `accountAgeDays`, and `anomalies: { code, value }[]` with codes `burst_long` (3+ submissions of 1,500+ effective characters within 12 hours), `quota_full`, `quick_gap` (under 30 minutes after the previous one and 1,000+ characters), `device` (3+ accounts on the registering device) and `device_heavy` (5+). Anomalies are hints only; nothing is decided automatically.
 
 ### Current criteria version
 

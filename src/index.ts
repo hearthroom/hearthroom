@@ -133,7 +133,7 @@ import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { reviewAiRoutes } from "./review-ai-routes";
 import { aiStateOf, blindOf, finalize as finalizeTwoStage, recordBlind } from "./review-two-stage";
-import { revealEventStatement } from "./review-ai";
+import { authorActivity, revealEventStatement } from "./review-ai";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
@@ -2367,6 +2367,17 @@ app.get("/v1/review/:id/detail", async (c) => {
  * 跟審核頁同一道門；作者用審核單找，伺服器端解析，網址與回應都沒有成員 ID。
  * 未驗年齡的審核員看不到成人卡的名稱與封面，卡號與狀態照列。
  */
+/**
+ * 作者行為（只給審核員，owner 2026-11-24）：本週送審額度、近 24 小時／7 天送審數、送審間隔、近期每張字數、
+ * 同裝置帳號數，以及超過門檻的異常提示。跟審核頁同一道門；只回數字，不回帳號或裝置識別碼。
+ */
+app.get("/v1/review/:id/author-activity", async (c) => {
+  const { s } = await claimedSubmission(c);
+  const activity = await authorActivity(c.env.DB, s.id, Date.now());
+  if (!activity) throw new HttpError(404, "author_unknown");
+  return c.json(activity, 200, { "Cache-Control": "private, no-store" });
+});
+
 app.get("/v1/review/:id/author-cards", async (c) => {
   const { member, s } = await claimedSubmission(c);
   const adultAllowed = (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt !== null;

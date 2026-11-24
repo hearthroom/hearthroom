@@ -1,5 +1,5 @@
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
-import { weeklyLimitAt } from "./quota";
+import { weeklyLimitAt, weeklyUsageForMember } from "./quota";
 import { submissionHistory, type SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -156,6 +156,14 @@ export function aiCardInput(settings: Record<string, unknown>, meta: { tags: str
       dashPer1k: per1k((scanned.match(/—+|──+/g) ?? []).length, scanned.length),
       openingQuestion: /[?？]|\[choices\]|(^|\n)\s*(?:[1-9１-９][.、．)]|[A-DＡ-Ｄ][.、．)])/.test(tail),
       openingPageChars: page.length,
+      // 開場網頁的結構：原始 HTML 大小、元素數、可點的元素（按鈕、連結、分頁）、有沒有腳本。
+      // 頁面內容靠腳本畫出來時，上面的純文字可能只剩「載入中」，這時看結構判斷用不用心
+      openingPageHtmlChars: text(asset.openingPage).length,
+      openingPageElements: (text(asset.openingPage).match(/<[a-zA-Z][^>]*>/g) ?? []).length,
+      openingPageInteractive: (text(asset.openingPage).match(/<(button|a|select|input)\b|onclick=|data-tab|role="tab"/gi) ?? []).length,
+      openingPageScript: /<script\b/i.test(text(asset.openingPage)),
+      // 開場白裡直接寫的 HTML（會被渲染成版面）的標籤數
+      openingHtmlTags: (welcome.match(/<[a-zA-Z][^>]*>/g) ?? []).length,
       openingOptions: prologue.length,
       // 開場白（含備選）被顯示規則命中的次數：多代表開場靠規則換成版面呈現
       openingRuleHits: welcomeHits === null ? null : welcomeHits + list(greetings.alternates).slice(0, LIMITS.alternates).reduce((n, a) => n + ruleHits(runnable, a), 0),
@@ -216,8 +224,8 @@ async function authorSignals(db: D1Database, memberId: string, sourceRoleId: str
   // 先取作者在各供應商的公開 ID，再用 (provider, author_num_id, registered_at) 索引數登記；免費額度不算禮包登記
   const ids = await db.prepare("SELECT provider, external_id FROM member_identities WHERE member_id=?").bind(memberId).all<{ provider: string; external_id: string }>();
   const byProvider = JSON.stringify(ids.results.map((r) => [r.provider, Number(r.external_id)]));
-  const row = await db.prepare(`SELECT
-      (SELECT COUNT(*) FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id WHERE v2.member_id=?1 AND s2.submitted_at>?3-${WEEK} AND s2.submitted_at<=?3) AS submissions7d,
+  const [row, recent] = await Promise.all([
+    db.prepare(`SELECT
       (SELECT COUNT(*) FROM json_each(?4) p JOIN card_registrations r ON r.provider=json_extract(p.value,'$[0]') AND r.author_num_id=json_extract(p.value,'$[1]')
         WHERE r.registered_at>?3-${WEEK} AND r.registered_at<=?3 AND r.pack_id IS NULL) AS registrations7d,
       (SELECT COUNT(*) FROM review_submissions s3 JOIN hosting_versions v3 ON v3.submission_id=s3.id WHERE v3.member_id=?1 AND s3.status='approved' AND s3.decided_at<?3) AS priorApproved,
@@ -225,15 +233,89 @@ async function authorSignals(db: D1Database, memberId: string, sourceRoleId: str
       (SELECT COUNT(DISTINCT d.member_id) FROM reward_devices d WHERE d.first_seen<=?3 AND d.device_hash=(
         SELECT r2.device_hash FROM json_each(?4) p2 JOIN card_registrations r2 ON r2.provider=json_extract(p2.value,'$[0]')
         WHERE r2.source_role_id=?2 AND r2.device_hash IS NOT NULL AND r2.registered_at<=?3 ORDER BY r2.registered_at DESC LIMIT 1)) AS deviceAccounts`)
-    .bind(memberId, sourceRoleId, at, byProvider).first<{ submissions7d: number; registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>();
+      .bind(memberId, sourceRoleId, at, byProvider).first<{ registrations7d: number; priorApproved: number; createdAt: number | null; deviceAccounts: number }>(),
+    // 送審前 7 天這位作者的每一次送審（含這次）：節奏與字數。看得出「一晚送六張長卡」
+    db.prepare(`SELECT s2.submitted_at AS at, s2.review_length_total AS chars,
+        (s2.status='pending' OR s2.decided_at>?2) AND s2.status<>'superseded' AS waiting
+      FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
+      WHERE v2.member_id=?1 AND s2.submitted_at>?2-${WEEK} AND s2.submitted_at<=?2 ORDER BY s2.submitted_at DESC LIMIT 30`)
+      .bind(memberId, at).all<{ at: number; chars: number | null; waiting: number }>(),
+  ]);
   const limit = await weeklyLimitAt(db, at);
+  const times = recent.results.map((r) => r.at);
+  const gaps = times.slice(0, -1).map((t, i) => (t - times[i + 1]!) / 3_600_000).sort((a, b) => a - b);
   return {
-    submissions7d: row?.submissions7d ?? 0,
+    submissions7d: recent.results.length,
+    submissions24h: recent.results.filter((r) => r.at > at - 86_400_000).length,
+    // 送審當下這位作者同時還有幾張在等審（含這張）
+    pendingAtSubmit: recent.results.filter((r) => r.waiting).length,
     registrations7d: row?.registrations7d ?? 0,
+    weeklyLimit: limit,
     quotaFull: (row?.registrations7d ?? 0) >= limit,
+    // 近 7 天相鄰兩次送審的間隔中位數（小時）、這張距上一張（分鐘）
+    medianGapHours: gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]! * 10) / 10 : null,
+    minutesSincePrevious: times.length > 1 ? Math.round((times[0]! - times[1]!) / 60_000) : null,
+    // 近幾次送審的有效字數（新的在前）
+    recentChars: recent.results.slice(0, 8).map((r) => r.chars),
     priorApproved: row?.priorApproved ?? 0,
     accountAgeDays: row?.createdAt ? Math.max(0, Math.floor((at - row.createdAt) / 86_400_000)) : null,
     deviceAccounts: row?.deviceAccounts || null,
+  };
+}
+
+/**
+ * 審核頁的「作者行為」（只給審核員，owner 2026-11-24）：本週用了多少送審額度、近 7 天與 24 小時送了幾次、
+ * 平均多久送一張、這張距上一張多久、近期每張的字數。看得出「一個晚上送六張長卡」這種批量產卡。
+ * 只回數字與狀態，不回帳號或裝置識別碼；作者標記沿用審核頁的作者側寫。
+ */
+/** 作者行為異常的門檻（PM 2026-11-24 定，之後可調）：只提示，不自動判定 */
+export const ACTIVITY_THRESHOLDS = {
+  burst: { windowMs: 12 * 3_600_000, count: 3, chars: 1500 },
+  quickGap: { minutes: 30, chars: 1000 },
+  device: { warn: 3, heavy: 5 },
+} as const;
+
+export async function authorActivity(db: D1Database, submissionId: string, now: number) {
+  const v = await db.prepare("SELECT member_id, source_role_id FROM hosting_versions WHERE submission_id=?").bind(submissionId).first<{ member_id: string; source_role_id: string }>();
+  if (!v) return null;
+  const [usage, limit, list, signals] = await Promise.all([
+    weeklyUsageForMember(db, v.member_id, now),
+    weeklyLimitAt(db, now),
+    db.prepare(`SELECT s2.id, s2.submitted_at AS at, s2.review_length_total AS chars, s2.status, s2.kind
+      FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
+      WHERE v2.member_id=? AND s2.submitted_at>? ORDER BY s2.submitted_at DESC LIMIT 20`).bind(v.member_id, now - WEEK)
+      .all<{ id: string; at: number; chars: number | null; status: string; kind: string }>(),
+    authorSignals(db, v.member_id, v.source_role_id, now),
+  ]);
+  const self = await db.prepare("SELECT submitted_at FROM review_submissions WHERE id=?").bind(submissionId).first<{ submitted_at: number }>();
+  const before = list.results.filter((r) => r.at < (self?.submitted_at ?? now));
+  const times = list.results.map((r) => r.at);
+  const gaps = times.slice(0, -1).map((t, i) => t - times[i + 1]!);
+  const T = ACTIVITY_THRESHOLDS;
+  // 一晚多張長卡：任一個 12 小時窗口裡，字數夠長的送審有幾張（取最多的那個窗口）
+  const long = list.results.filter((r) => (r.chars ?? 0) >= T.burst.chars).map((r) => r.at);
+  const burst = long.reduce((max, t) => Math.max(max, long.filter((u) => u <= t && u > t - T.burst.windowMs).length), 0);
+  const minutesSincePrevious = self && before.length ? Math.round((self.submitted_at - before[0]!.at) / 60_000) : null;
+  const thisChars = list.results.find((r) => r.id === submissionId)?.chars ?? null;
+  const used = usage.effectiveFreeWorks.size;
+  const anomalies = [
+    ...(burst >= T.burst.count ? [{ code: "burst_long", value: burst }] : []),
+    ...(limit > 0 && used >= limit ? [{ code: "quota_full", value: used }] : []),
+    ...(minutesSincePrevious !== null && minutesSincePrevious < T.quickGap.minutes && (thisChars ?? 0) >= T.quickGap.chars ? [{ code: "quick_gap", value: minutesSincePrevious }] : []),
+    ...((signals.deviceAccounts ?? 0) >= T.device.warn ? [{ code: (signals.deviceAccounts ?? 0) >= T.device.heavy ? "device_heavy" : "device", value: signals.deviceAccounts }] : []),
+  ];
+  return {
+    anomalies,
+    weekly: { used: usage.effectiveFreeWorks.size, limit, deviceShared: usage.deviceShared },
+    submissions7d: list.results.length,
+    submissions24h: list.results.filter((r) => r.at > now - 86_400_000).length,
+    pendingNow: list.results.filter((r) => r.status === "pending").length,
+    avgGapHours: gaps.length ? Math.round((gaps.reduce((a, b) => a + b, 0) / gaps.length / 3_600_000) * 10) / 10 : null,
+    minutesSincePrevious,
+    recent: list.results.map((r) => ({ at: r.at, chars: r.chars, status: r.status, kind: r.kind, current: r.id === submissionId })),
+    deviceAccounts: signals.deviceAccounts,
+    priorApproved: signals.priorApproved,
+    accountAgeDays: signals.accountAgeDays,
   };
 }
 

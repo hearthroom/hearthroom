@@ -457,7 +457,7 @@ describe('判準 v4 的讀卡輸入', () => {
     expect(body.author).toMatchObject({ tier: null, batchSuspected: null, submissions7d: 1, priorApproved: 0 });
     expect(typeof body.author.registrations7d).toBe('number');
     // 只有數字、布林或 null，沒有任何識別碼
-    for (const v of Object.values(body.author)) expect(v === null || typeof v === 'number' || typeof v === 'boolean').toBe(true);
+    for (const v of Object.values(body.author)) expect(v === null || typeof v === 'number' || typeof v === 'boolean' || (Array.isArray(v) && v.every((x) => x === null || typeof x === 'number'))).toBe(true);
     // 額度：送審前 7 天登記滿每週上限（禮包登記不算）就算用滿；送審之後的登記不算
     const sub = (await env.DB.prepare('SELECT submitted_at FROM review_submissions WHERE id=?').bind(id).first<{ submitted_at: number }>())!.submitted_at;
     for (const [i, at] of [sub - 1000, sub - 2000].entries()) await env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES ('harbor', ?, ?, ?)").bind(AUTHOR, `extra-${i}`, at).run();
@@ -646,5 +646,42 @@ describe('目前判準版本', () => {
     expect(def.total).toBe(1);
     expect((await json(await get('/v1/review-ai/disagreements?state=all&criteria=all', 'mgr'))).total).toBe(2);
     expect((await json(await get('/v1/review-ai/disagreements?state=all&criteria=v3', 'mgr'))).total).toBe(1);
+  });
+});
+
+describe('作者行為（審核頁）與 v7 讀卡訊號', () => {
+  it('一晚多張長卡、送審間隔極短都會提示；只回數字', async () => {
+    const a = await submitCard('draft-a');
+    const b = await submitCard('draft-b');
+    const c = await submitCard('draft-c');
+    const now = Date.now();
+    for (const [id, at] of [[a.id, now - 60 * 60_000], [b.id, now - 30 * 60_000], [c.id, now - 10 * 60_000]] as const) {
+      await env.DB.prepare('UPDATE review_submissions SET submitted_at=?, review_length_total=2000 WHERE id=?').bind(at, id).run();
+    }
+    await claim(env.DB, c.id, humanId, Date.now());
+    const res = await get(`/v1/review/${c.id}/author-activity`, 'human');
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body).toMatchObject({ submissions24h: 3, submissions7d: 3, minutesSincePrevious: 20, pendingNow: 3 });
+    expect(body.anomalies.map((x: any) => x.code)).toEqual(expect.arrayContaining(['burst_long', 'quick_gap']));
+    expect(body.recent.filter((r: any) => r.current)).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toMatch(/member-|draft-|sealed-/);
+    // 跟審核頁同一道門：沒領取的審核員打不開
+    expect((await get(`/v1/review/${a.id}/author-activity`, 'human')).status).toBe(409);
+  });
+
+  it('審卡員讀卡多了 24 小時送審數、送審當下待審數、間隔與近期字數；開場網頁的結構訊號', async () => {
+    const a = await submitCard('draft-a');
+    const b = await submitCard('draft-b');
+    await env.DB.prepare('UPDATE review_submissions SET review_length_total=1800 WHERE id IN (?, ?)').bind(a.id, b.id).run();
+    const body = await json(await get(`/v1/review-ai/submissions/${b.id}`, 'key'));
+    expect(body.author).toMatchObject({ submissions24h: 2, pendingAtSubmit: 2 });
+    expect(body.author.recentChars).toEqual([1800, 1800]);
+    const input = aiCardInput({
+      greetings: { welcome: '<div class="hc"><b>夜</b></div>你醒了。' },
+      authorAsset: { openingMode: 'page', openingPage: '<div><button data-tab="1">角色</button><button data-tab="2">世界</button><div id="app">載入中</div><script>render()</script></div>' },
+    }, { tags: [], fandom: '' });
+    expect(input.stats).toMatchObject({ openingPageScript: true, openingPageInteractive: 4, openingHtmlTags: 2 });
+    expect(input.stats.openingPageElements).toBeGreaterThanOrEqual(5);
   });
 });
