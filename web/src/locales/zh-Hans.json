@@ -4683,7 +4683,7 @@
   "moderation.ratingCorrection.doneTitle": "分级已更正",
   "moderation.ratingCorrection.doneFloor": "分级下限已锁在{to}",
   "moderation.ratingCorrection.doneNotice": "作者没有收到通知",
-  "moderation.ratingCorrection.again": "再做一个操作",
+  "moderation.ratingCorrection.again": "再做其他操作",
   "moderation.ratingCorrection.failed": "分级没有改动，理由还在，可以再试一次。",
   "moderation.ratingCorrection.retry": "重试",
   "moderation.ratingCorrection.alreadyRated": "这张卡已经是{to}，不需要更正。",
