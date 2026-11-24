@@ -42,11 +42,13 @@ export async function fenceManagedWork(env:Env,provider:ProviderId,source:string
    ...(options.restriction?{restriction:options.restriction}:{}),...(old?.permitId?{permitId:old.permitId}:pending?{permitId:pending.operation_id}:{})};
  }
  const operation=command.operationId;
+ const authorFence=provider==='harbor'&&!options.rootOperation&&(action==='private'||action==='cancel');
  const durable=await db.batch([
   await workPolicyIntentStatement(env,provider,source,command,root,options.moderationRevision),
   db.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=?
-   WHERE work_id=? AND epoch=? AND sync_operation_id IS ? AND (? IS NULL OR moderation_revision=?)`)
-   .bind(operation,p.work_id,p.epoch,p.sync_operation_id,options.moderationRevision??null,options.moderationRevision??null),
+   WHERE work_id=? AND epoch=? AND sync_operation_id IS ? AND (? IS NULL OR moderation_revision=?)
+   AND (?=0 OR NOT EXISTS(SELECT 1 FROM author_card_deletions WHERE source_role_id=? AND state<>'rejected'))`)
+   .bind(operation,p.work_id,p.epoch,p.sync_operation_id,options.moderationRevision??null,options.moderationRevision??null,authorFence?1:0,source),
  ]);
  if(!durable[1].meta.changes){
   if(durable[0].meta.changes)await db.prepare("UPDATE visibility_operations SET state='conflict' WHERE work_id=? AND operation_id=? AND state='intent'").bind(p.work_id,operation).run();
@@ -97,13 +99,14 @@ async function retireUnsubmittedPreparations(env:Env,provider:ProviderId,source:
     const bind=await db.prepare('SELECT command,state FROM visibility_operations WHERE work_id=? AND operation_id=?')
      .bind(version.work_id,managed.sync_operation_id).first<{command:string;state:string}>();
     const command=bind?JSON.parse(bind.command) as WorkPolicyCommand:null;
-    if(!command||command.action!=='bind')throw new HttpError(503,'visibility_sync_pending');
-    if(bind?.state==='conflict'){
+    if(!bind||bind.state==='conflict'){
      await refreshWorkAccess(env,1,[],[version.work_id]);
      const retired=await db.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(version.version_id).first<{state:string}>();
      if(retired?.state==='superseded')continue;
+     if(!bind)throw new HttpError(503,'visibility_sync_pending');
      throw new HttpError(409,'visibility_operation_conflict');
     }
+    if(!command||command.action!=='bind')throw new HttpError(503,'visibility_sync_pending');
     const receipt=await runWorkPolicyOperation(env,provider,source,command);
     await projectWorkReceipt(env,provider,receipt,undefined,'bind');
     managed=await managedWork(db,provider,source);

@@ -3,18 +3,33 @@ import {type Env,HttpError} from './types';
 import {policyOperationId,workPolicyGateway,type ManagedWork} from './work-policy';
 import {readCurrentWorkPolicies,WORK_READ_BUDGET} from './work-read';
 
-type RefreshRow=ManagedWork&{card_id:number|null;card_approved_role:string|null;card_version:string|null;refused_submission_version:string|null};
+type RefreshRow=ManagedWork&{card_id:number|null;card_approved_role:string|null;card_version:string|null;retirable_submission_version:string|null};
 
-const refusedSubmission=`SELECT v.version_id FROM hosting_versions v
- JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
+const orphanBindWaitMs=15*60*1000;
+// Keep legacy repair off until requests from the pre-atomic enrollment
+// version have drained. Prepared-at time does not establish fence age.
+const retirableSubmission=(env:Env)=>`SELECT v.version_id FROM hosting_versions v
+ LEFT JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
  WHERE v.work_id=p.work_id AND v.provider=p.provider AND v.source_role_id=p.source_role_id
  AND v.submission_id IS NULL AND v.hosted_revision_id IS NULL
- AND o.state='conflict' AND o.receipt IS NULL AND o.root_operation_id=o.operation_id
- AND json_extract(o.command,'$.action')='bind' AND json_extract(o.command,'$.expectedEpoch')=0
- AND json_extract(o.command,'$.workId')=p.work_id AND json_extract(o.command,'$.operationId')=p.sync_operation_id
  AND json_extract(v.visibility_consent,'$.providerEpoch')=0
- AND json_extract(v.visibility_consent,'$.providerRevision')=json_extract(o.command,'$.expectedOwnerRevision')
- AND json_extract(v.visibility_consent,'$.initialAccess')=json_extract(o.command,'$.access')
+ AND (
+  (o.state='conflict' AND o.receipt IS NULL AND o.root_operation_id=o.operation_id
+   AND json_extract(o.command,'$.action')='bind' AND json_extract(o.command,'$.expectedEpoch')=0
+   AND json_extract(o.command,'$.workId')=p.work_id AND json_extract(o.command,'$.operationId')=p.sync_operation_id
+   AND json_extract(v.visibility_consent,'$.providerRevision')=json_extract(o.command,'$.expectedOwnerRevision')
+   AND json_extract(v.visibility_consent,'$.initialAccess')=json_extract(o.command,'$.access'))
+  OR (${env.WORK_LEGACY_BIND_RECOVERY_ENABLED==='true'?1:0}=1 AND o.operation_id IS NULL AND v.created_at<=unixepoch('subsec')*1000-${orphanBindWaitMs}
+   AND p.approved_role_id IS NULL AND json_extract(v.visibility_consent,'$.initialAccess')=p.access
+   AND NOT EXISTS(SELECT 1 FROM visibility_operations history WHERE history.work_id=p.work_id)
+   AND NOT EXISTS(SELECT 1 FROM author_visibility_operations history WHERE history.work_id=p.work_id)
+   AND NOT EXISTS(SELECT 1 FROM hosting_versions history WHERE history.work_id=p.work_id AND
+    (history.submission_id IS NOT NULL OR history.hosted_revision_id IS NOT NULL
+     OR EXISTS(SELECT 1 FROM work_publication_permits g WHERE g.version_id=history.version_id)))
+   AND NOT EXISTS(SELECT 1 FROM cards c WHERE c.provider=p.provider AND c.source_role_id=p.source_role_id AND
+    (c.status='approved' OR c.approved_version_id IS NOT NULL OR c.approved_hosted_role_id IS NOT NULL
+     OR EXISTS(SELECT 1 FROM review_submissions s WHERE s.card_id=c.id))))
+ )
  AND NOT EXISTS(SELECT 1 FROM work_publication_permits g WHERE g.version_id=v.version_id)
  AND NOT EXISTS(SELECT 1 FROM author_visibility_operations a WHERE a.work_id=p.work_id
   AND (a.provider_operation_id=p.sync_operation_id OR a.state='pending'))
@@ -22,12 +37,12 @@ const refusedSubmission=`SELECT v.version_id FROM hosting_versions v
 
 const unsubmittedPreparation="v.state IN ('preparing','cancelling')";
 
-async function retireRefusedSubmission(env:Env,p:RefreshRow,version:string):Promise<void>{
+async function retireSubmissionBind(env:Env,p:RefreshRow,version:string):Promise<void>{
  if(await policyOperationId('submission-enroll:'+version)!==p.sync_operation_id)throw new HttpError(409,'visibility_operation_conflict');
  const guard=(state:string)=>`EXISTS(SELECT 1 FROM managed_work_access p LEFT JOIN cards c ON c.provider=p.provider AND c.source_role_id=p.source_role_id
   WHERE p.work_id=? AND p.epoch=0 AND p.sync_state='changing' AND p.sync_operation_id=?
   AND p.moderation_revision=? AND p.confirmed_moderation_revision=? AND c.id IS ? AND c.approved_hosted_role_id IS ?
-  AND EXISTS(${refusedSubmission} AND v.version_id=? AND ${state}))`;
+  AND EXISTS(${retirableSubmission(env)} AND v.version_id=? AND ${state}))`;
  const args=[p.work_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,p.card_id,p.card_approved_role,version];
  // Both statements recheck the same fence in one batch. Superseding the old
  // preparation prevents a late response from reviving it or issuing a permit.
@@ -40,11 +55,11 @@ async function retireRefusedSubmission(env:Env,p:RefreshRow,version:string):Prom
 }
 // Refresh current facts, never replay a command or infer authority from a receipt.
 // An established policy fence clears only after PG advanced past its CAS.
-// A definitively refused first bind has no established policy to project.
+// A refused or unsent first bind has no established policy to project.
 export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:string[]=[],onlyWorkIds?:string[]):Promise<{complete:number;pending:number}>{
  if(limit<1)return {complete:0,pending:0};
  const rows=await env.DB.prepare(`SELECT p.*,c.id AS card_id,c.approved_hosted_role_id AS card_approved_role,c.approved_version_id AS card_version,
- CASE WHEN p.epoch=0 THEN (${refusedSubmission} AND ${unsubmittedPreparation}) END AS refused_submission_version
+ CASE WHEN p.epoch=0 THEN (${retirableSubmission(env)} AND ${unsubmittedPreparation}) END AS retirable_submission_version
  FROM managed_work_access p LEFT JOIN cards c ON c.provider=p.provider AND c.source_role_id=p.source_role_id
  WHERE p.provider='harbor' AND p.epoch>=0 AND p.moderation_revision=p.confirmed_moderation_revision
  AND p.work_id NOT IN(SELECT value FROM json_each(?))
@@ -52,7 +67,7 @@ export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:stri
  AND ((c.id IS NOT NULL AND (p.sync_state='complete' OR EXISTS(SELECT 1 FROM author_visibility_operations a
  WHERE a.work_id=p.work_id AND a.provider_operation_id=p.sync_operation_id AND a.state='conflict'
  AND json_extract(a.command,'$.expectedEpoch')<p.epoch+1)))
- OR (p.epoch=0 AND EXISTS(${refusedSubmission} AND ${unsubmittedPreparation})))
+ OR (p.epoch=0 AND EXISTS(${retirableSubmission(env)} AND ${unsubmittedPreparation})))
  ORDER BY p.reconcile_at,p.work_id LIMIT ?`).bind(JSON.stringify(alreadyChecked),onlyWorkIds?JSON.stringify(onlyWorkIds):null,onlyWorkIds?JSON.stringify(onlyWorkIds):null,Math.min(onlyWorkIds?WORK_READ_BUDGET:10,limit)).all<RefreshRow>();
  if(!rows.results.length)return {complete:0,pending:0};
  const now=Date.now();
@@ -69,8 +84,8 @@ export async function refreshWorkAccess(env:Env,limit:number,alreadyChecked:stri
     // This GET must explicitly establish no original receipt. A timeout, stale
     // receipt or a newly established PG policy can never remove this fence.
     if(await workPolicyGateway.operation(env,'harbor',p.source_role_id,p.work_id,p.sync_operation_id))throw new HttpError(503,'visibility_sync_pending');
-    if(p.refused_submission_version){
-     await retireRefusedSubmission(env,p,p.refused_submission_version);
+    if(p.retirable_submission_version){
+     await retireSubmissionBind(env,p,p.retirable_submission_version);
      complete++;await bumpOp(env.DB,'work_access','reconcile','success');continue;
     }
     const removed=await env.DB.prepare(`DELETE FROM managed_work_access

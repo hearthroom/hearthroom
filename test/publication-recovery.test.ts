@@ -51,6 +51,75 @@ async function refusedSubmissionBind(hasApprovedCard=true){
  return {...x,bind,approvedRole,readReceipt,change,environment:{...env,HOSTING_SERVICE_KEY:'fixture-issuer'}};
 }
 
+it.each(['intent write failure','test account'])('does not leave an enrollment fence after %s',async mode=>{
+ const x=await orphan();
+ await env.DB.prepare('DELETE FROM managed_work_access WHERE work_id=?').bind(x.work).run();
+ if(mode==='intent write failure'){
+  await env.DB.prepare("CREATE TRIGGER fixture_bind_intent_failure BEFORE INSERT ON visibility_operations BEGIN SELECT RAISE(ABORT,'fixture_bind_intent_failure'); END").run();
+ }else{
+  await env.DB.prepare("UPDATE members SET account_class='test' WHERE id=?").bind(x.memberId).run();
+ }
+ const change=vi.spyOn(workPolicyGateway,'change');
+ try{
+  const enroll=enrollWorkAccess(env,{memberId:x.memberId,roleId:x.draft.roleId,operationId:crypto.randomUUID(),access:'unlisted',token:'fixture'});
+  if(mode==='test account')await expect(enroll).rejects.toMatchObject({status:403});
+  else await expect(enroll).rejects.toThrow('fixture_bind_intent_failure');
+  expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toBeNull();
+  expect(await env.DB.prepare('SELECT state FROM visibility_operations WHERE work_id=?').bind(x.work).first()).toBeNull();
+  expect(change).not.toHaveBeenCalled();
+ }finally{
+  if(mode==='intent write failure')await env.DB.prepare('DROP TRIGGER fixture_bind_intent_failure').run();
+ }
+});
+
+async function missingSubmissionBind(){
+ const x=await refusedSubmissionBind(false);
+ await upsertCard(env.DB,x.draft,Date.now(),{status:'unshared'});
+ await env.DB.prepare('DELETE FROM visibility_operations WHERE work_id=?').bind(x.work).run();
+ return {...x,environment:{...x.environment,WORK_LEGACY_BIND_RECOVERY_ENABLED:'true'}};
+}
+
+it('keeps legacy enrollment retirement off during rolling deployment',async()=>{
+ const x=await missingSubmissionBind();
+ const disabled={...x.environment,WORK_LEGACY_BIND_RECOVERY_ENABLED:undefined};
+ expect(await reconcileWorkAccess(disabled,1)).toEqual({complete:0,pending:1});
+ await expect(beginHostedEdit(env.DB,x.memberId,x.draft.roleId,Date.now(),'harbor',disabled))
+  .rejects.toMatchObject({status:503,message:'visibility_sync_pending'});
+ expect(x.readReceipt).not.toHaveBeenCalled();
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toEqual({epoch:0});
+});
+
+it.each(['scheduled reconciliation','author edit'])('retires the orphaned enrollment through %s without sending an operation',async entry=>{
+ const x=await missingSubmissionBind();
+ if(entry==='author edit')await beginHostedEdit(env.DB,x.memberId,x.draft.roleId,Date.now(),'harbor',x.environment);
+ else expect(await reconcileWorkAccess(x.environment,1)).toEqual({complete:1,pending:0});
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'superseded'});
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toBeNull();
+ expect(await env.DB.prepare('SELECT state FROM visibility_operations WHERE work_id=?').bind(x.work).first()).toBeNull();
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_publication_recovery_total{operation="cancel",outcome="complete"} 1');
+ expect(x.change).not.toHaveBeenCalled();
+});
+
+it.each(['receipt','current policy','new preparation','competing intent','wrong operation'])('preserves an enrollment fence with %s',async evidence=>{
+ const x=await missingSubmissionBind();
+ const receipt={sourceRoleId:x.draft.roleId,workId:x.work,operationId:x.bind,access:'unlisted',restriction:'none',epoch:1,state:'complete',replayed:false} as const;
+ if(evidence==='receipt')x.readReceipt.mockResolvedValue(receipt);
+ if(evidence==='current policy')vi.mocked(fetch).mockImplementation(async(_input,init)=>{
+  const {items}=JSON.parse(String(init?.body));
+  return Response.json({items:items.map((item:object)=>({...item,managed:true,epoch:1,access:'unlisted',restriction:'none',targetReadable:true,listed:false,shareRoleId:x.draft.roleId,approvedRoleId:''}))});
+ });
+ if(evidence==='new preparation')await env.DB.prepare('UPDATE hosting_versions SET created_at=? WHERE version_id=?').bind(Date.now(),x.version).run();
+ if(evidence==='competing intent')x.readReceipt.mockImplementation(async()=>{
+  await (await workPolicyIntentStatement(env,'harbor',x.draft.roleId,{workId:x.work,operationId:x.bind,expectedEpoch:0,action:'bind',access:'unlisted'})).run();
+  return null;
+ });
+ if(evidence==='wrong operation')await env.DB.prepare('UPDATE managed_work_access SET sync_operation_id=? WHERE work_id=?').bind(crypto.randomUUID(),x.work).run();
+ expect(await reconcileWorkAccess(x.environment,1)).toEqual({complete:0,pending:1});
+ expect(await env.DB.prepare('SELECT epoch FROM managed_work_access WHERE work_id=?').bind(x.work).first()).toEqual({epoch:0});
+ expect(await env.DB.prepare('SELECT state FROM hosting_versions WHERE version_id=?').bind(x.version).first()).toEqual({state:'cancelling'});
+ expect(x.change).not.toHaveBeenCalled();
+});
+
 it.each(['author edit','list recovery','scheduled reconciliation'])('retires the refused submission bind through %s without replaying it',async entry=>{
  const x=await refusedSubmissionBind();
  const oldCard=(await getCard(env.DB,x.draft.roleId,'harbor'))!;

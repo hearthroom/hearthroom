@@ -608,6 +608,90 @@ it('resumes confirmed Provider deletion after a failed local cleanup without del
  expect((await env.DB.prepare('SELECT status FROM cards WHERE id=?').bind(f.card.id).first<{status:string}>())?.status).toBe('unshared');
 });
 
+async function firstBindWithoutProjection(){
+ const f=await fixture(true),intent=await command(f.source,'private');
+ const original=f.network.getMockImplementation()!;
+ f.network.mockImplementation(async(input,init)=>{
+  const url=new URL(String(input));
+  if((init?.method??'GET')==='GET'&&url.pathname.endsWith('/work-access/'+f.source)&&!url.search)return Response.json({error:'unavailable'},{status:503});
+  return original(input,init);
+ });
+ expect((await request(`/v1/me/cards/${f.source}/visibility`,'owner',intent)).status).toBe(202);
+ expect(await env.DB.prepare('SELECT state FROM visibility_operations').first()).toEqual({state:'complete'});
+ f.network.mockImplementation(async(input,init)=>{
+  if(new URL(String(input)).pathname.includes('/operations/'))return Response.json({error:'not_found'},{status:404});
+  if(init?.method==='DELETE')return Response.json({message:'success'});
+  return original(input,init);
+ });
+ return {...f,intent};
+}
+
+it.each(['original policy','confirmed deletion'] as const)('settles a first bind from its saved receipt and %s',async scenario=>{
+ const f=await firstBindWithoutProjection();
+ if(scenario==='confirmed deletion'){
+  f.current.epoch+=2;
+  await env.DB.prepare("INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,0,'complete',?)")
+   .bind(f.member,f.source,Date.now()).run();
+  expect(await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer'})).toEqual({complete:0,pending:1});
+  expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'pending'});
+ }
+ expect(await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer',WORK_LEGACY_BIND_RECOVERY_ENABLED:'true'})).toEqual({complete:1,pending:0});
+ expect(await env.DB.prepare('SELECT epoch,access,sync_state,sync_operation_id FROM managed_work_access').first())
+  .toEqual({epoch:f.current.epoch,access:'private',sync_state:'complete',sync_operation_id:null});
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'complete'});
+ expect(await env.DB.prepare('SELECT status FROM cards').first()).toEqual({status:'unshared'});
+ expect(f.behavior.commands).toBe(1);
+});
+
+it('keeps a deleted-source bind fenced when the current work differs from its saved receipt',async()=>{
+ const f=await firstBindWithoutProjection();
+ f.current.epoch+=2;f.current.workId=crypto.randomUUID();
+ await env.DB.prepare("INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,0,'complete',?)")
+  .bind(f.member,f.source,Date.now()).run();
+ expect(await reconcileWorkAccess({...env,HOSTING_SERVICE_KEY:'fixture-issuer',WORK_LEGACY_BIND_RECOVERY_ENABLED:'true'})).toEqual({complete:0,pending:1});
+ expect(await env.DB.prepare('SELECT epoch,sync_state FROM managed_work_access').first()).toEqual({epoch:0,sync_state:'changing'});
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'pending'});
+});
+
+it('waits for an in-flight first bind before starting source deletion',async()=>{
+ const f=await firstBindWithoutProjection();
+ const response=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:0});
+ expect(response.status).toBe(503);
+ expect(await response.json()).toMatchObject({error:'visibility_sync_pending'});
+ expect(f.network.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
+ expect(await env.DB.prepare('SELECT state FROM author_card_deletions').first()).toBeNull();
+});
+
+it('allows source deletion once a different confirmed policy has replaced an old author fence',async()=>{
+ const f=await firstBindWithoutProjection();
+ f.current.epoch++;
+ await env.DB.prepare("UPDATE managed_work_access SET epoch=?,sync_state='complete',sync_operation_id=NULL WHERE source_role_id=?")
+  .bind(f.current.epoch,f.source).run();
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toEqual({state:'pending'});
+ const response=await request(`/v1/me/cards/${f.source}/delete`,'owner',{rewardRecoveryCredits:0});
+ expect(response.status).toBe(200);
+ expect(await env.DB.prepare('SELECT state FROM author_card_deletions').first()).toEqual({state:'complete'});
+});
+
+it.each([true,false])('does not start a visibility change while source deletion is pending (unmanaged: %s)',async unmanaged=>{
+ const f=await fixture(unmanaged),intent=await command(f.source,'private');
+ await env.DB.prepare("INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,0,'pending',?)")
+  .bind(f.member,f.source,Date.now()).run();
+ expect((await request(`/v1/me/cards/${f.source}/visibility`,'owner',intent)).status).toBe(409);
+ expect(f.behavior.commands).toBe(0);
+ expect(await env.DB.prepare('SELECT state FROM author_visibility_operations').first()).toBeNull();
+});
+
+it('does not acquire a legacy withdrawal fence while source deletion is pending',async()=>{
+ const f=await fixture();
+ await env.DB.prepare("INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,0,'pending',?)")
+  .bind(f.member,f.source,Date.now()).run();
+ await expect(unregister(env.DB,f.source,11,'harbor',{...env,HOSTING_SERVICE_KEY:'fixture-issuer'},'owner')).rejects.toMatchObject({status:409});
+ expect(await env.DB.prepare('SELECT sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?').bind(f.work).first())
+  .toEqual({sync_state:'complete',sync_operation_id:null});
+ expect(f.network.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false);
+});
+
 it('keeps the confirmed amount and resumes a lost Provider reply without reading the deleted owner view',async()=>{
  const f=await fixture();const original=f.network.getMockImplementation()!;let deletes=0,gone=false;
  f.network.mockImplementation(async(input,init)=>{

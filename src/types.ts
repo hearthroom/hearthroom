@@ -57,6 +57,7 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LI
   ENFORCEMENT_CONSOLE_ORIGINS?: string;
   /** Author controls remain off until the complete visibility release is approved. */
   WORK_SHARING_ENABLED?: string;
+  WORK_LEGACY_BIND_RECOVERY_ENABLED?: string;
   /** 卡片分享情境（?share=）的平台總開關："true" 才轉送給卡片；其他值一律關（卡片拿到 null、分享鈕照常）。 */
   SHARE_CONTEXT_ENABLED?: string;
   /** "true"：登入時多要 preset.read／preset.write（Harbor 固定客戶端允許之後才開） */
