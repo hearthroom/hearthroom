@@ -41,12 +41,19 @@ const earnedItems=computed(()=>data.value?.items.filter(b=>b.state==='earned')??
 const items=computed(()=>(own.value?data.value?.items.filter(b=>filter.value==='all'||(filter.value==='earned'?b.state==='earned':b.state!=='earned')):earnedItems.value)??[]);
 const earned=computed(()=>earnedItems.value.length);
 const rankOrder=(list:CollectedBadge[])=>{const parsed=list.map(b=>({b,h:parseHonorKey(b.key)}));const honors=parsed.filter(p=>p.h);if(!honors.length)return list;const sorted=sortHonors(honors.map(p=>({...p.h!,b:p.b}))).map(x=>x.b);return [...sorted,...parsed.filter(p=>!p.h).map(p=>p.b)];};
+/** 本人頁：同一系列（同一個計數）的徽章收在一起，在該組第一枚的位置前加小標與說明；其他徽章照原順序 */
+function seriesGroups(list:CollectedBadge[]):{series:string;items:CollectedBadge[]}[]{
+ if(!own.value)return [{series:'',items:list}];
+ const groups:{series:string;items:CollectedBadge[]}[]=[];
+ for(const b of list){const series=b.series??'';const found=series?groups.find(g=>g.series===series):undefined;if(found){found.items.push(b);continue;}const last=groups[groups.length-1];if(!series&&last&&!last.series)last.items.push(b);else groups.push({series,items:[b]});}
+ return groups;
+}
 // 切成區塊時類別照第一次出現的順序（伺服器照目錄排）。榜單榮譽裡沒拿過的另外收起來
 const sections=computed(()=>{
- const out:{category:string;items:CollectedBadge[];locked:CollectedBadge[];owned:number;total:number}[]=[];
+ const out:{category:string;items:CollectedBadge[];locked:CollectedBadge[];owned:number;total:number;groups:{series:string;items:CollectedBadge[]}[]}[]=[];
  // 依第一次出現的順序分組，同一類別只有一個區塊（不靠清單本身排好）
- for(const b of items.value){let sec=out.find(x=>x.category===b.category);if(!sec){sec={category:b.category,items:[],locked:[],owned:0,total:0};out.push(sec);}(b.category==='rank'&&b.state!=='earned'?sec.locked:sec.items).push(b);}
- for(const s of out){s.items=rankOrder(s.items);s.locked=rankOrder(s.locked);const all=data.value?.items.filter(b=>b.category===s.category)??[];s.owned=all.filter(b=>b.state==='earned').length;s.total=all.length;}
+ for(const b of items.value){let sec=out.find(x=>x.category===b.category);if(!sec){sec={category:b.category,items:[],locked:[],owned:0,total:0,groups:[]};out.push(sec);}(b.category==='rank'&&b.state!=='earned'?sec.locked:sec.items).push(b);}
+ for(const s of out){s.items=rankOrder(s.items);s.locked=rankOrder(s.locked);const all=data.value?.items.filter(b=>b.category===s.category)??[];s.owned=all.filter(b=>b.state==='earned').length;s.total=all.length;s.groups=seriesGroups(s.items);}
  return out;
 });
 const categoryLabel=(category:string)=>(BADGE_CATEGORIES as readonly string[]).includes(category)?t('badgeWall.category.'+category):category;
@@ -58,7 +65,28 @@ async function request<T>(path='',method='GET',body?:unknown){
 function apply(result:BadgeCollection){data.value=result;selected.value=[...result.featured];visible.value=!!result.public;}
 /** 看別人時，沒有成員資料的作者（伺服器回 404）就是沒有公開徽章，顯示空態而不是錯誤 */
 async function fetchCollection():Promise<BadgeCollection>{try{return await request<BadgeCollection>();}catch(e){if(!own.value&&(e as {status?:number})?.status===404)return {items:[],featured:[]};throw e;}}
-async function load(keepDraft=false){const n=++generation;loading.value=true;error.value='';try{const result=await fetchCollection();if(n===generation){if(keepDraft&&dirty.value){const valid=new Set(result.items.filter(b=>b.state==='earned').map(b=>b.key));selected.value=selected.value.filter(key=>valid.has(key));data.value=result;}else apply(result);}}catch{if(n===generation)error.value=t('badgeWall.loadFailed');}finally{if(n===generation)loading.value=false;}}
+/** 收下新的一份收藏；編輯中的展示選擇保留（只拿掉已經不是已取得的） */
+function receive(result:BadgeCollection,keepDraft:boolean){if(keepDraft&&dirty.value){const valid=new Set(result.items.filter(b=>b.state==='earned').map(b=>b.key));selected.value=selected.value.filter(key=>valid.has(key));data.value=result;}else apply(result);}
+async function load(keepDraft=false){const n=++generation;loading.value=true;error.value='';try{const result=await fetchCollection();if(n===generation){receive(result,keepDraft);if(own.value&&result.refreshing)void followRefresh(n);}}catch{if(n===generation)error.value=t('badgeWall.loadFailed');}finally{if(n===generation)loading.value=false;}}
+/**
+ * 本人打開成就頁：伺服器先回已存的數字，同時在背景向 Harbor 刷新自己（10 分鐘一次，帶 refreshing）。
+ * 這裡隔幾秒重讀（帶 reread，不再觸發），數字變了才寫「進度已更新」；沒變、失敗或逾時都直接收起，不出錯誤。
+ */
+const REREAD={delayMs:4000,attempts:2,shownMs:3000};
+const refresh=ref<''|'updating'|'updated'>('');
+const signature=(c:BadgeCollection)=>c.items.map(b=>`${b.key}:${b.state}:${b.progress?.value??''}:${b.pausedMet?1:0}`).join('|');
+const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function followRefresh(n:number){
+ refresh.value='updating';const before=data.value?signature(data.value):'';
+ try{
+  for(let i=0;i<REREAD.attempts;i++){
+   await wait(REREAD.delayMs);if(n!==generation)return;
+   const result=await request<BadgeCollection>('?reread=1');if(n!==generation)return;
+   if(signature(result)!==before){receive(result,true);refresh.value='updated';await wait(REREAD.shownMs);break;}
+  }
+ }catch{/* 失敗靜默：頁面照舊 */}
+ if(n===generation)refresh.value='';
+}
 async function save(){if(busy.value||!own.value)return;busy.value=true;error.value='';saved.value=false;const n=generation;try{const result=await request<BadgeCollection>('/featured','PATCH',{featured:selected.value,public:visible.value});if(n===generation){apply(result);saved.value=true;}}catch{if(n===generation)error.value=t('badgeWall.saveFailed');}finally{busy.value=false;}}
 function reset(){if(data.value)apply(data.value);error.value='';saved.value=false;}
 watch(()=>[author.value,own.value?session.profile?.handle:''],()=>{generation++;data.value=null;selected.value=[];visible.value=false;filter.value='all';saved.value=false;void load();},{immediate:true});
@@ -67,7 +95,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 <template>
  <div class="page badges-page">
   <RouterLink class="badges-back" :to="own&&!author?lp('/me'):lp('/authors/'+author)">← {{ own?t('community.backToProfile'):t('badgeWall.public.back') }}</RouterLink>
-  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/achievements?board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div></header>
+  <header class="badges-heading"><span class="badges-heading__icon"><CommunityIcon name="award" /></span><div><h1 class="display">{{ t('badgeWall.title') }}</h1><p v-if="data" class="subtle">{{ apTotal?t('badgeWall.earnedCountPoints',{n:earned,ap:apTotal,level:data.level??1}):t('badgeWall.earnedCount',{n:earned}) }}<template v-if="data.authorRank"> · <RouterLink :to="lp('/achievements?board=author&period=all')">{{ t('achievements.authorRank',{n:data.authorRank}) }}</RouterLink></template></p></div><p v-if="own&&data" class="badges-refresh"><span v-if="refresh==='updating'" class="badges-refresh__dot" aria-hidden="true" /><span v-if="refresh==='updating'">{{ t('badgeWall.updating') }}</span><span aria-live="polite">{{ refresh==='updated'?t('badgeWall.updated'):'' }}</span></p></header>
   <div v-if="loading&&!data" class="badge-loading" aria-live="polite"><span class="sr-only">{{ t('state.loading') }}</span><div v-for="i in 3" :key="i" class="ghost" /></div>
   <div v-if="error" class="notice notice--error" role="alert"><p>{{ error }}</p><button class="btn" :disabled="loading||busy" @click="load()">{{ t(own?'badgeWall.reload':'badgeWall.retry') }}</button></div>
   <template v-if="data">
@@ -87,7 +115,10 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
    <section v-for="section in sections" :key="section.category" class="badge-section">
     <h3 class="badge-section__title"><span class="badge-section__label">{{ categoryLabel(section.category) }}</span><span v-if="own" class="badge-section__count">{{ t('badgeWall.categoryProgress',{owned:section.owned,total:section.total}) }}</span></h3>
     <p v-if="own&&hint(section.category)" class="subtle badge-section__hint">{{ hint(section.category) }}</p>
-    <BadgeWall v-if="section.items.length" :items="section.items" :selected="selected" :editable="own" :busy="busy" :claiming="claiming" @change="selected=$event;saved=false" @claim="claim([$event])" />
+    <template v-for="group in section.groups" :key="group.series||group.items[0]?.key">
+     <div v-if="group.series" class="badge-series"><h4 class="badge-series__title">{{ t('badgeWall.series.'+group.series+'.title') }}</h4><p class="badge-series__note">{{ t('badgeWall.series.'+group.series+'.note') }}</p></div>
+     <BadgeWall :items="group.items" :selected="selected" :editable="own" :busy="busy" :claiming="claiming" @change="selected=$event;saved=false" @claim="claim([$event])" />
+    </template>
     <details v-if="section.locked.length" class="badge-locked">
      <summary>{{ t('badgeWall.rank.locked',{n:section.locked.length}) }}</summary>
      <BadgeWall :items="section.locked" :selected="selected" :editable="own" :busy="busy" @change="selected=$event;saved=false" />
@@ -100,7 +131,7 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
  </div>
 </template>
 <style scoped>
-.badges-page{max-width:68rem;display:grid;gap:var(--s-6)}.badges-back{justify-self:start;display:flex;align-items:center;min-height:2.75rem;color:var(--text-2)}.badges-heading{display:flex;gap:var(--s-4);align-items:center}.badges-heading h1{font-size:clamp(1.75rem,4vw,2.25rem);margin:0}.badges-heading p{margin:var(--s-2) 0 0;line-height:1.6}.badges-heading__icon{display:flex;align-items:center;justify-content:center;flex:none;width:3.5rem;height:3.5rem;background:var(--accent-tint);color:var(--accent-text);border-radius:var(--r-lg)}.badges-heading__icon svg{width:2rem;height:2rem}
+.badges-page{max-width:68rem;display:grid;gap:var(--s-6)}.badges-back{justify-self:start;display:flex;align-items:center;min-height:2.75rem;color:var(--text-2)}.badges-heading{display:flex;flex-wrap:wrap;gap:var(--s-4);align-items:center}.badges-heading h1{font-size:clamp(1.75rem,4vw,2.25rem);margin:0}.badges-heading p{margin:var(--s-2) 0 0;line-height:1.6}.badges-heading__icon{display:flex;align-items:center;justify-content:center;flex:none;width:3.5rem;height:3.5rem;background:var(--accent-tint);color:var(--accent-text);border-radius:var(--r-lg)}.badges-heading__icon svg{width:2rem;height:2rem}
 .badge-curation{padding:var(--s-5);display:grid;gap:var(--s-3)}.badge-curation h2,.badge-collection-heading h2{margin:0;font-size:1.125rem}.badge-curation p{margin:0;line-height:1.6}.badge-visibility{display:flex;align-items:center;gap:var(--s-3);min-height:2.75rem;cursor:pointer}.badge-visibility input{width:1.125rem;height:1.125rem;accent-color:var(--accent)}.badge-actions,.badge-next,.badge-filters{display:flex;gap:var(--s-2);flex-wrap:wrap}.badges-page .btn{min-height:2.75rem;white-space:normal;line-height:1.5}.badge-actions .btn{gap:var(--s-2)}.badge-collection-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--s-4);flex-wrap:wrap}.badge-filters .btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent-text)}
 .badge-section{display:grid;gap:var(--s-3)}.badge-section__title{display:flex;align-items:baseline;gap:var(--s-2);margin:0;font-size:13px;font-weight:600;color:var(--text-2)}.badge-section__count{font-weight:500;color:var(--text-3);font-variant-numeric:tabular-nums}.badge-section__hint{margin:0;line-height:1.6;max-width:44rem}
 .badge-locked{display:grid;gap:var(--s-3)}.badge-locked summary{display:flex;align-items:center;min-height:2.75rem;cursor:pointer;color:var(--text-2);font-size:14px;font-weight:600}.badge-locked[open] summary{margin-bottom:var(--s-3)}
@@ -108,4 +139,6 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
 .badge-next{border-top:1px solid var(--line);padding-top:var(--s-5)}.badge-next .btn{gap:var(--s-2)}.badge-loading{display:grid;gap:var(--s-4)}.badge-loading .ghost{height:84px;border-radius:var(--r-lg)}
 .badge-empty{padding:var(--s-5);display:grid;gap:var(--s-3);justify-items:start}.badge-empty p{margin:0}
 .badge-section__hint:lang(ko),.badge-empty p:lang(ko){word-break:keep-all}
+.badges-refresh{margin:0 0 0 auto;align-self:center;display:flex;align-items:center;gap:var(--s-2);min-height:1.5rem;font-size:.875rem;color:var(--text-2);white-space:nowrap}.badges-refresh__dot{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:var(--r-pill);animation:badges-spin var(--dur-slow) linear infinite}@keyframes badges-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.badges-refresh__dot{animation:none}}
+.badge-series{display:grid;gap:var(--s-1);padding:var(--s-3) var(--s-4);border-radius:var(--r-md);background:var(--surface-2)}.badge-series__title{margin:0;font-size:.9375rem;font-weight:600}.badge-series__note{margin:0;font-size:.8125rem;line-height:1.6;color:var(--text-2)}.badge-series__note:lang(ko){word-break:keep-all}
 </style>
