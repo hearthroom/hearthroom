@@ -165,10 +165,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <template v-else-if="step === 'other'">
             <fieldset class="rating-dlg__group">
               <legend class="rating-dlg__q">{{ RATING_OTHER.title[l] }}</legend>
-              <label v-for="opt in RATING_OTHER.options" :key="opt.id" class="choice" :class="{ 'choice--on': other === opt.id, 'choice--off': off(opt.rating) }" :aria-disabled="off(opt.rating) || undefined">
-                <input v-model="other" class="sr-only" type="radio" name="rating-other" :value="opt.id" :data-option="opt.id" :disabled="off(opt.rating)" />
+              <!-- 必答題不停用：停用低於下限的選項等於逼作者聲稱「不適合未滿 18 歲」。結果照樣取問卷與下限較高者並標「依分級下限」 -->
+              <label v-for="opt in RATING_OTHER.options" :key="opt.id" class="choice" :class="{ 'choice--on': other === opt.id }">
+                <input v-model="other" class="sr-only" type="radio" name="rating-other" :value="opt.id" :data-option="opt.id" />
                 <span class="choice__dot" aria-hidden="true" />
-                <span class="choice__text">{{ opt.text[l] }}<small v-if="off(opt.rating)" class="choice__off" data-below-floor>{{ $t("rating.belowFloor") }}</small></span>
+                <span class="choice__text">{{ opt.text[l] }}</span>
                 <RatingMark v-if="opt.rating !== 'G'" :rating="opt.rating" variant="chip" class="choice__level" />
               </label>
             </fieldset>

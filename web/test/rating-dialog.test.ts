@@ -111,16 +111,17 @@ it("can always be submitted with an adult floor, even for types whose options ar
   expect($<HTMLInputElement>('[data-option="drugs.mentioned"]')?.disabled).toBe(true);
   await click('[data-option="drugs.use"]');
   await click("[data-next]");
-  // 其他影響只剩限制級那一項能選
+  // 其他影響是必答題：選項全部可選，不逼作者選限制級
   const enabled = [...document.querySelectorAll<HTMLInputElement>('input[name="rating-other"]')].filter((x) => !x.disabled).map((x) => x.value);
-  expect(enabled).toEqual(["other.under18"]);
-  await click('[data-option="other.under18"]');
+  expect(enabled).toHaveLength(5);
+  await click('[data-option="other.none"]');
   await click("[data-next]");
   expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
+  // 毒品選了限制級那一項：結果本來就是限制級，不是下限決定的
   expect($("[data-by-floor]")).toBeNull();
   await click("[data-confirm]");
   // 菸酒雖不必選，仍照勾的送出，卡片的情節標籤才不會不見
-  expect(await result).toEqual({ version: 1, topics: { tobacco_alcohol: "tobacco_alcohol.shown", drugs: "drugs.use" }, other: "other.under18" });
+  expect(await result).toEqual({ version: 1, topics: { tobacco_alcohol: "tobacco_alcohol.shown", drugs: "drugs.use" }, other: "other.none" });
 });
 
 it("passes the next step when every ticked type is entirely below the floor", async () => {
@@ -130,10 +131,12 @@ it("passes the next step when every ticked type is entirely below the floor", as
   await click("[data-next]");
   expect($("[data-topic-na]")).not.toBeNull();
   await click("[data-next]");
-  await click('[data-option="other.under18"]');
+  await click('[data-option="other.none"]');
   await click("[data-next]");
+  // 問卷算出來比下限低：顯示下限那一級並標「依分級下限」
+  expect($("[data-by-floor]")?.textContent).toBe("依分級下限");
   await click("[data-confirm]");
-  expect(await result).toEqual({ version: 1, topics: { romance: "romance.dating" }, other: "other.under18" });
+  expect(await result).toEqual({ version: 1, topics: { romance: "romance.dating" }, other: "other.none" });
 });
 
 it("shows the floor as the result when earlier answers rate lower, and still confirms them", async () => {
