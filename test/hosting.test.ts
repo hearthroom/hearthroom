@@ -144,3 +144,27 @@ it('an author update cannot go below the rating floor a manager set',async()=>{
  expect((await env.DB.prepare("SELECT rating FROM review_submissions WHERE status='pending'").first<any>()).rating).toBe('R');
  expect((await env.DB.prepare("SELECT rating FROM hosting_versions WHERE version_id=?").bind(again.versionId).first<any>()).rating).toBe('R');
 });
+it('a manager correction reaches a pending hosted submission and survives approval and re-review',async()=>{
+ const memberId=await makeMember(10001);
+ const me=role({roleId:'draft',authorNumId:10001});
+ vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,roleId,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
+ vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
+ vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleName:"Fixture",roleTag:["Roleplay"],roleDetailDesc:'PRIVATE'.repeat(600)},greetings:{welcome:"Welcome",alternates:[],prologue:[]},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
+ await submitHosted(env,{memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
+ const sub=await env.DB.prepare('SELECT id,card_id FROM review_submissions').first<{id:string;card_id:number}>();
+ const {correctRating}=await import('../src/rating-correction');
+ await correctRating(env.DB,{cardId:sub!.card_id,rating:'R',reason:'分級不符',memberId:'manager',operationId:crypto.randomUUID(),now:Date.now()});
+ // 待審單提到下限，審核員的年齡門檻看得到
+ expect((await env.DB.prepare('SELECT rating FROM review_submissions WHERE id=?').bind(sub!.id).first<any>()).rating).toBe('R');
+ for (const reviewer of ['first','second']){
+  await claim(env.DB,sub!.id,reviewer,Date.now());
+  if((await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;
+ }
+ expect((await getCard(env.DB,'draft','harbor'))?.rating).toBe('R');
+ // 任何路徑把卡片分級寫低，都會被提回下限
+ await env.DB.prepare("UPDATE cards SET rating='G' WHERE id=?").bind(sub!.card_id).run();
+ expect((await getCard(env.DB,'draft','harbor'))?.rating).toBe('R');
+ // 待審單的分級除了提到下限以外仍然不可改
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating) SELECT 'p2',card_id,provider,source_role_id,'re','pending',content_hash,0,'R' FROM review_submissions WHERE id=?").bind(sub!.id).run();
+ await expect(env.DB.prepare("UPDATE review_submissions SET rating='G' WHERE id='p2'").run()).rejects.toThrow('hosted_revision_immutable');
+});

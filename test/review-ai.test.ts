@@ -685,3 +685,20 @@ describe('作者行為（審核頁）與 v7 讀卡訊號', () => {
     expect(input.stats.openingPageElements).toBeGreaterThanOrEqual(5);
   });
 });
+
+describe('作者行為：同一張卡改字重送不算另一張', () => {
+  it('重送同一張卡不觸發間隔極短，也不算一晚多張', async () => {
+    const a = await submitCard('draft-a');
+    const now = Date.now();
+    await env.DB.prepare('UPDATE review_submissions SET submitted_at=?, review_length_total=2000, status=? WHERE id=?').bind(now - 20 * 60_000, 'superseded', a.id).run();
+    const again = await env.DB.prepare("SELECT card_id FROM review_submissions WHERE id=?").bind(a.id).first<{ card_id: number }>();
+    const b = await submitCard('draft-a');
+    await env.DB.prepare('UPDATE review_submissions SET submitted_at=?, review_length_total=2000 WHERE id=?').bind(now - 5 * 60_000, b.id).run();
+    expect((await env.DB.prepare("SELECT card_id FROM review_submissions WHERE id=?").bind(b.id).first<{ card_id: number }>())!.card_id).toBe(again!.card_id);
+    await claim(env.DB, b.id, humanId, Date.now());
+    const body = await json(await get(`/v1/review/${b.id}/author-activity`, 'human'));
+    expect(body.minutesSincePrevious).toBeNull();
+    expect(body.anomalies.map((x: any) => x.code)).not.toContain('quick_gap');
+    expect(body.submissions7d).toBe(2);
+  });
+});

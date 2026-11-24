@@ -122,7 +122,7 @@ moderationRoutes.post('/v1/moderation/cards/:id/rating',async c=>{
  const card=await cardOf(db,c.req.param('id'));await guardCard(db,card,member.id);
  const body=await c.req.json<Record<string,unknown>>().catch(()=>({} as Record<string,unknown>));
  if(body.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
- return c.json(await correctRating(db,{cardId:Number(card.id),rating:body.rating,reason:body.reason,memberId:member.id,operationId:typeof body.operationId==='string'?body.operationId:'',now:Date.now()}),200,{'Cache-Control':'private, no-store'});
+ return c.json(await mutate(()=>correctRating(db,{cardId:Number(card.id),rating:body.rating,reason:body.reason,memberId:member.id,operationId:typeof body.operationId==='string'?body.operationId:'',now:Date.now()})),200,{'Cache-Control':'private, no-store'});
 });
 moderationRoutes.get('/v1/moderation/cases/:id/evidence',async c=>{
  const member=await requireReviewer(c);const row=await caseOf(c.env.DB,c.req.param('id'));

@@ -238,7 +238,7 @@ async function authorSignals(db: D1Database, memberId: string, sourceRoleId: str
     db.prepare(`SELECT s2.submitted_at AS at, s2.review_length_total AS chars,
         (s2.status='pending' OR s2.decided_at>?2) AND s2.status<>'superseded' AS waiting
       FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
-      WHERE v2.member_id=?1 AND s2.submitted_at>?2-${WEEK} AND s2.submitted_at<=?2 ORDER BY s2.submitted_at DESC LIMIT 30`)
+      WHERE v2.member_id=?1 AND s2.submitted_at>?2-${WEEK} AND s2.submitted_at<=?2 ORDER BY s2.submitted_at DESC LIMIT 60`)
       .bind(memberId, at).all<{ at: number; chars: number | null; waiting: number }>(),
   ]);
   const limit = await weeklyLimitAt(db, at);
@@ -281,20 +281,22 @@ export async function authorActivity(db: D1Database, submissionId: string, now: 
   const [usage, limit, list, signals] = await Promise.all([
     weeklyUsageForMember(db, v.member_id, now),
     weeklyLimitAt(db, now),
-    db.prepare(`SELECT s2.id, s2.submitted_at AS at, s2.review_length_total AS chars, s2.status, s2.kind
+    db.prepare(`SELECT s2.id, s2.card_id AS card, s2.submitted_at AS at, s2.review_length_total AS chars, s2.status, s2.kind
       FROM review_submissions s2 JOIN hosting_versions v2 ON v2.submission_id=s2.id
-      WHERE v2.member_id=? AND s2.submitted_at>? ORDER BY s2.submitted_at DESC LIMIT 20`).bind(v.member_id, now - WEEK)
-      .all<{ id: string; at: number; chars: number | null; status: string; kind: string }>(),
+      WHERE v2.member_id=? AND s2.submitted_at>? ORDER BY s2.submitted_at DESC LIMIT 60`).bind(v.member_id, now - WEEK)
+      .all<{ id: string; card: number; at: number; chars: number | null; status: string; kind: string }>(),
     authorSignals(db, v.member_id, v.source_role_id, now),
   ]);
   const self = await db.prepare("SELECT submitted_at FROM review_submissions WHERE id=?").bind(submissionId).first<{ submitted_at: number }>();
-  const before = list.results.filter((r) => r.at < (self?.submitted_at ?? now));
+  // 同一張卡改字重送不算「另一張」：間隔看上一張「別的卡」，一晚多張數的是不同的卡
+  const selfCard = list.results.find((r) => r.id === submissionId)?.card;
+  const before = list.results.filter((r) => r.at < (self?.submitted_at ?? now) && r.card !== selfCard);
   const times = list.results.map((r) => r.at);
   const gaps = times.slice(0, -1).map((t, i) => t - times[i + 1]!);
   const T = ACTIVITY_THRESHOLDS;
   // 一晚多張長卡：任一個 12 小時窗口裡，字數夠長的送審有幾張（取最多的那個窗口）
-  const long = list.results.filter((r) => (r.chars ?? 0) >= T.burst.chars).map((r) => r.at);
-  const burst = long.reduce((max, t) => Math.max(max, long.filter((u) => u <= t && u > t - T.burst.windowMs).length), 0);
+  const long = list.results.filter((r) => (r.chars ?? 0) >= T.burst.chars);
+  const burst = long.reduce((max, x) => Math.max(max, new Set(long.filter((u) => u.at <= x.at && u.at > x.at - T.burst.windowMs).map((u) => u.card)).size), 0);
   const minutesSincePrevious = self && before.length ? Math.round((self.submitted_at - before[0]!.at) / 60_000) : null;
   const thisChars = list.results.find((r) => r.id === submissionId)?.chars ?? null;
   const used = usage.effectiveFreeWorks.size;

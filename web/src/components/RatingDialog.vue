@@ -32,12 +32,20 @@ const body = ref<HTMLElement | null>(null);
 const floor = computed(() => ratingState.current?.floor ?? null);
 const floorName = computed(() => (floor.value ? ratingName(floor.value, String(locale.value)) : ""));
 const off = (r: Parameters<typeof belowFloor>[0]) => belowFloor(r, floor.value);
-/** 這一類每個選項都低於分級下限：不列選項、不作答 */
+/** 這一類每個選項都低於分級下限：不列選項、作者不必選 */
 const allOff = (id: Topic) => !!RATING_TOPICS.find((x) => x.id === id)?.options.every((o) => off(o.rating));
-// 沒選到的類型與整類低於下限的類型不送，不然整份答案算不出來、確認鍵會停用
+/** 整類低於下限但作者勾了：仍以這一類最高的選項作答，卡片的情節標籤（例如菸酒）才不會不見；分級本來就由下限決定 */
+const topOption = (id: Topic) => {
+  const opts = RATING_TOPICS.find((x) => x.id === id)?.options ?? [];
+  return opts.reduce<(typeof opts)[number] | undefined>((best, o) => (!best || !belowFloor(o.rating, best.rating) ? o : best), undefined)?.id;
+};
+// 沒選到選項的類型不送，不然整份答案算不出來、確認鍵會停用
 const answers = computed<RatingAnswers>(() => ({
   version: RATING_QUESTIONNAIRE_VERSION,
-  topics: Object.fromEntries(picked.value.filter((id) => options.value[id] && !allOff(id)).map((id) => [id, options.value[id]!])),
+  topics: Object.fromEntries(picked.value.flatMap((id) => {
+    const answer = allOff(id) ? topOption(id) : options.value[id];
+    return answer ? [[id, answer]] : [];
+  })),
   other: other.value,
 }));
 const result = computed(() => rate(answers.value));

@@ -119,7 +119,8 @@ it("can always be submitted with an adult floor, even for types whose options ar
   expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
   expect($("[data-by-floor]")).toBeNull();
   await click("[data-confirm]");
-  expect(await result).toEqual({ version: 1, topics: { drugs: "drugs.use" }, other: "other.under18" });
+  // 菸酒雖不必選，仍照勾的送出，卡片的情節標籤才不會不見
+  expect(await result).toEqual({ version: 1, topics: { tobacco_alcohol: "tobacco_alcohol.shown", drugs: "drugs.use" }, other: "other.under18" });
 });
 
 it("passes the next step when every ticked type is entirely below the floor", async () => {
@@ -132,7 +133,7 @@ it("passes the next step when every ticked type is entirely below the floor", as
   await click('[data-option="other.under18"]');
   await click("[data-next]");
   await click("[data-confirm]");
-  expect(await result).toEqual({ version: 1, topics: {}, other: "other.under18" });
+  expect(await result).toEqual({ version: 1, topics: { romance: "romance.dating" }, other: "other.under18" });
 });
 
 it("shows the floor as the result when earlier answers rate lower, and still confirms them", async () => {

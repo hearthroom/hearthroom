@@ -1,3 +1,4 @@
+import { RATING_RANK_SQL } from "./rating-correction";
 import { auditStmtIfChanged } from './audit';
 import { reviewerRole } from './members';
 import { serviceRewardOnApproval } from './card-reward-service';
@@ -633,7 +634,10 @@ export async function reopenCard(db: D1Database, input: { cardId: string; member
   const batch = await db.batch([
     db.prepare(`INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at, rating, rating_descriptors, rating_answers,
         review_length_total, review_worldbook_entries, review_regex_rules, reopen_of, reopened_by, reopen_reason)
-      SELECT ?, card_id, provider, source_role_id, 're', 'pending', content_hash, ?, rating, rating_descriptors, rating_answers,
+      SELECT ?, card_id, provider, source_role_id, 're', 'pending', content_hash, ?,
+        -- 管理員更正過分級的卡：重開的審核單分級不低於下限（審核員的年齡門檻看這一欄）
+        COALESCE((SELECT f.rating FROM review_rating_floors f WHERE f.card_id = o.card_id AND ${RATING_RANK_SQL("f.rating")} > ${RATING_RANK_SQL("o.rating")}), rating),
+        rating_descriptors, rating_answers,
         review_length_total, review_worldbook_entries, review_regex_rules, id, ?, ?
       FROM review_submissions o WHERE o.id = ? AND o.status = 'approved'
       AND NOT EXISTS (SELECT 1 FROM review_submissions p WHERE p.card_id = o.card_id AND p.status = 'pending' AND p.reopen_of IS NOT NULL)`)

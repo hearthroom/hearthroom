@@ -207,9 +207,15 @@ it('manager rating correction applies directly, audits, records history and sets
  expect((await env.DB.prepare("SELECT reason FROM audit_log WHERE action='rating_correction' AND subject_id=?").bind(card).first<any>()).reason).toBe('分級不符');
  expect((await env.DB.prepare("SELECT before_value,after_value FROM moderation_events WHERE action='rating'").first<any>())).toEqual({before_value:'PG12',after_value:'PG15'});
  expect(((await request(`/cards/${card}`,'manager').then(r=>r.json())) as any).card).toMatchObject({ratingFloor:'PG15',rating:'PG15'});
- // 同一個 operation 重送：分級沒變 → 409，不會多記一筆
- expect((await request(`/cards/${card}/rating`,'manager',b)).status).toBe(409);
+ // 同一個 operation 重送：回當時的結果，不會多記一筆
+ const replay=await request(`/cards/${card}/rating`,'manager',b);
+ expect(replay.status).toBe(200);
+ expect(await replay.json()).toMatchObject({rating:'PG15',before:{rating:'PG12'}});
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,operationId:crypto.randomUUID()})).status).toBe(409);
  expect((await env.DB.prepare("SELECT count(*) n FROM audit_log WHERE action='rating_correction'").first<any>()).n).toBe(1);
+ // 同一個 operation 換了分級：衝突，什麼都不改
+ expect((await request(`/cards/${card}/rating`,'manager',{...b,rating:'G'})).status).toBe(409);
+ expect((await env.DB.prepare('SELECT rating FROM cards WHERE id=?').bind(card).first<any>()).rating).toBe('PG15');
  // 可降級，下限跟著降
  expect((await request(`/cards/${card}/rating`,'manager',{...b,rating:'P',operationId:crypto.randomUUID()})).status).toBe(200);
  expect((await env.DB.prepare('SELECT rating FROM review_rating_floors WHERE card_id=?').bind(card).first<any>()).rating).toBe('P');
