@@ -109,7 +109,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <div class="rating-dlg__title-row">
             <div class="rating-dlg__title-group">
               <h2 id="rating-title" class="rating-dlg__title">{{ $t("rating.title") }}</h2>
-              <span v-if="floor" class="chip rating-floor" data-rating-floor>{{ $t("rating.floor", { name: floorName }) }}</span>
+              <span v-if="floor" class="chip" data-rating-floor>{{ $t("rating.floor", { name: floorName }) }}</span>
             </div>
             <span class="rating-dlg__step">{{ $t("rating.step", { n: stepIndex, total: stepTotal }) }}</span>
           </div>
@@ -209,7 +209,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .rating-dlg__title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .rating-dlg__title-group { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); min-width: 0; }
 .rating-dlg__title { font-size: 17px; font-weight: 600; }
-.rating-dlg__step { font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rating-dlg__step { flex: none; white-space: nowrap; font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .rating-dlg__progress { display: flex; gap: 4px; }
 .rating-dlg__progress span { flex: 1; height: 3px; border-radius: var(--r-pill); background: var(--surface-2); transition: background var(--dur) var(--ease); }
 .rating-dlg__progress span.on { background: var(--accent); }

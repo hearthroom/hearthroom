@@ -943,6 +943,7 @@ async function discardDraft() {
   newCardVisibility.value = "unlisted";
   // 本機草稿可能帶著上次建好、尚未存完的卡號；清空必須連儲存目標一起放掉。
   roleId.value = "";
+  ratingFloor.value = null;
   regexSet.value = emptyRuleSet();
   regexOriginal.value = emptyRuleSet();
   regexVersion.value = 0;
