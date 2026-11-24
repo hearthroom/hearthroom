@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "try": "/me/badges",
+  "title": {
+    "zh-Hant": "打開自己的徽章頁就會更新探險家進度，不必再等兩天多，系列旁也補上累計說明。",
+    "zh-Hans": "打开自己的徽章页就会更新探险家进度，不必再等两天多，系列旁也补上累计说明。",
+    "en": "Opening your badges page now updates Explorer progress without a two-day wait and explains how the series count works.",
+    "ja": "自分のバッジページを開くと探検家の進捗がすぐ更新され、シリーズの累計説明も追加されました。",
+    "ko": "내 배지 페이지를 열면 이틀씩 기다리지 않아도 탐험가 진행도가 바로 업데이트되고 시리즈 설명도 보여요."
+  }
+}
