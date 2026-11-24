@@ -26,6 +26,7 @@ const images = new Map(); const folders = new Map(); let imgSeq = 1;
 const roles = new Map(); const regex = new Map(); const books = new Map(); const bindings = new Map(); const entries = new Map();
 let seq = 1; const id = (p) => `${p}-${seq++}`;
 let sandboxAll = false;
+let badgeExplored = 3;
 const log = [];
 const json = (res, code, body) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((r) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => r(Buffer.concat(c))); });
@@ -65,6 +66,10 @@ http.createServer(async (req, res) => {
   if ((path === "/__plans" || path === "/open/v1/plans") && handlePlans({ m, path, url, body, json, res })) return;
   // 卡片工坊：本站那一半由 vite 轉過來（HEARTHROOM_WORKSHOP_MOCK），有的不必登入，自己判斷
   if ((path.startsWith("/__workshop") || path.startsWith("/v1/") || path.startsWith("/open/v1/workshop") || path === "/open/v1/player/role-settings/save") && await handleWorkshop({ m, path, url, body, req, json, res })) return;
+  // 徽章統計（成就頁即時刷新走查）：Worker 用機密應用換 token 再讀；/__badges?explored=<數字> 調整探索數，看「進度已更新」
+  if (path === "/__badges") { if (url.searchParams.has("explored")) badgeExplored = Number(url.searchParams.get("explored")) || 0; return json(res, 200, { explored: badgeExplored }); }
+  if (m === "POST" && path === "/oauth/token") return json(res, 200, { access_token: "mock-badges", token_type: "Bearer", expires_in: 3600 });
+  if (m === "POST" && path === "/open/v1/community/badges/metrics") return json(res, 200, { items: (body.accountNos ?? []).map((accountNo) => ({ accountNo, effectiveInvites: 0, netTopupUsdMicros: 0, consumedCredits: 0, complete: true, paidInvites: 0, paidInvites100At: null, starlightAt: null, exploredRoles: badgeExplored, exploredRoles500At: null })) });
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   // 長期指令與指令組：形狀與情境見 mock-directives.mjs（路徑含 preset，要排在預設之前）

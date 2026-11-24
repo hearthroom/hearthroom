@@ -85,7 +85,7 @@ it('keeps one section per category even when the list is not grouped',async()=>{
 
 it('opens your own author badge page in owner mode and moves the old /me/badges address there',async()=>{
  await open('/authors/fixture/badges',{...wall(),ap:1240,items:[{...wall().items[0],ap:40,share:0.04,ordinal:7}]});
- expect(mock.request).toHaveBeenCalledWith('/me/community/badges','fixture','GET',undefined);
+ expect(mock.request).toHaveBeenCalledWith('/me/community/badges?refresh=1','fixture','GET',undefined);
  expect(el.querySelector('.badge-curation')).not.toBeNull();
  expect(el.querySelector('.badges-heading p')?.textContent).toContain('1,240 achievement points · Lv.1');
  expect(el.querySelector('.badge-tile__ap')?.textContent).toBe('+40 pts');

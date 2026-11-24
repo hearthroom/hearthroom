@@ -32,7 +32,7 @@ const claimable=computed(()=>own.value?(data.value?.items.filter(b=>b.state==='e
 const claimTotal=computed(()=>new Intl.NumberFormat(locale.value).format(claimable.value.reduce((n,b)=>n+(b.reward??0),0)));
 const claiming=ref(''),claimError=ref('');
 /** 領積分：一個請求領完（伺服器自己判斷值多少、先記下再在背景發點）；全部領取不帶 keys，單枚帶那一枚 */
-async function claim(keys:string[]|null){if(claiming.value||!own.value)return;claimError.value='';const n=generation;claiming.value=keys?.[0]??'*';try{const result=await request<BadgeCollection>('/claim','POST',keys?{keys}:{});if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
+async function claim(keys:string[]|null){if(claiming.value||!own.value)return;claimError.value='';mutations++;const n=generation;claiming.value=keys?.[0]??'*';try{const result=await request<BadgeCollection>('/claim','POST',keys?{keys}:{});if(n!==generation)return;const keep=selected.value,keepVisible=visible.value;data.value=result;selected.value=keep;visible.value=keepVisible;}catch{if(n===generation)claimError.value=t('badgeWall.claimFailed');}finally{claiming.value='';}}
 const apTotal=computed(()=>data.value?.ap?new Intl.NumberFormat(locale.value).format(data.value.ap):'');
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
 let generation=0;
@@ -64,32 +64,36 @@ async function request<T>(path='',method='GET',body?:unknown){
 }
 function apply(result:BadgeCollection){data.value=result;selected.value=[...result.featured];visible.value=!!result.public;}
 /** 看別人時，沒有成員資料的作者（伺服器回 404）就是沒有公開徽章，顯示空態而不是錯誤 */
-async function fetchCollection():Promise<BadgeCollection>{try{return await request<BadgeCollection>();}catch(e){if(!own.value&&(e as {status?:number})?.status===404)return {items:[],featured:[]};throw e;}}
+/** 本人頁只在換到自己的作者頁網址後才要求刷新（舊網址 /me/badges 會先換網址再讀一次，這一次不占刷新額度） */
+async function fetchCollection():Promise<BadgeCollection>{try{return await request<BadgeCollection>(own.value&&author.value?'?refresh=1':'');}catch(e){if(!own.value&&(e as {status?:number})?.status===404)return {items:[],featured:[]};throw e;}}
 /** 收下新的一份收藏；編輯中的展示選擇保留（只拿掉已經不是已取得的） */
 function receive(result:BadgeCollection,keepDraft:boolean){if(keepDraft&&dirty.value){const valid=new Set(result.items.filter(b=>b.state==='earned').map(b=>b.key));selected.value=selected.value.filter(key=>valid.has(key));data.value=result;}else apply(result);}
 async function load(keepDraft=false){const n=++generation;loading.value=true;error.value='';try{const result=await fetchCollection();if(n===generation){receive(result,keepDraft);if(own.value&&result.refreshing)void followRefresh(n);}}catch{if(n===generation)error.value=t('badgeWall.loadFailed');}finally{if(n===generation)loading.value=false;}}
 /**
  * 本人打開成就頁：伺服器先回已存的數字，同時在背景向 Harbor 刷新自己（10 分鐘一次，帶 refreshing）。
- * 這裡隔幾秒重讀（帶 reread，不再觸發），數字變了才寫「進度已更新」；沒變、失敗或逾時都直接收起，不出錯誤。
+ * 這裡隔幾秒重讀（不帶 refresh，不再觸發），數字變了才寫「進度已更新」；沒變、失敗、逾時、換頁或使用者動了展示與領取，都直接收起，不出錯誤。
  */
 const REREAD={delayMs:4000,attempts:2,shownMs:3000};
 const refresh=ref<''|'updating'|'updated'>('');
+/** 儲存展示或領積分之後，背景重讀不能再蓋回畫面（重讀可能在寫入前就讀了） */
+let mutations=0;
 const signature=(c:BadgeCollection)=>c.items.map(b=>`${b.key}:${b.state}:${b.progress?.value??''}:${b.pausedMet?1:0}`).join('|');
 const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function followRefresh(n:number){
- refresh.value='updating';const before=data.value?signature(data.value):'';
+ refresh.value='updating';const before=data.value?signature(data.value):'',edits=mutations;
+ const current=()=>n===generation&&edits===mutations;
  try{
   for(let i=0;i<REREAD.attempts;i++){
-   await wait(REREAD.delayMs);if(n!==generation)return;
-   const result=await request<BadgeCollection>('?reread=1');if(n!==generation)return;
+   await wait(REREAD.delayMs);if(!current())return;
+   const result=await request<BadgeCollection>();if(!current())return;
    if(signature(result)!==before){receive(result,true);refresh.value='updated';await wait(REREAD.shownMs);break;}
   }
  }catch{/* 失敗靜默：頁面照舊 */}
- if(n===generation)refresh.value='';
+ finally{if(n===generation)refresh.value='';}
 }
-async function save(){if(busy.value||!own.value)return;busy.value=true;error.value='';saved.value=false;const n=generation;try{const result=await request<BadgeCollection>('/featured','PATCH',{featured:selected.value,public:visible.value});if(n===generation){apply(result);saved.value=true;}}catch{if(n===generation)error.value=t('badgeWall.saveFailed');}finally{busy.value=false;}}
+async function save(){if(busy.value||!own.value)return;busy.value=true;error.value='';saved.value=false;mutations++;const n=generation;try{const result=await request<BadgeCollection>('/featured','PATCH',{featured:selected.value,public:visible.value});if(n===generation){apply(result);saved.value=true;}}catch{if(n===generation)error.value=t('badgeWall.saveFailed');}finally{busy.value=false;}}
 function reset(){if(data.value)apply(data.value);error.value='';saved.value=false;}
-watch(()=>[author.value,own.value?session.profile?.handle:''],()=>{generation++;data.value=null;selected.value=[];visible.value=false;filter.value='all';saved.value=false;void load();},{immediate:true});
+watch(()=>[author.value,own.value?session.profile?.handle:''],()=>{generation++;refresh.value='';data.value=null;selected.value=[];visible.value=false;filter.value='all';saved.value=false;void load();},{immediate:true});
 watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immediate:true});
 </script>
 <template>
