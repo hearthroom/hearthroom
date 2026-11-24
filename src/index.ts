@@ -1835,7 +1835,7 @@ app.get('/v1/review/decisions',async(c)=>{
 
 app.get('/v1/mine/reviews/:id',async(c)=>{
  const member=await requireMember(c);
- const row=await c.env.DB.prepare(`SELECT s.status,s.note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,s.kind,
+ const row=await c.env.DB.prepare(`SELECT s.status,CASE WHEN s.status IN ('approved','rejected') THEN s.note END AS note,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,s.kind,
   CASE WHEN s.status='rejected' THEN s.reject_reasons END AS reasons,CASE WHEN s.status='rejected' THEN s.reject_coaching ELSE 0 END AS coaching,
   CASE WHEN s.status='approved' THEN s.approve_suggestions END AS suggestions,
   s.card_id AS cardNumber,w.source_provider AS provider,

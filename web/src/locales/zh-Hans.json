@@ -6286,5 +6286,8 @@
   "reviewAi.first.confirm.ai": "AI 建议",
   "reviewAi.first.confirm.final": "定案",
   "reviewAi.first.confirm.body": "作者会收到“已通过审核”通知，卡片会公开上架。",
-  "reviewAi.first.confirm.submit": "通过并上架"
+  "reviewAi.first.confirm.submit": "通过并上架",
+  "reviewAi.note.type.ai_inaccurate": "AI 判断不准确",
+  "reviewAi.arb.report.col.modifiedRate": "改了 AI 的比例",
+  "reviewAi.arb.report.col.inaccurate": "标不准确"
 }

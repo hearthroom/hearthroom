@@ -98,6 +98,8 @@ export interface AiReportVersion {
   /** 兩段式定案來源的筆數，與其中改用 AI 結論的筆數（舊版伺服器不帶） */
   finalSource?: Partial<Record<ReviewFinalSource, number>>;
   corrected?: number;
+  /** 定案時或定案後標「AI 判斷不準確」的筆數（舊版伺服器不帶） */
+  inaccurate?: number;
 }
 export async function fetchAiReport(token: string, days: number, now = Date.now()): Promise<{ from: number; to: number; versions: AiReportVersion[] }> {
   const p = new URLSearchParams({ from: String(now - days * 86_400_000), to: String(now) });

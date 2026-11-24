@@ -6286,5 +6286,8 @@
   "reviewAi.first.confirm.ai": "AIの提案",
   "reviewAi.first.confirm.final": "確定",
   "reviewAi.first.confirm.body": "作者には「審査通過」と通知され、カードは公開されます。",
-  "reviewAi.first.confirm.submit": "承認して公開"
+  "reviewAi.first.confirm.submit": "承認して公開",
+  "reviewAi.note.type.ai_inaccurate": "AIの判断が不正確",
+  "reviewAi.arb.report.col.modifiedRate": "AIを変更した割合",
+  "reviewAi.arb.report.col.inaccurate": "不正確の印"
 }

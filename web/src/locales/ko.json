@@ -6286,5 +6286,8 @@
   "reviewAi.first.confirm.ai": "AI 제안",
   "reviewAi.first.confirm.final": "확정",
   "reviewAi.first.confirm.body": "작성자에게 '심사 통과' 알림이 전달되고, 카드는 공개돼요.",
-  "reviewAi.first.confirm.submit": "승인하고 공개"
+  "reviewAi.first.confirm.submit": "승인하고 공개",
+  "reviewAi.note.type.ai_inaccurate": "AI 판단 부정확",
+  "reviewAi.arb.report.col.modifiedRate": "AI 수정 비율",
+  "reviewAi.arb.report.col.inaccurate": "부정확 표시"
 }

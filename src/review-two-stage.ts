@@ -123,7 +123,8 @@ export async function setAiInaccurate(db: D1Database, input: { submissionId: str
   const before = typesOf(ev.ai_note_types);
   if (before.includes("ai_inaccurate") !== input.value) {
     const next = parseAiNote(input.value ? [...before, "ai_inaccurate"] : before.filter((t) => t !== "ai_inaccurate"), null).types;
-    await db.prepare("UPDATE review_events SET ai_note_types=? WHERE id=?").bind(next.length ? JSON.stringify(next) : null, ev.id).run();
+    // 只在讀到的那一版沒被別人改過時才寫（兩人同時切換不會互相蓋掉）
+    await db.prepare("UPDATE review_events SET ai_note_types=? WHERE id=? AND ai_note_types IS ?").bind(next.length ? JSON.stringify(next) : null, ev.id, ev.ai_note_types).run();
   }
   return { inaccurate: input.value };
 }

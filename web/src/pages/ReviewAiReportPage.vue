@@ -130,6 +130,8 @@ const arbTotal = (v: AiReportVersion) => (v.arbitration ? ARBITRATION_VALUES.red
 const reasonRows = (v: AiReportVersion) => Object.entries(v.arbitration?.reasons ?? {}).map(([code, c]) => ({ code, ...c, n: c.humanWrong + c.aiWrong })).sort((a, b) => b.n - a.n);
 /** 兩段式定案筆數（舊版伺服器不帶 finalSource：整段不畫） */
 const finalTotal = (v: AiReportVersion) => FINAL_SOURCES.reduce((n, k) => n + (v.finalSource?.[k] ?? 0), 0);
+/** AI 為主的主指標：改了 AI 的比例＝改了 AI ÷（照 AI ＋ 改了 AI）；沒有可比的定案時是 null */
+const modifiedRate = (v: AiReportVersion) => { const ai = v.finalSource?.ai ?? 0, mod = v.finalSource?.modified ?? 0; return ai + mod ? mod / (ai + mod) : null; };
 /** 被說服：已判不到 10 筆寫樣本不足（不看仲裁筆數） */
 const persuadedCell = (v: AiReportVersion) => {
   const p = v.persuasion;
@@ -209,8 +211,8 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
           <p v-else-if="!enough(finalTotal(v))" class="muted ai-rep__note" data-final-small>{{ t('reviewAi.arb.report.finalSmall', { n: int(finalTotal(v)) }) }}</p>
           <div v-else class="ai-rep__scroll">
             <table class="ai-rep__table" data-table="final">
-              <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.finals') }}</th><th v-for="k in FINAL_SOURCES" :key="k" scope="col">{{ t(`reviewAi.two.source.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.corrected') }}</th></tr></thead>
-              <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="corrected">{{ int(v.corrected ?? 0) }}</td></tr></tbody>
+              <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.finals') }}</th><th v-for="k in FINAL_SOURCES" :key="k" scope="col">{{ t(`reviewAi.two.source.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.corrected') }}</th><th scope="col">{{ t('reviewAi.arb.report.col.modifiedRate') }}</th><th scope="col">{{ t('reviewAi.arb.report.col.inaccurate') }}</th></tr></thead>
+              <tbody><tr><td>{{ int(finalTotal(v)) }}</td><td v-for="k in FINAL_SOURCES" :key="k" :data-final-cell="k">{{ int(v.finalSource[k] ?? 0) }}</td><td data-final-cell="corrected">{{ int(v.corrected ?? 0) }}</td><td data-final-cell="modified-rate">{{ modifiedRate(v) === null ? '—' : `${Math.round(modifiedRate(v)! * 100)}%` }}</td><td data-final-cell="inaccurate">{{ int(v.inaccurate ?? 0) }}</td></tr></tbody>
             </table>
           </div>
           <p v-if="enough(finalTotal(v))" class="subtle ai-rep__note">{{ t('reviewAi.arb.report.correctedNote') }}</p>

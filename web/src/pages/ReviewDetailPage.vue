@@ -384,6 +384,11 @@ function applyAi() {
   aiApplied.value = { id: s.id, at: s.at }; aiDismissed.value = null; noteGuard.value = null;
 }
 function dismissAi() { const s = aiSuggestion.value; if (s) aiDismissed.value = { id: s.id, at: s.at }; }
+// AI 建議駁回、說明欄預填了駁回草稿，審核員改成通過：草稿不能變成給作者的通過補充說明，清掉（改過的就留著）
+watch(choice, (c) => {
+  const b = aiBase.value;
+  if (c === 'approve' && b?.verdict === 'reject' && aiSuggestion.value?.authorNote && note.value.trim() === aiSuggestion.value.authorNote.trim()) note.value = '';
+});
 // AI 的建議到了而決定區還沒人動：直接帶入；已經動過就留給「套用 AI 的建議」
 watch(aiBase, (b) => {
   if (!b || !aiFirst.value || aiApplied.value || formTouched.value) return;

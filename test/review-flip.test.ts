@@ -482,3 +482,14 @@ describe("給作者的說明的內部字詞檢查只管作者看得到的字", (
   });
 });
 
+
+describe("作者結果頁：還沒定案的單不帶說明", () => {
+  it("通過附建議寫了說明，但託管同步還沒完成（單子仍是待審）：作者先打開也看不到說明", async () => {
+    await submit();
+    const id = await latestAuthorSubmission();
+    await env.DB.prepare("UPDATE review_submissions SET note='再補一點開場的選項' WHERE id=?").bind(id).run();
+    const res = await mine(id);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).note).toBeNull();
+  });
+});

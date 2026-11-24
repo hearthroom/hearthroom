@@ -117,6 +117,20 @@ it('the AI review block sits below the author area and above the tabs: suggestio
   expect(aiCalls().map((c) => c.url)).toEqual(['/v1/review/s1/ai']);
 });
 
+it('switching an AI rejection to approve drops the untouched rejection draft so it never reaches the author as an approval note', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Give the player something to answer.' }));
+  await mountPage('/en/review/s1');
+  await waitAi();
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('Give the player something to answer.');
+  [...host.querySelectorAll<HTMLInputElement>('[data-decide-choices] input')].find((x) => x.value === 'approve')!.click(); await nextTick();
+  expect(checked()).toBe('approve');
+  $('[data-suggest-toggle]')!.click(); await nextTick();
+  const field = host.querySelector<HTMLTextAreaElement>('#suggest-note');
+  expect(field).not.toBeNull();
+  expect(field!.value).toBe('');
+});
+
 it('the decision defaults to the AI rejection; unchanged it finalizes as the AI suggests in one click, with the AI id and time, the inaccurate mark and the note for the AI', async () => {
   thenDecided('reject', 'ai');
   routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Give the player something to answer.' }));
@@ -719,7 +733,7 @@ it('report: the arbitration table gains a convinced column, suppressed on its ow
 it('report: suppresses figures under ten samples and exports the reference draft', async () => {
   routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [
     { criteriaVersion: 'v1', total: 4, ai: { pass: 2, reject: 2, handoff: 0 }, matrix: { approved: { pass: 2, reject: 1, handoff: 0 }, rejected: { pass: 0, reject: 1, handoff: 0 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.75, comparable: 4, aiStricter: 1, humanStricter: 0, handoffRate: 0, refusalRate: 0, costUsd: 0.01, arbitration: { values: { human_right: 1, ai_right: 0, both_ok: 0, both_wrong: 0 }, reasons: { 'opening.no_reply_hook': { humanWrong: 0, aiWrong: 1 } } } },
-    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3 }, corrected: 6, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
+    { criteriaVersion: 'v2', total: 40, finalSource: { blind: 20, ai: 6, modified: 2, human_no_ai: 3 }, corrected: 6, inaccurate: 1, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.815, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1234, arbitration: { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: { 'opening.no_reply_hook': { humanWrong: 4, aiWrong: 6 }, 'character.setting_thin': { humanWrong: 1, aiWrong: 2 } } } },
   ] }];
   routes['/v1/review-ai/reference-candidates'] = () => [200, { items: [{ id: 'c1', verdict: 'pass' }, { id: 'c2', verdict: 'reject' }, { id: 'c3', verdict: 'reject' }], skipped: 1 }];
   routes['/v1/review-ai/notes'] = (c) => [200, { from: 0, to: 1, items: c.url.includes('type=author_relation')
@@ -746,6 +760,9 @@ it('report: suppresses figures under ten samples and exports the reference draft
   // 定案來源與改用 AI 結論的筆數（少於 10 筆的版本沒有這一段資料就不畫）
   expect($('[data-version=v2] [data-final-cell=ai]')!.textContent).toBe('6');
   expect($('[data-version=v2] [data-final-cell=corrected]')!.textContent).toBe('6');
+  // AI 為主的主指標：改了 AI ÷（照 AI＋改了 AI）＝ 2／8；標不準確 1 筆
+  expect($('[data-version=v2] [data-final-cell=modified-rate]')!.textContent).toBe('25%');
+  expect($('[data-version=v2] [data-final-cell=inaccurate]')!.textContent).toBe('1');
   expect($('[data-version=v1] [data-table=final]')).toBeNull();
   // 給 AI 的說明：新的在前、全文；只選了類型的寫明沒有說明；可依類型篩
   await vi.waitFor(() => expect($('[data-notes]')).not.toBeNull());
