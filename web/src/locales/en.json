@@ -6209,7 +6209,7 @@
   "reviewAi.arb.report.finalSmall": "{n} two-step finals; not enough samples.",
   "reviewAi.arb.report.col.finals": "Finals",
   "reviewAi.arb.report.corrected": "Switched to the AI's call",
-  "reviewAi.arb.report.correctedNote": "“Switched to the AI's call” counts finals where the blind call differed from the AI and the reviewer chose “Use the AI's”.",
+  "reviewAi.arb.report.correctedNote": "“Switched to the AI's call” counts finals adopted directly from the AI suggestion without edits (same as “As AI suggested”); the edit rate is “Changed from AI ÷ (As AI suggested + Changed from AI)”.",
   "reviewAi.arb.notes.title": "Notes for the AI",
   "reviewAi.arb.notes.filter": "Reason type",
   "reviewAi.arb.notes.filterAll": "All types",

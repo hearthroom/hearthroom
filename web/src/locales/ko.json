@@ -6209,7 +6209,7 @@
   "reviewAi.arb.report.finalSmall": "2단계 확정 {n}건, 표본이 부족해요.",
   "reviewAi.arb.report.col.finals": "확정",
   "reviewAi.arb.report.corrected": "AI 판단으로 변경",
-  "reviewAi.arb.report.correctedNote": "'AI 판단으로 변경'은 블라인드 판단이 AI와 달랐고 최종적으로 'AI 판단'을 고른 건수예요.",
+  "reviewAi.arb.report.correctedNote": "'AI 판단으로 변경'은 수정 없이 AI 제안대로 확정한 건수('AI대로'와 같음)이며, AI 제안을 수정한 비율은 'AI 수정 ÷ (AI대로 + AI 수정)'으로 계산해요.",
   "reviewAi.arb.notes.title": "AI에게 남긴 설명",
   "reviewAi.arb.notes.filter": "이유 유형",
   "reviewAi.arb.notes.filterAll": "모든 유형",
