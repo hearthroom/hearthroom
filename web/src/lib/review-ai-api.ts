@@ -39,9 +39,14 @@ export interface DisagreementItem {
   ai: { verdict: "pass" | "reject"; reasons: string[]; flags: string[]; confidence: number | null; at: number };
   arbitration: Arbitration | null;
 }
+/** AI 說服你了嗎：評 AI 的理由說得好不好（和仲裁「誰對」無關），每人每筆取最後一次 */
+export type Persuasion = "convinced" | "not_convinced";
+export const PERSUASION_VALUES: readonly Persuasion[] = ["convinced", "not_convinced"];
+/** 本週（UTC 週，週一 00:00 起）被說服筆數；suppressed＝已判不到 10 筆，只給計數 */
+export interface WeeklyPersuasion { weekStart: number; convinced: number; rated: number; suppressed: boolean }
 export interface DisagreementQuery { state: "open" | "done" | "all"; direction?: Direction | null; criteria?: string | null; reason?: string | null; limit: number; offset: number }
 
-export async function fetchDisagreements(token: string, q: DisagreementQuery): Promise<{ total: number; items: DisagreementItem[] }> {
+export async function fetchDisagreements(token: string, q: DisagreementQuery): Promise<{ total: number; items: DisagreementItem[]; persuasion?: WeeklyPersuasion }> {
   const p = new URLSearchParams({ state: q.state, limit: String(q.limit), offset: String(q.offset) });
   if (q.direction) p.set("direction", q.direction);
   if (q.criteria) p.set("criteria", q.criteria);
@@ -62,6 +67,8 @@ export interface DisagreementDetail {
   human: { decision: HumanDecision; reasons: string[]; note: string; at: number | null; stamps: { verdict: "approve" | "reject"; at: number; reviewer: string | null }[]; feedback: { value: AiFeedback; at: number; reviewer: string | null }[] };
   ai: { suggestionId: string; criteriaVersion: string; model: string; verdict: "pass" | "reject"; reasons: string[]; flags: string[]; confidence: number | null; note: string; phase: string; at: number };
   arbitrations: { value: Arbitration; referencePool: "pass" | "reject" | null; note: string; /** 給 AI 的說明的原因類型（伺服器回 JSON 字串；舊紀錄沒有） */ noteTypes?: string | AiNoteType[] | null; at: number; arbiter: string | null; /** 這次在頁面上剛送出的（伺服器對非管理員不回名字） */ mine?: boolean }[];
+  /** 我自己最後一次的「AI 說服你了嗎」（舊版伺服器不帶） */
+  myPersuasion?: Persuasion | null;
   content: ({ state: "ready" } & { card: AiCardContent }) | { state: "unavailable" };
   update: AiUpdate;
 }
@@ -73,6 +80,10 @@ export async function arbitrate(suggestionId: string, token: string, body: { val
   return json(await fetch(`${COMMUNITY_API}/review-ai/disagreements/${encodeURIComponent(suggestionId)}/arbitration`, post(token, body)));
 }
 
+export async function sendPersuasion(suggestionId: string, token: string, value: Persuasion): Promise<{ value: Persuasion; updatedAt: number }> {
+  return json(await fetch(`${COMMUNITY_API}/review-ai/disagreements/${encodeURIComponent(suggestionId)}/persuasion`, { method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ value }) }));
+}
+
 type Cell3 = { pass: number; reject: number; handoff: number };
 export interface AiReportVersion {
   criteriaVersion: string; total: number; ai: Cell3;
@@ -80,6 +91,8 @@ export interface AiReportVersion {
   agreement: number | null; comparable: number; aiStricter: number; humanStricter: number;
   handoffRate: number | null; refusalRate: number | null; costUsd: number;
   arbitration: { values: Record<Arbitration, number>; reasons: Record<string, { humanWrong: number; aiWrong: number }> } | null;
+  /** 被說服：每人每筆最後一次選擇（舊版伺服器不帶） */
+  persuasion?: { convinced: number; rated: number };
   /** 兩段式定案來源的筆數，與其中改用 AI 結論的筆數（舊版伺服器不帶） */
   finalSource?: Partial<Record<ReviewFinalSource, number>>;
   corrected?: number;

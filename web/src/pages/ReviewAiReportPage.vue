@@ -9,7 +9,8 @@
  * 參考範例：伺服器最多回最近 30 筆被勾進範例池的分歧；匯出就是把這一份存成 JSON 草稿（不含帳號與卡號），PM 審過才成為新版本。
  *
  * 兩段式定案（ui-two-stage.md）：每個判準版本多列定案來源（用我的／用 AI 的／修改後／沒有 AI 對照）與改用 AI 結論的筆數，
- * 少於 10 筆一樣抑制。「給 AI 的說明」列出定案與仲裁時寫的全文（新的在前、不列審核員），可依原因類型篩，期間跟著上面的選擇。
+ * 少於 10 筆一樣抑制。「被說服」（v21）是仲裁表多的一欄：每人每筆最後一次選「說服我了」的比例，分母是已判筆數，自己少於 10 筆就抑制
+ * （不看仲裁筆數）；仲裁表因為筆數不夠沒畫時，這一欄單獨成一張小表。「給 AI 的說明」列出定案與仲裁時寫的全文（新的在前、不列審核員），可依原因類型篩，期間跟著上面的選擇。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -129,6 +130,12 @@ const arbTotal = (v: AiReportVersion) => (v.arbitration ? ARBITRATION_VALUES.red
 const reasonRows = (v: AiReportVersion) => Object.entries(v.arbitration?.reasons ?? {}).map(([code, c]) => ({ code, ...c, n: c.humanWrong + c.aiWrong })).sort((a, b) => b.n - a.n);
 /** 兩段式定案筆數（舊版伺服器不帶 finalSource：整段不畫） */
 const finalTotal = (v: AiReportVersion) => FINAL_SOURCES.reduce((n, k) => n + (v.finalSource?.[k] ?? 0), 0);
+/** 被說服：已判不到 10 筆寫樣本不足（不看仲裁筆數） */
+const persuadedCell = (v: AiReportVersion) => {
+  const p = v.persuasion;
+  if (!p || !enough(p.rated)) return small();
+  return t('reviewAi.arb.report.persuadedCell', { pct: pct(p.convinced / p.rated), yes: int(p.convinced), total: int(p.rated) });
+};
 const MATRIX_ROWS = ['approved', 'rejected', 'dropped'] as const;
 const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
 </script>
@@ -185,8 +192,14 @@ const MATRIX_COLS = ['pass', 'reject', 'handoff'] as const;
         <p v-else-if="!enough(arbTotal(v))" class="muted ai-rep__note" data-arb-small>{{ t('reviewAi.arb.report.smallArbitration', { n: int(arbTotal(v)) }) }}</p>
         <div v-else class="ai-rep__scroll">
           <table class="ai-rep__table" data-table="arbitration">
-            <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.arbitrated') }}</th><th v-for="k in ARBITRATION_VALUES" :key="k" scope="col">{{ t(`reviewAi.arb.value.${k}`) }}</th></tr></thead>
-            <tbody><tr><td>{{ int(arbTotal(v)) }}</td><td v-for="k in ARBITRATION_VALUES" :key="k">{{ pct(v.arbitration!.values[k] / arbTotal(v)) }} <span class="subtle">({{ int(v.arbitration!.values[k]) }})</span></td></tr></tbody>
+            <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.arbitrated') }}</th><th v-for="k in ARBITRATION_VALUES" :key="k" scope="col">{{ t(`reviewAi.arb.value.${k}`) }}</th><th scope="col">{{ t('reviewAi.arb.report.col.persuaded') }}</th></tr></thead>
+            <tbody><tr><td>{{ int(arbTotal(v)) }}</td><td v-for="k in ARBITRATION_VALUES" :key="k">{{ pct(v.arbitration!.values[k] / arbTotal(v)) }} <span class="subtle">({{ int(v.arbitration!.values[k]) }})</span></td><td data-cell="persuaded">{{ persuadedCell(v) }}</td></tr></tbody>
+          </table>
+        </div>
+        <div v-if="!enough(arbTotal(v)) && v.persuasion?.rated" class="ai-rep__scroll">
+          <table class="ai-rep__table" data-table="persuasion">
+            <thead><tr><th scope="col">{{ t('reviewAi.arb.report.col.persuaded') }}</th></tr></thead>
+            <tbody><tr><td data-cell="persuaded">{{ persuadedCell(v) }}</td></tr></tbody>
           </table>
         </div>
 

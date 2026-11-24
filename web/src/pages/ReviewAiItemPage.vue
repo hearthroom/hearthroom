@@ -8,12 +8,16 @@
  * 仲裁四選一、不預選；「給 AI 的說明」選填（原因類型可多選＋500 字內說明，與兩段式定案同一個區塊）。「加入參考範例」只有人對／AI 對能勾，池照仲裁後的正確結論（與伺服器同一條規則）。
  * 仲裁不改原決定、不通知作者，可以重新仲裁（報表取最後一筆），所以不需要確認層。
  * 送出失敗保留選擇與備註；同一組內容重試沿用同一個 operationId（伺服器回同一筆，不會多記），內容改了才換新的。
+ *
+ * AI 說服你了嗎（v21，owner 2026-11-24）：AI 欄的「AI 的權衡」（只有審核員看得到）顯示 AI 建議的說明；下面二選一 說服我了／沒說服，
+ * 不預選、選填、點了就存、可以改（每人每筆取最後一次）。評的是 AI 的理由說得好不好，和下面的仲裁四選一無關，所以不跟仲裁表單一起送，
+ * 仲裁送出前後都能改。存不起來就回到上一次存好的選擇並說一句。原本「依據」顯示的也是這段說明，搬進權衡區塊，不重複顯示兩次。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
-import { ARBITRATION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, noteTypesOf, type AiNoteType, type Arbitration, type DisagreementDetail } from '@/lib/review-ai-api';
+import { ARBITRATION_VALUES, PERSUASION_VALUES, arbitrate, fetchDisagreement, fetchDisagreements, noteTypesOf, sendPersuasion, type AiNoteType, type Arbitration, type DisagreementDetail, type Persuasion } from '@/lib/review-ai-api';
 import { referencePool } from '@/lib/review-ai';
 import { reasonKey } from '@/lib/review-reasons';
 import { reviewDiffFieldLabel } from '@/lib/review-diff-labels';
@@ -24,6 +28,7 @@ import { dateTime } from '@/lib/format';
 import { pageTitle } from '@/lib/i18n';
 import ReviewAiNav from '@/components/ReviewAiNav.vue';
 import ReviewAiNoteField from '@/components/ReviewAiNoteField.vue';
+import ReviewVisibility from '@/components/ReviewVisibility.vue';
 
 const { t, te, locale } = useI18n();
 const { lp } = useLocalePath();
@@ -56,6 +61,7 @@ async function load() {
     const res = await fetchDisagreement(target, await token());
     if (!alive || gen !== generation) return;
     data.value = res;
+    persuasion.value = res.myPersuasion ?? null;
     document.title = pageTitle(`${t('reviewAi.arb.title')} · ${res.content.state === 'ready' ? res.content.card.name : t('reviewAi.arb.cardNo', { id: res.submission.cardId })}`);
   } catch (e) {
     if (!alive || gen !== generation) return;
@@ -65,7 +71,10 @@ async function load() {
     if (gen === generation) loading.value = false;
   }
 }
-function reset() { data.value = null; choice.value = null; note.value = ''; noteTypes.value = []; addRef.value = false; sendError.value = ''; result.value = null; next.value = null; pendingOp = null; }
+function reset() {
+  data.value = null; choice.value = null; note.value = ''; noteTypes.value = []; addRef.value = false; sendError.value = ''; result.value = null; next.value = null; pendingOp = null;
+  persuasion.value = null; persuading.value = false; persuadeFailed.value = false; persuadeSeq++;
+}
 watch(id, () => { reset(); void load(); });
 watch(allowed, (a) => { if (a && !data.value) void load(); });
 onMounted(() => { document.title = pageTitle(t('reviewAi.arb.title')); void load(); });
@@ -88,6 +97,29 @@ const pct = (n: number) => new Intl.NumberFormat(String(locale.value), { style: 
 const update = computed(() => data.value?.update ?? null);
 /** 更新：逐欄列出改前改後（AI 讀到的也是這一份，每邊最多 1,500 字），折疊，點開才看 */
 const fieldLabel = (key: string) => reviewDiffFieldLabel(key, t, te);
+
+// ---- AI 說服你了嗎 ----
+const persuasion = ref<Persuasion | null>(null);
+const persuading = ref(false);
+const persuadeFailed = ref(false);
+let persuadeSeq = 0;
+const PERSUADE_LABEL: Record<Persuasion, string> = { convinced: 'reviewAi.arb.persuade.yes', not_convinced: 'reviewAi.arb.persuade.no' };
+async function choose(value: Persuasion) {
+  if (!data.value || persuading.value || value === persuasion.value) return;
+  const before = persuasion.value, target = id.value, seq = ++persuadeSeq;
+  persuasion.value = value; persuading.value = true; persuadeFailed.value = false;
+  try {
+    const res = await sendPersuasion(target, await token(), value);
+    if (!alive || seq !== persuadeSeq) return;
+    persuasion.value = res.value;
+  } catch (e) {
+    if (!alive || seq !== persuadeSeq) return;
+    if (e instanceof ApiError && e.status === 403) forbidden.value = true;
+    else { persuasion.value = before; persuadeFailed.value = true; }
+  } finally {
+    if (seq === persuadeSeq) persuading.value = false;
+  }
+}
 
 // ---- 仲裁 ----
 const choice = ref<Arbitration | null>(null);
@@ -255,10 +287,26 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
               <p class="ai-label">{{ t('reviewAi.arb.flags') }}</p>
               <p class="ai-chips"><span v-for="f in data.ai.flags" :key="f" class="chip ai-tag">{{ t(`reviewAi.flag.${f}`) }}</span></p>
             </div>
-            <div class="ai-field">
-              <p class="ai-label">{{ t('reviewAi.arb.basis') }}</p>
-              <p class="ai-text">{{ data.ai.note || t('reviewAi.arb.none') }}</p>
-            </div>
+            <section class="ai-weigh" aria-labelledby="ai-weigh-title" data-tradeoff>
+              <div class="ai-weigh__head">
+                <h4 id="ai-weigh-title" class="ai-weigh__title">{{ t('reviewAi.arb.tradeoff.title') }}</h4>
+                <ReviewVisibility who="reviewers" />
+              </div>
+              <p v-if="data.ai.note" class="ai-text" data-tradeoff-note>{{ data.ai.note }}</p>
+              <p v-else class="muted ai-note" data-tradeoff-empty>{{ t('reviewAi.arb.tradeoff.empty') }}</p>
+              <div class="ai-field" role="radiogroup" aria-labelledby="ai-persuade-title" aria-describedby="ai-persuade-hint" data-persuade>
+                <p id="ai-persuade-title" class="ai-label">{{ t('reviewAi.arb.persuade.title') }}</p>
+                <div class="ai-persuade">
+                  <label v-for="v in PERSUASION_VALUES" :key="v" class="ai-choice ai-choice--one" :class="{ 'ai-choice--on': persuasion === v }">
+                    <input type="radio" name="ai-persuade" :value="v" :checked="persuasion === v" :disabled="persuading" :data-persuade-value="v" @change="choose(v)" />
+                    <span class="ai-choice__name">{{ t(PERSUADE_LABEL[v]) }}</span>
+                  </label>
+                </div>
+                <p v-if="persuadeFailed" class="notice notice--error ai-note" role="alert" data-persuade-error>{{ t('reviewAi.arb.persuade.failed') }}</p>
+                <p v-else-if="persuasion && !persuading" class="subtle ai-note" role="status" data-persuade-recorded>{{ t('reviewAi.arb.persuade.recorded', { value: t(PERSUADE_LABEL[persuasion]) }) }}</p>
+                <p id="ai-persuade-hint" class="subtle ai-note">{{ t('reviewAi.arb.persuade.hint') }}</p>
+              </div>
+            </section>
             <p class="subtle ai-note" data-ai-meta>{{ t('reviewAi.arb.criteriaModel', { v: data.ai.criteriaVersion, model: data.ai.model }) }}</p>
           </section>
         </div>
@@ -368,6 +416,15 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 .ai-choice--on { border-color: var(--accent); background: var(--accent-tint); }
 .ai-choice__name { font-weight: 600; overflow-wrap: anywhere; }
 .ai-choice__hint { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+/* AI 的權衡：只有審核員看得到的內部說明，虛線框（同揭曉區的內部說明） */
+.ai-weigh { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); min-width: 0; padding: var(--s-3); border: 1px dashed var(--border-strong); border-radius: var(--r-sm); background: var(--surface-2); }
+.ai-weigh .ai-text { background: var(--surface); }
+.ai-weigh__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1) var(--s-2); min-width: 0; }
+.ai-weigh__title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.ai-persuade { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: var(--s-2); min-width: 0; }
+.ai-choice--one { background: var(--surface); }
+.ai-choice--one input { grid-row: auto; }
+.ai-choice--one.ai-choice--on { background: var(--accent-tint); }
 .ai-check { display: flex; align-items: flex-start; gap: var(--s-2); min-height: var(--h-md); cursor: pointer; }
 .ai-check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; }
 .ai-check--off { cursor: not-allowed; }
@@ -376,7 +433,8 @@ const history = computed(() => [...(data.value?.arbitrations ?? [])].reverse());
 .ai-check__name { font-weight: 600; }
 .ai-form__acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s-2); }
 .ai-form__submit { min-width: 128px; }
-.ai-choice__hint:lang(ko), .ai-note:lang(ko), .ai-check__text:lang(ko) { word-break: keep-all; }
+.ai-choice__hint:lang(ko), .ai-note:lang(ko), .ai-check__text:lang(ko), .ai-label:lang(ko), .ai-choice__name:lang(ko) { word-break: keep-all; }
+.ai-note:lang(ja), .ai-label:lang(ja) { word-break: auto-phrase; }
 @media (max-width: 760px) { .ai-choices { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .ai-form__acts > .btn--lg { flex: 1 1 auto; } }
 </style>

@@ -5,12 +5,15 @@
  * 只列人工與 AI 結論相反的送審；預設待仲裁，最舊的先。篩選放在網址上，從單筆仲裁回來還在。
  * 判準版本的選項取自近 120 天的對照報表（沒有另外的版本清單）。「作者標記」篩選服務端沒有提供，這一版不做。
  * 不是管理員：分頁本來就不出現；直接打網址看到一句說明，不發請求（服務端也擋）。
+ *
+ * 頁頂「本週被說服比例」（v21）：清單回應帶的本週（UTC 週）說服／已判，不跟著篩選；已判不到 10 筆只給計數、寫樣本不足。
+ * 重讀清單、清單空了或讀取失敗時都留著上一次的數字。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '@/lib/api';
-import { fetchAiReport, fetchDisagreements, type DisagreementItem, type Direction } from '@/lib/review-ai-api';
+import { fetchAiReport, fetchDisagreements, type DisagreementItem, type Direction, type WeeklyPersuasion } from '@/lib/review-ai-api';
 import { versionNumber } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
 import { useReviewer } from '@/lib/review';
@@ -47,6 +50,7 @@ function setFilter(key: string, value: string | null) { void router.replace({ qu
 function clearFilters() { void router.replace({ query: { state: route.query.state } }); }
 
 const items = ref<DisagreementItem[]>([]);
+const weekly = ref<WeeklyPersuasion | null>(null);
 const total = ref(0);
 const loading = ref(true);
 const loadingMore = ref(false);
@@ -69,6 +73,7 @@ async function load(more = false) {
     if (!alive || gen !== generation) return;
     items.value = more ? [...items.value, ...res.items] : res.items;
     total.value = res.total;
+    if (res.persuasion) weekly.value = res.persuasion;
   } catch (e) {
     if (!alive || gen !== generation) return;
     if (e instanceof ApiError && e.status === 403) forbidden.value = true; else failed.value = true;
@@ -92,6 +97,13 @@ watch(allowed, (a) => { if (a && !items.value.length) { void load(); void loadVe
 onMounted(() => { document.title = pageTitle(t('reviewAi.arb.title')); if (allowed.value) { void load(); void loadVersions(); } });
 
 const pct = (n: number) => new Intl.NumberFormat(String(locale.value), { style: 'percent', maximumFractionDigits: 0 }).format(n);
+const weeklyText = computed(() => {
+  const w = weekly.value;
+  if (!w) return '';
+  return w.suppressed || !w.rated
+    ? t('reviewAi.arb.persuade.weeklySmall', { yes: w.convinced, total: w.rated })
+    : t('reviewAi.arb.persuade.weeklyValue', { pct: pct(w.convinced / w.rated), yes: w.convinced, total: w.rated });
+});
 const cardName = (it: DisagreementItem) => it.name || t('reviewAi.arb.cardNo', { id: it.cardId });
 </script>
 
@@ -101,6 +113,11 @@ const cardName = (it: DisagreementItem) => it.name || t('reviewAi.arb.cardNo', {
     <p v-if="denied || forbidden" class="notice notice--error" role="alert" data-forbidden>{{ t('state.forbidden') }}</p>
     <template v-else>
       <p class="subtle ai-arb__intro">{{ t('reviewAi.arb.intro') }}</p>
+      <section v-if="weekly" class="panel ai-week" aria-labelledby="ai-week-title" data-weekly>
+        <h2 id="ai-week-title" class="ai-week__title">{{ t('reviewAi.arb.persuade.weeklyTitle') }}</h2>
+        <p class="ai-week__value" :data-suppressed="weekly.suppressed || !weekly.rated" data-weekly-value>{{ weeklyText }}</p>
+        <p class="subtle ai-week__rule">{{ t('reviewAi.arb.persuade.weeklyRule') }}</p>
+      </section>
       <div class="ai-arb__filters">
         <div class="seg ai-arb__states" role="group" :aria-label="t('reviewAi.arb.filter.state')">
           <button v-for="s in STATES" :key="s" type="button" class="seg__item" :class="{ 'seg__item--on': state === s }" :aria-pressed="state === s" :data-state="s" @click="setFilter('state', s === 'open' ? null : s)">{{ t(`reviewAi.arb.state.${s}`) }}</button>
@@ -183,6 +200,13 @@ const cardName = (it: DisagreementItem) => it.name || t('reviewAi.arb.cardNo', {
 <style scoped>
 .ai-arb { display: grid; gap: var(--s-4); min-width: 0; }
 .ai-arb__intro { margin: 0; }
+.ai-week { padding: var(--s-3) var(--s-4); display: grid; gap: var(--s-1); min-width: 0; }
+.ai-week__title { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ai-week__value { margin: 0; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ai-week__value[data-suppressed="true"] { font-size: 15px; font-weight: 600; color: var(--text-2); }
+.ai-week__rule { margin: 0; overflow-wrap: anywhere; }
+.ai-week__title:lang(ko), .ai-week__rule:lang(ko) { word-break: keep-all; }
+.ai-week__rule:lang(ja) { word-break: auto-phrase; }
 .ai-arb__filters { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
 .ai-arb__states { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .ai-arb__select { width: auto; min-width: 140px; max-width: 100%; }

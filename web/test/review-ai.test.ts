@@ -815,6 +815,108 @@ it('arbitration: a failed submit keeps the choice and note; unreadable content s
   expect(calls.filter((c) => c.method === 'POST').map((c) => c.body.operationId)).toEqual(['op-1', 'op-1']);
 });
 
+// ---------- AI 說服你了嗎（v21） ----------
+
+it('persuade: the AI column shows its trade-offs once, reviewers only; the two-way choice is unselected, saves on click, can change, and stays out of the arbitration', async () => {
+  let fail = false;
+  routes['/v1/review-ai/disagreements/g1/persuasion'] = (c) => (fail ? [503, { error: 'unavailable' }] : [200, { value: c.body.value, updatedAt: 9 }]);
+  routes['/v1/review-ai/disagreements/g1/arbitration'] = (c) => [200, { id: 'x1', value: c.body.value, referencePool: null }];
+  routes['/v1/review-ai/disagreements/g1'] = () => [200, disagreement()];
+  routes['/v1/review-ai/disagreements?'] = () => [200, { total: 0, items: [] }];
+  await mountPage('/en/review/ai/g1');
+  await vi.waitFor(() => expect($('[data-tradeoff]')).not.toBeNull());
+  const block = $('[data-col=ai] [data-tradeoff]')!;
+  expect(block.textContent).toContain(t('reviewAi.arb.tradeoff.title'));
+  expect(block.querySelector('[data-visibility=reviewers]')!.textContent).toContain(t('reviewAi.two.visibility.reviewerOnly'));
+  expect($('[data-tradeoff-note]')!.textContent).toBe('No hook.');
+  // 說明只出現一次（原本的「依據」搬進權衡區塊）
+  expect($('[data-col=ai]')!.textContent!.split('No hook.').length).toBe(2);
+  expect(block.textContent).toContain(t('reviewAi.arb.persuade.title'));
+  expect(block.textContent).toContain(t('reviewAi.arb.persuade.hint'));
+  expect($('[data-persuade]')!.getAttribute('role')).toBe('radiogroup');
+  const radio = (v: string) => host.querySelector<HTMLInputElement>(`[data-persuade-value=${v}]`)!;
+  const puts = () => calls.filter((c) => c.method === 'PUT');
+  expect(radio('convinced').checked || radio('not_convinced').checked).toBe(false);
+  expect($('[data-persuade-recorded]')).toBeNull();
+
+  radio('convinced').click();
+  await vi.waitFor(() => expect($('[data-persuade-recorded]')).not.toBeNull());
+  expect(puts().map((c) => [c.url, c.body])).toEqual([['/v1/review-ai/disagreements/g1/persuasion', { value: 'convinced' }]]);
+  expect($('[data-persuade-recorded]')!.textContent).toBe(t('reviewAi.arb.persuade.recorded', { value: t('reviewAi.arb.persuade.yes') }));
+  radio('not_convinced').click();
+  await vi.waitFor(() => expect(puts().length).toBe(2));
+  await vi.waitFor(() => expect($('[data-persuade-recorded]')!.textContent).toContain(t('reviewAi.arb.persuade.no')));
+  expect(puts()[1]!.body).toEqual({ value: 'not_convinced' });
+
+  // 存不起來：回到上一次存好的選擇，說一句
+  fail = true;
+  radio('convinced').click();
+  await vi.waitFor(() => expect($('[data-persuade-error]')).not.toBeNull());
+  expect($('[data-persuade-error]')!.textContent).toBe(t('reviewAi.arb.persuade.failed'));
+  expect(radio('not_convinced').checked).toBe(true);
+  expect(radio('convinced').checked).toBe(false);
+
+  // 仲裁照舊：不帶被說服，送出後還能改
+  fail = false;
+  host.querySelector<HTMLInputElement>('[data-value=human_right]')!.click(); await nextTick();
+  $('[data-action=submit]')!.click();
+  await vi.waitFor(() => expect($('[data-result]')).not.toBeNull());
+  expect(Object.keys(calls.find((c) => c.method === 'POST')!.body).sort()).toEqual(['addToReference', 'note', 'noteTypes', 'operationId', 'value']);
+  radio('convinced').click();
+  await vi.waitFor(() => expect(puts().length).toBe(4));
+  await vi.waitFor(() => expect($('[data-persuade-recorded]')!.textContent).toContain(t('reviewAi.arb.persuade.yes')));
+});
+
+it('persuade: my earlier choice comes back checked; no AI note says so', async () => {
+  routes['/v1/review-ai/disagreements/g1'] = () => [200, disagreement({ myPersuasion: 'not_convinced', ai: { ...disagreement().ai, note: '' } })];
+  await mountPage('/en/review/ai/g1');
+  await vi.waitFor(() => expect($('[data-tradeoff]')).not.toBeNull());
+  expect($('[data-tradeoff-empty]')!.textContent).toBe(t('reviewAi.arb.tradeoff.empty'));
+  expect($('[data-tradeoff-note]')).toBeNull();
+  expect(host.querySelector<HTMLInputElement>('[data-persuade-value=not_convinced]')!.checked).toBe(true);
+  expect($('[data-persuade-recorded]')!.textContent).toContain(t('reviewAi.arb.persuade.no'));
+});
+
+it('list: the weekly convinced card shows a ratio from ten rated, counts and "not enough samples" below, and stays when the list is empty', async () => {
+  let week = { weekStart: 1, convinced: 3, rated: 9, suppressed: true };
+  routes['/v1/review-ai/disagreements?'] = (c) => [200, { total: c.url.includes('direction=') ? 0 : 1, items: c.url.includes('direction=') ? [] : [{ ...listItem }], persuasion: week }];
+  routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [] }];
+  await mountPage('/en/review/ai');
+  await vi.waitFor(() => expect($('[data-weekly]')).not.toBeNull());
+  expect($('[data-weekly]')!.textContent).toContain(t('reviewAi.arb.persuade.weeklyTitle'));
+  expect($('[data-weekly]')!.textContent).toContain(t('reviewAi.arb.persuade.weeklyRule'));
+  expect($('[data-weekly-value]')!.textContent).toBe(t('reviewAi.arb.persuade.weeklySmall', { yes: 3, total: 9 }));
+  expect($('[data-weekly-value]')!.textContent).not.toContain('%');
+  week = { weekStart: 1, convinced: 12, rated: 29, suppressed: false };
+  await router.replace({ query: { direction: 'ai_stricter' } });
+  await vi.waitFor(() => expect($('[data-weekly-value]')!.textContent).toBe(t('reviewAi.arb.persuade.weeklyValue', { pct: '41%', yes: 12, total: 29 })));
+  expect($('[data-empty]')).not.toBeNull();
+  expect($('[data-weekly]')).not.toBeNull();
+});
+
+const listItem = { suggestionId: 'g1', submissionId: 's1', cardId: '123', name: 'Last Train', direction: 'ai_stricter', criteriaVersion: 'v3', human: { decision: 'approved', reasons: [], at: 2 }, ai: { verdict: 'reject', reasons: [], flags: [], confidence: 0.8, at: 1 }, arbitration: null };
+
+it('report: the arbitration table gains a convinced column, suppressed on its own rated count', async () => {
+  const base = { total: 40, ai: { pass: 20, reject: 18, handoff: 2 }, matrix: { approved: { pass: 18, reject: 4, handoff: 1 }, rejected: { pass: 3, reject: 13, handoff: 1 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.8, comparable: 38, aiStricter: 4, humanStricter: 3, handoffRate: 0.05, refusalRate: 0, costUsd: 0.1 };
+  const arb = { values: { human_right: 6, ai_right: 4, both_ok: 1, both_wrong: 1 }, reasons: {} };
+  routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [
+    { ...base, criteriaVersion: 'v3', arbitration: arb, persuasion: { convinced: 5, rated: 12 } },
+    { ...base, criteriaVersion: 'v2', arbitration: arb, persuasion: { convinced: 2, rated: 4 } },
+    { ...base, criteriaVersion: 'v1', arbitration: null, persuasion: { convinced: 3, rated: 10 } },
+  ] }];
+  routes['/v1/review-ai/reference-candidates'] = () => [200, { items: [], skipped: 0 }];
+  routes['/v1/review-ai/notes'] = () => [200, { from: 0, to: 1, items: [] }];
+  await mountPage('/en/review/ai/report');
+  await vi.waitFor(() => expect($('[data-version=v3] [data-table=arbitration]')).not.toBeNull());
+  const heads = [...host.querySelectorAll('[data-version=v3] [data-table=arbitration] th')].map((th) => th.textContent!.trim());
+  expect(heads.at(-1)).toBe(t('reviewAi.arb.report.col.persuaded'));
+  expect($('[data-version=v3] [data-cell=persuaded]')!.textContent).toBe(t('reviewAi.arb.report.persuadedCell', { pct: '41.7%', yes: '5', total: '12' }));
+  expect($('[data-version=v2] [data-cell=persuaded]')!.textContent).toBe(t('reviewStats.suppressed'));
+  // 沒有仲裁表的版本：被說服單獨一張小表
+  expect($('[data-version=v1] [data-table=arbitration]')).toBeNull();
+  expect($('[data-version=v1] [data-table=persuasion] [data-cell=persuaded]')!.textContent).toBe(t('reviewAi.arb.report.persuadedCell', { pct: '30.0%', yes: '3', total: '10' }));
+});
+
 it('report: suppresses figures under ten samples and exports the reference draft', async () => {
   routes['/v1/review-ai/report'] = () => [200, { from: 0, to: 1, versions: [
     { criteriaVersion: 'v1', total: 4, ai: { pass: 2, reject: 2, handoff: 0 }, matrix: { approved: { pass: 2, reject: 1, handoff: 0 }, rejected: { pass: 0, reject: 1, handoff: 0 }, dropped: { pass: 0, reject: 0, handoff: 0 } }, agreement: 0.75, comparable: 4, aiStricter: 1, humanStricter: 0, handoffRate: 0, refusalRate: 0, costUsd: 0.01, arbitration: { values: { human_right: 1, ai_right: 0, both_ok: 0, both_wrong: 0 }, reasons: { 'opening.no_reply_hook': { humanWrong: 0, aiWrong: 1 } } } },
