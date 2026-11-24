@@ -14,6 +14,9 @@ import { fetchFandomLookup } from '@/lib/api';
 import { pageTitle } from '@/lib/i18n';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewLengthExemptionControl from '@/components/ReviewLengthExemptionControl.vue';
+import RatingCorrection from '@/components/RatingCorrection.vue';
+import { isRating } from '../../../shared/content-rating';
+import { ratingName } from '@/lib/rating';
 const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();const {lp}=useLocalePath();
 const featuredQuota=computed(()=>reviewer.featured?.admin&&reviewer.featuredProvider===currentProvider()?reviewer.featured:null);
 const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.meta.managementTab === 'history' ? 'history' : 'cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
@@ -28,7 +31,7 @@ function findExemption(){exemptionTarget.value=exemptionNumber.value.trim();exem
 watch(()=>[session.me?.accountNumId,reviewer.role,tab.value],()=>{exemptionTarget.value='';exemptionNumber.value='';});
 // 重新審核：已發布、還沒在重審的卡才有；它不是處置案件，送到審核清單（伺服器另一支端點）
 const reopening=computed(()=>!!history.value?.reviews.some(r=>!!r.reopen&&r.status==='pending'));
-const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend',...(history.value.card.status==='approved'&&!reopening.value?['reopen']:[])]:[]);
+const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend',...(history.value.card.status==='approved'&&!reopening.value?['reopen']:[]),...(isManager.value?['rating']:[])]:[]);
 const operation=ref(crypto.randomUUID());
 const identity=()=>`${currentProvider()}:${session.me?.accountNumId??''}`;
 let generation=0, selectionGeneration=0, alive=true;
@@ -102,7 +105,13 @@ function resolve(decision:'confirm'|'dismiss'){if(!selected.value)return;return 
 function propose(){if(!history.value)return;if(action.value==='reopen')return perform(`/cards/${history.value.card.id}/reopen`,{reason:reason.value.trim()},t('moderation.action.reopen'),t('moderation.effect.reopen'));return perform('/cases',{cardId:history.value.card.id,action:action.value,reason:reason.value.trim(),operationId:operation.value},t(`moderation.action.${action.value}`),t(`moderation.proposal.${action.value}`));}
 function adjust(kind:'tags'|'compensation'|'fandom'){if(!history.value)return;const body=kind==='tags'?{tags:tagText.value.split(/[,，\n]/).map(s=>s.trim()).filter(Boolean)}:kind==='fandom'?{fandom:fandomPick.value.label.trim(),...(fandomPick.value.id?{fandomId:fandomPick.value.id}:{})}:{board:board.value,hours:hours.value};return perform(`/cards/${history.value.card.id}/${kind}`,{reason:reason.value.trim(),operationId:operation.value,...body},t(`moderation.${kind}`),kind==='compensation'?`${t('moderation.compensationEffect')} ${t(`moderation.board.${board.value}`)} · ${t('moderation.hours')}: ${hours.value}`:t(`moderation.${kind}Effect`));}
 function page(delta:number){if(busy.value)return;offset.value=Math.max(0,offset.value+delta*30);selected.value=null;history.value=null;void load();}
-function eventValue(item:CardHistory['events'][number]){try{const after=JSON.parse(item.afterValue);if(item.action==='fandom')return `${item.beforeValue||'—'} → ${after.fandom||'—'}`;if(item.action==='tags')return `${JSON.parse(item.beforeValue).join(', ')} → ${after.join(', ')}`;return `${t(`moderation.board.${after.board}`)} · ${t('moderation.hours')}: ${after.milliseconds/3600000}`;}catch{return '';}}
+function eventValue(item:CardHistory['events'][number]){
+ // 更正分級的歷程存的是級別代號本身（不是 JSON）
+ if(item.action==='rating'){const name=(r:string)=>isRating(r)?ratingName(r,String(locale.value)):(r||'—');return `${name(item.beforeValue)} → ${name(item.afterValue)}`;}
+ try{const after=JSON.parse(item.afterValue);if(item.action==='fandom')return `${item.beforeValue||'—'} → ${after.fandom||'—'}`;if(item.action==='tags')return `${JSON.parse(item.beforeValue).join(', ')} → ${after.join(', ')}`;return `${t(`moderation.board.${after.board}`)} · ${t('moderation.hours')}: ${after.milliseconds/3600000}`;}catch{return '';}}
+// 更正分級完成：換上新的卡片詳情（分級與歷程），清單裡同一張也跟著換，選取不清掉
+function ratingUpdated(fresh:CardHistory){if(!history.value||history.value.card.id!==fresh.card.id)return;history.value=fresh;cards.value=cards.value.map(item=>item.id===fresh.card.id?{...item,...fresh.card}:item);}
+async function ratingAgain(){action.value=actions.value[0]??'delist';await nextTick();document.getElementById('case-action')?.focus();}
 onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.refresh();void load();});
 </script>
 <template>
@@ -145,8 +154,11 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
       <p v-if="!history.card.featured&&featureFull" class="subtle">{{t('card.featureQuotaFull')}}</p>
      </section>
      <label for="case-action">{{t('moderation.chooseAction')}}</label><select id="case-action" v-model="action" class="input" :disabled="busy"><option v-for="value in actions" :key="value" :value="value">{{t(`moderation.action.${value}`)}}</option></select>
+     <RatingCorrection v-if="action==='rating'&&isManager" :key="history.card.id" :card="history.card" :token="token" :disabled="busy" @busy="v=>busy=v" @updated="ratingUpdated" @again="ratingAgain" />
+     <template v-else>
      <p class="subtle">{{t(`moderation.proposal.${action}`)}}</p><label for="card-reason">{{t('moderation.reason')}}</label><textarea autocomplete="off" id="card-reason" v-model="reason" class="input" rows="4" maxlength="2000" :disabled="busy"/>
      <button class="btn btn--danger work-submit" :disabled="busy||!reason.trim()" @click="propose">{{t(`moderation.action.${action}`)}}</button>
+     </template>
      <details v-if="isManager" class="work-tools"><summary>{{t('moderation.tools')}}</summary><label for="card-tags">{{t('moderation.tagsLabel')}}</label><input id="card-tags" v-model="tagText" class="input" :disabled="busy"/><button class="btn" :disabled="busy||!reason.trim()" @click="adjust('tags')">{{t('moderation.tags')}}</button><label for="card-fandom">{{t('moderation.fandomLabel')}}</label><LookupField v-model="fandomPick" input-id="card-fandom" :lookup="(q)=>fetchFandomLookup(q)" :disabled="busy" :placeholder="t('editor.fandom.placeholder')" /><button class="btn" :disabled="busy||!reason.trim()" @click="adjust('fandom')">{{t('moderation.fandom')}}</button><p class="subtle">{{t('moderation.fandomEffect')}}</p><label for="comp-board">{{t('moderation.board')}}</label><select id="comp-board" v-model="board" class="input"><option v-for="value in ['day','week','month']" :key="value" :value="value">{{t(`moderation.board.${value}`)}}</option></select><label for="comp-hours">{{t('moderation.hours')}}</label><input id="comp-hours" v-model.number="hours" class="input" type="number" min="0.25" max="720" step="0.25"/><button class="btn" :disabled="busy||!reason.trim()||!hours" @click="adjust('compensation')">{{t('moderation.compensation')}}</button><p class="subtle">{{t('moderation.compensationEffect')}}</p></details>
      <h3>{{t('moderation.tab.history')}}</h3><ol class="work-timeline"><li v-for="item in history.cases" :key="item.id"><strong>{{t(`moderation.action.${item.action}`)}}</strong> · {{t(`moderation.status.${item.status}`)}}<p>{{item.reason}}</p><time>{{dateTime(item.createdAt)}}</time></li><li v-for="item in history.reviews" :key="item.id"><strong>{{t(item.reopen?'moderation.reReview':'moderation.reviewQueue')}}</strong> · {{t(`moderation.status.${item.status}`)}}<p>{{item.note}}</p><time>{{dateTime(item.submittedAt)}}</time></li><li v-for="(item,i) in history.events" :key="i"><strong>{{t(`moderation.${item.action}`)}}</strong><p>{{item.reason}}</p><p class="subtle">{{eventValue(item)}}</p><time>{{dateTime(item.at)}}</time></li></ol><p v-if="!history.cases.length&&!history.reviews.length&&!history.events.length" class="subtle">{{t('moderation.noHistory')}}</p>
     </template>
