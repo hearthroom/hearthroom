@@ -4,10 +4,11 @@
  * 有開場白理由時多一行「並附上好開場的三個要素」。
  *
  * 駁回理由選擇器的即時預覽與兩段式定案（選「用我的」「用 AI 的」時作者會看到什麼）共用這一份。
+ * 婉拒（ui-decline.md）：作者收到的回覆放在最前面（小標「給作者的回覆」），其他理由接在後面，並註明這個順序。
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { hasOpeningReason, hasOptions, reasonKey, reasonOptionKey } from "@/lib/review-reasons";
+import { declineReply, hasOpeningReason, hasOptions, isDeclineReason, reasonKey, reasonOptionKey } from "@/lib/review-reasons";
 import ReviewReasonOptions from "@/components/ReviewReasonOptions.vue";
 
 const props = defineProps<{
@@ -20,13 +21,20 @@ const { t, te } = useI18n();
 // 字數參數：伺服器給的是 remaining，字串用的是 {gap}（跟作者端同一個鍵）
 const params = computed(() => ({ ...props.length, gap: props.length.remaining ?? "" }));
 const field = (code: string, name: Parameters<typeof reasonKey>[1]) => (te(reasonKey(code, name)) ? t(reasonKey(code, name), params.value) : "");
+const reply = computed(() => declineReply(t, props.codes));
+const others = computed(() => props.codes.filter((c) => !isDeclineReason(c)));
 const fixOf = (code: string) => (code === "content.min_length" && props.length.total ? field(code, "fixCount") : props.coaching ? field(code, "coachFix") || field(code, "fix") : field(code, "fix"));
 </script>
 
 <template>
   <section v-if="codes.length" class="preview" aria-live="polite" data-reason-preview>
     <h4 class="preview__title">{{ title || t("reviewV2.decide.previewTitle") }}</h4>
-    <article v-for="code in codes" :key="code" class="preview__item">
+    <article v-if="reply" class="preview__item" data-decline-preview>
+      <p class="preview__name">{{ t("review.reasons.decline.previewLabel") }}</p>
+      <p>{{ reply }}</p>
+    </article>
+    <p v-if="reply && others.length" class="subtle" data-decline-order>{{ t("review.reasons.decline.orderHint") }}</p>
+    <article v-for="code in others" :key="code" class="preview__item">
       <p class="preview__name">{{ t(reasonKey(code, "name")) }}</p>
       <p>{{ fixOf(code) }}</p>
       <template v-if="coaching && field(code, 'before')">
@@ -40,7 +48,7 @@ const fixOf = (code: string) => (code === "content.min_length" && props.length.t
         <ReviewReasonOptions :code="code" />
       </div>
     </article>
-    <p v-if="hasOpeningReason(codes)" class="subtle">{{ t("reviewV2.decide.previewOpening") }}</p>
+    <p v-if="hasOpeningReason(codes)" class="subtle" data-preview-opening>{{ t("reviewV2.decide.previewOpening") }}</p>
   </section>
 </template>
 

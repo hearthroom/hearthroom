@@ -7,7 +7,7 @@ import {useSession} from '@/lib/session';
 import {useLocalePath} from '@/lib/use-locale';
 import {dateTime} from '@/lib/format';
 import {pageTitle} from '@/lib/i18n';
-import {REVIEW_REASONS,hasField,hasOpeningReason,hasOptions,reasonKey,reasonOptionKey} from '@/lib/review-reasons';
+import {REVIEW_REASONS,declineReply,hasField,hasOpeningReason,hasOptions,isDeclineReason,reasonKey,reasonOptionKey} from '@/lib/review-reasons';
 import ReviewReasonOptions from '@/components/ReviewReasonOptions.vue';
 import {REVIEW_REQUIRED_CHARACTERS} from '../../../shared/review-length';
 import {platformPath} from '@/lib/distribution';
@@ -27,6 +27,14 @@ const known=(codes:string[]|undefined)=>(codes??[]).filter(c=>(REVIEW_REASONS as
 const suggest=computed(()=>{const d=data.value;return !!d&&d.status==='approved'&&!d.corrected&&known(d.suggestions).length>0;});
 const reasons=computed(()=>{const d=data.value;if(!d||d.corrected)return [];if(suggest.value)return known(d.suggestions);if(d.status!=='rejected')return [];return known(d.reasons);});
 const guided=computed(()=>reasons.value.length>0);
+/**
+ * 婉拒（ui-decline.md）：一張「給你的回覆」卡放最前面，只有溫和的回覆正文（不列問題／怎麼改／範例）；
+ * 同時勾了其他理由時接一句連接語，其他理由的卡片接在下面。只勾婉拒：標題「審核結果」，沒有好開場要素，按鈕只有返回我的卡片。
+ */
+const decline=computed(()=>suggest.value?'':declineReply(t,reasons.value));
+const cards=computed(()=>decline.value?reasons.value.filter(c=>!isDeclineReason(c)):reasons.value);
+const declineOnly=computed(()=>!!decline.value&&!cards.value.length);
+const titleKey=computed(()=>suggest.value?'reviewV2.author.suggestTitle':declineOnly.value?'reviewV2.author.declinePageTitle':guided.value?'reviewV2.author.pageTitle':data.value?.corrected?'review.correction.authorTitle':'review.correction.authorOpen');
 const coaching=computed(()=>guided.value&&(suggest.value||!!data.value?.coaching));
 const opening=computed(()=>hasOpeningReason(reasons.value));
 const has=(code:string,field:Parameters<typeof reasonKey>[1])=>hasField(te,code,field);
@@ -44,12 +52,12 @@ async function load(){
 }
 onMounted(()=>{void load();});
 watch(()=>[route.params.id,locale.value],()=>void load());
-watch([guided,suggest,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(suggest.value?'reviewV2.author.suggestTitle':guided.value?'reviewV2.author.pageTitle':'review.correction.authorTitle'));},{immediate:true});
+watch([guided,suggest,declineOnly,()=>data.value?.corrected,locale],()=>{document.title=pageTitle(t(suggest.value?'reviewV2.author.suggestTitle':declineOnly.value?'reviewV2.author.declinePageTitle':guided.value?'reviewV2.author.pageTitle':'review.correction.authorTitle'));},{immediate:true});
 </script>
 <template>
  <section class="page page--narrow result">
   <RouterLink class="link" :to="lp('/mine')">{{t('nav.mine')}}</RouterLink>
-  <h1>{{t(suggest?'reviewV2.author.suggestTitle':guided?'reviewV2.author.pageTitle':data?.corrected?'review.correction.authorTitle':'review.correction.authorOpen')}}</h1>
+  <h1>{{t(titleKey)}}</h1>
   <p v-if="error" class="notice notice--error" role="alert">{{error}} <button class="btn" @click="load">{{t('review.correction.reload')}}</button></p>
   <div v-else-if="loading" class="ghost placeholder" aria-busy="true" />
   <template v-else-if="data&&guided">
@@ -60,7 +68,11 @@ watch([guided,suggest,()=>data.value?.corrected,locale],()=>{document.title=page
     <p class="subtle">{{t('review.confirm.version')}} · {{dateTime(data.submittedAt)}}</p>
     <p v-if="suggest" data-suggest-intro>{{t('reviewV2.author.suggestIntro')}}</p>
    </article>
-   <article v-for="code in reasons" :key="code" class="panel record reason-card" :data-reason="code">
+   <article v-if="decline" class="panel record" data-decline-reply>
+    <h3>{{t('reviewV2.author.declineReplyTitle')}}</h3><p class="reason">{{decline}}</p>
+   </article>
+   <p v-if="decline&&cards.length" data-decline-lead>{{t('reviewV2.author.declineWithOthersLead')}}</p>
+   <article v-for="code in cards" :key="code" class="panel record reason-card" :data-reason="code">
     <h3>{{t(reasonKey(code,'name'))}}</h3>
     <dl class="reason-card__parts">
      <div><dt>{{t(suggest?'reviewV2.author.suggestPoint':'reviewV2.author.problem')}}</dt><dd>{{say(code,'summary')}}</dd></div>
@@ -77,15 +89,18 @@ watch([guided,suggest,()=>data.value?.corrected,locale],()=>{document.title=page
    <article v-if="(data.note??'').trim()" class="panel record" data-reviewer-note>
     <h3>{{t('reviewV2.author.reviewerNote')}}</h3><p class="reason">{{data.note}}</p>
    </article>
-   <details class="panel record elements" :open="opening" data-elements>
+   <details v-if="!declineOnly" class="panel record elements" :open="opening" data-elements>
     <summary>{{t('reviewV2.elements.title')}}</summary>
     <ul><li>{{t('reviewV2.elements.scene')}}</li><li>{{t('reviewV2.elements.event')}}</li><li>{{t('reviewV2.elements.hook')}}</li></ul>
     <p class="subtle">{{t('reviewV2.elements.footer')}}</p>
    </details>
-   <div v-if="editPath" class="edit">
+   <div v-if="declineOnly" class="edit">
+    <RouterLink class="btn btn--lg btn--primary" :to="lp('/mine')" data-back-to-mine>{{t('reviewV2.author.backToMine')}}</RouterLink>
+   </div>
+   <div v-else-if="editPath" class="edit">
     <a class="btn btn--lg" :class="{'btn--primary':!suggest}" :href="editPath" data-edit-card>{{t('reviewV2.author.edit')}}</a>
    </div>
-   <p class="subtle quota">{{t(suggest?'reviewV2.author.suggestQuota':'reviewV2.author.quota')}}</p>
+   <p v-if="!declineOnly" class="subtle quota">{{t(suggest?'reviewV2.author.suggestQuota':'reviewV2.author.quota')}}</p>
   </template>
   <article v-else-if="data" class="panel record">
    <h2>{{data.name}}</h2>

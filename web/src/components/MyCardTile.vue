@@ -13,7 +13,7 @@ import RatingMark from "./RatingMark.vue";
 import { visibilityStateKey } from "@/lib/visibility-presentation";
 import { ratingName } from "@/lib/rating";
 import { useI18n } from "vue-i18n";
-import { reasonSummary } from "@/lib/review-reasons";
+import { isDeclineReason, reasonSummary } from "@/lib/review-reasons";
 
 /** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
 const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean; visibilityEnabled?:boolean }>();
@@ -52,6 +52,8 @@ const visibilityNote = computed(() => {
   if (reasons) return t(v.update === "rejected" ? "reviewV2.author.mineLineUpdate" : "reviewV2.author.mineLine", { reasons });
   return t(visibilityStateKey(v), { note: v.reviewNote ?? "", reason: v.restrictionNote ?? "" });
 });
+/** 只勾了婉拒：沒有要改的地方，入口寫「查看審核結果」不寫修改方向 */
+const declineOnly = computed(() => { const r = props.card.workVisibility?.reviewReasons ?? []; return r.length > 0 && r.every(isDeclineReason); });
 const fixHref = computed(() => {
   const id = props.card.workVisibility?.reviewId;
   return rejectReasons.value && id ? lp(`/mine/reviews/${encodeURIComponent(id)}`) : "";
@@ -191,7 +193,7 @@ onBeforeUnmount(() => listen(false));
       <div v-if="hasDetails" class="card__body">
         <template v-if="card.workVisibility">
           <p v-if="baseDetails" class="card__note">{{ visibilityNote }}</p>
-          <RouterLink v-if="fixHref" :to="fixHref" class="card__inline-link" data-review-fix>{{ $t("reviewV2.author.viewFix") }}</RouterLink>
+          <RouterLink v-if="fixHref" :to="fixHref" class="card__inline-link" data-review-fix>{{ $t(declineOnly ? "reviewV2.author.viewResult" : "reviewV2.author.viewFix") }}</RouterLink>
           <template v-if="suggestions">
             <p class="card__note" data-review-suggest>{{ $t("reviewV2.author.mineSuggestLine", { n: suggestions.n, reasons: suggestions.reasons }, suggestions.n) }}</p>
             <RouterLink :to="suggestions.href" class="card__inline-link" data-review-suggest-link>{{ $t("reviewV2.author.viewSuggest") }}</RouterLink>

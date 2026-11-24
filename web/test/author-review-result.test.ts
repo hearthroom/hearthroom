@@ -138,3 +138,42 @@ it("通過並附改進建議：結果是已通過，列「可以更好的地方�
   expect(c.querySelector("[data-fix]")!.textContent).toBe(t("review.reasons.opening.no_reply_hook.coachFix"));
   expect(el.textContent).toContain(t("reviewV2.author.suggestQuota"));
 });
+
+// 婉拒（ui-decline.md、copy §0.8）：作者只看到溫和的回覆，不看到審核員端的選項名、問題／怎麼改／範例
+it("a decline alone shows only the gentle reply, the review-result title and a way back to my cards", async () => {
+  const el = await mount(result({ reasons: ["decline.burst_similar"] }));
+  expect(el.querySelector("h1")?.textContent).toBe(t("reviewV2.author.declinePageTitle"));
+  const reply = el.querySelector<HTMLElement>("[data-decline-reply]")!;
+  expect(reply.querySelector("h3")?.textContent).toBe(t("reviewV2.author.declineReplyTitle"));
+  expect(reply.textContent).toContain(t("review.reasons.decline.burst_similar.fix"));
+  expect(el.textContent).not.toContain(t("review.reasons.decline.burst_similar.name"));
+  expect(el.textContent).not.toContain(t("review.reasons.decline.burst_similar.summary"));
+  expect(card(el, "decline.burst_similar")).toBeNull();
+  expect(el.querySelector("[data-elements]")).toBeNull();
+  expect(el.querySelector("[data-edit-card]")).toBeNull();
+  expect(el.querySelector("[data-back-to-mine]")?.textContent).toBe(t("reviewV2.author.backToMine"));
+  expect(el.textContent).not.toContain(t("reviewV2.author.quota"));
+});
+
+it("both declines merge into one reply; with other reasons the reply comes first, then the lead line and the reason cards", async () => {
+  const both = await mount(result({ reasons: ["decline.burst_similar", "decline.not_ready"] }));
+  expect(both.querySelector("[data-decline-reply]")?.textContent).toContain(t("review.reasons.decline.bothFix"));
+  app?.unmount(); app = null; document.body.innerHTML = "";
+
+  const el = await mount(result({ reasons: ["opening.too_short", "decline.not_ready"] }));
+  expect(el.querySelector("h1")?.textContent).toBe(t("reviewV2.author.pageTitle"));
+  const reply = el.querySelector("[data-decline-reply]")!, lead = el.querySelector("[data-decline-lead]")!, opening = card(el, "opening.too_short")!;
+  expect(reply.textContent).toContain(t("review.reasons.decline.not_ready.fix"));
+  expect(lead.textContent).toBe(t("reviewV2.author.declineWithOthersLead"));
+  expect(reply.compareDocumentPosition(lead) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(lead.compareDocumentPosition(opening) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(card(el, "decline.not_ready")).toBeNull();
+  expect(el.querySelector("[data-elements]")).not.toBeNull();
+});
+
+it("lists and notices name declines only as the short label, once", async () => {
+  const { reasonSummary } = await import("../src/lib/review-reasons");
+  const tt = i18n.global.t as unknown as Parameters<typeof reasonSummary>[0];
+  expect(reasonSummary(tt, ["decline.burst_similar", "decline.not_ready"])).toBe(t("review.reasons.decline.shortChip"));
+  expect(reasonSummary(tt, ["opening.too_short", "decline.not_ready"])).toBe(`${t("review.reasons.decline.shortChip")}、${t("review.reasons.opening.too_short.name")}`);
+});

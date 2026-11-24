@@ -6,10 +6,10 @@ import {confirmState,settleConfirm} from '../src/lib/confirm';
 import {OPENING_SANDBOX,openingSrcdoc,OPENING_MESSAGE_TYPE} from 'stage-common/opening-page';
 const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),fetchReviewQueue:vi.fn(async()=>({items:[],claimTtlMs:1})),fetchReviewOriginality:vi.fn(),fetchReviewDiff:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),blindReview:vi.fn(),holdReview:vi.fn(),unholdReview:vi.fn(),withdrawReopen:vi.fn(),correctReviewDecision:vi.fn(),updateReviewTags:vi.fn(),fetchReviewAuthorCards:vi.fn(),fetchReviewAuthorActivity:vi.fn(),dropReview:vi.fn(async()=>({caseId:'k1'})),restoreReview:vi.fn(async()=>({restored:true})),markReviewAuthor:vi.fn(),fetchReviewGroup:vi.fn(),dropReviewBatch:vi.fn(),restoreReviewBatch:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string,readonly code='',readonly reviewLength?:unknown){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
-// AI 的判斷（兩段式揭曉、不受理後的揭曉區）自己讀網路：這裡只驗審核頁本身，AI 那一側由 review-ai.test.ts 管
+// AI 的建議自己讀網路：這裡 AI 一律還沒審完，決定區照一般流程（無 AI 對照）。AI 那一側由 review-ai.test.ts 管
 vi.mock('../src/lib/review-ai-api',async(original)=>({...await original<object>(),fetchReviewAi:async()=>({suggestions:[],myFeedback:[]})}));
-/** 第一步（盲審）送出後的回應：AI 還沒審完，畫面停在第二步 */
-const blindSaved=(verdict:'approve'|'reject',over:Record<string,unknown>={})=>({blind:{id:'b1',verdict,payload:{verdict,note:'',reasons:[],coaching:false,marks:[],suggestions:[],...over},at:Date.now()},ai:{state:'pending',suggestion:null}});
+/** 定案回應：AI 還沒審，記成無 AI 對照 */
+const stampSaved=(verdict:'approve'|'reject')=>({id:'s1',status:verdict==='approve'?'approved':'rejected',cardStatus:verdict==='approve'?'approved':'rejected',stamps:{approve:verdict==='approve'?1:0,required:1},finalSource:'human_no_ai'});
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
 let app:App,el:HTMLElement;
@@ -144,26 +144,25 @@ it('an update opens on its changes tab and reads the diff once; a first submissi
  expect(api.fetchReviewDiff).not.toHaveBeenCalled();
 });
 
-// 兩段式（owner 2026-11-24）：第一步「送出判斷」只記錄盲審判斷、不是定案，不跳確認；送出後原地換成第二步
-it('step one sends the blind call without a confirmation, says it is not final, and moves to the AI step',async()=>{
+// AI 為主（ui-ai-first.md）：AI 還沒審完時「AI 審卡」區塊只有一行，決定區照一般流程、不預選，一步定案（無 AI 對照），不跳確認
+it('with the AI still reviewing, the AI block is one line and the decision is the usual one-step flow with no preselection',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
- api.blindReview.mockResolvedValue(blindSaved('approve'));
+ api.stampReview.mockResolvedValue(stampSaved('approve'));
  await remount();
- await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
- expect(el.querySelector('[data-step="judge"]')!.getAttribute('aria-current')).toBe('step');
+ await vi.waitFor(()=>expect(el.querySelector('[data-ai-pending]')).toBeTruthy());
+ expect(el.querySelector('[data-ai-pending]')!.textContent).toBe(i18n.global.t('reviewAi.first.pending'));
+ expect(el.querySelector('[data-steps]')).toBeNull();
+ expect(el.querySelector('[data-ai-default]')).toBeNull();
+ expect(el.querySelector('[data-ai-option]')).toBeNull();
+ expect([...el.querySelectorAll<HTMLInputElement>('[data-decide-choices] input')].some((r)=>r.checked)).toBe(false);
  await choose('approve');
  const approve=()=>submit('approve')!;
- expect(approve().textContent?.trim()).toBe(i18n.global.t('reviewAi.two.judge.submit'));
- expect(el.querySelector('[data-blind-hint]')!.textContent).toBe(i18n.global.t('reviewAi.two.judge.hint'));
+ expect(approve().textContent?.trim()).toBe(i18n.global.t('reviewAi.first.submit.approve'));
+ expect(el.querySelector('[data-ai-submit-hint]')).toBeNull();
  approve().click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1'}));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{generation:'g1',finalSource:'human_no_ai',verdict:'approve',note:''}));
  expect(confirmState.current).toBeNull();
- expect(api.stampReview).not.toHaveBeenCalled();
- await vi.waitFor(()=>expect(el.querySelector('[data-two-stage-compare]')).toBeTruthy());
- expect(el.querySelector('[data-step="reveal"]')!.getAttribute('aria-current')).toBe('step');
- expect(el.querySelector('[data-undecided]')!.textContent).toBe(i18n.global.t('reviewAi.two.undecided'));
- // 決定的控制項收起來了：盲審判斷送出後鎖定
- expect(el.querySelector('[data-decide-choices]')).toBeNull();
+ expect(api.blindReview).not.toHaveBeenCalled();
 });
 
 it('clears the old actionable submission immediately while the next route detail is still loading',async()=>{
@@ -381,7 +380,7 @@ it('an unknown count does not block approval and says so',async()=>{
 
 it('the server refusing a short approval shows the count where the decision is made',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.blindReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
+ api.stampReview.mockRejectedValue(new api.ApiError(400,'x','review_length_insufficient',{total:3000,required:3001,remaining:1,eligible:false} as any));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
@@ -394,17 +393,15 @@ it('after deciding, the decision area becomes a result card with my decision, th
  const before=withLength(3600);
  api.fetchReviewDetail.mockReset().mockResolvedValueOnce(before)
   .mockResolvedValue({...before,submission:{...before.submission,claimedByMe:false,stampedByMe:true,status:'approved',stamps:[{verdict:'approve',note:'',at:2,mine:true,finalSource:'human_no_ai'}]}});
- api.blindReview.mockResolvedValue(blindSaved('approve'));
+ api.stampReview.mockResolvedValue(stampSaved('approve'));
  api.stampReview.mockResolvedValue({status:'approved',cardStatus:'approved',finalSource:'human_no_ai'});
  api.fetchReviewQueue.mockResolvedValue({items:[{id:'s9',kind:'first',submittedAt:1,card:{id:'9',roleId:'r9',name:'下一張',summary:'',avatarUrl:null,zone:'zh',tags:[]},stamps:{approve:0,required:1},claim:'free',stampedByMe:false}],claimTtlMs:1});
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
  submit('approve')!.click();
- // AI 還沒審完：不等，直接用我的判斷定案
- await vi.waitFor(()=>expect(el.querySelector('[data-final-skip]')).toBeTruthy());
- el.querySelector<HTMLButtonElement>('[data-final-skip]')!.click();
- await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{generation:'g1',finalSource:'human_no_ai'}));
+ // AI 還沒審完：照一般流程一步定案
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{generation:'g1',finalSource:'human_no_ai',verdict:'approve',note:''}));
  expect(confirmState.current).toBeNull();
  await vi.waitFor(()=>expect(el.querySelector('[data-result-card]')).toBeTruthy());
  expect(el.querySelector('[data-final-source]')!.textContent).toBe(i18n.global.t('reviewAi.two.sourceChip',{source:i18n.global.t('reviewAi.two.source.human_no_ai')}));
@@ -569,7 +566,7 @@ it('a manager releasing someone else\'s hold must write a reason first',async()=
 
 it('a hold placed just before approving explains itself where the decision is made',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValueOnce(pendingDetail()).mockResolvedValue(held({holder:'Mika',at:5,byMe:false,canRelease:false},true));
- api.blindReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
+ api.stampReview.mockRejectedValue(new api.ApiError(409,'x','review_held'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('approve');
@@ -851,7 +848,7 @@ it('nothing is preselected: approve stays disabled until chosen, and the note on
 
 it('a rejection needs at least one reason, previews what the author sees, and sends the reason codes',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.blindReview.mockResolvedValue(blindSaved('reject'));
+ api.stampReview.mockResolvedValue(stampSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('reject');
@@ -866,14 +863,13 @@ it('a rejection needs at least one reason, previews what the author sees, and se
  expect(preview.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.name'));
  expect(preview.textContent).toContain(i18n.global.t('reviewV2.decide.previewOpening'));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['opening.no_reply_hook'],coaching:false}));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{finalSource:'human_no_ai',verdict:'reject',note:'',generation:'g1',reasons:['opening.no_reply_hook'],coaching:false}));
  expect(confirmState.current).toBeNull();
- expect(api.stampReview).not.toHaveBeenCalled();
 });
 
 it('a new author gets coaching by default; the reviewer can switch it back to the normal fix',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
- api.blindReview.mockResolvedValue(blindSaved('reject'));
+ api.stampReview.mockResolvedValue(stampSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-author-profile]')).toBeTruthy());
  await choose('reject');
@@ -882,10 +878,10 @@ it('a new author gets coaching by default; the reviewer can switch it back to th
  reason('character.setting_thin')!.click();
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'',generation:'g1',reasons:['character.setting_thin'],coaching:true}));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{finalSource:'human_no_ai',verdict:'reject',note:'',generation:'g1',reasons:['character.setting_thin'],coaching:true}));
 
  // 改回一般：送出的就是一般版
- api.blindReview.mockClear();
+ api.stampReview.mockClear();
  api.fetchReviewDetail.mockReset().mockResolvedValue({...withLength(3600),authorProfile:profile('new')});
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
@@ -895,7 +891,7 @@ it('a new author gets coaching by default; the reviewer can switch it back to th
  reason('character.setting_thin')!.click();
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({reasons:['character.setting_thin'],coaching:false})));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',expect.objectContaining({finalSource:'human_no_ai',reasons:['character.setting_thin'],coaching:false})));
 });
 
 it('the live preview adds the three ways to offer choices for no reply hook, with the [choices] example in a monospace block',async()=>{
@@ -954,7 +950,7 @@ it('coaching is not offered for authors who are not new',async()=>{
 
 it('"other" needs a written note before the rejection can be sent',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.blindReview.mockResolvedValue(blindSaved('reject'));
+ api.stampReview.mockResolvedValue(stampSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  await choose('reject');
@@ -969,12 +965,12 @@ it('"other" needs a written note before the rejection can be sent',async()=>{
  typeNote('封面圖是別人的作品');
  await vi.waitFor(()=>expect(submit('reject')!.disabled).toBe(false));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'reject',note:'封面圖是別人的作品',generation:'g1',reasons:['other'],coaching:false}));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{finalSource:'human_no_ai',verdict:'reject',note:'封面圖是別人的作品',generation:'g1',reasons:['other'],coaching:false}));
 });
 
 it('a short card always carries the locked length reason alongside the reviewer\'s picks',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3000));
- api.blindReview.mockResolvedValue(blindSaved('reject'));
+ api.stampReview.mockResolvedValue(stampSaved('reject'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-approve-blocked]')).toBeTruthy());
  await choose('reject');
@@ -985,9 +981,9 @@ it('a short card always carries the locked length reason alongside the reviewer\
  reason('opening.too_short')!.click();
  await vi.waitFor(()=>expect(reason('opening.too_short')!.checked).toBe(true));
  submit('reject')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledTimes(1));
- const body=api.blindReview.mock.calls[0][2];
- expect(body).toMatchObject({verdict:'reject',generation:'g1',coaching:false});
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledTimes(1));
+ const body=api.stampReview.mock.calls[0][2];
+ expect(body).toMatchObject({finalSource:'human_no_ai',verdict:'reject',generation:'g1',coaching:false});
  expect([...body.reasons].sort()).toEqual(['content.min_length','opening.too_short']);
 });
 
@@ -1039,7 +1035,7 @@ it('the reject picker offers the unedited-generated and copied-verbatim reasons'
 // owner 2026-11-23：通過並附改進建議（選了通過才有、預設收合、不列字數與分級、作者看輔導版）
 it('approve can carry suggestions; min-length and rating are not offered as suggestions',async()=>{
  api.fetchReviewDetail.mockReset().mockResolvedValue(withLength(3600));
- api.blindReview.mockReset().mockResolvedValue(blindSaved('approve'));
+ api.stampReview.mockReset().mockResolvedValue(stampSaved('approve'));
  await remount();
  await vi.waitFor(()=>expect(el.querySelector('[data-decide-choices]')).toBeTruthy());
  expect(el.querySelector('[data-suggest]')).toBeNull();
@@ -1050,9 +1046,9 @@ it('approve can carry suggestions; min-length and rating are not offered as sugg
  expect(el.querySelector('[data-reason="rating.mismatch"]')).toBeNull();
  el.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.click();await nextTick();
  expect(el.querySelector('[data-reason-preview]')!.textContent).toContain(i18n.global.t('review.reasons.opening.no_reply_hook.coachFix'));
- expect(submit('approve')!.textContent!.trim()).toBe(i18n.global.t('reviewAi.two.judge.submit'));
+ expect(submit('approve')!.textContent!.trim()).toBe(i18n.global.t('reviewAi.first.submit.approve'));
  submit('approve')!.click();
- await vi.waitFor(()=>expect(api.blindReview).toHaveBeenCalledWith('s1','local-reviewer',{verdict:'approve',note:'',generation:'g1',suggestions:['opening.no_reply_hook']}));
+ await vi.waitFor(()=>expect(api.stampReview).toHaveBeenCalledWith('s1','local-reviewer',{finalSource:'human_no_ai',verdict:'approve',note:'',generation:'g1',suggestions:['opening.no_reply_hook']}));
  expect(confirmState.current).toBeNull();
 });
 

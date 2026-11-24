@@ -1,8 +1,8 @@
 /**
  * AI 審卡影子模式的審核端畫面（任務 2026-11-23-ai-card-review）：
- *   - 審核詳情的兩段式決定（盲審→揭曉→定案）：決定前不讀 AI；一致一鍵定案、不一致三選一；只有改判上架才確認；
- *     AI 沒審完每 10 秒重讀；重新進來直接到揭曉；保留期。
- *   - 不受理後的「AI 的判斷」揭曉區：一致／不同的畫法；覆核每次送新的 operationId、可改選。
+ *   - 審核詳情的 AI 為主、人為輔（ui-ai-first.md）：作者區下方的「AI 審卡」區塊；決定區預設 AI 的建議，沒改照 AI 定案、
+ *     改了記為改了 AI、沒有 AI 照一般流程；只有會讓卡上架的覆寫才確認；AI 沒審完每 10 秒重讀、晚到不覆蓋；婉拒理由；保留期。
+ *   - 「AI 的判斷」揭曉區元件（ReviewAiReveal）：一致／不同的畫法；覆核每次送新的 operationId、可改選。
  *   - 管理員的「AI 分歧」分頁：只有管理員看得到；單筆仲裁的參考範例勾選與池的說明、AI 對且原為通過時的重新審核入口。
  * 網路走真的 lib/review-ai-api（全域 fetch 換成假的），只把詳情頁自己的讀取換掉。
  */
@@ -77,7 +77,6 @@ const detail = (submission: Record<string, unknown>, extra: Record<string, unkno
     hashes: { card: '', welcome: '', worldbook: '', authorAsset: '', content: 'v' }, costProfile: empty, reviewLength: { total: 4000, required: 3001, remaining: 0, eligible: true } },
   ...extra,
 });
-const blindOf = (verdict: 'approve' | 'reject', over: Record<string, unknown> = {}) => ({ id: 'b1', verdict, payload: { verdict, note: '', reasons: verdict === 'reject' ? ['opening.no_reply_hook'] : [], coaching: false, marks: [], suggestions: [], ...over }, at: Date.now() });
 async function mountPage(path: string) {
   host = document.body.appendChild(document.createElement('div'));
   router = createRouter({ history: createMemoryHistory(), routes: siteRouter.options.routes });
@@ -86,282 +85,254 @@ async function mountPage(path: string) {
   app.mount(host);
 }
 
-it('shows nothing and asks nothing before the reviewer decides; dropping the card reveals the AI call', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ verdict: 'pass', reasons: [] })], myFeedback: [] }];
-  await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
-  await new Promise((r) => setTimeout(r, 0));
-  expect($('[data-ai-reveal]')).toBeNull();
-  expect($('[data-two-stage-compare]')).toBeNull();
-  expect(aiCalls()).toEqual([]);
-
-  const drop = host.querySelector<HTMLInputElement>('[data-decide-choices] input[value=drop]')!;
-  drop.click(); await nextTick();
-  expect(aiCalls()).toEqual([]);
-  $('[data-submit-drop]')!.click();
-  await vi.waitFor(() => expect($('[data-ai-reveal] [data-ai-verdict]')).not.toBeNull());
-  expect(aiCalls().map((c) => c.url)).toEqual(['/v1/review/s1/ai']);
-  // 不受理算「駁回」：AI 建議通過＝與你不同，有覆核
-  expect($('[data-ai-agree]')!.dataset.aiAgree).toBe('differ');
-  expect($('[data-ai-feedback]')).not.toBeNull();
-  expect($('[data-ai-reveal]')!.getAttribute('aria-live')).toBe('polite');
-});
-
-// ---------- 兩段式決定（盲審→揭曉→定案） ----------
+// ---------- AI 為主、人為輔（ui-ai-first.md v25，取代兩段式盲審） ----------
 
 const posts = (action: string) => calls.filter((c) => c.method === 'POST' && c.url === `/v1/review/s1/${action}`);
 const stampOk = (finalSource: string, status = 'approved'): [number, unknown] => [200, { id: 's1', status, cardStatus: status, stamps: { approve: 1, required: 1 }, finalSource }];
-const decidedAs = (verdict: 'approve' | 'reject', finalSource: string) => detail({ status: verdict === 'approve' ? 'approved' : 'rejected', claimedByMe: false, stampedByMe: true, stamps: [{ verdict, note: '', at: 2, mine: true, finalSource }] }, { retainUntil: Date.UTC(2026, 11, 1), myBlind: blindOf(verdict) });
 const chooseDecision = async (v: 'approve' | 'reject') => { host.querySelector<HTMLInputElement>(`[data-decide-choices] input[value=${v}]`)!.click(); await nextTick(); };
 const pickReason = async (code: string) => { host.querySelector<HTMLInputElement>(`[data-reason="${code}"]`)!.click(); await nextTick(); };
-const pickFinal = async (v: 'blind' | 'ai' | 'modified') => { host.querySelector<HTMLInputElement>(`[data-final-pick=${v}]`)!.click(); await nextTick(); };
-const finalButton = () => $('[data-final-submit]') as HTMLButtonElement;
-/** 送出第一步並等到第二步出現 */
-async function submitBlind(verdict: 'approve' | 'reject') {
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
-  await chooseDecision(verdict);
-  if (verdict === 'reject') await pickReason('opening.no_reply_hook');
-  $(`[data-submit-${verdict}]`)!.click();
-  await vi.waitFor(() => expect($('[data-two-stage-compare]')).not.toBeNull());
-}
-const blindWith = (verdict: 'approve' | 'reject', ai: unknown, over: Record<string, unknown> = {}) => (): [number, unknown] => [200, { blind: blindOf(verdict, over), ai }];
-const ready = (over: Record<string, unknown> = {}) => ({ state: 'ready', suggestion: suggestion(over) });
+const checked = () => host.querySelector<HTMLInputElement>('[data-decide-choices] input:checked')?.value ?? null;
+const typeInto = async (el: HTMLTextAreaElement, value: string) => { el.value = value; el.dispatchEvent(new Event('input')); await nextTick(); };
+const aiWith = (...list: unknown[]) => (): [number, unknown] => [200, { suggestions: list, current: 'v2', myFeedback: [] }];
+/** 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章 */
+const pending = () => mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+/** 第一次讀是待審，之後是我已經定案的那一份 */
+const thenDecided = (verdict: 'approve' | 'reject', finalSource: string) => mocks.fetchReviewDetail.mockResolvedValueOnce(detail({})).mockResolvedValue(detail({ status: verdict === 'approve' ? 'approved' : 'rejected', claimedByMe: false, stampedByMe: true, stamps: [{ verdict, note: '', at: 2, mine: true, finalSource }] }, { retainUntil: Date.UTC(2026, 11, 1) }));
+const waitAi = async () => { await vi.waitFor(() => expect($('[data-ai-first]')!.dataset.aiView).toBe('ready')); await nextTick(); };
 
-it('two-step: nothing about the AI before the blind call; the blind response shows both side by side; agreeing finalizes in one click', async () => {
-  mocks.fetchReviewDetail.mockResolvedValueOnce(detail({})).mockResolvedValue(decidedAs('approve', 'blind'));
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ verdict: 'pass', reasons: [], confidence: 0.9 }));
-  routes['/v1/review/s1/stamp'] = () => stampOk('blind');
+it('the AI review block sits below the author area and above the tabs: suggestion, confidence, reason chips and a reviewers-only internal note; there is no blind step', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ reasons: ['opening.no_reply_hook', 'decline.not_ready'], note: 'Opening ends without a hook.', authorNote: 'Give the player something to answer.' }));
   await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
-  await chooseDecision('approve');
-  expect(aiCalls()).toEqual([]);
+  await waitAi();
+  const block = $('[data-ai-first]')!;
+  // 位置：作者區（頁首）之後、分頁條之前
+  expect($('.layout__head')!.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(block.compareDocumentPosition($('.tabs-bar')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(block.querySelector('h3')!.textContent).toBe(t('reviewAi.first.title'));
+  expect(block.querySelector('[data-ai-verdict]')!.textContent).toBe(t('reviewAi.first.verdict.reject'));
+  expect(block.querySelector('[data-ai-confidence]')!.textContent).toBe(t('reviewAi.reveal.confidence', { pct: '82%' }));
+  expect([...block.querySelectorAll('[data-ai-reasons] li')].map((li) => li.textContent)).toEqual([t('review.reasons.opening.no_reply_hook.name'), t('review.reasons.decline.not_ready.name')]);
+  const internalNote = block.querySelector('[data-ai-internal]')!;
+  expect(internalNote.querySelector('[data-ai-internal-note]')!.textContent).toBe('Opening ends without a hook.');
+  expect(internalNote.querySelector('[data-visibility=reviewers]')).not.toBeNull();
+  // 給作者的草稿不在區塊裡重複，直接帶進決定區
+  expect(block.textContent).not.toContain('Give the player something to answer.');
+  expect(block.querySelector('[data-ai-inaccurate]')!.getAttribute('aria-pressed')).toBe('false');
+  expect(block.querySelector('[data-ai-inaccurate-hint]')!.textContent).toBe(t('reviewAi.first.inaccurateHint'));
+  // 沒有盲審步驟
+  expect($('[data-steps]')).toBeNull();
   expect($('[data-two-stage-compare]')).toBeNull();
-  $('[data-submit-approve]')!.click();
-  await vi.waitFor(() => expect($('[data-two-stage-compare]')).not.toBeNull());
-  expect(posts('blind').map((c) => c.body)).toEqual([{ verdict: 'approve', note: '', generation: 'g' }]);
-  // 盲審回應已帶 AI 的判斷：不另外讀
-  expect(aiCalls()).toEqual([]);
-  expect($('[data-blind-verdict]')!.dataset.blindVerdict).toBe('approve');
-  expect($('[data-ai-verdict]')!.dataset.aiVerdict).toBe('pass');
-  expect($('[data-agree]')!.dataset.agree).toBe('same');
-  expect($('[data-col=ai] [aria-live=polite]')).not.toBeNull();
-  // 一致：給 AI 的說明收合，一顆「確認通過」
-  expect($('[data-ai-note-toggle]')!.getAttribute('aria-expanded')).toBe('false');
-  expect($('[data-final-choices]')).toBeNull();
-  expect(finalButton().textContent!.trim()).toBe(t('reviewAi.two.final.agree.approve'));
-  finalButton().click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(confirmState.current).toBeNull();
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'blind' });
-  await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
-  expect($('[data-final-source]')!.dataset.finalSource).toBe('blind');
-  expect($('[data-retain-until]')!.textContent).toContain(t('review.retain.until', { date: '' }).slice(0, 4));
-  expect($('[data-ai-reveal]')).toBeNull();
+  expect(posts('blind')).toEqual([]);
+  expect(aiCalls().map((c) => c.url)).toEqual(['/v1/review/s1/ai']);
 });
 
-it('two-step disagreement: a choice is required; using the AI stamps the verdict shown, by id and time; notes for the AI ride along', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5 }));
+it('the decision defaults to the AI rejection; unchanged it finalizes as the AI suggests in one click, with the AI id and time, the inaccurate mark and the note for the AI', async () => {
+  thenDecided('reject', 'ai');
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Give the player something to answer.' }));
   routes['/v1/review/s1/stamp'] = () => stampOk('ai', 'rejected');
   await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  expect($('[data-agree]')!.dataset.agree).toBe('differ');
-  expect($('[data-agree]')!.textContent).toBe(t('reviewAi.two.differ.approveReject'));
-  const radios = [...host.querySelectorAll<HTMLInputElement>('[data-final-pick]')];
-  expect(radios.map((r) => r.value)).toEqual(['blind', 'ai', 'modified']);
-  expect(radios.some((r) => r.checked)).toBe(false);
-  expect(finalButton().disabled).toBe(true);
-  expect(finalButton().textContent!.trim()).toBe(t('reviewAi.two.final.submitIdle'));
-  expect($('[data-ai-note]')).toBeNull();
-
-  await pickFinal('ai');
-  expect($('[data-final-result]')!.textContent).toBe(t('reviewAi.two.final.result.rejectAi'));
-  expect($('[data-reason-preview]')!.textContent).toContain(t('review.reasons.opening.no_reply_hook.name'));
-  expect(finalButton().textContent!.trim()).toBe(t('reviewAi.two.final.submit.reject'));
-  // 不一致時說明區展開在選擇下方
-  expect($('[data-ai-note-toggle]')).toBeNull();
-  host.querySelector<HTMLInputElement>('[data-ai-note-type=author_relation]')!.click(); await nextTick();
-  expect($('[data-ai-note]')!.textContent).toContain(t('reviewAi.note.authorRelationHint'));
-  const text = host.querySelector<HTMLTextAreaElement>('[data-ai-note-text]')!;
-  text.value = 'Same group, six cards'; text.dispatchEvent(new Event('input')); await nextTick();
-  expect($('[data-ai-note-count]')!.textContent).toBe(t('reviewAi.note.count', { n: 21, max: 500 }));
-  finalButton().click();
+  await waitAi();
+  expect(checked()).toBe('reject');
+  expect($('[data-ai-default]')!.textContent).toBe(t('reviewAi.first.defaultChip'));
+  const option = $('[data-ai-option]')!;
+  expect(option.textContent).toBe(t('reviewAi.first.optionChip'));
+  expect(option.closest('label')!.querySelector('input')!.value).toBe('reject');
+  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.checked).toBe(true);
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('Give the player something to answer.');
+  expect($('[data-ai-modified]')).toBeNull();
+  const submit = $('[data-submit-reject]') as HTMLButtonElement;
+  expect(submit.classList.contains('btn--danger')).toBe(true);
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submitAi.reject'));
+  expect($('[data-ai-submit-hint]')!.textContent).toBe(t('reviewAi.first.submitHint'));
+  // AI 判斷不準確：單鈕、可取消
+  $('[data-ai-inaccurate]')!.click(); await nextTick();
+  expect($('[data-ai-inaccurate]')!.getAttribute('aria-pressed')).toBe('true');
+  expect($('[data-ai-inaccurate-hint]')!.textContent).toBe(t('reviewAi.first.inaccurateOn'));
+  // 標了不準確仍是照 AI 定案（兩件事）
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submitAi.reject'));
+  $('[data-ai-note-toggle]')!.click(); await nextTick();
+  await typeInto(host.querySelector<HTMLTextAreaElement>('[data-ai-note-text]')!, 'Reason right, wording off');
+  submit.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  // 通過的盲審改用 AI 的駁回：不會上架，不跳確認
   expect(confirmState.current).toBeNull();
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5, aiNoteTypes: ['author_relation'], aiNote: 'Same group, six cards' });
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5, aiNote: 'Reason right, wording off', aiInaccurate: true });
+  await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
+  expect($('[data-final-source]')!.textContent).toBe(t('reviewAi.two.sourceChip', { source: t('reviewAi.two.source.ai') }));
 });
 
-it('two-step: the final asks for confirmation only when it would publish against a rejecting blind call', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [], at: 7 }));
-  routes['/v1/review/s1/stamp'] = () => stampOk('blind', 'rejected');
+it('an AI approval is preselected and finalizes as the AI suggests without a confirmation', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'pass', reasons: [], at: 7 }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('ai');
   await mountPage('/en/review/s1');
-  await submitBlind('reject');
-  await pickFinal('ai');
-  expect($('[data-final-result]')!.textContent).toBe(t('reviewAi.two.final.result.approve'));
-  finalButton().click();
-  await vi.waitFor(() => expect(confirmState.current).not.toBeNull());
-  expect(confirmState.current!.title).toBe(t('reviewAi.two.confirm.title'));
-  expect(confirmState.current!.message).toContain(t('review.confirm.row', { label: t('reviewAi.two.confirm.blind'), value: t('review.action.reject') }));
-  expect(confirmState.current!.message).toContain(t('reviewAi.two.confirm.body'));
-  settleConfirm(false);
-  await vi.waitFor(() => expect(finalButton().disabled).toBe(false));
-  expect(posts('stamp')).toEqual([]);
-  // 用我的駁回：不跳確認
-  await pickFinal('blind');
-  finalButton().click();
+  await waitAi();
+  expect(checked()).toBe('approve');
+  expect($('[data-ai-option]')!.closest('label')!.querySelector('input')!.value).toBe('approve');
+  const submit = $('[data-submit-approve]') as HTMLButtonElement;
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submitAi.approve'));
+  submit.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
   expect(confirmState.current).toBeNull();
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'blind' });
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 7 });
 });
 
-it('two-step: finalizing with changes starts from the blind call, sends the edited decision and leaves the blind call as it was', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [] }), { note: 'Needs a hook' });
+it('any change to the AI suggestion is summarized and finalizes as changed, sending the edited decision', async () => {
+  thenDecided('reject', 'modified');
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Draft' }));
   routes['/v1/review/s1/stamp'] = () => stampOk('modified', 'rejected');
   await mountPage('/en/review/s1');
-  await submitBlind('reject');
-  expect($('[data-decide-choices]')).toBeNull();
-  await pickFinal('modified');
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
-  expect($('[data-final-modified]')!.textContent).toBe(t('reviewAi.two.final.modifiedLead'));
-  // 第二步沒有不受理與冷凍
-  expect(host.querySelector('[data-decide-choices] input[value=drop]')).toBeNull();
-  expect($('[data-hold]')).toBeNull();
-  expect(host.querySelector<HTMLInputElement>('[data-decide-choices] input[value=reject]')!.checked).toBe(true);
-  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.checked).toBe(true);
-  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('Needs a hook');
-  // 改成通過＝盲審駁回、定案上架：要確認
-  await chooseDecision('approve');
-  expect(finalButton().textContent!.trim()).toBe(t('reviewAi.two.final.submit.approve'));
-  finalButton().click();
-  await vi.waitFor(() => expect(confirmState.current).not.toBeNull());
-  settleConfirm(false);
-  await vi.waitFor(() => expect(finalButton().disabled).toBe(false));
-  await chooseDecision('reject');
+  await waitAi();
   await pickReason('character.setting_thin');
-  // 比較欄的盲審判斷沒有跟著表單改
-  expect([...host.querySelectorAll('[data-blind-reasons] li')].map((li) => li.textContent)).toEqual([t('review.reasons.opening.no_reply_hook.name')]);
-  finalButton().click();
+  await typeInto(host.querySelector<HTMLTextAreaElement>('#review-note')!, 'Draft, and the setting needs more.');
+  const summary = $('[data-ai-modified]')!;
+  expect(summary.textContent).toBe(t('reviewAi.first.modified', { changes: [t('reviewAi.first.change.added', { names: t('review.reasons.character.setting_thin.name') }), t('reviewAi.first.change.note')].join(', ') }));
+  const submit = $('[data-submit-reject]') as HTMLButtonElement;
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submit.reject'));
+  submit.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'modified', verdict: 'reject', note: 'Needs a hook', reasons: ['opening.no_reply_hook', 'character.setting_thin'], coaching: false });
+  expect(confirmState.current).toBeNull();
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'modified', verdict: 'reject', note: 'Draft, and the setting needs more.', reasons: ['opening.no_reply_hook', 'character.setting_thin'], coaching: false, aiSuggestionId: 'g1', aiSuggestionAt: 5 });
+  await vi.waitFor(() => expect($('[data-final-source]')).not.toBeNull());
+  expect($('[data-final-source]')!.textContent).toBe(t('reviewAi.two.sourceChip', { source: t('reviewAi.two.source.modified') }));
 });
 
-it('two-step: while the AI is not done it rereads every 10 seconds with no limit and swaps the verdict in; the reviewer can finalize without it', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  let aiDone = false;
-  routes['/v1/review/s1/blind'] = blindWith('approve', { state: 'pending', suggestion: null });
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: aiDone ? [suggestion({ verdict: 'pass', reasons: [] })] : [], myFeedback: [] }];
+it('only an override that would publish the card asks for confirmation', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Draft' }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('modified');
   await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
+  await waitAi();
   await chooseDecision('approve');
+  expect($('[data-ai-modified]')!.textContent).toBe(t('reviewAi.first.modified', { changes: t('reviewAi.first.change.verdict', { verdict: t('review.action.approve') }) }));
+  const submit = $('[data-submit-approve]') as HTMLButtonElement;
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submit.approve'));
+  submit.click();
+  await vi.waitFor(() => expect(confirmState.current).not.toBeNull());
+  expect(confirmState.current!.title).toBe(t('reviewAi.first.confirm.title'));
+  expect(confirmState.current!.message).toContain(t('reviewAi.first.confirm.body'));
+  expect(posts('stamp')).toEqual([]);
+  settleConfirm(true);
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'modified', verdict: 'approve', note: '', aiSuggestionId: 'g1', aiSuggestionAt: 5 });
+});
+
+it('without an AI suggestion (handoff) the block says so in one line and the decision is the usual flow, recorded as no AI comparison', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'handoff', reasons: [] }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('human_no_ai', 'rejected');
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
+  expect($('[data-ai-none]')!.textContent).toBe(t('reviewAi.first.none'));
+  expect($('[data-ai-inaccurate]')).toBeNull();
+  expect(checked()).toBeNull();
+  expect($('[data-ai-default]')).toBeNull();
+  await chooseDecision('reject');
+  await pickReason('opening.too_short');
+  $('[data-submit-reject]')!.click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'human_no_ai', verdict: 'reject', note: '', reasons: ['opening.too_short'], coaching: false });
+});
+
+it('while the AI is still reviewing it rereads every 10 seconds; arriving late it keeps what the reviewer filled and offers to apply', async () => {
+  pending();
+  let aiDone = false;
+  routes['/v1/review/s1/ai'] = () => [200, { suggestions: aiDone ? [suggestion({ authorNote: 'AI draft' })] : [], current: 'v2', myFeedback: [] }];
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   try {
-    $('[data-submit-approve]')!.click();
+    await mountPage('/en/review/s1');
     await vi.waitFor(() => expect($('[data-ai-pending]')).not.toBeNull());
-    expect($('[data-col=ai]')!.dataset.aiView).toBe('pending');
-    expect($('[data-ai-waited]')!.textContent).toBe(t('reviewAi.two.pending.waitedSeconds', { n: 0 }));
-    // 「已等 N 秒」不在 aria-live 區裡
-    expect($('[data-col=ai] [aria-live=polite] [data-ai-waited]')).toBeNull();
-    expect($('[data-final-skip]')!.textContent!.trim()).toBe(t('reviewAi.two.pending.skip.approve'));
-    expect(aiCalls()).toEqual([]);
+    expect($('[data-ai-pending]')!.textContent).toBe(t('reviewAi.first.pending'));
+    expect(checked()).toBeNull();
+    expect(aiCalls().length).toBe(1);
+    await chooseDecision('reject');
+    await pickReason('opening.too_short');
     vi.advanceTimersByTime(9_999);
-    expect(aiCalls().length).toBe(0);
+    expect(aiCalls().length).toBe(1);
     vi.advanceTimersByTime(1);
-    await vi.waitFor(() => expect(aiCalls().length).toBe(1));
-    for (let i = 2; i <= 6; i++) { vi.advanceTimersByTime(10_000); await vi.waitFor(() => expect(aiCalls().length).toBe(i)); }
-    expect($('[data-ai-pending]')).not.toBeNull();
+    await vi.waitFor(() => expect(aiCalls().length).toBe(2));
     aiDone = true;
     vi.advanceTimersByTime(10_000);
-    await vi.waitFor(() => expect($('[data-agree]')).not.toBeNull());
-    expect($('[data-agree]')!.dataset.agree).toBe('same');
-    expect($('[data-final-skip]')).toBeNull();
+    await vi.waitFor(() => expect($('[data-ai-late]')).not.toBeNull());
     // 換上之後不再重讀
     vi.advanceTimersByTime(60_000);
-    expect(aiCalls().length).toBe(7);
+    expect(aiCalls().length).toBe(3);
   } finally {
     vi.useRealTimers();
   }
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  aiDone = false;
-  routes['/v1/review/s1/stamp'] = () => stampOk('human_no_ai');
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  $('[data-final-skip]')!.click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'human_no_ai' });
+  expect($('[data-ai-late]')!.textContent).toContain(t('reviewAi.first.late', { verdict: t('reviewAi.first.verdict.reject') }));
+  // 審核員填的不動
+  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.too_short"]')!.checked).toBe(true);
+  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.checked).toBe(false);
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('');
+  $('[data-ai-apply]')!.click(); await nextTick();
+  expect($('[data-ai-late]')).toBeNull();
+  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.too_short"]')!.checked).toBe(false);
+  expect(host.querySelector<HTMLInputElement>('[data-reason="opening.no_reply_hook"]')!.checked).toBe(true);
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe('AI draft');
+  expect(($('[data-submit-reject]') as HTMLButtonElement).textContent!.trim()).toBe(t('reviewAi.first.submitAi.reject'));
 });
 
-it('two-step: no AI call (handoff) or an AI choice the server will not take leaves one exit, finalizing with my call', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/blind'] = blindWith('approve', { state: 'handoff', suggestion: suggestion({ verdict: 'handoff', reasons: [], confidence: null, handoffCause: 'refusal' }) });
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ verdict: 'handoff', reasons: [] })], myFeedback: [] }];
-  routes['/v1/review/s1/stamp'] = () => stampOk('human_no_ai');
+it('the AI arriving into an untouched form fills it; "not now" leaves the reviewer\'s choice and records it as changed', async () => {
+  pending();
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'pass', reasons: [], at: 9 }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('modified', 'rejected');
   await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  expect($('[data-ai-none]')!.textContent).toBe(t('reviewAi.two.none.title'));
-  expect($('[data-final-submit]')).toBeNull();
-  $('[data-ai-retry]')!.click();
-  await vi.waitFor(() => expect(aiCalls().length).toBe(1));
-  expect($('[data-final-mine]')!.textContent!.trim()).toBe(t('reviewAi.two.none.final.approve'));
-  // AI 沒判的出口也有「給 AI 的說明」，收合在出口按鈕上方（UI/UX 2026-11-24）
-  expect($('[data-ai-note-toggle]')).not.toBeNull();
-  expect($('[data-ai-note-toggle]')!.compareDocumentPosition($('[data-final-mine]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  $('[data-final-mine]')!.click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'human_no_ai' });
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready());
-  routes['/v1/review/s1/stamp'] = () => [409, { error: 'ai_choice_unavailable' }];
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  await pickFinal('ai');
-  finalButton().click();
-  await vi.waitFor(() => expect($('[data-ai-none]')).not.toBeNull());
-  expect($('[data-final-choices]')).toBeNull();
-  expect($('[data-final-mine]')).not.toBeNull();
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  // AI 駁回但只打了標記、沒有作者看得到的理由：照樣並排比，「用 AI 的」停用並說明
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ reasons: [], flags: ['mass_produced'] }));
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  expect($('[data-agree]')!.dataset.agree).toBe('differ');
-  const ai = host.querySelector<HTMLInputElement>('[data-final-pick=ai]')!;
-  expect(ai.disabled).toBe(true);
-  expect(ai.closest('label')!.textContent).toContain(t('reviewAi.two.final.pick.aiNoReasons'));
+  await waitAi();
+  expect(checked()).toBe('approve');
+  // AI 重判（換了一筆）：已經套用過，就提示而不覆蓋
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ id: 'g2', at: 12, authorNote: 'New draft' }));
+  $('[data-submit-approve]')!.click();
+  routes['/v1/review/s1/stamp'] = () => [409, { error: 'ai_changed' }];
+  await vi.waitFor(() => expect($('[data-ai-late]')).not.toBeNull());
+  expect(checked()).toBe('approve');
+  expect($('[role=alert]')!.textContent).toContain(t('reviewAi.two.final.aiChanged'));
+  $('[data-ai-dismiss]')!.click(); await nextTick();
+  expect($('[data-ai-late]')).toBeNull();
+  expect(checked()).toBe('approve');
+  expect(($('[data-submit-approve]') as HTMLButtonElement).textContent!.trim()).toBe(t('reviewAi.first.submit.approve'));
 });
 
-it('two-step: if the AI re-judged after the reveal, the new call is swapped in and the reviewer chooses again', async () => {
-  // 每次讀都是新的一份：定案後頁面會先在畫面上記下我的章
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  let changed = true;
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5 }));
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion({ at: 9, reasons: ['character.setting_thin'] })], myFeedback: [] }];
-  routes['/v1/review/s1/stamp'] = () => (changed ? [409, { error: 'ai_changed' }] : stampOk('ai', 'rejected'));
+it('decline reasons sit between rating and other, are enough on their own, and preview the gentle reply first', async () => {
+  pending();
+  routes['/v1/review/s1/stamp'] = () => stampOk('human_no_ai', 'rejected');
   await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  await pickFinal('ai');
-  finalButton().click();
-  await vi.waitFor(() => expect($('[data-ai-changed]')).not.toBeNull());
-  expect(aiCalls().length).toBe(1);
-  expect([...host.querySelectorAll<HTMLInputElement>('[data-final-pick]')].some((r) => r.checked)).toBe(false);
-  expect($('[data-ai-reasons]')!.textContent).toContain(t('review.reasons.character.setting_thin.name'));
-  changed = false;
-  await pickFinal('ai');
-  finalButton().click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(2));
-  expect(posts('stamp')[1]!.body).toMatchObject({ finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 9 });
+  await vi.waitFor(() => expect($('[data-ai-first]')).not.toBeNull());
+  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
+  await chooseDecision('reject');
+  const groups = [...host.querySelectorAll<HTMLElement>('[data-reason-group]')].map((g) => g.dataset.reasonGroup);
+  expect(groups).toEqual(['opening', 'setting', 'rating', 'decline', 'other']);
+  expect($('[data-reason-group=decline] legend')!.textContent).toBe(t('reviewV2.decide.group.decline'));
+  await pickReason('decline.not_ready');
+  const preview = $('[data-reason-preview]')!;
+  expect(preview.querySelector('[data-decline-preview]')!.textContent).toContain(t('review.reasons.decline.previewLabel'));
+  expect(preview.querySelector('[data-decline-preview]')!.textContent).toContain(t('review.reasons.decline.not_ready.fix'));
+  expect(preview.querySelector('[data-decline-order]')).toBeNull();
+  // 兩項都勾：合成一段
+  await pickReason('decline.burst_similar');
+  expect(preview.querySelector('[data-decline-preview]')!.textContent).toContain(t('review.reasons.decline.bothFix'));
+  await pickReason('decline.burst_similar');
+  // 加上其他理由：婉拒在最前面，註明順序
+  await pickReason('opening.too_short');
+  expect(preview.querySelector('[data-decline-order]')!.textContent).toBe(t('review.reasons.decline.orderHint'));
+  expect(preview.querySelector('[data-decline-preview]')!.compareDocumentPosition(preview.querySelector('.preview__item:not([data-decline-preview])')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await pickReason('opening.too_short');
+  // 只有婉拒就能送出，不用寫說明
+  const submit = $('[data-submit-reject]') as HTMLButtonElement;
+  expect(submit.disabled).toBe(false);
+  submit.click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toMatchObject({ finalSource: 'human_no_ai', verdict: 'reject', note: '', reasons: ['decline.not_ready'] });
+});
+
+it('decline is not offered as an improvement suggestion on approval', async () => {
+  pending();
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
+  await chooseDecision('approve');
+  $('[data-suggest-toggle]')!.click(); await nextTick();
+  expect($('[data-reason-group=decline]')).toBeNull();
+  expect($('[data-reason="decline.not_ready"]')).toBeNull();
 });
 
 // ---------- 揭曉區分欄：內部說明｜給作者的說明，與內部字詞檢查 ----------
@@ -380,199 +351,34 @@ const guardItems = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>(
   snippet: li.querySelector('[data-guard-snippet]')?.textContent ?? null, hint: li.querySelector('[data-guard-hint]')?.textContent ?? null,
 }));
 
-it('reveal: the AI column splits into a reviewers-only internal note and the note the author sees, each marked with an icon and words', async () => {
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ confidence: 0.82, note: 'Six cards from one device tonight', authorNote: 'The opening never gives the player a reason to reply.' }));
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  // 結論與理由代碼在上，兩塊在下
-  const col = $('[data-col=ai]')!;
-  const order = [...col.querySelectorAll('[data-ai-verdict], [data-ai-reasons], [data-ai-internal], [data-ai-author-note]')].map((el) => (el as HTMLElement).dataset.aiVerdict ? 'verdict' : el.hasAttribute('data-ai-reasons') ? 'reasons' : el.hasAttribute('data-ai-internal') ? 'internal' : 'author');
-  expect(order).toEqual(['verdict', 'reasons', 'internal', 'author']);
-  const inner = $('[data-ai-internal]')!;
-  expect(inner.querySelector('h5')!.textContent).toBe(t('reviewAi.two.internalNote.title'));
-  expect(inner.querySelector('[data-visibility]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.reviewerOnly'));
-  expect(inner.querySelector('[data-visibility=reviewers] svg[aria-hidden=true]')).not.toBeNull();
-  expect(inner.querySelector('[data-ai-confidence]')!.textContent).toBe(t('reviewAi.reveal.confidence', { pct: '82%' }));
-  expect(inner.querySelector('[data-ai-internal-note]')!.textContent).toBe('Six cards from one device tonight');
-  const author = $('[data-ai-author-note]')!;
-  expect(author.querySelector('h5')!.textContent).toBe(t('reviewAi.two.authorNote.title'));
-  expect(author.querySelector('[data-visibility=author]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.authorSees'));
-  expect(author.querySelector('[data-visibility=author] svg[aria-hidden=true]')).not.toBeNull();
-  expect(author.querySelector('[data-ai-author-note-text]')!.textContent).toBe('The opening never gives the player a reason to reply.');
-  // 內部說明不會出現在給作者的那一塊
-  expect(author.textContent).not.toContain('device');
-  // 給 AI 的說明一樣標「只有審核員看得到」
-  await pickFinal('blind');
-  expect($('[data-ai-note] [data-visibility=reviewers]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.reviewerOnly'));
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  // AI 沒寫給作者的說明：照樣有這一塊，寫明沒有；沒有信心與依據時不畫內部說明
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ confidence: null, note: '' }));
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  expect($('[data-ai-internal]')).toBeNull();
-  expect($('[data-ai-author-note-empty]')!.textContent).toBe(t('reviewAi.two.authorNote.empty'));
-});
-
-it('use the AI: the note for the author is prefilled with the AI draft; an edit is sent as authorNote, an untouched draft is left to the server', async () => {
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  const draft = 'The opening never gives the player a reason to reply.';
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5, authorNote: draft }));
-  routes['/v1/review/s1/stamp'] = () => stampOk('ai', 'rejected');
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  expect($('[data-author-note-field]')).toBeNull();
-  await pickFinal('ai');
-  const field = $('[data-author-note-field]')!;
-  const text = field.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!;
-  expect(text.value).toBe(draft);
-  expect(text.maxLength).toBe(1500);
-  expect(field.querySelector('label')!.textContent).toBe(t('reviewAi.two.authorNote.title'));
-  expect(field.querySelector('[data-visibility=author]')).not.toBeNull();
-  expect(field.textContent).toContain(t('reviewAi.two.authorNote.prefilledHint'));
-  expect($('[data-author-note-count]')!.textContent).toBe(t('reviewAi.two.authorNote.count', { n: draft.length, max: 1500 }));
-  // 順序：給作者的說明 → 理由與改法預覽 → 給 AI 的說明
-  expect($('[data-reason-preview]')!.textContent).toContain(t('reviewAi.two.authorNote.reasonsPreviewTitle'));
-  expect(field.compareDocumentPosition($('[data-reason-preview]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect($('[data-reason-preview]')!.compareDocumentPosition($('[data-ai-note]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  // 換去「用我的」再回來，改過的字還在
-  text.value = 'Give the player a question to answer in the first message.'; text.dispatchEvent(new Event('input')); await nextTick();
-  await pickFinal('blind');
-  expect($('[data-author-note-field]')).toBeNull();
-  await pickFinal('ai');
-  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe('Give the player a question to answer in the first message.');
-  finalButton().click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5, authorNote: 'Give the player a question to answer in the first message.' });
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  // 沒改：不帶 authorNote，伺服器用 AI 的草稿
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  await pickFinal('ai');
-  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe(draft);
-  finalButton().click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5 });
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  // AI 是通過：伺服器不帶說明給作者，沒有這個欄位
-  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [], authorNote: draft }));
-  await mountPage('/en/review/s1');
-  await submitBlind('reject');
-  await pickFinal('ai');
-  expect($('[data-final-result]')).not.toBeNull();
-  expect($('[data-author-note-field]')).toBeNull();
-});
-
-it('use the AI: a note naming internal signals is not sent; the error above the field lists each term with its snippet and a rewrite hint, and the text stays', async () => {
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
-  const edited = 'Your alt accounts sent six cards; low confidence in the setting.';
-  let blocked = true;
-  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5, authorNote: 'Draft' }));
-  routes['/v1/review/s1/stamp'] = () => (blocked ? internal(edited, [['帳號', 'accounts'], ['分數', 'confidence']]) : stampOk('ai', 'rejected'));
-  await mountPage('/en/review/s1');
-  await submitBlind('approve');
-  await pickFinal('ai');
-  const text = host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!;
-  text.value = edited; text.dispatchEvent(new Event('input')); await nextTick();
-  finalButton().click();
-  await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
-  expect(posts('stamp').length).toBe(1);
-  const guard = $('[data-note-guard]')!;
-  expect(guard.getAttribute('role')).toBe('alert');
-  // 錯誤區在欄位上方（同一個欄位區塊裡、文字框之前）
-  expect(guard.closest('[data-author-note-field]')).not.toBeNull();
-  expect(guard.compareDocumentPosition(host.querySelector('[data-author-note-text]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(guard.textContent).toContain(t('reviewAi.guard.title'));
-  expect(guard.textContent).toContain(t('reviewAi.guard.footerFinal'));
-  const a = matchOf(edited, '帳號', 'accounts'), c = matchOf(edited, '分數', 'confidence');
-  expect(guardItems(guard)).toEqual([
-    { term: 'account', chip: t('reviewAi.guard.term.account'), mark: a.snippet.slice(a.start, a.start + a.length), snippet: a.snippet, hint: t('reviewAi.guard.hint.account') },
-    { term: 'score', chip: t('reviewAi.guard.term.score'), mark: 'confidence', snippet: c.snippet, hint: t('reviewAi.guard.hint.score') },
-  ]);
-  expect(document.activeElement).toBe(guard.querySelector('[data-guard-term]'));
-  // 字留著、選擇留著、還在揭曉步驟；沒有另外的錯誤訊息
-  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe(edited);
-  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.getAttribute('aria-invalid')).toBe('true');
-  expect(host.querySelector<HTMLInputElement>('[data-final-pick=ai]')!.checked).toBe(true);
-  expect($('[data-two-stage-compare]')).not.toBeNull();
-  expect(host.querySelectorAll('[role=alert]').length).toBe(1);
-  // 改好再送：錯誤區收起、送出改過的字
-  blocked = false;
-  text.value = 'Give the player a question to answer.'; text.dispatchEvent(new Event('input')); await nextTick();
-  finalButton().click();
-  await vi.waitFor(() => expect(posts('stamp').length).toBe(2));
-  expect(posts('stamp')[1]!.body).toMatchObject({ finalSource: 'ai', authorNote: 'Give the player a question to answer.' });
-});
-
-it('blind step and finalize-with-changes: an internal term in the note keeps the text and shows the error above that note', async () => {
-  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+it('an internal term in the note for the author keeps the text, the choice and the AI default, and lists each hit above the note', async () => {
+  pending();
   const note = 'Same device as three other accounts.';
-  routes['/v1/review/s1/blind'] = () => internal(note, [['裝置', 'device'], ['帳號', 'accounts']]);
+  let blocked = true;
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Draft' }));
+  routes['/v1/review/s1/stamp'] = () => (blocked ? internal(note, [['裝置', 'device'], ['帳號', 'accounts']]) : stampOk('modified', 'rejected'));
   await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
-  await chooseDecision('reject');
-  await pickReason('opening.no_reply_hook');
-  // 駁回說明標「作者會看到」，下一行寫只寫卡片本身
+  await waitAi();
   expect($('.field [data-visibility=author]')).not.toBeNull();
-  expect($('#review-note-hint')!.textContent).toBe(t('reviewAi.two.authorNote.editHint'));
   const field = host.querySelector<HTMLTextAreaElement>('#review-note')!;
-  field.value = note; field.dispatchEvent(new Event('input')); await nextTick();
+  await typeInto(field, note);
   $('[data-submit-reject]')!.click();
   await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
   const guard = $('[data-note-guard]')!;
   expect(guard.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(guard.textContent).toContain(t('reviewAi.guard.footer'));
-  expect(guard.textContent).not.toContain(t('reviewAi.guard.footerFinal'));
+  expect(guard.textContent).toContain(t('reviewAi.guard.footerFinal'));
   expect(guardItems(guard).map((i) => [i.term, i.mark, i.hint])).toEqual([
     ['device', 'device', t('reviewAi.guard.hint.device')], ['account', 'accounts', t('reviewAi.guard.hint.account')],
   ]);
   expect(document.activeElement).toBe(guard.querySelector('[data-guard-term]'));
-  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(note);
-  expect($('[data-two-stage-compare]')).toBeNull();
-  expect(posts('blind').length).toBe(1);
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  // 修改後定案：同一道檢查，錯誤區在駁回說明上方，結尾寫「再按一次定案」
-  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [] }), { note: 'Needs a hook' });
-  const changed = 'Needs a hook; your weekly quota is used up.';
-  routes['/v1/review/s1/stamp'] = () => internal(changed, [['額度', 'quota']]);
-  await mountPage('/en/review/s1');
-  await submitBlind('reject');
-  await pickFinal('modified');
-  await vi.waitFor(() => expect($('#review-note')).not.toBeNull());
-  const edit = host.querySelector<HTMLTextAreaElement>('#review-note')!;
-  edit.value = changed; edit.dispatchEvent(new Event('input')); await nextTick();
-  finalButton().click();
-  await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
+  expect(field.value).toBe(note);
+  expect(checked()).toBe('reject');
   expect(posts('stamp').length).toBe(1);
-  expect($('[data-note-guard]')!.textContent).toContain(t('reviewAi.guard.footerFinal'));
-  expect(guardItems($('[data-note-guard]')!).map((i) => [i.term, i.chip, i.mark])).toEqual([['quota', t('reviewAi.guard.term.quota'), 'quota']]);
-  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(changed);
-  expect(host.querySelector<HTMLInputElement>('[data-final-pick=modified]')!.checked).toBe(true);
-});
-
-it('two-step re-entry: a second blind call goes straight to the AI step, and so does reopening a card with my blind call', async () => {
-  mocks.fetchReviewDetail.mockResolvedValueOnce(detail({})).mockResolvedValue(detail({}, { myBlind: blindOf('reject') }));
-  routes['/v1/review/s1/blind'] = () => [409, { error: 'blind_already_recorded' }];
-  routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
-  await mountPage('/en/review/s1');
-  await submitBlind('reject');
-  await vi.waitFor(() => expect($('[data-agree]')).not.toBeNull());
-  expect(posts('blind').length).toBe(1);
-  expect(aiCalls().length).toBe(1);
-  expect($('[data-agree]')!.dataset.agree).toBe('same');
-  expect($('[role=alert]')).toBeNull();
-  app!.unmount(); document.body.innerHTML = ''; calls = [];
-
-  mocks.fetchReviewDetail.mockReset().mockResolvedValue(detail({}, { myBlind: blindOf('reject') }));
-  await mountPage('/en/review/s1');
-  await vi.waitFor(() => expect($('[data-agree]')).not.toBeNull());
-  expect($('[data-decide-choices]')).toBeNull();
-  expect(posts('blind')).toEqual([]);
-  expect(aiCalls().map((c) => c.url)).toEqual(['/v1/review/s1/ai']);
+  blocked = false;
+  await typeInto(field, 'Give the player a question to answer.');
+  $('[data-submit-reject]')!.click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(2));
+  expect(posts('stamp')[1]!.body).toMatchObject({ finalSource: 'modified', note: 'Give the player a question to answer.' });
 });
 
 it('retention: a decided card past its retention says only public data is left; within retention it shows the date', async () => {
@@ -594,7 +400,7 @@ it('retention: a decided card past its retention says only public data is left; 
 
 // 兩段式之後（ui-two-stage.md）：通過與駁回在定案前已經並排比過，結果卡下不再掛揭曉區；只剩不受理用
 it('revisiting a card I stamped shows the result card without the old reveal panel and asks nothing', async () => {
-  mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'rejected', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'reject', note: '', at: 2, mine: true, finalSource: 'ai' }] }, { rejectReasons: ['opening.no_reply_hook'], retainUntil: Date.UTC(2026, 11, 1), myBlind: blindOf('approve') }));
+  mocks.fetchReviewDetail.mockResolvedValue(detail({ status: 'rejected', claimedByMe: false, stampedByMe: true, stamps: [{ verdict: 'reject', note: '', at: 2, mine: true, finalSource: 'ai' }] }, { rejectReasons: ['opening.no_reply_hook'], retainUntil: Date.UTC(2026, 11, 1) }));
   routes['/v1/review/s1/ai'] = () => [200, { suggestions: [suggestion()], myFeedback: [] }];
   await mountPage('/en/review/s1');
   await vi.waitFor(() => expect($('[data-result-card]')).not.toBeNull());
