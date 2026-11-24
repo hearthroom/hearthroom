@@ -65,3 +65,76 @@ it("ignores answers from an older questionnaire and starts over", async () => {
   expect($('[data-topic="none"]')).not.toBeNull();
   expect($("[data-rating-mark]")).toBeNull();
 });
+
+// 分級下限（管理員更正分級，2026-11-24）：低於下限的選項停用、結果不低於下限、永遠送得出去
+it("shows no floor chip or disabled options when the card has no floor", async () => {
+  void askRating(null);
+  await tick();
+  expect($("[data-rating-floor]")).toBeNull();
+  await click('[data-topic="violence"]');
+  await click("[data-next]");
+  expect($("[data-below-floor]")).toBeNull();
+  expect($<HTMLInputElement>('[data-option="violence.cartoon"]')?.disabled).toBe(false);
+});
+
+it("disables options below the floor and labels them in words", async () => {
+  void askRating(null, "PG15");
+  await tick();
+  expect($("[data-rating-floor]")?.textContent).toBe("分級下限：輔15級");
+  await click('[data-topic="violence"]');
+  await click("[data-next]");
+  const cartoon = $<HTMLInputElement>('[data-option="violence.cartoon"]')!;
+  expect(cartoon.disabled).toBe(true);
+  expect(cartoon.closest("label")?.getAttribute("aria-disabled")).toBe("true");
+  expect(cartoon.closest("label")?.textContent).toContain("低於分級下限");
+  expect($<HTMLInputElement>('[data-option="violence.fighting"]')?.disabled).toBe(true);
+  expect($<HTMLInputElement>('[data-option="violence.bloody"]')?.disabled).toBe(false);
+  // 點停用的選項不會選上，下一步照樣說缺什麼
+  cartoon.closest("label")!.click(); await tick();
+  expect(cartoon.checked).toBe(false);
+  await click("[data-next]");
+  expect($("[data-rating-dialog] [role=alert]")?.textContent).toBe(i18n.global.t("rating.missingOption"));
+});
+
+it("can always be submitted with an adult floor, even for types whose options are all below it", async () => {
+  const result = askRating(null, "R");
+  await tick();
+  await click('[data-topic="tobacco_alcohol"]');
+  await click("[data-next]");
+  // 菸酒只有輔15級一項：整類停用，勾了就帶上，不擋下一步
+  const only = $<HTMLInputElement>('[data-option="tobacco_alcohol.shown"]')!;
+  expect(only.disabled).toBe(true);
+  expect(only.checked).toBe(true);
+  await click("[data-next]");
+  // 其他影響只剩限制級那一項能選
+  const enabled = [...document.querySelectorAll<HTMLInputElement>('input[name="rating-other"]')].filter((x) => !x.disabled).map((x) => x.value);
+  expect(enabled).toEqual(["other.under18"]);
+  await click('[data-option="other.under18"]');
+  await click("[data-next]");
+  expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
+  expect($("[data-by-floor]")).toBeNull();
+  expect($("[data-rating-mark]")?.textContent).toContain("菸酒");
+  await click("[data-confirm]");
+  expect(await result).toEqual({ version: 1, topics: { tobacco_alcohol: "tobacco_alcohol.shown" }, other: "other.under18" });
+});
+
+it("shows the floor as the result when earlier answers rate lower, and still confirms them", async () => {
+  const result = askRating({ version: 1, topics: {}, other: "other.none" }, "R");
+  await tick();
+  expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
+  expect($("[data-rating-mark] strong")?.textContent).toBe("限制級");
+  expect($("[data-by-floor]")?.textContent).toBe("依分級下限");
+  expect($("[data-floor-note]")?.textContent).toBe("你選了「以上皆無」，結果不會低於分級下限。");
+  expect($<HTMLButtonElement>("[data-confirm]")?.disabled).toBe(false);
+  await click("[data-confirm]");
+  // 送的是作者的答案；分級由伺服器套用下限
+  expect(await result).toEqual({ version: 1, topics: {}, other: "other.none" });
+});
+
+it("result equals the higher of the questionnaire and the floor", async () => {
+  void askRating({ version: 1, topics: { sex: "sex.explicit" }, other: "other.none" }, "PG12");
+  await tick();
+  expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
+  expect($("[data-by-floor]")).toBeNull();
+  expect($("[data-floor-note]")).toBeNull();
+});

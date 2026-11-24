@@ -511,9 +511,9 @@ export async function registerCard(
   return result;
 }
 
-/** 改卡前先通知本站：resubmit＝存完要重新送審；ratingAnswers＝上一版的分級問卷（沒有就要作者重填）。 */
-export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
-  const result=await json<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
+/** 改卡前先通知本站：resubmit＝存完要重新送審；ratingAnswers＝上一版的分級問卷（沒有就要作者重填）；ratingFloor＝管理員更正分級後的分級下限。 */
+export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string;ratingFloor?:string}> {
+  const result=await json<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string;ratingFloor?:string}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
     method:'POST',headers:{...from(),'X-Provider':provider,...authHeaders(token)},
   }));
   clearPublicationOperation(publicationKey(provider,roleId));

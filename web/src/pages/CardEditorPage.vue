@@ -119,9 +119,9 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog, confirmForm, confirmPublication } from "@/lib/confirm";
 import { wrapTab } from "@/lib/focus-trap";
-import { askRating, rate, usable } from "@/lib/rating";
+import { askRating, rate, ratingName, usable, withFloor } from "@/lib/rating";
 import RatingMark from "@/components/RatingMark.vue";
-import type { RatingAnswers } from "../../../shared/content-rating";
+import { isRating, type Rating, type RatingAnswers } from "../../../shared/content-rating";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
@@ -157,7 +157,12 @@ const cardFandomId = ref("");
  * 改卡時伺服器帶回上一版的答案，存完自動重送審就用它。
  */
 const ratingAnswers = ref<RatingAnswers | null>(null);
-const ratingResult = computed(() => (ratingAnswers.value ? rate(ratingAnswers.value) : null));
+// 分級下限：管理員更正過分級的卡才有，由存檔時的改卡通知帶回；送審的分級＝問卷結果與下限取高者
+const ratingFloor = ref<Rating | null>(null);
+const ratingResult = computed(() => {
+  const r = ratingAnswers.value ? rate(ratingAnswers.value) : null;
+  return r ? { ...r, rating: withFloor(r.rating, ratingFloor.value) } : null;
+});
 /** 存完要重送審，但上一版沒有可沿用的分級問卷（問卷上線前送的）：作者得先補 */
 const ratingNeeded = ref(false);
 const creationPending = ref(!roleId.value);
@@ -1706,6 +1711,7 @@ async function save() {
     reviewRetry.value = false;
     ratingNeeded.value = false;
     if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
+    if (!wasNew) ratingFloor.value = "ratingFloor" in review && isRating(review.ratingFloor) ? review.ratingFloor : null;
     reviewResubmitted.value = !!review.resubmit;
     if (!targetRoleId) {
       targetRoleId = await ensureCardDraft(token);
@@ -1883,7 +1889,7 @@ async function remove() {
 
 /** 填或改分級問卷；已建立的卡順手存成草稿，下次送審直接帶出來。 */
 async function editRating(): Promise<RatingAnswers | null> {
-  const answers = await askRating(ratingAnswers.value);
+  const answers = await askRating(ratingAnswers.value, ratingFloor.value);
   if (!answers) return null;
   ratingAnswers.value = answers;
   if (roleId.value && !isNew.value) {
@@ -2515,9 +2521,12 @@ async function exportCard(format: "png" | "json") {
           <div class="panel rating-panel" data-rating-panel>
             <h2>{{ $t("rating.title") }}</h2>
             <p class="muted">{{ $t("editor.rating.hint") }}</p>
-            <RatingMark v-if="ratingResult" :rating="ratingResult.rating" :descriptors="ratingResult.descriptors" />
-            <p v-else-if="isNew" class="subtle">{{ $t("editor.rating.saveFirst") }}</p>
-            <p v-else class="subtle">{{ $t("editor.rating.empty") }}</p>
+            <div v-if="ratingResult || ratingFloor" class="rating-panel__current">
+              <RatingMark v-if="ratingResult" :rating="ratingResult.rating" :descriptors="ratingResult.descriptors" />
+              <span v-if="ratingFloor" class="chip" data-rating-floor>{{ $t("rating.floor", { name: ratingName(ratingFloor, String(locale)) }) }}</span>
+            </div>
+            <p v-if="!ratingResult && isNew" class="subtle">{{ $t("editor.rating.saveFirst") }}</p>
+            <p v-else-if="!ratingResult" class="subtle">{{ $t("editor.rating.empty") }}</p>
             <button type="button" class="btn" :disabled="isNew || saving" @click="editRating">
               {{ ratingResult ? $t("editor.rating.change") : $t("editor.rating.start") }}
             </button>
@@ -2829,6 +2838,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .state-panel__chip { font-variant-numeric: tabular-nums; }
 .state-panel__body { display: grid; gap: var(--s-4); padding-top: var(--s-2); border-top: 1px solid var(--line); }
 .checklist__done { margin: 0; color: var(--text-2); font-size: 14px; }
+.rating-panel__current { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
 .side__tag { font-size: 11px; color: var(--text-3); }
 .pane > .field, .pane :deep(.field) { margin-bottom: 0; }
 /*

@@ -1966,6 +1966,34 @@ it('a failed draft save never submits partial content for review',async()=>{
 });
 
 
+// 分級下限（管理員更正分級，2026-11-24）：改卡通知帶回下限，編輯器的分級列與問卷都看得到
+it('shows the rating floor from the edit notice beside the current rating and passes it to the questionnaire',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,ratingAnswers:GENERAL,ratingFloor:'R'} as never);
+ await mount('/cards/r1/edit');
+ expect(root.querySelector('[data-rating-panel] [data-rating-floor]')).toBeNull();
+ await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
+ const panel=root.querySelector('[data-rating-panel]')!;
+ expect(panel.querySelector('[data-rating-floor]')?.textContent).toBe('分級下限：限制級');
+ // 問卷是普遍級，送審會提到下限：分級列顯示的就是送審後的分級
+ expect(panel.querySelector('[data-rating-mark] strong')?.textContent).toBe('限制級');
+ [...panel.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.includes(i18n.global.t('editor.rating.change')))!.click();await flush();
+ expect(ratingState.current?.floor).toBe('R');
+ ratingState.current!.resolve(null);await flush();
+});
+
+it('shows no rating floor when the edit notice has none',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,ratingAnswers:GENERAL});
+ await mount('/cards/r1/edit');
+ await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
+ const panel=root.querySelector('[data-rating-panel]')!;
+ expect(panel.querySelector('[data-rating-floor]')).toBeNull();
+ expect(panel.querySelector('[data-rating-mark] strong')?.textContent).toBe('普遍級');
+});
+
 it('saves Harbor external image URLs directly without creating media assets', async () => {
  localStorage.setItem('hearthroom.provider', 'harbor');
  const url = 'https://objects.harbor.ai/cards/synthetic.png';

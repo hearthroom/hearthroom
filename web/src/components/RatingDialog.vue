@@ -5,11 +5,16 @@
  * 照官方「分級級別評量系統」的走法：先複選這張卡會出現哪些內容，再就每一類選最接近、
  * 而且不低於實際內容的那一項，最後一題問其他可能的不良影響，結果取最高級別。
  * 帶著上一份答案打開時直接停在結果，作者確認沿用或回頭改。題目文字在 shared/content-rating.ts。
+ *
+ * 分級下限（管理員更正過分級的卡）：低於下限的選項停用，結果＝問卷結果與下限取高者。
+ * 停用只擋新的選擇，問卷永遠送得出去：其他影響一定有限制級那一項可選；整類都低於下限的
+ * 只有單一選項的菸酒、戀愛交友，勾了就自動帶上那一項（照樣列進情節）；上一份答案裡已經
+ * 低於下限的選擇保留、照算，下限由結果與伺服器補上。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RATING_INTRO, RATING_OTHER, RATING_PICK_RULE, RATING_QUESTIONNAIRE_VERSION, RATING_TOPICS, type RatingAnswers, type Topic } from "../../../shared/content-rating";
-import { descriptorList, markSrc, rate, ratingLocale, ratingName, ratingState } from "@/lib/rating";
+import { belowFloor, descriptorList, markSrc, rate, ratingLocale, ratingName, ratingState, withFloor } from "@/lib/rating";
 import RatingMark from "./RatingMark.vue";
 
 const { locale, t } = useI18n();
@@ -24,12 +29,18 @@ const missing = ref(false);
 const box = ref<HTMLElement | null>(null);
 const body = ref<HTMLElement | null>(null);
 
+const floor = computed(() => ratingState.current?.floor ?? null);
+const floorName = computed(() => (floor.value ? ratingName(floor.value, String(locale.value)) : ""));
+const off = (r: Parameters<typeof belowFloor>[0]) => belowFloor(r, floor.value);
+// 沒選到的類型不送（整類停用、又沒有自動帶上的情況），不然整份答案算不出來、確認鍵會停用
 const answers = computed<RatingAnswers>(() => ({
   version: RATING_QUESTIONNAIRE_VERSION,
-  topics: Object.fromEntries(picked.value.map((id) => [id, options.value[id] ?? ""])),
+  topics: Object.fromEntries(picked.value.filter((id) => options.value[id]).map((id) => [id, options.value[id]!])),
   other: other.value,
 }));
 const result = computed(() => rate(answers.value));
+const shown = computed(() => (result.value ? withFloor(result.value.rating, floor.value) : null));
+const byFloor = computed(() => !!result.value && shown.value !== result.value.rating);
 const topicsShown = computed(() => RATING_TOPICS.filter((x) => picked.value.includes(x.id)));
 const stepIndex = computed(() => (["pick", "detail", "other", "result"] as Step[]).filter((s) => s !== "detail" || picked.value.length).indexOf(step.value) + 1);
 const stepTotal = computed(() => (picked.value.length ? 4 : 3));
@@ -65,7 +76,8 @@ function next() {
     if (!none.value && !picked.value.length) { missing.value = true; return; }
     step.value = picked.value.length ? "detail" : "other";
   } else if (step.value === "detail") {
-    if (picked.value.some((id) => !options.value[id])) { missing.value = true; return; }
+    // 只有還有能選的選項時才要求作答：整類都低於下限的不擋下一步
+    if (picked.value.some((id) => !options.value[id] && RATING_TOPICS.find((x) => x.id === id)?.options.some((o) => !off(o.rating)))) { missing.value = true; return; }
     step.value = "other";
   } else if (step.value === "other") {
     if (!other.value) { missing.value = true; return; }
@@ -95,7 +107,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
       <div ref="box" class="dlg panel rating-dlg" role="dialog" aria-modal="true" aria-labelledby="rating-title" data-rating-dialog>
         <header class="rating-dlg__head">
           <div class="rating-dlg__title-row">
-            <h2 id="rating-title" class="rating-dlg__title">{{ $t("rating.title") }}</h2>
+            <div class="rating-dlg__title-group">
+              <h2 id="rating-title" class="rating-dlg__title">{{ $t("rating.title") }}</h2>
+              <span v-if="floor" class="chip rating-floor" data-rating-floor>{{ $t("rating.floor", { name: floorName }) }}</span>
+            </div>
             <span class="rating-dlg__step">{{ $t("rating.step", { n: stepIndex, total: stepTotal }) }}</span>
           </div>
           <div class="rating-dlg__progress" aria-hidden="true">
@@ -127,10 +142,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             <p class="rating-dlg__lead">{{ RATING_PICK_RULE[l] }}</p>
             <fieldset v-for="topic in topicsShown" :key="topic.id" class="rating-dlg__group">
               <legend class="rating-dlg__q">{{ topic.title[l] }}</legend>
-              <label v-for="opt in topic.options" :key="opt.id" class="choice" :class="{ 'choice--on': options[topic.id] === opt.id }">
-                <input v-model="options[topic.id]" class="sr-only" type="radio" :name="`rating-${topic.id}`" :value="opt.id" :data-option="opt.id" />
+              <label v-for="opt in topic.options" :key="opt.id" class="choice" :class="{ 'choice--on': options[topic.id] === opt.id, 'choice--off': off(opt.rating) }" :aria-disabled="off(opt.rating) || undefined">
+                <input v-model="options[topic.id]" class="sr-only" type="radio" :name="`rating-${topic.id}`" :value="opt.id" :data-option="opt.id" :disabled="off(opt.rating)" />
                 <span class="choice__dot" aria-hidden="true" />
-                <span class="choice__text">{{ opt.text[l] }}</span>
+                <span class="choice__text">{{ opt.text[l] }}<small v-if="off(opt.rating)" class="choice__off" data-below-floor>{{ $t("rating.belowFloor") }}</small></span>
                 <RatingMark :rating="opt.rating" variant="chip" class="choice__level" />
               </label>
             </fieldset>
@@ -139,20 +154,24 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <template v-else-if="step === 'other'">
             <fieldset class="rating-dlg__group">
               <legend class="rating-dlg__q">{{ RATING_OTHER.title[l] }}</legend>
-              <label v-for="opt in RATING_OTHER.options" :key="opt.id" class="choice" :class="{ 'choice--on': other === opt.id }">
-                <input v-model="other" class="sr-only" type="radio" name="rating-other" :value="opt.id" :data-option="opt.id" />
+              <label v-for="opt in RATING_OTHER.options" :key="opt.id" class="choice" :class="{ 'choice--on': other === opt.id, 'choice--off': off(opt.rating) }" :aria-disabled="off(opt.rating) || undefined">
+                <input v-model="other" class="sr-only" type="radio" name="rating-other" :value="opt.id" :data-option="opt.id" :disabled="off(opt.rating)" />
                 <span class="choice__dot" aria-hidden="true" />
-                <span class="choice__text">{{ opt.text[l] }}</span>
+                <span class="choice__text">{{ opt.text[l] }}<small v-if="off(opt.rating)" class="choice__off" data-below-floor>{{ $t("rating.belowFloor") }}</small></span>
                 <RatingMark v-if="opt.rating !== 'G'" :rating="opt.rating" variant="chip" class="choice__level" />
               </label>
             </fieldset>
           </template>
 
-          <div v-else-if="result" class="result" data-rating-mark>
+          <div v-else-if="result && shown" class="result" data-rating-mark>
             <p class="rating-dlg__q">{{ $t("rating.result") }}</p>
-            <img :src="markSrc(result.rating)" width="88" height="88" :alt="ratingName(result.rating, String(locale))" class="result__mark" />
-            <strong class="result__name">{{ ratingName(result.rating, String(locale)) }}</strong>
+            <img :src="markSrc(shown)" width="88" height="88" :alt="ratingName(shown, String(locale))" class="result__mark" />
+            <span class="result__name-row">
+              <strong class="result__name">{{ ratingName(shown, String(locale)) }}</strong>
+              <span v-if="byFloor" class="chip" data-by-floor>{{ $t("rating.byFloor") }}</span>
+            </span>
             <span v-if="result.descriptors.length" class="result__contains">{{ $t("rating.contains", { list: descriptorList(result.descriptors, String(locale)) }) }}</span>
+            <p v-if="byFloor" class="result__floor" data-floor-note>{{ $t(none ? "rating.floorNoteNone" : "rating.floorNote") }}</p>
             <p class="result__note">{{ $t("rating.policy") }}</p>
           </div>
 
@@ -187,7 +206,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
 }
 .rating-dlg__head { padding: var(--s-5) var(--s-5) var(--s-3); display: grid; gap: var(--s-3); }
-.rating-dlg__title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.rating-dlg__title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.rating-dlg__title-group { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); min-width: 0; }
 .rating-dlg__title { font-size: 17px; font-weight: 600; }
 .rating-dlg__step { font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .rating-dlg__progress { display: flex; gap: 4px; }
@@ -227,6 +247,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 }
 .choice:hover { background: var(--surface-2); }
 .choice--on { border-color: var(--accent); background: var(--accent-tint); }
+/* 低於分級下限：不能選，靠旁邊的字說明，不只靠半透明 */
+.choice--off { cursor: not-allowed; }
+.choice--off:hover { background: transparent; }
+.choice--off .choice__dot, .choice--off .choice__level { opacity: .45; }
+.choice--off .choice__text { color: var(--text-3); }
+.choice__off { display: block; margin-top: 2px; font-size: 12px; color: var(--text-3); }
 .choice__dot {
   flex: none; width: 16px; height: 16px; margin-top: 3px; border-radius: 50%;
   border: 1.5px solid var(--border-strong); background: var(--surface);
@@ -240,7 +266,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .result { display: grid; justify-items: center; gap: var(--s-2); text-align: center; padding-top: var(--s-2); }
 .result .rating-dlg__q { justify-self: start; }
 .result__mark { display: block; margin-top: var(--s-2); border-radius: 3px; }
+.result__name-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--s-2); }
 .result__name { font-size: 18px; font-weight: 600; }
+.result__floor { font-size: 13px; line-height: 1.6; color: var(--text-2); }
 .result__contains { font-size: 13.5px; color: var(--text-2); }
 .result__note {
   justify-self: stretch; margin-top: var(--s-3); padding: var(--s-3); border-radius: var(--r-sm);

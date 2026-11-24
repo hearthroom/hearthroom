@@ -1,6 +1,6 @@
 import { reactive } from "vue";
 import {
-  LOCALES, RATING_NAMES, RATING_TOPICS, evaluateRating,
+  LOCALES, RATINGS, RATING_NAMES, RATING_TOPICS, evaluateRating,
   type Rating, type RatingAnswers, type RatingLocale, type RatingResult, type Topic,
 } from "../../../shared/content-rating";
 
@@ -9,16 +9,25 @@ import {
  * 伺服器用同一份重算，這裡算出的結果只是給作者先看。
  */
 
-interface Pending { initial: RatingAnswers | null; resolve: (answers: RatingAnswers | null) => void }
+interface Pending { initial: RatingAnswers | null; floor: Rating | null; resolve: (answers: RatingAnswers | null) => void }
 export const ratingState = reactive<{ current: Pending | null }>({ current: null });
 
-/** 打開問卷：有上一份答案就先給作者看結果，確認回答案，取消回 null。 */
-export function askRating(initial: RatingAnswers | null): Promise<RatingAnswers | null> {
+/**
+ * 打開問卷：有上一份答案就先給作者看結果，確認回答案，取消回 null。
+ * floor＝管理員更正分級後這張卡的分級下限：低於它的選項停用，結果顯示不低於它（送審時伺服器也會提到下限）。
+ */
+export function askRating(initial: RatingAnswers | null, floor: Rating | null = null): Promise<RatingAnswers | null> {
   ratingState.current?.resolve(null);
   return new Promise((resolve) => {
-    ratingState.current = { initial: usable(initial), resolve: (a) => { ratingState.current = null; resolve(a); } };
+    ratingState.current = { initial: usable(initial), floor, resolve: (a) => { ratingState.current = null; resolve(a); } };
   });
 }
+
+const rank = (r: Rating) => RATINGS.indexOf(r);
+/** 這個級別低於分級下限（沒有下限就永遠不低） */
+export const belowFloor = (r: Rating, floor: Rating | null) => !!floor && rank(r) < rank(floor);
+/** 送審後的分級：問卷結果與分級下限取高者（與伺服器 applyRatingFloor 同規則） */
+export const withFloor = (r: Rating, floor: Rating | null): Rating => (floor && rank(floor) > rank(r) ? floor : r);
 
 /** 還能用的答案（現行版本、形狀正確）才拿來預填；不能用就當沒有。 */
 export function usable(answers: RatingAnswers | null | undefined): RatingAnswers | null {
