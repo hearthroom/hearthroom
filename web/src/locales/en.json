@@ -6251,7 +6251,7 @@
   "reviewAi.two.final.submit.approve": "Finalize: Approve",
   "reviewAi.two.final.submit.reject": "Finalize: Reject",
   "reviewAi.two.final.submitIdle": "Finalize",
-  "reviewAi.two.final.aiChanged": "The AI just re-judged this card. Its new call is shown here; choose again.",
+  "reviewAi.two.final.aiChanged": "The AI just re-evaluated this card. You can apply its new suggestion above, or finalize with your current changes.",
   "reviewAi.two.confirm.title": "Finalize as approved and publish it?",
   "reviewAi.two.confirm.blind": "Your blind call",
   "reviewAi.two.confirm.final": "Final",

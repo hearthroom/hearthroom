@@ -6251,7 +6251,7 @@
   "reviewAi.two.final.submit.approve": "定案：通過",
   "reviewAi.two.final.submit.reject": "定案：駁回",
   "reviewAi.two.final.submitIdle": "定案",
-  "reviewAi.two.final.aiChanged": "AI 剛重新判斷過，這裡已換上新的判斷，請再選一次。",
+  "reviewAi.two.final.aiChanged": "AI 剛重新判斷過；可以在上方套用新的建議，或直接以目前的修改定案。",
   "reviewAi.two.confirm.title": "要定案為「通過」並公開上架嗎？",
   "reviewAi.two.confirm.blind": "你的盲審",
   "reviewAi.two.confirm.final": "定案",
@@ -6341,7 +6341,7 @@
   "reviewAi.first.verdict.reject": "建議駁回",
   "reviewAi.first.pending": "AI 還在審這張卡，每 10 秒自動重新整理。你也可以直接照一般流程決定。",
   "reviewAi.first.none": "AI 這次沒有給出建議，照一般流程決定。",
-  "reviewAi.first.error": "讀不到 AI 的建議，可以照一般流程決定。",
+  "reviewAi.first.error": "AI 的建議暫時載入不了，可以直接照一般流程決定。",
   "reviewAi.first.inaccurate": "AI 判斷不準確",
   "reviewAi.first.inaccurateHint": "覺得不準就標一下；不影響這張卡的結果",
   "reviewAi.first.inaccurateOn": "已標記：這是給 AI 打的分，不影響這張卡的結果",
@@ -6365,6 +6365,6 @@
   "reviewAi.first.confirm.title": "要定案為「通過」並公開上架嗎？",
   "reviewAi.first.confirm.ai": "AI 建議",
   "reviewAi.first.confirm.final": "定案",
-  "reviewAi.first.confirm.body": "作者會收到「已通過」，卡片會公開上架。",
+  "reviewAi.first.confirm.body": "作者會收到「已通過審核」通知，卡片會公開上架。",
   "reviewAi.first.confirm.submit": "通過並上架"
 }

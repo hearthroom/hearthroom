@@ -6251,7 +6251,7 @@
   "reviewAi.two.final.submit.approve": "確定：承認",
   "reviewAi.two.final.submit.reject": "確定：却下",
   "reviewAi.two.final.submitIdle": "確定",
-  "reviewAi.two.final.aiChanged": "AIが判定し直しました。新しい判定に差し替えたので、もう一度選んでください。",
+  "reviewAi.two.final.aiChanged": "AIが判定し直しました。上で新しい提案を適用するか、現在の変更のまま確定できます。",
   "reviewAi.two.confirm.title": "「承認」で確定して公開しますか？",
   "reviewAi.two.confirm.blind": "ブラインド判定",
   "reviewAi.two.confirm.final": "確定",
@@ -6353,7 +6353,7 @@
   "reviewAi.first.submit.reject": "確定：却下",
   "reviewAi.first.submitHint": "変更しなければAIどおりに確定します。どこか変更すると「AIの提案を変更」として記録されます",
   "reviewAi.first.modified": "AIの提案を変更：{changes}",
-  "reviewAi.first.change.verdict": "結論を{verdict}に変更",
+  "reviewAi.first.change.verdict": "結論を「{verdict}」に変更",
   "reviewAi.first.change.added": "{names}を追加",
   "reviewAi.first.change.removed": "{names}を削除",
   "reviewAi.first.change.note": "作者への説明を編集",
@@ -6365,6 +6365,6 @@
   "reviewAi.first.confirm.title": "「承認」で確定して公開しますか？",
   "reviewAi.first.confirm.ai": "AIの提案",
   "reviewAi.first.confirm.final": "確定",
-  "reviewAi.first.confirm.body": "作者には「承認」と通知され、カードは公開されます。",
+  "reviewAi.first.confirm.body": "作者には「審査通過」と通知され、カードは公開されます。",
   "reviewAi.first.confirm.submit": "承認して公開"
 }
