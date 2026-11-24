@@ -2144,6 +2144,7 @@
   "rating.byFloor": "최저 등급 적용",
   "rating.floorNote": "결과는 최저 등급보다 낮아지지 않아요.",
   "rating.floorNoteNone": "'해당 없음'을 선택했지만 결과는 최저 등급보다 낮아지지 않아요.",
+  "rating.topicBelowFloor": "이 유형은 모두 최저 등급보다 낮아 선택할 필요가 없어요",
   "editor.rating.hint": "대만 게임 소프트웨어 등급 기준으로 카드 페이지에 표시되며, 심사 신청 시마다 확인합니다.",
   "editor.rating.saveFirst": "저장 후 작성 가능",
   "editor.rating.empty": "등급 없음",

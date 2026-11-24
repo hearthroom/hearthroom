@@ -157,7 +157,7 @@ const cardFandomId = ref("");
  * 改卡時伺服器帶回上一版的答案，存完自動重送審就用它。
  */
 const ratingAnswers = ref<RatingAnswers | null>(null);
-// 分級下限：管理員更正過分級的卡才有，由存檔時的改卡通知帶回；送審的分級＝問卷結果與下限取高者
+// 分級下限：管理員更正過分級的卡才有，載入時由評測草稿帶回、存檔時由改卡通知更新；送審的分級＝問卷結果與下限取高者
 const ratingFloor = ref<Rating | null>(null);
 const ratingResult = computed(() => {
   const r = ratingAnswers.value ? rate(ratingAnswers.value) : null;
@@ -1052,7 +1052,8 @@ onMounted(async () => {
     settleDisclosures();
     if (token) {
       // 提前做好的評測：讀不到不擋編輯，送審時再填
-      if (!isNew.value) fetchRatingDraft(roleId.value, token, editorProvider.value).then((a) => { ratingAnswers.value = usable(a); }).catch(() => {});
+      // 分級下限也從這裡來：載入時就讓作者看到，存檔時改卡通知帶回的值再更新它
+      if (!isNew.value) fetchRatingDraft(roleId.value, token, editorProvider.value).then((d) => { ratingAnswers.value = usable(d.answers); ratingFloor.value = d.ratingFloor; }).catch(() => {});
       await wb.loadBound(token, roleId.value);
       for (const c of draft.value.world?.characters ?? []) {
         if (c.lorebookId) await memberBook(c).load(token, c.lorebookId).catch(() => {});

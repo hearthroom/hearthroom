@@ -4,7 +4,7 @@ import {parseUpdateIntent,type UpdateIntent} from '../../../shared/card-update';
 import {publicationOperationKey as publicationKey,notePublicationOperation} from './publication-operation';
 import {retentionParams} from './reward-retention';
 import { deviceToken } from "./reward-device";
-import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
+import { isRating, type Rating, type RatingAnswers, type Topic } from "../../../shared/content-rating";
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { apiBaseOf, oauthBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
@@ -520,12 +520,16 @@ export async function beginCardEdit(roleId:string,token:string,provider:Provider
   return result;
 }
 
-/** 作者先存著的分級評測（每位作者、每張卡一份）；問卷改版後的舊草稿回 null。 */
-export async function fetchRatingDraft(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<RatingAnswers | null> {
-  const res = await json<{ answers: RatingAnswers | null }>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/rating-draft`, {
+export interface RatingDraft { answers: RatingAnswers | null; ratingFloor: Rating | null }
+/**
+ * 作者先存著的分級評測（每位作者、每張卡一份）；問卷改版後的舊草稿 answers 回 null。
+ * ratingFloor＝管理員更正分級後這張卡的分級下限（只回給卡片作者），開問卷前就能停用較低的選項。
+ */
+export async function fetchRatingDraft(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<RatingDraft> {
+  const res = await json<{ answers: RatingAnswers | null; ratingFloor?: string }>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/rating-draft`, {
     headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
   }));
-  return res.answers;
+  return { answers: res.answers ?? null, ratingFloor: isRating(res.ratingFloor) ? res.ratingFloor : null };
 }
 
 export async function saveRatingDraft(roleId: string, answers: RatingAnswers, token: string, provider: ProviderId = currentProvider()): Promise<void> {

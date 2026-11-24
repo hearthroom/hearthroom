@@ -70,7 +70,7 @@ const api = vi.hoisted(() => ({
   registerCard: vi.fn(async () => ({status:'pending'})),
   fetchFandoms: vi.fn(async () => []),
   beginCardEdit: vi.fn(async ():Promise<{resubmit:boolean;ratingAnswers?:unknown}> => ({resubmit:false})),
-  fetchRatingDraft: vi.fn(async ():Promise<unknown> => null),
+  fetchRatingDraft: vi.fn(async ():Promise<unknown> => ({answers:null,ratingFloor:null})),
   saveRatingDraft: vi.fn(async () => {}),
   deleteRole: vi.fn(async () => {}),
   unregisterCard: vi.fn(async () => {}),
@@ -1981,6 +1981,17 @@ it('shows the rating floor from the edit notice beside the current rating and pa
  [...panel.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.includes(i18n.global.t('editor.rating.change')))!.click();await flush();
  expect(ratingState.current?.floor).toBe('R');
  ratingState.current!.resolve(null);await flush();
+});
+
+it('shows the rating floor as soon as the editor loads, from the rating draft',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.fetchRatingDraft.mockResolvedValueOnce({answers:GENERAL,ratingFloor:'PG15'});
+ await mount('/cards/r1/edit');
+ const panel=root.querySelector('[data-rating-panel]')!;
+ expect(api.beginCardEdit).not.toHaveBeenCalled();
+ expect(panel.querySelector('[data-rating-floor]')?.textContent).toBe('分級下限：輔15級');
+ expect(panel.querySelector('[data-rating-mark] strong')?.textContent).toBe('輔15級');
 });
 
 it('shows no rating floor when the edit notice has none',async()=>{

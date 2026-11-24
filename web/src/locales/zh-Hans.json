@@ -2144,6 +2144,7 @@
   "rating.byFloor": "按分级下限",
   "rating.floorNote": "结果不会低于分级下限。",
   "rating.floorNoteNone": "你选了“以上皆无”，结果不会低于分级下限。",
+  "rating.topicBelowFloor": "这一类都低于分级下限，不必选择",
   "editor.rating.hint": "依台湾游戏软件分级标示于卡片页，每次提交审核时确认。",
   "editor.rating.saveFirst": "保存后可填写",
   "editor.rating.empty": "尚未分级",

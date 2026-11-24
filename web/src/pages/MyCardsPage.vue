@@ -177,7 +177,7 @@ async function submitReview(expected:WorkVisibility){
  const valid=()=>!!visibilityCard.value&&workKey(visibilityCard.value)===key&&visibilityActor.value===actor;
  try {
   const token=await cardToken(card);if(!valid())return;const saved=await fetchRatingDraft(source,token,provider).catch(()=>null);
-  const answers=await askRating(saved);if(!answers||!valid())return;
+  const answers=await askRating(saved?.answers??null,saved?.ratingFloor??null);if(!answers||!valid())return;
   const options={title:t('mine.consent.title'),message:t('workspace.reviewConsent'),confirmText:t('mine.consent.confirm'),field:{label:t('editor.fandom.label'),placeholder:t('editor.fandom.placeholder'),hint:t('editor.fandom.hint'),maxlength:60,lookup:(q:string)=>fetchFandomLookup(q)}};
   let missingPresetTag=false,missingCover=false;
   const send=async(value:{text:string;id?:string;update?:import('../../../shared/card-update').UpdateIntent})=>{

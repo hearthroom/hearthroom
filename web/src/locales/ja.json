@@ -2144,6 +2144,7 @@
   "rating.byFloor": "レーティング下限による",
   "rating.floorNote": "結果はレーティング下限より低くなりません。",
   "rating.floorNoteNone": "「該当なし」を選択しましたが、結果はレーティング下限より低くなりません。",
+  "rating.topicBelowFloor": "この種類はすべてレーティング下限より低いため、選択は不要です",
   "editor.rating.hint": "台湾のゲームソフトレーティングに基づきカードページに表示。審査申請ごとに確認。",
   "editor.rating.saveFirst": "保存後に入力可能",
   "editor.rating.empty": "未設定",

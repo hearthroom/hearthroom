@@ -2144,6 +2144,7 @@
   "rating.byFloor": "Set by rating floor",
   "rating.floorNote": "The result can't be lower than the rating floor.",
   "rating.floorNoteNone": "You chose None of the above; the result can't be lower than the rating floor.",
+  "rating.topicBelowFloor": "Everything in this type is below the rating floor; no choice needed",
   "editor.rating.hint": "Shown on the card page using Taiwan's game software ratings. Confirmed at each submission.",
   "editor.rating.saveFirst": "Available after saving",
   "editor.rating.empty": "Not rated",

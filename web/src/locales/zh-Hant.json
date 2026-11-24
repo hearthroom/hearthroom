@@ -2144,6 +2144,7 @@
   "rating.byFloor": "依分級下限",
   "rating.floorNote": "結果不會低於分級下限。",
   "rating.floorNoteNone": "你選了「以上皆無」，結果不會低於分級下限。",
+  "rating.topicBelowFloor": "這一類都低於分級下限，不必選擇",
   "editor.rating.hint": "依台灣遊戲軟體分級標示於卡片頁，每次送審時確認。",
   "editor.rating.saveFirst": "儲存後可填寫",
   "editor.rating.empty": "尚未分級",

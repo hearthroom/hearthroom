@@ -23,7 +23,7 @@ vi.mock('../src/lib/rating',async original=>({...await original<typeof import('.
 let app:App;let root:HTMLElement;let currentRouter:Router;
 const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();await nextTick();};
 const card={id:'100021',num:100021,provider:'harbor',roleId:'sealed',sourceRoleId:'draft',status:'approved',author:{accountNumId:22,name:'Fixture'}} as any;
-beforeEach(()=>{vi.clearAllMocks();mocks.token.mockResolvedValue('token-harbor');mocks.confirm.mockImplementation(async options=>{await options.onConfirm?.({text:'',update:{updateKind:'minor',updateNote:''}});return true;});mocks.ratingDraft.mockResolvedValue(TEEN);mocks.ask.mockImplementation(async(a:unknown)=>a);mocks.saveRating.mockResolvedValue(undefined);mocks.register.mockImplementation(async()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',update:'pending',actions:['cancel_review']})});return {status:'approved'};});});
+beforeEach(()=>{vi.clearAllMocks();mocks.token.mockResolvedValue('token-harbor');mocks.confirm.mockImplementation(async options=>{await options.onConfirm?.({text:'',update:{updateKind:'minor',updateNote:''}});return true;});mocks.ratingDraft.mockResolvedValue({answers:TEEN,ratingFloor:null});mocks.ask.mockImplementation(async(a:unknown)=>a);mocks.saveRating.mockResolvedValue(undefined);mocks.register.mockImplementation(async()=>{visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',update:'pending',actions:['cancel_review']})});return {status:'approved'};});});
 afterEach(()=>{app?.unmount();root?.remove();document.body.innerHTML='';});
 async function mount(c=card,me=22){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});currentRouter=router;await router.push('/cards/100021');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:22,nickName:'F',avatar:''};if(me!==22)session.me={accountNumId:me,nickName:'F',avatar:''};session.profile={identities:[{provider:'harbor',externalId:me}]} as any;root=document.createElement('div');document.body.append(root);app=createApp({render:()=>h(CardOwnerActions,{card:c})}).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 const text=(key:string)=>i18n.global.t(key);
@@ -38,10 +38,19 @@ it('gives the owner a draft playtest link, and says the draft was edited with a 
  expect(root.textContent).toContain(text('visibility.state.changed'));
  button('card.owner.submitUpdate')!.click();await settle();
  // 送審前先確認分級：帶出作者存過的評測
- expect(mocks.ask).toHaveBeenCalledWith(TEEN);
+ expect(mocks.ask).toHaveBeenCalledWith(TEEN,null);
  expect(mocks.register).toHaveBeenCalledWith('draft','token-harbor',TEEN,[],'harbor',undefined,undefined,expect.objectContaining({policyRevision:'1'}));
  expect(button('card.owner.submitUpdate')).toBeUndefined();
  expect(root.textContent).toContain(text('visibility.state.updatePending'));
+});
+// 管理員更正過分級的卡：評測草稿帶回分級下限，問卷打開時就停用較低的選項
+it('opens the questionnaire with the card rating floor from the rating draft',async()=>{
+ mocks.draft.mockResolvedValue({status:'approved',draftChanged:true});visibilityMocks.read.mockResolvedValue({workVisibility:visibilityPolicy({access:'public',draftChanged:true,actions:['submit_update']})});
+ mocks.ratingDraft.mockResolvedValue({answers:TEEN,ratingFloor:'R'});
+ await mount();
+ button('card.owner.submitUpdate')!.click();await settle();
+ expect(mocks.ratingDraft).toHaveBeenCalledWith('draft','token-harbor','harbor');
+ expect(mocks.ask).toHaveBeenCalledWith(TEEN,'R');
 });
 it('shows no notice and no submit-update when the draft matches the approved version or an update is already in review',async()=>{
  mocks.draft.mockResolvedValue({status:'approved',draftChanged:false});

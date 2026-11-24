@@ -54,7 +54,7 @@ async function submit(expected=visibility.value) {
   if(!valid())return;
   if (!token) { quotaDeviceBlocked.value = false; error.value = t('auth.expired'); return; }
   const saved = await fetchRatingDraft(source, token, p).catch(() => null);
-  const answers = await askRating(saved);
+  const answers = await askRating(saved?.answers ?? null, saved?.ratingFloor ?? null);
   if (!answers||!valid()) return;
   const options={
     title: t('mine.consent.title'),

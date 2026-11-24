@@ -87,7 +87,7 @@ const api = vi.hoisted(() => ({
   registerCard: vi.fn(async () => ({ status: 'pending' })),
   fetchFandoms: vi.fn(async () => []),
   beginCardEdit: vi.fn(async () => ({ resubmit: false })),
-  fetchRatingDraft: vi.fn(async () => null),
+  fetchRatingDraft: vi.fn(async () => ({ answers: null, ratingFloor: null })),
   saveRatingDraft: vi.fn(async () => {}),
   deleteRole: vi.fn(async () => {}),
   unregisterCard: vi.fn(async () => {}),

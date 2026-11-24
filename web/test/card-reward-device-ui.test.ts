@@ -150,7 +150,7 @@ beforeEach(async () => {
   sessionMock.ready = true;
   apiMocks.accountToken.mockResolvedValue("tok-author");
   apiMocks.communityRequest.mockResolvedValue({ invite: "https://discord.gg/hearthroom" });
-  apiMocks.fetchRatingDraft.mockResolvedValue({ version: 1, topics: { romance: "romance.dating" }, other: "other.none" });
+  apiMocks.fetchRatingDraft.mockResolvedValue({ answers: { version: 1, topics: { romance: "romance.dating" }, other: "other.none" }, ratingFloor: null });
   apiMocks.ask.mockImplementation(async (a: unknown) => a);
   apiMocks.saveRatingDraft.mockResolvedValue(undefined);
   apiMocks.confirm.mockImplementation(async (opts: any) => {

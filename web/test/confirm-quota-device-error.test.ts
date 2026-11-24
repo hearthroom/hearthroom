@@ -80,7 +80,7 @@ beforeEach(async () => {
   confirmState.current = null;
   await applyLocale("zh-Hant");
   apiMocks.accountToken.mockResolvedValue("tok-author");
-  apiMocks.fetchRatingDraft.mockResolvedValue({ version: 1, topics: { romance: "romance.dating" }, other: "other.none" });
+  apiMocks.fetchRatingDraft.mockResolvedValue({ answers: { version: 1, topics: { romance: "romance.dating" }, other: "other.none" }, ratingFloor: null });
   apiMocks.ask.mockImplementation(async (a: unknown) => a);
   apiMocks.saveRatingDraft.mockResolvedValue(undefined);
   apiMocks.readVisibility.mockResolvedValue({

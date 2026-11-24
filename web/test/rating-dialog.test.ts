@@ -100,11 +100,16 @@ it("can always be submitted with an adult floor, even for types whose options ar
   const result = askRating(null, "R");
   await tick();
   await click('[data-topic="tobacco_alcohol"]');
+  await click('[data-topic="drugs"]');
   await click("[data-next]");
-  // 菸酒只有輔15級一項：整類停用，勾了就帶上，不擋下一步
-  const only = $<HTMLInputElement>('[data-option="tobacco_alcohol.shown"]')!;
-  expect(only.disabled).toBe(true);
-  expect(only.checked).toBe(true);
+  // 菸酒只有輔15級一項：整類低於下限，不列選項、不必作答（UI 稿 v14）
+  expect($('[data-option="tobacco_alcohol.shown"]')).toBeNull();
+  expect($("[data-topic-na]")?.textContent).toBe("這一類都低於分級下限，不必選擇");
+  // 毒品還有限制級那一項可選，沒選就說缺什麼
+  await click("[data-next]");
+  expect($("[data-rating-dialog] [role=alert]")?.textContent).toBe(i18n.global.t("rating.missingOption"));
+  expect($<HTMLInputElement>('[data-option="drugs.mentioned"]')?.disabled).toBe(true);
+  await click('[data-option="drugs.use"]');
   await click("[data-next]");
   // 其他影響只剩限制級那一項能選
   const enabled = [...document.querySelectorAll<HTMLInputElement>('input[name="rating-other"]')].filter((x) => !x.disabled).map((x) => x.value);
@@ -113,9 +118,21 @@ it("can always be submitted with an adult floor, even for types whose options ar
   await click("[data-next]");
   expect($<HTMLImageElement>("[data-rating-mark] img")?.getAttribute("src")).toBe("/rating/gsrr-R.png");
   expect($("[data-by-floor]")).toBeNull();
-  expect($("[data-rating-mark]")?.textContent).toContain("菸酒");
   await click("[data-confirm]");
-  expect(await result).toEqual({ version: 1, topics: { tobacco_alcohol: "tobacco_alcohol.shown" }, other: "other.under18" });
+  expect(await result).toEqual({ version: 1, topics: { drugs: "drugs.use" }, other: "other.under18" });
+});
+
+it("passes the next step when every ticked type is entirely below the floor", async () => {
+  const result = askRating(null, "R");
+  await tick();
+  await click('[data-topic="romance"]');
+  await click("[data-next]");
+  expect($("[data-topic-na]")).not.toBeNull();
+  await click("[data-next]");
+  await click('[data-option="other.under18"]');
+  await click("[data-next]");
+  await click("[data-confirm]");
+  expect(await result).toEqual({ version: 1, topics: {}, other: "other.under18" });
 });
 
 it("shows the floor as the result when earlier answers rate lower, and still confirms them", async () => {

@@ -8,8 +8,8 @@
  *
  * 分級下限（管理員更正過分級的卡）：低於下限的選項停用，結果＝問卷結果與下限取高者。
  * 停用只擋新的選擇，問卷永遠送得出去：其他影響一定有限制級那一項可選；整類都低於下限的
- * 只有單一選項的菸酒、戀愛交友，勾了就自動帶上那一項（照樣列進情節）；上一份答案裡已經
- * 低於下限的選擇保留、照算，下限由結果與伺服器補上。
+ * 類型（目前只有單一選項的菸酒、戀愛交友）不列選項、不作答、不擋下一步（UI 稿 v14）；
+ * 上一份答案裡低於下限、但同類還有可選項的選擇保留、照算，下限由結果與伺服器補上。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -32,10 +32,12 @@ const body = ref<HTMLElement | null>(null);
 const floor = computed(() => ratingState.current?.floor ?? null);
 const floorName = computed(() => (floor.value ? ratingName(floor.value, String(locale.value)) : ""));
 const off = (r: Parameters<typeof belowFloor>[0]) => belowFloor(r, floor.value);
-// 沒選到的類型不送（整類停用、又沒有自動帶上的情況），不然整份答案算不出來、確認鍵會停用
+/** 這一類每個選項都低於分級下限：不列選項、不作答 */
+const allOff = (id: Topic) => !!RATING_TOPICS.find((x) => x.id === id)?.options.every((o) => off(o.rating));
+// 沒選到的類型與整類低於下限的類型不送，不然整份答案算不出來、確認鍵會停用
 const answers = computed<RatingAnswers>(() => ({
   version: RATING_QUESTIONNAIRE_VERSION,
-  topics: Object.fromEntries(picked.value.filter((id) => options.value[id]).map((id) => [id, options.value[id]!])),
+  topics: Object.fromEntries(picked.value.filter((id) => options.value[id] && !allOff(id)).map((id) => [id, options.value[id]!])),
   other: other.value,
 }));
 const result = computed(() => rate(answers.value));
@@ -64,7 +66,7 @@ function togglePick(id: Topic) {
   picked.value = picked.value.includes(id) ? picked.value.filter((x) => x !== id) : [...picked.value, id];
   // 只有一個選項的類型（菸酒、戀愛交友）勾了就等於選了那一項，不必再點一次
   const only = RATING_TOPICS.find((x) => x.id === id)?.options;
-  if (only?.length === 1 && picked.value.includes(id)) options.value = { ...options.value, [id]: only[0]!.id };
+  if (only?.length === 1 && picked.value.includes(id) && !off(only[0]!.rating)) options.value = { ...options.value, [id]: only[0]!.id };
 }
 function pickNone() {
   none.value = !none.value;
@@ -76,8 +78,8 @@ function next() {
     if (!none.value && !picked.value.length) { missing.value = true; return; }
     step.value = picked.value.length ? "detail" : "other";
   } else if (step.value === "detail") {
-    // 只有還有能選的選項時才要求作答：整類都低於下限的不擋下一步
-    if (picked.value.some((id) => !options.value[id] && RATING_TOPICS.find((x) => x.id === id)?.options.some((o) => !off(o.rating)))) { missing.value = true; return; }
+    // 整類都低於下限的不必作答，不擋下一步
+    if (picked.value.some((id) => !options.value[id] && !allOff(id))) { missing.value = true; return; }
     step.value = "other";
   } else if (step.value === "other") {
     if (!other.value) { missing.value = true; return; }
@@ -142,7 +144,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
             <p class="rating-dlg__lead">{{ RATING_PICK_RULE[l] }}</p>
             <fieldset v-for="topic in topicsShown" :key="topic.id" class="rating-dlg__group">
               <legend class="rating-dlg__q">{{ topic.title[l] }}</legend>
-              <label v-for="opt in topic.options" :key="opt.id" class="choice" :class="{ 'choice--on': options[topic.id] === opt.id, 'choice--off': off(opt.rating) }" :aria-disabled="off(opt.rating) || undefined">
+              <p v-if="allOff(topic.id)" class="rating-dlg__na" data-topic-na>{{ $t("rating.topicBelowFloor") }}</p>
+              <label v-for="opt in allOff(topic.id) ? [] : topic.options" :key="opt.id" class="choice" :class="{ 'choice--on': options[topic.id] === opt.id, 'choice--off': off(opt.rating) }" :aria-disabled="off(opt.rating) || undefined">
                 <input v-model="options[topic.id]" class="sr-only" type="radio" :name="`rating-${topic.id}`" :value="opt.id" :data-option="opt.id" :disabled="off(opt.rating)" />
                 <span class="choice__dot" aria-hidden="true" />
                 <span class="choice__text">{{ opt.text[l] }}<small v-if="off(opt.rating)" class="choice__off" data-below-floor>{{ $t("rating.belowFloor") }}</small></span>
@@ -218,6 +221,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .rating-dlg__group { display: grid; gap: var(--s-2); margin: 0; padding: 0; border: 0; min-width: 0; }
 .rating-dlg__q { padding: 0; margin-bottom: var(--s-1); font-size: 14px; font-weight: 600; }
 .rating-dlg__missing { font-size: 13px; color: var(--danger); }
+.rating-dlg__na { padding: var(--s-3); border: 1px dashed var(--border-strong); border-radius: var(--r-md); font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .rating-dlg__actions {
   display: flex; justify-content: flex-end; gap: var(--s-2);
   padding: var(--s-3) var(--s-5) var(--s-4); border-top: 1px solid var(--line);
