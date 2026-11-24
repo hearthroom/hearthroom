@@ -200,7 +200,18 @@ const HOLD_JOIN = "LEFT JOIN review_holds h ON h.card_id = s.card_id LEFT JOIN m
 const HOLD_COLUMNS = "h.member_id AS hold_by, h.created_at AS hold_at, COALESCE(NULLIF(hm.display_name, ''), hm.handle) AS hold_name";
 
 /** 各分頁的待審數（獨立計數，不受清單 200 筆上限影響） */
-export async function queueCounts(db: D1Database): Promise<{ new: number; updates: number; dropped: number }> {
+// 2026-11-24 D1 過載止血：各分頁待審數每次要掃十幾萬列，審核頁定時重整會一直打。同一個 Worker 實例 60 秒內共用一份結果
+let queueCountsMemo: { at: number; value: Promise<{ new: number; updates: number; dropped: number }> } | null = null;
+export const QUEUE_COUNTS_TTL_MS = 60_000;
+export function resetQueueCountsMemo() { queueCountsMemo = null; }
+export async function queueCounts(db: D1Database, now = Date.now()): Promise<{ new: number; updates: number; dropped: number }> {
+  if (queueCountsMemo && now - queueCountsMemo.at < QUEUE_COUNTS_TTL_MS) return queueCountsMemo.value;
+  const value = queueCountsFresh(db);
+  queueCountsMemo = { at: now, value };
+  value.catch(() => { if (queueCountsMemo?.value === value) queueCountsMemo = null; });
+  return value;
+}
+async function queueCountsFresh(db: D1Database): Promise<{ new: number; updates: number; dropped: number }> {
   const row = await db.prepare(`SELECT
       SUM(CASE WHEN ${NOT_DROPPED("s")} AND ${NEW_CARD("s")} THEN 1 ELSE 0 END) AS new_cards,
       SUM(CASE WHEN ${NOT_DROPPED("s")} AND NOT ${NEW_CARD("s")} THEN 1 ELSE 0 END) AS updates,

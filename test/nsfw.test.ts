@@ -1,3 +1,4 @@
+import { resetMaintenanceMemo } from '../src/maintenance';
 import {approveFixtureResponse} from './hosted-fixture';
 /**
  * 成人內容（owner 2026-09-08）：本站自己的分級，不讀供應商的。
@@ -118,6 +119,7 @@ describe("榜單權限與快取", () => {
     queries.length = 0;
     const identity = vi.spyOn(upstream, "fetchMe");
     const ctx = createExecutionContext();
+    resetMaintenanceMemo(); // 量測的這個請求照舊讀一次維護開關（開關在實例內共用 5 秒）
     const result = await worker.fetch(req.clone(), measured, ctx);
     await waitOnExecutionContext(ctx);
     expect(result.headers.get("X-Cache")).toBe("hit");
@@ -393,6 +395,7 @@ describe("本站登入 cookie 直接放行單卡", () => {
     queries.length = 0;
     const identity = vi.spyOn(upstream, "fetchMe");
     const ctx = createExecutionContext();
+    resetMaintenanceMemo();
     const res = await worker.fetch(req(), measured, ctx);
     await waitOnExecutionContext(ctx);
     expect(ids(await json(res))).toEqual(["role-adult", "role-safe"]);

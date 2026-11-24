@@ -4,12 +4,15 @@ import worker from '../src/index';
 const MAINTENANCE_KEY = 'site_maintenance';
 import { opsMetrics } from '../src/ops-metrics';
 import { resetDb } from './helpers';
+import { resetMaintenanceMemo } from '../src/maintenance';
 
 beforeEach(resetDb);
 async function setState(value: unknown) {
   await env.DB.prepare('INSERT OR REPLACE INTO community_settings(key,value,updated_at) VALUES(?,?,1)').bind(MAINTENANCE_KEY,JSON.stringify(value)).run();
+  // 開關讀取在同一個 Worker 實例內共用 5 秒（D1 過載止血）；測試切換後立刻驗證，先清掉共用的那份
+  resetMaintenanceMemo();
 }
-it('defaults off, stays enabled after the ETA and reports primary state without caching',async()=>{
+it('defaults off, stays enabled after the ETA and reports primary state (shared at most 5 seconds per instance)',async()=>{
   expect(await (await SELF.fetch('https://sukisuki.ai/v1/maintenance')).json()).toEqual({enabled:false,endsAt:null,messages:{}});
   await setState({enabled:true,endsAt:1,messages:{en:'Upgrade in progress'}});
   const response=await SELF.fetch('https://sukisuki.ai/v1/maintenance');
@@ -62,6 +65,7 @@ it('keeps pages and APIs available when the primary maintenance read fails', asy
   })} as unknown as Fetcher;
   const ctx = createExecutionContext();
   const settings = {...env, DB: db, ASSETS: assets};
+  resetMaintenanceMemo();
   const home = await worker.fetch(new Request('https://sukisuki.ai/', {headers: {Accept: 'text/html'}}), settings, ctx);
   const health = await worker.fetch(new Request('https://sukisuki.ai/v1/health'), settings, ctx);
   const status = await worker.fetch(new Request('https://sukisuki.ai/v1/maintenance'), settings, ctx);
@@ -98,4 +102,16 @@ it('restores same-site sandbox documents by reloading their original shell and s
  const r=await worker.fetch(new Request('https://sukisuki.ai/sandbox/'),{...env,ASSETS:{fetch:async()=>new Response('<html><head></head></html>',{headers:{'Content-Type':'text/html'}})} as unknown as Fetcher},ctx);
  expect(await r.text()).toContain('content="sandbox"');await waitOnExecutionContext(ctx);
  expect((await SELF.fetch('https://sukisuki.ai/v1/maintenance',{headers:{Origin:'null'}})).headers.get('Access-Control-Allow-Origin')).toBe('*');
+});
+
+it('shares the primary read for 5 seconds within one instance, then reads again', async () => {
+  await setState({enabled:false});
+  expect((await SELF.fetch('https://sukisuki.ai/v1/maintenance')).status).toBe(200);
+  await env.DB.prepare('INSERT OR REPLACE INTO community_settings(key,value,updated_at) VALUES(?,?,1)').bind(MAINTENANCE_KEY,JSON.stringify({enabled:true,endsAt:null,messages:{}})).run();
+  // 5 秒內共用剛才那份（還是關）
+  expect(await (await SELF.fetch('https://sukisuki.ai/v1/maintenance')).json()).toMatchObject({enabled:false});
+  vi.useFakeTimers({ now: Date.now() + 6_000, toFake: ['Date'] });
+  try {
+    expect(await (await SELF.fetch('https://sukisuki.ai/v1/maintenance')).json()).toMatchObject({enabled:true});
+  } finally { vi.useRealTimers(); }
 });
