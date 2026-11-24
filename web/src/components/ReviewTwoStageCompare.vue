@@ -5,6 +5,8 @@
  *
  * AI 欄的狀態：loading（重新進來時讀取中）、error（讀不到）、pending（還沒審完：骨架＋已等多久）、
  * none（交人、拒答：只有你的判斷）、ready。
+ * AI 欄分成兩塊：內部說明（信心與依據，虛線灰底、鎖頭「只有審核員看得到」）與給作者的說明（AI 的草稿，實線強調框、
+ * 眼睛「作者會看到」）；結論與理由代碼在上。盲審欄不變。
  * AI 欄的內容在 aria-live 區裡：AI 審完自動換上時讀屏器會唸一次，不搶焦點；每秒跳的「已等 N 秒」放在區外，免得一直唸。
  */
 import { computed } from "vue";
@@ -13,6 +15,7 @@ import type { ReviewBlind } from "@/lib/api";
 import type { AiSuggestion } from "@/lib/review-ai-api";
 import { aiAsHuman, aiReasonCodes, type AiView } from "@/lib/review-ai";
 import { reasonKey } from "@/lib/review-reasons";
+import ReviewVisibility from "./ReviewVisibility.vue";
 
 const props = defineProps<{ blind: ReviewBlind; view: AiView; suggestion: AiSuggestion | null; waited: number; busy?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -23,6 +26,7 @@ const aiVerdict = computed(() => (props.view === "ready" && props.suggestion ? a
 const agree = computed(() => (aiVerdict.value ? aiVerdict.value === props.blind.verdict : null));
 const aiReasons = computed(() => (props.suggestion && aiVerdict.value === "reject" ? aiReasonCodes(props.suggestion) : []));
 const pct = (n: number) => new Intl.NumberFormat(String(locale.value), { style: "percent", maximumFractionDigits: 0 }).format(n);
+const authorNote = computed(() => props.suggestion?.authorNote?.trim() ?? "");
 const waitedText = computed(() => (props.waited < 60 ? t("reviewAi.two.pending.waitedSeconds", { n: props.waited }) : t("reviewAi.two.pending.waitedMinutes", { n: Math.floor(props.waited / 60) })));
 </script>
 
@@ -70,15 +74,29 @@ const waitedText = computed(() => (props.waited < 60 ? t("reviewAi.two.pending.w
           <template v-else-if="suggestion">
             <p class="cmp__chips">
               <span class="chip cmp__chip" :class="suggestion.verdict === 'pass' ? 'cmp__chip--pass' : 'cmp__chip--reject'" :data-ai-verdict="suggestion.verdict">{{ t(`reviewAi.reveal.verdict.${suggestion.verdict}`) }}</span>
-              <span v-if="suggestion.confidence !== null" class="chip cmp__chip cmp__chip--num" data-ai-confidence>{{ t("reviewAi.reveal.confidence", { pct: pct(suggestion.confidence) }) }}</span>
             </p>
             <ul v-if="aiReasons.length" class="cmp__chips cmp__list" data-ai-reasons>
               <li v-for="code in aiReasons" :key="code" class="chip cmp__chip">{{ t(reasonKey(code, "name")) }}</li>
             </ul>
-            <div v-if="suggestion.note" class="cmp__group">
-              <p class="cmp__label">{{ t("reviewAi.arb.basis") }}</p>
-              <p class="cmp__text">{{ suggestion.note }}</p>
-            </div>
+            <!-- 揭曉區分欄：誰看得到要一眼分得出（符號＋文字＋框線樣式，不單靠顏色） -->
+            <section v-if="suggestion.confidence !== null || suggestion.note" class="cmp__block cmp__block--internal" aria-labelledby="cmp-ai-internal" data-ai-internal>
+              <div class="cmp__block-head">
+                <h5 id="cmp-ai-internal" class="cmp__block-title">{{ t("reviewAi.two.internalNote.title") }}</h5>
+                <ReviewVisibility who="reviewers" />
+              </div>
+              <p v-if="suggestion.confidence !== null" class="cmp__chips">
+                <span class="chip cmp__chip cmp__chip--num" data-ai-confidence>{{ t("reviewAi.reveal.confidence", { pct: pct(suggestion.confidence) }) }}</span>
+              </p>
+              <p v-if="suggestion.note" class="cmp__text" data-ai-internal-note>{{ suggestion.note }}</p>
+            </section>
+            <section class="cmp__block cmp__block--author" aria-labelledby="cmp-ai-author" data-ai-author-note>
+              <div class="cmp__block-head">
+                <h5 id="cmp-ai-author" class="cmp__block-title">{{ t("reviewAi.two.authorNote.title") }}</h5>
+                <ReviewVisibility who="author" />
+              </div>
+              <p v-if="authorNote" class="cmp__text" data-ai-author-note-text>{{ authorNote }}</p>
+              <p v-else class="muted cmp__note" data-ai-author-note-empty>{{ t("reviewAi.two.authorNote.empty") }}</p>
+            </section>
           </template>
         </div>
         <p v-if="view === 'pending'" class="subtle cmp__note cmp__waited" data-ai-waited>{{ waitedText }}</p>
@@ -108,6 +126,14 @@ const waitedText = computed(() => (props.waited < 60 ? t("reviewAi.two.pending.w
 .cmp__note { margin: 0; overflow-wrap: anywhere; }
 .cmp__ghost { height: 64px; border-radius: var(--r-md); }
 .cmp__retry { justify-self: start; }
+/* 內部說明：虛線、灰底（中性）；給作者的說明：實線強調框。圓角比欄位小一階 */
+.cmp__block { display: grid; gap: var(--s-2); min-width: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); }
+.cmp__block--internal { border: 1px dashed var(--border-strong); background: var(--surface-2); }
+.cmp__block--author { border: 1px solid var(--accent); background: var(--surface); }
+.cmp__block-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1) var(--s-2); min-width: 0; }
+.cmp__block-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+/* 灰底區塊裡的文字框換回卡面底，才分得出層次 */
+.cmp__block--internal .cmp__text { background: var(--surface); }
 .cmp__waited { font-variant-numeric: tabular-nums; }
 /* 只是標示，不能點：拿掉 .chip 的 hover 與手指游標 */
 .cmp__chip { cursor: default; max-width: 100%; }

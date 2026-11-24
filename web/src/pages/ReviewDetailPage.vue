@@ -40,6 +40,10 @@ import ReviewAiReveal from '@/components/ReviewAiReveal.vue';
 import ReviewTwoStageCompare from '@/components/ReviewTwoStageCompare.vue';
 import ReviewAiNoteField from '@/components/ReviewAiNoteField.vue';
 import ReviewReasonPreview from '@/components/ReviewReasonPreview.vue';
+import ReviewAuthorNoteField from '@/components/ReviewAuthorNoteField.vue';
+import ReviewAuthorNoteGuard from '@/components/ReviewAuthorNoteGuard.vue';
+import ReviewVisibility from '@/components/ReviewVisibility.vue';
+import { guardHits, type GuardHit } from '@/lib/author-note-guard';
 import { fetchReviewAi, type AiNoteType } from '@/lib/review-ai-api';
 import { aiAsHuman, aiChoiceUsable, aiReasonCodes, aiStateOf, publishesAgainstBlind, waitedSeconds, type AiView, type MyDecision } from '@/lib/review-ai';
 import { REVIEW_REASONS, reasonKey } from '@/lib/review-reasons';
@@ -328,6 +332,20 @@ const finalPick = ref<(typeof FINAL_PICKS)[number] | null>(null);
 /** 給 AI 的說明（選填，跟著定案送出，不給作者看） */
 const aiNoteTypes = ref<AiNoteType[]>([]);
 const aiNote = ref('');
+/**
+ * 「用 AI 的」駁回時給作者的說明：預填 AI 的草稿（記下是哪一筆、原文是什麼），改過才送 authorNote，沒改由伺服器用 AI 的草稿。
+ * AI 重判換了一筆時重新預填，舊草稿上的修改不會跟著新的判斷送出。
+ */
+const authorNote = ref('');
+const authorNoteBase = ref<{ id: string; at: number; text: string } | null>(null);
+/**
+ * 給作者看的說明命中內部字詞（400 author_note_internal）：沒有送出，字都留著。錯誤區放在那個欄位上方——
+ * author＝給作者的說明（用 AI 的）、note＝駁回說明、suggest＝通過附建議的補充；top＝畫面上沒有對應欄位時放在決定區頂端。
+ * final：定案步驟（結尾寫「改好再按一次定案」），否則是第一步送出判斷。下次送出、換定案方式時清掉。
+ */
+type GuardAt = 'author' | 'note' | 'suggest' | 'top';
+const noteGuard = ref<{ at: GuardAt; hits: GuardHit[]; final: boolean } | null>(null);
+const guardFor = (at: GuardAt) => (noteGuard.value?.at === at ? noteGuard.value.hits : null);
 /** 剛定案時伺服器回的來源；重新讀詳情後以我那一章的 finalSource 為準 */
 const finalSourceDone = ref<ReviewFinalSource | null>(null);
 /** AI 還沒審完：每 10 秒重讀一次，沒有上限（PM 2026-11-24）；「已等 N 秒」每秒更新 */
@@ -337,6 +355,7 @@ let modifiedFilled = false;
 function resetTwoStage() {
   blind.value = null; aiState.value = null; aiLoadFailed.value = false; aiBusy.value = false; aiForcedNone.value = false; aiChanged.value = false;
   finalPick.value = null; aiNoteTypes.value = []; aiNote.value = ''; modifiedFilled = false;
+  authorNote.value = ''; authorNoteBase.value = null; noteGuard.value = null;
 }
 /** 盲審送出後、定案前：決定區換成揭曉與定案（重新審核沒有兩段式） */
 const stage = computed<'judge' | 'reveal'>(() => (blind.value && !reopen.value && data.value?.submission.status === 'pending' && !stampedByMe.value ? 'reveal' : 'judge'));
@@ -358,6 +377,17 @@ const aiPickBlocked = computed(() => aiNoReasons.value || (aiVerdict.value === '
 /** 修改後定案：用第一步同一套控制項自由調整，盲審判斷本身不變 */
 const modifying = computed(() => stage.value === 'reveal' && agreeWithAi.value === false && finalPick.value === 'modified');
 const showForm = computed(() => stage.value === 'judge' || modifying.value);
+/** 「用 AI 的」而 AI 是駁回：給作者的說明可以改（AI 通過時伺服器不帶說明，不給欄位） */
+const editingAuthorNote = computed(() => stage.value === 'reveal' && agreeWithAi.value === false && finalPick.value === 'ai' && aiVerdict.value === 'reject' && !aiPickBlocked.value);
+watch([editingAuthorNote, aiSuggestion], ([on, s]) => {
+  if (!on || !s) return;
+  const base = authorNoteBase.value;
+  if (base && base.id === s.id && base.at === s.at) return;
+  const text = s.authorNote ?? '';
+  authorNoteBase.value = { id: s.id, at: s.at, text };
+  authorNote.value = text;
+});
+watch(finalPick, () => { noteGuard.value = null; });
 /** 定案後的結論（決定按鈕上寫的那個） */
 const finalVerdict = computed<'approve' | 'reject' | null>(() => {
   const b = blind.value;
@@ -382,7 +412,7 @@ const finalPreview = computed(() => {
     if (b.verdict === 'reject') return { codes: b.payload.reasons, coaching: b.payload.coaching, title: '' };
     if (b.payload.suggestions.length) return { codes: b.payload.suggestions, coaching: true, title: t('reviewV2.decide.suggestPreviewTitle') };
   }
-  if (finalPick.value === 'ai' && aiVerdict.value === 'reject') return { codes: aiReasonCodes(aiSuggestion.value!), coaching: false, title: '' };
+  if (finalPick.value === 'ai' && aiVerdict.value === 'reject') return { codes: aiReasonCodes(aiSuggestion.value!), coaching: false, title: t('reviewAi.two.authorNote.reasonsPreviewTitle') };
   return null;
 });
 const waited = computed(() => (blind.value ? waitedSeconds(blind.value.at, clock.value) : 0));
@@ -711,6 +741,7 @@ async function stampReopen(verdict: "approve" | "reject") {
   error.value = "";
   decideError.value = "";
   decideUnknown.value = false;
+  noteGuard.value = null;
   const built = decisionBody(verdict);
   if ('error' in built) { decideError.value = built.error; return; }
   const target=id.value,review=data.value,generation=review.submission.claimGeneration,keep=verdict==='approve';
@@ -724,7 +755,7 @@ async function stampReopen(verdict: "approve" | "reject") {
     if(!active||id.value!==target)return;
     await settleStamp(target, res.status, { verdict, note: built.body.note ?? '' });
   } catch (err) {
-    await explainDecideError(err, target);
+    await explainDecideError(err, target, { at: verdict === 'reject' ? 'note' : 'top', final: false });
   } finally {
     busy.value = false;
   }
@@ -749,8 +780,13 @@ async function settleStamp(target: string, status: string, stamp: { verdict: "ap
  * 已經送過盲審（換個分頁送過、或重送）→ 重讀詳情，從 myBlind 進揭曉；AI 剛重判 → 換上新的判斷請他重選；
  * 「用 AI 的」不能選 → 當成 AI 沒有給出判斷，只剩用我的判斷定案。
  */
-async function explainDecideError(err: unknown, target: string) {
+async function explainDecideError(err: unknown, target: string, guard: { at: GuardAt; final: boolean } = { at: 'top', final: false }) {
     if(!active||id.value!==target)return;
+    if (err instanceof ApiError && err.code === "author_note_internal" && err.noteInternal) {
+      const hits = guardHits(err.noteInternal);
+      // 錯誤區自己把焦點移到第一個命中項；欄位與選擇都不動
+      if (hits.length) { noteGuard.value = { ...guard, hits }; return; }
+    }
     if (err instanceof ApiError && err.code === "blind_already_recorded") {
       await load();
       return;
@@ -811,7 +847,7 @@ async function submitBlind(verdict: "approve" | "reject") {
   if (busy.value || !data.value || data.value.submission.id !== id.value || hold.value || reopen.value) return;
   if (!claimedByMe.value) { error.value = t("review.claimFirst"); return; }
   if (verdict === "approve" && approveBlocked.value) return;
-  decideError.value = ""; decideUnknown.value = false; error.value = "";
+  decideError.value = ""; decideUnknown.value = false; error.value = ""; noteGuard.value = null;
   const built = decisionBody(verdict);
   if ('error' in built) { decideError.value = built.error; return; }
   const target = id.value, generation = data.value.submission.claimGeneration;
@@ -825,7 +861,7 @@ async function submitBlind(verdict: "approve" | "reject") {
     decideSection.value?.scrollIntoView({ block: "start" });
     decideSection.value?.querySelector<HTMLElement>("[data-decide-title]")?.focus({ preventScroll: true });
   } catch (err) {
-    await explainDecideError(err, target);
+    await explainDecideError(err, target, { at: verdict === 'approve' ? 'suggest' : 'note', final: false });
   } finally {
     busy.value = false;
   }
@@ -839,7 +875,7 @@ async function finalize(source: ReviewFinalSource) {
   const b = blind.value, review = data.value;
   if (busy.value || !b || !review || review.submission.id !== id.value || hold.value) return;
   if (!claimedByMe.value) { error.value = t("review.claimFirst"); return; }
-  decideError.value = ""; decideUnknown.value = false; error.value = ""; aiChanged.value = false;
+  decideError.value = ""; decideUnknown.value = false; error.value = ""; aiChanged.value = false; noteGuard.value = null;
   let decision: ReviewDecisionBody | null = null;
   let verdict = b.verdict;
   if (source === 'modified') {
@@ -855,6 +891,9 @@ async function finalize(source: ReviewFinalSource) {
   }
   // 「用 AI 的」帶畫面上那一筆：AI 在這之間重判過，伺服器回 ai_changed，不會蓋成沒看過的結論
   const shown = source === 'ai' ? aiSuggestion.value : null;
+  // 給作者的說明：只有改過才送，沒改由伺服器用 AI 的草稿（同一筆判斷）
+  const draft = shown && verdict === 'reject' && authorNoteBase.value?.id === shown.id ? authorNoteBase.value.text : null;
+  const editedNote = draft !== null && authorNote.value.trim() !== draft.trim() ? authorNote.value.trim() : null;
   const target = id.value, generation = review.submission.claimGeneration;
   busy.value = true;
   try {
@@ -876,12 +915,14 @@ async function finalize(source: ReviewFinalSource) {
       generation, finalSource: source, ...(decision ?? {}),
       ...(shown ? { aiSuggestionId: shown.id, aiSuggestionAt: shown.at } : {}),
       ...(types.length ? { aiNoteTypes: types } : {}), ...(text ? { aiNote: text } : {}),
+      ...(editedNote !== null ? { authorNote: editedNote } : {}),
     });
     if (!active || id.value !== target) return;
     finalSourceDone.value = res.finalSource ?? source;
-    await settleStamp(target, res.status, { verdict, note: decision?.note ?? (source === 'ai' ? '' : b.payload.note), finalSource: res.finalSource ?? source });
+    await settleStamp(target, res.status, { verdict, note: decision?.note ?? (source === 'ai' ? editedNote ?? draft?.trim() ?? '' : b.payload.note), finalSource: res.finalSource ?? source });
   } catch (err) {
-    await explainDecideError(err, target);
+    const at: GuardAt = source === 'ai' ? 'author' : source === 'modified' ? (verdict === 'approve' ? 'suggest' : 'note') : 'top';
+    await explainDecideError(err, target, { at, final: true });
   } finally {
     busy.value = false;
   }
@@ -1373,6 +1414,7 @@ onMounted(() => { void load(); });
             <p>{{ decideUnknown ? $t("review.decide.unknown") : decideError }}</p>
             <RouterLink v-if="decideUnknown" class="btn btn--sm" :to="lp('/review/decisions')">{{ $t("review.history.title") }}</RouterLink>
           </div>
+          <ReviewAuthorNoteGuard v-if="noteGuard?.at === 'top'" :hits="noteGuard.hits" :final="noteGuard.final" />
           <p v-if="hold" class="notice blocked" data-hold-blocked>{{ $t("review.hold.decideBlocked") }}</p>
           <p v-else-if="rejectLocked && claimedByMe" class="subtle" data-reject-locked>{{ $t("review.reopen.rejectManager") }}</p>
           <p v-if="approveBlocked && showForm" id="approve-blocked" class="notice blocked" data-approve-blocked>{{ $t("review.decide.approveBlocked", { total: lengthParams.total, gap: lengthParams.remaining }) }}</p>
@@ -1409,6 +1451,8 @@ onMounted(() => { void load(); });
                 </label>
               </div>
               <p v-if="(finalPick === 'blind' || finalPick === 'ai') && finalVerdict" class="final__text" data-final-result>{{ $t(finalVerdict === 'approve' ? "reviewAi.two.final.result.approve" : finalPick === 'ai' ? "reviewAi.two.final.result.rejectAi" : "reviewAi.two.final.result.reject") }}</p>
+              <!-- 用 AI 的駁回：給作者的說明（預填 AI 草稿、可改）→ 理由與改法預覽 → 給 AI 的說明 -->
+              <ReviewAuthorNoteField v-if="editingAuthorNote" v-model="authorNote" id-base="final-author-note" :disabled="busy" :hits="guardFor('author')" />
               <ReviewReasonPreview v-if="finalPreview" :codes="finalPreview.codes" :coaching="finalPreview.coaching" :length="lengthParams" :title="finalPreview.title" />
               <p v-if="finalPick === 'modified'" class="final__text" data-final-modified>{{ $t("reviewAi.two.final.modifiedLead") }}</p>
             </template>
@@ -1443,9 +1487,14 @@ onMounted(() => { void load(); });
               <ReviewReasonPicker v-model="suggestPicks" :locked="[]" :disabled="busy || !canDecide" :coaching="true" :coaching-default="false" :fandom="!!fandom"
                 :opening="data.detail.greetings?.welcome ?? ''" :length="lengthParams" :exclude="['content.min_length', 'rating.mismatch']"
                 :preview-title="$t('reviewV2.decide.suggestPreviewTitle')" />
+              <ReviewAuthorNoteGuard v-if="noteGuard?.at === 'suggest'" :hits="noteGuard.hits" :final="noteGuard.final" />
               <div class="field">
-                <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
-                <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" />
+                <div class="note-head">
+                  <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
+                  <ReviewVisibility who="author" />
+                </div>
+                <p id="suggest-note-hint" class="subtle note-hint">{{ $t("reviewAi.two.authorNote.editHint") }}</p>
+                <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" aria-describedby="suggest-note-hint" :aria-invalid="noteGuard?.at === 'suggest' ? 'true' : undefined" />
               </div>
             </template>
           </div>
@@ -1454,9 +1503,14 @@ onMounted(() => { void load(); });
             <ReviewReasonPicker v-if="!reopen" v-model="reasonPicks" :locked="lengthForced ? ['content.min_length'] : []" :disabled="busy || !canDecide"
               :coaching="coachingOn" :coaching-default="coachingDefault" :fandom="!!fandom" :opening="data.detail.greetings?.welcome ?? ''"
               :length="lengthParams" @update:coaching="coaching = $event" />
+            <ReviewAuthorNoteGuard v-if="noteGuard?.at === 'note'" :hits="noteGuard.hits" :final="noteGuard.final" />
             <div class="field">
-              <label for="review-note">{{ $t(noteRequired ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
-              <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" :aria-required="noteRequired" @focus="noteFocused = true" @blur="noteFocused = false" />
+              <div class="note-head">
+                <label for="review-note">{{ $t(noteRequired ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
+                <ReviewVisibility v-if="!reopen" who="author" />
+              </div>
+              <p v-if="!reopen" id="review-note-hint" class="subtle note-hint">{{ $t("reviewAi.two.authorNote.editHint") }}</p>
+              <textarea ref="noteField" autocomplete="off" id="review-note" v-model="note" class="input" rows="4" :maxlength="NOTE_MAX" :placeholder="$t('review.note.placeholder')" :disabled="decided||busy||!!hold" :aria-required="noteRequired" :aria-describedby="reopen ? undefined : 'review-note-hint'" :aria-invalid="noteGuard?.at === 'note' ? 'true' : undefined" @focus="noteFocused = true" @blur="noteFocused = false" />
             </div>
           </template>
           <div v-else-if="choice === 'drop'" class="drop-info" data-drop-info>
@@ -1661,6 +1715,11 @@ onMounted(() => { void load(); });
 .suggest { display: grid; gap: var(--s-2); min-width: 0; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
 .suggest__toggle { justify-self: start; min-height: var(--h-md); }
 .suggest__hint { margin: 0; }
+/* 給作者看的說明欄：標題旁標「作者會看到」，下一行寫只寫卡片本身 */
+.note-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-1) var(--s-2); min-width: 0; }
+.note-head > label { font-size: 13px; font-weight: 600; }
+.note-hint { margin: 0; overflow-wrap: anywhere; }
+.note-hint:lang(ko) { word-break: keep-all; }
 .decision-marks { border: 0; margin: 0; padding: 0; min-width: 0; min-inline-size: 0; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); align-items: center; }
 .decision-marks__title { font-size: 13px; font-weight: 600; color: var(--text-2); padding: 0; margin-bottom: var(--s-1); width: 100%; }
 .decision-marks__item { display: inline-flex; gap: var(--s-2); align-items: center; min-height: var(--h-md); cursor: pointer; font-size: 13px; }

@@ -4,11 +4,14 @@
  * 兩段式定案與 AI 分歧仲裁共用（ui-two-stage.md「給 AI 的說明」）。只用來調整 AI 的判準，不給作者看；
  * 都選填，選了類型不寫說明也可以送出。
  *
+ * 跟揭曉區的「內部說明」同一種標示：虛線框、鎖頭「只有審核員看得到」。
+ *
  * collapsible：結論一致、一鍵定案時收合成「＋ 給 AI 的說明（選填）」，不增加定案的步驟；已經填了東西就保持展開。
  */
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { AI_NOTE_MAX, AI_NOTE_TYPES, type AiNoteType } from "@/lib/review-ai-api";
+import ReviewVisibility from "./ReviewVisibility.vue";
 
 const props = defineProps<{ types: AiNoteType[]; note: string; context: "final" | "arbitration"; idBase: string; disabled?: boolean; collapsible?: boolean }>();
 const emit = defineEmits<{ "update:types": [value: AiNoteType[]]; "update:note": [value: string] }>();
@@ -29,8 +32,10 @@ const bodyId = computed(() => `${props.idBase}-body`);
     <button v-if="collapsible" type="button" class="btn btn--ghost btn--sm ai-note__toggle" :aria-expanded="open" :aria-controls="bodyId" data-ai-note-toggle @click="opened = !open">
       {{ open ? "−" : "＋" }} {{ t("reviewAi.note.title") }}
     </button>
-    <fieldset v-show="open" :id="bodyId" class="ai-note__body">
+    <div v-show="open" :id="bodyId" class="ai-note__frame">
+    <fieldset class="ai-note__body">
       <legend :class="collapsible ? 'sr-only' : 'ai-note__title'">{{ t("reviewAi.note.title") }}</legend>
+      <ReviewVisibility who="reviewers" />
       <p class="subtle ai-note__sub">{{ t(context === "arbitration" ? "reviewAi.note.subArbitration" : "reviewAi.note.subFinal") }}</p>
       <div class="ai-note__types" role="group" :aria-label="t('reviewAi.note.types')">
         <label v-for="type in AI_NOTE_TYPES" :key="type" class="ai-note__type" :class="{ 'ai-note__type--on': types.includes(type) }">
@@ -45,12 +50,14 @@ const bodyId = computed(() => `${props.idBase}-body`);
         @input="emit('update:note', ($event.target as HTMLTextAreaElement).value)" />
       <p :id="`${idBase}-count`" class="subtle ai-note__count" data-ai-note-count>{{ t("reviewAi.note.count", { n: note.length, max: AI_NOTE_MAX }) }}</p>
     </fieldset>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .ai-note { display: grid; gap: var(--s-2); min-width: 0; }
 .ai-note__toggle { justify-self: start; min-height: var(--h-md); padding-inline-start: 0; }
+.ai-note__frame { min-width: 0; padding: var(--s-3); border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
 /* fieldset 預設 min-inline-size: min-content，長字會把整個決定區撐出螢幕 */
 .ai-note__body { border: 0; margin: 0; padding: 0; min-width: 0; min-inline-size: 0; display: grid; gap: var(--s-2); }
 .ai-note__title { padding: 0; margin-bottom: var(--s-1); font-size: 14px; font-weight: 600; }

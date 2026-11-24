@@ -98,6 +98,8 @@ export async function fetchReferenceCandidates(token: string): Promise<{ items: 
 export const AI_NOTE_TYPES = ["card_content", "author_relation", "author_history", "criteria_issue", "other"] as const;
 export type AiNoteType = (typeof AI_NOTE_TYPES)[number];
 export const AI_NOTE_MAX = 500;
+/** 「用 AI 的」定案時給作者的說明上限（與伺服器 AI 草稿的上限同一個數） */
+export const AUTHOR_NOTE_MAX = 1500;
 export const FINAL_SOURCES: readonly ReviewFinalSource[] = ["blind", "ai", "modified", "human_no_ai"];
 
 /** kind=final：定案時寫的（finalSource 是定案來源）；kind=arbitration：仲裁時寫的（arbitration 是仲裁結果） */

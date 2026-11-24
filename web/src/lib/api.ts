@@ -23,10 +23,14 @@ import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "
 export class ApiError extends Error {
   /** 上游回的穩定錯誤碼（例如 image_in_use）。畫面要分情況說話時看它，不看訊息文字。 */
   /** reason：同一個碼底下更細的原因（例如預設格式錯在哪），上游有給才有。 */
-  constructor(readonly status: number, message: string, readonly code = "", readonly reviewLength?:ReviewLength, readonly reason = "") {
+  /** noteInternal：給作者看的說明命中內部字詞（400 author_note_internal）時，命中了哪些類別、在哪一句 */
+  constructor(readonly status: number, message: string, readonly code = "", readonly reviewLength?:ReviewLength, readonly reason = "", readonly noteInternal?: AuthorNoteInternal) {
     super(message);
   }
 }
+
+/** 400 author_note_internal 的內容：term 是伺服器的類別名，matches 帶原句片段與命中字在片段裡的位置（舊版伺服器沒有 matches） */
+export interface AuthorNoteInternal { terms: string[]; matches: { term: string; snippet: string; start: number; length: number }[] }
 
 /**
  * 錯誤訊息給人看，不給狀態碼。伺服器回的原文是英文的內部字串（card not found），
@@ -213,9 +217,19 @@ export async function json<T>(res: Response): Promise<T> {
       ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
       : describeApiError(res.status, raw, body.detail);
     const reason = raw === "validate_reject" ? body.detail?.reason ?? body.reason : body.reason;
-    throw new ApiError(res.status, said, body.error ?? (body as { code?: string }).code ?? "", body.detail?.reviewLength, typeof reason === "string" ? reason : "");
+    const internal = raw === "author_note_internal" ? noteInternalOf(body) : undefined;
+    throw new ApiError(res.status, said, body.error ?? (body as { code?: string }).code ?? "", body.detail?.reviewLength, typeof reason === "string" ? reason : "", internal);
   }
   return (await res.json()) as T;
+}
+
+/** 命中內部字詞的回應：terms 與 matches 跟 error 並列放在回應本體；讀不懂的項目丟掉 */
+function noteInternalOf(body: unknown): AuthorNoteInternal {
+  const b = (body ?? {}) as { terms?: unknown; matches?: unknown };
+  const terms = Array.isArray(b.terms) ? b.terms.filter((x): x is string => typeof x === "string") : [];
+  const matches = (Array.isArray(b.matches) ? b.matches : []).filter((m): m is AuthorNoteInternal["matches"][number] =>
+    !!m && typeof m.term === "string" && typeof m.snippet === "string" && Number.isInteger(m.start) && Number.isInteger(m.length));
+  return { terms, matches };
 }
 
 export const authHeaders = (token?: string): Record<string, string> =>
@@ -852,13 +866,16 @@ export type ReviewAiState = { state: "ready" | "handoff"; suggestion: ReviewAiSu
 export interface ReviewAiSuggestion {
   id: string; criteriaVersion: string; model: string; verdict: "pass" | "reject" | "handoff" | null; reasons: string[]; flags: string[];
   confidence: number | null; handoffCause: string | null; note: string; phase: string; at: number;
+  /** AI 寫給作者的說明草稿（只講卡片本身）；note 是只有審核員看得到的內部說明。舊版伺服器不帶 */
+  authorNote?: string;
 }
 /**
  * 蓋章。兩段式定案帶 finalSource（blind／ai／human_no_ai 不必帶決定內容，modified 帶這次的決定）與給 AI 的說明；
  * 選「用 AI 的」時帶畫面上那一筆 AI 判斷的 id 與時間：AI 在這之間重判過，伺服器回 409 ai_changed，不會蓋成沒看過的結論。
+ * 「用 AI 的」駁回時 authorNote 是審核員改過的給作者說明；沒帶就用 AI 的草稿。
  * 回應的 finalSource 是實際記下的來源。重新審核與沒送過盲審的單照舊只帶決定。
  */
-export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number }) =>
+export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number; authorNote?: string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number }; finalSource?: ReviewFinalSource }>(id, "stamp", token, body);
 /** 兩段式第一步：盲審判斷（只記錄，送審狀態不變）。每人每單一筆；第二次是 409 blind_already_recorded */
 export const blindReview = (id: string, token: string, body: ReviewDecisionBody & { generation?: string }) =>

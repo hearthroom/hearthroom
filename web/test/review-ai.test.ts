@@ -364,6 +364,196 @@ it('two-step: if the AI re-judged after the reveal, the new call is swapped in a
   expect(posts('stamp')[1]!.body).toMatchObject({ finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 9 });
 });
 
+// ---------- 揭曉區分欄：內部說明｜給作者的說明，與內部字詞檢查 ----------
+
+/** 伺服器 author_note_guard 的片段算法：命中處前後各 12 字，start/length 是命中字在片段裡的位置 */
+function matchOf(text: string, term: string, word: string) {
+  const at = text.indexOf(word);
+  const from = Math.max(0, at - 12);
+  return { term, snippet: text.slice(from, at + word.length + 12), start: at - from, length: word.length };
+}
+const internal = (text: string, hits: [string, string][]): [number, unknown] =>
+  [400, { error: 'author_note_internal', field: 'note', terms: hits.map(([term]) => term), matches: hits.map(([term, word]) => matchOf(text, term, word)) }];
+/** 錯誤區逐項：類別 chip、標底色的字、改寫提示 */
+const guardItems = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>('[data-guard-term]')].map((li) => ({
+  term: li.dataset.guardTerm, chip: li.querySelector('.chip')!.textContent, mark: li.querySelector('mark')?.textContent ?? null,
+  snippet: li.querySelector('[data-guard-snippet]')?.textContent ?? null, hint: li.querySelector('[data-guard-hint]')?.textContent ?? null,
+}));
+
+it('reveal: the AI column splits into a reviewers-only internal note and the note the author sees, each marked with an icon and words', async () => {
+  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ confidence: 0.82, note: 'Six cards from one device tonight', authorNote: 'The opening never gives the player a reason to reply.' }));
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  // 結論與理由代碼在上，兩塊在下
+  const col = $('[data-col=ai]')!;
+  const order = [...col.querySelectorAll('[data-ai-verdict], [data-ai-reasons], [data-ai-internal], [data-ai-author-note]')].map((el) => (el as HTMLElement).dataset.aiVerdict ? 'verdict' : el.hasAttribute('data-ai-reasons') ? 'reasons' : el.hasAttribute('data-ai-internal') ? 'internal' : 'author');
+  expect(order).toEqual(['verdict', 'reasons', 'internal', 'author']);
+  const inner = $('[data-ai-internal]')!;
+  expect(inner.querySelector('h5')!.textContent).toBe(t('reviewAi.two.internalNote.title'));
+  expect(inner.querySelector('[data-visibility]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.reviewerOnly'));
+  expect(inner.querySelector('[data-visibility=reviewers] svg[aria-hidden=true]')).not.toBeNull();
+  expect(inner.querySelector('[data-ai-confidence]')!.textContent).toBe(t('reviewAi.reveal.confidence', { pct: '82%' }));
+  expect(inner.querySelector('[data-ai-internal-note]')!.textContent).toBe('Six cards from one device tonight');
+  const author = $('[data-ai-author-note]')!;
+  expect(author.querySelector('h5')!.textContent).toBe(t('reviewAi.two.authorNote.title'));
+  expect(author.querySelector('[data-visibility=author]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.authorSees'));
+  expect(author.querySelector('[data-visibility=author] svg[aria-hidden=true]')).not.toBeNull();
+  expect(author.querySelector('[data-ai-author-note-text]')!.textContent).toBe('The opening never gives the player a reason to reply.');
+  // 內部說明不會出現在給作者的那一塊
+  expect(author.textContent).not.toContain('device');
+  // 給 AI 的說明一樣標「只有審核員看得到」
+  await pickFinal('blind');
+  expect($('[data-ai-note] [data-visibility=reviewers]')!.textContent!.trim()).toBe(t('reviewAi.two.visibility.reviewerOnly'));
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  // AI 沒寫給作者的說明：照樣有這一塊，寫明沒有；沒有信心與依據時不畫內部說明
+  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ confidence: null, note: '' }));
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  expect($('[data-ai-internal]')).toBeNull();
+  expect($('[data-ai-author-note-empty]')!.textContent).toBe(t('reviewAi.two.authorNote.empty'));
+});
+
+it('use the AI: the note for the author is prefilled with the AI draft; an edit is sent as authorNote, an untouched draft is left to the server', async () => {
+  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+  const draft = 'The opening never gives the player a reason to reply.';
+  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5, authorNote: draft }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('ai', 'rejected');
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  expect($('[data-author-note-field]')).toBeNull();
+  await pickFinal('ai');
+  const field = $('[data-author-note-field]')!;
+  const text = field.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!;
+  expect(text.value).toBe(draft);
+  expect(text.maxLength).toBe(1500);
+  expect(field.querySelector('label')!.textContent).toBe(t('reviewAi.two.authorNote.title'));
+  expect(field.querySelector('[data-visibility=author]')).not.toBeNull();
+  expect(field.textContent).toContain(t('reviewAi.two.authorNote.prefilledHint'));
+  expect($('[data-author-note-count]')!.textContent).toBe(t('reviewAi.two.authorNote.count', { n: draft.length, max: 1500 }));
+  // 順序：給作者的說明 → 理由與改法預覽 → 給 AI 的說明
+  expect($('[data-reason-preview]')!.textContent).toContain(t('reviewAi.two.authorNote.reasonsPreviewTitle'));
+  expect(field.compareDocumentPosition($('[data-reason-preview]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect($('[data-reason-preview]')!.compareDocumentPosition($('[data-ai-note]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // 換去「用我的」再回來，改過的字還在
+  text.value = 'Give the player a question to answer in the first message.'; text.dispatchEvent(new Event('input')); await nextTick();
+  await pickFinal('blind');
+  expect($('[data-author-note-field]')).toBeNull();
+  await pickFinal('ai');
+  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe('Give the player a question to answer in the first message.');
+  finalButton().click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5, authorNote: 'Give the player a question to answer in the first message.' });
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  // 沒改：不帶 authorNote，伺服器用 AI 的草稿
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  await pickFinal('ai');
+  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe(draft);
+  finalButton().click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 5 });
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  // AI 是通過：伺服器不帶說明給作者，沒有這個欄位
+  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [], authorNote: draft }));
+  await mountPage('/en/review/s1');
+  await submitBlind('reject');
+  await pickFinal('ai');
+  expect($('[data-final-result]')).not.toBeNull();
+  expect($('[data-author-note-field]')).toBeNull();
+});
+
+it('use the AI: a note naming internal signals is not sent; the error above the field lists each term with its snippet and a rewrite hint, and the text stays', async () => {
+  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+  const edited = 'Your alt accounts sent six cards; low confidence in the setting.';
+  let blocked = true;
+  routes['/v1/review/s1/blind'] = blindWith('approve', ready({ at: 5, authorNote: 'Draft' }));
+  routes['/v1/review/s1/stamp'] = () => (blocked ? internal(edited, [['帳號', 'accounts'], ['分數', 'confidence']]) : stampOk('ai', 'rejected'));
+  await mountPage('/en/review/s1');
+  await submitBlind('approve');
+  await pickFinal('ai');
+  const text = host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!;
+  text.value = edited; text.dispatchEvent(new Event('input')); await nextTick();
+  finalButton().click();
+  await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
+  expect(posts('stamp').length).toBe(1);
+  const guard = $('[data-note-guard]')!;
+  expect(guard.getAttribute('role')).toBe('alert');
+  // 錯誤區在欄位上方（同一個欄位區塊裡、文字框之前）
+  expect(guard.closest('[data-author-note-field]')).not.toBeNull();
+  expect(guard.compareDocumentPosition(host.querySelector('[data-author-note-text]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(guard.textContent).toContain(t('reviewAi.guard.title'));
+  expect(guard.textContent).toContain(t('reviewAi.guard.footerFinal'));
+  const a = matchOf(edited, '帳號', 'accounts'), c = matchOf(edited, '分數', 'confidence');
+  expect(guardItems(guard)).toEqual([
+    { term: 'account', chip: t('reviewAi.guard.term.account'), mark: a.snippet.slice(a.start, a.start + a.length), snippet: a.snippet, hint: t('reviewAi.guard.hint.account') },
+    { term: 'score', chip: t('reviewAi.guard.term.score'), mark: 'confidence', snippet: c.snippet, hint: t('reviewAi.guard.hint.score') },
+  ]);
+  expect(document.activeElement).toBe(guard.querySelector('[data-guard-term]'));
+  // 字留著、選擇留著、還在揭曉步驟；沒有另外的錯誤訊息
+  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.value).toBe(edited);
+  expect(host.querySelector<HTMLTextAreaElement>('[data-author-note-text]')!.getAttribute('aria-invalid')).toBe('true');
+  expect(host.querySelector<HTMLInputElement>('[data-final-pick=ai]')!.checked).toBe(true);
+  expect($('[data-two-stage-compare]')).not.toBeNull();
+  expect(host.querySelectorAll('[role=alert]').length).toBe(1);
+  // 改好再送：錯誤區收起、送出改過的字
+  blocked = false;
+  text.value = 'Give the player a question to answer.'; text.dispatchEvent(new Event('input')); await nextTick();
+  finalButton().click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(2));
+  expect(posts('stamp')[1]!.body).toMatchObject({ finalSource: 'ai', authorNote: 'Give the player a question to answer.' });
+});
+
+it('blind step and finalize-with-changes: an internal term in the note keeps the text and shows the error above that note', async () => {
+  mocks.fetchReviewDetail.mockImplementation(async () => detail({}));
+  const note = 'Same device as three other accounts.';
+  routes['/v1/review/s1/blind'] = () => internal(note, [['裝置', 'device'], ['帳號', 'accounts']]);
+  await mountPage('/en/review/s1');
+  await vi.waitFor(() => expect($('[data-decide-choices]')).not.toBeNull());
+  await chooseDecision('reject');
+  await pickReason('opening.no_reply_hook');
+  // 駁回說明標「作者會看到」，下一行寫只寫卡片本身
+  expect($('.field [data-visibility=author]')).not.toBeNull();
+  expect($('#review-note-hint')!.textContent).toBe(t('reviewAi.two.authorNote.editHint'));
+  const field = host.querySelector<HTMLTextAreaElement>('#review-note')!;
+  field.value = note; field.dispatchEvent(new Event('input')); await nextTick();
+  $('[data-submit-reject]')!.click();
+  await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
+  const guard = $('[data-note-guard]')!;
+  expect(guard.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(guard.textContent).toContain(t('reviewAi.guard.footer'));
+  expect(guard.textContent).not.toContain(t('reviewAi.guard.footerFinal'));
+  expect(guardItems(guard).map((i) => [i.term, i.mark, i.hint])).toEqual([
+    ['device', 'device', t('reviewAi.guard.hint.device')], ['account', 'accounts', t('reviewAi.guard.hint.account')],
+  ]);
+  expect(document.activeElement).toBe(guard.querySelector('[data-guard-term]'));
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(note);
+  expect($('[data-two-stage-compare]')).toBeNull();
+  expect(posts('blind').length).toBe(1);
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  // 修改後定案：同一道檢查，錯誤區在駁回說明上方，結尾寫「再按一次定案」
+  routes['/v1/review/s1/blind'] = blindWith('reject', ready({ verdict: 'pass', reasons: [] }), { note: 'Needs a hook' });
+  const changed = 'Needs a hook; your weekly quota is used up.';
+  routes['/v1/review/s1/stamp'] = () => internal(changed, [['額度', 'quota']]);
+  await mountPage('/en/review/s1');
+  await submitBlind('reject');
+  await pickFinal('modified');
+  await vi.waitFor(() => expect($('#review-note')).not.toBeNull());
+  const edit = host.querySelector<HTMLTextAreaElement>('#review-note')!;
+  edit.value = changed; edit.dispatchEvent(new Event('input')); await nextTick();
+  finalButton().click();
+  await vi.waitFor(() => expect($('[data-note-guard]')).not.toBeNull());
+  expect(posts('stamp').length).toBe(1);
+  expect($('[data-note-guard]')!.textContent).toContain(t('reviewAi.guard.footerFinal'));
+  expect(guardItems($('[data-note-guard]')!).map((i) => [i.term, i.chip, i.mark])).toEqual([['quota', t('reviewAi.guard.term.quota'), 'quota']]);
+  expect(host.querySelector<HTMLTextAreaElement>('#review-note')!.value).toBe(changed);
+  expect(host.querySelector<HTMLInputElement>('[data-final-pick=modified]')!.checked).toBe(true);
+});
+
 it('two-step re-entry: a second blind call goes straight to the AI step, and so does reopening a card with my blind call', async () => {
   mocks.fetchReviewDetail.mockResolvedValueOnce(detail({})).mockResolvedValue(detail({}, { myBlind: blindOf('reject') }));
   routes['/v1/review/s1/blind'] = () => [409, { error: 'blind_already_recorded' }];
