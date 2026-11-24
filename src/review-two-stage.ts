@@ -121,8 +121,8 @@ export async function finalize(db: D1Database, env: Env, input: {
     decision = { verdict, note: authorNote, reasons: verdict === "reject" ? reasons : undefined, coaching: false, marks: blind.payload.marks, suggestions: undefined };
   } else {
     if (!input.decision) throw new HttpError(400, "invalid_arguments", undefined, { field: "verdict" });
-    // 修改後常從 AI 的草稿改起：給作者的說明一樣不能帶內部資訊
-    if (typeof input.decision.note === "string") guardAuthorNote(input.decision.note);
+    // 修改後常從 AI 的草稿改起：駁回說明會給作者，一樣不能帶內部資訊（通過的補充說明作者看不到）
+    if (typeof input.decision.note === "string" && input.decision.verdict === "reject") guardAuthorNote(input.decision.note);
     decision = input.decision;
   }
   const aiVerdict = ai.state === "ready" ? aiVerdictAsHuman(ai.suggestion.verdict) : null;

@@ -12,10 +12,12 @@ ALTER TABLE review_submissions ADD COLUMN flip_reason TEXT NOT NULL DEFAULT '';
 CREATE INDEX idx_review_submissions_flip_of ON review_submissions (flip_of) WHERE flip_of IS NOT NULL;
 
 -- 改判單沒有通過就結束（撤回改判＝駁回、作者改稿重送、同步衝突而作廢）：版本列若已轉給它，還給原本駁回的那張，
--- 狀態回到駁回。作者端就跟沒發起過改判一樣。
+-- 狀態回到駁回。作者端就跟沒發起過改判一樣。核准時預約的重大更新通知一併清掉：這個 trigger 比 0092 的
+-- card_update_cancel 先跑（SQLite 先跑較新的 trigger），版本列一搬走那邊就找不到，留下的預約會擋住之後每一次重大更新。
 CREATE TRIGGER review_flip_closed AFTER UPDATE OF status ON review_submissions
 WHEN OLD.status='pending' AND NEW.status IN ('rejected','superseded') AND NEW.flip_of IS NOT NULL
 BEGIN
+ DELETE FROM card_update_events WHERE state='reserved' AND version_id IN (SELECT version_id FROM hosting_versions WHERE submission_id=NEW.id);
  UPDATE hosting_versions SET submission_id=NEW.flip_of, state='rejected' WHERE submission_id=NEW.id;
 END;
 

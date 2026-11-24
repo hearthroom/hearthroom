@@ -6,6 +6,7 @@ import type { ProviderId } from './providers';
 import { bumpOp } from './ops-metrics';
 import {readCurrentWorkPolicies} from './work-read';
 import { boundedSearchPattern } from './search-text';
+import { guardAuthorNote } from './author-note-guard';
 import { FLIP_COLUMNS, flipState, type FlipColumns } from './review-flip';
 
 export const REVIEW_CORRECTION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -36,6 +37,8 @@ export async function correctReview(env:Env,input:{id:string;member:string;opera
  if(x?.state==='conflict')throw new HttpError(409,'review_correction_changed');
  if(await db.prepare("SELECT 1 FROM card_rewards WHERE card_id=? AND public_days IS NOT NULL AND (status='pending' OR (status='paid' AND provider_entry_id IS NULL))").bind(s.card_id).first())throw new HttpError(503,'review_correction_reward_pending');
  if(!x){
+  // 改判駁回的說明會成為作者看到的駁回說明與通知（重新審核的駁回也走這裡）：不能帶內部資訊。接續已開始的改判不再檢查
+  guardAuthorNote(reason);
   const eligibility=await correctionEligibility(db,input.id,input.member,input.now);
   if(s.status!=='approved')throw new HttpError(409,'review_correction_not_final');
   if(!eligibility.canCorrect)throw new HttpError(403,'review_correction_manager_required');

@@ -231,7 +231,9 @@ export const STATS_SQL = {
     FROM review_events e LEFT JOIN review_submissions s ON s.id=e.submission_id
     LEFT JOIN review_submission_features f ON f.submission_id=e.submission_id
     LEFT JOIN review_submission_diffs d ON d.submission_id=e.submission_id
-    WHERE e.action='first_decision' AND e.at>=?1 AND e.at<?2 AND e.to_state IN ('approved','rejected')`,
+    WHERE e.action='first_decision' AND e.at>=?1 AND e.at<?2 AND e.to_state IN ('approved','rejected')
+      -- 駁回改判為通過：改判單的通過取代原本那次駁回，一張送審只算一次定案
+      AND NOT EXISTS(SELECT 1 FROM review_submissions ff WHERE ff.flip_of=e.submission_id AND ff.status='approved')`,
   // 首個人工處置：只算有送審事件的單（V2 起送審的），送審時間才可靠、也確定之前沒有沒記到的處置。
   // 只追溯 MAX_WAIT_DAYS 內送審的單，每張再用 (submission_id, at) 索引找它最早的人工處置
   firstAction: `WITH subs AS (SELECT submission_id, at FROM review_events WHERE action='submit' AND at>=?3 AND at<?2),
@@ -241,7 +243,7 @@ export const STATS_SQL = {
   // 已成熟的週裡的首次定案駁回（?2＝最後一個成熟週的終點）
   rejects: `SELECT e.submission_id AS id, e.card_id, e.at, e.reasons, ${AUTHOR('e.submission_id')} AS author, f.has_approved_base AS base
     FROM review_events e LEFT JOIN review_submission_features f ON f.submission_id=e.submission_id
-    WHERE e.action='first_decision' AND e.at>=?1 AND e.at<?2 AND e.to_state='rejected'`,
+    WHERE e.action='first_decision' AND e.at>=?1 AND e.at<?2 AND e.to_state='rejected' AND NOT EXISTS(SELECT 1 FROM review_submissions ff WHERE ff.flip_of=e.submission_id AND ff.status='approved')`,
   // 已成熟的週裡開的不受理案件（依入案時間分週）
   cases: `SELECT id, opened_at, closed_at, close_reason, author_member_id AS author FROM review_drop_cases WHERE opened_at>=?1 AND opened_at<?2`,
   sources: `SELECT d.source, d.created_at AS at, COALESCE(${AUTHOR('d.submission_id')}, k.author_member_id) AS author
@@ -256,7 +258,8 @@ export const STATS_SQL = {
     JOIN review_drop_cases k ON k.id=d.case_id JOIN review_submissions s ON s.id=d.submission_id WHERE d.restored_at IS NULL AND s.status='pending'`,
   // V2 前基線：只能從審核單現況回溯（之後改判過的單是改判後的狀態），理由是自由文字、不分類
   bDecisions: `SELECT s.status AS result, s.decided_at AS at, s.submitted_at, ${AUTHOR('s.id')} AS author FROM review_submissions s
-    WHERE s.status IN ('approved','rejected') AND s.decided_at>=?1 AND s.decided_at<?2 AND s.reopen_of IS NULL AND NOT (s.flip_of IS NOT NULL AND s.status='rejected')`,
+    WHERE s.status IN ('approved','rejected') AND s.decided_at>=?1 AND s.decided_at<?2 AND s.reopen_of IS NULL AND NOT (s.flip_of IS NOT NULL AND s.status='rejected')
+    AND NOT EXISTS(SELECT 1 FROM review_submissions ff WHERE ff.flip_of=s.id AND ff.status='approved')`,
   bStamps: `SELECT st.verdict, st.created_at AS at, ${AUTHOR('st.submission_id')} AS author FROM review_stamps st WHERE st.created_at>=?1 AND st.created_at<?2`,
   // 駁回之後同卡的作者新單：送審事件為主（舊流程撤銷登記會刪待審單，事件留著），V2 之前就在的單用審核單本身。
   // +x.action 讓查詢走 (card_id, at)，不去掃全部送審事件

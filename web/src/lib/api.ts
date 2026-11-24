@@ -604,7 +604,7 @@ export interface ReviewQueueItem {
   flip?: ReviewQueueFlip | null;
 }
 
-export interface ReviewQueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string }
+export interface ReviewQueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string; canTakeOver?: boolean }
 /** 一張駁回單的改判狀態：改判審核中、已改判為通過，以及管理員看不看得到「改判為通過」入口 */
 export interface ReviewFlipState { pendingId: string | null; approvedId: string | null; canStart: boolean }
 
@@ -724,7 +724,7 @@ export interface ReviewDetail {
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
     /** 這張是改判單：改判的那張、發起人、原駁回日期與理由、改判理由（只給管理員）。舊版伺服器不帶 */
-    flip?: { of: string; by: string; mine: boolean; at: number; rejectedAt: number | null; reasons: string[]; note: string; reason?: string } | null;
+    flip?: { of: string; by: string; mine: boolean; at: number; rejectedAt: number | null; reasons: string[]; note: string; reason?: string; canTakeOver?: boolean } | null;
     /** 這張的改判狀態；supersededBy＝作者之後又送過審（入口停用並連到最新那張） */
     flipState?: ReviewFlipState & { supersededBy: { id: string; submittedAt: number } | null };
     /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */

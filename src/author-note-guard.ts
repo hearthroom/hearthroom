@@ -4,13 +4,17 @@ import { HttpError } from "./types";
  * 給作者看的說明不能帶內部資訊（owner 2026-11-24）：作者行為、送審額度與次數、同裝置與帳號、AI 的分數與信心。
  * 這些是審核員判斷的參考，作者看到只會覺得被監視，也會教人怎麼繞過。只擋明確的內部字詞，寫卡片本身（開場白、設定、世界書）不受影響。
  */
+// 只擋帶內部語境的說法：單獨的「信心」「裝置」「設備」「分身」「帳號」「account」「device」常是卡片內容本身
+// （自信心、科幻裝置、分身角色、故事裡的帳號、plot device），擋了會讓審核員寫不出正常的修改建議。
+// 類別名（term）固定：網頁依它對到 reviewAi.guard.term.<kind> 與改寫提示。
+const COUNT = String.raw`(?:多|好幾|好几|幾|几|數|数|\d+)\s*(?:個|个)?`;
 const INTERNAL_TERMS: { term: string; pattern: RegExp }[] = [
-  { term: "額度", pattern: /額度|额度|quota/i },
-  { term: "送審次數", pattern: /送審次數|送审次数|送審頻率|送审频率|送審節奏|送审节奏|submission (count|rate|frequency)/i },
-  { term: "裝置", pattern: /裝置|装置|設備|设备|device/i },
-  { term: "帳號", pattern: /帳號|账号|帳戶|账户|分身|小號|小号|account/i },
-  { term: "分數", pattern: /分數|分数|信心|置信|confidence|score/i },
-  { term: "作者等級", pattern: /作者等級|作者等级|熟面孔|author tier/i },
+  { term: "額度", pattern: /額度|额度|\bquotas?\b/i },
+  { term: "送審次數", pattern: /送審(?:次數|頻率|節奏|數量|太頻繁|太頻|太多)|送审(?:次数|频率|节奏|数量|太频繁|太频|太多)|批量(?:產|产|生產|生产)|量(?:產|产)(?:卡|的卡|工作室)|工作室(?:量產|量产|批量)|\bsubmission (?:count|rate|frequency|pace)s?\b|\bmass[- ]produced\b|\bcard (?:mill|farm)s?\b/i },
+  { term: "裝置", pattern: /同(?:一)?(?:個|个|台|部)?\s*(?:裝置|设备|設備|装置|手機|手机|電腦|电脑|IP)|\bsame (?:device|ip|phone|computer)\b|\bdevice (?:id|fingerprint|hash)\b/i },
+  { term: "帳號", pattern: new RegExp(String.raw`${COUNT}(?:帳號|账号|帳戶|账户)|小號|小号|分身(?:帳號|账号)|\b(?:alt|multiple|duplicate|sock ?puppet) accounts?\b`, "i") },
+  { term: "分數", pattern: /信心分數|信心分数|置信度|置信分數|置信分数|AI\s*(?:分數|分数|評分|评分)|(?:風險|风险)(?:分數|分数)|\bconfidence (?:score|level)s?\b|\b(?:AI|risk) scores?\b/i },
+  { term: "作者等級", pattern: /作者等級|作者等级|熟面孔|\bauthor (?:tier|level|rank)s?\b/i },
 ];
 
 export function internalTermsIn(text: string): string[] {

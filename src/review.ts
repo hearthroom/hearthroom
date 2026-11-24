@@ -175,7 +175,12 @@ export interface QueueItem {
   flip: QueueFlip | null;
 }
 
-export interface QueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string }
+export interface QueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string; canTakeOver?: boolean }
+
+/** 改判單的發起人已經不是管理員（降級或撤銷）：任何現任管理員可以接手或撤回，單子才不會卡住 */
+export async function flipInitiatorActive(db: D1Database, flipBy: string | null | undefined): Promise<boolean> {
+  return !!flipBy && isManager(await reviewerRole(db, flipBy));
+}
 
 export interface QueueDiff { state: "pending" | "done" | "no_base" | "unreadable"; summary: Record<string, unknown> | null }
 
@@ -223,7 +228,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               (SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1) AS previous_status, ${HOLD_COLUMNS},
               v.member_id AS author_member, sd.device_hash, COALESCE(f.after_drop, 0) AS after_drop, dd.state AS diff_state, dd.summary AS diff_summary,
               s.flip_of, s.flip_by, s.flip_reason, COALESCE(NULLIF(fm.display_name, ''), fm.handle) AS flip_name,
-              (SELECT o.decided_at FROM review_submissions o WHERE o.id = s.flip_of) AS flip_rejected_at
+              (SELECT o.decided_at FROM review_submissions o WHERE o.id = s.flip_of) AS flip_rejected_at,
+              (SELECT r.role IN ('manager','owner') FROM reviewers r WHERE r.member_id = s.flip_by AND r.revoked_at IS NULL) AS flip_by_active
        FROM review_submissions s JOIN cards c ON c.id = s.card_id
        -- 改判單待審時版本列還在原本駁回的那張單上（見 0152）
        LEFT JOIN hosting_versions v ON v.submission_id IN (s.id, s.flip_of) ${HOLD_JOIN} LEFT JOIN members fm ON fm.id = s.flip_by
@@ -239,7 +245,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
       hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null; previous_status: "approved" | "rejected" | null;
       author_member: string | null; device_hash: string | null; after_drop: number; diff_state: string | null; diff_summary: string | null;
-      flip_of: string | null; flip_by: string | null; flip_reason: string; flip_name: string | null; flip_rejected_at: number | null;
+      flip_of: string | null; flip_by: string | null; flip_reason: string; flip_name: string | null; flip_rejected_at: number | null; flip_by_active: number | null;
     }>();
   const manager = isManager(await reviewerRole(db, memberId));
   const profiles = await authorProfiles(db, rows.results.map((r) => r.author_member ?? ""), now);
@@ -273,8 +279,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     },
     stamps: { approve: r.approvals, required: STAMPS_REQUIRED[r.kind] },
     rating: r.rating,
-    // 改判單只有發起人能處理：其他人一律看到「有人在看」
-    claim: (r.flip_by && r.flip_by !== memberId ? "other" : claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free") as QueueItem["claim"],
+    // 改判單只有發起人能處理：其他人一律看到「有人在看」；發起人已不是管理員時，現任管理員可以接手
+    claim: (r.flip_by && r.flip_by !== memberId ? (manager && !r.flip_by_active ? "free" : "other") : claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free") as QueueItem["claim"],
     stampedByMe: r.mine > 0,
     ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
     reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
@@ -286,7 +292,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     diff: r.diff_state ? { state: r.diff_state as QueueDiff["state"], summary: r.diff_summary ? JSON.parse(r.diff_summary) as Record<string, unknown> : null } : null,
     authorMark,
     fast,
-    flip: r.flip_of && r.flip_by ? { by: (r.flip_name ?? "").slice(0, 80), at: r.submitted_at, rejectedAt: r.flip_rejected_at, mine: r.flip_by === memberId, ...(manager ? { reason: r.flip_reason } : {}) } : null,
+    flip: r.flip_of && r.flip_by ? { by: (r.flip_name ?? "").slice(0, 80), at: r.submitted_at, rejectedAt: r.flip_rejected_at, mine: r.flip_by === memberId, ...(manager ? { reason: r.flip_reason } : {}),
+      ...(manager && r.flip_by !== memberId && !r.flip_by_active ? { canTakeOver: true } : {}) } : null,
   })).sort((a, b) => {
     // 快速審前移；冷凍中、別人領著的維持原位
     const front = (q: QueueItem) => (q.fast && q.claim !== "other" && !q.hold ? 0 : 1);
@@ -379,17 +386,18 @@ export async function claim(db: D1Database, submissionId: string, memberId: stri
   const row = await getSubmission(db, submissionId);
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (await hasStamped(db, submissionId, memberId)) throw new HttpError(409, "you already reviewed this submission");
-  // 改判單只有發起的管理員能領（ui-flip-approve.md：其他審核員只看到有人在看）
-  if (row.flip_by && row.flip_by !== memberId) throw new HttpError(409, "review_flip_initiator_only");
-  if (claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
+  // 改判單只有發起的管理員能領（ui-flip-approve.md：其他審核員只看到有人在看）。發起人已不是管理員時由現任管理員接手，發起人改成他
+  const takeOver = !!row.flip_by && row.flip_by !== memberId;
+  if (takeOver && (await flipInitiatorActive(db, row.flip_by) || !isManager(await reviewerRole(db, memberId)))) throw new HttpError(409, "review_flip_initiator_only");
+  if (!takeOver && claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
   // 不受理中的單不在佇列裡：要審就先復原
   if (await db.prepare("SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL").bind(submissionId).first()) throw new HttpError(409, "review_dropped");
-  const result=await db.prepare(`UPDATE review_submissions SET claimed_by=?,claimed_at=?,claim_generation=?
-    WHERE id=? AND status='pending' AND claim_generation=?
+  const result=await db.prepare(`UPDATE review_submissions SET claimed_by=?1,claimed_at=?2,claim_generation=?3,flip_by=CASE WHEN ?7 THEN ?1 ELSE flip_by END
+    WHERE id=?4 AND status='pending' AND claim_generation=?5
     AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=review_submissions.id AND d.restored_at IS NULL)
-    AND (claimed_by IS NULL OR claimed_at<=? OR claimed_by=?) AND (flip_by IS NULL OR flip_by=?)
-    AND NOT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=? AND member_id=?) RETURNING *`)
-    .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,memberId,memberId,submissionId,memberId).first<SubmissionRow>();
+    AND (claimed_by IS NULL OR claimed_at<=?6 OR claimed_by=?1 OR ?7) AND (flip_by IS NULL OR flip_by=?1 OR (?7 AND flip_by=?8))
+    AND NOT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?4 AND member_id=?1) RETURNING *`)
+    .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,takeOver?1:0,row.flip_by??null).first<SubmissionRow>();
   if(!result)throw new HttpError(409,'claim changed');
   return result;
 }
@@ -439,8 +447,9 @@ export async function normalizeDecision(db: D1Database, row: SubmissionRow, inpu
   if (input.verdict === "approve") await assertApprovableLength(db, row);
   const note = input.note.trim();
   if (note.length > REVIEW_NOTE_MAX) throw new HttpError(400, "note_too_long");
-  // 給作者看的說明（駁回說明、通過時的建議補充）不能帶內部資訊：額度、送審節奏、裝置、帳號、分數、作者等級
-  guardAuthorNote(note);
+  // 駁回說明會原文給作者，不能帶內部資訊：額度、送審節奏、裝置、帳號、分數、作者等級。
+  // 通過時的補充說明只留在審核章上（作者收到的是改進建議的代碼），不擋
+  if (input.verdict === "reject") guardAuthorNote(note);
   const rejection = input.verdict === "reject" ? normalizeRejectReasons({ reasons: input.reasons, note, lengthInsufficient: await lengthInsufficient(db, row) }) : null;
   let marks: string[];
   try { marks = normalizeDecisionMarks(input.marks); } catch { throw new HttpError(400, "review_mark_invalid"); }
@@ -504,6 +513,9 @@ export async function stamp(
   const approvals = (prior?.n ?? 0) + (input.verdict === "approve" ? 1 : 0);
   // 改判單要通過：先把原本駁回那張的版本列轉過來（作者改稿重送過就作廢這張改判單）
   const flipAdopted = !!row.flip_of && input.verdict === "approve" && approvals >= required && await adoptFlipVersion(db, row, input.now);
+  // 同一批再搬一次（已搬好就不動），核准的寫入都以「版本列在這張改判單上」為條件
+  if (flipAdopted) writes.unshift(adoptFlipStatement(db, row));
+  const ownsVersion = "(flip_of IS NULL OR EXISTS (SELECT 1 FROM hosting_versions WHERE submission_id = review_submissions.id))";
 
   let cardStatus: CardStatus = row.kind === "first" ? "pending" : "needs_review";
   if (input.verdict === "reject") {
@@ -516,7 +528,7 @@ export async function stamp(
       retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS),
     );
   } else if (approvals >= required && managed) {
-    writes.push(db.prepare('INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) VALUES(?,?)').bind(row.id,input.now));
+    writes.push(db.prepare(`INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) SELECT id,? FROM review_submissions WHERE id=? AND ${ownsVersion}`).bind(input.now,row.id));
     // 託管作品要等同步完成才真的過審（work-publication.ts）；保留期從審核員定案這一刻起算
     writes.push(retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS));
   } else if (approvals >= required) {
@@ -525,7 +537,7 @@ export async function stamp(
     cardStatus = "approved";
     // 首次送審的改判：卡片此刻是「已駁回」；先回到待審再核准，跟一般首次上架一樣（追蹤者的新作通知看這個轉換）
     if (flipAdopted) writes.push(db.prepare("UPDATE cards SET status = 'pending' WHERE id = ? AND approved_version_id IS NULL AND status = 'rejected'").bind(row.card_id));
-    writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
+    writes.push(db.prepare(`UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ? AND ${ownsVersion}`).bind(input.now, row.id));
     writes.push(auditStmtIfChanged(db, { subjectKind:'card_reward', subjectId:row.id, actorMemberId:null, actorKind:'system', action:'approval', after:{path:'stamp',cardId:Number(row.card_id)}, operationId:crypto.randomUUID(), now:input.now }));
     // 快照保留一段時間給審核員複核與仲裁（owner 2026-11-24），到期由排程刪；本站不長期留卡片的私有設定
     writes.push(retainStatement(db, row.id, input.now, input.final?.retainMs ?? RETAIN_MS));
@@ -547,6 +559,8 @@ export async function stamp(
     if(error instanceof Error && error.message.includes('review_dropped')) throw new HttpError(409,'review_dropped');
     throw error;
   }
+  // 版本列沒能轉到改判單上（作者剛重送）：這一批什麼都沒核准
+  if (flipAdopted && !await db.prepare("SELECT 1 FROM hosting_versions WHERE submission_id = ?").bind(row.id).first()) throw new HttpError(409, "review_flip_superseded");
   if(managed&&input.verdict==='approve'&&approvals>=required){
    if(!env)throw new HttpError(503,'visibility_sync_pending');
    await finalizeManagedReview(env,row.id,'stamp');
@@ -587,11 +601,26 @@ async function adoptFlipVersion(db: D1Database, row: SubmissionRow, now: number)
   throw new HttpError(409, "review_flip_superseded", undefined, newer ? { latestSubmissionId: newer.id, latestSubmittedAt: newer.submittedAt } : undefined);
 }
 
-/** 核准那一批沒寫成：版本列還給原本的駁回單（還沒記下託管核准決定時才還） */
+/**
+ * 核准那一批沒寫成：版本列還給原本的駁回單，核准時預約的重大更新通知一併清掉（同一批）。
+ * 只在改判單還待審、沒有通過章、沒記下託管核准決定時才還：別的請求已經核准成功，就不能把版本列搬走。
+ */
 async function releaseFlipVersion(db: D1Database, row: SubmissionRow): Promise<void> {
-  await db.prepare(`UPDATE hosting_versions SET submission_id = ?, state = 'rejected' WHERE submission_id = ?
-    AND EXISTS (SELECT 1 FROM review_submissions WHERE id = ? AND status = 'pending')
-    AND NOT EXISTS (SELECT 1 FROM work_review_decisions WHERE submission_id = ?)`).bind(row.flip_of, row.id, row.id, row.id).run();
+  const still = `EXISTS (SELECT 1 FROM review_submissions WHERE id = ?1 AND status = 'pending')
+    AND NOT EXISTS (SELECT 1 FROM work_review_decisions WHERE submission_id = ?1)
+    AND NOT EXISTS (SELECT 1 FROM review_stamps WHERE submission_id = ?1 AND verdict = 'approve')`;
+  await db.batch([
+    db.prepare(`DELETE FROM card_update_events WHERE state = 'reserved' AND version_id IN (SELECT version_id FROM hosting_versions WHERE submission_id = ?1) AND ${still}`).bind(row.id),
+    db.prepare(`UPDATE hosting_versions SET submission_id = ?2, state = 'rejected' WHERE submission_id = ?1 AND ${still}`).bind(row.id, row.flip_of),
+  ]);
+}
+
+/** 核准那一批裡再搬一次（已經搬過就不動）：預先搬好之後若被還回去，這一批也不會核准一張沒有版本列的改判單 */
+function adoptFlipStatement(db: D1Database, row: SubmissionRow): D1PreparedStatement {
+  return db.prepare(`UPDATE hosting_versions SET submission_id = ?1, state = 'pending' WHERE submission_id = ?2 AND state = 'rejected'
+    AND EXISTS (SELECT 1 FROM review_submissions WHERE id = ?1 AND status = 'pending' AND flip_of = ?2)
+    AND NOT EXISTS (SELECT 1 FROM review_submissions n, review_submissions o WHERE o.id = ?2 AND n.card_id = o.card_id AND n.id <> o.id
+      AND n.flip_of IS NULL AND n.reopen_of IS NULL AND (n.submitted_at > o.submitted_at OR (n.submitted_at = o.submitted_at AND n.rowid > o.rowid)))`).bind(row.id, row.flip_of);
 }
 
 /**

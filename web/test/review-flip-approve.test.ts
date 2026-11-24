@@ -147,6 +147,28 @@ it("別的管理員打開改判單：唯讀說明只有發起人能處理，沒�
   expect(button(t("review.action.claim"))).toBeUndefined();
 });
 
+it("發起人已不是管理員：現任管理員看到可接手，有領取與撤回，沒有唯讀說明", async () => {
+  const d = flipSubmission(false);
+  (d.submission as any).flip.canTakeOver = true;
+  api.fetchReviewDetail.mockResolvedValue(d);
+  await mount(DetailPage, "/review/f1", [{ path: "/review/:id", component: DetailPage }]);
+  await vi.waitFor(() => expect(el.querySelector("[data-flip-notice]")).toBeTruthy());
+  expect(el.querySelector("[data-flip-readonly]")).toBeNull();
+  expect(el.querySelector("[data-flip-withdraw]")).toBeTruthy();
+  expect(button(t("review.action.claim"))).toBeTruthy();
+});
+
+it("通過時的補充說明只有審核員看得到（作者收到的是勾選的改進建議），不標成作者會看到", async () => {
+  api.fetchReviewDetail.mockResolvedValue(detail({ status: "pending", claimedByMe: true, stampedByMe: false, stamps: [] }));
+  await mount(DetailPage, "/review/s1", [{ path: "/review/:id", component: DetailPage }]);
+  await vi.waitFor(() => expect(el.querySelector("[data-decide-choices]")).toBeTruthy());
+  el.querySelector<HTMLInputElement>('[data-decide-choices] input[value="approve"]')!.click(); await nextTick();
+  el.querySelector<HTMLButtonElement>("[data-suggest-toggle]")!.click(); await nextTick();
+  const marker = el.querySelector("[data-suggest] [data-visibility]")!;
+  expect(marker.getAttribute("data-visibility")).toBe("reviewers");
+  expect(el.querySelector("[data-suggest]")!.textContent).not.toContain(t("reviewAi.two.authorNote.editHint"));
+});
+
 it("待審清單：改判單多一顆「改判」chip 與副行；別人只看到有人在看，也沒有不受理選單", async () => {
   api.fetchReviewQueue.mockResolvedValue({
     items: [{ id: "f1", kind: "first", submittedAt: Date.now() - 180_000, type: "first", attempt: 1,

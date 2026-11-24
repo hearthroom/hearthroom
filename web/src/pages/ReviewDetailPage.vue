@@ -1030,7 +1030,7 @@ async function startFlip() {
 }
 
 async function withdrawFlip() {
-  if (busy.value || !data.value || !flip.value?.mine || decided.value) return;
+  if (busy.value || !data.value || !(flip.value?.mine || flip.value?.canTakeOver) || decided.value) return;
   const target = id.value;
   if (!await decisionConfirm({ title: t("review.flipApprove.withdrawConfirmTitle"), message: t("review.flipApprove.withdrawConfirmBody"), confirmText: t("review.flipApprove.withdrawAction"), cancelText: t("review.flipApprove.confirmCancel"), focusCancel: true, danger: true, dangerAppearance: "subdued" })) return;
   if (!active || id.value !== target) return;
@@ -1129,12 +1129,12 @@ onMounted(() => { void load(); });
             <p class="subtle">{{ $t("review.flipApprove.detailOriginalRejection", { rejectedAt: flip.rejectedAt ? dateTime(flip.rejectedAt) : "—", reasons: reasonNames(flip.reasons) || $t("review.confirm.noNote") }) }}</p>
             <div v-if="flip.note" class="field"><p class="subtle records__title">{{ $t("review.flipApprove.originalNote") }}</p><p class="text reopen__reason">{{ flip.note }}</p></div>
             <p v-if="flip.reason" class="text reopen__reason" data-flip-reason>{{ $t("review.flipApprove.detailReason", { reason: flip.reason }) }}</p>
-            <p v-if="!flip.mine && !decided" class="notice" data-flip-readonly>{{ $t("review.flipApprove.onlyInitiator", { name: flip.by }) }}</p>
+            <p v-if="!flip.mine && !flip.canTakeOver && !decided" class="notice" data-flip-readonly>{{ $t("review.flipApprove.onlyInitiator", { name: flip.by }) }}</p>
           </div>
         </div>
         <div class="head__acts">
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else-if="!stampedByMe && !dropped && !(flip && !flip.mine)" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe && !dropped && !(flip && !flip.mine && !flip.canTakeOver)" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
 
@@ -1555,7 +1555,7 @@ onMounted(() => { void load(); });
           </template>
 
           <!-- 改判單的另一條路：撤回改判（＝駁回這張改判單），原本的駁回維持、不通知作者；限發起人 -->
-          <div v-if="flip?.mine" class="flip-withdraw" data-flip-withdraw>
+          <div v-if="flip?.mine || flip?.canTakeOver" class="flip-withdraw" data-flip-withdraw>
             <button type="button" class="btn btn--danger" :disabled="busy" @click="withdrawFlip">{{ $t("review.flipApprove.withdrawAction") }}</button>
             <p class="subtle">{{ $t("review.flipApprove.withdrawHint") }}</p>
           </div>
@@ -1591,10 +1591,10 @@ onMounted(() => { void load(); });
               <div class="field">
                 <div class="note-head">
                   <label for="suggest-note">{{ $t(suggestions.includes('other') ? "reviewV2.decide.noteLabelRequired" : "reviewV2.decide.noteLabel") }}</label>
-                  <ReviewVisibility who="author" />
+                  <!-- 通過時作者收到的是勾選的改進建議與範例，這段補充說明只留在審核紀錄 -->
+                  <ReviewVisibility who="reviewers" />
                 </div>
-                <p id="suggest-note-hint" class="subtle note-hint">{{ $t("reviewAi.two.authorNote.editHint") }}</p>
-                <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" aria-describedby="suggest-note-hint" :aria-invalid="noteGuard?.at === 'suggest' ? 'true' : undefined" />
+                <textarea id="suggest-note" v-model="note" autocomplete="off" class="input" rows="3" :maxlength="NOTE_MAX" :disabled="busy" :aria-invalid="noteGuard?.at === 'suggest' ? 'true' : undefined" />
               </div>
             </template>
           </div>

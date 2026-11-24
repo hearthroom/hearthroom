@@ -7,7 +7,7 @@ import { RATING_RANK_SQL } from "./rating-correction";
 import { encodeSnapshot, loadSnapshot, reviewRecord } from "./review-snapshot";
 import { upstream } from "./upstream";
 import { reviewEventStatement } from "./review-v2";
-import { getSubmission, newerAuthorSubmission } from "./review";
+import { flipInitiatorActive, getSubmission, newerAuthorSubmission } from "./review";
 import { parseReviewReasons } from "../shared/review-reasons";
 
 /**
@@ -120,7 +120,8 @@ export async function withdrawFlip(db: D1Database, input: { id: string; memberId
   const s = await getSubmission(db, input.id);
   if (!s.flip_of) throw new HttpError(409, "review_not_flip");
   if (!isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_flip_manager_required");
-  if (s.flip_by !== input.memberId) throw new HttpError(403, "review_flip_initiator_only");
+  // 發起人已不是管理員（降級或撤銷）時，任何現任管理員都能撤回，單子才不會卡住
+  if (s.flip_by !== input.memberId && await flipInitiatorActive(db, s.flip_by)) throw new HttpError(403, "review_flip_initiator_only");
   if (s.status !== "pending" || await db.prepare("SELECT 1 FROM work_review_decisions WHERE submission_id = ?").bind(s.id).first()) throw new HttpError(409, "submission already decided");
   const closed = "EXISTS (SELECT 1 FROM review_submissions WHERE id = ? AND status = 'rejected' AND decided_at = ?)";
   const [update] = await db.batch([
@@ -167,6 +168,8 @@ export async function flipDetail(db: D1Database, s: { id: string; status: string
       .first<{ decided_at: number | null; reject_reasons: string | null; note: string; name: string | null }>();
     flip = {
       of: s.flip_of, by: (o?.name ?? "").slice(0, 80), mine: s.flip_by === memberId, at: s.submitted_at,
+      // 發起人已不是管理員：現任管理員可以接手（領取）或撤回
+      canTakeOver: manager && s.flip_by !== memberId && s.status === "pending" && !await flipInitiatorActive(db, s.flip_by),
       rejectedAt: o?.decided_at ?? null, reasons: parseReviewReasons(o?.reject_reasons ?? null), note: o?.note ?? "",
       // 改判理由只給管理員（發起人本身是管理員）
       ...(manager ? { reason: s.flip_reason ?? "" } : {}),

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { workPolicyGateway } from "../src/work-policy";
 import { finalizeManagedReview } from "../src/work-publication";
+import { HttpError } from "../src/types";
 import { legacyPolicyFixture } from "./work-policy-fixture";
 import { bearer, identities, makeAgent, makeMember, makeReviewer, ratingBody, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
 import { claim, pendingSubmissionOf, stamp, statusAmong } from "../src/review";
@@ -372,6 +373,97 @@ describe("改判為通過：託管作品", () => {
     expect(await env.DB.prepare("SELECT submission_id, state FROM hosting_versions WHERE version_id=?").bind(b.update.versionId).first()).toEqual({ submission_id: b.original, state: "rejected" });
     expect(await authorView()).toEqual(viewB);
     expect(((await (await mine(b.original)).json()) as any).status).toBe("rejected");
+  });
+
+  it("重大更新的改判在同步衝突後作廢：預約的更新通知一併清掉，之後的重大更新照常能預約與上架", async () => {
+    const send = (kind: "minor" | "major") => submitHosted(env, { memberId: author, account: AUTHOR, role: role({ roleId: "role-1", authorNumId: AUTHOR }), token: "author", rating: GENERAL_RATING, operationId: crypto.randomUUID(), now: Date.now(), updateKind: kind, ...(kind === "major" ? { updateNote: "新增第二章劇情以及全新分支結局" } : {}) });
+    const sid = async (version: string) => (await env.DB.prepare("SELECT submission_id FROM hosting_versions WHERE version_id=?").bind(version).first<{ submission_id: string }>())!.submission_id;
+    const decide = async (id: string, member: string, verdict: "approve" | "reject") => {
+      await claim(env.DB, id, member, Date.now());
+      return stamp(env.DB, { submissionId: id, memberId: member, verdict, note: verdict === "reject" ? "更新內容有問題" : "", reasons: verdict === "reject" ? ["other"] : undefined, now: Date.now() }, env);
+    };
+    const initial = await send("minor");
+    await decide(await sid(initial.versionId), "member-20001", "approve");
+    await enrollWorkAccess(env, { memberId: author, roleId: "role-1", operationId: crypto.randomUUID(), access: "public", token: "author" });
+    const update = await send("major");
+    const original = await sid(update.versionId);
+    await decide(original, "member-20001", "reject");
+    const { id } = await startFlip(env, { id: original, memberId: manager, operationId: crypto.randomUUID(), reason: "更新其實沒有問題", now: Date.now() });
+    vi.spyOn(workPolicyGateway, "commit").mockRejectedValueOnce(new HttpError(409, "visibility_operation_conflict"));
+    await expect(stamp(env.DB, { submissionId: id, memberId: manager, verdict: "approve", note: "", now: Date.now() }, env)).rejects.toThrow("visibility_operation_conflict");
+    vi.restoreAllMocks();
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "superseded" });
+    expect(await env.DB.prepare("SELECT submission_id, state FROM hosting_versions WHERE version_id=?").bind(update.versionId).first()).toEqual({ submission_id: original, state: "rejected" });
+    expect(await env.DB.prepare("SELECT COUNT(*) n FROM card_update_events WHERE state='reserved'").first()).toEqual({ n: 0 });
+
+    // 衝突留下的同步鎖由作品的同步修復處理（不在這張測試的範圍）；這裡直接當它已經修好
+    await env.DB.prepare("UPDATE managed_work_access SET sync_state='complete', sync_operation_id=NULL").run();
+    const next = await send("major");
+    const nextId = await sid(next.versionId);
+    expect((await decide(nextId, "member-20001", "approve")).submission.status).toBe("approved");
+    expect(await env.DB.prepare("SELECT state FROM card_update_events WHERE version_id=?").bind(next.versionId).first()).toEqual({ state: "published" });
+  });
+
+  it("核准前一刻失敗（更新通知預約不到）：版本列還回原單、沒有殘留預約；同一張單重按照常核准", async () => {
+    const send = (kind: "minor" | "major") => submitHosted(env, { memberId: author, account: AUTHOR, role: role({ roleId: "role-1", authorNumId: AUTHOR }), token: "author", rating: GENERAL_RATING, operationId: crypto.randomUUID(), now: Date.now(), updateKind: kind, ...(kind === "major" ? { updateNote: "新增第二章劇情以及全新分支結局" } : {}) });
+    const sid = async (version: string) => (await env.DB.prepare("SELECT submission_id FROM hosting_versions WHERE version_id=?").bind(version).first<{ submission_id: string }>())!.submission_id;
+    const initial = await send("minor");
+    const first = await sid(initial.versionId);
+    await claim(env.DB, first, "member-20001", Date.now());
+    await stamp(env.DB, { submissionId: first, memberId: "member-20001", verdict: "approve", note: "", now: Date.now() }, env);
+    const update = await send("major");
+    const original = await sid(update.versionId);
+    await claim(env.DB, original, "member-20001", Date.now());
+    await stamp(env.DB, { submissionId: original, memberId: "member-20001", verdict: "reject", note: "x", reasons: ["other"], now: Date.now() }, env);
+    const { id } = await startFlip(env, { id: original, memberId: manager, operationId: crypto.randomUUID(), reason: "誤判", now: Date.now() });
+    // 核准時預約更新通知失敗（另一個重大更新剛在冷卻期內發布）：版本列已轉過來，要還回原單
+    const work = (await env.DB.prepare("SELECT work_id FROM hosting_versions WHERE version_id=?").bind(update.versionId).first<{ work_id: string }>())!.work_id;
+    await env.DB.prepare("INSERT INTO card_update_events(version_id,work_id,state,reserved_at,published_at) VALUES(?,?,'published',?,?)").bind(initial.versionId, work, Date.now(), Date.now()).run();
+    await expect(stamp(env.DB, { submissionId: id, memberId: manager, verdict: "approve", note: "", now: Date.now() }, env)).rejects.toThrow("update_notification_cooldown");
+    expect(await env.DB.prepare("SELECT submission_id, state FROM hosting_versions WHERE version_id=?").bind(update.versionId).first()).toEqual({ submission_id: original, state: "rejected" });
+    expect(await env.DB.prepare("SELECT COUNT(*) n FROM card_update_events WHERE state='reserved'").first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "pending" });
+    await env.DB.prepare("DELETE FROM card_update_events WHERE version_id=?").bind(initial.versionId).run();
+    expect((await stamp(env.DB, { submissionId: id, memberId: manager, verdict: "approve", note: "", now: Date.now() }, env)).submission.status).toBe("approved");
+    expect(await env.DB.prepare("SELECT submission_id, state FROM hosting_versions WHERE version_id=?").bind(update.versionId).first()).toEqual({ submission_id: id, state: "approved" });
+  });
+});
+
+describe("改判為通過：發起人不再是管理員", () => {
+  it("任何現任管理員或擁有者可以接手（領取）或撤回；發起人還是管理員時別人不行", async () => {
+    const { original } = await rejected();
+    const id = await started(original);
+    expect(await code(await act(id, "claim", "mgr2"))).toBe("review_flip_initiator_only");
+    await env.DB.prepare("UPDATE reviewers SET role='reviewer' WHERE member_id=?").bind(manager).run();
+    const queued = (await queue("mgr2")).find((i) => i.id === id);
+    expect(queued.claim).toBe("free");
+    expect(queued.flip).toMatchObject({ mine: false, canTakeOver: true });
+    expect((await act(id, "claim", "mgr2")).status).toBe(200);
+    expect(await env.DB.prepare("SELECT flip_by, claimed_by FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ flip_by: "member-20005", claimed_by: "member-20005" });
+    // 原發起人降為一般審核員後也領不回來
+    expect(await code(await act(id, "claim", "mgr"))).toBe("review_flip_initiator_only");
+  });
+
+  it("發起人被撤銷審核資格：別的管理員可以直接撤回改判", async () => {
+    const { original } = await rejected();
+    const id = await started(original);
+    const withdraw = (token: string) => SELF.fetch(`https://c.test/v1/review/${id}/flip/withdraw`, { method: "POST", headers: { ...json, ...bearer(token) }, body: "{}" });
+    expect(await code(await withdraw("mgr2"))).toBe("review_flip_initiator_only");
+    await env.DB.prepare("UPDATE reviewers SET revoked_at=? WHERE member_id=?").bind(Date.now(), manager).run();
+    expect((await withdraw("mgr2")).status).toBe(200);
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "rejected" });
+  });
+});
+
+describe("給作者的說明的內部字詞檢查只管作者看得到的字", () => {
+  it("通過時的補充說明作者看不到，不擋；改判駁回（含重新審核駁回）的說明會給作者，要擋", async () => {
+    await submit();
+    const id = await latestAuthorSubmission();
+    expect((await act(id, "claim", "rev-a")).status).toBe(200);
+    expect((await act(id, "stamp", "rev-a", { verdict: "approve", note: "同裝置有 3 個帳號，先放行觀察" })).status).toBe(200);
+    const res = await SELF.fetch(`https://c.test/v1/review/${id}/correction`, { method: "POST", headers: { ...json, ...bearer("mgr") }, body: JSON.stringify({ operationId: crypto.randomUUID(), note: "同一裝置有好幾個帳號" }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "author_note_internal", terms: ["裝置", "帳號"] });
   });
 });
 
