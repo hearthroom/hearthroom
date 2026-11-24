@@ -882,12 +882,12 @@ export interface ReviewAiSuggestion {
   authorNote?: string;
 }
 /**
- * 蓋章。兩段式定案帶 finalSource（blind／ai／human_no_ai 不必帶決定內容，modified 帶這次的決定）與給 AI 的說明；
- * 選「用 AI 的」時帶畫面上那一筆 AI 判斷的 id 與時間：AI 在這之間重判過，伺服器回 409 ai_changed，不會蓋成沒看過的結論。
- * 「用 AI 的」駁回時 authorNote 是審核員改過的給作者說明；沒帶就用 AI 的草稿。
- * 回應的 finalSource 是實際記下的來源。重新審核與沒送過盲審的單照舊只帶決定。
+ * 蓋章。一般待審單（AI 為主，ui-ai-first.md）帶 finalSource：ai＝照 AI 定案（不必帶決定內容；要帶審核標記時連結論一起帶）、
+ * modified＝改了 AI 的建議、human_no_ai＝沒有 AI 建議，後兩種帶這次的決定。有 AI 建議時帶畫面上那一筆的 id 與時間：
+ * AI 在這之間重判過，伺服器回 409 ai_changed，不會蓋成沒看過的結論。aiInaccurate＝審核員標「AI 判斷不準確」。
+ * blind（用我的盲審）只剩舊流程送過盲審的單。回應的 finalSource 是實際記下的來源。重新審核照舊只帶決定。
  */
-export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number; authorNote?: string }) =>
+export const stampReview = (id: string, token: string, body: Partial<ReviewDecisionBody> & { generation?: string; finalSource?: ReviewFinalSource; aiNoteTypes?: string[]; aiNote?: string; aiSuggestionId?: string; aiSuggestionAt?: number; authorNote?: string; aiInaccurate?: boolean }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number }; finalSource?: ReviewFinalSource }>(id, "stamp", token, body);
 /** 兩段式第一步：盲審判斷（只記錄，送審狀態不變）。每人每單一筆；第二次是 409 blind_already_recorded */
 export const blindReview = (id: string, token: string, body: ReviewDecisionBody & { generation?: string }) =>

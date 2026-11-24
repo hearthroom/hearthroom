@@ -398,7 +398,8 @@ const aiChanges = computed<string[] | null>(() => {
   const out: string[] = [];
   if (c !== b.verdict) out.push(t('reviewAi.first.change.verdict', { verdict: t(`review.action.${c}`) }));
   if (c === 'reject') {
-    const added = pickedReasons.value.filter((x) => !b.reasons.includes(x));
+    // 字數未達標時自動帶上的「有效字數不足」不算修改：照 AI 定案時伺服器同樣會補上
+    const added = pickedReasons.value.filter((x) => !b.reasons.includes(x) && !(lengthForced.value && x === 'content.min_length'));
     const removed = b.reasons.filter((x) => !pickedReasons.value.includes(x));
     if (added.length) out.push(t('reviewAi.first.change.added', { names: names(added) }));
     if (removed.length) out.push(t('reviewAi.first.change.removed', { names: names(removed) }));

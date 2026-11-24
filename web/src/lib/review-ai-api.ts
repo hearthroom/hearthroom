@@ -6,7 +6,7 @@ import { currentSurface } from "./track";
 /**
  * AI 審卡影子模式的審核員與管理員介面（任務 2026-11-23-ai-card-review）。服務端在 src/review-ai-routes.ts。
  *
- * 揭曉（/review/:id/ai）只在這位審核員送過盲審判斷、自己蓋章或不受理之後才呼叫；伺服器也擋（403 ai_hidden_until_decided）。
+ * AI 的建議（/review/:id/ai）：待審單任何審核員進來就讀（AI 為主，ui-ai-first.md）；已定案的單只給自己審過的人與管理員。
  * 分歧、仲裁、報表、參考範例只給管理員。所有寫入都帶新的 operationId。
  */
 

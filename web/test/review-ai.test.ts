@@ -171,10 +171,36 @@ it('an AI approval is preselected and finalizes as the AI suggests without a con
   expect($('[data-ai-option]')!.closest('label')!.querySelector('input')!.value).toBe('approve');
   const submit = $('[data-submit-approve]') as HTMLButtonElement;
   expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submitAi.approve'));
+  // 審核標記不算修改：照 AI 定案時連結論一起送，伺服器才收得到標記
+  host.querySelector<HTMLInputElement>('[data-decision-mark=suspect_ai_text]')!.click(); await nextTick();
+  expect($('[data-ai-modified]')).toBeNull();
+  expect(submit.textContent!.trim()).toBe(t('reviewAi.first.submitAi.approve'));
   submit.click();
   await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
   expect(confirmState.current).toBeNull();
-  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', aiSuggestionId: 'g1', aiSuggestionAt: 7 });
+  expect(posts('stamp')[0]!.body).toEqual({ generation: 'g', finalSource: 'ai', verdict: 'approve', marks: ['suspect_ai_text'], aiSuggestionId: 'g1', aiSuggestionAt: 7 });
+});
+
+it('on a card under the length line, the auto-added length reason does not count as a change; an AI approval is not preselected there', async () => {
+  const short = { reviewLength: { total: 3000, required: 3001, remaining: 1, eligible: false } };
+  mocks.fetchReviewDetail.mockImplementation(async () => { const d = detail({}); return { ...d, detail: { ...d.detail, ...short } }; });
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ at: 5, authorNote: 'Draft' }));
+  routes['/v1/review/s1/stamp'] = () => stampOk('ai', 'rejected');
+  await mountPage('/en/review/s1');
+  await waitAi();
+  expect(checked()).toBe('reject');
+  expect(host.querySelector<HTMLInputElement>('[data-reason="content.min_length"]')!.checked).toBe(true);
+  expect($('[data-ai-modified]')).toBeNull();
+  $('[data-submit-reject]')!.click();
+  await vi.waitFor(() => expect(posts('stamp').length).toBe(1));
+  expect(posts('stamp')[0]!.body).toMatchObject({ finalSource: 'ai' });
+  app!.unmount(); document.body.innerHTML = ''; calls = [];
+
+  routes['/v1/review/s1/ai'] = aiWith(suggestion({ verdict: 'pass', reasons: [] }));
+  await mountPage('/en/review/s1');
+  await waitAi();
+  expect(checked()).toBeNull();
+  expect($('[data-ai-option]')!.closest('label')!.querySelector('input')!.value).toBe('approve');
 });
 
 it('any change to the AI suggestion is summarized and finalizes as changed, sending the edited decision', async () => {
