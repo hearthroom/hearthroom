@@ -33,6 +33,13 @@ describe("給作者的說明：內部字詞檢查", () => {
     ["Several cards came from the same device and multiple accounts.", ["裝置", "帳號"]],
     ["The confidence score was low.", ["分數"]],
     ["同一 IP 送了好幾張。", ["裝置"]],
+    ["AI 信心 0.8，判斷是量產。", ["送審次數", "分數"]],
+    ["AI 的信心是 0.8。", ["分數"]],
+    ["信心值偏低。", ["分數"]],
+    ["同一支手機登入。", ["裝置"]],
+    ["這位作者有兩個帳號。", ["帳號"]],
+    ["IP 相同。", ["裝置"]],
+    ["疑似量產。", ["送審次數"]],
   ])("內部資訊擋下：%s", (text, terms) => {
     expect(internalTermsIn(text)).toEqual(terms);
   });

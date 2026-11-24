@@ -440,6 +440,8 @@ export async function guardDecision(db: D1Database, row: SubmissionRow, input: D
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
+  // 改判單只能由管理員處理：發起人之後被降成一般審核員，就算還領著也不能定案（等其他管理員接手或撤回）
+  if (row.flip_of && !isManager(await reviewerRole(db, input.memberId))) throw new HttpError(403, "review_flip_manager_required");
 }
 
 /** 決定內容的規則（盲審判斷也用同一套）：字數、說明長度、駁回理由、標記、改進建議。 */

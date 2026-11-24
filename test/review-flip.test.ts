@@ -453,6 +453,16 @@ describe("改判為通過：發起人不再是管理員", () => {
     expect((await withdraw("mgr2")).status).toBe(200);
     expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "rejected" });
   });
+
+  it("發起人降成一般審核員：還領著改判單也不能定案，要等其他管理員接手", async () => {
+    const { original } = await rejected();
+    const id = await started(original);
+    generations.set(id + "mgr", (await env.DB.prepare("SELECT claim_generation FROM review_submissions WHERE id=?").bind(id).first<{ claim_generation: string }>())!.claim_generation);
+    await env.DB.prepare("UPDATE reviewers SET role='reviewer' WHERE member_id=?").bind(manager).run();
+    expect(await code(await act(id, "blind", "mgr", { verdict: "approve" }))).toBe("review_flip_manager_required");
+    expect(await code(await act(id, "stamp", "mgr", { verdict: "approve" }))).toBe("review_flip_manager_required");
+    expect(await env.DB.prepare("SELECT status FROM review_submissions WHERE id=?").bind(id).first()).toEqual({ status: "pending" });
+  });
 });
 
 describe("給作者的說明的內部字詞檢查只管作者看得到的字", () => {
