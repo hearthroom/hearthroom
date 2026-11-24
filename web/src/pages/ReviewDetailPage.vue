@@ -20,7 +20,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue"
 import {formatReviewLength} from "@/lib/review-length";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, dropReview, restoreReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, blindReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, updateReviewTags, type ReviewDetail, type ReviewOriginality, type ReviewBlind, type ReviewAiState, type ReviewDecisionBody, type ReviewFinalSource } from "@/lib/api";
+import { ApiError, claimReview, dropReview, restoreReview, fetchReviewDetail, fetchReviewOriginality, fetchReviewQueue, type ReviewQueueItem, releaseReview, stampReview, blindReview, holdReview, unholdReview, withdrawReopen, correctReviewDecision, startReviewFlip, withdrawReviewFlip, updateReviewTags, type ReviewDetail, type ReviewOriginality, type ReviewBlind, type ReviewAiState, type ReviewDecisionBody, type ReviewFinalSource } from "@/lib/api";
 import { confirmDialog, confirmState, settleConfirm } from '@/lib/confirm';
 import TagPicker from "@/components/editor/TagPicker.vue";
 import LookupField, { type LookupValue } from "@/components/LookupField.vue";
@@ -83,7 +83,7 @@ let ownedConfirm:typeof confirmState.current=null;
 const cancelOwnedConfirm=()=>{if(ownedConfirm&&confirmState.current===ownedConfirm)settleConfirm(false);ownedConfirm=null;};
 onBeforeUnmount(()=>{active=false;cancelOwnedConfirm();});
 // 「下一張待審」在同一個頁面實例裡換卡：上一張的查重結果、標籤草稿都要清掉，不然會帶到下一張（甚至存進下一張）
-watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];suggestOpen.value=false;suggestPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;resetTwoStage();finalSourceDone.value=null;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
+watch(id,()=>{cancelOwnedConfirm();data.value=null;note.value='';choice.value=null;reasonPicks.value=[];decisionMarks.value=[];suggestOpen.value=false;suggestPicks.value=[];coaching.value=null;dropDone.value=false;sectionChosen=false;done.value='';originality.value=null;originalityError.value='';picked.value=null;editingTags.value=false;draftTags.value=[];tagsError.value='';correctionOpen.value=false;correctionNote.value='';flipOpen.value=route.query.flip==='1';flipReason.value='';flipError.value='';flipDone.value=null;flipOperation=crypto.randomUUID();claimNote.value='';holdReason.value='';holdReasonOpen.value=false;holdError.value='';withdrawOpen.value=false;withdrawReason.value='';withdrawError.value='';changesOpened.value=false;autoClaimed=false;resetTwoStage();finalSourceDone.value=null;decideError.value='';decideUnknown.value=false;nextItems.value=null;nextSwitched.value=null;nextError.value='';section.value='basic';void load();});
 async function decisionConfirm(options:Parameters<typeof confirmDialog>[0]){
  const answer=confirmDialog(options);ownedConfirm=confirmState.current;
  try{return await answer;}finally{ownedConfirm=null;}
@@ -270,6 +270,21 @@ const withdrawError = ref("");
 const myStamp = computed(() => data.value?.submission.stamps.find((s) => s.mine) ?? null);
 /** 別人蓋的章（現行一張單一章就定案，通常是空的；舊單或日後恢復兩章時才有） */
 const otherStamps = computed(() => data.value?.submission.stamps.filter((s) => !s.mine) ?? []);
+/**
+ * 駁回改判為通過（ui-flip-approve.md v20，限管理員）。這張是改判單：頂端說明、決定只有通過與撤回改判；
+ * 這張是可改判的駁回單：結果卡多一塊「改判為通過」表單（從清單帶 ?flip=1 進來就直接展開）。
+ */
+const flip = computed(() => data.value?.submission.flip ?? null);
+const flipState = computed(() => data.value?.submission.flipState ?? null);
+const flipOpen = ref(route.query.flip === "1");
+const flipReason = ref("");
+const flipError = ref("");
+const flipDone = ref<string | null>(null);
+/** 同一次表單的冪等鍵：網路中斷後重按回到同一張改判單 */
+let flipOperation = crypto.randomUUID();
+const FLIP_REASON_MAX = 500;
+const rejectNote = computed(() => data.value?.submission.stamps.find((s) => s.verdict === "reject")?.note ?? "");
+const reasonNames = (codes: string[]) => codes.map((c) => t(reasonKey(c, "name"))).join(" · ");
 /**
  * 決定後的「AI 的判斷」揭曉區（附覆核）只剩不受理用：剛在這頁不受理（復原後就收起）才掛上。
  * 通過與駁回改走兩段式，定案前已經並排比過，結果卡不再掛（ui-two-stage.md）；重新審核與舊單的章也不再掛。
@@ -987,6 +1002,50 @@ async function correct(){
  }finally{busy.value=false;}
 }
 
+async function startFlip() {
+  if (busy.value || !data.value || data.value.submission.id !== id.value || flipState.value?.supersededBy) return;
+  const review = data.value, target = id.value, reason = flipReason.value.trim();
+  if (!reason) { flipError.value = t("review.flipApprove.reasonRequired"); return; }
+  busy.value = true; flipError.value = "";
+  try {
+    const confirmedToken = await token();
+    const version = t("review.flipApprove.confirmVersion", { date: dateTime(review.submission.submittedAt) });
+    const row = (label: string, value: string) => t("review.confirm.row", { label, value });
+    const message = [row(t("review.confirm.card"), review.detail.document.roleName), row(t("review.confirm.version"), version), row(t("review.flipApprove.reasonLabel"), reason)].join("\n")
+      + "\n\n" + ["review.flipApprove.effect1", "review.flipApprove.effect2", "review.flipApprove.effect3"].map((k, i) => `${i + 1}. ${t(k)}`).join("\n");
+    if (!await decisionConfirm({ scrollMessage: true, title: t("review.flipApprove.confirmTitle"), message, confirmText: t("review.flipApprove.confirmSubmit"), cancelText: t("review.flipApprove.confirmCancel"), focusCancel: true })) return;
+    if (!active || id.value !== target || data.value !== review) return;
+    const result = await startReviewFlip(target, confirmedToken, { operationId: flipOperation, reason });
+    if (!active || id.value !== target) return;
+    flipDone.value = result.id; flipOpen.value = false; flipReason.value = "";
+    await load();
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    // 作者剛改稿重送、別人剛建了改判單：重讀，表單會換成停用說明或改判審核中，不另外報錯
+    const settled = err instanceof ApiError && (err.code === "review_flip_superseded" || err.code === "review_flip_exists");
+    if (err instanceof ApiError && err.status === 409) await load();
+    if (!settled) flipError.value = err instanceof Error ? err.message : t("state.actionFailed");
+  } finally { busy.value = false; }
+}
+
+async function withdrawFlip() {
+  if (busy.value || !data.value || !flip.value?.mine || decided.value) return;
+  const target = id.value;
+  if (!await decisionConfirm({ title: t("review.flipApprove.withdrawConfirmTitle"), message: t("review.flipApprove.withdrawConfirmBody"), confirmText: t("review.flipApprove.withdrawAction"), cancelText: t("review.flipApprove.confirmCancel"), focusCancel: true, danger: true, dangerAppearance: "subdued" })) return;
+  if (!active || id.value !== target) return;
+  busy.value = true; decideError.value = "";
+  try {
+    await withdrawReviewFlip(target, await token());
+    if (!active || id.value !== target) return;
+    done.value = t("review.flipApprove.withdrawn");
+    await load();
+  } catch (err) {
+    if (!active || id.value !== target) return;
+    decideError.value = err instanceof Error ? err.message : t("state.actionFailed");
+    if (err instanceof ApiError && err.status === 409) await load();
+  } finally { busy.value = false; }
+}
+
 onMounted(() => { void load(); });
 </script>
 
@@ -1062,10 +1121,19 @@ onMounted(() => { void load(); });
             <p v-if="withdrawError" class="notice notice--error" role="alert">{{ withdrawError }}</p>
             <button v-if="manager" type="button" class="btn btn--sm reopen__action" :disabled="busy || (withdrawOpen && !withdrawReason.trim())" data-withdraw @click="withdraw">{{ $t("review.action.withdraw") }}</button>
           </div>
+          <!-- 改判單：原本哪天駁回、理由、誰發起、為什麼；通過前作者看到的仍是未通過審核 -->
+          <div v-if="flip" class="reopen" role="status" data-flip-notice>
+            <p><span class="chip chip--flip">{{ $t("review.flipApprove.detailChip") }}</span></p>
+            <p class="reopen__text">{{ $t("review.flipApprove.detailNotice", { rejectedAt: flip.rejectedAt ? dateTime(flip.rejectedAt) : "—", name: flip.by }) }}</p>
+            <p class="subtle">{{ $t("review.flipApprove.detailOriginalRejection", { rejectedAt: flip.rejectedAt ? dateTime(flip.rejectedAt) : "—", reasons: reasonNames(flip.reasons) || $t("review.confirm.noNote") }) }}</p>
+            <div v-if="flip.note" class="field"><p class="subtle records__title">{{ $t("review.flipApprove.originalNote") }}</p><p class="text reopen__reason">{{ flip.note }}</p></div>
+            <p v-if="flip.reason" class="text reopen__reason" data-flip-reason>{{ $t("review.flipApprove.detailReason", { reason: flip.reason }) }}</p>
+            <p v-if="!flip.mine && !decided" class="notice" data-flip-readonly>{{ $t("review.flipApprove.onlyInitiator", { name: flip.by }) }}</p>
+          </div>
         </div>
         <div class="head__acts">
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else-if="!stampedByMe && !dropped" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe && !dropped && !(flip && !flip.mine)" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t(hold ? "review.action.claimHeld" : "review.action.claim") }}</button>
         </div>
       </header>
 
@@ -1392,6 +1460,32 @@ onMounted(() => { void load(); });
                 <button class="btn btn--lg" :disabled="busy||!correctionNote.trim()" @click="correct">{{t('review.correction.action')}}</button>
               </div>
             </template>
+          <!-- 駁回改判為通過（限管理員，ui-flip-approve.md）：同一個送審版本建改判單，由自己領取後走正常核准 -->
+          <p v-if="flipState?.pendingId && !flipDone" class="notice" role="status" data-flip-pending>{{ $t("review.history.flipPending") }} <RouterLink :to="lp(`/review/${flipState.pendingId}`)">{{ $t("review.flipApprove.goReview") }}</RouterLink></p>
+          <p v-else-if="flipState?.approvedId" class="subtle" data-flip-approved>{{ $t("review.history.flippedToApproved") }}</p>
+          <div v-if="flipDone" class="records" role="status" data-flip-done>
+            <h3>{{ $t("review.flipApprove.doneTitle") }}</h3>
+            <p>{{ $t("review.flipApprove.doneBody") }}</p>
+            <RouterLink class="btn btn--primary" :to="lp(`/review/${flipDone}`)">{{ $t("review.flipApprove.goReview") }}</RouterLink>
+          </div>
+          <template v-else-if="flipState?.canStart">
+            <button v-if="!flipOpen" type="button" class="btn" :disabled="busy" data-flip-entry @click="flipOpen = true">{{ $t("review.flipApprove.action") }}</button>
+            <div v-else class="field flip-form" data-flip-form>
+              <h3>{{ $t("review.flipApprove.title") }}</h3>
+              <p v-if="flipState.supersededBy" class="notice" role="alert" data-flip-superseded>
+                {{ $t("review.flipApprove.supersededWarning", { date: dateTime(flipState.supersededBy.submittedAt) }) }}
+                <RouterLink :to="lp(`/review/${flipState.supersededBy.id}`)">{{ $t("review.flipApprove.goLatest") }}</RouterLink>
+              </p>
+              <p>{{ $t("review.flipApprove.originalSummary", { date: data.submission.decidedAt ? dateTime(data.submission.decidedAt) : "—" }) }}</p>
+              <div v-if="data.rejectReasons?.length"><p class="subtle records__title">{{ $t("review.flipApprove.originalReasons") }}</p><p>{{ reasonNames(data.rejectReasons) }}</p></div>
+              <div v-if="rejectNote"><p class="subtle records__title">{{ $t("review.flipApprove.originalNote") }}</p><p class="text record__note">{{ rejectNote }}</p></div>
+              <label for="flip-reason">{{ $t("review.flipApprove.reasonLabel") }}</label>
+              <textarea id="flip-reason" v-model="flipReason" autocomplete="off" class="input" rows="4" :maxlength="FLIP_REASON_MAX" :disabled="busy || !!flipState.supersededBy" aria-describedby="flip-reason-hint" />
+              <p id="flip-reason-hint" class="subtle">{{ $t("review.flipApprove.reasonHint") }}</p>
+              <p v-if="flipError" class="notice notice--error" role="alert">{{ flipError }}</p>
+              <button type="button" class="btn btn--danger btn--lg" :disabled="busy || !!flipState.supersededBy" data-flip-submit @click="startFlip">{{ $t("review.flipApprove.submit") }}</button>
+            </div>
+          </template>
           <p v-if="nextError" class="notice notice--error" role="alert">{{ nextError }}</p>
           <p v-if="nextItems && !nextItems.length" class="subtle">{{ $t("review.result.queueEmpty") }}</p>
           <p v-else-if="nextSwitched" class="subtle" data-next-switched>{{ $t(nextSwitched === "new" ? "reviewV2.decide.nextSwitchedToNew" : "reviewV2.decide.nextSwitchedToUpdates") }}</p>
@@ -1459,6 +1553,11 @@ onMounted(() => { void load(); });
             <p v-else-if="aiView === 'pending'" class="final__text">{{ $t("reviewAi.two.pending.skipLead") }}</p>
           </template>
 
+          <!-- 改判單的另一條路：撤回改判（＝駁回這張改判單），原本的駁回維持、不通知作者；限發起人 -->
+          <div v-if="flip?.mine" class="flip-withdraw" data-flip-withdraw>
+            <button type="button" class="btn btn--danger" :disabled="busy" @click="withdrawFlip">{{ $t("review.flipApprove.withdrawAction") }}</button>
+            <p class="subtle">{{ $t("review.flipApprove.withdrawHint") }}</p>
+          </div>
           <!-- 三個選項都不預選；重新審核單沒有「不受理」，駁回限管理員 -->
           <template v-if="showForm">
           <div class="choices" role="radiogroup" :aria-label="$t(modifying ? 'reviewAi.two.final.formTitle' : 'reviewV2.decide.title')" data-decide-choices>
@@ -1467,12 +1566,12 @@ onMounted(() => { void load(); });
               <span class="choice__name">{{ $t(reopen ? "review.action.keep" : "reviewV2.decide.approve") }}</span>
               <span class="choice__hint">{{ approveBlocked ? $t("reviewV2.decide.lengthGap", { gap: lengthParams.remaining }, Number(data.detail.reviewLength?.remaining ?? 0)) : !claimedByMe ? $t("reviewV2.decide.claimFirst") : $t("reviewV2.decide.approveHint") }}</span>
             </label>
-            <label class="choice" :class="{ 'choice--on': choice === 'reject', 'choice--off': !claimedByMe || !!hold || rejectLocked }">
+            <label v-if="!flip" class="choice" :class="{ 'choice--on': choice === 'reject', 'choice--off': !claimedByMe || !!hold || rejectLocked }">
               <input v-model="choice" type="radio" name="decide" value="reject" :disabled="busy || !claimedByMe || !!hold || rejectLocked" />
               <span class="choice__name">{{ $t("reviewV2.decide.reject") }}</span>
               <span class="choice__hint">{{ !claimedByMe ? $t("reviewV2.decide.claimFirst") : $t("reviewV2.decide.rejectHint") }}</span>
             </label>
-            <label v-if="!reopen && stage === 'judge'" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
+            <label v-if="!reopen && !flip && stage === 'judge'" class="choice" :class="{ 'choice--on': choice === 'drop', 'choice--off': !!hold }">
               <input v-model="choice" type="radio" name="decide" value="drop" :disabled="busy || !!hold" />
               <span class="choice__name">{{ $t("reviewV2.decide.drop") }}</span>
               <span class="choice__hint">{{ hold ? $t("reviewV2.menu.held") : $t("reviewV2.decide.dropHint") }}</span>
@@ -1579,6 +1678,11 @@ onMounted(() => { void load(); });
 .link { display: inline-flex; align-items: center; min-height: var(--h-lg); }
 .link, .link:hover { color: var(--accent-text); }
 .correction-error { scroll-margin-block-start: calc(var(--header-h) + var(--s-4)); }
+.flip-form { display: grid; gap: var(--s-2); }
+.flip-form h3, .flip-form p { margin: 0; }
+.flip-withdraw { display: grid; gap: var(--s-1); justify-items: start; margin-block-end: var(--s-3); }
+.flip-withdraw p { margin: 0; }
+.chip--flip { background: var(--accent-tint); color: var(--accent-text); }
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-4); }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 2px 0; }
 .head__name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }

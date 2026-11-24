@@ -600,7 +600,13 @@ export interface ReviewQueueItem {
   fast?: boolean;
   /** 審卡 V2 第二批：更新差異的摘要（只有更新單有）。pending＝還沒算；no_base／unreadable＝無法比較 */
   diff?: { state: "pending" | "done" | "no_base" | "unreadable"; summary: ReviewDiffSummary | null } | null;
+  /** 改判單（駁回改判為通過）：發起人、發起時間、原本駁回的時間；改判理由只給管理員。舊版伺服器不帶 */
+  flip?: ReviewQueueFlip | null;
 }
+
+export interface ReviewQueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string }
+/** 一張駁回單的改判狀態：改判審核中、已改判為通過，以及管理員看不看得到「改判為通過」入口 */
+export interface ReviewFlipState { pendingId: string | null; approvedId: string | null; canStart: boolean }
 
 /** 更新差異的純數字摘要（伺服器 src/review-diff.ts DiffSummary）：不含卡片原文 */
 export interface ReviewDiffSummary {
@@ -699,6 +705,8 @@ export interface ReviewDetail {
   submission: {
     lengthExempt?:boolean;
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
+    /** 定案時間（改判為通過的表單寫「原本結果：已駁回（日期）」）；舊版伺服器不帶 */
+    decidedAt?: number | null;
     /** 作者問卷算出的級別、情節名稱與每題答案；問卷上線前送的單是 null */
     rating?: Rating | null;
     ratingDescriptors?: Topic[];
@@ -715,6 +723,10 @@ export interface ReviewDetail {
     stamps: { verdict: "approve" | "reject"; note: string; at: number; mine?: boolean; finalSource?: ReviewFinalSource | null }[];
     canCorrect?:boolean;manager?:boolean;deadline?:number|null;
     correction?:{note:string;at:number;state:'pending'|'complete'|'conflict';operationId:string;publicState:string|null;canResume:boolean}|null;
+    /** 這張是改判單：改判的那張、發起人、原駁回日期與理由、改判理由（只給管理員）。舊版伺服器不帶 */
+    flip?: { of: string; by: string; mine: boolean; at: number; rejectedAt: number | null; reasons: string[]; note: string; reason?: string } | null;
+    /** 這張的改判狀態；supersededBy＝作者之後又送過審（入口停用並連到最新那張） */
+    flipState?: ReviewFlipState & { supersededBy: { id: string; submittedAt: number } | null };
     /** 同一張卡第幾次送審，與它之前最近一次定案的結果；舊版伺服器不帶 */
     attempt?: number;
     /** reasons：上次駁回的理由代碼。伺服器目前還沒帶（只有 note），帶了「更新內容」分頁才列出逐項對照 */
@@ -791,7 +803,7 @@ export async function fetchReviewQueue(token: string, lang?: string, tab?: "new"
 }
 
 export interface ReviewTimelineItem {
-  at: number; action: "submit" | "approve" | "reject" | "reopen" | "reopen_withdraw" | "drop" | "restore" | "hold" | "unhold" | "superseded";
+  at: number; action: "submit" | "approve" | "reject" | "reopen" | "reopen_withdraw" | "drop" | "restore" | "hold" | "unhold" | "superseded" | "flip" | "flip_withdraw";
   round: number; actor: string | null; mine: boolean; source?: string | null; reasons?: string[]; note?: string; marks?: string[]; suggestions?: string[]; current: boolean;
 }
 /** 單卡審核紀錄；coverageFrom＝事件紀錄的起點（之前的冷凍與不受理沒有紀錄） */
@@ -881,12 +893,16 @@ export const stampReview = (id: string, token: string, body: Partial<ReviewDecis
 export const blindReview = (id: string, token: string, body: ReviewDecisionBody & { generation?: string }) =>
   reviewAction<{ blind: ReviewBlind; ai: ReviewAiState }>(id, "blind", token, body);
 
-export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean}
+export interface ReviewDecision {id:string;status:string;kind:string;verdict:'approve'|'reject';note:string;at:number;submittedAt:number;decidedAt:number|null;versionId:string|null;card:{id:string;name:string};canCorrect:boolean;corrected?:boolean;flip?:ReviewFlipState}
 /** q：純數字＝卡號精確比對，其他＝卡名包含；伺服器搜全部紀錄 */
 export async function fetchReviewDecisions(token:string,lang:string,before?:number,q?:string):Promise<{items:ReviewDecision[];nextCursor:number|null}>{
  const query=new URLSearchParams({lang});if(before)query.set('before',String(before));if(q)query.set('q',q);
  return json(await fetch(`${COMMUNITY_API}/review/decisions?${query}`,{headers:{...from(),...authHeaders(token)}}));
 }
+/** 駁回改判為通過（限管理員）：用同一個送審版本建一張改判單，由自己領著。同一個 operationId 重送回同一張單 */
+export const startReviewFlip=(id:string,token:string,body:{operationId:string;reason:string})=>reviewAction<{id:string;flipOf:string;replayed:boolean}>(id,'flip',token,body);
+/** 撤回改判（限發起的管理員）：維持原本的駁回、不通知作者 */
+export const withdrawReviewFlip=(id:string,token:string)=>reviewAction<{status:'rejected'}>(id,'flip/withdraw',token,{});
 export const correctReviewDecision=(id:string,token:string,body:{operationId:string;note:string})=>reviewAction<{status:'rejected';publicVersionId:string|null;publicState:'previous_version'|'unpublished'|'unchanged';operationId:string;replayed:boolean}>(id,'correction',token,body);
 export interface AuthorReviewResult {name:string;status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;corrected:boolean;correctedAt:number|null;rewardKept?:boolean;
  /** 審卡 V2：駁回理由代碼（舊單是空陣列）、是否附完整改法、送審種類（re＝更新） */

@@ -35,6 +35,13 @@ function setQuery(value:string){
  if(q===query.value)return;
  void router.replace({query:{...route.query,q:q||undefined}});
 }
+/** 目前結果：改判（通過→駁回）、改判為通過（審核中／已通過）優先於單子本身的狀態 */
+function currentResult(item:ReviewDecision){
+ if(item.corrected)return t('review.history.corrected');
+ if(item.flip?.pendingId)return t('review.history.flipPending');
+ if(item.flip?.approvedId)return t('review.history.flippedToApproved');
+ return item.status==='pending'?t('review.history.pending'):t(`review.history.status.${item.status==='approved'?'approved':'rejected'}`);
+}
 function onInput(){clearTimeout(debounce);debounce=setTimeout(()=>setQuery(typed.value),300);}
 function submitSearch(){clearTimeout(debounce);setQuery(typed.value);}
 function clearSearch(){clearTimeout(debounce);typed.value='';setQuery('');}
@@ -63,10 +70,14 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
      <p class="row__title"><RouterLink v-if="stageAvailable" class="row__name" :to="lp(`/review/${item.id}`)">{{item.card.name}}</RouterLink><span v-else class="row__name">{{item.card.name}}</span> <span class="subtle num">#{{item.card.id}}</span></p>
      <p>{{t('review.confirm.version')}} · {{dateTime(item.submittedAt)}}</p>
      <p>{{t('review.history.myDecision')}} · {{t(`review.action.${item.verdict}`)}}</p>
-     <p>{{t('review.history.currentResult')}} · {{item.corrected?t('review.history.corrected'):item.status==='pending'?t('review.history.pending'):t(`review.history.status.${item.status==='approved'?'approved':'rejected'}`)}}</p>
+     <p>{{t('review.history.currentResult')}} · {{currentResult(item)}}</p>
      <p class="subtle">{{t('review.history.reviewedAt')}} · {{dateTime(item.at)}}</p>
     </div>
-    <RouterLink v-if="stageAvailable" class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>
+    <div v-if="stageAvailable" class="row__acts">
+     <RouterLink class="btn btn--sm" :to="lp(`/review/${item.id}`)">{{t(item.canCorrect?'review.correction.action':'review.history.open')}}</RouterLink>
+     <!-- 駁回改判為通過：只有管理員看得到，到詳情的結果卡填理由（ui-flip-approve.md） -->
+     <RouterLink v-if="item.flip?.canStart" class="btn btn--sm" data-flip-entry :to="lp(`/review/${item.id}?flip=1`)">{{t('review.flipApprove.action')}}</RouterLink>
+    </div>
    </li>
   </ul>
   <!-- 載入下一頁時按鈕留著、停用並寫「載入中…」：版面不跳、不會重複點，也看得出正在載（團隊負責人 2026-11-02 裁定） -->
@@ -76,5 +87,6 @@ watch(query,(q)=>{if(q!==typed.value.trim())typed.value=q;void load();});
 <style scoped>
 .decisions{display:grid;gap:var(--s-4)}.head,.row{display:flex;gap:var(--s-4);align-items:center;justify-content:space-between}.list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s-3)}.row{padding:var(--s-4)}.row__body{min-width:0;overflow-wrap:anywhere;display:grid;gap:var(--s-2)}.row__body p{margin:0}.row__name{font-weight:600;color:var(--text);font-size:16px}.num{font-variant-numeric:tabular-nums}.empty{padding:var(--s-5);display:grid;gap:var(--s-2);justify-items:start}.placeholder{height:132px;border-radius:var(--r-md)}
 .history-search__input{width:100%;min-height:var(--h-lg)}
-@media(max-width:640px){.head,.row{align-items:flex-start;flex-wrap:wrap}.row>.btn{min-height:var(--h-lg)}}
+.row__acts{display:flex;gap:var(--s-2);flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:640px){.head,.row{align-items:flex-start;flex-wrap:wrap}.row__acts{justify-content:flex-start}.row__acts>.btn{min-height:var(--h-lg)}}
 </style>

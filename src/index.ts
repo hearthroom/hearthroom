@@ -2373,7 +2373,7 @@ app.get("/v1/review/:id/detail", async (c) => {
   return c.json(
     {
       submission: {
-        id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at,
+        id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at, decidedAt: s.decided_at,
         // 作者問卷：級別、情節名稱、每題答案。審核人對照內容看是不是他說的那樣；問卷上線前送的單是 null
         lengthExempt:await reviewLengthExemptForCard(c.env.DB,s.card_id),
         rating: s.rating, ratingDescriptors: s.rating_descriptors ? JSON.parse(s.rating_descriptors) : [], ratingAnswers: s.rating_answers ? JSON.parse(s.rating_answers) : null,

@@ -33,6 +33,9 @@ onMounted(load);
 
 const label = (i: ReviewTimelineItem) =>
   i.action === "reopen_withdraw" ? t("review.action.withdraw")
+  // 駁回改判為通過：改判單建立、撤回改判（用改判文案，見 ui-flip-approve.md）
+  : i.action === "flip" ? t("review.flipApprove.detailChip")
+  : i.action === "flip_withdraw" ? t("review.flipApprove.withdrawAction")
   : i.action === "submit" && i.round > 1 ? t("reviewV2.timeline.event.resubmit")
   : i.action === "approve" && i.suggestions?.length ? t("reviewV2.timeline.event.approve_suggestions")
   : t(`reviewV2.timeline.event.${i.action}`);

@@ -20,7 +20,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, claimReview, dropReview, fetchReviewQueue, releaseReview, restoreReview, unholdReview, type ReviewBatchGroup, type ReviewQueueCounts, type ReviewQueueItem } from "@/lib/api";
 import { submissionTypeKey, submissionTypeOf } from "@/lib/review-type";
-import { relativeTime } from "@/lib/format";
+import { localDate, monthDay, relativeTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
@@ -243,6 +243,7 @@ onMounted(() => {
           <div class="row__body">
             <div class="row__top">
               <span class="row__name">{{ item.card.name }}</span>
+              <span v-if="item.flip" class="chip chip--flip" data-flip-chip>{{ $t("review.flipApprove.chip") }}</span>
               <span class="chip" :class="{ 'chip--re': submissionTypeOf(item) !== 'first' }" data-type-chip :data-reopen-chip="submissionTypeOf(item) === 'reopen' ? '' : undefined">{{ $t(submissionTypeKey(submissionTypeOf(item))) }}</span>
               <span v-if="submissionTypeOf(item) !== 'reopen' && (item.attempt ?? 1) >= 2" class="chip chip--attempt" data-attempt>{{ $t("review.attempt", { n: item.attempt }) }}</span>
               <span v-if="lengthChip(item)" class="chip chip--length" :class="{ 'chip--short': lengthChip(item)!.short }" data-length-chip>{{ lengthChip(item)!.text }}</span>
@@ -261,6 +262,8 @@ onMounted(() => {
             <p class="row__hook">{{ item.card.summary }}</p>
             <p v-if="diffLine(item)" class="row__diff" data-diff-summary>{{ diffLine(item) }}</p>
             <p class="row__meta">{{ zoneLabel(item.card.zone) }} · {{ relativeTime(item.submittedAt) }}</p>
+            <!-- 改判單：誰發起、何時、原本哪天駁回（ui-flip-approve.md）；只有發起人能處理，別人看到有人在看 -->
+            <p v-if="item.flip" class="row__meta" data-flip-by>{{ $t("review.flipApprove.queueSubline", { name: item.flip.by, time: relativeTime(item.flip.at), rejectedAt: item.flip.rejectedAt ? monthDay(localDate(item.flip.rejectedAt)) : "—" }) }}</p>
             <p v-if="item.hold" class="row__meta row__hold" data-hold-by>{{ item.hold.byMe ? $t("review.hold.byMe") : $t("review.hold.by", { name: item.hold.holder || $t("review.hold.someone") }) }} · {{ relativeTime(item.hold.at) }}</p>
             <p v-if="rowError?.id === item.id" class="notice notice--error row__error" role="alert">{{ rowError.text }}</p>
           </div>
@@ -278,7 +281,7 @@ onMounted(() => {
             <button v-if="item.hold?.byMe" class="btn btn--ghost row__minor" :disabled="!!busy" data-unhold @click="unhold(item)">{{ $t("review.action.unhold") }}</button>
           </div>
           <!-- 重新審核單不是作者送的，不能不受理 -->
-          <ReviewRowMenu v-if="!item.reopen" class="row__menu" :name="item.card.name" :busy="busy === item.id"
+          <ReviewRowMenu v-if="!item.reopen && !item.flip" class="row__menu" :name="item.card.name" :busy="busy === item.id"
             :blocked="item.claim === 'other' ? 'claimed' : item.hold ? 'held' : null" @drop="drop(item)" />
         </li>
       </ul>
@@ -316,6 +319,7 @@ onMounted(() => {
 .chip--length, .chip--count { font-variant-numeric: tabular-nums; }
 .chip--short { color: var(--warning-text); }
 .chip--hold { color: var(--warning-text); }
+.chip--flip { background: var(--accent-tint); color: var(--accent-text); }
 .row__hold { color: var(--warning-text); overflow-wrap: anywhere; }
 .row-ghost { height: 96px; border-radius: var(--r-md); }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-2); }
