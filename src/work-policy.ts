@@ -37,6 +37,9 @@ function checked(value:unknown,source:string,work?:string,operation?:string):Wor
   ||!['prepared','complete','cancelled'].includes(r.state??''))throw new HttpError(503,'visibility_receipt_invalid');
  return r as WorkPolicyReceipt;
 }
+export function parseWorkPolicyReceipt(value:string,source:string,work:string,operation:string):WorkPolicyReceipt{
+ return checked(JSON.parse(value),source,work,operation);
+}
 async function call(env:Env,provider:ProviderId,source:string,suffix:string,body?:unknown,token?:string,preserveAuth=false):Promise<unknown|null>{
  const key=hostingKey(env,provider);if(!key)throw new HttpError(503,'hosting_unavailable');
  const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/work-access/${encodeURIComponent(source)}${suffix}`,{
@@ -120,18 +123,30 @@ export async function policyOperationId(identity:string):Promise<string>{
  return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;
 }
 
-export async function workPolicyIntentStatement(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,root=command.operationId,moderationRevision?:number):Promise<D1PreparedStatement>{
- const intent=await hash({provider,source,command});
- return env.DB.prepare("INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at,moderation_revision) VALUES(?,?,?,?,?,'intent',?,?)")
-  .bind(command.workId,command.operationId,root,JSON.stringify(command),intent,Date.now(),moderationRevision??null);
+export async function workPolicyIntentStatement(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,root=command.operationId,moderationRevision?:number,enrollment?:{preparationId:string|null}):Promise<D1PreparedStatement>{
+ const intent=await workPolicyCommandHash(provider,source,command);
+ const select="SELECT ?,?,?,?,?,'intent',?,?";
+ const ownedEnrollment=` WHERE EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND provider=? AND source_role_id=?
+  AND epoch=0 AND sync_state='changing' AND sync_operation_id=?)
+  AND (? IS NULL OR EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND work_id=?
+   AND state IN ('preparing','failed') AND submission_id IS NULL))`;
+ return env.DB.prepare(`INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at,moderation_revision)
+  ${select}${enrollment?ownedEnrollment:''}`)
+  .bind(command.workId,command.operationId,root,JSON.stringify(command),intent,Date.now(),moderationRevision??null,
+   ...(enrollment?[command.workId,provider,source,command.operationId,enrollment.preparationId,enrollment.preparationId,command.workId]:[]));
 }
 
 // Persist only bounded commands and receipts, never a bearer. After an unknown
 // reply, read the original operation before resending the same idempotent command.
 export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,token?:string,rootOperation=command.operationId):Promise<WorkPolicyReceipt>{
  await assertPublicSource(env.DB,provider,source);
- const db=env.DB;const intent=await hash({provider,source,command});
+ const intent=await workPolicyCommandHash(provider,source,command);
  const inserted=await (await workPolicyIntentStatement(env,provider,source,command,rootOperation)).run();
+ return executeWorkPolicyOperation(env,provider,source,command,intent,!!inserted.meta.changes,token);
+}
+
+async function executeWorkPolicyOperation(env:Env,provider:ProviderId,source:string,command:WorkPolicyCommand,intent:string,firstAttempt:boolean,token?:string):Promise<WorkPolicyReceipt>{
+ const db=env.DB;
  const op=await db.prepare('SELECT intent_hash,command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(command.workId,command.operationId).first<Operation>();
  if(!op||op.intent_hash!==intent)throw new HttpError(409,'visibility_operation_conflict');
  if(op.state==='conflict'){
@@ -140,10 +155,10 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
  }
  if(op.state==='complete'&&op.receipt){
   await bumpOp(db,'work_access',command.action,'replay');
-  return checked(JSON.parse(op.receipt),source,command.workId,command.operationId);
+  return parseWorkPolicyReceipt(op.receipt,source,command.workId,command.operationId);
  }
  try{
-  const recovered=inserted.meta.changes?null:await workPolicyGateway.operation(env,provider,source,command.workId,command.operationId);
+  const recovered=firstAttempt?null:await workPolicyGateway.operation(env,provider,source,command.workId,command.operationId);
   const receipt=checked(recovered??await workPolicyGateway.change(env,provider,source,command,token),source,command.workId,command.operationId);
   await db.prepare("UPDATE visibility_operations SET state='complete',receipt=?,updated_at=? WHERE work_id=? AND operation_id=? AND intent_hash=?")
    .bind(JSON.stringify(receipt),Date.now(),command.workId,command.operationId,intent).run();
@@ -187,6 +202,7 @@ export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:str
  const provider=input.provider??'harbor';const db=env.DB;
  const work=await db.prepare('SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?').bind(provider,input.roleId).first<{id:string;member_id:string}>();
  if(!work)throw new HttpError(404,'card_not_found');if(work.member_id!==input.memberId)throw new HttpError(403,'not_the_author');
+ await assertPublicSource(db,provider,input.roleId);
  const card=await db.prepare('SELECT approved_hosted_role_id,public_blocked,board_hidden FROM cards WHERE provider=? AND source_role_id=?').bind(provider,input.roleId).first<{approved_hosted_role_id:string|null;public_blocked:number;board_hidden:number}>();
  const grants=await db.prepare("SELECT hosted_revision_id FROM hosting_versions WHERE work_id=? AND state='approved' AND hosted_revision_id IS NOT NULL ORDER BY version_id").bind(work.id).all<{hosted_revision_id:string}>();
  const command:WorkPolicyCommand={workId:work.id,operationId:input.operationId,expectedEpoch:0,action:'bind',access:input.access,
@@ -196,24 +212,29 @@ export async function enrollWorkAccess(env:Env,input:{memberId:string;roleId:str
  const previous=await db.prepare('SELECT command,state,receipt FROM visibility_operations WHERE work_id=? AND operation_id=?').bind(work.id,input.operationId).first<Operation>();
  const saved=previous?JSON.parse(previous.command) as WorkPolicyCommand:null;
  if(saved&&(saved.action!=='bind'||saved.access!==input.access))throw new HttpError(409,'visibility_operation_conflict');
- // Mark the work managed before sending bind. Otherwise a legacy reviewer can
- // publish while the remote result is unknown and D1 has no policy row yet.
- // A terminal bind can never acquire a new fence, even if recovery retired
- // its old fence while this request was reading the saved operation.
- await db.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id)
- SELECT ?,?,?,?,0,?,?,'changing',?
- WHERE NOT EXISTS(SELECT 1 FROM visibility_operations WHERE work_id=? AND operation_id=? AND state='conflict')
- AND (? IS NULL OR EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND work_id=?
-  AND state IN ('preparing','failed') AND submission_id IS NULL))`)
- .bind(work.id,provider,input.roleId,input.access,command.restriction,card?.approved_hosted_role_id??null,input.operationId,
-  work.id,input.operationId,input.preparationId??null,input.preparationId??null,work.id).run();
+ const bind=saved??command;
+ const preparationId=input.preparationId??null;
+ const intent=await workPolicyCommandHash(provider,input.roleId,bind);
+ // A fence and its authorized bind intent become durable together, before
+ // contacting Harbor. A retired preparation cannot acquire either again.
+ const [,inserted]=await db.batch([
+  db.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id)
+   SELECT ?,?,?,?,0,?,?,'changing',?
+   WHERE NOT EXISTS(SELECT 1 FROM visibility_operations WHERE work_id=? AND operation_id=? AND state='conflict')
+   AND NOT EXISTS(SELECT 1 FROM author_card_deletions WHERE member_id=? AND source_role_id=? AND state<>'rejected')
+   AND (? IS NULL OR EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND work_id=?
+    AND state IN ('preparing','failed') AND submission_id IS NULL))`)
+   .bind(work.id,provider,input.roleId,input.access,command.restriction,card?.approved_hosted_role_id??null,input.operationId,
+    work.id,input.operationId,input.memberId,input.roleId,preparationId,preparationId,work.id),
+  await workPolicyIntentStatement(env,provider,input.roleId,bind,bind.operationId,undefined,{preparationId}),
+ ]);
  const fence=await managedWork(db,provider,input.roleId);
  if(!fence||fence.epoch!==0||fence.sync_state!=='changing'||fence.sync_operation_id!==input.operationId){
   // Exact completed replay may return its receipt; it cannot project over a
   // newer fence or authorize another bind. Every new bind must own its fence.
-  if(previous?.state==='complete'&&previous.receipt)return checked(JSON.parse(previous.receipt),input.roleId,work.id,input.operationId);
+  if(previous?.state==='complete'&&previous.receipt)return parseWorkPolicyReceipt(previous.receipt,input.roleId,work.id,input.operationId);
   throw new HttpError(409,'visibility_operation_conflict');
  }
- const receipt=await runWorkPolicyOperation(env,provider,input.roleId,saved??command,input.token);
+ const receipt=await executeWorkPolicyOperation(env,provider,input.roleId,bind,intent,!!inserted.meta.changes,input.token);
  await projectWorkReceipt(env,provider,receipt,card?.approved_hosted_role_id,'bind');return receipt;
 }

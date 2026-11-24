@@ -8,7 +8,7 @@ import {getCard,upsertCard,finishManagedWithdrawal,type CardRow} from './cards';
 import {hostGateway,assertPublicationCover,assertPublicationFields,assertPresetTag} from './hosting';
 import {requireMember,resolveMember} from './members';
 import {ownerCardSource,readOwnerVisibility} from './work-sharing';
-import {managedWork,policyOperationId,workPolicyCommandHash,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkOwnerView} from './work-policy';
+import {managedWork,parseWorkPolicyReceipt,policyOperationId,workPolicyCommandHash,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt,type WorkOwnerView} from './work-policy';
 import {bumpOp} from './ops-metrics';
 import {type Env,HttpError} from './types';
 
@@ -68,7 +68,10 @@ async function enrollAuthorOperation(env:Env,member:{id:string;externalId:number
  // The community row and first managed fence commit together. An unknown bind
  // must never leave an unclassified legacy row readable through link preview.
  await upsertCard(env.DB,role,0,{status:'unshared',preserveExisting:true,additionalWrites:cardId=>[
-  env.DB.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id) VALUES(?,'harbor',?,?,0,?,?,'changing',?)`).bind(work.id,source,command.targetAccess,restriction,row?.approved_hosted_role_id??null,providerOperation),
+  env.DB.prepare(`INSERT OR IGNORE INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id,sync_state,sync_operation_id)
+   SELECT ?,'harbor',?,?,0,?,?,'changing',?
+   WHERE NOT EXISTS(SELECT 1 FROM author_card_deletions WHERE member_id=? AND source_role_id=? AND state<>'rejected')`)
+   .bind(work.id,source,command.targetAccess,restriction,row?.approved_hosted_role_id??null,providerOperation,member.id,source),
   env.DB.prepare(`INSERT OR IGNORE INTO author_visibility_operations(member_id,operation_id,source_role_id,work_id,provider_operation_id,intent,command,state,created_at,updated_at) SELECT ?,?,?,?,?,?,?,'pending',?,? WHERE EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=0 AND sync_operation_id=?)`).bind(member.id,command.operationId,source,work.id,providerOperation,intent,JSON.stringify(pg),now,now,work.id,providerOperation),
   env.DB.prepare(`INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at) SELECT work_id,provider_operation_id,provider_operation_id,command,?,'intent',? FROM author_visibility_operations WHERE member_id=? AND operation_id=? AND intent=? AND state='pending'`).bind(hash,now,member.id,command.operationId,intent),
   env.DB.prepare(`UPDATE cards SET rating='R' WHERE id=? AND approved_version_id IS NULL AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND sync_operation_id=?)`).bind(cardId,work.id,providerOperation),
@@ -77,15 +80,23 @@ async function enrollAuthorOperation(env:Env,member:{id:string;externalId:number
 
 // Only this source's unchanged, still-owned fence can complete. Historical PG
 // receipts are never permission to overwrite a newer epoch or another command.
-async function finalize(env:Env,op:AuthorOperation,receipt:WorkPolicyReceipt):Promise<void>{
+async function finalize(env:Env,op:AuthorOperation,command:WorkPolicyCommand,receipt:WorkPolicyReceipt):Promise<void>{
  const p=await managedWork(env.DB,'harbor',op.source_role_id);
+ if(!p||p.work_id!==op.work_id||p.sync_state!=='changing'||p.sync_operation_id!==op.provider_operation_id)throw new HttpError(409,'visibility_operation_conflict');
  const current=await workPolicyGateway.state(env,'harbor',op.source_role_id);
- if(!p||!current||current.workId!==op.work_id||current.epoch!==receipt.epoch||current.access!==receipt.access||current.restriction!==receipt.restriction)throw new HttpError(409,'visibility_operation_conflict');
- if(p.sync_operation_id!==op.provider_operation_id)throw new HttpError(409,'visibility_operation_conflict');
+ if(!current||current.epoch<receipt.epoch||current.epoch<p.epoch)throw new HttpError(503,'visibility_sync_pending');
+ const exact=current.workId===op.work_id&&current.epoch===receipt.epoch&&current.access===receipt.access&&current.restriction===receipt.restriction;
+ const deletion=command.action==='bind'&&p.epoch===0?await deletionOf(env,op.member_id,op.source_role_id):null;
+ const deleted=deletion?.state==='confirmed'||deletion?.state==='complete';
+ if(deleted){
+  // The local deletion receipt authorizes only a private projection. A fresh
+  // issuer read must still identify this exact work before retiring the bind.
+  if(env.WORK_LEGACY_BIND_RECOVERY_ENABLED!=='true'||current.workId!==op.work_id||current.state!=='complete'||current.access!=='private')throw new HttpError(503,'visibility_sync_pending');
+ }else if(!exact)throw new HttpError(409,'visibility_operation_conflict');
  const card=await getCard(env.DB,op.source_role_id,'harbor');if(!card)throw new HttpError(503,'visibility_sync_pending');
  const guard="EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND sync_operation_id=? AND sync_state='changing' AND moderation_revision=confirmed_moderation_revision)";
  const confirmed="EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND access=? AND restriction=? AND sync_state='complete' AND sync_operation_id IS NULL AND moderation_revision=confirmed_moderation_revision)";
- const status=receipt.access==='public'?'approved':'unshared';
+ const status=current.access==='public'?'approved':'unshared';
  const writes=[
   // 審核員發起的重新審核不隨作者的操作結束（作者改成私密再公開不能讓重審消失）
   env.DB.prepare(`UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE card_id=? AND status='pending' AND reopen_of IS NULL AND ${guard}`).bind(Date.now(),card.id,op.work_id,op.provider_operation_id),
@@ -93,12 +104,14 @@ async function finalize(env:Env,op:AuthorOperation,receipt:WorkPolicyReceipt):Pr
   env.DB.prepare(`UPDATE work_publication_permits SET state='cancelled' WHERE state='prepared' AND version_id IN(SELECT version_id FROM hosting_versions WHERE work_id=? AND state='superseded') AND ${guard}`).bind(op.work_id,op.work_id,op.provider_operation_id),
   // The database publication guard requires this projection before a retained
   // unshared card may become approved. Both writes remain in one D1 transaction.
-  env.DB.prepare(`UPDATE managed_work_access SET access=?,epoch=?,restriction=?,sync_state='complete',sync_operation_id=NULL WHERE work_id=? AND sync_operation_id=? AND epoch<=? AND moderation_revision=confirmed_moderation_revision`).bind(receipt.access,receipt.epoch,receipt.restriction,op.work_id,op.provider_operation_id,receipt.epoch),
-  env.DB.prepare(`UPDATE cards SET status=? WHERE id=? AND ${confirmed}`).bind(status,card.id,op.work_id,receipt.epoch,receipt.access,receipt.restriction),
-  env.DB.prepare(`UPDATE author_visibility_operations SET state='complete',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending' AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND sync_state='complete' AND sync_operation_id IS NULL)`).bind(Date.now(),op.member_id,op.operation_id,op.work_id,receipt.epoch),
+  env.DB.prepare(`UPDATE managed_work_access SET access=?,epoch=?,restriction=?,sync_state='complete',sync_operation_id=NULL
+   WHERE work_id=? AND sync_operation_id=? AND sync_state='changing' AND epoch=?
+   AND moderation_revision=confirmed_moderation_revision`).bind(current.access,current.epoch,current.restriction,op.work_id,op.provider_operation_id,p.epoch),
+  env.DB.prepare(`UPDATE cards SET status=? WHERE id=? AND ${confirmed}`).bind(status,card.id,op.work_id,current.epoch,current.access,current.restriction),
+  env.DB.prepare(`UPDATE author_visibility_operations SET state='complete',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending' AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND sync_state='complete' AND sync_operation_id IS NULL)`).bind(Date.now(),op.member_id,op.operation_id,op.work_id,current.epoch),
  ];
  const results=await env.DB.batch(writes);if(!results[3].meta.changes||!results[4].meta.changes||!results[5].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
- await bumpOp(env.DB,'work_access',(JSON.parse(op.command) as WorkPolicyCommand).action,'success');
+ await bumpOp(env.DB,'work_access',command.action,'success');
 }
 async function authorConflict(env:Env,op:AuthorOperation):Promise<'conflict'>{
  await env.DB.prepare("UPDATE author_visibility_operations SET state='conflict',updated_at=? WHERE member_id=? AND operation_id=? AND state='pending'").bind(Date.now(),op.member_id,op.operation_id).run();
@@ -154,21 +167,27 @@ export async function recoverAuthorVisibility(env:Env,op:AuthorOperation,token?:
  const command=JSON.parse(op.command) as WorkPolicyCommand;
  // An explicit Provider CAS refusal is terminal even if the process stopped
  // after persisting the lower-level refusal and before updating this aggregate.
- const intent=await env.DB.prepare("SELECT state,json_extract(receipt,'$.error') AS error FROM visibility_operations WHERE work_id=? AND operation_id=?").bind(op.work_id,op.provider_operation_id).first<{state:string;error:string|null}>();
+ const intent=await env.DB.prepare("SELECT state,receipt,json_extract(receipt,'$.error') AS error FROM visibility_operations WHERE work_id=? AND operation_id=?").bind(op.work_id,op.provider_operation_id).first<{state:string;receipt:string|null;error:string|null}>();
  if(intent?.state==='conflict')return isPublicationRefusal(intent.error)?settlePublicationRefusal(env,op,command,token):authorConflict(env,op);
  let receipt:WorkPolicyReceipt|null;
  try{
-  receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
-  if(!receipt){if(!token||options.allowTransmit===false)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+  if(intent?.state==='complete'){
+   if(!intent.receipt)return 'pending';
+   receipt=parseWorkPolicyReceipt(intent.receipt,op.source_role_id,op.work_id,op.provider_operation_id);
+  }else{
+   receipt=await workPolicyGateway.operation(env,'harbor',op.source_role_id,op.work_id,op.provider_operation_id);
+   if(!receipt){if(!token||options.allowTransmit===false)return 'pending';receipt=await runWorkPolicyOperation(env,'harbor',op.source_role_id,command,token);}
+  }
  }catch(error){
   if(error instanceof HttpError&&error.status===422&&isPublicationRefusal(error.message))return settlePublicationRefusal(env,op,command,token);
   if(error instanceof HttpError&&error.status===409)return authorConflict(env,op);
   throw error;
  }
  if(receipt.state!=='complete')return 'pending';
- await env.DB.prepare("UPDATE visibility_operations SET state='complete',receipt=?,updated_at=? WHERE work_id=? AND operation_id=?").bind(JSON.stringify(receipt),Date.now(),op.work_id,op.provider_operation_id).run();
- try{await finalize(env,op,receipt);return 'complete';}
+ if(intent?.state!=='complete')await env.DB.prepare("UPDATE visibility_operations SET state='complete',receipt=?,updated_at=? WHERE work_id=? AND operation_id=?").bind(JSON.stringify(receipt),Date.now(),op.work_id,op.provider_operation_id).run();
+ try{await finalize(env,op,command,receipt);return 'complete';}
  catch(error){
+  if((await findOperation(env,op.member_id,op.operation_id))?.state==='complete')return 'complete';
   if(error instanceof HttpError&&error.status===409)return authorConflict(env,op);
   throw error;
  }
@@ -210,7 +229,10 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/visibility',bodyLimit({maxSize:4
   const pg:WorkPolicyCommand={workId:p.work_id,operationId:providerOperation,expectedEpoch:view.provider.epoch,expectedOwnerRevision:view.provider.policyRevision,action,...(pending?{permitId:pending.operation_id}:{})};
   const now=Date.now(),hash=await workPolicyCommandHash('harbor',source,pg);
   await c.env.DB.batch([
-   c.env.DB.prepare(`INSERT OR IGNORE INTO author_visibility_operations(member_id,operation_id,source_role_id,work_id,provider_operation_id,intent,command,state,created_at,updated_at) SELECT ?,?,?,?,?,?,?,'pending',?,? WHERE EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND sync_state='complete' AND moderation_revision=confirmed_moderation_revision)`).bind(member.id,command.operationId,source,p.work_id,providerOperation,intent,JSON.stringify(pg),now,now,p.work_id,p.epoch),
+   c.env.DB.prepare(`INSERT OR IGNORE INTO author_visibility_operations(member_id,operation_id,source_role_id,work_id,provider_operation_id,intent,command,state,created_at,updated_at)
+    SELECT ?,?,?,?,?,?,?,'pending',?,? WHERE EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND sync_state='complete' AND moderation_revision=confirmed_moderation_revision)
+    AND NOT EXISTS(SELECT 1 FROM author_card_deletions WHERE member_id=? AND source_role_id=? AND state<>'rejected')`)
+    .bind(member.id,command.operationId,source,p.work_id,providerOperation,intent,JSON.stringify(pg),now,now,p.work_id,p.epoch,member.id,source),
    c.env.DB.prepare(`INSERT OR IGNORE INTO visibility_operations(work_id,operation_id,root_operation_id,command,intent_hash,state,updated_at) SELECT work_id,provider_operation_id,provider_operation_id,command,?,'intent',? FROM author_visibility_operations WHERE member_id=? AND operation_id=? AND intent=? AND state='pending'`).bind(hash,now,member.id,command.operationId,intent),
    c.env.DB.prepare(`UPDATE managed_work_access SET sync_state='changing',sync_operation_id=? WHERE work_id=? AND epoch=? AND sync_state='complete' AND moderation_revision=confirmed_moderation_revision AND EXISTS(SELECT 1 FROM author_visibility_operations WHERE member_id=? AND operation_id=? AND intent=? AND state='pending')`).bind(providerOperation,p.work_id,p.epoch,member.id,command.operationId,intent),
   ]);
@@ -258,8 +280,15 @@ workSharingCommandRoutes.post('/v1/me/cards/:id/delete',bodyLimit({maxSize:1024}
  let pending=await deletionOf(c.env,member.id,source);
  if(!pending||pending.state==='rejected'){
   await workPolicyGateway.owner(c.env,'harbor',source,token,true);
-  await c.env.DB.prepare(`INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at) VALUES(?,?,?,'pending',?) ON CONFLICT(member_id,source_role_id) DO UPDATE SET recovery_credits=excluded.recovery_credits,state='pending',updated_at=excluded.updated_at WHERE author_card_deletions.state='rejected'`).bind(member.id,source,credits,Date.now()).run();
+  // Only a live fence competes with deletion. A superseded author operation
+  // can still have a pending ledger row after the fence has moved on.
+  await c.env.DB.prepare(`INSERT INTO author_card_deletions(member_id,source_role_id,recovery_credits,state,updated_at)
+   SELECT ?,?,?,'pending',?
+   WHERE NOT EXISTS(SELECT 1 FROM managed_work_access WHERE provider='harbor' AND source_role_id=? AND sync_state='changing')
+   ON CONFLICT(member_id,source_role_id) DO UPDATE SET recovery_credits=excluded.recovery_credits,state='pending',updated_at=excluded.updated_at WHERE author_card_deletions.state='rejected'`)
+   .bind(member.id,source,credits,Date.now(),source).run();
   pending=await deletionOf(c.env,member.id,source);
+  if(!pending||pending.state==='rejected')throw new HttpError(503,'visibility_sync_pending');
  }
  if(!pending||pending.recovery_credits!==credits)throw new HttpError(409,'visibility_operation_conflict');
  if(pending.state==='complete')return c.json({message:'success'});
