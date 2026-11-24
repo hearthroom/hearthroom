@@ -27,6 +27,7 @@ const roles = new Map(); const regex = new Map(); const books = new Map(); const
 let seq = 1; const id = (p) => `${p}-${seq++}`;
 let sandboxAll = false;
 let badgeExplored = 3, badgeFail = false;
+let historyOn = false;
 const log = [];
 const json = (res, code, body) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((r) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => r(Buffer.concat(c))); });
@@ -38,6 +39,8 @@ http.createServer(async (req, res) => {
   if (path === "/__log") return json(res, 200, log);
   if (path.startsWith("/fixtures/")) { const f = pathMod.join(CARDS, path.slice(10)); if (!fs.existsSync(f)) return json(res, 404, {}); res.writeHead(200, { "content-type": f.endsWith(".png") ? "image/png" : "application/json", "access-control-allow-origin": "*" }); return res.end(fs.readFileSync(f)); }
   // 沙箱卡：/__sandbox?on=1 之後所有卡都當沙箱卡開（on=0 關）；或對某張卡 PUT author-asset 存 pageMode=sandbox
+  // 對話歷史：/__history?on=1 之後 conversation/messages 回一句玩家訊息加一句 AI 回覆（測「編輯並重送」要有玩家那一句）
+  if (path === "/__history") { historyOn = url.searchParams.get("on") === "1"; return json(res, 200, { historyOn }); }
   if (path === "/__sandbox") { sandboxAll = url.searchParams.get("on") === "1"; return json(res, 200, { sandboxAll }); }
   if (path === "/__reset") { roles.clear(); regex.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
   // 圖片本體是公開網址，<img> 不會帶 Bearer：放在鑑權前面
@@ -94,7 +97,9 @@ http.createServer(async (req, res) => {
   if (m === "GET" && path === "/open/v1/player/preference") return json(res, 200, { prefs: {} });
   if (m === "GET" && path === "/open/v1/player/conversation-persona") return json(res, 200, { userName: "", userSex: "", userDefine: "", exists: false });
   if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", responseSettingsVersion: 1, presetSettingsVersion: 1, defaultRelay: r.roleWelcome ?? "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "", roleWelcome: r.roleWelcome ?? "" }, historyConversation: null }); }
-  if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
+  if (path === "/open/v1/conversation/messages") return json(res, 200, historyOn
+    ? { chats: [{ chatId: "chat-ai-1", chatRole: "AI", chatMessage: "她點點頭，等你說下去。", turnStatus: "completed" }, { chatId: "chat-user-1", chatRole: "USER", chatMessage: "我們明天去海邊好嗎", turnStatus: "completed" }], hasNextPage: false, list: [], hasMore: false }
+    : { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
   if (path === "/open/v1/conversation/notepad") return json(res, 200, { content: "", maxLength: 10000 });
   if (path === "/open/v1/notepad/templates") return json(res, 200, { list: [], maxCount: 50, maxLength: 10000, maxTitle: 40 });
