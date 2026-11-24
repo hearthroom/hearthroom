@@ -86,7 +86,7 @@ describe('審卡員讀卡', () => {
     expect((await get(`/v1/review-ai/submissions/${id}`, 'human')).status).toBe(403);
   });
 
-  it('已定案的單 7 天內可讀（試跑），超過就不給；讀到的仍不含人工決定', async () => {
+  it('已定案的單 7 天內可讀可寫（試跑），超過只讀不寫；讀到的仍不含人工決定', async () => {
     const { id } = await submitCard();
     await decide(id, humanId, 'reject');
     const res = await get(`/v1/review-ai/submissions/${id}`, 'key');
@@ -97,9 +97,13 @@ describe('審卡員讀卡', () => {
     expect(body.author).toMatchObject({ tier: null, batchSuspected: null });
     expect(JSON.stringify(body)).not.toContain('opening.no_reply_hook"]');
     await env.DB.prepare('UPDATE review_submissions SET submitted_at=? WHERE id=?').bind(Date.now() - 8 * 86_400_000, id).run();
+    // 超過 7 天：讀照給（phase=closed，查作者其他卡用），寫建議擋下
     const old = await get(`/v1/review-ai/submissions/${id}`, 'key');
-    expect(old.status).toBe(410);
-    expect((await json(old)).error).toBe('review_ai_window_closed');
+    expect(old.status).toBe(200);
+    expect((await json(old)).submission.phase).toBe('closed');
+    const write = await suggest(id, { verdict: 'pass' });
+    expect(write.status).toBe(410);
+    expect((await json(write)).error).toBe('review_ai_window_closed');
   });
 
   it('審卡員的帳號不能蓋章', async () => {
