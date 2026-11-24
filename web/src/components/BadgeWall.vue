@@ -44,7 +44,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
    </div>
    <div><h3>{{ nameOf(badge) }}</h3><p class="badge-tile__condition">{{ badgeText(badge.descriptions,locale) }}</p></div>
    <div class="badge-tile__details">
-    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t(badge.progress.unit?'badgeWall.progress.'+badge.progress.unit:'badgeWall.progress',{value:Math.floor(badge.progress.value),target:badge.progress.target}) }}<progress :value="Math.floor(badge.progress.value)" :max="badge.progress.target" /></label></template>
+    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t(badge.progress.unit?'badgeWall.progress.'+badge.progress.unit:'badgeWall.progress',{value:Math.floor(badge.progress.value),target:badge.progress.target}) }}<progress :value="Math.floor(badge.progress.value)" :max="badge.progress.target" /></label></template><p v-if="badge.pausedMet" class="badge-tile__paused">{{ t('badgeWall.pausedMet') }}</p>
     <p v-if="recent(badge)">{{ recent(badge) }}</p>
     <p v-else-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
@@ -103,7 +103,7 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
 .badge-tile .badge-tile__claim{color:var(--accent-text);border-color:color-mix(in srgb,var(--accent) 45%,var(--border-strong))}
 .badge-tile__claimed{color:var(--success)}
 .badge-tile__state,.badge-tile__details{font-size:.8125rem;color:var(--text-2)}.badge-tile__state{overflow-wrap:anywhere;text-align:end}
-.badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}
+.badge-tile h3{font-size:1rem;line-height:1.5;margin:0;overflow-wrap:anywhere}.badge-tile p{margin:var(--s-2) 0 0;line-height:1.6;overflow-wrap:anywhere}.badge-tile__condition{white-space:pre-line;color:var(--text-2);font-size:.875rem}.badge-tile__paused{color:var(--text-3);font-size:.8125rem}
 .badge-tile--earned h3{width:fit-content;max-width:100%;font-weight:700;background:linear-gradient(90deg,var(--ink),var(--ink-2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .badge-tile--legendary.badge-tile--earned h3,.badge-tile--unique.badge-tile--earned h3{font-size:1.0625rem;font-weight:800;letter-spacing:.02em}
 .badge-tile:not(.badge-tile--earned) h3{color:var(--text-2)}

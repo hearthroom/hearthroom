@@ -6,7 +6,7 @@ import { badgeAp, badgeReward, parseConversationRewardFreeze } from '../../share
 import { claimSummaries } from './badge-rewards';
 import { levelOf } from '../../shared/achievements';
 import { authorRankOf } from './achievement-board';
-import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress } from '../../shared/community-badges';
+import { BADGE_ICONS, BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeDefinition, type BadgeCollection, type CollectedBadge, type BadgeProgress, type BadgeSeries } from '../../shared/community-badges';
 export const ACTIVE_AWARD = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)";
 /** Members who joined before this instant earned the founding-member badge. */
 export const FOUNDER_CUTOFF = Date.UTC(2026, 9, 16,16);
@@ -29,6 +29,16 @@ type Metric = {
  all:string;
  timed?:true; unit?:BadgeProgress['unit']; progress?:false;
 };
+/**
+ * 只顯示進度、不靠門檻發獎的全服唯一徽章（2026-11-24）：定義的 metric／threshold 留空，讀取與每小時掃描就不會繞過
+ * 「依越線時間排序、先驅 9 名」的發放（first-badges.ts）。paused 要跟 STAT_FIRST_BADGES 有沒有這枚一致（測試守著）：
+ * 放行千面旅人時兩邊一起改。停發期間已達標的人看到「已達成條件；目前暫停發放」。
+ */
+export const PROGRESS_ONLY:Record<string,{metric:string;target:number;paused:boolean}>={
+ sole_wanderer:{metric:'explored_roles',target:500,paused:true},
+};
+/** 同一個計數的一組徽章：探險家各級與千面旅人都讀探索數，成就頁在組前說明「各級共用同一個計數」 */
+const SERIES_BY_METRIC:Record<string,BadgeSeries>={explored_roles:'explorer'};
 /**
  * Milestone counters. `one` feeds the owner's wall; `all` feeds the hourly sweep so an
  * award lands even when the member never opens the page. Both read the same tables, so
@@ -124,7 +134,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
  const [awards,link,appearance,values,rankCounts]=await Promise.all([
   env.DB.prepare('SELECT badge,created_at,revoked_at,expires_at FROM community_awards WHERE member_id=?').bind(member).all<{badge:string;created_at:number;revoked_at:number|null;expires_at:number|null}>(),
   env.DB.prepare("SELECT created_at FROM discord_links WHERE member_id=? AND state='active'").bind(member).first<{created_at:number}>(),appearanceView(env,member),
-  publicOnly?{} as Record<string,number>:measure(env,member,[...new Set(catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string))]),
+  publicOnly?{} as Record<string,number>:measure(env,member,[...new Set([...catalog.filter(d=>d.metric&&METRICS[d.metric]).map(d=>d.metric as string),...catalog.filter(d=>PROGRESS_ONLY[d.key]).map(d=>PROGRESS_ONLY[d.key].metric)])]),
   env.DB.prepare("SELECT 'rank_'||zone||'_'||window||'_'||band AS badge,COUNT(*) AS count,MIN(awarded_at) AS first_at,MAX(awarded_at) AS last_at,MAX(period) AS last_period FROM rank_awards WHERE member_id=? GROUP BY zone,window,band").bind(member).all<{badge:string;count:number;first_at:number;last_at:number;last_period:string}>(),
  ]);
  // 「第幾位獲得」拿掉了：每次讀收藏都要按徽章數早於自己的紀錄，平均一次讀一萬多行，2026-11-20 上線後是 D1 讀取量最大的查詢
@@ -148,6 +158,14 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
    if(!award&&value>=def.threshold){item.state='earned';item.earnedAt=now;crossed.push(def.key);}
    if(metric.progress!==false)item.progress={value:item.state==='earned'?Math.max(value,def.threshold):Math.min(value,def.threshold),target:def.threshold,...(metric.unit?{unit:metric.unit}:{})};
   }
+  const only=PROGRESS_ONLY[def.key];
+  if(only&&!publicOnly&&item.state!=='earned'){
+   const value=values[only.metric]??0;
+   item.progress={value:Math.min(value,only.target),target:only.target};
+   if(only.paused&&value>=only.target)item.pausedMet=true;
+  }
+  const series=SERIES_BY_METRIC[only?.metric??def.metric??''];
+  if(series)item.series=series;
   if(!counts){item.count=item.state==='earned'?1:0;item.firstAt=item.earnedAt;item.lastAt=item.earnedAt;}
   item.ap=badgeAp(def);
   const crown=crowns[def.key];

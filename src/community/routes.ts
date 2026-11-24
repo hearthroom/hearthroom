@@ -7,6 +7,7 @@ import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, fini
 import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
 import { claimBadgeRewards } from './badge-rewards';
+import { claimSelfRefresh, runSelfRefresh } from '../badge-stats';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -126,7 +127,14 @@ app.get("/v1/community/config", (c) =>
 app.get("/v1/me/community", async (c) =>
   c.json(await communityView(c.env, (await requireMember(c)).id)),
 );
-app.get('/v1/me/community/badges',async c=>c.json(await badgeCollection(c.env,(await requireMember(c)).id)));
+/** 本人打開成就頁：先回已存的數字，同時在背景刷新自己一次（10 分鐘一次）；有刷新就帶 refreshing，前端稍後重讀。重讀帶 ?reread=1，不再觸發 */
+app.get('/v1/me/community/badges',async c=>{
+ const member=(await requireMember(c)).id;
+ const claim=c.req.query('reread')==='1'?null:await claimSelfRefresh(c.env,member).catch(()=>null);
+ if(claim)c.executionCtx.waitUntil(runSelfRefresh(c.env,member,claim));
+ const collection=await badgeCollection(c.env,member);
+ return c.json(claim?{...collection,refreshing:true}:collection);
+});
 app.patch('/v1/me/community/badges/featured',async c=>{
  const member=await requireMember(c);const b=await c.req.json();await setFeaturedBadges(c.env,member.id,b.featured,b.public);return c.json(await badgeCollection(c.env,member.id));
 });
