@@ -145,3 +145,43 @@ export function submissionType(s: { reopen_of: string | null; kind: SubmissionKi
   if (s.previous === "approved" || s.kind === "re") return "update";
   return "first";
 }
+
+export interface AgentAuthorCard {
+  cardId: string;
+  name: string;
+  /** cards.status：approved／pending／rejected／unshared…… */
+  status: string;
+  /** 現在在榜上（通過而且沒被站方擋下公開） */
+  live: boolean;
+  latest: { id: string; kind: string; reopen: boolean; status: string; submittedAt: number; decidedAt: number | null; chars: number | null } | null;
+}
+
+/**
+ * 審卡員看的「作者的其他卡」（任務 2026-11-23-ai-card-review）：跟審核頁同一個「同一位作者」，但不含這張卡本身——
+ * 這張卡的狀態就是這張單的人工決定，已定案的單（試跑）會被它洩漏。只回卡號、名稱、狀態與最新一張單，不回帳號或封面。
+ */
+export async function agentAuthorCards(db: D1Database, cardId: string | number): Promise<{ items: AgentAuthorCard[]; total: number } | null> {
+  const a = await authorRow(db, cardId);
+  if (!a) return null;
+  const rows = await db
+    .prepare(
+      `SELECT c.id, c.names, c.status, c.public_blocked,
+              (SELECT json_object('id', r.id, 'kind', r.kind, 'reopen', r.reopen_of IS NOT NULL, 'status', r.status, 'submittedAt', r.submitted_at, 'decidedAt', r.decided_at, 'chars', r.review_length_total)
+                 FROM review_submissions r WHERE r.card_id = c.id AND r.status <> 'superseded' ORDER BY r.submitted_at DESC, r.rowid DESC LIMIT 1) AS latest
+       FROM cards c WHERE ${SAME_AUTHOR} AND c.id <> ?4
+       ORDER BY c.registered_at DESC, c.id DESC LIMIT ?5`,
+    )
+    .bind(a.provider, a.author_num_id, a.member_id, String(cardId), AUTHOR_CARDS_MAX)
+    .all<{ id: number | string; names: string; status: string; public_blocked: number; latest: string | null }>();
+  const total = (await db.prepare(`SELECT COUNT(*) AS n FROM cards c WHERE ${SAME_AUTHOR} AND c.id <> ?4`).bind(a.provider, a.author_num_id, a.member_id, String(cardId)).first<{ n: number }>())?.n ?? rows.results.length;
+  const items = rows.results.map((r): AgentAuthorCard => {
+    const latest = r.latest ? (JSON.parse(r.latest) as Omit<NonNullable<AgentAuthorCard["latest"]>, "reopen"> & { reopen: number }) : null;
+    let name = "";
+    try { name = pickLocale(JSON.parse(r.names) as Localized, "zh-Hant"); } catch { name = ""; }
+    return {
+      cardId: String(r.id), name, status: r.status, live: r.status === "approved" && !r.public_blocked,
+      latest: latest ? { ...latest, reopen: !!latest.reopen } : null,
+    };
+  });
+  return { items, total };
+}

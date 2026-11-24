@@ -85,6 +85,15 @@ export function aiPhaseOf(s: Pick<SubmissionRow, "status" | "submitted_at">, now
   throw new HttpError(410, "review_ai_window_closed");
 }
 
+/**
+ * 只讀：審卡員查作者的其他卡時要打開更早的單，所以已定案（通過、駁回）的單超過 7 天也讀得到（closed），內容讀不到才 404。
+ * 寫建議仍照 aiPhaseOf 的 7 天窗；被取代、撤回的單讀也不給。
+ */
+export function aiReadPhase(s: Pick<SubmissionRow, "status" | "submitted_at">, now: number): "shadow" | "backfill" | "closed" {
+  if (s.status === "approved" || s.status === "rejected") return now - s.submitted_at <= AI_BACKFILL_WINDOW_MS ? "backfill" : "closed";
+  return aiPhaseOf(s, now);
+}
+
 /** 送給 AI 的卡片內容：只有判斷用心程度需要的文字，長文截斷；統計數字用全文算。 */
 /** applyRules：只有審卡員讀卡時才執行作者的顯示規則（其他路由不需要，也不冒效能風險） */
 export function aiCardInput(settings: Record<string, unknown>, meta: { tags: string[]; fandom: string }, opts: { applyRules?: boolean } = {}) {
@@ -225,7 +234,7 @@ const WEEK = 7 * 86_400_000;
  * - accountAgeDays：帳號建立到送審幾天
  * - deviceAccounts：登記這張卡的裝置上有幾個帳號（同一支手機綁多個帳號）
  */
-async function authorSignals(db: D1Database, memberId: string, sourceRoleId: string, at: number) {
+export async function authorSignals(db: D1Database, memberId: string, sourceRoleId: string, at: number) {
   // 先取作者在各供應商的公開 ID，再用 (provider, author_num_id, registered_at) 索引數登記；免費額度不算禮包登記
   const ids = await db.prepare("SELECT provider, external_id FROM member_identities WHERE member_id=?").bind(memberId).all<{ provider: string; external_id: string }>();
   const byProvider = JSON.stringify(ids.results.map((r) => [r.provider, Number(r.external_id)]));

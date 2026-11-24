@@ -254,3 +254,48 @@ export async function originalityReport(
     sources,
   };
 }
+
+/**
+ * 跟指定幾張卡（審卡員看作者自己的其他卡用）的設定重複率：同一套指紋，但不排除同一位作者、
+ * 不丟「很多張卡都有」的指紋——同一個人六張卡共用一個模板，正是要抓的；也不看那些卡的送審狀態（被駁回的也算）。
+ * 每張卡取它所有進過索引的版本的聯集。沒進過索引的卡回 null（量不到，不是 0）；這張設定太短就整個回 null。
+ * 命中列數（卡數 × 共用指紋）到上限就整個回 null：截斷後排在後面的卡會被算低，寧可說量不到也不給錯的小數字。
+ */
+export const SAME_AUTHOR_HIT_LIMIT = 50_000;
+export async function similarityToCards(
+  db: D1Database,
+  submissionId: string,
+  detail: Record<string, any> | null,
+  cardIds: string[],
+): Promise<Map<string, number | null> | null> {
+  const doc = detail && !detail.partial ? detail.document : null;
+  if (!doc || !cardIds.length) return null;
+  const units = toUnits(String(doc.roleDetailDesc ?? ""), [String(doc.roleName ?? ""), String(doc.userName ?? "")]);
+  const prints = fingerprints(units);
+  if (units.length < MIN_RUN || !prints.length) return null;
+  const cards = JSON.stringify(cardIds.map(String));
+  const [hits, indexed] = await db.batch([
+    db.prepare(
+      `WITH q AS (SELECT DISTINCT value AS hash FROM json_each(?1))
+       SELECT DISTINCT f.hash, t.card_id FROM q JOIN originality_prints f ON f.hash = q.hash JOIN originality_texts t ON t.id = f.text_id
+       WHERE t.algorithm = ?2 AND t.submission_id <> ?3 AND t.card_id IN (SELECT value FROM json_each(?4))
+       LIMIT ${SAME_AUTHOR_HIT_LIMIT}`,
+    ).bind(JSON.stringify(printHashes(prints)), ALGORITHM, submissionId, cards),
+    db.prepare("SELECT DISTINCT card_id FROM originality_texts WHERE algorithm = ? AND submission_id <> ? AND card_id IN (SELECT value FROM json_each(?))")
+      .bind(ALGORITHM, submissionId, cards),
+  ]);
+  if ((hits as D1Result).results.length >= SAME_AUTHOR_HIT_LIMIT) return null;
+  const byCard = new Map<string, Set<number>>();
+  for (const h of (hits as D1Result<{ hash: number; card_id: string }>).results) {
+    const set = byCard.get(String(h.card_id)) ?? new Set<number>();
+    set.add(h.hash);
+    byCard.set(String(h.card_id), set);
+  }
+  const out = new Map<string, number | null>(cardIds.map((id) => [String(id), null]));
+  for (const r of (indexed as D1Result<{ card_id: string }>).results) {
+    const set = byCard.get(String(r.card_id));
+    const runs = set ? coveredRuns(prints.filter((p) => set.has(p.hash)).map((p) => p.pos), units.length) : [];
+    out.set(String(r.card_id), ratio(coveredCount(runs), units.length));
+  }
+  return out;
+}

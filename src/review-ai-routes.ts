@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { LATEST_FEEDBACK, currentCriteria, setCurrentCriteria, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
+import { LATEST_FEEDBACK, currentCriteria, setCurrentCriteria, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReadPhase, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
@@ -13,6 +13,7 @@ import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
 import { upstream } from "./upstream";
+import { agentAuthorCardList, agentAuthorProfile, agentLiveCard, agentOriginality, getAuthorNote, putAuthorNote } from "./review-ai-evidence";
 
 /**
  * AI 審卡影子模式的路由。審卡員（AI 審核帳號）用 /v1/review-ai/*；審核員看揭曉、寫覆核用 /v1/review/:id/ai*。
@@ -38,7 +39,8 @@ async function requireHuman(c: Ctx) {
   return { member, role: await reviewerRole(c.env.DB, member.id) };
 }
 
-type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes";
+type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes"
+  | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
@@ -80,12 +82,15 @@ reviewAiRoutes.get("/v1/review-ai/queue", (c) => counted(c, "queue", async () =>
   }, 200, NO_STORE);
 }));
 
-/** 讀卡：送審時封存的那一版（不領取、不影響審核員）。附判斷用的統計數字與可用代碼。 */
+/**
+ * 讀卡：送審時封存的那一版（不領取、不影響審核員）。附判斷用的統計數字與可用代碼。
+ * 已定案超過 7 天的單也讀得到（phase=closed，查作者的其他卡用）；寫建議仍限 7 天內。
+ */
 reviewAiRoutes.get("/v1/review-ai/submissions/:id", (c) => counted(c, "read", async () => {
   await requireAgent(c);
   const now = Date.now();
   const s = await getSubmission(c.env.DB, c.req.param("id"));
-  const phase = aiPhaseOf(s, now);
+  const phase = aiReadPhase(s, now);
   const settings = await readContent(c.env, s);
   const { submission, author, meta } = await aiSubmissionMeta(c.env.DB, s, now);
   return c.json({
@@ -143,6 +148,61 @@ async function readContent(env: Env, s: SubmissionRow): Promise<Record<string, u
     throw error;
   }
 }
+
+/** 查重與同作者相似度要的設定原文：本站留的查重快照（只有設定與名字）優先，沒有了再讀 Harbor 封存版 */
+async function originalityInput(env: Env, s: SubmissionRow): Promise<Record<string, unknown>> {
+  const snap = await loadSnapshot(env.DB, s.id);
+  if (snap && snap.document && !snap.partial) return snap;
+  return readContent(env, s);
+}
+
+/** 審卡員看得到的那幾張單（跟讀卡同一道門）：待審、已定案；被取代、撤回的不給 */
+async function readableSubmission(c: Ctx) {
+  await requireAgent(c);
+  const s = await getSubmission(c.env.DB, c.req.param("id")!);
+  aiReadPhase(s, Date.now());
+  return s;
+}
+
+/** 完整查重（跟審核頁同一份）：每張相似卡的卡號、名稱、相似度、早晚、狀態，與這張卡設定裡跟它重疊的原文（共 4,000 字內） */
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/originality", (c) => counted(c, "originality", async () => {
+  const s = await readableSubmission(c);
+  return c.json(await agentOriginality(c.env.DB, s, await originalityInput(c.env, s)), 200, NO_STORE);
+}));
+
+/** 作者側寫：只回數量、標記與審核員的標記說明，不回任何帳號、裝置或審核員身分 */
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/author", (c) => counted(c, "author", async () => {
+  const s = await readableSubmission(c);
+  return c.json(await agentAuthorProfile(c.env.DB, s, Date.now()), 200, NO_STORE);
+}));
+
+/** 作者的其他卡（不含這張）與同作者設定重複率；讀不到這張的設定時重複率是 null，清單照給 */
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/author-cards", (c) => counted(c, "author_cards", async () => {
+  const s = await readableSubmission(c);
+  const detail = await originalityInput(c.env, s).catch((error) => { if (error instanceof HttpError && error.status < 500) return null; throw error; });
+  return c.json(await agentAuthorCardList(c.env.DB, s, detail), 200, NO_STORE);
+}));
+
+/** 一張卡目前上架的那一版；沒上架 404 card_not_live */
+reviewAiRoutes.get("/v1/review-ai/cards/:cardId", (c) => counted(c, "card", async () => {
+  await requireAgent(c);
+  const cardId = c.req.param("cardId");
+  if (!/^\d{1,12}$/.test(cardId)) throw new HttpError(404, "card_not_found");
+  return c.json(await agentLiveCard(c.env, cardId), 200, NO_STORE);
+}));
+
+/** 審卡員自己的作者筆記（一位作者一份）。只在這組路由讀寫，作者看不到 */
+reviewAiRoutes.get("/v1/review-ai/submissions/:id/author-note", (c) => counted(c, "author_note_read", async () => {
+  const s = await readableSubmission(c);
+  return c.json(await getAuthorNote(c.env.DB, s.id), 200, NO_STORE);
+}));
+reviewAiRoutes.put("/v1/review-ai/submissions/:id/author-note", (c) => counted(c, "author_note_write", async () => {
+  const agent = await requireAgent(c);
+  const s = await getSubmission(c.env.DB, c.req.param("id"));
+  aiReadPhase(s, Date.now());
+  const body = (await c.req.json().catch(() => null)) as { note?: unknown } | null;
+  return c.json(await putAuthorNote(c.env.DB, s.id, body?.note, agent.id, Date.now()), 200, NO_STORE);
+}));
 
 /** 寫建議（覆蓋同版本的上一筆）。只記錄，不改送審狀態。 */
 reviewAiRoutes.put("/v1/review-ai/submissions/:id/suggestion", (c) => counted(c, "suggest", async () => write(c, false)));
