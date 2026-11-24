@@ -7,6 +7,10 @@ import { claim, stamp } from '../src/review';
 import { finalizeManagedReview } from '../src/work-publication';
 import { enrollWorkAccess, workPolicyGateway } from '../src/work-policy';
 import { opsMetrics } from '../src/ops-metrics';
+import { HttpError } from '../src/types';
+import { getCard } from '../src/cards';
+import { reconcileWorkAccess } from '../src/work-reconcile';
+import { readOwnerVisibility } from '../src/work-sharing';
 
 const updateNote = '新增第二章劇情以及全新分支結局';
 const source = 'managed-update-fixture';
@@ -23,11 +27,11 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 
-async function submit(updateKind: 'minor' | 'major' = 'minor') {
+async function submit(updateKind: 'minor' | 'major' = 'minor', expectedVisibility?: { policyRevision: string; approvalRevision: string }) {
   return submitHosted(env, {
     memberId: author, account: 11001, role: role({ roleId: source, authorNumId: 11001 }),
     token: 'owner', rating: GENERAL_RATING, operationId: crypto.randomUUID(), now: Date.now(),
-    updateKind, ...(updateKind === 'major' ? { updateNote } : {}),
+    updateKind, expectedVisibility, ...(updateKind === 'major' ? { updateNote } : {}),
   });
 }
 async function submissionId(version: string) {
@@ -58,6 +62,118 @@ const updateNotices = () => env.DB.prepare("SELECT member_id,extra FROM communit
   .all<{ member_id: string; extra: string }>();
 const queued = () => env.DB.prepare("SELECT value FROM ops_metrics WHERE metric='card_update' AND operation='publish' AND outcome='queued'")
   .first<{ value: number }>();
+
+const publicationFence = (workId: string) => env.DB.prepare(
+  'SELECT epoch,access,restriction,sync_state,sync_operation_id FROM managed_work_access WHERE work_id=?',
+).bind(workId).first();
+const permit = (version: string) => env.DB.prepare('SELECT operation_id,state FROM work_publication_permits WHERE version_id=?')
+  .bind(version).first<{ operation_id: string; state: string }>();
+
+it('projects current Harbor access after a refused commit and lets the author resubmit and publish', async () => {
+  const f = await fixture();
+  const before = (await workPolicyGateway.state(env, 'harbor', source))!;
+  // Harbor advanced after the permit was prepared. Its real fixture CAS now refuses commit.
+  const current = await workPolicyGateway.change(env, 'harbor', source, {
+    action: 'private', workId: f.update.workId, operationId: crypto.randomUUID(), expectedEpoch: before.epoch,
+  });
+  await expect(approve(f.id)).rejects.toThrow('visibility_operation_conflict');
+  expect(await publicationFence(f.update.workId)).toEqual({
+    epoch: current.epoch, access: 'private', restriction: current.restriction, sync_state: 'complete', sync_operation_id: null,
+  });
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'conflict' });
+  expect(await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(f.id).first())
+    .toEqual({ status: 'superseded' });
+  expect(await event(f.update.versionId)).toBeNull();
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_operations_total{operation="publish",outcome="conflict"} 1');
+
+  const { workVisibility } = await readOwnerVisibility(env, source, 'owner', await getCard(env.DB, source, 'harbor'));
+  expect(workVisibility.syncState).toBe('complete');
+  expect(workVisibility.actions).toContain('submit_review');
+  const retry = await submit('minor', {
+    policyRevision: workVisibility.policyRevision, approvalRevision: workVisibility.approvalRevision,
+  });
+  expect(retry.versionId).not.toBe(f.update.versionId);
+  expect((await approve(await submissionId(retry.versionId), 'retry-reviewer')).submission.status).toBe('approved');
+  expect(await permit(retry.versionId)).toMatchObject({ state: 'published' });
+  expect(await env.DB.prepare('SELECT approved_version_id FROM cards WHERE id=?').bind(f.cardId).first())
+    .toEqual({ approved_version_id: retry.versionId });
+});
+
+it('keeps the original review recoverable when Harbor refuses commit but policy readback fails', async () => {
+  const f = await fixture();
+  const before = (await workPolicyGateway.state(env, 'harbor', source))!;
+  await workPolicyGateway.change(env, 'harbor', source, {
+    action: 'private', workId: f.update.workId, operationId: crypto.randomUUID(), expectedEpoch: before.epoch,
+  });
+  vi.spyOn(workPolicyGateway, 'state').mockRejectedValueOnce(new Error('Synthetic policy read unavailable'));
+  await expect(approve(f.id)).rejects.toThrow('visibility_sync_pending');
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'prepared' });
+  expect(await publicationFence(f.update.workId)).toMatchObject({
+    epoch: before.epoch, sync_state: 'changing', sync_operation_id: (await permit(f.update.versionId))!.operation_id,
+  });
+  expect(await env.DB.prepare('SELECT status FROM review_submissions WHERE id=?').bind(f.id).first())
+    .toEqual({ status: 'pending' });
+
+  await reconcileWorkAccess(env);
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'conflict' });
+  expect(await publicationFence(f.update.workId)).toMatchObject({ sync_state: 'complete', sync_operation_id: null });
+});
+
+it('waits for Harbor policy readback to catch up to a successful commit receipt', async () => {
+  const f = await fixture();
+  const before = (await workPolicyGateway.state(env, 'harbor', source))!;
+  const commit = vi.spyOn(workPolicyGateway, 'commit');
+  vi.spyOn(workPolicyGateway, 'state').mockResolvedValueOnce(before);
+  await expect(approve(f.id)).rejects.toThrow('visibility_sync_pending');
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'prepared' });
+  expect(await publicationFence(f.update.workId)).toMatchObject({ epoch: before.epoch, sync_state: 'changing' });
+
+  await reconcileWorkAccess(env);
+  expect(commit).toHaveBeenCalledTimes(1);
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'published' });
+});
+
+it('preserves a newer fence taken while a publication conflict is being read back', async () => {
+  const f = await fixture();
+  const current = (await workPolicyGateway.state(env, 'harbor', source))!;
+  const newerOperation = crypto.randomUUID();
+  vi.spyOn(workPolicyGateway, 'commit').mockRejectedValueOnce(new HttpError(409, 'visibility_operation_conflict'));
+  vi.spyOn(workPolicyGateway, 'state').mockImplementationOnce(async () => {
+    await env.DB.prepare('UPDATE managed_work_access SET sync_operation_id=? WHERE work_id=?').bind(newerOperation, f.update.workId).run();
+    return current;
+  });
+
+  await expect(approve(f.id)).rejects.toThrow('visibility_operation_conflict');
+  expect(await publicationFence(f.update.workId)).toMatchObject({ epoch: current.epoch, sync_state: 'changing', sync_operation_id: newerOperation });
+  expect(await permit(f.update.versionId)).toMatchObject({ state: 'conflict' });
+});
+
+it('returns the settled 409 to both finalizers of the same permit', async () => {
+  const f = await fixture();
+  const before = (await workPolicyGateway.state(env, 'harbor', source))!;
+  await workPolicyGateway.change(env, 'harbor', source, {
+    action: 'private', workId: f.update.workId, operationId: crypto.randomUUID(), expectedEpoch: before.epoch,
+  });
+  let signalCommit!: () => void;
+  const reachedCommit = new Promise<void>(resolve => { signalCommit = resolve; });
+  let resume!: () => void;
+  const held = new Promise<void>(resolve => { resume = resolve; });
+  const commit = workPolicyGateway.commit;
+  vi.spyOn(workPolicyGateway, 'commit').mockImplementationOnce(async (...args) => {
+    signalCommit();
+    await held;
+    return commit(...args);
+  });
+  const first = expect(approve(f.id)).rejects.toThrow('visibility_operation_conflict');
+  await reachedCommit;
+  try {
+    await expect(finalizeManagedReview(env, f.id)).rejects.toThrow('visibility_operation_conflict');
+  } finally {
+    resume();
+  }
+  await first;
+  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_operations_total{operation="publish",outcome="conflict"} 1');
+});
 
 it('reserves before Provider commit and recovers its lost reply without publishing twice', async () => {
   const f = await fixture();
