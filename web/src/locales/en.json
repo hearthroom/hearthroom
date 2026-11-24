@@ -5951,6 +5951,7 @@
   "reviewAi.arb.direction.human_stricter": "Human rejected, AI approved",
   "reviewAi.arb.filter.criteria": "Criteria version",
   "reviewAi.arb.filter.criteriaAll": "All versions",
+  "reviewAi.arb.filter.criteriaCurrent": "Current criteria",
   "reviewAi.arb.filter.reason": "Reason",
   "reviewAi.arb.filter.reasonAll": "All reasons",
   "reviewAi.arb.criteria": "Criteria {v}",

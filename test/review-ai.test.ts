@@ -614,3 +614,37 @@ describe('兩段式：審查修正', () => {
     expect(o.available).toBe(false);
   });
 });
+
+describe('目前判準版本', () => {
+  const gen = async (id: string) => (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(id).first<{ claim_generation: string }>())!.claim_generation;
+  it('設了目前版本，揭曉與兩段式只看這一版；還沒用這版審過就是 AI 尚未審完', async () => {
+    const { id } = await submitCard();
+    await suggest(id, { verdict: 'reject', reasons: ['opening.too_short'], criteriaVersion: 'v3' });
+    expect((await send('PUT', '/v1/review-ai/criteria', 'key', { version: 'v4' })).status).toBe(200);
+    expect((await json(await get('/v1/review-ai/criteria', 'key'))).current).toBe('v4');
+    expect((await send('PUT', '/v1/review-ai/criteria', 'human', { version: 'v9' })).status).toBe(403);
+    await claim(env.DB, id, humanId, Date.now());
+    const res = await json(await send('POST', `/v1/review/${id}/blind`, 'human', { verdict: 'approve', generation: await gen(id) }));
+    expect(res.ai).toEqual({ state: 'pending', suggestion: null });
+    expect((await json(await get(`/v1/review/${id}/ai`, 'human'))).current).toBe('v4');
+    await suggest(id, { verdict: 'pass', criteriaVersion: 'v4' });
+    const ai = await json(await get(`/v1/review/${id}/ai`, 'human'));
+    expect(ai.suggestions.map((x: any) => x.criteriaVersion).sort()).toEqual(['v3', 'v4']);
+    expect((await json(await send('POST', `/v1/review/${id}/stamp`, 'human', { finalSource: 'ai', generation: await gen(id) }))).finalSource).toBe('ai');
+    expect(await status(id)).toBe('approved');
+  });
+
+  it('仲裁清單預設只看目前版本，criteria=all 看全部；沒設目前版本就取近 7 天用過的最新版', async () => {
+    const a = await submitCard('draft-a');
+    const b = await submitCard('draft-b');
+    await suggest(a.id, { verdict: 'reject', reasons: ['opening.too_short'], criteriaVersion: 'v3' });
+    await suggest(b.id, { verdict: 'reject', reasons: ['opening.too_short'], criteriaVersion: 'v4' });
+    await decide(a.id, humanId, 'approve');
+    await decide(b.id, humanId, 'approve');
+    const def = await json(await get('/v1/review-ai/disagreements?state=all', 'mgr'));
+    expect(def.criteria).toBe('v4');
+    expect(def.total).toBe(1);
+    expect((await json(await get('/v1/review-ai/disagreements?state=all&criteria=all', 'mgr'))).total).toBe(2);
+    expect((await json(await get('/v1/review-ai/disagreements?state=all&criteria=v3', 'mgr'))).total).toBe(1);
+  });
+});

@@ -24,7 +24,7 @@ export type HumanDecision = "approved" | "rejected" | "dropped";
 export const AI_FLAGS = ["ai_unedited", "copied_text", "mass_produced"] as const;
 
 export type AiSuggestion = ReviewAiSuggestion;
-export interface AiReveal { suggestions: AiSuggestion[]; myFeedback: { suggestionId: string; value: AiFeedback }[] }
+export interface AiReveal { suggestions: AiSuggestion[]; current?: string | null; myFeedback: { suggestionId: string; value: AiFeedback }[] }
 
 export async function fetchReviewAi(id: string, token: string): Promise<AiReveal> {
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/ai`, { headers: headers(token) }));

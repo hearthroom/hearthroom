@@ -271,6 +271,10 @@ A reviewer first records a blind judgment, then sees the AI verdict, then finali
 - The comparison report uses the stamping reviewer's blind judgment as the human side when one exists, and adds `finalSource` counts and `corrected` (finals that took the AI verdict).
 - `GET /v1/review-ai/notes?type=&from=&to=&limit=100` (managers) lists the notes and reason types written at finalization and arbitration, newest first, without reviewer identities.
 
+### Current criteria version
+
+The reveal, the two-step finalize and the disagreement list compare against one criteria version at a time. `GET /v1/review-ai/criteria` (AI identity key or any reviewer) returns `{ current }`; `PUT /v1/review-ai/criteria` with `{ version: "v<n>" }` sets it (AI identity key or managers). Without a setting, the newest version the AI used in the last 7 days counts. Suggestions from other versions are kept but not used for comparison; when the current version has not judged a card yet, the AI state is `pending`. `GET /v1/review/:id/ai` returns `current` next to `suggestions`; `GET /v1/review-ai/disagreements` defaults to the current version (`criteria=all` lists every version) and echoes the `criteria` it used.
+
 ### Retention after a decision
 
 The review snapshot (originality text) is kept for 7 days after a decision so reviewers can re-check and arbitrate; when the final decision differs from the AI it is kept up to 14 days, shortened back to 7 days once arbitrated. A scheduled job deletes expired snapshots. During retention the detail route returns the full sealed version to the stamping reviewer and managers, with `retainUntil`; it also returns `myBlind` (the caller's own blind judgment or null, never anything about the AI); afterwards `retainUntil` is null and only public data remains.

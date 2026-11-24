@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { requireReviewer, reviewerRole } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { getSubmission, type SubmissionRow } from "./review";
-import { LATEST_FEEDBACK, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
+import { LATEST_FEEDBACK, currentCriteria, setCurrentCriteria, revealEventStatement, AI_FEEDBACK, AI_FLAGS, AI_HANDOFF_CAUSES, AI_REASONS, AI_VERDICTS, aiCardInput, aiPhaseOf, aiReport, aiSubmissionMeta, AI_BACKFILL_WINDOW_MS, canReveal, parseSuggestion, recordFeedback, saveSuggestion, suggestionsOf } from "./review-ai";
 import { loadSnapshot } from "./review-snapshot";
 import { diffView } from "./review-diff-store";
 import { AI_NOTE_TYPES } from "./review-two-stage";
@@ -153,7 +153,8 @@ reviewAiRoutes.get("/v1/review/:id/ai", (c) => counted(c, "reveal", async () => 
   if (suggestions.some((x) => x.verdict !== null)) await revealEventStatement(c.env.DB, { submissionId: s.id, cardId: Number(s.card_id), memberId: member.id, now: Date.now() }).run();
   const mine = await c.env.DB.prepare(`SELECT e.ai_suggestion_id AS suggestionId, e.source AS value, e.at FROM review_events e WHERE ${LATEST_FEEDBACK} AND e.submission_id=? AND e.actor_member_id=?`)
     .bind(s.id, member.id).all<{ suggestionId: string; value: string }>();
-  return c.json({ suggestions, myFeedback: mine.results }, 200, NO_STORE);
+  // current：目前判準版本；畫面只拿這一版的建議跟審核員比（沒有就是 AI 尚未用目前判準審完）
+  return c.json({ suggestions, current: await currentCriteria(c.env.DB), myFeedback: mine.results }, 200, NO_STORE);
 }));
 
 /** 覆核：揭曉後對某筆建議表態，寫成審核事件（每人每筆一次，第一次為準）。 */
@@ -209,7 +210,10 @@ reviewAiRoutes.get("/v1/review-ai/disagreements", (c) => counted(c, "arbitration
   if (reason !== null && !/^[a-z_]+(\.[a-z_]+)?$/.test(reason)) throw new HttpError(400, "invalid_arguments", undefined, { field: "reason" });
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 20)) || 20, 1), 50);
   const offset = Math.max(Math.floor(Number(c.req.query("offset") ?? 0)) || 0, 0);
-  return c.json(await listDisagreements(c.env.DB, { state, criteria: criteriaOf(c), direction: direction as Direction | null, reason, limit, offset, viewer: member.id }), 200, NO_STORE);
+  // 沒指定判準版本就看目前版本；criteria=all 看全部
+  const asked = c.req.query("criteria");
+  const criteria = asked === "all" ? null : asked === undefined ? await currentCriteria(c.env.DB) : criteriaOf(c);
+  return c.json({ ...(await listDisagreements(c.env.DB, { state, criteria, direction: direction as Direction | null, reason, limit, offset, viewer: member.id })), criteria }, 200, NO_STORE);
 }));
 
 /** 單筆分歧：卡片（與 AI 讀到的同一份封存內容；讀不到就說明）、人工、AI、歷次仲裁。審核員名字只給管理員。 */
@@ -277,3 +281,18 @@ reviewAiRoutes.get("/v1/review-ai/notes", (c) => counted(c, "notes", async () =>
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 100)) || 100, 1), 200);
   return c.json({ from, to, items: await aiNotes(c.env.DB, { from, to, type, limit }) }, 200, NO_STORE);
 }));
+
+/** 目前判準版本：審卡員換版時設（金鑰），管理員也能設。揭曉、兩段式定案、仲裁預設都只看這一版。 */
+reviewAiRoutes.get("/v1/review-ai/criteria", async (c) => {
+  const key = c.req.header("X-Review-Agent-Key");
+  if (key !== undefined) await reviewAgentByKey(c.env, key, c.req.header("Origin")); else await requireHuman(c);
+  return c.json({ current: await currentCriteria(c.env.DB) }, 200, NO_STORE);
+});
+reviewAiRoutes.put("/v1/review-ai/criteria", async (c) => {
+  const key = c.req.header("X-Review-Agent-Key");
+  const memberId = key !== undefined ? await reviewAgentByKey(c.env, key, c.req.header("Origin")) : (await requireManager(c)).id;
+  const body = ((await c.req.json().catch(() => ({}))) ?? {}) as { version?: unknown };
+  if (typeof body.version !== "string") throw new HttpError(400, "invalid_arguments", undefined, { field: "version" });
+  await setCurrentCriteria(c.env.DB, body.version, memberId, Date.now());
+  return c.json({ current: body.version }, 200, NO_STORE);
+});

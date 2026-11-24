@@ -5951,6 +5951,7 @@
   "reviewAi.arb.direction.human_stricter": "人は却下・AIは承認",
   "reviewAi.arb.filter.criteria": "判定基準のバージョン",
   "reviewAi.arb.filter.criteriaAll": "すべてのバージョン",
+  "reviewAi.arb.filter.criteriaCurrent": "現在の判定基準",
   "reviewAi.arb.filter.reason": "理由",
   "reviewAi.arb.filter.reasonAll": "すべての理由",
   "reviewAi.arb.criteria": "判定基準 {v}",

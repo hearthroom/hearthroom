@@ -5951,6 +5951,7 @@
   "reviewAi.arb.direction.human_stricter": "人不过 AI 过",
   "reviewAi.arb.filter.criteria": "判定标准版本",
   "reviewAi.arb.filter.criteriaAll": "全部版本",
+  "reviewAi.arb.filter.criteriaCurrent": "当前判准",
   "reviewAi.arb.filter.reason": "理由",
   "reviewAi.arb.filter.reasonAll": "全部理由",
   "reviewAi.arb.criteria": "判定标准 {v}",

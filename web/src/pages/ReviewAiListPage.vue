@@ -39,9 +39,10 @@ const DIRECTIONS: readonly Direction[] = ['ai_stricter', 'human_stricter'];
 const q = (k: string) => (typeof route.query[k] === 'string' ? (route.query[k] as string) : '');
 const state = computed(() => ((STATES as readonly string[]).includes(q('state')) ? q('state') : 'open') as (typeof STATES)[number]);
 const direction = computed(() => ((DIRECTIONS as readonly string[]).includes(q('direction')) ? (q('direction') as Direction) : null));
-const criteria = computed(() => (/^v\d{1,4}$/.test(q('criteria')) ? q('criteria') : null));
+// 判準版本：不指定＝目前版本（伺服器決定）；all＝全部版本
+const criteria = computed(() => (/^(v\d{1,4}|all)$/.test(q('criteria')) ? q('criteria') : null));
 const reason = computed(() => ((REVIEW_REASONS as readonly string[]).includes(q('reason')) ? q('reason') : null));
-const filtered = computed(() => !!(direction.value || criteria.value || reason.value));
+const filtered = computed(() => !!(direction.value || (criteria.value && criteria.value !== 'all') || reason.value));
 function setFilter(key: string, value: string | null) { void router.replace({ query: { ...route.query, [key]: value || undefined } }); }
 function clearFilters() { void router.replace({ query: { state: route.query.state } }); }
 
@@ -84,7 +85,7 @@ async function loadVersions() {
     if (alive) versions.value = res.versions.map((v) => v.criteriaVersion);
   } catch { /* 篩選少幾個選項不擋清單 */ }
 }
-const versionOptions = computed(() => [...new Set([...versions.value, ...(criteria.value ? [criteria.value] : [])])].sort((a, b) => versionNumber(b) - versionNumber(a)));
+const versionOptions = computed(() => [...new Set([...versions.value, ...(criteria.value && criteria.value !== 'all' ? [criteria.value] : [])])].sort((a, b) => versionNumber(b) - versionNumber(a)));
 
 watch(() => [state.value, direction.value, criteria.value, reason.value], () => void load());
 watch(allowed, (a) => { if (a && !items.value.length) { void load(); void loadVersions(); } });
@@ -109,7 +110,8 @@ const cardName = (it: DisagreementItem) => it.name || t('reviewAi.arb.cardNo', {
           <option v-for="d in DIRECTIONS" :key="d" :value="d">{{ t(`reviewAi.arb.direction.${d}`) }}</option>
         </select>
         <select class="input ai-arb__select" :value="criteria ?? ''" :aria-label="t('reviewAi.arb.filter.criteria')" data-filter="criteria" @change="setFilter('criteria', ($event.target as HTMLSelectElement).value)">
-          <option value="">{{ t('reviewAi.arb.filter.criteriaAll') }}</option>
+          <option value="">{{ t('reviewAi.arb.filter.criteriaCurrent') }}</option>
+          <option value="all">{{ t('reviewAi.arb.filter.criteriaAll') }}</option>
           <option v-for="v in versionOptions" :key="v" :value="v">{{ t('reviewAi.arb.criteria', { v }) }}</option>
         </select>
         <select class="input ai-arb__select" :value="reason ?? ''" :aria-label="t('reviewAi.arb.filter.reason')" data-filter="reason" @change="setFilter('reason', ($event.target as HTMLSelectElement).value)">

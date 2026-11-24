@@ -302,6 +302,25 @@ export async function saveSuggestion(db: D1Database, input: SuggestionInput & { 
   return row!;
 }
 
+const CRITERIA_KEY = "review_ai_criteria";
+
+/**
+ * 目前的判準版本：揭曉、兩段式定案、仲裁預設都只看這一版的建議（換版時舊版建議不再拿來對照）。
+ * 由審卡員（換版時）或管理員設定；沒設定就取近 7 天審卡員用過的最新版本。
+ */
+export async function currentCriteria(db: D1Database): Promise<string | null> {
+  const row = await db.prepare("SELECT value FROM community_settings WHERE key=?").bind(CRITERIA_KEY).first<{ value: string }>();
+  if (row) { try { return JSON.parse(row.value) as string; } catch { /* 壞值當沒設 */ } }
+  const recent = await db.prepare("SELECT criteria_version AS v FROM review_ai_suggestions WHERE updated_at > ? GROUP BY criteria_version").bind(Date.now() - 7 * 86_400_000).all<{ v: string }>();
+  return recent.results.map((r) => r.v).sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0] ?? null;
+}
+
+export async function setCurrentCriteria(db: D1Database, version: string, memberId: string, now: number): Promise<void> {
+  if (!/^v\d{1,4}$/.test(version)) throw new HttpError(400, "invalid_arguments", undefined, { field: "version" });
+  await db.prepare("INSERT INTO community_settings (key, value, updated_by, updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at")
+    .bind(CRITERIA_KEY, JSON.stringify(version), memberId, now).run();
+}
+
 export interface SuggestionView {
   id: string; criteriaVersion: string; model: string; verdict: AiVerdict | null; reasons: string[]; flags: string[];
   confidence: number | null; handoffCause: string | null; note: string; phase: string; at: number;

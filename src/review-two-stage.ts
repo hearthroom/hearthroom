@@ -1,7 +1,7 @@
 import { guardDecision, normalizeDecision, getSubmission, RETAIN_MS, stamp, type DecisionInput, type StampResult } from "./review";
 import { reviewEventStatement } from "./review-v2";
 import { REVIEW_REASON_VERSION, isReviewReason } from "../shared/review-reasons";
-import { suggestionsOf, type SuggestionView } from "./review-ai";
+import { currentCriteria, suggestionsOf, type SuggestionView } from "./review-ai";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -31,9 +31,11 @@ export async function blindOf(db: D1Database, submissionId: string, memberId: st
 
 export type AiState = { state: "ready" | "handoff"; suggestion: SuggestionView } | { state: "pending"; suggestion: null };
 
-/** 這張單最新的 AI 建議：已判（過或不過）、交人，或還沒判（審卡員還沒巡到） */
+/** 這張單目前判準版本的 AI 建議：已判（過或不過）、交人，或還沒判（審卡員還沒用這一版巡到） */
 export async function aiStateOf(db: D1Database, submissionId: string): Promise<AiState> {
-  const latest = (await suggestionsOf(db, submissionId)).find((s) => s.verdict !== null);
+  // 只看目前判準版本的建議（同版本只有一筆，重判是覆寫）；還沒用目前版本審過就是 pending
+  const current = await currentCriteria(db);
+  const latest = (await suggestionsOf(db, submissionId)).find((s) => s.verdict !== null && (current === null || s.criteriaVersion === current));
   if (!latest) return { state: "pending", suggestion: null };
   return { state: latest.verdict === "handoff" ? "handoff" : "ready", suggestion: latest };
 }

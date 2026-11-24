@@ -5951,6 +5951,7 @@
   "reviewAi.arb.direction.human_stricter": "사람 반려, AI 승인",
   "reviewAi.arb.filter.criteria": "판단 기준 버전",
   "reviewAi.arb.filter.criteriaAll": "모든 버전",
+  "reviewAi.arb.filter.criteriaCurrent": "현재 판단 기준",
   "reviewAi.arb.filter.reason": "사유",
   "reviewAi.arb.filter.reasonAll": "모든 사유",
   "reviewAi.arb.criteria": "판단 기준 {v}",

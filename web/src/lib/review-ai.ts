@@ -76,8 +76,9 @@ export type AiView = "loading" | "error" | "pending" | "none" | "ready";
  * 定案時伺服器拿來比的那一筆 AI 判斷（與服務端 aiStateOf 同一條規則）：清單照更新時間新到舊，第一筆下了結論的。
  * 揭曉與「用 AI 的」都用這一筆，按鈕寫的結論才會等於實際蓋下去的。只打標記、沒下結論的不算。
  */
-export function aiStateOf(list: readonly AiSuggestion[]): ReviewAiState {
-  const s = list.find((x) => x.verdict !== null);
+/** 只看目前判準版本的建議（伺服器給 current）；沒有就是 AI 尚未用目前判準審完。舊伺服器沒給 current 時取最新一筆 */
+export function aiStateOf(list: readonly AiSuggestion[], current?: string | null): ReviewAiState {
+  const s = list.find((x) => x.verdict !== null && (!current || x.criteriaVersion === current));
   if (!s) return { state: "pending", suggestion: null };
   return { state: s.verdict === "handoff" ? "handoff" : "ready", suggestion: s };
 }

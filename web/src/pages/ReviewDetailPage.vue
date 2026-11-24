@@ -411,7 +411,7 @@ async function refreshAi(manual = false) {
   try {
     const res = await fetchReviewAi(target, await token());
     if (!active || target !== id.value || !blind.value) return;
-    aiState.value = aiStateOf(res.suggestions);
+    aiState.value = aiStateOf(res.suggestions, res.current);
     aiForcedNone.value = false;
   } catch {
     if (!active || target !== id.value) return;

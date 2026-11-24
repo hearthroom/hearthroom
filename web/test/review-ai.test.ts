@@ -676,3 +676,11 @@ it('report: suppresses figures under ten samples and exports the reference draft
   expect(created).toHaveLength(1);
   expect(JSON.parse(await created[0]!.text()).map((i: { id: string }) => i.id)).toEqual(['c1', 'c2', 'c3']);
 });
+
+it('AI state uses only the current criteria version when the server names one', async () => {
+  const { aiStateOf } = await import('@/lib/review-ai');
+  const v3 = { id: 'a', criteriaVersion: 'v3', model: 'm', verdict: 'reject', reasons: ['opening.too_short'], flags: [], confidence: 0.9, handoffCause: null, note: '', phase: 'shadow', at: 2 } as any;
+  expect(aiStateOf([v3], 'v4')).toEqual({ state: 'pending', suggestion: null });
+  expect(aiStateOf([{ ...v3, id: 'b', criteriaVersion: 'v4', verdict: 'pass', reasons: [] }, v3], 'v4').suggestion!.id).toBe('b');
+  expect(aiStateOf([v3]).suggestion!.id).toBe('a');
+});
