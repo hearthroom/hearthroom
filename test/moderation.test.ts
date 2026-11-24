@@ -1,7 +1,7 @@
 import {workPolicyGateway,type WorkPolicyReceipt} from '../src/work-policy';
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
-import { GENERAL_RATING, resetDb, makeMember, makeReviewer, role, identities, bearer, restoreUpstream } from './helpers';
+import { GENERAL_RATING, resetDb, makeMember, makeReviewer, role, identities, bearer, restoreUpstream, appAdmins } from './helpers';
 import { upsertCard } from '../src/cards';
 
 let card: string;
@@ -61,6 +61,7 @@ it('rejects non-reviewers and self-review, requires reasons, and replays an oper
   expect((await a.json() as any).id).toBe((await b.json() as any).id);
 });
 it('summary counts actionable peer votes only and metadata history omits private snapshots',async()=>{
+  appAdmins(); // Both reviewers have a local role and no upstream admin privileges.
   const res=await proposal('suspend');expect(res.status).toBe(201);
   const mine=await request('/summary','r1').then(r=>r.json()) as any;
   const peer=await request('/summary','r2').then(r=>r.json()) as any;

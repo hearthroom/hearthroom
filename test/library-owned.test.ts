@@ -1,7 +1,7 @@
 import {SELF,env} from 'cloudflare:test';
 import {beforeEach,afterEach,it,expect} from 'vitest';
 import {ownedHistory} from '../src/owned-history';
-import {resetDb,identities,bearer,restoreUpstream} from './helpers';
+import {resetDb,identities,bearer,restoreUpstream,rolesOnMainSite} from './helpers';
 const original=ownedHistory.read;
 beforeEach(async()=>{await resetDb();identities({fan:20001,other:20002});});
 afterEach(()=>{ownedHistory.read=original;restoreUpstream();});
@@ -22,6 +22,7 @@ it('does not label unavailable policy reads as author_private',async()=>{
  expect((await r.json() as any).conversations[0]).toMatchObject({canGenerate:false,reason:'unavailable'});
 });
 it('projects a qualified private player as resumable without a closed-history reason',async()=>{
+ rolesOnMainSite(); // The private role has no public upstream record.
  await SELF.fetch('https://c.test/v1/me/conversations',{method:'PUT',headers:{...bearer('fan'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'old',conversationId:'saved'})});
  ownedHistory.read=async()=>({conversationId:'saved',roleId:'old',title:'Saved title',roleName:'Retained role',canGenerate:true});
  const result=await SELF.fetch('https://c.test/v1/me/conversations',{headers:bearer('fan')});
