@@ -1984,7 +1984,7 @@ app.post("/v1/review/:id/release", async (c) => {
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown; finalSource?: unknown; aiNoteTypes?: unknown; aiNote?: unknown; aiSuggestionId?: unknown; aiSuggestionAt?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown; reasons?: unknown; coaching?: unknown; marks?: unknown; suggestions?: unknown; finalSource?: unknown; aiNoteTypes?: unknown; aiNote?: unknown; aiSuggestionId?: unknown; aiSuggestionAt?: unknown; authorNote?: unknown };
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const submissionId = c.req.param("id");
   // 兩段式決定（owner 2026-11-24）：送過盲審的人要說明定案從哪來（用我的／用 AI 的／修改後／沒等 AI）；
@@ -2000,7 +2000,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   const decision = verdict ? { verdict: verdict as "approve" | "reject", note: noteText, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions } : null;
   const metricVerdict = (verdict ?? "approve") as "approve" | "reject";
   const result = await (twoStage
-    ? finalizeTwoStage(c.env.DB, c.env, { submissionId, memberId: member.id, now: Date.now(), generation: body.generation, source: body.finalSource, decision, aiNoteTypes: body.aiNoteTypes, aiNote: body.aiNote, aiSuggestionId: body.aiSuggestionId, aiSuggestionAt: body.aiSuggestionAt })
+    ? finalizeTwoStage(c.env.DB, c.env, { submissionId, memberId: member.id, now: Date.now(), generation: body.generation, source: body.finalSource, decision, aiNoteTypes: body.aiNoteTypes, aiNote: body.aiNote, aiSuggestionId: body.aiSuggestionId, aiSuggestionAt: body.aiSuggestionAt, authorNote: body.authorNote })
         .then(async (r) => { await bumpOp(c.env.DB, "review_two_stage", "final", r.finalSource); return r; })
     : stampSubmission(c.env.DB, { submissionId, memberId: member.id, verdict: verdict!, note: noteText, now: Date.now(), generation:body.generation, reasons: body.reasons, coaching: body.coaching === true, marks: body.marks, suggestions: body.suggestions },c.env))
     .catch(async (error) => { if (error instanceof HttpError && (error.status === 409 || error.status === 400 || error.status === 403)) await bumpOp(c.env.DB, "review_stamp", metricVerdict, error.status === 409 ? "conflict" : "denied"); throw error; });

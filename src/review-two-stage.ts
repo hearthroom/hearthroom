@@ -2,6 +2,7 @@ import { guardDecision, normalizeDecision, getSubmission, RETAIN_MS, stamp, type
 import { reviewEventStatement } from "./review-v2";
 import { REVIEW_REASON_VERSION, isReviewReason } from "../shared/review-reasons";
 import { currentCriteria, suggestionsOf, type SuggestionView } from "./review-ai";
+import { guardAuthorNote } from "./author-note-guard";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -92,6 +93,8 @@ export async function finalize(db: D1Database, env: Env, input: {
   aiSuggestionId?: unknown;
   /** 那一筆建議當時的更新時間（同一版判準重判時 id 不變，要靠它認出換過了） */
   aiSuggestionAt?: unknown;
+  /** 用 AI 的：審核員改過的給作者說明（沒給就用 AI 的草稿） */
+  authorNote?: unknown;
 }): Promise<StampResult & { finalSource: FinalSource }> {
   if (typeof input.source !== "string" || !(FINAL_SOURCES as readonly string[]).includes(input.source)) throw new HttpError(400, "invalid_arguments", undefined, { field: "finalSource" });
   let source = input.source as FinalSource;
@@ -110,9 +113,14 @@ export async function finalize(db: D1Database, env: Env, input: {
     const verdict = aiVerdictAsHuman(ai.suggestion.verdict)!;
     const reasons = ai.suggestion.reasons.filter(isReviewReason);
     if (verdict === "reject" && !reasons.length) throw new HttpError(409, "ai_choice_unavailable");
-    decision = { verdict, note: "", reasons: verdict === "reject" ? reasons : undefined, coaching: false, marks: blind.payload.marks, suggestions: undefined };
+    // 給作者的說明：審核員在畫面上改過就用改過的，否則用 AI 寫的草稿；兩者都過內部字詞檢查
+    const authorNote = verdict === "reject" ? (typeof input.authorNote === "string" ? input.authorNote.trim() : ai.suggestion.authorNote) : "";
+    guardAuthorNote(authorNote);
+    decision = { verdict, note: authorNote, reasons: verdict === "reject" ? reasons : undefined, coaching: false, marks: blind.payload.marks, suggestions: undefined };
   } else {
     if (!input.decision) throw new HttpError(400, "invalid_arguments", undefined, { field: "verdict" });
+    // 修改後常從 AI 的草稿改起：給作者的說明一樣不能帶內部資訊
+    if (typeof input.decision.note === "string") guardAuthorNote(input.decision.note);
     decision = input.decision;
   }
   const aiVerdict = ai.state === "ready" ? aiVerdictAsHuman(ai.suggestion.verdict) : null;

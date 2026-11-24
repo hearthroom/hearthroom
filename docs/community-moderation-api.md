@@ -310,3 +310,7 @@ Any human reviewer can arbitrate; the report and the reference export stay manag
 - The report's version rows gain `arbitration: { values: { human_right, ai_right, both_ok, both_wrong }, reasons: { [code]: { humanWrong, aiWrong } } } | null`.
 
 Metrics: `hearthroom_review_two_stage_total{operation="blind"|"final",outcome}`, `hearthroom_review_retention_purged_total`, `hearthroom_review_ai_operations_total{operation,outcome}`, `hearthroom_review_ai_verdicts_total{verdict,outcome="shadow"|"backfill"}` and `hearthroom_review_agent_key_admissions_total{operation="admission",outcome}`.
+
+### AI author note (two columns)
+
+A suggestion may carry `authorNote` (up to 1,500 characters): a draft of the detailed explanation shown to the card's author, about the card itself only. `note` stays the reviewers-only explanation and may cite author signals. The server rejects an `authorNote` that mentions internal signals (submission quota, submission count or pace, devices, accounts, scores or confidence, author tier) with `400 author_note_internal` and `{ field: "authorNote", terms, hint }`. Reveal (`GET /v1/review/:id/ai`) returns `authorNote` on each suggestion. Finalising with `finalSource: "ai"` uses the AI's `authorNote` as the note to the author for a rejection; send `authorNote` to use an edited version. The same check applies to that edited text and to the note in a `modified` final decision (`400 author_note_internal` with `terms`).

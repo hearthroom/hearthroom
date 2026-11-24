@@ -702,3 +702,36 @@ describe('作者行為：同一張卡改字重送不算另一張', () => {
     expect(body.submissions7d).toBe(2);
   });
 });
+
+describe('給作者的說明（AI 草稿）', () => {
+  const blind = async (id: string, body: Record<string, unknown>, token = 'human') => {
+    const gen = (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(id).first<{ claim_generation: string }>())!.claim_generation;
+    return send('POST', `/v1/review/${id}/blind`, token, { generation: gen, ...body });
+  };
+  const final = async (id: string, body: Record<string, unknown>, token = 'human') => {
+    const gen = (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(id).first<{ claim_generation: string }>())!.claim_generation;
+    return send('POST', `/v1/review/${id}/stamp`, token, { generation: gen, ...body });
+  };
+  it('AI 寫的作者說明不能帶內部資訊；用 AI 的定案帶入草稿，審核員改過也要過檢查', async () => {
+    const { id } = await submitCard();
+    const leak = await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'], authorNote: '本週額度已用滿，同裝置有 4 個帳號。' });
+    expect(leak.status).toBe(400);
+    const err = await json(leak);
+    expect(err).toMatchObject({ error: 'author_note_internal', field: 'authorNote', terms: ['額度', '裝置', '帳號'] });
+    expect(err.hint).toContain('note');
+    const draft = '開場白停在角色的外貌描寫，沒有一件要玩家回應的事。可以讓角色在開場提出一個請求或遇到狀況。';
+    expect((await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'], note: '本週額度用滿、一晚送 6 張', authorNote: draft })).status).toBe(200);
+    await claim(env.DB, id, humanId, Date.now());
+    await blind(id, { verdict: 'approve' });
+    const shown = (await json(await get(`/v1/review/${id}/ai`, 'human'))).suggestions[0];
+    expect(shown).toMatchObject({ authorNote: draft, note: '本週額度用滿、一晚送 6 張' });
+    // 審核員改過的說明帶了內部字詞：擋下，告訴他是哪個詞
+    const bad = await final(id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at, authorNote: draft + '另外你的送審次數太多。' });
+    expect(bad.status).toBe(400);
+    expect(await json(bad)).toMatchObject({ error: 'author_note_internal', terms: ['送審次數'] });
+    expect(await status(id)).toBe('pending');
+    expect((await final(id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at })).status).toBe(200);
+    const row = await env.DB.prepare('SELECT note FROM review_submissions WHERE id=?').bind(id).first<{ note: string }>();
+    expect(row!.note).toBe(draft);
+  });
+});

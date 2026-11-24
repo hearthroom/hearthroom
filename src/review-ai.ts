@@ -1,5 +1,6 @@
 import { applyBatchMarks, authorProfiles, deviceSignals } from "./review-profile";
 import { weeklyLimitAt, weeklyUsageForMember } from "./quota";
+import { internalTermsIn } from "./author-note-guard";
 import { submissionHistory, type SubmissionRow } from "./review";
 import { HttpError } from "./types";
 
@@ -24,7 +25,7 @@ export const AI_FEEDBACK = ["ai_right", "ai_wrong", "both_ok"] as const;
 /** 已定案的單，送審後多久內還能讓 AI 讀（試跑用） */
 export const AI_BACKFILL_WINDOW_MS = 7 * 86_400_000;
 
-const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 6, entries: 20, entry: 300, note: 400, index: 40, rules: 20 };
+const LIMITS = { setting: 12_000, text: 4_000, opening: 6_000, page: 3_000, alternates: 3, alternate: 3_000, prologue: 6, entries: 20, entry: 300, note: 400, authorNote: 1500, index: 40, rules: 20 };
 
 interface RuleInput { name?: unknown; find?: unknown; replace?: unknown; enabled?: unknown }
 
@@ -324,6 +325,8 @@ export async function authorActivity(db: D1Database, submissionId: string, now: 
 export interface SuggestionInput {
   criteriaVersion: string; model: string; verdict: AiVerdict | null; reasons: string[]; flags: string[];
   confidence: number | null; note: string; handoffCause: string | null;
+  /** 給作者的詳細說明草稿：只寫卡片本身，不帶作者行為、額度、裝置、分數 */
+  authorNote: string;
   inputTokens: number | null; outputTokens: number | null; costUsd: number | null; latencyMs: number | null;
 }
 
@@ -348,7 +351,7 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
   if (typeof model !== "string" || !/^[\w./:@-]{1,100}$/.test(model)) bad("model");
   const flags = codes(body.flags, AI_FLAGS, "flags");
   if (opts.tagsOnly) {
-    return { criteriaVersion: criteriaVersion as string, model: model as string, verdict: null, reasons: [], flags, confidence: null, note: "", handoffCause: null, inputTokens: null, outputTokens: null, costUsd: null, latencyMs: null };
+    return { criteriaVersion: criteriaVersion as string, model: model as string, verdict: null, reasons: [], flags, confidence: null, note: "", handoffCause: null, authorNote: "", inputTokens: null, outputTokens: null, costUsd: null, latencyMs: null };
   }
   if (!oneOf(body.verdict, AI_VERDICTS)) bad("verdict");
   const verdict = body.verdict as AiVerdict;
@@ -363,8 +366,15 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
   const confidence = count(body.confidence, "confidence", 1);
   const note = body.note === undefined || body.note === null ? "" : body.note;
   if (typeof note !== "string" || note.length > LIMITS.note) bad("note");
+  const authorNote = body.authorNote === undefined || body.authorNote === null ? "" : body.authorNote;
+  if (typeof authorNote !== "string" || authorNote.length > LIMITS.authorNote) bad("authorNote");
+  const hits = internalTermsIn(authorNote as string);
+  if (hits.length) throw new HttpError(400, "author_note_internal", undefined, {
+    field: "authorNote", terms: hits,
+    hint: "authorNote is shown to the card's author. Describe only the card itself (opening, setting, lorebook, writing) and how to improve it. Keep submission quota, pace, devices, accounts and scores in note, which only reviewers see.",
+  });
   return {
-    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, confidence, note: (note as string).trim(), handoffCause,
+    criteriaVersion: criteriaVersion as string, model: model as string, verdict, reasons, flags, confidence, note: (note as string).trim(), handoffCause, authorNote: (authorNote as string).trim(),
     inputTokens: count(body.inputTokens, "inputTokens"), outputTokens: count(body.outputTokens, "outputTokens"),
     costUsd: count(body.costUsd, "costUsd", 100), latencyMs: count(body.latencyMs, "latencyMs", 86_400_000),
   };
@@ -373,15 +383,15 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
 /** 寫建議：同一審卡員、同一判準版本、同一張單只留一筆。只打標記時保留已下的結論。 */
 export async function saveSuggestion(db: D1Database, input: SuggestionInput & { submissionId: string; cardId: number; agentId: string; phase: "shadow" | "backfill"; now: number }, opts: { tagsOnly?: boolean } = {}) {
   const id = crypto.randomUUID();
-  const cols = "id,submission_id,card_id,agent_member_id,criteria_version,model,verdict,reasons,flags,confidence,handoff_cause,note,phase,input_tokens,output_tokens,cost_usd,latency_ms,created_at,updated_at";
+  const cols = "id,submission_id,card_id,agent_member_id,criteria_version,model,verdict,reasons,flags,confidence,handoff_cause,note,author_note,phase,input_tokens,output_tokens,cost_usd,latency_ms,created_at,updated_at";
   const update = opts.tagsOnly
     // 只打標記不動 updated_at：updated_at 代表結論何時改過（揭曉後「用 AI 的」靠它認出 AI 重判）
     ? "flags=excluded.flags,model=excluded.model"
-    : "model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=excluded.flags,confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at";
-  const row = await db.prepare(`INSERT INTO review_ai_suggestions (${cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    : "model=excluded.model,verdict=excluded.verdict,reasons=excluded.reasons,flags=excluded.flags,confidence=excluded.confidence,handoff_cause=excluded.handoff_cause,note=excluded.note,author_note=excluded.author_note,phase=excluded.phase,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,cost_usd=excluded.cost_usd,latency_ms=excluded.latency_ms,updated_at=excluded.updated_at";
+  const row = await db.prepare(`INSERT INTO review_ai_suggestions (${cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(submission_id,agent_member_id,criteria_version) DO UPDATE SET ${update} RETURNING id, verdict, phase`)
     .bind(id, input.submissionId, input.cardId, input.agentId, input.criteriaVersion, input.model, input.verdict, JSON.stringify(input.reasons), JSON.stringify(input.flags),
-      input.confidence, input.handoffCause, input.note, input.phase, input.inputTokens, input.outputTokens, input.costUsd, input.latencyMs, input.now, input.now)
+      input.confidence, input.handoffCause, input.note, input.authorNote, input.phase, input.inputTokens, input.outputTokens, input.costUsd, input.latencyMs, input.now, input.now)
     .first<{ id: string; verdict: string | null; phase: string }>();
   return row!;
 }
@@ -407,14 +417,14 @@ export async function setCurrentCriteria(db: D1Database, version: string, member
 
 export interface SuggestionView {
   id: string; criteriaVersion: string; model: string; verdict: AiVerdict | null; reasons: string[]; flags: string[];
-  confidence: number | null; handoffCause: string | null; note: string; phase: string; at: number;
+  confidence: number | null; handoffCause: string | null; note: string; authorNote: string; phase: string; at: number;
 }
 
 export async function suggestionsOf(db: D1Database, submissionId: string): Promise<SuggestionView[]> {
   const rows = await db.prepare("SELECT * FROM review_ai_suggestions WHERE submission_id=? ORDER BY updated_at DESC").bind(submissionId).all<Record<string, any>>();
   return rows.results.map((r) => ({
     id: r.id, criteriaVersion: r.criteria_version, model: r.model, verdict: r.verdict, reasons: JSON.parse(r.reasons), flags: JSON.parse(r.flags),
-    confidence: r.confidence, handoffCause: r.handoff_cause, note: r.note, phase: r.phase, at: r.updated_at,
+    confidence: r.confidence, handoffCause: r.handoff_cause, note: r.note, authorNote: r.author_note ?? "", phase: r.phase, at: r.updated_at,
   }));
 }
 
