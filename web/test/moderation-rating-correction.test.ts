@@ -64,7 +64,11 @@ it('confirms with the card, change, reason and effects, posts once with an opera
  expect([...select.options].find(o=>o.value==='PG15')?.disabled).toBe(false);
  // 分級和下限都已經是輔15級：說明沒有改變，按鈕停用
  expect($('[data-rating-unchanged]')?.textContent).toBe('分級沒有改變：目前分級和分級下限都已經是輔15級。');
+ // 填了理由也一樣停用
+ input('[data-rating-reason]','Same rating and floor');await flush();
  expect($<HTMLButtonElement>('[data-rating-submit]')!.disabled).toBe(true);
+ expect($<HTMLButtonElement>('[data-rating-submit]')!.textContent).toBe('更正分級');
+ input('[data-rating-reason]','');
  input('[data-rating-next]','R');await flush();
  expect($('[data-rating-adult]')?.textContent).toBe('沒有開啟成人內容的玩家，之後在榜單、搜尋和卡片頁都看不到這張卡。');
  // 理由必填，上限 500
@@ -176,6 +180,8 @@ it('locks only the floor when the new rating equals the current one and there is
  input('#case-action','rating');await flush();
  expect($('[data-rating-floor]')?.textContent).toBe('輔15級');
  expect($('[data-rating-unchanged]')?.textContent).toBe('分級沒有改變：目前分級和分級下限都已經是輔15級。');
+ input('[data-rating-reason]','Again');await flush();
+ expect($<HTMLButtonElement>('[data-rating-submit]')!.disabled).toBe(true);
  expect($<HTMLButtonElement>('[data-rating-submit]')!.textContent).toBe('更正分級');
 });
 
