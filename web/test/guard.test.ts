@@ -7,6 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, restore: async () => undefined }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "", setSurface: () => {} }));
+// 路由守衛測試保留真正的路由與導航；遊玩頁和舞台資源有獨立用例。
+vi.mock("../src/pages/PlayPage.vue", () => ({ default: { template: "<div />" } }));
+vi.mock("../src/lib/stage-preload", () => ({ preloadStage: async () => undefined }));
 
 import { router } from "../src/router";
 
@@ -32,6 +35,7 @@ describe("需要登入的頁", () => {
     session.me = null;
     await router.push("/en/play/r1?x=1");
     expect(router.currentRoute.value.path).toBe("/en/play/r1");
+    expect(router.currentRoute.value.params.roleId).toBe("r1");
   });
 
   it("登入了就放行", async () => {

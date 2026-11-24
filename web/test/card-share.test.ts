@@ -168,7 +168,9 @@ describe("卡片頁的分享面板", () => {
     const items = await openPanel(root);
     const event = new MouseEvent("click", { bubbles: true, cancelable: true });
     items[1].dispatchEvent(event);
-    await flush();
+    // 等剪貼簿 mock 和 Vue 更新，不跨計時器去和 2.4 秒提示倒數競速。
+    await Promise.resolve();
+    await nextTick();
     expect(event.defaultPrevented).toBe(true);
     expect(writeText).toHaveBeenCalledWith(SHARE_URL);
     expect(root.querySelector(".sh__item.is-done")?.textContent).toContain(i18n.global.t("share.pasteTo", { name: "QQ" }));
