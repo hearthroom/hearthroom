@@ -127,10 +127,10 @@ app.get("/v1/community/config", (c) =>
 app.get("/v1/me/community", async (c) =>
   c.json(await communityView(c.env, (await requireMember(c)).id)),
 );
-/** 本人打開成就頁：先回已存的數字，同時在背景刷新自己一次（10 分鐘一次）；有刷新就帶 refreshing，前端稍後重讀。重讀帶 ?reread=1，不再觸發 */
+/** 本人打開成就頁（只有成就頁帶 ?refresh=1；我的頁、展示徽章等其他讀取不觸發）：先回已存的數字，同時在背景刷新自己一次（10 分鐘一次）；有刷新就帶 refreshing，前端稍後不帶參數重讀 */
 app.get('/v1/me/community/badges',async c=>{
  const member=(await requireMember(c)).id;
- const claim=c.req.query('reread')==='1'?null:await claimSelfRefresh(c.env,member).catch(()=>null);
+ const claim=c.req.query('refresh')==='1'?await claimSelfRefresh(c.env,member).catch(()=>null):null;
  if(claim)c.executionCtx.waitUntil(runSelfRefresh(c.env,member,claim));
  const collection=await badgeCollection(c.env,member);
  return c.json(claim?{...collection,refreshing:true}:collection);
