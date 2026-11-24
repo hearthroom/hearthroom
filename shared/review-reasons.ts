@@ -4,13 +4,15 @@
  *
  * 語意改了就加新代碼、把舊的移到 RETIRED（歷史單照樣顯示），不要改既有代碼的意思。
  */
-/** 2：owner 2026-11-23 追加「開場白讀起來像未修改的 AI 生成文字」「設定直接搬運現成文本」 */
-export const REVIEW_REASON_VERSION = 2;
+/** 2：owner 2026-11-23 追加「開場白讀起來像未修改的 AI 生成文字」「設定直接搬運現成文本」
+ *  3：owner 2026-11-24 追加「婉拒」兩項（短期大量送審內容雷同、不太符合平台公開要求）：勾了就送出，作者收到固定的溫和說明 */
+export const REVIEW_REASON_VERSION = 3;
 
 export const REVIEW_REASON_GROUPS = {
   opening: ['opening.no_reply_hook', 'opening.no_focused_event', 'opening.exposition_only', 'opening.too_short', 'opening.unedited_generated'],
   setting: ['content.min_length', 'character.setting_thin', 'character.copied_verbatim'],
   rating: ['rating.mismatch'],
+  decline: ['decline.burst_similar', 'decline.not_ready'],
   other: ['other'],
 } as const;
 

@@ -59,8 +59,9 @@ const auth = (token: string): Record<string, string> => (token === 'key' ? { 'X-
 const get = (path: string, token: string) => SELF.fetch(`https://c.test${path}`, { headers: auth(token) });
 const send = (method: string, path: string, token: string, body: unknown) =>
   SELF.fetch(`https://c.test${path}`, { method, headers: { 'Content-Type': 'application/json', ...auth(token) }, body: JSON.stringify(body) });
+// AI 為主之後每張駁回都要附給作者的說明；測試沒特別指定時帶一段
 const suggest = (id: string, body: Record<string, unknown>, token = 'key') =>
-  send('PUT', `/v1/review-ai/submissions/${id}/suggestion`, token, { criteriaVersion: 'v1', model: 'deepseek/deepseek-v4.1-flash', ...body });
+  send('PUT', `/v1/review-ai/submissions/${id}/suggestion`, token, { criteriaVersion: 'v1', model: 'deepseek/deepseek-v4.1-flash', ...(body.verdict === 'reject' && !('authorNote' in body) ? { authorNote: '開場停在描寫，請讓角色提出一件需要玩家回應的事。' } : {}), ...body });
 const json = async (res: Response) => (await res.json()) as any;
 const decide = async (id: string, member: string, verdict: 'approve' | 'reject') => {
   await claim(env.DB, id, member, Date.now());
@@ -164,12 +165,12 @@ describe('佇列', () => {
 });
 
 describe('雙盲與揭曉', () => {
-  it('審核員自己決定前看不到；蓋章或不受理後才看得到，覆核寫成審核事件', async () => {
+  it('AI 為主（owner 11-24）：待審單一進來就看得到 AI 建議；覆核寫成審核事件', async () => {
     const { id } = await submitCard();
     const { id: sid } = await json(await suggest(id, { verdict: 'reject', reasons: ['opening.exposition_only'], confidence: 0.9 }));
-    const hidden = await get(`/v1/review/${id}/ai`, 'human');
-    expect(hidden.status).toBe(403);
-    expect((await json(hidden)).error).toBe('ai_hidden_until_decided');
+    const visible = await get(`/v1/review/${id}/ai`, 'human');
+    expect(visible.status).toBe(200);
+    expect((await json(visible)).suggestions).toHaveLength(1);
     // 審核頁本身也不帶 AI 建議
     await claim(env.DB, id, humanId, Date.now());
     const detail = await get(`/v1/review/${id}/detail`, 'human');
@@ -196,7 +197,7 @@ describe('雙盲與揭曉', () => {
   it('不受理也算做完決定', async () => {
     const { id } = await submitCard();
     await suggest(id, { verdict: 'pass' });
-    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(403);
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200); // AI 為主：待審單直接看得到 AI 建議
     await dropSubmission(env.DB, { submissionId: id, memberId: humanId, now: Date.now() });
     expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
   });
@@ -511,7 +512,7 @@ describe('雙盲：不受理後復原', () => {
     await dropSubmission(env.DB, { submissionId: id, memberId: humanId, now: Date.now() });
     expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
     await env.DB.prepare('UPDATE review_drops SET restored_at=?, restored_by=? WHERE submission_id=?').bind(Date.now(), humanId, id).run();
-    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(403);
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200); // AI 為主：待審單直接看得到 AI 建議
     await new Promise((r) => setTimeout(r, 5));
     await decide(id, humanId, 'approve');
     const report = await json(await get('/v1/review-ai/report', 'mgr'));
@@ -612,7 +613,7 @@ describe('兩段式決定', () => {
     const { id } = await submitCard();
     await suggest(id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] });
     await claim(env.DB, id, humanId, Date.now());
-    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(403);
+    expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200); // AI 為主：待審單直接看得到 AI 建議
     const res = await blind(id, { verdict: 'approve' });
     expect(res.status).toBe(200);
     const body = await json(res);
@@ -626,8 +627,8 @@ describe('兩段式決定', () => {
     expect((await get(`/v1/review/${id}/ai`, 'human')).status).toBe(200);
     expect((await blind(id, { verdict: 'reject', reasons: ['other'], note: 'x' })).status).toBe(409);
     expect(await json(await final(id, { verdict: 'approve' }))).toEqual({ error: 'finalize_with_source' });
-    // 別人看不到這份盲審，也看不到 AI
-    expect((await get(`/v1/review/${id}/ai`, 'mgr')).status).toBe(403);
+    // AI 為主：其他審核員對待審單也看得到 AI 建議（盲審判斷本身仍只有自己看得到）
+    expect((await get(`/v1/review/${id}/ai`, 'mgr')).status).toBe(200);
   });
 
   it('用 AI 的：照 AI 結論與理由定案（與 AI 一致，保留 7 天）；報表人那邊用盲審，記一次 AI 校正；給 AI 的說明進事件與說明清單', async () => {
@@ -910,5 +911,49 @@ describe('送審節奏只算還沒上架的卡', () => {
     const act = await json(await get(`/v1/review/${ups[2].id}/author-activity`, 'human'));
     expect(act.submissions24h).toBe(1);
     expect(act.anomalies.map((x: any) => x.code)).not.toContain('burst_long');
+  });
+});
+
+describe('AI 為主、人為輔（owner 2026-11-24）', () => {
+  const final = async (id: string, body: Record<string, unknown>, token = 'human') => {
+    const g = (await env.DB.prepare('SELECT claim_generation FROM review_submissions WHERE id=?').bind(id).first<{ claim_generation: string }>())!.claim_generation;
+    return send('POST', `/v1/review/${id}/stamp`, token, { generation: g, ...body });
+  };
+  it('AI 駁回一定要附給作者的說明', async () => {
+    const { id } = await submitCard();
+    const res = await send('PUT', `/v1/review-ai/submissions/${id}/suggestion`, 'key', { criteriaVersion: 'v1', model: 'm', verdict: 'reject', reasons: ['decline.not_ready'] });
+    expect(res.status).toBe(400);
+    expect(await json(res)).toMatchObject({ error: 'author_note_required', field: 'authorNote' });
+    expect((await suggest(id, { verdict: 'reject', reasons: ['decline.not_ready'], authorNote: '開場還需要一件要玩家回應的事。' })).status).toBe(200);
+  });
+
+  it('不用盲審：照 AI 定案記 ai，帶「AI 不準確」；改了記 modified；AI 還沒審記 human_no_ai', async () => {
+    const a = await submitCard('draft-a');
+    await suggest(a.id, { verdict: 'reject', reasons: ['opening.no_reply_hook'], authorNote: '開場停在描寫，請讓角色提出一件需要玩家回應的事。' });
+    await claim(env.DB, a.id, humanId, Date.now());
+    const shown = (await json(await get(`/v1/review/${a.id}/ai`, 'human'))).suggestions[0];
+    const ok = await final(a.id, { finalSource: 'ai', aiSuggestionId: shown.id, aiSuggestionAt: shown.at, aiInaccurate: true });
+    expect(ok.status).toBe(200);
+    expect(await json(ok)).toMatchObject({ finalSource: 'ai' });
+    const ev = await env.DB.prepare("SELECT final_source, ai_note_types FROM review_events WHERE submission_id=? AND action IN ('approve','reject')").bind(a.id).first<{ final_source: string; ai_note_types: string }>();
+    expect(ev!.final_source).toBe('ai');
+    expect(JSON.parse(ev!.ai_note_types)).toContain('ai_inaccurate');
+    expect((await env.DB.prepare('SELECT note FROM review_submissions WHERE id=?').bind(a.id).first<{ note: string }>())!.note).toBe('開場停在描寫，請讓角色提出一件需要玩家回應的事。');
+    expect((await json(await get('/v1/review-ai/report', 'mgr'))).versions[0]).toMatchObject({ inaccurate: 1, finalSource: { ai: 1 } });
+
+    const b = await submitCard('draft-b');
+    await suggest(b.id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] });
+    await claim(env.DB, b.id, humanId, Date.now());
+    const sb = (await json(await get(`/v1/review/${b.id}/ai`, 'human'))).suggestions[0];
+    const mod = await final(b.id, { finalSource: 'modified', aiSuggestionId: sb.id, aiSuggestionAt: sb.at, verdict: 'reject', reasons: ['decline.burst_similar'], note: '' });
+    expect(mod.status).toBe(200);
+    expect(await json(mod)).toMatchObject({ finalSource: 'modified' });
+    expect(await status(b.id)).toBe('rejected');
+
+    const c = await submitCard('draft-c');
+    await claim(env.DB, c.id, humanId, Date.now());
+    const none = await final(c.id, { finalSource: 'human_no_ai', verdict: 'approve', note: '' });
+    expect(none.status).toBe(200);
+    expect(await json(none)).toMatchObject({ finalSource: 'human_no_ai' });
   });
 });

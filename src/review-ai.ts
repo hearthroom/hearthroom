@@ -17,7 +17,7 @@ import { HttpError } from "./types";
 export const AI_VERDICTS = ["pass", "reject", "handoff"] as const;
 export type AiVerdict = (typeof AI_VERDICTS)[number];
 /** 作者看得到的駁回理由裡，AI 能判的那幾個（分級與字數門檻不給 AI 判）。代碼與 shared/review-reasons.ts 同步。 */
-export const AI_REASONS = ["opening.no_reply_hook", "opening.no_focused_event", "opening.exposition_only", "opening.too_short", "opening.unedited_generated", "character.setting_thin", "character.copied_verbatim"] as const;
+export const AI_REASONS = ["opening.no_reply_hook", "opening.no_focused_event", "opening.exposition_only", "opening.too_short", "opening.unedited_generated", "character.setting_thin", "character.copied_verbatim", "decline.burst_similar", "decline.not_ready"] as const;
 /** 審核標記：只給審核與數據，作者看不到 */
 export const AI_FLAGS = ["ai_unedited", "copied_text", "mass_produced"] as const;
 export const AI_HANDOFF_CAUSES = ["unsure", "refusal", "invalid_output", "timeout", "error", "too_large"] as const;
@@ -383,6 +383,11 @@ export function parseSuggestion(body: Record<string, unknown>, opts: { tagsOnly?
   if (typeof note !== "string" || note.length > LIMITS.note) bad("note");
   const authorNote = body.authorNote === undefined || body.authorNote === null ? "" : body.authorNote;
   if (typeof authorNote !== "string" || authorNote.length > LIMITS.authorNote) bad("authorNote");
+  // AI 為主（owner 2026-11-24）：審核員預設照 AI 定案，駁回時給作者的說明就是 AI 寫的，所以每張駁回都要依實際情況寫
+  if (verdict === "reject" && !(authorNote as string).trim()) throw new HttpError(400, "author_note_required", undefined, {
+    field: "authorNote",
+    hint: "Every reject needs authorNote: the explanation shown to the card's author. Say briefly why public cards are quality-reviewed, then point to what in this card needs work and how to improve it, in the card's language. Keep internal signals in note.",
+  });
   const hits = internalTermsIn(authorNote as string);
   if (hits.length) throw new HttpError(400, "author_note_internal", undefined, {
     field: "authorNote", terms: hits,
@@ -448,11 +453,13 @@ export async function suggestionsOf(db: D1Database, submissionId: string): Promi
  * 不受理被復原之後就不再揭曉；萬一先看了再復原、再蓋章，那一章由 TAINTED 排除在對照報表之外。
  */
 export async function canReveal(db: D1Database, s: Pick<SubmissionRow, "id" | "status">, memberId: string, role: string | null): Promise<boolean> {
+  // AI 為主（owner 2026-11-24）：結束雙盲，待審單的 AI 建議一進審核頁就看得到
+  if (s.status === "pending") return true;
   const mine = await db.prepare(`SELECT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=?1 AND member_id=?2)
     OR EXISTS(SELECT 1 FROM review_drops WHERE submission_id=?1 AND actor_member_id=?2 AND restored_at IS NULL)
     OR EXISTS(SELECT 1 FROM review_blind_judgments WHERE submission_id=?1 AND member_id=?2) AS ok`).bind(s.id, memberId).first<{ ok: number }>();
   if (mine?.ok) return true;
-  return s.status !== "pending" && (role === "manager" || role === "owner");
+  return role === "manager" || role === "owner";
 }
 
 /** 揭曉留一筆事件（每人每單一次）：用來找出「看過 AI 判斷之後才蓋章」的決定 */
@@ -466,7 +473,9 @@ export function revealEventStatement(db: D1Database, input: { submissionId: stri
  * 兩段式決定不算：只要盲審判斷是在第一次看到 AI 之前送的，那位審核員的獨立判斷記在盲審裡，對照用它。
  * 先看過 AI 才送的「盲審」（不受理→看→復原→盲審）照樣算污染。
  */
-export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id AND (
+// AI 為主（owner 2026-11-24）之後定案都會帶來源（ai／modified／human_no_ai），看過 AI 再定案是正常流程，不算污染
+export const TAINTED = `EXISTS(SELECT 1 FROM review_events rv WHERE rv.action='ai_reveal' AND rv.submission_id=s.id
+  AND NOT EXISTS(SELECT 1 FROM review_events fe WHERE fe.submission_id=rv.submission_id AND fe.final_source IN ('ai','modified','human_no_ai')) AND (
   (EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=rv.submission_id AND st.member_id=rv.actor_member_id AND st.created_at>rv.at)
     AND NOT EXISTS(SELECT 1 FROM review_blind_judgments bj WHERE bj.submission_id=rv.submission_id AND bj.member_id=rv.actor_member_id AND bj.created_at<=rv.at))
   OR EXISTS(SELECT 1 FROM review_drops dr WHERE dr.submission_id=rv.submission_id AND dr.actor_member_id=rv.actor_member_id AND dr.created_at>rv.at AND dr.restored_at IS NULL)))`;
@@ -490,7 +499,8 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL) AS dropped,
       (SELECT b.verdict FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_verdict,
       (SELECT b.payload FROM review_blind_judgments b JOIN review_stamps st ON st.submission_id=b.submission_id AND st.member_id=b.member_id WHERE b.submission_id=s.id LIMIT 1) AS blind_payload,
-      (SELECT e.final_source FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_source
+      (SELECT e.final_source FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_source,
+      (SELECT e.ai_note_types FROM review_events e WHERE e.submission_id=s.id AND e.final_source IS NOT NULL ORDER BY e.at DESC LIMIT 1) AS final_note_types
     FROM review_ai_suggestions a JOIN review_submissions s ON s.id=a.submission_id
     WHERE a.verdict IS NOT NULL AND s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3)
       AND (s.status IN ('approved','rejected') OR EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL))
@@ -516,6 +526,8 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       g.finalSource[r.final_source] = (g.finalSource[r.final_source] ?? 0) + 1;
       // AI 校正：盲審跟 AI 不同，最後改用 AI 的
       if (r.final_source === "ai") g.corrected++;
+      // AI 為主（owner 2026-11-24）的主指標：改了 AI 的比例＝modified／(ai＋modified)；審核員標「AI 判斷不準確」的筆數
+      if (r.final_note_types && (JSON.parse(r.final_note_types) as string[]).includes("ai_inaccurate")) g.inaccurate++;
     }
     g.matrix[human as keyof typeof g.matrix][r.verdict as AiVerdict]++;
     if (human === "rejected") {
@@ -559,6 +571,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
       avgLatencyMs: g.latencyN ? Math.round(g.latencySum / g.latencyN) : null,
       // 兩段式定案來源（blind 用我的／ai 用 AI 的／modified 修改後／human_no_ai 沒等 AI）與 AI 校正次數
       finalSource: g.finalSource,
+      inaccurate: g.inaccurate,
       corrected: g.corrected,
       costUsd: Math.round(g.costUsd * 10_000) / 10_000,
     };
@@ -568,7 +581,7 @@ export async function aiReport(db: D1Database, input: { from: number; to: number
 function emptyGroup() {
   const cell = () => ({ pass: 0, reject: 0, handoff: 0 });
   return {
-    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0, corrected: 0, finalSource: {} as Record<string, number>,
+    total: 0, ai: cell(), latencySum: 0, latencyN: 0, costUsd: 0, corrected: 0, inaccurate: 0, finalSource: {} as Record<string, number>,
     matrix: { approved: cell(), rejected: cell(), dropped: cell() },
     handoffCauses: {} as Record<string, number>, flags: {} as Record<string, number>,
     reasonAgreement: {} as Record<string, { human: number; ai: number; both: number }>,

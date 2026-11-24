@@ -16,7 +16,8 @@ import { HttpError, type Env } from "./types";
 export const FINAL_SOURCES = ["blind", "ai", "modified", "human_no_ai"] as const;
 export type FinalSource = (typeof FINAL_SOURCES)[number];
 /** 給 AI 的說明的原因類型：卡片內容、作者關聯（同一群人多帳號、量產群組）、作者歷史、判準本身有問題、其他 */
-export const AI_NOTE_TYPES = ["card_content", "author_relation", "author_history", "criteria_issue", "other"] as const;
+/** ai_inaccurate：審核員標「AI 判斷不準確」（AI 為主，owner 2026-11-24；定案時一起送） */
+export const AI_NOTE_TYPES = ["card_content", "author_relation", "author_history", "criteria_issue", "other", "ai_inaccurate"] as const;
 export const AI_NOTE_MAX = 500;
 /** 定案與 AI 不一致時快照保留較久，等仲裁（最長 14 天；仲裁完成就縮回 7 天） */
 export const DISAGREE_RETAIN_MS = 14 * 86_400_000;
@@ -97,17 +98,28 @@ export async function finalize(db: D1Database, env: Env, input: {
   aiSuggestionAt?: unknown;
   /** 用 AI 的：審核員改過的給作者說明（沒給就用 AI 的草稿） */
   authorNote?: unknown;
+  /** 審核員標「AI 判斷不準確」 */
+  aiInaccurate?: unknown;
 }): Promise<StampResult & { finalSource: FinalSource }> {
   if (typeof input.source !== "string" || !(FINAL_SOURCES as readonly string[]).includes(input.source)) throw new HttpError(400, "invalid_arguments", undefined, { field: "finalSource" });
   let source = input.source as FinalSource;
+  // AI 為主（owner 2026-11-24）：不再需要先送盲審判斷。舊流程送過盲審的照舊可以「用我的」
   const blind = await blindOf(db, input.submissionId, input.memberId);
-  if (!blind) throw new HttpError(409, "blind_required");
   const ai = await aiStateOf(db, input.submissionId);
-  const note = parseAiNote(input.aiNoteTypes, input.aiNote);
+  const types = Array.isArray(input.aiNoteTypes) ? [...input.aiNoteTypes] : input.aiNoteTypes === undefined || input.aiNoteTypes === null ? [] : input.aiNoteTypes;
+  if (input.aiInaccurate === true && Array.isArray(types) && !types.includes("ai_inaccurate")) types.push("ai_inaccurate");
+  const note = parseAiNote(types, input.aiNote);
   let decision: Omit<DecisionInput, "submissionId" | "memberId" | "now" | "generation">;
-  if (source === "blind" || source === "human_no_ai") {
+  if (source === "blind" && !blind) throw new HttpError(409, "blind_required");
+  if (source === "human_no_ai" && !blind) {
+    // AI 還沒審：照一般流程送出的決定；AI 其實已經好了就記成「改了 AI」
+    if (!input.decision) throw new HttpError(400, "invalid_arguments", undefined, { field: "verdict" });
+    if (ai.state === "ready") source = "modified";
+    if (typeof input.decision.note === "string" && input.decision.verdict === "reject") guardAuthorNote(input.decision.note);
+    decision = input.decision;
+  } else if (source === "blind" || source === "human_no_ai") {
     if (source === "human_no_ai" && ai.state === "ready") source = "blind";
-    decision = { verdict: blind.payload.verdict, note: blind.payload.note, reasons: blind.payload.reasons, coaching: blind.payload.coaching, marks: blind.payload.marks, suggestions: blind.payload.suggestions };
+    decision = { verdict: blind!.payload.verdict, note: blind!.payload.note, reasons: blind!.payload.reasons, coaching: blind!.payload.coaching, marks: blind!.payload.marks, suggestions: blind!.payload.suggestions };
   } else if (source === "ai") {
     if (ai.state !== "ready") throw new HttpError(409, "ai_choice_unavailable");
     if (input.aiSuggestionId !== undefined && input.aiSuggestionId !== null
@@ -118,7 +130,7 @@ export async function finalize(db: D1Database, env: Env, input: {
     // 給作者的說明：審核員在畫面上改過就用改過的，否則用 AI 寫的草稿；兩者都過內部字詞檢查
     const authorNote = verdict === "reject" ? (typeof input.authorNote === "string" ? input.authorNote.trim() : ai.suggestion.authorNote) : "";
     guardAuthorNote(authorNote);
-    decision = { verdict, note: authorNote, reasons: verdict === "reject" ? reasons : undefined, coaching: false, marks: blind.payload.marks, suggestions: undefined };
+    decision = { verdict, note: authorNote, reasons: verdict === "reject" ? reasons : undefined, coaching: false, marks: blind?.payload.marks ?? input.decision?.marks ?? [], suggestions: undefined };
   } else {
     if (!input.decision) throw new HttpError(400, "invalid_arguments", undefined, { field: "verdict" });
     // 修改後常從 AI 的草稿改起：駁回說明會給作者，一樣不能帶內部資訊（通過的補充說明作者看不到）
