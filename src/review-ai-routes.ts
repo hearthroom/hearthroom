@@ -7,7 +7,8 @@ import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { diffView } from "./review-diff-store";
 import { AI_NOTE_TYPES } from "./review-two-stage";
-import { aiNotes, arbitrate, arbitrationStats, disagreementSides, listDisagreements, referenceCandidates, type Direction } from "./review-ai-arbitration";
+import { aiNotes, arbitrate, arbitrationStats, disagreementSides, listDisagreements, myPersuasion, persuade, persuasionStats, persuasionWindow, referenceCandidates, type Direction } from "./review-ai-arbitration";
+import { weekStart } from "./review-stats";
 import { reviewAgentByKey } from "./review-agent-key";
 import { operationOf } from "./moderation";
 import { HttpError, type Env } from "./types";
@@ -40,7 +41,7 @@ async function requireHuman(c: Ctx) {
 }
 
 type Op = "queue" | "read" | "suggest" | "tag" | "reveal" | "feedback" | "report" | "arbitration_list" | "arbitration_read" | "arbitrate" | "references" | "notes"
-  | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write";
+  | "originality" | "author" | "author_cards" | "card" | "author_note_read" | "author_note_write" | "persuade";
 async function counted<T>(c: Ctx, op: Op, run: () => Promise<T>): Promise<T> {
   try {
     const out = await run();
@@ -266,8 +267,8 @@ reviewAiRoutes.get("/v1/review-ai/report", (c) => counted(c, "report", async () 
   if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 120 * 86_400_000) throw new HttpError(400, "invalid_arguments", undefined, { field: "from" });
   const criteria = c.req.query("criteria") ?? null;
   if (criteria !== null && !/^v\d{1,4}$/.test(criteria)) throw new HttpError(400, "invalid_arguments", undefined, { field: "criteria" });
-  const [versions, arbitration] = await Promise.all([aiReport(c.env.DB, { from, to, criteria }), arbitrationStats(c.env.DB, { from, to, criteria })]);
-  return c.json({ from, to, versions: versions.map((v) => ({ ...v, arbitration: arbitration[v.criteriaVersion] ?? null })) }, 200, NO_STORE);
+  const [versions, arbitration, persuasion] = await Promise.all([aiReport(c.env.DB, { from, to, criteria }), arbitrationStats(c.env.DB, { from, to, criteria }), persuasionStats(c.env.DB, { from, to, criteria })]);
+  return c.json({ from, to, versions: versions.map((v) => ({ ...v, arbitration: arbitration[v.criteriaVersion] ?? null, persuasion: persuasion[v.criteriaVersion] ?? { convinced: 0, rated: 0 } })) }, 200, NO_STORE);
 }));
 
 const criteriaOf = (c: Ctx) => {
@@ -293,13 +294,20 @@ reviewAiRoutes.get("/v1/review-ai/disagreements", (c) => counted(c, "arbitration
   // 沒指定判準版本就看目前版本；criteria=all 看全部
   const asked = c.req.query("criteria");
   const criteria = asked === "all" ? null : asked === undefined ? await currentCriteria(c.env.DB) : criteriaOf(c);
-  return c.json({ ...(await listDisagreements(c.env.DB, { state, criteria, direction: direction as Direction | null, reason, limit, offset, viewer: member.id })), criteria }, 200, NO_STORE);
+  // 本週被說服比例（UTC 週、按選擇時間）：全部分歧一起算，不跟著清單篩選
+  const week = weekStart(Date.now());
+  const [list, persuasion] = await Promise.all([
+    listDisagreements(c.env.DB, { state, criteria, direction: direction as Direction | null, reason, limit, offset, viewer: member.id }),
+    persuasionWindow(c.env.DB, week, week + 7 * 86_400_000),
+  ]);
+  return c.json({ ...list, criteria, persuasion: { weekStart: week, ...persuasion } }, 200, NO_STORE);
 }));
 
 /** 單筆分歧：卡片（與 AI 讀到的同一份封存內容；讀不到就說明）、人工、AI、歷次仲裁。審核員名字只給管理員。 */
 reviewAiRoutes.get("/v1/review-ai/disagreements/:id", (c) => counted(c, "arbitration_read", async () => {
   const { member, role } = await requireHuman(c);
   const sides = await disagreementSides(c.env.DB, c.req.param("id"), { viewer: member.id, names: role === "manager" || role === "owner" });
+  const mine = await myPersuasion(c.env.DB, sides.ai.suggestionId, member.id);
   const s = await getSubmission(c.env.DB, sides.submission.id);
   let card: ReturnType<typeof aiCardInput> | null = null;
   try {
@@ -308,7 +316,7 @@ reviewAiRoutes.get("/v1/review-ai/disagreements/:id", (c) => counted(c, "arbitra
   } catch (error) {
     if (!(error instanceof HttpError)) throw error;
   }
-  return c.json({ ...sides, content: card ? { state: "ready", ...card } : { state: "unavailable" }, update: await aiUpdateDiff(c.env, s) }, 200, NO_STORE);
+  return c.json({ ...sides, myPersuasion: mine, content: card ? { state: "ready", ...card } : { state: "unavailable" }, update: await aiUpdateDiff(c.env, s) }, 200, NO_STORE);
 }));
 
 /** 仲裁：人對／AI 對／都說得通／都不對，選填備註，可勾加入參考範例。不改原決定、不通知作者。 */
@@ -318,6 +326,16 @@ reviewAiRoutes.post("/v1/review-ai/disagreements/:id/arbitration", (c) => counte
   const operationId = operationOf(body.operationId);
   const out = await arbitrate(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, addToReference: body.addToReference, note: body.note, noteTypes: body.noteTypes, operationId, now: Date.now() });
   return c.json(out, 200, NO_STORE);
+}));
+
+/**
+ * AI 說服你了嗎：評 AI 的理由說得好不好，和仲裁「誰對」無關。說服我了／沒說服，可改，每人每筆取最後一次。
+ * 能打開這筆分歧的審核員都能評；不寫審核事件、不動仲裁。
+ */
+reviewAiRoutes.put("/v1/review-ai/disagreements/:id/persuasion", (c) => counted(c, "persuade", async () => {
+  const { member } = await requireHuman(c);
+  const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+  return c.json(await persuade(c.env.DB, { suggestionId: c.req.param("id"), memberId: member.id, value: body.value, now: Date.now() }), 200, NO_STORE);
 }));
 
 /**

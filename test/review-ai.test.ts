@@ -7,6 +7,7 @@ import { dropSubmission } from '../src/review-drop';
 import { aiCardInput } from '../src/review-ai';
 import { getCard } from '../src/cards';
 import { upstream } from '../src/upstream';
+import { opsMetrics } from '../src/ops-metrics';
 
 // AI 審卡影子模式（任務 2026-11-23-ai-card-review）：審卡員只讀與寫建議，雙盲，審完才揭曉。
 const AUTHOR = 10001, AGENT = 30001, HUMAN = 20001, MANAGER = 20002;
@@ -363,6 +364,87 @@ describe('AI 分歧仲裁', () => {
     const v1 = report.versions.find((v: any) => v.criteriaVersion === 'v1');
     expect(v1.arbitration.values).toEqual({ human_right: 0, ai_right: 1, both_ok: 1, both_wrong: 0 });
     expect(v1.arbitration.reasons['opening.no_reply_hook']).toEqual({ humanWrong: 1, aiWrong: 0 });
+  });
+});
+
+describe('AI 說服你了嗎（owner 2026-11-24）', () => {
+  const persuade = (sid: string, value: unknown, token = 'human') => send('PUT', `/v1/review-ai/disagreements/${sid}/persuasion`, token, { value });
+  async function setup() {
+    const a = await submitCard('draft-a');
+    const c = await submitCard('draft-c');
+    const sa = (await json(await suggest(a.id, { verdict: 'reject', reasons: ['opening.no_reply_hook'] }))).id;
+    const sc = (await json(await suggest(c.id, { verdict: 'pass' }))).id;
+    await decide(a.id, humanId, 'approve');
+    await decide(c.id, humanId, 'approve');
+    return { a, sa, sc };
+  }
+  const rows = async () => (await env.DB.prepare('SELECT suggestion_id, member_id, value FROM review_ai_persuasion ORDER BY member_id').all()).results;
+
+  it('評一次、改選、重送同一個選擇都只有一列，取最後一次；不動仲裁、不寫審核事件、仍是待仲裁', async () => {
+    const { sa } = await setup();
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'))).myPersuasion).toBeNull();
+    const first = await persuade(sa, 'convinced');
+    expect(first.status).toBe(200);
+    expect(await json(first)).toMatchObject({ value: 'convinced' });
+    expect((await persuade(sa, 'not_convinced')).status).toBe(200);
+    expect((await persuade(sa, 'not_convinced')).status).toBe(200);
+    expect(await rows()).toEqual([{ suggestion_id: sa, member_id: humanId, value: 'not_convinced' }]);
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'))).myPersuasion).toBe('not_convinced');
+    expect((await persuade(sa, 'maybe')).status).toBe(400);
+    expect((await persuade(sa, undefined)).status).toBe(400);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM review_ai_arbitrations').first<{ n: number }>())!.n).toBe(0);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM review_events WHERE ai_suggestion_id=?").bind(sa).first<{ n: number }>())!.n).toBe(0);
+    expect((await json(await get('/v1/review-ai/disagreements', 'human'))).items.map((i: any) => i.suggestionId)).toContain(sa);
+    const metrics = await opsMetrics(env.DB);
+    expect(metrics).toContain('hearthroom_review_ai_operations_total{operation="persuade",outcome="success"} 3');
+    expect(metrics).toContain('hearthroom_review_ai_operations_total{operation="persuade",outcome="rejected"} 2');
+  });
+
+  it('能打開這筆分歧的審核員都能評，各算各的；只回自己的選擇；自己的卡、不是分歧、不是審核員都不行', async () => {
+    const { sa, sc } = await setup();
+    await persuade(sa, 'convinced', 'human');
+    await persuade(sa, 'not_convinced', 'mgr');
+    expect((await rows()).map((r: any) => r.value).sort()).toEqual(['convinced', 'not_convinced']);
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'human'))).myPersuasion).toBe('convinced');
+    expect((await json(await get(`/v1/review-ai/disagreements/${sa}`, 'mgr'))).myPersuasion).toBe('not_convinced');
+    expect((await persuade(sc, 'convinced')).status).toBe(404);
+    expect((await persuade('nope', 'convinced')).status).toBe(404);
+    expect((await persuade(sa, 'convinced', 'author')).status).toBe(403);
+    expect((await persuade(sa, 'convinced', 'key')).status).toBe(401);
+    await makeReviewer(AUTHOR);
+    expect((await persuade(sa, 'convinced', 'author')).status).toBe(404);
+    expect(await rows()).toHaveLength(2);
+  });
+
+  it('清單帶本週（UTC 週）被說服比例：不受篩選影響，上週的不算，已判不到 10 筆標樣本不足', async () => {
+    const { sa } = await setup();
+    await persuade(sa, 'convinced');
+    let week = (await json(await get('/v1/review-ai/disagreements?state=done&criteria=v9', 'human'))).persuasion;
+    const monday = new Date(week.weekStart);
+    expect(monday.getUTCDay()).toBe(1);
+    expect(monday.getUTCHours()).toBe(0);
+    expect(Date.now() - week.weekStart).toBeLessThan(7 * 86_400_000);
+    expect(week).toMatchObject({ convinced: 1, rated: 1, suppressed: true });
+    // 再補 10 筆本週、1 筆上週（直接寫表，只看統計口徑）
+    const now = Date.now();
+    for (let i = 0; i < 10; i++) {
+      await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+        .bind(`g-${i}`, managerId, 's', i < 4 ? 'convinced' : 'not_convinced', now, now).run();
+    }
+    await env.DB.prepare('INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+      .bind('g-old', managerId, 's', 'convinced', week.weekStart - 1, week.weekStart - 1).run();
+    week = (await json(await get('/v1/review-ai/disagreements', 'human'))).persuasion;
+    expect(week).toMatchObject({ convinced: 5, rated: 11, suppressed: false });
+  });
+
+  it('報表每個判準版本帶被說服筆數（沒仲裁過也有），每人每筆取最後一次', async () => {
+    const { sa } = await setup();
+    await persuade(sa, 'convinced', 'human');
+    await persuade(sa, 'not_convinced', 'human');
+    await persuade(sa, 'convinced', 'mgr');
+    const v1 = (await json(await get('/v1/review-ai/report', 'mgr'))).versions.find((v: any) => v.criteriaVersion === 'v1');
+    expect(v1.arbitration).toBeNull();
+    expect(v1.persuasion).toEqual({ convinced: 1, rated: 2 });
   });
 });
 

@@ -193,3 +193,48 @@ export async function aiNotes(db: D1Database, input: { from: number; to: number;
     ORDER BY at DESC LIMIT ${input.limit}`).bind(input.from, input.to, input.type).all<Record<string, any>>();
   return rows.results.map((r) => ({ ...r, cardId: String(r.cardId), types: JSON.parse(r.types ?? "[]") as string[] }));
 }
+
+/**
+ * AI 說服你了嗎（owner 2026-11-24）：一致率只是參考，主指標是分歧時 AI 的理由能不能說服人。
+ * 和仲裁「誰對」是兩件事：不寫仲裁、不寫審核事件、不動快照保留期。每位審核員每筆分歧一列，改選就覆蓋，統計取這一列（最後一次選擇）。
+ */
+export const PERSUASION_VALUES = ["convinced", "not_convinced"] as const;
+export type PersuasionValue = (typeof PERSUASION_VALUES)[number];
+/** 已判不到這個數只給計數、不給比例（沿用審核統計的抑制門檻） */
+export const PERSUASION_MIN = 10;
+
+/** 評一筆分歧：能打開這筆分歧的審核員都能評（自己的卡、已不是分歧的 404）。同一個選擇重送只更新時間。 */
+export async function persuade(db: D1Database, input: { suggestionId: string; memberId: string; value: unknown; now: number }) {
+  if (typeof input.value !== "string" || !(PERSUASION_VALUES as readonly string[]).includes(input.value)) throw new HttpError(400, "invalid_arguments", undefined, { field: "value" });
+  const row = await db.prepare(`SELECT a.id, a.submission_id, ${DIRECTION} AS direction ${base}
+      WHERE a.id=?1 AND NOT EXISTS(SELECT 1 FROM hosting_versions ov WHERE ov.submission_id=s.id AND ov.member_id=?2)`)
+    .bind(input.suggestionId, input.memberId).first<{ id: string; submission_id: string; direction: string | null }>();
+  if (!row || !row.direction) throw new HttpError(404, "disagreement_not_found");
+  await db.prepare(`INSERT INTO review_ai_persuasion (suggestion_id,member_id,submission_id,value,created_at,updated_at) VALUES (?,?,?,?,?,?)
+      ON CONFLICT(suggestion_id,member_id) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
+    .bind(row.id, input.memberId, row.submission_id, input.value, input.now, input.now).run();
+  return { value: input.value as PersuasionValue, updatedAt: input.now };
+}
+
+/** 這位審核員對這筆分歧最後一次的選擇（只回自己的，別人的不回） */
+export async function myPersuasion(db: D1Database, suggestionId: string, memberId: string): Promise<PersuasionValue | null> {
+  const row = await db.prepare("SELECT value FROM review_ai_persuasion WHERE suggestion_id=? AND member_id=?").bind(suggestionId, memberId).first<{ value: PersuasionValue }>();
+  return row?.value ?? null;
+}
+
+/** 一段期間內（按選擇時間）的被說服筆數：清單頁頂的本週比例，不看判準版本與清單篩選 */
+export async function persuasionWindow(db: D1Database, from: number, to: number) {
+  const row = await db.prepare(`SELECT COUNT(*) AS rated, COALESCE(SUM(value='convinced'),0) AS convinced FROM review_ai_persuasion WHERE updated_at>=? AND updated_at<?`)
+    .bind(from, to).first<{ rated: number; convinced: number }>();
+  const rated = row?.rated ?? 0;
+  return { convinced: row?.convinced ?? 0, rated, suppressed: rated < PERSUASION_MIN };
+}
+
+/** 報表：每個判準版本的被說服筆數。期間口徑與仲裁統計相同（送審時間），每人每筆取最後一次 */
+export async function persuasionStats(db: D1Database, input: { from: number; to: number; criteria: string | null }) {
+  const rows = await db.prepare(`SELECT a.criteria_version AS v, COUNT(*) AS rated, SUM(p.value='convinced') AS convinced
+    FROM review_ai_persuasion p JOIN review_ai_suggestions a ON a.id=p.suggestion_id JOIN review_submissions s ON s.id=a.submission_id
+    WHERE s.submitted_at>=? AND s.submitted_at<? AND (?3 IS NULL OR a.criteria_version=?3) GROUP BY a.criteria_version`)
+    .bind(input.from, input.to, input.criteria).all<{ v: string; rated: number; convinced: number }>();
+  return Object.fromEntries(rows.results.map((r) => [r.v, { convinced: r.convinced, rated: r.rated }]));
+}
