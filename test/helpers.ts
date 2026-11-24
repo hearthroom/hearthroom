@@ -1,4 +1,5 @@
 import { resetQueueCountsMemo } from '../src/review';
+import { resetMaintenanceMemo } from '../src/maintenance';
 import {frozenFixtureRoles,restoreHostedFixture,hostedFixture} from './hosted-fixture';
 import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
@@ -17,6 +18,7 @@ let cacheGeneration = 0;
  */
 export async function resetDb(): Promise<void> {
   resetQueueCountsMemo();
+  resetMaintenanceMemo();
   // D1 batch executes in order. Preserve dependency/trigger cleanup order while
   // resetting the database in one RPC instead of a round trip for every table.
   const statements:D1PreparedStatement[]=[];
@@ -324,6 +326,8 @@ export const envWithAssets = (files?: Record<string, string | Response>, shellHe
  * 請求裡的查詢都走 withSession 開出來的工作階段，只盯 env.DB.prepare 會數到零。
  */
 export function recordD1(db: D1Database): { queries: string[]; db: D1Database } {
+  // 每次量測從乾淨的維護開關共用狀態開始：量到的第一個請求照舊會讀一次開關
+  resetMaintenanceMemo();
   const queries: string[] = [];
   const wrap = <T extends object>(target: T): T => new Proxy(target, { get(t, property) {
     if (property === "prepare") return (sql: string) => { queries.push(sql); return (t as unknown as D1Database).prepare(sql); };

@@ -18,6 +18,19 @@ export async function readMaintenance(db: D1Database): Promise<MaintenanceState>
     throw new InvalidMaintenanceState('Invalid maintenance configuration', {cause});
   }
 }
+// 2026-11-24 D1 過載止血：每個 API 請求都先讀一次主庫的維護開關（一小時近十萬次）。同一個 Worker 實例 5 秒內共用一份；
+// 開關切換最多晚 5 秒生效。排程與資源庫照舊直接讀（readMaintenance）。
+let maintenanceMemo:{at:number;value:Promise<MaintenanceState>}|null=null;
+export const MAINTENANCE_MEMO_MS=5_000;
+export function resetMaintenanceMemo(){maintenanceMemo=null;}
+function cachedMaintenance(db:D1Database):Promise<MaintenanceState>{
+ const now=Date.now();
+ if(maintenanceMemo&&now-maintenanceMemo.at<MAINTENANCE_MEMO_MS)return maintenanceMemo.value;
+ const value=readMaintenance(db);
+ maintenanceMemo={at:now,value};
+ value.catch(()=>{if(maintenanceMemo?.value===value)maintenanceMemo=null;});
+ return value;
+}
 const STATIC = /\.(?:js|mjs|css|png|webp|jpe?g|gif|svg|ico|woff2?|ttf|map|webmanifest|txt|xml|atom)$/i;
 const noStore={'Cache-Control':'no-store','Retry-After':'15'};
 /** Runs before sessions, identity reads, HTML metadata, proxy upgrades and Provider calls. */
@@ -33,7 +46,7 @@ export async function maintenanceResponse(request:Request,env:Env,ctx:ExecutionC
   const document=['GET','HEAD'].includes(request.method)&&(!path.split('/').pop()?.includes('.')||path.endsWith('.html')||request.headers.get('Accept')?.includes('text/html'));
   if(!status&&!api&&!document&&!sandboxAsset)return null;
   let state:MaintenanceState;
-  try { state=await readMaintenance(env.DB); }
+  try { state=await cachedMaintenance(env.DB); }
   catch (error) {
     ctx.waitUntil(bumpOp(env.DB,'maintenance','status','error'));
     // Let the requested route handle its own dependencies. Pollers still need
