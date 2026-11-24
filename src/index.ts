@@ -38,6 +38,7 @@ import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
 import { listReviewDecisions, correctReview, correctionEligibility } from './review-correction';
+import { flipDetail, startFlip, withdrawFlip } from './review-flip';
 import { pickLocale } from './types';
 import { communityMaintenance, NOTIFICATION_RETENTION_MS, purgeExpiredCommunityNotifications } from "./community/service";
 import { communityRoutes } from "./community/routes";
@@ -110,8 +111,8 @@ import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, weeklyUsageForMember, openPack, needsFirstRegistration } from "./quota";
 import { hashDeviceToken, recordRewardDevice, trimRewardDevices } from "./reward-device";
 import {
-  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue, queueCounts,
-  release as releaseSubmission, stamp as stampSubmission, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, claimIsLive, claim as claimSubmission, getSubmission, hasStamped, listQueue, queueCounts,
+  release as releaseSubmission, stamp as stampSubmission, FLIP_HIDDEN, REVIEW_NOTE_MAX, submissionHistory, recordReviewLengthStatement, hold as holdSubmission, unhold as unholdSubmission, holdOf, reopenCard, withdrawReopen, recordReviewCountsStatement, reviewCounts,
 } from "./review";
 import { authorCards, reviewAuthor, submissionType } from "./review-author";
 import { isAdult, setCardFeatured } from "./cards";
@@ -1840,9 +1841,12 @@ app.get('/v1/mine/reviews/:id',async(c)=>{
   s.card_id AS cardNumber,w.source_provider AS provider,
   v.version_id AS versionId,v.public_role,x.state AS correctionState,x.created_at AS correctedAt,
   coalesce(x.state='complete' AND json_array_length(json_extract(x.command,'$.rewardPayoutEntryIds'))>0,0) AS rewardKept
-  FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id JOIN works w ON w.id=v.work_id
+  FROM review_submissions s
+  -- 改判通過後版本列轉給了改判單（0152）：原本那張駁回的結果頁照樣打得開
+  JOIN hosting_versions v ON v.submission_id IN (s.id,(SELECT f.id FROM review_submissions f WHERE f.flip_of=s.id AND f.status='approved'))
+  JOIN works w ON w.id=v.work_id
   LEFT JOIN review_corrections x ON x.submission_id=s.id AND x.state='complete'
-  WHERE s.id=? AND w.member_id=?`).bind(c.req.param('id'),member.id).first<{
+  WHERE s.id=? AND w.member_id=? AND NOT ${FLIP_HIDDEN('s')}`).bind(c.req.param('id'),member.id).first<{
    status:string;note:string;submittedAt:number;decidedAt:number|null;versionId:string;public_role:string;correctionState:string|null;correctedAt:number|null;kind:string;reasons:string|null;coaching:number;suggestions:string|null;cardNumber:number;provider:string;
   }>();
  if(!row)throw new HttpError(404,'review result not found');
@@ -1861,6 +1865,38 @@ app.post('/v1/review/:id/correction',async(c)=>{
   queuePush(c);return c.json(result,200,{'Cache-Control':'private, no-store'});
  }catch(error){
   if(error instanceof HttpError&&(error.status===400||error.status===403))await bumpOp(c.env.DB,'review_correction','correct','denied');
+  throw error;
+ }
+});
+
+/**
+ * 駁回改判為通過（ui-flip-approve.md）：管理員用同一個送審版本開一張改判單，由他自己領著走正常核准。
+ * 冪等鍵 operationId（UUID）：同一個 operation 重送回當初的結果，拿去改別張單是 409。規則見 src/review-flip.ts。
+ */
+app.post('/v1/review/:id/flip',async(c)=>{
+ const member=await requireReviewer(c);
+ const body=await c.req.json().catch(()=>({})) as {operationId?:unknown;reason?:unknown};
+ try{
+  const result=await startFlip(c.env,{id:c.req.param('id'),memberId:member.id,operationId:body.operationId,reason:body.reason,now:Date.now()});
+  note(c,{event:'review_flip',detail:'start'});
+  queuePush(c);return c.json(result,result.replayed?200:201,{'Cache-Control':'private, no-store'});
+ }catch(error){
+  if(error instanceof HttpError&&(error.status===400||error.status===403))await bumpOp(c.env.DB,'review_flip','start','denied');
+  if(error instanceof HttpError&&error.status===409&&error.message==='review_flip_superseded')await bumpOp(c.env.DB,'review_flip','start','superseded');
+  throw error;
+ }
+});
+
+/** 撤回改判（＝駁回這張改判單）：限發起的管理員；維持原本的駁回、不通知作者。 */
+app.post('/v1/review/:id/flip/withdraw',async(c)=>{
+ const member=await requireReviewer(c);
+ try{
+  await withdrawFlip(c.env.DB,{id:c.req.param('id'),memberId:member.id,now:Date.now()});
+  await bumpOp(c.env.DB,'review_flip','withdraw','success');
+  note(c,{event:'review_flip',detail:'withdraw'});
+  queuePush(c);return c.json({status:'rejected'},200,{'Cache-Control':'private, no-store'});
+ }catch(error){
+  if(error instanceof HttpError)await bumpOp(c.env.DB,'review_flip','withdraw',error.status===409?'conflict':'denied');
   throw error;
  }
 });
@@ -2135,14 +2171,16 @@ app.get("/v1/review/:id/originality", async (c) => {
 app.post("/v1/review/:id/tags", async (c) => {
   const { member, s } = await claimedSubmission(c);
   if (s.status !== "pending") throw new HttpError(410, "review no longer active");
-  if (s.claimed_by !== member.id || s.claimed_at === null || Date.now() - s.claimed_at >= CLAIM_TTL_MS) throw new HttpError(409, "claim this submission first");
+  if (s.claimed_by !== member.id || !claimIsLive(s, Date.now())) throw new HttpError(409, "claim this submission first");
   const body = (await c.req.json().catch(() => ({}))) as { tags?: unknown; fandom?: unknown; fandomId?: unknown; generation?: unknown };
   if (typeof body.generation === "string" && body.generation !== s.claim_generation) throw new HttpError(409, "claim changed");
   const tags = normalizeTags(body.tags);
   // 原作：沒帶就不動；帶了（編號或文字，含空字串）就換成那個
   const fandomInput = await resolveFandom(c.env.DB, body);
-  const version = await c.env.DB.prepare("SELECT version_id, public_role FROM hosting_versions WHERE submission_id = ? AND state = 'pending'")
-    .bind(s.id).first<{ version_id: string; public_role: string }>();
+  // 改判單待審時版本列還在原本那張駁回單上（0152），核准時才轉過來
+  const owner = s.flip_of ? { id: s.flip_of, state: "rejected" } : { id: s.id, state: "pending" };
+  const version = await c.env.DB.prepare("SELECT version_id, public_role FROM hosting_versions WHERE submission_id = ? AND state = ?")
+    .bind(owner.id, owner.state).first<{ version_id: string; public_role: string }>();
   // 舊流程由同步開的重審單沒有版本可改（公開資料跟著供應商走）
   if (!version?.public_role) throw new HttpError(409, "tags_not_editable");
   const role = JSON.parse(version.public_role) as UpstreamRole & { searchName?: string; searchText?: string; searchBody?: string; fandomQid?: string | null; fandomKey?: string; fandomSearch?: string };
@@ -2153,8 +2191,8 @@ app.post("/v1/review/:id/tags", async (c) => {
   await c.env.DB.batch([
     ...(fandomChanged ? [c.env.DB.prepare("INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,'fandom','review',?,?,?,? FROM cards WHERE id=?")
       .bind(crypto.randomUUID(), member.id, role.fandom ?? "", fandom.fandom, Date.now(), crypto.randomUUID(), s.card_id)] : []),
-    c.env.DB.prepare("UPDATE hosting_versions SET public_role = ? WHERE version_id = ? AND submission_id = ? AND state = 'pending'")
-      .bind(JSON.stringify(next), version.version_id, s.id),
+    c.env.DB.prepare("UPDATE hosting_versions SET public_role = ? WHERE version_id = ? AND submission_id = ? AND state = ?")
+      .bind(JSON.stringify(next), version.version_id, owner.id, owner.state),
     // 稽核紀錄跟管理後台改標籤同一張表，卡片的管理頁看得到誰在什麼時候改了什麼
     c.env.DB.prepare("INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,'tags','review',?,?,?,? FROM cards WHERE id=?")
       .bind(crypto.randomUUID(), member.id, JSON.stringify(role.tags ?? []), JSON.stringify(tags), Date.now(), crypto.randomUUID(), s.card_id),
@@ -2165,7 +2203,8 @@ app.post("/v1/review/:id/tags", async (c) => {
 
 /** 這一版過審後會上榜的標籤與原作（審核人可能改過）。舊流程的單沒有版本：什麼都不回。 */
 async function versionMeta(db: D1Database, submissionId: string): Promise<{ tags?: string[]; fandom?: string; fandomId?: string }> {
-  const row = await db.prepare("SELECT json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom, json_extract(public_role,'$.fandomQid') AS fandom_qid FROM hosting_versions WHERE submission_id = ?").bind(submissionId).first<{ tags: string | null; fandom: string | null; fandom_qid: string | null }>();
+  // 改判單待審時版本列還在原本那張駁回單上（0152）
+  const row = await db.prepare("SELECT json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom, json_extract(public_role,'$.fandomQid') AS fandom_qid FROM hosting_versions WHERE submission_id IN (?1, (SELECT flip_of FROM review_submissions WHERE id = ?1)) LIMIT 1").bind(submissionId).first<{ tags: string | null; fandom: string | null; fandom_qid: string | null }>();
   if (!row?.tags) return {};
   return { tags: JSON.parse(row.tags) as string[], fandom: row.fandom ?? "", ...(row.fandom_qid ? { fandomId: row.fandom_qid } : {}) };
 }
@@ -2202,9 +2241,11 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
   // 不受理清單的「查看」：唯讀，不必領取（不受理中的單本來就不能領）
   // 自己寫的卡例外：作者（包括身兼審核員的作者）永遠不該知道卡被不受理
   const droppedNow=s.status==='pending'&&await isDropped(c.env.DB,s.id)&&!await c.env.DB.prepare('SELECT 1 FROM hosting_versions WHERE submission_id=? AND member_id=?').bind(s.id,member.id).first();
-  if(!stampedByMe&&!heldByMe&&!droppedNow&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
+  // 改判單：別的管理員可以唯讀查看（頁面寫明只有發起人能處理）；發起人的領取不逾時
+  const flipReadOnly=s.status==='pending'&&!!s.flip_of&&s.flip_by!==member.id&&(role==='manager'||role==='owner');
+  if(!stampedByMe&&!heldByMe&&!droppedNow&&!flipReadOnly&&!(s.status!=='pending'&&(role==='manager'||role==='owner'))){
     if(s.status!=='pending')throw new HttpError(410,'review no longer active');
-    if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
+    if(s.claimed_by!==member.id||!claimIsLive(s,Date.now()))throw new HttpError(409,'claim this submission first');
   }
   if(s.rating==='R'&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
   return { member, s, stampedByMe, droppedNow };
@@ -2212,7 +2253,8 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
 
 /** 作者側寫（審卡 V2）：只給審核頁；回標記、依據與覆寫，不回帳號以外的身分、不回裝置雜湊 */
 async function reviewAuthorProfile(db: D1Database, submissionId: string, now: number) {
-  const row = await db.prepare(`SELECT v.member_id, sd.device_hash FROM hosting_versions v LEFT JOIN review_submission_devices sd ON sd.submission_id=v.submission_id WHERE v.submission_id=?`)
+  const row = await db.prepare(`SELECT v.member_id, sd.device_hash FROM hosting_versions v LEFT JOIN review_submission_devices sd ON sd.submission_id=v.submission_id
+    WHERE v.submission_id IN (?1, (SELECT flip_of FROM review_submissions WHERE id = ?1)) LIMIT 1`)
     .bind(submissionId).first<{ member_id: string; device_hash: string | null }>();
   if (!row) return null;
   const profiles = await authorProfiles(db, [row.member_id], now);
@@ -2347,6 +2389,8 @@ app.get("/v1/review/:id/detail", async (c) => {
           ...(st.member_id === member.id && myFinalSource ? { finalSource: myFinalSource } : {}) })),
         correction:await c.env.DB.prepare("SELECT note,created_at AS at,state,operation_id AS operationId,public_state AS publicState,actor_member_id=? AS canResume FROM review_corrections WHERE submission_id=? ORDER BY rowid DESC LIMIT 1").bind(member.id,s.id).first(),
         ...(await correctionEligibility(c.env.DB,s.id,member.id,Date.now())),
+        // 駁回改判為通過：這張是改判單就帶改判說明；是駁回單就帶能不能改判、作者有沒有改稿重送
+        ...(await flipDetail(c.env.DB, s, member.id)),
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份
       card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },

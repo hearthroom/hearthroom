@@ -65,7 +65,7 @@ reviewAiRoutes.get("/v1/review-ai/queue", (c) => counted(c, "queue", async () =>
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query("limit") ?? 50)) || 50, 1), 200);
   const now = Date.now();
   const where = `FROM review_submissions s
-    WHERE (s.status='pending' OR (?1='recent' AND s.status IN ('approved','rejected')))
+    WHERE (s.status='pending' OR (?1='recent' AND s.status IN ('approved','rejected'))) AND s.flip_of IS NULL
       AND (?1='pending' OR s.submitted_at>=?2)
       AND (?3=0 OR NOT EXISTS (SELECT 1 FROM review_ai_suggestions a WHERE a.submission_id=s.id AND a.agent_member_id=?4 AND a.verdict IS NOT NULL AND (?5 IS NULL OR a.criteria_version=?5)))`;
   const args = [scope, now - AI_BACKFILL_WINDOW_MS, unshadowed ? 1 : 0, agent.id, criteria];
@@ -153,6 +153,8 @@ async function write(c: Ctx, tagsOnly: boolean) {
   const agent = await requireAgent(c);
   const now = Date.now();
   const s = await getSubmission(c.env.DB, c.req.param("id")!);
+  // 改判單（駁回改判為通過）是管理員對自己判斷的更正，不是一張新的送審：不給 AI 判、不進人機對照
+  if (s.flip_of) throw new HttpError(409, "review_flip_not_for_ai");
   const phase = aiPhaseOf(s, now);
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") throw new HttpError(400, "invalid_arguments");

@@ -45,6 +45,8 @@ export async function aiStateOf(db: D1Database, submissionId: string): Promise<A
 export async function recordBlind(db: D1Database, input: DecisionInput): Promise<BlindView> {
   const row = await getSubmission(db, input.submissionId);
   if (row.reopen_of) throw new HttpError(409, "blind_not_applicable");
+  // 改判單只有通過或撤回改判（撤回走 /flip/withdraw）
+  if (row.flip_of && input.verdict === "reject") throw new HttpError(409, "review_flip_use_withdraw");
   if (await blindOf(db, row.id, input.memberId)) throw new HttpError(409, "blind_already_recorded");
   await guardDecision(db, row, input);
   const d = await normalizeDecision(db, row, input);

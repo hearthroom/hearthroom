@@ -3,6 +3,7 @@ import {requireMember} from './members';
 import {ownerCardSource,readOwnerVisibility} from './work-sharing';
 import {bumpOp} from './ops-metrics';
 import {parseReviewReasons} from '../shared/review-reasons';
+import {FLIP_HIDDEN} from './review';
 import {type Env,HttpError} from './types';
 
 /** Author metadata only. Never select a review snapshot, stamp, claim or private document. */
@@ -23,7 +24,7 @@ reviewStatusRoutes.get('/v1/me/cards/:id/review-status',async c=>{
    CASE WHEN v.update_kind='minor' THEN 1 WHEN v.update_kind='major' THEN 0 ELSE NULL END AS silentUpdate
    FROM review_submissions s LEFT JOIN hosting_versions v ON v.submission_id=s.id
    LEFT JOIN works w ON w.id=v.work_id
-   WHERE s.provider='harbor' AND s.card_id=? AND (s.source_role_id=? OR v.source_role_id=?)
+   WHERE s.provider='harbor' AND s.card_id=? AND (s.source_role_id=? OR v.source_role_id=?) AND NOT ${FLIP_HIDDEN('s')}
     AND (v.version_id IS NULL OR (v.member_id=? AND w.member_id=?))
    ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1`).bind(row.id,source,source,member.id,member.id).first<{
     id:string;kind:string;status:string;submittedAt:number;rejectionReason:string|null;rejectionCodes:string|null;

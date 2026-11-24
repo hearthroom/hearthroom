@@ -98,8 +98,10 @@ export async function authorCards(db: D1Database, cardId: string | number, opts:
       `SELECT c.id, c.names, c.background_url AS cover, c.status, c.public_blocked, c.board_hidden, c.rating,
               EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id = c.id) AS held,
               EXISTS(SELECT 1 FROM review_submissions r WHERE r.card_id = c.id AND r.status = 'pending' AND r.reopen_of IS NOT NULL) AS re_review,
-              (SELECT COUNT(*) FROM review_submissions r WHERE r.card_id = c.id AND r.status IN ('approved', 'rejected') AND r.reopen_of IS NULL) AS decided,
-              (SELECT COUNT(*) FROM review_submissions r WHERE r.card_id = c.id AND r.status = 'rejected' AND r.reopen_of IS NULL) AS rejected,
+              -- 改判：改判單跟原單是同一次送審（撤回的改判不算；改判通過時原單由改判單代表）
+              (SELECT COUNT(*) FROM review_submissions r WHERE r.card_id = c.id AND r.status IN ('approved', 'rejected') AND r.reopen_of IS NULL AND r.flip_of IS NULL) AS decided,
+              (SELECT COUNT(*) FROM review_submissions r WHERE r.card_id = c.id AND r.status = 'rejected' AND r.reopen_of IS NULL AND r.flip_of IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM review_submissions f WHERE f.flip_of = r.id AND f.status = 'approved')) AS rejected,
               (SELECT json_object('id', r.id, 'status', r.status, 'submittedAt', r.submitted_at, 'decidedAt', r.decided_at, 'reopen', r.reopen_of IS NOT NULL)
                  FROM review_submissions r WHERE r.card_id = c.id AND r.status <> 'superseded' ORDER BY r.submitted_at DESC, r.rowid DESC LIMIT 1) AS latest
        FROM cards c WHERE ${SAME_AUTHOR}

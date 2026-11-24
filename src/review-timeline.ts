@@ -11,7 +11,7 @@ import { parseReviewReasons } from '../shared/review-reasons';
  */
 export type TimelineAction =
   | 'submit' | 'approve' | 'reject' | 'reopen' | 'reopen_withdraw'
-  | 'drop' | 'restore' | 'hold' | 'unhold' | 'superseded';
+  | 'drop' | 'restore' | 'hold' | 'unhold' | 'superseded' | 'flip' | 'flip_withdraw';
 
 export interface TimelineItem {
   at: number;
@@ -33,13 +33,13 @@ export interface TimelineItem {
   current: boolean;
 }
 
-const EVENT_ACTIONS: TimelineAction[] = ['drop', 'restore', 'hold', 'unhold', 'superseded', 'reopen_withdraw'];
+const EVENT_ACTIONS: TimelineAction[] = ['drop', 'restore', 'hold', 'unhold', 'superseded', 'reopen_withdraw', 'flip_withdraw'];
 
 export async function reviewTimeline(db: D1Database, submissionId: string, viewer: string): Promise<{ items: TimelineItem[]; coverageFrom: number | null }> {
   const card = await db.prepare('SELECT card_id FROM review_submissions WHERE id=?').bind(submissionId).first<{ card_id: number }>();
   if (!card) return { items: [], coverageFrom: null };
   const [subs, stamps, events, first] = await db.batch([
-    db.prepare(`SELECT id, submitted_at, status, decided_at, note, reject_reasons, reopen_of FROM review_submissions WHERE card_id=? ORDER BY submitted_at, rowid`).bind(card.card_id),
+    db.prepare(`SELECT id, submitted_at, status, decided_at, note, reject_reasons, reopen_of, flip_of FROM review_submissions WHERE card_id=? ORDER BY submitted_at, rowid`).bind(card.card_id),
     db.prepare(`SELECT st.submission_id, st.member_id, st.verdict, st.note, st.created_at, COALESCE(NULLIF(m.display_name,''), m.handle) AS name, s.reject_reasons, s.reopen_of,
         (SELECT ev.marks FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id) AS marks,
         (SELECT ev.reasons FROM review_events ev WHERE ev.event_key='stamp:'||st.submission_id||':'||st.member_id AND ev.source='suggestions') AS suggestions
@@ -49,16 +49,17 @@ export async function reviewTimeline(db: D1Database, submissionId: string, viewe
       WHERE e.card_id=? AND +e.action IN (${EVENT_ACTIONS.map(() => '?').join(',')})`).bind(card.card_id, ...EVENT_ACTIONS),
     db.prepare('SELECT MIN(at) AS at FROM review_events'),
   ]);
-  type Sub = { id: string; submitted_at: number; status: string; decided_at: number | null; note: string; reject_reasons: string | null; reopen_of: string | null };
+  type Sub = { id: string; submitted_at: number; status: string; decided_at: number | null; note: string; reject_reasons: string | null; reopen_of: string | null; flip_of: string | null };
   const subRows = (subs as D1Result<Sub>).results;
   // 作者送審的輪次；重新審核單沿用它審的那一張的輪次
   const round = new Map<string, number>();
   let n = 0;
-  for (const s of subRows) if (!s.reopen_of) round.set(s.id, ++n);
-  for (const s of subRows) if (s.reopen_of) round.set(s.id, round.get(s.reopen_of) ?? n);
+  // 改判單（駁回改判為通過）跟它改判的那張是同一輪
+  for (const s of subRows) if (!s.reopen_of && !s.flip_of) round.set(s.id, ++n);
+  for (const s of subRows) if (s.reopen_of || s.flip_of) round.set(s.id, round.get((s.reopen_of ?? s.flip_of)!) ?? n);
   const items: TimelineItem[] = [];
   const base = (id: string) => ({ round: round.get(id) ?? 1, current: id === submissionId });
-  for (const s of subRows) items.push({ at: s.submitted_at, action: s.reopen_of ? 'reopen' : 'submit', actor: null, mine: false, ...base(s.id) });
+  for (const s of subRows) items.push({ at: s.submitted_at, action: s.reopen_of ? 'reopen' : s.flip_of ? 'flip' : 'submit', actor: null, mine: false, ...base(s.id) });
   const marksOf = (raw: string | null) => { try { const m = raw ? JSON.parse(raw) : []; return Array.isArray(m) && m.length ? { marks: m.filter((x): x is string => typeof x === 'string') } : {}; } catch { return {}; } };
   for (const st of (stamps as D1Result<{ submission_id: string; member_id: string; verdict: 'approve' | 'reject'; note: string; created_at: number; name: string | null; reject_reasons: string | null; marks: string | null; suggestions: string | null }>).results) {
     const suggestions = st.verdict === 'approve' ? parseReviewReasons(st.suggestions) : [];

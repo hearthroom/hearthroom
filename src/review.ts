@@ -74,13 +74,25 @@ export interface SubmissionRow {
   content_fingerprint: string | null;
   /** 通過並附改進建議的理由代碼（0146 起） */
   approve_suggestions: string | null;
+  /** 駁回改判為通過（0152 起）：改判的是哪一張駁回單、哪位管理員發起、改判理由。其他單是 NULL／空字串 */
+  flip_of?: string | null;
+  flip_by?: string | null;
+  flip_reason?: string;
 }
+
+/**
+ * 作者看不到的改判單：還沒通過（待審、撤回改判、作廢）的改判單。通過後就是一張普通的過審單；
+ * 通過後又被改判駁回的也照常給作者看（他收過那張單的通知）。s 是 review_submissions 的別名。
+ */
+export const FLIP_HIDDEN = (s: string) =>
+  `(${s}.flip_of IS NOT NULL AND ${s}.status<>'approved' AND NOT EXISTS(SELECT 1 FROM review_corrections fx WHERE fx.submission_id=${s}.id AND fx.state='complete'))`;
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
 export async function pendingSubmissionOf(db: D1Database, cardId: string): Promise<SubmissionRow | null> {
   return await db
     // 只看作者自己送的單：審核員發起的重新審核不是作者的送審，不能拿來判斷作者重送是不是重複
-    .prepare("SELECT * FROM review_submissions WHERE card_id = ? AND status = 'pending' AND reopen_of IS NULL ORDER BY submitted_at DESC LIMIT 1")
+    // 管理員發起的改判單也不是：作者看到的仍是駁回，可以照常改稿重送（重送會讓改判單作廢）
+    .prepare("SELECT * FROM review_submissions WHERE card_id = ? AND status = 'pending' AND reopen_of IS NULL AND flip_of IS NULL ORDER BY submitted_at DESC LIMIT 1")
     .bind(cardId)
     .first<SubmissionRow>();
 }
@@ -88,9 +100,13 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
 /**
  * 同一張卡在這張單之前、審核人真的看過（定案）的單。作者在排隊中重送而被取代的單（superseded）
  * 沒人看過，不算一次送審。用送審時間排，同一毫秒再看 rowid。
+ * 改判：改判單跟它改判的那張是同一次送審。改判單自己不把原單算進去（第幾次送審、上一次結果、新卡／更新分頁
+ * 都跟原單一樣）；改判通過後，原單由改判單代表；作者看不到的改判單（待審、撤回、作廢）不算。
  */
 export const EARLIER_DECIDED = (p: string, s: string) =>
   `${p}.card_id = ${s}.card_id AND ${p}.status IN ('approved', 'rejected') AND ${p}.reopen_of IS NULL
+   AND NOT ${FLIP_HIDDEN(p)} AND ${p}.id IS NOT ${s}.flip_of
+   AND NOT EXISTS (SELECT 1 FROM review_submissions pf WHERE pf.flip_of = ${p}.id AND NOT ${FLIP_HIDDEN("pf")})
    AND (${p}.submitted_at < ${s}.submitted_at OR (${p}.submitted_at = ${s}.submitted_at AND ${p}.rowid < ${s}.rowid))`;
 
 export interface PreviousSubmission { status: "approved" | "rejected"; note: string; submittedAt: number; decidedAt: number | null; reasons?: string[] }
@@ -116,8 +132,9 @@ export async function submissionHistory(db: D1Database, submissionId: string): P
   };
 }
 
-const claimIsLive = (row: { claimed_by: string | null; claimed_at: number | null }, now: number) =>
-  !!row.claimed_by && row.claimed_at !== null && now - row.claimed_at < CLAIM_TTL_MS;
+/** 領取還有效嗎。改判單由發起人領著時不逾時（只有他能處理，不會被放回給別人） */
+export const claimIsLive = (row: { claimed_by: string | null; claimed_at: number | null; flip_by?: string | null }, now: number) =>
+  !!row.claimed_by && row.claimed_at !== null && (now - row.claimed_at < CLAIM_TTL_MS || (!!row.flip_by && row.claimed_by === row.flip_by));
 
 export interface QueueItem {
   lengthExempt:boolean;
@@ -154,7 +171,11 @@ export interface QueueItem {
   fast: boolean;
   /** 更新差異的摘要（只有更新單有；pending＝還沒算，no_base／unreadable＝無法比較） */
   diff: QueueDiff | null;
+  /** 改判單（駁回改判為通過）：發起人、發起時間、原本駁回的時間；改判理由只給管理員。其他單是 null */
+  flip: QueueFlip | null;
 }
+
+export interface QueueFlip { by: string; at: number; rejectedAt: number | null; mine: boolean; reason?: string }
 
 export interface QueueDiff { state: "pending" | "done" | "no_base" | "unreadable"; summary: Record<string, unknown> | null }
 
@@ -200,8 +221,12 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine,
               (SELECT COUNT(*) FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")}) AS earlier,
               (SELECT p.status FROM review_submissions p WHERE ${EARLIER_DECIDED("p", "s")} ORDER BY p.submitted_at DESC, p.rowid DESC LIMIT 1) AS previous_status, ${HOLD_COLUMNS},
-              v.member_id AS author_member, sd.device_hash, COALESCE(f.after_drop, 0) AS after_drop, dd.state AS diff_state, dd.summary AS diff_summary
-       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id ${HOLD_JOIN}
+              v.member_id AS author_member, sd.device_hash, COALESCE(f.after_drop, 0) AS after_drop, dd.state AS diff_state, dd.summary AS diff_summary,
+              s.flip_of, s.flip_by, s.flip_reason, COALESCE(NULLIF(fm.display_name, ''), fm.handle) AS flip_name,
+              (SELECT o.decided_at FROM review_submissions o WHERE o.id = s.flip_of) AS flip_rejected_at
+       FROM review_submissions s JOIN cards c ON c.id = s.card_id
+       -- 改判單待審時版本列還在原本駁回的那張單上（見 0152）
+       LEFT JOIN hosting_versions v ON v.submission_id IN (s.id, s.flip_of) ${HOLD_JOIN} LEFT JOIN members fm ON fm.id = s.flip_by
        LEFT JOIN review_submission_devices sd ON sd.submission_id = s.id LEFT JOIN review_submission_features f ON f.submission_id = s.id
        LEFT JOIN review_submission_diffs dd ON dd.submission_id = s.id
        WHERE s.status = 'pending' AND ${NOT_DROPPED("s")} ${tab === "new" ? `AND ${NEW_CARD("s")}` : tab === "updates" ? `AND NOT ${NEW_CARD("s")}` : ""}
@@ -214,6 +239,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       length_exempt:number;approvals: number; mine: number; rating: string | null; earlier: number; review_length_total: number | null; review_worldbook_entries: number | null; review_regex_rules: number | null;
       hold_by: string | null; hold_at: number | null; hold_name: string | null; reopen_of: string | null; previous_status: "approved" | "rejected" | null;
       author_member: string | null; device_hash: string | null; after_drop: number; diff_state: string | null; diff_summary: string | null;
+      flip_of: string | null; flip_by: string | null; flip_reason: string; flip_name: string | null; flip_rejected_at: number | null;
     }>();
   const manager = isManager(await reviewerRole(db, memberId));
   const profiles = await authorProfiles(db, rows.results.map((r) => r.author_member ?? ""), now);
@@ -227,7 +253,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       batchSuspected: profile.manual.batch ? profile.batchSuspected : !!device?.suspected,
       deviceAccounts: device ? device.accounts : null,
     } : null;
-    return { r, authorMark, fast: !!authorMark && authorMark.tier === "top" && !authorMark.batchSuspected && !r.reopen_of };
+    return { r, authorMark, fast: !!authorMark && authorMark.tier === "top" && !authorMark.batchSuspected && !r.reopen_of && !r.flip_of };
   });
   return items.map(({ r, authorMark, fast }) => ({
     lengthExempt:!!r.length_exempt,
@@ -247,7 +273,8 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     },
     stamps: { approve: r.approvals, required: STAMPS_REQUIRED[r.kind] },
     rating: r.rating,
-    claim: (claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free") as QueueItem["claim"],
+    // 改判單只有發起人能處理：其他人一律看到「有人在看」
+    claim: (r.flip_by && r.flip_by !== memberId ? "other" : claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free") as QueueItem["claim"],
     stampedByMe: r.mine > 0,
     ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
     reviewLength: r.review_length_total === null ? null : reviewLengthStatus(r.review_length_total),
@@ -259,6 +286,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     diff: r.diff_state ? { state: r.diff_state as QueueDiff["state"], summary: r.diff_summary ? JSON.parse(r.diff_summary) as Record<string, unknown> : null } : null,
     authorMark,
     fast,
+    flip: r.flip_of && r.flip_by ? { by: (r.flip_name ?? "").slice(0, 80), at: r.submitted_at, rejectedAt: r.flip_rejected_at, mine: r.flip_by === memberId, ...(manager ? { reason: r.flip_reason } : {}) } : null,
   })).sort((a, b) => {
     // 快速審前移；冷凍中、別人領著的維持原位
     const front = (q: QueueItem) => (q.fast && q.claim !== "other" && !q.hold ? 0 : 1);
@@ -284,6 +312,8 @@ export async function hold(db: D1Database, input: { submissionId: string; member
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   // 託管作品：審核決定已經記下、只差同步完成，等同定案
   if (await db.prepare("SELECT 1 FROM work_review_decisions WHERE submission_id = ?").bind(row.id).first()) throw new HttpError(409, "submission already decided");
+  // 改判單由發起人一人處理，不冷凍討論（冷凍會放回領取）；要放棄就撤回改判
+  if (row.flip_of) throw new HttpError(409, "review_flip_no_hold");
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation !== undefined && input.generation !== row.claim_generation) throw new HttpError(409, "claim changed");
   if (await db.prepare("SELECT 1 FROM review_holds WHERE card_id = ?").bind(row.card_id).first()) throw new HttpError(409, "review_already_held");
@@ -349,15 +379,17 @@ export async function claim(db: D1Database, submissionId: string, memberId: stri
   const row = await getSubmission(db, submissionId);
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (await hasStamped(db, submissionId, memberId)) throw new HttpError(409, "you already reviewed this submission");
+  // 改判單只有發起的管理員能領（ui-flip-approve.md：其他審核員只看到有人在看）
+  if (row.flip_by && row.flip_by !== memberId) throw new HttpError(409, "review_flip_initiator_only");
   if (claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
   // 不受理中的單不在佇列裡：要審就先復原
   if (await db.prepare("SELECT 1 FROM review_drops WHERE submission_id=? AND restored_at IS NULL").bind(submissionId).first()) throw new HttpError(409, "review_dropped");
   const result=await db.prepare(`UPDATE review_submissions SET claimed_by=?,claimed_at=?,claim_generation=?
     WHERE id=? AND status='pending' AND claim_generation=?
     AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=review_submissions.id AND d.restored_at IS NULL)
-    AND (claimed_by IS NULL OR claimed_at<=? OR claimed_by=?)
+    AND (claimed_by IS NULL OR claimed_at<=? OR claimed_by=?) AND (flip_by IS NULL OR flip_by=?)
     AND NOT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=? AND member_id=?) RETURNING *`)
-    .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,memberId,submissionId,memberId).first<SubmissionRow>();
+    .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,memberId,memberId,submissionId,memberId).first<SubmissionRow>();
   if(!result)throw new HttpError(409,'claim changed');
   return result;
 }
@@ -431,7 +463,8 @@ export async function stamp(
   env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
-  const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id=?').bind(row.id).first();
+  // 改判單待審時版本列還在原本那張駁回單上（0152），核准時才轉過來
+  const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id IN (?,?)').bind(row.id,row.flip_of??row.id).first();
   if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
    if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');
    if(!env)throw new HttpError(503,'visibility_sync_pending');
@@ -442,6 +475,8 @@ export async function stamp(
 
   await guardDecision(db, row, input);
   if (row.reopen_of) return stampReopen(db, row, input, env);
+  // 改判單只有通過或撤回改判兩條路；撤回走 /flip/withdraw（不通知作者、維持原本的駁回）
+  if (row.flip_of && input.verdict === "reject") throw new HttpError(409, "review_flip_use_withdraw");
   const { note, rejection, marks, suggestions, coaching } = await normalizeDecision(db, row, input);
   const required = STAMPS_REQUIRED[row.kind];
   const writes: D1PreparedStatement[] = [
@@ -467,6 +502,8 @@ export async function stamp(
     .bind(row.id)
     .first<{ n: number }>();
   const approvals = (prior?.n ?? 0) + (input.verdict === "approve" ? 1 : 0);
+  // 改判單要通過：先把原本駁回那張的版本列轉過來（作者改稿重送過就作廢這張改判單）
+  const flipAdopted = !!row.flip_of && input.verdict === "approve" && approvals >= required && await adoptFlipVersion(db, row, input.now);
 
   let cardStatus: CardStatus = row.kind === "first" ? "pending" : "needs_review";
   if (input.verdict === "reject") {
@@ -485,6 +522,8 @@ export async function stamp(
   } else if (approvals >= required) {
     await reserveUpdateNotification(db,row.id,input.now);
     cardStatus = "approved";
+    // 首次送審的改判：卡片此刻是「已駁回」；先回到待審再核准，跟一般首次上架一樣（追蹤者的新作通知看這個轉換）
+    if (flipAdopted) writes.push(db.prepare("UPDATE cards SET status = 'pending' WHERE id = ? AND approved_version_id IS NULL AND status = 'rejected'").bind(row.card_id));
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
     writes.push(auditStmtIfChanged(db, { subjectKind:'card_reward', subjectId:row.id, actorMemberId:null, actorKind:'system', action:'approval', after:{path:'stamp',cardId:Number(row.card_id)}, operationId:crypto.randomUUID(), now:input.now }));
     // 快照保留一段時間給審核員複核與仲裁（owner 2026-11-24），到期由排程刪；本站不長期留卡片的私有設定
@@ -501,6 +540,7 @@ export async function stamp(
     }
   }
   try { await db.batch(writes); } catch (error) {
+    if (flipAdopted) await releaseFlipVersion(db, row);
     if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
     if(error instanceof Error && error.message.includes('review_held')) throw new HttpError(409,'review_held');
     if(error instanceof Error && error.message.includes('review_dropped')) throw new HttpError(409,'review_dropped');
@@ -511,8 +551,46 @@ export async function stamp(
    await finalizeManagedReview(env,row.id,'stamp');
   }
   const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
+  if (flipAdopted && !managed) await bumpOp(db, "review_flip", "approve", "success");
   if(!managed&&env&&input.verdict==='approve'&&approvals>=required&&finalCard?.status==='approved') await serviceRewardOnApproval(env,Number(row.card_id),'stamp');
   return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
+}
+
+/** 作者在這張單之後又送過審（含之後被取代、撤回的）：回最新那張。改判單與重新審核單不算作者送審。 */
+export async function newerAuthorSubmission(db: D1Database, originalId: string): Promise<{ id: string; submittedAt: number } | null> {
+  return await db.prepare(`SELECT n.id, n.submitted_at AS submittedAt FROM review_submissions n, review_submissions o WHERE o.id = ?1 AND n.card_id = o.card_id AND n.id <> o.id
+    AND n.flip_of IS NULL AND n.reopen_of IS NULL AND (n.submitted_at > o.submitted_at OR (n.submitted_at = o.submitted_at AND n.rowid > o.rowid))
+    ORDER BY n.submitted_at DESC, n.rowid DESC LIMIT 1`).bind(originalId).first<{ id: string; submittedAt: number }>();
+}
+
+/** 改判單作廢（作者改稿重送、原單版本已不在駁回）：結束這張單，不通知作者。 */
+export async function retireFlip(db: D1Database, id: string, now: number): Promise<boolean> {
+  const r = await db.prepare("UPDATE review_submissions SET status = 'superseded', claimed_by = NULL, claimed_at = NULL, claim_generation = '', decided_at = ? WHERE id = ? AND status = 'pending' AND flip_of IS NOT NULL").bind(now, id).run();
+  if (r.meta.changes) { await db.prepare("DELETE FROM review_snapshots WHERE submission_id = ?").bind(id).run(); await bumpOp(db, "review_flip", "retire", "superseded"); }
+  return !!r.meta.changes;
+}
+
+/**
+ * 改判單核准前一刻：把原本駁回那張單的版本列轉給改判單（同一個封存版本、同一張已準備好的上架許可），之後照一般核准。
+ * 已經轉過（同步結果不明後重按）就直接回 true。作者之後又送過審、或原單的版本已不在駁回，就作廢這張改判單並回 409。
+ */
+async function adoptFlipVersion(db: D1Database, row: SubmissionRow, now: number): Promise<boolean> {
+  if (await db.prepare("SELECT 1 FROM hosting_versions WHERE submission_id = ?").bind(row.id).first()) return true;
+  const newer = await newerAuthorSubmission(db, row.flip_of!);
+  const moved = newer ? null : await db.prepare(`UPDATE hosting_versions SET submission_id = ?, state = 'pending' WHERE submission_id = ? AND state = 'rejected'
+    AND EXISTS (SELECT 1 FROM review_submissions WHERE id = ? AND status = 'pending' AND flip_of = ?)
+    AND EXISTS (SELECT 1 FROM review_submissions WHERE id = ? AND status = 'rejected')`).bind(row.id, row.flip_of, row.id, row.flip_of, row.flip_of).run();
+  if (moved?.meta.changes) return true;
+  await retireFlip(db, row.id, now);
+  await bumpOp(db, "review_flip", "approve", "superseded");
+  throw new HttpError(409, "review_flip_superseded", undefined, newer ? { latestSubmissionId: newer.id, latestSubmittedAt: newer.submittedAt } : undefined);
+}
+
+/** 核准那一批沒寫成：版本列還給原本的駁回單（還沒記下託管核准決定時才還） */
+async function releaseFlipVersion(db: D1Database, row: SubmissionRow): Promise<void> {
+  await db.prepare(`UPDATE hosting_versions SET submission_id = ?, state = 'rejected' WHERE submission_id = ?
+    AND EXISTS (SELECT 1 FROM review_submissions WHERE id = ? AND status = 'pending')
+    AND NOT EXISTS (SELECT 1 FROM work_review_decisions WHERE submission_id = ?)`).bind(row.flip_of, row.id, row.id, row.id).run();
 }
 
 /**
@@ -581,10 +659,10 @@ export async function statusAmong(
     .prepare(
       `SELECT c.source_role_id, c.status, CASE WHEN c.status='unlisted' THEN NULL ELSE c.rating END AS rating, c.approved_content_hash, c.approved_revision_hash,
               CASE WHEN c.approved_version_id IS NOT NULL THEN
-                (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id AND s.reopen_of IS NULL ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
+                (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id AND s.reopen_of IS NULL AND NOT ${FLIP_HIDDEN("s")} ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
               END AS update_status,
               EXISTS(SELECT 1 FROM review_submissions s WHERE s.card_id=c.id AND s.status='pending' AND s.reopen_of IS NOT NULL) AS re_review,
-              (SELECT note FROM review_submissions s WHERE s.card_id = c.id AND s.status = 'rejected'
+              (SELECT note FROM review_submissions s WHERE s.card_id = c.id AND s.status = 'rejected' AND NOT ${FLIP_HIDDEN("s")}
                ORDER BY s.decided_at DESC LIMIT 1) AS note
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )

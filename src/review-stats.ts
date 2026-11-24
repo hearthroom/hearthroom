@@ -251,19 +251,19 @@ export const STATS_SQL = {
     WHERE e.action IN (${quoted(OPERATIONS)}) AND e.at>=?1 AND e.at<?2 AND e.actor_kind='reviewer'`,
   // 存量（資料截至時）：待審＝作者送審、未定案、不在不受理清單；不受理＝清單上的單，年齡從案件起點算
   pending: `SELECT s.submitted_at AS at, ${AUTHOR('s.id')} AS author FROM review_submissions s
-    WHERE s.status='pending' AND s.reopen_of IS NULL AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)`,
+    WHERE s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND NOT EXISTS(SELECT 1 FROM review_drops d WHERE d.submission_id=s.id AND d.restored_at IS NULL)`,
   dropped: `SELECT k.opened_at AS at, COALESCE(k.author_member_id, ${AUTHOR('s.id')}) AS author FROM review_drops d
     JOIN review_drop_cases k ON k.id=d.case_id JOIN review_submissions s ON s.id=d.submission_id WHERE d.restored_at IS NULL AND s.status='pending'`,
   // V2 前基線：只能從審核單現況回溯（之後改判過的單是改判後的狀態），理由是自由文字、不分類
   bDecisions: `SELECT s.status AS result, s.decided_at AS at, s.submitted_at, ${AUTHOR('s.id')} AS author FROM review_submissions s
-    WHERE s.status IN ('approved','rejected') AND s.decided_at>=?1 AND s.decided_at<?2 AND s.reopen_of IS NULL`,
+    WHERE s.status IN ('approved','rejected') AND s.decided_at>=?1 AND s.decided_at<?2 AND s.reopen_of IS NULL AND NOT (s.flip_of IS NOT NULL AND s.status='rejected')`,
   bStamps: `SELECT st.verdict, st.created_at AS at, ${AUTHOR('st.submission_id')} AS author FROM review_stamps st WHERE st.created_at>=?1 AND st.created_at<?2`,
   // 駁回之後同卡的作者新單：送審事件為主（舊流程撤銷登記會刪待審單，事件留著），V2 之前就在的單用審核單本身。
   // +x.action 讓查詢走 (card_id, at)，不去掃全部送審事件
   candidates: `SELECT x.submission_id AS id, x.card_id, x.at, y.to_state AS decided, y.at AS decided_at
       FROM review_events x LEFT JOIN review_events y ON y.event_key='first:'||x.submission_id WHERE x.card_id IN (${LIST}) AND +x.action='submit'
     UNION ALL SELECT s.id, s.card_id, s.submitted_at, y.to_state, y.at
-      FROM review_submissions s LEFT JOIN review_events y ON y.event_key='first:'||s.id WHERE s.card_id IN (${LIST}) AND s.reopen_of IS NULL`,
+      FROM review_submissions s LEFT JOIN review_events y ON y.event_key='first:'||s.id WHERE s.card_id IN (${LIST}) AND s.reopen_of IS NULL AND s.flip_of IS NULL`,
   drops: `SELECT d.case_id, d.submission_id, d.created_at, d.restored_at,
       (SELECT MIN(x.at) FROM review_events x WHERE x.submission_id=d.submission_id AND x.action IN ('superseded','first_decision')) AS left_at,
       y.to_state AS decided, y.at AS decided_at, ${AUTHOR('d.submission_id')} AS author

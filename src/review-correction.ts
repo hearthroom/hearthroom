@@ -6,6 +6,7 @@ import type { ProviderId } from './providers';
 import { bumpOp } from './ops-metrics';
 import {readCurrentWorkPolicies} from './work-read';
 import { boundedSearchPattern } from './search-text';
+import { FLIP_COLUMNS, flipState, type FlipColumns } from './review-flip';
 
 export const REVIEW_CORRECTION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -180,7 +181,8 @@ export async function listReviewDecisions(db:D1Database, member:string, now:numb
     " AND EXISTS(SELECT 1 FROM json_each(coalesce(json_extract(v.public_role,'$.names'),c.names)) n WHERE n.value LIKE ? ESCAPE '\\')";
   const params:unknown[]=[member,before??Number.MAX_SAFE_INTEGER];
   if(q!==undefined)params.push(byNumber?q:pattern);
-  const rows=await db.prepare(`SELECT st.rowid cursor,s.id,s.status,s.kind,s.decided_at,s.submitted_at,st.verdict,st.note,st.created_at,
+  const manager=['manager','owner'].includes(String(await reviewerRole(db,member)));
+  const rows=await db.prepare(`SELECT st.rowid cursor,s.id,s.status,s.kind,s.decided_at,s.submitted_at,st.verdict,st.note,st.created_at,s.reopen_of,${FLIP_COLUMNS('s')},
     EXISTS(SELECT 1 FROM review_corrections x WHERE x.submission_id=s.id AND x.state='complete') corrected,
     v.version_id,c.id card_id,coalesce(json_extract(v.public_role,'$.names'),c.names) names
     FROM review_stamps st JOIN review_submissions s ON s.id=st.submission_id JOIN cards c ON c.id=s.card_id
@@ -188,12 +190,14 @@ export async function listReviewDecisions(db:D1Database, member:string, now:numb
     WHERE st.member_id=? AND st.rowid<?${filter} ORDER BY st.rowid DESC LIMIT 51`)
     .bind(...params).all<{
       cursor:number;id:string;status:string;kind:string;decided_at:number|null;submitted_at:number;corrected:number;verdict:string;note:string;created_at:number;
-      version_id:string|null;card_id:string;names:string;
-    }>();
+      version_id:string|null;card_id:string;names:string;reopen_of:string|null;
+    }&FlipColumns>();
   const page=rows.results.slice(0,50);
   return {items:page.map(r=>({
     id:r.id,status:r.status,kind:r.kind,verdict:r.verdict,note:r.note,at:r.created_at,
     submittedAt:r.submitted_at,corrected:!!r.corrected,decidedAt:r.decided_at,versionId:r.version_id,card:{id:String(r.card_id),name:pickLocale(JSON.parse(r.names) as Localized,lang)},
     canCorrect:r.status==='approved'&&r.verdict==='approve'&&r.version_id!==null&&r.decided_at!==null&&now-r.decided_at<=REVIEW_CORRECTION_TTL_MS,
+    // 駁回改判為通過（ui-flip-approve.md）：改判審核中／已改判為通過，以及管理員看不看得到入口
+    flip:flipState(r,manager),
   })),nextCursor:rows.results.length>50?page.at(-1)!.cursor:null};
 }

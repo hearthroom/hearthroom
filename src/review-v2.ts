@@ -1,5 +1,5 @@
 import { effectiveCharacters, reviewLength } from './review-length';
-import { reviewCounts } from './review';
+import { FLIP_HIDDEN, reviewCounts } from './review';
 import type { UpstreamRole } from './upstream';
 import { HttpError } from './types';
 import { isReviewReason, REVIEW_REASONS } from '../shared/review-reasons';
@@ -111,8 +111,9 @@ export function submissionRecordStatements(db: D1Database, input: {
     db.prepare(`UPDATE review_submissions SET content_fingerprint=? WHERE id=?`).bind(input.fingerprint, input.submissionId),
     db.prepare(`INSERT OR IGNORE INTO review_submission_features(submission_id,spec_version,author_member_id,author_seq,has_prior,prior_result,has_approved_base,after_drop,features,created_at)
       SELECT ?1,?2,?3,(SELECT COUNT(*)+1 FROM review_submission_features WHERE author_member_id=?3),
-       EXISTS(SELECT 1 FROM review_submissions p WHERE p.card_id=?4 AND p.reopen_of IS NULL AND p.id<>?1),
-       (SELECT p.status FROM review_submissions p WHERE p.card_id=?4 AND p.reopen_of IS NULL AND p.id<>?1 AND p.status IN ('approved','rejected') ORDER BY p.submitted_at DESC,p.rowid DESC LIMIT 1),
+       EXISTS(SELECT 1 FROM review_submissions p WHERE p.card_id=?4 AND p.reopen_of IS NULL AND p.flip_of IS NULL AND p.id<>?1),
+       -- 上一張定案：改判通過的改判單代表它改判的那張；沒通過的改判單不算（作者看到的仍是原本的駁回）
+       (SELECT p.status FROM review_submissions p WHERE p.card_id=?4 AND p.reopen_of IS NULL AND p.id<>?1 AND p.status IN ('approved','rejected') AND NOT ${FLIP_HIDDEN('p')} ORDER BY p.submitted_at DESC,p.rowid DESC LIMIT 1),
        EXISTS(SELECT 1 FROM cards c WHERE c.id=?4 AND c.approved_version_id IS NOT NULL),?5,?6,?7
       WHERE ${exists.replace('?', '?1')}`)
       .bind(input.submissionId, REVIEW_SPEC_VERSION, input.memberId, input.cardId, input.closeCaseId ? 1 : 0, JSON.stringify(input.features), input.now),

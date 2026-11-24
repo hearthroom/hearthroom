@@ -71,6 +71,10 @@ export async function finalizeManagedReview(env:Env,submission:string,path:'stam
   db.prepare(`UPDATE work_publication_permits SET state='published',published_epoch=? WHERE version_id=? AND state='prepared'
    AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch=? AND approved_role_id=? AND sync_state='complete')`)
    .bind(receipt.epoch,row.version_id,row.work_id,receipt.epoch,row.hosted_revision_id),
+  // 首次送審的改判（0152）：卡片此刻是「已駁回」，先回到待審再核准，跟一般首次上架一樣（追蹤者的新作通知看這個轉換）
+  db.prepare(`UPDATE cards SET status='pending' WHERE id=? AND approved_version_id IS NULL AND status='rejected'
+   AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='pending' AND flip_of IS NOT NULL)
+   AND EXISTS(SELECT 1 FROM work_publication_permits WHERE version_id=? AND state='published')`).bind(row.card_id,submission,row.version_id),
   db.prepare(`UPDATE review_submissions SET status='approved',decided_at=? WHERE id=? AND status='pending'
    AND EXISTS(SELECT 1 FROM work_publication_permits WHERE version_id=? AND state='published')`).bind(row.decided_at,submission,row.version_id),
   auditStmtIfChanged(db, {subjectKind:'card_reward',subjectId:submission,actorMemberId:null,actorKind:'system',action:'approval',after:{path,cardId:Number(row.card_id)},operationId:crypto.randomUUID(),now:Date.now()}),
@@ -80,7 +84,8 @@ export async function finalizeManagedReview(env:Env,submission:string,path:'stam
   db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved') AND NOT EXISTS(SELECT 1 FROM review_snapshot_retention WHERE submission_id=?)").bind(submission,submission,submission),
   supersedeOlderWorkIntents(env,receipt),
  ]);
- if(!final[2].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
+ if(!final[3].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  await bumpOp(db,'work_access','publish','success');
+ if(await db.prepare('SELECT 1 FROM review_submissions WHERE id=? AND flip_of IS NOT NULL').bind(submission).first())await bumpOp(db,'review_flip','approve','success');
  await serviceRewardOnApproval(env,Number(row.card_id),path);
 }

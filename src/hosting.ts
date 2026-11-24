@@ -229,6 +229,10 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers,review_length_total,review_worldbook_entries,review_regex_rules) SELECT ?,?,?,?,?,'pending',?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,length.total,counts.worldbookEntries,counts.regexRules,version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),
+   // 作者改稿重送：管理員對舊版開的改判單作廢（審核以最新版為準；作者本來就看不到改判單）
+   db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,claim_generation='',decided_at=? WHERE card_id=? AND status='pending' AND flip_of IS NOT NULL AND EXISTS(SELECT 1 FROM review_submissions WHERE id=?)").bind(input.now,cardId,submissionId),
+   db.prepare("INSERT INTO ops_metrics(metric,operation,outcome,value) SELECT 'review_flip','retire','superseded',changes() WHERE changes()>0 ON CONFLICT(metric,operation,outcome) DO UPDATE SET value=value+excluded.value"),
+   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT id FROM review_submissions WHERE card_id=? AND flip_of IS NOT NULL AND status='superseded')").bind(cardId),
    snapshot,
    // 查重指紋跟審核單同一批：單子沒寫成就不留指紋
    ...indexStatements(db,{submissionId,cardId,memberId:input.memberId,text:String(privateDoc.roleDetailDesc??''),names:[String(privateDoc.roleName??''),String(privateDoc.userName??'')],now:input.now}),

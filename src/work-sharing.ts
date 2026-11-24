@@ -1,4 +1,5 @@
 import {parseReviewReasons} from '../shared/review-reasons';
+import {FLIP_HIDDEN} from './review';
 import {sourceUpdateEligibility} from './card-update';
 import {Hono} from 'hono';
 import {CARD_NUMBER,getCard,type CardRow} from './cards';
@@ -53,7 +54,7 @@ export async function readOwnerVisibility(env:Env,source:string,token:string,row
   if(local&&(!provider.managed||provider.workId!==local.work_id))throw new HttpError(503,'visibility_provider_unavailable');
  }
  const [reviews,history,moderation]=await Promise.all([
-  env.DB.prepare("SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons,s.approve_suggestions FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1").bind(source).first<ReviewRow>(),
+  env.DB.prepare(`SELECT s.id,s.kind,s.status,s.note,s.submitted_at,s.decided_at,s.reject_reasons,s.approve_suggestions FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND NOT ${FLIP_HIDDEN('s')} ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1`).bind(source).first<ReviewRow>(),
   env.DB.prepare("SELECT EXISTS(SELECT 1 FROM review_submissions s WHERE s.provider='harbor' AND (s.source_role_id=?1 OR s.id IN(SELECT submission_id FROM hosting_versions WHERE provider='harbor' AND source_role_id=?1)) AND s.status='approved') AS ever_public").bind(source).first<{ever_public:number}>(),
   env.DB.prepare("SELECT reason FROM moderation_events WHERE provider='harbor' AND source_role_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(source).first<{reason:string}>(),
  ]);
@@ -134,7 +135,7 @@ async function ownerVisibilityBatch(env:Env,sources:string[],token:string,allowU
    ROW_NUMBER() OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id) ORDER BY s.submitted_at DESC,s.rowid DESC) AS n,
    MAX(CASE WHEN s.status='approved' THEN 1 ELSE 0 END) OVER(PARTITION BY COALESCE(v.source_role_id,s.source_role_id)) AS ever_public
    FROM review_submissions s LEFT JOIN hosting_versions v ON v.submission_id=s.id
-   WHERE s.provider='harbor' AND COALESCE(v.source_role_id,s.source_role_id) IN(SELECT value FROM json_each(?))) WHERE n=1`).bind(ids).all<ReviewRow&{source:string;ever_public:number}>(),
+   WHERE s.provider='harbor' AND COALESCE(v.source_role_id,s.source_role_id) IN(SELECT value FROM json_each(?)) AND NOT ${FLIP_HIDDEN('s')}) WHERE n=1`).bind(ids).all<ReviewRow&{source:string;ever_public:number}>(),
   env.DB.prepare(`SELECT * FROM(SELECT source_role_id,reason,ROW_NUMBER() OVER(PARTITION BY source_role_id ORDER BY created_at DESC,rowid DESC) AS n
    FROM moderation_events WHERE provider='harbor' AND source_role_id IN(SELECT value FROM json_each(?))) WHERE n=1`).bind(ids).all<{source_role_id:string;reason:string}>(),
  ]);

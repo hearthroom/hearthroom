@@ -13,6 +13,7 @@ import { communityAdmin } from './staff';
 import { resolveFandom } from './fandom';
 import { buildSearchName } from './upstream';
 import { boundedSearchPattern } from './search-text';
+import { FLIP_COLUMNS, flipState, type FlipColumns } from './review-flip';
 
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
@@ -108,7 +109,11 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  if(card.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
  const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
- const reviews=await db.prepare("SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,COALESCE(NULLIF(note,''),reopen_reason) AS note,content_hash AS version,reopen_of IS NOT NULL AS reopen FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100").bind(card.id).all();
+ const manager=['manager','owner'].includes(String(await reviewerRole(db,member.id)));
+ const reviewRows=await db.prepare(`SELECT s.id,s.kind,s.status,s.submitted_at AS submittedAt,s.decided_at AS decidedAt,COALESCE(NULLIF(s.note,''),NULLIF(s.reopen_reason,''),CASE WHEN ?2 THEN s.flip_reason ELSE '' END) AS note,s.content_hash AS version,s.reopen_of IS NOT NULL AS reopen,s.flip_of AS flipOf,${FLIP_COLUMNS('s')}
+  FROM review_submissions s WHERE s.card_id=?1 ORDER BY s.submitted_at DESC LIMIT 100`).bind(card.id,manager?1:0).all<{id:string;status:string;reopen:number}&FlipColumns&Record<string,unknown>>();
+ // 駁回改判為通過：改判單標成改判；駁回單帶改判狀態與管理員的入口（ui-flip-approve.md）
+ const reviews={results:reviewRows.results.map(({flip_pending_id,flip_approved_id,flip_version_rejected,...r})=>({...r,reopen:!!r.reopen,flip:flipState({flip_pending_id,flip_approved_id,flip_version_rejected,status:r.status,reopen:r.reopen},manager)}))};
  const author=card.author_member_id?await db.prepare('SELECT handle FROM members WHERE id=?').bind(card.author_member_id).first<{handle:string}>():null;
  return c.json({card:{...projection(card,c.req.query('lang')||'zh-Hant'),authorHandle:author?.handle??null,ratingFloor:await floorForCard(db,card.id)},cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
 });

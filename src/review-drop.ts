@@ -21,14 +21,16 @@ export const NOT_DROPPED = (alias: string) => `NOT ${ACTIVE_DROP(alias)}`;
 
 /** 單子現在能不能被移出：能就回 null，不能回錯誤代碼。 */
 async function dropBlocker(db: D1Database, id: string, memberId: string, now: number): Promise<string | null> {
-  const row = await db.prepare(`SELECT s.status, s.reopen_of, s.claimed_by, s.claimed_at,
+  const row = await db.prepare(`SELECT s.status, s.reopen_of, s.flip_of, s.claimed_by, s.claimed_at,
       EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id) AS held,
       EXISTS(SELECT 1 FROM work_review_decisions w WHERE w.submission_id=s.id) AS deciding,
       ${ACTIVE_DROP('s')} AS dropped
-    FROM review_submissions s WHERE s.id=?`).bind(id).first<{ status: string; reopen_of: string | null; claimed_by: string | null; claimed_at: number | null; held: number; deciding: number; dropped: number }>();
+    FROM review_submissions s WHERE s.id=?`).bind(id).first<{ status: string; reopen_of: string | null; flip_of: string | null; claimed_by: string | null; claimed_at: number | null; held: number; deciding: number; dropped: number }>();
   if (!row) return 'review_not_found';
   if (row.status !== 'pending' || row.deciding) return 'review_decided';
   if (row.reopen_of) return 'review_drop_reopen';
+  // 改判單是管理員自己開的，不是作者的送審：要放棄就撤回改判
+  if (row.flip_of) return 'review_drop_flip';
   if (row.dropped) return 'review_dropped';
   if (row.held) return 'review_held';
   if (row.claimed_by && row.claimed_by !== memberId && row.claimed_at !== null && now - row.claimed_at < CLAIM_TTL_MS) return 'claimed_by_other';
@@ -47,7 +49,7 @@ export async function dropSubmission(db: D1Database, input: { submissionId: stri
   const ctx = input.ctx ?? await queueContext(db, row.id);
   const caseId = crypto.randomUUID(), dropId = crypto.randomUUID();
   // 寫入當下再確認一次全部條件：上面的檢查與這裡之間，別人可能剛領走、冷凍或蓋完章
-  const eligible = `s.id=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')}
+  const eligible = `s.id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')}
     AND NOT EXISTS(SELECT 1 FROM review_holds h WHERE h.card_id=s.card_id)
     AND NOT EXISTS(SELECT 1 FROM work_review_decisions w WHERE w.submission_id=s.id)
     AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<=?)`;
@@ -105,14 +107,14 @@ export async function groupSubmissionIds(db: D1Database, anchorId: string, scope
     const author = await db.prepare('SELECT member_id FROM hosting_versions WHERE submission_id=?').bind(anchorId).first<{ member_id: string }>();
     if (!author) return null;
     const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id
-      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')} ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
+      WHERE v.member_id=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')} ORDER BY s.submitted_at, s.rowid`).bind(author.member_id).all<{ id: string }>();
     return rows.results.map((r) => r.id);
   }
   const device = await db.prepare('SELECT device_hash FROM review_submission_devices WHERE submission_id=?').bind(anchorId).first<{ device_hash: string }>();
   if (!device) return null;
   const rows = await db.prepare(`SELECT s.id FROM review_submissions s JOIN review_submission_devices sd ON sd.submission_id=s.id
     JOIN hosting_versions v ON v.submission_id=s.id
-    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL AND ${NOT_DROPPED('s')}
+    WHERE sd.device_hash=? AND s.status='pending' AND s.reopen_of IS NULL AND s.flip_of IS NULL AND ${NOT_DROPPED('s')}
     AND NOT EXISTS(SELECT 1 FROM quota_device_exemptions e WHERE e.member_id=v.member_id AND e.revoked_at IS NULL)
     ORDER BY s.submitted_at, s.rowid`).bind(device.device_hash).all<{ id: string }>();
   return rows.results.map((r) => r.id);
