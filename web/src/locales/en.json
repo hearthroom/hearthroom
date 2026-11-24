@@ -6079,7 +6079,7 @@
   "reviewAi.arb.update.after": "After",
   "reviewAi.two.steps.label": "Decision steps",
   "reviewAi.two.steps.judge": "Submit your call",
-  "reviewAi.two.steps.reveal": "See the AI",
+  "reviewAi.two.steps.reveal": "See AI's call",
   "reviewAi.two.steps.final": "Finalize",
   "reviewAi.two.steps.done": "(done)",
   "reviewAi.two.judge.submit": "Submit your call",
@@ -6151,7 +6151,7 @@
   "reviewAi.note.label": "Note",
   "reviewAi.note.placeholder": "For example: this is derived from an existing work, so a brief setting is normal",
   "reviewAi.note.count": "{n} / {max}",
-  "reviewAi.arb.report.finalSource": "Where finals came from",
+  "reviewAi.arb.report.finalSource": "Final decision source",
   "reviewAi.arb.report.finalNone": "No two-step finals for this version yet.",
   "reviewAi.arb.report.finalSmall": "{n} two-step finals; not enough samples.",
   "reviewAi.arb.report.col.finals": "Finals",
@@ -6167,5 +6167,5 @@
   "reviewAi.arb.notes.empty": "No notes for the AI in this period.",
   "reviewAi.arb.notes.emptyFiltered": "No notes of this type in this period. Try another type or period.",
   "reviewAi.arb.notes.failed": "Notes for the AI couldn't load.",
-  "reviewAi.two.final.pick.aiNoReasons": "The AI picked no reason the author can see, so it can't be used as is"
+  "reviewAi.two.final.pick.aiNoReasons": "The AI didn't pick an author-visible reason, so it can't be used as is"
 }
