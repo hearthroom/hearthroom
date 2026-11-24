@@ -1,3 +1,4 @@
+import { resetQueueCountsMemo } from '../src/review';
 import {frozenFixtureRoles,restoreHostedFixture,hostedFixture} from './hosted-fixture';
 import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
@@ -15,6 +16,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
+  resetQueueCountsMemo();
   // D1 batch executes in order. Preserve dependency/trigger cleanup order while
   // resetting the database in one RPC instead of a round trip for every table.
   const statements:D1PreparedStatement[]=[];

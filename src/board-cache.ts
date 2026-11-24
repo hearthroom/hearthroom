@@ -1,7 +1,8 @@
 import type { Env } from "./types";
 import { writePublicKv } from "./public-kv-write";
 
-export const BOARD_TTL = 300;
+// 2026-11-24 D1 過載止血：公開榜單與標籤計數快取從 5 分鐘加長到 15 分鐘（排行版本號不變時才命中，下架等處置仍立即生效）
+export const BOARD_TTL = 900;
 export const boardCache = { namespace: "board-official-v4" };
 interface Entry { body: string; expiresAt: number }
 interface Key { edge: Request; kv: string }
